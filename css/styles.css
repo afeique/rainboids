@@ -193,15 +193,15 @@ canvas {
     position: absolute;
     right: 18%;
     bottom: 18%;
-    width: 16vmin;
-    height: 16vmin;
+    width: 20vmin; /* was 16vmin */
+    height: 20vmin; /* was 16vmin */
     background-color: rgba(255, 255, 255, 0.15);
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 8vmin;
+    font-size: 10vmin; /* was 8vmin */
     color: rgba(255, 255, 255, 0.6);
     user-select: none;
     -webkit-user-select: none;
