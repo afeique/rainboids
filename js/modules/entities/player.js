@@ -25,6 +25,8 @@ export class Player {
         this.canShoot = true;
         this.active = true;
         this.isThrusting = false;
+        // Player mass (smaller than most asteroids)
+        this.mass = Math.PI * Math.pow(this.radius, 2) * 0.5;
     }
     
     update(input, particlePool, bulletPool, audioManager) {
@@ -83,7 +85,7 @@ export class Player {
         wrap(this, this.width, this.height);
         
         // Handle shooting (only with input.firePressed and cooldown)
-        if (input.firePressed && this.canShoot && this.playerState !== 'CRITICAL') {
+        if (input.firePressed && this.canShoot) {
             bulletPool.get(this.x, this.y, this.angle);
             audioManager.playShoot();
             this.canShoot = false;

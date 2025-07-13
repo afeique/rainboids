@@ -52,6 +52,22 @@ export class Particle {
                 this.maxRadius = 30;
                 this.color = 'white';
                 break;
+                
+            case 'starBlip':
+                this.life = args[0] || 0.3;
+                this.radius = args[1] || 3;
+                this.maxRadius = this.radius * 2;
+                this.color = '#FFD700';
+                this.fadeRate = 0.1;
+                this.growthRate = 0.2;
+                break;
+                
+            case 'starSparkle':
+                this.life = 0.4;
+                this.radius = 1;
+                this.color = '#FFD700';
+                this.vel = { x: 0, y: 0 };
+                break;
             case 'explosionPulse':
                 this.life = 0.5;
                 this.radius = 0;
@@ -155,6 +171,19 @@ export class Particle {
                 this.life -= 0.04;
                 this.radius = (1 - this.life) * this.maxRadius;
                 break;
+                
+            case 'starBlip':
+                this.life -= this.fadeRate || 0.1;
+                this.radius += (this.growthRate || 0.15) * this.radius;
+                if (this.radius > this.maxRadius) this.radius = this.maxRadius;
+                break;
+                
+            case 'starSparkle':
+                this.x += this.vel.x;
+                this.y += this.vel.y;
+                this.life -= 0.025;
+                this.radius *= 0.95; // Shrink as it moves
+                break;
             case 'explosionPulse':
                 this.life -= 0.06;
                 this.radius = (1 - this.life) * this.maxRadius;
@@ -231,6 +260,36 @@ export class Particle {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
+                break;
+                
+            case 'starBlip':
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life * 2); // Brighter
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 30; // More glow
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+                ctx.fill();
+                // Add inner bright core
+                ctx.globalAlpha = Math.max(0, this.life * 3);
+                ctx.fillStyle = '#FFFFE0'; // Light yellow
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.5, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.restore();
+                break;
+                
+            case 'starSparkle':
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life * 2);
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.restore();
                 break;
             case 'asteroidCollisionDebris':
                 ctx.save();

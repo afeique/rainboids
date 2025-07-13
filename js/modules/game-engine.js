@@ -10,9 +10,7 @@ import { Star } from './entities/star.js';
 import { LineDebris } from './entities/line-debris.js';
 
 export const PLAYER_STATES = {
-    NORMAL: 'normal',
-    CRITICAL: 'critical',
-    RAPID_RECHARGE: 'rapid_recharge',
+    NORMAL: 'normal'
 };
 
 export class GameEngine {
@@ -41,18 +39,21 @@ export class GameEngine {
         this.previousFire = false;
         this.maxEnergy = 99;
         this.playerEnergy = this.maxEnergy;
-        this.energyDepleteRate = this.maxEnergy / GAME_CONFIG.TIME_TO_ENERGY_EMPTY / 60; // 5 seconds to empty at 60fps
-        this.energyRegenRate = this.maxEnergy / GAME_CONFIG.TIME_TO_ENERGY_FULL / 60;  // 30 seconds to full at 60fps
-        this.energyDepleted = false;
-        this.energyDepletedTimer = 0;
-        this.criticalTimer = 0;
-        this.criticalActive = false;
-        this.criticalJustActivated = false;
-        this.criticalAlarmCounter = 0;
-        this.energyRegenRapid = false;
-        this.energyRegenTarget = this.maxEnergy;
-        this.prevEnergyValue = this.maxEnergy;
+        this.energyTanks = 0; // Player starts with zero energy tanks
+        this.damagePerHit = 33; // Each hit takes 33 energy (3 hits to deplete one tank)
+        
+        // Damage animation properties
+        this.animatingDamage = false;
+        this.damageAnimationStart = 0;
+        this.damageAnimationDuration = 1000; // 1 second
+        this.energyBeforeDamage = this.maxEnergy;
+        this.energyAfterDamage = this.maxEnergy;
+        this.tanksBeforeDamage = 0;
+        this.tanksAfterDamage = 0;
+        this.displayEnergy = this.maxEnergy;
+        this.displayTanks = 0;
         this.playerState = PLAYER_STATES.NORMAL;
+        this.pendingDamage = 0; // New property to track pending damage
     }
     
     initializePools() {
@@ -117,15 +118,13 @@ export class GameEngine {
         this.game.state = GAME_STATES.PLAYING;
         // Reset player
         this.player = new Player();
-        // Reset energy and CRITICAL state
+        // Reset energy
         this.playerEnergy = this.maxEnergy;
-        this.criticalActive = false;
-        this.criticalJustActivated = false;
-        this.criticalTimer = 0;
-        this.criticalAlarmCounter = 0;
-        this.energyRegenRapid = false;
-        this.energyDepleted = false;
-        this.energyDepletedTimer = 0;
+        this.energyTanks = 0; // Reset to zero tanks
+        this.displayEnergy = this.maxEnergy;
+        this.displayTanks = 0;
+        this.animatingDamage = false;
+        this.pendingDamage = 0; // Reset pending damage
         // Clear all pools
         this.bulletPool.activeObjects = [];
         this.particlePool.activeObjects = [];
@@ -148,15 +147,10 @@ export class GameEngine {
         this.asteroidPool.cleanupInactive();
         this.starPool.cleanupInactive();
         this.game.currentWave++;
-        this.uiManager.updateWave(this.game.currentWave);
         this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500);
         this.game.state = GAME_STATES.WAVE_TRANSITION;
-        // Always clear CRITICAL/rapid_recharge state at wave start
+        // Reset player state at wave start
         this.playerState = PLAYER_STATES.NORMAL;
-        this.criticalTimer = 0;
-        this.criticalAlarmCounter = 0;
-        this.hideCriticalOverlay();
-        this.energyRegenRapid = false;
         const numAsteroids = GAME_CONFIG.INITIAL_AST_COUNT + (this.game.currentWave - 1) * 2;
         for (let i = 0; i < numAsteroids; i++) {
             this.spawnAsteroidOffscreen();
@@ -166,13 +160,8 @@ export class GameEngine {
                 this.game.state = GAME_STATES.PLAYING;
             }
         }, 1500);
-        // Only do rapid recharge for waves after the first
-        if (this.game.currentWave > 1) {
-            this.energyRegenRapid = true;
-            this.playerEnergy = 0;
-        } else {
-            this.playerEnergy = this.maxEnergy;
-        }
+        // No rapid recharge between waves - energy persists
+        // Only restore energy at game start
     }
     
     spawnAsteroidOffscreen() {
@@ -248,7 +237,63 @@ export class GameEngine {
         if (this.player.active) {
             for (const ast of this.asteroidPool.activeObjects) {
                 if (collision(this.player, ast)) {
-                    this.player.die(this.particlePool, this.audioManager, this.uiManager, this.game, this.triggerScreenShake.bind(this));
+                    // Player takes damage
+                    this.takeDamage();
+                    
+                    // Mass-based collision physics
+                    const dx = ast.x - this.player.x;
+                    const dy = ast.y - this.player.y;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+                    
+                    // Relative velocity
+                    const dvx = ast.vel.x - this.player.vel.x;
+                    const dvy = ast.vel.y - this.player.vel.y;
+                    const dvn = dvx * nx + dvy * ny;
+                    
+                    // Don't process if already separating
+                    if (dvn > 0) continue;
+                    
+                    // Calculate impulse magnitude
+                    const totalMass = this.player.mass + ast.mass;
+                    const impulse = 2 * dvn / totalMass;
+                    
+                    // Apply impulse to velocities
+                    this.player.vel.x += impulse * ast.mass * nx;
+                    this.player.vel.y += impulse * ast.mass * ny;
+                    ast.vel.x -= impulse * this.player.mass * nx;
+                    ast.vel.y -= impulse * this.player.mass * ny;
+                    
+                    // Separate overlapping objects
+                    const overlap = this.player.radius + ast.radius - dist;
+                    const separationForce = overlap / 2;
+                    this.player.x -= nx * separationForce;
+                    this.player.y -= ny * separationForce;
+                    ast.x += nx * separationForce;
+                    ast.y += ny * separationForce;
+                    
+                    // Create collision effects
+                    // White pulse at impact point
+                    const impactX = this.player.x + nx * this.player.radius;
+                    const impactY = this.player.y + ny * this.player.radius;
+                    this.particlePool.get(impactX, impactY, 'explosionPulse', 30);
+                    
+                    // Blue particles explosion
+                    for (let i = 0; i < 20; i++) {
+                        const particle = this.particlePool.get(impactX, impactY, 'explosion');
+                        if (particle) {
+                            // Override color to blue
+                            particle.color = `hsl(210, 100%, ${50 + Math.random() * 50}%)`;
+                        }
+                    }
+                    
+                    this.audioManager.playHit();
+                    
+                    // Strong screen shake when player takes damage
+                    const impactForce = Math.abs(impulse) * totalMass;
+                    this.triggerScreenShake(30, 15, impactForce * 0.8);
+                    
                     return;
                 }
             }
@@ -265,15 +310,19 @@ export class GameEngine {
                     this.game.score += 50; // 50 points for hit
                     triggerHapticFeedback(20);
                     this.audioManager.playHit();
-                    // More pronounced explosion for hit
-                    this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', ast.baseRadius * 1.0);
-                    for (let p = 0; p < 14; p++) {
+                    
+                    // Damage the asteroid
+                    ast.health--;
+                    
+                    // Hit effects
+                    this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', ast.baseRadius * 0.5);
+                    for (let p = 0; p < 7; p++) {
                         this.particlePool.get(bullet.x, bullet.y, 'explosionRedOrange');
                     }
-                    this.particlePool.get(bullet.x, bullet.y, 'explosion');
-                    // Light screen shake for asteroid hits
-                    this.triggerScreenShake(3, 2, ast.baseRadius * 0.3);
-                    if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
+                    
+                    // No screen shake for asteroid hits
+                    
+                    if (ast.health <= 0 && ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                         this.game.score += 100; // 100 points for destroy
                         this.audioManager.playExplosion();
                         // Multiple fiery shockwave pulses for destruction
@@ -290,8 +339,8 @@ export class GameEngine {
                         this.createDebris(ast);
                         this.createStarBurst(ast.x, ast.y);
                         this.asteroidPool.release(ast);
-                        this.triggerScreenShake(15, 8, ast.baseRadius);
-                    } else {
+                        // No screen shake for asteroid destruction
+                    } else if (ast.health <= 0) {
                         const count = Math.random() < 0.5 ? 2 : 3;
                         const newR = ast.baseRadius / Math.sqrt(count);
                         const totalMass = ast.mass + bullet.mass;
@@ -308,10 +357,9 @@ export class GameEngine {
                             }
                             this.createDebris(ast);
                             this.createStarBurst(ast.x, ast.y);
-                            this.triggerScreenShake(12, 6, ast.baseRadius);
+                            // No screen shake for asteroid destruction
                         } else {
-                            // Additional screen shake for asteroid splitting
-                            this.triggerScreenShake(8, 4, ast.baseRadius * 0.5);
+                            // No screen shake for asteroid splitting
                             
                             for (let k = 0; k < count; k++) {
                                 const newAst = this.asteroidPool.get(
@@ -377,20 +425,54 @@ export class GameEngine {
                 if (collision(this.player, star)) {
                     this.game.score += star.isBurst ? GAME_CONFIG.BURST_STAR_SCORE : GAME_CONFIG.STAR_SCORE;
                     this.audioManager.playCoin();
-                    this.particlePool.get(star.x, star.y, 'pickupPulse');
-                    // Add energy if not in CRITICAL, up to max 99
-                    if (this.playerState !== PLAYER_STATES.CRITICAL) {
-                        let percent = this.playerEnergy / this.maxEnergy;
-                        let value = Math.round(percent * 99);
-                        if (value < 99) {
-                            let addAmount = star.isBurst ? GAME_CONFIG.BURST_STAR_ENERGY : GAME_CONFIG.STAR_ENERGY;
-                            let newEnergy = this.playerEnergy + (this.maxEnergy / 99) * addAmount;
-                            let newPercent = newEnergy / this.maxEnergy;
-                            let newValue = Math.round(newPercent * 99);
-                            if (newValue > 99) {
-                                newEnergy = this.maxEnergy;
-                            }
-                            this.playerEnergy = Math.min(newEnergy, this.maxEnergy);
+                    
+                    // Create enhanced golden blip effect
+                    // Central bright flash
+                    const blip = this.particlePool.get(star.x, star.y, 'starBlip');
+                    if (blip) {
+                        blip.color = '#FFD700'; // Gold color
+                        blip.radius = 3; // Slightly larger
+                        blip.life = 0.3; // Slightly longer
+                        blip.fadeRate = 0.1;
+                        blip.growthRate = 0.2; // Slight expansion
+                    }
+                    
+                    // Ring of smaller sparkles
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (i / 6) * Math.PI * 2;
+                        const dist = 8;
+                        const sparkle = this.particlePool.get(
+                            star.x + Math.cos(angle) * dist,
+                            star.y + Math.sin(angle) * dist,
+                            'starSparkle'
+                        );
+                        if (sparkle) {
+                            sparkle.color = '#FFD700';
+                            sparkle.radius = 1;
+                            sparkle.life = 0.4;
+                            sparkle.vel = {
+                                x: Math.cos(angle) * 2,
+                                y: Math.sin(angle) * 2
+                            };
+                        }
+                    }
+                    
+                    // Add energy up to max capacity (999 total)
+                    const currentTotalEnergy = this.energyTanks * this.maxEnergy + this.playerEnergy;
+                    const maxTotalEnergy = 999;
+                    
+                    if (currentTotalEnergy < maxTotalEnergy) {
+                        const addAmount = star.isBurst ? GAME_CONFIG.BURST_STAR_ENERGY : GAME_CONFIG.STAR_ENERGY;
+                        let newTotalEnergy = Math.min(currentTotalEnergy + addAmount, maxTotalEnergy);
+                        
+                        // Calculate new tanks and energy
+                        this.energyTanks = Math.floor(newTotalEnergy / this.maxEnergy);
+                        this.playerEnergy = newTotalEnergy % this.maxEnergy;
+                        
+                        // Special case: if we have exactly 999 energy
+                        if (newTotalEnergy === 999) {
+                            this.energyTanks = 10;
+                            this.playerEnergy = 99;
                         }
                     }
                     if (!star.isBurst) this.spawnStar();
@@ -409,117 +491,23 @@ export class GameEngine {
             let value = Math.round(percent * 99);
             if (value < 0) value = 0;
             if (value > 99) value = 99;
-            // State transitions
-            // Only go CRITICAL if in PLAYING state
-            if (this.game.state === GAME_STATES.PLAYING && value === 0 && this.prevEnergyValue > 0 && this.playerState !== PLAYER_STATES.CRITICAL) {
-                this.playerState = PLAYER_STATES.CRITICAL;
-                this.criticalTimer = 300; // 5 seconds at 60fps
-                this.criticalAlarmCounter = 0;
-                this.showCriticalOverlay();
-            }
-            if (this.playerState === PLAYER_STATES.CRITICAL) {
-                this.criticalTimer--;
-                this.criticalAlarmCounter++;
-                if (this.criticalAlarmCounter % 120 === 1) {
-                    this.playCriticalAlarm();
-                }
-                if (this.criticalTimer <= 0) {
-                    this.playerState = PLAYER_STATES.RAPID_RECHARGE;
-                    this.hideCriticalOverlay();
-                }
-            }
-            if (this.playerState === PLAYER_STATES.RAPID_RECHARGE) {
-                this.energyRegenRapid = true;
-            }
-            // End rapid recharge when full
-            if (this.energyRegenRapid) {
-                this.playerEnergy += 6;
-                if (this.playerEnergy >= this.maxEnergy) {
-                    this.playerEnergy = this.maxEnergy;
-                    this.energyRegenRapid = false;
-                    this.playerState = PLAYER_STATES.NORMAL;
-                }
-            }
-            this.prevEnergyValue = value;
-            let canAct = value > 0 && this.playerState === PLAYER_STATES.NORMAL;
-            let usingThrust = canAct && (input.up || (typeof input.joystickY === 'number' && input.joystickY < -0.3)) && this.playerEnergy > 0;
-            // Energy logic
-            if (usingThrust && !this.energyDepleted && this.playerState === PLAYER_STATES.NORMAL) {
-                const prevEnergy = this.playerEnergy;
-                this.playerEnergy -= this.energyDepleteRate;
-                let used = prevEnergy - this.playerEnergy;
-                if (used > 0) this.game.score += used * 99 / this.maxEnergy; // 1 point per 1 energy used
-                if (this.playerEnergy <= 0) {
-                    this.playerEnergy = 0;
-                    this.energyDepleted = true;
-                    this.energyDepletedTimer = 300;
-                }
-            } else if (this.energyDepleted) {
-                this.energyDepletedTimer--;
-                if (this.energyDepletedTimer <= 0) {
-                    this.energyDepleted = false;
-                }
-            } else if (this.playerEnergy < this.maxEnergy && this.playerState === PLAYER_STATES.NORMAL) {
-                this.playerEnergy += this.energyRegenRate;
-                if (this.playerEnergy > this.maxEnergy) this.playerEnergy = this.maxEnergy;
-            }
-            // Update simple energy bar UI
-            if (energyBar && energyValue) {
-                percent = this.playerEnergy / this.maxEnergy;
-                value = Math.round(percent * 99);
-                if (value < 0) value = 0;
-                if (value > 99) value = 99;
-                energyBar.style.width = `${Math.max(0, percent * 180)}px`;
-                let color;
-                if (percent > 0.66) {
-                    const t = (percent - 0.66) / 0.34;
-                    color = `rgb(${255 * (1-t)},255,0)`;
-                } else if (percent > 0.33) {
-                    const t = (percent - 0.33) / 0.33;
-                    color = `rgb(255,${165 + 90*t},0)`;
-                } else {
-                    const t = percent / 0.33;
-                    color = `rgb(255,${t*165},0)`;
-                }
-                energyBar.style.background = color;
-                energyValue.style.color = color;
-                // Always display as integer, no decimals
-                energyValue.textContent = Math.round(value).toString().padStart(2, '0');
-                if (value === 0) {
-                    energyValue.classList.add('flashing-red');
-                } else {
-                    energyValue.classList.remove('flashing-red');
-                }
-            }
-            // Remove firing logic from here. Player handles firing in its update method.
-            // Only fire if input.firePressed is true and in normal state
-            if (input.firePressed && canAct) {
-                const prevEnergy = this.playerEnergy;
-                this.playerEnergy -= 2;
-                let used = prevEnergy - this.playerEnergy;
-                if (used > 0) this.game.score += used;
-                if (this.playerEnergy < 0) this.playerEnergy = 0;
-            }
-            // Prevent player from moving when not in normal state
-            if (this.playerState === PLAYER_STATES.NORMAL) {
-                this.player.update(input, this.particlePool, this.bulletPool, this.audioManager);
-            } else if (this.playerState === PLAYER_STATES.CRITICAL) {
-                // Allow only turning, preserve momentum, disable thrust/shoot
-                const turnOnlyInput = {
-                    ...input,
-                    up: false,
-                    down: false,
-                    fire: false,
-                    space: false,
-                };
-                this.player.update(turnOnlyInput, this.particlePool, this.bulletPool, this.audioManager);
-            }
+            // Remove critical state logic - energy doesn't deplete automatically anymore
+            // Calculate total energy from tanks and current energy
+            const totalEnergy = (this.energyTanks - 1) * this.maxEnergy + this.playerEnergy;
+            
+            let canAct = totalEnergy > 0 && this.playerState === PLAYER_STATES.NORMAL;
+            // Energy no longer drains from thrust or shooting
+            // Update energy bar and tanks UI
+            this.updateEnergyDisplay();
+            // Remove firing energy cost - energy only drains from damage
+            // Always allow normal player movement
+            this.player.update(input, this.particlePool, this.bulletPool, this.audioManager);
             this.bulletPool.updateActive(this.particlePool, this.asteroidPool);
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.asteroidPool.updateActive();
             // Tractor beam visual and sound feedback
-            if (input.space && canAct) {
+            if (input.space) {
                 // Only trigger if not already recently triggered (avoid spamming)
                 if (!this.tractorBeamActive) {
                     this.tractorBeamActive = true;
@@ -548,11 +536,6 @@ export class GameEngine {
             
             this.uiManager.updateScore(this.game.score);
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
-            // Remove CRITICAL overlay if still active
-            if (this.playerState === PLAYER_STATES.CRITICAL || this.playerState === PLAYER_STATES.RAPID_RECHARGE) {
-                this.hideCriticalOverlay();
-                this.playerState = PLAYER_STATES.NORMAL;
-            }
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
         }
@@ -664,49 +647,223 @@ export class GameEngine {
         this.gameLoop();
     }
 
-    showCriticalOverlay() {
-        let overlay = document.getElementById('critical-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'critical-overlay';
-            overlay.style.position = 'fixed';
-            overlay.style.top = '0';
-            overlay.style.left = '0';
-            overlay.style.width = '100vw';
-            overlay.style.height = '100vh';
-            overlay.style.background = 'rgba(255,0,0,0.18)';
-            overlay.style.display = 'flex';
-            overlay.style.alignItems = 'center';
-            overlay.style.justifyContent = 'center';
-            overlay.style.zIndex = '9999';
-            overlay.style.pointerEvents = 'none';
-            overlay.innerHTML = '<span class="critical-flash-text">CRITICAL</span>';
-            document.body.appendChild(overlay);
+    
+    takeDamage() {
+        // Store state before damage for animation
+        this.energyBeforeDamage = this.displayEnergy;
+        this.tanksBeforeDamage = this.displayTanks;
+        
+        // Apply damage
+        let remainingDamage = this.damagePerHit;
+        
+        // Calculate final state after damage
+        let finalEnergy = this.playerEnergy;
+        let finalTanks = this.energyTanks;
+        
+        // First drain from current energy
+        if (finalEnergy >= remainingDamage) {
+            finalEnergy -= remainingDamage;
+            remainingDamage = 0;
         } else {
-            overlay.style.display = 'flex';
+            remainingDamage -= finalEnergy;
+            finalEnergy = 0;
+            
+            // Then drain from tanks
+            while (remainingDamage > 0 && finalTanks > 0) {
+                // Use up a tank
+                finalTanks--;
+                finalEnergy = this.maxEnergy;
+                
+                if (finalEnergy >= remainingDamage) {
+                    finalEnergy -= remainingDamage;
+                    remainingDamage = 0;
+                } else {
+                    remainingDamage -= finalEnergy;
+                    finalEnergy = 0;
+                }
+            }
+        }
+        
+        // Set final values
+        this.playerEnergy = finalEnergy;
+        this.energyTanks = finalTanks;
+        this.energyAfterDamage = finalEnergy;
+        this.tanksAfterDamage = finalTanks;
+        
+        // Start damage animation
+        this.animatingDamage = true;
+        this.damageAnimationStart = Date.now();
+        
+        // Check if player is dead
+        const totalEnergy = this.energyTanks * this.maxEnergy + this.playerEnergy;
+        if (totalEnergy <= 0) {
+            this.player.die(this.particlePool, this.audioManager, this.uiManager, this.game, this.triggerScreenShake.bind(this));
         }
     }
-    playCriticalAlarm() {
-        // Play a simple alarm sound using the AudioManager or a beep
-        if (this.audioManager && this.audioManager.playAlarm) {
-            this.audioManager.playAlarm();
+    
+    updateEnergyDisplay() {
+        const energyBar = document.getElementById('energy-bar');
+        const energyValue = document.getElementById('energy-value');
+        const energyBarContainer = document.getElementById('energy-bar-container');
+        let energyTanksContainer = document.getElementById('energy-tanks');
+        
+        // Update animation state
+        if (this.animatingDamage) {
+            const elapsed = Date.now() - this.damageAnimationStart;
+            const progress = Math.min(elapsed / this.damageAnimationDuration, 1);
+            
+            // Animate energy draining
+            if (this.tanksBeforeDamage > this.tanksAfterDamage) {
+                // Tank loss animation: drain to 0, refill to 99, drain to final
+                if (progress < 0.33) {
+                    // Phase 1: drain current energy to 0
+                    const drainProgress = progress * 3;
+                    this.displayEnergy = this.energyBeforeDamage * (1 - drainProgress);
+                    this.displayTanks = this.tanksBeforeDamage;
+                } else if (progress < 0.5) {
+                    // Tank explosion moment
+                    this.displayEnergy = 0;
+                    this.displayTanks = this.tanksBeforeDamage;
+                    
+                    // Trigger tank explosion at this moment
+                    if (!this.tankExploded) {
+                        this.tankExploded = true;
+                        this.explodeTank(this.tanksBeforeDamage - 1);
+                        this.triggerScreenShake(20, 10, 40);
+                    }
+                } else if (progress < 0.67) {
+                    // Phase 2: refill to 99
+                    const refillProgress = (progress - 0.5) * 6;
+                    this.displayEnergy = 99 * refillProgress;
+                    this.displayTanks = this.tanksAfterDamage;
+                } else {
+                    // Phase 3: drain from 99 to final value
+                    const finalDrainProgress = (progress - 0.67) * 3;
+                    this.displayEnergy = 99 - (99 - this.energyAfterDamage) * finalDrainProgress;
+                    this.displayTanks = this.tanksAfterDamage;
+                }
+            } else {
+                // Simple energy drain (no tank loss)
+                this.displayEnergy = this.energyBeforeDamage + (this.energyAfterDamage - this.energyBeforeDamage) * progress;
+                this.displayTanks = this.tanksBeforeDamage;
+            }
+            
+            if (progress >= 1) {
+                this.animatingDamage = false;
+                this.tankExploded = false;
+                this.displayEnergy = this.playerEnergy;
+                this.displayTanks = this.energyTanks;
+            }
         } else {
-            // Fallback: use Web Audio API beep
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const o = ctx.createOscillator();
-                const g = ctx.createGain();
-                o.type = 'square';
-                o.frequency.value = 440;
-                g.gain.value = 0.15;
-                o.connect(g); g.connect(ctx.destination);
-                o.start();
-                setTimeout(() => { o.stop(); ctx.close(); }, 180);
-            } catch (e) {}
+            this.displayEnergy = this.playerEnergy;
+            this.displayTanks = this.energyTanks;
         }
-    }
-    hideCriticalOverlay() {
-        const overlay = document.getElementById('critical-overlay');
-        if (overlay) overlay.style.display = 'none';
+        
+        if (energyBar && energyValue) {
+            // Update energy value display
+            energyValue.textContent = Math.round(this.displayEnergy).toString().padStart(2, '0');
+            
+            // Color based on whether player has tanks
+            let color;
+            if (this.displayTanks > 0) {
+                color = '#00ff00';
+            } else {
+                const percent = this.displayEnergy / this.maxEnergy;
+                if (percent > 0.5) {
+                    const t = (percent - 0.5) * 2;
+                    color = `rgb(${255 * (1-t)}, 255, 0)`;
+                } else {
+                    const t = percent * 2;
+                    color = `rgb(255, ${255 * t}, 0)`;
+                }
+            }
+            
+            energyValue.style.color = color;
+            
+            // Update energy bar - no red background, just green bar
+            const percent = this.displayEnergy / this.maxEnergy;
+            energyBar.innerHTML = '';
+            energyBar.style.width = `${Math.max(0, percent * 100)}%`;
+            energyBar.style.background = color;
+        }
+        
+        // Update energy tanks display
+        if (!energyTanksContainer) {
+            // Create energy tanks container if it doesn't exist
+            const container = document.createElement('div');
+            container.id = 'energy-tanks';
+            container.style.position = 'absolute';
+            container.style.top = '40px';
+            container.style.left = '70px'; // Align with energy bar (24px base + 45px margin)
+            container.style.display = 'flex';
+            container.style.gap = '3px';
+            container.style.zIndex = '90';
+            document.body.appendChild(container);
+        } else {
+            // Clear existing tanks
+            energyTanksContainer.innerHTML = '';
+        }
+        
+        // Create only the tanks the player has (max 10 visible)
+        energyTanksContainer = document.getElementById('energy-tanks');
+        const visibleTanks = Math.min(this.displayTanks, 10);
+        for (let i = 0; i < visibleTanks; i++) {
+            const tank = document.createElement('div');
+            tank.className = 'energy-tank';
+            tank.dataset.tankIndex = i;
+            tank.style.width = '14px';
+            tank.style.height = '14px';
+            tank.style.borderRadius = '3px';
+            tank.style.background = 'rgba(0,255,0,0.8)';
+            tank.style.position = 'relative';
+            energyTanksContainer.appendChild(tank);
+        }
+    }    
+    explodeTank(tankIndex) {
+        const tanks = document.querySelectorAll('.energy-tank');
+        if (tanks[tankIndex]) {
+            const tank = tanks[tankIndex];
+            const rect = tank.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            // Create explosion particles at tank location
+            for (let i = 0; i < 12; i++) {
+                const particle = document.createElement('div');
+                particle.style.position = 'fixed';
+                particle.style.left = centerX + 'px';
+                particle.style.top = centerY + 'px';
+                particle.style.width = '4px';
+                particle.style.height = '4px';
+                particle.style.background = '#00ff00';
+                particle.style.borderRadius = '50%';
+                particle.style.zIndex = '1000';
+                particle.style.pointerEvents = 'none';
+                document.body.appendChild(particle);
+                
+                // Animate particle
+                const angle = (i / 12) * Math.PI * 2;
+                const speed = 50 + Math.random() * 50;
+                const duration = 500 + Math.random() * 500;
+                
+                particle.animate([
+                    { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+                    { transform: `translate(${Math.cos(angle) * speed}px, ${Math.sin(angle) * speed}px) scale(0)`, opacity: 0 }
+                ], {
+                    duration: duration,
+                    easing: 'ease-out'
+                }).onfinish = () => particle.remove();
+            }
+            
+            // Flash and fade the tank
+            tank.animate([
+                { opacity: 1, transform: 'scale(1)' },
+                { opacity: 1, transform: 'scale(1.5)' },
+                { opacity: 0, transform: 'scale(0)' }
+            ], {
+                duration: 300,
+                easing: 'ease-out'
+            });
+        }
     }
 } 

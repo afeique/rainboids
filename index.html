@@ -35,12 +35,13 @@
         <p>For the best experience,<br>please rotate your device to landscape mode.</p>
     </div>
 
-    <div id="energy-bar-row" style="position:absolute;top:18px;left:50%;transform:translateX(-50%);display:flex;align-items:center;z-index:90;">
+    <div id="energy-bar-row">
         <span id="energy-value"></span>
-        <div id="energy-bar"></div>
+        <div id="energy-bar-container">
+            <div id="energy-bar"></div>
+        </div>
     </div>
-    <div id="score" class="ui-element">0</div>
-    <div id="wave-display" class="ui-element">WAVE: 1</div>
+    <div id="score" class="ui-element" style="position:absolute;top:18px;right:24px;">0</div>
     
     <div id="game-message-overlay" class="ui-element">
         <h1 id="message-title" class="message-title" style="display: none;"></h1>

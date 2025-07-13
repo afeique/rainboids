@@ -31,12 +31,6 @@ canvas {
 
 #score {
     top: 20px;
-    left: 20px;
-    font-size: 24px;
-}
-
-#wave-display {
-    top: 20px;
     right: 20px;
     font-size: 24px;
 }
@@ -113,7 +107,7 @@ canvas {
     background: linear-gradient( to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50% );
     background-size: 100% 4px;
     animation: scanline 10s linear infinite;
-    z-index: 100;
+    z-index: 500; /* Above title screen */
 }
 
 #mobile-controls {
@@ -452,57 +446,67 @@ canvas {
     position: absolute;
     top: 18px;
     left: 24px;
-    transform: none;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     z-index: 90;
-    width: 220px;
-    justify-content: flex-start;
 }
-#energy-bar {
-    width: 180px;
+
+#energy-bar-container {
+    position: relative;
+    width: 220px;
     height: 16px;
-    background: #00ff00;
-    transition: width 0.2s, background 0.2s;
-    margin-left: 0;
+    background: rgba(64,64,64,0.5);
+    border-radius: 3px;
+    margin-left: 45px;
+}
+
+#energy-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 3px;
+    overflow: hidden;
 }
 #energy-value {
+    position: absolute;
+    top: 0;
+    left: 0;
     font-family: 'Press Start 2P', monospace;
     font-size: 1.1em;
     font-weight: bold;
-    margin-right: 18px;
     color: #00ff00;
     text-shadow: none;
-    width: 2.5ch;
-    display: inline-block;
+    width: 36px;
+    display: block;
     text-align: right;
     transition: color 0.2s;
 }
-#energy-value.flashing-red {
-    animation: flash-red-text 0.5s alternate infinite;
-    color: #ff2222 !important;
-    text-shadow: 0 0 8px #ff2222, 0 0 16px #ff2222, 1px 1px 2px #000;
-}
-@keyframes flash-red-text {
-    0% { color: #ff2222; text-shadow: 0 0 8px #ff2222, 0 0 16px #ff2222, 1px 1px 2px #000; }
-    100% { color: #fff; text-shadow: 0 0 2px #fff, 1px 1px 2px #000; }
+/* Critical/flashing effects removed */
+
+#energy-tanks {
+    position: absolute;
+    top: 40px;
+    left: 24px;
+    display: flex;
+    gap: 2px;
+    z-index: 90;
 }
 
-.critical-flash-text {
-    color: #ff2222;
-    font-size: 4em;
-    font-family: 'Press Start 2P', monospace;
-    font-weight: bold;
-    text-shadow: 0 0 8px #ff2222, 0 0 16px #ff2222, 1px 1px 2px #000;
-    animation: flash-red-text 0.5s alternate infinite;
-    pointer-events: none;
+.energy-tank {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: rgba(0,255,0,0.8);
+    transition: background 0.2s;
 }
 
 @media (hover: none) and (pointer: coarse), (max-width: 768px) {
     #mobile-controls, #mobile-pause-button {
         display: block;
     }
-    #wave-display, #score { 
+    #score { 
         font-size: 18px; 
     }
     #mobile-pause-button { 

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp:*)",
+      "Bash(sed:*)",
+      "Bash(rm:*)"
+    ],
+    "deny": []
+  }
+}

@@ -1,0 +1,903 @@
+// Main game engine and state management
+import { GAME_CONFIG, GAME_STATES } from './constants.js';
+import { random, collision, triggerHapticFeedback } from './utils.js';
+import { PoolManager } from './pool-manager.js';
+import { Player } from './entities/player.js';
+import { Bullet } from './entities/bullet.js';
+import { Asteroid } from './entities/asteroid.js';
+import { Particle } from './entities/particle.js';
+import { Star } from './entities/star.js';
+import { LineDebris } from './entities/line-debris.js';
+
+export const PLAYER_STATES = {
+    NORMAL: 'normal'
+};
+
+export class GameEngine {
+    constructor(canvas, uiManager, audioManager, inputHandler) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.uiManager = uiManager;
+        this.audioManager = audioManager;
+        this.inputHandler = inputHandler;
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        this.game = {
+            score: 0,
+            highScore: 0,
+            currentWave: 0,
+            state: GAME_STATES.TITLE_SCREEN,
+            lastState: GAME_STATES.TITLE_SCREEN,
+            screenShakeDuration: 0,
+            screenShakeMagnitude: 0
+        };
+        this.initializePools();
+        this.setupEventListeners();
+        this.playerCanFire = true;
+        this.previousFire = false;
+        this.maxEnergy = 99;
+        this.playerEnergy = this.maxEnergy;
+        this.energyTanks = 0; // Player starts with zero energy tanks
+        this.damagePerHit = 33; // Each hit takes 33 energy (3 hits to deplete one tank)
+        
+        // Damage animation properties
+        this.animatingDamage = false;
+        this.damageAnimationStart = 0;
+        this.damageAnimationDuration = 1000; // 1 second
+        this.energyBeforeDamage = this.maxEnergy;
+        this.energyAfterDamage = this.maxEnergy;
+        this.tanksBeforeDamage = 0;
+        this.tanksAfterDamage = 0;
+        this.displayEnergy = this.maxEnergy;
+        this.displayTanks = 0;
+        this.playerState = PLAYER_STATES.NORMAL;
+        this.pendingDamage = 0; // New property to track pending damage
+    }
+    
+    initializePools() {
+        this.player = new Player();
+        
+        this.bulletPool = new PoolManager(Bullet, 20);
+        this.particlePool = new PoolManager(Particle, 200);
+        this.lineDebrisPool = new PoolManager(LineDebris, 100);
+        this.asteroidPool = new PoolManager(Asteroid, 20);
+        this.starPool = new PoolManager(Star, GAME_CONFIG.STAR_COUNT + 100);
+    }
+    
+    setupEventListeners() {
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            this.width = window.innerWidth;
+            this.height = window.innerHeight;
+            this.canvas.width = this.width;
+            this.canvas.height = this.height;
+            this.uiManager.checkOrientation();
+        });
+        
+        // Handle orientation change
+        window.addEventListener('orientationchange', () => {
+            this.uiManager.checkOrientation();
+        });
+        
+        // Handle pause
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Escape') {
+                this.togglePause();
+            }
+        });
+        
+        this.uiManager.elements.mobilePauseButton.addEventListener('click', () => {
+            this.togglePause();
+        });
+        
+        // Handle game restart
+        window.addEventListener('click', () => {
+            if (this.game.state === GAME_STATES.GAME_OVER) {
+                this.init();
+            }
+        });
+        
+        window.addEventListener('touchstart', () => {
+            if (this.game.state === GAME_STATES.GAME_OVER) {
+                this.init();
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Enter' && this.game.state === GAME_STATES.GAME_OVER) {
+                this.init();
+            }
+        });
+    }
+    
+    init() {
+        this.game.score = 0;
+        this.game.currentWave = 0;
+        this.game.state = GAME_STATES.PLAYING;
+        // Reset player
+        this.player = new Player();
+        // Reset energy
+        this.playerEnergy = this.maxEnergy;
+        this.energyTanks = 0; // Reset to zero tanks
+        this.displayEnergy = this.maxEnergy;
+        this.displayTanks = 0;
+        this.animatingDamage = false;
+        this.pendingDamage = 0; // Reset pending damage
+        // Clear all pools
+        this.bulletPool.activeObjects = [];
+        this.particlePool.activeObjects = [];
+        this.lineDebrisPool.activeObjects = [];
+        this.asteroidPool.activeObjects = [];
+        this.starPool.activeObjects = [];
+        // Spawn initial stars
+        for (let i = 0; i < GAME_CONFIG.STAR_COUNT; i++) {
+            this.spawnStar();
+        }
+        this.startNextWave();
+        this.uiManager.hideMessage();
+    }
+    
+    startNextWave() {
+        // Clean up inactive objects in all pools before starting the next wave
+        this.bulletPool.cleanupInactive();
+        this.particlePool.cleanupInactive();
+        this.lineDebrisPool.cleanupInactive();
+        this.asteroidPool.cleanupInactive();
+        this.starPool.cleanupInactive();
+        this.game.currentWave++;
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500);
+        this.game.state = GAME_STATES.WAVE_TRANSITION;
+        // Reset player state at wave start
+        this.playerState = PLAYER_STATES.NORMAL;
+        const numAsteroids = GAME_CONFIG.INITIAL_AST_COUNT + (this.game.currentWave - 1) * 2;
+        for (let i = 0; i < numAsteroids; i++) {
+            this.spawnAsteroidOffscreen();
+        }
+        setTimeout(() => {
+            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+                this.game.state = GAME_STATES.PLAYING;
+            }
+        }, 1500);
+        // No rapid recharge between waves - energy persists
+        // Only restore energy at game start
+    }
+    
+    spawnAsteroidOffscreen() {
+        let x, y;
+        const edge = Math.floor(random(0, 4));
+        const r = random(30, 60);
+        const spawnBuffer = r * 4;
+        
+        switch (edge) {
+            case 0: x = random(0, this.width); y = -spawnBuffer; break;
+            case 1: x = this.width + spawnBuffer; y = random(0, this.height); break;
+            case 2: x = random(0, this.width); y = this.height + spawnBuffer; break;
+            default: x = -spawnBuffer; y = random(0, this.height); break;
+        }
+        
+        const newAst = this.asteroidPool.get(x, y, r);
+        const tx = random(this.width * 0.3, this.width * 0.7);
+        const ty = random(this.height * 0.3, this.height * 0.7);
+        const ang = Math.atan2(ty - y, tx - x);
+        const spd = Math.min(2.5, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.1);
+        newAst.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
+    }
+    
+    spawnStar() {
+        let x, y, tooClose, attempts = 0;
+        // On mobile, always use landscape dimensions for star spawning
+        let spawnWidth = this.width;
+        let spawnHeight = this.height;
+        if (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches) {
+            spawnWidth = Math.max(window.innerWidth, window.innerHeight);
+            spawnHeight = Math.max(window.innerWidth, window.innerHeight);
+        }
+        do {
+            tooClose = false;
+            x = random(0, spawnWidth);
+            y = random(0, spawnHeight);
+            if (this.starPool && this.starPool.activeObjects) {
+                for (let o of this.starPool.activeObjects) {
+                    if (Math.hypot(x - o.x, y - o.y) < GAME_CONFIG.MIN_STAR_DIST) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            attempts++;
+            if (attempts > 100) break;
+        } while (tooClose);
+        if (!tooClose) {
+            this.starPool.get(x, y, false);
+        }
+    }
+    
+    createDebris(ast) {
+        for (let i = 0; i < 25; i++) {
+            this.particlePool.get(ast.x, ast.y, 'explosion');
+        }
+        
+        ast.edges.forEach(edge => {
+            const p1 = ast.vertices3D[edge[0]];
+            const p2 = ast.vertices3D[edge[1]];
+            this.lineDebrisPool.get(ast.x, ast.y, p1, p2);
+        });
+    }
+    
+    createStarBurst(x, y) {
+        for (let i = 0; i < 5; i++) {
+            this.starPool.get(x, y, true);
+        }
+    }
+    
+    handleCollisions() {
+        // Player vs Asteroids
+        if (this.player.active) {
+            for (const ast of this.asteroidPool.activeObjects) {
+                if (collision(this.player, ast)) {
+                    // Player takes damage
+                    this.takeDamage();
+                    
+                    // Mass-based collision physics
+                    const dx = ast.x - this.player.x;
+                    const dy = ast.y - this.player.y;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+                    
+                    // Relative velocity
+                    const dvx = ast.vel.x - this.player.vel.x;
+                    const dvy = ast.vel.y - this.player.vel.y;
+                    const dvn = dvx * nx + dvy * ny;
+                    
+                    // Don't process if already separating
+                    if (dvn > 0) continue;
+                    
+                    // Calculate impulse magnitude
+                    const totalMass = this.player.mass + ast.mass;
+                    const impulse = 2 * dvn / totalMass;
+                    
+                    // Apply impulse to velocities
+                    this.player.vel.x += impulse * ast.mass * nx;
+                    this.player.vel.y += impulse * ast.mass * ny;
+                    ast.vel.x -= impulse * this.player.mass * nx;
+                    ast.vel.y -= impulse * this.player.mass * ny;
+                    
+                    // Separate overlapping objects
+                    const overlap = this.player.radius + ast.radius - dist;
+                    const separationForce = overlap / 2;
+                    this.player.x -= nx * separationForce;
+                    this.player.y -= ny * separationForce;
+                    ast.x += nx * separationForce;
+                    ast.y += ny * separationForce;
+                    
+                    // Create collision effects
+                    // White pulse at impact point
+                    const impactX = this.player.x + nx * this.player.radius;
+                    const impactY = this.player.y + ny * this.player.radius;
+                    this.particlePool.get(impactX, impactY, 'explosionPulse', 30);
+                    
+                    // Blue particles explosion
+                    for (let i = 0; i < 20; i++) {
+                        const particle = this.particlePool.get(impactX, impactY, 'explosion');
+                        if (particle) {
+                            // Override color to blue
+                            particle.color = `hsl(210, 100%, ${50 + Math.random() * 50}%)`;
+                        }
+                    }
+                    
+                    this.audioManager.playHit();
+                    
+                    // Screen shake based on impact force
+                    const impactForce = Math.abs(impulse) * totalMass;
+                    this.triggerScreenShake(15, 8, impactForce * 0.5);
+                    
+                    return;
+                }
+            }
+        }
+        
+        // Bullets vs Asteroids
+        for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
+            const bullet = this.bulletPool.activeObjects[i];
+            if (!bullet.active) continue;
+            for (let j = this.asteroidPool.activeObjects.length - 1; j >= 0; j--) {
+                const ast = this.asteroidPool.activeObjects[j];
+                if (!ast.active) continue;
+                if (collision(bullet, ast)) {
+                    this.game.score += 50; // 50 points for hit
+                    triggerHapticFeedback(20);
+                    this.audioManager.playHit();
+                    
+                    // Damage the asteroid
+                    ast.health--;
+                    
+                    // Hit effects
+                    this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', ast.baseRadius * 0.5);
+                    for (let p = 0; p < 7; p++) {
+                        this.particlePool.get(bullet.x, bullet.y, 'explosionRedOrange');
+                    }
+                    
+                    // Light screen shake for asteroid hits
+                    this.triggerScreenShake(2, 1, ast.baseRadius * 0.2);
+                    
+                    if (ast.health <= 0 && ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
+                        this.game.score += 100; // 100 points for destroy
+                        this.audioManager.playExplosion();
+                        // Multiple fiery shockwave pulses for destruction
+                        const pulseCount = 4;
+                        for (let n = 0; n < pulseCount; n++) {
+                            setTimeout(() => {
+                                this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * (1.2 + n * 0.5));
+                                this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * (1.1 + n * 0.2));
+                            }, n * 80);
+                        }
+                        for (let p = 0; p < 54; p++) {
+                            this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
+                        }
+                        this.createDebris(ast);
+                        this.createStarBurst(ast.x, ast.y);
+                        this.asteroidPool.release(ast);
+                        this.triggerScreenShake(15, 8, ast.baseRadius);
+                    } else if (ast.health <= 0) {
+                        const count = Math.random() < 0.5 ? 2 : 3;
+                        const newR = ast.baseRadius / Math.sqrt(count);
+                        const totalMass = ast.mass + bullet.mass;
+                        const v_com_x = (ast.vel.x * ast.mass + bullet.vel.x * bullet.mass) / totalMass;
+                        const v_com_y = (ast.vel.y * ast.mass + bullet.vel.y * bullet.mass) / totalMass;
+                        
+                        if (newR < GAME_CONFIG.MIN_AST_RAD) {
+                            this.game.score += 100; // 100 points for destroy
+                            this.audioManager.playExplosion();
+                            // Large explosion pulse and many particles for destruction
+                            this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.2);
+                            for (let p = 0; p < 18; p++) {
+                                this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
+                            }
+                            this.createDebris(ast);
+                            this.createStarBurst(ast.x, ast.y);
+                            this.triggerScreenShake(12, 6, ast.baseRadius);
+                        } else {
+                            // Additional screen shake for asteroid splitting
+                            this.triggerScreenShake(8, 4, ast.baseRadius * 0.5);
+                            
+                            for (let k = 0; k < count; k++) {
+                                const newAst = this.asteroidPool.get(
+                                    ast.x + random(-2, 2),
+                                    ast.y + random(-2, 2),
+                                    newR
+                                );
+                                const angle = (k / count) * (2 * Math.PI) + random(-0.2, 0.2);
+                                const kick_x = Math.cos(angle) * 1;
+                                const kick_y = Math.sin(angle) * 1;
+                                newAst.vel.x = v_com_x + kick_x;
+                                newAst.vel.y = v_com_y + kick_y;
+                            }
+                        }
+                        this.asteroidPool.release(ast);
+                    }
+                    this.bulletPool.release(bullet);
+                    break;
+                }
+            }
+        }
+        
+        // Asteroid vs Asteroid collisions
+        const activeAsteroids = this.asteroidPool.activeObjects;
+        for (let i = 0; i < activeAsteroids.length; i++) {
+            for (let j = i + 1; j < activeAsteroids.length; j++) {
+                let a1 = activeAsteroids[i], a2 = activeAsteroids[j];
+                if (!a1.active || !a2.active) continue;
+                if (collision(a1, a2)) {
+                    let dx = a2.x - a1.x, dy = a2.y - a1.y, dist = Math.hypot(dx, dy);
+                    if (dist === 0) continue;
+                    
+                    // Play explosion sound
+                    this.audioManager.playExplosion();
+                    // Spawn rocky debris particles at collision point
+                    const debrisCount = Math.floor(random(10, 18));
+                    const cx = (a1.x + a2.x) / 2;
+                    const cy = (a1.y + a2.y) / 2;
+                    for (let d = 0; d < debrisCount; d++) {
+                        this.particlePool.get(cx, cy, 'asteroidCollisionDebris');
+                    }
+                    
+                    let nx = dx / dist, ny = dy / dist, tx = -ny, ty = nx;
+                    let dpTan1 = a1.vel.x * tx + a1.vel.y * ty, dpTan2 = a2.vel.x * tx + a2.vel.y * ty;
+                    let dpNorm1 = a1.vel.x * nx + a1.vel.y * ny, dpNorm2 = a2.vel.x * nx + a2.vel.y * ny;
+                    let m1 = (dpNorm1 * (a1.mass - a2.mass) + 2 * a2.mass * dpNorm2) / (a1.mass + a2.mass);
+                    let m2 = (dpNorm2 * (a2.mass - a1.mass) + 2 * a1.mass * dpNorm1) / (a1.mass + a2.mass);
+                    
+                    a1.vel = { x: tx * dpTan1 + nx * m1, y: ty * dpTan1 + ny * m1 };
+                    a2.vel = { x: tx * dpTan2 + nx * m2, y: ty * dpTan2 + ny * m2 };
+                    
+                    let overlap = 0.5 * (a1.radius + a2.radius - dist + 1);
+                    a1.x -= overlap * nx; a1.y -= overlap * ny;
+                    a2.x += overlap * nx; a2.y += overlap * ny;
+                }
+            }
+        }
+        
+        // Player vs Stars
+        if (this.player && this.player.active) {
+            for (let i = this.starPool.activeObjects.length - 1; i >= 0; i--) {
+                const star = this.starPool.activeObjects[i];
+                if (collision(this.player, star)) {
+                    this.game.score += star.isBurst ? GAME_CONFIG.BURST_STAR_SCORE : GAME_CONFIG.STAR_SCORE;
+                    this.audioManager.playCoin();
+                    
+                    // Create golden blip effect
+                    const blip = this.particlePool.get(star.x, star.y, 'starBlip');
+                    if (blip) {
+                        blip.color = '#FFD700'; // Gold color
+                        blip.radius = 1.5; // Very small, 3x3px
+                        blip.life = 0.2; // Very quick flash
+                        blip.fadeRate = 0.15; // Fade really fast
+                        blip.growthRate = 0; // No growth
+                    }
+                    
+                    // Add energy up to max capacity (999 total)
+                    const currentTotalEnergy = this.energyTanks * this.maxEnergy + this.playerEnergy;
+                    const maxTotalEnergy = 999;
+                    
+                    if (currentTotalEnergy < maxTotalEnergy) {
+                        const addAmount = star.isBurst ? GAME_CONFIG.BURST_STAR_ENERGY : GAME_CONFIG.STAR_ENERGY;
+                        let newTotalEnergy = Math.min(currentTotalEnergy + addAmount, maxTotalEnergy);
+                        
+                        // Calculate new tanks and energy
+                        this.energyTanks = Math.floor(newTotalEnergy / this.maxEnergy);
+                        this.playerEnergy = newTotalEnergy % this.maxEnergy;
+                        
+                        // Special case: if we have exactly 999 energy
+                        if (newTotalEnergy === 999) {
+                            this.energyTanks = 10;
+                            this.playerEnergy = 99;
+                        }
+                    }
+                    if (!star.isBurst) this.spawnStar();
+                    this.starPool.release(star);
+                }
+            }
+        }
+    }
+    
+    update() {
+        if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
+            const input = this.inputHandler.getInput();
+            const energyBar = document.getElementById('energy-bar');
+            const energyValue = document.getElementById('energy-value');
+            let percent = this.playerEnergy / this.maxEnergy;
+            let value = Math.round(percent * 99);
+            if (value < 0) value = 0;
+            if (value > 99) value = 99;
+            // Remove critical state logic - energy doesn't deplete automatically anymore
+            // Calculate total energy from tanks and current energy
+            const totalEnergy = (this.energyTanks - 1) * this.maxEnergy + this.playerEnergy;
+            
+            let canAct = totalEnergy > 0 && this.playerState === PLAYER_STATES.NORMAL;
+            // Energy no longer drains from thrust or shooting
+            // Update energy bar and tanks UI
+            this.updateEnergyDisplay();
+            // Remove firing energy cost - energy only drains from damage
+            // Always allow normal player movement
+            this.player.update(input, this.particlePool, this.bulletPool, this.audioManager);
+            this.bulletPool.updateActive(this.particlePool, this.asteroidPool);
+            this.particlePool.updateActive();
+            this.lineDebrisPool.updateActive();
+            this.asteroidPool.updateActive();
+            // Tractor beam visual and sound feedback
+            if (input.space) {
+                // Only trigger if not already recently triggered (avoid spamming)
+                if (!this.tractorBeamActive) {
+                    this.tractorBeamActive = true;
+                }
+                // Spawn multiple neon-blue particles in a radius around the ship
+                for (let i = 0; i < 2; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 60 + Math.random() * 40;
+                    const px = this.player.x + Math.cos(angle) * dist;
+                    const py = this.player.y + Math.sin(angle) * dist;
+                    this.particlePool.get(px, py, 'tractorBeamParticle', this.player.x, this.player.y);
+                }
+                // Tractor beam sound disabled
+            } else {
+                this.tractorBeamActive = false;
+            }
+            // Pass input.space to stars as playerPos.space
+            this.starPool.activeObjects.forEach(s => s.update(this.player.vel, { ...this.player, space: input.space }));
+            
+            this.handleCollisions();
+            
+            if (this.game.state === GAME_STATES.PLAYING && this.asteroidPool.activeObjects.length === 0) {
+                this.game.state = GAME_STATES.WAVE_TRANSITION;
+                setTimeout(() => this.startNextWave(), 2000);
+            }
+            
+            this.uiManager.updateScore(this.game.score);
+        } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
+            this.particlePool.updateActive();
+            this.lineDebrisPool.updateActive();
+        }
+    }
+    
+    draw() {
+        // Clear with semi-transparent black for trail effect
+        this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        
+        if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
+            this.starPool.drawActive(this.ctx);
+            this.lineDebrisPool.drawActive(this.ctx);
+            this.particlePool.drawActive(this.ctx);
+            this.asteroidPool.drawActive(this.ctx);
+            this.bulletPool.drawActive(this.ctx);
+            this.player.draw(this.ctx);
+        }
+    }
+    
+    gameLoop() {
+        this.update();
+        
+        this.ctx.save();
+        if (this.game.screenShakeDuration > 0) {
+            // Enhanced shake algorithm with multiple frequencies and smooth decay
+            const time = Date.now() * 0.01;
+            const shakeIntensity = this.game.screenShakeMagnitude * (this.game.screenShakeDuration / this.game.originalShakeMagnitude);
+            
+            // Combine multiple sine waves for more natural shake
+            const dx = Math.sin(time * 15) * shakeIntensity * 0.3 + 
+                      Math.sin(time * 7) * shakeIntensity * 0.2 + 
+                      (Math.random() - 0.5) * shakeIntensity * 0.5;
+            const dy = Math.cos(time * 13) * shakeIntensity * 0.3 + 
+                      Math.cos(time * 5) * shakeIntensity * 0.2 + 
+                      (Math.random() - 0.5) * shakeIntensity * 0.5;
+            
+            this.ctx.translate(dx, dy);
+            this.game.screenShakeDuration--;
+            
+            // Smooth decay of shake magnitude
+            if (this.game.screenShakeDuration > 0) {
+                this.game.screenShakeMagnitude = Math.max(0, this.game.screenShakeMagnitude - this.game.shakeDecayRate);
+            } else {
+                this.game.screenShakeMagnitude = 0;
+            }
+        }
+        
+        this.draw();
+        this.ctx.restore();
+        
+        if (this.game.state === GAME_STATES.GAME_OVER) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.fillRect(0, 0, this.width, this.height);
+        }
+        
+        requestAnimationFrame(() => this.gameLoop());
+    }
+    
+    togglePause() {
+        if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
+            this.game.state = GAME_STATES.PAUSED;
+            this.uiManager.togglePause();
+            if (this.player && this.player.isThrusting) {
+                this.audioManager.playThruster();
+            }
+        } else if (this.game.state === GAME_STATES.PAUSED) {
+            this.game.state = GAME_STATES.PLAYING;
+            this.uiManager.togglePause();
+        }
+    }
+    
+    triggerScreenShake(duration, magnitude, asteroidSize = 0) {
+        // Enhanced screen shake based on asteroid size
+        const baseMagnitude = magnitude;
+        const sizeMultiplier = Math.max(1, asteroidSize / 30); // Larger asteroids = more shake
+        const enhancedMagnitude = baseMagnitude * sizeMultiplier;
+        
+        // Add some randomness to make it feel more natural
+        const randomDuration = duration + Math.floor(Math.random() * 5);
+        const randomMagnitude = enhancedMagnitude + Math.random() * 3;
+        
+        this.game.screenShakeDuration = randomDuration;
+        this.game.screenShakeMagnitude = randomMagnitude;
+        
+        // Store the original values for smooth decay
+        this.game.originalShakeMagnitude = randomMagnitude;
+        this.game.shakeDecayRate = randomMagnitude / randomDuration;
+    }
+    
+    loadHighScore() {
+        this.game.highScore = parseInt(localStorage.getItem('rainboidsHighScore')) || 0;
+    }
+    
+    checkHighScore() {
+        if (this.game.score > this.game.highScore) {
+            this.game.highScore = this.game.score;
+            localStorage.setItem('rainboidsHighScore', this.game.highScore);
+        }
+    }
+    
+    start() {
+        this.loadHighScore();
+        this.uiManager.checkOrientation();
+        this.uiManager.setupTitleScreen();
+        this.uiManager.showTitleScreen();
+        this.uiManager.updateHighScore(this.game.highScore);
+        this.inputHandler.setupTouchControls();
+        this.gameLoop();
+    }
+
+    
+    takeDamage() {
+        // Store state before damage for animation
+        this.energyBeforeDamage = this.displayEnergy;
+        this.tanksBeforeDamage = this.displayTanks;
+        
+        // Apply damage
+        let remainingDamage = this.damagePerHit;
+        
+        // Calculate final state after damage
+        let finalEnergy = this.playerEnergy;
+        let finalTanks = this.energyTanks;
+        
+        // First drain from current energy
+        if (finalEnergy >= remainingDamage) {
+            finalEnergy -= remainingDamage;
+            remainingDamage = 0;
+        } else {
+            remainingDamage -= finalEnergy;
+            finalEnergy = 0;
+            
+            // Then drain from tanks
+            while (remainingDamage > 0 && finalTanks > 0) {
+                // Use up a tank
+                finalTanks--;
+                finalEnergy = this.maxEnergy;
+                
+                if (finalEnergy >= remainingDamage) {
+                    finalEnergy -= remainingDamage;
+                    remainingDamage = 0;
+                } else {
+                    remainingDamage -= finalEnergy;
+                    finalEnergy = 0;
+                }
+            }
+        }
+        
+        // Set final values
+        this.playerEnergy = finalEnergy;
+        this.energyTanks = finalTanks;
+        this.energyAfterDamage = finalEnergy;
+        this.tanksAfterDamage = finalTanks;
+        
+        // Start damage animation
+        this.animatingDamage = true;
+        this.damageAnimationStart = Date.now();
+        
+        // Check if player is dead
+        const totalEnergy = this.energyTanks * this.maxEnergy + this.playerEnergy;
+        if (totalEnergy <= 0) {
+            this.player.die(this.particlePool, this.audioManager, this.uiManager, this.game, this.triggerScreenShake.bind(this));
+        }
+    }
+    
+    updateEnergyDisplay() {
+        const energyBar = document.getElementById('energy-bar');
+        const energyValue = document.getElementById('energy-value');
+        const energyBarContainer = document.getElementById('energy-bar-container');
+        let energyTanksContainer = document.getElementById('energy-tanks');
+        
+        // Update animation state
+        if (this.animatingDamage) {
+            const elapsed = Date.now() - this.damageAnimationStart;
+            const progress = Math.min(elapsed / this.damageAnimationDuration, 1);
+            
+            // --- Simple drain animation: only animate the green bar draining ---
+            if (this.animatingDamage && this.energyBeforeDamage > this.energyAfterDamage) {
+                const elapsed = Date.now() - this.damageAnimationStart;
+                const duration = this.damageAnimationDuration;
+                // If hit mid-drain, stack new damage on top of current visual state
+                if (this.pendingDamage) {
+                    this.energyBeforeDamage = this.displayEnergy;
+                    this.energyAfterDamage = Math.max(0, this.displayEnergy - this.pendingDamage);
+                    this.tanksBeforeDamage = this.displayTanks;
+                    this.tanksAfterDamage = this.displayTanks;
+                    this.damageAnimationStart = Date.now();
+                    this.pendingDamage = 0;
+                }
+                const progress = Math.min(elapsed / duration, 1);
+                let greenPercent = this.energyBeforeDamage / this.maxEnergy - (this.energyBeforeDamage - this.energyAfterDamage) / this.maxEnergy * progress;
+                greenPercent = Math.max(0, Math.min(1, greenPercent));
+                // Colors
+                let color;
+                if (this.displayTanks > 0) {
+                    color = '#00ff00';
+                } else {
+                    const percent = greenPercent;
+                    if (percent > 0.5) {
+                        const t = (percent - 0.5) * 2;
+                        color = `rgb(${255 * (1-t)}, 255, 0)`;
+                    } else {
+                        const t = percent * 2;
+                        color = `rgb(255, ${255 * t}, 0)`;
+                    }
+                }
+                energyBar.innerHTML = `
+                    <div style=\"position:absolute;left:0;width:100%;height:100%;background:rgba(64,64,64,0.5);border-radius:3px;\"></div>
+                    <div style=\"position:absolute;left:0;width:${greenPercent * 100}%;height:100%;background:${color};border-radius:3px;\"></div>
+                `;
+                // End animation
+                if (elapsed >= duration) {
+                    this.animatingDamage = false;
+                    this.tankExploded = false;
+                    this.displayEnergy = this.playerEnergy = this.energyAfterDamage;
+                    this.displayTanks = this.energyTanks = this.tanksAfterDamage;
+                }
+            } else {
+                // Simple energy drain
+                this.displayEnergy = this.energyBeforeDamage + (this.energyAfterDamage - this.energyBeforeDamage) * progress;
+                this.displayTanks = this.tanksBeforeDamage;
+            }
+            
+            if (progress >= 1) {
+                this.animatingDamage = false;
+                this.tankExploded = false;
+                this.displayEnergy = this.playerEnergy;
+                this.displayTanks = this.energyTanks;
+            }
+        } else {
+            this.displayEnergy = this.playerEnergy;
+            this.displayTanks = this.energyTanks;
+        }
+        
+        if (energyBar && energyValue) {
+            // Update energy value display
+            energyValue.textContent = Math.round(this.displayEnergy).toString().padStart(2, '0');
+            
+            // Color based on whether player has tanks
+            let color;
+            if (this.displayTanks > 0) {
+                color = '#00ff00';
+            } else {
+                const percent = this.displayEnergy / this.maxEnergy;
+                if (percent > 0.5) {
+                    const t = (percent - 0.5) * 2;
+                    color = `rgb(${255 * (1-t)}, 255, 0)`;
+                } else {
+                    const t = percent * 2;
+                    color = `rgb(255, ${255 * t}, 0)`;
+                }
+            }
+            
+            energyValue.style.color = color;
+            
+            // Create energy bar with damage chunk
+            if (this.animatingDamage && this.energyBeforeDamage > this.energyAfterDamage) {
+                // Three-layered approach: dark bg, red bg, green bar
+                const elapsed = Date.now() - this.damageAnimationStart;
+                const totalDuration = this.damageAnimationDuration;
+                const halfDuration = totalDuration / 2;
+                let greenPercent, redPercent;
+                if (elapsed < halfDuration) {
+                    // Phase 1: green drains, red stays at previous value
+                    const progress = Math.min(elapsed / halfDuration, 1);
+                    greenPercent = this.energyBeforeDamage / this.maxEnergy - (this.energyBeforeDamage - this.energyAfterDamage) / this.maxEnergy * progress;
+                    redPercent = this.energyBeforeDamage / this.maxEnergy;
+                } else {
+                    // Phase 2: green stays at new value, red drains
+                    const progress = Math.min((elapsed - halfDuration) / halfDuration, 1);
+                    greenPercent = this.energyAfterDamage / this.maxEnergy;
+                    redPercent = this.energyBeforeDamage / this.maxEnergy - (this.energyBeforeDamage - this.energyAfterDamage) / this.maxEnergy * progress;
+                }
+                // Clamp
+                greenPercent = Math.max(0, Math.min(1, greenPercent));
+                redPercent = Math.max(0, Math.min(1, redPercent));
+                // Colors
+                let color;
+                if (this.displayTanks > 0) {
+                    color = '#00ff00';
+                } else {
+                    const percent = greenPercent;
+                    if (percent > 0.5) {
+                        const t = (percent - 0.5) * 2;
+                        color = `rgb(${255 * (1-t)}, 255, 0)`;
+                    } else {
+                        const t = percent * 2;
+                        color = `rgb(255, ${255 * t}, 0)`;
+                    }
+                }
+                energyBar.innerHTML = `
+                    <div style="position:absolute;left:0;width:100%;height:100%;background:rgba(64,64,64,0.5);border-radius:3px;"></div>
+                    <div style="position:absolute;left:0;width:${redPercent * 100}%;height:100%;background:rgba(255,0,0,0.45);border-radius:3px;"></div>
+                    <div style="position:absolute;left:0;width:${greenPercent * 100}%;height:100%;background:${color};border-radius:3px;"></div>
+                `;
+            } else {
+                const percent = this.displayEnergy / this.maxEnergy;
+                energyBar.innerHTML = '';
+                energyBar.style.width = `${Math.max(0, percent * 100)}%`;
+                energyBar.style.background = color;
+            }
+        }
+        
+        // Update energy tanks display
+        if (!energyTanksContainer) {
+            // Create energy tanks container if it doesn't exist
+            const container = document.createElement('div');
+            container.id = 'energy-tanks';
+            container.style.position = 'absolute';
+            container.style.top = '40px';
+            container.style.left = '70px'; // Align with energy bar (24px base + 45px margin)
+            container.style.display = 'flex';
+            container.style.gap = '3px';
+            container.style.zIndex = '90';
+            document.body.appendChild(container);
+        } else {
+            // Clear existing tanks
+            energyTanksContainer.innerHTML = '';
+        }
+        
+        // Create only the tanks the player has (max 10 visible)
+        energyTanksContainer = document.getElementById('energy-tanks');
+        const visibleTanks = Math.min(this.displayTanks, 10);
+        for (let i = 0; i < visibleTanks; i++) {
+            const tank = document.createElement('div');
+            tank.className = 'energy-tank';
+            tank.dataset.tankIndex = i;
+            tank.style.width = '14px';
+            tank.style.height = '14px';
+            tank.style.borderRadius = '3px';
+            tank.style.background = 'rgba(0,255,0,0.8)';
+            tank.style.position = 'relative';
+            energyTanksContainer.appendChild(tank);
+        }
+    }
+    
+    explodeTank(tankIndex) {
+        const tanks = document.querySelectorAll('.energy-tank');
+        if (tanks[tankIndex]) {
+            const tank = tanks[tankIndex];
+            const rect = tank.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            // Create explosion particles at tank location
+            for (let i = 0; i < 12; i++) {
+                const particle = document.createElement('div');
+                particle.style.position = 'fixed';
+                particle.style.left = centerX + 'px';
+                particle.style.top = centerY + 'px';
+                particle.style.width = '4px';
+                particle.style.height = '4px';
+                particle.style.background = '#00ff00';
+                particle.style.borderRadius = '50%';
+                particle.style.zIndex = '1000';
+                particle.style.pointerEvents = 'none';
+                document.body.appendChild(particle);
+                
+                // Animate particle
+                const angle = (i / 12) * Math.PI * 2;
+                const speed = 50 + Math.random() * 50;
+                const duration = 500 + Math.random() * 500;
+                
+                particle.animate([
+                    { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+                    { transform: `translate(${Math.cos(angle) * speed}px, ${Math.sin(angle) * speed}px) scale(0)`, opacity: 0 }
+                ], {
+                    duration: duration,
+                    easing: 'ease-out'
+                }).onfinish = () => particle.remove();
+            }
+            
+            // Flash and fade the tank
+            tank.animate([
+                { opacity: 1, transform: 'scale(1)' },
+                { opacity: 1, transform: 'scale(1.5)' },
+                { opacity: 0, transform: 'scale(0)' }
+            ], {
+                duration: 300,
+                easing: 'ease-out'
+            });
+        }
+    }
+} 

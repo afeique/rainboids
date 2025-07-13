@@ -31,6 +31,10 @@ export class Asteroid {
         this.fov = 300;
         this.active = true;
         
+        // Initialize health based on size
+        this.maxHealth = Math.ceil((baseRadius || 50) / 20); // 2-3 hits for most asteroids
+        this.health = this.maxHealth;
+        
         // Define edges for wireframe
         this.edges = [
             [0,1],[0,5],[0,7],[0,10],[0,11],[1,5],[1,7],[1,8],[1,9],
@@ -72,6 +76,10 @@ export class Asteroid {
         
         this.radius = (minR + maxR) / 2;
         this.mass = (4 / 3) * Math.PI * Math.pow(this.radius, 3);
+        
+        // Update health when rescaling
+        this.maxHealth = Math.ceil(newBaseRadius / 20);
+        this.health = this.maxHealth;
         
         this.project();
     }
@@ -157,6 +165,26 @@ export class Asteroid {
     
     draw(ctx) {
         if (!this.active) return;
+        
+        // Draw health bar above asteroid
+        if (this.health < this.maxHealth) {
+            ctx.save();
+            const barWidth = 30;
+            const barHeight = 4;
+            const barY = this.y - this.radius - 15;
+            
+            // Background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(this.x - barWidth/2, barY, barWidth, barHeight);
+            
+            // Health fill
+            const healthPercent = this.health / this.maxHealth;
+            const healthColor = healthPercent > 0.66 ? '#0f0' : 
+                               healthPercent > 0.33 ? '#ff0' : '#f00';
+            ctx.fillStyle = healthColor;
+            ctx.fillRect(this.x - barWidth/2, barY, barWidth * healthPercent, barHeight);
+            ctx.restore();
+        }
         
         ctx.save();
         ctx.translate(this.x, this.y);
