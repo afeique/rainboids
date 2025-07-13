@@ -1,5 +1,11 @@
 # Rainboids - Supercharged Asteroids
 
+Royalty-free background music ["Legend"](https://www.youtube.com/watch?v=mxygNM3b95M&ab_channel=WhiteBatAudio) 
+graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).
+
+Support White Bat Audio on [Bandcamp](https://karlcasey.bandcamp.com/) and 
+[YouTube](https://www.youtube.com/@WhiteBatAudio)!
+
 <img width="928" alt="image" src="https://github.com/user-attachments/assets/f85765c7-a5ab-43eb-b239-cb8b67c861a1" />
 
 <img width="1506" alt="image" src="https://github.com/user-attachments/assets/28b95aa1-11f1-429e-bb72-60c3aa264ea0" />
