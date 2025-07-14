@@ -1,0 +1,26 @@
+{
+  "name": "rainboids",
+  "version": "1.0.0",
+  "description": "Royalty-free background music [\"Legend\"](https://www.youtube.com/watch?v=mxygNM3b95M&ab_channel=WhiteBatAudio)  graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).",
+  "main": "index.js",
+  "scripts": {
+    "serve": "http-server .",
+    "dev": "http-server .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/afeique/rainboids.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/afeique/rainboids/issues"
+  },
+  "homepage": "https://github.com/afeique/rainboids#readme",
+  "dependencies": {
+    "http-server": "^14.1.1"
+  }
+}

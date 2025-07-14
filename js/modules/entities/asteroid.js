@@ -169,12 +169,12 @@ export class Asteroid {
         // Draw health bar above asteroid
         if (this.health < this.maxHealth) {
             ctx.save();
-            const barWidth = 30;
+            const barWidth = 100;
             const barHeight = 4;
             const barY = this.y - this.radius - 15;
             
             // Background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
             ctx.fillRect(this.x - barWidth/2, barY, barWidth, barHeight);
             
             // Health fill

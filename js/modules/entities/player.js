@@ -47,7 +47,6 @@ export class Player {
             this.vel.x += Math.cos(this.angle) * GAME_CONFIG.SHIP_THRUST;
             this.vel.y += Math.sin(this.angle) * GAME_CONFIG.SHIP_THRUST;
             
-            // Create thrust particles
             const rear = this.angle + Math.PI;
             const dist = this.radius * 1.2;
             const spread = this.radius * 0.8;

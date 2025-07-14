@@ -4,6 +4,7 @@ export class AudioManager {
         this.audioReady = false;
         this.sfxMasterVol = 0.4;
         this.sounds = {};
+        this.audioCache = {};
         this.backgroundMusic = null;
         this.initSounds();
     }
@@ -42,6 +43,12 @@ export class AudioManager {
         this.sounds.thruster.p_hpf_freq = 0.4;
         this.sounds.thruster.p_lpf_freq = 0.9;
         this.sounds.thruster.sound_vol = 0.25;
+        
+        // Pre-generate audio elements for all sounds
+        this.audioCache = {};
+        for (const [name, params] of Object.entries(this.sounds)) {
+            this.audioCache[name] = params;
+        }
     }
     
     setBackgroundMusic(audioElement) {
@@ -57,9 +64,9 @@ export class AudioManager {
     }
     
     playSound(soundName) {
-        if (!this.audioReady || !this.sounds[soundName]) return;
+        if (!this.audioReady || !this.audioCache[soundName]) return;
         
-        const params = this.sounds[soundName];
+        const params = this.audioCache[soundName];
         const vol = params.sound_vol * this.sfxMasterVol;
         const snd = sfxr.toAudio(params);
         snd.volume = vol;

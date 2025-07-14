@@ -6,6 +6,7 @@
     <title>Rainboids: Supercharged Asteroids</title>
     <script src="https://sfxr.me/riffwave.js"></script>
     <script src="https://sfxr.me/sfxr.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -139,7 +140,23 @@
         <div id="touch-tractor" class="control-button" data-control-id="touch-tractor">⊙</div>
     </div>
 
-    <!-- Load the modular JavaScript -->
-    <script type="module" src="js/main.js"></script>
+    <!-- Load the modular JavaScript after external libraries -->
+    <script>
+        // Wait for external libraries to load before starting the game
+        window.addEventListener('load', () => {
+            // Ensure sfxr is available globally
+            if (typeof sfxr === 'undefined' || typeof RIFFWAVE === 'undefined') {
+                console.error('External libraries not loaded properly');
+                return;
+            }
+            
+            // Now load the main module
+            import('./js/main.js').then(module => {
+                console.log('Game module loaded');
+            }).catch(err => {
+                console.error('Failed to load game module:', err);
+            });
+        });
+    </script>
 </body>
 </html> 
