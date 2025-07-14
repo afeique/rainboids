@@ -109,6 +109,7 @@ class RainboidsGame {
             this.inputHandler
         );
         window.gameEngine = this.gameEngine;
+        window.game = this.gameEngine; // Expose for UI access
     }
     
     setupStartHandlers() {
@@ -117,6 +118,7 @@ class RainboidsGame {
             
             this.uiManager.hideTitleScreen();
             this.audioManager.initializeAudio();
+            this.uiManager.startMusic();
             this.gameEngine.init();
             this.gameEngine.game.state = 'PLAYING';
             

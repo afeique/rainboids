@@ -41,7 +41,21 @@
             <div id="energy-bar"></div>
         </div>
     </div>
-    <div id="score" class="ui-element" style="position:absolute;top:18px;right:24px;">0</div>
+    <div id="energy-tanks"></div>
+    <div id="music-info" class="ui-element">
+        <div id="track-name" class="marquee">
+            <span id="track-name-text"></span>
+        </div>
+        <div id="music-info-progress-container">
+            <span id="music-info-current-time">0:00</span>
+            <div id="music-progress-bar">
+                <div id="music-progress"></div>
+            </div>
+            <span id="music-info-duration">0:00</span>
+        </div>
+    </div>
+    <div id="score" class="ui-element">0</div>
+    <div id="pause-button" class="ui-element">PAUSE</div>
     
     <div id="game-message-overlay" class="ui-element">
         <h1 id="message-title" class="message-title" style="display: none;"></h1>
@@ -49,22 +63,56 @@
     </div>
 
     <div id="pause-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%;">
-        <div id="pause-controls">
-            <h2>CONTROLS</h2>
-            <div><span class="control-symbol">🡄🡆</span> Rotate</div>
-            <div><span class="control-symbol">↑</span> Thrust</div>
-            <div><span class="control-symbol">↓</span> Brake</div>
-            <div><span class="control-symbol">ℤ</span> &nbsp;Fire</div>
-            <div>SPACE Tractor</div>
-            <div>ESC Pause/Resume</div>
-            <h2>MOBILE</h2>
-            <div>Joystick: Rotate</div>
-            <div>
-                <span class="control-symbol">↑</span> Thrust
-                <span class="control-symbol">⌖</span> Fire
+        <div id="pause-menu">
+            <div class="pause-tabs">
+                <button class="pause-tab active" data-tab="controls">CONTROLS</button>
+                <button class="pause-tab" data-tab="music">MUSIC</button>
             </div>
-            <div style="text-align: center;">
-                <span class="control-symbol">⊙</span> Tractor
+            
+            <div id="controls-tab" class="pause-tab-content active">
+                <h2>CONTROLS</h2>
+                <div><span class="control-symbol">🡄🡆</span> Rotate</div>
+                <div><span class="control-symbol">↑</span> Thrust</div>
+                <div><span class="control-symbol">↓</span> Brake</div>
+                <div><span class="control-symbol">ℤ</span> &nbsp;Fire</div>
+                <div>SPACE Tractor</div>
+                <div>ESC Pause/Resume</div>
+                <h2>MOBILE</h2>
+                <div>Joystick: Rotate</div>
+                <div>
+                    <span class="control-symbol">↑</span> Thrust
+                    <span class="control-symbol">⌖</span> Fire
+                </div>
+                <div style="text-align: center;">
+                    <span class="control-symbol">⊙</span> Tractor
+                </div>
+            </div>
+            
+            <div id="music-tab" class="pause-tab-content">
+                <h2>NOW PLAYING</h2>
+                <div id="music-player">
+                    <div id="current-track-name"></div>
+                    <div id="music-progress-container">
+                        <span id="music-current-time">0:00</span>
+                        <div id="music-player-progress-bar">
+                            <div id="music-player-progress"></div>
+                        </div>
+                        <span id="music-duration">0:00</span>
+                    </div>
+                    <div id="music-controls">
+                        <button id="music-shuffle" class="music-control-btn left">🔀</button>
+                        <div class="music-main-controls">
+                            <button id="music-prev" class="music-control-btn">⏮</button>
+                            <button id="music-play-pause" class="music-control-btn large">▶</button>
+                            <button id="music-next" class="music-control-btn">⏭</button>
+                        </div>
+                        <button id="music-repeat" class="music-control-btn right">🔁</button>
+                    </div>
+                    <div id="playlist-container">
+                        <h3>PLAYLIST</h3>
+                        <div id="playlist-tracks"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -90,11 +138,6 @@
         <div id="touch-thrust" class="control-button" data-control-id="touch-thrust">↑</div>
         <div id="touch-tractor" class="control-button" data-control-id="touch-tractor">⊙</div>
     </div>
-
-    <audio id="background-music" loop preload="auto">
-        <source src="https://github.com/afeique/rainboids/raw/refs/heads/master/bgm.mp3" type="audio/mpeg">
-        Your browser does not support the audio element.
-    </audio>
 
     <!-- Load the modular JavaScript -->
     <script type="module" src="js/main.js"></script>
