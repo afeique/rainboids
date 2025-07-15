@@ -389,11 +389,17 @@ export class UIManager {
             const marqueeText = this.elements.currentTrackName.querySelector('.marquee-text');
             if (marqueeText) {
                 marqueeText.innerHTML = trackDisplay;
-                // Force layout update
-                this.elements.currentTrackName.offsetHeight;
-                setTimeout(() => {
-                    this.ensureMarquee(marqueeText, this.elements.currentTrackName);
-                }, 500); // Longer delay for pause menu
+                // Store for deferred marquee check
+                this.elements.currentTrackName._marqueeText = marqueeText;
+                this.elements.currentTrackName._marqueeChecked = false;
+                
+                // Only check marquee if pause menu is visible
+                if (this.elements.pauseOverlay.style.display === 'flex') {
+                    this.elements.currentTrackName._marqueeChecked = true;
+                    setTimeout(() => {
+                        this.ensureMarquee(marqueeText, this.elements.currentTrackName);
+                    }, 100);
+                }
             }
         }
     }
@@ -457,6 +463,19 @@ export class UIManager {
                 }, 50);
             }
         });
+        
+        // Also check the current track name marquee
+        if (this.elements.currentTrackName && 
+            !this.elements.currentTrackName._marqueeChecked && 
+            this.elements.currentTrackName._marqueeText) {
+            this.elements.currentTrackName._marqueeChecked = true;
+            setTimeout(() => {
+                this.ensureMarquee(
+                    this.elements.currentTrackName._marqueeText, 
+                    this.elements.currentTrackName
+                );
+            }, 50);
+        }
     }
 
     ensureMarquee(textEl, containerEl) {
@@ -476,8 +495,13 @@ export class UIManager {
         
         // Wait a bit for render
         setTimeout(() => {
+            // Get computed styles to account for padding
+            const containerStyle = window.getComputedStyle(containerEl);
+            const paddingLeft = parseFloat(containerStyle.paddingLeft) || 0;
+            const paddingRight = parseFloat(containerStyle.paddingRight) || 0;
+            
             // Get fresh measurements
-            const containerWidth = containerEl.clientWidth;
+            const containerWidth = containerEl.clientWidth - paddingLeft - paddingRight;
             const textWidth = textEl.scrollWidth;
             
             

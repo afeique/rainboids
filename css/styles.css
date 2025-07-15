@@ -621,11 +621,11 @@ canvas {
 }
 
 #current-track-name {
-    margin: 0 -20px 20px -20px; /* Negative margins to extend to edges */
-    padding: 0 20px; /* Add padding back */
+    margin-bottom: 20px;
+    padding: 0 20px;
     overflow: hidden;
     position: relative;
-    width: calc(100% + 40px); /* Account for negative margins */
+    width: 100%;
     height: 30px;
     text-align: center;
     box-sizing: border-box;
