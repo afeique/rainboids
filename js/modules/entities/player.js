@@ -25,66 +25,99 @@ export class Player {
         this.canShoot = true;
         this.active = true;
         this.isThrusting = false;
+        this.thrustersDisabled = false;
+        this.invincible = false;
+        this.invincibilityTimer = 0;
         // Player mass (smaller than most asteroids)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.5;
     }
+
+    disableThrusters(duration) {
+        this.thrustersDisabled = true;
+        setTimeout(() => {
+            this.thrustersDisabled = false;
+        }, duration);
+    }
     
-    update(input, particlePool, bulletPool, audioManager) {
+    makeInvincible(duration) {
+        this.invincible = true;
+        this.invincibilityTimer = duration;
+    }
+    
+    update(input, particlePool, bulletPool, audioManager, starPool, tractorEngaged) {
         if (!this.active) return;
-        // On mobile, instantly set angle to joystick direction if joystick is active
-        if ((typeof input.joystickX === 'number' && typeof input.joystickY === 'number') && (input.joystickX !== 0 || input.joystickY !== 0)) {
-            // Joystick Y is negative up, so flip for screen coordinates
-            this.angle = Math.atan2(input.joystickY, input.joystickX);
-        } else {
-            // Handle rotation (desktop/keyboard)
-            this.angle += GAME_CONFIG.TURN_SPEED * input.rotation;
+        
+        // Update invincibility timer
+        if (this.invincibilityTimer > 0) {
+            this.invincibilityTimer -= 16; // Assuming 60fps, ~16ms per frame
+            if (this.invincibilityTimer <= 0) {
+                this.invincible = false;
+                this.invincibilityTimer = 0;
+            }
         }
-        
-        // Handle thrust - use joystick Y-axis for thrust control
-        this.isThrusting = input.up;
-        
-        if (this.isThrusting) {
-            this.vel.x += Math.cos(this.angle) * GAME_CONFIG.SHIP_THRUST;
-            this.vel.y += Math.sin(this.angle) * GAME_CONFIG.SHIP_THRUST;
-            
-            const rear = this.angle + Math.PI;
+
+        // Aiming
+        const dx = input.aimX - this.x;
+        const dy = input.aimY - this.y;
+        this.angle = Math.atan2(dy, dx);
+
+        this.isMoving = input.up || input.down || input.left || input.right;
+
+        if (this.isMoving && !this.thrustersDisabled) {
+            let moveX = 0;
+            let moveY = 0;
+            if (input.left) moveX -= 1;
+            if (input.right) moveX += 1;
+            if (input.up) moveY -= 1;
+            if (input.down) moveY += 1;
+
+            const moveAngle = Math.atan2(moveY, moveX);
+            this.vel.x += Math.cos(moveAngle) * GAME_CONFIG.SHIP_THRUST;
+            this.vel.y += Math.sin(moveAngle) * GAME_CONFIG.SHIP_THRUST;
+
+            const rear = moveAngle + Math.PI;
             const dist = this.radius * 1.2;
             const spread = this.radius * 0.8;
-            
+
             for (let i = 0; i < 4; i++) {
                 const p_angle = rear + random(-0.3, 0.3);
                 const p_dist = random(0, spread);
-                const p_x = this.x + Math.cos(p_angle) * dist + Math.cos(p_angle + Math.PI/2) * p_dist;
-                const p_y = this.y + Math.sin(p_angle) * dist + Math.sin(p_angle + Math.PI/2) * p_dist;
+                const p_x = this.x + Math.cos(p_angle) * dist + Math.cos(p_angle + Math.PI / 2) * p_dist;
+                const p_y = this.y + Math.sin(p_angle) * dist + Math.sin(p_angle + Math.PI / 2) * p_dist;
                 particlePool.get(p_x, p_y, 'thrust', rear);
             }
-        } else if (input.down) {
-            // Deceleration (still available for keyboard controls)
-            this.vel.x *= GAME_CONFIG.SHIP_FRICTION * 0.95;
-            this.vel.y *= GAME_CONFIG.SHIP_FRICTION * 0.95;
-        } else {
-            // Natural friction
-            this.vel.x *= GAME_CONFIG.SHIP_FRICTION;
-            this.vel.y *= GAME_CONFIG.SHIP_FRICTION;
-        }
-        
-        if (this.isThrusting) {
             audioManager.playThruster();
         }
-        
+
+        // Automatic tractor beam visual
+        if (tractorEngaged) {
+            // Spawn multiple neon-blue particles in a radius around the ship
+            for (let i = 0; i < 2; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 60 + Math.random() * 40;
+                const px = this.x + Math.cos(angle) * dist;
+                const py = this.y + Math.sin(angle) * dist;
+                particlePool.get(px, py, 'tractorBeamParticle', this.x, this.y);
+            }
+        }
+
+        // Natural friction
+        this.vel.x *= GAME_CONFIG.SHIP_FRICTION;
+        this.vel.y *= GAME_CONFIG.SHIP_FRICTION;
+
         // Limit velocity
         const mag = Math.hypot(this.vel.x, this.vel.y);
         if (mag > GAME_CONFIG.MAX_V) {
             this.vel.x = (this.vel.x / mag) * GAME_CONFIG.MAX_V;
             this.vel.y = (this.vel.y / mag) * GAME_CONFIG.MAX_V;
         }
-        
+
         this.x += this.vel.x;
         this.y += this.vel.y;
         wrap(this, this.width, this.height);
-        
-        // Handle shooting (only with input.firePressed and cooldown)
-        if (input.firePressed && this.canShoot) {
+
+        // Handle continuous shooting
+        if (input.fire && this.canShoot) {
             bulletPool.get(this.x, this.y, this.angle);
             audioManager.playShoot();
             this.canShoot = false;
@@ -98,6 +131,12 @@ export class Player {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle + Math.PI / 2);
+        
+        // Flash effect during invincibility
+        if (this.invincible) {
+            const flash = Math.sin(Date.now() * 0.02) > 0;
+            ctx.globalAlpha = flash ? 0.4 : 0.8;
+        }
         
         ctx.strokeStyle = '#0ff';
         ctx.lineWidth = 2;

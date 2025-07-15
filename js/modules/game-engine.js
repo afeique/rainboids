@@ -40,7 +40,7 @@ export class GameEngine {
         this.maxEnergy = 99;
         this.playerEnergy = this.maxEnergy;
         this.energyTanks = 0; // Player starts with zero energy tanks
-        this.damagePerHit = 33; // Each hit takes 33 energy (3 hits to deplete one tank)
+        this.baseDamage = 20; // Base damage per hit (5 hits to deplete one tank)
         
         // Damage animation properties
         this.animatingDamage = false;
@@ -79,6 +79,20 @@ export class GameEngine {
         // Handle orientation change
         window.addEventListener('orientationchange', () => {
             this.uiManager.checkOrientation();
+        });
+        
+        // Handle mouse movement for cursor changes
+        this.canvas.addEventListener('mousemove', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const target = this.checkCursorTarget(mouseX, mouseY);
+            if (target === 'enemy') {
+                this.canvas.classList.add('asteroid-hover');
+            } else {
+                this.canvas.classList.remove('asteroid-hover');
+            }
         });
         
         // Handle pause
@@ -234,11 +248,33 @@ export class GameEngine {
     
     handleCollisions() {
         // Player vs Asteroids
-        if (this.player.active) {
+        if (this.player.active && !this.player.invincible) {
             for (const ast of this.asteroidPool.activeObjects) {
                 if (collision(this.player, ast)) {
-                    // Player takes damage
-                    this.takeDamage();
+                    this.player.disableThrusters(750);
+                    
+                    // Calculate dynamic damage based on asteroid size and relative velocity
+                    const relVelX = ast.vel.x - this.player.vel.x;
+                    const relVelY = ast.vel.y - this.player.vel.y;
+                    const relVelMag = Math.hypot(relVelX, relVelY);
+                    
+                    // Size factor: larger asteroids deal more damage
+                    const sizeFactor = ast.radius / 30; // Normalized to medium asteroid
+                    
+                    // Velocity factor: faster impacts deal more damage
+                    const velocityFactor = Math.min(relVelMag / 5, 2); // Cap at 2x
+                    
+                    // Calculate total damage (20-100)
+                    const damage = Math.min(100, Math.max(20, 
+                        this.baseDamage * sizeFactor * (0.5 + velocityFactor)));
+                    
+                    // Player takes damage and becomes invincible
+                    const finalDamage = Math.round(damage);
+                    this.takeDamage(finalDamage);
+                    this.player.makeInvincible(500); // 500ms invincibility
+                    
+                    // Show damage number
+                    this.particlePool.get(this.player.x, this.player.y - 20, 'damageNumber', finalDamage);
                     
                     // Mass-based collision physics
                     const dx = ast.x - this.player.x;
@@ -255,15 +291,21 @@ export class GameEngine {
                     // Don't process if already separating
                     if (dvn > 0) continue;
                     
-                    // Calculate impulse magnitude
+                    // Calculate impulse magnitude with MUCH MORE DRASTIC KNOCKBACK
                     const totalMass = this.player.mass + ast.mass;
-                    const impulse = 2 * dvn / totalMass;
+                    const baseImpulse = 2 * dvn / totalMass;
                     
-                    // Apply impulse to velocities
-                    this.player.vel.x += impulse * ast.mass * nx;
-                    this.player.vel.y += impulse * ast.mass * ny;
-                    ast.vel.x -= impulse * this.player.mass * nx;
-                    ast.vel.y -= impulse * this.player.mass * ny;
+                    // Apply MUCH MORE DRASTIC knockback multiplier
+                    const knockbackMultiplier = 8.0; // Increased from ~1.0 to 8.0
+                    const enhancedImpulse = baseImpulse * knockbackMultiplier;
+                    
+                    // Apply enhanced impulse to player velocity (MUCH MORE DRASTIC)
+                    this.player.vel.x += enhancedImpulse * ast.mass * nx;
+                    this.player.vel.y += enhancedImpulse * ast.mass * ny;
+                    
+                    // Also apply some impulse to asteroid (but less dramatic)
+                    ast.vel.x -= enhancedImpulse * 0.3 * this.player.mass * nx;
+                    ast.vel.y -= enhancedImpulse * 0.3 * this.player.mass * ny;
                     
                     // Separate overlapping objects
                     const overlap = this.player.radius + ast.radius - dist;
@@ -273,26 +315,30 @@ export class GameEngine {
                     ast.x += nx * separationForce;
                     ast.y += ny * separationForce;
                     
-                    // Create collision effects
+                    // Create enhanced collision effects
                     // White pulse at impact point
                     const impactX = this.player.x + nx * this.player.radius;
                     const impactY = this.player.y + ny * this.player.radius;
-                    this.particlePool.get(impactX, impactY, 'explosionPulse', 30);
+                    this.particlePool.get(impactX, impactY, 'explosionPulse', 40);
                     
-                    // Blue particles explosion
-                    for (let i = 0; i < 20; i++) {
+                    // Enhanced blue particles explosion
+                    for (let i = 0; i < 30; i++) {
                         const particle = this.particlePool.get(impactX, impactY, 'explosion');
                         if (particle) {
-                            // Override color to blue
-                            particle.color = `hsl(210, 100%, ${50 + Math.random() * 50}%)`;
+                            // Override color to bright blue
+                            particle.color = `hsl(210, 100%, ${60 + Math.random() * 40}%)`;
+                            // Make particles faster and larger for more dramatic effect
+                            particle.vel.x *= 1.5;
+                            particle.vel.y *= 1.5;
+                            particle.radius *= 1.3;
                         }
                     }
                     
                     this.audioManager.playHit();
                     
-                    // Strong screen shake when player takes damage
-                    const impactForce = Math.abs(impulse) * totalMass;
-                    this.triggerScreenShake(30, 15, impactForce * 0.8);
+                    // Enhanced screen shake based on impact force
+                    const impactForce = Math.abs(enhancedImpulse) * totalMass;
+                    this.triggerScreenShake(25, 15, impactForce * 0.8);
                     
                     return;
                 }
@@ -312,7 +358,12 @@ export class GameEngine {
                     this.audioManager.playHit();
                     
                     // Damage the asteroid
-                    ast.health--;
+                    ast.health -= 1;
+
+                    // Impart momentum from bullet
+                    const impulse = 0.05; // Adjust for desired push effect
+                    ast.vel.x += bullet.vel.x * impulse;
+                    ast.vel.y += bullet.vel.y * impulse;
                     
                     // Hit effects
                     this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', ast.baseRadius * 0.5);
@@ -322,59 +373,61 @@ export class GameEngine {
                     
                     // No screen shake for asteroid hits
                     
-                    if (ast.health <= 0 && ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
-                        this.game.score += 100; // 100 points for destroy
-                        this.audioManager.playExplosion();
-                        // Multiple fiery shockwave pulses for destruction
-                        const pulseCount = 4;
-                        for (let n = 0; n < pulseCount; n++) {
-                            setTimeout(() => {
-                                this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * (1.2 + n * 0.5));
-                                this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * (1.1 + n * 0.2));
-                            }, n * 80);
-                        }
-                        for (let p = 0; p < 54; p++) {
-                            this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
-                        }
-                        this.createDebris(ast);
-                        this.createStarBurst(ast.x, ast.y);
-                        this.asteroidPool.release(ast);
-                        // No screen shake for asteroid destruction
-                    } else if (ast.health <= 0) {
-                        const count = Math.random() < 0.5 ? 2 : 3;
-                        const newR = ast.baseRadius / Math.sqrt(count);
-                        const totalMass = ast.mass + bullet.mass;
-                        const v_com_x = (ast.vel.x * ast.mass + bullet.vel.x * bullet.mass) / totalMass;
-                        const v_com_y = (ast.vel.y * ast.mass + bullet.vel.y * bullet.mass) / totalMass;
-                        
-                        if (newR < GAME_CONFIG.MIN_AST_RAD) {
+                    if (ast.health <= 0) {
+                        if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                             this.game.score += 100; // 100 points for destroy
                             this.audioManager.playExplosion();
-                            // Large explosion pulse and many particles for destruction
-                            this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.2);
-                            for (let p = 0; p < 18; p++) {
+                            // Multiple fiery shockwave pulses for destruction
+                            const pulseCount = 4;
+                            for (let n = 0; n < pulseCount; n++) {
+                                setTimeout(() => {
+                                    this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * (1.2 + n * 0.5));
+                                    this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * (1.1 + n * 0.2));
+                                }, n * 80);
+                            }
+                            for (let p = 0; p < 54; p++) {
                                 this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
                             }
                             this.createDebris(ast);
                             this.createStarBurst(ast.x, ast.y);
+                            this.asteroidPool.release(ast);
                             // No screen shake for asteroid destruction
                         } else {
-                            // No screen shake for asteroid splitting
+                            const count = Math.random() < 0.5 ? 2 : 3;
+                            const newR = ast.baseRadius / Math.sqrt(count);
+                            const totalMass = ast.mass + bullet.mass;
+                            const v_com_x = (ast.vel.x * ast.mass + bullet.vel.x * bullet.mass) / totalMass;
+                            const v_com_y = (ast.vel.y * ast.mass + bullet.vel.y * bullet.mass) / totalMass;
                             
-                            for (let k = 0; k < count; k++) {
-                                const newAst = this.asteroidPool.get(
-                                    ast.x + random(-2, 2),
-                                    ast.y + random(-2, 2),
-                                    newR
-                                );
-                                const angle = (k / count) * (2 * Math.PI) + random(-0.2, 0.2);
-                                const kick_x = Math.cos(angle) * 1;
-                                const kick_y = Math.sin(angle) * 1;
-                                newAst.vel.x = v_com_x + kick_x;
-                                newAst.vel.y = v_com_y + kick_y;
+                            if (newR < GAME_CONFIG.MIN_AST_RAD) {
+                                this.game.score += 100; // 100 points for destroy
+                                this.audioManager.playExplosion();
+                                // Large explosion pulse and many particles for destruction
+                                this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.2);
+                                for (let p = 0; p < 18; p++) {
+                                    this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
+                                }
+                                this.createDebris(ast);
+                                this.createStarBurst(ast.x, ast.y);
+                                // No screen shake for asteroid destruction
+                            } else {
+                                // No screen shake for asteroid splitting
+                                
+                                for (let k = 0; k < count; k++) {
+                                    const newAst = this.asteroidPool.get(
+                                        ast.x + random(-2, 2),
+                                        ast.y + random(-2, 2),
+                                        newR
+                                    );
+                                    const angle = (k / count) * (2 * Math.PI) + random(-0.2, 0.2);
+                                    const kick_x = Math.cos(angle) * 1;
+                                    const kick_y = Math.sin(angle) * 1;
+                                    newAst.vel.x = v_com_x + kick_x;
+                                    newAst.vel.y = v_com_y + kick_y;
+                                }
                             }
+                            this.asteroidPool.release(ast);
                         }
-                        this.asteroidPool.release(ast);
                     }
                     this.bulletPool.release(bullet);
                     break;
@@ -501,31 +554,14 @@ export class GameEngine {
             this.updateEnergyDisplay();
             // Remove firing energy cost - energy only drains from damage
             // Always allow normal player movement
-            this.player.update(input, this.particlePool, this.bulletPool, this.audioManager);
+            const tractorEngaged = !input.up && !input.down && !input.left && !input.right && !input.fire;
+            this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.starPool, tractorEngaged);
             this.bulletPool.updateActive(this.particlePool, this.asteroidPool);
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.asteroidPool.updateActive();
-            // Tractor beam visual and sound feedback
-            if (input.space) {
-                // Only trigger if not already recently triggered (avoid spamming)
-                if (!this.tractorBeamActive) {
-                    this.tractorBeamActive = true;
-                }
-                // Spawn multiple neon-blue particles in a radius around the ship
-                for (let i = 0; i < 2; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const dist = 60 + Math.random() * 40;
-                    const px = this.player.x + Math.cos(angle) * dist;
-                    const py = this.player.y + Math.sin(angle) * dist;
-                    this.particlePool.get(px, py, 'tractorBeamParticle', this.player.x, this.player.y);
-                }
-                // Tractor beam sound disabled
-            } else {
-                this.tractorBeamActive = false;
-            }
-            // Pass input.space to stars as playerPos.space
-            this.starPool.activeObjects.forEach(s => s.update(this.player.vel, { ...this.player, space: input.space }));
+            // Update stars with player position and tractor beam state
+            this.starPool.activeObjects.forEach(s => s.update(this.player.vel, this.player, tractorEngaged));
             
             this.handleCollisions();
             
@@ -646,15 +682,53 @@ export class GameEngine {
         this.inputHandler.setupTouchControls();
         this.gameLoop();
     }
+    
+    checkCursorTarget(mouseX, mouseY) {
+        // Check if cursor is over any asteroid (enemy)
+        for (const ast of this.asteroidPool.activeObjects) {
+            if (ast.active) {
+                const dx = mouseX - ast.x;
+                const dy = mouseY - ast.y;
+                const distance = Math.hypot(dx, dy);
+                if (distance <= ast.radius) {
+                    return 'enemy';
+                }
+            }
+        }
+        
+        // Check if cursor is over player ship
+        if (this.player && this.player.active) {
+            const dx = mouseX - this.player.x;
+            const dy = mouseY - this.player.y;
+            const distance = Math.hypot(dx, dy);
+            if (distance <= this.player.radius) {
+                return 'player';
+            }
+        }
+        
+        // Check if cursor is over any star
+        for (const star of this.starPool.activeObjects) {
+            if (star.active) {
+                const dx = mouseX - star.x;
+                const dy = mouseY - star.y;
+                const distance = Math.hypot(dx, dy);
+                if (distance <= star.radius) {
+                    return 'star';
+                }
+            }
+        }
+        
+        return 'none';
+    }
 
     
-    takeDamage() {
+    takeDamage(damageAmount = this.baseDamage) {
         // Store state before damage for animation
         this.energyBeforeDamage = this.displayEnergy;
         this.tanksBeforeDamage = this.displayTanks;
         
         // Apply damage
-        let remainingDamage = this.damagePerHit;
+        let remainingDamage = damageAmount;
         
         // Calculate final state after damage
         let finalEnergy = this.playerEnergy;

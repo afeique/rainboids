@@ -31,9 +31,7 @@ export class Asteroid {
         this.fov = 300;
         this.active = true;
         
-        // Initialize health based on size (doubled)
-        this.maxHealth = Math.ceil((baseRadius || 50) / 10); // 4-6 hits for most asteroids
-        this.health = this.maxHealth;
+        this.setHealth(baseRadius || random(40, 60));
         
         // Define edges for wireframe
         this.edges = [
@@ -44,6 +42,17 @@ export class Asteroid {
         ];
         
         this.rescale(baseRadius || random(40, 60));
+    }
+
+    setHealth(radius) {
+        if (radius >= 40) { // Large
+            this.maxHealth = 20;
+        } else if (radius >= 25) { // Medium
+            this.maxHealth = 12;
+        } else { // Small
+            this.maxHealth = 8;
+        }
+        this.health = this.maxHealth;
     }
     
     rescale(newBaseRadius) {
@@ -77,9 +86,7 @@ export class Asteroid {
         this.radius = (minR + maxR) / 2;
         this.mass = (4 / 3) * Math.PI * Math.pow(this.radius, 3);
         
-        // Update health when rescaling
-        this.maxHealth = Math.ceil(newBaseRadius / 20);
-        this.health = this.maxHealth;
+        this.setHealth(newBaseRadius);
         
         this.project();
     }
@@ -166,32 +173,13 @@ export class Asteroid {
     draw(ctx) {
         if (!this.active) return;
         
-        // Draw health bar above asteroid
-        if (this.health < this.maxHealth) {
-            ctx.save();
-            const barWidth = 100;
-            const barHeight = 4;
-            const barY = this.y - this.radius - 15;
-            
-            // Background
-            ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
-            ctx.fillRect(this.x - barWidth/2, barY, barWidth, barHeight);
-            
-            // Health fill
-            const healthPercent = this.health / this.maxHealth;
-            const healthColor = healthPercent > 0.66 ? '#0f0' : 
-                               healthPercent > 0.33 ? '#ff0' : '#f00';
-            ctx.fillStyle = healthColor;
-            ctx.fillRect(this.x - barWidth/2, barY, barWidth * healthPercent, barHeight);
-            ctx.restore();
-        }
+        this.drawHealthBar(ctx);
         
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.strokeStyle = 'white';
         ctx.lineWidth = 1.5;
         
-        this.edges.forEach(edge => {
+        this.edges.forEach((edge, index) => {
             const v1 = this.projectedVertices[edge[0]];
             const v2 = this.projectedVertices[edge[1]];
             
@@ -200,12 +188,43 @@ export class Asteroid {
             const avg = (v1.depth + v2.depth) / 2;
             ctx.globalAlpha = Math.max(0.1, Math.pow(Math.max(0, (this.fov - avg) / (this.fov + this.radius)), 2.5));
             
+            const hue = (Date.now() / 20 + index * 10) % 360;
+            ctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
+
             ctx.beginPath();
             ctx.moveTo(v1.x, v1.y);
             ctx.lineTo(v2.x, v2.y);
             ctx.stroke();
         });
         
+        ctx.restore();
+    }
+
+    drawHealthBar(ctx) {
+        if (this.health === this.maxHealth) return;
+
+        ctx.save();
+        const segmentSize = 8;
+        const segmentMargin = 2;
+        const totalBarWidth = (segmentSize + segmentMargin) * this.maxHealth - segmentMargin;
+        const barX = this.x - totalBarWidth / 2;
+        const barY = this.y - this.radius - 20;
+
+        const healthPercent = this.health / this.maxHealth;
+        const r = Math.round(Math.min(255, 510 * (1 - healthPercent)));
+        const g = Math.round(Math.min(255, 510 * healthPercent));
+        const color = `rgb(${r},${g},0)`;
+
+        const gradient = ctx.createLinearGradient(0, barY, 0, barY + segmentSize);
+        gradient.addColorStop(0, `rgba(${r-50},${g-50},0,0.8)`);
+        gradient.addColorStop(0.5, `rgba(${r},${g},0,1)`);
+        gradient.addColorStop(1, `rgba(${r-50},${g-50},0,0.8)`);
+
+        for (let i = 0; i < this.maxHealth; i++) {
+            ctx.fillStyle = i < this.health ? gradient : '#333';
+            ctx.fillRect(barX + i * (segmentSize + segmentMargin), barY, segmentSize, segmentSize);
+        }
+
         ctx.restore();
     }
 } 

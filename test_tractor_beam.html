@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tractor Beam Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #0ff;
+            font-family: monospace;
+        }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border: 1px solid #0ff;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>Tractor Beam Test</h2>
+        <p>Testing tractor beam mechanics:</p>
+        <ul>
+            <li>When NO keys are pressed: Tractor beam ENGAGED</li>
+            <li>When ANY movement/fire key pressed: Tractor beam OFF</li>
+        </ul>
+        <p>Expected behavior:</p>
+        <ul>
+            <li>Tractor OFF: Stars attract weakly from ~80px</li>
+            <li>Tractor ON: Stars attract strongly from ~2000px</li>
+        </ul>
+        <hr>
+        <p>Current state: <span id="state">Loading...</span></p>
+        <p>Nearest star distance: <span id="distance">-</span>px</p>
+        <p>Stars in tractor range: <span id="inrange">0</span></p>
+    </div>
+    
+    <script type="module">
+        // Simple test to verify the constants
+        import { GAME_CONFIG } from './js/modules/constants.js';
+        
+        document.getElementById('state').innerHTML = `
+            <br>Passive: ${GAME_CONFIG.PASSIVE_STAR_ATTR} strength, ${GAME_CONFIG.PASSIVE_STAR_ATTRACT_DIST}px range
+            <br>Active: ${GAME_CONFIG.ACTIVE_STAR_ATTR} strength, ${GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST}px range
+        `;
+        
+        // Open the main game to test
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 3000);
+    </script>
+</body>
+</html>

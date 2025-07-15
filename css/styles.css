@@ -11,6 +11,12 @@ body {
     justify-content: center;
     align-items: center;
     height: 100vh;
+    cursor: default;
+}
+
+/* Red cursor for hovering over enemies/asteroids */
+body.cursor-red {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="red" stroke-width="2"/><circle cx="8" cy="8" r="2" fill="red"/></svg>') 8 8, auto;
 }
 h2 {
     margin-bottom: 0;
@@ -22,6 +28,11 @@ canvas {
     /* Debug: Ensure canvas is visible */
     position: relative;
     z-index: 1;
+    cursor: url('data:image/svg+xml;utf8,<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3V7M12 17V21M3 12H7M17 12H21M12 12H12.01M19 12C19 15.866 15.866 19 12 19C8.13401 19 5 15.866 5 12C5 8.13401 8.13401 5 12 5C15.866 5 19 8.13401 19 12Z" stroke="%230ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') 12 12, crosshair;
+}
+
+canvas.asteroid-hover {
+    cursor: url('data:image/svg+xml;utf8,<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 12C21 16.9706 16.9706 21 12 21M21 12C21 7.02944 16.9706 3 12 3M21 12H17M12 21C7.02944 21 3 16.9706 3 12M12 21V17M3 12C3 7.02944 7.02944 3 12 3M3 12H7M12 3V7M12 12H12.01" stroke="%23ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') 12 12, crosshair;
 }
 
 .ui-element {
@@ -33,7 +44,7 @@ canvas {
 
 #score {
     position: absolute;
-    top: 60px;
+    top: 70px;
     left: 24px;
     margin-left: 45px;
     font-size: 24px;

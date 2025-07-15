@@ -139,6 +139,14 @@ export class Particle {
                 this.vel = { x: (targetX - this.x) * random(0.02, 0.045), y: (targetY - this.y) * random(0.02, 0.045) };
                 break;
             }
+            
+            case 'damageNumber':
+                const [damage] = args;
+                this.damage = damage;
+                this.life = 1;
+                this.vel = { x: random(-0.5, 0.5), y: -2 }; // Float upward
+                this.fontSize = 16;
+                break;
         }
     }
     
@@ -217,6 +225,13 @@ export class Particle {
                 this.radius = this.baseRadius * this.life;
                 break;
             }
+            
+            case 'damageNumber':
+                this.x += this.vel.x;
+                this.y += this.vel.y;
+                this.vel.y += 0.1; // Gravity effect
+                this.life -= 0.025; // Fade out quickly
+                break;
         }
         
         if (this.life <= 0) {
@@ -355,6 +370,22 @@ export class Particle {
                 ctx.restore();
                 break;
             }
+            
+            case 'damageNumber':
+                ctx.save();
+                ctx.font = `${this.fontSize}px 'Press Start 2P', monospace`;
+                ctx.fillStyle = '#ff0000';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 3;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.globalAlpha = Math.max(0, this.life);
+                // Draw black outline
+                ctx.strokeText(`-${this.damage}`, this.x, this.y);
+                // Draw red text
+                ctx.fillText(`-${this.damage}`, this.x, this.y);
+                ctx.restore();
+                break;
         }
         
         ctx.restore();

@@ -17,13 +17,42 @@ export class Star {
         this.x = x || random(0, this.width);
         this.y = y || random(0, this.height);
         
-        const sizeRoll = Math.pow(Math.random(), 6);
+        // Create more depth layers with exponential distribution
+        const depthRoll = Math.random();
         let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
-        this.z = (1 - sizeRoll) * 4 + 0.5;
-        this.radius = this.z * scale;
+        
+        // Create 10 distinct depth layers
+        if (depthRoll < 0.15) {
+            // Very far background stars (15%)
+            this.z = random(0.1, 0.3);
+        } else if (depthRoll < 0.35) {
+            // Far background stars (20%)
+            this.z = random(0.3, 0.6);
+        } else if (depthRoll < 0.55) {
+            // Mid-far stars (20%)
+            this.z = random(0.6, 1.0);
+        } else if (depthRoll < 0.70) {
+            // Mid stars (15%)
+            this.z = random(1.0, 1.5);
+        } else if (depthRoll < 0.82) {
+            // Mid-close stars (12%)
+            this.z = random(1.5, 2.0);
+        } else if (depthRoll < 0.91) {
+            // Close stars (9%)
+            this.z = random(2.0, 2.5);
+        } else if (depthRoll < 0.97) {
+            // Very close stars (6%)
+            this.z = random(2.5, 3.0);
+        } else {
+            // Foreground stars (3%)
+            this.z = random(3.0, 4.0);
+        }
+        
+        this.radius = (this.z * 0.8 + 0.2) * scale;
         this.opacity = 0;
         this.opacityOffset = Math.random() * Math.PI * 2;
-        this.twinkleSpeed = random(0.01, 0.05);
+        // Slower twinkle for distant stars
+        this.twinkleSpeed = random(0.01, 0.03) * (1 + this.z * 0.3);
         
         this.shape = STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
         this.points = Math.floor(random(4, 7)) * 2;
@@ -47,7 +76,7 @@ export class Star {
         }
     }
     
-    update(shipVel, playerPos) {
+    update(shipVel, playerPos, tractorEngaged) {
         if (!this.active) return;
         
         if (this.isBurst) {
@@ -72,30 +101,37 @@ export class Star {
             if (playerPos.active && dist < GAME_CONFIG.BURST_STAR_ATTRACT_DIST) {
                 // Strong linear attraction for burst stars
                 const strength = GAME_CONFIG.BURST_STAR_ATTR * this.z;
-                this.x += (dx / dist) * strength;
-                this.y += (dy / dist) * strength;
+                this.vel.x += (dx / dist) * strength;
+                this.vel.y += (dy / dist) * strength;
             }
         } else {
             // Normal star behavior
+            const attractDist = tractorEngaged ? GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST : GAME_CONFIG.PASSIVE_STAR_ATTRACT_DIST;
+            const attractStrength = tractorEngaged ? GAME_CONFIG.ACTIVE_STAR_ATTR : GAME_CONFIG.PASSIVE_STAR_ATTR;
+
             const dx = playerPos.x - this.x;
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
-            if (playerPos.active && dist < GAME_CONFIG.STAR_ATTRACT_DIST) {
-                // Linear attraction, but much stronger when very close
-                let strength = GAME_CONFIG.STAR_ATTR * this.z;
-                if (dist < 50) strength *= 4;
-                if (playerPos.space) strength *= 3;
-                this.x += (dx / dist) * strength;
-                this.y += (dy / dist) * strength;
+
+            if (playerPos.active && dist < attractDist) {
+                this.vel.x += (dx / dist) * attractStrength * this.z;
+                this.vel.y += (dy / dist) * attractStrength * this.z;
             }
-            
+
+            this.vel.x *= GAME_CONFIG.STAR_FRIC;
+            this.vel.y *= GAME_CONFIG.STAR_FRIC;
+            this.x += this.vel.x;
+            this.y += this.vel.y;
+
             this.opacityOffset += this.twinkleSpeed;
             this.opacity = (Math.sin(this.opacityOffset) + 1) / 2 * 0.9 + 0.1;
         }
         
-        // Parallax effect
-        this.x -= shipVel.x / (6 - this.z);
-        this.y -= shipVel.y / (6 - this.z);
+        // Enhanced parallax effect with exponential scaling
+        // Distant stars move much slower, close stars move faster
+        const parallaxFactor = Math.pow(this.z, 2.2) * 0.15;
+        this.x -= shipVel.x * parallaxFactor;
+        this.y -= shipVel.y * parallaxFactor;
         wrap(this, this.width, this.height);
     }
     
@@ -104,7 +140,9 @@ export class Star {
         
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.globalAlpha = this.opacity * (this.z / 5);
+        // Adjust opacity based on depth - distant stars are dimmer
+        const depthOpacity = Math.min(1, 0.2 + Math.pow(this.z / 4, 1.5));
+        ctx.globalAlpha = this.opacity * depthOpacity;
         
         if (this.shape === 'point') {
             const borderSize = 1;
