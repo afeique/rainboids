@@ -11,7 +11,8 @@
       "Bash(npm run build:*)",
       "Bash(ls:*)",
       "Bash(grep:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

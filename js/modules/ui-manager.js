@@ -6,6 +6,7 @@ export class UIManager {
     constructor() {
         this.elements = {};
         this.musicPlayer = new MusicPlayer();
+        this.audioManager = null; // Will be set by the game
         this.initializeElements();
         this.setupMusicPlayer();
     }
@@ -26,6 +27,7 @@ export class UIManager {
             highScoreDisplay: document.getElementById('high-score-display'),
             // Music elements
             musicInfo: document.getElementById('music-info'),
+            trackName: document.getElementById('track-name'),
             trackNameText: document.getElementById('track-name-text'),
             musicProgress: document.getElementById('music-progress'),
             musicInfoCurrentTime: document.getElementById('music-info-current-time'),
@@ -44,7 +46,14 @@ export class UIManager {
             musicNext: document.getElementById('music-next'),
             musicShuffle: document.getElementById('music-shuffle'),
             musicRepeat: document.getElementById('music-repeat'),
-            playlistTracks: document.getElementById('playlist-tracks')
+            playlistTracks: document.getElementById('playlist-tracks'),
+            // Music volume elements
+            musicVolumeSlider: document.getElementById('music-volume-slider'),
+            musicVolumeValue: document.getElementById('music-volume-value'),
+            // SFX elements
+            sfxVolumeSlider: document.getElementById('sfx-volume-slider'),
+            sfxVolumeValue: document.getElementById('sfx-volume-value'),
+            sfxTogglesContainer: document.getElementById('sfx-toggles')
         };
     }
     
@@ -120,6 +129,93 @@ export class UIManager {
         return false;
     }
     
+    setAudioManager(audioManager) {
+        this.audioManager = audioManager;
+        this.setupSfxControls();
+        this.setupMusicVolumeControl();
+    }
+    
+    setupSfxControls() {
+        if (!this.audioManager || !this.elements.sfxVolumeSlider) return;
+        
+        // Set initial value (50% on slider = 10% actual volume)
+        const initialVolume = this.audioManager.getSfxVolume() * 100;
+        this.elements.sfxVolumeSlider.value = initialVolume;
+        this.updateSfxVolumeDisplay(initialVolume);
+        
+        // Handle slider changes
+        this.elements.sfxVolumeSlider.addEventListener('input', (e) => {
+            const sliderValue = e.target.value;
+            const normalizedVolume = sliderValue / 100;
+            this.audioManager.setSfxVolume(normalizedVolume);
+            this.updateSfxVolumeDisplay(sliderValue);
+        });
+    }
+    
+    updateSfxVolumeDisplay(sliderValue) {
+        // Convert slider value (0-100) to actual volume percentage (0-20%)
+        const actualVolume = Math.round(sliderValue * 0.2);
+        this.elements.sfxVolumeValue.textContent = `${actualVolume}%`;
+    }
+    
+    setupMusicVolumeControl() {
+        if (!this.elements.musicVolumeSlider) return;
+        
+        // Set initial value
+        const initialVolume = this.musicPlayer.getVolume() * 100;
+        this.elements.musicVolumeSlider.value = initialVolume;
+        this.elements.musicVolumeValue.textContent = `${Math.round(initialVolume)}%`;
+        
+        // Handle slider changes
+        this.elements.musicVolumeSlider.addEventListener('input', (e) => {
+            const volume = e.target.value / 100;
+            this.musicPlayer.setVolume(volume);
+            this.elements.musicVolumeValue.textContent = `${e.target.value}%`;
+        });
+        
+        // Create sound effect toggles
+        this.createSfxToggles();
+    }
+    
+    createSfxToggles() {
+        if (!this.audioManager || !this.elements.sfxTogglesContainer) return;
+        
+        const soundNames = this.audioManager.getSoundNames();
+        const friendlyNames = {
+            shoot: 'Shooting',
+            hit: 'Hit/Damage',
+            coin: 'Pickup',
+            explosion: 'Asteroid Explosion',
+            playerExplosion: 'Player Explosion',
+            thruster: 'Thruster',
+            tractorBeam: 'Tractor Beam'
+        };
+        
+        soundNames.forEach(soundName => {
+            const toggleDiv = document.createElement('div');
+            toggleDiv.className = 'sfx-toggle';
+            
+            const label = document.createElement('span');
+            label.className = 'sfx-toggle-label';
+            label.textContent = friendlyNames[soundName] || soundName;
+            
+            const switchDiv = document.createElement('div');
+            switchDiv.className = 'sfx-toggle-switch active';
+            switchDiv.dataset.sound = soundName;
+            
+            // Handle toggle clicks
+            switchDiv.addEventListener('click', () => {
+                const isEnabled = !this.audioManager.isSoundEnabled(soundName);
+                this.audioManager.setSoundEnabled(soundName, isEnabled);
+                switchDiv.classList.toggle('active', isEnabled);
+            });
+            
+            toggleDiv.appendChild(label);
+            toggleDiv.appendChild(switchDiv);
+            this.elements.sfxTogglesContainer.appendChild(toggleDiv);
+        });
+    }
+    
     setupMusicPlayer() {
         // Set up music player callbacks
         this.musicPlayer.onTrackChange = (track) => {
@@ -173,8 +269,15 @@ export class UIManager {
         });
         
         this.elements.musicRepeat.addEventListener('click', () => {
-            const isRepeat = this.musicPlayer.toggleRepeat();
-            this.elements.musicRepeat.classList.toggle('active', isRepeat);
+            // Toggle repeat-one mode only
+            const isRepeatOne = this.elements.musicRepeat.classList.toggle('active');
+            this.elements.musicRepeat.classList.toggle('repeat-one', isRepeatOne);
+            // Set repeat-one mode in the music player
+            if (isRepeatOne) {
+                this.musicPlayer.setRepeatOne(true);
+            } else {
+                this.musicPlayer.setRepeatOne(false);
+            }
         });
         
         // Progress bar click
@@ -204,12 +307,22 @@ export class UIManager {
         this.musicPlayer.playlist.forEach((track, index) => {
             const trackElement = document.createElement('div');
             trackElement.className = 'playlist-track';
-            trackElement.textContent = track.name;
+            
+            // Create inner span for content
+            const contentSpan = document.createElement('span');
+            contentSpan.className = 'playlist-track-content';
+            contentSpan.innerHTML = `${track.name} · <span style="color: #00ccff;">${track.artist}</span>`;
+            
+            trackElement.appendChild(contentSpan);
             trackElement.dataset.index = index;
             
             // Mark current track as playing
             if (index === this.musicPlayer.currentTrackIndex) {
                 trackElement.classList.add('playing');
+                // Always apply marquee check for playing track
+                setTimeout(() => {
+                    this.applyPlaylistMarquee(contentSpan, trackElement);
+                }, 200);
             }
             
             // Add click handler
@@ -219,54 +332,72 @@ export class UIManager {
                 this.updatePlaylistDisplay();
             });
             
+            // Add hover handlers for marquee effect (only for non-playing tracks)
+            this.addPlaylistTrackHoverEffects(trackElement, contentSpan);
+            
             this.elements.playlistTracks.appendChild(trackElement);
         });
     }
     
-    updatePlaylistDisplay() {
-        // Update playing status in playlist
-        const tracks = this.elements.playlistTracks.querySelectorAll('.playlist-track');
-        tracks.forEach((track, index) => {
-            if (index === this.musicPlayer.currentTrackIndex) {
-                track.classList.add('playing');
-            } else {
-                track.classList.remove('playing');
+    addPlaylistTrackHoverEffects(trackElement, contentSpan) {
+        trackElement.addEventListener('mouseenter', () => {
+            // Don't apply hover marquee if this is the playing track (already has marquee)
+            if (trackElement.classList.contains('playing')) return;
+            
+            // Check if content overflows
+            const trackWidth = trackElement.offsetWidth - 30; // Subtract padding
+            const contentWidth = contentSpan.scrollWidth;
+            
+            if (contentWidth > trackWidth) {
+                // Apply marquee using the same logic as ensureMarquee
+                this.applyPlaylistMarquee(contentSpan, trackElement);
             }
+        });
+        
+        trackElement.addEventListener('mouseleave', () => {
+            // Don't stop marquee if this is the playing track
+            if (trackElement.classList.contains('playing')) return;
+            
+            // Stop marquee and reset
+            if (contentSpan._marqueeRAF) {
+                cancelAnimationFrame(contentSpan._marqueeRAF);
+                contentSpan._marqueeRAF = null;
+            }
+            
+            trackElement.classList.remove('has-marquee');
+            contentSpan.style.transform = 'translateX(0)';
         });
     }
     
     updateTrackDisplay(track) {
-        // Set the track name only once
-        this.elements.trackNameText.textContent = track.name;
-        this.elements.currentTrackName.textContent = track.name;
-        // Always (re)start the JS-driven marquee
-        this.ensureMarquee(this.elements.trackNameText, this.elements.trackName);
-        this.ensureMarquee(this.elements.currentTrackName, this.elements.currentTrackName.parentElement);
+        // Format track display
+        const trackDisplay = `<span style="color: #00ff00;">${track.name}</span>&nbsp;<span style="color: #666;">·</span>&nbsp;<span style="color: #00ccff;">${track.artist || 'unknown'}</span>`;
+        
+        // Update music info box
+        if (this.elements.trackNameText) {
+            this.elements.trackNameText.innerHTML = trackDisplay;
+            // Start marquee after a delay
+            setTimeout(() => {
+                this.ensureMarquee(this.elements.trackNameText, this.elements.trackName);
+            }, 200);
+        }
+        
+        // Update pause menu current track
+        if (this.elements.currentTrackName) {
+            const marqueeText = this.elements.currentTrackName.querySelector('.marquee-text');
+            if (marqueeText) {
+                marqueeText.innerHTML = trackDisplay;
+                // Force layout update
+                this.elements.currentTrackName.offsetHeight;
+                setTimeout(() => {
+                    this.ensureMarquee(marqueeText, this.elements.currentTrackName);
+                }, 500); // Longer delay for pause menu
+            } else {
+                console.warn('No .marquee-text found in current-track-name');
+            }
+        }
     }
 
-    ensureMarquee(textEl, containerEl) {
-        if (!textEl || !containerEl) return;
-        // Remove any previous animation frame
-        if (textEl._marqueeRAF) cancelAnimationFrame(textEl._marqueeRAF);
-        // Reset transform
-        textEl.style.transform = 'translateX(0)';
-        // Only animate if overflow
-        const containerWidth = containerEl.offsetWidth;
-        const textWidth = textEl.scrollWidth;
-        if (textWidth <= containerWidth) return;
-        let pos = 0;
-        const speed = 1.2; // px per frame
-        function step() {
-            pos -= speed;
-            if (pos <= -textWidth) {
-                pos = containerWidth;
-            }
-            textEl.style.transform = `translateX(${pos}px)`;
-            textEl._marqueeRAF = requestAnimationFrame(step);
-        }
-        step();
-    }
-    
     updateProgress(progress, currentTime, duration) {
         this.elements.musicProgress.style.width = `${progress * 100}%`;
         this.elements.musicPlayerProgress.style.width = `${progress * 100}%`;
@@ -307,5 +438,165 @@ export class UIManager {
     
     startMusic() {
         this.musicPlayer.play();
+    }
+
+    ensureMarquee(textEl, containerEl) {
+        if (!textEl || !containerEl) return;
+        
+        // Stop any existing animation
+        if (textEl._marqueeRAF) {
+            cancelAnimationFrame(textEl._marqueeRAF);
+            textEl._marqueeRAF = null;
+        }
+        
+        // Reset position
+        textEl.style.transform = 'translateX(0)';
+        
+        // Force a reflow to ensure styles are applied
+        containerEl.offsetHeight;
+        
+        // Wait a bit for render
+        setTimeout(() => {
+            // Get fresh measurements
+            const containerWidth = containerEl.clientWidth;
+            const textWidth = textEl.scrollWidth;
+            
+            console.log(`Marquee check for ${containerEl.id}:`, {
+                containerWidth,
+                textWidth,
+                overflow: textWidth > containerWidth,
+                element: textEl
+            });
+            
+            // Only start marquee if text overflows
+            if (textWidth > containerWidth) {
+                let position = 0;
+                let direction = -1;
+                const speed = 0.5;
+                const pauseTime = 1000;
+                let pauseTimer = 0;
+                const maxScroll = textWidth - containerWidth + 20; // Add some padding
+                
+                const animate = () => {
+                    // Handle pause
+                    if (pauseTimer > 0) {
+                        pauseTimer -= 16;
+                        textEl._marqueeRAF = requestAnimationFrame(animate);
+                        return;
+                    }
+                    
+                    // Move
+                    position += speed * direction;
+                    
+                    // Bounce at edges
+                    if (position <= -maxScroll) {
+                        position = -maxScroll;
+                        direction = 1;
+                        pauseTimer = pauseTime;
+                    } else if (position >= 0) {
+                        position = 0;
+                        direction = -1;
+                        pauseTimer = pauseTime;
+                    }
+                    
+                    textEl.style.transform = `translateX(${position}px)`;
+                    textEl._marqueeRAF = requestAnimationFrame(animate);
+                };
+                
+                console.log('Starting marquee animation for', containerEl.id);
+                animate();
+            }
+        }, 300); // Increased delay
+    }
+
+    applyPlaylistMarquee(textEl, containerEl) {
+        if (!textEl || !containerEl) return;
+        
+        // Stop any existing animation
+        if (textEl._marqueeRAF) {
+            cancelAnimationFrame(textEl._marqueeRAF);
+            textEl._marqueeRAF = null;
+        }
+        
+        // Add marquee class
+        containerEl.classList.add('has-marquee');
+        
+        // Reset position
+        textEl.style.transform = 'translateX(0)';
+        
+        // Wait for render
+        setTimeout(() => {
+            const padding = 30; // Account for padding
+            const containerWidth = containerEl.offsetWidth - padding;
+            const textWidth = textEl.scrollWidth;
+            
+            // Only start marquee if text overflows
+            if (textWidth > containerWidth) {
+                let position = 0;
+                let direction = -1;
+                const speed = 0.5;
+                const pauseTime = 1000;
+                let pauseTimer = 0;
+                const maxScroll = textWidth - containerWidth + 10;
+                
+                const animate = () => {
+                    // Handle pause
+                    if (pauseTimer > 0) {
+                        pauseTimer -= 16;
+                        textEl._marqueeRAF = requestAnimationFrame(animate);
+                        return;
+                    }
+                    
+                    // Move
+                    position += speed * direction;
+                    
+                    // Bounce at edges
+                    if (position <= -maxScroll) {
+                        position = -maxScroll;
+                        direction = 1;
+                        pauseTimer = pauseTime;
+                    } else if (position >= 0) {
+                        position = 0;
+                        direction = -1;
+                        pauseTimer = pauseTime;
+                    }
+                    
+                    textEl.style.transform = `translateX(${position}px)`;
+                    textEl._marqueeRAF = requestAnimationFrame(animate);
+                };
+                
+                animate();
+            } else {
+                containerEl.classList.remove('has-marquee');
+            }
+        }, 100);
+    }
+    
+    updatePlaylistDisplay() {
+        // Update playing status in playlist
+        const tracks = this.elements.playlistTracks.querySelectorAll('.playlist-track');
+        tracks.forEach((track, index) => {
+            const contentSpan = track.querySelector('.playlist-track-content');
+            if (index === this.musicPlayer.currentTrackIndex) {
+                track.classList.add('playing');
+                // Apply marquee to new playing track if needed
+                setTimeout(() => {
+                    const trackWidth = track.offsetWidth - 30; // Subtract padding
+                    const contentWidth = contentSpan.scrollWidth;
+                    if (contentWidth > trackWidth && !contentSpan._marqueeRAF) {
+                        this.applyPlaylistMarquee(contentSpan, track);
+                    }
+                }, 100);
+            } else {
+                track.classList.remove('playing');
+                track.classList.remove('has-marquee');
+                // Remove marquee from non-playing tracks
+                if (contentSpan._marqueeRAF) {
+                    cancelAnimationFrame(contentSpan._marqueeRAF);
+                    contentSpan._marqueeRAF = null;
+                }
+                contentSpan.style.transform = 'translateX(0)';
+            }
+        });
     }
 } 

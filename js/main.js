@@ -99,6 +99,8 @@ class RainboidsGame {
     setupManagers() {
         this.inputHandler = new InputHandler();
         this.uiManager = new UIManager();
+        // Pass audio manager to UI manager for SFX controls
+        this.uiManager.setAudioManager(this.audioManager);
     }
     
     setupGameEngine() {

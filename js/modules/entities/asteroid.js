@@ -31,8 +31,8 @@ export class Asteroid {
         this.fov = 300;
         this.active = true;
         
-        // Initialize health based on size
-        this.maxHealth = Math.ceil((baseRadius || 50) / 20); // 2-3 hits for most asteroids
+        // Initialize health based on size (doubled)
+        this.maxHealth = Math.ceil((baseRadius || 50) / 10); // 4-6 hits for most asteroids
         this.health = this.maxHealth;
         
         // Define edges for wireframe

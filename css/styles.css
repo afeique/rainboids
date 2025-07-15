@@ -1,10 +1,12 @@
+/* Remove manual @font-face declarations - let Google Fonts handle it */
+
 body {
     margin: 0;
     padding: 0;
     background-color: #000;
     color: #fff;
     overflow: hidden;
-    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-family: 'Press Start 2P', monospace;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -125,7 +127,7 @@ canvas {
     display: block;
     margin: 20px auto 0;
     padding: 10px;
-    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-family: 'Press Start 2P', monospace;
     font-size: 16px;
     color: white;
     background: #333;
@@ -358,7 +360,7 @@ canvas {
 #save-layout-button {
      margin-top: 30px;
      padding: 15px 30px;
-     font-family: 'Press Start 2P', 'Courier New', monospace;
+     font-family: 'Press Start 2P',  monospace;
      font-size: 18px;
      color: black;
      background: white;
@@ -377,7 +379,7 @@ canvas {
     justify-content: center;
     align-items: center;
     color: white;
-    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-family: 'Press Start 2P',  monospace;
 }
 
 #loading-screen h1 {
@@ -539,42 +541,32 @@ canvas {
 }
 
 #track-name {
-    height: 20px;
-    overflow: hidden;
-    white-space: nowrap;
+    height: 30px;
     margin-bottom: 8px;
-    color: #00ff00;
-    font-size: 12px;
+    overflow: hidden;
     position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
 }
 
 #track-name-text {
     display: inline-block;
     white-space: nowrap;
-    text-align: center;
+    font-family: 'Silkscreen', 'Press Start 2P', 'Courier New', monospace;
+    font-size: 18px;
+    color: #00ff00;
+    line-height: 30px;
 }
 
-#track-name-text.marquee, #current-track-name.marquee {
+#current-track-name .marquee-text {
     display: inline-block;
     white-space: nowrap;
-    animation: marquee 20s linear infinite;
-    min-width: 100%;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 18px;
+    color: #00ff00;
+    line-height: 30px;
     position: relative;
 }
 
-@keyframes marquee {
-    0% { transform: translateX(0%); }
-    100% { transform: translateX(-100%); }
-}
 
-#track-name, #current-track-name {
-    overflow: hidden;
-    white-space: nowrap;
-    position: relative;
-}
 
 #music-info-progress-container {
     display: flex;
@@ -606,7 +598,7 @@ canvas {
 
 #pause-button {
     position: absolute;
-    top: 89px;
+    top: 95px;
     right: 20px;
     padding: 8px 16px;
     background: rgba(0, 0, 0, 0.5);
@@ -625,17 +617,18 @@ canvas {
 
 /* Music Player Styles */
 #music-player {
-    margin-top: 20px;
+    margin-top: 0;
 }
 
 #current-track-name {
-    font-size: 18px;
-    margin-bottom: 20px;
-    color: #00ff00;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    margin: 0 -20px 20px -20px; /* Negative margins to extend to edges */
+    padding: 0 20px; /* Add padding back */
+    overflow: hidden;
+    position: relative;
+    width: calc(100% + 40px); /* Account for negative margins */
+    height: 30px;
     text-align: center;
+    box-sizing: border-box;
 }
 
 #music-progress-container {
@@ -723,9 +716,7 @@ canvas {
 
 /* Playlist Styles */
 #playlist-container {
-    margin-top: 30px;
-    border-top: 2px solid rgba(255, 255, 255, 0.2);
-    padding-top: 20px;
+    margin-top: 20px;
 }
 
 #playlist-container h3 {
@@ -736,7 +727,7 @@ canvas {
 }
 
 #playlist-tracks {
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 4px;
@@ -762,13 +753,25 @@ canvas {
 }
 
 .playlist-track {
-    padding: 10px 15px;
+    padding: 0 15px;
     cursor: pointer;
-    font-size: 12px;
+    font-family: 'Silkscreen', monospace;
+    font-size: 18px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     transition: all 0.2s;
+    position: relative;
+}
+
+.playlist-track.has-marquee {
+    text-overflow: clip; /* Remove ellipsis when marquee is active */
+}
+
+.playlist-track-content {
+    display: inline-block;
+    white-space: nowrap;
+    transition: none; /* No transition for smooth marquee */
 }
 
 .playlist-track:nth-child(odd) {
@@ -790,7 +793,7 @@ canvas {
     font-weight: bold;
 }
 
-.playlist-track.playing::before {
+.playlist-track.playing:not(.has-marquee)::before {
     content: "♪ ";
     margin-right: 5px;
 }
@@ -812,6 +815,8 @@ canvas {
     background: rgba(0,255,0,0.8);
     transition: background 0.2s;
 }
+
+/* Remove duplicate marquee styles */
 
 @media (hover: none) and (pointer: coarse), (max-width: 768px) {
     #mobile-controls, #mobile-pause-button {
@@ -856,4 +861,184 @@ canvas {
 @keyframes pulse-opacity {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
+}
+
+/* SFX Volume Slider */
+#sfx-volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    outline: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#sfx-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #00ff00;
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+#sfx-volume-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #00ff00;
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+#sfx-volume-value {
+    color: #00ff00;
+    font-size: 14px;
+}
+
+/* Music Volume Slider */
+#music-volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    outline: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#music-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #0088ff;
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+#music-volume-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #0088ff;
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+#music-volume-value {
+    color: #0088ff;
+    font-size: 14px;
+}
+
+/* Sound Effect Toggles */
+#sfx-toggles {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+#sfx-toggles::-webkit-scrollbar {
+    width: 8px;
+}
+
+#sfx-toggles::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+#sfx-toggles::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+#sfx-toggles::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.sfx-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    transition: background 0.2s;
+}
+
+.sfx-toggle:nth-child(odd) {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sfx-toggle:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.sfx-toggle:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.sfx-toggle-label {
+    font-family: 'Silkscreen', monospace;
+    font-size: 18px;
+    text-transform: capitalize;
+}
+
+.sfx-toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.sfx-toggle-switch.active {
+    background: #00ff00;
+}
+
+.sfx-toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+}
+
+.sfx-toggle-switch.active::after {
+    transform: translateX(20px);
+} 
+
+#music-repeat {
+    position: relative;
+}
+
+#music-repeat.repeat-one::after {
+    content: '1';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 14px;
+    height: 14px;
+    background: white;
+    color: #00ccff;
+    border-radius: 50%;
+    font-size: 11px;
+    font-family: 'Silkscreen', 'Press Start 2P', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    z-index: 2;
+    border: 2px solid #00ccff;
+    pointer-events: none;
 } 

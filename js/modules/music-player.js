@@ -1,4 +1,6 @@
 // Music Player System with playlist management and controls
+import { PLAYLIST_DATA } from '../playlist-data.js';
+
 export class MusicPlayer {
     constructor() {
         this.playlist = [];
@@ -21,52 +23,14 @@ export class MusicPlayer {
     }
     
     async initializePlaylist() {
-        // Define all tracks in the music directory
-        const tracks = [
-            'acrylic-formaledehyde.mp3',
-            'aura.mp3',
-            'beyond-shadows.mp3',
-            'blood-ties.mp3',
-            'command-console.mp3',
-            'cosmic-wander.mp3',
-            'dangerous.mp3',
-            'darkest-knight.mp3',
-            'darkness-in-disguise.mp3',
-            'death-star-valley.mp3',
-            'do-you-wonder.mp3',
-            'eastern-sinusoidia.mp3',
-            'electrachu.mp3',
-            'electrica.mp3',
-            'electrobit.mp3',
-            'exodus-de-novo.mp3',
-            'incandescence.mp3',
-            'inferno.mp3',
-            'iridium.mp3',
-            'legends.mp3',
-            'lightsabre-raptor.mp3',
-            'melodia-nostalgíque.mp3',
-            'midnight.mp3',
-            'never-enough.mp3',
-            'out-for-blood.mp3',
-            'rainbow-vision.mp3',
-            'salvation.mp3',
-            'samus.mp3',
-            'solacia.mp3',
-            'sparkly-glass-cannon.mp3',
-            'steel-heart.mp3',
-            'superhero-rodeo.mp3',
-            'thundara.mp3',
-            'violencia.mp3',
-            'world-eater.mp3',
-            'zypher.mp3'
-        ];
+        // Use the pre-generated playlist data
+        this.playlist = [...PLAYLIST_DATA];
+        console.log(`Loaded ${this.playlist.length} tracks from playlist data`);
         
-        // Create playlist with full paths
-        this.playlist = tracks.map(track => ({
-            name: this.formatTrackName(track.replace('.mp3', '')),
-            path: `music/${track}`,
-            duration: 0
-        }));
+        // Add duration property to each track
+        this.playlist.forEach(track => {
+            track.duration = 0;
+        });
         
         // Shuffle playlist on initialization
         this.shufflePlaylist();
@@ -75,13 +39,6 @@ export class MusicPlayer {
         this.loadTrack(0);
     }
     
-    formatTrackName(filename) {
-        // Convert hyphenated filename to readable title
-        return filename
-            .split('-')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-    }
     
     shufflePlaylist() {
         // Fisher-Yates shuffle
@@ -113,6 +70,13 @@ export class MusicPlayer {
             track.duration = this.currentAudio.duration;
         });
         
+        // Handle loading errors
+        this.currentAudio.addEventListener('error', (e) => {
+            console.error('Failed to load track:', track.path, e);
+            // Try next track if loading fails
+            setTimeout(() => this.next(), 1000);
+        });
+        
         // Preload next and previous tracks
         this.preloadAdjacentTracks();
         
@@ -121,12 +85,11 @@ export class MusicPlayer {
             this.onTrackChange(track);
         }
         
-        // Log for debugging
-        console.log('Now playing:', track.name);
         
         // Start playing if we were playing before
         if (this.isPlaying) {
-            this.play();
+            // Delay play slightly to ensure audio element is ready
+            setTimeout(() => this.play(), 100);
         }
     }
     
@@ -150,11 +113,19 @@ export class MusicPlayer {
     
     play() {
         if (this.currentAudio) {
-            this.currentAudio.play();
-            this.isPlaying = true;
-            if (this.onPlayStateChange) {
-                this.onPlayStateChange(true);
-            }
+            this.currentAudio.play().then(() => {
+                this.isPlaying = true;
+                if (this.onPlayStateChange) {
+                    this.onPlayStateChange(true);
+                }
+            }).catch(error => {
+                console.log("Music playback blocked by browser:", error);
+                // Set playing to false if blocked
+                this.isPlaying = false;
+                if (this.onPlayStateChange) {
+                    this.onPlayStateChange(false);
+                }
+            });
         }
     }
     
@@ -174,6 +145,7 @@ export class MusicPlayer {
         } else {
             this.play();
         }
+        return this.isPlaying;
     }
     
     next() {
@@ -257,5 +229,26 @@ export class MusicPlayer {
     
     getDuration() {
         return this.currentAudio ? this.currentAudio.duration : 0;
+    }
+    
+    setVolume(volume) {
+        this.volume = Math.max(0, Math.min(1, volume));
+        if (this.currentAudio) {
+            this.currentAudio.volume = this.volume;
+        }
+        if (this.nextAudio) {
+            this.nextAudio.volume = this.volume;
+        }
+        if (this.prevAudio) {
+            this.prevAudio.volume = this.volume;
+        }
+    }
+    
+    getVolume() {
+        return this.volume;
+    }
+
+    setRepeatOne(enabled) {
+        this.isRepeatOne = !!enabled;
     }
 }
