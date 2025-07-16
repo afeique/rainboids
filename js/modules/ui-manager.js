@@ -64,7 +64,7 @@ export class UIManager {
     }
     
     updateScore(money) {
-        this.elements.score.textContent = `◈ ${Math.floor(money)}`;
+        this.elements.score.textContent = `${Math.floor(money)}`;
     }
     
     updateWave(wave) {

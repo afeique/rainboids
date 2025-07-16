@@ -1,6 +1,6 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
-import { random, collision, triggerHapticFeedback, generatePoissonStarPosition } from './utils.js';
+import { random, collision, triggerHapticFeedback, generatePoissonStarPosition, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
@@ -42,6 +42,13 @@ export class GameEngine {
 
         this.playerState = PLAYER_STATES.NORMAL;
         this.pendingDamage = 0; // New property to track pending damage
+
+        // Shield system variables (renamed from energy for consistency)
+        this.maxShields = 99;
+        this.playerShields = this.maxShields;
+        this.shieldTanks = 0; // Player starts with zero shield tanks
+        this.displayShields = this.maxShields;
+        this.displayTanks = 0;
 
         this.shieldIcon = new Image();
         this.shieldIcon.src = 'assets/shield-icon.svg';
@@ -124,10 +131,10 @@ export class GameEngine {
         this.game.state = GAME_STATES.PLAYING;
         // Reset player
         this.player = new Player();
-        // Reset energy
-        this.playerEnergy = this.maxEnergy;
-        this.energyTanks = 0; // Reset to zero tanks
-        this.displayEnergy = this.maxEnergy;
+        // Reset shields
+        this.playerShields = this.maxShields;
+        this.shieldTanks = 0; // Reset to zero tanks
+        this.displayShields = this.maxShields;
         this.displayTanks = 0;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
@@ -166,8 +173,8 @@ export class GameEngine {
                 this.game.state = GAME_STATES.PLAYING;
             }
         }, 1500);
-        // No rapid recharge between waves - energy persists
-        // Only restore energy at game start
+        // No rapid recharge between waves - shields persist
+        // Only restore shields at game start
     }
     
     spawnAsteroidOffscreen() {
@@ -431,22 +438,22 @@ export class GameEngine {
                         }
                     }
                     
-                    // Add energy up to max capacity (999 total)
-                    const currentTotalEnergy = this.energyTanks * this.maxEnergy + this.playerEnergy;
-                    const maxTotalEnergy = 999;
+                    // Add shields up to max capacity (999 total)
+                    const currentTotalShields = this.shieldTanks * this.maxShields + this.playerShields;
+                    const maxTotalShields = 999;
                     
-                    if (currentTotalEnergy < maxTotalEnergy) {
-                        const addAmount = star.isBurst ? GAME_CONFIG.BURST_STAR_ENERGY : GAME_CONFIG.STAR_ENERGY;
-                        let newTotalEnergy = Math.min(currentTotalEnergy + addAmount, maxTotalEnergy);
+                    if (currentTotalShields < maxTotalShields) {
+                        const addAmount = star.isBurst ? GAME_CONFIG.BURST_STAR_SHIELDS : GAME_CONFIG.STAR_SHIELDS;
+                        let newTotalShields = Math.min(currentTotalShields + addAmount, maxTotalShields);
                         
-                        // Calculate new tanks and energy
-                        this.energyTanks = Math.floor(newTotalEnergy / this.maxEnergy);
-                        this.playerEnergy = newTotalEnergy % this.maxEnergy;
+                        // Calculate new tanks and shields
+                        this.shieldTanks = Math.floor(newTotalShields / this.maxShields);
+                        this.playerShields = newTotalShields % this.maxShields;
                         
-                        // Special case: if we have exactly 999 energy
-                        if (newTotalEnergy === 999) {
-                            this.energyTanks = 10;
-                            this.playerEnergy = 99;
+                        // Special case: if we have exactly 999 shields
+                        if (newTotalShields === 999) {
+                            this.shieldTanks = 10;
+                            this.playerShields = 99;
                         }
                     }
                     if (!star.isBurst) this.spawnStar();
@@ -498,7 +505,7 @@ export class GameEngine {
             this.player.draw(this.ctx);
             
             // Draw health bar and UI elements
-            this.updateEnergyDisplay();
+            this.updateShieldsDisplay();
         }
     }
     
@@ -640,9 +647,9 @@ export class GameEngine {
         this.player.health -= reducedDamage;
 
         if (this.player.health <= 0) {
-            if (this.energyTanks > 0) {
-                this.energyTanks--;
-                this.explodeTank(this.energyTanks); // Visual effect for tank explosion
+            if (this.shieldTanks > 0) {
+                this.shieldTanks--;
+                this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
                 this.player.health = this.player.maxHealth;
                 this.audioManager.playCoin(); // Tank used sound
             } else {
@@ -672,7 +679,7 @@ export class GameEngine {
         this.triggerScreenShake(30, 20);
     }
     
-    updateEnergyDisplay() {
+    updateShieldsDisplay() {
         const ctx = this.ctx;
         const barX = 20;
         const barY = 20;
@@ -806,86 +813,40 @@ export class GameEngine {
         const textX = barX + barWidth / 2;
         const textY = barY + barHeight + 8; // Position below the bar
         
+        // Draw heart icon to the left of health text
+        const hpTextWidth = ctx.measureText(hpText).width;
+        const heartIconX = textX - hpTextWidth/2 - 10; // Position to the left of health text
+        const heartIconY = textY + 5;
+        const heartIconSize = 12;
+        
+        drawCachedHeartIcon(ctx, heartIconX, heartIconY, heartIconSize, '#800000', '#DC143C');
+        
         // Draw text outline
         ctx.strokeText(hpText, textX, textY);
         // Draw text fill
         ctx.fillText(hpText, textX, textY);
 
-        // Draw Shield Icon with layered effect
+        // Draw Shield Icon using cached sprite for better performance
         const shieldIconX = barX + barWidth + 20;
         const shieldIconY = barY;
         const iconSize = 30;
         
-        // Function to draw shield shape using exact SVG path coordinates
-        const drawShieldPath = (centerX, centerY, size) => {
-            const scale = size / 16; // SVG viewBox is 16x16
-            ctx.beginPath();
-            
-            // Exact SVG path: M4.35009 13.3929L8 16L11.6499 13.3929C13.7523 11.8912 15 9.46667 15 6.88306V3L8 0L1 3V6.88306C1 9.46667 2.24773 11.8912 4.35009 13.3929Z
-            // Transform coordinates to center on (centerX, centerY)
-            const offsetX = centerX - 8 * scale;
-            const offsetY = centerY - 8 * scale;
-            
-            // Start at top center (8,0)
-            ctx.moveTo(offsetX + 8 * scale, offsetY + 0 * scale);
-            // Line to left top corner (1,3)
-            ctx.lineTo(offsetX + 1 * scale, offsetY + 3 * scale);
-            // Line down left side to (1, 6.88306)
-            ctx.lineTo(offsetX + 1 * scale, offsetY + 6.88306 * scale);
-            // Curve to bottom left (4.35009, 13.3929)
-            ctx.bezierCurveTo(
-                offsetX + 1 * scale, offsetY + 9.46667 * scale,
-                offsetX + 2.24773 * scale, offsetY + 11.8912 * scale,
-                offsetX + 4.35009 * scale, offsetY + 13.3929 * scale
-            );
-            // Line to bottom center (8,16)
-            ctx.lineTo(offsetX + 8 * scale, offsetY + 16 * scale);
-            // Line to bottom right (11.6499, 13.3929)
-            ctx.lineTo(offsetX + 11.6499 * scale, offsetY + 13.3929 * scale);
-            // Curve to right side
-            ctx.bezierCurveTo(
-                offsetX + 13.7523 * scale, offsetY + 11.8912 * scale,
-                offsetX + 15 * scale, offsetY + 9.46667 * scale,
-                offsetX + 15 * scale, offsetY + 6.88306 * scale
-            );
-            // Line up right side to (15,3)
-            ctx.lineTo(offsetX + 15 * scale, offsetY + 3 * scale);
-            // Line to top center, completing the path
-            ctx.lineTo(offsetX + 8 * scale, offsetY + 0 * scale);
-            ctx.closePath();
-        };
-        
         const centerX = shieldIconX + iconSize / 2;
         const centerY = shieldIconY + iconSize / 2;
         
-        // Draw single shield with border and gradient fill
+        // Use cached shield icon sprite instead of complex path drawing
         ctx.globalAlpha = 0.9;
-        drawShieldPath(centerX, centerY, iconSize);
-        
-        // Create gradient fill
-        const shieldGradient = ctx.createLinearGradient(centerX, centerY - iconSize/2, centerX, centerY + iconSize/2);
-        shieldGradient.addColorStop(0, 'rgba(135, 206, 250, 0.95)'); // Light sky blue
-        shieldGradient.addColorStop(0.5, 'rgba(100, 180, 255, 0.9)'); // Sky blue
-        shieldGradient.addColorStop(1, 'rgba(70, 150, 220, 0.85)'); // Deeper sky blue
-        
-        // Fill the shield
-        ctx.fillStyle = shieldGradient;
-        ctx.fill();
-        
-        // Add border stroke
-        ctx.strokeStyle = 'rgba(120, 180, 255, 0.8)'; // Lighter shield-blue border
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        drawCachedShieldIcon(ctx, centerX, centerY, iconSize);
         
         ctx.globalAlpha = 0.9;
         ctx.font = "12px 'Press Start 2P', monospace";
-        ctx.fillStyle = textColor;
-        ctx.strokeStyle = strokeColor;
+        ctx.fillStyle = '#4A90E2'; // Consistent blue color for shield text
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)'; // Dark outline
         ctx.lineWidth = 0.5;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         
-        const shieldText = `${this.player.shield}%`;
+        const shieldText = `${this.player.shield}`; // Remove % sign
         const shieldTextX = shieldIconX + iconSize + 8;
         const shieldTextY = shieldIconY + iconSize / 2;
         
@@ -893,47 +854,72 @@ export class GameEngine {
         ctx.strokeText(shieldText, shieldTextX, shieldTextY);
         ctx.fillText(shieldText, shieldTextX, shieldTextY);
 
+        // Draw money icon to the right of the shield text
+        const shieldTextWidth = ctx.measureText(shieldText).width;
+        const moneyIconX = shieldTextX + shieldTextWidth + 25; // Position to the right of shield text with extra margin (moved right by 10px)
+        const moneyIconY = shieldTextY; // Align vertically with shield text
+        const moneyIconSize = 16;
+        
+        // Draw money icon using cached sprite for better performance
+        drawCachedMoneyIcon(ctx, moneyIconX, moneyIconY, moneyIconSize, '#FFFF00', '#B8860B');
 
-        // Draw energy tanks
+        // Draw money text to the right of the money icon
+        const moneyTextX = moneyIconX + moneyIconSize + 4; // Position to the right of icon with small margin
+        const moneyTextY = moneyIconY;
+        
+        ctx.font = "12px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#FFD700'; // Gold color for money text
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 0.5;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        
+        const moneyText = `${Math.floor(this.game.money)}`;
+        
+        // Draw money text with outline
+        ctx.strokeText(moneyText, moneyTextX, moneyTextY);
+        ctx.fillText(moneyText, moneyTextX, moneyTextY);
+
+        // Draw shield tanks
         const tankSize = 25;
         const tankMargin = 8;
         const tanksY = barY + barHeight + 10;
         
-        // Update energy tanks display
-        let energyTanksContainer = document.getElementById('energy-tanks');
-        if (!energyTanksContainer) {
-            // Create energy tanks container if it doesn't exist
+        // Update shield tanks display
+        let shieldTanksContainer = document.getElementById('shield-tanks');
+        if (!shieldTanksContainer) {
+            // Create shield tanks container if it doesn't exist
             const container = document.createElement('div');
-            container.id = 'energy-tanks';
+            container.id = 'shield-tanks';
             container.style.position = 'absolute';
             container.style.top = '40px';
-            container.style.left = '70px'; // Align with energy bar (24px base + 45px margin)
+            container.style.left = '70px'; // Align with shield bar (24px base + 45px margin)
             container.style.display = 'flex';
             container.style.gap = '3px';
             container.style.zIndex = '90';
             document.body.appendChild(container);
         } else {
             // Clear existing tanks
-            energyTanksContainer.innerHTML = '';
+            shieldTanksContainer.innerHTML = '';
         }
         
         // Create only the tanks the player has (max 10 visible)
-        energyTanksContainer = document.getElementById('energy-tanks');
+        shieldTanksContainer = document.getElementById('shield-tanks');
         const visibleTanks = Math.min(this.displayTanks, 10);
         for (let i = 0; i < visibleTanks; i++) {
             const tank = document.createElement('div');
-            tank.className = 'energy-tank';
+            tank.className = 'shield-tank';
             tank.dataset.tankIndex = i;
             tank.style.width = '14px';
             tank.style.height = '14px';
             tank.style.borderRadius = '3px';
             tank.style.background = 'rgba(0,255,0,0.8)';
             tank.style.position = 'relative';
-            energyTanksContainer.appendChild(tank);
+            shieldTanksContainer.appendChild(tank);
         }
     }    
     explodeTank(tankIndex) {
-        const tanks = document.querySelectorAll('.energy-tank');
+        const tanks = document.querySelectorAll('.shield-tank');
         if (tanks[tankIndex]) {
             const tank = tanks[tankIndex];
             const rect = tank.getBoundingClientRect();
@@ -983,8 +969,44 @@ export class GameEngine {
     handlePlayerAsteroidCollision(player, asteroid) {
         if (this.player.invincible) return;
 
-        // Player takes damage
-        this.takeDamage(asteroid.mass * 0.1);
+        // Calculate damage based on asteroid size and speed (10-20 damage range)
+        const baseSize = 40; // Minimum asteroid radius
+        const maxSize = 60; // Maximum asteroid radius
+        const sizeRatio = (asteroid.radius - baseSize) / (maxSize - baseSize); // 0-1 range
+        
+        // Calculate speed factor
+        const speed = Math.hypot(asteroid.vel.x, asteroid.vel.y);
+        const maxSpeed = 4; // Typical max asteroid speed
+        const speedRatio = Math.min(speed / maxSpeed, 1); // Cap at 1
+        
+        // Damage calculation: 10-20 range based on size and speed
+        const sizeDamage = 10 + (sizeRatio * 6); // 10-16 damage from size
+        const speedDamage = speedRatio * 4; // 0-4 additional damage from speed
+        const totalDamage = sizeDamage + speedDamage; // 10-20 damage range
+        
+        // Apply shield damage reduction and round to integer
+        const reducedDamage = totalDamage * (1 - this.player.shield / 100);
+        const finalDamage = Math.round(reducedDamage);
+        
+        // Apply the calculated damage
+        this.player.health -= finalDamage;
+
+        // Handle death/shield tank usage
+        if (this.player.health <= 0) {
+            if (this.shieldTanks > 0) {
+                this.shieldTanks--;
+                this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
+                this.player.health = this.player.maxHealth;
+                this.audioManager.playCoin(); // Tank used sound
+            } else {
+                this.gameOver();
+            }
+        }
+
+        // Visual and audio feedback
+        this.player.makeInvincible(3000); // 3 seconds of invincibility
+        this.audioManager.playHit();
+        this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
         this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
         this.audioManager.playShield();
 

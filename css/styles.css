@@ -45,7 +45,13 @@ canvas.asteroid-hover {
 }
 
 #score {
-    display: none; /* Money now displayed on canvas */
+    position: absolute;
+    top: 30px;
+    left: 270px; /* Position to the right of the health bar */
+    font-size: 12px;
+    color: #FFD700;
+    z-index: 10;
+    display: none; /* Hidden since money is now rendered on canvas */
 }
 
 #game-message-overlay {
@@ -807,7 +813,7 @@ canvas.asteroid-hover {
     margin-right: 5px;
 }
 
-#energy-tanks {
+#shield-tanks {
     position: absolute;
     top: 40px;
     left: 24px;
@@ -817,7 +823,7 @@ canvas.asteroid-hover {
     z-index: 90;
 }
 
-.energy-tank {
+.shield-tank {
     width: 14px;
     height: 14px;
     border-radius: 3px;

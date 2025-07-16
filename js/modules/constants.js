@@ -24,13 +24,24 @@ export const GAME_CONFIG = {
     MIN_AST_RAD: 15,
     SAFE_ZONE: 250,
     MOBILE_SCALE: 0.65,
-    STAR_ENERGY: 1,
-    BURST_STAR_ENERGY: 1,
+    STAR_SHIELDS: 1,
+    BURST_STAR_SHIELDS: 1,
 };
 
 export const NOISE_CONFIG = {
     // General settings
     DENSITY_MULTIPLIER: 2.5, // Overall control of star density
+    
+    // Galaxy pattern settings
+    GALAXY_CENTERS: [
+        { x: 0.25, y: 0.3, intensity: 0.8, spiralTightness: 0.15, haloRadius: 0.4 },
+        { x: 0.75, y: 0.7, intensity: 0.9, spiralTightness: 0.12, haloRadius: 0.35 },
+        { x: 0.15, y: 0.8, intensity: 0.7, spiralTightness: 0.18, haloRadius: 0.3 },
+        { x: 0.85, y: 0.2, intensity: 0.6, spiralTightness: 0.2, haloRadius: 0.25 }
+    ],
+    SPIRAL_ARMS: 2, // Number of spiral arms per galaxy
+    SPIRAL_AMPLITUDE: 0.4, // How much spiral pattern affects density
+    HALO_AMPLITUDE: 0.6, // How much halo pattern affects density
     
     // Far Layer (z < 0.6): Large, sparse galactic structures
     FAR_LAYER: {

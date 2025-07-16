@@ -41,14 +41,14 @@ export class Asteroid {
         
         this.rescale(radius || random(40, 60));
 
-        // Calculate reasonable health based on size (20-40 range)
-        // Base health of 20, scaled by size relative to minimum radius (40)
-        const baseHealth = 20;
+        // Calculate reasonable health based on size (20-30 range for biggest asteroids)
+        // Base health of 12, scaled by size relative to minimum radius (40)
+        const baseHealth = 12;
         const sizeMultiplier = this.radius / 40; // 40 is minimum radius
         const levelMultiplier = this.level;
         this.maxHealth = Math.floor(baseHealth * sizeMultiplier * levelMultiplier);
-        // Ensure health is in reasonable range
-        this.maxHealth = Math.max(15, Math.min(50, this.maxHealth));
+        // Ensure health is in range 8-30, with biggest asteroids (radius 60) having ~18-30 health
+        this.maxHealth = Math.max(8, Math.min(30, this.maxHealth));
         this.health = this.maxHealth;
     }
 
@@ -73,14 +73,14 @@ export class Asteroid {
         
         this.rescale(radius || random(40, 60));
 
-        // Calculate reasonable health based on size (20-40 range)
-        // Base health of 20, scaled by size relative to minimum radius (40)
-        const baseHealth = 20;
+        // Calculate reasonable health based on size (20-30 range for biggest asteroids)
+        // Base health of 12, scaled by size relative to minimum radius (40)
+        const baseHealth = 12;
         const sizeMultiplier = this.radius / 40; // 40 is minimum radius
         const levelMultiplier = this.level;
         this.maxHealth = Math.floor(baseHealth * sizeMultiplier * levelMultiplier);
-        // Ensure health is in reasonable range
-        this.maxHealth = Math.max(15, Math.min(50, this.maxHealth));
+        // Ensure health is in range 8-30, with biggest asteroids (radius 60) having ~18-30 health
+        this.maxHealth = Math.max(8, Math.min(30, this.maxHealth));
         this.health = this.maxHealth;
     }
 
@@ -212,62 +212,65 @@ export class Asteroid {
         ctx.shadowBlur = 0;
         
         const barWidth = 50; // Medium width
-        const barHeight = 5; // Thinner
+        const barHeight = 3; // Reduced from 5px to 3px for more compact appearance
         const barX = this.x - barWidth / 2;
         const barY = this.y - this.radius - 18;
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;
-        let healthColor, borderColor;
+        
+        // Create vertical gradient for health bar (light to dark) and background color
+        let healthGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+        let backgroundColor;
+        
         if (healthPercentage > 0.5) {
-            healthColor = '#00ff00';
-            borderColor = 'rgba(0, 255, 0, 0.6)'; // Light green border
+            // Green gradient: light green to dark green
+            healthGradient.addColorStop(0, '#66ff66'); // Light green at top
+            healthGradient.addColorStop(1, '#00cc00'); // Dark green at bottom
+            backgroundColor = 'rgba(0, 102, 0, 0.6)'; // Dark green background with opacity
         } else if (healthPercentage > 0.25) {
-            healthColor = '#ffff00';
-            borderColor = 'rgba(255, 255, 0, 0.6)'; // Light yellow border
+            // Yellow gradient: light yellow to dark yellow
+            healthGradient.addColorStop(0, '#ffff99'); // Light yellow at top
+            healthGradient.addColorStop(1, '#cccc00'); // Dark yellow at bottom
+            backgroundColor = 'rgba(102, 102, 0, 0.6)'; // Dark yellow background with opacity
         } else {
-            healthColor = '#ff0000';
-            borderColor = 'rgba(255, 0, 0, 0.6)'; // Light red border
+            // Red gradient: light red to dark red
+            healthGradient.addColorStop(0, '#ff6666'); // Light red at top
+            healthGradient.addColorStop(1, '#cc0000'); // Dark red at bottom
+            backgroundColor = 'rgba(102, 0, 0, 0.6)'; // Dark red background with opacity
         }
         
         const cornerRadius = 1; // Minimal rounding
         
-        // Background with rounded corners
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        // Colored background matching health state with full width
+        ctx.fillStyle = backgroundColor;
         ctx.beginPath();
         ctx.roundRect(barX, barY, barWidth, barHeight, cornerRadius);
         ctx.fill();
 
-        // Health bar with rounded corners
+        // Health bar with gradient and rounded corners
         const filledWidth = barWidth * healthPercentage;
         if (filledWidth > 0) {
-            ctx.fillStyle = healthColor;
+            ctx.fillStyle = healthGradient;
             ctx.beginPath();
             ctx.roundRect(barX, barY, filledWidth, barHeight, cornerRadius);
             ctx.fill();
         }
 
-        // Light colored border that matches health color
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(barX, barY, barWidth, barHeight, cornerRadius);
-        ctx.stroke();
-        
-        // HP Text positioned to the left of the bar with matching color
-        ctx.font = "9px 'Press Start 2P', monospace";
-        ctx.fillStyle = healthColor;
+        // Health number centered above the health bar (darker goldenrod showing current/max)
+        ctx.font = "10px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#B8860B'; // Darker goldenrod for health number
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 2;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        const text = `${Math.round(this.health)}/${this.maxHealth}`;
-        const textX = barX - 8; // Position to the left of the bar
-        const textY = barY + barHeight / 2;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const healthNumber = `${Math.round(this.health)}/${this.maxHealth}`;
+        const numberX = barX + barWidth / 2; // Center above the bar
+        const numberY = barY - 6; // Position above the bar with 6px gap (3px more than before)
         
-        // Draw text outline first, then fill
-        ctx.strokeText(text, textX, textY);
-        ctx.fillText(text, textX, textY);
+        // Draw health number outline first, then fill
+        ctx.strokeText(healthNumber, numberX, numberY);
+        ctx.fillText(healthNumber, numberX, numberY);
 
         ctx.restore();
     }

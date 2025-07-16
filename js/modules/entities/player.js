@@ -20,7 +20,7 @@ export class Player {
         this.radius = 12;
         this.health = 120;
         this.maxHealth = 120;
-        this.energyTanks = 1; // Start with 1 energy tank
+        this.shieldTanks = 1; // Start with 1 shield tank
         this.shield = 1; // 1% damage reduction
         this.invulnerable = false;
         this.lastHitTime = 0;
