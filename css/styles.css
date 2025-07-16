@@ -45,12 +45,7 @@ canvas.asteroid-hover {
 }
 
 #score {
-    position: absolute;
-    top: 120px;
-    left: 24px;
-    margin-left: 45px;
-    font-size: 12px;
-    color: #FFD700;
+    display: none; /* Money now displayed on canvas */
 }
 
 #game-message-overlay {
