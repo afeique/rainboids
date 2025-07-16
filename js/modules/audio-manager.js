@@ -1,4 +1,5 @@
 // Audio management for sound effects and music
+
 export class AudioManager {
     constructor() {
         this.audioReady = false;
@@ -15,13 +16,13 @@ export class AudioManager {
             explosion: true,
             playerExplosion: true,
             thruster: true,
-            tractorBeam: true
+            tractorBeam: true,
+            shield: true // Added shield sound
         };
-        this.initSounds();
     }
     
-    initSounds() {
-        // Initialize sound effects using sfxr
+    init() {
+        // Initialize sound effects using sfxr CDN API
         this.sounds = {
             shoot: sfxr.generate("laserShoot"),
             hit: sfxr.generate("hitHurt"),
@@ -29,38 +30,33 @@ export class AudioManager {
             explosion: sfxr.generate("explosion"),
             playerExplosion: sfxr.generate("explosion"),
             thruster: sfxr.generate("explosion"),
-            tractorBeam: sfxr.generate("tone", {
-                wave_type: 2, // Sine
-                p_env_attack: 0.05,
-                p_env_sustain: 0.5,
-                p_env_decay: 0.3,
-                p_base_freq: 0.15, // Low frequency
-                sound_vol: 0.18
-            })
+            tractorBeam: {
+                wave_type: 0,
+                p_base_freq: 0.15,
+                p_env_attack: 0,
+                p_env_sustain: 0.3,
+                p_env_decay: 0.1,
+                sound_vol: 0.18,
+                sample_rate: 44100,
+                sample_size: 8
+            },
+            shield: {
+                wave_type: 3, // Noise
+                p_base_freq: 0.3,
+                p_env_attack: 0.01,
+                p_env_sustain: 0.1,
+                p_env_decay: 0.2,
+                p_freq_ramp: -0.2,
+                p_hpf_freq: 0.2,
+                sound_vol: 0.3,
+                sample_rate: 44100,
+                sample_size: 8
+            }
         };
         
-        // Set default volumes for all sounds
-        this.sounds.shoot.sound_vol = 0.3;
-        this.sounds.hit.sound_vol = 0.4;
-        this.sounds.coin.sound_vol = 0.3;
-        this.sounds.explosion.sound_vol = 0.5;
-        
-        // Customize specific sounds
-        this.sounds.playerExplosion.attackTime = 0.2;
-        this.sounds.playerExplosion.sustainTime = 0.3;
-        this.sounds.playerExplosion.startFrequency = 400;
-        this.sounds.playerExplosion.minFrequency = 100;
-        this.sounds.playerExplosion.sound_vol = 0.6;
-        
-        this.sounds.thruster.wave_type = NOISE;
-        this.sounds.thruster.p_env_attack = 0.1;
-        this.sounds.thruster.p_env_sustain = 0.3;
-        this.sounds.thruster.p_env_decay = 0.2;
-        this.sounds.thruster.p_base_freq = 0.8;
-        this.sounds.thruster.p_freq_ramp = -0.05;
-        this.sounds.thruster.p_hpf_freq = 0.4;
-        this.sounds.thruster.p_lpf_freq = 0.9;
-        this.sounds.thruster.sound_vol = 0.25;
+        // Customize specific sounds further
+        this.sounds.playerExplosion.p_env_sustain = 0.4;
+        this.sounds.playerExplosion.p_base_freq = 0.2;
         
         // Pre-generate audio elements for all sounds
         this.audioCache = {};
@@ -80,53 +76,57 @@ export class AudioManager {
             this.backgroundMusic.play().catch(e => console.error("Music playback failed:", e));
         }
     }
-    
+
     playSound(soundName) {
         if (!this.audioReady || !this.audioCache[soundName] || !this.soundEnabled[soundName]) return;
         
-        const params = this.audioCache[soundName];
-        // Clone the params to avoid modifying the cached version
-        const soundParams = Object.assign({}, params);
-        // Apply the master volume to the sound_vol parameter
-        soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
-        
-        const snd = sfxr.toAudio(soundParams);
-        snd.play();
+        try {
+            const params = this.audioCache[soundName];
+            
+            let snd;
+            if (typeof params === 'object' && params.wave_type !== undefined) {
+                // This is a parameter object, use sfxr.toAudio
+                const soundParams = Object.assign({}, params);
+                // Apply the master volume to the sound_vol parameter
+                soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
+                snd = sfxr.toAudio(soundParams);
+            } else {
+                // This is a generated sound object, use it directly
+                snd = sfxr.toAudio(params);
+            }
+            
+            if (snd && snd.play) {
+                try {
+                    const playResult = snd.play();
+                    // Check if play() returns a Promise (has .catch method)
+                    if (playResult && typeof playResult.catch === 'function') {
+                        playResult.catch(e => {
+                            console.warn(`Failed to play sound ${soundName}:`, e);
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`Failed to play sound ${soundName}:`, e);
+                }
+            }
+        } catch (error) {
+            console.warn(`Failed to create sound ${soundName}:`, error);
+        }
     }
     
-    playShoot() {
-        this.playSound('shoot');
-    }
-    
-    playHit() {
-        this.playSound('hit');
-    }
-    
-    playCoin() {
-        this.playSound('coin');
-    }
-    
-    playExplosion() {
-        this.playSound('explosion');
-    }
-    
-    playPlayerExplosion() {
-        this.playSound('playerExplosion');
-    }
-    
-    playThruster() {
-        this.playSound('thruster');
-    }
+    playShoot() { this.playSound('shoot'); }
+    playHit() { this.playSound('hit'); }
+    playCoin() { this.playSound('coin'); }
+    playExplosion() { this.playSound('explosion'); }
+    playPlayerExplosion() { this.playSound('playerExplosion'); }
+    playThruster() { this.playSound('thruster'); }
+    playTractorBeam() { this.playSound('tractorBeam'); }
+    playShield() { this.playSound('shield'); }
 
-    playTractorBeam() {
-        this.playSound('tractorBeam');
-    }
-    
     setSfxVolume(normalizedVolume) {
         // normalizedVolume is 0-1 from the slider, map it to 0-maxSfxVolume
         this.sfxMasterVol = normalizedVolume * this.maxSfxVolume;
     }
-    
+
     getSfxVolume() {
         // Return the normalized value (0-1) for the slider
         return this.sfxMasterVol / this.maxSfxVolume;
@@ -146,3 +146,5 @@ export class AudioManager {
         return Object.keys(this.soundEnabled);
     }
 } 
+
+export const audioManager = new AudioManager(); 

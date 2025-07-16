@@ -63,8 +63,8 @@ export class UIManager {
         });
     }
     
-    updateScore(score) {
-        this.elements.score.textContent = Math.floor(score);
+    updateScore(money) {
+        this.elements.score.textContent = `◈ ${Math.floor(money)}`;
     }
     
     updateWave(wave) {

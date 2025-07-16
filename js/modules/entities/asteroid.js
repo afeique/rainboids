@@ -2,20 +2,19 @@
 import { GAME_CONFIG } from '../constants.js';
 import { random } from '../utils.js';
 
+const width = window.innerWidth;
+const height = window.innerHeight;
+const DEBRIS_COUNT = 5;
+
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
 }
 
 export class Asteroid {
-    constructor() {
-        this.width = window.innerWidth;
-        this.height = window.innerHeight;
-        this.active = false;
-    }
-    
-    reset(x, y, baseRadius) {
-        this.x = x;
-        this.y = y;
+    constructor(x, y, radius, level = 1) {
+        this.level = level;
+        this.x = x !== undefined ? x : random(0, width);
+        this.y = y !== undefined ? y : random(0, height);
         this.vel = {
             x: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2,
             y: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2
@@ -30,8 +29,7 @@ export class Asteroid {
         
         this.fov = 300;
         this.active = true;
-        
-        this.setHealth(baseRadius || random(40, 60));
+        this.creationTime = Date.now();
         
         // Define edges for wireframe
         this.edges = [
@@ -41,20 +39,51 @@ export class Asteroid {
             [7,8],[7,10],[8,9],[10,11]
         ];
         
-        this.rescale(baseRadius || random(40, 60));
-    }
+        this.rescale(radius || random(40, 60));
 
-    setHealth(radius) {
-        if (radius >= 40) { // Large
-            this.maxHealth = 20;
-        } else if (radius >= 25) { // Medium
-            this.maxHealth = 12;
-        } else { // Small
-            this.maxHealth = 8;
-        }
+        // Calculate reasonable health based on size (20-40 range)
+        // Base health of 20, scaled by size relative to minimum radius (40)
+        const baseHealth = 20;
+        const sizeMultiplier = this.radius / 40; // 40 is minimum radius
+        const levelMultiplier = this.level;
+        this.maxHealth = Math.floor(baseHealth * sizeMultiplier * levelMultiplier);
+        // Ensure health is in reasonable range
+        this.maxHealth = Math.max(15, Math.min(50, this.maxHealth));
         this.health = this.maxHealth;
     }
-    
+
+    reset(x, y, radius, level = 1) {
+        this.level = level;
+        this.x = x !== undefined ? x : random(0, width);
+        this.y = y !== undefined ? y : random(0, height);
+        this.vel = {
+            x: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2,
+            y: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2
+        };
+        
+        this.rot3D = { x: 0, y: 0, z: 0 };
+        this.rotVel3D = {
+            x: random(-0.02, 0.02),
+            y: random(-0.02, 0.02),
+            z: random(-0.02, 0.02)
+        };
+        
+        this.active = true;
+        this.creationTime = Date.now();
+        
+        this.rescale(radius || random(40, 60));
+
+        // Calculate reasonable health based on size (20-40 range)
+        // Base health of 20, scaled by size relative to minimum radius (40)
+        const baseHealth = 20;
+        const sizeMultiplier = this.radius / 40; // 40 is minimum radius
+        const levelMultiplier = this.level;
+        this.maxHealth = Math.floor(baseHealth * sizeMultiplier * levelMultiplier);
+        // Ensure health is in reasonable range
+        this.maxHealth = Math.max(15, Math.min(50, this.maxHealth));
+        this.health = this.maxHealth;
+    }
+
     rescale(newBaseRadius) {
         let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
         this.baseRadius = newBaseRadius * scale;
@@ -85,8 +114,6 @@ export class Asteroid {
         
         this.radius = (minR + maxR) / 2;
         this.mass = (4 / 3) * Math.PI * Math.pow(this.radius, 3);
-        
-        this.setHealth(newBaseRadius);
         
         this.project();
     }
@@ -134,33 +161,12 @@ export class Asteroid {
         this.x += this.vel.x;
         this.y += this.vel.y;
         
-        // --- Begin impulse logic for border correction ---
-        const deg30 = Math.PI / 6;
-        const centerX = this.width / 2;
-        const centerY = this.height / 2;
-        const impulseStrength = 0.7; // tweak as needed
-        // Horizontal check (top/bottom)
-        const horizontalAngle = Math.abs(Math.atan2(this.vel.y, this.vel.x));
-        if ((this.y < this.baseRadius * 2 || this.y > this.height - this.baseRadius * 2) && (horizontalAngle < deg30 || horizontalAngle > Math.PI - deg30)) {
-            // Moving mostly horizontally near top or bottom
-            const dir = this.y < centerY ? 1 : -1; // push down if near top, up if near bottom
-            this.vel.y += dir * impulseStrength;
-        }
-        // Vertical check (left/right)
-        const verticalAngle = Math.abs(Math.atan2(this.vel.x, this.vel.y));
-        if ((this.x < this.baseRadius * 2 || this.x > this.width - this.baseRadius * 2) && (verticalAngle < deg30 || verticalAngle > Math.PI - deg30)) {
-            // Moving mostly vertically near left or right
-            const dir = this.x < centerX ? 1 : -1; // push right if near left, left if near right
-            this.vel.x += dir * impulseStrength;
-        }
-        // --- End impulse logic ---
-        
         // Wrap around screen with buffer
-        const wrapBuffer = this.baseRadius * 4;
-        if (this.x < -wrapBuffer) this.x = this.width + wrapBuffer;
-        if (this.x > this.width + wrapBuffer) this.x = -wrapBuffer;
-        if (this.y < -wrapBuffer) this.y = this.height + wrapBuffer;
-        if (this.y > this.height + wrapBuffer) this.y = -wrapBuffer;
+        const wrapBuffer = this.radius * 2;
+        if (this.x < -wrapBuffer) this.x = width + wrapBuffer;
+        if (this.x > width + wrapBuffer) this.x = -wrapBuffer;
+        if (this.y < -wrapBuffer) this.y = height + wrapBuffer;
+        if (this.y > height + wrapBuffer) this.y = -wrapBuffer;
         
         // Update rotation
         this.rot3D.x += this.rotVel3D.x;
@@ -173,11 +179,8 @@ export class Asteroid {
     draw(ctx) {
         if (!this.active) return;
         
-        this.drawHealthBar(ctx);
-        
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.lineWidth = 1.5;
         
         this.edges.forEach((edge, index) => {
             const v1 = this.projectedVertices[edge[0]];
@@ -190,40 +193,81 @@ export class Asteroid {
             
             const hue = (Date.now() / 20 + index * 10) % 360;
             ctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
+            
+            // Add shadow blur for better visual effect
+            ctx.shadowColor = `hsl(${hue}, 100%, 70%)`;
+            ctx.shadowBlur = 8;
 
             ctx.beginPath();
             ctx.moveTo(v1.x, v1.y);
             ctx.lineTo(v2.x, v2.y);
             ctx.stroke();
         });
-        
+
         ctx.restore();
-    }
 
-    drawHealthBar(ctx) {
-        if (this.health === this.maxHealth) return;
-
+        // Draw health bar
         ctx.save();
-        const segmentSize = 8;
-        const segmentMargin = 2;
-        const totalBarWidth = (segmentSize + segmentMargin) * this.maxHealth - segmentMargin;
-        const barX = this.x - totalBarWidth / 2;
-        const barY = this.y - this.radius - 20;
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        
+        const barWidth = 50; // Medium width
+        const barHeight = 5; // Thinner
+        const barX = this.x - barWidth / 2;
+        const barY = this.y - this.radius - 18;
 
-        const healthPercent = this.health / this.maxHealth;
-        const r = Math.round(Math.min(255, 510 * (1 - healthPercent)));
-        const g = Math.round(Math.min(255, 510 * healthPercent));
-        const color = `rgb(${r},${g},0)`;
-
-        const gradient = ctx.createLinearGradient(0, barY, 0, barY + segmentSize);
-        gradient.addColorStop(0, `rgba(${r-50},${g-50},0,0.8)`);
-        gradient.addColorStop(0.5, `rgba(${r},${g},0,1)`);
-        gradient.addColorStop(1, `rgba(${r-50},${g-50},0,0.8)`);
-
-        for (let i = 0; i < this.maxHealth; i++) {
-            ctx.fillStyle = i < this.health ? gradient : '#333';
-            ctx.fillRect(barX + i * (segmentSize + segmentMargin), barY, segmentSize, segmentSize);
+        // Health calculation
+        const healthPercentage = this.health / this.maxHealth;
+        let healthColor, borderColor;
+        if (healthPercentage > 0.5) {
+            healthColor = '#00ff00';
+            borderColor = 'rgba(0, 255, 0, 0.6)'; // Light green border
+        } else if (healthPercentage > 0.25) {
+            healthColor = '#ffff00';
+            borderColor = 'rgba(255, 255, 0, 0.6)'; // Light yellow border
+        } else {
+            healthColor = '#ff0000';
+            borderColor = 'rgba(255, 0, 0, 0.6)'; // Light red border
         }
+        
+        const cornerRadius = 1; // Minimal rounding
+        
+        // Background with rounded corners
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barWidth, barHeight, cornerRadius);
+        ctx.fill();
+
+        // Health bar with rounded corners
+        const filledWidth = barWidth * healthPercentage;
+        if (filledWidth > 0) {
+            ctx.fillStyle = healthColor;
+            ctx.beginPath();
+            ctx.roundRect(barX, barY, filledWidth, barHeight, cornerRadius);
+            ctx.fill();
+        }
+
+        // Light colored border that matches health color
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barWidth, barHeight, cornerRadius);
+        ctx.stroke();
+        
+        // HP Text positioned to the left of the bar with matching color
+        ctx.font = "9px 'Press Start 2P', monospace";
+        ctx.fillStyle = healthColor;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        const text = `${Math.round(this.health)}/${this.maxHealth}`;
+        const textX = barX - 8; // Position to the left of the bar
+        const textY = barY + barHeight / 2;
+        
+        // Draw text outline first, then fill
+        ctx.strokeText(text, textX, textY);
+        ctx.fillText(text, textX, textY);
 
         ctx.restore();
     }

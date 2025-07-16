@@ -8,8 +8,8 @@ export const GAME_CONFIG = {
     BULLET_SPEED: 8,
     INITIAL_AST_COUNT: 3,
     AST_SPEED: 1.2,
-    STAR_COUNT: 250,
-    MIN_STAR_DIST: 30,
+    STAR_COUNT: 1000,
+    MIN_STAR_DIST: 15, // Reduced to allow for denser clusters
     PASSIVE_STAR_ATTR: 0.5,
     PASSIVE_STAR_ATTRACT_DIST: 50,
     ACTIVE_STAR_ATTR: 0.002,
@@ -24,14 +24,49 @@ export const GAME_CONFIG = {
     MIN_AST_RAD: 15,
     SAFE_ZONE: 250,
     MOBILE_SCALE: 0.65,
-    STAR_ENERGY: 2,
+    STAR_ENERGY: 1,
     BURST_STAR_ENERGY: 1,
-    // Energy depletion rate of thrusters
-    // Higher is slower, lower means energy depletes faster
-    TIME_TO_ENERGY_EMPTY: 7, 
-    // Energy regeneration time when not thrusting
-    // Higher is slower
-    TIME_TO_ENERGY_FULL: 23, 
+};
+
+export const NOISE_CONFIG = {
+    // General settings
+    DENSITY_MULTIPLIER: 2.5, // Overall control of star density
+    
+    // Far Layer (z < 0.6): Large, sparse galactic structures
+    FAR_LAYER: {
+        FBM_SCALE: 0.0008,
+        FBM_OCTAVES: 5,
+        FBM_PERSISTENCE: 0.45,
+        FBM_LACUNARITY: 2.1,
+        FBM_WEIGHT: 0.7,
+
+        WORLEY_SCALE: 0.002,
+        WORLEY_WEIGHT: 0.5,
+    },
+
+    // Mid Layer (0.6 <= z < 2.0): Denser regions, smaller clusters
+    MID_LAYER: {
+        FBM_SCALE: 0.0015,
+        FBM_OCTAVES: 4,
+        FBM_PERSISTENCE: 0.5,
+        FBM_LACUNARITY: 2.0,
+        FBM_WEIGHT: 0.6,
+
+        WORLEY_SCALE: 0.008,
+        WORLEY_WEIGHT: 0.3,
+    },
+
+    // Near Layer (z >= 2.0): Fine-grained, subtle clustering
+    NEAR_LAYER: {
+        FBM_SCALE: 0.005,
+        FBM_OCTAVES: 3,
+        FBM_PERSISTENCE: 0.6,
+        FBM_LACUNARITY: 2.0,
+        FBM_WEIGHT: 0.8,
+
+        WORLEY_SCALE: 0.02,
+        WORLEY_WEIGHT: 0.1,
+    }
 };
 
 export const NORMAL_STAR_COLORS = [

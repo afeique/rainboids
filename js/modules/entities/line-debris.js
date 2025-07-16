@@ -52,8 +52,6 @@ export class LineDebris {
         ctx.globalAlpha = Math.max(0, this.life);
         ctx.strokeStyle = `hsl(${this.hue}, 100%, 50%)`;
         ctx.lineWidth = 2;
-        ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
-        ctx.shadowBlur = 10;
         
         ctx.beginPath();
         ctx.moveTo(this.p1.x, this.p1.y);

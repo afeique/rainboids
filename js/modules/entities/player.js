@@ -10,6 +10,21 @@ export class Player {
     constructor() {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
+        this.x = this.width / 2;
+        this.y = this.height / 2;
+        this.lastX = this.x;
+        this.lastY = this.y;
+        this.vel = { x: 0, y: 0 };
+        this.angle = 0;
+        this.rotation = 0;
+        this.radius = 12;
+        this.health = 120;
+        this.maxHealth = 120;
+        this.energyTanks = 1; // Start with 1 energy tank
+        this.shield = 1; // 1% damage reduction
+        this.invulnerable = false;
+        this.lastHitTime = 0;
+        this.lastBlinkTime = 0;
         this.isThrusting = false;
         this.active = false;
         this.reset();
@@ -140,8 +155,6 @@ export class Player {
         
         ctx.strokeStyle = '#0ff';
         ctx.lineWidth = 2;
-        ctx.shadowColor = '#0ff';
-        ctx.shadowBlur = 15;
         ctx.globalCompositeOperation = 'lighter';
         
         const r = this.radius;

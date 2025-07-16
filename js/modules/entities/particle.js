@@ -140,6 +140,13 @@ export class Particle {
                 break;
             }
             
+            case 'shieldHit':
+                this.life = 0.4;
+                this.radius = args[0] || 30; // Player radius
+                this.maxRadius = this.radius * 1.5;
+                this.color = 'rgba(0, 150, 255, 0.7)';
+                break;
+
             case 'damageNumber':
                 const [damage] = args;
                 this.damage = damage;
@@ -226,11 +233,16 @@ export class Particle {
                 break;
             }
             
+            case 'shieldHit':
+                this.life -= 0.05;
+                this.radius += 2;
+                break;
+
             case 'damageNumber':
                 this.x += this.vel.x;
                 this.y += this.vel.y;
                 this.vel.y += 0.1; // Gravity effect
-                this.life -= 0.025; // Fade out quickly
+                this.life -= 0.00625; // Further halved fade out rate to double lifetime again
                 break;
         }
         
@@ -281,8 +293,6 @@ export class Particle {
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, this.life * 2); // Brighter
                 ctx.fillStyle = this.color;
-                ctx.shadowColor = this.color;
-                ctx.shadowBlur = 30; // More glow
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
@@ -299,8 +309,6 @@ export class Particle {
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, this.life * 2);
                 ctx.fillStyle = this.color;
-                ctx.shadowColor = this.color;
-                ctx.shadowBlur = 10;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
@@ -347,8 +355,6 @@ export class Particle {
                 const g1 = 255 + (80 - 255) * t;
                 const b1 = 80 + (0 - 80) * t;
                 const a1 = 0.7 * this.life;
-                ctx.shadowColor = `rgba(80,255,80,0.7)`;
-                ctx.shadowBlur = 18 * this.life;
                 ctx.strokeStyle = `rgba(${r1},${g1},${b1},${a1})`;
                 ctx.lineWidth = 6 + 10 * this.life;
                 ctx.beginPath();
@@ -361,8 +367,6 @@ export class Particle {
                 // Draw main glowing particle only (no trail)
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, this.life);
-                ctx.shadowColor = this.glowColor;
-                ctx.shadowBlur = 32;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
@@ -371,6 +375,19 @@ export class Particle {
                 break;
             }
             
+            case 'shieldHit':
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 3;
+                ctx.shadowColor = '#00aaff';
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+                ctx.stroke();
+                ctx.restore();
+                break;
+
             case 'damageNumber':
                 ctx.save();
                 ctx.font = `${this.fontSize}px 'Press Start 2P', monospace`;
@@ -381,9 +398,9 @@ export class Particle {
                 ctx.textBaseline = 'middle';
                 ctx.globalAlpha = Math.max(0, this.life);
                 // Draw black outline
-                ctx.strokeText(`-${this.damage}`, this.x, this.y);
+                ctx.strokeText(`${this.damage}`, this.x, this.y);
                 // Draw red text
-                ctx.fillText(`-${this.damage}`, this.x, this.y);
+                ctx.fillText(`${this.damage}`, this.x, this.y);
                 ctx.restore();
                 break;
         }

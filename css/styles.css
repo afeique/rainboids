@@ -18,6 +18,8 @@ body {
 body.cursor-red {
     cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="red" stroke-width="2"/><circle cx="8" cy="8" r="2" fill="red"/></svg>') 8 8, auto;
 }
+
+
 h2 {
     margin-bottom: 0;
 }
@@ -44,10 +46,11 @@ canvas.asteroid-hover {
 
 #score {
     position: absolute;
-    top: 70px;
+    top: 120px;
     left: 24px;
     margin-left: 45px;
-    font-size: 24px;
+    font-size: 12px;
+    color: #FFD700;
 }
 
 #game-message-overlay {

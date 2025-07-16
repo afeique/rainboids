@@ -4,10 +4,12 @@
   "description": "Royalty-free background music [\"Legend\"](https://www.youtube.com/watch?v=mxygNM3b95M&ab_channel=WhiteBatAudio)  graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).",
   "main": "index.js",
   "scripts": {
-    "build": "node scripts/generate-playlist.js",
-    "serve": "npm run build && http-server .",
-    "dev": "npm run build && http-server .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "vite",
+    "generate-playlist": "node scripts/generate-playlist.js"
   },
   "repository": {
     "type": "git",
@@ -16,7 +18,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/afeique/rainboids/issues"
   },
@@ -24,5 +26,8 @@
   "dependencies": {
     "http-server": "^14.1.1",
     "jsmediatags": "^3.9.7"
+  },
+  "devDependencies": {
+    "vite": "^7.0.4"
   }
 }

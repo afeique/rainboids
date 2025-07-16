@@ -1,6 +1,6 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
-import { random, collision, triggerHapticFeedback } from './utils.js';
+import { random, collision, triggerHapticFeedback, generatePoissonStarPosition } from './utils.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
@@ -26,6 +26,7 @@ export class GameEngine {
         this.canvas.height = this.height;
         this.game = {
             score: 0,
+            money: 0,
             highScore: 0,
             currentWave: 0,
             state: GAME_STATES.TITLE_SCREEN,
@@ -37,23 +38,13 @@ export class GameEngine {
         this.setupEventListeners();
         this.playerCanFire = true;
         this.previousFire = false;
-        this.maxEnergy = 99;
-        this.playerEnergy = this.maxEnergy;
-        this.energyTanks = 0; // Player starts with zero energy tanks
-        this.baseDamage = 20; // Base damage per hit (5 hits to deplete one tank)
-        
-        // Damage animation properties
-        this.animatingDamage = false;
-        this.damageAnimationStart = 0;
-        this.damageAnimationDuration = 1000; // 1 second
-        this.energyBeforeDamage = this.maxEnergy;
-        this.energyAfterDamage = this.maxEnergy;
-        this.tanksBeforeDamage = 0;
-        this.tanksAfterDamage = 0;
-        this.displayEnergy = this.maxEnergy;
-        this.displayTanks = 0;
+        this.baseDamage = 20; // Base damage per hit
+
         this.playerState = PLAYER_STATES.NORMAL;
         this.pendingDamage = 0; // New property to track pending damage
+
+        this.shieldIcon = new Image();
+        this.shieldIcon.src = 'assets/shield-icon.svg';
     }
     
     initializePools() {
@@ -128,6 +119,7 @@ export class GameEngine {
     
     init() {
         this.game.score = 0;
+        this.game.money = 0;
         this.game.currentWave = 0;
         this.game.state = GAME_STATES.PLAYING;
         // Reset player
@@ -200,31 +192,35 @@ export class GameEngine {
     }
     
     spawnStar() {
-        let x, y, tooClose, attempts = 0;
-        // On mobile, always use landscape dimensions for star spawning
-        let spawnWidth = this.width;
-        let spawnHeight = this.height;
-        if (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches) {
-            spawnWidth = Math.max(window.innerWidth, window.innerHeight);
-            spawnHeight = Math.max(window.innerWidth, window.innerHeight);
-        }
-        do {
-            tooClose = false;
-            x = random(0, spawnWidth);
-            y = random(0, spawnHeight);
-            if (this.starPool && this.starPool.activeObjects) {
-                for (let o of this.starPool.activeObjects) {
-                    if (Math.hypot(x - o.x, y - o.y) < GAME_CONFIG.MIN_STAR_DIST) {
-                        tooClose = true;
-                        break;
-                    }
-                }
+        // Use landscape dimensions for star spawning to ensure consistency
+        const spawnWidth = Math.max(this.width, this.height);
+        const spawnHeight = this.height;
+
+        // 1. Determine target depth (z) for this star
+        const depthRoll = Math.random();
+        let z;
+        if (depthRoll < 0.15) { z = random(0.1, 0.3); }      // 15% Very far
+        else if (depthRoll < 0.35) { z = random(0.3, 0.6); } // 20% Far
+        else if (depthRoll < 0.55) { z = random(0.6, 1.0); } // 20% Mid-far
+        else if (depthRoll < 0.70) { z = random(1.0, 1.5); } // 15% Mid
+        else if (depthRoll < 0.82) { z = random(1.5, 2.0); } // 12% Mid-close
+        else if (depthRoll < 0.91) { z = random(2.0, 2.5); } // 9% Close
+        else if (depthRoll < 0.97) { z = random(2.5, 3.0); } // 6% Very close
+        else { z = random(3.0, 4.0); }                      // 3% Foreground
+
+        // 2. Use Poisson disk sampling with variable density to find a position
+        const existingStars = this.starPool ? this.starPool.activeObjects : [];
+        const positionData = generatePoissonStarPosition(spawnWidth, spawnHeight, existingStars, z);
+        
+        // 3. If a valid position is found, create the star
+        if (positionData) {
+            const { x, y, density } = positionData;
+            const star = this.starPool.get(x, y, false, z, density);
+            
+            // Add the new star to the existing stars array for subsequent checks
+            if (star) {
+                existingStars.push(star);
             }
-            attempts++;
-            if (attempts > 100) break;
-        } while (tooClose);
-        if (!tooClose) {
-            this.starPool.get(x, y, false);
         }
     }
     
@@ -247,105 +243,14 @@ export class GameEngine {
     }
     
     handleCollisions() {
-        // Player vs Asteroids
-        if (this.player.active && !this.player.invincible) {
-            for (const ast of this.asteroidPool.activeObjects) {
-                if (collision(this.player, ast)) {
-                    this.player.disableThrusters(750);
-                    
-                    // Calculate dynamic damage based on asteroid size and relative velocity
-                    const relVelX = ast.vel.x - this.player.vel.x;
-                    const relVelY = ast.vel.y - this.player.vel.y;
-                    const relVelMag = Math.hypot(relVelX, relVelY);
-                    
-                    // Size factor: larger asteroids deal more damage
-                    const sizeFactor = ast.radius / 30; // Normalized to medium asteroid
-                    
-                    // Velocity factor: faster impacts deal more damage
-                    const velocityFactor = Math.min(relVelMag / 5, 2); // Cap at 2x
-                    
-                    // Calculate total damage (20-100)
-                    const damage = Math.min(100, Math.max(20, 
-                        this.baseDamage * sizeFactor * (0.5 + velocityFactor)));
-                    
-                    // Player takes damage and becomes invincible
-                    const finalDamage = Math.round(damage);
-                    this.takeDamage(finalDamage);
-                    this.player.makeInvincible(500); // 500ms invincibility
-                    
-                    // Show damage number
-                    this.particlePool.get(this.player.x, this.player.y - 20, 'damageNumber', finalDamage);
-                    
-                    // Mass-based collision physics
-                    const dx = ast.x - this.player.x;
-                    const dy = ast.y - this.player.y;
-                    const dist = Math.hypot(dx, dy) || 1;
-                    const nx = dx / dist;
-                    const ny = dy / dist;
-                    
-                    // Relative velocity
-                    const dvx = ast.vel.x - this.player.vel.x;
-                    const dvy = ast.vel.y - this.player.vel.y;
-                    const dvn = dvx * nx + dvy * ny;
-                    
-                    // Don't process if already separating
-                    if (dvn > 0) continue;
-                    
-                    // Calculate impulse magnitude with MUCH MORE DRASTIC KNOCKBACK
-                    const totalMass = this.player.mass + ast.mass;
-                    const baseImpulse = 2 * dvn / totalMass;
-                    
-                    // Apply MUCH MORE DRASTIC knockback multiplier
-                    const knockbackMultiplier = 8.0; // Increased from ~1.0 to 8.0
-                    const enhancedImpulse = baseImpulse * knockbackMultiplier;
-                    
-                    // Apply enhanced impulse to player velocity (MUCH MORE DRASTIC)
-                    this.player.vel.x += enhancedImpulse * ast.mass * nx;
-                    this.player.vel.y += enhancedImpulse * ast.mass * ny;
-                    
-                    // Also apply some impulse to asteroid (but less dramatic)
-                    ast.vel.x -= enhancedImpulse * 0.3 * this.player.mass * nx;
-                    ast.vel.y -= enhancedImpulse * 0.3 * this.player.mass * ny;
-                    
-                    // Separate overlapping objects
-                    const overlap = this.player.radius + ast.radius - dist;
-                    const separationForce = overlap / 2;
-                    this.player.x -= nx * separationForce;
-                    this.player.y -= ny * separationForce;
-                    ast.x += nx * separationForce;
-                    ast.y += ny * separationForce;
-                    
-                    // Create enhanced collision effects
-                    // White pulse at impact point
-                    const impactX = this.player.x + nx * this.player.radius;
-                    const impactY = this.player.y + ny * this.player.radius;
-                    this.particlePool.get(impactX, impactY, 'explosionPulse', 40);
-                    
-                    // Enhanced blue particles explosion
-                    for (let i = 0; i < 30; i++) {
-                        const particle = this.particlePool.get(impactX, impactY, 'explosion');
-                        if (particle) {
-                            // Override color to bright blue
-                            particle.color = `hsl(210, 100%, ${60 + Math.random() * 40}%)`;
-                            // Make particles faster and larger for more dramatic effect
-                            particle.vel.x *= 1.5;
-                            particle.vel.y *= 1.5;
-                            particle.radius *= 1.3;
-                        }
-                    }
-                    
-                    this.audioManager.playHit();
-                    
-                    // Enhanced screen shake based on impact force
-                    const impactForce = Math.abs(enhancedImpulse) * totalMass;
-                    this.triggerScreenShake(25, 15, impactForce * 0.8);
-                    
-                    return;
-                }
+        // Player-asteroid collisions
+        this.asteroidPool.activeObjects.forEach(ast => {
+            if (this.player.active && !this.player.invincible && collision(this.player, ast)) {
+                this.handlePlayerAsteroidCollision(this.player, ast);
             }
-        }
-        
-        // Bullets vs Asteroids
+        });
+
+        // Bullet-asteroid collisions
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
             if (!bullet.active) continue;
@@ -354,6 +259,7 @@ export class GameEngine {
                 if (!ast.active) continue;
                 if (collision(bullet, ast)) {
                     this.game.score += 50; // 50 points for hit
+                    this.game.money += 50; // 50 money for hit
                     triggerHapticFeedback(20);
                     this.audioManager.playHit();
                     
@@ -376,6 +282,7 @@ export class GameEngine {
                     if (ast.health <= 0) {
                         if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                             this.game.score += 100; // 100 points for destroy
+                            this.game.money += 100; // 100 money for destroy
                             this.audioManager.playExplosion();
                             // Multiple fiery shockwave pulses for destruction
                             const pulseCount = 4;
@@ -393,37 +300,43 @@ export class GameEngine {
                             this.asteroidPool.release(ast);
                             // No screen shake for asteroid destruction
                         } else {
-                            const count = Math.random() < 0.5 ? 2 : 3;
-                            const newR = ast.baseRadius / Math.sqrt(count);
-                            const totalMass = ast.mass + bullet.mass;
-                            const v_com_x = (ast.vel.x * ast.mass + bullet.vel.x * bullet.mass) / totalMass;
-                            const v_com_y = (ast.vel.y * ast.mass + bullet.vel.y * bullet.mass) / totalMass;
+                            // Make the explosion really dramatic
+                            this.audioManager.playExplosion();
+                            this.triggerScreenShake(20, ast.baseRadius * 0.25, ast.baseRadius);
+
+                            // Add a bunch of particle effects
+                            this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.5);
+                            this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * 1.2);
+                            for (let p = 0; p < 40; p++) {
+                                this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
+                            }
+                            this.createDebris(ast);
+                            this.createStarBurst(ast.x, ast.y);
                             
-                            if (newR < GAME_CONFIG.MIN_AST_RAD) {
-                                this.game.score += 100; // 100 points for destroy
-                                this.audioManager.playExplosion();
-                                // Large explosion pulse and many particles for destruction
-                                this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.2);
-                                for (let p = 0; p < 18; p++) {
-                                    this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
-                                }
-                                this.createDebris(ast);
-                                this.createStarBurst(ast.x, ast.y);
-                                // No screen shake for asteroid destruction
-                            } else {
-                                // No screen shake for asteroid splitting
+                            const count = (Math.random() < 0.5 ? 2 : 3) + 1; // Now 3 or 4
+                            const newR = ast.baseRadius / Math.sqrt(count);
+                            const angleSlice = (2 * Math.PI) / count;
+                            
+                            for (let k = 0; k < count; k++) {
+                                // Spawn fragments around the parent's center with jitter
+                                const spawnX = ast.x + random(-ast.radius * 0.2, ast.radius * 0.2);
+                                const spawnY = ast.y + random(-ast.radius * 0.2, ast.radius * 0.2);
+
+                                const newAst = this.asteroidPool.get(spawnX, spawnY, newR);
                                 
-                                for (let k = 0; k < count; k++) {
-                                    const newAst = this.asteroidPool.get(
-                                        ast.x + random(-2, 2),
-                                        ast.y + random(-2, 2),
-                                        newR
-                                    );
-                                    const angle = (k / count) * (2 * Math.PI) + random(-0.2, 0.2);
-                                    const kick_x = Math.cos(angle) * 1;
-                                    const kick_y = Math.sin(angle) * 1;
-                                    newAst.vel.x = v_com_x + kick_x;
-                                    newAst.vel.y = v_com_y + kick_y;
+                                if (newAst) {
+                                    // Give fragments an explosive, outward velocity
+                                    // Systematically spread angles to prevent overlap, with jitter
+                                    const baseAngle = k * angleSlice;
+                                    const angleJitter = random(-angleSlice / 5, angleSlice / 5);
+                                    const angle = baseAngle + angleJitter;
+
+                                    // Greater variance in speed, guaranteed non-zero
+                                    const speed = random(1.2, 5.5);
+                                    
+                                    // Inherit a small amount of parent velocity and add the explosion force
+                                    newAst.vel.x = ast.vel.x * 0.2 + Math.cos(angle) * speed;
+                                    newAst.vel.y = ast.vel.y * 0.2 + Math.sin(angle) * speed;
                                 }
                             }
                             this.asteroidPool.release(ast);
@@ -441,6 +354,13 @@ export class GameEngine {
             for (let j = i + 1; j < activeAsteroids.length; j++) {
                 let a1 = activeAsteroids[i], a2 = activeAsteroids[j];
                 if (!a1.active || !a2.active) continue;
+
+                // Grant temporary immunity to newly spawned asteroids
+                const now = Date.now();
+                if (now - a1.creationTime < 750 || now - a2.creationTime < 750) {
+                    continue;
+                }
+
                 if (collision(a1, a2)) {
                     let dx = a2.x - a1.x, dy = a2.y - a1.y, dist = Math.hypot(dx, dy);
                     if (dist === 0) continue;
@@ -477,6 +397,7 @@ export class GameEngine {
                 const star = this.starPool.activeObjects[i];
                 if (collision(this.player, star)) {
                     this.game.score += star.isBurst ? GAME_CONFIG.BURST_STAR_SCORE : GAME_CONFIG.STAR_SCORE;
+                    this.game.money += star.isBurst ? GAME_CONFIG.BURST_STAR_SCORE : GAME_CONFIG.STAR_SCORE;
                     this.audioManager.playCoin();
                     
                     // Create enhanced golden blip effect
@@ -538,21 +459,7 @@ export class GameEngine {
     update() {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
             const input = this.inputHandler.getInput();
-            const energyBar = document.getElementById('energy-bar');
-            const energyValue = document.getElementById('energy-value');
-            let percent = this.playerEnergy / this.maxEnergy;
-            let value = Math.round(percent * 99);
-            if (value < 0) value = 0;
-            if (value > 99) value = 99;
-            // Remove critical state logic - energy doesn't deplete automatically anymore
-            // Calculate total energy from tanks and current energy
-            const totalEnergy = (this.energyTanks - 1) * this.maxEnergy + this.playerEnergy;
-            
-            let canAct = totalEnergy > 0 && this.playerState === PLAYER_STATES.NORMAL;
-            // Energy no longer drains from thrust or shooting
-            // Update energy bar and tanks UI
-            this.updateEnergyDisplay();
-            // Remove firing energy cost - energy only drains from damage
+
             // Always allow normal player movement
             const tractorEngaged = !input.up && !input.down && !input.left && !input.right && !input.fire;
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.starPool, tractorEngaged);
@@ -570,7 +477,7 @@ export class GameEngine {
                 setTimeout(() => this.startNextWave(), 2000);
             }
             
-            this.uiManager.updateScore(this.game.score);
+            this.uiManager.updateScore(this.game.money);
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
@@ -589,6 +496,9 @@ export class GameEngine {
             this.asteroidPool.drawActive(this.ctx);
             this.bulletPool.drawActive(this.ctx);
             this.player.draw(this.ctx);
+            
+            // Draw health bar and UI elements
+            this.updateEnergyDisplay();
         }
     }
     
@@ -723,145 +633,274 @@ export class GameEngine {
 
     
     takeDamage(damageAmount = this.baseDamage) {
-        // Store state before damage for animation
-        this.energyBeforeDamage = this.displayEnergy;
-        this.tanksBeforeDamage = this.displayTanks;
-        
-        // Apply damage
-        let remainingDamage = damageAmount;
-        
-        // Calculate final state after damage
-        let finalEnergy = this.playerEnergy;
-        let finalTanks = this.energyTanks;
-        
-        // First drain from current energy
-        if (finalEnergy >= remainingDamage) {
-            finalEnergy -= remainingDamage;
-            remainingDamage = 0;
-        } else {
-            remainingDamage -= finalEnergy;
-            finalEnergy = 0;
-            
-            // Then drain from tanks
-            while (remainingDamage > 0 && finalTanks > 0) {
-                // Use up a tank
-                finalTanks--;
-                finalEnergy = this.maxEnergy;
-                
-                if (finalEnergy >= remainingDamage) {
-                    finalEnergy -= remainingDamage;
-                    remainingDamage = 0;
-                } else {
-                    remainingDamage -= finalEnergy;
-                    finalEnergy = 0;
-                }
+        if (this.player.invincible) return;
+
+        // Apply shield damage reduction
+        const reducedDamage = damageAmount * (1 - this.player.shield / 100);
+        this.player.health -= reducedDamage;
+
+        if (this.player.health <= 0) {
+            if (this.energyTanks > 0) {
+                this.energyTanks--;
+                this.explodeTank(this.energyTanks); // Visual effect for tank explosion
+                this.player.health = this.player.maxHealth;
+                this.audioManager.playCoin(); // Tank used sound
+            } else {
+                this.gameOver();
             }
         }
+
+        this.player.makeInvincible(3000); // 3 seconds of invincibility
+        this.audioManager.playHit();
+        this.particlePool.get(this.player.x, this.player.y, 'damageNumber', Math.round(reducedDamage));
+        this.triggerScreenShake(15, 8);
+    }
+
+    gameOver() {
+        this.game.state = GAME_STATES.GAME_OVER;
+        this.player.active = false;
+        this.checkHighScore();
+        this.audioManager.playPlayerExplosion();
         
-        // Set final values
-        this.playerEnergy = finalEnergy;
-        this.energyTanks = finalTanks;
-        this.energyAfterDamage = finalEnergy;
-        this.tanksAfterDamage = finalTanks;
-        
-        // Start damage animation
-        this.animatingDamage = true;
-        this.damageAnimationStart = Date.now();
-        
-        // Check if player is dead
-        const totalEnergy = this.energyTanks * this.maxEnergy + this.playerEnergy;
-        if (totalEnergy <= 0) {
-            this.player.die(this.particlePool, this.audioManager, this.uiManager, this.game, this.triggerScreenShake.bind(this));
+        // Create death explosion
+        for (let i = 0; i < 50; i++) {
+            this.particlePool.get(this.player.x, this.player.y, 'explosion');
         }
+        
+        // Show game over message
+        this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
+        this.triggerScreenShake(30, 20);
     }
     
     updateEnergyDisplay() {
-        const energyBar = document.getElementById('energy-bar');
-        const energyValue = document.getElementById('energy-value');
-        const energyBarContainer = document.getElementById('energy-bar-container');
-        let energyTanksContainer = document.getElementById('energy-tanks');
+        const ctx = this.ctx;
+        const barX = 20;
+        const barY = 20;
+        const barHeight = 30;
+        const barWidth = 220;
+        const bevelSize = 12;
+        const segments = 10; // Number of segments for the bar
         
-        // Update animation state
-        if (this.animatingDamage) {
-            const elapsed = Date.now() - this.damageAnimationStart;
-            const progress = Math.min(elapsed / this.damageAnimationDuration, 1);
+        ctx.save();
+        
+        // Create futuristic angled health bar geometry
+        const createHealthBarPath = (width) => {
+            ctx.beginPath();
+            // Start from top-left with angled corner
+            ctx.moveTo(barX + bevelSize, barY);
+            // Top edge with slight angle
+            ctx.lineTo(barX + width - bevelSize * 0.5, barY);
+            // Angled top-right corner
+            ctx.lineTo(barX + width, barY + bevelSize);
+            // Right edge
+            ctx.lineTo(barX + width, barY + barHeight - bevelSize);
+            // Angled bottom-right corner
+            ctx.lineTo(barX + width - bevelSize, barY + barHeight);
+            // Bottom edge with angle
+            ctx.lineTo(barX + bevelSize * 0.5, barY + barHeight);
+            // Angled bottom-left corner
+            ctx.lineTo(barX, barY + barHeight - bevelSize);
+            // Left edge
+            ctx.lineTo(barX, barY + bevelSize);
+            // Close back to start
+            ctx.closePath();
+        };
+
+        // Draw outer glow effect
+        ctx.shadowColor = 'rgba(0, 180, 255, 0.5)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        
+        // Draw background container with semi-transparency
+        ctx.globalAlpha = 0.3;
+        createHealthBarPath(barWidth);
+        ctx.fillStyle = 'rgba(10, 40, 80, 0.8)';
+        ctx.fill();
+        
+        // Draw subtle border
+        ctx.globalAlpha = 0.6;
+        ctx.strokeStyle = 'rgba(120, 200, 255, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+
+        // Calculate health percentage and filled width
+        const healthPercentage = this.player.health / this.player.maxHealth;
+        const filledWidth = barWidth * healthPercentage;
+        
+        // Draw filled health bar with gradient
+        if (filledWidth > 0) {
+            ctx.globalAlpha = 0.7;
             
-            // Animate energy draining
-            if (this.tanksBeforeDamage > this.tanksAfterDamage) {
-                // Tank loss animation: drain to 0, refill to 99, drain to final
-                if (progress < 0.33) {
-                    // Phase 1: drain current energy to 0
-                    const drainProgress = progress * 3;
-                    this.displayEnergy = this.energyBeforeDamage * (1 - drainProgress);
-                    this.displayTanks = this.tanksBeforeDamage;
-                } else if (progress < 0.5) {
-                    // Tank explosion moment
-                    this.displayEnergy = 0;
-                    this.displayTanks = this.tanksBeforeDamage;
-                    
-                    // Trigger tank explosion at this moment
-                    if (!this.tankExploded) {
-                        this.tankExploded = true;
-                        this.explodeTank(this.tanksBeforeDamage - 1);
-                        this.triggerScreenShake(20, 10, 40);
-                    }
-                } else if (progress < 0.67) {
-                    // Phase 2: refill to 99
-                    const refillProgress = (progress - 0.5) * 6;
-                    this.displayEnergy = 99 * refillProgress;
-                    this.displayTanks = this.tanksAfterDamage;
-                } else {
-                    // Phase 3: drain from 99 to final value
-                    const finalDrainProgress = (progress - 0.67) * 3;
-                    this.displayEnergy = 99 - (99 - this.energyAfterDamage) * finalDrainProgress;
-                    this.displayTanks = this.tanksAfterDamage;
-                }
+            // Create enhanced gradient for health bar
+            const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+            const radialGradient = ctx.createRadialGradient(
+                barX + filledWidth / 2, barY + barHeight / 2, 0,
+                barX + filledWidth / 2, barY + barHeight / 2, barHeight * 2
+            );
+            
+            // Color based on health level with enhanced gradients
+            if (healthPercentage > 0.6) {
+                // Healthy - bright sky blue with subtle shimmer
+                gradient.addColorStop(0, 'rgba(120, 240, 255, 0.95)');
+                gradient.addColorStop(0.3, 'rgba(80, 200, 255, 0.9)');
+                gradient.addColorStop(0.7, 'rgba(60, 180, 255, 0.85)');
+                gradient.addColorStop(1, 'rgba(40, 140, 220, 0.8)');
+            } else if (healthPercentage > 0.3) {
+                // Warning - yellow-blue transition
+                gradient.addColorStop(0, 'rgba(180, 240, 255, 0.95)');
+                gradient.addColorStop(0.3, 'rgba(150, 200, 220, 0.9)');
+                gradient.addColorStop(0.7, 'rgba(120, 180, 200, 0.85)');
+                gradient.addColorStop(1, 'rgba(100, 140, 160, 0.8)');
             } else {
-                // Simple energy drain (no tank loss)
-                this.displayEnergy = this.energyBeforeDamage + (this.energyAfterDamage - this.energyBeforeDamage) * progress;
-                this.displayTanks = this.tanksBeforeDamage;
+                // Critical - red-tinted with urgency
+                gradient.addColorStop(0, 'rgba(255, 180, 180, 0.95)');
+                gradient.addColorStop(0.3, 'rgba(240, 140, 160, 0.9)');
+                gradient.addColorStop(0.7, 'rgba(220, 120, 150, 0.85)');
+                gradient.addColorStop(1, 'rgba(180, 100, 120, 0.8)');
             }
             
-            if (progress >= 1) {
-                this.animatingDamage = false;
-                this.tankExploded = false;
-                this.displayEnergy = this.playerEnergy;
-                this.displayTanks = this.energyTanks;
-            }
+            createHealthBarPath(filledWidth);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Add subtle inner glow
+            ctx.globalAlpha = 0.4;
+            createHealthBarPath(filledWidth);
+            ctx.strokeStyle = 'rgba(200, 240, 255, 0.6)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+        
+        // Remove segmentation lines for cleaner look
+
+        // Draw HP text below the health bar with matching colors
+        ctx.globalAlpha = 0.9;
+        ctx.font = "12px 'Press Start 2P', monospace";
+        
+        // Match text color to health bar color
+        const textHealthPercentage = this.player.health / this.player.maxHealth;
+        let textColor, strokeColor;
+        if (textHealthPercentage > 0.6) {
+            textColor = 'rgba(100, 220, 255, 0.9)';
+            strokeColor = 'rgba(60, 180, 255, 0.6)';
+        } else if (textHealthPercentage > 0.3) {
+            textColor = 'rgba(150, 220, 255, 0.9)';
+            strokeColor = 'rgba(120, 180, 200, 0.6)';
         } else {
-            this.displayEnergy = this.playerEnergy;
-            this.displayTanks = this.energyTanks;
+            textColor = 'rgba(255, 150, 150, 0.9)';
+            strokeColor = 'rgba(220, 120, 150, 0.6)';
         }
         
-        if (energyBar && energyValue) {
-            // Update energy value display
-            energyValue.textContent = Math.round(this.displayEnergy).toString().padStart(2, '0');
+        ctx.fillStyle = textColor;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 0.5;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        
+        const hpText = `${Math.round(this.player.health)}/${this.player.maxHealth}`;
+        const textX = barX + barWidth / 2;
+        const textY = barY + barHeight + 8; // Position below the bar
+        
+        // Draw text outline
+        ctx.strokeText(hpText, textX, textY);
+        // Draw text fill
+        ctx.fillText(hpText, textX, textY);
+
+        // Draw Shield Icon with layered effect
+        const shieldIconX = barX + barWidth + 20;
+        const shieldIconY = barY;
+        const iconSize = 30;
+        
+        // Function to draw shield shape using exact SVG path coordinates
+        const drawShieldPath = (centerX, centerY, size) => {
+            const scale = size / 16; // SVG viewBox is 16x16
+            ctx.beginPath();
             
-            // Color based on whether player has tanks
-            let color;
-            if (this.displayTanks > 0) {
-                color = '#00ff00';
-            } else {
-                const percent = this.displayEnergy / this.maxEnergy;
-                if (percent > 0.5) {
-                    const t = (percent - 0.5) * 2;
-                    color = `rgb(${255 * (1-t)}, 255, 0)`;
-                } else {
-                    const t = percent * 2;
-                    color = `rgb(255, ${255 * t}, 0)`;
-                }
-            }
+            // Exact SVG path: M4.35009 13.3929L8 16L11.6499 13.3929C13.7523 11.8912 15 9.46667 15 6.88306V3L8 0L1 3V6.88306C1 9.46667 2.24773 11.8912 4.35009 13.3929Z
+            // Transform coordinates to center on (centerX, centerY)
+            const offsetX = centerX - 8 * scale;
+            const offsetY = centerY - 8 * scale;
             
-            energyValue.style.color = color;
-            
-            // Update energy bar - no red background, just green bar
-            const percent = this.displayEnergy / this.maxEnergy;
-            energyBar.innerHTML = '';
-            energyBar.style.width = `${Math.max(0, percent * 100)}%`;
-            energyBar.style.background = color;
-        }
+            // Start at top center (8,0)
+            ctx.moveTo(offsetX + 8 * scale, offsetY + 0 * scale);
+            // Line to left top corner (1,3)
+            ctx.lineTo(offsetX + 1 * scale, offsetY + 3 * scale);
+            // Line down left side to (1, 6.88306)
+            ctx.lineTo(offsetX + 1 * scale, offsetY + 6.88306 * scale);
+            // Curve to bottom left (4.35009, 13.3929)
+            ctx.bezierCurveTo(
+                offsetX + 1 * scale, offsetY + 9.46667 * scale,
+                offsetX + 2.24773 * scale, offsetY + 11.8912 * scale,
+                offsetX + 4.35009 * scale, offsetY + 13.3929 * scale
+            );
+            // Line to bottom center (8,16)
+            ctx.lineTo(offsetX + 8 * scale, offsetY + 16 * scale);
+            // Line to bottom right (11.6499, 13.3929)
+            ctx.lineTo(offsetX + 11.6499 * scale, offsetY + 13.3929 * scale);
+            // Curve to right side
+            ctx.bezierCurveTo(
+                offsetX + 13.7523 * scale, offsetY + 11.8912 * scale,
+                offsetX + 15 * scale, offsetY + 9.46667 * scale,
+                offsetX + 15 * scale, offsetY + 6.88306 * scale
+            );
+            // Line up right side to (15,3)
+            ctx.lineTo(offsetX + 15 * scale, offsetY + 3 * scale);
+            // Line to top center, completing the path
+            ctx.lineTo(offsetX + 8 * scale, offsetY + 0 * scale);
+            ctx.closePath();
+        };
+        
+        const centerX = shieldIconX + iconSize / 2;
+        const centerY = shieldIconY + iconSize / 2;
+        
+        // Draw single shield with border and gradient fill
+        ctx.globalAlpha = 0.9;
+        drawShieldPath(centerX, centerY, iconSize);
+        
+        // Create gradient fill
+        const shieldGradient = ctx.createLinearGradient(centerX, centerY - iconSize/2, centerX, centerY + iconSize/2);
+        shieldGradient.addColorStop(0, 'rgba(135, 206, 250, 0.95)'); // Light sky blue
+        shieldGradient.addColorStop(0.5, 'rgba(100, 180, 255, 0.9)'); // Sky blue
+        shieldGradient.addColorStop(1, 'rgba(70, 150, 220, 0.85)'); // Deeper sky blue
+        
+        // Fill the shield
+        ctx.fillStyle = shieldGradient;
+        ctx.fill();
+        
+        // Add border stroke
+        ctx.strokeStyle = 'rgba(120, 180, 255, 0.8)'; // Lighter shield-blue border
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        ctx.globalAlpha = 0.9;
+        ctx.font = "12px 'Press Start 2P', monospace";
+        ctx.fillStyle = textColor;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 0.5;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        
+        const shieldText = `${this.player.shield}%`;
+        const shieldTextX = shieldIconX + iconSize + 8;
+        const shieldTextY = shieldIconY + iconSize / 2;
+        
+        // Draw shield text with outline
+        ctx.strokeText(shieldText, shieldTextX, shieldTextY);
+        ctx.fillText(shieldText, shieldTextX, shieldTextY);
+
+
+        // Draw energy tanks
+        const tankSize = 25;
+        const tankMargin = 8;
+        const tanksY = barY + barHeight + 10;
         
         // Update energy tanks display
+        let energyTanksContainer = document.getElementById('energy-tanks');
         if (!energyTanksContainer) {
             // Create energy tanks container if it doesn't exist
             const container = document.createElement('div');
@@ -939,5 +978,71 @@ export class GameEngine {
                 easing: 'ease-out'
             });
         }
+    }
+
+    handlePlayerAsteroidCollision(player, asteroid) {
+        if (this.player.invincible) return;
+
+        // Player takes damage
+        this.takeDamage(asteroid.mass * 0.1);
+        this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
+        this.audioManager.playShield();
+
+        // Asteroid bounces off player
+        const astSpeed = Math.hypot(asteroid.vel.x, asteroid.vel.y);
+        const knockbackAngle = Math.atan2(this.player.y - asteroid.y, this.player.x - asteroid.x);
+
+        // Calculate knockback magnitude based on asteroid's trajectory and player's mass
+        const totalMass = this.player.mass + asteroid.mass;
+        const dvn = (this.player.vel.x - asteroid.vel.x) * Math.cos(knockbackAngle) + (this.player.vel.y - asteroid.vel.y) * Math.sin(knockbackAngle);
+        const enhancedImpulse = 2 * dvn / totalMass;
+
+        // Apply MUCH MORE DRASTIC knockback multiplier
+        const knockbackMultiplier = 8.0; // Increased from ~1.0 to 8.0
+        const enhancedKnockback = enhancedImpulse * knockbackMultiplier;
+
+        // Apply jittered impulse to player velocity
+        const jitter = random(-Math.PI / 4, Math.PI / 4);
+        this.player.vel.x += Math.cos(knockbackAngle + jitter) * enhancedKnockback;
+        this.player.vel.y += Math.sin(knockbackAngle + jitter) * enhancedKnockback;
+
+        // Also apply some impulse to asteroid (but less dramatic, along original normal)
+        const nx = Math.cos(knockbackAngle);
+        const ny = Math.sin(knockbackAngle);
+        asteroid.vel.x -= enhancedKnockback * 0.3 * this.player.mass * nx;
+        asteroid.vel.y -= enhancedKnockback * 0.3 * this.player.mass * ny;
+
+        // Separate overlapping objects
+        const overlap = this.player.radius + asteroid.radius - Math.hypot(this.player.x - asteroid.x, this.player.y - asteroid.y);
+        const separationForce = overlap / 2;
+        this.player.x -= nx * separationForce;
+        this.player.y -= ny * separationForce;
+        asteroid.x += nx * separationForce;
+        asteroid.y += ny * separationForce;
+
+        // Create enhanced collision effects
+        // White pulse at impact point
+        const impactX = this.player.x + nx * this.player.radius;
+        const impactY = this.player.y + ny * this.player.radius;
+        this.particlePool.get(impactX, impactY, 'explosionPulse', 40);
+        
+        // Enhanced blue particles explosion
+        for (let i = 0; i < 30; i++) {
+            const particle = this.particlePool.get(impactX, impactY, 'explosion');
+            if (particle) {
+                // Override color to bright blue
+                particle.color = `hsl(210, 100%, ${60 + Math.random() * 40}%)`;
+                // Make particles faster and larger for more dramatic effect
+                particle.vel.x *= 1.5;
+                particle.vel.y *= 1.5;
+                particle.radius *= 1.3;
+            }
+        }
+        
+        this.audioManager.playHit();
+        
+        // Enhanced screen shake based on impact force
+        const impactForce = Math.abs(enhancedKnockback) * totalMass;
+        this.triggerScreenShake(25, 15, impactForce * 0.8);
     }
 } 
