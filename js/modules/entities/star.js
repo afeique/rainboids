@@ -46,7 +46,7 @@ export class Star {
             this.radius = (this.z * 1.2 + 0.4) * scale * 1.2; // Extra large
 
             const ang = random(0, 2 * Math.PI);
-            const spd = random(0.5, 1.5); // Much slower initial burst speed
+            const spd = random(0.1, 0.3); // Even slower burst speed for easier collection
             this.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
             this.color = '#00ff7f';
             this.borderColor = '#ffd700';

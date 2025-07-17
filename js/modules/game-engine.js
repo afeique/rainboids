@@ -24,6 +24,25 @@ export class GameEngine {
         this.height = window.innerHeight;
         this.canvas.width = this.width;
         this.canvas.height = this.height;
+        
+        // Initialize game state properties
+        this.initializeGameState();
+        
+        this.initializePools();
+        this.setupEventListeners();
+        this.playerCanFire = true;
+        this.previousFire = false;
+        this.baseDamage = 20; // Base damage per hit
+
+        this.playerState = PLAYER_STATES.NORMAL;
+        this.pendingDamage = 0; // New property to track pending damage
+
+        this.shieldIcon = new Image();
+        this.shieldIcon.src = 'assets/shield-icon.svg';
+    }
+    
+    // Helper method to initialize/reset game state
+    initializeGameState() {
         this.game = {
             score: 0,
             money: 0,
@@ -34,24 +53,6 @@ export class GameEngine {
             screenShakeDuration: 0,
             screenShakeMagnitude: 0
         };
-        this.initializePools();
-        this.setupEventListeners();
-        this.playerCanFire = true;
-        this.previousFire = false;
-        this.baseDamage = 20; // Base damage per hit
-
-        this.playerState = PLAYER_STATES.NORMAL;
-        this.pendingDamage = 0; // New property to track pending damage
-
-        // Shield system variables (renamed from energy for consistency)
-        this.maxShields = 99;
-        this.playerShields = this.maxShields;
-        this.shieldTanks = 0; // Player starts with zero shield tanks
-        this.displayShields = this.maxShields;
-        this.displayTanks = 0;
-
-        this.shieldIcon = new Image();
-        this.shieldIcon.src = 'assets/shield-icon.svg';
     }
     
     initializePools() {
@@ -125,16 +126,15 @@ export class GameEngine {
     }
     
     init() {
-        this.game.score = 0;
-        this.game.money = 0;
-        this.game.currentWave = 0;
+        // Reset core game state (score, money, wave)
+        this.initializeGameState();
         this.game.state = GAME_STATES.PLAYING;
         // Reset player
         this.player = new Player();
         // Reset shields
-        this.playerShields = this.maxShields;
+        this.playerShields = 50; // Start with 50 health
         this.shieldTanks = 0; // Reset to zero tanks
-        this.displayShields = this.maxShields;
+        this.displayShields = 50; // Match starting health
         this.displayTanks = 0;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage

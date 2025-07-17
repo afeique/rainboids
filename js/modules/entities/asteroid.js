@@ -1,9 +1,6 @@
 // Asteroid entity with 3D wireframe rendering
 import { GAME_CONFIG } from '../constants.js';
-import { random } from '../utils.js';
-
-const width = window.innerWidth;
-const height = window.innerHeight;
+import { random, GameDimensions } from '../utils.js';
 const DEBRIS_COUNT = 5;
 
 function isMobile() {
@@ -12,26 +9,9 @@ function isMobile() {
 
 export class Asteroid {
     constructor(x, y, radius, level = 1) {
-        this.level = level;
-        this.x = x !== undefined ? x : random(0, width);
-        this.y = y !== undefined ? y : random(0, height);
-        this.vel = {
-            x: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2,
-            y: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2
-        };
-        
-        this.rot3D = { x: 0, y: 0, z: 0 };
-        this.rotVel3D = {
-            x: random(-0.02, 0.02),
-            y: random(-0.02, 0.02),
-            z: random(-0.02, 0.02)
-        };
-        
         this.fov = 300;
-        this.active = true;
-        this.creationTime = Date.now();
         
-        // Define edges for wireframe
+        // Define edges for wireframe (only set once in constructor)
         this.edges = [
             [0,1],[0,5],[0,7],[0,10],[0,11],[1,5],[1,7],[1,8],[1,9],
             [2,3],[2,4],[2,6],[2,10],[2,11],[3,4],[3,6],[3,8],[3,9],
@@ -39,23 +19,14 @@ export class Asteroid {
             [7,8],[7,10],[8,9],[10,11]
         ];
         
-        this.rescale(radius || random(40, 60));
-
-        // Calculate reasonable health based on size (20-30 range for biggest asteroids)
-        // Base health of 12, scaled by size relative to minimum radius (40)
-        const baseHealth = 12;
-        const sizeMultiplier = this.radius / 40; // 40 is minimum radius
-        const levelMultiplier = this.level;
-        this.maxHealth = Math.floor(baseHealth * sizeMultiplier * levelMultiplier);
-        // Ensure health is in range 8-30, with biggest asteroids (radius 60) having ~18-30 health
-        this.maxHealth = Math.max(8, Math.min(30, this.maxHealth));
-        this.health = this.maxHealth;
+        this.initializeAsteroid(x, y, radius, level);
     }
-
-    reset(x, y, radius, level = 1) {
+    
+    // Helper method to initialize/reset asteroid properties
+    initializeAsteroid(x, y, radius, level = 1) {
         this.level = level;
-        this.x = x !== undefined ? x : random(0, width);
-        this.y = y !== undefined ? y : random(0, height);
+        this.x = x !== undefined ? x : random(0, GameDimensions.width);
+        this.y = y !== undefined ? y : random(0, GameDimensions.height);
         this.vel = {
             x: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2,
             y: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2
@@ -71,17 +42,30 @@ export class Asteroid {
         this.active = true;
         this.creationTime = Date.now();
         
-        this.rescale(radius || random(40, 60));
+        this.rescale(radius || random(30, 60));
 
-        // Calculate reasonable health based on size (20-30 range for biggest asteroids)
-        // Base health of 12, scaled by size relative to minimum radius (40)
-        const baseHealth = 12;
-        const sizeMultiplier = this.radius / 40; // 40 is minimum radius
-        const levelMultiplier = this.level;
-        this.maxHealth = Math.floor(baseHealth * sizeMultiplier * levelMultiplier);
-        // Ensure health is in range 8-30, with biggest asteroids (radius 60) having ~18-30 health
-        this.maxHealth = Math.max(8, Math.min(30, this.maxHealth));
+        // Calculate health based on size tiers:
+        // Biggest asteroids (30-60 radius): 8-12 health
+        // Medium asteroids (15-30 radius): 4-8 health  
+        // Smallest asteroids (7-15 radius): 2-4 health
+        let health;
+        if (this.radius >= 30) {
+            // Big asteroids: 8-12 health
+            health = Math.floor(8 + (this.radius - 30) / 30 * 4); // Scale from 8 to 12 based on radius 30-60
+        } else if (this.radius >= 15) {
+            // Medium asteroids: 4-8 health
+            health = Math.floor(4 + (this.radius - 15) / 15 * 4); // Scale from 4 to 8 based on radius 15-30
+        } else {
+            // Small asteroids: 2-4 health
+            health = Math.floor(2 + (this.radius - 7) / 8 * 2); // Scale from 2 to 4 based on radius 7-15
+        }
+        
+        this.maxHealth = Math.max(1, health); // Ensure minimum 1 health
         this.health = this.maxHealth;
+    }
+
+    reset(x, y, radius, level = 1) {
+        this.initializeAsteroid(x, y, radius, level);
     }
 
     rescale(newBaseRadius) {
@@ -163,10 +147,10 @@ export class Asteroid {
         
         // Wrap around screen with buffer
         const wrapBuffer = this.radius * 2;
-        if (this.x < -wrapBuffer) this.x = width + wrapBuffer;
-        if (this.x > width + wrapBuffer) this.x = -wrapBuffer;
-        if (this.y < -wrapBuffer) this.y = height + wrapBuffer;
-        if (this.y > height + wrapBuffer) this.y = -wrapBuffer;
+        if (this.x < -wrapBuffer) this.x = GameDimensions.width + wrapBuffer;
+        if (this.x > GameDimensions.width + wrapBuffer) this.x = -wrapBuffer;
+        if (this.y < -wrapBuffer) this.y = GameDimensions.height + wrapBuffer;
+        if (this.y > GameDimensions.height + wrapBuffer) this.y = -wrapBuffer;
         
         // Update rotation
         this.rot3D.x += this.rotVel3D.x;

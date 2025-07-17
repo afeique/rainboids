@@ -8,43 +8,47 @@ function isMobile() {
 
 export class Player {
     constructor() {
+        // One-time setup properties
         this.width = window.innerWidth;
         this.height = window.innerHeight;
+        this.lastX = 0;
+        this.lastY = 0;
+        this.rotation = 0;
+        this.radius = 12;
+        this.health = 50;
+        this.maxHealth = 50;
+        this.shieldTanks = 1; // Start with 1 shield tank
+        this.shield = 0; // 0% damage reduction (start with no armor)
+        this.invulnerable = false;
+        this.lastHitTime = 0;
+        this.lastBlinkTime = 0;
+        
+        this.initializePlayer();
+    }
+    
+    // Helper method to initialize/reset player properties
+    initializePlayer() {
         this.x = this.width / 2;
         this.y = this.height / 2;
         this.lastX = this.x;
         this.lastY = this.y;
         this.vel = { x: 0, y: 0 };
-        this.angle = 0;
-        this.rotation = 0;
-        this.radius = 12;
-        this.health = 120;
-        this.maxHealth = 120;
-        this.shieldTanks = 1; // Start with 1 shield tank
-        this.shield = 1; // 1% damage reduction
-        this.invulnerable = false;
-        this.lastHitTime = 0;
-        this.lastBlinkTime = 0;
-        this.isThrusting = false;
-        this.active = false;
-        this.reset();
-    }
-    
-    reset() {
-        this.x = this.width / 2;
-        this.y = this.height / 2;
-        let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
-        this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
         this.angle = -Math.PI / 2;
-        this.vel = { x: 0, y: 0 };
-        this.canShoot = true;
-        this.active = true;
         this.isThrusting = false;
+        this.active = true;
+        this.canShoot = true;
         this.thrustersDisabled = false;
         this.invincible = false;
         this.invincibilityTimer = 0;
+        
+        let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
+        this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
         // Player mass (smaller than most asteroids)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.5;
+    }
+    
+    reset() {
+        this.initializePlayer();
     }
 
     disableThrusters(duration) {

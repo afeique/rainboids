@@ -1,5 +1,11 @@
 import { GAME_CONFIG, NOISE_CONFIG } from './constants.js';
 
+// Game dimensions singleton
+export const GameDimensions = {
+    get width() { return window.innerWidth; },
+    get height() { return window.innerHeight; }
+};
+
 // Utility functions
 export const random = (a, b) => Math.random() * (b - a) + a;
 
