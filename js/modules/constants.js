@@ -8,7 +8,7 @@ export const GAME_CONFIG = {
     BULLET_SPEED: 12,
     INITIAL_AST_COUNT: 3,
     AST_SPEED: 1.2,
-    STAR_COUNT: 400,
+    STAR_COUNT: 600,
     MIN_STAR_DIST: 15, // Reduced to allow for denser clusters
     PASSIVE_STAR_ATTR: 0.5,
     PASSIVE_STAR_ATTRACT_DIST: 50,
@@ -100,4 +100,13 @@ export const PARTICLE_TYPES = {
     PICKUP_PULSE: 'pickupPulse'
 };
 
-export const STAR_SHAPES = ['point', 'point', 'point', 'point', 'point', 'point', 'point', 'diamond', 'star4', 'star8', 'plus']; 
+export const STAR_SHAPES = [
+    'point', 'point', 'point', 'point',  // Most common - simple points
+    'diamond', 'diamond',                 // Common diamonds
+    'star4', 'star4',                    // 4-pointed stars
+    'star5', 'star6',                    // 5 and 6-pointed stars
+    'star8',                             // 8-pointed star
+    'triangle', 'hexagon',               // Geometric shapes
+    'circle', 'square',                  // Basic shapes
+    'sparkle', 'burst'                   // Special effects
+]; 

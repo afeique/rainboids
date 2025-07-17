@@ -23,7 +23,7 @@ export class Star {
         
         // Radius and twinkle speed are now affected by density
         const densityFactor = 0.7 + (this.density || 0.5) * 0.6;
-        this.radius = (this.z * 0.8 + 0.2) * scale * densityFactor;
+        this.radius = (this.z * 2.2 + 1.0) * scale * densityFactor; // Further increased for bigger overall stars
         
         this.opacity = 0;
         this.opacityOffset = Math.random() * Math.PI * 2;
@@ -32,6 +32,13 @@ export class Star {
         this.shape = STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
         this.points = Math.floor(random(4, 7)) * 2;
         this.innerRadiusRatio = random(0.4, 0.8);
+        
+        // Add rotation and size variation
+        this.rotation = 0;
+        this.rotationSpeed = random(-0.02, 0.02);
+        this.sizeVariation = random(0.8, 1.8); // 80% to 180% size variation
+        this.pulseSpeed = random(0.005, 0.015);
+        this.pulseOffset = Math.random() * Math.PI * 2;
         
         this.isBurst = burst;
         this.vel = { x: 0, y: 0 };
@@ -123,13 +130,17 @@ export class Star {
 
             this.opacityOffset += this.twinkleSpeed;
             this.opacity = (Math.sin(this.opacityOffset) + 1) / 2 * 0.9 + 0.1;
+            
+            // Update rotation for spinning stars
+            this.rotation += this.rotationSpeed;
+            this.pulseOffset += this.pulseSpeed;
         }
         
         // Enhanced parallax effect with exponential scaling
         // Distant stars move much slower, close stars move faster
         // But burst stars don't have parallax - they're gameplay elements
         if (!this.isBurst) {
-            const parallaxFactor = Math.pow(this.z, 2.2) * 0.15;
+            const parallaxFactor = Math.pow(this.z, 2.5) * 0.25; // Increased exponent and multiplier for stronger parallax
             this.x -= shipVel.x * parallaxFactor;
             this.y -= shipVel.y * parallaxFactor;
             wrap(this, this.width, this.height);
@@ -141,6 +152,14 @@ export class Star {
         
         ctx.save();
         ctx.translate(this.x, this.y);
+        
+        // Apply rotation
+        ctx.rotate(this.rotation);
+        
+        // Calculate dynamic radius with size variation and pulse
+        const pulseMultiplier = 1 + Math.sin(this.pulseOffset) * 0.1; // Gentle pulsing
+        const dynamicRadius = this.radius * this.sizeVariation * pulseMultiplier;
+        
         // Adjust opacity based on depth - distant stars are dimmer
         const depthOpacity = Math.min(1, 0.2 + Math.pow(this.z / 4, 1.5));
         ctx.globalAlpha = this.opacity * depthOpacity;
@@ -149,55 +168,131 @@ export class Star {
             const borderSize = 1;
             ctx.fillStyle = this.borderColor;
             ctx.fillRect(
-                -this.radius / 2 - borderSize,
-                -this.radius / 2 - borderSize,
-                this.radius + borderSize * 2,
-                this.radius + borderSize * 2
+                -dynamicRadius / 2 - borderSize,
+                -dynamicRadius / 2 - borderSize,
+                dynamicRadius + borderSize * 2,
+                dynamicRadius + borderSize * 2
             );
             ctx.fillStyle = this.color;
-            ctx.fillRect(-this.radius / 2, -this.radius / 2, this.radius, this.radius);
+            ctx.fillRect(-dynamicRadius / 2, -dynamicRadius / 2, dynamicRadius, dynamicRadius);
         } else {
             ctx.beginPath();
             
             switch (this.shape) {
                 case 'diamond':
-                    ctx.moveTo(0, -this.radius);
-                    ctx.lineTo(this.radius * 0.7, 0);
-                    ctx.lineTo(0, this.radius);
-                    ctx.lineTo(-this.radius * 0.7, 0);
+                    ctx.moveTo(0, -dynamicRadius);
+                    ctx.lineTo(dynamicRadius * 0.7, 0);
+                    ctx.lineTo(0, dynamicRadius);
+                    ctx.lineTo(-dynamicRadius * 0.7, 0);
                     ctx.closePath();
                     break;
                     
+                case 'triangle':
+                    ctx.moveTo(0, -dynamicRadius);
+                    ctx.lineTo(dynamicRadius * 0.8, dynamicRadius * 0.5);
+                    ctx.lineTo(-dynamicRadius * 0.8, dynamicRadius * 0.5);
+                    ctx.closePath();
+                    break;
+                    
+                case 'hexagon':
+                    for (let i = 0; i < 6; i++) {
+                        const a = i * Math.PI / 3;
+                        const x = Math.cos(a) * dynamicRadius;
+                        const y = Math.sin(a) * dynamicRadius;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    break;
+                    
+                case 'circle':
+                    ctx.arc(0, 0, dynamicRadius, 0, Math.PI * 2);
+                    break;
+                    
+                case 'square':
+                    ctx.rect(-dynamicRadius * 0.7, -dynamicRadius * 0.7, dynamicRadius * 1.4, dynamicRadius * 1.4);
+                    break;
+                    
                 case 'plus':
-                    ctx.moveTo(0, -this.radius);
-                    ctx.lineTo(0, this.radius);
-                    ctx.moveTo(-this.radius, 0);
-                    ctx.lineTo(this.radius, 0);
+                    ctx.moveTo(0, -dynamicRadius);
+                    ctx.lineTo(0, dynamicRadius);
+                    ctx.moveTo(-dynamicRadius, 0);
+                    ctx.lineTo(dynamicRadius, 0);
+                    break;
+                    
+                case 'x':
+                    ctx.moveTo(-dynamicRadius, -dynamicRadius);
+                    ctx.lineTo(dynamicRadius, dynamicRadius);
+                    ctx.moveTo(dynamicRadius, -dynamicRadius);
+                    ctx.lineTo(-dynamicRadius, dynamicRadius);
                     break;
                     
                 case 'star4':
                     for (let i = 0; i < 8; i++) {
                         const a = i * Math.PI / 4;
-                        const r = i % 2 === 0 ? this.radius : this.radius * 0.4;
-                        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                        const r = i % 2 === 0 ? dynamicRadius : dynamicRadius * 0.4;
+                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                    }
+                    ctx.closePath();
+                    break;
+                    
+                case 'star5':
+                    for (let i = 0; i < 10; i++) {
+                        const a = i * Math.PI / 5;
+                        const r = i % 2 === 0 ? dynamicRadius : dynamicRadius * 0.4;
+                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                    }
+                    ctx.closePath();
+                    break;
+                    
+                case 'star6':
+                    for (let i = 0; i < 12; i++) {
+                        const a = i * Math.PI / 6;
+                        const r = i % 2 === 0 ? dynamicRadius : dynamicRadius * 0.4;
+                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
                     }
                     ctx.closePath();
                     break;
                     
                 case 'star8':
-                    for (let i = 0; i < this.points * 2; i++) {
-                        const a = i * Math.PI / this.points;
-                        const r = i % 2 === 0 ? this.radius : this.innerRadiusRatio;
-                        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                    for (let i = 0; i < 16; i++) {
+                        const a = i * Math.PI / 8;
+                        const r = i % 2 === 0 ? dynamicRadius : dynamicRadius * this.innerRadiusRatio;
+                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
                     }
                     ctx.closePath();
                     break;
                     
+                case 'sparkle':
+                    // 8-pointed sparkle with varying lengths
+                    for (let i = 0; i < 8; i++) {
+                        const a = i * Math.PI / 4;
+                        const length = (i % 2 === 0) ? dynamicRadius : dynamicRadius * 0.6;
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(Math.cos(a) * length, Math.sin(a) * length);
+                    }
+                    break;
+                    
+                case 'burst':
+                    // Radiating lines of varying lengths
+                    for (let i = 0; i < 12; i++) {
+                        const a = i * Math.PI / 6;
+                        const length = dynamicRadius * (0.5 + Math.random() * 0.5);
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(Math.cos(a) * length, Math.sin(a) * length);
+                    }
+                    break;
+                    
                 default:
-                    ctx.moveTo(-this.radius, -this.radius);
-                    ctx.lineTo(this.radius, this.radius);
-                    ctx.moveTo(this.radius, -this.radius);
-                    ctx.lineTo(-this.radius, this.radius);
+                    // Default X shape
+                    ctx.moveTo(-dynamicRadius, -dynamicRadius);
+                    ctx.lineTo(dynamicRadius, dynamicRadius);
+                    ctx.moveTo(dynamicRadius, -dynamicRadius);
+                    ctx.lineTo(-dynamicRadius, dynamicRadius);
                     break;
             }
             
