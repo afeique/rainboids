@@ -165,30 +165,11 @@ export class Asteroid {
     draw(ctx) {
         if (!this.active) return;
         
+        // Draw main asteroid
         ctx.save();
         ctx.translate(this.x, this.y);
         
-        this.edges.forEach((edge, index) => {
-            const v1 = this.projectedVertices[edge[0]];
-            const v2 = this.projectedVertices[edge[1]];
-            
-            if (!v1 || !v2) return;
-            
-            const avg = (v1.depth + v2.depth) / 2;
-            ctx.globalAlpha = Math.max(0.1, Math.pow(Math.max(0, (this.fov - avg) / (this.fov + this.radius)), 2.5));
-            
-            const hue = (Date.now() / 20 + index * 10) % 360;
-            ctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
-            
-            // Add shadow blur for better visual effect
-            ctx.shadowColor = `hsl(${hue}, 100%, 70%)`;
-            ctx.shadowBlur = 8;
-
-            ctx.beginPath();
-            ctx.moveTo(v1.x, v1.y);
-            ctx.lineTo(v2.x, v2.y);
-            ctx.stroke();
-        });
+        this.drawAsteroidShape(ctx);
 
         ctx.restore();
 
@@ -243,9 +224,9 @@ export class Asteroid {
             ctx.fill();
         }
 
-        // Health number centered above the health bar (darker goldenrod showing current/max)
+        // Health number centered above the health bar (bright gold showing current/max)
         ctx.font = "10px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#B8860B'; // Darker goldenrod for health number
+        ctx.fillStyle = '#FFD700'; // Bright gold for health number
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 2;
         ctx.textAlign = 'center';
@@ -260,4 +241,34 @@ export class Asteroid {
 
         ctx.restore();
     }
-} 
+    
+    // Helper method to draw the asteroid shape
+    drawAsteroidShape(ctx) {
+        this.edges.forEach((edge, index) => {
+            const v1 = this.projectedVertices[edge[0]];
+            const v2 = this.projectedVertices[edge[1]];
+            
+            if (!v1 || !v2) return;
+            
+            const avg = (v1.depth + v2.depth) / 2;
+            const baseAlpha = Math.max(0.2, Math.pow(Math.max(0, (this.fov - avg) / (this.fov + this.radius)), 2.0));
+            
+            ctx.globalAlpha = baseAlpha;
+            
+            const hue = (Date.now() / 20 + index * 10) % 360;
+            ctx.strokeStyle = `hsl(${hue}, 100%, 75%)`; // Increased lightness from 70% to 85%
+            ctx.lineWidth = 2; // Thicker lines for more visibility
+            
+            // Remove all shadow effects
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+
+            ctx.beginPath();
+            ctx.moveTo(v1.x, v1.y);
+            ctx.lineTo(v2.x, v2.y);
+            ctx.stroke();
+        });
+    }
+}

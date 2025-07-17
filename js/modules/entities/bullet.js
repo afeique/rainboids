@@ -78,11 +78,7 @@ export class Bullet {
             }
         }
         
-        // Create phantom particles
-        if (this.life % 2 === 0) {
-            const currentColor = `hsl(${this.life * 5 % 360}, 100%, 50%)`;
-            particlePool.get(this.x, this.y, 'phantom', currentColor, this.radius);
-        }
+        // Phantom trail particles disabled (motion blur disabled)
     }
 
     draw(ctx) {

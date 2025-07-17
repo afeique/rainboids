@@ -250,8 +250,17 @@ export class GameEngine {
     }
     
     createStarBurst(x, y) {
-        for (let i = 0; i < 10; i++) {
-            this.starPool.get(x, y, true);
+        for (let i = 0; i < 5; i++) {
+            // Calculate explosion angle and speed for each burst star
+            const angle = (i / 5) * Math.PI * 2 + random(-0.3, 0.3); // Spread evenly with some randomness
+            const speed = random(2, 5); // Initial explosion speed
+            
+            const star = this.starPool.get(x, y, true);
+            if (star) {
+                // Set initial explosion velocity
+                star.vel.x = Math.cos(angle) * speed;
+                star.vel.y = Math.sin(angle) * speed;
+            }
         }
     }
     
@@ -498,8 +507,8 @@ export class GameEngine {
     }
     
     draw() {
-        // Clear with semi-transparent black for trail effect
-        this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        // Clear canvas completely (motion blur disabled)
+        this.ctx.fillStyle = 'rgba(0,0,0,1)';
         this.ctx.fillRect(0, 0, this.width, this.height);
         
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {

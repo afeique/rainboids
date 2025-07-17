@@ -45,9 +45,8 @@ export class Star {
             this.density = 0.8;
             this.radius = (this.z * 1.2 + 0.4) * scale * 1.2; // Extra large
 
-            const ang = random(0, 2 * Math.PI);
-            const spd = random(0.05, 0.15); // Very slow burst speed for easier collection
-            this.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
+            // Initial velocity will be set by createStarBurst for explosion effect
+            this.vel = { x: 0, y: 0 };
             this.color = '#00ff7f';
             this.borderColor = '#ffd700';
             this.life = 1800;
@@ -80,18 +79,28 @@ export class Star {
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
             
-            if (playerPos.active && dist < GAME_CONFIG.BURST_STAR_ATTRACT_DIST) {
-                // Direct homing - adjust velocity to point toward player
-                const homingSpeed = 1.2 + this.z * 0.25; // Slightly faster: 1.5-1.95 speed
-                const turnRate = 0.04; // Slightly faster turning (0-1)
+            if (playerPos.active) {
+                // Strong attraction when very close to player (sucked up effect)
+                const closeRange = 80; // Distance for strong attraction
                 
-                // Calculate desired velocity direction
-                const desiredVelX = (dx / dist) * homingSpeed;
-                const desiredVelY = (dy / dist) * homingSpeed;
-                
-                // Smoothly turn toward desired direction
-                this.vel.x = this.vel.x * (1 - turnRate) + desiredVelX * turnRate;
-                this.vel.y = this.vel.y * (1 - turnRate) + desiredVelY * turnRate;
+                if (dist < closeRange) {
+                    // Very strong attraction - direct pull toward player
+                    const pullStrength = 8 + (closeRange - dist) / closeRange * 12; // 8-20 pull strength
+                    this.vel.x += (dx / dist) * pullStrength * 0.3;
+                    this.vel.y += (dy / dist) * pullStrength * 0.3;
+                } else {
+                    // Normal homing behavior when farther away
+                    const homingSpeed = 2.0 + this.z * 0.4; // Faster homing: 2.6-3.2 speed
+                    const turnRate = 0.08; // Faster turning (0-1)
+                    
+                    // Calculate desired velocity direction
+                    const desiredVelX = (dx / dist) * homingSpeed;
+                    const desiredVelY = (dy / dist) * homingSpeed;
+                    
+                    // Smoothly turn toward desired direction
+                    this.vel.x = this.vel.x * (1 - turnRate) + desiredVelX * turnRate;
+                    this.vel.y = this.vel.y * (1 - turnRate) + desiredVelY * turnRate;
+                }
             }
         } else {
             // Normal star behavior
