@@ -45,19 +45,21 @@ export class Asteroid {
         this.rescale(radius || random(30, 60));
 
         // Calculate health based on size tiers:
-        // Biggest asteroids (30-60 radius): 8-12 health
-        // Medium asteroids (15-30 radius): 4-8 health  
-        // Smallest asteroids (7-15 radius): 2-4 health
+        // Use baseRadius for consistent health calculation
+        // Biggest asteroids (40-60 baseRadius): 8-12 health
+        // Medium asteroids (20-40 baseRadius): 4-8 health  
+        // Smallest asteroids (10-20 baseRadius): 2-4 health
         let health;
-        if (this.radius >= 30) {
+        const sizeRef = this.baseRadius || this.radius;
+        if (sizeRef >= 40) {
             // Big asteroids: 8-12 health
-            health = Math.floor(8 + (this.radius - 30) / 30 * 4); // Scale from 8 to 12 based on radius 30-60
-        } else if (this.radius >= 15) {
+            health = Math.floor(8 + (sizeRef - 40) / 20 * 4); // Scale from 8 to 12 based on radius 40-60
+        } else if (sizeRef >= 20) {
             // Medium asteroids: 4-8 health
-            health = Math.floor(4 + (this.radius - 15) / 15 * 4); // Scale from 4 to 8 based on radius 15-30
+            health = Math.floor(4 + (sizeRef - 20) / 20 * 4); // Scale from 4 to 8 based on radius 20-40
         } else {
             // Small asteroids: 2-4 health
-            health = Math.floor(2 + (this.radius - 7) / 8 * 2); // Scale from 2 to 4 based on radius 7-15
+            health = Math.floor(2 + (sizeRef - 10) / 10 * 2); // Scale from 2 to 4 based on radius 10-20
         }
         
         this.maxHealth = Math.max(1, health); // Ensure minimum 1 health

@@ -225,34 +225,59 @@ export function getStarDensity(x, y, z, spawnWidth = 1920, spawnHeight = 1080) {
     return Math.max(0, Math.min(1, combinedDensity));
 }
 
-export function generatePoissonStarPosition(spawnWidth, spawnHeight, existingStars, z) {
-    const maxAttempts = 30;
-    const baseRadius = GAME_CONFIG.MIN_STAR_DIST;
+// Generative star position using grid-based jittered sampling
+export function generateStarPositions(spawnWidth, spawnHeight, starCount) {
+    const positions = [];
     
-    for (let i = 0; i < maxAttempts; i++) {
-        const x = random(0, spawnWidth);
-        const y = random(0, spawnHeight);
-        
-        const density = getStarDensity(x, y, z, spawnWidth, spawnHeight);
-        const minDistance = baseRadius + (1.0 - density) * baseRadius * 3;
-
-        let tooClose = false;
-        for (const star of existingStars) {
-            const dist = Math.hypot(x - star.x, y - star.y);
+    // Calculate grid dimensions based on star count
+    const aspectRatio = spawnWidth / spawnHeight;
+    const gridSizeY = Math.ceil(Math.sqrt(starCount / aspectRatio));
+    const gridSizeX = Math.ceil(starCount / gridSizeY);
+    
+    const cellWidth = spawnWidth / gridSizeX;
+    const cellHeight = spawnHeight / gridSizeY;
+    
+    // Generate positions with jittered grid sampling
+    for (let row = 0; row < gridSizeY; row++) {
+        for (let col = 0; col < gridSizeX; col++) {
+            if (positions.length >= starCount) break;
             
-            const otherStarMinDist = baseRadius + (1.0 - star.density) * baseRadius * 3;
-            if (dist < Math.max(minDistance, otherStarMinDist)) {
-                tooClose = true;
-                break;
-            }
-        }
-        
-        if (!tooClose) {
-            return { x, y, density };
+            // Base position at grid cell center
+            const baseX = (col + 0.5) * cellWidth;
+            const baseY = (row + 0.5) * cellHeight;
+            
+            // Add jitter within cell bounds (70% of cell size to avoid overlap)
+            const jitterX = (Math.random() - 0.5) * cellWidth * 0.7;
+            const jitterY = (Math.random() - 0.5) * cellHeight * 0.7;
+            
+            const x = Math.max(0, Math.min(spawnWidth, baseX + jitterX));
+            const y = Math.max(0, Math.min(spawnHeight, baseY + jitterY));
+            
+            // Determine depth distribution
+            const depthRoll = Math.random();
+            let z;
+            if (depthRoll < 0.15) { z = random(0.1, 0.3); }      // 15% Very far
+            else if (depthRoll < 0.35) { z = random(0.3, 0.6); } // 20% Far
+            else if (depthRoll < 0.55) { z = random(0.6, 1.0); } // 20% Mid-far
+            else if (depthRoll < 0.70) { z = random(1.0, 1.5); } // 15% Mid
+            else if (depthRoll < 0.82) { z = random(1.5, 2.0); } // 12% Mid-close
+            else if (depthRoll < 0.91) { z = random(2.0, 2.5); } // 9% Close
+            else if (depthRoll < 0.97) { z = random(2.5, 3.0); } // 6% Very close
+            else { z = random(3.0, 4.0); }                      // 3% Foreground
+            
+            const density = getStarDensity(x, y, z, spawnWidth, spawnHeight);
+            
+            positions.push({ x, y, z, density });
         }
     }
     
-    return null; // Return null if no valid position is found
+    // Shuffle to randomize order
+    for (let i = positions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [positions[i], positions[j]] = [positions[j], positions[i]];
+    }
+    
+    return positions;
 } 
 
 export function isCirclePolygonColliding(circle, polygon) {

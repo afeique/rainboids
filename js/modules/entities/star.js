@@ -46,7 +46,7 @@ export class Star {
             this.radius = (this.z * 1.2 + 0.4) * scale * 1.2; // Extra large
 
             const ang = random(0, 2 * Math.PI);
-            const spd = random(0.1, 0.3); // Even slower burst speed for easier collection
+            const spd = random(0.05, 0.15); // Very slow burst speed for easier collection
             this.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
             this.color = '#00ff7f';
             this.borderColor = '#ffd700';
@@ -82,8 +82,8 @@ export class Star {
             
             if (playerPos.active && dist < GAME_CONFIG.BURST_STAR_ATTRACT_DIST) {
                 // Direct homing - adjust velocity to point toward player
-                const homingSpeed = 1.0 + this.z * 0.2; // Much slower: 1.3-1.6 speed
-                const turnRate = 0.03; // Much slower turning (0-1)
+                const homingSpeed = 1.2 + this.z * 0.25; // Slightly faster: 1.5-1.95 speed
+                const turnRate = 0.04; // Slightly faster turning (0-1)
                 
                 // Calculate desired velocity direction
                 const desiredVelX = (dx / dist) * homingSpeed;

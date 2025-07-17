@@ -1,6 +1,6 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
-import { random, collision, triggerHapticFeedback, generatePoissonStarPosition, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
+import { random, collision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
@@ -144,12 +144,51 @@ export class GameEngine {
         this.lineDebrisPool.activeObjects = [];
         this.asteroidPool.activeObjects = [];
         this.starPool.activeObjects = [];
-        // Spawn initial stars
-        for (let i = 0; i < GAME_CONFIG.STAR_COUNT; i++) {
-            this.spawnStar();
-        }
+        
+        // Generate all stars at once using generative method
+        this.generateInitialStars();
+        
         this.startNextWave();
         this.uiManager.hideMessage();
+    }
+    
+    // Generate all initial stars using purely generative method
+    generateInitialStars() {
+        const spawnWidth = Math.max(this.width, this.height);
+        const spawnHeight = this.height;
+        
+        const starPositions = generateStarPositions(spawnWidth, spawnHeight, GAME_CONFIG.STAR_COUNT);
+        
+        starPositions.forEach(({ x, y, z, density }) => {
+            const star = this.starPool.get(x, y, false, z, density);
+        });
+    }
+    
+    // Spawn a single star using simple random generation (for replacement stars)
+    spawnStar() {
+        const spawnWidth = Math.max(this.width, this.height);
+        const spawnHeight = this.height;
+        
+        // Simple random position
+        const x = random(0, spawnWidth);
+        const y = random(0, spawnHeight);
+        
+        // Same depth distribution as the generative method
+        const depthRoll = Math.random();
+        let z;
+        if (depthRoll < 0.15) { z = random(0.1, 0.3); }      // 15% Very far
+        else if (depthRoll < 0.35) { z = random(0.3, 0.6); } // 20% Far
+        else if (depthRoll < 0.55) { z = random(0.6, 1.0); } // 20% Mid-far
+        else if (depthRoll < 0.70) { z = random(1.0, 1.5); } // 15% Mid
+        else if (depthRoll < 0.82) { z = random(1.5, 2.0); } // 12% Mid-close
+        else if (depthRoll < 0.91) { z = random(2.0, 2.5); } // 9% Close
+        else if (depthRoll < 0.97) { z = random(2.5, 3.0); } // 6% Very close
+        else { z = random(3.0, 4.0); }                      // 3% Foreground
+        
+        // Simple density value (not using complex noise function for individual stars)
+        const density = 0.5 + Math.random() * 0.3; // Random density between 0.5-0.8
+        
+        const star = this.starPool.get(x, y, false, z, density);
     }
     
     startNextWave() {
@@ -196,39 +235,6 @@ export class GameEngine {
         const ang = Math.atan2(ty - y, tx - x);
         const spd = Math.min(2.5, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.1);
         newAst.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
-    }
-    
-    spawnStar() {
-        // Use landscape dimensions for star spawning to ensure consistency
-        const spawnWidth = Math.max(this.width, this.height);
-        const spawnHeight = this.height;
-
-        // 1. Determine target depth (z) for this star
-        const depthRoll = Math.random();
-        let z;
-        if (depthRoll < 0.15) { z = random(0.1, 0.3); }      // 15% Very far
-        else if (depthRoll < 0.35) { z = random(0.3, 0.6); } // 20% Far
-        else if (depthRoll < 0.55) { z = random(0.6, 1.0); } // 20% Mid-far
-        else if (depthRoll < 0.70) { z = random(1.0, 1.5); } // 15% Mid
-        else if (depthRoll < 0.82) { z = random(1.5, 2.0); } // 12% Mid-close
-        else if (depthRoll < 0.91) { z = random(2.0, 2.5); } // 9% Close
-        else if (depthRoll < 0.97) { z = random(2.5, 3.0); } // 6% Very close
-        else { z = random(3.0, 4.0); }                      // 3% Foreground
-
-        // 2. Use Poisson disk sampling with variable density to find a position
-        const existingStars = this.starPool ? this.starPool.activeObjects : [];
-        const positionData = generatePoissonStarPosition(spawnWidth, spawnHeight, existingStars, z);
-        
-        // 3. If a valid position is found, create the star
-        if (positionData) {
-            const { x, y, density } = positionData;
-            const star = this.starPool.get(x, y, false, z, density);
-            
-            // Add the new star to the existing stars array for subsequent checks
-            if (star) {
-                existingStars.push(star);
-            }
-        }
     }
     
     createDebris(ast) {
@@ -503,7 +509,11 @@ export class GameEngine {
             this.asteroidPool.drawActive(this.ctx);
             this.bulletPool.drawActive(this.ctx);
             this.player.draw(this.ctx);
-            
+        }
+    }
+    
+    drawHUD() {
+        if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
             // Draw health bar and UI elements
             this.updateShieldsDisplay();
         }
@@ -539,6 +549,9 @@ export class GameEngine {
         
         this.draw();
         this.ctx.restore();
+        
+        // Draw HUD elements outside of screen shake transform
+        this.drawHUD();
         
         if (this.game.state === GAME_STATES.GAME_OVER) {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
