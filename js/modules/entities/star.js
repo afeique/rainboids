@@ -46,7 +46,7 @@ export class Star {
             this.radius = (this.z * 1.2 + 0.4) * scale * 1.2; // Extra large
 
             const ang = random(0, 2 * Math.PI);
-            const spd = random(2, 5);
+            const spd = random(0.5, 1.5); // Much slower initial burst speed
             this.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
             this.color = '#00ff7f';
             this.borderColor = '#ffd700';
@@ -82,8 +82,8 @@ export class Star {
             
             if (playerPos.active && dist < GAME_CONFIG.BURST_STAR_ATTRACT_DIST) {
                 // Direct homing - adjust velocity to point toward player
-                const homingSpeed = 4.0 + this.z; // Base speed 4-7 depending on z
-                const turnRate = 0.1; // How quickly it turns toward player (0-1)
+                const homingSpeed = 1.0 + this.z * 0.2; // Much slower: 1.3-1.6 speed
+                const turnRate = 0.03; // Much slower turning (0-1)
                 
                 // Calculate desired velocity direction
                 const desiredVelX = (dx / dist) * homingSpeed;
@@ -118,10 +118,13 @@ export class Star {
         
         // Enhanced parallax effect with exponential scaling
         // Distant stars move much slower, close stars move faster
-        const parallaxFactor = Math.pow(this.z, 2.2) * 0.15;
-        this.x -= shipVel.x * parallaxFactor;
-        this.y -= shipVel.y * parallaxFactor;
-        wrap(this, this.width, this.height);
+        // But burst stars don't have parallax - they're gameplay elements
+        if (!this.isBurst) {
+            const parallaxFactor = Math.pow(this.z, 2.2) * 0.15;
+            this.x -= shipVel.x * parallaxFactor;
+            this.y -= shipVel.y * parallaxFactor;
+            wrap(this, this.width, this.height);
+        }
     }
     
     draw(ctx) {
