@@ -244,7 +244,7 @@ export class GameEngine {
     }
     
     createStarBurst(x, y) {
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 10; i++) {
             this.starPool.get(x, y, true);
         }
     }
@@ -252,7 +252,7 @@ export class GameEngine {
     handleCollisions() {
         // Player-asteroid collisions
         this.asteroidPool.activeObjects.forEach(ast => {
-            if (this.player.active && !this.player.invincible && collision(this.player, ast)) {
+            if (this.player.active && collision(this.player, ast)) {
                 this.handlePlayerAsteroidCollision(this.player, ast);
             }
         });
@@ -967,48 +967,49 @@ export class GameEngine {
     }
 
     handlePlayerAsteroidCollision(player, asteroid) {
-        if (this.player.invincible) return;
+        // Apply damage only if not invincible
+        if (!this.player.invincible) {
+            // Calculate damage based on asteroid size and speed (10-20 damage range)
+            const baseSize = 40; // Minimum asteroid radius
+            const maxSize = 60; // Maximum asteroid radius
+            const sizeRatio = (asteroid.radius - baseSize) / (maxSize - baseSize); // 0-1 range
+            
+            // Calculate speed factor
+            const speed = Math.hypot(asteroid.vel.x, asteroid.vel.y);
+            const maxSpeed = 4; // Typical max asteroid speed
+            const speedRatio = Math.min(speed / maxSpeed, 1); // Cap at 1
+            
+            // Damage calculation: 10-20 range based on size and speed
+            const sizeDamage = 10 + (sizeRatio * 6); // 10-16 damage from size
+            const speedDamage = speedRatio * 4; // 0-4 additional damage from speed
+            const totalDamage = sizeDamage + speedDamage; // 10-20 damage range
+            
+            // Apply shield damage reduction and round to integer
+            const reducedDamage = totalDamage * (1 - this.player.shield / 100);
+            const finalDamage = Math.round(reducedDamage);
+            
+            // Apply the calculated damage
+            this.player.health -= finalDamage;
 
-        // Calculate damage based on asteroid size and speed (10-20 damage range)
-        const baseSize = 40; // Minimum asteroid radius
-        const maxSize = 60; // Maximum asteroid radius
-        const sizeRatio = (asteroid.radius - baseSize) / (maxSize - baseSize); // 0-1 range
-        
-        // Calculate speed factor
-        const speed = Math.hypot(asteroid.vel.x, asteroid.vel.y);
-        const maxSpeed = 4; // Typical max asteroid speed
-        const speedRatio = Math.min(speed / maxSpeed, 1); // Cap at 1
-        
-        // Damage calculation: 10-20 range based on size and speed
-        const sizeDamage = 10 + (sizeRatio * 6); // 10-16 damage from size
-        const speedDamage = speedRatio * 4; // 0-4 additional damage from speed
-        const totalDamage = sizeDamage + speedDamage; // 10-20 damage range
-        
-        // Apply shield damage reduction and round to integer
-        const reducedDamage = totalDamage * (1 - this.player.shield / 100);
-        const finalDamage = Math.round(reducedDamage);
-        
-        // Apply the calculated damage
-        this.player.health -= finalDamage;
-
-        // Handle death/shield tank usage
-        if (this.player.health <= 0) {
-            if (this.shieldTanks > 0) {
-                this.shieldTanks--;
-                this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-                this.player.health = this.player.maxHealth;
-                this.audioManager.playCoin(); // Tank used sound
-            } else {
-                this.gameOver();
+            // Handle death/shield tank usage
+            if (this.player.health <= 0) {
+                if (this.shieldTanks > 0) {
+                    this.shieldTanks--;
+                    this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
+                    this.player.health = this.player.maxHealth;
+                    this.audioManager.playCoin(); // Tank used sound
+                } else {
+                    this.gameOver();
+                }
             }
-        }
 
-        // Visual and audio feedback
-        this.player.makeInvincible(3000); // 3 seconds of invincibility
-        this.audioManager.playHit();
-        this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
-        this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
-        this.audioManager.playShield();
+            // Visual and audio feedback
+            this.player.makeInvincible(3000); // 3 seconds of invincibility
+            this.audioManager.playHit();
+            this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
+            this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
+            this.audioManager.playShield();
+        }
 
         // Asteroid bounces off player
         const astSpeed = Math.hypot(asteroid.vel.x, asteroid.vel.y);
@@ -1034,13 +1035,28 @@ export class GameEngine {
         asteroid.vel.x -= enhancedKnockback * 0.3 * this.player.mass * nx;
         asteroid.vel.y -= enhancedKnockback * 0.3 * this.player.mass * ny;
 
-        // Separate overlapping objects
-        const overlap = this.player.radius + asteroid.radius - Math.hypot(this.player.x - asteroid.x, this.player.y - asteroid.y);
-        const separationForce = overlap / 2;
-        this.player.x -= nx * separationForce;
-        this.player.y -= ny * separationForce;
-        asteroid.x += nx * separationForce;
-        asteroid.y += ny * separationForce;
+        // Separate overlapping objects with stronger force
+        const distance = Math.hypot(this.player.x - asteroid.x, this.player.y - asteroid.y);
+        const overlap = this.player.radius + asteroid.radius - distance;
+        
+        if (overlap > 0) {
+            // Calculate normalized direction from asteroid to player
+            const dx = (this.player.x - asteroid.x) / distance;
+            const dy = (this.player.y - asteroid.y) / distance;
+            
+            // Apply full overlap distance plus a buffer to ensure separation
+            const separationBuffer = 5; // Extra pixels to ensure they don't stick
+            const totalSeparation = overlap + separationBuffer;
+            
+            // Move player away from asteroid by the full separation amount
+            this.player.x += dx * totalSeparation;
+            this.player.y += dy * totalSeparation;
+            
+            // Also apply velocity to push player away
+            const pushForce = 2.0; // Additional velocity push
+            this.player.vel.x += dx * pushForce;
+            this.player.vel.y += dy * pushForce;
+        }
 
         // Create enhanced collision effects
         // White pulse at impact point

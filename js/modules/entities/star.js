@@ -50,7 +50,7 @@ export class Star {
             this.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
             this.color = '#00ff7f';
             this.borderColor = '#ffd700';
-            this.life = 900;
+            this.life = 1800;
         } else {
             this.color = NORMAL_STAR_COLORS[Math.floor(Math.random() * NORMAL_STAR_COLORS.length)];
             this.borderColor = NORMAL_STAR_COLORS[Math.floor(Math.random() * NORMAL_STAR_COLORS.length)];
@@ -75,16 +75,23 @@ export class Star {
             
             this.opacity = Math.min(1, this.life / 120);
             
-            // Attract to player
+            // Home directly toward player
             const dx = playerPos.x - this.x;
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
             
             if (playerPos.active && dist < GAME_CONFIG.BURST_STAR_ATTRACT_DIST) {
-                // Strong linear attraction for burst stars
-                const strength = GAME_CONFIG.BURST_STAR_ATTR * this.z;
-                this.vel.x += (dx / dist) * strength;
-                this.vel.y += (dy / dist) * strength;
+                // Direct homing - adjust velocity to point toward player
+                const homingSpeed = 4.0 + this.z; // Base speed 4-7 depending on z
+                const turnRate = 0.1; // How quickly it turns toward player (0-1)
+                
+                // Calculate desired velocity direction
+                const desiredVelX = (dx / dist) * homingSpeed;
+                const desiredVelY = (dy / dist) * homingSpeed;
+                
+                // Smoothly turn toward desired direction
+                this.vel.x = this.vel.x * (1 - turnRate) + desiredVelX * turnRate;
+                this.vel.y = this.vel.y * (1 - turnRate) + desiredVelY * turnRate;
             }
         } else {
             // Normal star behavior
