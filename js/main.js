@@ -196,6 +196,9 @@ class RainboidsGame {
     
     start() {
         this.gameEngine.start();
+        
+        // Make gameEngine accessible for debugging
+        window.gameEngine = this.gameEngine;
     }
 }
 

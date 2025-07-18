@@ -18,6 +18,9 @@ export const GAME_CONFIG = {
     BURST_STAR_COLLECTION_BONUS: 15, // Extra pixels added to burst star collection radius
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,
+    // Performance settings
+    STARFIELD_OPTIMIZATION: true, // Enable sprite caching and batched rendering
+    MAX_SPRITE_CACHE_SIZE: 100, // Maximum number of cached star sprites
 };
 
 export const NOISE_CONFIG = {

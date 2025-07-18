@@ -54,11 +54,19 @@ export class BackgroundStar {
     draw(ctx) {
         if (!this.active) return;
         
+        // Store rendering properties for batch rendering
+        this.depthOpacity = Math.min(1, 0.4 + Math.pow(this.z / 4, 1.0));
+        this.finalOpacity = this.opacity * this.depthOpacity;
+        
+        // Background stars will be batch rendered - this method just prepares properties
+    }
+    
+    // Direct rendering fallback (used by starfield renderer when needed)
+    drawDirect(ctx) {
         ctx.save();
         
         // Adjust opacity based on depth - brighter overall
-        const depthOpacity = Math.min(1, 0.4 + Math.pow(this.z / 4, 1.0));
-        ctx.globalAlpha = this.opacity * depthOpacity;
+        ctx.globalAlpha = this.finalOpacity;
         
         // Simple point star
         ctx.fillStyle = this.color;

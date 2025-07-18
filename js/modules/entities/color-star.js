@@ -163,6 +163,19 @@ export class ColorStar {
     draw(ctx) {
         if (!this.active) return;
         
+        // Store rendering properties for batch rendering
+        this.depthOpacity = Math.min(1, 0.5 + Math.pow(this.z / 4, 1.2));
+        this.finalOpacity = this.opacity * this.depthOpacity;
+        
+        // For performance, use direct rendering for complex burst stars, sprite cache for others
+        if (this.isBurst || this.shape === 'sparkle' || this.shape === 'burst') {
+            // Direct rendering for special effects
+            this.drawDirect(ctx);
+        }
+        // Simple stars will be batch rendered - this method just prepares properties
+    }
+    
+    drawDirect(ctx) {
         ctx.save();
         ctx.translate(this.x, this.y);
         
@@ -174,8 +187,7 @@ export class ColorStar {
         const dynamicRadius = this.radius * this.sizeVariation * pulseMultiplier;
         
         // Adjust opacity based on depth - brighter overall
-        const depthOpacity = Math.min(1, 0.5 + Math.pow(this.z / 4, 1.2));
-        ctx.globalAlpha = this.opacity * depthOpacity;
+        ctx.globalAlpha = this.finalOpacity;
         
         // Remove glow effects - use direct rendering for better visibility
         
@@ -337,7 +349,7 @@ export class ColorStar {
             
             // Pulsing glow effect
             const pulseIntensity = 0.3 + 0.4 * Math.sin(Date.now() * 0.008 + this.x * 0.01);
-            ctx.globalAlpha = this.opacity * pulseIntensity;
+            ctx.globalAlpha = this.finalOpacity * pulseIntensity;
             
             // Collection area indicator - subtle outer glow
             const collectionRadius = dynamicRadius + 15; // Match GAME_CONFIG.BURST_STAR_COLLECTION_BONUS
@@ -345,7 +357,7 @@ export class ColorStar {
             ctx.shadowBlur = 15;
             ctx.strokeStyle = this.color;
             ctx.lineWidth = 2;
-            ctx.globalAlpha = this.opacity * pulseIntensity * 0.3;
+            ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.3;
             
             ctx.beginPath();
             ctx.arc(0, 0, collectionRadius, 0, 2 * Math.PI);
@@ -353,13 +365,90 @@ export class ColorStar {
             
             // Inner bright core for better visibility
             ctx.shadowBlur = 8;
-            ctx.globalAlpha = this.opacity * 0.9;
+            ctx.globalAlpha = this.finalOpacity * 0.9;
             ctx.fillStyle = this.color;
             ctx.beginPath();
             ctx.arc(0, 0, dynamicRadius * 0.6, 0, 2 * Math.PI);
             ctx.fill();
             
             ctx.restore();
+        }
+        
+        ctx.restore();
+    }
+    
+    // Direct rendering fallback for simple shapes (used when batching is disabled or as fallback)
+    drawDirectSimple(ctx) {
+        if (!this.active) return;
+        
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Apply rotation
+        ctx.rotate(this.rotation);
+        
+        // Calculate dynamic radius with size variation and pulse
+        const pulseMultiplier = 1 + Math.sin(this.pulseOffset) * 0.1;
+        const dynamicRadius = this.radius * this.sizeVariation * pulseMultiplier;
+        
+        // Use stored opacity
+        ctx.globalAlpha = this.finalOpacity;
+        
+        if (this.shape === 'point') {
+            const borderSize = 1;
+            ctx.fillStyle = this.borderColor;
+            ctx.fillRect(
+                -dynamicRadius / 2 - borderSize,
+                -dynamicRadius / 2 - borderSize,
+                dynamicRadius + borderSize * 2,
+                dynamicRadius + borderSize * 2
+            );
+            ctx.fillStyle = this.color;
+            ctx.fillRect(-dynamicRadius / 2, -dynamicRadius / 2, dynamicRadius, dynamicRadius);
+        } else if (this.shape === 'circle') {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, dynamicRadius, 0, 2 * Math.PI);
+            ctx.fill();
+        } else {
+            // Simple stroke rendering for other shapes
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 1.5 + this.z / 3;
+            ctx.beginPath();
+            
+            switch (this.shape) {
+                case 'diamond':
+                    ctx.moveTo(0, -dynamicRadius);
+                    ctx.lineTo(dynamicRadius * 0.7, 0);
+                    ctx.lineTo(0, dynamicRadius);
+                    ctx.lineTo(-dynamicRadius * 0.7, 0);
+                    ctx.closePath();
+                    break;
+                case 'triangle':
+                    ctx.moveTo(0, -dynamicRadius);
+                    ctx.lineTo(dynamicRadius * 0.8, dynamicRadius * 0.5);
+                    ctx.lineTo(-dynamicRadius * 0.8, dynamicRadius * 0.5);
+                    ctx.closePath();
+                    break;
+                case 'plus':
+                    ctx.moveTo(0, -dynamicRadius);
+                    ctx.lineTo(0, dynamicRadius);
+                    ctx.moveTo(-dynamicRadius, 0);
+                    ctx.lineTo(dynamicRadius, 0);
+                    break;
+                case 'x':
+                    ctx.moveTo(-dynamicRadius, -dynamicRadius);
+                    ctx.lineTo(dynamicRadius, dynamicRadius);
+                    ctx.moveTo(dynamicRadius, -dynamicRadius);
+                    ctx.lineTo(-dynamicRadius, dynamicRadius);
+                    break;
+                default:
+                    // Default to circle
+                    ctx.arc(0, 0, dynamicRadius, 0, 2 * Math.PI);
+                    break;
+            }
+            
+            ctx.stroke();
         }
         
         ctx.restore();

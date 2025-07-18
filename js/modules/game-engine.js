@@ -1,6 +1,7 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
 import { random, collision, burstStarCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
+import { starfieldRenderer } from './performance/starfield-renderer.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
@@ -40,6 +41,10 @@ export class GameEngine {
 
         this.shieldIcon = new Image();
         this.shieldIcon.src = 'assets/shield-icon.svg';
+        
+        // Initialize optimized starfield renderer
+        starfieldRenderer.initialize();
+        console.log('🌟 Starfield optimization: Temporarily using fallback rendering for debugging');
     }
     
     // Helper method to initialize/reset game state
@@ -519,8 +524,24 @@ export class GameEngine {
         this.ctx.fillRect(0, 0, this.width, this.height);
         
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
-            this.backgroundStarPool.drawActive(this.ctx); // Draw background stars first
-            this.colorStarPool.drawActive(this.ctx);
+            // Temporarily use fallback rendering to debug
+            this.backgroundStarPool.activeObjects.forEach(star => {
+                if (star.active) {
+                    star.draw(this.ctx);
+                    star.drawDirect(this.ctx);
+                }
+            });
+            
+            this.colorStarPool.activeObjects.forEach(star => {
+                if (star.active) {
+                    star.draw(this.ctx);
+                    // For simple stars, use direct rendering temporarily
+                    if (!star.isBurst && star.shape !== 'sparkle' && star.shape !== 'burst') {
+                        star.drawDirectSimple(this.ctx);
+                    }
+                }
+            });
+            
             this.lineDebrisPool.drawActive(this.ctx);
             this.particlePool.drawActive(this.ctx);
             this.asteroidPool.drawActive(this.ctx);
@@ -539,6 +560,33 @@ export class GameEngine {
         }
     }
     
+    renderOptimizedStarfield() {
+        // Batch all background stars for efficient rendering
+        for (const star of this.backgroundStarPool.activeObjects) {
+            if (star.active) {
+                // Update rendering properties
+                star.draw(this.ctx);
+                starfieldRenderer.addStarToBatch(star, 'background');
+            }
+        }
+        
+        // Batch simple color stars, render complex ones directly
+        for (const star of this.colorStarPool.activeObjects) {
+            if (star.active) {
+                // Update rendering properties and potentially render complex stars directly
+                star.draw(this.ctx);
+                
+                // Only add simple shapes to batch (complex ones render themselves)
+                if (!star.isBurst && star.shape !== 'sparkle' && star.shape !== 'burst') {
+                    starfieldRenderer.addStarToBatch(star, 'color');
+                }
+            }
+        }
+        
+        // Render all batched stars efficiently
+        starfieldRenderer.renderBatchedStars(this.ctx);
+    }
+
     drawJitterCircle() {
         const input = this.inputHandler.getInput();
         const intensity = this.player.shootingIntensity || 0;
@@ -694,6 +742,35 @@ export class GameEngine {
         this.uiManager.updateHighScore(this.game.highScore);
         this.inputHandler.setupTouchControls();
         this.gameLoop();
+    }
+    
+    // Get performance statistics for starfield rendering
+    getStarfieldStats() {
+        const stats = {
+            totalStars: this.backgroundStarPool.activeObjects.length + this.colorStarPool.activeObjects.length,
+            backgroundStars: this.backgroundStarPool.activeObjects.length,
+            colorStars: this.colorStarPool.activeObjects.length,
+            cacheStats: starfieldRenderer.getCacheStats()
+        };
+        
+        return stats;
+    }
+    
+    // Debug method - call from console: gameEngine.debugStarfieldPerformance()
+    debugStarfieldPerformance() {
+        const stats = this.getStarfieldStats();
+        console.log('🌟 Starfield Performance Stats:');
+        console.log(`  Total Stars: ${stats.totalStars}`);
+        console.log(`  Background Stars: ${stats.backgroundStars}`);
+        console.log(`  Color Stars: ${stats.colorStars}`);
+        console.log(`  Sprite Cache: ${stats.cacheStats.size}/${stats.cacheStats.maxSize} sprites`);
+        console.log(`  Memory Usage: ${Math.round(stats.cacheStats.memoryUsage / 1024)}KB`);
+        console.log(`  Frames Rendered: ${stats.cacheStats.frameCount}`);
+        console.log(`  Avg Batched Stars/Frame: ${stats.cacheStats.avgBatchedPerFrame}`);
+        console.log(`  Total Optimized Stars: ${stats.cacheStats.totalOptimizedStars}`);
+        
+        const estimatedSavings = Math.round((stats.cacheStats.avgBatchedPerFrame / stats.totalStars) * 100);
+        console.log(`💡 Performance: ~${estimatedSavings}% of stars use optimized rendering`);
     }
 
     checkCursorTarget(mouseX, mouseY) {
