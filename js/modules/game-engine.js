@@ -220,6 +220,9 @@ export class GameEngine {
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         // Reset player state at wave start
         this.playerState = PLAYER_STATES.NORMAL;
+        
+        // Restore player health to full between waves
+        this.player.health = this.player.maxHealth;
         const numAsteroids = GAME_CONFIG.INITIAL_AST_COUNT + (this.game.currentWave - 1) * 2;
         for (let i = 0; i < numAsteroids; i++) {
             this.spawnAsteroidOffscreen();
@@ -338,12 +341,13 @@ export class GameEngine {
                             this.createDebris(ast);
                             this.createStarBurst(ast.x, ast.y);
                             this.asteroidPool.release(ast);
-                            // Small screen shake for small asteroid destruction
-                            this.triggerScreenShake(8, ast.baseRadius * 0.15, ast.baseRadius);
+                            // Enhanced screen shake for small asteroid destruction
+                            this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
                         } else {
                             // Make the explosion really dramatic
                                 this.audioManager.playExplosion();
-                            this.triggerScreenShake(20, ast.baseRadius * 0.25, ast.baseRadius);
+                            // Massive screen shake for large asteroid destruction
+                            this.triggerScreenShake(25, ast.baseRadius * 0.8, ast.baseRadius);
 
                             // Add a bunch of particle effects
                             this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.5);
@@ -383,7 +387,8 @@ export class GameEngine {
                             this.asteroidPool.release(ast);
                         }
                     }
-                    this.bulletPool.release(bullet);
+                    // Start death animation instead of instant removal
+                    bullet.startDying(bullet.x, bullet.y);
                     break;
                 }
             }
@@ -650,19 +655,22 @@ export class GameEngine {
     triggerScreenShake(duration, magnitude, asteroidSize = 0) {
         // Enhanced screen shake based on asteroid size
         const baseMagnitude = magnitude;
-        const sizeMultiplier = Math.max(1, asteroidSize / 30); // Larger asteroids = more shake
+        const sizeMultiplier = Math.max(1.5, asteroidSize / 20); // Larger asteroids = much more shake
         const enhancedMagnitude = baseMagnitude * sizeMultiplier;
         
-        // Add some randomness to make it feel more natural
-        const randomDuration = duration + Math.floor(Math.random() * 5);
-        const randomMagnitude = enhancedMagnitude + Math.random() * 3;
+        // Add more randomness and intensity for asteroid destructions
+        const randomDuration = duration + Math.floor(Math.random() * 8);
+        const randomMagnitude = enhancedMagnitude + Math.random() * 5;
         
-        this.game.screenShakeDuration = randomDuration;
-        this.game.screenShakeMagnitude = randomMagnitude;
-        
-        // Store the original values for smooth decay
-        this.game.originalShakeMagnitude = randomMagnitude;
-        this.game.shakeDecayRate = randomMagnitude / randomDuration;
+        // Only apply new shake if it's stronger than current shake
+        if (randomMagnitude > this.game.screenShakeMagnitude) {
+            this.game.screenShakeDuration = randomDuration;
+            this.game.screenShakeMagnitude = randomMagnitude;
+            
+            // Store the original values for smooth decay
+            this.game.originalShakeMagnitude = randomMagnitude;
+            this.game.shakeDecayRate = randomMagnitude / randomDuration;
+        }
     }
     
     loadHighScore() {
@@ -825,6 +833,25 @@ export class GameEngine {
         const healthPercentage = this.player.health / this.player.maxHealth;
         const filledWidth = barWidth * healthPercentage;
         
+        // Add warning glow effect for low health
+        if (healthPercentage <= 0.3) {
+            ctx.save();
+            // Pulsing red glow effect
+            const pulseIntensity = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
+            ctx.shadowColor = `rgba(255, 50, 50, ${pulseIntensity * 0.8})`;
+            ctx.shadowBlur = 20 + pulseIntensity * 10;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            
+            // Draw warning glow around the entire health bar area
+            ctx.globalAlpha = 0.3;
+            ctx.strokeStyle = `rgba(255, 100, 100, ${pulseIntensity})`;
+            ctx.lineWidth = 3;
+            createHealthBarPath(barWidth);
+            ctx.stroke();
+            ctx.restore();
+        }
+        
         // Draw filled health bar with gradient
         if (filledWidth > 0) {
             ctx.globalAlpha = 0.7;
@@ -901,9 +928,10 @@ export class GameEngine {
         
         // Draw heart icon to the left of health text
         const hpTextWidth = ctx.measureText(hpText).width;
-        const heartIconX = textX - hpTextWidth/2 - 10; // Position to the left of health text
+        
+        const heartIconSize = 18;
+        const heartIconX = textX - hpTextWidth/2 - heartIconSize; // Position to the left of health text
         const heartIconY = textY + 5;
-        const heartIconSize = 12;
         
         drawCachedHeartIcon(ctx, heartIconX, heartIconY, heartIconSize, '#800000', '#DC143C');
         

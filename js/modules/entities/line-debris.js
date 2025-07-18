@@ -22,7 +22,7 @@ export class LineDebris {
         const midX = (p1.x + p2.x) / 2;
         const midY = (p1.y + p2.y) / 2;
         const ang = Math.atan2(midY, midX);
-        const spd = random(1, 3);
+        const spd = random(2, 5);
         
         this.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
         this.rot = 0;

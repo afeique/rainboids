@@ -34,9 +34,9 @@ export class Asteroid {
         
         this.rot3D = { x: 0, y: 0, z: 0 };
         this.rotVel3D = {
-            x: random(-0.02, 0.02),
-            y: random(-0.02, 0.02),
-            z: random(-0.02, 0.02)
+            x: random(-0.04, 0.04),
+            y: random(-0.04, 0.04),
+            z: random(-0.04, 0.04)
         };
         
         this.active = true;

@@ -15,7 +15,7 @@ export class Particle {
         switch (type) {
             case 'explosion':
                 this.radius = random(1, 3);
-                this.vel = { x: random(-3, 3), y: random(-3, 3) };
+                this.vel = { x: random(-5, 5), y: random(-5, 5) };
                 this.life = 1;
                 this.color = `hsl(${random(0, 360)}, 100%, 70%)`;
                 break;
@@ -32,7 +32,7 @@ export class Particle {
                 const cols = ['#ff4500', '#ff8c00', '#ffa500'];
                 this.color = cols[Math.floor(random(0, cols.length))];
                 const a = angle + random(-0.26, 0.26);
-                const s = random(1.5, 3);
+                const s = random(2.5, 4.5);
                 this.radius = random(1, 2.5);
                 this.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
                 this.life = 1;

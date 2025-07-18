@@ -39,10 +39,62 @@ export class Bullet {
         this.mass = 1;
         this.trail = []; // Reset trail for reused bullets
         this.shootingIntensity = shootingIntensity; // Store for trail effects
+        
+        // Death animation properties
+        this.dying = false;
+        this.deathTimer = 0;
+        this.deathDuration = 20; // frames for death animation
+        this.impactPoint = null;
+    }
+    
+    // Trigger death animation where trail collapses to impact point
+    startDying(impactX, impactY) {
+        this.dying = true;
+        this.deathTimer = 0;
+        this.impactPoint = { x: impactX, y: impactY };
+        // Stop moving when dying
+        this.vel.x = 0;
+        this.vel.y = 0;
     }
     
     update(particlePool, asteroidPool) {
         if (!this.active) return;
+        
+        if (this.dying) {
+            // Death animation: trail collapses to impact point
+            this.deathTimer++;
+            
+            if (this.deathTimer >= this.deathDuration) {
+                this.active = false;
+                return;
+            }
+            
+            // Animate trail points moving toward impact point
+            const collapseProgress = this.deathTimer / this.deathDuration;
+            const moveSpeed = 0.15; // How fast trail points move toward impact
+            
+            for (let i = 0; i < this.trail.length; i++) {
+                const point = this.trail[i];
+                if (this.impactPoint) {
+                    // Move each trail point toward the impact point
+                    const dx = this.impactPoint.x - point.x;
+                    const dy = this.impactPoint.y - point.y;
+                    point.x += dx * moveSpeed;
+                    point.y += dy * moveSpeed;
+                }
+            }
+            
+            // Remove trail points that are close to impact point
+            this.trail = this.trail.filter(point => {
+                if (this.impactPoint) {
+                    const dist = Math.hypot(point.x - this.impactPoint.x, point.y - this.impactPoint.y);
+                    return dist > 2; // Remove points within 2 pixels of impact
+                }
+                return true;
+            });
+            
+            return;
+        }
         
         this.life++;
         
@@ -69,6 +121,12 @@ export class Bullet {
     draw(ctx) {
         if (!this.active) return;
         
+        // Calculate fade multiplier for dying animation
+        let deathFade = 1;
+        if (this.dying) {
+            deathFade = 1 - (this.deathTimer / this.deathDuration);
+        }
+        
         // Draw much longer and more dramatic trail
         if (this.trail && this.trail.length > 1) {
             ctx.save();
@@ -79,7 +137,8 @@ export class Bullet {
                 const alpha = i / this.trail.length; // Fade from 0 to 1
                 const width = alpha * 4 + (this.shootingIntensity * 0.5); // Thicker trails with intensity
                 
-                ctx.globalAlpha = alpha * 0.9;
+                // Apply death fade to trail alpha
+                ctx.globalAlpha = alpha * 0.9 * deathFade;
                 ctx.lineWidth = width;
                 
                 ctx.beginPath();
@@ -90,14 +149,15 @@ export class Bullet {
             ctx.restore();
         }
         
-        // Draw main bullet - elongated bullet shape
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
-        
-        ctx.fillStyle = '#FF4500'; // Bright fiery orange
-        ctx.shadowColor = '#FF6B00';
-        ctx.shadowBlur = 8 + (this.shootingIntensity * 2); // Enhance glow with intensity
+        // Draw main bullet - elongated bullet shape (only when not dying)
+        if (!this.dying) {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+            
+            ctx.fillStyle = '#FF4500'; // Bright fiery orange
+            ctx.shadowColor = '#FF6B00';
+            ctx.shadowBlur = 8 + (this.shootingIntensity * 2); // Enhance glow with intensity
         
         // Draw elongated bullet body (cylinder)
         const length = this.radius * 3; // Make it 3x longer than radius
@@ -137,5 +197,6 @@ export class Bullet {
         ctx.fill();
         
         ctx.restore();
+        }
     }
 }
