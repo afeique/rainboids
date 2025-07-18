@@ -96,10 +96,7 @@ export class Player {
         if (timeSinceLastShot > 500) {
             this.continuousShootingStartTime = 0;
             this.shootingIntensity = 0;
-            console.log(`Reset continuous shooting timer due to inactivity (${timeSinceLastShot}ms)`);
         }
-        
-        console.log(`Before update: timeSinceLastShot=${timeSinceLastShot}, intensity=${this.shootingIntensity.toFixed(3)}, startTime=${this.continuousShootingStartTime}`);
 
         // Aiming
         const dx = input.aimX - this.x;
@@ -172,9 +169,6 @@ export class Player {
             const continuousShootingDuration = currentTime - this.continuousShootingStartTime;
             this.shootingIntensity = Math.min(1, continuousShootingDuration / this.maxIntensityTime);
             this.lastShotTime = currentTime;
-            
-            // Debug logging
-            console.log(`Shooting: duration=${continuousShootingDuration}ms, intensity=${this.shootingIntensity.toFixed(3)}`);
             
             // Pass shooting intensity (0-1) to bullet
             bulletPool.get(this.x, this.y, this.angle, this.shootingIntensity);

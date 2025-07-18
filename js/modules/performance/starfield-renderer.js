@@ -44,6 +44,12 @@ export class StarfieldRenderer {
     }
     
     createStarSprite(radius, color, shape, sizeVariation = 1.0, isBurst = false) {
+        // Validate inputs
+        if (!radius || radius <= 0 || !color || !shape) {
+            console.warn('Invalid sprite parameters:', { radius, color, shape });
+            return null;
+        }
+        
         const cacheKey = `${radius}-${color}-${shape}-${sizeVariation.toFixed(2)}-${isBurst}`;
         
         if (this.spriteCache.has(cacheKey)) {
@@ -52,10 +58,15 @@ export class StarfieldRenderer {
         
         // Create off-screen canvas for sprite
         const canvas = document.createElement('canvas');
-        const size = Math.ceil(radius * sizeVariation * 2.5); // Extra padding for effects
+        const size = Math.ceil(radius * sizeVariation * 3); // Extra padding for effects
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+            console.warn('Failed to create 2D context for sprite');
+            return null;
+        }
         
         const centerX = size / 2;
         const centerY = size / 2;
@@ -262,16 +273,13 @@ export class StarfieldRenderer {
         for (const { star, type } of this.batchedStars) {
             if (!star.active) continue;
             
-            // Calculate final properties
+            // Use pre-calculated properties from star.draw()
+            const finalOpacity = star.finalOpacity || star.opacity || 1;
+            
+            // Calculate dynamic radius for rendering
             const pulseMultiplier = star.pulseOffset ? 
                 1 + Math.sin(star.pulseOffset) * 0.1 : 1;
             const dynamicRadius = star.radius * (star.sizeVariation || 1) * pulseMultiplier;
-            
-            let depthOpacity = 1;
-            if (star.z) {
-                depthOpacity = Math.min(1, 0.5 + Math.pow(star.z / 4, 1.2));
-            }
-            const finalOpacity = star.opacity * depthOpacity;
             
             // Only save/restore when opacity changes significantly
             if (Math.abs(currentOpacity - finalOpacity) > 0.05) {
@@ -282,17 +290,30 @@ export class StarfieldRenderer {
                 savedCount++;
             }
             
-            // Get or create sprite
-            const sprite = this.getStarSprite(star, dynamicRadius, type);
+            // Get or create sprite (use base radius for caching, apply scaling during render)
+            const baseRadius = Math.round(star.radius);
+            const sprite = this.getStarSprite(star, baseRadius, type);
             
             if (sprite) {
-                // Fast sprite blitting
-                const spriteSize = sprite.width;
-                ctx.drawImage(
-                    sprite,
-                    star.x - spriteSize / 2,
-                    star.y - spriteSize / 2
-                );
+                // Fast sprite blitting with scaling if needed
+                const scale = dynamicRadius / baseRadius;
+                const spriteSize = sprite.width * scale;
+                
+                if (scale !== 1) {
+                    // Apply scaling transform
+                    ctx.save();
+                    ctx.translate(star.x, star.y);
+                    ctx.scale(scale, scale);
+                    ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
+                    ctx.restore();
+                } else {
+                    // Direct blitting (no scaling needed)
+                    ctx.drawImage(
+                        sprite,
+                        star.x - sprite.width / 2,
+                        star.y - sprite.height / 2
+                    );
+                }
             } else {
                 // Fallback to direct rendering for complex/unique stars
                 this.renderStarDirect(ctx, star, dynamicRadius, type);
@@ -337,6 +358,9 @@ export class StarfieldRenderer {
             ctx.rotate(star.rotation);
         }
         
+        // Use the star's pre-calculated opacity
+        ctx.globalAlpha = star.finalOpacity || star.opacity || 1;
+        
         if (type === 'background' || star.shape === 'circle') {
             ctx.fillStyle = star.color;
             ctx.beginPath();
@@ -345,7 +369,7 @@ export class StarfieldRenderer {
         } else {
             // Complex shape rendering
             ctx.strokeStyle = star.color;
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = 1.5 + (star.z || 1) / 3;
             ctx.beginPath();
             this.drawStarShape(ctx, star.shape, radius);
             ctx.stroke();

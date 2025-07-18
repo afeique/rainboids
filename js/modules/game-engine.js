@@ -2,6 +2,8 @@
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
 import { random, collision, burstStarCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
 import { starfieldRenderer } from './performance/starfield-renderer.js';
+import { lightweightStarfieldOptimizer } from './performance/lightweight-starfield.js';
+import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
@@ -44,7 +46,7 @@ export class GameEngine {
         
         // Initialize optimized starfield renderer
         starfieldRenderer.initialize();
-        console.log('🌟 Starfield optimization: Temporarily using fallback rendering for debugging');
+        this.starfieldRenderMode = 'depth'; // Options: 'depth', 'lightweight', 'fallback', 'heavy'
     }
     
     // Helper method to initialize/reset game state
@@ -524,24 +526,64 @@ export class GameEngine {
         this.ctx.fillRect(0, 0, this.width, this.height);
         
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
-            // Temporarily use fallback rendering to debug
-            this.backgroundStarPool.activeObjects.forEach(star => {
-                if (star.active) {
-                    star.draw(this.ctx);
-                    star.drawDirect(this.ctx);
-                }
-            });
+            // Starfield rendering with multiple optimization approaches
+            switch (this.starfieldRenderMode) {
+                case 'sprite':
+                    // Sprite caching - no batching, just render directly
+                    this.backgroundStarPool.activeObjects.forEach(star => {
+                        if (star.active) {
+                            star.draw(this.ctx);
+                        }
+                    });
+                    this.colorStarPool.activeObjects.forEach(star => {
+                        if (star.active) {
+                            star.draw(this.ctx);
+                        }
+                    });
+                    break;
+                    
+                case 'lightweight':
+                    // Lightweight optimization - reduces context switches without heavy caching
+                    lightweightStarfieldOptimizer.groupStarsForRendering(
+                        this.backgroundStarPool.activeObjects, 
+                        this.colorStarPool.activeObjects
+                    );
+                    lightweightStarfieldOptimizer.renderGroupedStars(this.ctx);
+                    
+                    // Render complex color stars that weren't optimized
+                    this.colorStarPool.activeObjects.forEach(star => {
+                        if (star.active && (star.isBurst || star.shape === 'sparkle' || star.shape === 'burst')) {
+                            star.draw(this.ctx); // Complex stars use their full draw method
+                        }
+                    });
+                    break;
+                    
+                case 'heavy':
+                    // Heavy optimization - sprite caching and batching (can cause throttling)
+                    this.renderOptimizedStarfield();
+                    break;
+                    
+                case 'fallback':
+                default:
+                    // Original direct rendering approach
+                    this.backgroundStarPool.activeObjects.forEach(star => {
+                        if (star.active) {
+                            star.draw(this.ctx);
+                            star.drawDirect(this.ctx);
+                        }
+                    });
+                    this.colorStarPool.activeObjects.forEach(star => {
+                        if (star.active) {
+                            star.draw(this.ctx);
+                            if (!star.isBurst && star.shape !== 'sparkle' && star.shape !== 'burst') {
+                                star.drawDirectSimple(this.ctx);
+                            }
+                        }
+                    });
+                    break;
+            }
             
-            this.colorStarPool.activeObjects.forEach(star => {
-                if (star.active) {
-                    star.draw(this.ctx);
-                    // For simple stars, use direct rendering temporarily
-                    if (!star.isBurst && star.shape !== 'sparkle' && star.shape !== 'burst') {
-                        star.drawDirectSimple(this.ctx);
-                    }
-                }
-            });
-            
+            // Regular rendering for other game objects
             this.lineDebrisPool.drawActive(this.ctx);
             this.particlePool.drawActive(this.ctx);
             this.asteroidPool.drawActive(this.ctx);
@@ -560,30 +602,29 @@ export class GameEngine {
         }
     }
     
+    // Optimized starfield rendering with batching and sprite caching
     renderOptimizedStarfield() {
-        // Batch all background stars for efficient rendering
+        // Background stars - all get batched (simple circles)
         for (const star of this.backgroundStarPool.activeObjects) {
             if (star.active) {
-                // Update rendering properties
-                star.draw(this.ctx);
+                star.draw(this.ctx); // Prepares rendering properties
                 starfieldRenderer.addStarToBatch(star, 'background');
             }
         }
         
-        // Batch simple color stars, render complex ones directly
+        // Color stars - simple shapes get batched, complex ones render directly
         for (const star of this.colorStarPool.activeObjects) {
             if (star.active) {
-                // Update rendering properties and potentially render complex stars directly
-                star.draw(this.ctx);
+                star.draw(this.ctx); // Handles complex stars directly + prepares properties
                 
-                // Only add simple shapes to batch (complex ones render themselves)
+                // Only add simple shapes to batch (complex ones already rendered by star.draw())
                 if (!star.isBurst && star.shape !== 'sparkle' && star.shape !== 'burst') {
                     starfieldRenderer.addStarToBatch(star, 'color');
                 }
             }
         }
         
-        // Render all batched stars efficiently
+        // Render all batched stars in one efficient pass
         starfieldRenderer.renderBatchedStars(this.ctx);
     }
 
@@ -759,18 +800,84 @@ export class GameEngine {
     // Debug method - call from console: gameEngine.debugStarfieldPerformance()
     debugStarfieldPerformance() {
         const stats = this.getStarfieldStats();
-        console.log('🌟 Starfield Performance Stats:');
-        console.log(`  Total Stars: ${stats.totalStars}`);
-        console.log(`  Background Stars: ${stats.backgroundStars}`);
-        console.log(`  Color Stars: ${stats.colorStars}`);
-        console.log(`  Sprite Cache: ${stats.cacheStats.size}/${stats.cacheStats.maxSize} sprites`);
-        console.log(`  Memory Usage: ${Math.round(stats.cacheStats.memoryUsage / 1024)}KB`);
-        console.log(`  Frames Rendered: ${stats.cacheStats.frameCount}`);
-        console.log(`  Avg Batched Stars/Frame: ${stats.cacheStats.avgBatchedPerFrame}`);
-        console.log(`  Total Optimized Stars: ${stats.cacheStats.totalOptimizedStars}`);
         
-        const estimatedSavings = Math.round((stats.cacheStats.avgBatchedPerFrame / stats.totalStars) * 100);
-        console.log(`💡 Performance: ~${estimatedSavings}% of stars use optimized rendering`);
+        if (this.starfieldRenderMode === 'depth') {
+            const batchStats = depthBatchRenderer.getStats();
+            return {
+                mode: this.starfieldRenderMode,
+                totalStars: stats.totalStars,
+                depthBuckets: batchStats.depthBuckets,
+                batchedStars: batchStats.totalStars,
+                frameCount: batchStats.frameCount
+            };
+        } else if (this.starfieldRenderMode === 'lightweight') {
+            const lightStats = lightweightStarfieldOptimizer.getStats();
+            return {
+                mode: this.starfieldRenderMode,
+                totalStars: stats.totalStars,
+                optimizedStars: lightStats.totalOptimized,
+                frameCount: lightStats.frameCount
+            };
+        } else if (this.starfieldRenderMode === 'heavy') {
+            return {
+                mode: this.starfieldRenderMode,
+                totalStars: stats.totalStars,
+                cacheStats: stats.cacheStats
+            };
+        } else {
+            return {
+                mode: this.starfieldRenderMode,
+                totalStars: stats.totalStars,
+                drawCalls: stats.totalStars
+            };
+        }
+    }
+    
+    // Debug method to cycle through rendering modes
+    cycleStarfieldMode() {
+        const modes = ['depth', 'lightweight', 'fallback', 'heavy'];
+        const currentIndex = modes.indexOf(this.starfieldRenderMode);
+        const nextIndex = (currentIndex + 1) % modes.length;
+        this.starfieldRenderMode = modes[nextIndex];
+        
+        return {
+            newMode: this.starfieldRenderMode,
+            description: {
+                'depth': 'Depth-based batching (groups by depth/opacity)',
+                'lightweight': 'Lightweight optimization (reduces context switches)',
+                'fallback': 'Original direct rendering (baseline)',
+                'heavy': 'Heavy optimization (sprite caching + batching - may throttle)'
+            }[this.starfieldRenderMode]
+        };
+    }
+    
+    // Debug method to clear sprite cache (useful for testing)
+    clearStarfieldCache() {
+        if (this.starfieldRenderMode === 'heavy') {
+            starfieldRenderer.clearCache();
+            return { cleared: true, mode: 'heavy' };
+        } else {
+            return { cleared: false, reason: 'No cache to clear in current mode' };
+        }
+    }
+
+    // Debug method to show live depth batching performance
+    showDepthBatchStats() {
+        if (this.starfieldRenderMode !== 'depth') {
+            return { 
+                error: 'Depth batching is not active in current mode. Switch to depth mode first.',
+                currentMode: this.starfieldRenderMode
+            };
+        }
+        
+        const batchStats = depthBatchRenderer.getStats();
+        return {
+            activeBuckets: batchStats.depthBuckets,
+            batchedStars: batchStats.totalStars,
+            framesProcessed: batchStats.frameCount,
+            efficiency: batchStats.depthBuckets <= 5 ? 'excellent' : 
+                       batchStats.depthBuckets <= 10 ? 'good' : 'could be improved'
+        };
     }
 
     checkCursorTarget(mouseX, mouseY) {

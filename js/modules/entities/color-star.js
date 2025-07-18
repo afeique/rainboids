@@ -163,16 +163,18 @@ export class ColorStar {
     draw(ctx) {
         if (!this.active) return;
         
-        // Store rendering properties for batch rendering
+        // Calculate final opacity for rendering
         this.depthOpacity = Math.min(1, 0.5 + Math.pow(this.z / 4, 1.2));
         this.finalOpacity = this.opacity * this.depthOpacity;
         
-        // For performance, use direct rendering for complex burst stars, sprite cache for others
+        // Complex stars always use direct rendering for special effects
         if (this.isBurst || this.shape === 'sparkle' || this.shape === 'burst') {
-            // Direct rendering for special effects
             this.drawDirect(ctx);
+            return;
         }
-        // Simple stars will be batch rendered - this method just prepares properties
+        
+        // Simple stars will be handled by depth batch renderer
+        // No rendering here - just property preparation
     }
     
     drawDirect(ctx) {

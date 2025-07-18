@@ -25,6 +25,9 @@ export class BackgroundStar {
         const densityFactor = 0.5 + (this.density || 0.5) * 0.5;
         this.radius = (this.z * 0.8 + 0.3) * scale * densityFactor; // Larger and more visible
         
+        // Background stars are always simple circles
+        this.shape = 'circle';
+        
         // Twinkling properties
         this.opacity = 0;
         this.opacityOffset = Math.random() * Math.PI * 2;
@@ -54,11 +57,11 @@ export class BackgroundStar {
     draw(ctx) {
         if (!this.active) return;
         
-        // Store rendering properties for batch rendering
-        this.depthOpacity = Math.min(1, 0.4 + Math.pow(this.z / 4, 1.0));
-        this.finalOpacity = this.opacity * this.depthOpacity;
+        // Calculate final opacity for depth batching
+        const depthOpacity = Math.min(1, 0.4 + Math.pow(this.z / 4, 1.0));
+        this.finalOpacity = this.opacity * depthOpacity;
         
-        // Background stars will be batch rendered - this method just prepares properties
+        // No rendering here - will be handled by depth batch renderer
     }
     
     // Direct rendering fallback (used by starfield renderer when needed)

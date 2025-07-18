@@ -20,12 +20,6 @@ export class Bullet {
         const jitterAmount = shootingIntensity * 0.524; // 30 degrees = ~0.524 radians
         const jitterAngle = angle + (Math.random() - 0.5) * jitterAmount;
         
-        // Debug logging
-        if (shootingIntensity > 0) {
-            const angleChangeDegrees = ((jitterAngle - angle) * 180 / Math.PI);
-            console.log(`Bullet jitter: intensity=${shootingIntensity.toFixed(3)}, jitterAmount=${jitterAmount.toFixed(3)}, angleChange=${angleChangeDegrees.toFixed(1)}°`);
-        }
-        
         this.x = x + Math.cos(jitterAngle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
         this.y = y + Math.sin(jitterAngle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
         this.radius = 2 * scale; // Smaller bullets
