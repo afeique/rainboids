@@ -4,24 +4,19 @@ export const GAME_CONFIG = {
     SHIP_THRUST: 0.15,
     SHIP_FRICTION: 0.995,
     MAX_V: 3,
-    TURN_SPEED: 0.06,
     BULLET_SPEED: 12,
     INITIAL_AST_COUNT: 3,
     AST_SPEED: 2.2,
-    STAR_COUNT: 100,
+    COLOR_STAR_COUNT: 100,
     BACKGROUND_STAR_COUNT: 400, // Non-collectible background stars
-    MIN_STAR_DIST: 15, // Reduced to allow for denser clusters
-    PASSIVE_STAR_ATTR: 1.5,
-    PASSIVE_STAR_ATTRACT_DIST: 120,
-    ACTIVE_STAR_ATTR: 0.004,
-    ACTIVE_STAR_ATTRACT_DIST: 350,
+    ACTIVE_STAR_ATTR: 0.01,
+    ACTIVE_STAR_ATTRACT_DIST: 100,
     STAR_FRIC: 0.99,
     HIT_SCORE: 50,
     DESTROY_SCORE: 500,
-    STAR_SCORE: 7,
     BURST_STAR_SCORE: 4,
+    BURST_STAR_COLLECTION_BONUS: 15, // Extra pixels added to burst star collection radius
     MIN_AST_RAD: 15,
-    SAFE_ZONE: 250,
     MOBILE_SCALE: 0.65,
 };
 

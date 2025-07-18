@@ -1,12 +1,12 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
-import { random, collision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
+import { random, collision, burstStarCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
 import { Asteroid } from './entities/asteroid.js';
 import { Particle } from './entities/particle.js';
-import { CollectibleStar } from './entities/collectible-star.js';
+import { ColorStar } from './entities/color-star.js';
 import { BackgroundStar } from './entities/background-star.js';
 import { LineDebris } from './entities/line-debris.js';
 
@@ -63,7 +63,7 @@ export class GameEngine {
         this.particlePool = new PoolManager(Particle, 200);
         this.lineDebrisPool = new PoolManager(LineDebris, 100);
         this.asteroidPool = new PoolManager(Asteroid, 20);
-        this.starPool = new PoolManager(CollectibleStar, GAME_CONFIG.STAR_COUNT + 100);
+        this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 100);
         this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT);
     }
     
@@ -101,10 +101,6 @@ export class GameEngine {
             if (e.code === 'Escape') {
                 this.togglePause();
             }
-        });
-        
-        this.uiManager.elements.mobilePauseButton.addEventListener('click', () => {
-            this.togglePause();
         });
         
         // Handle game restart
@@ -145,26 +141,26 @@ export class GameEngine {
         this.particlePool.activeObjects = [];
         this.lineDebrisPool.activeObjects = [];
         this.asteroidPool.activeObjects = [];
-        this.starPool.activeObjects = [];
+        this.colorStarPool.activeObjects = [];
         this.backgroundStarPool.activeObjects = [];
         
-        // Generate all stars at once using generative method
-        this.generateInitialStars();
+        // Generate all color stars at once using generative method
+        this.generateInitialColorStars();
         this.generateBackgroundStars();
         
         this.startNextWave();
         this.uiManager.hideMessage();
     }
     
-    // Generate all initial stars using purely generative method
-    generateInitialStars() {
+    // Generate all initial color stars using purely generative method
+    generateInitialColorStars() {
         const spawnWidth = Math.max(this.width, this.height);
         const spawnHeight = this.height;
         
-        const starPositions = generateStarPositions(spawnWidth, spawnHeight, GAME_CONFIG.STAR_COUNT);
+        const starPositions = generateStarPositions(spawnWidth, spawnHeight, GAME_CONFIG.COLOR_STAR_COUNT);
         
         starPositions.forEach(({ x, y, z, density }) => {
-            const star = this.starPool.get(x, y, false, z, density);
+            const colorStar = this.colorStarPool.get(x, y, false, z, density);
         });
     }
     
@@ -180,8 +176,8 @@ export class GameEngine {
         });
     }
     
-    // Spawn a single star using simple random generation (for replacement stars)
-    spawnStar() {
+    // Spawn a single color star using simple random generation (for replacement color stars)
+    spawnColorStar() {
         const spawnWidth = Math.max(this.width, this.height);
         const spawnHeight = this.height;
         
@@ -204,7 +200,7 @@ export class GameEngine {
         // Simple density value (not using complex noise function for individual stars)
         const density = 0.5 + Math.random() * 0.3; // Random density between 0.5-0.8
         
-        const star = this.starPool.get(x, y, false, z, density);
+        const colorStar = this.colorStarPool.get(x, y, false, z, density);
     }
     
     startNextWave() {
@@ -213,7 +209,7 @@ export class GameEngine {
         this.particlePool.cleanupInactive();
         this.lineDebrisPool.cleanupInactive();
         this.asteroidPool.cleanupInactive();
-        this.starPool.cleanupInactive();
+        this.colorStarPool.cleanupInactive();
         this.backgroundStarPool.cleanupInactive();
         this.game.currentWave++;
         this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500);
@@ -270,17 +266,17 @@ export class GameEngine {
         });
     }
     
-    createStarBurst(x, y) {
+    createColorStarBurst(x, y) {
         for (let i = 0; i < 5; i++) {
-            // Calculate explosion angle and speed for each burst star
+            // Calculate explosion angle and speed for each collectible burst colorStar
             const angle = (i / 5) * Math.PI * 2 + random(-0.3, 0.3); // Spread evenly with some randomness
             const speed = random(2, 5); // Initial explosion speed
             
-            const star = this.starPool.get(x, y, true);
-            if (star) {
+            const colorStar = this.colorStarPool.get(x, y, true);
+            if (colorStar) {
                 // Set initial explosion velocity
-                star.vel.x = Math.cos(angle) * speed;
-                star.vel.y = Math.sin(angle) * speed;
+                colorStar.vel.x = Math.cos(angle) * speed;
+                colorStar.vel.y = Math.sin(angle) * speed;
             }
         }
     }
@@ -296,14 +292,14 @@ export class GameEngine {
         // Bullet-asteroid collisions
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
-            if (!bullet.active) continue;
+            if (!bullet.active || bullet.dying || bullet.hasHit) continue; // Skip dying/used bullets
             for (let j = this.asteroidPool.activeObjects.length - 1; j >= 0; j--) {
                 const ast = this.asteroidPool.activeObjects[j];
                 if (!ast.active) continue;
                 if (collision(bullet, ast)) {
                     this.game.score += 50; // 50 points for hit
                     this.game.money += 50; // 50 money for hit
-                    triggerHapticFeedback(20);
+                    triggerHapticFeedback(60);
                     this.audioManager.playHit();
                     
                     // Damage the asteroid
@@ -339,7 +335,7 @@ export class GameEngine {
                                 this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
                             }
                             this.createDebris(ast);
-                            this.createStarBurst(ast.x, ast.y);
+                            this.createColorStarBurst(ast.x, ast.y);
                             this.asteroidPool.release(ast);
                             // Enhanced screen shake for small asteroid destruction
                             this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
@@ -356,7 +352,7 @@ export class GameEngine {
                                     this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
                                 }
                                 this.createDebris(ast);
-                                this.createStarBurst(ast.x, ast.y);
+                                this.createColorStarBurst(ast.x, ast.y);
                             
                             const count = (Math.random() < 0.5 ? 2 : 3) + 1; // Now 3 or 4
                             const newR = ast.baseRadius / Math.sqrt(count);
@@ -437,18 +433,20 @@ export class GameEngine {
             }
         }
         
-        // Player vs Stars
+        // Player vs Burst ColorStars (only burst stars from asteroid destruction are collectible)
         if (this.player && this.player.active) {
-            for (let i = this.starPool.activeObjects.length - 1; i >= 0; i--) {
-                const star = this.starPool.activeObjects[i];
-                if (collision(this.player, star)) {
-                    this.game.score += star.isBurst ? GAME_CONFIG.BURST_STAR_SCORE : GAME_CONFIG.STAR_SCORE;
-                    this.game.money += star.isBurst ? GAME_CONFIG.BURST_STAR_SCORE : GAME_CONFIG.STAR_SCORE;
+            for (let i = this.colorStarPool.activeObjects.length - 1; i >= 0; i--) {
+                const colorStar = this.colorStarPool.activeObjects[i];
+                // Only check collision for burst stars using enhanced collision detection
+                // Uses larger radius + predictive collision to prevent fast stars from passing through player
+                if (colorStar.isBurst && burstStarCollision(this.player, colorStar)) {
+                    this.game.score += GAME_CONFIG.BURST_STAR_SCORE;
+                    this.game.money += GAME_CONFIG.BURST_STAR_SCORE;
                     this.audioManager.playCoin();
                     
                     // Create focused golden burst effect
                     // Central bright flash - smaller and more focused
-                    const blip = this.particlePool.get(star.x, star.y, 'starBlip');
+                    const blip = this.particlePool.get(colorStar.x, colorStar.y, 'starBlip');
                     if (blip) {
                         blip.color = '#FFFF00'; // Bright golden-yellow
                         blip.radius = 4; // Smaller, more focused
@@ -462,8 +460,8 @@ export class GameEngine {
                         const angle = (i / 8) * Math.PI * 2;
                         const dist = 12; // Slightly larger radius for better spread
                         const sparkle = this.particlePool.get(
-                            star.x + Math.cos(angle) * dist,
-                            star.y + Math.sin(angle) * dist,
+                            colorStar.x + Math.cos(angle) * dist,
+                            colorStar.y + Math.sin(angle) * dist,
                             'starSparkle'
                         );
                         if (sparkle) {
@@ -477,9 +475,7 @@ export class GameEngine {
                         }
                     }
                     
-                    
-                    if (!star.isBurst) this.spawnStar();
-                    this.starPool.release(star);
+                    this.colorStarPool.release(colorStar);
                 }
             }
         }
@@ -491,13 +487,13 @@ export class GameEngine {
 
             // Always allow normal player movement
             const tractorEngaged = !input.up && !input.down && !input.left && !input.right && !input.fire;
-            this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.starPool, tractorEngaged);
+            this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged);
             this.bulletPool.updateActive(this.particlePool, this.asteroidPool);
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.asteroidPool.updateActive();
-            // Update stars with player position and tractor beam state
-            this.starPool.activeObjects.forEach(s => s.update(this.player.vel, this.player, tractorEngaged));
+            // Update color stars with player position and tractor beam state
+            this.colorStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.player, tractorEngaged));
             // Update background stars with just player velocity for parallax
             this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel));
             
@@ -524,7 +520,7 @@ export class GameEngine {
         
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
             this.backgroundStarPool.drawActive(this.ctx); // Draw background stars first
-            this.starPool.drawActive(this.ctx);
+            this.colorStarPool.drawActive(this.ctx);
             this.lineDebrisPool.drawActive(this.ctx);
             this.particlePool.drawActive(this.ctx);
             this.asteroidPool.drawActive(this.ctx);
@@ -564,14 +560,20 @@ export class GameEngine {
             this.jitterCircleFade.targetAlpha = 0;
         }
         
-        // Smooth fade transition (60fps assumed, ~16ms per frame)
-        const fadeSpeed = 0.08; // Adjust for faster/slower fade
+        // Smooth fade transition with gentle fade-out (60fps assumed, ~16ms per frame)
         if (this.jitterCircleFade.alpha < this.jitterCircleFade.targetAlpha) {
+            // Fade-in: moderate speed
+            const fadeInSpeed = 0.08;
             this.jitterCircleFade.alpha = Math.min(this.jitterCircleFade.targetAlpha, 
-                this.jitterCircleFade.alpha + fadeSpeed);
+                this.jitterCircleFade.alpha + fadeInSpeed);
         } else if (this.jitterCircleFade.alpha > this.jitterCircleFade.targetAlpha) {
+            // Fade-out: gentle, non-linear fade using easing
+            const fadeOutSpeed = 0.04; // Slower base speed for gentler fade
+            const alphaRatio = this.jitterCircleFade.alpha / 0.4; // Normalize to 0-1 range
+            const easedSpeed = fadeOutSpeed * (0.3 + 0.7 * alphaRatio); // Slower as it gets more transparent
+            
             this.jitterCircleFade.alpha = Math.max(this.jitterCircleFade.targetAlpha, 
-                this.jitterCircleFade.alpha - fadeSpeed);
+                this.jitterCircleFade.alpha - easedSpeed);
         }
         
         // Hide when fully faded out
@@ -718,13 +720,20 @@ export class GameEngine {
         }
         
         // Check if cursor is over any star
-        for (const star of this.starPool.activeObjects) {
-            if (star.active) {
-                const dx = mouseX - star.x;
-                const dy = mouseY - star.y;
+        for (const colorStar of this.colorStarPool.activeObjects) {
+            if (colorStar.active) {
+                const dx = mouseX - colorStar.x;
+                const dy = mouseY - colorStar.y;
                 const distance = Math.hypot(dx, dy);
-                if (distance <= star.radius) {
-                    return 'star';
+                
+                // Use enhanced collision radius for burst stars to match collection behavior
+                let targetRadius = colorStar.radius;
+                if (colorStar.isBurst) {
+                    targetRadius += GAME_CONFIG.BURST_STAR_COLLECTION_BONUS; // Match the enhanced collection radius
+                }
+                
+                if (distance <= targetRadius) {
+                    return colorStar.isBurst ? 'star' : 'colorStar';
                 }
             }
         }

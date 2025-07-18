@@ -317,23 +317,7 @@ canvas.asteroid-hover {
     border-color: #bbb !important;
 }
 
-#mobile-pause-button {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 50px;
-    height: 50px;
-    background-color: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 10px;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 30px;
-    z-index: 201; 
-    display: none; 
-    justify-content: center;
-    align-items: center;
-    pointer-events: all;
-}
+
 
 #customization-overlay {
     position: absolute;
@@ -834,16 +818,11 @@ canvas.asteroid-hover {
 /* Remove duplicate marquee styles */
 
 @media (hover: none) and (pointer: coarse), (max-width: 768px) {
-    #mobile-controls, #mobile-pause-button {
+    #mobile-controls {
         display: block;
     }
     #score { 
         font-size: 18px; 
-    }
-    #mobile-pause-button { 
-        display: flex; 
-        top: 60px;
-        right: 20px;
     }
     /* Hide music info box on mobile - takes up too much space */
     #music-info {
@@ -1035,6 +1014,63 @@ canvas.asteroid-hover {
 
 .sfx-toggle-switch.active::after {
     transform: translateX(20px);
+}
+
+.sfx-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sfx-test-button,
+.sfx-reroll-button {
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-family: inherit;
+}
+
+.sfx-test-button:hover,
+.sfx-reroll-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+}
+
+.sfx-test-button:active,
+.sfx-reroll-button:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.sfx-test-button {
+    background: rgba(0, 200, 255, 0.2);
+    border-color: rgba(0, 200, 255, 0.5);
+}
+
+.sfx-test-button:hover {
+    background: rgba(0, 200, 255, 0.3);
+    border-color: rgba(0, 200, 255, 0.7);
+}
+
+.sfx-reroll-button {
+    background: rgba(255, 165, 0, 0.2);
+    border-color: rgba(255, 165, 0, 0.5);
+}
+
+.sfx-reroll-button:hover {
+    background: rgba(255, 165, 0, 0.3);
+    border-color: rgba(255, 165, 0, 0.7);
 } 
 
 #music-repeat {

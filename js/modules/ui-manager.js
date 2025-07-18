@@ -19,7 +19,6 @@ export class UIManager {
             pauseOverlay: document.getElementById('pause-overlay'),
             messageTitle: document.getElementById('message-title'),
             messageSubtitle: document.getElementById('message-subtitle'),
-            mobilePauseButton: document.getElementById('mobile-pause-button'),
             mobileControls: document.getElementById('mobile-controls'),
             titleScreen: document.getElementById('title-screen'),
             gameTitle: document.getElementById('game-title'),
@@ -53,14 +52,13 @@ export class UIManager {
             // SFX elements
             sfxVolumeSlider: document.getElementById('sfx-volume-slider'),
             sfxVolumeValue: document.getElementById('sfx-volume-value'),
-            sfxTogglesContainer: document.getElementById('sfx-toggles')
+            sfxTogglesContainer: document.getElementById('sfx-toggles'),
+            rerollAllSfxButton: document.getElementById('reroll-all-sfx')
         };
     }
     
     setupEventListeners() {
-        this.elements.mobilePauseButton.addEventListener('click', () => {
-            // Let the game handle pause
-        });
+        // Mobile event listeners removed - using unified pause system
     }
     
     updateScore(money) {
@@ -91,10 +89,11 @@ export class UIManager {
         const isPaused = this.elements.pauseOverlay.style.display === 'flex';
         if (isPaused) {
             this.elements.pauseOverlay.style.display = 'none';
-            this.elements.mobilePauseButton.innerHTML = '||';
         } else {
             this.elements.pauseOverlay.style.display = 'flex';
-            this.elements.mobilePauseButton.innerHTML = '▶';
+            
+            // Sync music player button state when pause menu is shown
+            this.syncMusicPlayerState();
             
             // Check marquee for playing track when pause menu is shown
             this.checkPlaylistMarquees();
@@ -178,6 +177,9 @@ export class UIManager {
         
         // Create sound effect toggles
         this.createSfxToggles();
+        
+        // Setup reroll all button
+        this.setupRerollAllButton();
     }
     
     createSfxToggles() {
@@ -202,6 +204,51 @@ export class UIManager {
             label.className = 'sfx-toggle-label';
             label.textContent = friendlyNames[soundName] || soundName;
             
+            const controlsDiv = document.createElement('div');
+            controlsDiv.className = 'sfx-controls';
+            
+            // Test button
+            const testButton = document.createElement('button');
+            testButton.className = 'sfx-test-button';
+            testButton.textContent = '♪';
+            testButton.title = 'Test sound';
+            testButton.addEventListener('click', () => {
+                if (this.audioManager.isSoundEnabled(soundName)) {
+                    this.audioManager.playSound(soundName);
+                }
+            });
+            
+            // Re-roll button
+            const rerollButton = document.createElement('button');
+            rerollButton.className = 'sfx-reroll-button';
+            rerollButton.textContent = '🎲';
+            rerollButton.title = 'Generate new sound';
+            rerollButton.addEventListener('click', () => {
+                this.audioManager.rerollSound(soundName);
+                
+                // Visual feedback - brief animation
+                const originalText = rerollButton.textContent;
+                rerollButton.textContent = '✨';
+                rerollButton.style.background = 'rgba(0, 255, 0, 0.3)';
+                rerollButton.style.borderColor = 'rgba(0, 255, 0, 0.7)';
+                rerollButton.style.transform = 'scale(1.1)';
+                
+                setTimeout(() => {
+                    rerollButton.textContent = originalText;
+                    rerollButton.style.background = 'rgba(255, 165, 0, 0.2)';
+                    rerollButton.style.borderColor = 'rgba(255, 165, 0, 0.5)';
+                    rerollButton.style.transform = 'scale(1)';
+                }, 300);
+                
+                // Optionally play the new sound for immediate feedback
+                if (this.audioManager.isSoundEnabled(soundName)) {
+                    setTimeout(() => {
+                        this.audioManager.playSound(soundName);
+                    }, 100);
+                }
+            });
+            
+            // Toggle switch
             const switchDiv = document.createElement('div');
             switchDiv.className = 'sfx-toggle-switch active';
             switchDiv.dataset.sound = soundName;
@@ -213,9 +260,46 @@ export class UIManager {
                 switchDiv.classList.toggle('active', isEnabled);
             });
             
+            controlsDiv.appendChild(testButton);
+            controlsDiv.appendChild(rerollButton);
+            controlsDiv.appendChild(switchDiv);
+            
             toggleDiv.appendChild(label);
-            toggleDiv.appendChild(switchDiv);
+            toggleDiv.appendChild(controlsDiv);
             this.elements.sfxTogglesContainer.appendChild(toggleDiv);
+        });
+    }
+    
+    setupRerollAllButton() {
+        if (!this.elements.rerollAllSfxButton || !this.audioManager) return;
+        
+        this.elements.rerollAllSfxButton.addEventListener('click', () => {
+            this.audioManager.rerollAllSounds();
+            
+            // Visual feedback - brief flash effect
+            const originalText = this.elements.rerollAllSfxButton.textContent;
+            this.elements.rerollAllSfxButton.textContent = '✨ REROLLED!';
+            this.elements.rerollAllSfxButton.style.background = 'rgba(0, 255, 0, 0.3)';
+            this.elements.rerollAllSfxButton.style.borderColor = 'rgba(0, 255, 0, 0.7)';
+            
+            setTimeout(() => {
+                this.elements.rerollAllSfxButton.textContent = originalText;
+                this.elements.rerollAllSfxButton.style.background = 'rgba(255, 165, 0, 0.2)';
+                this.elements.rerollAllSfxButton.style.borderColor = 'rgba(255, 165, 0, 0.5)';
+            }, 1000);
+        });
+        
+        // Add hover effect
+        this.elements.rerollAllSfxButton.addEventListener('mouseenter', () => {
+            this.elements.rerollAllSfxButton.style.background = 'rgba(255, 165, 0, 0.3)';
+            this.elements.rerollAllSfxButton.style.borderColor = 'rgba(255, 165, 0, 0.7)';
+            this.elements.rerollAllSfxButton.style.transform = 'scale(1.05)';
+        });
+        
+        this.elements.rerollAllSfxButton.addEventListener('mouseleave', () => {
+            this.elements.rerollAllSfxButton.style.background = 'rgba(255, 165, 0, 0.2)';
+            this.elements.rerollAllSfxButton.style.borderColor = 'rgba(255, 165, 0, 0.5)';
+            this.elements.rerollAllSfxButton.style.transform = 'scale(1)';
         });
     }
     
@@ -443,12 +527,22 @@ export class UIManager {
         
         // Check marquees when switching to music tab
         if (tabName === 'music') {
+            this.syncMusicPlayerState();
             this.checkPlaylistMarquees();
         }
     }
     
     startMusic() {
         this.musicPlayer.play();
+    }
+    
+    syncMusicPlayerState() {
+        // Update play/pause button to match current music player state
+        const isPlaying = this.musicPlayer.isPlaying;
+        this.elements.musicPlayPause.textContent = isPlaying ? '⏸' : '▶';
+        
+        // Ensure playlist display is correct for first track
+        this.updatePlaylistDisplay();
     }
     
     checkPlaylistMarquees() {
@@ -459,7 +553,14 @@ export class UIManager {
                 track._marqueeChecked = true;
                 // Small delay to ensure layout is complete
                 setTimeout(() => {
-                    this.applyPlaylistMarquee(track._contentSpan, track);
+                    // Only apply marquee if text actually overflows
+                    const padding = 30;
+                    const containerWidth = track.offsetWidth - padding;
+                    const textWidth = track._contentSpan.scrollWidth;
+                    
+                    if (textWidth > containerWidth) {
+                        this.applyPlaylistMarquee(track._contentSpan, track);
+                    }
                 }, 50);
             }
         });
@@ -620,11 +721,26 @@ export class UIManager {
                 track._contentSpan = contentSpan;
                 track._marqueeChecked = false;
                 
-                // Only check marquee if pause menu is visible
+                // Reset any existing marquee state first
+                track.classList.remove('has-marquee');
+                if (contentSpan._marqueeRAF) {
+                    cancelAnimationFrame(contentSpan._marqueeRAF);
+                    contentSpan._marqueeRAF = null;
+                }
+                contentSpan.style.transform = 'translateX(0)';
+                
+                // Only check marquee if pause menu is visible AND text actually overflows
                 if (this.elements.pauseOverlay.style.display === 'flex') {
                     track._marqueeChecked = true;
                     setTimeout(() => {
-                        this.applyPlaylistMarquee(contentSpan, track);
+                        // Only apply marquee if text is too long
+                        const padding = 30;
+                        const containerWidth = track.offsetWidth - padding;
+                        const textWidth = contentSpan.scrollWidth;
+                        
+                        if (textWidth > containerWidth) {
+                            this.applyPlaylistMarquee(contentSpan, track);
+                        }
                     }, 100);
                 }
             } else {

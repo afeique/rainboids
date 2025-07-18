@@ -45,6 +45,7 @@ export class Bullet {
         this.deathTimer = 0;
         this.deathDuration = 20; // frames for death animation
         this.impactPoint = null;
+        this.hasHit = false; // Flag to prevent multiple hits
     }
     
     // Trigger death animation where trail collapses to impact point
@@ -52,6 +53,7 @@ export class Bullet {
         this.dying = true;
         this.deathTimer = 0;
         this.impactPoint = { x: impactX, y: impactY };
+        this.hasHit = true; // Mark as having hit something
         // Stop moving when dying
         this.vel.x = 0;
         this.vel.y = 0;

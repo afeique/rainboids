@@ -145,6 +145,88 @@ export class AudioManager {
     getSoundNames() {
         return Object.keys(this.soundEnabled);
     }
+    
+    rerollSound(soundName) {
+        if (!this.sounds.hasOwnProperty(soundName)) {
+            console.warn(`Unknown sound: ${soundName}`);
+            return;
+        }
+        
+        // Generate new sound effect based on the sound type
+        let newSound;
+        switch (soundName) {
+            case 'shoot':
+                newSound = sfxr.generate("laserShoot");
+                break;
+            case 'hit':
+                newSound = sfxr.generate("hitHurt");
+                break;
+            case 'coin':
+                newSound = sfxr.generate("pickupCoin");
+                break;
+            case 'explosion':
+            case 'playerExplosion':
+            case 'thruster':
+                newSound = sfxr.generate("explosion");
+                break;
+            case 'tractorBeam':
+                // Generate a custom tractor beam sound with some randomization
+                newSound = {
+                    wave_type: 0,
+                    p_base_freq: 0.1 + Math.random() * 0.1, // 0.1-0.2
+                    p_env_attack: 0,
+                    p_env_sustain: 0.2 + Math.random() * 0.2, // 0.2-0.4
+                    p_env_decay: 0.05 + Math.random() * 0.1, // 0.05-0.15
+                    sound_vol: 0.15 + Math.random() * 0.1, // 0.15-0.25
+                    sample_rate: 44100,
+                    sample_size: 8
+                };
+                break;
+            case 'shield':
+                // Generate a custom shield sound with some randomization
+                newSound = {
+                    wave_type: 3, // Noise
+                    p_base_freq: 0.2 + Math.random() * 0.2, // 0.2-0.4
+                    p_env_attack: 0.01,
+                    p_env_sustain: 0.05 + Math.random() * 0.1, // 0.05-0.15
+                    p_env_decay: 0.1 + Math.random() * 0.2, // 0.1-0.3
+                    p_freq_ramp: -0.3 + Math.random() * 0.2, // -0.3 to -0.1
+                    p_hpf_freq: 0.1 + Math.random() * 0.2, // 0.1-0.3
+                    sound_vol: 0.2 + Math.random() * 0.2, // 0.2-0.4
+                    sample_rate: 44100,
+                    sample_size: 8
+                };
+                break;
+            default:
+                console.warn(`No reroll logic for sound: ${soundName}`);
+                return;
+        }
+        
+        // Update the sound
+        this.sounds[soundName] = newSound;
+        
+        // Apply specific customizations based on sound type
+        if (soundName === 'playerExplosion') {
+            this.sounds.playerExplosion.p_env_sustain = 0.3 + Math.random() * 0.2; // 0.3-0.5
+            this.sounds.playerExplosion.p_base_freq = 0.15 + Math.random() * 0.1; // 0.15-0.25
+        }
+        
+        // Update audio cache
+        this.audioCache[soundName] = newSound;
+        
+        console.log(`Rerolled sound: ${soundName}`);
+    }
+    
+    rerollAllSounds() {
+        const soundNames = Object.keys(this.sounds);
+        console.log('Rerolling all sound effects...');
+        
+        soundNames.forEach(soundName => {
+            this.rerollSound(soundName);
+        });
+        
+        console.log('All sound effects rerolled!');
+    }
 } 
 
 export const audioManager = new AudioManager(); 

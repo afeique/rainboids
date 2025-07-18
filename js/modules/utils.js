@@ -22,6 +22,71 @@ export function collision(a, b) {
     return Math.hypot(dx, dy) < a.radius + b.radius;
 }
 
+// Enhanced collision detection specifically for burst stars
+// Addresses issues with small, fast-moving collectibles being missed by standard collision detection
+export function burstStarCollision(player, burstStar) {
+    const dx = player.x - burstStar.x;
+    const dy = player.y - burstStar.y;
+    const distance = Math.hypot(dx, dy);
+    
+    // Import GAME_CONFIG here to avoid circular dependencies
+    const BURST_STAR_COLLECTION_BONUS = 15; // Should match GAME_CONFIG.BURST_STAR_COLLECTION_BONUS
+    
+    // Increased collection radius for burst stars to make them easier to collect
+    const collectionRadius = player.radius + burstStar.radius + BURST_STAR_COLLECTION_BONUS;
+    
+    // Basic circle collision check first
+    if (distance < collectionRadius) {
+        return true;
+    }
+    
+    // Swept collision detection for fast-moving burst stars
+    // Check if the star will pass through the player's collection area in the next frame
+    const futureX = burstStar.x + burstStar.vel.x;
+    const futureY = burstStar.y + burstStar.vel.y;
+    
+    // Check collision with the star's future position
+    const futureDx = player.x - futureX;
+    const futureDy = player.y - futureY;
+    const futureDistance = Math.hypot(futureDx, futureDy);
+    
+    if (futureDistance < collectionRadius) {
+        return true;
+    }
+    
+    // Line-circle intersection: check if the star's movement path intersects the collection area
+    const speed = Math.hypot(burstStar.vel.x, burstStar.vel.y);
+    if (speed > 0) {
+        // Vector from star to player
+        const toPlayerX = player.x - burstStar.x;
+        const toPlayerY = player.y - burstStar.y;
+        
+        // Project player position onto the star's velocity vector
+        const velocityDotProduct = burstStar.vel.x * toPlayerX + burstStar.vel.y * toPlayerY;
+        const velocityMagnitudeSquared = burstStar.vel.x * burstStar.vel.x + burstStar.vel.y * burstStar.vel.y;
+        
+        if (velocityMagnitudeSquared > 0) {
+            const t = velocityDotProduct / velocityMagnitudeSquared;
+            
+            // Only check if the closest point is in the forward direction and within reasonable distance
+            if (t >= 0 && t <= 2) { // Check up to 2 frames ahead
+                const closestX = burstStar.x + burstStar.vel.x * t;
+                const closestY = burstStar.y + burstStar.vel.y * t;
+                
+                const closestDx = player.x - closestX;
+                const closestDy = player.y - closestY;
+                const closestDistance = Math.hypot(closestDx, closestDy);
+                
+                if (closestDistance < collectionRadius) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    return false;
+}
+
 export function triggerHapticFeedback(duration = 10) {
     if (navigator.vibrate) {
         navigator.vibrate(duration);

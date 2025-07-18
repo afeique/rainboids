@@ -1,4 +1,5 @@
-// Collectible star entity with various shapes and behaviors
+// Color star entity - decorative stars with various shapes and behaviors
+// Note: Burst stars (created from asteroid destruction) are still collectible
 import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES } from '../constants.js';
 import { random, wrap } from '../utils.js';
 
@@ -6,7 +7,7 @@ function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
 }
 
-export class CollectibleStar {
+export class ColorStar {
     constructor() {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
@@ -64,7 +65,7 @@ export class CollectibleStar {
             this.y = y || random(0, this.height);
             this.z = random(1.5, 3.0); // Close and bright
             this.density = 0.8;
-            this.radius = (this.z * 1.2 + 0.4) * scale * 1.2; // Extra large
+            this.radius = (this.z * 1.2 + 0.4) * scale * 1.8; // Even larger for better visibility and collection
 
             // Initial velocity will be set by createStarBurst for explosion effect
             this.vel = { x: 0, y: 0 };
@@ -100,65 +101,52 @@ export class CollectibleStar {
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
             
-            if (playerPos.active) {
-                // Strong attraction when very close to player (sucked up effect)
-                const closeRange = 80; // Distance for strong attraction
+            if (dist > 1) {
+                // Strengthened base homing behavior - always moves towards player
+                const baseAttraction = 0.8; // Much stronger constant homing
+                this.vel.x += (dx / dist) * baseAttraction * 0.15 * this.z;
+                this.vel.y += (dy / dist) * baseAttraction * 0.15 * this.z;
                 
-                if (dist < closeRange) {
-                    // Very strong attraction - direct pull toward player
-                    const pullStrength = 8 + (closeRange - dist) / closeRange * 12; // 8-20 pull strength
-                    this.vel.x += (dx / dist) * pullStrength * 0.3;
-                    this.vel.y += (dy / dist) * pullStrength * 0.3;
-                } else {
-                    // Normal homing behavior when farther away
-                    const homingSpeed = 2.0 + this.z * 0.4; // Faster homing: 2.6-3.2 speed
-                    const turnRate = 0.08; // Faster turning (0-1)
+                // Strong attraction at medium range (within 100 pixels)
+                if (dist < 100) {
+                    const strongAttraction = 15; // Stronger pull when in medium range
+                    const proximityMultiplier = (100 - dist) / 100; // Stronger as it gets closer
+                    this.vel.x += (dx / dist) * strongAttraction * proximityMultiplier * this.z;
+                    this.vel.y += (dy / dist) * strongAttraction * proximityMultiplier * this.z;
+                }
+                
+                // Very strong magnetic pull at close range (within 40 pixels)
+                if (dist < 40) {
+                    const magneticAttraction = 25; // Very strong pull when very close
+                    const magneticMultiplier = (40 - dist) / 40; // Maximum strength when touching
+                    this.vel.x += (dx / dist) * magneticAttraction * magneticMultiplier * this.z;
+                    this.vel.y += (dy / dist) * magneticAttraction * magneticMultiplier * this.z;
+                }
+                
+                // Enhanced attraction when tractor beam is active (works at longer range)
+                if (tractorEngaged) {
+                    let tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500; // Increased tractor strength
+                    let tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
                     
-                    // Calculate desired velocity direction
-                    const desiredVelX = (dx / dist) * homingSpeed;
-                    const desiredVelY = (dy / dist) * homingSpeed;
-                    
-                    // Smoothly turn toward desired direction
-                    this.vel.x = this.vel.x * (1 - turnRate) + desiredVelX * turnRate;
-                    this.vel.y = this.vel.y * (1 - turnRate) + desiredVelY * turnRate;
+                    if (dist < tractorDist) {
+                        const tractorForce = tractorAttraction * (1 - dist / tractorDist);
+                        this.vel.x += (dx / dist) * tractorForce * this.z;
+                        this.vel.y += (dy / dist) * tractorForce * this.z;
+                    }
                 }
             }
         } else {
-            // Normal star behavior - using dual-mode attraction like burst stars
-            this.vel.x *= GAME_CONFIG.STAR_FRIC;
-            this.vel.y *= GAME_CONFIG.STAR_FRIC;
-            this.x += this.vel.x;
-            this.y += this.vel.y;
-
-            this.opacityOffset += this.twinkleSpeed;
-            this.opacity = (Math.sin(this.opacityOffset) + 1) / 2 * 0.9 + 0.1;
+            // Update twinkle based on sine wave
+            this.opacity = 0.3 + 0.7 * (Math.sin(Date.now() * this.twinkleSpeed + this.opacityOffset) + 1) / 2;
             
-            // Update rotation for spinning stars
+            // Rotate the star
             this.rotation += this.rotationSpeed;
+            
+            // Pulse size
             this.pulseOffset += this.pulseSpeed;
             
-            // Dual-mode attraction similar to burst stars but for normal stars
-            const dx = playerPos.x - this.x;
-            const dy = playerPos.y - this.y;
-            const dist = Math.hypot(dx, dy);
-            
-            const attractDist = tractorEngaged ? GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST : GAME_CONFIG.PASSIVE_STAR_ATTRACT_DIST;
-            
-            if (playerPos.active && dist < attractDist) {
-                const closeRange = 60; // Distance for strong attraction (smaller than burst stars)
-                
-                if (dist < closeRange) {
-                    // Strong close-range attraction - direct pull toward player
-                    const pullStrength = 4 + (closeRange - dist) / closeRange * 8; // 4-12 pull strength (weaker than burst stars)
-                    this.vel.x += (dx / dist) * pullStrength * 0.2 * this.z; // Scale with depth
-                    this.vel.y += (dy / dist) * pullStrength * 0.2 * this.z;
-                } else {
-                    // Normal attraction when farther away
-                    const attractStrength = tractorEngaged ? GAME_CONFIG.ACTIVE_STAR_ATTR : GAME_CONFIG.PASSIVE_STAR_ATTR;
-                    this.vel.x += (dx / dist) * attractStrength * this.z;
-                    this.vel.y += (dy / dist) * attractStrength * this.z;
-                }
-            }
+            // Non-burst stars are no longer attracted to player - they just exist for visual effect
+            // Remove all tractor beam and attraction logic
         }
         
         // Enhanced parallax effect with exponential scaling
@@ -340,6 +328,37 @@ export class CollectibleStar {
             ctx.beginPath();
             ctx.arc(0, 0, dynamicRadius * 0.4, 0, 2 * Math.PI);
             ctx.fill();
+            ctx.restore();
+        }
+        
+        // Special glow effect for burst stars to indicate they're collectible
+        if (this.isBurst) {
+            ctx.save();
+            
+            // Pulsing glow effect
+            const pulseIntensity = 0.3 + 0.4 * Math.sin(Date.now() * 0.008 + this.x * 0.01);
+            ctx.globalAlpha = this.opacity * pulseIntensity;
+            
+            // Collection area indicator - subtle outer glow
+            const collectionRadius = dynamicRadius + 15; // Match GAME_CONFIG.BURST_STAR_COLLECTION_BONUS
+            ctx.shadowColor = this.color;
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = this.opacity * pulseIntensity * 0.3;
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, collectionRadius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // Inner bright core for better visibility
+            ctx.shadowBlur = 8;
+            ctx.globalAlpha = this.opacity * 0.9;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, dynamicRadius * 0.6, 0, 2 * Math.PI);
+            ctx.fill();
+            
             ctx.restore();
         }
         
