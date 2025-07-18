@@ -21,7 +21,7 @@ export class StarfieldRenderer {
         this.generateCommonSprites();
         this.initialized = true;
         
-        console.log(`🚀 StarfieldRenderer initialized: ${this.spriteCache.size} sprites pre-cached`);
+        console.log(`🚀 StarfieldRenderer initialized`);
     }
     
     generateCommonSprites() {

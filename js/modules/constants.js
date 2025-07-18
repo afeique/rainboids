@@ -12,15 +12,10 @@ export const GAME_CONFIG = {
     ACTIVE_STAR_ATTR: 0.01,
     ACTIVE_STAR_ATTRACT_DIST: 100,
     STAR_FRIC: 0.99,
-    HIT_SCORE: 50,
-    DESTROY_SCORE: 500,
-    BURST_STAR_SCORE: 4,
-    BURST_STAR_COLLECTION_BONUS: 15, // Extra pixels added to burst star collection radius
+    BURST_STAR_MONEY: 20,
+    BURST_STAR_COLLECTION_RADIUS: 15, // Extra pixels added to burst star collection radius
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,
-    // Performance settings
-    STARFIELD_OPTIMIZATION: true, // Enable sprite caching and batched rendering
-    MAX_SPRITE_CACHE_SIZE: 100, // Maximum number of cached star sprites
 };
 
 export const NOISE_CONFIG = {

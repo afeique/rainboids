@@ -46,7 +46,13 @@ export class GameEngine {
         
         // Initialize optimized starfield renderer
         starfieldRenderer.initialize();
-        this.starfieldRenderMode = 'depth'; // Options: 'depth', 'lightweight', 'fallback', 'heavy'
+        this.starfieldRenderMode = 'depth'; // Options: 'depth', 'lightweight', 'fallback'
+        
+        // Print debug commands to console
+        console.log('🌟 Starfield Debug Commands:');
+        console.log('  gameEngine.cycleStarfieldMode() - Switch rendering modes');
+        console.log('  gameEngine.debugStarfieldPerformance() - View performance stats');
+        console.log('  gameEngine.showDepthBatchStats() - View depth batching stats');
     }
     
     // Helper method to initialize/reset game state
@@ -304,8 +310,6 @@ export class GameEngine {
                 const ast = this.asteroidPool.activeObjects[j];
                 if (!ast.active) continue;
                 if (collision(bullet, ast)) {
-                    this.game.score += 50; // 50 points for hit
-                    this.game.money += 50; // 50 money for hit
                     triggerHapticFeedback(60);
                     this.audioManager.playHit();
                     
@@ -327,8 +331,6 @@ export class GameEngine {
                     
                     if (ast.health <= 0) {
                         if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
-                            this.game.score += 100; // 100 points for destroy
-                            this.game.money += 100; // 100 money for destroy
                             this.audioManager.playExplosion();
                             // Multiple fiery shockwave pulses for destruction
                             const pulseCount = 4;
@@ -447,8 +449,8 @@ export class GameEngine {
                 // Only check collision for burst stars using enhanced collision detection
                 // Uses larger radius + predictive collision to prevent fast stars from passing through player
                 if (colorStar.isBurst && burstStarCollision(this.player, colorStar)) {
-                    this.game.score += GAME_CONFIG.BURST_STAR_SCORE;
-                    this.game.money += GAME_CONFIG.BURST_STAR_SCORE;
+                    this.game.score += GAME_CONFIG.BURST_STAR_MONEY;
+                    this.game.money += GAME_CONFIG.BURST_STAR_MONEY;
                     this.audioManager.playCoin();
                     
                     // Create focused golden burst effect
@@ -556,11 +558,6 @@ export class GameEngine {
                             star.draw(this.ctx); // Complex stars use their full draw method
                         }
                     });
-                    break;
-                    
-                case 'heavy':
-                    // Heavy optimization - sprite caching and batching (can cause throttling)
-                    this.renderOptimizedStarfield();
                     break;
                     
                 case 'fallback':
@@ -818,12 +815,6 @@ export class GameEngine {
                 optimizedStars: lightStats.totalOptimized,
                 frameCount: lightStats.frameCount
             };
-        } else if (this.starfieldRenderMode === 'heavy') {
-            return {
-                mode: this.starfieldRenderMode,
-                totalStars: stats.totalStars,
-                cacheStats: stats.cacheStats
-            };
         } else {
             return {
                 mode: this.starfieldRenderMode,
@@ -835,7 +826,7 @@ export class GameEngine {
     
     // Debug method to cycle through rendering modes
     cycleStarfieldMode() {
-        const modes = ['depth', 'lightweight', 'fallback', 'heavy'];
+        const modes = ['depth', 'lightweight', 'fallback'];
         const currentIndex = modes.indexOf(this.starfieldRenderMode);
         const nextIndex = (currentIndex + 1) % modes.length;
         this.starfieldRenderMode = modes[nextIndex];
@@ -845,20 +836,14 @@ export class GameEngine {
             description: {
                 'depth': 'Depth-based batching (groups by depth/opacity)',
                 'lightweight': 'Lightweight optimization (reduces context switches)',
-                'fallback': 'Original direct rendering (baseline)',
-                'heavy': 'Heavy optimization (sprite caching + batching - may throttle)'
+                'fallback': 'Original direct rendering (baseline)'
             }[this.starfieldRenderMode]
         };
     }
     
     // Debug method to clear sprite cache (useful for testing)
     clearStarfieldCache() {
-        if (this.starfieldRenderMode === 'heavy') {
-            starfieldRenderer.clearCache();
-            return { cleared: true, mode: 'heavy' };
-        } else {
-            return { cleared: false, reason: 'No cache to clear in current mode' };
-        }
+        return { cleared: false, reason: 'No cache to clear - heavy mode removed' };
     }
 
     // Debug method to show live depth batching performance
@@ -913,7 +898,7 @@ export class GameEngine {
                 // Use enhanced collision radius for burst stars to match collection behavior
                 let targetRadius = colorStar.radius;
                 if (colorStar.isBurst) {
-                    targetRadius += GAME_CONFIG.BURST_STAR_COLLECTION_BONUS; // Match the enhanced collection radius
+                    targetRadius += GAME_CONFIG.BURST_STAR_COLLECTION_RADIUS; // Match the enhanced collection radius
                 }
                 
                 if (distance <= targetRadius) {

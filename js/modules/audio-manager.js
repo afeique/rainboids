@@ -17,7 +17,8 @@ export class AudioManager {
             playerExplosion: true,
             thruster: true,
             tractorBeam: true,
-            shield: true // Added shield sound
+            shield: true,
+            healthRegen: true // Added health regeneration sound
         };
     }
     
@@ -49,6 +50,21 @@ export class AudioManager {
                 p_freq_ramp: -0.2,
                 p_hpf_freq: 0.2,
                 sound_vol: 0.3,
+                sample_rate: 44100,
+                sample_size: 8
+            },
+            healthRegen: {
+                wave_type: 1, // Sawtooth for warm tone
+                p_base_freq: 0.8, // Higher frequency for bright, healing sound
+                p_env_attack: 0.3, // Gentle fade in
+                p_env_sustain: 0.4, // Medium sustain
+                p_env_decay: 0.6, // Long, gentle fade out
+                p_freq_ramp: 0.1, // Slight upward frequency sweep
+                p_vib_speed: 6, // Gentle vibrato
+                p_vib_strength: 0.1, // Light vibrato
+                p_lpf_freq: 0.7, // Low pass filter for warmth
+                p_lpf_ramp: 0.2, // Gentle filter sweep
+                sound_vol: 0.15, // Quiet and soothing
                 sample_rate: 44100,
                 sample_size: 8
             }
@@ -121,6 +137,7 @@ export class AudioManager {
     playThruster() { this.playSound('thruster'); }
     playTractorBeam() { this.playSound('tractorBeam'); }
     playShield() { this.playSound('shield'); }
+    playHealthRegen() { this.playSound('healthRegen'); }
     
     setSfxVolume(normalizedVolume) {
         // normalizedVolume is 0-1 from the slider, map it to 0-maxSfxVolume
@@ -193,6 +210,24 @@ export class AudioManager {
                     p_freq_ramp: -0.3 + Math.random() * 0.2, // -0.3 to -0.1
                     p_hpf_freq: 0.1 + Math.random() * 0.2, // 0.1-0.3
                     sound_vol: 0.2 + Math.random() * 0.2, // 0.2-0.4
+                    sample_rate: 44100,
+                    sample_size: 8
+                };
+                break;
+            case 'healthRegen':
+                // Generate a custom healing sound with some randomization
+                newSound = {
+                    wave_type: 1, // Sawtooth for warm tone
+                    p_base_freq: 0.7 + Math.random() * 0.3, // 0.7-1.0 for bright healing sound
+                    p_env_attack: 0.2 + Math.random() * 0.2, // 0.2-0.4 gentle fade in
+                    p_env_sustain: 0.3 + Math.random() * 0.2, // 0.3-0.5 medium sustain
+                    p_env_decay: 0.4 + Math.random() * 0.4, // 0.4-0.8 gentle fade out
+                    p_freq_ramp: Math.random() * 0.2, // 0-0.2 slight upward sweep
+                    p_vib_speed: 4 + Math.random() * 4, // 4-8 gentle vibrato
+                    p_vib_strength: 0.05 + Math.random() * 0.1, // 0.05-0.15 light vibrato
+                    p_lpf_freq: 0.6 + Math.random() * 0.2, // 0.6-0.8 low pass for warmth
+                    p_lpf_ramp: 0.1 + Math.random() * 0.2, // 0.1-0.3 gentle filter sweep
+                    sound_vol: 0.1 + Math.random() * 0.1, // 0.1-0.2 quiet and soothing
                     sample_rate: 44100,
                     sample_size: 8
                 };
