@@ -205,6 +205,6 @@ const game = new RainboidsGame();
     try {
         await game.init();
     } catch (error) {
-        console.error('Failed to initialize game:', error);
+    console.error('Failed to initialize game:', error);
     }
 })(); 

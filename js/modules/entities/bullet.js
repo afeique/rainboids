@@ -13,20 +13,32 @@ export class Bullet {
         this.active = false;
     }
     
-    reset(x, y, angle) {
+    reset(x, y, angle, shootingIntensity = 0) {
         let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
-        this.x = x + Math.cos(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
-        this.y = y + Math.sin(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
-        this.radius = 3 * scale;
-        this.angle = angle;
+        
+        // Apply jitter based on shooting intensity - max 30 degrees (0.524 radians) after 5 seconds
+        const jitterAmount = shootingIntensity * 0.524; // 30 degrees = ~0.524 radians
+        const jitterAngle = angle + (Math.random() - 0.5) * jitterAmount;
+        
+        // Debug logging
+        if (shootingIntensity > 0) {
+            const angleChangeDegrees = ((jitterAngle - angle) * 180 / Math.PI);
+            console.log(`Bullet jitter: intensity=${shootingIntensity.toFixed(3)}, jitterAmount=${jitterAmount.toFixed(3)}, angleChange=${angleChangeDegrees.toFixed(1)}°`);
+        }
+        
+        this.x = x + Math.cos(jitterAngle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
+        this.y = y + Math.sin(jitterAngle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
+        this.radius = 2 * scale; // Smaller bullets
+        this.angle = jitterAngle; // Use the jittered angle
         this.vel = {
-            x: Math.cos(angle) * GAME_CONFIG.BULLET_SPEED,
-            y: Math.sin(angle) * GAME_CONFIG.BULLET_SPEED
+            x: Math.cos(jitterAngle) * GAME_CONFIG.BULLET_SPEED,
+            y: Math.sin(jitterAngle) * GAME_CONFIG.BULLET_SPEED
         };
         this.life = 0;
-        this.waveAmp = 4;
         this.active = true;
         this.mass = 1;
+        this.trail = []; // Reset trail for reused bullets
+        this.shootingIntensity = shootingIntensity; // Store for trail effects
     }
     
     update(particlePool, asteroidPool) {
@@ -34,58 +46,96 @@ export class Bullet {
         
         this.life++;
         
-        // Add wave motion
-        const perp = this.angle + Math.PI / 2;
-        const off = Math.sin(this.life * 0.2) * this.waveAmp;
+        // Store previous position for trail
+        if (!this.trail) {
+            this.trail = [];
+        }
+        this.trail.push({ x: this.x, y: this.y });
         
-        this.x += this.vel.x + Math.cos(perp) * off;
-        this.y += this.vel.y + Math.sin(perp) * off;
+        // Much longer trail length (25-30 segments based on shooting intensity)
+        const baseTrailLength = 25;
+        const maxTrailLength = 30;
+        const trailLength = baseTrailLength + Math.floor(this.shootingIntensity * (maxTrailLength - baseTrailLength));
         
-        // Homing effect: curve toward nearest asteroid if close
-        if (asteroidPool && asteroidPool.activeObjects && asteroidPool.activeObjects.length > 0) {
-            let nearest = null;
-            let minDist = 99999;
-            for (const ast of asteroidPool.activeObjects) {
-                if (!ast.active) continue;
-                const dx = ast.x - this.x;
-                const dy = ast.y - this.y;
-                const dist = Math.hypot(dx, dy);
-                if (dist < minDist && dist < 60) {
-                    minDist = dist;
-                    nearest = ast;
-                }
-            }
-            if (nearest) {
-                const dx = nearest.x - this.x;
-                const dy = nearest.y - this.y;
-                const angleToAst = Math.atan2(dy, dx);
-                // Interpolate current velocity angle toward target, but clamp max turn
-                const curAngle = Math.atan2(this.vel.y, this.vel.x);
-                let angleDiff = angleToAst - curAngle;
-                // Normalize angleDiff to [-PI, PI]
-                angleDiff = ((angleDiff + Math.PI) % (2 * Math.PI)) - Math.PI;
-                // Clamp to max 20 degrees (PI/9 radians) per frame
-                const maxTurn = Math.PI / 9;
-                if (angleDiff > maxTurn) angleDiff = maxTurn;
-                if (angleDiff < -maxTurn) angleDiff = -maxTurn;
-                // Make homing much stronger the closer the bullet is
-                let homingStrength = 1 - (minDist / 60);
-                homingStrength = Math.max(0.5, Math.min(1, homingStrength));
-                const newAngle = curAngle + angleDiff * homingStrength;
-                const speed = Math.hypot(this.vel.x, this.vel.y);
-                this.vel.x = Math.cos(newAngle) * speed;
-                this.vel.y = Math.sin(newAngle) * speed;
-            }
+        if (this.trail.length > trailLength) {
+            this.trail.shift();
         }
         
-        // Phantom trail particles disabled (motion blur disabled)
+        // Simple straight movement - no homing or wave motion
+        this.x += this.vel.x;
+        this.y += this.vel.y;
     }
 
     draw(ctx) {
         if (!this.active) return;
-        ctx.fillStyle = `hsl(${this.life * 5 % 360}, 100%, 50%)`;
+        
+        // Draw much longer and more dramatic trail
+        if (this.trail && this.trail.length > 1) {
+            ctx.save();
+            ctx.strokeStyle = '#FF6B00'; // Fiery orange
+            ctx.lineCap = 'round';
+            
+            for (let i = 1; i < this.trail.length; i++) {
+                const alpha = i / this.trail.length; // Fade from 0 to 1
+                const width = alpha * 4 + (this.shootingIntensity * 0.5); // Thicker trails with intensity
+                
+                ctx.globalAlpha = alpha * 0.9;
+                ctx.lineWidth = width;
+                
+                ctx.beginPath();
+                ctx.moveTo(this.trail[i-1].x, this.trail[i-1].y);
+                ctx.lineTo(this.trail[i].x, this.trail[i].y);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+        
+        // Draw main bullet - elongated bullet shape
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        
+        ctx.fillStyle = '#FF4500'; // Bright fiery orange
+        ctx.shadowColor = '#FF6B00';
+        ctx.shadowBlur = 8 + (this.shootingIntensity * 2); // Enhance glow with intensity
+        
+        // Draw elongated bullet body (cylinder)
+        const length = this.radius * 3; // Make it 3x longer than radius
+        const width = this.radius;
+        
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+        // Main cylindrical body
+        ctx.rect(-length/2, -width/2, length * 0.8, width);
         ctx.fill();
+        
+        // Pointed tip (triangle)
+        ctx.beginPath();
+        ctx.moveTo(length/2 - length * 0.2, 0); // Point at front
+        ctx.lineTo(length/2 - length * 0.8, -width/2); // Top of body
+        ctx.lineTo(length/2 - length * 0.8, width/2); // Bottom of body
+        ctx.closePath();
+        ctx.fill();
+        
+        // Add bright inner core (smaller elongated shape)
+        ctx.fillStyle = '#FFFF00'; // Bright yellow center
+        ctx.shadowBlur = 4 + (this.shootingIntensity * 1);
+        
+        ctx.beginPath();
+        const coreLength = length * 0.6;
+        const coreWidth = width * 0.5;
+        
+        // Core body
+        ctx.rect(-coreLength/2, -coreWidth/2, coreLength * 0.8, coreWidth);
+        ctx.fill();
+        
+        // Core tip
+        ctx.beginPath();
+        ctx.moveTo(coreLength/2 - coreLength * 0.2, 0);
+        ctx.lineTo(coreLength/2 - coreLength * 0.8, -coreWidth/2);
+        ctx.lineTo(coreLength/2 - coreLength * 0.8, coreWidth/2);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
     }
 }

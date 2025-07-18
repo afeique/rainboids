@@ -1,4 +1,4 @@
-// Star entity with various shapes and behaviors
+// Collectible star entity with various shapes and behaviors
 import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES } from '../constants.js';
 import { random, wrap } from '../utils.js';
 
@@ -6,7 +6,7 @@ function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
 }
 
-export class Star {
+export class CollectibleStar {
     constructor() {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
@@ -23,7 +23,16 @@ export class Star {
         
         // Radius and twinkle speed are now affected by density
         const densityFactor = 0.7 + (this.density || 0.5) * 0.6;
-        this.radius = (this.z * 2.2 + 1.0) * scale * densityFactor; // Further increased for bigger overall stars
+        
+        // 5% chance for a "big star" - much larger and brighter
+        const isBigStar = Math.random() < 0.05;
+        if (isBigStar) {
+            this.radius = (this.z * 1.8 + 0.8) * scale * densityFactor; // Big stars
+            this.isBigStar = true;
+        } else {
+            this.radius = (this.z * 0.6 + 0.2) * scale * densityFactor; // Normal small stars
+            this.isBigStar = false;
+        }
         
         this.opacity = 0;
         this.opacityOffset = Math.random() * Math.PI * 2;
@@ -36,7 +45,12 @@ export class Star {
         // Add rotation and size variation
         this.rotation = 0;
         this.rotationSpeed = random(-0.02, 0.02);
-        this.sizeVariation = random(0.8, 1.8); // 80% to 180% size variation
+        // Big stars get larger size variation
+        if (this.isBigStar) {
+            this.sizeVariation = random(1.2, 2.0); // Big stars: 120% to 200% size variation
+        } else {
+            this.sizeVariation = random(0.7, 1.3); // Normal stars: 70% to 130% size variation
+        }
         this.pulseSpeed = random(0.005, 0.015);
         this.pulseOffset = Math.random() * Math.PI * 2;
         
@@ -110,19 +124,7 @@ export class Star {
                 }
             }
         } else {
-            // Normal star behavior
-            const attractDist = tractorEngaged ? GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST : GAME_CONFIG.PASSIVE_STAR_ATTRACT_DIST;
-            const attractStrength = tractorEngaged ? GAME_CONFIG.ACTIVE_STAR_ATTR : GAME_CONFIG.PASSIVE_STAR_ATTR;
-
-            const dx = playerPos.x - this.x;
-            const dy = playerPos.y - this.y;
-            const dist = Math.hypot(dx, dy);
-
-            if (playerPos.active && dist < attractDist) {
-                this.vel.x += (dx / dist) * attractStrength * this.z;
-                this.vel.y += (dy / dist) * attractStrength * this.z;
-            }
-
+            // Normal star behavior - using dual-mode attraction like burst stars
             this.vel.x *= GAME_CONFIG.STAR_FRIC;
             this.vel.y *= GAME_CONFIG.STAR_FRIC;
             this.x += this.vel.x;
@@ -134,6 +136,29 @@ export class Star {
             // Update rotation for spinning stars
             this.rotation += this.rotationSpeed;
             this.pulseOffset += this.pulseSpeed;
+            
+            // Dual-mode attraction similar to burst stars but for normal stars
+            const dx = playerPos.x - this.x;
+            const dy = playerPos.y - this.y;
+            const dist = Math.hypot(dx, dy);
+            
+            const attractDist = tractorEngaged ? GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST : GAME_CONFIG.PASSIVE_STAR_ATTRACT_DIST;
+            
+            if (playerPos.active && dist < attractDist) {
+                const closeRange = 60; // Distance for strong attraction (smaller than burst stars)
+                
+                if (dist < closeRange) {
+                    // Strong close-range attraction - direct pull toward player
+                    const pullStrength = 4 + (closeRange - dist) / closeRange * 8; // 4-12 pull strength (weaker than burst stars)
+                    this.vel.x += (dx / dist) * pullStrength * 0.2 * this.z; // Scale with depth
+                    this.vel.y += (dy / dist) * pullStrength * 0.2 * this.z;
+                } else {
+                    // Normal attraction when farther away
+                    const attractStrength = tractorEngaged ? GAME_CONFIG.ACTIVE_STAR_ATTR : GAME_CONFIG.PASSIVE_STAR_ATTR;
+                    this.vel.x += (dx / dist) * attractStrength * this.z;
+                    this.vel.y += (dy / dist) * attractStrength * this.z;
+                }
+            }
         }
         
         // Enhanced parallax effect with exponential scaling
@@ -160,9 +185,11 @@ export class Star {
         const pulseMultiplier = 1 + Math.sin(this.pulseOffset) * 0.1; // Gentle pulsing
         const dynamicRadius = this.radius * this.sizeVariation * pulseMultiplier;
         
-        // Adjust opacity based on depth - distant stars are dimmer
-        const depthOpacity = Math.min(1, 0.2 + Math.pow(this.z / 4, 1.5));
+        // Adjust opacity based on depth - brighter overall
+        const depthOpacity = Math.min(1, 0.5 + Math.pow(this.z / 4, 1.2));
         ctx.globalAlpha = this.opacity * depthOpacity;
+        
+        // Remove glow effects - use direct rendering for better visibility
         
         if (this.shape === 'point') {
             const borderSize = 1;
@@ -301,8 +328,19 @@ export class Star {
             ctx.stroke();
             
             ctx.strokeStyle = this.color;
-            ctx.lineWidth = 0.5 + this.z / 5;
+            ctx.lineWidth = 1.5 + this.z / 3; // Thicker lines for better visibility
             ctx.stroke();
+        }
+        
+        // Add extra visibility for big stars without glow
+        if (this.isBigStar) {
+            ctx.save();
+            ctx.globalAlpha = this.opacity * 0.8;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, dynamicRadius * 0.4, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.restore();
         }
         
         ctx.restore();

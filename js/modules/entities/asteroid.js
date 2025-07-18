@@ -46,20 +46,20 @@ export class Asteroid {
 
         // Calculate health based on size tiers:
         // Use baseRadius for consistent health calculation
-        // Biggest asteroids (40-60 baseRadius): 8-12 health
-        // Medium asteroids (20-40 baseRadius): 4-8 health  
-        // Smallest asteroids (10-20 baseRadius): 2-4 health
+        // Biggest asteroids (40-60 baseRadius): 12-18 health
+        // Medium asteroids (20-40 baseRadius): 8-12 health  
+        // Smallest asteroids (10-20 baseRadius): 4-8 health
         let health;
         const sizeRef = this.baseRadius || this.radius;
         if (sizeRef >= 40) {
-            // Big asteroids: 8-12 health
-            health = Math.floor(8 + (sizeRef - 40) / 20 * 4); // Scale from 8 to 12 based on radius 40-60
+            // Big asteroids: 12-18 health
+            health = Math.floor(12 + (sizeRef - 40) / 20 * 6); // Scale from 12 to 18 based on radius 40-60
         } else if (sizeRef >= 20) {
-            // Medium asteroids: 4-8 health
-            health = Math.floor(4 + (sizeRef - 20) / 20 * 4); // Scale from 4 to 8 based on radius 20-40
+            // Medium asteroids: 8-12 health
+            health = Math.floor(8 + (sizeRef - 20) / 20 * 4); // Scale from 8 to 12 based on radius 20-40
         } else {
-            // Small asteroids: 2-4 health
-            health = Math.floor(2 + (sizeRef - 10) / 10 * 2); // Scale from 2 to 4 based on radius 10-20
+            // Small asteroids: 4-8 health
+            health = Math.floor(4 + (sizeRef - 10) / 10 * 4); // Scale from 4 to 8 based on radius 10-20
         }
         
         this.maxHealth = Math.max(1, health); // Ensure minimum 1 health
@@ -143,6 +143,14 @@ export class Asteroid {
     
     update() {
         if (!this.active) return;
+        
+        // Cap asteroid speed to keep them manageable to hit
+        const maxSpeed = 2.0; // Maximum speed for asteroids
+        const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+        if (currentSpeed > maxSpeed) {
+            this.vel.x = (this.vel.x / currentSpeed) * maxSpeed;
+            this.vel.y = (this.vel.y / currentSpeed) * maxSpeed;
+        }
         
         this.x += this.vel.x;
         this.y += this.vel.y;

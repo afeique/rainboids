@@ -8,10 +8,11 @@ export const GAME_CONFIG = {
     BULLET_SPEED: 12,
     INITIAL_AST_COUNT: 3,
     AST_SPEED: 1.2,
-    STAR_COUNT: 600,
+    STAR_COUNT: 100,
+    BACKGROUND_STAR_COUNT: 400, // Non-collectible background stars
     MIN_STAR_DIST: 15, // Reduced to allow for denser clusters
-    PASSIVE_STAR_ATTR: 0.5,
-    PASSIVE_STAR_ATTRACT_DIST: 50,
+    PASSIVE_STAR_ATTR: 1,
+    PASSIVE_STAR_ATTRACT_DIST: 100,
     ACTIVE_STAR_ATTR: 0.002,
     ACTIVE_STAR_ATTRACT_DIST: 300,
     STAR_FRIC: 0.995,
@@ -22,8 +23,6 @@ export const GAME_CONFIG = {
     MIN_AST_RAD: 15,
     SAFE_ZONE: 250,
     MOBILE_SCALE: 0.65,
-    STAR_SHIELDS: 1,
-    BURST_STAR_SHIELDS: 1,
 };
 
 export const NOISE_CONFIG = {
@@ -102,11 +101,11 @@ export const PARTICLE_TYPES = {
 
 export const STAR_SHAPES = [
     'point', 'point', 'point', 'point',  // Most common - simple points
-    'diamond', 'diamond',                 // Common diamonds
+    'diamond', 'diamond',                // Common diamonds
     'star4', 'star4',                    // 4-pointed stars
     'star5', 'star6',                    // 5 and 6-pointed stars
     'star8',                             // 8-pointed star
     'triangle', 'hexagon',               // Geometric shapes
-    'circle', 'square',                  // Basic shapes
+    'circle',                            // Basic shapes
     'sparkle', 'burst'                   // Special effects
 ]; 

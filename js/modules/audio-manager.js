@@ -76,19 +76,19 @@ export class AudioManager {
             this.backgroundMusic.play().catch(e => console.error("Music playback failed:", e));
         }
     }
-
+    
     playSound(soundName) {
         if (!this.audioReady || !this.audioCache[soundName] || !this.soundEnabled[soundName]) return;
         
         try {
-            const params = this.audioCache[soundName];
+        const params = this.audioCache[soundName];
             
             let snd;
             if (typeof params === 'object' && params.wave_type !== undefined) {
                 // This is a parameter object, use sfxr.toAudio
-                const soundParams = Object.assign({}, params);
-                // Apply the master volume to the sound_vol parameter
-                soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
+        const soundParams = Object.assign({}, params);
+        // Apply the master volume to the sound_vol parameter
+        soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
                 snd = sfxr.toAudio(soundParams);
             } else {
                 // This is a generated sound object, use it directly
@@ -121,12 +121,12 @@ export class AudioManager {
     playThruster() { this.playSound('thruster'); }
     playTractorBeam() { this.playSound('tractorBeam'); }
     playShield() { this.playSound('shield'); }
-
+    
     setSfxVolume(normalizedVolume) {
         // normalizedVolume is 0-1 from the slider, map it to 0-maxSfxVolume
         this.sfxMasterVol = normalizedVolume * this.maxSfxVolume;
     }
-
+    
     getSfxVolume() {
         // Return the normalized value (0-1) for the slider
         return this.sfxMasterVol / this.maxSfxVolume;

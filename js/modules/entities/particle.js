@@ -291,26 +291,40 @@ export class Particle {
                 
             case 'starBlip':
                 ctx.save();
-                ctx.globalAlpha = Math.max(0, this.life * 2); // Brighter
+                // Add bright glow effect
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = this.radius * 3;
+                ctx.globalAlpha = Math.max(0, this.life * 2.5); // Even brighter
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
-                // Add inner bright core
-                ctx.globalAlpha = Math.max(0, this.life * 3);
-                ctx.fillStyle = '#FFFFE0'; // Light yellow
+                // Add super bright inner core
+                ctx.shadowBlur = this.radius * 2;
+                ctx.globalAlpha = Math.max(0, this.life * 4);
+                ctx.fillStyle = '#FFFFFF'; // Pure white center
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 0.5, 0, 2 * Math.PI);
+                ctx.arc(this.x, this.y, this.radius * 0.4, 0, 2 * Math.PI);
                 ctx.fill();
                 ctx.restore();
                 break;
                 
             case 'starSparkle':
                 ctx.save();
-                ctx.globalAlpha = Math.max(0, this.life * 2);
+                // Add glow effect to sparkles
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = this.radius * 4;
+                ctx.globalAlpha = Math.max(0, this.life * 2.5);
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+                ctx.fill();
+                // Add bright center
+                ctx.shadowBlur = this.radius * 2;
+                ctx.globalAlpha = Math.max(0, this.life * 3);
+                ctx.fillStyle = '#FFFFAA'; // Bright yellow-white center
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.6, 0, 2 * Math.PI);
                 ctx.fill();
                 ctx.restore();
                 break;

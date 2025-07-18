@@ -6,7 +6,8 @@ import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
 import { Asteroid } from './entities/asteroid.js';
 import { Particle } from './entities/particle.js';
-import { Star } from './entities/star.js';
+import { CollectibleStar } from './entities/collectible-star.js';
+import { BackgroundStar } from './entities/background-star.js';
 import { LineDebris } from './entities/line-debris.js';
 
 export const PLAYER_STATES = {
@@ -62,7 +63,8 @@ export class GameEngine {
         this.particlePool = new PoolManager(Particle, 200);
         this.lineDebrisPool = new PoolManager(LineDebris, 100);
         this.asteroidPool = new PoolManager(Asteroid, 20);
-        this.starPool = new PoolManager(Star, GAME_CONFIG.STAR_COUNT + 100);
+        this.starPool = new PoolManager(CollectibleStar, GAME_CONFIG.STAR_COUNT + 100);
+        this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT);
     }
     
     setupEventListeners() {
@@ -144,9 +146,11 @@ export class GameEngine {
         this.lineDebrisPool.activeObjects = [];
         this.asteroidPool.activeObjects = [];
         this.starPool.activeObjects = [];
+        this.backgroundStarPool.activeObjects = [];
         
         // Generate all stars at once using generative method
         this.generateInitialStars();
+        this.generateBackgroundStars();
         
         this.startNextWave();
         this.uiManager.hideMessage();
@@ -161,6 +165,18 @@ export class GameEngine {
         
         starPositions.forEach(({ x, y, z, density }) => {
             const star = this.starPool.get(x, y, false, z, density);
+        });
+    }
+    
+    // Generate background stars using same generative logic
+    generateBackgroundStars() {
+        const spawnWidth = Math.max(this.width, this.height);
+        const spawnHeight = this.height;
+        
+        const backgroundStarPositions = generateStarPositions(spawnWidth, spawnHeight, GAME_CONFIG.BACKGROUND_STAR_COUNT);
+        
+        backgroundStarPositions.forEach(({ x, y, z, density }) => {
+            const backgroundStar = this.backgroundStarPool.get(x, y, z, density);
         });
     }
     
@@ -198,6 +214,7 @@ export class GameEngine {
         this.lineDebrisPool.cleanupInactive();
         this.asteroidPool.cleanupInactive();
         this.starPool.cleanupInactive();
+        this.backgroundStarPool.cleanupInactive();
         this.game.currentWave++;
         this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500);
         this.game.state = GAME_STATES.WAVE_TRANSITION;
@@ -215,6 +232,7 @@ export class GameEngine {
         // No rapid recharge between waves - shields persist
         // Only restore shields at game start
     }
+
     
     spawnAsteroidOffscreen() {
         let x, y;
@@ -320,26 +338,27 @@ export class GameEngine {
                             this.createDebris(ast);
                             this.createStarBurst(ast.x, ast.y);
                             this.asteroidPool.release(ast);
-                            // No screen shake for asteroid destruction
+                            // Small screen shake for small asteroid destruction
+                            this.triggerScreenShake(8, ast.baseRadius * 0.15, ast.baseRadius);
                         } else {
                             // Make the explosion really dramatic
-                            this.audioManager.playExplosion();
+                                this.audioManager.playExplosion();
                             this.triggerScreenShake(20, ast.baseRadius * 0.25, ast.baseRadius);
 
                             // Add a bunch of particle effects
                             this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.5);
                             this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * 1.2);
                             for (let p = 0; p < 40; p++) {
-                                this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
-                            }
-                            this.createDebris(ast);
-                            this.createStarBurst(ast.x, ast.y);
+                                    this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
+                                }
+                                this.createDebris(ast);
+                                this.createStarBurst(ast.x, ast.y);
                             
                             const count = (Math.random() < 0.5 ? 2 : 3) + 1; // Now 3 or 4
                             const newR = ast.baseRadius / Math.sqrt(count);
                             const angleSlice = (2 * Math.PI) / count;
-                            
-                            for (let k = 0; k < count; k++) {
+                                
+                                for (let k = 0; k < count; k++) {
                                 // Spawn fragments around the parent's center with jitter
                                 const spawnX = ast.x + random(-ast.radius * 0.2, ast.radius * 0.2);
                                 const spawnY = ast.y + random(-ast.radius * 0.2, ast.radius * 0.2);
@@ -422,55 +441,38 @@ export class GameEngine {
                     this.game.money += star.isBurst ? GAME_CONFIG.BURST_STAR_SCORE : GAME_CONFIG.STAR_SCORE;
                     this.audioManager.playCoin();
                     
-                    // Create enhanced golden blip effect
-                    // Central bright flash
+                    // Create focused golden burst effect
+                    // Central bright flash - smaller and more focused
                     const blip = this.particlePool.get(star.x, star.y, 'starBlip');
                     if (blip) {
-                        blip.color = '#FFD700'; // Gold color
-                        blip.radius = 3; // Slightly larger
-                        blip.life = 0.3; // Slightly longer
+                        blip.color = '#FFFF00'; // Bright golden-yellow
+                        blip.radius = 4; // Smaller, more focused
+                        blip.life = 0.4; // Shorter duration
                         blip.fadeRate = 0.1;
-                        blip.growthRate = 0.2; // Slight expansion
+                        blip.growthRate = 0.2; // Less expansion
                     }
                     
-                    // Ring of smaller sparkles
-                    for (let i = 0; i < 6; i++) {
-                        const angle = (i / 6) * Math.PI * 2;
-                        const dist = 8;
+                    // Enhanced ring of sparkles - more visible but balanced
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (i / 8) * Math.PI * 2;
+                        const dist = 12; // Slightly larger radius for better spread
                         const sparkle = this.particlePool.get(
                             star.x + Math.cos(angle) * dist,
                             star.y + Math.sin(angle) * dist,
                             'starSparkle'
                         );
                         if (sparkle) {
-                            sparkle.color = '#FFD700';
-                            sparkle.radius = 1;
-                            sparkle.life = 0.4;
+                            sparkle.color = '#FFFF00'; // Bright golden-yellow
+                            sparkle.radius = 2.5; // Larger sparkles for better visibility
+                            sparkle.life = 0.8; // Longer duration so they're visible longer
                             sparkle.vel = {
-                                x: Math.cos(angle) * 2,
-                                y: Math.sin(angle) * 2
+                                x: Math.cos(angle) * 1.8, // Slightly slower so they're visible longer
+                                y: Math.sin(angle) * 1.8
                             };
                         }
                     }
                     
-                    // Add shields up to max capacity (999 total)
-                    const currentTotalShields = this.shieldTanks * this.maxShields + this.playerShields;
-                    const maxTotalShields = 999;
                     
-                    if (currentTotalShields < maxTotalShields) {
-                        const addAmount = star.isBurst ? GAME_CONFIG.BURST_STAR_SHIELDS : GAME_CONFIG.STAR_SHIELDS;
-                        let newTotalShields = Math.min(currentTotalShields + addAmount, maxTotalShields);
-                        
-                        // Calculate new tanks and shields
-                        this.shieldTanks = Math.floor(newTotalShields / this.maxShields);
-                        this.playerShields = newTotalShields % this.maxShields;
-                        
-                        // Special case: if we have exactly 999 shields
-                        if (newTotalShields === 999) {
-                            this.shieldTanks = 10;
-                            this.playerShields = 99;
-                        }
-                    }
                     if (!star.isBurst) this.spawnStar();
                     this.starPool.release(star);
                 }
@@ -491,6 +493,8 @@ export class GameEngine {
             this.asteroidPool.updateActive();
             // Update stars with player position and tractor beam state
             this.starPool.activeObjects.forEach(s => s.update(this.player.vel, this.player, tractorEngaged));
+            // Update background stars with just player velocity for parallax
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel));
             
             this.handleCollisions();
             
@@ -503,6 +507,8 @@ export class GameEngine {
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
+            // Continue background star animation even when paused
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel));
         }
     }
     
@@ -512,12 +518,16 @@ export class GameEngine {
         this.ctx.fillRect(0, 0, this.width, this.height);
         
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
+            this.backgroundStarPool.drawActive(this.ctx); // Draw background stars first
             this.starPool.drawActive(this.ctx);
             this.lineDebrisPool.drawActive(this.ctx);
             this.particlePool.drawActive(this.ctx);
             this.asteroidPool.drawActive(this.ctx);
             this.bulletPool.drawActive(this.ctx);
             this.player.draw(this.ctx);
+            
+            // Draw jitter circle to show bullet spread area
+            this.drawJitterCircle();
         }
     }
     
@@ -525,6 +535,60 @@ export class GameEngine {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
             // Draw health bar and UI elements
             this.updateShieldsDisplay();
+        }
+    }
+    
+    drawJitterCircle() {
+        const input = this.inputHandler.getInput();
+        const intensity = this.player.shootingIntensity || 0;
+        
+        // Initialize fade tracking if needed
+        if (!this.jitterCircleFade) {
+            this.jitterCircleFade = {
+                visible: false,
+                alpha: 0,
+                targetAlpha: 0
+            };
+        }
+        
+        // Update target alpha based on shooting intensity
+        if (intensity > 0) {
+            this.jitterCircleFade.targetAlpha = Math.min(0.4, 0.1 + intensity * 0.3); // Fade to 0.1-0.4 alpha
+            this.jitterCircleFade.visible = true;
+        } else {
+            this.jitterCircleFade.targetAlpha = 0;
+        }
+        
+        // Smooth fade transition (60fps assumed, ~16ms per frame)
+        const fadeSpeed = 0.08; // Adjust for faster/slower fade
+        if (this.jitterCircleFade.alpha < this.jitterCircleFade.targetAlpha) {
+            this.jitterCircleFade.alpha = Math.min(this.jitterCircleFade.targetAlpha, 
+                this.jitterCircleFade.alpha + fadeSpeed);
+        } else if (this.jitterCircleFade.alpha > this.jitterCircleFade.targetAlpha) {
+            this.jitterCircleFade.alpha = Math.max(this.jitterCircleFade.targetAlpha, 
+                this.jitterCircleFade.alpha - fadeSpeed);
+        }
+        
+        // Hide when fully faded out
+        if (this.jitterCircleFade.alpha <= 0.01) {
+            this.jitterCircleFade.visible = false;
+            this.jitterCircleFade.alpha = 0;
+        }
+        
+        // Draw circle if visible
+        if (this.jitterCircleFade.visible && this.jitterCircleFade.alpha > 0) {
+            // Base radius starts at 20px, scales up to 80px based on intensity
+            const baseRadius = 20;
+            const maxRadius = 80;
+            const currentRadius = baseRadius + (maxRadius - baseRadius) * intensity;
+            
+            this.ctx.save();
+            this.ctx.globalAlpha = this.jitterCircleFade.alpha;
+            this.ctx.fillStyle = '#666666'; // Gray color
+            this.ctx.beginPath();
+            this.ctx.arc(input.aimX, input.aimY, currentRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.restore();
         }
     }
     
@@ -621,7 +685,7 @@ export class GameEngine {
         this.inputHandler.setupTouchControls();
         this.gameLoop();
     }
-    
+
     checkCursorTarget(mouseX, mouseY) {
         // Check if cursor is over any asteroid (enemy)
         for (const ast of this.asteroidPool.activeObjects) {
@@ -674,7 +738,7 @@ export class GameEngine {
                 this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
                 this.player.health = this.player.maxHealth;
                 this.audioManager.playCoin(); // Tank used sound
-            } else {
+                } else {
                 this.gameOver();
             }
         }
@@ -785,7 +849,7 @@ export class GameEngine {
                 gradient.addColorStop(0.3, 'rgba(150, 200, 220, 0.9)');
                 gradient.addColorStop(0.7, 'rgba(120, 180, 200, 0.85)');
                 gradient.addColorStop(1, 'rgba(100, 140, 160, 0.8)');
-            } else {
+                } else {
                 // Critical - red-tinted with urgency
                 gradient.addColorStop(0, 'rgba(255, 180, 180, 0.95)');
                 gradient.addColorStop(0.3, 'rgba(240, 140, 160, 0.9)');
@@ -820,7 +884,7 @@ export class GameEngine {
         } else if (textHealthPercentage > 0.3) {
             textColor = 'rgba(150, 220, 255, 0.9)';
             strokeColor = 'rgba(120, 180, 200, 0.6)';
-        } else {
+            } else {
             textColor = 'rgba(255, 150, 150, 0.9)';
             strokeColor = 'rgba(220, 120, 150, 0.6)';
         }

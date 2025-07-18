@@ -845,6 +845,10 @@ canvas.asteroid-hover {
         top: 60px;
         right: 20px;
     }
+    /* Hide music info box on mobile - takes up too much space */
+    #music-info {
+        display: none;
+    }
 }
 
 @keyframes scanline {

@@ -23,6 +23,14 @@ export class Player {
         this.lastHitTime = 0;
         this.lastBlinkTime = 0;
         
+        // Shooting intensity tracking
+        this.shootingIntensity = 0;
+        this.maxShootingIntensity = 1; // Now represents 0-1 scale instead of 0-10
+        this.shootingDecayRate = 0.98; // How fast intensity decays when not shooting
+        this.lastShotTime = 0;
+        this.continuousShootingStartTime = 0; // When continuous shooting started
+        this.maxIntensityTime = 3000; // 3 seconds to reach maximum intensity
+        
         this.initializePlayer();
     }
     
@@ -40,6 +48,11 @@ export class Player {
         this.thrustersDisabled = false;
         this.invincible = false;
         this.invincibilityTimer = 0;
+        
+        // Reset shooting intensity
+        this.shootingIntensity = 0;
+        this.lastShotTime = 0;
+        this.continuousShootingStartTime = 0;
         
         let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
@@ -74,6 +87,19 @@ export class Player {
                 this.invincibilityTimer = 0;
             }
         }
+
+        // Update shooting intensity - decay over time
+        const currentTime = Date.now();
+        const timeSinceLastShot = currentTime - this.lastShotTime;
+        
+        // Reset continuous shooting timer if player hasn't shot for a while (500ms)
+        if (timeSinceLastShot > 500) {
+            this.continuousShootingStartTime = 0;
+            this.shootingIntensity = 0;
+            console.log(`Reset continuous shooting timer due to inactivity (${timeSinceLastShot}ms)`);
+        }
+        
+        console.log(`Before update: timeSinceLastShot=${timeSinceLastShot}, intensity=${this.shootingIntensity.toFixed(3)}, startTime=${this.continuousShootingStartTime}`);
 
         // Aiming
         const dx = input.aimX - this.x;
@@ -135,9 +161,23 @@ export class Player {
         this.y += this.vel.y;
         wrap(this, this.width, this.height);
 
-        // Handle continuous shooting
+        // Handle continuous shooting with intensity tracking
         if (input.fire && this.canShoot) {
-            bulletPool.get(this.x, this.y, this.angle);
+            // Start continuous shooting timer if not already started
+            if (this.continuousShootingStartTime === 0) {
+                this.continuousShootingStartTime = currentTime;
+            }
+            
+            // Calculate time-based shooting intensity (0-1 over 5 seconds)
+            const continuousShootingDuration = currentTime - this.continuousShootingStartTime;
+            this.shootingIntensity = Math.min(1, continuousShootingDuration / this.maxIntensityTime);
+            this.lastShotTime = currentTime;
+            
+            // Debug logging
+            console.log(`Shooting: duration=${continuousShootingDuration}ms, intensity=${this.shootingIntensity.toFixed(3)}`);
+            
+            // Pass shooting intensity (0-1) to bullet
+            bulletPool.get(this.x, this.y, this.angle, this.shootingIntensity);
             audioManager.playShoot();
             this.canShoot = false;
             setTimeout(() => this.canShoot = true, 200);
