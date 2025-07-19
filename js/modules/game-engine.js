@@ -1,13 +1,13 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
 import { random, collision, burstStarCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
-import { starfieldRenderer } from './performance/starfield-renderer.js';
-import { lightweightStarfieldOptimizer } from './performance/lightweight-starfield.js';
 import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
 import { Asteroid } from './entities/asteroid.js';
+import { Enemy, ENEMY_TYPES } from './entities/enemy.js';
+import { EnemyBullet } from './entities/enemy-bullet.js';
 import { Particle } from './entities/particle.js';
 import { ColorStar } from './entities/color-star.js';
 import { BackgroundStar } from './entities/background-star.js';
@@ -36,23 +36,49 @@ export class GameEngine {
         this.setupEventListeners();
         this.playerCanFire = true;
         this.previousFire = false;
-        this.baseDamage = 20; // Base damage per hit
+        this.baseDamage = 1; // Base damage per hit
 
         this.playerState = PLAYER_STATES.NORMAL;
         this.pendingDamage = 0; // New property to track pending damage
 
         this.shieldIcon = new Image();
-        this.shieldIcon.src = 'assets/shield-icon.svg';
         
-        // Initialize optimized starfield renderer
-        starfieldRenderer.initialize();
-        this.starfieldRenderMode = 'depth'; // Options: 'depth', 'lightweight', 'fallback'
+        // Enhanced wave management
+        this.waveTimer = 0;
+        this.lastEnemySpawn = 0;
+        this.waveInProgress = false;
         
-        // Print debug commands to console
-        console.log('🌟 Starfield Debug Commands:');
-        console.log('  gameEngine.cycleStarfieldMode() - Switch rendering modes');
-        console.log('  gameEngine.debugStarfieldPerformance() - View performance stats');
-        console.log('  gameEngine.showDepthBatchStats() - View depth batching stats');
+        // Sub-wave tracking
+        this.currentSubWave = 0;
+        this.subWaveTimer = 0;
+        this.enemiesRemainingInSubWave = 0;
+        
+        // Wave phase tracking
+        this.wavePhase = 'waiting'; // 'waiting', 'asteroids', 'enemies', 'complete'
+        this.wavePhaseTimer = 0;
+        
+        // Depth-based starfield rendering initialized
+        console.log('🌟 Starfield Depth Batching Active');
+        console.log('  gameEngine.debugStarfieldPerformance() - Show performance stats');
+        console.log('  gameEngine.showDepthBatchStats() - Show depth batching details');
+        console.log('🤖 Enemy System Ready:');
+        console.log('  🔴 HUNTER (Triangle) - 10 HP - Fast aggressive chaser');
+        console.log('  🟢 GUARDIAN (Square) - 20 HP - Defensive spread shooter');
+        console.log('  🟡 WASP (Diamond) - 8 HP - Fast swarm enemy');
+        console.log('  🟣 TITAN (Hexagon) - 30 HP - Heavy orbital enemy');
+        console.log('  🔵 STALKER (Cross) - 10 HP - Stealth approach enemy');
+        console.log('  🟠 BOMBER (Spiked Circle) - 15 HP - Explosive projectiles');
+        console.log('💥 Combat System: Player bullets = 1 dmg, Enemy bullets = 2 dmg');
+        console.log(`💚 Health System: Burst stars heal ${GAME_CONFIG.BURST_STAR_HEAL_AMOUNT}HP each! Enemies drop ${GAME_CONFIG.BURST_STAR_DROP_COUNT} per kill!`);
+        console.log(`🪨 Asteroid Interactions: Enemy bullets deal ${GAME_CONFIG.ENEMY_BULLET_ASTEROID_DAMAGE} damage to asteroids, enemies bounce off (no damage)`);
+        console.log('💥 Player Damage Feedback: Screen shake, red damage numbers, and colored explosions when hit');
+        console.log('🎆 Bullet Impact Effects: Colored particle explosions for all enemy bullet impacts');
+        console.log('🟠 Player Bullet Effects: Satisfying orange explosions on all player bullet hits');
+        console.log('♻️  Enemy Bullet Lifecycle: No fade decay, recycled when off-screen for efficiency');
+        console.log('👻 Enemy Phase-Through: Enemies pass through each other and enemy bullets');
+        console.log('🕶️ Enemy Dodging: Enemies actively dodge each other\'s bullets with predictive AI');
+        console.log('💊 Tunable Healing: Burst star heal amount now configurable in constants');
+        console.log('🌊 Enhanced Waves: Multi-phase waves with asteroids first, then enemy sub-waves');
     }
     
     // Helper method to initialize/reset game state
@@ -76,6 +102,8 @@ export class GameEngine {
         this.particlePool = new PoolManager(Particle, 200);
         this.lineDebrisPool = new PoolManager(LineDebris, 100);
         this.asteroidPool = new PoolManager(Asteroid, 20);
+        this.enemyPool = new PoolManager(Enemy, 15);
+        this.enemyBulletPool = new PoolManager(EnemyBullet, 50);
         this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 100);
         this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT);
     }
@@ -149,11 +177,23 @@ export class GameEngine {
         this.displayTanks = 0;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
+        
+        // Reset enhanced wave state
+        this.waveTimer = 0;
+        this.lastEnemySpawn = 0;
+        this.waveInProgress = false;
+        this.currentSubWave = 0;
+        this.subWaveTimer = 0;
+        this.enemiesRemainingInSubWave = 0;
+        this.wavePhase = 'waiting';
+        this.wavePhaseTimer = 0;
         // Clear all pools
         this.bulletPool.activeObjects = [];
         this.particlePool.activeObjects = [];
         this.lineDebrisPool.activeObjects = [];
         this.asteroidPool.activeObjects = [];
+        this.enemyPool.activeObjects = [];
+        this.enemyBulletPool.activeObjects = [];
         this.colorStarPool.activeObjects = [];
         this.backgroundStarPool.activeObjects = [];
         
@@ -161,8 +201,15 @@ export class GameEngine {
         this.generateInitialColorStars();
         this.generateBackgroundStars();
         
-        this.startNextWave();
-        this.uiManager.hideMessage();
+        // Initialize first wave with enhanced wave system
+        this.game.currentWave = 1;
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500);
+        this.game.state = GAME_STATES.WAVE_TRANSITION;
+        setTimeout(() => {
+            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+                this.game.state = GAME_STATES.PLAYING;
+            }
+        }, 1500);
     }
     
     // Generate all initial color stars using purely generative method
@@ -222,20 +269,21 @@ export class GameEngine {
         this.particlePool.cleanupInactive();
         this.lineDebrisPool.cleanupInactive();
         this.asteroidPool.cleanupInactive();
+        this.enemyPool.cleanupInactive();
+        this.enemyBulletPool.cleanupInactive();
         this.colorStarPool.cleanupInactive();
         this.backgroundStarPool.cleanupInactive();
-        this.game.currentWave++;
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500);
+        // Note: Wave increment now handled by enhanced wave system (completeWave method)
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave + 1}`, '', 1500);
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         // Reset player state at wave start
         this.playerState = PLAYER_STATES.NORMAL;
         
         // Restore player health to full between waves
         this.player.health = this.player.maxHealth;
-        const numAsteroids = GAME_CONFIG.INITIAL_AST_COUNT + (this.game.currentWave - 1) * 2;
-        for (let i = 0; i < numAsteroids; i++) {
-            this.spawnAsteroidOffscreen();
-        }
+        
+        // Note: Asteroid spawning now handled by enhanced wave system
+        // via spawnWaveAsteroids() in startNewWave()
         setTimeout(() => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.game.state = GAME_STATES.PLAYING;
@@ -294,6 +342,273 @@ export class GameEngine {
         }
     }
     
+    // Enhanced wave management with sub-waves
+    updateWaves() {
+        if (this.game.state !== GAME_STATES.PLAYING) return;
+        
+        const now = Date.now();
+        
+        // Check if current wave is complete (all enemies AND asteroids eliminated)
+        if (this.waveInProgress && 
+            this.enemyPool.activeObjects.length === 0 && 
+            this.asteroidPool.activeObjects.length === 0 &&
+            this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE &&
+            this.enemiesRemainingInSubWave <= 0) {
+            
+            this.completeWave();
+            return;
+        }
+        
+        // Start new wave
+        if (!this.waveInProgress && now > this.waveTimer) {
+            this.startNewWave();
+            return;
+        }
+        
+        // Handle wave phases
+        if (this.waveInProgress) {
+            this.updateWavePhases(now);
+        }
+    }
+    
+    updateWavePhases(now) {
+        switch (this.wavePhase) {
+            case 'asteroids':
+                // Asteroids should spawn immediately when wave starts
+                if (now - this.wavePhaseTimer > GAME_CONFIG.WAVE_ASTEROID_DELAY) {
+                    this.wavePhase = 'enemies';
+                    this.wavePhaseTimer = now;
+                    this.currentSubWave = 0;
+                    this.startEnemySubWave();
+                }
+                break;
+                
+            case 'enemies':
+                // Handle enemy sub-wave spawning
+                if (this.currentSubWave < GAME_CONFIG.SUB_WAVES_PER_WAVE) {
+                    // Check if current sub-wave is complete
+                    if (this.enemiesRemainingInSubWave <= 0 && 
+                        now - this.subWaveTimer > GAME_CONFIG.SUB_WAVE_INTERVAL) {
+                        this.currentSubWave++;
+                        if (this.currentSubWave < GAME_CONFIG.SUB_WAVES_PER_WAVE) {
+                            this.startEnemySubWave();
+                        }
+                    }
+                    
+                    // Spawn enemies in current sub-wave
+                    if (this.enemiesRemainingInSubWave > 0 && 
+                        now - this.lastEnemySpawn > 800) { // Faster spawning within sub-waves
+                        this.spawnRandomEnemy();
+                        this.enemiesRemainingInSubWave--;
+                        this.lastEnemySpawn = now;
+                    }
+                }
+                break;
+        }
+    }
+    
+    completeWave() {
+        this.waveInProgress = false;
+        this.game.currentWave++;
+        this.waveTimer = Date.now() + 3000; // 3 second break between waves
+        this.wavePhase = 'waiting';
+        
+        console.log(`✅ Wave ${this.game.currentWave} complete! Next wave in 3 seconds...`);
+    }
+    
+    startNewWave() {
+        this.waveInProgress = true;
+        this.wavePhase = 'asteroids';
+        this.wavePhaseTimer = Date.now();
+        this.currentSubWave = 0;
+        this.enemiesRemainingInSubWave = 0;
+        
+        // Spawn asteroids first
+        this.spawnWaveAsteroids();
+        
+        console.log(`🚨 Wave ${this.game.currentWave} starting!`);
+        console.log(`🪨 Spawning asteroids first...`);
+        console.log(`👾 ${GAME_CONFIG.SUB_WAVES_PER_WAVE} enemy sub-waves incoming!`);
+    }
+    
+    spawnWaveAsteroids() {
+        const numAsteroids = GAME_CONFIG.INITIAL_AST_COUNT + Math.floor(this.game.currentWave / 2);
+        
+        for (let i = 0; i < numAsteroids; i++) {
+            setTimeout(() => {
+                const asteroid = this.asteroidPool.get();
+                if (asteroid) {
+                    this.initializeWaveAsteroid(asteroid);
+                }
+            }, i * 200); // Stagger asteroid spawning
+        }
+    }
+    
+    startEnemySubWave() {
+        this.enemiesRemainingInSubWave = GAME_CONFIG.ENEMIES_PER_SUB_WAVE + 
+                                        Math.floor(this.game.currentWave / 3); // Scale with wave
+        this.subWaveTimer = Date.now();
+        this.lastEnemySpawn = 0; // Spawn first enemy immediately
+        
+        console.log(`🔥 Sub-wave ${this.currentSubWave + 1}/${GAME_CONFIG.SUB_WAVES_PER_WAVE}: ${this.enemiesRemainingInSubWave} enemies!`);
+    }
+    
+    initializeWaveAsteroid(asteroid) {
+        // Spawn asteroid at random edge position
+        let x, y;
+        const edge = Math.floor(random(0, 4));
+        const r = random(30, 60);
+        const spawnBuffer = r * 4;
+        
+        switch (edge) {
+            case 0: x = random(0, this.width); y = -spawnBuffer; break;
+            case 1: x = this.width + spawnBuffer; y = random(0, this.height); break;
+            case 2: x = random(0, this.width); y = this.height + spawnBuffer; break;
+            case 3: x = -spawnBuffer; y = random(0, this.height); break;
+        }
+        
+        const spd = Math.min(2.5, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.1);
+        const vel = {
+            x: random(-spd, spd) || 0.2,
+            y: random(-spd, spd) || 0.2
+        };
+        
+        asteroid.initializeAsteroid(x, y, r);
+        asteroid.vel = vel;
+    }
+    
+    // Legacy method - replaced by startNewWave and sub-wave system
+    
+    spawnRandomEnemy() {
+        // Choose enemy type based on wave progression
+        const enemyTypes = Object.keys(ENEMY_TYPES);
+        let availableTypes = ['HUNTER', 'WASP']; // Start with basic types
+        
+        if (this.game.currentWave >= 2) availableTypes.push('GUARDIAN', 'STALKER');
+        if (this.game.currentWave >= 4) availableTypes.push('BOMBER');
+        if (this.game.currentWave >= 6) availableTypes.push('TITAN');
+        
+        const enemyType = availableTypes[Math.floor(random(0, availableTypes.length))];
+        
+        // Spawn at random edge position
+        const edge = Math.floor(random(0, 4)); // 0=top, 1=right, 2=bottom, 3=left
+        let x, y;
+        
+        switch (edge) {
+            case 0: // Top
+                x = random(50, this.width - 50);
+                y = -50;
+                break;
+            case 1: // Right
+                x = this.width + 50;
+                y = random(50, this.height - 50);
+                break;
+            case 2: // Bottom
+                x = random(50, this.width - 50);
+                y = this.height + 50;
+                break;
+            case 3: // Left
+                x = -50;
+                y = random(50, this.height - 50);
+                break;
+        }
+        
+        const enemy = this.enemyPool.get(x, y, enemyType);
+        if (enemy) {
+            console.log(`👾 ${enemyType} spawned at wave ${this.game.currentWave}`);
+        }
+    }
+    
+    createEnemyDebris(enemy) {
+        // Create explosion particles
+        for (let i = 0; i < 20; i++) {
+            const particle = this.particlePool.get(enemy.x, enemy.y, 'explosion');
+            if (particle) {
+                particle.color = enemy.color;
+            }
+        }
+        
+        // Create colored line debris based on enemy shape
+        this.createShapeDebris(enemy);
+        
+        // Screen shake
+        this.triggerScreenShake(12, 8, enemy.radius);
+    }
+    
+    createShapeDebris(enemy) {
+        const debrisCount = 6; // Number of debris pieces
+        const size = enemy.radius * 0.8;
+        
+        for (let i = 0; i < debrisCount; i++) {
+            // Create line segments based on enemy shape
+            let p1, p2;
+            
+            switch (enemy.type) {
+                case 'HUNTER': // Triangle debris
+                    const triangleAngle = (i / 3) * Math.PI * 2 / 3;
+                    p1 = { x: Math.cos(triangleAngle) * size * 0.5, y: Math.sin(triangleAngle) * size * 0.5 };
+                    p2 = { x: Math.cos(triangleAngle + Math.PI * 2/3) * size * 0.5, y: Math.sin(triangleAngle + Math.PI * 2/3) * size * 0.5 };
+                    break;
+                    
+                case 'GUARDIAN': // Square debris
+                    const squareAngle = (i / 4) * Math.PI * 2;
+                    p1 = { x: Math.cos(squareAngle) * size * 0.5, y: Math.sin(squareAngle) * size * 0.5 };
+                    p2 = { x: Math.cos(squareAngle + Math.PI/2) * size * 0.5, y: Math.sin(squareAngle + Math.PI/2) * size * 0.5 };
+                    break;
+                    
+                case 'WASP': // Diamond debris
+                    const diamondAngle = (i / 4) * Math.PI * 2 + Math.PI/4;
+                    p1 = { x: Math.cos(diamondAngle) * size * 0.4, y: Math.sin(diamondAngle) * size * 0.4 };
+                    p2 = { x: Math.cos(diamondAngle + Math.PI/2) * size * 0.4, y: Math.sin(diamondAngle + Math.PI/2) * size * 0.4 };
+                    break;
+                    
+                case 'TITAN': // Hexagon debris
+                    const hexAngle = (i / 6) * Math.PI * 2;
+                    p1 = { x: Math.cos(hexAngle) * size * 0.6, y: Math.sin(hexAngle) * size * 0.6 };
+                    p2 = { x: Math.cos(hexAngle + Math.PI/3) * size * 0.6, y: Math.sin(hexAngle + Math.PI/3) * size * 0.6 };
+                    break;
+                    
+                case 'STALKER': // Cross debris
+                    if (i < 2) {
+                        // Horizontal pieces
+                        p1 = { x: -size * 0.5, y: 0 };
+                        p2 = { x: size * 0.5, y: 0 };
+                    } else {
+                        // Vertical pieces
+                        p1 = { x: 0, y: -size * 0.5 };
+                        p2 = { x: 0, y: size * 0.5 };
+                    }
+                    break;
+                    
+                case 'BOMBER': // Spiked circle debris
+                    const spikeAngle = (i / 8) * Math.PI * 2;
+                    p1 = { x: Math.cos(spikeAngle) * size * 0.3, y: Math.sin(spikeAngle) * size * 0.3 };
+                    p2 = { x: Math.cos(spikeAngle) * size * 0.6, y: Math.sin(spikeAngle) * size * 0.6 };
+                    break;
+                    
+                default:
+                    // Default random debris
+                    const angle = (i / debrisCount) * Math.PI * 2;
+                    p1 = { x: Math.cos(angle) * size * 0.3, y: Math.sin(angle) * size * 0.3 };
+                    p2 = { x: Math.cos(angle) * size * 0.6, y: Math.sin(angle) * size * 0.6 };
+            }
+            
+            this.lineDebrisPool.get(enemy.x, enemy.y, p1, p2, enemy.color);
+        }
+    }
+    
+    createEnemyBurstStar(x, y) {
+        // Create a collectible burst star that heals the player
+        const burstStar = this.colorStarPool.get(x, y, true); // true = is burst star
+        if (burstStar) {
+            // Give it some random velocity to scatter from the enemy position
+            const angle = random(0, Math.PI * 2);
+            const speed = random(1, 3);
+            burstStar.vel.x = Math.cos(angle) * speed;
+            burstStar.vel.y = Math.sin(angle) * speed;
+        }
+    }
+    
     handleCollisions() {
         // Player-asteroid collisions
         this.asteroidPool.activeObjects.forEach(ast => {
@@ -321,8 +636,21 @@ export class GameEngine {
                     ast.vel.x += bullet.vel.x * impulse;
                     ast.vel.y += bullet.vel.y * impulse;
                     
-                    // Hit effects
+                    // Orange explosion effects for player bullets
                     this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', ast.baseRadius * 0.5);
+                    for (let p = 0; p < 10; p++) {
+                        const particle = this.particlePool.get(bullet.x, bullet.y, 'explosion');
+                        if (particle) {
+                            particle.color = '#ff8800'; // Orange color
+                            // Add random velocity for explosion effect
+                            const angle = random(0, Math.PI * 2);
+                            const speed = random(1, 4);
+                            particle.vel = {
+                                x: Math.cos(angle) * speed,
+                                y: Math.sin(angle) * speed
+                            };
+                        }
+                    }
                     for (let p = 0; p < 7; p++) {
                         this.particlePool.get(bullet.x, bullet.y, 'explosionRedOrange');
                     }
@@ -451,7 +779,25 @@ export class GameEngine {
                 if (colorStar.isBurst && burstStarCollision(this.player, colorStar)) {
                     this.game.score += GAME_CONFIG.BURST_STAR_MONEY;
                     this.game.money += GAME_CONFIG.BURST_STAR_MONEY;
-                    this.audioManager.playCoin();
+                    
+                    // Heal player for collecting burst star
+                    const healAmount = GAME_CONFIG.BURST_STAR_HEAL_AMOUNT;
+                    const oldHealth = this.player.health;
+                    this.player.health = Math.min(this.player.maxHealth, this.player.health + healAmount);
+                    const actualHeal = this.player.health - oldHealth;
+                    
+                    if (actualHeal > 0) {
+                        this.audioManager.playHealthRegen(); // Play healing sound
+                        // Create green healing particle
+                        const healParticle = this.particlePool.get(this.player.x, this.player.y, 'starBlip');
+                        if (healParticle) {
+                            healParticle.color = '#00ff00'; // Green for healing
+                            healParticle.radius = 6;
+                            healParticle.life = 0.6;
+                        }
+                    } else {
+                        this.audioManager.playCoin(); // Normal sound if already at max health
+                    }
                     
                     // Create focused golden burst effect
                     // Central bright flash - smaller and more focused
@@ -488,6 +834,373 @@ export class GameEngine {
                 }
             }
         }
+        
+        // Player-enemy collisions
+        this.enemyPool.activeObjects.forEach(enemy => {
+            if (this.player.active && collision(this.player, enemy)) {
+                this.handlePlayerEnemyCollision(this.player, enemy);
+            }
+        });
+        
+        // Bullet-enemy collisions
+        for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
+            const bullet = this.bulletPool.activeObjects[i];
+            if (!bullet.active || bullet.dying || bullet.hasHit) continue;
+            
+            for (let j = this.enemyPool.activeObjects.length - 1; j >= 0; j--) {
+                const enemy = this.enemyPool.activeObjects[j];
+                if (!enemy.active) continue;
+                
+                if (collision(bullet, enemy)) {
+                    triggerHapticFeedback(40);
+                    this.audioManager.playHit();
+                    
+                    // Mark bullet as having hit to prevent multiple damage
+                    bullet.hasHit = true;
+                    
+                    // Damage the enemy
+                    const destroyed = enemy.takeDamage(this.baseDamage);
+                    
+                    // Orange explosion effects for player bullets
+                    for (let p = 0; p < 12; p++) {
+                        const particle = this.particlePool.get(bullet.x, bullet.y, 'explosion');
+                        if (particle) {
+                            particle.color = '#ff8800'; // Orange color
+                            // Add random velocity for explosion effect
+                            const angle = random(0, Math.PI * 2);
+                            const speed = random(1, 4);
+                            particle.vel = {
+                                x: Math.cos(angle) * speed,
+                                y: Math.sin(angle) * speed
+                            };
+                        }
+                    }
+                    
+                    // Hit effects with enemy color for additional detail
+                    for (let p = 0; p < 6; p++) {
+                        const particle = this.particlePool.get(bullet.x, bullet.y, 'hit');
+                        if (particle) {
+                            particle.color = enemy.color; // Use enemy color for hit particles
+                        }
+                    }
+                    
+                    if (destroyed) {
+                        // Award points
+                        const reward = enemy.getDestructionReward();
+                        this.game.score += reward.points;
+                        this.game.money += reward.points;
+                        
+                        // Create colored explosion effects
+                        this.createEnemyDebris(enemy);
+                        
+                        // Drop burst stars for health
+                        for (let i = 0; i < GAME_CONFIG.BURST_STAR_DROP_COUNT; i++) {
+                            this.createEnemyBurstStar(enemy.x, enemy.y);
+                        }
+                        
+                        console.log(`💥 ${reward.type} destroyed! +${reward.points} points`);
+                        
+                        this.enemyPool.release(enemy);
+                    }
+                    
+                    bullet.startDying(bullet.x, bullet.y);
+                    break;
+                }
+            }
+        }
+        
+        // Enemy bullet-player collisions
+        this.enemyBulletPool.activeObjects.forEach(bullet => {
+            if (bullet.active && this.player.active && bullet.checkCollision(this.player)) {
+                this.handlePlayerEnemyBulletCollision(this.player, bullet);
+                
+                // Explode if it's an explosive bullet
+                if (bullet.explosive) {
+                    bullet.explode(this);
+                }
+                
+                bullet.active = false;
+            }
+        });
+        
+        // Enemy bullet-asteroid collisions
+        for (let i = this.enemyBulletPool.activeObjects.length - 1; i >= 0; i--) {
+            const bullet = this.enemyBulletPool.activeObjects[i];
+            if (!bullet.active) continue;
+            
+            for (let j = this.asteroidPool.activeObjects.length - 1; j >= 0; j--) {
+                const ast = this.asteroidPool.activeObjects[j];
+                if (!ast.active) continue;
+                
+                if (bullet.checkCollision(ast)) {
+                    // Damage the asteroid
+                    ast.health -= GAME_CONFIG.ENEMY_BULLET_ASTEROID_DAMAGE;
+                    this.audioManager.playHit(); // Sound for impact
+                    
+                    // Impart momentum from enemy bullet
+                    const impulse = 0.03; // Slightly less than player bullets
+                    ast.vel.x += bullet.vel.x * impulse;
+                    ast.vel.y += bullet.vel.y * impulse;
+                    
+                    // Handle asteroid destruction
+                    if (ast.health <= 0) {
+                        if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
+                            this.audioManager.playExplosion();
+                            // Create destruction effects
+                            this.createDebris(ast);
+                            this.createColorStarBurst(ast.x, ast.y);
+                            this.asteroidPool.release(ast);
+                            this.triggerScreenShake(8, ast.baseRadius * 0.3, ast.baseRadius);
+                        } else {
+                            // Split larger asteroids
+                            this.audioManager.playExplosion();
+                            this.triggerScreenShake(12, ast.baseRadius * 0.4, ast.baseRadius);
+                            
+                            // Create 2-3 smaller asteroids
+                            const numFragments = Math.floor(random(2, 4));
+                            for (let f = 0; f < numFragments; f++) {
+                                const fragment = this.asteroidPool.get();
+                                if (fragment) {
+                                    const newRadius = ast.baseRadius * random(0.4, 0.7);
+                                    if (newRadius >= GAME_CONFIG.MIN_AST_RAD) {
+                                        const angle = random(0, Math.PI * 2);
+                                        const distance = ast.baseRadius * 0.8;
+                                        fragment.initializeAsteroid(
+                                            ast.x + Math.cos(angle) * distance,
+                                            ast.y + Math.sin(angle) * distance,
+                                            newRadius
+                                        );
+                                        fragment.vel.x = Math.cos(angle) * random(1, 3);
+                                        fragment.vel.y = Math.sin(angle) * random(1, 3);
+                                    } else {
+                                        this.asteroidPool.release(fragment);
+                                    }
+                                }
+                            }
+                            this.createDebris(ast);
+                            this.asteroidPool.release(ast);
+                        }
+                    }
+                    
+                    // Create explosion particles with bullet color
+                    for (let p = 0; p < 8; p++) {
+                        const particle = this.particlePool.get(bullet.x, bullet.y, 'explosion');
+                        if (particle) {
+                            particle.color = bullet.color;
+                            // Add random velocity for explosion effect
+                            const angle = random(0, Math.PI * 2);
+                            const speed = random(1, 3);
+                            particle.vel = {
+                                x: Math.cos(angle) * speed,
+                                y: Math.sin(angle) * speed
+                            };
+                        }
+                    }
+                    
+                    // Additional hit particles at impact point
+                    for (let p = 0; p < 4; p++) {
+                        const particle = this.particlePool.get(bullet.x, bullet.y, 'hit');
+                        if (particle) {
+                            particle.color = bullet.color;
+                        }
+                    }
+                    
+                    // Explode if it's an explosive bullet
+                    if (bullet.explosive) {
+                        bullet.explode(this);
+                    }
+                    
+                    // Destroy the bullet
+                    bullet.active = false;
+                    break;
+                }
+            }
+        }
+        
+        // Enemy-asteroid collisions
+        this.enemyPool.activeObjects.forEach(enemy => {
+            if (!enemy.active) return;
+            
+            this.asteroidPool.activeObjects.forEach(ast => {
+                if (!ast.active) return;
+                
+                if (collision(enemy, ast)) {
+                    this.handleEnemyAsteroidCollision(enemy, ast);
+                }
+            });
+        });
+    }
+    
+    handlePlayerEnemyCollision(player, enemy) {
+        // Damage player
+        const damage = 5; // Reduced collision damage
+        player.health -= damage;
+        
+        // Check for death/shield tank usage
+        if (player.health <= 0) {
+            if (this.shieldTanks > 0) {
+                this.shieldTanks--;
+                this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
+                player.health = player.maxHealth;
+                this.audioManager.playCoin(); // Tank used sound
+            } else {
+                this.gameOver();
+                return; // Exit early if game over
+            }
+        }
+        
+        // Visual feedback
+        this.triggerScreenShake(18, 10, enemy.radius); // Strong screen shake for collision
+        this.audioManager.playExplosion();
+        
+        // Show red damage number
+        this.particlePool.get(player.x, player.y, 'damageNumber', damage);
+        
+        // Create explosion particles at player position with enemy color
+        for (let i = 0; i < 15; i++) {
+            const particle = this.particlePool.get(player.x, player.y, 'explosion');
+            if (particle) {
+                particle.color = enemy.color;
+                // Add random velocity for explosion effect
+                const angle = random(0, Math.PI * 2);
+                const speed = random(2, 6);
+                particle.vel = {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                };
+            }
+        }
+        
+        // Damage the enemy too (collision damage)
+        const destroyed = enemy.takeDamage(2); // Reduced enemy collision damage
+        
+        if (destroyed) {
+            const reward = enemy.getDestructionReward();
+            this.game.score += reward.points / 2; // Reduced points for collision kill
+            this.createEnemyDebris(enemy);
+            // Drop burst stars for healing
+            for (let i = 0; i < GAME_CONFIG.BURST_STAR_DROP_COUNT; i++) {
+                this.createEnemyBurstStar(enemy.x, enemy.y);
+            }
+            this.enemyPool.release(enemy);
+        }
+        
+        // Push player away
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance > 0) {
+            const pushForce = 5;
+            player.vel.x += (dx / distance) * pushForce;
+            player.vel.y += (dy / distance) * pushForce;
+        }
+        
+        // Additional impact particles at collision point
+        for (let i = 0; i < 8; i++) {
+            const particle = this.particlePool.get((player.x + enemy.x) / 2, (player.y + enemy.y) / 2, 'hit');
+            if (particle) {
+                particle.color = enemy.color;
+            }
+        }
+        
+        // Make player invulnerable briefly
+        player.makeInvincible(1500);
+    }
+    
+    handlePlayerEnemyBulletCollision(player, bullet) {
+        // Damage player
+        player.health -= bullet.damage;
+        
+        // Check for death/shield tank usage
+        if (player.health <= 0) {
+            if (this.shieldTanks > 0) {
+                this.shieldTanks--;
+                this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
+                player.health = player.maxHealth;
+                this.audioManager.playCoin(); // Tank used sound
+            } else {
+                this.gameOver();
+                return; // Exit early if game over
+            }
+        }
+        
+        // Visual feedback
+        this.triggerScreenShake(12, 6, bullet.radius); // Increased screen shake
+        this.audioManager.playHit();
+        
+        // Show red damage number
+        this.particlePool.get(player.x, player.y, 'damageNumber', bullet.damage);
+        
+        // Create explosion particles at player position with bullet color
+        for (let i = 0; i < 12; i++) {
+            const particle = this.particlePool.get(player.x, player.y, 'explosion');
+            if (particle) {
+                particle.color = bullet.color;
+                // Add some random velocity for explosion effect
+                const angle = random(0, Math.PI * 2);
+                const speed = random(1, 4);
+                particle.vel = {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                };
+            }
+        }
+        
+        // Additional hit particles at bullet impact point
+        for (let i = 0; i < 5; i++) {
+            const particle = this.particlePool.get(bullet.x, bullet.y, 'hit');
+            if (particle) {
+                particle.color = bullet.color;
+            }
+        }
+        
+        // Make player invulnerable briefly
+        player.makeInvincible(1000);
+    }
+    
+    handleEnemyAsteroidCollision(enemy, asteroid) {
+        // No damage to enemy - just momentum transfer and bouncing
+        
+        // Calculate collision direction
+        const dx = enemy.x - asteroid.x;
+        const dy = enemy.y - asteroid.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance > 0) {
+            // Push enemy away from asteroid
+            const enemyPushForce = 4;
+            enemy.vel.x += (dx / distance) * enemyPushForce;
+            enemy.vel.y += (dy / distance) * enemyPushForce;
+            
+            // Impart momentum to asteroid (like bullet impact)
+            const asteroidPushForce = 2;
+            asteroid.vel.x += enemy.vel.x * 0.3; // Transfer some of enemy's momentum
+            asteroid.vel.y += enemy.vel.y * 0.3;
+            asteroid.vel.x -= (dx / distance) * asteroidPushForce;
+            asteroid.vel.y -= (dy / distance) * asteroidPushForce;
+            
+            // Add rotation to asteroid from collision
+            const rotationForce = random(-0.02, 0.02);
+            if (asteroid.rotationSpeed !== undefined) {
+                asteroid.rotationSpeed += rotationForce;
+            }
+        }
+        
+        // Light visual feedback (no damage, just bump)
+        this.triggerScreenShake(4, 2, enemy.radius);
+        this.audioManager.playHit(); // Lighter sound than explosion
+        
+        // Create small impact particles
+        for (let i = 0; i < 3; i++) {
+            const particle = this.particlePool.get((enemy.x + asteroid.x) / 2, (enemy.y + asteroid.y) / 2, 'hit');
+            if (particle) {
+                particle.color = enemy.color;
+                particle.life = 0.3; // Shorter lived particles
+            }
+        }
+        
+        // No enemy destruction from asteroid collisions
     }
     
     update() {
@@ -501,6 +1214,12 @@ export class GameEngine {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.asteroidPool.updateActive();
+            
+            // Update enemies and enemy bullets
+            this.updateWaves();
+            this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this));
+            this.enemyBulletPool.updateActive();
+            
             // Update color stars with player position and tractor beam state
             this.colorStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.player, tractorEngaged));
             // Update background stars with just player velocity for parallax
@@ -508,10 +1227,8 @@ export class GameEngine {
             
             this.handleCollisions();
             
-            if (this.game.state === GAME_STATES.PLAYING && this.asteroidPool.activeObjects.length === 0) {
-                this.game.state = GAME_STATES.WAVE_TRANSITION;
-                setTimeout(() => this.startNextWave(), 2000);
-            }
+            // Note: Wave completion now handled by enhanced wave system in updateWaves()
+            // Old asteroid-only trigger removed to prevent conflicts
             
             this.uiManager.updateScore(this.game.money);
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
@@ -528,62 +1245,26 @@ export class GameEngine {
         this.ctx.fillRect(0, 0, this.width, this.height);
         
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
-            // Starfield rendering with multiple optimization approaches
-            switch (this.starfieldRenderMode) {
-                case 'sprite':
-                    // Sprite caching - no batching, just render directly
-                    this.backgroundStarPool.activeObjects.forEach(star => {
-                        if (star.active) {
-                            star.draw(this.ctx);
-                        }
-                    });
-                    this.colorStarPool.activeObjects.forEach(star => {
-                        if (star.active) {
-                            star.draw(this.ctx);
-                        }
-                    });
-                    break;
-                    
-                case 'lightweight':
-                    // Lightweight optimization - reduces context switches without heavy caching
-                    lightweightStarfieldOptimizer.groupStarsForRendering(
-                        this.backgroundStarPool.activeObjects, 
-                        this.colorStarPool.activeObjects
-                    );
-                    lightweightStarfieldOptimizer.renderGroupedStars(this.ctx);
-                    
-                    // Render complex color stars that weren't optimized
-                    this.colorStarPool.activeObjects.forEach(star => {
-                        if (star.active && (star.isBurst || star.shape === 'sparkle' || star.shape === 'burst')) {
-                            star.draw(this.ctx); // Complex stars use their full draw method
-                        }
-                    });
-                    break;
-                    
-                case 'fallback':
-                default:
-                    // Original direct rendering approach
-                    this.backgroundStarPool.activeObjects.forEach(star => {
-                        if (star.active) {
-                            star.draw(this.ctx);
-                            star.drawDirect(this.ctx);
-                        }
-                    });
-                    this.colorStarPool.activeObjects.forEach(star => {
-                        if (star.active) {
-                            star.draw(this.ctx);
-                            if (!star.isBurst && star.shape !== 'sparkle' && star.shape !== 'burst') {
-                                star.drawDirectSimple(this.ctx);
-                            }
-                        }
-                    });
-                    break;
-            }
+            // Depth-based batched starfield rendering for optimal performance
+            depthBatchRenderer.groupStarsByDepth(
+                this.backgroundStarPool.activeObjects, 
+                this.colorStarPool.activeObjects
+            );
+            depthBatchRenderer.renderDepthBatches(this.ctx);
+            
+            // Render complex color stars that need special effects (not batched)
+            this.colorStarPool.activeObjects.forEach(star => {
+                if (star.active && (star.isBurst || star.shape === 'sparkle' || star.shape === 'burst')) {
+                    star.draw(this.ctx); // Complex stars use their full draw method
+                }
+            });
             
             // Regular rendering for other game objects
             this.lineDebrisPool.drawActive(this.ctx);
             this.particlePool.drawActive(this.ctx);
             this.asteroidPool.drawActive(this.ctx);
+            this.enemyPool.drawActive(this.ctx);
+            this.enemyBulletPool.drawActive(this.ctx);
             this.bulletPool.drawActive(this.ctx);
             this.player.draw(this.ctx);
             
@@ -787,8 +1468,7 @@ export class GameEngine {
         const stats = {
             totalStars: this.backgroundStarPool.activeObjects.length + this.colorStarPool.activeObjects.length,
             backgroundStars: this.backgroundStarPool.activeObjects.length,
-            colorStars: this.colorStarPool.activeObjects.length,
-            cacheStats: starfieldRenderer.getCacheStats()
+            colorStars: this.colorStarPool.activeObjects.length
         };
         
         return stats;
@@ -797,71 +1477,35 @@ export class GameEngine {
     // Debug method - call from console: gameEngine.debugStarfieldPerformance()
     debugStarfieldPerformance() {
         const stats = this.getStarfieldStats();
-        
-        if (this.starfieldRenderMode === 'depth') {
-            const batchStats = depthBatchRenderer.getStats();
-            return {
-                mode: this.starfieldRenderMode,
-                totalStars: stats.totalStars,
-                depthBuckets: batchStats.depthBuckets,
-                batchedStars: batchStats.totalStars,
-                frameCount: batchStats.frameCount
-            };
-        } else if (this.starfieldRenderMode === 'lightweight') {
-            const lightStats = lightweightStarfieldOptimizer.getStats();
-            return {
-                mode: this.starfieldRenderMode,
-                totalStars: stats.totalStars,
-                optimizedStars: lightStats.totalOptimized,
-                frameCount: lightStats.frameCount
-            };
-        } else {
-            return {
-                mode: this.starfieldRenderMode,
-                totalStars: stats.totalStars,
-                drawCalls: stats.totalStars
-            };
-        }
-    }
-    
-    // Debug method to cycle through rendering modes
-    cycleStarfieldMode() {
-        const modes = ['depth', 'lightweight', 'fallback'];
-        const currentIndex = modes.indexOf(this.starfieldRenderMode);
-        const nextIndex = (currentIndex + 1) % modes.length;
-        this.starfieldRenderMode = modes[nextIndex];
+        const batchStats = depthBatchRenderer.getStats();
         
         return {
-            newMode: this.starfieldRenderMode,
-            description: {
-                'depth': 'Depth-based batching (groups by depth/opacity)',
-                'lightweight': 'Lightweight optimization (reduces context switches)',
-                'fallback': 'Original direct rendering (baseline)'
-            }[this.starfieldRenderMode]
+            mode: 'depth-batching',
+            totalStars: stats.totalStars,
+            backgroundStars: stats.backgroundStars,
+            colorStars: stats.colorStars,
+            depthBuckets: batchStats.depthBuckets,
+            batchedStars: batchStats.totalStars,
+            frameCount: batchStats.frameCount,
+            efficiency: batchStats.depthBuckets <= 5 ? 'excellent' : 
+                       batchStats.depthBuckets <= 10 ? 'good' : 'needs optimization'
         };
     }
     
-    // Debug method to clear sprite cache (useful for testing)
-    clearStarfieldCache() {
-        return { cleared: false, reason: 'No cache to clear - heavy mode removed' };
-    }
-
     // Debug method to show live depth batching performance
     showDepthBatchStats() {
-        if (this.starfieldRenderMode !== 'depth') {
-            return { 
-                error: 'Depth batching is not active in current mode. Switch to depth mode first.',
-                currentMode: this.starfieldRenderMode
-            };
-        }
-        
         const batchStats = depthBatchRenderer.getStats();
+        const totalStars = this.backgroundStarPool.activeObjects.length + this.colorStarPool.activeObjects.length;
+        
         return {
+            mode: 'depth-batching',
             activeBuckets: batchStats.depthBuckets,
             batchedStars: batchStats.totalStars,
+            totalStars: totalStars,
             framesProcessed: batchStats.frameCount,
             efficiency: batchStats.depthBuckets <= 5 ? 'excellent' : 
-                       batchStats.depthBuckets <= 10 ? 'good' : 'could be improved'
+                       batchStats.depthBuckets <= 10 ? 'good' : 'needs optimization',
+            avgStarsPerBucket: batchStats.depthBuckets > 0 ? Math.round(batchStats.totalStars / batchStats.depthBuckets) : 0
         };
     }
 

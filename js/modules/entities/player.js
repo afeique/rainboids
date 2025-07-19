@@ -31,12 +31,7 @@ export class Player {
         this.continuousShootingStartTime = 0; // When continuous shooting started
         this.maxIntensityTime = 3000; // 3 seconds to reach maximum intensity
         
-        // Health regeneration tracking
-        this.lastActivityTime = Date.now(); // Last time player moved or shot
-        this.idleTimeForRegen = 2000; // 2 seconds of inactivity before regen starts
-        this.regenRate = 0.5; // Health points per second when regenerating
-        this.lastRegenTime = 0;
-        this.isRegenerating = false;
+
         
         this.initializePlayer();
     }
@@ -59,10 +54,6 @@ export class Player {
         // Reset shooting intensity
         this.shootingIntensity = 0;
         
-        // Reset health regeneration state
-        this.lastActivityTime = Date.now();
-        this.isRegenerating = false;
-        this.lastRegenTime = 0;
         this.lastShotTime = 0;
         this.continuousShootingStartTime = 0;
         
@@ -117,11 +108,7 @@ export class Player {
 
         this.isMoving = input.up || input.down || input.left || input.right;
         
-        // Track activity for health regeneration
-        if (this.isMoving) {
-            this.lastActivityTime = currentTime;
-            this.isRegenerating = false;
-        }
+
 
         if (this.isMoving && !this.thrustersDisabled) {
             let moveX = 0;
@@ -178,9 +165,7 @@ export class Player {
 
         // Handle continuous shooting with intensity tracking
         if (input.fire && this.canShoot) {
-            // Track activity for health regeneration
-            this.lastActivityTime = currentTime;
-            this.isRegenerating = false;
+
             
             // Start continuous shooting timer if not already started
             if (this.continuousShootingStartTime === 0) {
@@ -199,31 +184,7 @@ export class Player {
             setTimeout(() => this.canShoot = true, 200);
         }
         
-        // Health regeneration when idle
-        const timeSinceActivity = currentTime - this.lastActivityTime;
-        if (this.health < this.maxHealth && timeSinceActivity > this.idleTimeForRegen) {
-            // Start regenerating if not already
-            if (!this.isRegenerating) {
-                this.isRegenerating = true;
-                this.lastRegenTime = currentTime;
-                audioManager.playHealthRegen();
-            }
-            
-            // Regenerate health gradually
-            const timeSinceLastRegen = currentTime - this.lastRegenTime;
-            if (timeSinceLastRegen >= 1000) { // Every second
-                this.health = Math.min(this.maxHealth, this.health + this.regenRate);
-                this.lastRegenTime = currentTime;
-                
-                // Continue playing regen sound if still regenerating
-                if (this.health < this.maxHealth) {
-                    audioManager.playHealthRegen();
-                }
-            }
-        } else if (this.isRegenerating && (timeSinceActivity <= this.idleTimeForRegen || this.health >= this.maxHealth)) {
-            // Stop regenerating if player becomes active or health is full
-            this.isRegenerating = false;
-        }
+
     }
     
     draw(ctx) {

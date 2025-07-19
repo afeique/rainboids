@@ -13,9 +13,19 @@ export const GAME_CONFIG = {
     ACTIVE_STAR_ATTRACT_DIST: 100,
     STAR_FRIC: 0.99,
     BURST_STAR_MONEY: 20,
+    BURST_STAR_HEAL_AMOUNT: 5, // Health restored per burst star
+    BURST_STAR_DROP_COUNT: 5, // Number of burst stars dropped per enemy death
     BURST_STAR_COLLECTION_RADIUS: 15, // Extra pixels added to burst star collection radius
+    ENEMY_BULLET_ASTEROID_DAMAGE: 1, // Damage enemy bullets deal to asteroids
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,
+    
+    // Wave system configuration
+    WAVE_ASTEROID_DELAY: 0, // Time before spawning asteroids (ms)
+    WAVE_ENEMY_DELAY: 15000, // Time before first enemy sub-wave (ms)
+    SUB_WAVE_INTERVAL: 15000, // Time between enemy sub-waves (ms)
+    ENEMIES_PER_SUB_WAVE: 2, // Number of enemies per sub-wave
+    SUB_WAVES_PER_WAVE: 3, // Number of enemy sub-waves per wave
 };
 
 export const NOISE_CONFIG = {
