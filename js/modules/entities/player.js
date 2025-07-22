@@ -23,15 +23,9 @@ export class Player {
         this.lastHitTime = 0;
         this.lastBlinkTime = 0;
         
-        // Shooting intensity tracking
-        this.shootingIntensity = 0;
-        this.maxShootingIntensity = 1; // Now represents 0-1 scale instead of 0-10
-        this.shootingDecayRate = 0.98; // How fast intensity decays when not shooting
-        this.lastShotTime = 0;
-        this.continuousShootingStartTime = 0; // When continuous shooting started
-        this.maxIntensityTime = 3000; // 3 seconds to reach maximum intensity
-        
-
+        // Powerup system
+        this.powerups = new Map(); // Map of powerup type -> {stacks, timeRemaining}
+        this.baseCooldown = 120; // Base shooting cooldown
         
         this.initializePlayer();
     }
@@ -51,11 +45,8 @@ export class Player {
         this.invincible = false;
         this.invincibilityTimer = 0;
         
-        // Reset shooting intensity
-        this.shootingIntensity = 0;
-        
-        this.lastShotTime = 0;
-        this.continuousShootingStartTime = 0;
+        // Reset powerups
+        this.powerups.clear();
         
         let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
@@ -91,15 +82,8 @@ export class Player {
             }
         }
 
-        // Update shooting intensity - decay over time
-        const currentTime = Date.now();
-        const timeSinceLastShot = currentTime - this.lastShotTime;
-        
-        // Reset continuous shooting timer if player hasn't shot for a while (500ms)
-        if (timeSinceLastShot > 500) {
-            this.continuousShootingStartTime = 0;
-            this.shootingIntensity = 0;
-        }
+        // Update powerups
+        this.updatePowerups();
 
         // Aiming
         const dx = input.aimX - this.x;
@@ -119,14 +103,15 @@ export class Player {
             if (input.down) moveY += 1;
 
             const moveAngle = Math.atan2(moveY, moveX);
-            this.vel.x += Math.cos(moveAngle) * GAME_CONFIG.SHIP_THRUST;
-            this.vel.y += Math.sin(moveAngle) * GAME_CONFIG.SHIP_THRUST;
+            const speedMultiplier = this.getMovementSpeedMultiplier();
+            this.vel.x += Math.cos(moveAngle) * GAME_CONFIG.SHIP_THRUST * speedMultiplier;
+            this.vel.y += Math.sin(moveAngle) * GAME_CONFIG.SHIP_THRUST * speedMultiplier;
 
             const rear = moveAngle + Math.PI;
             const dist = this.radius * 1.2;
             const spread = this.radius * 0.8;
 
-            for (let i = 0; i < 4; i++) {
+            for (let i = 0; i < 2; i++) {
                 const p_angle = rear + random(-0.3, 0.3);
                 const p_dist = random(0, spread);
                 const p_x = this.x + Math.cos(p_angle) * dist + Math.cos(p_angle + Math.PI / 2) * p_dist;
@@ -136,15 +121,29 @@ export class Player {
             audioManager.playThruster();
         }
 
-        // Automatic tractor beam visual
-        if (tractorEngaged) {
-            // Spawn multiple neon-blue particles in a radius around the ship
-            for (let i = 0; i < 2; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 60 + Math.random() * 40;
-                const px = this.x + Math.cos(angle) * dist;
-                const py = this.y + Math.sin(angle) * dist;
-                particlePool.get(px, py, 'tractorBeamParticle', this.x, this.y);
+        // Reduced tractor beam visual for performance
+        if (tractorEngaged && Math.random() < 0.3) {
+            // Spawn fewer particles less frequently
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 60 + Math.random() * 40;
+            const px = this.x + Math.cos(angle) * dist;
+            const py = this.y + Math.sin(angle) * dist;
+            particlePool.get(px, py, 'tractorBeamParticle', this.x, this.y);
+        }
+        
+        // Shield boost visual effect - green shimmer around player
+        const shieldBoostStacks = this.getPowerupStacks('SHIELD_BOOST');
+        if (shieldBoostStacks > 0 && Math.random() < 0.3) {
+            const particle = particlePool.get(this.x, this.y, 'starSparkle');
+            if (particle) {
+                particle.color = '#00ff88'; // Green color matching shield boost
+                const angle = random(0, Math.PI * 2);
+                const distance = random(20, 35);
+                particle.x = this.x + Math.cos(angle) * distance;
+                particle.y = this.y + Math.sin(angle) * distance;
+                particle.vel.x = Math.cos(angle) * 0.3;
+                particle.vel.y = Math.sin(angle) * 0.3;
+                particle.life = 30; // Short lived for subtle effect
             }
         }
 
@@ -163,25 +162,9 @@ export class Player {
         this.y += this.vel.y;
         wrap(this, this.width, this.height);
 
-        // Handle continuous shooting with intensity tracking
+        // Handle shooting with powerup-enhanced capabilities
         if (input.fire && this.canShoot) {
-
-            
-            // Start continuous shooting timer if not already started
-            if (this.continuousShootingStartTime === 0) {
-                this.continuousShootingStartTime = currentTime;
-            }
-            
-            // Calculate time-based shooting intensity (0-1 over 5 seconds)
-            const continuousShootingDuration = currentTime - this.continuousShootingStartTime;
-            this.shootingIntensity = Math.min(1, continuousShootingDuration / this.maxIntensityTime);
-            this.lastShotTime = currentTime;
-            
-            // Pass shooting intensity (0-1) to bullet
-            bulletPool.get(this.x, this.y, this.angle, this.shootingIntensity);
-            audioManager.playShoot();
-            this.canShoot = false;
-            setTimeout(() => this.canShoot = true, 200);
+            this.fireWeapons(bulletPool, audioManager);
         }
         
 
@@ -317,6 +300,121 @@ export class Player {
         ctx.restore();
         
         ctx.restore();
+    }
+    
+    // Powerup management methods
+    addPowerup(type, config) {
+        if (this.powerups.has(type)) {
+            // Stack the powerup
+            const existing = this.powerups.get(type);
+            existing.stacks = Math.min(existing.stacks + 1, 5); // Max 5 stacks
+            existing.timeRemaining = config.duration; // Reset timer
+        } else {
+            // New powerup
+            this.powerups.set(type, {
+                stacks: 1,
+                timeRemaining: config.duration,
+                config: config
+            });
+        }
+    }
+    
+    updatePowerups() {
+        // Decrease timers and remove expired powerups
+        for (const [type, powerup] of this.powerups.entries()) {
+            powerup.timeRemaining -= 16; // Assume 60fps
+            if (powerup.timeRemaining <= 0) {
+                this.powerups.delete(type);
+                console.log(`⏰ ${powerup.config.name} expired`);
+            }
+        }
+    }
+    
+    getPowerupStacks(type) {
+        return this.powerups.has(type) ? this.powerups.get(type).stacks : 0;
+    }
+    
+    fireWeapons(bulletPool, audioManager) {
+        // Calculate effective shooting cooldown with powerups
+        const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
+        const cooldownMultiplier = Math.pow(0.75, rapidFireStacks); // 25% faster per stack
+        const effectiveCooldown = this.baseCooldown * cooldownMultiplier;
+        
+        // Fire bullets based on powerups
+        this.createBullets(bulletPool);
+        audioManager.playShoot();
+        
+        this.canShoot = false;
+        setTimeout(() => this.canShoot = true, effectiveCooldown);
+    }
+    
+    createBullets(bulletPool) {
+        const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
+        const spreadShotStacks = this.getPowerupStacks('SPREAD_SHOT');
+        const homingStacks = this.getPowerupStacks('HOMING');
+        const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
+        const piercingStacks = this.getPowerupStacks('PIERCING');
+        const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
+        
+        // Debug powerup effects
+        if (multiShotStacks > 0 || spreadShotStacks > 0 || piercingStacks > 0 || explosiveStacks > 0 || homingStacks > 0) {
+            console.log(`🎯 Firing with powerups: Multi:${multiShotStacks} Spread:${spreadShotStacks} Pierce:${piercingStacks} Explosive:${explosiveStacks} Homing:${homingStacks}`);
+        }
+        
+        // Calculate number of bullets to fire
+        let bulletCount = 1;
+        if (multiShotStacks > 0) {
+            bulletCount += multiShotStacks; // +1 bullet per stack
+        }
+        if (spreadShotStacks > 0) {
+            bulletCount += spreadShotStacks * 2; // +2 bullets per stack
+        }
+        
+        // Calculate spread angle
+        const spreadAngle = spreadShotStacks > 0 ? 
+                           Math.min(0.6, spreadShotStacks * 0.15) : 0; // Max 0.6 radians spread
+        
+        // Fire bullets
+        for (let i = 0; i < bulletCount; i++) {
+            let angle = this.angle;
+            
+            // Apply spread for multiple bullets
+            if (bulletCount > 1) {
+                const angleOffset = (i - (bulletCount - 1) / 2) * (spreadAngle / Math.max(1, bulletCount - 1));
+                angle += angleOffset;
+            }
+            
+            const bullet = bulletPool.get(this.x, this.y, angle);
+            if (bullet) {
+                // Apply powerup effects to bullet
+                if (homingStacks > 0) {
+                    bullet.homing = true;
+                    bullet.homingStrength = Math.min(0.05, homingStacks * 0.01);
+                }
+                if (bigBulletStacks > 0) {
+                    bullet.radius *= (1 + bigBulletStacks * 0.3); // 30% bigger per stack
+                }
+                if (piercingStacks > 0) {
+                    bullet.piercing = piercingStacks; // Number of enemies it can pierce
+                }
+                if (explosiveStacks > 0) {
+                    bullet.explosive = true;
+                    bullet.explosionRadius = 30 + explosiveStacks * 10;
+                }
+            }
+        }
+    }
+    
+    getMovementSpeedMultiplier() {
+        const speedBoostStacks = this.getPowerupStacks('SPEED_BOOST');
+        return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.3) : 1;
+    }
+    
+    getEffectiveShield() {
+        const baseShield = this.shield;
+        const shieldBoostStacks = this.getPowerupStacks('SHIELD_BOOST');
+        const boostAmount = shieldBoostStacks * 15; // +15% damage reduction per stack
+        return Math.min(100, baseShield + boostAmount); // Cap at 100%
     }
     
     die(particlePool, audioManager, uiManager, game, triggerScreenShake) {

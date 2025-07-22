@@ -7,8 +7,8 @@ export const GAME_CONFIG = {
     BULLET_SPEED: 12,
     INITIAL_AST_COUNT: 3,
     AST_SPEED: 2.2,
-    COLOR_STAR_COUNT: 100,
-    BACKGROUND_STAR_COUNT: 400, // Non-collectible background stars
+    COLOR_STAR_COUNT: 60, // Increased slightly to show more variety of shapes
+    BACKGROUND_STAR_COUNT: 40, // Non-collectible background stars
     ACTIVE_STAR_ATTR: 0.01,
     ACTIVE_STAR_ATTRACT_DIST: 100,
     STAR_FRIC: 0.99,
@@ -26,6 +26,10 @@ export const GAME_CONFIG = {
     SUB_WAVE_INTERVAL: 15000, // Time between enemy sub-waves (ms)
     ENEMIES_PER_SUB_WAVE: 2, // Number of enemies per sub-wave
     SUB_WAVES_PER_WAVE: 3, // Number of enemy sub-waves per wave
+    
+    // Performance settings
+    MAX_PARTICLES: 100, // Maximum active particles for performance
+    PARTICLE_CLEANUP_INTERVAL: 60, // Clean up particles every N score points
 };
 
 export const NOISE_CONFIG = {

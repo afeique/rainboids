@@ -12,6 +12,7 @@ import { Particle } from './entities/particle.js';
 import { ColorStar } from './entities/color-star.js';
 import { BackgroundStar } from './entities/background-star.js';
 import { LineDebris } from './entities/line-debris.js';
+import { Powerup } from './entities/powerup.js';
 
 export const PLAYER_STATES = {
     NORMAL: 'normal'
@@ -79,6 +80,64 @@ export class GameEngine {
         console.log('🕶️ Enemy Dodging: Enemies actively dodge each other\'s bullets with predictive AI');
         console.log('💊 Tunable Healing: Burst star heal amount now configurable in constants');
         console.log('🌊 Enhanced Waves: Multi-phase waves with asteroids first, then enemy sub-waves');
+        console.log('⚡ Performance Optimizations Active:');
+        console.log('  🔧 Reduced particle counts for explosions and effects');
+        console.log('  🧹 Automatic particle cleanup and limits');
+        console.log('  📊 gameEngine.showPerformanceStats() - View current object counts');
+        console.log('🎁 Powerup System Active:');
+        console.log('  💨 Rapid Fire - Faster shooting (stacks up to 5x)');
+        console.log('  🎯 Homing Bullets - Track enemies automatically');
+        console.log('  💥 Multi-Shot & Spread Shot - More bullets per shot');
+        console.log('  🔸 Big Bullets - Easier to hit agile enemies');
+        console.log('  ⚡ Speed Boost - Enhanced movement speed');
+        console.log('  🏹 Piercing Shots - Bullets go through enemies');
+        console.log('  💣 Explosive Rounds - Area damage on impact');
+        console.log('  🛡️ Shield Boost - +15% damage reduction per stack');
+        console.log('✨ Enhanced Star System:');
+        console.log('  ⭐ Larger stars to showcase beautiful geometric shapes');
+        console.log('  🎭 15% chance for spectacular big stars');
+        console.log('  🔶 Complex shapes: stars, hexagons, diamonds, sparkles & bursts');
+        console.log('  💫 Enhanced animations: rotation, pulsing, and glow effects');
+        console.log('😌 Calmed Down All Enemies:');
+        console.log('  🐌 Significantly reduced all enemy speeds (STALKER: 2.6→1.8, HUNTER: 2.2→1.6)');
+        console.log('  🎯 Toned down dodge mechanics, erratic movement, and acceleration');
+        console.log('  💨 Reduced weaving, sine waves, and speed multipliers');
+        console.log('  🎮 Much more manageable and less frantic gameplay');
+        console.log('🎁 Enhanced Powerup System:');
+        console.log('  ✨ Spectacular gradient visual effects and distinctive shapes');
+        console.log('  🎯 Unique icons: ⚡💨🎯●💥🛡 etc. for each powerup type');
+        console.log('  🔊 Magical treasure pickup sound with pitch variations');
+        console.log('  📊 Console shows powerup drop rolls and spawns');
+        console.log('  🎮 Beautiful gradient UI indicators at bottom of screen');
+        console.log('  ⏱️ Timer bars show remaining duration (3 minutes each!)');
+        console.log('  📺 Powerup names display at top in Silkscreen font with smooth fade');
+        console.log('  🎨 Bullets change shape/color based on active powerups');
+        console.log('  🧪 Press "P" key to test spawn a powerup near player');
+    }
+    
+    // Performance monitoring
+    showPerformanceStats() {
+        console.log('📊 Performance Stats:');
+        console.log(`  Particles: ${this.particlePool.activeObjects.length}/${GAME_CONFIG.MAX_PARTICLES}`);
+        console.log(`  Bullets: ${this.bulletPool.activeObjects.length}`);
+        console.log(`  Enemies: ${this.enemyPool.activeObjects.length}`);
+        console.log(`  Asteroids: ${this.asteroidPool.activeObjects.length}`);
+        console.log(`  Enemy Bullets: ${this.enemyBulletPool.activeObjects.length}`);
+        console.log(`  Color Stars: ${this.colorStarPool.activeObjects.length}`);
+        console.log(`  Background Stars: ${this.backgroundStarPool.activeObjects.length}`);
+        console.log(`  Line Debris: ${this.lineDebrisPool.activeObjects.length}`);
+        console.log(`  Powerups: ${this.powerupPool.activeObjects.length}`);
+        
+        const totalObjects = this.particlePool.activeObjects.length + 
+                           this.bulletPool.activeObjects.length + 
+                           this.enemyPool.activeObjects.length + 
+                           this.asteroidPool.activeObjects.length + 
+                           this.enemyBulletPool.activeObjects.length + 
+                           this.colorStarPool.activeObjects.length + 
+                           this.backgroundStarPool.activeObjects.length + 
+                           this.lineDebrisPool.activeObjects.length + 
+                           this.powerupPool.activeObjects.length;
+        console.log(`  Total Objects: ${totalObjects}`);
     }
     
     // Helper method to initialize/reset game state
@@ -106,6 +165,17 @@ export class GameEngine {
         this.enemyBulletPool = new PoolManager(EnemyBullet, 50);
         this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 100);
         this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT);
+        this.powerupPool = new PoolManager(Powerup, 20);
+        
+        // Powerup display system
+        this.powerupDisplay = {
+            active: false,
+            text: '',
+            color: '#ffffff',
+            opacity: 1.0,
+            fadeTimer: 0,
+            maxFadeTime: 180 // 3 seconds fade out
+        };
     }
     
     setupEventListeners() {
@@ -137,10 +207,17 @@ export class GameEngine {
             }
         });
         
-        // Handle pause
+        // Handle pause and test keys
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Escape') {
                 this.togglePause();
+            }
+            // Test powerup spawn (for debugging)
+            if (e.code === 'KeyP' && this.game.state === GAME_STATES.PLAYING) {
+                const offsetX = random(-50, 50);
+                const offsetY = random(-50, 50);
+                this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY);
+                console.log('🧪 Test powerup spawned near player');
             }
         });
         
@@ -196,6 +273,7 @@ export class GameEngine {
         this.enemyBulletPool.activeObjects = [];
         this.colorStarPool.activeObjects = [];
         this.backgroundStarPool.activeObjects = [];
+        this.powerupPool.activeObjects = [];
         
         // Generate all color stars at once using generative method
         this.generateInitialColorStars();
@@ -203,7 +281,7 @@ export class GameEngine {
         
         // Initialize first wave with enhanced wave system
         this.game.currentWave = 1;
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500);
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500, 'top');
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         setTimeout(() => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
@@ -274,7 +352,7 @@ export class GameEngine {
         this.colorStarPool.cleanupInactive();
         this.backgroundStarPool.cleanupInactive();
         // Note: Wave increment now handled by enhanced wave system (completeWave method)
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave + 1}`, '', 1500);
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave + 1}`, '', 1500, 'top');
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         // Reset player state at wave start
         this.playerState = PLAYER_STATES.NORMAL;
@@ -425,6 +503,9 @@ export class GameEngine {
         
         // Spawn asteroids first
         this.spawnWaveAsteroids();
+        
+        // Show wave notification
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500, 'top');
         
         console.log(`🚨 Wave ${this.game.currentWave} starting!`);
         console.log(`🪨 Spawning asteroids first...`);
@@ -609,6 +690,180 @@ export class GameEngine {
         }
     }
     
+    dropPowerup(x, y, type = null) {
+        const powerup = this.powerupPool.get(x, y, type);
+        if (powerup) {
+            // Give it some random velocity
+            const angle = random(0, Math.PI * 2);
+            const speed = random(0.5, 1.5);
+            powerup.vel.x = Math.cos(angle) * speed;
+            powerup.vel.y = Math.sin(angle) * speed;
+            console.log(`🎁 Powerup spawned: ${powerup.type} at (${Math.round(x)}, ${Math.round(y)})`);
+        } else {
+            console.log('❌ Failed to spawn powerup - pool issue');
+        }
+        return powerup;
+    }
+    
+    collectPowerup(powerup) {
+        if (!this.player || !this.player.active) return;
+        
+        // Add powerup to player's active powerups (stacking system)
+        this.player.addPowerup(powerup.type, powerup.config);
+        
+        // Visual feedback
+        this.particlePool.get(powerup.x, powerup.y, 'pickupPulse');
+        for (let i = 0; i < 8; i++) {
+            const particle = this.particlePool.get(powerup.x, powerup.y, 'starSparkle');
+            if (particle) {
+                particle.color = powerup.color;
+                const angle = (i / 8) * Math.PI * 2;
+                particle.vel.x = Math.cos(angle) * 2;
+                particle.vel.y = Math.sin(angle) * 2;
+            }
+        }
+        
+        // Audio feedback - magical powerup sound
+        this.audioManager.playPowerup();
+        
+        console.log(`🎁 Collected ${powerup.config.name}! Current stacks: ${this.player.getPowerupStacks(powerup.type)}`);
+        
+        // Display powerup name at top of screen
+        this.showPowerupDisplay(powerup.config.name, powerup.powerupColor);
+    }
+    
+    showPowerupDisplay(name, color) {
+        this.powerupDisplay.active = true;
+        this.powerupDisplay.text = name.toUpperCase();
+        this.powerupDisplay.color = color;
+        this.powerupDisplay.opacity = 1.0;
+        this.powerupDisplay.fadeTimer = this.powerupDisplay.maxFadeTime;
+    }
+    
+    drawPowerupDisplay() {
+        if (!this.powerupDisplay.active) return;
+        
+        const ctx = this.ctx;
+        ctx.save();
+        
+        // Position at top center, above wave number
+        const centerX = this.width / 2;
+        const topY = 60; // Above where wave number appears
+        
+        // Set font to Silkscreen with fallback
+        ctx.font = "32px 'Silkscreen', 'Press Start 2P', monospace";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Apply fade opacity
+        ctx.globalAlpha = this.powerupDisplay.opacity;
+        
+        // Glow effect
+        ctx.shadowColor = this.powerupDisplay.color;
+        ctx.shadowBlur = 15 * this.powerupDisplay.opacity;
+        
+        // Draw text with outline
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(this.powerupDisplay.text, centerX, topY);
+        
+        // Draw main text
+        ctx.fillStyle = this.powerupDisplay.color;
+        ctx.fillText(this.powerupDisplay.text, centerX, topY);
+        
+        ctx.restore();
+    }
+    
+    drawPowerupIndicators() {
+        if (!this.player || !this.player.powerups || this.player.powerups.size === 0) return;
+        
+        const ctx = this.ctx;
+        const margin = 20;
+        const iconSize = 40;
+        const spacing = 50;
+        const bottomY = this.height - margin - iconSize;
+        
+        let index = 0;
+        
+        ctx.save();
+        
+        for (const [type, powerupData] of this.player.powerups.entries()) {
+            const x = margin + index * spacing;
+            const y = bottomY;
+            
+            // Draw background circle
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.beginPath();
+            ctx.arc(x + iconSize/2, y + iconSize/2, iconSize/2 + 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw powerup border with gradient
+            const borderGradient = ctx.createRadialGradient(
+                x + iconSize/2, y + iconSize/2, 0,
+                x + iconSize/2, y + iconSize/2, iconSize/2
+            );
+            const gradientColors = powerupData.config.gradientColors || ['#ff0000', '#990000'];
+            borderGradient.addColorStop(0, gradientColors[0]);
+            borderGradient.addColorStop(1, gradientColors[1]);
+            
+            ctx.strokeStyle = borderGradient;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(x + iconSize/2, y + iconSize/2, iconSize/2, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Draw powerup icon with enhanced visibility
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            ctx.font = `bold ${iconSize * 0.5}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.strokeText(powerupData.config.icon, x + iconSize/2, y + iconSize/2);
+            ctx.fillText(powerupData.config.icon, x + iconSize/2, y + iconSize/2);
+            
+            // Draw stack count if > 1
+            if (powerupData.stacks > 1) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `bold ${iconSize * 0.3}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                ctx.strokeText(powerupData.stacks.toString(), x + iconSize - 8, y + iconSize - 8);
+                ctx.fillText(powerupData.stacks.toString(), x + iconSize - 8, y + iconSize - 8);
+            }
+            
+            // Draw timer bar
+            const timePercent = powerupData.timeRemaining / powerupData.config.duration;
+            const barWidth = iconSize * 0.8;
+            const barHeight = 4;
+            const barX = x + (iconSize - barWidth) / 2;
+            const barY = y + iconSize + 5;
+            
+            // Background bar
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            // Timer bar with gradient
+            const timerGradient = ctx.createLinearGradient(barX, barY, barX + barWidth * timePercent, barY);
+            if (timePercent > 0.3) {
+                const gradientColors = powerupData.config.gradientColors || ['#ff0000', '#990000'];
+                timerGradient.addColorStop(0, gradientColors[0]);
+                timerGradient.addColorStop(1, gradientColors[1]);
+            } else {
+                timerGradient.addColorStop(0, '#ff9999');
+                timerGradient.addColorStop(1, '#ff3333');
+            }
+            ctx.fillStyle = timerGradient;
+            ctx.fillRect(barX, barY, barWidth * timePercent, barHeight);
+            
+            index++;
+        }
+        
+        ctx.restore();
+    }
+    
     handleCollisions() {
         // Player-asteroid collisions
         this.asteroidPool.activeObjects.forEach(ast => {
@@ -620,7 +875,7 @@ export class GameEngine {
         // Bullet-asteroid collisions
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
-            if (!bullet.active || bullet.dying || bullet.hasHit) continue; // Skip dying/used bullets
+            if (!bullet.active || bullet.hasHit) continue; // Skip inactive/used bullets
             for (let j = this.asteroidPool.activeObjects.length - 1; j >= 0; j--) {
                 const ast = this.asteroidPool.activeObjects[j];
                 if (!ast.active) continue;
@@ -636,9 +891,9 @@ export class GameEngine {
                     ast.vel.x += bullet.vel.x * impulse;
                     ast.vel.y += bullet.vel.y * impulse;
                     
-                    // Orange explosion effects for player bullets
+                    // Reduced explosion effects for performance
                     this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', ast.baseRadius * 0.5);
-                    for (let p = 0; p < 10; p++) {
+                    for (let p = 0; p < 3; p++) {
                         const particle = this.particlePool.get(bullet.x, bullet.y, 'explosion');
                         if (particle) {
                             particle.color = '#ff8800'; // Orange color
@@ -650,9 +905,6 @@ export class GameEngine {
                                 y: Math.sin(angle) * speed
                             };
                         }
-                    }
-                    for (let p = 0; p < 7; p++) {
-                        this.particlePool.get(bullet.x, bullet.y, 'explosionRedOrange');
                     }
                     
                     // No screen shake for asteroid hits
@@ -668,11 +920,15 @@ export class GameEngine {
                                     this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * (1.1 + n * 0.2));
                                 }, n * 80);
                             }
-                            for (let p = 0; p < 54; p++) {
+                            for (let p = 0; p < 8; p++) {
                                 this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
                             }
                             this.createDebris(ast);
                             this.createColorStarBurst(ast.x, ast.y);
+                            // Chance to drop powerup (15% chance)
+                            if (Math.random() < 0.15) {
+                                this.dropPowerup(ast.x, ast.y);
+                            }
                             this.asteroidPool.release(ast);
                             // Enhanced screen shake for small asteroid destruction
                             this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
@@ -690,6 +946,10 @@ export class GameEngine {
                                 }
                                 this.createDebris(ast);
                                 this.createColorStarBurst(ast.x, ast.y);
+                                // Chance to drop powerup from large asteroids (20% chance)
+                                if (Math.random() < 0.2) {
+                                    this.dropPowerup(ast.x, ast.y);
+                                }
                             
                             const count = (Math.random() < 0.5 ? 2 : 3) + 1; // Now 3 or 4
                             const newR = ast.baseRadius / Math.sqrt(count);
@@ -720,9 +980,16 @@ export class GameEngine {
                             this.asteroidPool.release(ast);
                         }
                     }
-                    // Start death animation instead of instant removal
-                    bullet.startDying(bullet.x, bullet.y);
-                    break;
+                    // Handle bullet hit with powerup effects
+                    if (bullet.explosive) {
+                        bullet.explode(this);
+                    }
+                    bullet.onHit();
+                    
+                    // Only break if bullet is destroyed (no piercing left)
+                    if (!bullet.active) {
+                        break;
+                    }
                 }
             }
         }
@@ -746,8 +1013,8 @@ export class GameEngine {
                     
                     // Play explosion sound
                     this.audioManager.playExplosion();
-                    // Spawn rocky debris particles at collision point
-                    const debrisCount = Math.floor(random(10, 18));
+                    // Reduced debris particles for performance
+                    const debrisCount = Math.floor(random(3, 6));
                     const cx = (a1.x + a2.x) / 2;
                     const cy = (a1.y + a2.y) / 2;
                     for (let d = 0; d < debrisCount; d++) {
@@ -835,6 +1102,15 @@ export class GameEngine {
             }
         }
         
+        // Player-powerup collisions
+        for (let i = this.powerupPool.activeObjects.length - 1; i >= 0; i--) {
+            const powerup = this.powerupPool.activeObjects[i];
+            if (powerup.checkCollision(this.player)) {
+                this.collectPowerup(powerup);
+                this.powerupPool.release(powerup);
+            }
+        }
+        
         // Player-enemy collisions
         this.enemyPool.activeObjects.forEach(enemy => {
             if (this.player.active && collision(this.player, enemy)) {
@@ -845,7 +1121,7 @@ export class GameEngine {
         // Bullet-enemy collisions
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
-            if (!bullet.active || bullet.dying || bullet.hasHit) continue;
+            if (!bullet.active || bullet.hasHit) continue;
             
             for (let j = this.enemyPool.activeObjects.length - 1; j >= 0; j--) {
                 const enemy = this.enemyPool.activeObjects[j];
@@ -861,8 +1137,8 @@ export class GameEngine {
                     // Damage the enemy
                     const destroyed = enemy.takeDamage(this.baseDamage);
                     
-                    // Orange explosion effects for player bullets
-                    for (let p = 0; p < 12; p++) {
+                    // Reduced explosion effects for performance
+                    for (let p = 0; p < 4; p++) {
                         const particle = this.particlePool.get(bullet.x, bullet.y, 'explosion');
                         if (particle) {
                             particle.color = '#ff8800'; // Orange color
@@ -898,13 +1174,31 @@ export class GameEngine {
                             this.createEnemyBurstStar(enemy.x, enemy.y);
                         }
                         
+                        // Chance to drop powerup (higher chance for stronger enemies)
+                        const powerupChance = enemy.type === 'WASP' ? 0.4 : 
+                                            enemy.type === 'TITAN' ? 0.5 : 
+                                            enemy.type === 'BOMBER' ? 0.45 : 0.25;
+                        const roll = Math.random();
+                        console.log(`🎲 Powerup roll for ${enemy.type}: ${roll.toFixed(3)} vs ${powerupChance}`);
+                        if (roll < powerupChance) {
+                            this.dropPowerup(enemy.x, enemy.y);
+                        }
+                        
                         console.log(`💥 ${reward.type} destroyed! +${reward.points} points`);
                         
                         this.enemyPool.release(enemy);
                     }
                     
-                    bullet.startDying(bullet.x, bullet.y);
-                    break;
+                    // Handle bullet hit with powerup effects
+                    if (bullet.explosive) {
+                        bullet.explode(this);
+                    }
+                    bullet.onHit();
+                    
+                    // Only break if bullet is destroyed (no piercing left)
+                    if (!bullet.active) {
+                        break;
+                    }
                 }
             }
         }
@@ -1210,9 +1504,11 @@ export class GameEngine {
             // Always allow normal player movement
             const tractorEngaged = !input.up && !input.down && !input.left && !input.right && !input.fire;
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged);
-            this.bulletPool.updateActive(this.particlePool, this.asteroidPool);
+            this.bulletPool.activeObjects.forEach(bullet => 
+                bullet.update(this.particlePool, this.asteroidPool, this.enemyPool));
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
+            this.powerupPool.activeObjects.forEach(p => p.update(this.player));
             this.asteroidPool.updateActive();
             
             // Update enemies and enemy bullets
@@ -1226,6 +1522,24 @@ export class GameEngine {
             this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel));
             
             this.handleCollisions();
+            
+            // Update powerup display fade
+            if (this.powerupDisplay.active) {
+                this.powerupDisplay.fadeTimer--;
+                if (this.powerupDisplay.fadeTimer <= 0) {
+                    this.powerupDisplay.active = false;
+                } else {
+                    // Smooth fade out
+                    this.powerupDisplay.opacity = this.powerupDisplay.fadeTimer / this.powerupDisplay.maxFadeTime;
+                }
+            }
+
+            // Performance: Clean up inactive particles periodically
+            if (this.game.score % GAME_CONFIG.PARTICLE_CLEANUP_INTERVAL === 0) {
+                this.particlePool.cleanupInactive();
+                this.lineDebrisPool.cleanupInactive();
+                this.powerupPool.cleanupInactive();
+            }
             
             // Note: Wave completion now handled by enhanced wave system in updateWaves()
             // Old asteroid-only trigger removed to prevent conflicts
@@ -1262,11 +1576,18 @@ export class GameEngine {
             // Regular rendering for other game objects
             this.lineDebrisPool.drawActive(this.ctx);
             this.particlePool.drawActive(this.ctx);
+            this.powerupPool.drawActive(this.ctx);
             this.asteroidPool.drawActive(this.ctx);
             this.enemyPool.drawActive(this.ctx);
             this.enemyBulletPool.drawActive(this.ctx);
-            this.bulletPool.drawActive(this.ctx);
+            this.bulletPool.drawActive(this.ctx, this);
             this.player.draw(this.ctx);
+            
+            // Draw powerup indicators
+            this.drawPowerupIndicators();
+            
+            // Draw powerup display at top
+            this.drawPowerupDisplay();
             
             // Draw jitter circle to show bullet spread area
             this.drawJitterCircle();
@@ -1558,8 +1879,9 @@ export class GameEngine {
     takeDamage(damageAmount = this.baseDamage) {
         if (this.player.invincible) return;
 
-        // Apply shield damage reduction
-        const reducedDamage = damageAmount * (1 - this.player.shield / 100);
+        // Apply shield damage reduction (including powerup boosts)
+        const effectiveShield = this.player.getEffectiveShield();
+        const reducedDamage = damageAmount * (1 - effectiveShield / 100);
         this.player.health -= reducedDamage;
 
         if (this.player.health <= 0) {
@@ -1782,7 +2104,8 @@ export class GameEngine {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         
-        const shieldText = `${this.player.shield}`; // Remove % sign
+        const effectiveShield = Math.round(this.player.getEffectiveShield());
+        const shieldText = `${effectiveShield}`; // Show effective shield including powerups
         const shieldTextX = shieldIconX + iconSize + 8;
         const shieldTextY = shieldIconY + iconSize / 2;
         
@@ -1920,8 +2243,9 @@ export class GameEngine {
             const speedDamage = speedRatio * 4; // 0-4 additional damage from speed
             const totalDamage = sizeDamage + speedDamage; // 10-20 damage range
             
-            // Apply shield damage reduction and round to integer
-            const reducedDamage = totalDamage * (1 - this.player.shield / 100);
+                    // Apply shield damage reduction and round to integer (including powerup boosts)
+        const effectiveShield = this.player.getEffectiveShield();
+        const reducedDamage = totalDamage * (1 - effectiveShield / 100);
             const finalDamage = Math.round(reducedDamage);
             
             // Apply the calculated damage

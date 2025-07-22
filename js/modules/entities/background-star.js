@@ -47,8 +47,8 @@ export class BackgroundStar {
         this.opacityOffset += this.twinkleSpeed;
         this.opacity = (Math.sin(this.opacityOffset) + 1) / 2 * 0.6 + 0.5; // 0.5 to 1.1 opacity (brighter)
         
-        // Enhanced parallax effect - same as collectible stars
-        const parallaxFactor = Math.pow(this.z, 2.5) * 0.25;
+        // Reduced parallax effect for less distraction
+        const parallaxFactor = Math.pow(this.z, 1.8) * 0.12;
         this.x -= shipVel.x * parallaxFactor;
         this.y -= shipVel.y * parallaxFactor;
         wrap(this, this.width, this.height);

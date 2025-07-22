@@ -290,23 +290,11 @@ export class Particle {
                 break;
                 
             case 'starBlip':
-                ctx.save();
-                // Add bright glow effect
-                ctx.shadowColor = this.color;
-                ctx.shadowBlur = this.radius * 3;
-                ctx.globalAlpha = Math.max(0, this.life * 2.5); // Even brighter
+                // Simplified rendering without expensive shadow effects
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
-                // Add super bright inner core
-                ctx.shadowBlur = this.radius * 2;
-                ctx.globalAlpha = Math.max(0, this.life * 4);
-                ctx.fillStyle = '#FFFFFF'; // Pure white center
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 0.4, 0, 2 * Math.PI);
-                ctx.fill();
-                ctx.restore();
                 break;
                 
             case 'starSparkle':
@@ -390,16 +378,12 @@ export class Particle {
             }
             
             case 'shieldHit':
-                ctx.save();
-                ctx.globalAlpha = Math.max(0, this.life);
+                // Simplified rendering without expensive shadow effects
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = 3;
-                ctx.shadowColor = '#00aaff';
-                ctx.shadowBlur = 15;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
-                ctx.restore();
                 break;
 
             case 'damageNumber':

@@ -1,4 +1,5 @@
 // Object pooling system for efficient memory management
+import { GAME_CONFIG } from './constants.js';
 export class PoolManager {
     constructor(ObjectClass, initialSize) {
         this.ObjectClass = ObjectClass;
@@ -11,6 +12,15 @@ export class PoolManager {
     }
     
     get(...args) {
+        // Performance: Limit total active objects for particle pools
+        if (this.ObjectClass.name === 'Particle' && this.activeObjects.length > GAME_CONFIG.MAX_PARTICLES) {
+            // Release oldest particle to make room for new one
+            const oldestParticle = this.activeObjects[0];
+            if (oldestParticle) {
+                this.release(oldestParticle);
+            }
+        }
+        
         let obj;
         if (this.pool.length > 0) {
             obj = this.pool.pop();

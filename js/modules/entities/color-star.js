@@ -25,35 +25,58 @@ export class ColorStar {
         // Radius and twinkle speed are now affected by density
         const densityFactor = 0.7 + (this.density || 0.5) * 0.6;
         
-        // 5% chance for a "big star" - much larger and brighter
-        const isBigStar = Math.random() < 0.05;
+        // 15% chance for a "big star" - much larger and brighter
+        const isBigStar = Math.random() < 0.15;
         if (isBigStar) {
-            this.radius = (this.z * 1.8 + 0.8) * scale * densityFactor; // Big stars
+            this.radius = (this.z * 3.5 + 1.5) * scale * densityFactor; // Much bigger stars to show shapes
             this.isBigStar = true;
         } else {
-            this.radius = (this.z * 0.6 + 0.2) * scale * densityFactor; // Normal small stars
+            this.radius = (this.z * 1.2 + 0.6) * scale * densityFactor; // Larger normal stars too
             this.isBigStar = false;
         }
         
         this.opacity = 0;
         this.opacityOffset = Math.random() * Math.PI * 2;
-        this.twinkleSpeed = random(0.01, 0.03) * (1 + this.z * 0.3) * densityFactor;
+        this.twinkleSpeed = random(0.003, 0.008) * (1 + this.z * 0.2) * densityFactor; // Much slower, more gentle
         
-        this.shape = STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
+        // Shape selection - bias big stars toward more interesting shapes
+        if (isBigStar) {
+            // Big stars favor complex, interesting shapes to showcase variety
+            const interestingShapes = ['star4', 'star5', 'star6', 'star8', 'hexagon', 'diamond', 'triangle', 'sparkle', 'burst'];
+            this.shape = Math.random() < 0.8 ? 
+                        interestingShapes[Math.floor(Math.random() * interestingShapes.length)] :
+                        STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
+        } else {
+            this.shape = STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
+        }
+        
         this.points = Math.floor(random(4, 7)) * 2;
         this.innerRadiusRatio = random(0.4, 0.8);
         
         // Add rotation and size variation
         this.rotation = 0;
         this.rotationSpeed = random(-0.02, 0.02);
+        
+        // Big stars with interesting shapes get enhanced rotation - more subtle
+        if (isBigStar && ['star5', 'star6', 'star8', 'sparkle'].includes(this.shape)) {
+            this.rotationSpeed *= 1.3; // Gentle showcase of rotating complex shapes
+        }
         // Big stars get larger size variation
         if (this.isBigStar) {
-            this.sizeVariation = random(1.2, 2.0); // Big stars: 120% to 200% size variation
+            this.sizeVariation = random(1.5, 2.8); // Big stars: 150% to 280% size variation - showcase shapes!
         } else {
-            this.sizeVariation = random(0.7, 1.3); // Normal stars: 70% to 130% size variation
+            this.sizeVariation = random(0.9, 1.6); // Normal stars: 90% to 160% size variation
         }
-        this.pulseSpeed = random(0.005, 0.015);
+        this.pulseSpeed = random(0.002, 0.006); // Slower, more gentle pulsing
         this.pulseOffset = Math.random() * Math.PI * 2;
+        
+        // Shape-specific enhancements for visual interest - toned down
+        if (['star5', 'star6', 'star8'].includes(this.shape)) {
+            this.rotationSpeed *= 1.2; // Slightly faster rotation, not too dramatic
+        }
+        if (['sparkle', 'burst'].includes(this.shape)) {
+            this.pulseSpeed *= 1.5; // More subtle pulse enhancement
+        }
         
         this.isBurst = burst;
         this.vel = { x: 0, y: 0 };
@@ -136,8 +159,8 @@ export class ColorStar {
                 }
             }
         } else {
-            // Update twinkle based on sine wave
-            this.opacity = 0.3 + 0.7 * (Math.sin(Date.now() * this.twinkleSpeed + this.opacityOffset) + 1) / 2;
+            // Update twinkle based on sine wave - much more subtle variation
+            this.opacity = 0.6 + 0.3 * (Math.sin(Date.now() * this.twinkleSpeed + this.opacityOffset) + 1) / 2;
             
             // Rotate the star
             this.rotation += this.rotationSpeed;
@@ -149,11 +172,11 @@ export class ColorStar {
             // Remove all tractor beam and attraction logic
         }
         
-        // Enhanced parallax effect with exponential scaling
-        // Distant stars move much slower, close stars move faster
-        // But burst stars don't have parallax - they're gameplay elements
-        if (!this.isBurst) {
-            const parallaxFactor = Math.pow(this.z, 2.5) * 0.25; // Increased exponent and multiplier for stronger parallax
+                    // Reduced parallax effect for less distraction
+            // Distant stars move much slower, close stars move faster
+            // But burst stars don't have parallax - they're gameplay elements
+            if (!this.isBurst) {
+                const parallaxFactor = Math.pow(this.z, 1.8) * 0.12; // Reduced exponent and multiplier for gentler parallax
             this.x -= shipVel.x * parallaxFactor;
             this.y -= shipVel.y * parallaxFactor;
             wrap(this, this.width, this.height);
@@ -185,7 +208,7 @@ export class ColorStar {
         ctx.rotate(this.rotation);
         
         // Calculate dynamic radius with size variation and pulse
-        const pulseMultiplier = 1 + Math.sin(this.pulseOffset) * 0.1; // Gentle pulsing
+        const pulseMultiplier = 1 + Math.sin(this.pulseOffset) * 0.08; // Much more subtle pulsing
         const dynamicRadius = this.radius * this.sizeVariation * pulseMultiplier;
         
         // Adjust opacity based on depth - brighter overall
@@ -304,13 +327,18 @@ export class ColorStar {
                         ctx.moveTo(0, 0);
                         ctx.lineTo(Math.cos(a) * length, Math.sin(a) * length);
                     }
+                    // Add central cross for sparkle effect
+                    ctx.moveTo(-dynamicRadius * 0.3, 0);
+                    ctx.lineTo(dynamicRadius * 0.3, 0);
+                    ctx.moveTo(0, -dynamicRadius * 0.3);
+                    ctx.lineTo(0, dynamicRadius * 0.3);
                     break;
                     
                 case 'burst':
-                    // Radiating lines of varying lengths
-                    for (let i = 0; i < 12; i++) {
-                        const a = i * Math.PI / 6;
-                        const length = dynamicRadius * (0.5 + Math.random() * 0.5);
+                    // Radiating lines of varying lengths - more dramatic
+                    for (let i = 0; i < 16; i++) {
+                        const a = i * Math.PI / 8;
+                        const length = dynamicRadius * (0.4 + Math.sin(Date.now() * 0.005 + i) * 0.3);
                         ctx.moveTo(0, 0);
                         ctx.lineTo(Math.cos(a) * length, Math.sin(a) * length);
                     }
@@ -325,23 +353,59 @@ export class ColorStar {
                     break;
             }
             
+            // Enhanced border for shape definition
             ctx.strokeStyle = this.borderColor;
-            ctx.lineWidth = 1;
+            ctx.lineWidth = this.isBigStar ? 3 : 2;
             ctx.stroke();
             
+            // Main shape stroke - thicker to showcase intricate shapes
             ctx.strokeStyle = this.color;
-            ctx.lineWidth = 1.5 + this.z / 3; // Thicker lines for better visibility
+            ctx.lineWidth = (this.isBigStar ? 4 : 2.5) + this.z / 2; // Much thicker lines
             ctx.stroke();
+            
+            // Add subtle fill for complex shapes to make them more visible
+            if (['star4', 'star5', 'star6', 'star8', 'hexagon', 'diamond', 'triangle'].includes(this.shape)) {
+                ctx.save();
+                ctx.globalAlpha = this.finalOpacity * 0.3; // Subtle fill
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
         }
         
-        // Add extra visibility for big stars without glow
+        // Add extra visibility for big stars - enhanced center glow
         if (this.isBigStar) {
             ctx.save();
-            ctx.globalAlpha = this.opacity * 0.8;
+            ctx.globalAlpha = this.finalOpacity * 0.6;
             ctx.fillStyle = this.color;
+            
+            // Add a subtle glow effect to make big stars more spectacular
+            ctx.shadowColor = this.color;
+            ctx.shadowBlur = 8;
+            
             ctx.beginPath();
-            ctx.arc(0, 0, dynamicRadius * 0.4, 0, 2 * Math.PI);
+            ctx.arc(0, 0, dynamicRadius * 0.3, 0, 2 * Math.PI);
             ctx.fill();
+            
+            // Add sparkle effect for the most interesting shapes
+            if (['star5', 'star6', 'star8', 'sparkle', 'burst'].includes(this.shape)) {
+                ctx.shadowBlur = 15;
+                ctx.globalAlpha = this.finalOpacity * 0.4;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                
+                // Add small radiating lines for extra sparkle
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const innerR = dynamicRadius * 0.7;
+                    const outerR = dynamicRadius * 1.1;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR);
+                    ctx.lineTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR);
+                    ctx.stroke();
+                }
+            }
+            
             ctx.restore();
         }
         

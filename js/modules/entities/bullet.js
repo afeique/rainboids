@@ -1,6 +1,6 @@
 // Bullet projectile entity
 import { GAME_CONFIG } from '../constants.js';
-import { wrap } from '../utils.js';
+import { wrap, random } from '../utils.js';
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -13,186 +13,353 @@ export class Bullet {
         this.active = false;
     }
     
-    reset(x, y, angle, shootingIntensity = 0) {
+    reset(x, y, angle) {
         let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
         
-        // Apply jitter based on shooting intensity - max 30 degrees (0.524 radians) after 5 seconds
-        const jitterAmount = shootingIntensity * 0.524; // 30 degrees = ~0.524 radians
-        const jitterAngle = angle + (Math.random() - 0.5) * jitterAmount;
-        
-        this.x = x + Math.cos(jitterAngle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
-        this.y = y + Math.sin(jitterAngle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
+        // Use original angle without any jitter
+        this.x = x + Math.cos(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
+        this.y = y + Math.sin(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
         this.radius = 2 * scale; // Smaller bullets
-        this.angle = jitterAngle; // Use the jittered angle
+        this.angle = angle; // Use the original angle
         this.vel = {
-            x: Math.cos(jitterAngle) * GAME_CONFIG.BULLET_SPEED,
-            y: Math.sin(jitterAngle) * GAME_CONFIG.BULLET_SPEED
+            x: Math.cos(angle) * GAME_CONFIG.BULLET_SPEED,
+            y: Math.sin(angle) * GAME_CONFIG.BULLET_SPEED
         };
         this.life = 0;
         this.active = true;
         this.mass = 1;
-        this.trail = []; // Reset trail for reused bullets
-        this.shootingIntensity = shootingIntensity; // Store for trail effects
-        
-        // Death animation properties
-        this.dying = false;
-        this.deathTimer = 0;
-        this.deathDuration = 20; // frames for death animation
-        this.impactPoint = null;
         this.hasHit = false; // Flag to prevent multiple hits
-    }
-    
-    // Trigger death animation where trail collapses to impact point
-    startDying(impactX, impactY) {
-        this.dying = true;
-        this.deathTimer = 0;
-        this.impactPoint = { x: impactX, y: impactY };
-        this.hasHit = true; // Mark as having hit something
-        // Stop moving when dying
-        this.vel.x = 0;
-        this.vel.y = 0;
-    }
-    
-    update(particlePool, asteroidPool) {
-        if (!this.active) return;
         
-        if (this.dying) {
-            // Death animation: trail collapses to impact point
-            this.deathTimer++;
-            
-            if (this.deathTimer >= this.deathDuration) {
-                this.active = false;
-                return;
-            }
-            
-            // Animate trail points moving toward impact point
-            const collapseProgress = this.deathTimer / this.deathDuration;
-            const moveSpeed = 0.15; // How fast trail points move toward impact
-            
-            for (let i = 0; i < this.trail.length; i++) {
-                const point = this.trail[i];
-                if (this.impactPoint) {
-                    // Move each trail point toward the impact point
-                    const dx = this.impactPoint.x - point.x;
-                    const dy = this.impactPoint.y - point.y;
-                    point.x += dx * moveSpeed;
-                    point.y += dy * moveSpeed;
-                }
-            }
-            
-            // Remove trail points that are close to impact point
-            this.trail = this.trail.filter(point => {
-                if (this.impactPoint) {
-                    const dist = Math.hypot(point.x - this.impactPoint.x, point.y - this.impactPoint.y);
-                    return dist > 2; // Remove points within 2 pixels of impact
-                }
-                return true;
-            });
-            
-            return;
-        }
+        // Powerup effects (will be set by player when creating bullets)
+        this.homing = false;
+        this.homingStrength = 0;
+        this.piercing = 0; // Number of enemies it can pierce through
+        this.piercedEnemies = 0; // Track how many it has pierced
+        this.explosive = false;
+        this.explosionRadius = 30;
+    }
+    
+    // Simple bullet removal on impact
+    startDying(impactX, impactY) {
+        this.active = false;
+        this.hasHit = true; // Mark as having hit something
+    }
+    
+    update(particlePool, asteroidPool, enemyPool = null) {
+        if (!this.active) return;
         
         this.life++;
         
-        // Store previous position for trail
-        if (!this.trail) {
-            this.trail = [];
-        }
-        this.trail.push({ x: this.x, y: this.y });
-        
-        // Much longer trail length (25-30 segments based on shooting intensity)
-        const baseTrailLength = 25;
-        const maxTrailLength = 30;
-        const trailLength = baseTrailLength + Math.floor(this.shootingIntensity * (maxTrailLength - baseTrailLength));
-        
-        if (this.trail.length > trailLength) {
-            this.trail.shift();
+        // Homing behavior
+        if (this.homing && enemyPool) {
+            this.applyHoming(enemyPool);
         }
         
-        // Simple straight movement - no homing or wave motion
+        // Movement
         this.x += this.vel.x;
         this.y += this.vel.y;
+        
+        // Screen boundary check (bullets disappear when off screen)
+        if (this.x < -50 || this.x > this.width + 50 || 
+            this.y < -50 || this.y > this.height + 50) {
+            this.active = false;
+        }
+    }
+    
+    applyHoming(enemyPool) {
+        let closestEnemy = null;
+        let closestDistance = Infinity;
+        
+        // Find closest enemy
+        for (const enemy of enemyPool.activeObjects) {
+            if (!enemy.active) continue;
+            
+            const dx = enemy.x - this.x;
+            const dy = enemy.y - this.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance < closestDistance && distance < 200) { // 200 pixel homing range
+                closestDistance = distance;
+                closestEnemy = enemy;
+            }
+        }
+        
+        // Apply homing force toward closest enemy
+        if (closestEnemy) {
+            const dx = closestEnemy.x - this.x;
+            const dy = closestEnemy.y - this.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance > 0) {
+                this.vel.x += (dx / distance) * this.homingStrength;
+                this.vel.y += (dy / distance) * this.homingStrength;
+                
+                // Maintain bullet speed
+                const speed = Math.hypot(this.vel.x, this.vel.y);
+                if (speed > GAME_CONFIG.BULLET_SPEED * 1.2) {
+                    this.vel.x = (this.vel.x / speed) * GAME_CONFIG.BULLET_SPEED * 1.2;
+                    this.vel.y = (this.vel.y / speed) * GAME_CONFIG.BULLET_SPEED * 1.2;
+                }
+            }
+        }
+    }
+    
+    explode(gameEngine) {
+        if (!this.explosive || !gameEngine) return;
+        
+        // Create explosion particles
+        for (let i = 0; i < 15; i++) {
+            const particle = gameEngine.particlePool.get(this.x, this.y, 'explosion');
+            if (particle) {
+                particle.color = '#ff6600';
+                const angle = random(0, Math.PI * 2);
+                const speed = random(2, 8);
+                particle.vel = {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                };
+            }
+        }
+        
+        // Damage nearby enemies
+        if (gameEngine.enemyPool) {
+            for (const enemy of gameEngine.enemyPool.activeObjects) {
+                if (!enemy.active) continue;
+                
+                const dx = enemy.x - this.x;
+                const dy = enemy.y - this.y;
+                const distance = Math.hypot(dx, dy);
+                
+                if (distance < this.explosionRadius) {
+                    const damage = Math.ceil(2 * (1 - distance / this.explosionRadius));
+                    const destroyed = enemy.takeDamage(damage);
+                    
+                    if (destroyed && gameEngine.game) {
+                        const reward = enemy.getDestructionReward();
+                        gameEngine.game.score += reward.points;
+                        gameEngine.game.money += reward.points;
+                        
+                        // Create additional explosion particles for destroyed enemies
+                        for (let j = 0; j < 8; j++) {
+                            const particle = gameEngine.particlePool.get(enemy.x, enemy.y, 'explosion');
+                            if (particle) {
+                                particle.color = '#ffaa00';
+                                const angle = random(0, Math.PI * 2);
+                                const speed = random(3, 10);
+                                particle.vel = {
+                                    x: Math.cos(angle) * speed,
+                                    y: Math.sin(angle) * speed
+                                };
+                            }
+                        }
+                        
+                        // Drop burst stars and maybe powerups
+                        for (let i = 0; i < GAME_CONFIG.BURST_STAR_DROP_COUNT; i++) {
+                            gameEngine.createEnemyBurstStar(enemy.x, enemy.y);
+                        }
+                        
+                        gameEngine.enemyPool.release(enemy);
+                    }
+                }
+            }
+        }
+    }
+    
+    onHit() {
+        if (this.piercing > 0) {
+            this.piercedEnemies++;
+            console.log(`🔹 Piercing bullet hit ${this.piercedEnemies}/${this.piercing} targets`);
+            if (this.piercedEnemies >= this.piercing) {
+                console.log(`🔹 Piercing bullet exhausted, destroying`);
+                this.startDying(this.x, this.y);
+            }
+            // Continue flying if still has piercing left
+        } else {
+            this.startDying(this.x, this.y);
+        }
     }
 
-    draw(ctx) {
+    draw(ctx, gameEngine = null) {
         if (!this.active) return;
         
-        // Calculate fade multiplier for dying animation
-        let deathFade = 1;
-        if (this.dying) {
-            deathFade = 1 - (this.deathTimer / this.deathDuration);
+        ctx.save();
+        
+        // Get powerup-enhanced visuals
+        const visualData = this.getBulletVisuals(gameEngine);
+        
+        // Apply enhanced colors and effects
+        ctx.fillStyle = visualData.color;
+        ctx.shadowColor = visualData.glowColor;
+        ctx.shadowBlur = visualData.glowIntensity;
+        
+        // Draw based on bullet type/powerups
+        if (visualData.shape === 'star') {
+            this.drawStarBullet(ctx, visualData);
+        } else if (visualData.shape === 'diamond') {
+            this.drawDiamondBullet(ctx, visualData);
+        } else if (visualData.shape === 'triangle') {
+            this.drawTriangleBullet(ctx, visualData);
+        } else if (visualData.shape === 'hexagon') {
+            this.drawHexagonBullet(ctx, visualData);
+        } else {
+            // Default circle shape
+            this.drawCircleBullet(ctx, visualData);
         }
-        
-        // Draw much longer and more dramatic trail
-        if (this.trail && this.trail.length > 1) {
-            ctx.save();
-            ctx.strokeStyle = '#FF6B00'; // Fiery orange
-            ctx.lineCap = 'round';
-            
-            for (let i = 1; i < this.trail.length; i++) {
-                const alpha = i / this.trail.length; // Fade from 0 to 1
-                const width = alpha * 4 + (this.shootingIntensity * 0.5); // Thicker trails with intensity
-                
-                // Apply death fade to trail alpha
-                ctx.globalAlpha = alpha * 0.9 * deathFade;
-                ctx.lineWidth = width;
-                
-                ctx.beginPath();
-                ctx.moveTo(this.trail[i-1].x, this.trail[i-1].y);
-                ctx.lineTo(this.trail[i].x, this.trail[i].y);
-                ctx.stroke();
-            }
-            ctx.restore();
-        }
-        
-        // Draw main bullet - elongated bullet shape (only when not dying)
-        if (!this.dying) {
-            ctx.save();
-            ctx.translate(this.x, this.y);
-            ctx.rotate(this.angle);
-            
-            ctx.fillStyle = '#FF4500'; // Bright fiery orange
-            ctx.shadowColor = '#FF6B00';
-            ctx.shadowBlur = 8 + (this.shootingIntensity * 2); // Enhance glow with intensity
-        
-        // Draw elongated bullet body (cylinder)
-        const length = this.radius * 3; // Make it 3x longer than radius
-        const width = this.radius;
-        
-        ctx.beginPath();
-        // Main cylindrical body
-        ctx.rect(-length/2, -width/2, length * 0.8, width);
-        ctx.fill();
-        
-        // Pointed tip (triangle)
-        ctx.beginPath();
-        ctx.moveTo(length/2 - length * 0.2, 0); // Point at front
-        ctx.lineTo(length/2 - length * 0.8, -width/2); // Top of body
-        ctx.lineTo(length/2 - length * 0.8, width/2); // Bottom of body
-        ctx.closePath();
-        ctx.fill();
-        
-        // Add bright inner core (smaller elongated shape)
-        ctx.fillStyle = '#FFFF00'; // Bright yellow center
-        ctx.shadowBlur = 4 + (this.shootingIntensity * 1);
-        
-        ctx.beginPath();
-        const coreLength = length * 0.6;
-        const coreWidth = width * 0.5;
-        
-        // Core body
-        ctx.rect(-coreLength/2, -coreWidth/2, coreLength * 0.8, coreWidth);
-        ctx.fill();
-        
-        // Core tip
-        ctx.beginPath();
-        ctx.moveTo(coreLength/2 - coreLength * 0.2, 0);
-        ctx.lineTo(coreLength/2 - coreLength * 0.8, -coreWidth/2);
-        ctx.lineTo(coreLength/2 - coreLength * 0.8, coreWidth/2);
-        ctx.closePath();
-        ctx.fill();
         
         ctx.restore();
+    }
+    
+    getBulletVisuals(gameEngine) {
+        let color = '#00FFFF'; // Default cyan
+        let glowColor = '#00FFFF';
+        let glowIntensity = 6;
+        let shape = 'circle';
+        let size = this.radius;
+        
+        // Check for active powerups through game engine player
+        if (gameEngine && gameEngine.player && gameEngine.player.powerups) {
+            const powerups = gameEngine.player.powerups;
+            
+            // Priority order for visual effects (later ones override earlier ones)
+            if (powerups.has('RAPID_FIRE')) {
+                color = '#ff6600';
+                glowColor = '#ff3300';
+                glowIntensity = 8;
+                shape = 'triangle';
+            }
+            if (powerups.has('MULTI_SHOT')) {
+                color = '#66aaff';
+                glowColor = '#3366ff';
+                shape = 'hexagon';
+            }
+            if (powerups.has('SPEED_BOOST')) {
+                color = '#ffff33';
+                glowColor = '#ffcc00';
+                glowIntensity = 10;
+            }
+            if (powerups.has('BIG_BULLETS')) {
+                color = '#66ff66';
+                glowColor = '#33cc33';
+                size = this.radius * 1.2; // Slightly bigger visual
+            }
+            if (powerups.has('PIERCING')) {
+                color = '#ffcc66';
+                glowColor = '#ff9933';
+                shape = 'diamond';
+                glowIntensity = 12;
+            }
+            if (powerups.has('SPREAD_SHOT')) {
+                color = '#66ddff';
+                glowColor = '#33ccff';
+                shape = 'star';
+            }
+            if (powerups.has('HOMING')) {
+                color = '#ff66cc';
+                glowColor = '#ff3399';
+                shape = 'diamond';
+                glowIntensity = 15;
+            }
+            if (powerups.has('EXPLOSIVE')) {
+                color = '#ff9933';
+                glowColor = '#ff6600';
+                shape = 'star';
+                glowIntensity = 20;
+                size = this.radius * 1.1;
+            }
         }
+        
+        return { color, glowColor, glowIntensity, shape, size };
+    }
+    
+    drawCircleBullet(ctx, visualData) {
+        // Main bullet
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, visualData.size, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Bright center
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowBlur = 3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, visualData.size * 0.5, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    
+    drawStarBullet(ctx, visualData) {
+        const points = 5;
+        ctx.beginPath();
+        for (let i = 0; i < points * 2; i++) {
+            const angle = (i * Math.PI) / points;
+            const radius = i % 2 === 0 ? visualData.size : visualData.size * 0.5;
+            const x = this.x + Math.cos(angle) * radius;
+            const y = this.y + Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        
+        // Bright center
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowBlur = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, visualData.size * 0.3, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    
+    drawDiamondBullet(ctx, visualData) {
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - visualData.size);
+        ctx.lineTo(this.x + visualData.size * 0.7, this.y);
+        ctx.lineTo(this.x, this.y + visualData.size);
+        ctx.lineTo(this.x - visualData.size * 0.7, this.y);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Bright center line
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 2;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - visualData.size * 0.5);
+        ctx.lineTo(this.x, this.y + visualData.size * 0.5);
+        ctx.stroke();
+    }
+    
+    drawTriangleBullet(ctx, visualData) {
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - visualData.size);
+        ctx.lineTo(this.x + visualData.size * 0.8, this.y + visualData.size * 0.5);
+        ctx.lineTo(this.x - visualData.size * 0.8, this.y + visualData.size * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Bright center
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowBlur = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, visualData.size * 0.3, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    
+    drawHexagonBullet(ctx, visualData) {
+        const sides = 6;
+        ctx.beginPath();
+        for (let i = 0; i < sides; i++) {
+            const angle = (i * 2 * Math.PI) / sides;
+            const x = this.x + Math.cos(angle) * visualData.size;
+            const y = this.y + Math.sin(angle) * visualData.size;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        
+        // Bright center
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowBlur = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, visualData.size * 0.4, 0, 2 * Math.PI);
+        ctx.fill();
     }
 }

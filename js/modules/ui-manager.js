@@ -69,11 +69,21 @@ export class UIManager {
         this.elements.waveDisplay.textContent = `WAVE: ${wave}`;
     }
     
-    showMessage(title, subtitle = '', duration = 0) {
+    showMessage(title, subtitle = '', duration = 0, position = 'center') {
         this.elements.messageTitle.textContent = title;
         this.elements.messageTitle.style.display = 'block';
         this.elements.messageSubtitle.innerHTML = subtitle.replace(/\n/g, '<br>');
         this.elements.messageSubtitle.style.display = subtitle ? 'block' : 'none';
+        
+        // Position the message overlay
+        const overlay = document.getElementById('game-message-overlay');
+        if (position === 'top') {
+            overlay.style.justifyContent = 'flex-start';
+            overlay.style.paddingTop = '12.5vh'; // 7/8 from top = 1/8 from top = 12.5% of viewport height
+        } else {
+            overlay.style.justifyContent = 'center';
+            overlay.style.paddingTop = '0';
+        }
         
         if (duration > 0) {
             setTimeout(() => this.hideMessage(), duration);
@@ -83,6 +93,11 @@ export class UIManager {
     hideMessage() {
         this.elements.messageTitle.style.display = 'none';
         this.elements.messageSubtitle.style.display = 'none';
+        
+        // Reset positioning to center for next message
+        const overlay = document.getElementById('game-message-overlay');
+        overlay.style.justifyContent = 'center';
+        overlay.style.paddingTop = '0';
     }
     
     togglePause() {

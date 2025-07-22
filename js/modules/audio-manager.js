@@ -13,6 +13,7 @@ export class AudioManager {
             shoot: true,
             hit: true,
             coin: true,
+            powerup: true,
             explosion: true,
             playerExplosion: true,
             thruster: true,
@@ -28,6 +29,22 @@ export class AudioManager {
             shoot: sfxr.generate("laserShoot"),
             hit: sfxr.generate("hitHurt"),
             coin: sfxr.generate("pickupCoin"),
+            powerup: {
+                wave_type: 0, // Square wave for bright, magical sound
+                p_base_freq: 0.6, // Higher pitch for bright magical feel
+                p_freq_ramp: 0.3, // Rising pitch sweep
+                p_freq_dramp: -0.1, // Slight dip
+                p_env_attack: 0.0, // Instant attack
+                p_env_sustain: 0.15, // Short sustain
+                p_env_decay: 0.4, // Medium decay for sparkle effect
+                p_vib_strength: 0.3, // Vibrato for magical shimmer
+                p_vib_speed: 0.5, // Fast vibrato
+                p_arp_mod: 0.4, // Arpeggio for chord effect
+                p_arp_speed: 0.7, // Fast arpeggio
+                sound_vol: 0.25, // Moderate volume
+                sample_rate: 44100,
+                sample_size: 8
+            },
             explosion: sfxr.generate("explosion"),
             playerExplosion: sfxr.generate("explosion"),
             thruster: sfxr.generate("explosion"),
@@ -132,6 +149,7 @@ export class AudioManager {
     playShoot() { this.playSound('shoot'); }
     playHit() { this.playSound('hit'); }
     playCoin() { this.playSound('coin'); }
+    playPowerup() { this.playSound('powerup'); }
     playExplosion() { this.playSound('explosion'); }
     playPlayerExplosion() { this.playSound('playerExplosion'); }
     playThruster() { this.playSound('thruster'); }
@@ -244,6 +262,13 @@ export class AudioManager {
         if (soundName === 'playerExplosion') {
             this.sounds.playerExplosion.p_env_sustain = 0.3 + Math.random() * 0.2; // 0.3-0.5
             this.sounds.playerExplosion.p_base_freq = 0.15 + Math.random() * 0.1; // 0.15-0.25
+        }
+        
+        if (soundName === 'powerup') {
+            // Randomize powerup sound for magical variety each pickup
+            this.sounds.powerup.p_base_freq = 0.55 + Math.random() * 0.15; // 0.55-0.7 for pitch variety
+            this.sounds.powerup.p_freq_ramp = 0.25 + Math.random() * 0.15; // 0.25-0.4 for sweep variety
+            this.sounds.powerup.p_vib_strength = 0.2 + Math.random() * 0.2; // 0.2-0.4 for shimmer variety
         }
         
         // Update audio cache
