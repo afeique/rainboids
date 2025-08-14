@@ -1156,29 +1156,37 @@ export class Enemy {
         const barX = this.x - barWidth / 2;
         const barY = this.y - this.radius - 18;
 
-        // Draw level display to the left of the health bar
-        const levelText = `LV.${this.level}`;
-        ctx.font = "8px 'Press Start 2P', monospace";
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        
-        // Draw "LV." in gray
-        const lvX = barX - 4;
-        const lvY = barY + barHeight / 2;
-        ctx.fillStyle = '#888888'; // Gray color
+        // Health number centered above the health bar
+        ctx.font = "10px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#FFD700'; // Bright gold for health number
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 1;
-        ctx.strokeText('LV.', lvX, lvY);
-        ctx.fillText('LV.', lvX, lvY);
+        ctx.lineWidth = 2;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const healthNumber = `${Math.round(this.health)}/${this.maxHealth}`;
+        const numberX = barX + barWidth / 2;
+        const numberY = barY - 6;
         
-        // Measure "LV." width to position the level number
-        const lvWidth = ctx.measureText('LV.').width;
+        // Measure health number width to position level to the left
+        const healthWidth = ctx.measureText(healthNumber).width;
         
-        // Draw level number in blue
-        const levelNumX = lvX + lvWidth;
-        ctx.fillStyle = '#4488ff'; // Blue color
-        ctx.strokeText(this.level.toString(), levelNumX, lvY);
-        ctx.fillText(this.level.toString(), levelNumX, lvY);
+        // Draw level display inline to the left of HP number
+        const levelText = `LV${this.level || 1}`;
+        const levelWidth = ctx.measureText(levelText).width;
+        const spacing = 8; // Space between level and health
+        const levelX = numberX - (healthWidth / 2) - spacing - levelWidth;
+        
+        // Draw level text in light blue
+        ctx.fillStyle = '#88ccff'; // Light blue color
+        ctx.textAlign = 'left';
+        ctx.strokeText(levelText, levelX, numberY);
+        ctx.fillText(levelText, levelX, numberY);
+        
+        // Draw health number outline first, then fill
+        ctx.fillStyle = '#FFD700';
+        ctx.textAlign = 'center';
+        ctx.strokeText(healthNumber, numberX, numberY);
+        ctx.fillText(healthNumber, numberX, numberY);
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;
@@ -1221,20 +1229,7 @@ export class Enemy {
             ctx.fill();
         }
 
-        // Health number centered above the health bar
-        ctx.font = "10px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#FFD700'; // Bright gold for health number
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        const healthNumber = `${Math.round(this.health)}/${this.maxHealth}`;
-        const numberX = barX + barWidth / 2;
-        const numberY = barY - 6;
-        
-        // Draw health number outline first, then fill
-        ctx.strokeText(healthNumber, numberX, numberY);
-        ctx.fillText(healthNumber, numberX, numberY);
+
 
         ctx.restore();
     }

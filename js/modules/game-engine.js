@@ -260,9 +260,9 @@ export class GameEngine {
             }
         });
         
-        // Shop click handling
+        // Shop click handling with click-outside-to-close
         this.canvas.addEventListener('click', (e) => {
-            if (this.game.state === GAME_STATES.SHOP && this.shopItemBounds) {
+            if (this.game.state === GAME_STATES.SHOP) {
                 e.preventDefault();
                 e.stopPropagation();
                 
@@ -270,15 +270,32 @@ export class GameEngine {
                 const clickX = e.clientX - rect.left;
                 const clickY = e.clientY - rect.top;
                 
-                for (const bound of this.shopItemBounds) {
-                    if (clickX >= bound.x && clickX <= bound.x + bound.width &&
-                        clickY >= bound.y && clickY <= bound.y + bound.height) {
-                        console.log(`🛒 Attempting to buy ${bound.item.name}...`);
-                        const success = this.buyShopItem(bound.item.id);
-                        if (success) {
-                            console.log(`🛒 Purchase successful!`);
+                // Check if click is outside shop window
+                if (this.shopWindowBounds) {
+                    const isOutsideShop = clickX < this.shopWindowBounds.x || 
+                                        clickX > this.shopWindowBounds.x + this.shopWindowBounds.width ||
+                                        clickY < this.shopWindowBounds.y || 
+                                        clickY > this.shopWindowBounds.y + this.shopWindowBounds.height;
+                    
+                    if (isOutsideShop) {
+                        console.log('🛒 Clicked outside shop, closing...');
+                        this.closeShop();
+                        return;
+                    }
+                }
+                
+                // Check for item clicks
+                if (this.shopItemBounds) {
+                    for (const bound of this.shopItemBounds) {
+                        if (clickX >= bound.x && clickX <= bound.x + bound.width &&
+                            clickY >= bound.y && clickY <= bound.y + bound.height) {
+                            console.log(`🛒 Attempting to buy ${bound.item.name}...`);
+                            const success = this.buyShopItem(bound.item.id);
+                            if (success) {
+                                console.log(`🛒 Purchase successful!`);
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
@@ -286,10 +303,107 @@ export class GameEngine {
         
         // Mouse move tracking for hover effects
         this.canvas.addEventListener('mousemove', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            this.mouseX = e.clientX - rect.left;
+            this.mouseY = e.clientY - rect.top;
+        });
+        
+        // Shop scroll support
+        this.canvas.addEventListener('wheel', (e) => {
+            if (this.game.state === GAME_STATES.SHOP) {
+                e.preventDefault();
+                
+                // Check if mouse is over shop window
+                if (this.shopWindowBounds && this.mouseX !== undefined && this.mouseY !== undefined) {
+                    const isOverShop = this.mouseX >= this.shopWindowBounds.x && 
+                                     this.mouseX <= this.shopWindowBounds.x + this.shopWindowBounds.width &&
+                                     this.mouseY >= this.shopWindowBounds.y && 
+                                     this.mouseY <= this.shopWindowBounds.y + this.shopWindowBounds.height;
+                    
+                    if (isOverShop) {
+                        const scrollSpeed = 40;
+                        if (this.shopScrollOffset === undefined) {
+                            this.shopScrollOffset = 0;
+                        }
+                        this.shopScrollOffset += e.deltaY > 0 ? scrollSpeed : -scrollSpeed;
+                    }
+                }
+            }
+        });
+        
+        // Mobile touch support for shop
+        let touchStartY = 0;
+        let touchStartScrollOffset = 0;
+        
+        this.canvas.addEventListener('touchstart', (e) => {
             if (this.game.state === GAME_STATES.SHOP) {
                 const rect = this.canvas.getBoundingClientRect();
-                this.mouseX = e.clientX - rect.left;
-                this.mouseY = e.clientY - rect.top;
+                const touch = e.touches[0];
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+                
+                // Check if touch is outside shop window - close if so
+                if (this.shopWindowBounds) {
+                    const isOutsideShop = touchX < this.shopWindowBounds.x || 
+                                        touchX > this.shopWindowBounds.x + this.shopWindowBounds.width ||
+                                        touchY < this.shopWindowBounds.y || 
+                                        touchY > this.shopWindowBounds.y + this.shopWindowBounds.height;
+                    
+                    if (isOutsideShop) {
+                        e.preventDefault();
+                        console.log('🛒 Touched outside shop, closing...');
+                        this.closeShop();
+                        return;
+                    }
+                }
+                
+                // Store touch start position for scrolling
+                touchStartY = touchY;
+                touchStartScrollOffset = this.shopScrollOffset || 0;
+            }
+        });
+        
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (this.game.state === GAME_STATES.SHOP) {
+                e.preventDefault(); // Prevent page scroll
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                const touchY = touch.clientY - rect.top;
+                
+                // Update scroll offset based on touch movement
+                const deltaY = touchStartY - touchY;
+                if (this.shopScrollOffset === undefined) {
+                    this.shopScrollOffset = 0;
+                }
+                this.shopScrollOffset = touchStartScrollOffset + deltaY;
+            }
+        });
+        
+        this.canvas.addEventListener('touchend', (e) => {
+            if (this.game.state === GAME_STATES.SHOP) {
+                e.preventDefault();
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const touch = e.changedTouches[0];
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+                
+                // Check for item taps (only if not much scrolling happened)
+                const scrollDelta = Math.abs((this.shopScrollOffset || 0) - touchStartScrollOffset);
+                if (scrollDelta < 20 && this.shopItemBounds) { // 20px tolerance for tap vs scroll
+                    for (const bound of this.shopItemBounds) {
+                        if (touchX >= bound.x && touchX <= bound.x + bound.width &&
+                            touchY >= bound.y && touchY <= bound.y + bound.height) {
+                            console.log(`🛒 Attempting to buy ${bound.item.name}...`);
+                            const success = this.buyShopItem(bound.item.id);
+                            if (success) {
+                                console.log(`🛒 Purchase successful!`);
+                            }
+                            break;
+                        }
+                    }
+                }
             }
         });
     }
@@ -830,51 +944,113 @@ export class GameEngine {
     }
     
     drawShop() {
+        // Initialize scroll offset if not set
+        if (this.shopScrollOffset === undefined) {
+            this.shopScrollOffset = 0;
+        }
+        
         // Draw semi-transparent overlay
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         this.ctx.fillRect(0, 0, this.width, this.height);
         
-        // Shop title
+        // Calculate shop window dimensions
+        const shopWindowWidth = Math.min(600, this.width - 40);
+        const shopWindowHeight = Math.min(this.height - 160, 600);
+        const shopWindowX = (this.width - shopWindowWidth) / 2;
+        const shopWindowY = 120;
+        
+        // Store shop window bounds for click detection
+        this.shopWindowBounds = {
+            x: shopWindowX,
+            y: shopWindowY,
+            width: shopWindowWidth,
+            height: shopWindowHeight
+        };
+        
+        // Draw shop window background
+        this.ctx.fillStyle = 'rgba(20, 20, 30, 0.95)';
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 3;
+        this.ctx.fillRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
+        this.ctx.strokeRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
+        
+        // Shop title - larger and more prominent
         this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = 'bold 48px "Press Start 2P", monospace';
+        this.ctx.font = 'bold 32px "Press Start 2P", monospace';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('SHOP', this.width / 2, 80);
+        this.ctx.fillText('SHOP', this.width / 2, 60);
         
-        // Money display
+        // Money display - larger and more visible
         this.ctx.fillStyle = '#00FF00';
-        this.ctx.font = 'bold 24px "Press Start 2P", monospace';
-        this.ctx.fillText(`Coins: ${this.game.money}`, this.width / 2, 120);
+        this.ctx.font = 'bold 20px "Press Start 2P", monospace';
+        this.ctx.fillText(`Coins: ${this.game.money}`, this.width / 2, 90);
         
-        // Calculate grid layout
-        const itemsPerRow = 4;
-        const itemWidth = 200;
-        const itemHeight = 180; // Increased from 160 to provide more vertical space
-        const padding = 20;
-        const startX = (this.width - (itemsPerRow * itemWidth + (itemsPerRow - 1) * padding)) / 2;
-        const startY = 180;
+        // Setup clipping for scrollable area
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.rect(shopWindowX + 10, shopWindowY + 20, shopWindowWidth - 20, shopWindowHeight - 80);
+        this.ctx.clip();
+        
+        // Calculate scrollable list layout
+        const itemWidth = shopWindowWidth - 40;
+        const itemHeight = 100; // Increased from 80 to accommodate larger fonts
+        const padding = 12; // Slightly increased padding
+        const startX = shopWindowX + 20;
+        
+        // Calculate total content height for scroll limits
+        const totalContentHeight = this.shopItems.length * (itemHeight + padding);
+        const maxScroll = Math.max(0, totalContentHeight - (shopWindowHeight - 80));
+        
+        // Clamp scroll offset
+        this.shopScrollOffset = Math.max(0, Math.min(maxScroll, this.shopScrollOffset));
+        
+        // Calculate start Y position after clamping scroll offset
+        const startY = shopWindowY + 30 - this.shopScrollOffset;
         
         // Draw shop items with hover detection
         this.shopItems.forEach((item, index) => {
-            const row = Math.floor(index / itemsPerRow);
-            const col = index % itemsPerRow;
-            const x = startX + col * (itemWidth + padding);
-            const y = startY + row * (itemHeight + padding);
+            const x = startX;
+            const y = startY + index * (itemHeight + padding);
             
-            // Check for hover if mouse position is available
-            let isHovered = false;
-            if (this.mouseX !== undefined && this.mouseY !== undefined) {
-                isHovered = this.mouseX >= x && this.mouseX <= x + itemWidth &&
-                           this.mouseY >= y && this.mouseY <= y + itemHeight;
+            // Only draw items that are visible in the scroll area
+            if (y + itemHeight >= shopWindowY + 20 && y <= shopWindowY + shopWindowHeight - 60) {
+                // Check for hover if mouse position is available
+                let isHovered = false;
+                if (this.mouseX !== undefined && this.mouseY !== undefined) {
+                    isHovered = this.mouseX >= x && this.mouseX <= x + itemWidth &&
+                               this.mouseY >= y && this.mouseY <= y + itemHeight &&
+                               this.mouseX >= shopWindowX + 10 && this.mouseX <= shopWindowX + shopWindowWidth - 10 &&
+                               this.mouseY >= shopWindowY + 20 && this.mouseY <= shopWindowY + shopWindowHeight - 60;
+                }
+                
+                this.drawShopItem(item, x, y, itemWidth, itemHeight, index, isHovered);
             }
-            
-            this.drawShopItem(item, x, y, itemWidth, itemHeight, index, isHovered);
         });
         
-        // Instructions
+        this.ctx.restore(); // Remove clipping
+        
+        // Draw scroll indicators if needed
+        if (maxScroll > 0) {
+            const scrollBarX = shopWindowX + shopWindowWidth - 15;
+            const scrollBarY = shopWindowY + 20;
+            const scrollBarHeight = shopWindowHeight - 80;
+            const scrollThumbHeight = Math.max(20, scrollBarHeight * (shopWindowHeight - 80) / totalContentHeight);
+            const scrollThumbY = scrollBarY + (this.shopScrollOffset / maxScroll) * (scrollBarHeight - scrollThumbHeight);
+            
+            // Scroll track
+            this.ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
+            this.ctx.fillRect(scrollBarX, scrollBarY, 10, scrollBarHeight);
+            
+            // Scroll thumb
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.fillRect(scrollBarX, scrollThumbY, 10, scrollThumbHeight);
+        }
+        
+        // Instructions - larger and more visible
         this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = '16px "Press Start 2P", monospace';
+        this.ctx.font = '14px "Press Start 2P", monospace';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('Click items to purchase • Press SPACE to continue', this.width / 2, this.height - 50);
+        this.ctx.fillText('Click items to purchase • Press SPACE or click outside to continue', this.width / 2, this.height - 30);
     }
     
     drawShopItem(item, x, y, width, height, index, isHovered = false) {
@@ -911,42 +1087,82 @@ export class GameEngine {
         }
         this.ctx.strokeRect(x, y, width, height);
         
-        // Item icon
-        this.ctx.font = '36px "Press Start 2P", monospace';
+        // Horizontal layout for list items - larger, more visible fonts
+        const iconSize = 32; // Increased from 24 for better visibility
+        const padding = 15; // Increased padding for better spacing
+        const iconAreaWidth = iconSize + padding; // Width allocated for icon area
+        
+        // Item icon (centered in icon area, shifted up by 10px)
+        this.ctx.font = `${iconSize}px "Press Start 2P", monospace`;
         this.ctx.textAlign = 'center';
         this.ctx.fillStyle = maxedOut ? '#666' : '#FFFFFF';
-        this.ctx.fillText(item.icon, x + width / 2, y + 38);
+        const iconCenterX = x + padding + iconAreaWidth / 2;
+        this.ctx.fillText(item.icon, iconCenterX, y + height / 2 + iconSize / 4 - 10);
         
-        // Item name (potentially multiline) - Using Fira Code
-        this.ctx.font = 'bold 18px "Fira Code", Montserrat, Consolas, monospace';
+        // Text content area (right of icon area)
+        const textX = x + padding + iconAreaWidth + padding;
+        const costAreaWidth = 100; // Fixed width for cost area
+        const textWidth = width - (padding + iconAreaWidth + padding + costAreaWidth + padding);
+        
+        // Item name - larger, more visible font
+        this.ctx.font = 'bold 16px "Press Start 2P", monospace';
         this.ctx.fillStyle = maxedOut ? '#666' : '#FFFFFF';
-        this.drawMultilineText(item.name, x + width / 2, y + 78, width - 20, 18);
+        this.ctx.textAlign = 'left'; // Left-justified text
         
-        // Item description (multiline) - Using Fira Code
-        this.ctx.font = '15px "Fira Code", Montserrat, Consolas, monospace';
+        // Truncate name if too long
+        let displayName = item.name;
+        let nameWidth = this.ctx.measureText(displayName).width;
+        if (nameWidth > textWidth) {
+            while (nameWidth > textWidth - 30 && displayName.length > 3) {
+                displayName = displayName.slice(0, -1);
+                nameWidth = this.ctx.measureText(displayName + '...').width;
+            }
+            displayName += '...';
+        }
+        this.ctx.fillText(displayName, textX, y + 22);
+        
+        // Item description - larger, more readable font
+        this.ctx.font = '12px "Press Start 2P", monospace';
         this.ctx.fillStyle = maxedOut ? '#666' : '#CCCCCC';
-        this.drawMultilineText(item.description, x + width / 2, y + 103, width - 20, 15);
+        this.ctx.textAlign = 'left'; // Ensure description is left-justified
         
-        // Cost and stacks - Using Fira Code
-        this.ctx.font = 'bold 16px "Fira Code", Montserrat, Consolas, monospace';
-        this.ctx.fillStyle = '#FFD700';
-        this.ctx.fillText(`${actualCost} coins`, x + width / 2, y + 143);
+        // Word wrap description to fit in available space (shifted down by 20px)
+        const maxDescLines = 2;
+        const lineHeight = 16; // Increased line height for larger font
+        const descStartY = y + 62; // Shifted down by 20px from original y + 42
         
+        this.drawMultilineText(item.description, textX, descStartY, textWidth, lineHeight, maxDescLines);
+        
+        // Level info (if applicable) - more visible (also shifted down)
         if (currentStacks > 0) {
             this.ctx.fillStyle = '#00FFFF';
-            this.ctx.font = '14px "Fira Code", Montserrat, Consolas, monospace';
-            this.ctx.fillText(`Lv ${currentStacks}/${item.maxStacks}`, x + width / 2, y + 163);
+            this.ctx.font = '11px "Press Start 2P", monospace';
+            this.ctx.textAlign = 'left'; // Ensure level info is left-justified
+            this.ctx.fillText(`Lv ${currentStacks}/${item.maxStacks}`, textX, y + 92); // Shifted down by 20px from y + 72
         }
+        
+        // Cost (right side) - larger, more visible
+        const costX = x + width - padding;
+        this.ctx.font = 'bold 16px "Press Start 2P", monospace';
+        this.ctx.fillStyle = canAfford ? '#FFD700' : '#FF6666';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(`${actualCost}`, costX, y + 35);
+        
+        // "coins" label larger
+        this.ctx.font = '12px "Press Start 2P", monospace';
+        this.ctx.fillStyle = canAfford ? '#B8860B' : '#CC4444'; // Darker versions
+        this.ctx.fillText('coins', costX, y + 52);
         
         // Store item bounds for click detection
         if (!this.shopItemBounds) this.shopItemBounds = [];
         this.shopItemBounds[index] = { x, y, width, height, item };
     }
     
-    drawMultilineText(text, centerX, startY, maxWidth, lineHeight) {
+    drawMultilineText(text, x, startY, maxWidth, lineHeight, maxLines = null) {
         const words = text.split(' ');
         let line = '';
         let y = startY;
+        let lineCount = 0;
         
         for (let i = 0; i < words.length; i++) {
             const testLine = line + words[i] + ' ';
@@ -954,18 +1170,30 @@ export class GameEngine {
             const testWidth = metrics.width;
             
             if (testWidth > maxWidth && i > 0) {
+                // Check if we've hit max lines
+                if (maxLines && lineCount >= maxLines - 1) {
+                    // Truncate with ellipsis
+                    let truncatedLine = line.trim();
+                    while (this.ctx.measureText(truncatedLine + '...').width > maxWidth && truncatedLine.length > 0) {
+                        truncatedLine = truncatedLine.slice(0, -1);
+                    }
+                    this.ctx.fillText(truncatedLine + '...', x, y);
+                    return;
+                }
+                
                 // Draw the current line and start a new one
-                this.ctx.fillText(line.trim(), centerX, y);
+                this.ctx.fillText(line.trim(), x, y);
                 line = words[i] + ' ';
-                y += lineHeight + 2; // Small spacing between lines
+                y += lineHeight;
+                lineCount++;
             } else {
                 line = testLine;
             }
         }
         
-        // Draw the last line
-        if (line.trim().length > 0) {
-            this.ctx.fillText(line.trim(), centerX, y);
+        // Draw the last line if we haven't hit max lines
+        if (line.trim().length > 0 && (!maxLines || lineCount < maxLines)) {
+            this.ctx.fillText(line.trim(), x, y);
         }
     }
     
@@ -1061,7 +1289,7 @@ export class GameEngine {
             y: random(-spd, spd) || 0.2
         };
         
-        asteroid.initializeAsteroid(x, y, r);
+        asteroid.initializeAsteroid(x, y, r, this.game.asteroidLevel);
         asteroid.vel = vel;
     }
     
@@ -1474,7 +1702,7 @@ export class GameEngine {
                                 const spawnX = ast.x + random(-ast.radius * 0.2, ast.radius * 0.2);
                                 const spawnY = ast.y + random(-ast.radius * 0.2, ast.radius * 0.2);
 
-                                const newAst = this.asteroidPool.get(spawnX, spawnY, newR);
+                                const newAst = this.asteroidPool.get(spawnX, spawnY, newR, ast.level);
                                 
                                 if (newAst) {
                                     // Give fragments an explosive, outward velocity
@@ -1776,7 +2004,8 @@ export class GameEngine {
                                         fragment.initializeAsteroid(
                                             ast.x + Math.cos(angle) * distance,
                                             ast.y + Math.sin(angle) * distance,
-                                            newRadius
+                                            newRadius,
+                                            ast.level
                                         );
                                         fragment.vel.x = Math.cos(angle) * random(1, 3);
                                         fragment.vel.y = Math.sin(angle) * random(1, 3);
