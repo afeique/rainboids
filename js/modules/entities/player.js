@@ -15,10 +15,10 @@ export class Player {
         this.lastY = 0;
         this.rotation = 0;
         this.radius = 12;
-        this.health = 10;
-        this.maxHealth = 10;
+        this.health = 25;
+        this.maxHealth = 25;
         this.shieldTanks = 1; // Start with 1 shield tank
-        this.shield = 0; // 0% damage reduction (start with no armor)
+        this.shield = 15; // 15% damage reduction (start with basic armor for survivability)
         this.invulnerable = false;
         this.lastHitTime = 0;
         this.lastBlinkTime = 0;
@@ -354,8 +354,8 @@ export class Player {
         // Special handling for health boost - increase current health when purchased
         if (type === 'HEALTH_BOOST' && isShopItem) {
             const newMaxHealth = this.getEffectiveMaxHealth();
-            // Increase current health by 5, but don't exceed new max
-            this.health = Math.min(this.health + 5, newMaxHealth);
+            // Increase current health by 25, but don't exceed new max
+            this.health = Math.min(this.health + 25, newMaxHealth);
             console.log(`🩺 Health boost applied! Current: ${this.health}/${newMaxHealth}`);
         }
         
@@ -483,10 +483,10 @@ export class Player {
     getEffectiveMaxHealth() {
         const baseMaxHealth = this.maxHealth;
         const healthBoostStacks = this.getPowerupStacks('HEALTH_BOOST');
-        const healthBoostAmount = healthBoostStacks * 5; // +5 max health per stack (balanced for 10 base health)
+        const healthBoostAmount = healthBoostStacks * 25; // +25 max health per stack
         
         const totalMaxHealth = baseMaxHealth + healthBoostAmount;
-        return Math.min(50, totalMaxHealth); // Cap at 50 (10 base + 40 from upgrades)
+        return Math.min(525, totalMaxHealth); // Cap at 525 (25 base + 500 from upgrades)
     }
     
     getEffectiveCritChance() {

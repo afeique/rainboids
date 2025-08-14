@@ -45,7 +45,7 @@ export class GameEngine {
         this.shieldIcon = new Image();
         
         // Bulletproof continuous spawning system
-        this.spawnInterval = 3000; // Spawn something every 3 seconds
+        this.spawnInterval = 5000; // Spawn something every 5 seconds
         this.lastSpawnTime = 0; // Track last spawn
         this.gameStartTime = Date.now();
         this.forceSpawnEnabled = true; // Emergency spawning when battlefield is empty
@@ -424,10 +424,10 @@ export class GameEngine {
         this.player = new Player();
         // Wave bonus shield system removed
         // Reset shields
-        this.playerShields = 10; // Start with 10 health
-        this.shieldTanks = 0; // Reset to zero tanks
-        this.displayShields = 10; // Match starting health
-        this.displayTanks = 0;
+        this.playerShields = 25; // Start with 25 health
+        this.shieldTanks = 1; // Start with 1 shield tank for survivability
+        this.displayShields = 25; // Match starting health
+        this.displayTanks = 1;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
         
@@ -438,7 +438,7 @@ export class GameEngine {
         this.nextShopTime = Date.now() + this.shopInterval;
         this.forceSpawnEnabled = true;
         
-        console.log('🔄 Bulletproof spawning reset - continuous 3s intervals + 5s emergency backup');
+        console.log('🔄 Bulletproof spawning reset - continuous 5s intervals + 5s emergency backup');
         
         // Reset ghost preview positions
         this.ghostEnemyPosition = this.generateGhostPosition();
@@ -712,14 +712,18 @@ export class GameEngine {
     }
     
     openShop() {
+        console.log(`🛒 Opening shop from state: ${this.game.state}`);
+        
         // Hide any active wave messages when opening shop
         this.uiManager.hideMessage();
         
         // Store the time when shop opened to adjust spawn timers later
         this.shopOpenTime = Date.now();
         
-        // Pause the game and show shop interface
+        // Transition to shop state from any valid state
         this.game.state = GAME_STATES.SHOP;
+        
+        console.log(`🛒 Shop state set to: ${this.game.state}`);
         
         // Define shop items with balanced costs based on power output
         this.shopItems = [
@@ -734,10 +738,10 @@ export class GameEngine {
             {
                 id: 'HEALTH_BOOST',
                 name: 'Health Boost', 
-                description: 'Increases max health by 20',
+                description: 'Increases max health by 25',
                 cost: 1000,  // Very expensive for significant health increase
                 icon: '❤️',
-                maxStacks: 20   // 20 stacks × 20 = 400 extra health (100 base + 400 = 500 max)
+                maxStacks: 20   // 20 stacks × 25 = 500 extra health (25 base + 500 = 525 max)
             },
             {
                 id: 'SPEED_BOOST',
@@ -1161,14 +1165,6 @@ export class GameEngine {
         
         this.drawMultilineText(item.description, textX, descStartY, textWidth, lineHeight, maxDescLines);
         
-        // Level info (if applicable) - more visible (also shifted down)
-        if (currentStacks > 0) {
-            this.ctx.fillStyle = '#00FFFF';
-            this.ctx.font = '11px "Press Start 2P", monospace';
-            this.ctx.textAlign = 'left'; // Ensure level info is left-justified
-            this.ctx.fillText(`Lv ${currentStacks}/${item.maxStacks}`, textX, y + 92); // Shifted down by 20px from y + 72
-        }
-        
         // Cost (right side) - larger, more visible
         const costX = x + width - padding;
         this.ctx.font = 'bold 16px "Press Start 2P", monospace';
@@ -1180,6 +1176,12 @@ export class GameEngine {
         this.ctx.font = '12px "Press Start 2P", monospace';
         this.ctx.fillStyle = canAfford ? '#B8860B' : '#CC4444'; // Darker versions
         this.ctx.fillText('coins', costX, y + 52);
+        
+        // Item level beneath coin cost (right side)
+        this.ctx.font = '10px "Press Start 2P", monospace';
+        this.ctx.fillStyle = maxedOut ? '#666' : '#00FFFF';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(`Level ${currentStacks}`, costX, y + 70);
         
         // Store item bounds for click detection
         if (!this.shopItemBounds) this.shopItemBounds = [];

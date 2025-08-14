@@ -32,6 +32,8 @@ export class UIManager {
             musicInfoCurrentTime: null, // Removed from main display
             musicInfoDuration: null, // Removed from main display
             pauseButton: document.getElementById('pause-button'),
+            pauseShopButton: document.getElementById('pause-shop-button'),
+            pauseResumeButton: document.getElementById('pause-resume-button'),
             // Music tab elements
             pauseTabs: document.querySelectorAll('.pause-tab'),
             tabContents: document.querySelectorAll('.pause-tab-content'),
@@ -497,6 +499,36 @@ export class UIManager {
                 window.game.togglePause();
             }
         });
+        
+        // Pause menu action buttons
+        if (this.elements.pauseShopButton) {
+            this.elements.pauseShopButton.addEventListener('click', () => {
+                console.log('🛒 Shop button clicked from pause menu');
+                if (window.game) {
+                    console.log('🛒 window.game available, current state:', window.game.game?.state);
+                    // Close pause menu and open shop
+                    this.elements.pauseOverlay.style.display = 'none';
+                    window.game.openShop();
+                } else {
+                    console.error('❌ window.game not available for shop button');
+                }
+            });
+        } else {
+            console.error('❌ pauseShopButton element not found!');
+        }
+        
+        if (this.elements.pauseResumeButton) {
+            this.elements.pauseResumeButton.addEventListener('click', () => {
+                console.log('▶ Resume button clicked from pause menu');
+                if (window.game) {
+                    window.game.togglePause();
+                } else {
+                    console.error('❌ window.game not available for resume button');
+                }
+            });
+        } else {
+            console.error('❌ pauseResumeButton element not found!');
+        }
         
         // Tab switching
         this.elements.pauseTabs.forEach(tab => {
