@@ -15,8 +15,8 @@ export class Player {
         this.lastY = 0;
         this.rotation = 0;
         this.radius = 12;
-        this.health = 1000;
-        this.maxHealth = 1000;
+        this.health = 100;
+        this.maxHealth = 100;
         this.shieldTanks = 1; // Start with 1 shield tank
         this.shield = 0; // 0% damage reduction (start with no armor)
         this.invulnerable = false;
@@ -321,7 +321,7 @@ export class Player {
     // Powerup management methods
     addPowerup(type, config, isShopItem = false) {
         // Determine duration based on source
-        const duration = isShopItem ? Infinity : (config.duration || 15000); // 15 seconds for dropped powerups
+        const duration = isShopItem ? Infinity : (config.duration || 30000); // 30 seconds for dropped powerups
         
         if (this.powerups.has(type)) {
             const existing = this.powerups.get(type);
@@ -354,8 +354,8 @@ export class Player {
         // Special handling for health boost - increase current health when purchased
         if (type === 'HEALTH_BOOST' && isShopItem) {
             const newMaxHealth = this.getEffectiveMaxHealth();
-            // Increase current health by 200, but don't exceed new max
-            this.health = Math.min(this.health + 200, newMaxHealth);
+            // Increase current health by 20, but don't exceed new max
+            this.health = Math.min(this.health + 20, newMaxHealth);
             console.log(`🩺 Health boost applied! Current: ${this.health}/${newMaxHealth}`);
         }
         
@@ -438,11 +438,11 @@ export class Player {
                 
                 if (isCritical) {
                     const critDamage = this.getEffectiveCritDamage();
-                    bullet.damage = (bullet.damage || 200) * (critDamage / 100); // Default 200 base damage (10x scale)
+                    bullet.damage = (bullet.damage || 20) * (critDamage / 100); // Default 20 base damage (scaled down)
                     bullet.isCritical = true;
                     bullet.color = '#FFD700'; // Gold color for critical hits
                 } else {
-                    bullet.damage = bullet.damage || 200; // Default base damage (10x scale)
+                    bullet.damage = bullet.damage || 20; // Default base damage (scaled down)
                     bullet.isCritical = false;
                 }
                 
@@ -483,10 +483,10 @@ export class Player {
     getEffectiveMaxHealth() {
         const baseMaxHealth = this.maxHealth;
         const healthBoostStacks = this.getPowerupStacks('HEALTH_BOOST');
-        const healthBoostAmount = healthBoostStacks * 200; // +200 max health per stack (scaled 8x)
+        const healthBoostAmount = healthBoostStacks * 20; // +20 max health per stack (scaled down)
         
         const totalMaxHealth = baseMaxHealth + healthBoostAmount;
-        return Math.min(5000, totalMaxHealth); // Cap at 5000 (1000 base + 4000 from upgrades)
+        return Math.min(500, totalMaxHealth); // Cap at 500 (100 base + 400 from upgrades)
     }
     
     getEffectiveCritChance() {
@@ -508,12 +508,12 @@ export class Player {
     }
     
     getEffectiveBurstStarHealing() {
-        const baseHealing = 10; // Base healing scaled from 1 to 10 (10x health scale)
+        const baseHealing = 1; // Base healing scaled back down
         const medpackStacks = this.getPowerupStacks('MEDPACK');
-        const bonusHealing = medpackStacks * 10; // +10 healing per medpack stack (scaled 10x)
+        const bonusHealing = medpackStacks * 1; // +1 healing per medpack stack (scaled down)
         
         const totalHealing = baseHealing + bonusHealing;
-        return Math.min(60, totalHealing); // Cap at 60 (base 10 + 5 stacks × 10 = 60 max)
+        return Math.min(6, totalHealing); // Cap at 6 (base 1 + 5 stacks × 1 = 6 max)
     }
     
     // Wave bonus shield system removed - replaced with shop system

@@ -8,7 +8,7 @@ export const POWERUP_TYPES = {
         color: '#ff3300',
         gradientColors: ['#ff6600', '#ff0000'],
         icon: '⚡',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'rapidFire',
         rarity: 0.3,
         description: '25% faster shooting per stack'
@@ -18,7 +18,7 @@ export const POWERUP_TYPES = {
         color: '#3366ff',
         gradientColors: ['#66aaff', '#0033cc'],
         icon: '※',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'multiShot',
         rarity: 0.25,
         description: 'Fire +1 bullet per stack'
@@ -28,7 +28,7 @@ export const POWERUP_TYPES = {
         color: '#ff3399',
         gradientColors: ['#ff66cc', '#cc0066'],
         icon: '🎯',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'homing',
         rarity: 0.2,
         description: 'Bullets track enemies'
@@ -38,7 +38,7 @@ export const POWERUP_TYPES = {
         color: '#33cc33',
         gradientColors: ['#66ff66', '#009900'],
         icon: '●',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'bigBullets',
         rarity: 0.25,
         description: '+30% bullet size per stack'
@@ -48,7 +48,7 @@ export const POWERUP_TYPES = {
         color: '#ffcc00',
         gradientColors: ['#ffff33', '#cc9900'],
         icon: '💨',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'speedBoost',
         rarity: 0.3,
         description: 'Increased movement speed'
@@ -58,7 +58,7 @@ export const POWERUP_TYPES = {
         color: '#ff9933',
         gradientColors: ['#ffcc66', '#cc6600'],
         icon: '➤',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'piercing',
         rarity: 0.15,
         description: 'Pierce through multiple enemies'
@@ -68,7 +68,7 @@ export const POWERUP_TYPES = {
         color: '#33ccff',
         gradientColors: ['#66ddff', '#0099cc'],
         icon: '⇶',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'spreadShot',
         rarity: 0.2,
         description: 'Fire +2 bullets in wide spread'
@@ -78,7 +78,7 @@ export const POWERUP_TYPES = {
         color: '#ff6600',
         gradientColors: ['#ff9933', '#cc3300'],
         icon: '💥',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'explosive',
         rarity: 0.1,
         description: 'Area damage on impact'
@@ -88,7 +88,7 @@ export const POWERUP_TYPES = {
         color: '#ffcc00',
         gradientColors: ['#ffff66', '#cc9900'],
         icon: '🎯',
-        duration: 15000, // 15 seconds for drops
+        duration: 30000, // 30 seconds for drops
         effect: 'critChance',
         rarity: 0.2,
         description: '+5% critical hit chance'
@@ -98,7 +98,7 @@ export const POWERUP_TYPES = {
         color: '#ff0066',
         gradientColors: ['#ff3399', '#cc0033'],
         icon: '💥',
-        duration: 15000, // 15 seconds for drops
+        duration: 30000, // 30 seconds for drops
         effect: 'critDamage',
         rarity: 0.15,
         description: '+10% critical hit damage'
@@ -108,7 +108,7 @@ export const POWERUP_TYPES = {
         color: '#00cc88',
         gradientColors: ['#33ff99', '#006644'],
         icon: '🛡',
-        duration: 60000, // 1 minute
+        duration: 30000, // 30 seconds
         effect: 'shieldBoost',
         rarity: 0.2,
         description: 'Temporary damage reduction'
@@ -118,7 +118,7 @@ export const POWERUP_TYPES = {
         color: '#ff6699',
         gradientColors: ['#ff99cc', '#cc3366'],
         icon: '💊',
-        duration: 15000, // 15 seconds for drops
+        duration: 30000, // 30 seconds for drops
         effect: 'medpack',
         rarity: 0.25,
         description: '+1 burst star healing'

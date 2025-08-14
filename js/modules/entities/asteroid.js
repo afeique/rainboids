@@ -44,26 +44,36 @@ export class Asteroid {
         
         this.rescale(radius || random(30, 60));
 
-        // Calculate health based on size tiers:
+        // Calculate health based on size tiers and level:
         // Use baseRadius for consistent health calculation
-        // Biggest asteroids (40-60 baseRadius): 12-18 health
-        // Medium asteroids (20-40 baseRadius): 8-12 health  
-        // Smallest asteroids (10-20 baseRadius): 4-8 health
-        let health;
+        // Biggest asteroids (40-60 baseRadius): 12-18 base health
+        // Medium asteroids (20-40 baseRadius): 8-12 base health  
+        // Smallest asteroids (10-20 baseRadius): 4-8 base health
+        let baseHealth;
         const sizeRef = this.baseRadius || this.radius;
         if (sizeRef >= 40) {
-            // Big asteroids: 12-18 health
-            health = Math.floor(12 + (sizeRef - 40) / 20 * 6); // Scale from 12 to 18 based on radius 40-60
+            // Big asteroids: 12-18 base health
+            baseHealth = Math.floor(12 + (sizeRef - 40) / 20 * 6); // Scale from 12 to 18 based on radius 40-60
         } else if (sizeRef >= 20) {
-            // Medium asteroids: 8-12 health
-            health = Math.floor(8 + (sizeRef - 20) / 20 * 4); // Scale from 8 to 12 based on radius 20-40
+            // Medium asteroids: 8-12 base health
+            baseHealth = Math.floor(8 + (sizeRef - 20) / 20 * 4); // Scale from 8 to 12 based on radius 20-40
         } else {
-            // Small asteroids: 4-8 health
-            health = Math.floor(4 + (sizeRef - 10) / 10 * 4); // Scale from 4 to 8 based on radius 10-20
+            // Small asteroids: 4-8 base health
+            baseHealth = Math.floor(4 + (sizeRef - 10) / 10 * 4); // Scale from 4 to 8 based on radius 10-20
         }
+        
+        // Scale health based on level (30% increase per level)
+        const levelMultiplier = 1 + (this.level - 1) * 0.3;
+        const health = Math.round(baseHealth * levelMultiplier);
         
         this.maxHealth = Math.max(1, health); // Ensure minimum 1 health
         this.health = this.maxHealth;
+    }
+    
+    // Get level-scaled collision damage for asteroid impacts
+    getLevelScaledCollisionDamage(baseDamage) {
+        const levelMultiplier = 1 + (this.level - 1) * 0.2; // 20% damage increase per level
+        return Math.round(baseDamage * levelMultiplier);
     }
 
     reset(x, y, radius, level = 1) {
@@ -186,10 +196,35 @@ export class Asteroid {
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
         
-        const barWidth = 50; // Medium width
+        // Make bar longer to accommodate level display
+        const barWidth = 65; // Increased from 50 to 65
         const barHeight = 3; // Reduced from 5px to 3px for more compact appearance
         const barX = this.x - barWidth / 2;
         const barY = this.y - this.radius - 18;
+
+        // Draw level display to the left of the health bar
+        const levelText = `LV.${this.level}`;
+        ctx.font = "8px 'Press Start 2P', monospace";
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        
+        // Draw "LV." in gray
+        const lvX = barX - 4;
+        const lvY = barY + barHeight / 2;
+        ctx.fillStyle = '#888888'; // Gray color
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.strokeText('LV.', lvX, lvY);
+        ctx.fillText('LV.', lvX, lvY);
+        
+        // Measure "LV." width to position the level number
+        const lvWidth = ctx.measureText('LV.').width;
+        
+        // Draw level number in blue
+        const levelNumX = lvX + lvWidth;
+        ctx.fillStyle = '#4488ff'; // Blue color
+        ctx.strokeText(this.level.toString(), levelNumX, lvY);
+        ctx.fillText(this.level.toString(), levelNumX, lvY);
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;

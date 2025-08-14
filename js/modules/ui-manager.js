@@ -78,6 +78,10 @@ export class UIManager {
         this.elements.messageSubtitle.innerHTML = subtitle.replace(/\n/g, '<br>');
         this.elements.messageSubtitle.style.display = subtitle ? 'block' : 'none';
         
+        // Reset opacity for new message
+        this.elements.messageTitle.style.opacity = '1';
+        this.elements.messageSubtitle.style.opacity = '1';
+        
         // Position the message overlay
         const overlay = document.getElementById('game-message-overlay');
         if (position === 'top') {
@@ -89,13 +93,62 @@ export class UIManager {
         }
         
         if (duration > 0) {
-            setTimeout(() => this.hideMessage(), duration);
+            // Check if this is a wave message to apply slow fade-out
+            const isWaveMessage = title.startsWith('WAVE ');
+            if (isWaveMessage) {
+                // Show for 60% of duration, then fade out over remaining 40%
+                const fadeStartTime = duration * 0.6;
+                const fadeOutDuration = duration * 0.4;
+                
+                setTimeout(() => {
+                    this.fadeOutMessage(fadeOutDuration);
+                }, fadeStartTime);
+            } else {
+                // Regular instant hide for non-wave messages
+                setTimeout(() => this.hideMessage(), duration);
+            }
         }
     }
     
+    fadeOutMessage(fadeOutDuration) {
+        // Disable CSS animations that might interfere with fade-out
+        this.elements.messageTitle.style.animation = 'none';
+        this.elements.messageSubtitle.style.animation = 'none';
+        
+        // Force a reflow to ensure animation disable takes effect
+        this.elements.messageTitle.offsetHeight;
+        this.elements.messageSubtitle.offsetHeight;
+        
+        // Add smooth transition for opacity
+        this.elements.messageTitle.style.transition = `opacity ${fadeOutDuration}ms ease-out`;
+        this.elements.messageSubtitle.style.transition = `opacity ${fadeOutDuration}ms ease-out`;
+        
+        // Force another reflow to ensure transition is applied
+        this.elements.messageTitle.offsetHeight;
+        this.elements.messageSubtitle.offsetHeight;
+        
+        // Use requestAnimationFrame to ensure the transition starts properly
+        requestAnimationFrame(() => {
+            // Start fade out
+            this.elements.messageTitle.style.opacity = '0';
+            this.elements.messageSubtitle.style.opacity = '0';
+        });
+        
+        // Hide completely after fade completes
+        setTimeout(() => {
+            this.hideMessage();
+        }, fadeOutDuration);
+    }
+
     hideMessage() {
         this.elements.messageTitle.style.display = 'none';
         this.elements.messageSubtitle.style.display = 'none';
+        
+        // Clear any transitions and restore animations
+        this.elements.messageTitle.style.transition = '';
+        this.elements.messageSubtitle.style.transition = '';
+        this.elements.messageTitle.style.animation = '';
+        this.elements.messageSubtitle.style.animation = '';
         
         // Reset positioning to center for next message
         const overlay = document.getElementById('game-message-overlay');

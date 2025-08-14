@@ -164,7 +164,9 @@ export class GameEngine {
             state: GAME_STATES.TITLE_SCREEN,
             lastState: GAME_STATES.TITLE_SCREEN,
             screenShakeDuration: 0,
-            screenShakeMagnitude: 0
+            screenShakeMagnitude: 0,
+            enemyLevel: 1,    // Enemy level increases each wave
+            asteroidLevel: 1  // Asteroid level increases each wave
         };
     }
     
@@ -438,7 +440,7 @@ export class GameEngine {
             default: x = -spawnBuffer; y = random(0, this.height); break;
         }
         
-        const newAst = this.asteroidPool.get(x, y, r);
+        const newAst = this.asteroidPool.get(x, y, r, this.game.asteroidLevel);
         const tx = random(this.width * 0.3, this.width * 0.7);
         const ty = random(this.height * 0.3, this.height * 0.7);
         const ang = Math.atan2(ty - y, tx - x);
@@ -568,6 +570,12 @@ export class GameEngine {
         this.waveTimer = Date.now() + GAME_CONFIG.WAVE_BREAK_TIME; // Short break between waves
         this.wavePhase = 'waiting';
         
+        // Increase enemy and asteroid levels each wave for scaling difficulty
+        this.game.enemyLevel = Math.floor(this.game.currentWave / 2) + 1; // Level 1-2 = wave 1-3, Level 3 = wave 5-6, etc.
+        this.game.asteroidLevel = Math.floor(this.game.currentWave / 3) + 1; // Slower asteroid scaling
+        
+        console.log(`🌊 Wave ${this.game.currentWave} completed! Enemy Level: ${this.game.enemyLevel}, Asteroid Level: ${this.game.asteroidLevel}`);
+        
         // Open shop immediately after wave completion
         setTimeout(() => {
             this.openShop();
@@ -593,16 +601,16 @@ export class GameEngine {
             {
                 id: 'HEALTH_BOOST',
                 name: 'Health Boost', 
-                description: 'Increases max health by 200',
+                description: 'Increases max health by 20',
                 cost: 1000,  // Very expensive for significant health increase
                 icon: '❤️',
-                maxStacks: 20   // 20 stacks × 200 = 4000 extra health (1000 base + 4000 = 5000 max)
+                maxStacks: 20   // 20 stacks × 20 = 400 extra health (100 base + 400 = 500 max)
             },
             {
                 id: 'SPEED_BOOST',
                 name: 'Speed Boost',
                 description: 'Move 30% faster',
-                cost: 50,  // Utility upgrade, reasonably priced
+                cost: 5000,  // Ultra expensive utility upgrade
                 icon: '💨',
                 maxStacks: 4
             },
@@ -658,7 +666,7 @@ export class GameEngine {
                 id: 'EXPLOSIVE',
                 name: 'Explosive',
                 description: 'Bullets explode on impact',
-                cost: 300, // Most expensive for massive area damage
+                cost: 3000, // Ultra expensive for massive area damage
                 icon: '💣',
                 maxStacks: 3
             },
@@ -666,7 +674,7 @@ export class GameEngine {
                 id: 'CRIT_CHANCE',
                 name: 'Critical Chance',
                 description: 'Increases crit chance by 5%',
-                cost: 150, // High cost for DPS multiplier
+                cost: 3000, // Ultra expensive DPS multiplier
                 icon: '🎯',
                 maxStacks: 10  // Max 50% crit chance
             },
@@ -674,7 +682,7 @@ export class GameEngine {
                 id: 'CRIT_DAMAGE',
                 name: 'Critical Damage',
                 description: 'Increases crit damage by 10%',
-                cost: 180, // Very high cost for damage scaling
+                cost: 1500, // Expensive damage scaling
                 icon: '💥',
                 maxStacks: 15  // Max 300% crit damage (150% base + 150% from upgrades)
             }
@@ -692,16 +700,29 @@ export class GameEngine {
                 return;
             }
             
-            this.game.state = GAME_STATES.PLAYING;
+            this.game.state = GAME_STATES.WAVE_TRANSITION;
             console.log(`🎮 Game state changed to: ${this.game.state}`);
             
             // Clear shop bounds to prevent memory leaks
             this.shopItemBounds = null;
             console.log('🧹 Shop bounds cleared');
             
-            console.log('🚀 Starting new wave...');
-            this.startNewWave();
-            console.log('🛒 Shop closed, starting next wave!');
+            // Respect the WAVE_BREAK_TIME timer instead of immediately starting the wave
+            const remainingTime = this.waveTimer - Date.now();
+            if (remainingTime > 0) {
+                console.log(`⏱️ Waiting ${remainingTime}ms before starting next wave (respecting WAVE_BREAK_TIME)`);
+                setTimeout(() => {
+                    if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+                        console.log('🚀 Starting new wave after timer...');
+                        this.startNewWave();
+                    }
+                }, remainingTime);
+            } else {
+                console.log('🚀 Timer expired, starting new wave immediately...');
+                this.startNewWave();
+            }
+            
+            console.log('🛒 Shop closed!');
             
         } catch (error) {
             console.error('❌ Error in closeShop:', error);
@@ -1080,9 +1101,9 @@ export class GameEngine {
                 break;
         }
         
-        const enemy = this.enemyPool.get(x, y, enemyType);
+        const enemy = this.enemyPool.get(x, y, enemyType, this.game.enemyLevel);
         if (enemy) {
-            console.log(`👾 ${enemyType} spawned at wave ${this.game.currentWave}`);
+            console.log(`👾 ${enemyType} LV.${this.game.enemyLevel} spawned at wave ${this.game.currentWave}`);
         }
     }
     
@@ -1819,8 +1840,8 @@ export class GameEngine {
     }
     
     handlePlayerEnemyCollision(player, enemy) {
-        // Apply RPG-like damage with shield calculation
-        const baseDamage = 250; // RPG-like collision damage (10x scale)
+        // Apply balanced damage with shield calculation and enemy level scaling
+        const baseDamage = enemy.getLevelScaledDamage(25); // Level-scaled collision damage (scaled back down)
         const effectiveShield = player.getEffectiveShield();
         const reducedDamage = baseDamage * (1 - effectiveShield / 100);
         const finalDamage = Math.round(reducedDamage);
@@ -1844,7 +1865,7 @@ export class GameEngine {
         this.audioManager.playExplosion();
         
         // Show red damage number
-        this.particlePool.get(player.x, player.y, 'damageNumber', damage);
+        this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
         
         // Create explosion particles at player position with enemy color
         for (let i = 0; i < 15; i++) {
@@ -1899,8 +1920,8 @@ export class GameEngine {
     }
     
     handlePlayerEnemyBulletCollision(player, bullet) {
-        // Apply RPG-like damage with shield calculation
-        const baseDamage = bullet.damage || 150; // Default 150 damage for enemy bullets (10x scale)
+        // Apply balanced damage with shield calculation
+        const baseDamage = bullet.damage || 15; // Default 15 damage for enemy bullets (scaled back down)
         const effectiveShield = player.getEffectiveShield();
         const reducedDamage = baseDamage * (1 - effectiveShield / 100);
         const finalDamage = Math.round(reducedDamage);
@@ -1924,7 +1945,7 @@ export class GameEngine {
         this.audioManager.playHit();
         
         // Show red damage number
-        this.particlePool.get(player.x, player.y, 'damageNumber', bullet.damage);
+        this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
         
         // Create explosion particles at player position with bullet color
         for (let i = 0; i < 12; i++) {
@@ -2730,10 +2751,13 @@ export class GameEngine {
             const maxSpeed = 4; // Typical max asteroid speed
             const speedRatio = Math.min(speed / maxSpeed, 1); // Cap at 1
             
-            // Damage calculation: 10-20 range based on size and speed
+            // Damage calculation: 10-20 base range based on size and speed (scaled back down)
             const sizeDamage = 10 + (sizeRatio * 6); // 10-16 damage from size
             const speedDamage = speedRatio * 4; // 0-4 additional damage from speed
-            const totalDamage = sizeDamage + speedDamage; // 10-20 damage range
+            const baseDamage = sizeDamage + speedDamage; // 10-20 base damage range
+            
+            // Apply level scaling to damage
+            const totalDamage = asteroid.getLevelScaledCollisionDamage(baseDamage);
             
                     // Apply shield damage reduction and round to integer (including powerup boosts)
         const effectiveShield = this.player.getEffectiveShield();

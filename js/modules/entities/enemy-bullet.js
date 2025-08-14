@@ -27,8 +27,8 @@ export class EnemyBullet {
         this.rotation = 0;
         this.rotationSpeed = explosive ? 0.1 : 0.05;
         
-        // Damage (scaled 10x for new health system)
-        this.damage = explosive ? 30 : 20;
+        // Damage (scaled back down to balanced levels)
+        this.damage = explosive ? 3 : 2;
         
         // Movement pattern properties (set by enemy when creating bullet)
         this.movementPattern = 'aimed'; // Default pattern

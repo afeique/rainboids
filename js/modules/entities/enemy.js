@@ -73,15 +73,17 @@ export const ENEMY_TYPES = {
 };
 
 export class Enemy {
-    constructor(x, y, type = 'HUNTER') {
+    constructor(x, y, type = 'HUNTER', level = 1) {
         this.type = type;
         this.config = ENEMY_TYPES[type];
+        this.level = level;
         this.initializeEnemy(x, y);
     }
     
-    reset(x, y, type = 'HUNTER') {
+    reset(x, y, type = 'HUNTER', level = 1) {
         this.type = type;
         this.config = ENEMY_TYPES[type];
+        this.level = level;
         this.initializeEnemy(x, y);
     }
     
@@ -89,10 +91,15 @@ export class Enemy {
         this.x = x !== undefined ? x : random(0, GameDimensions.width);
         this.y = y !== undefined ? y : random(0, GameDimensions.height);
         
-        this.health = this.config.health;
-        this.maxHealth = this.config.health;
-        this.radius = this.config.size;
-        this.baseRadius = this.config.size;
+        // Scale health based on level (35% increase per level)
+        const levelMultiplier = 1 + (this.level - 1) * 0.35;
+        this.maxHealth = Math.round(this.config.health * levelMultiplier);
+        this.health = this.maxHealth;
+        
+        // Scale size slightly based on level (10% increase per level, max 2x)
+        const sizeMultiplier = Math.min(2.0, 1 + (this.level - 1) * 0.1);
+        this.radius = this.config.size * sizeMultiplier;
+        this.baseRadius = this.config.size * sizeMultiplier;
         this.color = this.config.color;
         
         // Initialize movement
@@ -162,6 +169,11 @@ export class Enemy {
         }
     }
     
+    // Get level-scaled damage for enemy attacks
+    getLevelScaledDamage(baseDamage) {
+        const levelMultiplier = 1 + (this.level - 1) * 0.25; // 25% damage increase per level
+        return Math.round(baseDamage * levelMultiplier);
+    }
 
     
     update(playerRef, gameEngine) {
@@ -813,6 +825,10 @@ export class Enemy {
                 explosive
             );
             
+            // Set level-scaled damage (scaled back down)
+            const baseDamage = explosive ? 3 : 2;
+            bullet.damage = this.getLevelScaledDamage(baseDamage);
+            
             // Set unique movement pattern for this bullet
             bullet.movementPattern = movementPattern;
             bullet.patternTimer = 0;
@@ -1134,10 +1150,35 @@ export class Enemy {
         
         ctx.save();
         
-        const barWidth = this.radius * 1.8;
+        // Make bar longer to accommodate level display
+        const barWidth = this.radius * 2.2; // Increased from 1.8 to 2.2
         const barHeight = 3;
         const barX = this.x - barWidth / 2;
         const barY = this.y - this.radius - 18;
+
+        // Draw level display to the left of the health bar
+        const levelText = `LV.${this.level}`;
+        ctx.font = "8px 'Press Start 2P', monospace";
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        
+        // Draw "LV." in gray
+        const lvX = barX - 4;
+        const lvY = barY + barHeight / 2;
+        ctx.fillStyle = '#888888'; // Gray color
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.strokeText('LV.', lvX, lvY);
+        ctx.fillText('LV.', lvX, lvY);
+        
+        // Measure "LV." width to position the level number
+        const lvWidth = ctx.measureText('LV.').width;
+        
+        // Draw level number in blue
+        const levelNumX = lvX + lvWidth;
+        ctx.fillStyle = '#4488ff'; // Blue color
+        ctx.strokeText(this.level.toString(), levelNumX, lvY);
+        ctx.fillText(this.level.toString(), levelNumX, lvY);
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;
