@@ -112,6 +112,16 @@ export const POWERUP_TYPES = {
         effect: 'shieldBoost',
         rarity: 0.2,
         description: 'Temporary damage reduction'
+    },
+    MEDPACK: {
+        name: 'Medpack',
+        color: '#ff6699',
+        gradientColors: ['#ff99cc', '#cc3366'],
+        icon: '💊',
+        duration: 15000, // 15 seconds for drops
+        effect: 'medpack',
+        rarity: 0.25,
+        description: '+1 burst star healing'
     }
 };
 
@@ -333,6 +343,16 @@ export class Powerup {
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
+            ctx.closePath();
+        } else if (this.type === 'MEDPACK') {
+            // Cross/plus shape for medpack
+            ctx.beginPath();
+            const armWidth = currentRadius * 0.3;
+            const armLength = currentRadius * 0.8;
+            // Horizontal arm
+            ctx.rect(-armLength, -armWidth, armLength * 2, armWidth * 2);
+            // Vertical arm  
+            ctx.rect(-armWidth, -armLength, armWidth * 2, armLength * 2);
             ctx.closePath();
         } else {
             // Hexagon for others

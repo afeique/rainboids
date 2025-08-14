@@ -583,20 +583,20 @@ export class GameEngine {
         // Define shop items with balanced costs based on power output
         this.shopItems = [
             {
-                id: 'ARMOR',
-                name: 'Hull Plating',
-                description: 'Reduces damage by 5%',
-                cost: 500,  // Premium survivability option
-                icon: '🛟',
-                maxStacks: 10  // 10 stacks × 5% = 50% max
+                id: 'MEDPACK',
+                name: 'Medpack',
+                description: 'Increases burst star healing by 1',
+                cost: 500,  // Premium healing upgrade
+                icon: '💊',
+                maxStacks: 5  // 5 stacks for max +5 healing (1 base + 5 bonus = 6 total)
             },
             {
                 id: 'HEALTH_BOOST',
                 name: 'Health Boost', 
-                description: 'Increases max health by 25',
+                description: 'Increases max health by 200',
                 cost: 1000,  // Very expensive for significant health increase
                 icon: '❤️',
-                maxStacks: 20   // 20 stacks × 25 = 500 extra health (100 base + 500 = 600 max)
+                maxStacks: 20   // 20 stacks × 200 = 4000 extra health (1000 base + 4000 = 5000 max)
             },
             {
                 id: 'SPEED_BOOST',
@@ -610,23 +610,23 @@ export class GameEngine {
                 id: 'RAPID_FIRE',
                 name: 'Rapid Fire',
                 description: 'Shoot 25% faster',
-                cost: 80,  // Significant DPS increase
+                cost: 1500,  // Expensive DPS increase
                 icon: '⚡',
                 maxStacks: 5
             },
             {
                 id: 'SHIELD_BOOST',
                 name: 'Shielding',
-                description: 'Reduces damage by 15%',
+                description: 'Reduces damage by 5%',
                 cost: 1500, // Premium shield enhancement
-                icon: '🛡️',
-                maxStacks: 5
+                icon: '🛡️', // Shield icon
+                maxStacks: 15  // 15 stacks × 5% = 75% max
             },
             {
                 id: 'MULTI_SHOT',
                 name: 'Multi Shot',
                 description: 'Fire one extra bullet',
-                cost: 150, // Major DPS boost, expensive
+                cost: 2000, // Very expensive DPS boost
                 icon: '🎯',
                 maxStacks: 5   // Unlimited stacking for high cost
             },
@@ -642,7 +642,7 @@ export class GameEngine {
                 id: 'HOMING',
                 name: 'Homing',
                 description: 'Bullets track enemies',
-                cost: 180, // Utility + damage, high cost
+                cost: 1500, // Very expensive utility upgrade
                 icon: '🎪',
                 maxStacks: 5   // More stacks for scaling effect
             },
@@ -650,7 +650,7 @@ export class GameEngine {
                 id: 'PIERCING',
                 name: 'Piercing',
                 description: 'Bullets go through enemies',
-                cost: 250, // Extremely powerful against groups
+                cost: 5000, // Ultra expensive for game-changing effect
                 icon: '🏹',
                 maxStacks: 5   // More stacks for multiple piercing
             },
@@ -800,7 +800,7 @@ export class GameEngine {
             'PIERCING': { name: 'Piercing', duration: Infinity },
             'EXPLOSIVE': { name: 'Explosive', duration: Infinity },
             'HOMING': { name: 'Homing', duration: Infinity },
-            'ARMOR': { name: 'Hull Plating', duration: Infinity },
+            'MEDPACK': { name: 'Medpack', duration: Infinity },
             'HEALTH_BOOST': { name: 'Health Boost', duration: Infinity },
             'CRIT_CHANCE': { name: 'Critical Chance', duration: Infinity },
             'CRIT_DAMAGE': { name: 'Critical Damage', duration: Infinity }
@@ -1540,8 +1540,8 @@ export class GameEngine {
                     this.game.score += GAME_CONFIG.BURST_STAR_MONEY;
                     this.game.money += GAME_CONFIG.BURST_STAR_MONEY;
                     
-                    // Heal player for collecting burst star
-                    const healAmount = GAME_CONFIG.BURST_STAR_HEAL_AMOUNT;
+                    // Heal player for collecting burst star (use player's effective healing amount)
+                    const healAmount = this.player.getEffectiveBurstStarHealing();
                     const oldHealth = this.player.health;
                     this.player.health = Math.min(this.player.getEffectiveMaxHealth(), this.player.health + healAmount);
                     const actualHeal = this.player.health - oldHealth;
@@ -1820,7 +1820,7 @@ export class GameEngine {
     
     handlePlayerEnemyCollision(player, enemy) {
         // Apply RPG-like damage with shield calculation
-        const baseDamage = 25; // RPG-like collision damage
+        const baseDamage = 250; // RPG-like collision damage (10x scale)
         const effectiveShield = player.getEffectiveShield();
         const reducedDamage = baseDamage * (1 - effectiveShield / 100);
         const finalDamage = Math.round(reducedDamage);
@@ -1900,7 +1900,7 @@ export class GameEngine {
     
     handlePlayerEnemyBulletCollision(player, bullet) {
         // Apply RPG-like damage with shield calculation
-        const baseDamage = bullet.damage || 15; // Default 15 damage for enemy bullets
+        const baseDamage = bullet.damage || 150; // Default 150 damage for enemy bullets (10x scale)
         const effectiveShield = player.getEffectiveShield();
         const reducedDamage = baseDamage * (1 - effectiveShield / 100);
         const finalDamage = Math.round(reducedDamage);
