@@ -7,21 +7,13 @@ Support White Bat Audio on [Bandcamp](https://karlcasey.bandcamp.com/) and
 [YouTube](https://www.youtube.com/@WhiteBatAudio)!
 
 <img width="928" alt="image" src="https://github.com/user-attachments/assets/f85765c7-a5ab-43eb-b239-cb8b67c861a1" />
-
-<img width="1506" alt="image" src="https://github.com/user-attachments/assets/28b95aa1-11f1-429e-bb72-60c3aa264ea0" />
+<img width="1609" height="865" alt="Screenshot 2025-08-13 at 22 25 26" src="https://github.com/user-attachments/assets/d6c98752-0d1e-4ae3-b5ce-8794610b3ecd" />
 
 ## Synopsis
 
 This mobile-friendly game can be played at: https://rainboids.cat.computer
 
-This is an asteroids clone with its own interesting mechanics and visual aesthetics. It includes:
-
-- A rainbow-blaster
-- Energy bar for your thrusters and blaster
-- Pickups in the form of stars and goodies from asteroids
-- A tractor beam to pickup things and recharge energy
-- Interesting particle and pseudo-3d visual effects
-- Mobile controls and support
+This is an asteroids clone with its own interesting mechanics and visual aesthetics.
 
 It features countless enhancements and tweaks over the original 
 [Monolithic Rainboids](https://github.com/afeique/rainboids-monolithic).
