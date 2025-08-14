@@ -101,12 +101,11 @@ export class InputHandler {
     setupTouchControls() {
         const joystickArea = document.getElementById('joystick-area');
         const joystickHandle = document.getElementById('joystick-handle');
-        const musicInfoBox = document.getElementById('music-info');
+        const musicInfoBox = null; // Music info removed from main display
 
         const isTouchOnUI = (touch) => {
             const target = touch.target;
-            return joystickArea.contains(target) || 
-                   musicInfoBox.contains(target);
+            return joystickArea.contains(target);
         };
 
         document.addEventListener('touchstart', e => {

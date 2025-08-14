@@ -44,20 +44,23 @@ export class GameEngine {
 
         this.shieldIcon = new Image();
         
-        // Enhanced wave management
-        this.waveTimer = 0;
-        this.lastEnemySpawn = 0;
-        this.waveInProgress = false;
+        // Bulletproof continuous spawning system
+        this.spawnInterval = 3000; // Spawn something every 3 seconds
+        this.lastSpawnTime = 0; // Track last spawn
+        this.gameStartTime = Date.now();
+        this.forceSpawnEnabled = true; // Emergency spawning when battlefield is empty
         
-        // Sub-wave tracking
-        this.currentSubWave = 0;
-        this.subWaveTimer = 0;
-        this.subWaveStartTime = 0; // Track sub-wave start time for timeout
-        this.enemiesRemainingInSubWave = 0;
+        // BACKUP SPAWNING SYSTEM - independent emergency spawner
+        this.emergencySpawnInterval = 5000; // Emergency spawn every 5 seconds
+        this.lastEmergencySpawn = 0;
         
-        // Wave phase tracking
-        this.wavePhase = 'waiting'; // 'waiting', 'asteroids', 'enemies', 'complete'
-        this.wavePhaseTimer = 0;
+        // Shop timer - open shop every 2 minutes
+        this.shopInterval = 120000; // 2 minutes
+        this.nextShopTime = Date.now() + this.shopInterval;
+        
+        // Ghost preview positions (stored to prevent flickering)
+        this.ghostEnemyPosition = this.generateGhostPosition();
+        this.ghostAsteroidPosition = this.generateGhostPosition();
         
         // Depth-based starfield rendering initialized
         console.log('🌟 Starfield Depth Batching Active');
@@ -234,6 +237,11 @@ export class GameEngine {
                 const offsetY = random(-50, 50);
                 this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY);
                 console.log('🧪 Test powerup spawned near player');
+            }
+            // Open shop manually
+            if (e.code === 'KeyS' && this.game.state === GAME_STATES.PLAYING) {
+                this.openShop();
+                console.log('🛒 Shop opened manually with S key');
             }
         });
         
@@ -423,16 +431,18 @@ export class GameEngine {
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
         
-        // Reset enhanced wave state
-        this.waveTimer = 0;
-        this.lastEnemySpawn = 0;
-        this.waveInProgress = false;
-        this.currentSubWave = 0;
-        this.subWaveTimer = 0;
-        this.subWaveStartTime = 0;
-        this.enemiesRemainingInSubWave = 0;
-        this.wavePhase = 'waiting';
-        this.wavePhaseTimer = 0;
+        // Reset bulletproof spawning state
+        this.gameStartTime = Date.now();
+        this.lastSpawnTime = 0; // Reset spawn timer
+        this.lastEmergencySpawn = 0; // Reset emergency timer
+        this.nextShopTime = Date.now() + this.shopInterval;
+        this.forceSpawnEnabled = true;
+        
+        console.log('🔄 Bulletproof spawning reset - continuous 3s intervals + 5s emergency backup');
+        
+        // Reset ghost preview positions
+        this.ghostEnemyPosition = this.generateGhostPosition();
+        this.ghostAsteroidPosition = this.generateGhostPosition();
         // Clear all pools
         this.bulletPool.activeObjects = [];
         this.particlePool.activeObjects = [];
@@ -589,94 +599,97 @@ export class GameEngine {
         }
     }
     
-    // Enhanced wave management with sub-waves
-    updateWaves() {
-        if (this.game.state !== GAME_STATES.PLAYING) return;
-        
+    // ULTRA-BULLETPROOF continuous spawning system
+    updateBulletproofSpawning() {
         const now = Date.now();
         
-        // Check if current wave is complete - automatic progression after all sub-waves
-        if (this.waveInProgress) {
-            const activeEnemies = this.enemyPool.activeObjects.length;
-            const activeAsteroids = this.asteroidPool.activeObjects.length;
-            
-            // Natural completion: all enemies and asteroids eliminated and all sub-waves completed
-            const naturalCompletion = activeEnemies === 0 && activeAsteroids === 0 && 
-            this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE &&
-                                    this.enemiesRemainingInSubWave <= 0;
-            
-            // Forced completion: all sub-waves finished (automatically progress regardless of enemies)
-            const forcedCompletion = this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE;
-            
-            if (naturalCompletion || forcedCompletion) {
-            this.completeWave();
+        // LOG EVERYTHING - debug what's happening
+        if (now % 3000 < 50) { // Log every 3 seconds
+            console.log(`🎮 GAME STATE: ${this.game.state} (should be PLAYING for spawning)`);
+            console.log(`🕐 SPAWNING STATUS: Last spawn ${(now - this.lastSpawnTime)/1000}s ago, interval ${this.spawnInterval/1000}s`);
+        }
+        
+        // FIX THE STATE ISSUE - spawn during PLAYING AND WAVE_TRANSITION
+        if (this.game.state !== GAME_STATES.PLAYING && this.game.state !== GAME_STATES.WAVE_TRANSITION) {
+            if (now % 5000 < 50) { // Log occasionally
+                console.log(`❌ SPAWNING BLOCKED by state: ${this.game.state}`);
+            }
             return;
+        }
+        
+        // Clean up dead entities first
+        this.enemyPool.cleanupInactive();
+        this.asteroidPool.cleanupInactive();
+        
+        // Count current entities
+        const totalEntities = this.enemyPool.activeObjects.length + this.asteroidPool.activeObjects.length;
+        
+        // CONSTANT LOGGING - see what's happening
+        if (now % 3000 < 50) { // Show every 3 seconds
+            console.log(`🎯 SPAWNING: ${totalEntities} entities (E:${this.enemyPool.activeObjects.length}, A:${this.asteroidPool.activeObjects.length})`);
+            console.log(`⏱️ Timer: ${(now - this.lastSpawnTime)/1000}s / ${this.spawnInterval/1000}s`);
+        }
+        
+        // MULTIPLE FORCE SPAWN CONDITIONS:
+        const timeSinceLastSpawn = now - this.lastSpawnTime;
+        const shouldSpawnByTime = timeSinceLastSpawn >= this.spawnInterval;
+        const shouldSpawnByCount = totalEntities < 3; // Always maintain at least 3 entities
+        const shouldForceSpawn = totalEntities === 0; // Emergency spawn if battlefield is empty
+        const shouldSpawnByDelay = timeSinceLastSpawn > (this.spawnInterval * 2); // Force if too long delay
+        
+        if (shouldSpawnByTime || shouldSpawnByCount || shouldForceSpawn || shouldSpawnByDelay) {
+            console.log(`🚀 SPAWNING TRIGGERED! Time:${shouldSpawnByTime} Count:${shouldSpawnByCount} Force:${shouldForceSpawn} Delay:${shouldSpawnByDelay}`);
+            
+            // GUARANTEED SPAWN - try multiple methods
+            const spawned = this.forceSpawnEntity();
+            
+            if (spawned) {
+                this.lastSpawnTime = now;
+                console.log(`✅ SPAWN SUCCESS! Entities now: ${totalEntities + 1}`);
+            } else {
+                console.error('❌ SPAWN FAILED! Will retry immediately...');
+                this.lastSpawnTime = now - this.spawnInterval + 500; // Retry in 0.5 seconds
             }
         }
         
-        // Start new wave
-        if (!this.waveInProgress && now > this.waveTimer) {
-            this.startNewWave();
-            return;
+        // Shop and wave management
+        if (now >= this.nextShopTime) {
+            this.openShop();
+            this.nextShopTime = now + this.shopInterval;
+            console.log(`🛒 Auto-opening shop`);
         }
         
-        // Handle wave phases
-        if (this.waveInProgress) {
-            this.updateWavePhases(now);
+        // EMERGENCY BACKUP SPAWNING SYSTEM - runs independently
+        const timeSinceEmergencySpawn = now - this.lastEmergencySpawn;
+        if (timeSinceEmergencySpawn >= this.emergencySpawnInterval) {
+            const totalEntities = this.enemyPool.activeObjects.length + this.asteroidPool.activeObjects.length;
+            if (totalEntities < 2) {
+                console.log(`🚨 EMERGENCY BACKUP SPAWNING: Only ${totalEntities} entities!`);
+                if (this.forceSpawnEntity()) {
+                    this.lastEmergencySpawn = now;
+                    console.log(`✅ Emergency backup spawn successful!`);
+                } else {
+                    console.error(`❌ Emergency backup spawn failed!`);
+                }
+            } else {
+                this.lastEmergencySpawn = now; // Reset timer even if we didn't need to spawn
+            }
+        }
+        
+        // Wave progression
+        const wavesSinceStart = Math.floor((now - this.gameStartTime) / 60000);
+        if (wavesSinceStart > this.game.currentWave) {
+            this.game.currentWave = wavesSinceStart + 1;
+            this.game.enemyLevel = Math.floor(this.game.currentWave / 2) + 1;
+            this.game.asteroidLevel = Math.floor(this.game.currentWave / 3) + 1;
+            
+            this.uiManager.updateWave(this.game.currentWave);
+            this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 3000, 'top');
+            console.log(`🆙 Wave ${this.game.currentWave} - Enemy LV.${this.game.enemyLevel}, Asteroid LV.${this.game.asteroidLevel}`);
         }
     }
     
-    updateWavePhases(now) {
-        switch (this.wavePhase) {
-            case 'asteroids':
-                // Asteroids should spawn immediately when wave starts
-                if (now - this.wavePhaseTimer > GAME_CONFIG.WAVE_ASTEROID_DELAY) {
-                    this.wavePhase = 'enemies';
-                    this.wavePhaseTimer = now;
-                    this.currentSubWave = 0;
-                    this.startEnemySubWave();
-                }
-                break;
-                
-            case 'enemies':
-                // Handle enemy sub-wave spawning
-                if (this.currentSubWave < GAME_CONFIG.SUB_WAVES_PER_WAVE) {
-                    // Check if current sub-wave is complete OR timed out OR interval elapsed
-                    const subWaveTimedOut = (now - this.subWaveStartTime) > GAME_CONFIG.SUB_WAVE_TIMEOUT;
-                    const subWaveComplete = this.enemiesRemainingInSubWave <= 0;
-                    const intervalElapsed = now - this.subWaveTimer > GAME_CONFIG.SUB_WAVE_INTERVAL;
-                    
-                    // Force progression if any condition is met (no waiting for both conditions)
-                    if (subWaveComplete || subWaveTimedOut || intervalElapsed) {
-                        
-                        if (subWaveTimedOut) {
-                            console.log(`⏰ Sub-wave ${this.currentSubWave + 1} timed out after ${GAME_CONFIG.SUB_WAVE_TIMEOUT/1000} seconds`);
-                        } else if (intervalElapsed && !subWaveComplete) {
-                            console.log(`🚀 Sub-wave ${this.currentSubWave + 1} auto-progressed after ${GAME_CONFIG.SUB_WAVE_INTERVAL/1000} seconds`);
-                        }
-                        
-                        this.currentSubWave++;
-                        if (this.currentSubWave < GAME_CONFIG.SUB_WAVES_PER_WAVE) {
-                            this.startEnemySubWave();
-                        }
-                    }
-                    
-                    // Spawn enemies in current sub-wave (respect MAX_ENEMIES limit)
-                    const currentEnemies = this.enemyPool.activeObjects.length;
-                    const canSpawnMore = currentEnemies < GAME_CONFIG.MAX_ENEMIES;
-                    
-                    if (this.enemiesRemainingInSubWave > 0 && 
-                        canSpawnMore &&
-                        now - this.lastEnemySpawn > 1000) { // Spawn one enemy at a time
-                        this.spawnRandomEnemy();
-                        this.enemiesRemainingInSubWave--;
-                        this.lastEnemySpawn = now;
-                        console.log(`👾 Spawned enemy (${currentEnemies + 1}/${GAME_CONFIG.MAX_ENEMIES} active)`);
-                    }
-                }
-                break;
-        }
-    }
+    // Legacy wave methods removed - replaced by continuous spawning system
     
     completeWave() {
         this.waveInProgress = false;
@@ -699,6 +712,12 @@ export class GameEngine {
     }
     
     openShop() {
+        // Hide any active wave messages when opening shop
+        this.uiManager.hideMessage();
+        
+        // Store the time when shop opened to adjust spawn timers later
+        this.shopOpenTime = Date.now();
+        
         // Pause the game and show shop interface
         this.game.state = GAME_STATES.SHOP;
         
@@ -812,6 +831,15 @@ export class GameEngine {
             if (!this.game) {
                 console.error('❌ Game object is undefined in closeShop!');
                 return;
+            }
+            
+            // Adjust spawn timers for the time spent in shop
+            if (this.shopOpenTime) {
+                const timeInShop = Date.now() - this.shopOpenTime;
+                this.lastSpawnTime += timeInShop; // Adjust last spawn time instead of next spawn time
+                this.lastEmergencySpawn += timeInShop; // Adjust emergency timer too
+                this.nextShopTime += timeInShop;
+                console.log(`⏱️ Adjusted all timers for ${timeInShop}ms spent in shop`);
             }
             
             this.game.state = GAME_STATES.WAVE_TRANSITION;
@@ -1119,7 +1147,7 @@ export class GameEngine {
             }
             displayName += '...';
         }
-        this.ctx.fillText(displayName, textX, y + 22);
+        this.ctx.fillText(displayName, textX, y + 35); // Aligned with coin cost position
         
         // Item description - larger, more readable font
         this.ctx.font = '12px "Press Start 2P", monospace';
@@ -1295,6 +1323,168 @@ export class GameEngine {
     
     // Legacy method - replaced by startNewWave and sub-wave system
     
+    forceSpawnEntity() {
+        // ULTRA-AGGRESSIVE spawning - WILL NOT FAIL
+        const activeEnemies = this.enemyPool.activeObjects.length;
+        const activeAsteroids = this.asteroidPool.activeObjects.length;
+        
+        console.log(`🔧 FORCE SPAWN: E:${activeEnemies}/${GAME_CONFIG.MAX_ENEMIES}, A:${activeAsteroids}/${GAME_CONFIG.MAX_ASTEROIDS}`);
+        
+        // Try both types - don't respect limits if we're empty
+        const totalEntities = activeEnemies + activeAsteroids;
+        
+        // If battlefield is empty, ignore all limits
+        if (totalEntities === 0) {
+            console.log(`🚨 EMERGENCY: Battlefield empty! Forcing spawn regardless of limits`);
+            if (this.forceSpawnEnemy()) {
+                console.log(`👾 EMERGENCY spawned enemy`);
+                return true;
+            }
+            if (this.forceSpawnAsteroid()) {
+                console.log(`🪨 EMERGENCY spawned asteroid`);
+                return true;
+            }
+        }
+        
+        // Normal spawn logic - try to balance types
+        let spawnEnemy = Math.random() < 0.5;
+        
+        // Override if one type is at limit
+        if (activeEnemies >= GAME_CONFIG.MAX_ENEMIES && activeAsteroids < GAME_CONFIG.MAX_ASTEROIDS) {
+            spawnEnemy = false; // Force asteroid
+        } else if (activeAsteroids >= GAME_CONFIG.MAX_ASTEROIDS && activeEnemies < GAME_CONFIG.MAX_ENEMIES) {
+            spawnEnemy = true; // Force enemy
+        } else if (activeEnemies >= GAME_CONFIG.MAX_ENEMIES && activeAsteroids >= GAME_CONFIG.MAX_ASTEROIDS) {
+            console.log('🚫 Both pools at limit but forcing spawn anyway');
+            spawnEnemy = Math.random() < 0.5; // Still try to spawn something
+        }
+        
+        // Try to spawn the chosen type
+        if (spawnEnemy) {
+            if (this.forceSpawnEnemy()) {
+                console.log(`👾 SPAWNED enemy (${activeEnemies + 1}/${GAME_CONFIG.MAX_ENEMIES})`);
+                return true;
+            }
+        } else {
+            if (this.forceSpawnAsteroid()) {
+                console.log(`🪨 SPAWNED asteroid (${activeAsteroids + 1}/${GAME_CONFIG.MAX_ASTEROIDS})`);
+                return true;
+            }
+        }
+        
+        // If first choice failed, try the other type
+        console.log(`⚠️ First choice failed, trying other type...`);
+        if (spawnEnemy) {
+            if (this.forceSpawnAsteroid()) {
+                console.log(`🪨 FALLBACK spawned asteroid`);
+                return true;
+            }
+        } else {
+            if (this.forceSpawnEnemy()) {
+                console.log(`👾 FALLBACK spawned enemy`);
+                return true;
+            }
+        }
+        
+        // LAST RESORT - try both again
+        console.log(`🆘 LAST RESORT: Trying both types again...`);
+        if (this.forceSpawnEnemy()) return true;
+        if (this.forceSpawnAsteroid()) return true;
+        
+        console.error('❌ ALL SPAWN METHODS EXHAUSTED!');
+        return false;
+    }
+    
+    forceSpawnEnemy() {
+        console.log(`🔨 Attempting to spawn enemy...`);
+        
+        // Method 1: Try normal pool
+        const enemy = this.enemyPool.get();
+        if (enemy) {
+            console.log(`✅ Got enemy from pool`);
+            const { x, y } = this.getRandomSpawnPosition();
+            const enemyType = this.getRandomEnemyType();
+            enemy.reset(x, y, enemyType, this.game.enemyLevel);
+            console.log(`✅ Enemy spawned at (${x.toFixed(0)}, ${y.toFixed(0)}) type:${enemyType} level:${this.game.enemyLevel}`);
+            return true;
+        }
+        
+        console.log(`⚠️ Pool failed, creating new enemy...`);
+        
+        // Method 2: Force create new enemy if pool failed
+        try {
+            const newEnemy = new Enemy();
+            const { x, y } = this.getRandomSpawnPosition();
+            const enemyType = this.getRandomEnemyType();
+            newEnemy.reset(x, y, enemyType, this.game.enemyLevel);
+            this.enemyPool.activeObjects.push(newEnemy);
+            console.log(`✅ NEW Enemy created at (${x.toFixed(0)}, ${y.toFixed(0)}) type:${enemyType}`);
+            return true;
+        } catch (error) {
+            console.error('❌ Failed to create new enemy:', error);
+            return false;
+        }
+    }
+    
+    forceSpawnAsteroid() {
+        console.log(`🔨 Attempting to spawn asteroid...`);
+        
+        // Method 1: Try normal pool
+        const asteroid = this.asteroidPool.get();
+        if (asteroid) {
+            console.log(`✅ Got asteroid from pool`);
+            this.initializeWaveAsteroid(asteroid);
+            console.log(`✅ Asteroid spawned at (${asteroid.x.toFixed(0)}, ${asteroid.y.toFixed(0)}) level:${this.game.asteroidLevel}`);
+            return true;
+        }
+        
+        console.log(`⚠️ Pool failed, creating new asteroid...`);
+        
+        // Method 2: Force create new asteroid if pool failed
+        try {
+            const newAsteroid = new Asteroid();
+            this.initializeWaveAsteroid(newAsteroid);
+            this.asteroidPool.activeObjects.push(newAsteroid);
+            console.log(`✅ NEW Asteroid created at (${newAsteroid.x.toFixed(0)}, ${newAsteroid.y.toFixed(0)})`);
+            return true;
+        } catch (error) {
+            console.error('❌ Failed to create new asteroid:', error);
+            return false;
+        }
+    }
+    
+    getRandomSpawnPosition() {
+        const edge = Math.floor(Math.random() * 4);
+        switch (edge) {
+            case 0: return { x: Math.random() * this.width, y: -50 }; // Top
+            case 1: return { x: this.width + 50, y: Math.random() * this.height }; // Right
+            case 2: return { x: Math.random() * this.width, y: this.height + 50 }; // Bottom
+            case 3: return { x: -50, y: Math.random() * this.height }; // Left
+            default: return { x: 0, y: 0 };
+        }
+    }
+    
+    getRandomEnemyType() {
+        let availableTypes = ['HUNTER', 'WASP'];
+        if (this.game.currentWave >= 2) availableTypes.push('GUARDIAN', 'STALKER');
+        if (this.game.currentWave >= 4) availableTypes.push('BOMBER');
+        if (this.game.currentWave >= 6) availableTypes.push('TITAN');
+        return availableTypes[Math.floor(Math.random() * availableTypes.length)];
+    }
+    
+    spawnContinuousAsteroid() {
+        const asteroid = this.asteroidPool.get();
+        if (asteroid) {
+            this.initializeWaveAsteroid(asteroid);
+        } else {
+            console.warn('⚠️ Failed to get asteroid from pool!');
+            // Force create a new asteroid if pool is empty
+            const newAsteroid = new Asteroid();
+            this.initializeWaveAsteroid(newAsteroid);
+            this.asteroidPool.activeObjects.push(newAsteroid);
+        }
+    }
+    
     spawnRandomEnemy() {
         // Choose enemy type based on wave progression
         const enemyTypes = Object.keys(ENEMY_TYPES);
@@ -1332,6 +1522,13 @@ export class GameEngine {
         const enemy = this.enemyPool.get(x, y, enemyType, this.game.enemyLevel);
         if (enemy) {
             console.log(`👾 ${enemyType} LV.${this.game.enemyLevel} spawned at wave ${this.game.currentWave}`);
+        } else {
+            console.warn('⚠️ Failed to get enemy from pool!');
+            // Force create a new enemy if pool is empty
+            const newEnemy = new Enemy();
+            newEnemy.reset(x, y, enemyType, this.game.enemyLevel);
+            this.enemyPool.activeObjects.push(newEnemy);
+            console.log(`👾 ${enemyType} LV.${this.game.enemyLevel} force-spawned at wave ${this.game.currentWave}`);
         }
     }
     
@@ -2251,9 +2448,12 @@ export class GameEngine {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
             const input = this.inputHandler.getInput();
 
-            // Always allow normal player movement
+            // Calculate tractor beam state
             const tractorEngaged = !input.up && !input.down && !input.left && !input.right && !input.fire;
+            
+            // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged);
+            
             this.bulletPool.activeObjects.forEach(bullet => 
                 bullet.update(this.particlePool, this.asteroidPool, this.enemyPool));
             this.particlePool.updateActive();
@@ -2261,8 +2461,8 @@ export class GameEngine {
             this.powerupPool.activeObjects.forEach(p => p.update(this.player));
             this.asteroidPool.updateActive();
             
-            // Update enemies and enemy bullets
-            this.updateWaves();
+            // Update enemies and enemy bullets (only during active gameplay)
+            this.updateBulletproofSpawning();
             this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this));
             this.enemyBulletPool.updateActive();
             
@@ -2300,6 +2500,12 @@ export class GameEngine {
             this.lineDebrisPool.updateActive();
             // Continue background star animation even when paused
             this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel));
+        } else if (this.game.state === GAME_STATES.SHOP) {
+            // When in shop, only update background stars for ambiance
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel));
+            // Keep existing particles moving but don't create new ones
+            this.particlePool.updateActive();
+            this.lineDebrisPool.updateActive();
         }
     }
     
@@ -2338,6 +2544,9 @@ export class GameEngine {
             
             // Draw powerup display at top
             this.drawPowerupDisplay();
+            
+            // Draw spawn countdown timer
+            this.drawSpawnTimer();
             
             // Draw jitter circle to show bullet spread area
             this.drawJitterCircle();
@@ -3087,5 +3296,208 @@ export class GameEngine {
         // Enhanced screen shake based on impact force
         const impactForce = Math.abs(enhancedKnockback) * totalMass;
         this.triggerScreenShake(25, 15, impactForce * 0.8);
+    }
+    
+    drawSpawnTimer() {
+        const ctx = this.ctx;
+        const now = Date.now();
+        
+        // Calculate time until next spawn (based on last spawn + interval)
+        const timeSinceLastSpawn = now - this.lastSpawnTime;
+        const timeUntilSpawn = Math.max(0, this.spawnInterval - timeSinceLastSpawn);
+        const spawnProgress = Math.min(1, timeSinceLastSpawn / this.spawnInterval);
+        
+        // Calculate time until next shop
+        const timeUntilShop = Math.max(0, this.nextShopTime - now);
+        const shopProgress = 1 - (timeUntilShop / this.shopInterval);
+        
+        // Timer position - vertically stacked on the right side
+        const timerX = this.width - 60; // Right side of screen
+        const startY = 40;
+        const radius = 20; // Smaller radius
+        const verticalSpacing = 60;
+        
+        ctx.save();
+        ctx.globalAlpha = 0.7; // More in background
+        
+        // Draw spawn timer (top) - shows generic "entity" icon
+        const spawnY = startY;
+        this.drawCircularTimer(ctx, timerX, spawnY, radius, spawnProgress, '#00ff88', '⚡', timeUntilSpawn);
+        
+        // Draw shop timer (bottom) - only show when shop interval > 30 seconds
+        if (timeUntilShop > 30000) {
+            const shopY = startY + verticalSpacing;
+            this.drawCircularTimer(ctx, timerX, shopY, radius, shopProgress, '#ffaa00', '🛒', timeUntilShop);
+        }
+        
+        ctx.restore();
+        
+        // Draw ghost previews (simplified)
+        this.drawGhostPreviews(spawnProgress);
+    }
+    
+    drawCircularTimer(ctx, x, y, radius, progress, color, icon, timeRemaining) {
+        // Draw background circle
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Draw progress arc
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + (progress * Math.PI * 2));
+        ctx.stroke();
+        
+        // Draw icon in center
+        ctx.font = '16px "Press Start 2P", monospace';
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(icon, x, y);
+        
+        // Draw countdown text below
+        const totalSeconds = Math.ceil(timeRemaining / 1000);
+        let timeText;
+        if (totalSeconds >= 60) {
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+            timeText = `${totalSeconds}s`;
+        }
+        
+        ctx.font = '10px "Press Start 2P", monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(timeText, x, y + radius + 6);
+    }
+    
+    drawGhostPreviews(spawnProgress) {
+        const ctx = this.ctx;
+        
+        // Only show ghost when progress is > 0.5 (last 50% of countdown)
+        if (spawnProgress > 0.5) {
+            // Randomly show either enemy or asteroid ghost (50/50 chance)
+            if (Math.random() < 0.5) {
+                this.drawGhostEnemy(spawnProgress);
+            } else {
+                this.drawGhostAsteroid(spawnProgress);
+            }
+        }
+    }
+    
+    generateGhostPosition() {
+        const side = Math.floor(Math.random() * 4);
+        let x, y;
+        
+        switch (side) {
+            case 0: // Top
+                x = Math.random() * this.width;
+                y = -50;
+                break;
+            case 1: // Right
+                x = this.width + 50;
+                y = Math.random() * this.height;
+                break;
+            case 2: // Bottom
+                x = Math.random() * this.width;
+                y = this.height + 50;
+                break;
+            case 3: // Left
+                x = -50;
+                y = Math.random() * this.height;
+                break;
+        }
+        
+        return { x, y };
+    }
+    
+    drawGhostEnemy(progress) {
+        const ctx = this.ctx;
+        
+        // Use stored ghost position
+        const ghostX = this.ghostEnemyPosition.x;
+        const ghostY = this.ghostEnemyPosition.y;
+        
+        ctx.save();
+        
+        // Ghost effect - semi-transparent and flickering
+        const alpha = 0.3 + (Math.sin(Date.now() * 0.01) * 0.1);
+        ctx.globalAlpha = alpha * (progress - 0.3) / 0.7; // Fade in as progress increases
+        
+        // Draw ghost enemy outline
+        ctx.strokeStyle = '#ff4444';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]); // Dashed outline
+        
+        // Draw basic enemy shape (triangle)
+        const size = 15;
+        ctx.beginPath();
+        ctx.moveTo(ghostX, ghostY - size);
+        ctx.lineTo(ghostX - size, ghostY + size);
+        ctx.lineTo(ghostX + size, ghostY + size);
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Draw construction progress indicator
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#ff4444';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(ghostX, ghostY, size + 5, -Math.PI / 2, -Math.PI / 2 + ((progress - 0.3) / 0.7) * Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.restore();
+    }
+    
+    drawGhostAsteroid(progress) {
+        const ctx = this.ctx;
+        
+        // Use stored ghost position
+        const ghostX = this.ghostAsteroidPosition.x;
+        const ghostY = this.ghostAsteroidPosition.y;
+        
+        ctx.save();
+        
+        // Ghost effect - semi-transparent and flickering
+        const alpha = 0.3 + (Math.sin(Date.now() * 0.008) * 0.1);
+        ctx.globalAlpha = alpha * (progress - 0.3) / 0.7; // Fade in as progress increases
+        
+        // Draw ghost asteroid outline
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]); // Dashed outline
+        
+        // Draw basic asteroid shape (irregular polygon)
+        const size = 20;
+        const sides = 8;
+        ctx.beginPath();
+        for (let i = 0; i < sides; i++) {
+            const angle = (i / sides) * Math.PI * 2;
+            const variance = 0.7 + Math.sin(i * 2.3) * 0.3; // Irregular shape
+            const x = ghostX + Math.cos(angle) * size * variance;
+            const y = ghostY + Math.sin(angle) * size * variance;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Draw construction progress indicator
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(ghostX, ghostY, size + 5, -Math.PI / 2, -Math.PI / 2 + ((progress - 0.3) / 0.7) * Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.restore();
     }
 } 

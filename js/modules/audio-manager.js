@@ -193,13 +193,89 @@ export class AudioManager {
     
     playShoot() { this.playSound('shoot'); }
     playHit() { this.playSound('hit'); }
-    playCoin() { this.playSound('coin'); }
+    playCoin() { this.playPickupSound('coin'); }
     playPowerup() { this.playSound('powerup'); }
     playExplosion() { this.playSound('explosion'); }
     playPlayerExplosion() { this.playSound('playerExplosion'); }
     playTractorBeam() { this.playSound('tractorBeam'); }
     playShield() { this.playSound('shield'); }
     playHealthRegen() { this.playSound('healthRegen'); }
+    
+    // Special method for pickup sounds that bypasses throttling and timing restrictions
+    playPickupSound(soundName) {
+        if (!this.audioReady || !this.audioCache[soundName] || !this.soundEnabled[soundName]) return;
+        
+        // NO throttling for pickup sounds - they should always play immediately
+        
+        try {
+            // Get or create audio pool for this sound
+            if (!this.audioPool.has(soundName)) {
+                this.audioPool.set(soundName, []);
+            }
+            
+            const pool = this.audioPool.get(soundName);
+            let snd = null;
+            
+            // Find an available audio element in the pool
+            for (let audio of pool) {
+                if (audio.paused || audio.ended || audio.currentTime === 0) {
+                    snd = audio;
+                    break;
+                }
+            }
+            
+            // If no available audio element, create a new one (if pool not full)
+            if (!snd && pool.length < this.poolSize) {
+                const params = this.audioCache[soundName];
+                
+                if (typeof params === 'object' && params.wave_type !== undefined) {
+                    // This is a parameter object, use sfxr.toAudio
+                    const soundParams = Object.assign({}, params);
+                    // Apply the master volume to the sound_vol parameter
+                    soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
+                    snd = sfxr.toAudio(soundParams);
+                } else {
+                    // This is a generated sound object, use it directly
+                    snd = sfxr.toAudio(params);
+                }
+                
+                if (snd) {
+                    pool.push(snd);
+                }
+            }
+            
+            // If still no sound available, create a temporary one (no pool limit for pickups)
+            if (!snd) {
+                const params = this.audioCache[soundName];
+                
+                if (typeof params === 'object' && params.wave_type !== undefined) {
+                    const soundParams = Object.assign({}, params);
+                    soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
+                    snd = sfxr.toAudio(soundParams);
+                } else {
+                    snd = sfxr.toAudio(params);
+                }
+            }
+            
+            // Play the sound immediately
+            if (snd && snd.play) {
+                try {
+                    snd.currentTime = 0; // Always start from beginning
+                    const playResult = snd.play();
+                    // Check if play() returns a Promise (has .catch method)
+                    if (playResult && typeof playResult.catch === 'function') {
+                        playResult.catch(e => {
+                            // Ignore autoplay policy errors - they're expected
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`Failed to play pickup sound ${soundName}:`, e);
+                }
+            }
+        } catch (error) {
+            console.warn(`Failed to create pickup sound ${soundName}:`, error);
+        }
+    }
     
     setSfxVolume(normalizedVolume) {
         // normalizedVolume is 0-1 from the slider, map it to 0-maxSfxVolume

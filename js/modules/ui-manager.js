@@ -24,13 +24,13 @@ export class UIManager {
             gameTitle: document.getElementById('game-title'),
             orientationOverlay: document.getElementById('orientation-overlay'),
             highScoreDisplay: document.getElementById('high-score-display'),
-            // Music elements
-            musicInfo: document.getElementById('music-info'),
-            trackName: document.getElementById('track-name'),
-            trackNameText: document.getElementById('track-name-text'),
-            musicProgress: document.getElementById('music-progress'),
-            musicInfoCurrentTime: document.getElementById('music-info-current-time'),
-            musicInfoDuration: document.getElementById('music-info-duration'),
+            // Music elements (removed from main UI, only in pause menu)
+            musicInfo: null, // Removed from main display
+            trackName: null, // Removed from main display
+            trackNameText: null, // Removed from main display
+            musicProgress: null, // Removed from main display
+            musicInfoCurrentTime: null, // Removed from main display
+            musicInfoDuration: null, // Removed from main display
             pauseButton: document.getElementById('pause-button'),
             // Music tab elements
             pauseTabs: document.querySelectorAll('.pause-tab'),
@@ -69,7 +69,10 @@ export class UIManager {
     }
     
     updateWave(wave) {
-        this.elements.waveDisplay.textContent = `WAVE: ${wave}`;
+        // Wave display element no longer exists - wave info now shown via spawn timers
+        if (this.elements.waveDisplay) {
+            this.elements.waveDisplay.textContent = `WAVE: ${wave}`;
+        }
     }
     
     showMessage(title, subtitle = '', duration = 0, position = 'center') {
@@ -482,10 +485,12 @@ export class UIManager {
             this.updateProgress(progress, currentTime, duration);
         };
         
-        // Set up event listeners
-        this.elements.musicInfo.addEventListener('click', () => {
-            this.showMusicTab();
-        });
+        // Set up event listeners (skip music info since it's removed)
+        if (this.elements.musicInfo) {
+            this.elements.musicInfo.addEventListener('click', () => {
+                this.showMusicTab();
+            });
+        }
         
         this.elements.pauseButton.addEventListener('click', () => {
             if (window.game) {
@@ -623,7 +628,7 @@ export class UIManager {
         // Format track display
         const trackDisplay = `<span style="color: #00ff00;">${track.name}</span>&nbsp;<span style="color: #666;">·</span>&nbsp;<span style="color: #00ccff;">${track.artist || 'unknown'}</span>`;
         
-        // Update music info box
+        // Update music info box (skip since removed from main UI)
         if (this.elements.trackNameText) {
             this.elements.trackNameText.innerHTML = trackDisplay;
             // Start marquee after a delay
@@ -653,14 +658,29 @@ export class UIManager {
     }
 
     updateProgress(progress, currentTime, duration) {
-        this.elements.musicProgress.style.width = `${progress * 100}%`;
-        this.elements.musicPlayerProgress.style.width = `${progress * 100}%`;
+        // Update main music info (skip since removed from main UI)
+        if (this.elements.musicProgress) {
+            this.elements.musicProgress.style.width = `${progress * 100}%`;
+        }
         
-        // Update both music info and pause menu times
-        this.elements.musicInfoCurrentTime.textContent = this.formatTime(currentTime);
-        this.elements.musicInfoDuration.textContent = this.formatTime(duration);
-        this.elements.musicCurrentTime.textContent = this.formatTime(currentTime);
-        this.elements.musicDuration.textContent = this.formatTime(duration);
+        // Update pause menu music player
+        if (this.elements.musicPlayerProgress) {
+            this.elements.musicPlayerProgress.style.width = `${progress * 100}%`;
+        }
+        
+        // Update time displays (skip main UI, only update pause menu)
+        if (this.elements.musicInfoCurrentTime) {
+            this.elements.musicInfoCurrentTime.textContent = this.formatTime(currentTime);
+        }
+        if (this.elements.musicInfoDuration) {
+            this.elements.musicInfoDuration.textContent = this.formatTime(duration);
+        }
+        if (this.elements.musicCurrentTime) {
+            this.elements.musicCurrentTime.textContent = this.formatTime(currentTime);
+        }
+        if (this.elements.musicDuration) {
+            this.elements.musicDuration.textContent = this.formatTime(duration);
+        }
     }
     
     formatTime(seconds) {
