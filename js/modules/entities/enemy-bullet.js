@@ -29,6 +29,12 @@ export class EnemyBullet {
         
         // Damage
         this.damage = explosive ? 3 : 2;
+        
+        // Movement pattern properties (set by enemy when creating bullet)
+        this.movementPattern = 'aimed'; // Default pattern
+        this.patternTimer = 0;
+        this.patternPhase = 0;
+        this.baseVel = { x: velX, y: velY }; // Store original velocity
     }
     
     update() {
@@ -40,12 +46,18 @@ export class EnemyBullet {
             this.trail.pop();
         }
         
+        // Apply movement pattern
+        this.applyMovementPattern();
+        
         // Update position
         this.x += this.vel.x;
         this.y += this.vel.y;
         
         // Update rotation
         this.rotation += this.rotationSpeed;
+        
+        // Update pattern timer
+        this.patternTimer += 0.016; // Assuming 60fps
         
         // Don't fade over time - bullets stay strong until they hit something or go off-screen
         
@@ -54,6 +66,70 @@ export class EnemyBullet {
         if (this.x < -margin || this.x > GameDimensions.width + margin ||
             this.y < -margin || this.y > GameDimensions.height + margin) {
             this.active = false; // Will be recycled by pool manager
+        }
+    }
+    
+    applyMovementPattern() {
+        if (!this.baseVel) return; // Safety check
+        
+        const speed = Math.hypot(this.baseVel.x, this.baseVel.y);
+        const baseAngle = Math.atan2(this.baseVel.y, this.baseVel.x);
+        
+        switch (this.movementPattern) {
+            case 'aimed':
+                // Standard straight movement - no modification needed
+                break;
+                
+            case 'spread':
+                // Sinusoidal weaving pattern
+                const waveFreq = 3;
+                const waveAmp = 0.5;
+                const perpAngle = baseAngle + Math.PI / 2;
+                const waveOffset = Math.sin(this.patternTimer * waveFreq + this.patternPhase) * waveAmp;
+                
+                this.vel.x = this.baseVel.x + Math.cos(perpAngle) * waveOffset;
+                this.vel.y = this.baseVel.y + Math.sin(perpAngle) * waveOffset;
+                break;
+                
+            case 'rapid':
+                // Erratic jittery movement
+                const jitterStrength = 0.3;
+                const jitterX = (Math.random() - 0.5) * jitterStrength;
+                const jitterY = (Math.random() - 0.5) * jitterStrength;
+                
+                this.vel.x = this.baseVel.x + jitterX;
+                this.vel.y = this.baseVel.y + jitterY;
+                break;
+                
+            case 'spiral':
+                // Spiral outward pattern
+                const spiralRate = 2;
+                const spiralRadius = this.patternTimer * 0.5;
+                const spiralAngle = baseAngle + this.patternTimer * spiralRate;
+                
+                this.vel.x = Math.cos(spiralAngle) * speed + Math.cos(spiralAngle + Math.PI/2) * spiralRadius * 0.1;
+                this.vel.y = Math.sin(spiralAngle) * speed + Math.sin(spiralAngle + Math.PI/2) * spiralRadius * 0.1;
+                break;
+                
+            case 'burst':
+                // Accelerating pattern that speeds up over time
+                const accelFactor = 1 + this.patternTimer * 0.5;
+                this.vel.x = this.baseVel.x * accelFactor;
+                this.vel.y = this.baseVel.y * accelFactor;
+                break;
+                
+            case 'explosive':
+                // Slower start, then sudden acceleration
+                let explosiveFactor;
+                if (this.patternTimer < 0.5) {
+                    explosiveFactor = 0.3; // Start slow
+                } else {
+                    explosiveFactor = 1.5 + (this.patternTimer - 0.5) * 2; // Sudden acceleration
+                }
+                
+                this.vel.x = this.baseVel.x * explosiveFactor;
+                this.vel.y = this.baseVel.y * explosiveFactor;
+                break;
         }
     }
     

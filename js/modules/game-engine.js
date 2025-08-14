@@ -252,6 +252,43 @@ export class GameEngine {
             if (e.code === 'Enter' && this.game.state === GAME_STATES.GAME_OVER) {
                 this.init();
             }
+            if (e.code === 'Space' && this.game.state === GAME_STATES.SHOP) {
+                e.preventDefault();
+                this.closeShop();
+            }
+        });
+        
+        // Shop click handling
+        this.canvas.addEventListener('click', (e) => {
+            if (this.game.state === GAME_STATES.SHOP && this.shopItemBounds) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+                
+                for (const bound of this.shopItemBounds) {
+                    if (clickX >= bound.x && clickX <= bound.x + bound.width &&
+                        clickY >= bound.y && clickY <= bound.y + bound.height) {
+                        console.log(`🛒 Attempting to buy ${bound.item.name}...`);
+                        const success = this.buyShopItem(bound.item.id);
+                        if (success) {
+                            console.log(`🛒 Purchase successful!`);
+                        }
+                        break;
+                    }
+                }
+            }
+        });
+        
+        // Mouse move tracking for hover effects
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (this.game.state === GAME_STATES.SHOP) {
+                const rect = this.canvas.getBoundingClientRect();
+                this.mouseX = e.clientX - rect.left;
+                this.mouseY = e.clientY - rect.top;
+            }
         });
     }
     
@@ -261,11 +298,11 @@ export class GameEngine {
         this.game.state = GAME_STATES.PLAYING;
         // Reset player
         this.player = new Player();
-        this.player.waveBonusShield = 0; // Ensure wave bonus starts at 0
+        // Wave bonus shield system removed
         // Reset shields
-        this.playerShields = 25; // Start with 25 health
+        this.playerShields = 10; // Start with 10 health
         this.shieldTanks = 0; // Reset to zero tanks
-        this.displayShields = 25; // Match starting health
+        this.displayShields = 10; // Match starting health
         this.displayTanks = 0;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
@@ -374,7 +411,7 @@ export class GameEngine {
         this.playerState = PLAYER_STATES.NORMAL;
         
         // Restore player health to full between waves
-        this.player.health = this.player.maxHealth;
+        this.player.health = this.player.getEffectiveMaxHealth();
         
         // Note: Asteroid spawning now handled by enhanced wave system
         // via spawnWaveAsteroids() in startNewWave()
@@ -449,15 +486,15 @@ export class GameEngine {
             
             // Natural completion: all enemies and asteroids eliminated and all sub-waves completed
             const naturalCompletion = activeEnemies === 0 && activeAsteroids === 0 && 
-                                    this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE &&
+            this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE &&
                                     this.enemiesRemainingInSubWave <= 0;
             
             // Forced completion: all sub-waves finished (automatically progress regardless of enemies)
             const forcedCompletion = this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE;
             
             if (naturalCompletion || forcedCompletion) {
-                this.completeWave();
-                return;
+            this.completeWave();
+            return;
             }
         }
         
@@ -531,33 +568,423 @@ export class GameEngine {
         this.waveTimer = Date.now() + GAME_CONFIG.WAVE_BREAK_TIME; // Short break between waves
         this.wavePhase = 'waiting';
         
-        // Award wave survival bonus - 1% damage reduction per wave survived
-        this.player.addWaveBonusShield(1);
+        // Open shop immediately after wave completion
+        setTimeout(() => {
+            this.openShop();
+        }, 500); // Brief delay to ensure clean transition
         
-        // Show wave completion message with bonus
-        const currentShield = Math.round(this.player.getEffectiveShield());
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave - 1} COMPLETE!`, `+1% Damage Reduction (${currentShield}% Total)`, 7000, 'center');
+        console.log(`✅ Wave ${this.game.currentWave} complete! Opening shop...`);
+    }
+    
+    openShop() {
+        // Pause the game and show shop interface
+        this.game.state = GAME_STATES.SHOP;
         
-        console.log(`✅ Wave ${this.game.currentWave} complete! +1% damage reduction bonus awarded.`);
-        console.log(`📊 Player now has ${this.player.waveBonusShield}% wave bonus shield (${currentShield}% total effective shield)`);
+        // Define shop items with balanced costs based on power output
+        this.shopItems = [
+            {
+                id: 'ARMOR',
+                name: 'Hull Plating',
+                description: 'Reduces damage by 5%',
+                cost: 500,  // Premium survivability option
+                icon: '🛟',
+                maxStacks: 10  // 10 stacks × 5% = 50% max
+            },
+            {
+                id: 'HEALTH_BOOST',
+                name: 'Health Boost', 
+                description: 'Increases max health by 25',
+                cost: 1000,  // Very expensive for significant health increase
+                icon: '❤️',
+                maxStacks: 20   // 20 stacks × 25 = 500 extra health (100 base + 500 = 600 max)
+            },
+            {
+                id: 'SPEED_BOOST',
+                name: 'Speed Boost',
+                description: 'Move 30% faster',
+                cost: 50,  // Utility upgrade, reasonably priced
+                icon: '💨',
+                maxStacks: 4
+            },
+            {
+                id: 'RAPID_FIRE',
+                name: 'Rapid Fire',
+                description: 'Shoot 25% faster',
+                cost: 80,  // Significant DPS increase
+                icon: '⚡',
+                maxStacks: 5
+            },
+            {
+                id: 'SHIELD_BOOST',
+                name: 'Shielding',
+                description: 'Reduces damage by 15%',
+                cost: 1500, // Premium shield enhancement
+                icon: '🛡️',
+                maxStacks: 5
+            },
+            {
+                id: 'MULTI_SHOT',
+                name: 'Multi Shot',
+                description: 'Fire one extra bullet',
+                cost: 150, // Major DPS boost, expensive
+                icon: '🎯',
+                maxStacks: 5   // Unlimited stacking for high cost
+            },
+            {
+                id: 'SPREAD_SHOT',
+                name: 'Spread Shot',
+                description: 'Fire spread bullets (3/5/7)',
+                cost: 2000, // Base cost, escalates with purchases
+                icon: '📐',
+                maxStacks: 3   // Now upgradeable 3 times
+            },
+            {
+                id: 'HOMING',
+                name: 'Homing',
+                description: 'Bullets track enemies',
+                cost: 180, // Utility + damage, high cost
+                icon: '🎪',
+                maxStacks: 5   // More stacks for scaling effect
+            },
+            {
+                id: 'PIERCING',
+                name: 'Piercing',
+                description: 'Bullets go through enemies',
+                cost: 250, // Extremely powerful against groups
+                icon: '🏹',
+                maxStacks: 5   // More stacks for multiple piercing
+            },
+            {
+                id: 'EXPLOSIVE',
+                name: 'Explosive',
+                description: 'Bullets explode on impact',
+                cost: 300, // Most expensive for massive area damage
+                icon: '💣',
+                maxStacks: 3
+            },
+            {
+                id: 'CRIT_CHANCE',
+                name: 'Critical Chance',
+                description: 'Increases crit chance by 5%',
+                cost: 150, // High cost for DPS multiplier
+                icon: '🎯',
+                maxStacks: 10  // Max 50% crit chance
+            },
+            {
+                id: 'CRIT_DAMAGE',
+                name: 'Critical Damage',
+                description: 'Increases crit damage by 10%',
+                cost: 180, // Very high cost for damage scaling
+                icon: '💥',
+                maxStacks: 15  // Max 300% crit damage (150% base + 150% from upgrades)
+            }
+        ];
+        
+        console.log('🛒 Shop opened!');
+    }
+    
+    closeShop() {
+        try {
+            console.log('🛒 Closing shop...');
+            
+            if (!this.game) {
+                console.error('❌ Game object is undefined in closeShop!');
+                return;
+            }
+            
+            this.game.state = GAME_STATES.PLAYING;
+            console.log(`🎮 Game state changed to: ${this.game.state}`);
+            
+            // Clear shop bounds to prevent memory leaks
+            this.shopItemBounds = null;
+            console.log('🧹 Shop bounds cleared');
+            
+            console.log('🚀 Starting new wave...');
+            this.startNewWave();
+            console.log('🛒 Shop closed, starting next wave!');
+            
+        } catch (error) {
+            console.error('❌ Error in closeShop:', error);
+            console.error('❌ Stack trace:', error.stack);
+        }
+    }
+    
+    buyShopItem(itemId) {
+        try {
+            console.log(`🛒 buyShopItem called with itemId: ${itemId}`);
+            
+            const item = this.shopItems.find(i => i.id === itemId);
+            if (!item) {
+                console.error(`❌ Item not found: ${itemId}`);
+                return false;
+            }
+            
+            console.log(`🛒 Found item: ${item.name}`);
+            
+            if (!this.player) {
+                console.error(`❌ Player is undefined!`);
+                return false;
+            }
+            
+            const currentStacks = this.player.getPowerupStacks(itemId);
+            if (currentStacks >= item.maxStacks) {
+                if (item.maxStacks === 1) {
+                    console.log(`❌ ${item.name} can only be purchased once`);
+                } else {
+                    console.log(`❌ ${item.name} is already at max level (${item.maxStacks})`);
+                }
+                return false;
+            }
+            
+            if (!this.game) {
+                console.error(`❌ Game object is undefined!`);
+                return false;
+            }
+            
+            // Calculate dynamic cost for spread shot
+            let actualCost = item.cost;
+            if (item.id === 'SPREAD_SHOT') {
+                const currentStacks = this.player.getPowerupStacks(item.id);
+                if (currentStacks === 0) actualCost = 2000;      // First purchase
+                else if (currentStacks === 1) actualCost = 4000; // Second purchase  
+                else if (currentStacks === 2) actualCost = 10000; // Third purchase
+            }
+            
+            if (this.game.money < actualCost) {
+                console.log(`❌ Not enough coins for ${item.name} (need ${actualCost}, have ${this.game.money})`);
+                return false;
+            }
+            
+            // Purchase successful
+            this.game.money -= actualCost;
+            console.log(`💰 Money deducted. New balance: ${this.game.money}`);
+            
+            // Add powerup to player (permanent for the run)
+            const powerupConfig = this.getPowerupConfig(itemId);
+            if (!powerupConfig) {
+                console.error(`❌ Powerup config not found for: ${itemId}`);
+                return false;
+            }
+            
+            console.log(`🛒 Adding powerup to player...`);
+            this.player.addPowerup(itemId, {
+                ...powerupConfig,
+                duration: Infinity // Permanent for the run
+            }, true); // isShopItem = true
+            
+            console.log(`✅ Purchased ${item.name} for ${actualCost} coins!`);
+            
+            if (!this.audioManager) {
+                console.error(`❌ AudioManager is undefined!`);
+                return true; // Purchase was successful, just no sound
+            }
+            
+            this.audioManager.playCoin(); // Play purchase sound
+            return true;
+            
+        } catch (error) {
+            console.error(`❌ Error in buyShopItem:`, error);
+            console.error(`❌ Stack trace:`, error.stack);
+            return false;
+        }
+    }
+    
+    getPowerupConfig(type) {
+        // Return powerup configurations for shop items
+        const configs = {
+            'SHIELD_BOOST': { name: 'Shielding', duration: Infinity },
+            'RAPID_FIRE': { name: 'Rapid Fire', duration: Infinity },
+            'MULTI_SHOT': { name: 'Multi Shot', duration: Infinity },
+            'SPREAD_SHOT': { name: 'Spread Shot', duration: Infinity },
+            'SPEED_BOOST': { name: 'Speed Boost', duration: Infinity },
+            'PIERCING': { name: 'Piercing', duration: Infinity },
+            'EXPLOSIVE': { name: 'Explosive', duration: Infinity },
+            'HOMING': { name: 'Homing', duration: Infinity },
+            'ARMOR': { name: 'Hull Plating', duration: Infinity },
+            'HEALTH_BOOST': { name: 'Health Boost', duration: Infinity },
+            'CRIT_CHANCE': { name: 'Critical Chance', duration: Infinity },
+            'CRIT_DAMAGE': { name: 'Critical Damage', duration: Infinity }
+        };
+        return configs[type];
+    }
+    
+    drawShop() {
+        // Draw semi-transparent overlay
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        
+        // Shop title
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 48px "Press Start 2P", monospace';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('SHOP', this.width / 2, 80);
+        
+        // Money display
+        this.ctx.fillStyle = '#00FF00';
+        this.ctx.font = 'bold 24px "Press Start 2P", monospace';
+        this.ctx.fillText(`Coins: ${this.game.money}`, this.width / 2, 120);
+        
+        // Calculate grid layout
+        const itemsPerRow = 4;
+        const itemWidth = 200;
+        const itemHeight = 180; // Increased from 160 to provide more vertical space
+        const padding = 20;
+        const startX = (this.width - (itemsPerRow * itemWidth + (itemsPerRow - 1) * padding)) / 2;
+        const startY = 180;
+        
+        // Draw shop items with hover detection
+        this.shopItems.forEach((item, index) => {
+            const row = Math.floor(index / itemsPerRow);
+            const col = index % itemsPerRow;
+            const x = startX + col * (itemWidth + padding);
+            const y = startY + row * (itemHeight + padding);
+            
+            // Check for hover if mouse position is available
+            let isHovered = false;
+            if (this.mouseX !== undefined && this.mouseY !== undefined) {
+                isHovered = this.mouseX >= x && this.mouseX <= x + itemWidth &&
+                           this.mouseY >= y && this.mouseY <= y + itemHeight;
+            }
+            
+            this.drawShopItem(item, x, y, itemWidth, itemHeight, index, isHovered);
+        });
+        
+        // Instructions
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = '16px "Press Start 2P", monospace';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('Click items to purchase • Press SPACE to continue', this.width / 2, this.height - 50);
+    }
+    
+    drawShopItem(item, x, y, width, height, index, isHovered = false) {
+        const currentStacks = this.player.getPowerupStacks(item.id);
+        
+        // Calculate dynamic cost for spread shot
+        let actualCost = item.cost;
+        if (item.id === 'SPREAD_SHOT') {
+            if (currentStacks === 0) actualCost = 2000;      // First purchase
+            else if (currentStacks === 1) actualCost = 4000; // Second purchase  
+            else if (currentStacks === 2) actualCost = 10000; // Third purchase
+        }
+        
+        const canAfford = this.game.money >= actualCost;
+        const maxedOut = currentStacks >= item.maxStacks;
+        
+        // Item background with hover effect
+        if (maxedOut) {
+            this.ctx.fillStyle = isHovered ? 'rgba(150, 150, 150, 0.6)' : 'rgba(100, 100, 100, 0.5)';
+        } else if (canAfford) {
+            this.ctx.fillStyle = isHovered ? 'rgba(0, 255, 0, 0.4)' : 'rgba(0, 255, 0, 0.2)';
+        } else {
+            this.ctx.fillStyle = isHovered ? 'rgba(255, 0, 0, 0.4)' : 'rgba(255, 0, 0, 0.2)';
+        }
+        this.ctx.fillRect(x, y, width, height);
+        
+        // Item border with hover effect
+        if (isHovered) {
+            this.ctx.strokeStyle = maxedOut ? '#AAA' : (canAfford ? '#00FF88' : '#FF4444');
+            this.ctx.lineWidth = 3;
+        } else {
+            this.ctx.strokeStyle = maxedOut ? '#666' : (canAfford ? '#00FF00' : '#FF0000');
+            this.ctx.lineWidth = 2;
+        }
+        this.ctx.strokeRect(x, y, width, height);
+        
+        // Item icon
+        this.ctx.font = '36px "Press Start 2P", monospace';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillStyle = maxedOut ? '#666' : '#FFFFFF';
+        this.ctx.fillText(item.icon, x + width / 2, y + 38);
+        
+        // Item name (potentially multiline) - Using Fira Code
+        this.ctx.font = 'bold 18px "Fira Code", Montserrat, Consolas, monospace';
+        this.ctx.fillStyle = maxedOut ? '#666' : '#FFFFFF';
+        this.drawMultilineText(item.name, x + width / 2, y + 78, width - 20, 18);
+        
+        // Item description (multiline) - Using Fira Code
+        this.ctx.font = '15px "Fira Code", Montserrat, Consolas, monospace';
+        this.ctx.fillStyle = maxedOut ? '#666' : '#CCCCCC';
+        this.drawMultilineText(item.description, x + width / 2, y + 103, width - 20, 15);
+        
+        // Cost and stacks - Using Fira Code
+        this.ctx.font = 'bold 16px "Fira Code", Montserrat, Consolas, monospace';
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.fillText(`${actualCost} coins`, x + width / 2, y + 143);
+        
+        if (currentStacks > 0) {
+            this.ctx.fillStyle = '#00FFFF';
+            this.ctx.font = '14px "Fira Code", Montserrat, Consolas, monospace';
+            this.ctx.fillText(`Lv ${currentStacks}/${item.maxStacks}`, x + width / 2, y + 163);
+        }
+        
+        // Store item bounds for click detection
+        if (!this.shopItemBounds) this.shopItemBounds = [];
+        this.shopItemBounds[index] = { x, y, width, height, item };
+    }
+    
+    drawMultilineText(text, centerX, startY, maxWidth, lineHeight) {
+        const words = text.split(' ');
+        let line = '';
+        let y = startY;
+        
+        for (let i = 0; i < words.length; i++) {
+            const testLine = line + words[i] + ' ';
+            const metrics = this.ctx.measureText(testLine);
+            const testWidth = metrics.width;
+            
+            if (testWidth > maxWidth && i > 0) {
+                // Draw the current line and start a new one
+                this.ctx.fillText(line.trim(), centerX, y);
+                line = words[i] + ' ';
+                y += lineHeight + 2; // Small spacing between lines
+            } else {
+                line = testLine;
+            }
+        }
+        
+        // Draw the last line
+        if (line.trim().length > 0) {
+            this.ctx.fillText(line.trim(), centerX, y);
+        }
     }
     
     startNewWave() {
+        try {
+            console.log('🚀 startNewWave called');
+            
+            if (!this.game) {
+                console.error('❌ Game object is undefined in startNewWave!');
+                return;
+            }
+            
         this.waveInProgress = true;
         this.wavePhase = 'asteroids';
         this.wavePhaseTimer = Date.now();
         this.currentSubWave = 0;
         this.enemiesRemainingInSubWave = 0;
+            
+            console.log('📊 Wave state initialized');
         
         // Spawn asteroids first
+            console.log('🪨 Spawning asteroids...');
         this.spawnWaveAsteroids();
         
         // Show wave notification
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 7000, 'top');
+            if (this.uiManager) {
+                console.log('📢 Showing wave notification...');
+                this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 7000, 'top');
+            } else {
+                console.error('❌ UIManager is undefined!');
+            }
         
         console.log(`🚨 Wave ${this.game.currentWave} starting!`);
         console.log(`🪨 Spawning asteroids first...`);
         console.log(`👾 ${GAME_CONFIG.SUB_WAVES_PER_WAVE} enemy sub-waves incoming!`);
+            
+        } catch (error) {
+            console.error('❌ Error in startNewWave:', error);
+            console.error('❌ Stack trace:', error.stack);
+        }
     }
     
     spawnWaveAsteroids() {
@@ -817,9 +1244,7 @@ export class GameEngine {
         // Apply fade opacity
         ctx.globalAlpha = this.powerupDisplay.opacity;
         
-        // Glow effect
-        ctx.shadowColor = this.powerupDisplay.color;
-        ctx.shadowBlur = 15 * this.powerupDisplay.opacity;
+        // Glow effect removed for performance
         
         // Draw text with outline
         ctx.strokeStyle = '#000000';
@@ -893,8 +1318,12 @@ export class GameEngine {
                 ctx.fillText(powerupData.stacks.toString(), x + iconSize - 8, y + iconSize - 8);
             }
             
-            // Draw timer bar
+            // Draw timer bar (only for temporary powerups, not permanent shop items)
+            if (powerupData.timeRemaining !== Infinity && powerupData.config.duration !== Infinity) {
             const timePercent = powerupData.timeRemaining / powerupData.config.duration;
+                
+                // Ensure timePercent is finite and valid
+                if (isFinite(timePercent) && timePercent >= 0 && timePercent <= 1) {
             const barWidth = iconSize * 0.8;
             const barHeight = 4;
             const barX = x + (iconSize - barWidth) / 2;
@@ -904,8 +1333,10 @@ export class GameEngine {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
             ctx.fillRect(barX, barY, barWidth, barHeight);
             
-            // Timer bar with gradient
-            const timerGradient = ctx.createLinearGradient(barX, barY, barX + barWidth * timePercent, barY);
+                    // Timer bar with gradient - ensure gradient coordinates are finite
+                    const gradientEndX = barX + barWidth * timePercent;
+                    if (isFinite(gradientEndX)) {
+                        const timerGradient = ctx.createLinearGradient(barX, barY, gradientEndX, barY);
             if (timePercent > 0.3) {
                 const gradientColors = powerupData.config.gradientColors || ['#ff0000', '#990000'];
                 timerGradient.addColorStop(0, gradientColors[0]);
@@ -916,6 +1347,9 @@ export class GameEngine {
             }
             ctx.fillStyle = timerGradient;
             ctx.fillRect(barX, barY, barWidth * timePercent, barHeight);
+                    }
+                }
+            }
             
             index++;
         }
@@ -1109,7 +1543,7 @@ export class GameEngine {
                     // Heal player for collecting burst star
                     const healAmount = GAME_CONFIG.BURST_STAR_HEAL_AMOUNT;
                     const oldHealth = this.player.health;
-                    this.player.health = Math.min(this.player.maxHealth, this.player.health + healAmount);
+                    this.player.health = Math.min(this.player.getEffectiveMaxHealth(), this.player.health + healAmount);
                     const actualHeal = this.player.health - oldHealth;
                     
                     if (actualHeal > 0) {
@@ -1385,16 +1819,19 @@ export class GameEngine {
     }
     
     handlePlayerEnemyCollision(player, enemy) {
-        // Damage player
-        const damage = 5; // Reduced collision damage
-        player.health -= damage;
+        // Apply RPG-like damage with shield calculation
+        const baseDamage = 25; // RPG-like collision damage
+        const effectiveShield = player.getEffectiveShield();
+        const reducedDamage = baseDamage * (1 - effectiveShield / 100);
+        const finalDamage = Math.round(reducedDamage);
+        player.health -= finalDamage;
         
         // Check for death/shield tank usage
         if (player.health <= 0) {
             if (this.shieldTanks > 0) {
                 this.shieldTanks--;
                 this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-                player.health = player.maxHealth;
+                player.health = player.getEffectiveMaxHealth();
                 this.audioManager.playCoin(); // Tank used sound
             } else {
                 this.gameOver();
@@ -1462,15 +1899,19 @@ export class GameEngine {
     }
     
     handlePlayerEnemyBulletCollision(player, bullet) {
-        // Damage player
-        player.health -= bullet.damage;
+        // Apply RPG-like damage with shield calculation
+        const baseDamage = bullet.damage || 15; // Default 15 damage for enemy bullets
+        const effectiveShield = player.getEffectiveShield();
+        const reducedDamage = baseDamage * (1 - effectiveShield / 100);
+        const finalDamage = Math.round(reducedDamage);
+        player.health -= finalDamage;
         
         // Check for death/shield tank usage
         if (player.health <= 0) {
             if (this.shieldTanks > 0) {
                 this.shieldTanks--;
                 this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-                player.health = player.maxHealth;
+                player.health = player.getEffectiveMaxHealth();
                 this.audioManager.playCoin(); // Tank used sound
             } else {
                 this.gameOver();
@@ -1785,6 +2226,10 @@ export class GameEngine {
             this.ctx.fillRect(0, 0, this.width, this.height);
         }
         
+        if (this.game.state === GAME_STATES.SHOP) {
+            this.drawShop();
+        }
+        
         requestAnimationFrame(() => this.gameLoop());
     }
     
@@ -1945,7 +2390,7 @@ export class GameEngine {
             if (this.shieldTanks > 0) {
                 this.shieldTanks--;
                 this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-                this.player.health = this.player.maxHealth;
+                this.player.health = this.player.getEffectiveMaxHealth();
                 this.audioManager.playCoin(); // Tank used sound
                 } else {
                 this.gameOver();
@@ -2008,11 +2453,7 @@ export class GameEngine {
             ctx.closePath();
         };
 
-        // Draw outer glow effect
-        ctx.shadowColor = 'rgba(0, 180, 255, 0.5)';
-        ctx.shadowBlur = 15;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
+        // Outer glow effect removed for performance
         
         // Draw background container with semi-transparency
         ctx.globalAlpha = 0.3;
@@ -2026,27 +2467,21 @@ export class GameEngine {
         ctx.lineWidth = 1.5;
         ctx.stroke();
         
-        // Reset shadow
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
+        // Shadow effects removed for performance
 
-        // Calculate health percentage and filled width
-        const healthPercentage = this.player.health / this.player.maxHealth;
+        // Calculate health percentage using effective max health
+        const effectiveMaxHealth = this.player.getEffectiveMaxHealth();
+        const healthPercentage = this.player.health / effectiveMaxHealth;
         const filledWidth = barWidth * healthPercentage;
         
         // Add warning glow effect for low health
         if (healthPercentage <= 0.3) {
             ctx.save();
-            // Pulsing red glow effect
-            const pulseIntensity = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
-            ctx.shadowColor = `rgba(255, 50, 50, ${pulseIntensity * 0.8})`;
-            ctx.shadowBlur = 20 + pulseIntensity * 10;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
+            // Static red glow for low health warning (performance optimized)
             
             // Draw warning glow around the entire health bar area
             ctx.globalAlpha = 0.3;
-            ctx.strokeStyle = `rgba(255, 100, 100, ${pulseIntensity})`;
+            ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)'; // Fixed opacity instead of undefined pulseIntensity
             ctx.lineWidth = 3;
             createHealthBarPath(barWidth);
             ctx.stroke();
@@ -2104,7 +2539,7 @@ export class GameEngine {
         ctx.font = "12px 'Press Start 2P', monospace";
         
         // Match text color to health bar color
-        const textHealthPercentage = this.player.health / this.player.maxHealth;
+        const textHealthPercentage = this.player.health / effectiveMaxHealth;
         let textColor, strokeColor;
         if (textHealthPercentage > 0.6) {
             textColor = 'rgba(100, 220, 255, 0.9)';
@@ -2123,7 +2558,7 @@ export class GameEngine {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         
-        const hpText = `${Math.round(this.player.health)}/${this.player.maxHealth}`;
+        const hpText = `${Math.round(this.player.health)}/${effectiveMaxHealth}`;
         const textX = barX + barWidth / 2;
         const textY = barY + barHeight + 8; // Position below the bar
         
@@ -2162,9 +2597,7 @@ export class GameEngine {
         ctx.textBaseline = 'middle';
         
         const effectiveShield = Math.round(this.player.getEffectiveShield());
-        const waveBonus = this.player.waveBonusShield;
-        // Show shield with wave bonus indicator if any
-        const shieldText = waveBonus > 0 ? `${effectiveShield} (+${waveBonus}%)` : `${effectiveShield}`;
+        const shieldText = `${effectiveShield}`;
         const shieldTextX = shieldIconX + iconSize + 8;
         const shieldTextY = shieldIconY + iconSize / 2;
         
@@ -2315,7 +2748,7 @@ export class GameEngine {
                 if (this.shieldTanks > 0) {
                     this.shieldTanks--;
                     this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-                    this.player.health = this.player.maxHealth;
+                    this.player.health = this.player.getEffectiveMaxHealth();
                     this.audioManager.playCoin(); // Tank used sound
                 } else {
                     this.gameOver();

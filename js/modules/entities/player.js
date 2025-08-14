@@ -15,14 +15,17 @@ export class Player {
         this.lastY = 0;
         this.rotation = 0;
         this.radius = 12;
-        this.health = 25;
-        this.maxHealth = 25;
+        this.health = 100;
+        this.maxHealth = 100;
         this.shieldTanks = 1; // Start with 1 shield tank
         this.shield = 0; // 0% damage reduction (start with no armor)
-        this.waveBonusShield = 0; // Additional shield from waves survived (1% per wave)
         this.invulnerable = false;
         this.lastHitTime = 0;
         this.lastBlinkTime = 0;
+        
+        // Critical hit system
+        this.baseCritChance = 0; // 0% base critical hit chance
+        this.baseCritDamage = 150; // 150% base critical hit damage (50% extra)
         
         // WASD + Mouse controls
         this.thrustPower = 0.3; // Precise thrust power
@@ -31,11 +34,8 @@ export class Player {
         this.autoFireTimer = 0;
         this.baseFireRate = 200; // Base auto-fire rate in ms
         
-        // Audio throttling
-        this.lastThrusterSound = 0;
-        this.thrusterSoundInterval = 150; // Play thruster sound every 150ms instead of every frame
+        // Audio sync - shoot sound matches fire rate exactly
         this.lastShootSound = 0;
-        this.shootSoundInterval = 400; // Much longer interval between shoot sounds (400ms)
         
         // Powerup system
         this.powerups = new Map(); // Map of powerup type -> {stacks, timeRemaining}
@@ -61,8 +61,7 @@ export class Player {
         // Reset auto-fire timer
         this.autoFireTimer = 0;
         
-        // Reset wave bonus shield
-        this.waveBonusShield = 0;
+        // Wave bonus shield system removed
         
         // Reset powerups
         this.powerups.clear();
@@ -139,12 +138,7 @@ export class Player {
                 particlePool.get(p_x, p_y, 'thrust', rear);
             }
             
-            // Throttle thruster sound to reduce noise
-            const now = Date.now();
-            if (now - this.lastThrusterSound > this.thrusterSoundInterval) {
-                audioManager.playThruster();
-                this.lastThrusterSound = now;
-            }
+            // Thruster sound removed for cleaner audio experience
         }
 
         // Reduced tractor beam visual for performance
@@ -241,8 +235,6 @@ export class Player {
         
         // Draw visual-only direction triangle (guillemet/raquo) at the head (blue)
         ctx.save();
-        ctx.shadowColor = '#3399ff';
-        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.85;
         ctx.strokeStyle = '#3399ff'; // blue
         ctx.lineWidth = 3;
@@ -266,8 +258,6 @@ export class Player {
         const thrusterBase = r * 0.35; // base width of thruster triangle
         // Left thruster
         ctx.save();
-        ctx.shadowColor = '#ff3333';
-        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.7;
         ctx.strokeStyle = '#ff3333'; // red
         ctx.lineWidth = 2.5;
@@ -281,8 +271,6 @@ export class Player {
         ctx.restore();
         // Right thruster
         ctx.save();
-        ctx.shadowColor = '#ff3333';
-        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.7;
         ctx.strokeStyle = '#ff3333'; // red
         ctx.lineWidth = 2.5;
@@ -302,8 +290,6 @@ export class Player {
         const wingBase = r * 0.32; // base width of wing triangle
         // Left wing
         ctx.save();
-        ctx.shadowColor = '#a259ff';
-        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.6;
         ctx.strokeStyle = '#a259ff'; // purple
         ctx.lineWidth = 2.2;
@@ -317,8 +303,6 @@ export class Player {
         ctx.restore();
         // Right wing
         ctx.save();
-        ctx.shadowColor = '#a259ff';
-        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.6;
         ctx.strokeStyle = '#a259ff'; // purple
         ctx.lineWidth = 2.2;
@@ -335,29 +319,62 @@ export class Player {
     }
     
     // Powerup management methods
-    addPowerup(type, config) {
+    addPowerup(type, config, isShopItem = false) {
+        // Determine duration based on source
+        const duration = isShopItem ? Infinity : (config.duration || 15000); // 15 seconds for dropped powerups
+        
         if (this.powerups.has(type)) {
-            // Stack the powerup
             const existing = this.powerups.get(type);
-            existing.stacks = Math.min(existing.stacks + 1, 5); // Max 5 stacks
-            existing.timeRemaining = config.duration; // Reset timer
+            
+            if (isShopItem) {
+                // Shop items stack and remain permanent
+                existing.stacks += 1;
+                existing.timeRemaining = Infinity;
+                existing.isPermanent = true;
+            } else {
+                // Dropped powerups reset timer but don't stack if already permanent
+                if (existing.isPermanent) {
+                    console.log(`🔒 ${type} is permanent from shop - ignoring temporary pickup`);
+                    return;
+                } else {
+                    // Refresh temporary powerup
+                    existing.timeRemaining = duration;
+                }
+            }
         } else {
             // New powerup
             this.powerups.set(type, {
                 stacks: 1,
-                timeRemaining: config.duration,
-                config: config
+                timeRemaining: duration,
+                config: config,
+                isPermanent: isShopItem
             });
+        }
+        
+        // Special handling for health boost - increase current health when purchased
+        if (type === 'HEALTH_BOOST' && isShopItem) {
+            const newMaxHealth = this.getEffectiveMaxHealth();
+            // Increase current health by 25, but don't exceed new max
+            this.health = Math.min(this.health + 25, newMaxHealth);
+            console.log(`🩺 Health boost applied! Current: ${this.health}/${newMaxHealth}`);
+        }
+        
+        if (isShopItem) {
+            console.log(`🛒 Shop powerup ${type} added permanently (Level ${this.getPowerupStacks(type)})`);
+        } else {
+            console.log(`⏰ Temporary powerup ${type} added for ${duration/1000} seconds`);
         }
     }
     
     updatePowerups() {
-        // Decrease timers and remove expired powerups
+        // Decrease timers and remove expired powerups (skip permanent ones)
         for (const [type, powerup] of this.powerups.entries()) {
-            powerup.timeRemaining -= 16; // Assume 60fps
-            if (powerup.timeRemaining <= 0) {
-                this.powerups.delete(type);
-                console.log(`⏰ ${powerup.config.name} expired`);
+            if (powerup.timeRemaining !== Infinity && !powerup.isPermanent) {
+                powerup.timeRemaining -= 16; // Assume 60fps
+                if (powerup.timeRemaining <= 0) {
+                    this.powerups.delete(type);
+                    console.log(`⏰ Temporary powerup ${powerup.config.name || type} expired`);
+                }
             }
         }
     }
@@ -370,12 +387,8 @@ export class Player {
         // Fire bullets based on powerups (no cooldown needed since auto-fire handles timing)
         this.createBullets(bulletPool);
         
-        // Throttle shoot sound to prevent overwhelming other audio
-        const now = Date.now();
-        if (now - this.lastShootSound > this.shootSoundInterval) {
-            audioManager.playShoot();
-            this.lastShootSound = now;
-        }
+        // Play shoot sound synchronized with every shot
+        audioManager.playShoot();
     }
     
     createBullets(bulletPool) {
@@ -391,13 +404,16 @@ export class Player {
             console.log(`🎯 Firing with powerups: Multi:${multiShotStacks} Spread:${spreadShotStacks} Pierce:${piercingStacks} Explosive:${explosiveStacks} Homing:${homingStacks}`);
         }
         
-        // Calculate number of bullets to fire
+        // Calculate number of bullets to fire - scaling with stack levels
         let bulletCount = 1;
         if (multiShotStacks > 0) {
             bulletCount += multiShotStacks; // +1 bullet per stack
         }
         if (spreadShotStacks > 0) {
-            bulletCount += spreadShotStacks * 2; // +2 bullets per stack
+            // Progressive bullet count: 3, 5, 7 bullets
+            if (spreadShotStacks === 1) bulletCount = 3;
+            else if (spreadShotStacks === 2) bulletCount = 5;
+            else if (spreadShotStacks >= 3) bulletCount = 7;
         }
         
         // Calculate spread angle
@@ -416,6 +432,20 @@ export class Player {
             
             const bullet = bulletPool.get(this.x, this.y, angle);
             if (bullet) {
+                // Calculate critical hit
+                const critChance = this.getEffectiveCritChance();
+                const isCritical = Math.random() * 100 < critChance;
+                
+                if (isCritical) {
+                    const critDamage = this.getEffectiveCritDamage();
+                    bullet.damage = (bullet.damage || 20) * (critDamage / 100); // Default 20 base damage
+                    bullet.isCritical = true;
+                    bullet.color = '#FFD700'; // Gold color for critical hits
+                } else {
+                    bullet.damage = bullet.damage || 20; // Default base damage
+                    bullet.isCritical = false;
+                }
+                
                 // Apply powerup effects to bullet
                 if (homingStacks > 0) {
                     bullet.homing = true;
@@ -443,17 +473,43 @@ export class Player {
     getEffectiveShield() {
         const baseShield = this.shield;
         const shieldBoostStacks = this.getPowerupStacks('SHIELD_BOOST');
-        const boostAmount = shieldBoostStacks * 15; // +15% damage reduction per stack
-        const totalShield = baseShield + boostAmount + this.waveBonusShield;
+        const armorStacks = this.getPowerupStacks('ARMOR');
+        
+        const shieldBoostAmount = shieldBoostStacks * 15; // +15% damage reduction per stack
+        const armorAmount = armorStacks * 5; // +5% damage reduction per stack
+        
+        const totalShield = baseShield + shieldBoostAmount + armorAmount;
         return Math.min(100, totalShield); // Cap at 100%
     }
     
-    // Method to add wave bonus shield
-    addWaveBonusShield(amount = 1) {
-        this.waveBonusShield += amount;
-        // Cap at reasonable maximum to prevent infinite scaling
-        this.waveBonusShield = Math.min(this.waveBonusShield, 50); // Max 50% from waves
+    getEffectiveMaxHealth() {
+        const baseMaxHealth = this.maxHealth;
+        const healthBoostStacks = this.getPowerupStacks('HEALTH_BOOST');
+        const healthBoostAmount = healthBoostStacks * 25; // +25 max health per stack
+        
+        const totalMaxHealth = baseMaxHealth + healthBoostAmount;
+        return Math.min(600, totalMaxHealth); // Cap at 600 (100 base + 500 from upgrades)
     }
+    
+    getEffectiveCritChance() {
+        const baseCritChance = this.baseCritChance;
+        const critChanceStacks = this.getPowerupStacks('CRIT_CHANCE');
+        const critChanceBonus = critChanceStacks * 5; // +5% crit chance per stack
+        
+        const totalCritChance = baseCritChance + critChanceBonus;
+        return Math.min(50, totalCritChance); // Cap at 50%
+    }
+    
+    getEffectiveCritDamage() {
+        const baseCritDamage = this.baseCritDamage;
+        const critDamageStacks = this.getPowerupStacks('CRIT_DAMAGE');
+        const critDamageBonus = critDamageStacks * 10; // +10% crit damage per stack
+        
+        const totalCritDamage = baseCritDamage + critDamageBonus;
+        return Math.min(300, totalCritDamage); // Cap at 300% (3x damage)
+    }
+    
+    // Wave bonus shield system removed - replaced with shop system
     
     die(particlePool, audioManager, uiManager, game, triggerScreenShake) {
         this.active = false;

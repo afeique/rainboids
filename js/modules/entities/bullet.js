@@ -234,10 +234,8 @@ export class Bullet {
         // Get powerup-enhanced visuals
         const visualData = this.getBulletVisuals(gameEngine);
         
-        // Apply enhanced colors and effects
+        // Apply enhanced colors (shadow effects removed for performance)
         ctx.fillStyle = visualData.color;
-        ctx.shadowColor = visualData.glowColor;
-        ctx.shadowBlur = visualData.glowIntensity;
         
         // Draw based on bullet type/powerups
         if (visualData.shape === 'star') {
@@ -326,7 +324,6 @@ export class Bullet {
         
         // Bright center
         ctx.fillStyle = '#FFFFFF';
-        ctx.shadowBlur = 3;
         ctx.beginPath();
         ctx.arc(this.x, this.y, visualData.size * 0.5, 0, 2 * Math.PI);
         ctx.fill();
@@ -348,7 +345,7 @@ export class Bullet {
         
         // Bright center
         ctx.fillStyle = '#FFFFFF';
-        ctx.shadowBlur = 2;
+
         ctx.beginPath();
         ctx.arc(this.x, this.y, visualData.size * 0.3, 0, 2 * Math.PI);
         ctx.fill();
@@ -366,7 +363,6 @@ export class Bullet {
         // Bright center line
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 2;
-        ctx.shadowBlur = 2;
         ctx.beginPath();
         ctx.moveTo(this.x, this.y - visualData.size * 0.5);
         ctx.lineTo(this.x, this.y + visualData.size * 0.5);
@@ -383,7 +379,7 @@ export class Bullet {
         
         // Bright center
         ctx.fillStyle = '#FFFFFF';
-        ctx.shadowBlur = 2;
+
         ctx.beginPath();
         ctx.arc(this.x, this.y, visualData.size * 0.3, 0, 2 * Math.PI);
         ctx.fill();
@@ -404,7 +400,7 @@ export class Bullet {
         
         // Bright center
         ctx.fillStyle = '#FFFFFF';
-        ctx.shadowBlur = 2;
+
         ctx.beginPath();
         ctx.arc(this.x, this.y, visualData.size * 0.4, 0, 2 * Math.PI);
         ctx.fill();

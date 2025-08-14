@@ -116,6 +116,15 @@ export class Enemy {
         this.lastShot = 0;
         this.targetPlayer = null;
         
+        // Face direction for orientation (initialized once in constructor)
+        if (this.turnSpeed === undefined) {
+            this.turnSpeed = 0.08; // How fast enemy can turn
+        }
+        
+        // Reset face direction
+        this.faceAngle = Math.random() * Math.PI * 2; // Random starting direction
+        this.targetFaceAngle = this.faceAngle;
+        
         // Circulating shield indicator with music sync
         this.shield = {
             rotation: 0,
@@ -159,6 +168,9 @@ export class Enemy {
         if (!this.active) return;
         
         this.targetPlayer = playerRef;
+        
+        // Update face direction to look at player
+        this.updateFaceDirection();
         
         // Update movement based on pattern
         this.updateMovement(gameEngine);
@@ -230,6 +242,29 @@ export class Enemy {
         if (this.health <= 0) {
             this.active = false;
         }
+    }
+    
+    updateFaceDirection() {
+        if (!this.targetPlayer) return;
+        
+        // Calculate angle to player
+        const dx = this.targetPlayer.x - this.x;
+        const dy = this.targetPlayer.y - this.y;
+        this.targetFaceAngle = Math.atan2(dy, dx);
+        
+        // Smoothly rotate to face target
+        let angleDiff = this.targetFaceAngle - this.faceAngle;
+        
+        // Normalize angle difference to [-π, π]
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        
+        // Apply turn speed
+        this.faceAngle += angleDiff * this.turnSpeed;
+        
+        // Normalize face angle
+        while (this.faceAngle > Math.PI) this.faceAngle -= Math.PI * 2;
+        while (this.faceAngle < -Math.PI) this.faceAngle += Math.PI * 2;
     }
     
     updateMovement(gameEngine) {
@@ -725,53 +760,46 @@ export class Enemy {
         const dy = this.targetPlayer.y - this.y;
         const angle = Math.atan2(dy, dx);
         
-        this.createEnemyBullet(gameEngine, angle, 3, this.color);
+        this.createEnemyBullet(gameEngine, angle, 3, this.color, false, 'aimed');
     }
     
     shootSpread(gameEngine) {
         const baseAngle = Math.atan2(this.targetPlayer.y - this.y, this.targetPlayer.x - this.x);
-        const spreadAngles = [-0.3, -0.15, 0, 0.15, 0.3];
         
-        spreadAngles.forEach(offset => {
-            this.createEnemyBullet(gameEngine, baseAngle + offset, 2.5, this.color);
-        });
+        // Single bullet with spreading movement pattern
+        this.createEnemyBullet(gameEngine, baseAngle, 2.5, this.color, false, 'spread');
     }
     
     shootRapid(gameEngine) {
-        // Multiple shots in quick succession
-        for (let i = 0; i < 3; i++) {
-            setTimeout(() => {
-                const angle = Math.atan2(this.targetPlayer.y - this.y, this.targetPlayer.x - this.x);
-                this.createEnemyBullet(gameEngine, angle + random(-0.1, 0.1), 4, this.color);
-            }, i * 50);
-        }
+        const angle = Math.atan2(this.targetPlayer.y - this.y, this.targetPlayer.x - this.x);
+        
+        // Single bullet with rapid/erratic movement pattern
+        this.createEnemyBullet(gameEngine, angle, 4, this.color, false, 'rapid');
     }
     
     shootSpiral(gameEngine) {
-        const spiralAngle = (Date.now() / 100) % (Math.PI * 2);
-        for (let i = 0; i < 6; i++) {
-            const angle = spiralAngle + (i * Math.PI * 2 / 6);
-            this.createEnemyBullet(gameEngine, angle, 2, this.color);
-        }
+        if (!this.spiralAngle) this.spiralAngle = 0;
+        this.spiralAngle += 0.3;
+        
+        // Single bullet with spiral movement pattern
+        this.createEnemyBullet(gameEngine, this.spiralAngle, 2, this.color, false, 'spiral');
     }
     
     shootBurst(gameEngine) {
-        // Fire 3 shots in a tight burst
         const baseAngle = Math.atan2(this.targetPlayer.y - this.y, this.targetPlayer.x - this.x);
-        for (let i = 0; i < 3; i++) {
-            setTimeout(() => {
-                this.createEnemyBullet(gameEngine, baseAngle + random(-0.05, 0.05), 3.5, this.color);
-            }, i * 30);
-        }
+        
+        // Single bullet with burst/explosive movement pattern
+        this.createEnemyBullet(gameEngine, baseAngle, 2, this.color, false, 'burst');
     }
     
     shootExplosive(gameEngine) {
-        // Slower but larger projectiles
         const angle = Math.atan2(this.targetPlayer.y - this.y, this.targetPlayer.x - this.x);
-        this.createEnemyBullet(gameEngine, angle, 2, this.color, true); // explosive flag
+        
+        // Single explosive bullet with unique movement pattern
+        this.createEnemyBullet(gameEngine, angle, 2.5, this.color, true, 'explosive');
     }
     
-    createEnemyBullet(gameEngine, angle, speed, color, explosive = false) {
+    createEnemyBullet(gameEngine, angle, speed, color, explosive = false, movementPattern = 'aimed') {
         if (!gameEngine.enemyBulletPool) return;
         
         const bullet = gameEngine.enemyBulletPool.get();
@@ -785,6 +813,11 @@ export class Enemy {
                 explosive
             );
             
+            // Set unique movement pattern for this bullet
+            bullet.movementPattern = movementPattern;
+            bullet.patternTimer = 0;
+            bullet.patternPhase = Math.random() * Math.PI * 2; // Random starting phase
+            
             // Enemy shooting sounds removed to reduce audio confusion
         }
     }
@@ -796,7 +829,7 @@ export class Enemy {
         
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.rotate(this.rotation);
+        ctx.rotate(this.faceAngle); // Rotate to face direction
         
         // Health-based transparency
         const healthRatio = this.health / this.maxHealth;
@@ -845,55 +878,70 @@ export class Enemy {
     }
     
     drawTriangle(ctx) {
-        // Aggressive arrow pointing forward
+        // Aggressive arrow pointing forward (toward player)
         const size = this.radius * 0.8;
         ctx.beginPath();
-        ctx.moveTo(size, 0);
-        ctx.lineTo(-size * 0.6, -size * 0.8);
-        ctx.lineTo(-size * 0.6, size * 0.8);
+        ctx.moveTo(size, 0); // Point (tip of arrow)
+        ctx.lineTo(-size * 0.6, -size * 0.8); // Left back corner
+        ctx.lineTo(-size * 0.6, size * 0.8); // Right back corner
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+        
+        // Add small directional indicator at tip
+        ctx.beginPath();
+        ctx.arc(size * 0.8, 0, 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
     }
     
     drawSquare(ctx) {
-        // Defensive square
+        // Defensive square with directional indicator
         const size = this.radius * 0.7;
         ctx.beginPath();
         ctx.rect(-size, -size, size * 2, size * 2);
         ctx.fill();
         ctx.stroke();
         
-        // Inner cross for defense look
+        // Directional indicator - arrow pointing forward
         ctx.beginPath();
-        ctx.moveTo(-size * 0.4, 0);
-        ctx.lineTo(size * 0.4, 0);
-        ctx.moveTo(0, -size * 0.4);
-        ctx.lineTo(0, size * 0.4);
-        ctx.stroke();
+        ctx.moveTo(size * 0.6, 0);
+        ctx.lineTo(size * 0.2, -size * 0.3);
+        ctx.lineTo(size * 0.2, size * 0.3);
+        ctx.closePath();
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
     }
     
     drawDiamond(ctx) {
-        // Fast, agile diamond
+        // Fast, agile diamond with directional tip
         const size = this.radius * 0.6;
         ctx.beginPath();
-        ctx.moveTo(0, -size);
-        ctx.lineTo(size, 0);
+        ctx.moveTo(size * 1.2, 0); // Extended tip pointing forward
+        ctx.lineTo(0, -size);
+        ctx.lineTo(-size * 0.6, 0); // Flattened back
         ctx.lineTo(0, size);
-        ctx.lineTo(-size, 0);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+        
+        // Small highlight on the tip
+        ctx.beginPath();
+        ctx.arc(size, 0, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
     }
     
     drawHexagon(ctx) {
-        // Heavy, imposing hexagon
+        // Heavy, imposing hexagon with directional point
         const size = this.radius * 0.8;
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const angle = (i / 6) * Math.PI * 2;
-            const x = Math.cos(angle) * size;
-            const y = Math.sin(angle) * size;
+            // Stretch the first point forward to create directionality
+            const stretch = i === 0 ? 1.3 : 1;
+            const x = Math.cos(angle) * size * stretch;
+            const y = Math.sin(angle) * size * stretch;
             if (i === 0) {
                 ctx.moveTo(x, y);
             } else {
@@ -903,24 +951,38 @@ export class Enemy {
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+        
+        // Central directional line
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(size * 0.8, 0);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
     }
     
     drawCross(ctx) {
-        // Stealth cross shape
+        // Stealth cross shape with directional emphasis
         const size = this.radius * 0.7;
         const thickness = size * 0.3;
         
         ctx.beginPath();
         // Vertical bar
         ctx.rect(-thickness/2, -size, thickness, size * 2);
-        // Horizontal bar
-        ctx.rect(-size, -thickness/2, size * 2, thickness);
+        // Horizontal bar (extended forward)
+        ctx.rect(-size * 0.6, -thickness/2, size * 2.4, thickness);
         ctx.fill();
         ctx.stroke();
+        
+        // Forward direction indicator
+        ctx.beginPath();
+        ctx.arc(size * 1.3, 0, 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
     }
     
     drawSpikedCircle(ctx) {
-        // Explosive circle with spikes
+        // Explosive circle with directional spikes
         const innerSize = this.radius * 0.5;
         const outerSize = this.radius * 0.8;
         
@@ -930,18 +992,28 @@ export class Enemy {
         ctx.fill();
         ctx.stroke();
         
-        // Spikes
+        // Spikes with forward emphasis
         ctx.beginPath();
         for (let i = 0; i < 8; i++) {
             const angle = (i / 8) * Math.PI * 2;
+            // Make forward spikes longer
+            const lengthMultiplier = (i === 0) ? 1.5 : 1;
             const innerX = Math.cos(angle) * innerSize;
             const innerY = Math.sin(angle) * innerSize;
-            const outerX = Math.cos(angle) * outerSize;
-            const outerY = Math.sin(angle) * outerSize;
+            const outerX = Math.cos(angle) * outerSize * lengthMultiplier;
+            const outerY = Math.sin(angle) * outerSize * lengthMultiplier;
             
             ctx.moveTo(innerX, innerY);
             ctx.lineTo(outerX, outerY);
         }
+        ctx.stroke();
+        
+        // Forward spike emphasis
+        ctx.beginPath();
+        ctx.moveTo(innerSize, 0);
+        ctx.lineTo(outerSize * 1.5, 0);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#ffffff';
         ctx.stroke();
     }
     
@@ -951,10 +1023,10 @@ export class Enemy {
         // Use music-synchronized intensity
         const pulseIntensity = this.shield.currentIntensity || 0.5;
         
-        // Create sine wave pattern around the shield perimeter
+        // Simplified shield pattern for performance
         const time = Date.now() * 0.001;
-        const waveFrequency = 8; // Number of waves around the circumference
-        const waveAmplitude = 4; // How much the radius varies
+        const waveFrequency = 4; // Reduced from 8 for better performance
+        const waveAmplitude = 2; // Reduced from 4 for better performance
         
         // Base radius with music-driven pulsing
         const baseRadius = this.shield.radius + (pulseIntensity - 0.5) * 6;
@@ -982,7 +1054,7 @@ export class Enemy {
         ctx.globalAlpha = pulseIntensity;
         
         ctx.beginPath();
-        const angleStep = 0.1; // Higher resolution for smooth sine wave
+        const angleStep = 0.3; // Increased from 0.1 for better performance
         for (let angle = 0; angle <= Math.PI * 2; angle += angleStep) {
             // Calculate sine wave modulation
             const wavePhase = angle * waveFrequency + this.shield.waveOffset + time * 2;

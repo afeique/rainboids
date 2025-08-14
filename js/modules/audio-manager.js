@@ -11,7 +11,11 @@ export class AudioManager {
         
         // Audio pool system for simultaneous playback
         this.audioPool = new Map(); // Map of soundName -> Array of audio elements
-        this.poolSize = 3; // Number of simultaneous instances per sound
+        this.poolSize = 2; // Reduced from 3 to 2 for better performance
+        
+        // Audio throttling to prevent overload
+        this.soundThrottles = new Map(); // Track last play time for each sound
+        this.minSoundInterval = 50; // Minimum 50ms between same sound effects
         
         // Track which sounds are enabled
         this.soundEnabled = {
@@ -21,7 +25,6 @@ export class AudioManager {
             powerup: true,
             explosion: true,
             playerExplosion: true,
-            thruster: true,
             tractorBeam: true,
             shield: true,
             healthRegen: true // Added health regeneration sound
@@ -52,7 +55,6 @@ export class AudioManager {
             },
             explosion: sfxr.generate("explosion"),
             playerExplosion: sfxr.generate("explosion"),
-            thruster: sfxr.generate("explosion"),
             tractorBeam: {
                 wave_type: 0,
                 p_base_freq: 0.15,
@@ -118,6 +120,14 @@ export class AudioManager {
     
     playSound(soundName) {
         if (!this.audioReady || !this.audioCache[soundName] || !this.soundEnabled[soundName]) return;
+        
+        // Throttle sounds to prevent audio overload
+        const now = Date.now();
+        const lastPlayTime = this.soundThrottles.get(soundName) || 0;
+        if (now - lastPlayTime < this.minSoundInterval) {
+            return; // Skip this sound to prevent spam
+        }
+        this.soundThrottles.set(soundName, now);
         
         try {
             // Get or create audio pool for this sound
@@ -187,7 +197,6 @@ export class AudioManager {
     playPowerup() { this.playSound('powerup'); }
     playExplosion() { this.playSound('explosion'); }
     playPlayerExplosion() { this.playSound('playerExplosion'); }
-    playThruster() { this.playSound('thruster'); }
     playTractorBeam() { this.playSound('tractorBeam'); }
     playShield() { this.playSound('shield'); }
     playHealthRegen() { this.playSound('healthRegen'); }
@@ -236,7 +245,6 @@ export class AudioManager {
                 break;
             case 'explosion':
             case 'playerExplosion':
-            case 'thruster':
                 newSound = sfxr.generate("explosion");
                 break;
             case 'tractorBeam':

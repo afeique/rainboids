@@ -83,6 +83,26 @@ export const POWERUP_TYPES = {
         rarity: 0.1,
         description: 'Area damage on impact'
     },
+    CRIT_CHANCE: {
+        name: 'Critical Chance',
+        color: '#ffcc00',
+        gradientColors: ['#ffff66', '#cc9900'],
+        icon: '🎯',
+        duration: 15000, // 15 seconds for drops
+        effect: 'critChance',
+        rarity: 0.2,
+        description: '+5% critical hit chance'
+    },
+    CRIT_DAMAGE: {
+        name: 'Critical Damage',
+        color: '#ff0066',
+        gradientColors: ['#ff3399', '#cc0033'],
+        icon: '💥',
+        duration: 15000, // 15 seconds for drops
+        effect: 'critDamage',
+        rarity: 0.15,
+        description: '+10% critical hit damage'
+    },
     SHIELD_BOOST: {
         name: 'Shield Boost',
         color: '#00cc88',
@@ -275,6 +295,28 @@ export class Powerup {
             for (let i = 0; i < 8; i++) {
                 const angle = (i / 8) * Math.PI * 2;
                 const radius = i % 2 === 0 ? currentRadius : currentRadius * 0.5;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+        } else if (this.type === 'CRIT_CHANCE') {
+            // Target/crosshair shape for critical chance
+            ctx.beginPath();
+            ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
+            ctx.closePath();
+            // Add crosshair
+            ctx.moveTo(-currentRadius * 0.6, 0);
+            ctx.lineTo(currentRadius * 0.6, 0);
+            ctx.moveTo(0, -currentRadius * 0.6);
+            ctx.lineTo(0, currentRadius * 0.6);
+        } else if (this.type === 'CRIT_DAMAGE') {
+            // Spiky star for critical damage
+            ctx.beginPath();
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2;
+                const radius = i % 2 === 0 ? currentRadius : currentRadius * 0.3;
                 const x = Math.cos(angle) * radius;
                 const y = Math.sin(angle) * radius;
                 if (i === 0) ctx.moveTo(x, y);

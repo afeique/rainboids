@@ -20,9 +20,9 @@ export const GAME_CONFIG = {
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,
     
-    // Entity limits for aggressive gameplay
-    MAX_ASTEROIDS: 6, // Maximum asteroids on field at once
-    MAX_ENEMIES: 5, // Maximum enemies on field at once - increased for higher difficulty
+    // Entity limits reduced for better performance
+    MAX_ASTEROIDS: 4, // Reduced from 6 for better performance
+    MAX_ENEMIES: 3, // Reduced from 5 for better performance
     
     // Wave system configuration - aggressive timing for continuous action
     WAVE_ASTEROID_DELAY: 0, // Time before spawning asteroids (ms)
@@ -31,11 +31,11 @@ export const GAME_CONFIG = {
     ENEMIES_PER_SUB_WAVE: 2, // Enemies per sub-wave - increased from 1
     SUB_WAVES_PER_WAVE: 4, // Number of enemy sub-waves per wave - increased from 3
     SUB_WAVE_TIMEOUT: 20000, // Auto-progress sub-wave after 20 seconds (ms) - reduced from 2 minutes
-    WAVE_BREAK_TIME: 1000, // Time between waves (ms) - reduced from 3 seconds
+    WAVE_BREAK_TIME: 4000, // Time between waves (ms) - quadrupled for strategic planning
     
-    // Performance settings
-    MAX_PARTICLES: 100, // Maximum active particles for performance
-    PARTICLE_CLEANUP_INTERVAL: 60, // Clean up particles every N score points
+    // Performance settings optimized
+    MAX_PARTICLES: 50, // Reduced from 100 for better performance
+    PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 };
 
 export const NOISE_CONFIG = {
@@ -101,7 +101,8 @@ export const GAME_STATES = {
     PAUSED: 'PAUSED',
     GAME_OVER: 'GAME_OVER',
     WAVE_TRANSITION: 'WAVE_TRANSITION',
-    ORIENTATION_LOCK: 'ORIENTATION_LOCK'
+    ORIENTATION_LOCK: 'ORIENTATION_LOCK',
+    SHOP: 'SHOP'
 };
 
 export const PARTICLE_TYPES = {

@@ -53,7 +53,10 @@ export class UIManager {
             sfxVolumeSlider: document.getElementById('sfx-volume-slider'),
             sfxVolumeValue: document.getElementById('sfx-volume-value'),
             sfxTogglesContainer: document.getElementById('sfx-toggles'),
-            rerollAllSfxButton: document.getElementById('reroll-all-sfx')
+            rerollAllSfxButton: document.getElementById('reroll-all-sfx'),
+            // Powerups tab elements
+            powerupsList: document.getElementById('powerups-list'),
+            noPowerups: document.getElementById('no-powerups')
         };
     }
     
@@ -107,6 +110,9 @@ export class UIManager {
         } else {
             this.elements.pauseOverlay.style.display = 'flex';
             
+            // Update powerups list when pause menu is shown
+            this.updatePowerupsList();
+            
             // Sync music player button state when pause menu is shown
             this.syncMusicPlayerState();
             
@@ -144,6 +150,96 @@ export class UIManager {
         // Portrait mode now supported
         this.elements.orientationOverlay.style.display = 'none';
         return false;
+    }
+    
+    updatePowerupsList() {
+        if (!this.elements.powerupsList || !window.game?.player) return;
+        
+        const player = window.game.player;
+        const powerups = Array.from(player.powerups.entries());
+        
+        if (powerups.length === 0) {
+            this.elements.noPowerups.style.display = 'block';
+            // Clear any existing powerup items
+            const existingItems = this.elements.powerupsList.querySelectorAll('.powerup-item');
+            existingItems.forEach(item => item.remove());
+            return;
+        }
+        
+        this.elements.noPowerups.style.display = 'none';
+        
+        // Clear existing items
+        const existingItems = this.elements.powerupsList.querySelectorAll('.powerup-item');
+        existingItems.forEach(item => item.remove());
+        
+        // Add each powerup
+        powerups.forEach(([type, powerupData]) => {
+            const item = document.createElement('div');
+            item.className = 'powerup-item';
+            item.style.cssText = `
+                display: flex;
+                align-items: center;
+                margin-bottom: 15px;
+                padding: 12px;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                font-family: 'Silkscreen', monospace;
+            `;
+            
+            const icon = document.createElement('div');
+            icon.style.cssText = `
+                font-size: 24px;
+                margin-right: 15px;
+                min-width: 30px;
+                text-align: center;
+            `;
+            icon.textContent = powerupData.config.icon || '⭐';
+            
+            const info = document.createElement('div');
+            info.style.cssText = `
+                flex: 1;
+                font-size: 12px;
+                line-height: 1.4;
+            `;
+            
+            const name = document.createElement('div');
+            name.style.cssText = `
+                color: #00ccff;
+                font-weight: bold;
+                margin-bottom: 4px;
+                font-size: 14px;
+            `;
+            name.textContent = powerupData.config.name || type;
+            
+            const details = document.createElement('div');
+            details.style.cssText = `
+                color: #cccccc;
+                font-size: 11px;
+            `;
+            
+            if (powerupData.isPermanent) {
+                if (powerupData.stacks > 1) {
+                    details.innerHTML = `Level ${powerupData.stacks}<br>🔒 Permanent`;
+                } else {
+                    details.innerHTML = '🔒 Permanent';
+                }
+            } else {
+                const timeLeft = Math.ceil(powerupData.timeRemaining / 1000);
+                if (powerupData.stacks > 1) {
+                    details.innerHTML = `Level ${powerupData.stacks}<br>⏰ ${timeLeft}s remaining`;
+                } else {
+                    details.innerHTML = `⏰ ${timeLeft}s remaining`;
+                }
+            }
+            
+            info.appendChild(name);
+            info.appendChild(details);
+            item.appendChild(icon);
+            item.appendChild(info);
+            
+            this.elements.powerupsList.appendChild(item);
+        });
     }
     
     setAudioManager(audioManager) {

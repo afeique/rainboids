@@ -61,6 +61,7 @@
         <div id="pause-menu">
             <div class="pause-tabs">
                 <button class="pause-tab active" data-tab="controls">CONTROLS</button>
+                <button class="pause-tab" data-tab="powerups">POWERUPS</button>
                 <button class="pause-tab" data-tab="music">MUSIC</button>
                 <button class="pause-tab" data-tab="sfx">SFX</button>
             </div>
@@ -74,6 +75,15 @@
                 <h2>MOBILE</h2>
                 <div><span class="control-symbol">LEFT JOYSTICK</span> Move</div>
                 <div><span class="control-symbol">TOUCHSCREEN</span> Aim & Fire</div>
+            </div>
+            
+            <div id="powerups-tab" class="pause-tab-content">
+                <h2>ACTIVE POWERUPS</h2>
+                <div id="powerups-list" style="max-height: 300px; overflow-y: auto; margin-top: 20px;">
+                    <div id="no-powerups" style="text-align: center; color: #888; font-style: italic;">
+                        No powerups collected yet
+                    </div>
+                </div>
             </div>
             
             <div id="music-tab" class="pause-tab-content">
