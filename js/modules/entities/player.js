@@ -15,10 +15,11 @@ export class Player {
         this.lastY = 0;
         this.rotation = 0;
         this.radius = 12;
-        this.health = 50;
-        this.maxHealth = 50;
+        this.health = 25;
+        this.maxHealth = 25;
         this.shieldTanks = 1; // Start with 1 shield tank
         this.shield = 0; // 0% damage reduction (start with no armor)
+        this.waveBonusShield = 0; // Additional shield from waves survived (1% per wave)
         this.invulnerable = false;
         this.lastHitTime = 0;
         this.lastBlinkTime = 0;
@@ -29,6 +30,12 @@ export class Player {
         // Auto-firing system
         this.autoFireTimer = 0;
         this.baseFireRate = 200; // Base auto-fire rate in ms
+        
+        // Audio throttling
+        this.lastThrusterSound = 0;
+        this.thrusterSoundInterval = 150; // Play thruster sound every 150ms instead of every frame
+        this.lastShootSound = 0;
+        this.shootSoundInterval = 400; // Much longer interval between shoot sounds (400ms)
         
         // Powerup system
         this.powerups = new Map(); // Map of powerup type -> {stacks, timeRemaining}
@@ -53,6 +60,9 @@ export class Player {
         
         // Reset auto-fire timer
         this.autoFireTimer = 0;
+        
+        // Reset wave bonus shield
+        this.waveBonusShield = 0;
         
         // Reset powerups
         this.powerups.clear();
@@ -128,7 +138,13 @@ export class Player {
                 const p_y = this.y + Math.sin(p_angle) * dist + Math.sin(p_angle + Math.PI / 2) * p_dist;
                 particlePool.get(p_x, p_y, 'thrust', rear);
             }
-            audioManager.playThruster();
+            
+            // Throttle thruster sound to reduce noise
+            const now = Date.now();
+            if (now - this.lastThrusterSound > this.thrusterSoundInterval) {
+                audioManager.playThruster();
+                this.lastThrusterSound = now;
+            }
         }
 
         // Reduced tractor beam visual for performance
@@ -353,7 +369,13 @@ export class Player {
     fireWeapons(bulletPool, audioManager) {
         // Fire bullets based on powerups (no cooldown needed since auto-fire handles timing)
         this.createBullets(bulletPool);
-        audioManager.playShoot();
+        
+        // Throttle shoot sound to prevent overwhelming other audio
+        const now = Date.now();
+        if (now - this.lastShootSound > this.shootSoundInterval) {
+            audioManager.playShoot();
+            this.lastShootSound = now;
+        }
     }
     
     createBullets(bulletPool) {
@@ -422,7 +444,15 @@ export class Player {
         const baseShield = this.shield;
         const shieldBoostStacks = this.getPowerupStacks('SHIELD_BOOST');
         const boostAmount = shieldBoostStacks * 15; // +15% damage reduction per stack
-        return Math.min(100, baseShield + boostAmount); // Cap at 100%
+        const totalShield = baseShield + boostAmount + this.waveBonusShield;
+        return Math.min(100, totalShield); // Cap at 100%
+    }
+    
+    // Method to add wave bonus shield
+    addWaveBonusShield(amount = 1) {
+        this.waveBonusShield += amount;
+        // Cap at reasonable maximum to prevent infinite scaling
+        this.waveBonusShield = Math.min(this.waveBonusShield, 50); // Max 50% from waves
     }
     
     die(particlePool, audioManager, uiManager, game, triggerScreenShake) {

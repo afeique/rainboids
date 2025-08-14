@@ -261,10 +261,11 @@ export class GameEngine {
         this.game.state = GAME_STATES.PLAYING;
         // Reset player
         this.player = new Player();
+        this.player.waveBonusShield = 0; // Ensure wave bonus starts at 0
         // Reset shields
-        this.playerShields = 50; // Start with 50 health
+        this.playerShields = 25; // Start with 25 health
         this.shieldTanks = 0; // Reset to zero tanks
-        this.displayShields = 50; // Match starting health
+        this.displayShields = 25; // Match starting health
         this.displayTanks = 0;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
@@ -296,7 +297,7 @@ export class GameEngine {
         
         // Initialize first wave with enhanced wave system
         this.game.currentWave = 1;
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500, 'top');
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 7000, 'top');
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         setTimeout(() => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
@@ -367,7 +368,7 @@ export class GameEngine {
         this.colorStarPool.cleanupInactive();
         this.backgroundStarPool.cleanupInactive();
         // Note: Wave increment now handled by enhanced wave system (completeWave method)
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave + 1}`, '', 1500, 'top');
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave + 1}`, '', 7000, 'top');
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         // Reset player state at wave start
         this.playerState = PLAYER_STATES.NORMAL;
@@ -441,15 +442,23 @@ export class GameEngine {
         
         const now = Date.now();
         
-        // Check if current wave is complete (all enemies AND asteroids eliminated)
-        if (this.waveInProgress && 
-            this.enemyPool.activeObjects.length === 0 && 
-            this.asteroidPool.activeObjects.length === 0 &&
-            this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE &&
-            this.enemiesRemainingInSubWave <= 0) {
+        // Check if current wave is complete - automatic progression after all sub-waves
+        if (this.waveInProgress) {
+            const activeEnemies = this.enemyPool.activeObjects.length;
+            const activeAsteroids = this.asteroidPool.activeObjects.length;
             
-            this.completeWave();
-            return;
+            // Natural completion: all enemies and asteroids eliminated and all sub-waves completed
+            const naturalCompletion = activeEnemies === 0 && activeAsteroids === 0 && 
+                                    this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE &&
+                                    this.enemiesRemainingInSubWave <= 0;
+            
+            // Forced completion: all sub-waves finished (automatically progress regardless of enemies)
+            const forcedCompletion = this.currentSubWave >= GAME_CONFIG.SUB_WAVES_PER_WAVE;
+            
+            if (naturalCompletion || forcedCompletion) {
+                this.completeWave();
+                return;
+            }
         }
         
         // Start new wave
@@ -479,15 +488,18 @@ export class GameEngine {
             case 'enemies':
                 // Handle enemy sub-wave spawning
                 if (this.currentSubWave < GAME_CONFIG.SUB_WAVES_PER_WAVE) {
-                    // Check if current sub-wave is complete OR timed out
+                    // Check if current sub-wave is complete OR timed out OR interval elapsed
                     const subWaveTimedOut = (now - this.subWaveStartTime) > GAME_CONFIG.SUB_WAVE_TIMEOUT;
                     const subWaveComplete = this.enemiesRemainingInSubWave <= 0;
+                    const intervalElapsed = now - this.subWaveTimer > GAME_CONFIG.SUB_WAVE_INTERVAL;
                     
-                    if ((subWaveComplete || subWaveTimedOut) && 
-                        now - this.subWaveTimer > GAME_CONFIG.SUB_WAVE_INTERVAL) {
+                    // Force progression if any condition is met (no waiting for both conditions)
+                    if (subWaveComplete || subWaveTimedOut || intervalElapsed) {
                         
                         if (subWaveTimedOut) {
-                            console.log(`⏰ Sub-wave ${this.currentSubWave + 1} timed out after 2 minutes`);
+                            console.log(`⏰ Sub-wave ${this.currentSubWave + 1} timed out after ${GAME_CONFIG.SUB_WAVE_TIMEOUT/1000} seconds`);
+                        } else if (intervalElapsed && !subWaveComplete) {
+                            console.log(`🚀 Sub-wave ${this.currentSubWave + 1} auto-progressed after ${GAME_CONFIG.SUB_WAVE_INTERVAL/1000} seconds`);
                         }
                         
                         this.currentSubWave++;
@@ -516,10 +528,18 @@ export class GameEngine {
     completeWave() {
         this.waveInProgress = false;
         this.game.currentWave++;
-        this.waveTimer = Date.now() + 3000; // 3 second break between waves
+        this.waveTimer = Date.now() + GAME_CONFIG.WAVE_BREAK_TIME; // Short break between waves
         this.wavePhase = 'waiting';
         
-        console.log(`✅ Wave ${this.game.currentWave} complete! Next wave in 3 seconds...`);
+        // Award wave survival bonus - 1% damage reduction per wave survived
+        this.player.addWaveBonusShield(1);
+        
+        // Show wave completion message with bonus
+        const currentShield = Math.round(this.player.getEffectiveShield());
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave - 1} COMPLETE!`, `+1% Damage Reduction (${currentShield}% Total)`, 7000, 'center');
+        
+        console.log(`✅ Wave ${this.game.currentWave} complete! +1% damage reduction bonus awarded.`);
+        console.log(`📊 Player now has ${this.player.waveBonusShield}% wave bonus shield (${currentShield}% total effective shield)`);
     }
     
     startNewWave() {
@@ -533,7 +553,7 @@ export class GameEngine {
         this.spawnWaveAsteroids();
         
         // Show wave notification
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 1500, 'top');
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 7000, 'top');
         
         console.log(`🚨 Wave ${this.game.currentWave} starting!`);
         console.log(`🪨 Spawning asteroids first...`);
@@ -1772,9 +1792,7 @@ export class GameEngine {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
             this.game.state = GAME_STATES.PAUSED;
             this.uiManager.togglePause();
-            if (this.player && this.player.isThrusting) {
-                this.audioManager.playThruster();
-            }
+            // Removed thruster sound on pause to reduce noise issues
         } else if (this.game.state === GAME_STATES.PAUSED) {
             this.game.state = GAME_STATES.PLAYING;
             this.uiManager.togglePause();
@@ -2144,7 +2162,9 @@ export class GameEngine {
         ctx.textBaseline = 'middle';
         
         const effectiveShield = Math.round(this.player.getEffectiveShield());
-        const shieldText = `${effectiveShield}`; // Show effective shield including powerups
+        const waveBonus = this.player.waveBonusShield;
+        // Show shield with wave bonus indicator if any
+        const shieldText = waveBonus > 0 ? `${effectiveShield} (+${waveBonus}%)` : `${effectiveShield}`;
         const shieldTextX = shieldIconX + iconSize + 8;
         const shieldTextY = shieldIconY + iconSize / 2;
         

@@ -8,6 +8,11 @@ export class AudioManager {
         this.sounds = {};
         this.audioCache = {};
         this.backgroundMusic = null;
+        
+        // Audio pool system for simultaneous playback
+        this.audioPool = new Map(); // Map of soundName -> Array of audio elements
+        this.poolSize = 3; // Number of simultaneous instances per sound
+        
         // Track which sounds are enabled
         this.soundEnabled = {
             shoot: true,
@@ -84,7 +89,8 @@ export class AudioManager {
                 sound_vol: 0.15, // Quiet and soothing
                 sample_rate: 44100,
                 sample_size: 8
-            }
+            },
+
         };
         
         // Customize specific sounds further
@@ -114,27 +120,56 @@ export class AudioManager {
         if (!this.audioReady || !this.audioCache[soundName] || !this.soundEnabled[soundName]) return;
         
         try {
-        const params = this.audioCache[soundName];
-            
-            let snd;
-            if (typeof params === 'object' && params.wave_type !== undefined) {
-                // This is a parameter object, use sfxr.toAudio
-        const soundParams = Object.assign({}, params);
-        // Apply the master volume to the sound_vol parameter
-        soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
-                snd = sfxr.toAudio(soundParams);
-            } else {
-                // This is a generated sound object, use it directly
-                snd = sfxr.toAudio(params);
+            // Get or create audio pool for this sound
+            if (!this.audioPool.has(soundName)) {
+                this.audioPool.set(soundName, []);
             }
             
+            const pool = this.audioPool.get(soundName);
+            let snd = null;
+            
+            // Find an available audio element in the pool
+            for (let audio of pool) {
+                if (audio.paused || audio.ended || audio.currentTime === 0) {
+                    snd = audio;
+                    break;
+                }
+            }
+            
+            // If no available audio element, create a new one (if pool not full)
+            if (!snd && pool.length < this.poolSize) {
+                const params = this.audioCache[soundName];
+                
+                if (typeof params === 'object' && params.wave_type !== undefined) {
+                    // This is a parameter object, use sfxr.toAudio
+                    const soundParams = Object.assign({}, params);
+                    // Apply the master volume to the sound_vol parameter
+                    soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
+                    snd = sfxr.toAudio(soundParams);
+                } else {
+                    // This is a generated sound object, use it directly
+                    snd = sfxr.toAudio(params);
+                }
+                
+                if (snd) {
+                    pool.push(snd);
+                }
+            }
+            
+            // If still no sound available, use the oldest one in the pool
+            if (!snd && pool.length > 0) {
+                snd = pool[0];
+                snd.currentTime = 0; // Reset to beginning
+            }
+            
+            // Play the sound
             if (snd && snd.play) {
                 try {
                     const playResult = snd.play();
                     // Check if play() returns a Promise (has .catch method)
                     if (playResult && typeof playResult.catch === 'function') {
                         playResult.catch(e => {
-                            console.warn(`Failed to play sound ${soundName}:`, e);
+                            // Ignore autoplay policy errors - they're expected
                         });
                     }
                 } catch (e) {

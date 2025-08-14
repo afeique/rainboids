@@ -20,17 +20,18 @@ export const GAME_CONFIG = {
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,
     
-    // Entity limits for simpler gameplay
-    MAX_ASTEROIDS: 5, // Maximum asteroids on field at once
-    MAX_ENEMIES: 3, // Maximum enemies on field at once
+    // Entity limits for aggressive gameplay
+    MAX_ASTEROIDS: 6, // Maximum asteroids on field at once
+    MAX_ENEMIES: 5, // Maximum enemies on field at once - increased for higher difficulty
     
-    // Wave system configuration - simplified for single enemy spawning
+    // Wave system configuration - aggressive timing for continuous action
     WAVE_ASTEROID_DELAY: 0, // Time before spawning asteroids (ms)
-    WAVE_ENEMY_DELAY: 15000, // Time before first enemy sub-wave (ms)
-    SUB_WAVE_INTERVAL: 15000, // Time between enemy sub-waves (ms)
-    ENEMIES_PER_SUB_WAVE: 1, // Single enemy per sub-wave for focused combat
-    SUB_WAVES_PER_WAVE: 3, // Number of enemy sub-waves per wave
-    SUB_WAVE_TIMEOUT: 120000, // Auto-progress sub-wave after 2 minutes (ms)
+    WAVE_ENEMY_DELAY: 2000, // Time before first enemy sub-wave (ms) - reduced from 15s
+    SUB_WAVE_INTERVAL: 3000, // Time between enemy sub-waves (ms) - reduced from 15s
+    ENEMIES_PER_SUB_WAVE: 2, // Enemies per sub-wave - increased from 1
+    SUB_WAVES_PER_WAVE: 4, // Number of enemy sub-waves per wave - increased from 3
+    SUB_WAVE_TIMEOUT: 20000, // Auto-progress sub-wave after 20 seconds (ms) - reduced from 2 minutes
+    WAVE_BREAK_TIME: 1000, // Time between waves (ms) - reduced from 3 seconds
     
     // Performance settings
     MAX_PARTICLES: 100, // Maximum active particles for performance

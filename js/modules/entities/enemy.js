@@ -116,6 +116,17 @@ export class Enemy {
         this.lastShot = 0;
         this.targetPlayer = null;
         
+        // Circulating shield indicator with music sync
+        this.shield = {
+            rotation: 0,
+            rotationSpeed: 0.04 + Math.random() * 0.02, // Rotation speed (0.04 - 0.06)
+            radius: this.radius + 18, // Shield distance from enemy center
+            basePulsePhase: Math.random() * Math.PI * 2, // Random starting pulse phase
+            segmentCount: 12 + Math.floor(Math.random() * 8), // 12-19 shield segments
+            musicSyncIntensity: 0.7 + Math.random() * 0.6, // How strongly it responds to music (0.7-1.3)
+            waveOffset: Math.random() * Math.PI * 2 // Phase offset for wave pattern
+        }
+        
         // Movement pattern state
         this.patrolAngle = random(0, Math.PI * 2);
         this.patrolDirection = Math.random() < 0.5 ? 1 : -1; // Random initial patrol direction
@@ -130,10 +141,16 @@ export class Enemy {
         this.evasiveTimer = 0;
         this.lastPlayerPosition = { x: 0, y: 0 };
         
-        // Circling pixel indicator (initialize here too for reset)
-        this.orbitPixelAngle = 0;
-        this.orbitPixelSpeed = 0.08 + Math.random() * 0.04; // Slight speed variation
-        this.orbitPixelRadius = this.radius + 15; // Distance from enemy center
+        // Circulating shield indicator with music sync
+        this.shield = {
+            rotation: 0,
+            rotationSpeed: 0.04 + Math.random() * 0.02, // Rotation speed (0.04 - 0.06)
+            radius: this.radius + 18, // Shield distance from enemy center
+            basePulsePhase: Math.random() * Math.PI * 2, // Random starting pulse phase
+            segmentCount: 12 + Math.floor(Math.random() * 8), // 12-19 shield segments
+            musicSyncIntensity: 0.7 + Math.random() * 0.6, // How strongly it responds to music (0.7-1.3)
+            waveOffset: Math.random() * Math.PI * 2 // Phase offset for wave pattern
+        }
     }
     
 
@@ -164,8 +181,37 @@ export class Enemy {
         // Update rotation with agility-based speed
         this.rotation += this.rotationSpeed;
         
-        // Update circling pixel indicator
-        this.orbitPixelAngle += this.orbitPixelSpeed;
+        // Update circulating shield with music sync
+        this.shield.rotation += this.shield.rotationSpeed;
+        
+        // Calculate music-synchronized pulse using different tempo assumptions
+        const musicPlayer = gameEngine.uiManager?.musicPlayer;
+        let musicTime = 0;
+        let musicIntensity = 0.5; // Default fallback
+        
+        if (musicPlayer && musicPlayer.isPlaying && musicPlayer.currentAudio) {
+            musicTime = musicPlayer.getCurrentTime();
+            // Assume average BPM of ~120-140 for electronic music, create beat frequency
+            const assumedBPM = 130; // beats per minute
+            const beatFrequency = assumedBPM / 60; // beats per second
+            const beatPhase = (musicTime * beatFrequency * Math.PI * 2) + this.shield.basePulsePhase;
+            
+            // Create layered sine waves for complex pulsing
+            const primaryBeat = Math.sin(beatPhase);
+            const harmonicBeat = Math.sin(beatPhase * 2) * 0.3; // Higher frequency harmonic
+            const subBeat = Math.sin(beatPhase * 0.5) * 0.2; // Lower frequency sub-beat
+            
+            musicIntensity = 0.5 + (primaryBeat + harmonicBeat + subBeat) * 0.5 * this.shield.musicSyncIntensity;
+            musicIntensity = Math.max(0.1, Math.min(1.0, musicIntensity)); // Clamp to reasonable range
+        } else {
+            // Fallback to time-based pulsing when no music
+            const time = Date.now() * 0.001;
+            const fallbackPhase = (time * 2.2 * Math.PI) + this.shield.basePulsePhase; // ~132 BPM equivalent
+            musicIntensity = 0.5 + Math.sin(fallbackPhase) * 0.3;
+        }
+        
+        // Store music intensity for use in drawing
+        this.shield.currentIntensity = musicIntensity;
         
         // Add random micro-movements for agility
         this.addMicroMovements();
@@ -738,6 +784,8 @@ export class Enemy {
                 color,
                 explosive
             );
+            
+            // Enemy shooting sounds removed to reduce audio confusion
         }
     }
     
@@ -760,8 +808,8 @@ export class Enemy {
         
         ctx.restore();
         
-        // Draw circling pixel indicator (outside of transform)
-        this.drawCirclingPixel(ctx);
+        // Draw circulating shield indicator (outside of transform)
+        this.drawCirculatingShield(ctx);
         
         // Draw health bar (outside of transform)
         this.drawHealthBar(ctx);
@@ -897,40 +945,114 @@ export class Enemy {
         ctx.stroke();
     }
     
-    drawCirclingPixel(ctx) {
+    drawCirculatingShield(ctx) {
         ctx.save();
         
-        // Calculate pixel position
-        const pixelX = this.x + Math.cos(this.orbitPixelAngle) * this.orbitPixelRadius;
-        const pixelY = this.y + Math.sin(this.orbitPixelAngle) * this.orbitPixelRadius;
+        // Use music-synchronized intensity
+        const pulseIntensity = this.shield.currentIntensity || 0.5;
         
-        // Draw a bright pixel with glow effect in the enemy's color
-        const pixelSize = 3;
-        const glowSize = 8;
+        // Create sine wave pattern around the shield perimeter
+        const time = Date.now() * 0.001;
+        const waveFrequency = 8; // Number of waves around the circumference
+        const waveAmplitude = 4; // How much the radius varies
         
-        // Outer glow
-        const outerGlow = ctx.createRadialGradient(pixelX, pixelY, 0, pixelX, pixelY, glowSize);
-        outerGlow.addColorStop(0, this.color + 'AA');
-        outerGlow.addColorStop(0.5, this.color + '66');
+        // Base radius with music-driven pulsing
+        const baseRadius = this.shield.radius + (pulseIntensity - 0.5) * 6;
+        
+        // Draw shield ring with sine wave pattern
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.shield.rotation);
+        
+        // Draw outer glow with variable radius
+        const maxGlowRadius = baseRadius + waveAmplitude + 8;
+        const outerGlow = ctx.createRadialGradient(0, 0, baseRadius - 8, 0, 0, maxGlowRadius);
+        outerGlow.addColorStop(0, this.color + '00');
+        outerGlow.addColorStop(0.3, this.color + Math.floor(pulseIntensity * 0.6 * 255).toString(16).padStart(2, '0'));
+        outerGlow.addColorStop(0.7, this.color + Math.floor(pulseIntensity * 0.4 * 255).toString(16).padStart(2, '0'));
         outerGlow.addColorStop(1, this.color + '00');
         
         ctx.fillStyle = outerGlow;
         ctx.beginPath();
-        ctx.arc(pixelX, pixelY, glowSize, 0, Math.PI * 2);
+        ctx.arc(0, 0, maxGlowRadius, 0, Math.PI * 2);
         ctx.fill();
         
-        // Inner bright pixel
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(pixelX, pixelY, pixelSize, 0, Math.PI * 2);
-        ctx.fill();
+        // Draw main shield as a continuous sine wave path
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = pulseIntensity;
         
-        // Bright white center
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.8;
         ctx.beginPath();
-        ctx.arc(pixelX, pixelY, pixelSize * 0.5, 0, Math.PI * 2);
-        ctx.fill();
+        const angleStep = 0.1; // Higher resolution for smooth sine wave
+        for (let angle = 0; angle <= Math.PI * 2; angle += angleStep) {
+            // Calculate sine wave modulation
+            const wavePhase = angle * waveFrequency + this.shield.waveOffset + time * 2;
+            const radiusVariation = Math.sin(wavePhase) * waveAmplitude * pulseIntensity;
+            const currentRadius = baseRadius + radiusVariation;
+            
+            const x = Math.cos(angle) * currentRadius;
+            const y = Math.sin(angle) * currentRadius;
+            
+            if (angle === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Draw secondary inner wave with different frequency
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = pulseIntensity * 0.6;
+        ctx.strokeStyle = '#ffffff';
+        
+        ctx.beginPath();
+        for (let angle = 0; angle <= Math.PI * 2; angle += angleStep) {
+            const wavePhase = angle * (waveFrequency * 1.5) + this.shield.waveOffset + time * 3;
+            const radiusVariation = Math.sin(wavePhase) * (waveAmplitude * 0.5) * pulseIntensity;
+            const currentRadius = baseRadius - 4 + radiusVariation;
+            
+            const x = Math.cos(angle) * currentRadius;
+            const y = Math.sin(angle) * currentRadius;
+            
+            if (angle === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Draw energy particles following the sine wave pattern
+        const particleCount = 8;
+        for (let i = 0; i < particleCount; i++) {
+            const particleAngle = (this.shield.rotation * 3 + (i / particleCount) * Math.PI * 2) % (Math.PI * 2);
+            
+            // Calculate particle position on the sine wave
+            const wavePhase = particleAngle * waveFrequency + this.shield.waveOffset + time * 2;
+            const radiusVariation = Math.sin(wavePhase) * waveAmplitude * pulseIntensity;
+            const particleRadius = baseRadius + radiusVariation;
+            
+            const particleX = Math.cos(particleAngle) * particleRadius;
+            const particleY = Math.sin(particleAngle) * particleRadius;
+            
+            // Particle intensity varies with wave position
+            const particleIntensity = pulseIntensity * (0.6 + 0.4 * Math.sin(wavePhase));
+            
+            ctx.globalAlpha = particleIntensity;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(particleX, particleY, 2 + Math.sin(wavePhase) * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Bright center
+            ctx.globalAlpha = particleIntensity * 0.8;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(particleX, particleY, 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
         
         ctx.restore();
     }
