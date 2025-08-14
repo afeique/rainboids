@@ -23,9 +23,15 @@ export class Player {
         this.lastHitTime = 0;
         this.lastBlinkTime = 0;
         
+        // WASD + Mouse controls
+        this.thrustPower = 0.3; // Precise thrust power
+        
+        // Auto-firing system
+        this.autoFireTimer = 0;
+        this.baseFireRate = 200; // Base auto-fire rate in ms
+        
         // Powerup system
         this.powerups = new Map(); // Map of powerup type -> {stacks, timeRemaining}
-        this.baseCooldown = 120; // Base shooting cooldown
         
         this.initializePlayer();
     }
@@ -44,6 +50,9 @@ export class Player {
         this.thrustersDisabled = false;
         this.invincible = false;
         this.invincibilityTimer = 0;
+        
+        // Reset auto-fire timer
+        this.autoFireTimer = 0;
         
         // Reset powerups
         this.powerups.clear();
@@ -85,7 +94,7 @@ export class Player {
         // Update powerups
         this.updatePowerups();
 
-        // Aiming
+        // Mouse aiming
         const dx = input.aimX - this.x;
         const dy = input.aimY - this.y;
         this.angle = Math.atan2(dy, dx);
@@ -94,9 +103,9 @@ export class Player {
         
 
 
+        // WASD movement with tight controls
         if (this.isMoving && !this.thrustersDisabled) {
-            let moveX = 0;
-            let moveY = 0;
+            let moveX = 0, moveY = 0;
             if (input.left) moveX -= 1;
             if (input.right) moveX += 1;
             if (input.up) moveY -= 1;
@@ -104,8 +113,9 @@ export class Player {
 
             const moveAngle = Math.atan2(moveY, moveX);
             const speedMultiplier = this.getMovementSpeedMultiplier();
-            this.vel.x += Math.cos(moveAngle) * GAME_CONFIG.SHIP_THRUST * speedMultiplier;
-            this.vel.y += Math.sin(moveAngle) * GAME_CONFIG.SHIP_THRUST * speedMultiplier;
+            const thrustForce = this.thrustPower * speedMultiplier;
+            this.vel.x += Math.cos(moveAngle) * thrustForce;
+            this.vel.y += Math.sin(moveAngle) * thrustForce;
 
             const rear = moveAngle + Math.PI;
             const dist = this.radius * 1.2;
@@ -147,9 +157,9 @@ export class Player {
             }
         }
 
-        // Natural friction
-        this.vel.x *= GAME_CONFIG.SHIP_FRICTION;
-        this.vel.y *= GAME_CONFIG.SHIP_FRICTION;
+        // Minimal friction for tight control (no slipperiness)
+        this.vel.x *= 0.98; // Very little friction for precise control
+        this.vel.y *= 0.98;
 
         // Limit velocity
         const mag = Math.hypot(this.vel.x, this.vel.y);
@@ -162,9 +172,15 @@ export class Player {
         this.y += this.vel.y;
         wrap(this, this.width, this.height);
 
-        // Handle shooting with powerup-enhanced capabilities
-        if (input.fire && this.canShoot) {
+        // Auto-firing system - continuously fire at set intervals
+        this.autoFireTimer += 16; // Assume 60fps (16ms per frame)
+        const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
+        const fireRateMultiplier = Math.pow(0.75, rapidFireStacks); // 25% faster per stack
+        const effectiveFireRate = this.baseFireRate * fireRateMultiplier;
+        
+        if (this.autoFireTimer >= effectiveFireRate) {
             this.fireWeapons(bulletPool, audioManager);
+            this.autoFireTimer = 0;
         }
         
 
@@ -335,17 +351,9 @@ export class Player {
     }
     
     fireWeapons(bulletPool, audioManager) {
-        // Calculate effective shooting cooldown with powerups
-        const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
-        const cooldownMultiplier = Math.pow(0.75, rapidFireStacks); // 25% faster per stack
-        const effectiveCooldown = this.baseCooldown * cooldownMultiplier;
-        
-        // Fire bullets based on powerups
+        // Fire bullets based on powerups (no cooldown needed since auto-fire handles timing)
         this.createBullets(bulletPool);
         audioManager.playShoot();
-        
-        this.canShoot = false;
-        setTimeout(() => this.canShoot = true, effectiveCooldown);
     }
     
     createBullets(bulletPool) {
@@ -389,7 +397,7 @@ export class Player {
                 // Apply powerup effects to bullet
                 if (homingStacks > 0) {
                     bullet.homing = true;
-                    bullet.homingStrength = Math.min(0.05, homingStacks * 0.01);
+                    bullet.homingStrength = Math.min(0.25, homingStacks * 0.05); // Improved homing strength
                 }
                 if (bigBulletStacks > 0) {
                     bullet.radius *= (1 + bigBulletStacks * 0.3); // 30% bigger per stack

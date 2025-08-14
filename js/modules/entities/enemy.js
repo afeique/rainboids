@@ -103,11 +103,11 @@ export class Enemy {
         
         // Enhanced rotation for visual effect and agility (toned down)
         this.rotation = random(0, Math.PI * 2);
-        // Faster rotation for WASP, moderate for others (reduced for calmer feel)
+        // Much slower rotation for easier targeting
         if (this.type === 'WASP') {
-            this.rotationSpeed = random(-0.05, 0.05); // Reduced from 0.08
+            this.rotationSpeed = random(-0.02, 0.02); // Much reduced
         } else {
-            this.rotationSpeed = random(-0.025, 0.025); // Reduced from 0.04
+            this.rotationSpeed = random(-0.01, 0.01); // Much reduced
         }
         
         // Behavior state
@@ -129,6 +129,11 @@ export class Enemy {
         this.evasiveDirection = { x: 0, y: 0 };
         this.evasiveTimer = 0;
         this.lastPlayerPosition = { x: 0, y: 0 };
+        
+        // Circling pixel indicator (initialize here too for reset)
+        this.orbitPixelAngle = 0;
+        this.orbitPixelSpeed = 0.08 + Math.random() * 0.04; // Slight speed variation
+        this.orbitPixelRadius = this.radius + 15; // Distance from enemy center
     }
     
 
@@ -158,6 +163,9 @@ export class Enemy {
         
         // Update rotation with agility-based speed
         this.rotation += this.rotationSpeed;
+        
+        // Update circling pixel indicator
+        this.orbitPixelAngle += this.orbitPixelSpeed;
         
         // Add random micro-movements for agility
         this.addMicroMovements();
@@ -228,23 +236,23 @@ export class Enemy {
         const distance = Math.hypot(dx, dy);
         
         if (distance > 0) {
-            // Enhanced acceleration with agility (toned down)
-            const acceleration = 0.025; // Reduced from 0.035 - more reasonable chase
+            // Minimal acceleration for predictable movement
+            const acceleration = 0.012; // Much reduced for easier targeting
             let targetVelX = (dx / distance) * acceleration;
             let targetVelY = (dy / distance) * acceleration;
             
-            // Add weaving movement for agility (reduced)
+            // Minimal weaving for easier targeting
             const weaveAngle = Math.atan2(dy, dx) + Math.PI / 2;
-            const weaveStrength = Math.sin(Date.now() * 0.005 + this.x * 0.01) * 0.3; // Reduced strength and frequency
+            const weaveStrength = Math.sin(Date.now() * 0.002 + this.x * 0.01) * 0.1; // Much reduced
             targetVelX += Math.cos(weaveAngle) * weaveStrength * acceleration;
             targetVelY += Math.sin(weaveAngle) * weaveStrength * acceleration;
             
             this.vel.x += targetVelX;
             this.vel.y += targetVelY;
             
-            // Cap speed with higher maximum for agility (reduced)
+            // Lower speed cap for predictable movement
             const speed = Math.hypot(this.vel.x, this.vel.y);
-            const maxSpeed = this.config.speed * 1.15; // Reduced from 1.3 - less crazy speed
+            const maxSpeed = this.config.speed * 1.08; // Much reduced
             if (speed > maxSpeed) {
                 this.vel.x = (this.vel.x / speed) * maxSpeed;
                 this.vel.y = (this.vel.y / speed) * maxSpeed;
@@ -330,19 +338,19 @@ export class Enemy {
             this.vel.y += (dy / distance) * 0.035;
         }
         
-        // Enhanced erratic movement for WASP agility (further toned down)
-        const erraticStrength = this.type === 'WASP' ? 0.12 : 0.08;
+        // Minimal erratic movement for easier targeting
+        const erraticStrength = this.type === 'WASP' ? 0.05 : 0.03; // Much reduced
         this.vel.x += random(-erraticStrength, erraticStrength);
         this.vel.y += random(-erraticStrength, erraticStrength);
         
-        // Add sine wave movement for unpredictability (further reduced)
-        const time = Date.now() * 0.005; // Even slower oscillation
-        this.vel.x += Math.sin(time + this.x * 0.02) * 0.08; // Further reduced
-        this.vel.y += Math.cos(time + this.y * 0.02) * 0.08;
+        // Subtle sine wave movement
+        const time = Date.now() * 0.002; // Much slower oscillation
+        this.vel.x += Math.sin(time + this.x * 0.02) * 0.03; // Much reduced
+        this.vel.y += Math.cos(time + this.y * 0.02) * 0.03;
         
-        // Cap speed with higher maximum for swarm agility (further reduced)
+        // Lower speed cap for predictable movement
         const speed = Math.hypot(this.vel.x, this.vel.y);
-        const maxSpeed = this.config.speed * 1.1; // Further reduced from 1.2
+        const maxSpeed = this.config.speed * 1.02; // Much reduced
         if (speed > maxSpeed) {
             this.vel.x = (this.vel.x / speed) * maxSpeed;
             this.vel.y = (this.vel.y / speed) * maxSpeed;
@@ -515,8 +523,8 @@ export class Enemy {
             const distance = Math.hypot(dx, dy);
             
             // Enhanced dodge radius based on enemy type (reduced for WASPs)
-            const baseDodgeRadius = this.type === 'WASP' ? 50 : 45;
-            const dodgeRadius = baseDodgeRadius * (this.config.speed / 2); // Faster enemies detect farther
+                    const baseDodgeRadius = this.type === 'WASP' ? 30 : 25; // Reduced dodge detection
+        const dodgeRadius = baseDodgeRadius * (this.config.speed / 3); // Much smaller dodge range
             const lookaheadTime = 25; // Predict bullet path
             
             // Predicted bullet position
@@ -538,7 +546,7 @@ export class Enemy {
             const crossProduct = dx * bullet.vel.y - dy * bullet.vel.x;
             const dodgeDirection = crossProduct > 0 ? 1 : -1;
             
-            const dodgeStrength = dodgeForce * dodgeDirection * 1.8; // Reduced dodge strength
+            const dodgeStrength = dodgeForce * dodgeDirection * 0.8; // Much weaker dodge response
                 totalDodgeX += Math.cos(perpAngle) * dodgeStrength;
                 totalDodgeY += Math.sin(perpAngle) * dodgeStrength;
             }
@@ -559,7 +567,7 @@ export class Enemy {
     
     addMicroMovements() {
         // Small random movements to make enemies harder to hit (toned down)
-        const microStrength = this.type === 'WASP' ? 0.08 : 0.04; // Halved the strength
+        const microStrength = this.type === 'WASP' ? 0.02 : 0.01; // Minimal micro-movements
         
         // Add random micro-adjustments every few frames (less frequent)
         if (Math.random() < 0.15) { // Reduced from 0.3 to 0.15
@@ -752,6 +760,9 @@ export class Enemy {
         
         ctx.restore();
         
+        // Draw circling pixel indicator (outside of transform)
+        this.drawCirclingPixel(ctx);
+        
         // Draw health bar (outside of transform)
         this.drawHealthBar(ctx);
     }
@@ -884,6 +895,44 @@ export class Enemy {
             ctx.lineTo(outerX, outerY);
         }
         ctx.stroke();
+    }
+    
+    drawCirclingPixel(ctx) {
+        ctx.save();
+        
+        // Calculate pixel position
+        const pixelX = this.x + Math.cos(this.orbitPixelAngle) * this.orbitPixelRadius;
+        const pixelY = this.y + Math.sin(this.orbitPixelAngle) * this.orbitPixelRadius;
+        
+        // Draw a bright pixel with glow effect in the enemy's color
+        const pixelSize = 3;
+        const glowSize = 8;
+        
+        // Outer glow
+        const outerGlow = ctx.createRadialGradient(pixelX, pixelY, 0, pixelX, pixelY, glowSize);
+        outerGlow.addColorStop(0, this.color + 'AA');
+        outerGlow.addColorStop(0.5, this.color + '66');
+        outerGlow.addColorStop(1, this.color + '00');
+        
+        ctx.fillStyle = outerGlow;
+        ctx.beginPath();
+        ctx.arc(pixelX, pixelY, glowSize, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Inner bright pixel
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(pixelX, pixelY, pixelSize, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Bright white center
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(pixelX, pixelY, pixelSize * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
     }
     
     drawHealthBar(ctx) {

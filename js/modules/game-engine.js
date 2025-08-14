@@ -52,6 +52,7 @@ export class GameEngine {
         // Sub-wave tracking
         this.currentSubWave = 0;
         this.subWaveTimer = 0;
+        this.subWaveStartTime = 0; // Track sub-wave start time for timeout
         this.enemiesRemainingInSubWave = 0;
         
         // Wave phase tracking
@@ -103,13 +104,26 @@ export class GameEngine {
         console.log('  🎯 Toned down dodge mechanics, erratic movement, and acceleration');
         console.log('  💨 Reduced weaving, sine waves, and speed multipliers');
         console.log('  🎮 Much more manageable and less frantic gameplay');
+        console.log('🚀 Enhanced WASD + Mouse Controls:');
+        console.log('  ⬆️ WASD = Move in 8 directions with tight control');
+        console.log('  🖱️ Mouse = Aim direction (ship faces mouse cursor)');
+        console.log('  🔫 Auto-fire = Ship continuously fires (no fire button!)');
+        console.log('  📱 Mobile = Joystick: WASD movement, touch for aiming');
+        console.log('');
+        console.log('🎮 Simplified Gameplay:');
+        console.log('  🪨 Max 5 asteroids on field at once');
+        console.log('  👾 Max 3 enemies on field at once');
+        console.log('  🎯 Single enemy per sub-wave for focused combat');
+        console.log('  ⏰ Sub-waves auto-progress after 2 minutes');
+        console.log('  🎨 Much less agile enemies - easier to hit!');
+        console.log('');
         console.log('🎁 Enhanced Powerup System:');
         console.log('  ✨ Spectacular gradient visual effects and distinctive shapes');
         console.log('  🎯 Unique icons: ⚡💨🎯●💥🛡 etc. for each powerup type');
         console.log('  🔊 Magical treasure pickup sound with pitch variations');
         console.log('  📊 Console shows powerup drop rolls and spawns');
         console.log('  🎮 Beautiful gradient UI indicators at bottom of screen');
-        console.log('  ⏱️ Timer bars show remaining duration (3 minutes each!)');
+        console.log('  ⏱️ Timer bars show remaining duration (1 minute each)');
         console.log('  📺 Powerup names display at top in Silkscreen font with smooth fade');
         console.log('  🎨 Bullets change shape/color based on active powerups');
         console.log('  🧪 Press "P" key to test spawn a powerup near player');
@@ -261,6 +275,7 @@ export class GameEngine {
         this.waveInProgress = false;
         this.currentSubWave = 0;
         this.subWaveTimer = 0;
+        this.subWaveStartTime = 0;
         this.enemiesRemainingInSubWave = 0;
         this.wavePhase = 'waiting';
         this.wavePhaseTimer = 0;
@@ -464,21 +479,34 @@ export class GameEngine {
             case 'enemies':
                 // Handle enemy sub-wave spawning
                 if (this.currentSubWave < GAME_CONFIG.SUB_WAVES_PER_WAVE) {
-                    // Check if current sub-wave is complete
-                    if (this.enemiesRemainingInSubWave <= 0 && 
+                    // Check if current sub-wave is complete OR timed out
+                    const subWaveTimedOut = (now - this.subWaveStartTime) > GAME_CONFIG.SUB_WAVE_TIMEOUT;
+                    const subWaveComplete = this.enemiesRemainingInSubWave <= 0;
+                    
+                    if ((subWaveComplete || subWaveTimedOut) && 
                         now - this.subWaveTimer > GAME_CONFIG.SUB_WAVE_INTERVAL) {
+                        
+                        if (subWaveTimedOut) {
+                            console.log(`⏰ Sub-wave ${this.currentSubWave + 1} timed out after 2 minutes`);
+                        }
+                        
                         this.currentSubWave++;
                         if (this.currentSubWave < GAME_CONFIG.SUB_WAVES_PER_WAVE) {
                             this.startEnemySubWave();
                         }
                     }
                     
-                    // Spawn enemies in current sub-wave
+                    // Spawn enemies in current sub-wave (respect MAX_ENEMIES limit)
+                    const currentEnemies = this.enemyPool.activeObjects.length;
+                    const canSpawnMore = currentEnemies < GAME_CONFIG.MAX_ENEMIES;
+                    
                     if (this.enemiesRemainingInSubWave > 0 && 
-                        now - this.lastEnemySpawn > 800) { // Faster spawning within sub-waves
+                        canSpawnMore &&
+                        now - this.lastEnemySpawn > 1000) { // Spawn one enemy at a time
                         this.spawnRandomEnemy();
                         this.enemiesRemainingInSubWave--;
                         this.lastEnemySpawn = now;
+                        console.log(`👾 Spawned enemy (${currentEnemies + 1}/${GAME_CONFIG.MAX_ENEMIES} active)`);
                     }
                 }
                 break;
@@ -513,9 +541,17 @@ export class GameEngine {
     }
     
     spawnWaveAsteroids() {
-        const numAsteroids = GAME_CONFIG.INITIAL_AST_COUNT + Math.floor(this.game.currentWave / 2);
+        // Respect MAX_ASTEROIDS limit for simpler gameplay
+        const desiredAsteroids = Math.min(
+            GAME_CONFIG.INITIAL_AST_COUNT + Math.floor(this.game.currentWave / 2),
+            GAME_CONFIG.MAX_ASTEROIDS
+        );
         
-        for (let i = 0; i < numAsteroids; i++) {
+        // Only spawn if we're under the limit
+        const currentAsteroids = this.asteroidPool.activeObjects.length;
+        const asteroidsToSpawn = Math.max(0, desiredAsteroids - currentAsteroids);
+        
+        for (let i = 0; i < asteroidsToSpawn; i++) {
             setTimeout(() => {
                 const asteroid = this.asteroidPool.get();
                 if (asteroid) {
@@ -523,11 +559,14 @@ export class GameEngine {
                 }
             }, i * 200); // Stagger asteroid spawning
         }
+        
+        console.log(`🪨 Spawning ${asteroidsToSpawn} asteroids (${currentAsteroids} already active, max: ${GAME_CONFIG.MAX_ASTEROIDS})`);
     }
     
     startEnemySubWave() {
-        this.enemiesRemainingInSubWave = GAME_CONFIG.ENEMIES_PER_SUB_WAVE + 
-                                        Math.floor(this.game.currentWave / 3); // Scale with wave
+        // Single enemy per sub-wave for focused combat
+        this.enemiesRemainingInSubWave = GAME_CONFIG.ENEMIES_PER_SUB_WAVE;
+        this.subWaveStartTime = Date.now(); // Track when sub-wave started for timeout
         this.subWaveTimer = Date.now();
         this.lastEnemySpawn = 0; // Spawn first enemy immediately
         

@@ -12,20 +12,25 @@ export const GAME_CONFIG = {
     ACTIVE_STAR_ATTR: 0.01,
     ACTIVE_STAR_ATTRACT_DIST: 100,
     STAR_FRIC: 0.99,
-    BURST_STAR_MONEY: 20,
-    BURST_STAR_HEAL_AMOUNT: 5, // Health restored per burst star
+    BURST_STAR_MONEY: 50,
+    BURST_STAR_HEAL_AMOUNT: 2, // Health restored per burst star
     BURST_STAR_DROP_COUNT: 5, // Number of burst stars dropped per enemy death
     BURST_STAR_COLLECTION_RADIUS: 15, // Extra pixels added to burst star collection radius
     ENEMY_BULLET_ASTEROID_DAMAGE: 1, // Damage enemy bullets deal to asteroids
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,
     
-    // Wave system configuration
+    // Entity limits for simpler gameplay
+    MAX_ASTEROIDS: 5, // Maximum asteroids on field at once
+    MAX_ENEMIES: 3, // Maximum enemies on field at once
+    
+    // Wave system configuration - simplified for single enemy spawning
     WAVE_ASTEROID_DELAY: 0, // Time before spawning asteroids (ms)
     WAVE_ENEMY_DELAY: 15000, // Time before first enemy sub-wave (ms)
     SUB_WAVE_INTERVAL: 15000, // Time between enemy sub-waves (ms)
-    ENEMIES_PER_SUB_WAVE: 2, // Number of enemies per sub-wave
+    ENEMIES_PER_SUB_WAVE: 1, // Single enemy per sub-wave for focused combat
     SUB_WAVES_PER_WAVE: 3, // Number of enemy sub-waves per wave
+    SUB_WAVE_TIMEOUT: 120000, // Auto-progress sub-wave after 2 minutes (ms)
     
     // Performance settings
     MAX_PARTICLES: 100, // Maximum active particles for performance

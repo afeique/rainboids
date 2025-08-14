@@ -67,10 +67,12 @@ export class Bullet {
     }
     
     applyHoming(enemyPool) {
-        let closestEnemy = null;
-        let closestDistance = Infinity;
+        if (!this.homing || !enemyPool) return;
         
-        // Find closest enemy
+        let bestTarget = null;
+        let bestScore = 0;
+        
+        // Enhanced target selection with predictive scoring
         for (const enemy of enemyPool.activeObjects) {
             if (!enemy.active) continue;
             
@@ -78,27 +80,72 @@ export class Bullet {
             const dy = enemy.y - this.y;
             const distance = Math.hypot(dx, dy);
             
-            if (distance < closestDistance && distance < 200) { // 200 pixel homing range
-                closestDistance = distance;
-                closestEnemy = enemy;
+            if (distance < 400) { // Increased homing range
+                // Score based on distance and angle to current velocity
+                const currentAngle = Math.atan2(this.vel.y, this.vel.x);
+                const targetAngle = Math.atan2(dy, dx);
+                let angleDiff = Math.abs(currentAngle - targetAngle);
+                if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+                
+                // Prefer closer targets and targets more aligned with current trajectory
+                const distanceScore = (400 - distance) / 400; // 0-1, higher is closer
+                const angleScore = (Math.PI - angleDiff) / Math.PI; // 0-1, higher is more aligned
+                const totalScore = distanceScore * 0.7 + angleScore * 0.3;
+                
+                if (totalScore > bestScore) {
+                    bestScore = totalScore;
+                    bestTarget = enemy;
+                }
             }
         }
         
-        // Apply homing force toward closest enemy
-        if (closestEnemy) {
-            const dx = closestEnemy.x - this.x;
-            const dy = closestEnemy.y - this.y;
+        // Enhanced homing with predictive targeting
+        if (bestTarget) {
+            // Predict enemy position based on velocity
+            const leadTime = 8; // Frames to predict ahead
+            const predictedX = bestTarget.x + (bestTarget.vel ? bestTarget.vel.x * leadTime : 0);
+            const predictedY = bestTarget.y + (bestTarget.vel ? bestTarget.vel.y * leadTime : 0);
+            
+            const dx = predictedX - this.x;
+            const dy = predictedY - this.y;
             const distance = Math.hypot(dx, dy);
             
             if (distance > 0) {
-                this.vel.x += (dx / distance) * this.homingStrength;
-                this.vel.y += (dy / distance) * this.homingStrength;
+                // Calculate desired velocity direction
+                const desiredVelX = (dx / distance) * GAME_CONFIG.BULLET_SPEED;
+                const desiredVelY = (dy / distance) * GAME_CONFIG.BULLET_SPEED;
                 
-                // Maintain bullet speed
+                // Apply turn rate limiting for smooth homing
+                const maxTurnRate = 0.15; // Maximum radians per frame
+                const currentAngle = Math.atan2(this.vel.y, this.vel.x);
+                const desiredAngle = Math.atan2(desiredVelY, desiredVelX);
+                
+                let angleDiff = desiredAngle - currentAngle;
+                if (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+                
+                // Limit turn rate
+                const actualTurn = Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), maxTurnRate);
+                const newAngle = currentAngle + actualTurn;
+                
+                // Distance-based homing strength (stronger when closer)
+                const homingStrength = this.homingStrength * (1 + (200 - Math.min(distance, 200)) / 200);
+                
+                // Apply the turning with enhanced strength
+                const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+                const targetVelX = Math.cos(newAngle) * currentSpeed;
+                const targetVelY = Math.sin(newAngle) * currentSpeed;
+                
+                // Gradually adjust velocity toward target direction
+                this.vel.x = this.vel.x * (1 - homingStrength) + targetVelX * homingStrength;
+                this.vel.y = this.vel.y * (1 - homingStrength) + targetVelY * homingStrength;
+                
+                // Maintain consistent speed with slight boost when homing
                 const speed = Math.hypot(this.vel.x, this.vel.y);
-                if (speed > GAME_CONFIG.BULLET_SPEED * 1.2) {
-                    this.vel.x = (this.vel.x / speed) * GAME_CONFIG.BULLET_SPEED * 1.2;
-                    this.vel.y = (this.vel.y / speed) * GAME_CONFIG.BULLET_SPEED * 1.2;
+                const targetSpeed = GAME_CONFIG.BULLET_SPEED * 1.1; // Slight speed boost for homing
+                if (speed > 0) {
+                    this.vel.x = (this.vel.x / speed) * targetSpeed;
+                    this.vel.y = (this.vel.y / speed) * targetSpeed;
                 }
             }
         }

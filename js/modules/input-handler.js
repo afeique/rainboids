@@ -8,7 +8,7 @@ export class InputHandler {
             down: false,
             left: false,
             right: false,
-            fire: false,
+            fire: false, // Keep for potential future use
             aimX: 0,
             aimY: 0,
         };
@@ -25,6 +25,7 @@ export class InputHandler {
         document.addEventListener('keyup', this.handleKeyUp.bind(this));
     }
 
+    
     setupMouseControls() {
         document.addEventListener('mousemove', e => {
             this.input.aimX = e.clientX;
@@ -171,6 +172,7 @@ export class InputHandler {
             const normalizedX = dx / this.joystickMaxDist;
             const normalizedY = dy / this.joystickMaxDist;
             
+            // WASD-style mobile controls
             this.input.up = normalizedY < -0.2;
             this.input.down = normalizedY > 0.2;
             this.input.left = normalizedX < -0.2;

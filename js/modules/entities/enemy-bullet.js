@@ -103,57 +103,99 @@ export class EnemyBullet {
     }
     
     drawRegularBullet(ctx) {
-        // Outer glow
-        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.glowRadius);
-        gradient.addColorStop(0, this.color);
-        gradient.addColorStop(0.5, this.color + '88');
-        gradient.addColorStop(1, this.color + '00');
+        // Enhanced multi-layer glow effect for better visibility
+        const time = Date.now() * 0.005;
+        const pulseIntensity = 0.8 + Math.sin(time) * 0.2; // Subtle pulsing
         
-        ctx.fillStyle = gradient;
+        // Outer glow layer - larger and more prominent
+        const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, this.glowRadius * 1.5);
+        outerGlow.addColorStop(0, this.color + 'AA');
+        outerGlow.addColorStop(0.3, this.color + '66');
+        outerGlow.addColorStop(0.7, this.color + '33');
+        outerGlow.addColorStop(1, this.color + '00');
+        
+        ctx.globalAlpha = pulseIntensity * 0.8;
+        ctx.fillStyle = outerGlow;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.glowRadius * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Middle glow layer
+        const middleGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, this.glowRadius);
+        middleGlow.addColorStop(0, this.color + 'CC');
+        middleGlow.addColorStop(0.5, this.color + '88');
+        middleGlow.addColorStop(1, this.color + '00');
+        
+        ctx.globalAlpha = pulseIntensity;
+        ctx.fillStyle = middleGlow;
         ctx.beginPath();
         ctx.arc(0, 0, this.glowRadius, 0, Math.PI * 2);
         ctx.fill();
         
-        // Core bullet
+        // Core bullet with enhanced brightness
+        ctx.globalAlpha = 1;
         ctx.fillStyle = this.color;
         ctx.beginPath();
         ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
         ctx.fill();
         
-        // Inner highlight
+        // Bright inner core for visibility
         ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.6;
+        ctx.globalAlpha = 0.9;
         ctx.beginPath();
-        ctx.arc(-this.radius * 0.3, -this.radius * 0.3, this.radius * 0.4, 0, Math.PI * 2);
+        ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Inner highlight with pulsing effect
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.7 + pulseIntensity * 0.3;
+        ctx.beginPath();
+        ctx.arc(-this.radius * 0.2, -this.radius * 0.2, this.radius * 0.3, 0, Math.PI * 2);
         ctx.fill();
     }
     
     drawExplosiveBullet(ctx) {
-        // Pulsing glow effect
-        const pulse = Math.sin(Date.now() / 100) * 0.3 + 0.7;
+        // Enhanced pulsing glow effect for explosive bullets
+        const pulse = Math.sin(Date.now() / 100) * 0.4 + 0.8;
         const glowSize = this.glowRadius * pulse;
         
-        // Outer glow
-        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
-        gradient.addColorStop(0, this.color);
-        gradient.addColorStop(0.3, this.color + 'aa');
-        gradient.addColorStop(0.7, this.color + '44');
-        gradient.addColorStop(1, this.color + '00');
+        // Outer danger glow - larger and more prominent
+        const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize * 1.8);
+        outerGlow.addColorStop(0, this.color + 'DD');
+        outerGlow.addColorStop(0.2, this.color + 'AA');
+        outerGlow.addColorStop(0.5, this.color + '66');
+        outerGlow.addColorStop(0.8, this.color + '22');
+        outerGlow.addColorStop(1, this.color + '00');
         
-        ctx.fillStyle = gradient;
+        ctx.globalAlpha = pulse * 0.9;
+        ctx.fillStyle = outerGlow;
+        ctx.beginPath();
+        ctx.arc(0, 0, glowSize * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Middle warning glow
+        const middleGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
+        middleGlow.addColorStop(0, this.color + 'FF');
+        middleGlow.addColorStop(0.3, this.color + 'BB');
+        middleGlow.addColorStop(0.7, this.color + '66');
+        middleGlow.addColorStop(1, this.color + '00');
+        
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = middleGlow;
         ctx.beginPath();
         ctx.arc(0, 0, glowSize, 0, Math.PI * 2);
         ctx.fill();
         
-        // Spinning core with spikes
+        // Spinning core with enhanced spikes
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.beginPath();
         
         for (let i = 0; i < 8; i++) {
             const angle = (i / 8) * Math.PI * 2;
             const innerRadius = this.radius * 0.6;
-            const outerRadius = this.radius;
+            const outerRadius = this.radius * (1 + pulse * 0.3); // Pulsing spikes
             
             const x1 = Math.cos(angle) * innerRadius;
             const y1 = Math.sin(angle) * innerRadius;
@@ -165,10 +207,18 @@ export class EnemyBullet {
         }
         ctx.stroke();
         
-        // Center core
+        // Bright warning center core
         ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = pulse;
         ctx.beginPath();
-        ctx.arc(0, 0, this.radius * 0.3, 0, Math.PI * 2);
+        ctx.arc(0, 0, this.radius * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Pulsing danger indicator
+        ctx.fillStyle = '#ffff00'; // Yellow warning color
+        ctx.globalAlpha = pulse * 0.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 0.2, 0, Math.PI * 2);
         ctx.fill();
     }
     
