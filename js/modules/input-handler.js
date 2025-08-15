@@ -37,8 +37,13 @@ export class InputHandler {
         document.addEventListener('mousemove', e => {
             // Skip mouse input on mobile devices to prevent interference with touch
             if (isMobile()) {
-                console.log('📱 Ignoring mouse event on mobile device');
+                console.log(`📱 BLOCKING MOUSE: mousemove at (${e.clientX}, ${e.clientY}) - mobile device detected`);
                 return;
+            }
+            
+            // Console log to verify mouse is working on desktop
+            if (Math.random() < 0.01) {
+                console.log(`🖱️ DESKTOP MOUSE: Setting aim to (${e.clientX}, ${e.clientY})`);
             }
             
             this.input.aimX = e.clientX;
@@ -171,7 +176,11 @@ export class InputHandler {
                     this.input.aimX = touch.clientX;
                     this.input.aimY = touch.clientY;
                     triggerHapticFeedback(15);
-                    console.log(`📱 Second touch: Aiming started at (${touch.clientX}, ${touch.clientY}) with ID ${touchId}`);
+                    console.log(`📱 SECOND TOUCH: Aiming started at (${touch.clientX}, ${touch.clientY}) with ID ${touchId}`);
+                    console.log(`📱 INPUT NOW: aimX=${this.input.aimX}, aimY=${this.input.aimY}, fire=${this.input.fire}`);
+                    
+                    // Create visual debug marker for aim point
+                    this.showDebugAimPoint(touch.clientX, touch.clientY);
                 } else {
                     console.log(`📱 Third+ touch ignored: ID ${touchId}`);
                 }
@@ -232,6 +241,9 @@ export class InputHandler {
                     this.input.aimX = touch.clientX;
                     this.input.aimY = touch.clientY;
                     
+                    // Update visual debug marker
+                    this.updateDebugAimPoint(touch.clientX, touch.clientY);
+                    
                     // Throttled aim logging
                     if (Math.random() < 0.02) { // 2% of aims logged
                         console.log(`📱 AIM UPDATE: (${oldAimX}, ${oldAimY}) → (${touch.clientX}, ${touch.clientY})`);
@@ -263,6 +275,7 @@ export class InputHandler {
                     // Aim touch ended
                     this.aimTouchId = null;
                     this.input.fire = false;
+                    this.hideDebugAimPoint();
                     console.log(`📱 Aiming touch ended (ID ${touchId})`);
                 }
             }
@@ -304,6 +317,46 @@ export class InputHandler {
         document.addEventListener('touchend', testHandler, { passive: false });
         
         console.log('📱 Multi-touch test handlers installed (will auto-remove after 3 events)');
+    }
+    
+    showDebugAimPoint(x, y) {
+        // Create visual debug marker for aim point
+        let aimMarker = document.getElementById('debug-aim-marker');
+        if (!aimMarker) {
+            aimMarker = document.createElement('div');
+            aimMarker.id = 'debug-aim-marker';
+            aimMarker.style.cssText = `
+                position: fixed;
+                width: 20px;
+                height: 20px;
+                background: red;
+                border: 2px solid white;
+                border-radius: 50%;
+                z-index: 2000;
+                pointer-events: none;
+                transform: translate(-50%, -50%);
+            `;
+            document.body.appendChild(aimMarker);
+        }
+        aimMarker.style.left = x + 'px';
+        aimMarker.style.top = y + 'px';
+        aimMarker.style.display = 'block';
+        console.log(`📱 DEBUG AIM MARKER: Created/moved to (${x}, ${y})`);
+    }
+    
+    updateDebugAimPoint(x, y) {
+        const aimMarker = document.getElementById('debug-aim-marker');
+        if (aimMarker) {
+            aimMarker.style.left = x + 'px';
+            aimMarker.style.top = y + 'px';
+        }
+    }
+    
+    hideDebugAimPoint() {
+        const aimMarker = document.getElementById('debug-aim-marker');
+        if (aimMarker) {
+            aimMarker.style.display = 'none';
+        }
     }
     
     showDynamicJoystick(x, y) {
@@ -379,9 +432,17 @@ export class InputHandler {
         this.input.left = false;
         this.input.right = false;
         this.input.fire = false;
+        
+        // Hide debug markers
+        this.hideDebugAimPoint();
     }
     
     getInput() {
+        // Debug: Log input values occasionally
+        if (Math.random() < 0.005) { // 0.5% chance
+            console.log(`📱 INPUT STATE: aim=(${this.input.aimX}, ${this.input.aimY}), fire=${this.input.fire}, movement=(up:${this.input.up}, down:${this.input.down}, left:${this.input.left}, right:${this.input.right})`);
+            console.log(`📱 TOUCH STATE: joystickId=${this.joystickTouchId}, aimId=${this.aimTouchId}, activeTouches=${this.activeTouches.size}`);
+        }
         return { ...this.input };
     }
     

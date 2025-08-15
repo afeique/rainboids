@@ -107,6 +107,11 @@ export class Player {
         const dx = input.aimX - this.x;
         const dy = input.aimY - this.y;
         this.angle = Math.atan2(dy, dx);
+        
+        // Debug player aiming occasionally
+        if (Math.random() < 0.01) { // 1% chance
+            console.log(`🎯 PLAYER AIM: input=(${input.aimX}, ${input.aimY}), player=(${this.x.toFixed(1)}, ${this.y.toFixed(1)}), angle=${(this.angle * 180 / Math.PI).toFixed(1)}°`);
+        }
 
         this.isMoving = input.up || input.down || input.left || input.right;
         
