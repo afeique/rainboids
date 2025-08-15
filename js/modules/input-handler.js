@@ -106,14 +106,25 @@ export class InputHandler {
         this.joystickCenter = null; // Dynamic center position
         this.joystickMaxDist = 80; // Fixed joystick radius
         
+        // Multi-touch detection and fallback
+        this.touchSupported = 'ontouchstart' in window;
+        this.maxTouchPoints = navigator.maxTouchPoints || 1;
+        console.log(`📱 Touch info: Supported=${this.touchSupported}, MaxPoints=${this.maxTouchPoints}`);
+        
         // Pure two-finger system - no static joystick elements needed
+        
+        // Test multi-touch capability
+        this.testMultiTouch();
 
         document.addEventListener('touchstart', e => {
             e.preventDefault();
+            console.log(`📱 TouchStart: ${e.changedTouches.length} new touches, total active: ${e.touches.length}`);
             
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
                 const touchId = touch.identifier;
+                
+                console.log(`📱 Processing touch ID ${touchId} at (${touch.clientX}, ${touch.clientY})`);
                 
                 // Store touch info
                 this.activeTouches.set(touchId, {
@@ -129,7 +140,7 @@ export class InputHandler {
                     this.joystickCenter = { x: touch.clientX, y: touch.clientY };
                     this.showDynamicJoystick(touch.clientX, touch.clientY);
                     triggerHapticFeedback(20);
-                    console.log('📱 Joystick center set at', touch.clientX, touch.clientY);
+                    console.log(`📱 First touch: Joystick center set at (${touch.clientX}, ${touch.clientY}) with ID ${touchId}`);
                 } else if (this.aimTouchId === null) {
                     // Second touch - set up aiming
                     this.aimTouchId = touchId;
@@ -137,9 +148,13 @@ export class InputHandler {
                     this.input.aimX = touch.clientX;
                     this.input.aimY = touch.clientY;
                     triggerHapticFeedback(15);
-                    console.log('📱 Aiming started at', touch.clientX, touch.clientY);
+                    console.log(`📱 Second touch: Aiming started at (${touch.clientX}, ${touch.clientY}) with ID ${touchId}`);
+                } else {
+                    console.log(`📱 Third+ touch ignored: ID ${touchId}`);
                 }
             }
+            
+            console.log(`📱 Active touches: ${this.activeTouches.size}, Joystick: ${this.joystickTouchId}, Aim: ${this.aimTouchId}`);
         }, { passive: false });
 
         document.addEventListener('touchmove', e => {
@@ -149,7 +164,10 @@ export class InputHandler {
                 const touch = e.changedTouches[i];
                 const touchId = touch.identifier;
                 
-                if (!this.activeTouches.has(touchId)) continue;
+                if (!this.activeTouches.has(touchId)) {
+                    console.log(`📱 TouchMove: Unknown touch ID ${touchId}, skipping`);
+                    continue;
+                }
                 
                 // Update touch position
                 this.activeTouches.set(touchId, {
@@ -179,21 +197,33 @@ export class InputHandler {
                     this.input.down = normalizedY > 0.2;
                     this.input.left = normalizedX < -0.2;
                     this.input.right = normalizedX > 0.2;
+                    
+                    // Throttled movement logging
+                    if (Math.random() < 0.01) { // 1% of moves logged
+                        console.log(`📱 Joystick move: (${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)}) up:${this.input.up} down:${this.input.down} left:${this.input.left} right:${this.input.right}`);
+                    }
                 } else if (touchId === this.aimTouchId) {
                     // Handle aiming
                     this.input.aimX = touch.clientX;
                     this.input.aimY = touch.clientY;
+                    
+                    // Throttled aim logging
+                    if (Math.random() < 0.01) { // 1% of aims logged
+                        console.log(`📱 Aiming at: (${touch.clientX}, ${touch.clientY})`);
+                    }
                 }
             }
         }, { passive: false });
 
         document.addEventListener('touchend', e => {
             e.preventDefault();
+            console.log(`📱 TouchEnd: ${e.changedTouches.length} ended touches, remaining active: ${e.touches.length}`);
             
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
                 const touchId = touch.identifier;
                 
+                console.log(`📱 Ending touch ID ${touchId}`);
                 this.activeTouches.delete(touchId);
                 
                 if (touchId === this.joystickTouchId) {
@@ -203,21 +233,52 @@ export class InputHandler {
                     this.input.down = false;
                     this.input.left = false;
                     this.input.right = false;
-                    console.log('📱 Joystick touch ended');
+                    console.log(`📱 Joystick touch ended (ID ${touchId})`);
                 } else if (touchId === this.aimTouchId) {
                     // Aim touch ended
                     this.aimTouchId = null;
                     this.input.fire = false;
-                    console.log('📱 Aiming touch ended');
-                }
-                
-                // If both fingers are lifted, reset the system
-                if (this.activeTouches.size === 0) {
-                    this.resetDynamicJoystick();
-                    console.log('📱 All touches ended - joystick reset');
+                    console.log(`📱 Aiming touch ended (ID ${touchId})`);
                 }
             }
+            
+            // If both fingers are lifted, reset the system
+            if (this.activeTouches.size === 0) {
+                this.resetDynamicJoystick();
+                console.log('📱 All touches ended - joystick reset');
+            }
+            
+            console.log(`📱 Touch state after end: Active touches: ${this.activeTouches.size}, Joystick: ${this.joystickTouchId}, Aim: ${this.aimTouchId}`);
         }, { passive: false });
+    }
+    
+    testMultiTouch() {
+        console.log('📱 Testing multi-touch capability...');
+        console.log(`📱 window.TouchEvent: ${typeof window.TouchEvent !== 'undefined'}`);
+        console.log(`📱 window.touches: ${typeof window.touches}`);
+        console.log(`📱 Document touch events supported: ${typeof document.ontouchstart !== 'undefined'}`);
+        
+        if (navigator.maxTouchPoints) {
+            console.log(`📱 Navigator reports max touch points: ${navigator.maxTouchPoints}`);
+        }
+        
+        // Test if touch events fire properly
+        let testTouchCount = 0;
+        const testHandler = (e) => {
+            testTouchCount++;
+            console.log(`📱 Test touch event ${testTouchCount}: ${e.type}, touches: ${e.touches ? e.touches.length : 'N/A'}`);
+            if (testTouchCount >= 3) {
+                document.removeEventListener('touchstart', testHandler);
+                document.removeEventListener('touchmove', testHandler);
+                document.removeEventListener('touchend', testHandler);
+            }
+        };
+        
+        document.addEventListener('touchstart', testHandler, { passive: false });
+        document.addEventListener('touchmove', testHandler, { passive: false });
+        document.addEventListener('touchend', testHandler, { passive: false });
+        
+        console.log('📱 Multi-touch test handlers installed (will auto-remove after 3 events)');
     }
     
     showDynamicJoystick(x, y) {

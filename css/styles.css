@@ -12,6 +12,15 @@ body {
     align-items: center;
     height: 100vh;
     cursor: default;
+    
+    /* Multi-touch support */
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 /* Red cursor for hovering over enemies/asteroids */
@@ -31,6 +40,10 @@ canvas {
     position: relative;
     z-index: 1;
     cursor: url('data:image/svg+xml;utf8,<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3V7M12 17V21M3 12H7M17 12H21M12 12H12.01M19 12C19 15.866 15.866 19 12 19C8.13401 19 5 15.866 5 12C5 8.13401 8.13401 5 12 5C15.866 5 19 8.13401 19 12Z" stroke="%230ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') 12 12, crosshair;
+    
+    /* Multi-touch support for canvas */
+    touch-action: none;
+    -webkit-touch-callout: none;
 }
 
 canvas.asteroid-hover {
