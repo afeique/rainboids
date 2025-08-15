@@ -9,9 +9,11 @@ export class InputHandler {
             left: false,
             right: false,
             fire: false, // Keep for potential future use
-            aimX: 0,
-            aimY: 0,
+            aimX: window.innerWidth / 2, // Default to center of screen
+            aimY: window.innerHeight / 2,
         };
+        
+        console.log(`📱 InputHandler initialized with default aim: (${this.input.aimX}, ${this.input.aimY})`);
         
         this.gameEngine = null; // Will be set by game engine
         
@@ -27,7 +29,18 @@ export class InputHandler {
 
     
     setupMouseControls() {
+        // Check if this is a mobile device
+        const isMobile = () => {
+            return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
+        };
+        
         document.addEventListener('mousemove', e => {
+            // Skip mouse input on mobile devices to prevent interference with touch
+            if (isMobile()) {
+                console.log('📱 Ignoring mouse event on mobile device');
+                return;
+            }
+            
             this.input.aimX = e.clientX;
             this.input.aimY = e.clientY;
             
@@ -44,9 +57,19 @@ export class InputHandler {
             }
         });
         document.addEventListener('mousedown', e => {
+            // Skip mouse input on mobile devices
+            if (isMobile()) {
+                console.log('📱 Ignoring mouse down on mobile device');
+                return;
+            }
             this.input.fire = true;
         });
         document.addEventListener('mouseup', e => {
+            // Skip mouse input on mobile devices
+            if (isMobile()) {
+                console.log('📱 Ignoring mouse up on mobile device');
+                return;
+            }
             this.input.fire = false;
         });
     }
@@ -204,12 +227,14 @@ export class InputHandler {
                     }
                 } else if (touchId === this.aimTouchId) {
                     // Handle aiming
+                    const oldAimX = this.input.aimX;
+                    const oldAimY = this.input.aimY;
                     this.input.aimX = touch.clientX;
                     this.input.aimY = touch.clientY;
                     
                     // Throttled aim logging
-                    if (Math.random() < 0.01) { // 1% of aims logged
-                        console.log(`📱 Aiming at: (${touch.clientX}, ${touch.clientY})`);
+                    if (Math.random() < 0.02) { // 2% of aims logged
+                        console.log(`📱 AIM UPDATE: (${oldAimX}, ${oldAimY}) → (${touch.clientX}, ${touch.clientY})`);
                     }
                 }
             }
