@@ -247,37 +247,7 @@ canvas.asteroid-hover {
     font-size: 1.5rem;
 }
 
-#joystick-area {
-    position: absolute;
-    width: 44vmin;
-    height: 44vmin;
-    left: 5%;
-    bottom: 5%;
-    pointer-events: all;
-    z-index: 201;
-}
-
-#joystick-base {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px solid rgba(255, 255, 255, 0.15);
-}
-
-#joystick-handle {
-    position: absolute;
-    width: 16vmin;
-    height: 16vmin;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    border-radius: 50%;
-    transition: transform 0.1s ease-out;
-}
+/* Joystick styles removed - now using dynamic two-finger system */
 
 #touch-fire {
     position: absolute;

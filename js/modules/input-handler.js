@@ -106,14 +106,7 @@ export class InputHandler {
         this.joystickCenter = null; // Dynamic center position
         this.joystickMaxDist = 80; // Fixed joystick radius
         
-        // Get joystick elements for visual feedback
-        const joystickArea = document.getElementById('joystick-area');
-        const joystickHandle = document.getElementById('joystick-handle');
-        
-        // Hide static joystick initially
-        if (joystickArea) {
-            joystickArea.style.display = 'none';
-        }
+        // Pure two-finger system - no static joystick elements needed
 
         document.addEventListener('touchstart', e => {
             e.preventDefault();
