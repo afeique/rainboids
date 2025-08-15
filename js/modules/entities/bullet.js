@@ -28,13 +28,13 @@ export class Bullet {
         this.life = 0;
         this.active = true;
         this.mass = 1;
-        this.hasHit = false; // Flag to prevent multiple hits
         
         // Powerup effects (will be set by player when creating bullets)
         this.homing = false;
         this.homingStrength = 0;
         this.piercing = 0; // Number of enemies it can pierce through
         this.piercedEnemies = 0; // Track how many it has pierced
+        this.hitTargets = new Set(); // Track which targets (enemies/asteroids) this bullet has already hit
         this.explosive = false;
         this.explosionRadius = 30;
     }
@@ -42,7 +42,6 @@ export class Bullet {
     // Simple bullet removal on impact
     startDying(impactX, impactY) {
         this.active = false;
-        this.hasHit = true; // Mark as having hit something
     }
     
     update(particlePool, asteroidPool, enemyPool = null) {
@@ -212,18 +211,27 @@ export class Bullet {
         }
     }
     
-    onHit() {
+    onHit(target = null) {
         if (this.piercing > 0) {
             this.piercedEnemies++;
-            console.log(`🔹 Piercing bullet hit ${this.piercedEnemies}/${this.piercing} targets`);
-            if (this.piercedEnemies >= this.piercing) {
+            if (target !== null) {
+                this.hitTargets.add(target);
+            }
+            console.log(`🔹 Piercing bullet hit ${this.piercedEnemies}/${this.piercing} targets, active=${this.active}`);
+            // Allow piercing bullets to hit piercing+1 targets (so piercing=1 means it can hit 2 targets)
+            if (this.piercedEnemies > this.piercing) {
                 console.log(`🔹 Piercing bullet exhausted, destroying`);
                 this.startDying(this.x, this.y);
             }
             // Continue flying if still has piercing left
         } else {
+            console.log(`🔹 Non-piercing bullet hit, destroying`);
             this.startDying(this.x, this.y);
         }
+    }
+    
+    hasHitEnemy(target) {
+        return this.hitTargets.has(target);
     }
 
     draw(ctx, gameEngine = null) {

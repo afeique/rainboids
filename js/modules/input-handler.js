@@ -99,84 +99,207 @@ export class InputHandler {
     }
     
     setupTouchControls() {
+        // Dynamic joystick system - first touch sets joystick center, second touch aims
+        this.activeTouches = new Map(); // Track all active touches
+        this.joystickTouchId = null; // Touch ID for movement
+        this.aimTouchId = null; // Touch ID for aiming
+        this.joystickCenter = null; // Dynamic center position
+        this.joystickMaxDist = 80; // Fixed joystick radius
+        
+        // Get joystick elements for visual feedback
         const joystickArea = document.getElementById('joystick-area');
         const joystickHandle = document.getElementById('joystick-handle');
-        const musicInfoBox = null; // Music info removed from main display
-
-        const isTouchOnUI = (touch) => {
-            const target = touch.target;
-            return joystickArea.contains(target);
-        };
+        
+        // Hide static joystick initially
+        if (joystickArea) {
+            joystickArea.style.display = 'none';
+        }
 
         document.addEventListener('touchstart', e => {
+            e.preventDefault();
+            
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
-                if (!isTouchOnUI(touch)) {
+                const touchId = touch.identifier;
+                
+                // Store touch info
+                this.activeTouches.set(touchId, {
+                    x: touch.clientX,
+                    y: touch.clientY,
+                    startX: touch.clientX,
+                    startY: touch.clientY
+                });
+                
+                if (this.joystickTouchId === null) {
+                    // First touch - set up joystick
+                    this.joystickTouchId = touchId;
+                    this.joystickCenter = { x: touch.clientX, y: touch.clientY };
+                    this.showDynamicJoystick(touch.clientX, touch.clientY);
+                    triggerHapticFeedback(20);
+                    console.log('📱 Joystick center set at', touch.clientX, touch.clientY);
+                } else if (this.aimTouchId === null) {
+                    // Second touch - set up aiming
+                    this.aimTouchId = touchId;
                     this.input.fire = true;
                     this.input.aimX = touch.clientX;
                     this.input.aimY = touch.clientY;
-                    break; 
+                    triggerHapticFeedback(15);
+                    console.log('📱 Aiming started at', touch.clientX, touch.clientY);
                 }
             }
         }, { passive: false });
 
         document.addEventListener('touchmove', e => {
+            e.preventDefault();
+            
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
-                if (!isTouchOnUI(touch)) {
+                const touchId = touch.identifier;
+                
+                if (!this.activeTouches.has(touchId)) continue;
+                
+                // Update touch position
+                this.activeTouches.set(touchId, {
+                    ...this.activeTouches.get(touchId),
+                    x: touch.clientX,
+                    y: touch.clientY
+                });
+                
+                if (touchId === this.joystickTouchId && this.joystickCenter) {
+                    // Handle joystick movement
+                    let dx = touch.clientX - this.joystickCenter.x;
+                    let dy = touch.clientY - this.joystickCenter.y;
+                    const dist = Math.hypot(dx, dy);
+                    
+                    if (dist > this.joystickMaxDist) {
+                        dx = (dx / dist) * this.joystickMaxDist;
+                        dy = (dy / dist) * this.joystickMaxDist;
+                    }
+                    
+                    this.updateDynamicJoystick(dx, dy);
+                    
+                    const normalizedX = dx / this.joystickMaxDist;
+                    const normalizedY = dy / this.joystickMaxDist;
+                    
+                    // WASD-style mobile controls
+                    this.input.up = normalizedY < -0.2;
+                    this.input.down = normalizedY > 0.2;
+                    this.input.left = normalizedX < -0.2;
+                    this.input.right = normalizedX > 0.2;
+                } else if (touchId === this.aimTouchId) {
+                    // Handle aiming
                     this.input.aimX = touch.clientX;
                     this.input.aimY = touch.clientY;
-                    break;
                 }
             }
         }, { passive: false });
 
         document.addEventListener('touchend', e => {
-            this.input.fire = false;
-        }, { passive: false });
-        
-        // Enhanced joystick handlers for movement
-        joystickArea.addEventListener('touchstart', e => {
             e.preventDefault();
-            triggerHapticFeedback(20);
-            this.joystickActive = true;
-            this.joystickMaxDist = joystickArea.clientWidth / 2.5;
-        }, { passive: false });
-        
-        joystickArea.addEventListener('touchend', e => {
-            e.preventDefault();
-            this.joystickActive = false;
-            this.input.up = false;
-            this.input.down = false;
-            this.input.left = false;
-            this.input.right = false;
-            joystickHandle.style.transform = `translate(0px, 0px) translate(-50%, -50%)`;
-        }, { passive: false });
-        
-        joystickArea.addEventListener('touchmove', e => {
-            if (!this.joystickActive) return;
-            e.preventDefault();
-            const rect = joystickArea.getBoundingClientRect();
-            const touch = e.targetTouches[0];
-            const centerX = joystickArea.offsetWidth / 2;
-            const centerY = joystickArea.offsetHeight / 2;
-            let dx = touch.clientX - rect.left - centerX;
-            let dy = touch.clientY - rect.top - centerY;
-            const dist = Math.hypot(dx, dy);
-            if (dist > this.joystickMaxDist) {
-                dx = (dx / dist) * this.joystickMaxDist;
-                dy = (dy / dist) * this.joystickMaxDist;
-            }
-            joystickHandle.style.transform = `translate(${dx}px, ${dy}px) translate(-50%, -50%)`;
-            const normalizedX = dx / this.joystickMaxDist;
-            const normalizedY = dy / this.joystickMaxDist;
             
-            // WASD-style mobile controls
-            this.input.up = normalizedY < -0.2;
-            this.input.down = normalizedY > 0.2;
-            this.input.left = normalizedX < -0.2;
-            this.input.right = normalizedX > 0.2;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                const touchId = touch.identifier;
+                
+                this.activeTouches.delete(touchId);
+                
+                if (touchId === this.joystickTouchId) {
+                    // Joystick touch ended
+                    this.joystickTouchId = null;
+                    this.input.up = false;
+                    this.input.down = false;
+                    this.input.left = false;
+                    this.input.right = false;
+                    console.log('📱 Joystick touch ended');
+                } else if (touchId === this.aimTouchId) {
+                    // Aim touch ended
+                    this.aimTouchId = null;
+                    this.input.fire = false;
+                    console.log('📱 Aiming touch ended');
+                }
+                
+                // If both fingers are lifted, reset the system
+                if (this.activeTouches.size === 0) {
+                    this.resetDynamicJoystick();
+                    console.log('📱 All touches ended - joystick reset');
+                }
+            }
         }, { passive: false });
+    }
+    
+    showDynamicJoystick(x, y) {
+        // Create or show dynamic joystick visual at the touch position
+        let joystickBase = document.getElementById('dynamic-joystick-base');
+        let joystickHandle = document.getElementById('dynamic-joystick-handle');
+        
+        if (!joystickBase) {
+            // Create dynamic joystick elements
+            joystickBase = document.createElement('div');
+            joystickBase.id = 'dynamic-joystick-base';
+            joystickBase.style.cssText = `
+                position: fixed;
+                width: ${this.joystickMaxDist * 2}px;
+                height: ${this.joystickMaxDist * 2}px;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                border-radius: 50%;
+                background: rgba(0, 0, 0, 0.2);
+                z-index: 1000;
+                pointer-events: none;
+                transform: translate(-50%, -50%);
+            `;
+            document.body.appendChild(joystickBase);
+            
+            joystickHandle = document.createElement('div');
+            joystickHandle.id = 'dynamic-joystick-handle';
+            joystickHandle.style.cssText = `
+                position: fixed;
+                width: 30px;
+                height: 30px;
+                background: rgba(255, 255, 255, 0.7);
+                border-radius: 50%;
+                z-index: 1001;
+                pointer-events: none;
+                transform: translate(-50%, -50%);
+            `;
+            document.body.appendChild(joystickHandle);
+        }
+        
+        joystickBase.style.left = x + 'px';
+        joystickBase.style.top = y + 'px';
+        joystickBase.style.display = 'block';
+        
+        joystickHandle.style.left = x + 'px';
+        joystickHandle.style.top = y + 'px';
+        joystickHandle.style.display = 'block';
+    }
+    
+    updateDynamicJoystick(dx, dy) {
+        const joystickHandle = document.getElementById('dynamic-joystick-handle');
+        if (joystickHandle && this.joystickCenter) {
+            joystickHandle.style.left = (this.joystickCenter.x + dx) + 'px';
+            joystickHandle.style.top = (this.joystickCenter.y + dy) + 'px';
+        }
+    }
+    
+    resetDynamicJoystick() {
+        // Hide dynamic joystick
+        const joystickBase = document.getElementById('dynamic-joystick-base');
+        const joystickHandle = document.getElementById('dynamic-joystick-handle');
+        
+        if (joystickBase) joystickBase.style.display = 'none';
+        if (joystickHandle) joystickHandle.style.display = 'none';
+        
+        // Reset state
+        this.joystickCenter = null;
+        this.joystickTouchId = null;
+        this.aimTouchId = null;
+        
+        // Reset input state
+        this.input.up = false;
+        this.input.down = false;
+        this.input.left = false;
+        this.input.right = false;
+        this.input.fire = false;
     }
     
     getInput() {
@@ -189,5 +312,11 @@ export class InputHandler {
         this.input.left = false;
         this.input.right = false;
         this.input.fire = false;
+        
+        // Reset touch state
+        if (this.activeTouches) {
+            this.activeTouches.clear();
+        }
+        this.resetDynamicJoystick();
     }
 } 

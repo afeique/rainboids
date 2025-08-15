@@ -779,7 +779,7 @@ export class GameEngine {
                 id: 'SPREAD_SHOT',
                 name: 'Spread Shot',
                 description: 'Fire spread bullets (3/5/7)',
-                cost: 2000, // Base cost, escalates with purchases
+                cost: 5000, // Base cost, escalates with purchases
                 icon: '📐',
                 maxStacks: 3   // Now upgradeable 3 times
             },
@@ -912,9 +912,9 @@ export class GameEngine {
             let actualCost = item.cost;
             if (item.id === 'SPREAD_SHOT') {
                 const currentStacks = this.player.getPowerupStacks(item.id);
-                if (currentStacks === 0) actualCost = 2000;      // First purchase
-                else if (currentStacks === 1) actualCost = 4000; // Second purchase  
-                else if (currentStacks === 2) actualCost = 10000; // Third purchase
+                if (currentStacks === 0) actualCost = 5000;      // First purchase
+                else if (currentStacks === 1) actualCost = 10000; // Second purchase  
+                else if (currentStacks === 2) actualCost = 20000; // Third purchase
             }
             
             if (this.game.money < actualCost) {
@@ -1091,9 +1091,9 @@ export class GameEngine {
         // Calculate dynamic cost for spread shot
         let actualCost = item.cost;
         if (item.id === 'SPREAD_SHOT') {
-            if (currentStacks === 0) actualCost = 2000;      // First purchase
-            else if (currentStacks === 1) actualCost = 4000; // Second purchase  
-            else if (currentStacks === 2) actualCost = 10000; // Third purchase
+            if (currentStacks === 0) actualCost = 5000;      // First purchase
+            else if (currentStacks === 1) actualCost = 10000; // Second purchase  
+            else if (currentStacks === 2) actualCost = 20000; // Third purchase
         }
         
         const canAfford = this.game.money >= actualCost;
@@ -1816,10 +1816,17 @@ export class GameEngine {
         // Bullet-asteroid collisions
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
-            if (!bullet.active || bullet.hasHit) continue; // Skip inactive/used bullets
+            if (!bullet.active) continue; // Allow piercing bullets to continue
             for (let j = this.asteroidPool.activeObjects.length - 1; j >= 0; j--) {
                 const ast = this.asteroidPool.activeObjects[j];
                 if (!ast.active) continue;
+                
+                // Skip if this piercing bullet has already hit this asteroid
+                if (bullet.piercing > 0 && bullet.hasHitEnemy(ast)) {
+                    console.log(`🔹 Skipping already hit asteroid: piercing=${bullet.piercing}, hitTargets=${bullet.hitTargets.size}`);
+                    continue;
+                }
+                
                 if (collision(bullet, ast)) {
                     triggerHapticFeedback(60);
                     this.audioManager.playHit();
@@ -1925,7 +1932,7 @@ export class GameEngine {
                     if (bullet.explosive) {
                         bullet.explode(this);
                     }
-                    bullet.onHit();
+                    bullet.onHit(ast);
                     
                     // Only break if bullet is destroyed (no piercing left)
                     if (!bullet.active) {
@@ -2062,18 +2069,21 @@ export class GameEngine {
         // Bullet-enemy collisions
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
-            if (!bullet.active || bullet.hasHit) continue;
+            if (!bullet.active) continue;
             
             for (let j = this.enemyPool.activeObjects.length - 1; j >= 0; j--) {
                 const enemy = this.enemyPool.activeObjects[j];
                 if (!enemy.active) continue;
                 
+                // Skip if this piercing bullet has already hit this enemy
+                if (bullet.piercing > 0 && bullet.hasHitEnemy(enemy)) {
+                    console.log(`🔹 Skipping already hit enemy: piercing=${bullet.piercing}, hitTargets=${bullet.hitTargets.size}`);
+                    continue;
+                }
+                
                 if (collision(bullet, enemy)) {
                     triggerHapticFeedback(40);
                     this.audioManager.playHit();
-                    
-                    // Mark bullet as having hit to prevent multiple damage
-                    bullet.hasHit = true;
                     
                     // Damage the enemy
                     const destroyed = enemy.takeDamage(this.baseDamage);
@@ -2134,7 +2144,7 @@ export class GameEngine {
                     if (bullet.explosive) {
                         bullet.explode(this);
                     }
-                    bullet.onHit();
+                    bullet.onHit(enemy);
                     
                     // Only break if bullet is destroyed (no piercing left)
                     if (!bullet.active) {

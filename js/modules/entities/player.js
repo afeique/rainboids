@@ -28,11 +28,11 @@ export class Player {
         this.baseCritDamage = 150; // 150% base critical hit damage (50% extra)
         
         // WASD + Mouse controls
-        this.thrustPower = 0.3; // Precise thrust power
+        this.thrustPower = 0.2; // Reduced thrust power to make speed upgrades more valuable
         
         // Auto-firing system
         this.autoFireTimer = 0;
-        this.baseFireRate = 200; // Base auto-fire rate in ms
+        this.baseFireRate = 400; // Base auto-fire rate in ms (halved frequency for more rapid fire upgrade value)
         
         // Audio sync - shoot sound matches fire rate exactly
         this.lastShootSound = 0;
@@ -167,9 +167,9 @@ export class Player {
             }
         }
 
-        // Minimal friction for tight control (no slipperiness)
-        this.vel.x *= 0.98; // Very little friction for precise control
-        this.vel.y *= 0.98;
+        // Increased friction to make movement slower and speed upgrades more valuable
+        this.vel.x *= 0.95; // More friction for slower base movement
+        this.vel.y *= 0.95;
 
         // Limit velocity
         const mag = Math.hypot(this.vel.x, this.vel.y);
@@ -456,6 +456,7 @@ export class Player {
                 }
                 if (piercingStacks > 0) {
                     bullet.piercing = piercingStacks; // Number of enemies it can pierce
+                    console.log(`🏹 Created piercing bullet with ${piercingStacks} piercing power`);
                 }
                 if (explosiveStacks > 0) {
                     bullet.explosive = true;
@@ -467,7 +468,7 @@ export class Player {
     
     getMovementSpeedMultiplier() {
         const speedBoostStacks = this.getPowerupStacks('SPEED_BOOST');
-        return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.3) : 1;
+        return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.4) : 1; // Increased bonus per stack
     }
     
     getEffectiveShield() {

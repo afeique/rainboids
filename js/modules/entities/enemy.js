@@ -96,6 +96,12 @@ export class Enemy {
         this.maxHealth = Math.round(this.config.health * levelMultiplier);
         this.health = this.maxHealth;
         
+        // Safeguard: ensure health never exceeds maxHealth
+        if (this.health > this.maxHealth) {
+            console.warn(`🐛 Enemy health bug detected: ${this.health} > ${this.maxHealth}, fixing...`);
+            this.health = this.maxHealth;
+        }
+        
         // Scale size slightly based on level (10% increase per level, max 2x)
         const sizeMultiplier = Math.min(2.0, 1 + (this.level - 1) * 0.1);
         this.radius = this.config.size * sizeMultiplier;
@@ -1163,7 +1169,7 @@ export class Enemy {
         ctx.lineWidth = 2;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        const healthNumber = `${Math.round(this.health)}/${this.maxHealth}`;
+        const healthNumber = `${Math.round(this.health)}/${Math.round(this.maxHealth)}`;
         const numberX = barX + barWidth / 2;
         const numberY = barY - 6;
         
@@ -1236,6 +1242,10 @@ export class Enemy {
     
     takeDamage(damage) {
         this.health -= damage;
+        
+        // Safeguard: clamp health between 0 and maxHealth
+        this.health = Math.max(0, Math.min(this.health, this.maxHealth));
+        
         return this.health <= 0;
     }
     
