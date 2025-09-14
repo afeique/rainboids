@@ -22,28 +22,28 @@ export function collision(a, b) {
     return Math.hypot(dx, dy) < a.radius + b.radius;
 }
 
-// Enhanced collision detection specifically for burst stars
+// Enhanced collision detection specifically for health stars and money stars
 // Addresses issues with small, fast-moving collectibles being missed by standard collision detection
-export function burstStarCollision(player, burstStar) {
-    const dx = player.x - burstStar.x;
-    const dy = player.y - burstStar.y;
+export function starCollision(player, star) {
+    const dx = player.x - star.x;
+    const dy = player.y - star.y;
     const distance = Math.hypot(dx, dy);
     
     // Import GAME_CONFIG here to avoid circular dependencies
-    const BURST_STAR_COLLECTION_BONUS = 15; // Should match GAME_CONFIG.BURST_STAR_COLLECTION_BONUS
+    const STAR_COLLECTION_BONUS = 15; // Should match GAME_CONFIG collection radius
     
-    // Increased collection radius for burst stars to make them easier to collect
-    const collectionRadius = player.radius + burstStar.radius + BURST_STAR_COLLECTION_BONUS;
+    // Increased collection radius for collectible stars to make them easier to collect
+    const collectionRadius = player.radius + star.radius + STAR_COLLECTION_BONUS;
     
     // Basic circle collision check first
     if (distance < collectionRadius) {
         return true;
     }
     
-    // Swept collision detection for fast-moving burst stars
+    // Swept collision detection for fast-moving collectible stars
     // Check if the star will pass through the player's collection area in the next frame
-    const futureX = burstStar.x + burstStar.vel.x;
-    const futureY = burstStar.y + burstStar.vel.y;
+    const futureX = star.x + star.vel.x;
+    const futureY = star.y + star.vel.y;
     
     // Check collision with the star's future position
     const futureDx = player.x - futureX;
@@ -55,23 +55,23 @@ export function burstStarCollision(player, burstStar) {
     }
     
     // Line-circle intersection: check if the star's movement path intersects the collection area
-    const speed = Math.hypot(burstStar.vel.x, burstStar.vel.y);
+    const speed = Math.hypot(star.vel.x, star.vel.y);
     if (speed > 0) {
         // Vector from star to player
-        const toPlayerX = player.x - burstStar.x;
-        const toPlayerY = player.y - burstStar.y;
+        const toPlayerX = player.x - star.x;
+        const toPlayerY = player.y - star.y;
         
         // Project player position onto the star's velocity vector
-        const velocityDotProduct = burstStar.vel.x * toPlayerX + burstStar.vel.y * toPlayerY;
-        const velocityMagnitudeSquared = burstStar.vel.x * burstStar.vel.x + burstStar.vel.y * burstStar.vel.y;
+        const velocityDotProduct = star.vel.x * toPlayerX + star.vel.y * toPlayerY;
+        const velocityMagnitudeSquared = star.vel.x * star.vel.x + star.vel.y * star.vel.y;
         
         if (velocityMagnitudeSquared > 0) {
             const t = velocityDotProduct / velocityMagnitudeSquared;
             
             // Only check if the closest point is in the forward direction and within reasonable distance
             if (t >= 0 && t <= 2) { // Check up to 2 frames ahead
-                const closestX = burstStar.x + burstStar.vel.x * t;
-                const closestY = burstStar.y + burstStar.vel.y * t;
+                const closestX = star.x + star.vel.x * t;
+                const closestY = star.y + star.vel.y * t;
                 
                 const closestDx = player.x - closestX;
                 const closestDy = player.y - closestY;

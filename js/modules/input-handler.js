@@ -266,10 +266,10 @@ export class InputHandler {
                 if (touchId === this.joystickTouchId) {
                     // Joystick touch ended
                     this.joystickTouchId = null;
-                    this.input.up = false;
-                    this.input.down = false;
-                    this.input.left = false;
-                    this.input.right = false;
+            this.input.up = false;
+            this.input.down = false;
+            this.input.left = false;
+            this.input.right = false;
                     console.log(`📱 Joystick touch ended (ID ${touchId})`);
                 } else if (touchId === this.aimTouchId) {
                     // Aim touch ended

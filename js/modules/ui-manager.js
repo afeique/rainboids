@@ -15,6 +15,7 @@ export class UIManager {
         // Get all UI elements
         this.elements = {
             score: document.getElementById('score'),
+            livesDisplay: document.getElementById('lives-display'),
             waveDisplay: document.getElementById('wave-display'),
             pauseOverlay: document.getElementById('pause-overlay'),
             messageTitle: document.getElementById('message-title'),
@@ -31,7 +32,7 @@ export class UIManager {
             musicProgress: null, // Removed from main display
             musicInfoCurrentTime: null, // Removed from main display
             musicInfoDuration: null, // Removed from main display
-            pauseButton: document.getElementById('pause-button'),
+            shopButton: document.getElementById('shop-button'),
             pauseShopButton: document.getElementById('pause-shop-button'),
             pauseResumeButton: document.getElementById('pause-resume-button'),
             // Music tab elements
@@ -70,10 +71,124 @@ export class UIManager {
         this.elements.score.textContent = `${Math.floor(money)}`;
     }
     
+    updateLives(lives) {
+        if (this.elements.livesDisplay) {
+            // Show the lives display when game starts
+            this.elements.livesDisplay.style.display = 'block';
+            
+            // Position lives display relative to other HUD elements
+            this.positionLivesDisplay();
+            
+            // Clear existing content and render triangles manually
+            this.elements.livesDisplay.innerHTML = '';
+            
+            // Create canvas for manual triangle rendering
+            const canvas = document.createElement('canvas');
+            canvas.width = 60;
+            canvas.height = 40;
+            canvas.style.display = 'block';
+            canvas.style.background = 'transparent'; // Ensure transparent background
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas with transparent background
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw triangles based on lives count
+            this.drawTriforceFormation(ctx, lives, canvas.width, canvas.height);
+            
+            // Add canvas to lives display
+            this.elements.livesDisplay.appendChild(canvas);
+            
+            // Change intensity based on lives remaining
+            if (lives <= 1) {
+                this.elements.livesDisplay.style.filter = 'brightness(1.2)';
+            } else if (lives <= 2) {
+                this.elements.livesDisplay.style.filter = 'brightness(1.1)';
+            } else {
+                this.elements.livesDisplay.style.filter = 'brightness(1.0)';
+            }
+        }
+    }
+    
+    positionLivesDisplay() {
+        // Position triforce all the way on the left, before the health bar
+        const livesX = 10; // Far left position with small margin from edge
+        
+        // Position the lives display
+        this.elements.livesDisplay.style.left = `${livesX}px`;
+        this.elements.livesDisplay.style.top = '20px'; // Same as other HUD elements
+    }
+    
+    drawTriforceFormation(ctx, lives, width, height) {
+        const triangleSize = 12;
+        const spacing = 2;
+        
+        // Calculate positions for perfect triforce formation
+        const centerX = width / 2; // Center within the canvas (no additional offset needed)
+        const topY = 8;
+        const bottomY = topY + triangleSize + spacing - 1; // Move bottom row up by 1px
+        
+        // Triangle positions
+        const topTriangle = { x: centerX, y: topY };
+        const bottomLeftTriangle = { x: centerX - (triangleSize / 2 + spacing / 2), y: bottomY };
+        const bottomRightTriangle = { x: centerX + (triangleSize / 2 + spacing / 2), y: bottomY };
+        
+        // Set triangle style
+        ctx.fillStyle = '#FFD700'; // Gold
+        ctx.strokeStyle = '#B8860B'; // Goldenrod border
+        ctx.lineWidth = 1;
+        
+        // Draw triangles based on lives count
+        if (lives >= 3) {
+            // Full triforce: all 3 triangles
+            this.drawTriangle(ctx, topTriangle.x, topTriangle.y, triangleSize);
+            this.drawTriangle(ctx, bottomLeftTriangle.x, bottomLeftTriangle.y, triangleSize);
+            this.drawTriangle(ctx, bottomRightTriangle.x, bottomRightTriangle.y, triangleSize);
+        } else if (lives === 2) {
+            // Bottom two triangles
+            this.drawTriangle(ctx, bottomLeftTriangle.x, bottomLeftTriangle.y, triangleSize);
+            this.drawTriangle(ctx, bottomRightTriangle.x, bottomRightTriangle.y, triangleSize);
+        } else if (lives === 1) {
+            // Bottom left triangle only
+            this.drawTriangle(ctx, bottomLeftTriangle.x, bottomLeftTriangle.y, triangleSize);
+        }
+        // No triangles drawn for 0 lives
+    }
+    
+    drawTriangle(ctx, centerX, centerY, size) {
+        const height = size * 0.866; // Equilateral triangle height
+        
+        ctx.beginPath();
+        // Top point
+        ctx.moveTo(centerX, centerY - height / 2);
+        // Bottom left
+        ctx.lineTo(centerX - size / 2, centerY + height / 2);
+        // Bottom right
+        ctx.lineTo(centerX + size / 2, centerY + height / 2);
+        ctx.closePath();
+        
+        // Fill and stroke
+        ctx.fill();
+        ctx.stroke();
+    }
+    
     updateWave(wave) {
         // Wave display element no longer exists - wave info now shown via spawn timers
         if (this.elements.waveDisplay) {
             this.elements.waveDisplay.textContent = `WAVE: ${wave}`;
+        }
+    }
+    
+    hideShopButton() {
+        if (this.elements.shopButton) {
+            this.elements.shopButton.style.display = 'none';
+        }
+    }
+    
+    showShopButton() {
+        if (this.elements.shopButton) {
+            this.elements.shopButton.style.display = 'block';
         }
     }
     
@@ -494,9 +609,11 @@ export class UIManager {
             });
         }
         
-        this.elements.pauseButton.addEventListener('click', () => {
+        this.elements.shopButton.addEventListener('click', () => {
             if (window.game) {
-                window.game.togglePause();
+                // Pause game and open shop
+                window.game.game.state = window.game.GAME_STATES?.PAUSED || 'PAUSED';
+                window.game.openShop();
             }
         });
         

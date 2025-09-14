@@ -121,7 +121,7 @@ export const POWERUP_TYPES = {
         duration: 30000, // 30 seconds for drops
         effect: 'medpack',
         rarity: 0.25,
-        description: '+1 burst star healing'
+        description: '+1 health star healing'
     }
 };
 

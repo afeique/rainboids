@@ -11,6 +11,8 @@ export class Bullet {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         this.active = false;
+        this.trail = []; // Array to store trail positions
+        this.maxTrailLength = 8; // Maximum trail segments
     }
     
     reset(x, y, angle) {
@@ -19,7 +21,7 @@ export class Bullet {
         // Use original angle without any jitter
         this.x = x + Math.cos(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
         this.y = y + Math.sin(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
-        this.radius = 2 * scale; // Smaller bullets
+        this.radius = 4 * scale; // Larger bullets for comet-like appearance
         this.angle = angle; // Use the original angle
         this.vel = {
             x: Math.cos(angle) * GAME_CONFIG.BULLET_SPEED,
@@ -37,6 +39,7 @@ export class Bullet {
         this.hitTargets = new Set(); // Track which targets (enemies/asteroids) this bullet has already hit
         this.explosive = false;
         this.explosionRadius = 30;
+        this.trail = []; // Clear trail on reset
     }
     
     // Simple bullet removal on impact
@@ -44,14 +47,20 @@ export class Bullet {
         this.active = false;
     }
     
-    update(particlePool, asteroidPool, enemyPool = null) {
+    update(particlePool, asteroidPool, enemyPool = null, gameEngine = null) {
         if (!this.active) return;
         
         this.life++;
         
-        // Homing behavior
-        if (this.homing && enemyPool) {
-            this.applyHoming(enemyPool);
+        // Homing behavior - can target both enemies and asteroids
+        if (this.homing) {
+            this.applyHoming(enemyPool, asteroidPool, gameEngine);
+        }
+        
+        // Add current position to trail before moving
+        this.trail.push({ x: this.x, y: this.y });
+        if (this.trail.length > this.maxTrailLength) {
+            this.trail.shift(); // Remove oldest trail segment
         }
         
         // Movement
@@ -65,37 +74,56 @@ export class Bullet {
         }
     }
     
-    applyHoming(enemyPool) {
-        if (!this.homing || !enemyPool) return;
+    applyHoming(enemyPool, asteroidPool = null, gameEngine = null) {
+        if (!this.homing) return;
         
         let bestTarget = null;
-        let bestScore = 0;
+        let bestDistance = Infinity;
+        let cursorX = null, cursorY = null;
         
-        // Enhanced target selection with predictive scoring
-        for (const enemy of enemyPool.activeObjects) {
-            if (!enemy.active) continue;
-            
-            const dx = enemy.x - this.x;
-            const dy = enemy.y - this.y;
-            const distance = Math.hypot(dx, dy);
-            
-            if (distance < 400) { // Increased homing range
-                // Score based on distance and angle to current velocity
-                const currentAngle = Math.atan2(this.vel.y, this.vel.x);
-                const targetAngle = Math.atan2(dy, dx);
-                let angleDiff = Math.abs(currentAngle - targetAngle);
-                if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+        // Get cursor position from game engine if available
+        if (gameEngine && gameEngine.inputHandler) {
+            cursorX = gameEngine.inputHandler.input.aimX;
+            cursorY = gameEngine.inputHandler.input.aimY;
+        }
+        
+        // Enhanced target selection - prioritize targets closest to cursor, fallback to closest to bullet
+        const checkTargets = (targets) => {
+            if (!targets) return;
+            for (const target of targets.activeObjects) {
+                if (!target.active) continue;
                 
-                // Prefer closer targets and targets more aligned with current trajectory
-                const distanceScore = (400 - distance) / 400; // 0-1, higher is closer
-                const angleScore = (Math.PI - angleDiff) / Math.PI; // 0-1, higher is more aligned
-                const totalScore = distanceScore * 0.7 + angleScore * 0.3;
+                const dx = target.x - this.x;
+                const dy = target.y - this.y;
+                const bulletDistance = Math.hypot(dx, dy);
                 
-                if (totalScore > bestScore) {
-                    bestScore = totalScore;
-                    bestTarget = enemy;
+                if (bulletDistance > 400) continue; // Outside homing range
+                
+                let priority = bulletDistance; // Default: closest to bullet
+                
+                // If we have cursor position, prioritize targets closest to cursor
+                if (cursorX !== null && cursorY !== null) {
+                    const cursorDx = target.x - cursorX;
+                    const cursorDy = target.y - cursorY;
+                    const cursorDistance = Math.hypot(cursorDx, cursorDy);
+                    priority = cursorDistance; // Prioritize cursor distance over bullet distance
+                }
+                
+                if (priority < bestDistance) {
+                    bestDistance = priority;
+                    bestTarget = target;
                 }
             }
+        };
+        
+        // Check enemies first (higher priority)
+        if (enemyPool) {
+            checkTargets(enemyPool);
+        }
+        
+        // Check asteroids if no nearby enemies found
+        if (!bestTarget && asteroidPool) {
+            checkTargets(asteroidPool);
         }
         
         // Enhanced homing with predictive targeting
@@ -199,10 +227,8 @@ export class Bullet {
                             }
                         }
                         
-                        // Drop burst stars and maybe powerups
-                        for (let i = 0; i < GAME_CONFIG.BURST_STAR_DROP_COUNT; i++) {
-                            gameEngine.createEnemyBurstStar(enemy.x, enemy.y);
-                        }
+                        // Drop health and money stars
+                        gameEngine.dropStarsFromEntity(enemy.x, enemy.y);
                         
                         gameEngine.enemyPool.release(enemy);
                     }
@@ -242,6 +268,9 @@ export class Bullet {
         // Get powerup-enhanced visuals
         const visualData = this.getBulletVisuals(gameEngine);
         
+        // Draw trail first (behind bullet)
+        this.drawTrail(ctx, visualData);
+        
         // Apply enhanced colors (shadow effects removed for performance)
         ctx.fillStyle = visualData.color;
         
@@ -263,9 +292,9 @@ export class Bullet {
     }
     
     getBulletVisuals(gameEngine) {
-        let color = '#00FFFF'; // Default cyan
-        let glowColor = '#00FFFF';
-        let glowIntensity = 6;
+        let color = '#FFFF00'; // Default bright yellow
+        let glowColor = '#FFDD00';
+        let glowIntensity = 8;
         let shape = 'circle';
         let size = this.radius;
         
@@ -324,16 +353,68 @@ export class Bullet {
         return { color, glowColor, glowIntensity, shape, size };
     }
     
+    drawTrail(ctx, visualData) {
+        if (this.trail.length < 2) return;
+        
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen'; // Additive blending for bright trails
+        
+        // Draw trail segments with decreasing opacity and size
+        for (let i = 0; i < this.trail.length - 1; i++) {
+            const segment = this.trail[i];
+            const alpha = (i + 1) / this.trail.length; // Fade from 0 to 1
+            const size = visualData.size * alpha * 0.6; // Smaller trail segments
+            
+            ctx.globalAlpha = alpha * 0.7; // Semi-transparent trail
+            ctx.fillStyle = visualData.glowColor;
+            
+            ctx.beginPath();
+            ctx.arc(segment.x, segment.y, size, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+        
+        ctx.restore();
+    }
+    
     drawCircleBullet(ctx, visualData) {
-        // Main bullet
+        // Draw comet-shaped bullet
+        const headRadius = visualData.size;
+        const tailLength = visualData.size * 2;
+        
+        // Calculate direction opposite to movement for tail
+        const tailAngle = Math.atan2(-this.vel.y, -this.vel.x);
+        const tailX = this.x + Math.cos(tailAngle) * tailLength;
+        const tailY = this.y + Math.sin(tailAngle) * tailLength;
+        
+        // Draw comet tail (gradient from head to tail)
+        const gradient = ctx.createLinearGradient(this.x, this.y, tailX, tailY);
+        gradient.addColorStop(0, visualData.color);
+        gradient.addColorStop(0.7, visualData.color + '80'); // Semi-transparent
+        gradient.addColorStop(1, visualData.color + '00'); // Fully transparent
+        
+        ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, visualData.size, 0, 2 * Math.PI);
+        ctx.ellipse(
+            this.x + Math.cos(tailAngle) * tailLength * 0.3, 
+            this.y + Math.sin(tailAngle) * tailLength * 0.3,
+            tailLength * 0.8, 
+            headRadius * 0.6,
+            tailAngle,
+            0, 
+            2 * Math.PI
+        );
+        ctx.fill();
+        
+        // Main bullet head (circular)
+        ctx.fillStyle = visualData.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, headRadius, 0, 2 * Math.PI);
         ctx.fill();
         
         // Bright center
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
-        ctx.arc(this.x, this.y, visualData.size * 0.5, 0, 2 * Math.PI);
+        ctx.arc(this.x, this.y, headRadius * 0.5, 0, 2 * Math.PI);
         ctx.fill();
     }
     

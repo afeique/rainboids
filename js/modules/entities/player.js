@@ -57,6 +57,7 @@ export class Player {
         this.thrustersDisabled = false;
         this.invincible = false;
         this.invincibilityTimer = 0;
+        this.firingDisabled = false;
         
         // Reset auto-fire timer
         this.autoFireTimer = 0;
@@ -97,6 +98,7 @@ export class Player {
             if (this.invincibilityTimer <= 0) {
                 this.invincible = false;
                 this.invincibilityTimer = 0;
+                this.firingDisabled = false; // Re-enable firing when invincibility ends
             }
         }
 
@@ -187,15 +189,17 @@ export class Player {
         this.y += this.vel.y;
         wrap(this, this.width, this.height);
 
-        // Auto-firing system - continuously fire at set intervals
-        this.autoFireTimer += 16; // Assume 60fps (16ms per frame)
-        const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
-        const fireRateMultiplier = Math.pow(0.75, rapidFireStacks); // 25% faster per stack
-        const effectiveFireRate = this.baseFireRate * fireRateMultiplier;
-        
-        if (this.autoFireTimer >= effectiveFireRate) {
-            this.fireWeapons(bulletPool, audioManager);
-            this.autoFireTimer = 0;
+        // Auto-firing system - continuously fire at set intervals (unless firing is disabled)
+        if (!this.firingDisabled) {
+            this.autoFireTimer += 16; // Assume 60fps (16ms per frame)
+            const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
+            const fireRateMultiplier = Math.pow(0.75, rapidFireStacks); // 25% faster per stack
+            const effectiveFireRate = this.baseFireRate * fireRateMultiplier;
+            
+            if (this.autoFireTimer >= effectiveFireRate) {
+                this.fireWeapons(bulletPool, audioManager);
+                this.autoFireTimer = 0;
+            }
         }
         
 
@@ -513,13 +517,22 @@ export class Player {
         return Math.min(300, totalCritDamage); // Cap at 300% (3x damage)
     }
     
-    getEffectiveBurstStarHealing() {
-        const baseHealing = 1; // Base healing scaled back down
+    getEffectiveHealthOrbHealing() {
+        const baseHealing = 1; // Will be passed from game engine using GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT
         const medpackStacks = this.getPowerupStacks('MEDPACK');
-        const bonusHealing = medpackStacks * 1; // +1 healing per medpack stack (scaled down)
+        const bonusHealing = medpackStacks * 1; // +1 healing per medpack stack
         
         const totalHealing = baseHealing + bonusHealing;
         return Math.min(6, totalHealing); // Cap at 6 (base 1 + 5 stacks × 1 = 6 max)
+    }
+    
+    // Legacy support for old method names
+    getEffectiveHealthStarHealing() {
+        return this.getEffectiveHealthOrbHealing();
+    }
+    
+    getEffectiveBurstStarHealing() {
+        return this.getEffectiveHealthOrbHealing();
     }
     
     // Wave bonus shield system removed - replaced with shop system

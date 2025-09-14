@@ -12,10 +12,26 @@ export const GAME_CONFIG = {
     ACTIVE_STAR_ATTR: 0.01,
     ACTIVE_STAR_ATTRACT_DIST: 100,
     STAR_FRIC: 0.99,
-    BURST_STAR_MONEY: 50,
-    BURST_STAR_HEAL_AMOUNT: 1, // Health restored per burst star
-    BURST_STAR_DROP_COUNT: 3, // Number of burst stars dropped per enemy death
-    BURST_STAR_COLLECTION_RADIUS: 15, // Extra pixels added to burst star collection radius
+    
+    // Health Orb Configuration (renamed from health stars)
+    HEALTH_ORB_HEAL_AMOUNT: 1, // Health restored per health orb
+    HEALTH_ORB_BASE_DROP_RATE: 0.8, // 80% base chance to drop health orbs
+    HEALTH_ORB_BASE_DROP_COUNT_MIN: 1, // Minimum health orbs dropped
+    HEALTH_ORB_BASE_DROP_COUNT_MAX: 4, // Maximum health orbs dropped
+    HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
+    
+    // Money Orb Configuration (renamed from money stars)
+    MONEY_ORB_MONEY_AMOUNT: 25, // Money gained per money orb
+    MONEY_ORB_BASE_DROP_RATE: 0.9, // 90% base chance to drop money orbs
+    MONEY_ORB_BASE_DROP_COUNT_MIN: 1, // Minimum money orbs dropped
+    MONEY_ORB_BASE_DROP_COUNT_MAX: 3, // Maximum money orbs dropped
+    MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
+    
+    // Orb Drop Upgrade Configuration
+    HEALTH_ORB_DROP_CHANCE_UPGRADE: 0.1, // +10% drop chance per upgrade stack
+    MONEY_ORB_DROP_CHANCE_UPGRADE: 0.1, // +10% drop chance per upgrade stack
+    HEALTH_ORB_DROP_QUANTITY_UPGRADE: 1, // +1 orb per upgrade stack
+    MONEY_ORB_DROP_QUANTITY_UPGRADE: 1, // +1 orb per upgrade stack
     ENEMY_BULLET_ASTEROID_DAMAGE: 1, // Damage enemy bullets deal to asteroids
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,

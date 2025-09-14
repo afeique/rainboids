@@ -199,10 +199,9 @@ export class Asteroid {
         // Make bar longer to accommodate level display
         const barWidth = 65; // Increased from 50 to 65
         const barHeight = 3; // Reduced from 5px to 3px for more compact appearance
-        const barX = this.x - barWidth / 2;
         const barY = this.y - this.radius - 18;
 
-        // Health number centered above the health bar
+        // Health number and level text setup
         ctx.font = "10px 'Press Start 2P', monospace";
         ctx.fillStyle = '#FFD700'; // Bright gold for health number
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
@@ -210,17 +209,24 @@ export class Asteroid {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         const healthNumber = `${Math.round(this.health)}/${this.maxHealth}`;
-        const numberX = barX + barWidth / 2; // Center above the bar
         const numberY = barY - 6; // Position above the bar with 6px gap
         
-        // Measure health number width to position level to the left
+        // Measure text widths for proper centering
         const healthWidth = ctx.measureText(healthNumber).width;
-        
-        // Draw level display inline to the left of HP number
         const levelText = `LV${this.level || 1}`;
         const levelWidth = ctx.measureText(levelText).width;
         const spacing = 8; // Space between level and health
-        const levelX = numberX - (healthWidth / 2) - spacing - levelWidth;
+        
+        // Calculate total width of combined LV + HP text
+        const totalTextWidth = levelWidth + spacing + healthWidth;
+        
+        // Center the health bar under the combined text
+        const barX = this.x - barWidth / 2;
+        const textCenterX = this.x; // Center the combined text over the asteroid
+        
+        // Calculate positions for level and health text
+        const levelX = textCenterX - (totalTextWidth / 2);
+        const numberX = levelX + levelWidth + spacing + (healthWidth / 2);
         
         // Draw level text in light blue
         ctx.fillStyle = '#88ccff'; // Light blue color

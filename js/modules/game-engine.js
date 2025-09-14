@@ -1,6 +1,7 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
-import { random, collision, burstStarCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
+import { debugConsole, debug, toggleDebugMode, setDebugMode, getDebugMode } from './debug.js';
+import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
 import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
@@ -74,7 +75,7 @@ export class GameEngine {
         console.log('  🔵 STALKER (Cross) - 10 HP - Stealth approach enemy');
         console.log('  🟠 BOMBER (Spiked Circle) - 15 HP - Explosive projectiles');
         console.log('💥 Combat System: Player bullets = 1 dmg, Enemy bullets = 2 dmg');
-        console.log(`💚 Health System: Burst stars heal ${GAME_CONFIG.BURST_STAR_HEAL_AMOUNT}HP each! Enemies drop ${GAME_CONFIG.BURST_STAR_DROP_COUNT} per kill!`);
+        console.log(`💚 Health System: Health orbs heal ${GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT}HP each! Configurable drop rates and counts!`);
         console.log(`🪨 Asteroid Interactions: Enemy bullets deal ${GAME_CONFIG.ENEMY_BULLET_ASTEROID_DAMAGE} damage to asteroids, enemies bounce off (no damage)`);
         console.log('💥 Player Damage Feedback: Screen shake, red damage numbers, and colored explosions when hit');
         console.log('🎆 Bullet Impact Effects: Colored particle explosions for all enemy bullet impacts');
@@ -82,7 +83,7 @@ export class GameEngine {
         console.log('♻️  Enemy Bullet Lifecycle: No fade decay, recycled when off-screen for efficiency');
         console.log('👻 Enemy Phase-Through: Enemies pass through each other and enemy bullets');
         console.log('🕶️ Enemy Dodging: Enemies actively dodge each other\'s bullets with predictive AI');
-        console.log('💊 Tunable Healing: Burst star heal amount now configurable in constants');
+        console.log('💊 Tunable Healing: Health orb heal amount now configurable in constants');
         console.log('🌊 Enhanced Waves: Multi-phase waves with asteroids first, then enemy sub-waves');
         console.log('⚡ Performance Optimizations Active:');
         console.log('  🔧 Reduced particle counts for explosions and effects');
@@ -164,13 +165,102 @@ export class GameEngine {
             money: 0,
             highScore: 0,
             currentWave: 0,
+            lives: 3, // Start with 3 lives
             state: GAME_STATES.TITLE_SCREEN,
             lastState: GAME_STATES.TITLE_SCREEN,
             screenShakeDuration: 0,
             screenShakeMagnitude: 0,
             enemyLevel: 1,    // Enemy level increases each wave
-            asteroidLevel: 1  // Asteroid level increases each wave
+            asteroidLevel: 1,  // Asteroid level increases each wave
+            waveComplete: false,
+            waveCountdownTime: 0,
+            waveCountdownDuration: 5000, // 5 seconds between waves
+            respawning: false,
+            respawnStartTime: 0,
+            respawnDuration: 5000 // 5 seconds respawn sequence
         };
+        
+        // Initialize cheat flags
+        this.cheats = {
+            onePunchMan: false,    // Player destroys everything with one hit
+            freeWilly: false,      // 100,000 coins (one-time activation)
+            vitamix: false         // Enemies and asteroids ALWAYS drop health and money
+        };
+        
+        // Expose cheat functions globally (case insensitive)
+        this.setupCheatCodes();
+        
+        // Expose debug functions globally
+        this.setupDebugFunctions();
+    }
+    
+    setupCheatCodes() {
+        // Make cheat functions available globally
+        window.onepunchman = window.ONEPUNCHMAN = () => this.activateOnePunchMan();
+        window.freewilly = window.FREEWILLY = () => this.activateFreeWilly();
+        window.vitamix = window.VITAMIX = () => this.activateVitamix();
+        window.gdb = window.GDB = () => this.activateGdb();
+        
+        console.log('🎮 Cheat codes activated! Available cheats: onepunchman, freewilly, vitamix, gdb');
+        console.log('🐛 Debug mode is currently:', getDebugMode() ? 'ENABLED' : 'DISABLED');
+    }
+    
+    activateOnePunchMan() {
+        this.cheats.onePunchMan = !this.cheats.onePunchMan;
+        const status = this.cheats.onePunchMan ? 'ACTIVATED' : 'DEACTIVATED';
+        console.log(`🥊 ONE PUNCH MAN ${status} - Player destroys everything with one hit!`);
+        debugConsole.log(`🥊 [DEBUG] ONE PUNCH MAN ${status} - Player destroys everything with one hit!`);
+        if (this.cheats.onePunchMan) {
+            this.uiManager.showMessage('ONE PUNCH MAN', 'Activated! One hit destroys all!', 3000);
+        }
+        return `One Punch Man ${status}`;
+    }
+    
+    activateFreeWilly() {
+        if (!this.cheats.freeWilly) {
+            this.cheats.freeWilly = true;
+            this.game.money += 100000;
+            console.log(`💰 FREE WILLY ACTIVATED - Added 100,000 coins! Total: ${this.game.money}`);
+            debugConsole.log(`💰 [DEBUG] FREE WILLY ACTIVATED - Added 100,000 coins! Total: ${this.game.money}`);
+            this.uiManager.showMessage('FREE WILLY', '+100,000 Coins!', 3000);
+            return 'Free Willy ACTIVATED - 100,000 coins added!';
+        } else {
+            console.log(`💰 FREE WILLY already used this session`);
+            debugConsole.log(`💰 [DEBUG] FREE WILLY already used this session`);
+            return 'Free Willy already used this session';
+        }
+    }
+    
+    activateVitamix() {
+        this.cheats.vitamix = !this.cheats.vitamix;
+        const status = this.cheats.vitamix ? 'ACTIVATED' : 'DEACTIVATED';
+        console.log(`💊 VITAMIX ${status} - Enemies and asteroids ALWAYS drop health and money!`);
+        debugConsole.log(`💊 [DEBUG] VITAMIX ${status} - Enemies and asteroids ALWAYS drop health and money!`);
+        if (this.cheats.vitamix) {
+            this.uiManager.showMessage('VITAMIX', 'Activated! Guaranteed drops!', 3000);
+        }
+        return `Vitamix ${status}`;
+    }
+    
+    activateGdb() {
+        const newState = toggleDebugMode();
+        const status = newState ? 'ENABLED' : 'DISABLED';
+        console.log(`🐛 GDB (Debug Mode) ${status}`);
+        if (newState) {
+            this.uiManager.showMessage('DEBUG MODE', 'Enabled! Check console for debug output', 3000);
+        } else {
+            this.uiManager.showMessage('DEBUG MODE', 'Disabled', 2000);
+        }
+        return `Debug Mode ${status}`;
+    }
+    
+    setupDebugFunctions() {
+        // Make debug functions available globally
+        window.debugConsole = debugConsole;
+        window.debug = debug;
+        window.toggleDebugMode = toggleDebugMode;
+        window.setDebugMode = setDebugMode;
+        window.getDebugMode = getDebugMode;
     }
     
     initializePools() {
@@ -238,11 +328,11 @@ export class GameEngine {
                 this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY);
                 console.log('🧪 Test powerup spawned near player');
             }
-            // Open shop manually
-            if (e.code === 'KeyS' && this.game.state === GAME_STATES.PLAYING) {
-                this.openShop();
-                console.log('🛒 Shop opened manually with S key');
-            }
+            // Open shop manually (disabled - use pause menu instead)
+            // if (e.code === 'KeyS' && this.game.state === GAME_STATES.PLAYING) {
+            //     this.openShop();
+            //     console.log('🛒 Shop opened manually with S key');
+            // }
         });
         
         // Handle game restart
@@ -311,9 +401,9 @@ export class GameEngine {
         
         // Mouse move tracking for hover effects
         this.canvas.addEventListener('mousemove', (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            this.mouseX = e.clientX - rect.left;
-            this.mouseY = e.clientY - rect.top;
+                const rect = this.canvas.getBoundingClientRect();
+                this.mouseX = e.clientX - rect.left;
+                this.mouseY = e.clientY - rect.top;
         });
         
         // Shop scroll support
@@ -458,15 +548,15 @@ export class GameEngine {
         this.generateInitialColorStars();
         this.generateBackgroundStars();
         
-        // Initialize first wave with enhanced wave system
+        // Initialize first wave with fixed wave system
         this.game.currentWave = 1;
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 7000, 'top');
-        this.game.state = GAME_STATES.WAVE_TRANSITION;
-        setTimeout(() => {
-            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+        this.game.waveComplete = false;
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 3000, 'top');
+        this.uiManager.updateLives(this.game.lives); // Initialize lives display
                 this.game.state = GAME_STATES.PLAYING;
-            }
-        }, 1500);
+        
+        // Spawn initial wave (4 asteroids for wave 1)
+        this.spawnWaveEntities();
     }
     
     // Generate all initial color stars using purely generative method
@@ -599,21 +689,9 @@ export class GameEngine {
         }
     }
     
-    // ULTRA-BULLETPROOF continuous spawning system
-    updateBulletproofSpawning() {
-        const now = Date.now();
-        
-        // LOG EVERYTHING - debug what's happening
-        if (now % 3000 < 50) { // Log every 3 seconds
-            console.log(`🎮 GAME STATE: ${this.game.state} (should be PLAYING for spawning)`);
-            console.log(`🕐 SPAWNING STATUS: Last spawn ${(now - this.lastSpawnTime)/1000}s ago, interval ${this.spawnInterval/1000}s`);
-        }
-        
-        // FIX THE STATE ISSUE - spawn during PLAYING AND WAVE_TRANSITION
+    // Fixed wave system with object limits for performance
+    updateWaveSystem() {
         if (this.game.state !== GAME_STATES.PLAYING && this.game.state !== GAME_STATES.WAVE_TRANSITION) {
-            if (now % 5000 < 50) { // Log occasionally
-                console.log(`❌ SPAWNING BLOCKED by state: ${this.game.state}`);
-            }
             return;
         }
         
@@ -621,71 +699,142 @@ export class GameEngine {
         this.enemyPool.cleanupInactive();
         this.asteroidPool.cleanupInactive();
         
-        // Count current entities
-        const totalEntities = this.enemyPool.activeObjects.length + this.asteroidPool.activeObjects.length;
+        // Check if current wave is complete
+        const totalEnemies = this.enemyPool.activeObjects.length;
+        const totalAsteroids = this.asteroidPool.activeObjects.length;
+        const totalEntities = totalEnemies + totalAsteroids;
         
-        // CONSTANT LOGGING - see what's happening
-        if (now % 3000 < 50) { // Show every 3 seconds
-            console.log(`🎯 SPAWNING: ${totalEntities} entities (E:${this.enemyPool.activeObjects.length}, A:${this.asteroidPool.activeObjects.length})`);
-            console.log(`⏱️ Timer: ${(now - this.lastSpawnTime)/1000}s / ${this.spawnInterval/1000}s`);
+        if (totalEntities === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
+            // Wave completed!
+            this.game.waveComplete = true;
+            this.game.waveCountdownTime = Date.now() + this.game.waveCountdownDuration;
+            this.game.state = GAME_STATES.WAVE_TRANSITION;
+            
+            console.log(`🌊 Wave ${this.game.currentWave} completed!`);
+            this.showWaveComplete();
         }
         
-        // MULTIPLE FORCE SPAWN CONDITIONS:
-        const timeSinceLastSpawn = now - this.lastSpawnTime;
-        const shouldSpawnByTime = timeSinceLastSpawn >= this.spawnInterval;
-        const shouldSpawnByCount = totalEntities < 3; // Always maintain at least 3 entities
-        const shouldForceSpawn = totalEntities === 0; // Emergency spawn if battlefield is empty
-        const shouldSpawnByDelay = timeSinceLastSpawn > (this.spawnInterval * 2); // Force if too long delay
-        
-        if (shouldSpawnByTime || shouldSpawnByCount || shouldForceSpawn || shouldSpawnByDelay) {
-            console.log(`🚀 SPAWNING TRIGGERED! Time:${shouldSpawnByTime} Count:${shouldSpawnByCount} Force:${shouldForceSpawn} Delay:${shouldSpawnByDelay}`);
+        // Handle wave countdown
+        if (this.game.waveComplete && this.game.state === GAME_STATES.WAVE_TRANSITION) {
+            const timeLeft = this.game.waveCountdownTime - Date.now();
             
-            // GUARANTEED SPAWN - try multiple methods
-            const spawned = this.forceSpawnEntity();
-            
-            if (spawned) {
-                this.lastSpawnTime = now;
-                console.log(`✅ SPAWN SUCCESS! Entities now: ${totalEntities + 1}`);
-            } else {
-                console.error('❌ SPAWN FAILED! Will retry immediately...');
-                this.lastSpawnTime = now - this.spawnInterval + 500; // Retry in 0.5 seconds
+            if (timeLeft <= 0) {
+                // Start next wave
+                this.startNextWave();
             }
         }
+    }
+    
+    showWaveComplete() {
+        // Show WAVE COMPLETE with wavy color-changing text
+        this.uiManager.showWavyMessage('WAVE COMPLETE', '', this.game.waveCountdownDuration, 'center');
+    }
+    
+    // Method to draw wavy rainbow text like the title screen
+    drawWavyText(text, x, y, fontSize = 48) {
+        const time = Date.now() * 0.001; // Convert to seconds
+        const chars = text.split('');
+        let currentX = x;
         
-        // Shop and wave management
-        if (now >= this.nextShopTime) {
-            this.openShop();
-            this.nextShopTime = now + this.shopInterval;
-            console.log(`🛒 Auto-opening shop`);
+        this.ctx.save();
+        this.ctx.font = `${fontSize}px "Press Start 2P", monospace`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        
+        chars.forEach((char, index) => {
+            if (char === ' ') {
+                currentX += fontSize * 0.5; // Space width
+            return;
         }
         
-        // EMERGENCY BACKUP SPAWNING SYSTEM - runs independently
-        const timeSinceEmergencySpawn = now - this.lastEmergencySpawn;
-        if (timeSinceEmergencySpawn >= this.emergencySpawnInterval) {
-            const totalEntities = this.enemyPool.activeObjects.length + this.asteroidPool.activeObjects.length;
-            if (totalEntities < 2) {
-                console.log(`🚨 EMERGENCY BACKUP SPAWNING: Only ${totalEntities} entities!`);
-                if (this.forceSpawnEntity()) {
-                    this.lastEmergencySpawn = now;
-                    console.log(`✅ Emergency backup spawn successful!`);
-                } else {
-                    console.error(`❌ Emergency backup spawn failed!`);
-                }
+            // Wave animation
+            const waveOffset = Math.sin(time * 2 + index * 0.5) * 15;
+            
+            // Color cycling (rainbow effect)
+            const colorTime = (time * 0.1 + index * 0.1) % 1;
+            let color, shadowColor;
+            
+            if (colorTime < 0.16) {
+                color = '#00F'; shadowColor = '#00F';
+            } else if (colorTime < 0.32) {
+                color = '#4B0082'; shadowColor = '#4B0082';
+            } else if (colorTime < 0.48) {
+                color = '#8A2BE2'; shadowColor = '#8A2BE2';
+            } else if (colorTime < 0.64) {
+                color = '#FF00FF'; shadowColor = '#FF00FF';
+            } else if (colorTime < 0.80) {
+                color = '#FF4500'; shadowColor = '#FF4500';
             } else {
-                this.lastEmergencySpawn = now; // Reset timer even if we didn't need to spawn
+                color = '#F00'; shadowColor = '#F00';
+            }
+            
+            this.ctx.fillStyle = color;
+            this.ctx.shadowColor = shadowColor;
+            this.ctx.shadowBlur = 15;
+            
+            // Draw character with wave offset
+            this.ctx.fillText(char, currentX, y + waveOffset);
+            
+            // Move to next character position
+            const charWidth = this.ctx.measureText(char).width;
+            currentX += charWidth + fontSize * 0.1; // Small spacing between chars
+        });
+        
+        this.ctx.restore();
+    }
+    
+    startNextWave() {
+        this.game.currentWave++;
+        this.game.waveComplete = false;
+        this.game.state = GAME_STATES.PLAYING;
+        
+        // Update levels
+        this.game.enemyLevel = Math.floor(this.game.currentWave / 2) + 1;
+        this.game.asteroidLevel = Math.floor(this.game.currentWave / 3) + 1;
+        
+        console.log(`🚀 Starting Wave ${this.game.currentWave} - Enemy LV.${this.game.enemyLevel}, Asteroid LV.${this.game.asteroidLevel}`);
+        
+        // Spawn wave entities based on wave number
+        this.spawnWaveEntities();
+        
+        // Show wave start message
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 3000, 'top');
+    }
+    
+    spawnWaveEntities() {
+        // Wave 1: 4 asteroids only
+        if (this.game.currentWave === 1) {
+            this.spawnAsteroids(4);
+        } else {
+            // Later waves: mix of asteroids and enemies (limit total for performance)
+            const maxEntities = 8; // Performance limit
+            const asteroidCount = Math.min(4, Math.floor(maxEntities * 0.6));
+            const enemyCount = Math.min(4, maxEntities - asteroidCount);
+            
+            this.spawnAsteroids(asteroidCount);
+            this.spawnEnemies(enemyCount);
+        }
+    }
+    
+    spawnAsteroids(count) {
+        for (let i = 0; i < count; i++) {
+            const asteroid = this.asteroidPool.get();
+            if (asteroid) {
+                this.initializeWaveAsteroid(asteroid);
+                console.log(`🪨 Spawned asteroid ${i + 1}/${count}`);
             }
         }
-        
-        // Wave progression
-        const wavesSinceStart = Math.floor((now - this.gameStartTime) / 60000);
-        if (wavesSinceStart > this.game.currentWave) {
-            this.game.currentWave = wavesSinceStart + 1;
-            this.game.enemyLevel = Math.floor(this.game.currentWave / 2) + 1;
-            this.game.asteroidLevel = Math.floor(this.game.currentWave / 3) + 1;
-            
-            this.uiManager.updateWave(this.game.currentWave);
-            this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 3000, 'top');
-            console.log(`🆙 Wave ${this.game.currentWave} - Enemy LV.${this.game.enemyLevel}, Asteroid LV.${this.game.asteroidLevel}`);
+    }
+    
+    spawnEnemies(count) {
+        for (let i = 0; i < count; i++) {
+            const enemy = this.enemyPool.get();
+            if (enemy) {
+                const enemyType = this.getRandomEnemyType();
+                const spawnPos = this.getRandomSpawnPosition();
+                enemy.reset(spawnPos.x, spawnPos.y, enemyType, this.game.enemyLevel);
+                console.log(`👾 Spawned ${enemyType} enemy ${i + 1}/${count}`);
+            }
         }
     }
     
@@ -703,12 +852,12 @@ export class GameEngine {
         
         console.log(`🌊 Wave ${this.game.currentWave} completed! Enemy Level: ${this.game.enemyLevel}, Asteroid Level: ${this.game.asteroidLevel}`);
         
-        // Open shop immediately after wave completion
-        setTimeout(() => {
-            this.openShop();
-        }, 500); // Brief delay to ensure clean transition
+        // Shop removed from wave completion - players can access via pause menu
+        // setTimeout(() => {
+        //     this.openShop();
+        // }, 500); // Brief delay to ensure clean transition
         
-        console.log(`✅ Wave ${this.game.currentWave} complete! Opening shop...`);
+        console.log(`✅ Wave ${this.game.currentWave} complete! Use pause menu to access shop.`);
     }
     
     openShop() {
@@ -716,6 +865,8 @@ export class GameEngine {
         
         // Hide any active wave messages when opening shop
         this.uiManager.hideMessage();
+        
+        // Shop button will be naturally hidden behind shop overlay (z-index)
         
         // Store the time when shop opened to adjust spawn timers later
         this.shopOpenTime = Date.now();
@@ -730,7 +881,7 @@ export class GameEngine {
             {
                 id: 'MEDPACK',
                 name: 'Medpack',
-                description: 'Increases burst star healing by 1',
+                description: 'Increases green health orb healing by 1',
                 cost: 500,  // Premium healing upgrade
                 icon: '💊',
                 maxStacks: 5  // 5 stacks for max +5 healing (1 base + 5 bonus = 6 total)
@@ -822,6 +973,47 @@ export class GameEngine {
                 cost: 1500, // Expensive damage scaling
                 icon: '💥',
                 maxStacks: 15  // Max 300% crit damage (150% base + 150% from upgrades)
+            },
+            {
+                id: 'HEALTH_ORB_DROP_CHANCE',
+                name: 'Health Orb Luck',
+                description: 'Increases health orb drop chance by 10%',
+                cost: 2000, // Expensive utility upgrade
+                icon: '🍀',
+                maxStacks: 2  // Max 20% bonus (80% base + 20% = 100% guaranteed)
+            },
+            {
+                id: 'MONEY_ORB_DROP_CHANCE',
+                name: 'Money Orb Luck',
+                description: 'Increases money orb drop chance by 10%',
+                cost: 2000, // Expensive utility upgrade
+                icon: '💰',
+                maxStacks: 1  // Max 10% bonus (90% base + 10% = 100% guaranteed)
+            },
+            {
+                id: 'HEALTH_ORB_DROP_QUANTITY',
+                name: 'Health Orb Bounty',
+                description: 'Increases health orbs dropped by 1',
+                cost: 3000, // Very expensive for more healing
+                icon: '💚',
+                maxStacks: 3  // Max +3 extra orbs per drop
+            },
+            {
+                id: 'MONEY_ORB_DROP_QUANTITY',
+                name: 'Money Orb Bounty',
+                description: 'Increases money orbs dropped by 1',
+                cost: 2500, // Expensive for more money
+                icon: '🪙',
+                maxStacks: 4  // Max +4 extra orbs per drop
+            },
+            {
+                id: 'SPARE_SHIP',
+                name: 'Spare Ship',
+                description: 'Adds an extra life (max 3)',
+                cost: 10000, // Expensive flat cost, no scaling
+                icon: '🚀',
+                maxStacks: 1,  // Only one purchase allowed
+                flatCost: true // Flag to indicate no cost scaling
             }
         ];
         
@@ -836,6 +1028,8 @@ export class GameEngine {
                 console.error('❌ Game object is undefined in closeShop!');
                 return;
             }
+            
+            // Shop button will be naturally visible again (z-index)
             
             // Adjust spawn timers for the time spent in shop
             if (this.shopOpenTime) {
@@ -893,6 +1087,12 @@ export class GameEngine {
                 return false;
             }
             
+            // Special check for Spare Ship - can't buy if already at 3 lives
+            if (itemId === 'SPARE_SHIP' && this.game.lives >= 3) {
+                console.log(`❌ Cannot purchase ${item.name} - already at maximum lives (3)`);
+                return false;
+            }
+            
             const currentStacks = this.player.getPowerupStacks(itemId);
             if (currentStacks >= item.maxStacks) {
                 if (item.maxStacks === 1) {
@@ -908,9 +1108,12 @@ export class GameEngine {
                 return false;
             }
             
-            // Calculate dynamic cost for spread shot
+            // Calculate dynamic cost for special items
             let actualCost = item.cost;
-            if (item.id === 'SPREAD_SHOT') {
+            if (item.flatCost) {
+                // Items with flat cost don't scale (like Spare Ship)
+                actualCost = item.cost;
+            } else if (item.id === 'SPREAD_SHOT') {
                 const currentStacks = this.player.getPowerupStacks(item.id);
                 if (currentStacks === 0) actualCost = 5000;      // First purchase
                 else if (currentStacks === 1) actualCost = 10000; // Second purchase  
@@ -926,18 +1129,25 @@ export class GameEngine {
             this.game.money -= actualCost;
             console.log(`💰 Money deducted. New balance: ${this.game.money}`);
             
-            // Add powerup to player (permanent for the run)
-            const powerupConfig = this.getPowerupConfig(itemId);
-            if (!powerupConfig) {
-                console.error(`❌ Powerup config not found for: ${itemId}`);
-                return false;
+            // Special handling for Spare Ship
+            if (itemId === 'SPARE_SHIP') {
+                this.game.lives = Math.min(3, this.game.lives + 1); // Cap at 3 lives
+                this.uiManager.updateLives(this.game.lives);
+                console.log(`🚀 Spare Ship purchased! Lives: ${this.game.lives}`);
+            } else {
+                // Add powerup to player (permanent for the run)
+                const powerupConfig = this.getPowerupConfig(itemId);
+                if (!powerupConfig) {
+                    console.error(`❌ Powerup config not found for: ${itemId}`);
+                    return false;
+                }
+                
+                console.log(`🛒 Adding powerup to player...`);
+                this.player.addPowerup(itemId, {
+                    ...powerupConfig,
+                    duration: Infinity // Permanent for the run
+                }, true); // isShopItem = true
             }
-            
-            console.log(`🛒 Adding powerup to player...`);
-            this.player.addPowerup(itemId, {
-                ...powerupConfig,
-                duration: Infinity // Permanent for the run
-            }, true); // isShopItem = true
             
             console.log(`✅ Purchased ${item.name} for ${actualCost} coins!`);
             
@@ -1012,10 +1222,25 @@ export class GameEngine {
         this.ctx.textAlign = 'center';
         this.ctx.fillText('SHOP', this.width / 2, 60);
         
-        // Money display - larger and more visible
-        this.ctx.fillStyle = '#00FF00';
+        // Money display with icon and gold text
+        const moneyY = 90;
+        const iconSize = 20;
+        const moneyText = `${Math.floor(this.game.money)}`;
+        
+        // Measure text width to center the icon + text combination
         this.ctx.font = 'bold 20px "Press Start 2P", monospace';
-        this.ctx.fillText(`Coins: ${this.game.money}`, this.width / 2, 90);
+        const textWidth = this.ctx.measureText(moneyText).width;
+        const totalWidth = iconSize + 8 + textWidth; // icon + spacing + text
+        const moneyStartX = (this.width - totalWidth) / 2;
+        
+        // Draw money icon
+        drawCachedMoneyIcon(this.ctx, moneyStartX + iconSize/2, moneyY - 2, iconSize, '#FFD700', '#B8860B');
+        
+        // Draw money amount in gold
+        this.ctx.fillStyle = '#FFD700'; // Gold color
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(moneyText, moneyStartX + iconSize + 8, moneyY);
         
         // Setup clipping for scrollable area
         this.ctx.save();
@@ -1141,17 +1366,23 @@ export class GameEngine {
         this.ctx.fillStyle = maxedOut ? '#666' : '#FFFFFF';
         this.ctx.textAlign = 'left'; // Left-justified text
         
-        // Truncate name if too long
-        let displayName = item.name;
-        let nameWidth = this.ctx.measureText(displayName).width;
-        if (nameWidth > textWidth) {
-            while (nameWidth > textWidth - 30 && displayName.length > 3) {
-                displayName = displayName.slice(0, -1);
-                nameWidth = this.ctx.measureText(displayName + '...').width;
+        // Handle multi-line names (like "Critical\nDamage")
+        const nameLines = item.name.split('\n');
+        const nameLineHeight = 18;
+        
+        nameLines.forEach((line, index) => {
+            // Truncate line if too long
+            let displayLine = line;
+            let lineWidth = this.ctx.measureText(displayLine).width;
+            if (lineWidth > textWidth) {
+                while (lineWidth > textWidth - 30 && displayLine.length > 3) {
+                    displayLine = displayLine.slice(0, -1);
+                    lineWidth = this.ctx.measureText(displayLine + '...').width;
+                }
+                displayLine += '...';
             }
-            displayName += '...';
-        }
-        this.ctx.fillText(displayName, textX, y + 35); // Aligned with coin cost position
+            this.ctx.fillText(displayLine, textX, y + 25 + (index * nameLineHeight)); // Multi-line support
+        });
         
         // Item description - larger, more readable font
         this.ctx.font = '12px "Press Start 2P", monospace';
@@ -1612,15 +1843,60 @@ export class GameEngine {
         }
     }
     
-    createEnemyBurstStar(x, y) {
-        // Create a collectible burst star that heals the player
-        const burstStar = this.colorStarPool.get(x, y, true); // true = is burst star
-        if (burstStar) {
-            // Give it some random velocity to scatter from the enemy position
+    // Create health orbs that heal the player
+    createHealthOrb(x, y) {
+        const healthOrb = this.colorStarPool.get(x, y, 'health'); // health orb type
+        if (healthOrb) {
+            // Give it some random velocity to scatter from the entity position
             const angle = random(0, Math.PI * 2);
             const speed = random(1, 3);
-            burstStar.vel.x = Math.cos(angle) * speed;
-            burstStar.vel.y = Math.sin(angle) * speed;
+            healthOrb.vel.x = Math.cos(angle) * speed;
+            healthOrb.vel.y = Math.sin(angle) * speed;
+        }
+    }
+    
+    // Create money orbs that give coins to the player
+    createMoneyOrb(x, y) {
+        const moneyOrb = this.colorStarPool.get(x, y, 'money'); // money orb type
+        if (moneyOrb) {
+            // Give it some random velocity to scatter from the entity position
+            const angle = random(0, Math.PI * 2);
+            const speed = random(1, 3);
+            moneyOrb.vel.x = Math.cos(angle) * speed;
+            moneyOrb.vel.y = Math.sin(angle) * speed;
+        }
+    }
+    
+    // Drop orbs based on configuration and upgrades
+    dropOrbsFromEntity(x, y) {
+        // Get upgrade stacks for drop chances and quantities
+        const healthDropChanceStacks = this.player.getPowerupStacks('HEALTH_ORB_DROP_CHANCE');
+        const moneyDropChanceStacks = this.player.getPowerupStacks('MONEY_ORB_DROP_CHANCE');
+        const healthDropQuantityStacks = this.player.getPowerupStacks('HEALTH_ORB_DROP_QUANTITY');
+        const moneyDropQuantityStacks = this.player.getPowerupStacks('MONEY_ORB_DROP_QUANTITY');
+        
+        // Calculate effective drop rates with upgrades (Vitamix cheat: guaranteed drops)
+        const healthDropRate = this.cheats.vitamix ? 1.0 : Math.min(1.0, GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + (healthDropChanceStacks * GAME_CONFIG.HEALTH_ORB_DROP_CHANCE_UPGRADE));
+        const moneyDropRate = this.cheats.vitamix ? 1.0 : Math.min(1.0, GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + (moneyDropChanceStacks * GAME_CONFIG.MONEY_ORB_DROP_CHANCE_UPGRADE));
+        
+        // Drop health orbs
+        if (Math.random() < healthDropRate) {
+            const baseHealthOrbCount = Math.floor(Math.random() * (GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX - GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MIN + 1)) + GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MIN;
+            const totalHealthOrbCount = baseHealthOrbCount + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
+            
+            for (let i = 0; i < totalHealthOrbCount; i++) {
+                this.createHealthOrb(x, y);
+            }
+        }
+        
+        // Drop money orbs
+        if (Math.random() < moneyDropRate) {
+            const baseMoneyOrbCount = Math.floor(Math.random() * (GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX - GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MIN + 1)) + GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MIN;
+            const totalMoneyOrbCount = baseMoneyOrbCount + (moneyDropQuantityStacks * GAME_CONFIG.MONEY_ORB_DROP_QUANTITY_UPGRADE);
+            
+            for (let i = 0; i < totalMoneyOrbCount; i++) {
+                this.createMoneyOrb(x, y);
+            }
         }
     }
     
@@ -1831,8 +2107,9 @@ export class GameEngine {
                     triggerHapticFeedback(60);
                     this.audioManager.playHit();
                     
-                    // Damage the asteroid
-                    ast.health -= 1;
+                    // Damage the asteroid (One Punch Man cheat: instant kill)
+                    const damage = this.cheats.onePunchMan ? 99999 : 1;
+                    ast.health -= damage;
 
                     // Impart momentum from bullet
                     const impulse = 0.05; // Adjust for desired push effect
@@ -1873,6 +2150,8 @@ export class GameEngine {
                             }
                             this.createDebris(ast);
                             this.createColorStarBurst(ast.x, ast.y);
+                            // Drop health and money orbs
+                            this.dropOrbsFromEntity(ast.x, ast.y);
                             // Chance to drop powerup (15% chance)
                             if (Math.random() < 0.15) {
                                 this.dropPowerup(ast.x, ast.y);
@@ -1985,18 +2264,16 @@ export class GameEngine {
             }
         }
         
-        // Player vs Burst ColorStars (only burst stars from asteroid destruction are collectible)
+        // Player vs Collectible Orbs (health and money orbs from entity destruction are collectible)
         if (this.player && this.player.active) {
             for (let i = this.colorStarPool.activeObjects.length - 1; i >= 0; i--) {
                 const colorStar = this.colorStarPool.activeObjects[i];
-                // Only check collision for burst stars using enhanced collision detection
-                // Uses larger radius + predictive collision to prevent fast stars from passing through player
-                if (colorStar.isBurst && burstStarCollision(this.player, colorStar)) {
-                    this.game.score += GAME_CONFIG.BURST_STAR_MONEY;
-                    this.game.money += GAME_CONFIG.BURST_STAR_MONEY;
-                    
-                    // Heal player for collecting burst star (use player's effective healing amount)
-                    const healAmount = this.player.getEffectiveBurstStarHealing();
+                // Only check collision for collectible orbs using enhanced collision detection
+                // Uses larger radius + predictive collision to prevent fast orbs from passing through player
+                if (colorStar.isCollectible && starCollision(this.player, colorStar)) {
+                    if (colorStar.starType === 'health') {
+                        // Health orb collected
+                        const healAmount = this.player.getEffectiveHealthStarHealing();
                     const oldHealth = this.player.health;
                     this.player.health = Math.min(this.player.getEffectiveMaxHealth(), this.player.health + healAmount);
                     const actualHeal = this.player.health - oldHealth;
@@ -2012,6 +2289,23 @@ export class GameEngine {
                         }
                     } else {
                         this.audioManager.playCoin(); // Normal sound if already at max health
+                        }
+                    } else if (colorStar.starType === 'money') {
+                        // Money orb collected
+                        const moneyAmount = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT;
+                        this.game.score += moneyAmount;
+                        this.game.money += moneyAmount;
+                        
+                        // Play pickup sound (always play regardless of music beat)
+                        this.audioManager.playCoin();
+                        
+                        // Create golden money particle
+                        const moneyParticle = this.particlePool.get(this.player.x, this.player.y, 'starBlip');
+                        if (moneyParticle) {
+                            moneyParticle.color = '#FFD700'; // Gold for money
+                            moneyParticle.radius = 6;
+                            moneyParticle.life = 0.6;
+                        }
                     }
                     
                     // Create focused golden burst effect
@@ -2085,8 +2379,9 @@ export class GameEngine {
                     triggerHapticFeedback(40);
                     this.audioManager.playHit();
                     
-                    // Damage the enemy
-                    const destroyed = enemy.takeDamage(this.baseDamage);
+                    // Damage the enemy (One Punch Man cheat: instant kill)
+                    const damage = this.cheats.onePunchMan ? 99999 : this.baseDamage;
+                    const destroyed = enemy.takeDamage(damage);
                     
                     // Reduced explosion effects for performance
                     for (let p = 0; p < 4; p++) {
@@ -2120,10 +2415,8 @@ export class GameEngine {
                         // Create colored explosion effects
                         this.createEnemyDebris(enemy);
                         
-                        // Drop burst stars for health
-                        for (let i = 0; i < GAME_CONFIG.BURST_STAR_DROP_COUNT; i++) {
-                            this.createEnemyBurstStar(enemy.x, enemy.y);
-                        }
+        // Drop health and money orbs
+        this.dropOrbsFromEntity(enemy.x, enemy.y);
                         
                         // Chance to drop powerup (higher chance for stronger enemies)
                         const powerupChance = enemy.type === 'WASP' ? 0.4 : 
@@ -2194,6 +2487,8 @@ export class GameEngine {
                             // Create destruction effects
                             this.createDebris(ast);
                             this.createColorStarBurst(ast.x, ast.y);
+                            // Drop health and money orbs
+                            this.dropOrbsFromEntity(ast.x, ast.y);
                             this.asteroidPool.release(ast);
                             this.triggerScreenShake(8, ast.baseRadius * 0.3, ast.baseRadius);
                         } else {
@@ -2327,10 +2622,8 @@ export class GameEngine {
             const reward = enemy.getDestructionReward();
             this.game.score += reward.points / 2; // Reduced points for collision kill
             this.createEnemyDebris(enemy);
-            // Drop burst stars for healing
-            for (let i = 0; i < GAME_CONFIG.BURST_STAR_DROP_COUNT; i++) {
-                this.createEnemyBurstStar(enemy.x, enemy.y);
-            }
+        // Drop health and money orbs
+        this.dropOrbsFromEntity(enemy.x, enemy.y);
             this.enemyPool.release(enemy);
         }
         
@@ -2460,6 +2753,12 @@ export class GameEngine {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
             const input = this.inputHandler.getInput();
 
+            // Handle respawn animation sequence
+            if (this.game.respawning) {
+                this.updateRespawnAnimation(input);
+                return; // Skip normal gameplay updates during respawn
+            }
+
             // Calculate tractor beam state
             const tractorEngaged = !input.up && !input.down && !input.left && !input.right && !input.fire;
             
@@ -2467,14 +2766,14 @@ export class GameEngine {
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged);
             
             this.bulletPool.activeObjects.forEach(bullet => 
-                bullet.update(this.particlePool, this.asteroidPool, this.enemyPool));
+                bullet.update(this.particlePool, this.asteroidPool, this.enemyPool, this));
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.powerupPool.activeObjects.forEach(p => p.update(this.player));
             this.asteroidPool.updateActive();
             
             // Update enemies and enemy bullets (only during active gameplay)
-            this.updateBulletproofSpawning();
+            // this.updateWaveSystem(); // Commented out continuous spawning system
             this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this));
             this.enemyBulletPool.updateActive();
             
@@ -2557,18 +2856,28 @@ export class GameEngine {
             // Draw powerup display at top
             this.drawPowerupDisplay();
             
-            // Draw spawn countdown timer
-            this.drawSpawnTimer();
+            // Draw spawn countdown timer (hidden per user request)
+            // this.drawSpawnTimer();
             
             // Draw jitter circle to show bullet spread area
             this.drawJitterCircle();
+            
+            // Draw respawn countdown timer if respawning
+            if (this.game.respawning) {
+                this.drawRespawnCountdown();
+            }
+            
+            // Draw invincibility countdown timer if player is invincible after respawn
+            if (this.player.active && this.player.invincible && this.player.firingDisabled) {
+                this.drawInvincibilityCountdown();
+            }
         }
     }
     
     drawHUD() {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
             // Draw health bar and UI elements
-            this.updateShieldsDisplay();
+            this.updateHUD();
         }
     }
     
@@ -2706,12 +3015,56 @@ export class GameEngine {
     
     togglePause() {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
+            // Playing → Paused
             this.game.state = GAME_STATES.PAUSED;
             this.uiManager.togglePause();
+            console.log('⏸️ Game paused');
             // Removed thruster sound on pause to reduce noise issues
         } else if (this.game.state === GAME_STATES.PAUSED) {
+            // Paused → Playing
             this.game.state = GAME_STATES.PLAYING;
             this.uiManager.togglePause();
+            console.log('▶️ Game resumed');
+        } else if (this.game.state === GAME_STATES.SHOP) {
+            // Shop → Paused (close shop and show pause menu)
+            this.closeShopToPause();
+            console.log('🛒 Shop closed, showing pause menu');
+        }
+    }
+    
+    closeShopToPause() {
+        try {
+            console.log('🛒 Closing shop to show pause menu...');
+            
+            if (!this.game) {
+                console.error('❌ Game object is undefined in closeShopToPause!');
+                return;
+            }
+            
+            // Shop button will be naturally visible again (z-index)
+            
+            // Adjust spawn timers for the time spent in shop
+            if (this.shopOpenTime) {
+                const timeInShop = Date.now() - this.shopOpenTime;
+                this.lastSpawnTime += timeInShop;
+                this.lastEmergencySpawn += timeInShop;
+                this.nextShopTime += timeInShop;
+                console.log(`⏱️ Adjusted all timers for ${timeInShop}ms spent in shop`);
+            }
+            
+            // Set state to paused instead of wave transition
+            this.game.state = GAME_STATES.PAUSED;
+            this.uiManager.togglePause(); // Show pause menu
+            console.log(`🎮 Game state changed to: ${this.game.state}`);
+            
+            // Clear shop bounds to prevent memory leaks
+            this.shopItemBounds = null;
+            console.log('🧹 Shop bounds cleared');
+            
+        } catch (error) {
+            console.error('❌ Error in closeShopToPause:', error);
+            // Fallback: just set to paused state
+            this.game.state = GAME_STATES.PAUSED;
         }
     }
     
@@ -2875,24 +3228,190 @@ export class GameEngine {
     }
 
     gameOver() {
-        this.game.state = GAME_STATES.GAME_OVER;
-        this.player.active = false;
-        this.checkHighScore();
+        // Lose a life first
+        this.game.lives--;
+        console.log(`💀 Player died! Lives remaining: ${this.game.lives}`); // Always show player death
+        debugConsole.debug('PLAYER', `Death details - Lives: ${this.game.lives}, Score: ${this.game.score}, Money: ${this.game.money}`);
+        
+        // Update lives display
+        this.uiManager.updateLives(this.game.lives);
+        
         this.audioManager.playPlayerExplosion();
         
-        // Create death explosion
-        for (let i = 0; i < 50; i++) {
-            this.particlePool.get(this.player.x, this.player.y, 'explosion');
+        // Create massive death explosion with multiple particle types
+        const explosionX = this.player.x;
+        const explosionY = this.player.y;
+        
+        // Main explosion particles (much more)
+        for (let i = 0; i < 120; i++) {
+            const particle = this.particlePool.get(explosionX, explosionY, 'explosion');
+            if (particle) {
+                // Enhanced velocity for more dramatic spread
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 3 + Math.random() * 8; // Faster particles
+                particle.vel.x = Math.cos(angle) * speed;
+                particle.vel.y = Math.sin(angle) * speed;
+                particle.life = 60 + Math.random() * 40; // Longer lasting
+            }
         }
         
-        // Show game over message
-        this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
-        this.triggerScreenShake(30, 20);
+        // Secondary explosion ring particles
+        for (let i = 0; i < 80; i++) {
+            const particle = this.particlePool.get(explosionX, explosionY, 'explosionRedOrange');
+            if (particle) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 6;
+                particle.vel.x = Math.cos(angle) * speed;
+                particle.vel.y = Math.sin(angle) * speed;
+                particle.radius = 2 + Math.random() * 4;
+                particle.life = 80 + Math.random() * 60;
+            }
+        }
+        
+        // Explosion pulse rings
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => {
+                this.particlePool.get(explosionX, explosionY, 'explosionPulse', 40 + i * 20);
+            }, i * 100);
+        }
+        
+        // Fiery explosion rings
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                this.particlePool.get(explosionX, explosionY, 'fieryExplosionRing', 60 + i * 30);
+            }, i * 150);
+        }
+        
+        // Debris particles
+        for (let i = 0; i < 40; i++) {
+            const particle = this.particlePool.get(explosionX, explosionY, 'starBlip');
+            if (particle) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1 + Math.random() * 4;
+                particle.vel.x = Math.cos(angle) * speed;
+                particle.vel.y = Math.sin(angle) * speed;
+                particle.color = ['#ff4444', '#ff8800', '#ffaa00', '#ffffff'][Math.floor(Math.random() * 4)];
+                particle.life = 100 + Math.random() * 80;
+            }
+        }
+        
+        // Massive screen shake for player death
+        this.triggerScreenShake(80, 45); // Much stronger and longer shake
+        
+        if (this.game.lives <= 0) {
+            // True game over - no lives left
+            this.game.state = GAME_STATES.GAME_OVER;
+            this.player.active = false;
+            this.checkHighScore();
+            this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
+            console.log('💀 GAME OVER - No lives remaining!');
+        } else {
+            // Still have lives - respawn player
+            this.respawnPlayer();
+        }
     }
     
-    updateShieldsDisplay() {
+    respawnPlayer() {
+        console.log(`🔄 Starting respawn sequence with ${this.game.lives} lives remaining`);
+        
+        // Start respawn animation sequence
+        this.game.respawning = true;
+        this.game.respawnStartTime = Date.now();
+        
+        // Position player at center but keep inactive during animation
+        this.player.x = this.width / 2;
+        this.player.y = this.height / 2;
+        this.player.vel.x = 0;
+        this.player.vel.y = 0;
+        this.player.angle = 0;
+        this.player.active = false; // Keep inactive during respawn animation
+        
+        // Reset health and shields
+        this.player.health = this.player.getEffectiveMaxHealth();
+        this.playerShields = this.player.health;
+        this.displayShields = this.player.health;
+        
+        // Clear nearby enemies and bullets to give player a chance
+        this.clearAreaAroundPlayer(150);
+        
+        console.log('✨ Respawn animation started');
+    }
+    
+    updateRespawnAnimation(input) {
+        const now = Date.now();
+        const elapsed = now - this.game.respawnStartTime;
+        const progress = Math.min(1, elapsed / this.game.respawnDuration);
+        
+        // Update particles and other systems that should continue during respawn
+        this.particlePool.updateActive();
+        this.lineDebrisPool.updateActive();
+        this.backgroundStarPool.activeObjects.forEach(s => s.update({ x: 0, y: 0 })); // No parallax during respawn
+        
+        // Generate blue particles that converge on the player position
+        if (Math.random() < 0.8) { // High frequency for dramatic effect
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 100 + Math.random() * 200; // Start particles from a distance
+            const startX = this.player.x + Math.cos(angle) * distance;
+            const startY = this.player.y + Math.sin(angle) * distance;
+            
+            // Create tractor beam particle that moves toward player
+            const particle = this.particlePool.get(startX, startY, 'tractorBeamParticle', this.player.x, this.player.y);
+            if (particle) {
+                // Override color to bright blue
+                particle.color = `hsl(210, 100%, ${70 + Math.random() * 30}%)`;
+                particle.radius = 2 + Math.random() * 2;
+            }
+        }
+        
+        // Check if respawn animation is complete
+        if (progress >= 1) {
+            // Activate player and start invincibility
+            this.player.active = true;
+            this.player.makeInvincible(this.game.respawnDuration); // 5 seconds of invincibility
+            this.player.firingDisabled = true; // Disable firing during invincibility
+            
+            // End respawn animation
+            this.game.respawning = false;
+            
+            // Show respawn message
+            const livesText = this.game.lives === 1 ? '1 life' : `${this.game.lives} lives`;
+            this.uiManager.showMessage('RESPAWNED', `${livesText} remaining`, 'top');
+            
+            console.log('✨ Player respawned successfully with invincibility');
+        }
+    }
+    
+    clearAreaAroundPlayer(radius) {
+        // Clear enemies near player spawn
+        this.enemyPool.activeObjects.forEach(enemy => {
+            const dx = enemy.x - this.player.x;
+            const dy = enemy.y - this.player.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < radius) {
+                enemy.active = false;
+                // Create small explosion effect
+                for (let i = 0; i < 5; i++) {
+                    this.particlePool.get(enemy.x, enemy.y, 'explosion');
+                }
+            }
+        });
+        
+        // Clear enemy bullets near player spawn
+        this.enemyBulletPool.activeObjects.forEach(bullet => {
+            const dx = bullet.x - this.player.x;
+            const dy = bullet.y - this.player.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < radius) {
+                bullet.active = false;
+            }
+        });
+        
+        console.log(`🧹 Cleared area around player (radius: ${radius}px)`);
+    }
+    
+    updateHUD() {
         const ctx = this.ctx;
-        const barX = 20;
+        const barX = 80; // Moved right to make room for triforce on the left
         const barY = 20;
         const barHeight = 30;
         const barWidth = 220;
@@ -2926,14 +3445,12 @@ export class GameEngine {
 
         // Outer glow effect removed for performance
         
-        // Draw background container with semi-transparency
-        ctx.globalAlpha = 0.3;
+        // Draw background container
         createHealthBarPath(barWidth);
         ctx.fillStyle = 'rgba(10, 40, 80, 0.8)';
         ctx.fill();
         
         // Draw subtle border
-        ctx.globalAlpha = 0.6;
         ctx.strokeStyle = 'rgba(120, 200, 255, 0.8)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
@@ -2951,7 +3468,6 @@ export class GameEngine {
             // Static red glow for low health warning (performance optimized)
             
             // Draw warning glow around the entire health bar area
-            ctx.globalAlpha = 0.3;
             ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)'; // Fixed opacity instead of undefined pulseIntensity
             ctx.lineWidth = 3;
             createHealthBarPath(barWidth);
@@ -2961,7 +3477,6 @@ export class GameEngine {
         
         // Draw filled health bar with gradient
         if (filledWidth > 0) {
-            ctx.globalAlpha = 0.7;
             
             // Create enhanced gradient for health bar
             const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
@@ -2972,23 +3487,23 @@ export class GameEngine {
             
             // Color based on health level with enhanced gradients
             if (healthPercentage > 0.6) {
-                // Healthy - bright sky blue with subtle shimmer
-                gradient.addColorStop(0, 'rgba(120, 240, 255, 0.95)');
-                gradient.addColorStop(0.3, 'rgba(80, 200, 255, 0.9)');
-                gradient.addColorStop(0.7, 'rgba(60, 180, 255, 0.85)');
-                gradient.addColorStop(1, 'rgba(40, 140, 220, 0.8)');
+                // Healthy - vibrant electric blue
+                gradient.addColorStop(0, 'rgba(0, 150, 255, 0.95)');
+                gradient.addColorStop(0.3, 'rgba(0, 120, 255, 0.9)');
+                gradient.addColorStop(0.7, 'rgba(0, 90, 255, 0.85)');
+                gradient.addColorStop(1, 'rgba(0, 60, 220, 0.8)');
             } else if (healthPercentage > 0.3) {
-                // Warning - yellow-blue transition
-                gradient.addColorStop(0, 'rgba(180, 240, 255, 0.95)');
-                gradient.addColorStop(0.3, 'rgba(150, 200, 220, 0.9)');
-                gradient.addColorStop(0.7, 'rgba(120, 180, 200, 0.85)');
-                gradient.addColorStop(1, 'rgba(100, 140, 160, 0.8)');
+                // Warning - bright yellow
+                gradient.addColorStop(0, 'rgba(255, 255, 0, 0.95)');
+                gradient.addColorStop(0.3, 'rgba(255, 220, 0, 0.9)');
+                gradient.addColorStop(0.7, 'rgba(255, 180, 0, 0.85)');
+                gradient.addColorStop(1, 'rgba(220, 140, 0, 0.8)');
                 } else {
-                // Critical - red-tinted with urgency
-                gradient.addColorStop(0, 'rgba(255, 180, 180, 0.95)');
-                gradient.addColorStop(0.3, 'rgba(240, 140, 160, 0.9)');
-                gradient.addColorStop(0.7, 'rgba(220, 120, 150, 0.85)');
-                gradient.addColorStop(1, 'rgba(180, 100, 120, 0.8)');
+                // Critical - bright red
+                gradient.addColorStop(0, 'rgba(255, 50, 50, 0.95)');
+                gradient.addColorStop(0.3, 'rgba(255, 20, 20, 0.9)');
+                gradient.addColorStop(0.7, 'rgba(220, 0, 0, 0.85)');
+                gradient.addColorStop(1, 'rgba(180, 0, 0, 0.8)');
             }
             
             createHealthBarPath(filledWidth);
@@ -2996,7 +3511,6 @@ export class GameEngine {
             ctx.fill();
             
             // Add subtle inner glow
-            ctx.globalAlpha = 0.4;
             createHealthBarPath(filledWidth);
             ctx.strokeStyle = 'rgba(200, 240, 255, 0.6)';
             ctx.lineWidth = 1;
@@ -3006,7 +3520,6 @@ export class GameEngine {
         // Remove segmentation lines for cleaner look
 
         // Draw HP text below the health bar with matching colors
-        ctx.globalAlpha = 0.9;
         ctx.font = "12px 'Press Start 2P', monospace";
         
         // Match text color to health bar color
@@ -3056,10 +3569,8 @@ export class GameEngine {
         const centerY = shieldIconY + iconSize / 2;
         
         // Use cached shield icon sprite instead of complex path drawing
-        ctx.globalAlpha = 0.9;
         drawCachedShieldIcon(ctx, centerX, centerY, iconSize);
         
-        ctx.globalAlpha = 0.9;
         ctx.font = "12px 'Press Start 2P', monospace";
         ctx.fillStyle = '#4A90E2'; // Consistent blue color for shield text
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)'; // Dark outline
@@ -3125,20 +3636,8 @@ export class GameEngine {
             shieldTanksContainer.innerHTML = '';
         }
         
-        // Create only the tanks the player has (max 10 visible)
-        shieldTanksContainer = document.getElementById('shield-tanks');
-        const visibleTanks = Math.min(this.displayTanks, 10);
-        for (let i = 0; i < visibleTanks; i++) {
-            const tank = document.createElement('div');
-            tank.className = 'shield-tank';
-            tank.dataset.tankIndex = i;
-            tank.style.width = '14px';
-            tank.style.height = '14px';
-            tank.style.borderRadius = '3px';
-            tank.style.background = 'rgba(0,255,0,0.8)';
-            tank.style.position = 'relative';
-            shieldTanksContainer.appendChild(tank);
-        }
+        // Shield tanks display removed - was causing green square overlay
+        // Tanks are now managed internally without DOM elements
     }    
     explodeTank(tankIndex) {
         const tanks = document.querySelectorAll('.shield-tank');
@@ -3336,11 +3835,11 @@ export class GameEngine {
         const spawnY = startY;
         this.drawCircularTimer(ctx, timerX, spawnY, radius, spawnProgress, '#00ff88', '⚡', timeUntilSpawn);
         
-        // Draw shop timer (bottom) - only show when shop interval > 30 seconds
-        if (timeUntilShop > 30000) {
-            const shopY = startY + verticalSpacing;
-            this.drawCircularTimer(ctx, timerX, shopY, radius, shopProgress, '#ffaa00', '🛒', timeUntilShop);
-        }
+        // Draw shop timer (bottom) - disabled per user request
+        // if (timeUntilShop > 30000) {
+        //     const shopY = startY + verticalSpacing;
+        //     this.drawCircularTimer(ctx, timerX, shopY, radius, shopProgress, '#ffaa00', '🛒', timeUntilShop);
+        // }
         
         ctx.restore();
         
@@ -3386,6 +3885,105 @@ export class GameEngine {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillText(timeText, x, y + radius + 6);
+    }
+    
+    drawRespawnCountdown() {
+        const ctx = this.ctx;
+        const now = Date.now();
+        const elapsed = now - this.game.respawnStartTime;
+        const progress = Math.min(1, elapsed / this.game.respawnDuration);
+        const timeRemaining = this.game.respawnDuration - elapsed;
+        
+        // Draw at center of screen
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        const radius = 40;
+        
+        ctx.save();
+        
+        // Draw background circle
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Draw progress arc (countdown)
+        ctx.strokeStyle = '#00aaff'; // Blue color
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        // Start from top and go clockwise, showing remaining time
+        ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + ((1 - progress) * Math.PI * 2));
+        ctx.stroke();
+        
+        // Draw respawn icon in center
+        ctx.font = '24px "Press Start 2P", monospace';
+        ctx.fillStyle = '#00aaff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚡', centerX, centerY);
+        
+        // Draw countdown text below
+        const totalSeconds = Math.ceil(timeRemaining / 1000);
+        const timeText = `${totalSeconds}s`;
+        
+        ctx.font = '14px "Press Start 2P", monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        // Removed "RESPAWNING" text - only show countdown
+        ctx.fillText(timeText, centerX, centerY + radius + 10);
+        
+        ctx.restore();
+    }
+    
+    drawInvincibilityCountdown() {
+        const ctx = this.ctx;
+        const timeRemaining = this.player.invincibilityTimer;
+        const totalDuration = this.game.respawnDuration; // 5 seconds
+        const progress = 1 - (timeRemaining / totalDuration);
+        
+        // Draw at center of screen, smaller than respawn timer
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        const radius = 30;
+        
+        ctx.save();
+        
+        // Draw background circle
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Draw progress arc (countdown) - showing remaining time
+        ctx.strokeStyle = '#ffaa00'; // Orange color for invincibility
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        // Start from top and go clockwise, showing remaining time
+        ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + ((1 - progress) * Math.PI * 2));
+        ctx.stroke();
+        
+        // Draw shield icon in center
+        ctx.font = '18px "Press Start 2P", monospace';
+        ctx.fillStyle = '#ffaa00';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🛡', centerX, centerY);
+        
+        // Draw countdown text below
+        const totalSeconds = Math.ceil(timeRemaining / 1000);
+        const timeText = `${totalSeconds}s`;
+        
+        ctx.font = '12px "Press Start 2P", monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('INVINCIBLE', centerX, centerY + radius + 8);
+        ctx.fillText(timeText, centerX, centerY + radius + 24);
+        
+        ctx.restore();
     }
     
     drawGhostPreviews(spawnProgress) {
