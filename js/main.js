@@ -155,7 +155,7 @@ class RainboidsGame {
             window.removeEventListener('click', startGame);
             window.removeEventListener('touchstart', startGame);
             
-            this.uiManager.hideTitleScreen();
+            // this.uiManager.hideTitleScreen();
             this.audioManager.initializeAudio();
             this.uiManager.startMusic();
             this.gameEngine.init();

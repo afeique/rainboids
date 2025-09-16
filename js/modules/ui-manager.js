@@ -21,10 +21,10 @@ export class UIManager {
             messageTitle: document.getElementById('message-title'),
             messageSubtitle: document.getElementById('message-subtitle'),
             mobileControls: document.getElementById('mobile-controls'),
-            titleScreen: document.getElementById('title-screen'),
-            gameTitle: document.getElementById('game-title'),
+            // titleScreen: document.getElementById('title-screen'),
+            // gameTitle: document.getElementById('game-title'),
             orientationOverlay: document.getElementById('orientation-overlay'),
-            highScoreDisplay: document.getElementById('high-score-display'),
+            // highScoreDisplay: document.getElementById('high-score-display'),
             // Music elements (removed from main UI, only in pause menu)
             musicInfo: null, // Removed from main display
             trackName: null, // Removed from main display
@@ -295,29 +295,29 @@ export class UIManager {
         return !isPaused;
     }
     
-    showTitleScreen() {
-        this.elements.titleScreen.style.display = 'flex';
-    }
+    // showTitleScreen() {
+    //     this.elements.titleScreen.style.display = 'flex';
+    // }
     
-    hideTitleScreen() {
-        this.elements.titleScreen.style.display = 'none';
-    }
+    // hideTitleScreen() {
+    //     this.elements.titleScreen.style.display = 'none';
+    // }
     
-    setupTitleScreen() {
-        const titleText = "RAINBOIDS";
-        this.elements.gameTitle.innerHTML = '';
-        titleText.split('').forEach((char, index) => {
-            const span = document.createElement('span');
-            span.textContent = char;
-            span.className = 'title-char';
-            span.style.animationDelay = `${index * 0.1}s`;
-            this.elements.gameTitle.appendChild(span);
-        });
-    }
+    // setupTitleScreen() {
+    //     const titleText = "RAINBOIDS";
+    //     this.elements.gameTitle.innerHTML = '';
+    //     titleText.split('').forEach((char, index) => {
+    //         const span = document.createElement('span');
+    //         span.textContent = char;
+    //         span.className = 'title-char';
+    //         span.style.animationDelay = `${index * 0.1}s`;
+    //         this.elements.gameTitle.appendChild(span);
+    //     });
+    // }
     
-    updateHighScore(highScore) {
-        this.elements.highScoreDisplay.textContent = `HIGH SCORE: ${highScore}`;
-    }
+    // updateHighScore(highScore) {
+    //     this.elements.highScoreDisplay.textContent = `HIGH SCORE: ${highScore}`;
+    // }
     
     checkOrientation() {
         // Portrait mode now supported

@@ -44,10 +44,20 @@ export class Player {
         this.maxChargeTime = 5000; // 5 seconds for full charge
         this.minChargeTime = 3000; // 3 seconds for basic charge
         
+        // Pause system for charge shot
+        this.chargePaused = false;
+        this.pausedChargeTime = 0; // Accumulated charge time when paused
+        
         // Shot cooldown system
         this.shotCooldownTime = 800; // 800ms cooldown between shots
         this.lastShotTime = 0;
         this.canShoot = true;
+        
+        // Hit streak combo system
+        this.hitStreak = 0; // Current consecutive hit streak
+        this.currentShotHits = 0; // Hits for the current shot
+        this.shotFired = false; // Whether a shot is currently active
+        this.activeShotBullets = 0; // Number of bullets from current shot still active
         
         // Powerup system
         this.powerups = new Map(); // Map of powerup type -> {stacks, timeRemaining}
@@ -130,6 +140,11 @@ export class Player {
     }
     
     updateChargingSystem(input, bulletPool, audioManager) {
+        // Skip charging updates if paused
+        if (this.chargePaused) {
+            return;
+        }
+        
         const now = Date.now();
         
         // Update cooldown status
@@ -142,6 +157,7 @@ export class Player {
                 this.fireChargedShot(bulletPool, audioManager);
                 this.isCharging = false;
                 this.chargeLevel = 0;
+                this.pausedChargeTime = 0; // Reset accumulated charge time
                 this.lastShotTime = now; // Start cooldown
             }
         } else {
@@ -153,20 +169,20 @@ export class Player {
                 this.chargeLevel = 0;
             }
             
-            // Update charge level
-            const chargeTime = now - this.chargeStartTime;
+            // Update charge level (including any previously accumulated time)
+            const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
             const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
             const reducedMaxChargeTime = this.maxChargeTime - (chargeSpeedStacks * 1000);
             
-            this.chargeLevel = Math.min(1, chargeTime / reducedMaxChargeTime);
+            this.chargeLevel = Math.min(1, currentChargeTime / reducedMaxChargeTime);
         }
         
         // Update tractor beam and visual effects
         if (this.isCharging) {
-            const chargeTime = now - this.chargeStartTime;
+            const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
             const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
             const reducedMaxChargeTime = this.maxChargeTime - (chargeSpeedStacks * 1000);
-            const isFullyCharged = chargeTime >= reducedMaxChargeTime;
+            const isFullyCharged = currentChargeTime >= reducedMaxChargeTime;
             
             this.tractorBeamActive = !isFullyCharged; // Stop tractor when fully charged
             this.isFullyCharged = isFullyCharged; // Store for visual effects
@@ -176,8 +192,71 @@ export class Player {
         }
     }
     
+    pauseChargeShot() {
+        if (this.isCharging && !this.chargePaused) {
+            // Store accumulated charge time before pausing
+            this.pausedChargeTime += Date.now() - this.chargeStartTime;
+            this.chargePaused = true;
+        }
+    }
+    
+    resumeChargeShot() {
+        if (this.chargePaused) {
+            // Resume charging from where we left off
+            this.chargeStartTime = Date.now();
+            this.chargePaused = false;
+            // pausedChargeTime keeps the accumulated time
+        }
+    }
+    
+    // Hit streak combo system methods
+    startNewShot(bulletCount = 1) {
+        this.shotFired = true;
+        this.currentShotHits = 0;
+        this.activeShotBullets = bulletCount;
+    }
+    
+    registerHit() {
+        if (this.shotFired) {
+            this.currentShotHits++;
+        }
+    }
+    
+    onBulletDestroyed() {
+        if (this.shotFired) {
+            this.activeShotBullets--;
+            if (this.activeShotBullets <= 0) {
+                this.finalizeShotResult();
+            }
+        }
+    }
+    
+    finalizeShotResult() {
+        if (this.shotFired) {
+            if (this.currentShotHits > 0) {
+                // At least one hit - continue or increase streak
+                this.hitStreak++;
+            } else {
+                // No hits - reset streak
+                this.hitStreak = 0;
+            }
+            this.shotFired = false;
+            this.currentShotHits = 0;
+            this.activeShotBullets = 0;
+        }
+    }
+    
+    getHitStreakMultiplier() {
+        // Higher streak = more orb drops
+        if (this.hitStreak < 5) return 1;
+        if (this.hitStreak < 10) return 1.5;
+        if (this.hitStreak < 20) return 2;
+        if (this.hitStreak < 50) return 3;
+        return 4; // Max multiplier for very high streaks
+    }
+    
     fireChargedShot(bulletPool, audioManager) {
-        const chargeTime = Date.now() - this.chargeStartTime;
+        const chargeTime = (Date.now() - this.chargeStartTime) + this.pausedChargeTime;
         
         // Apply charge speed upgrades
         const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
@@ -465,7 +544,7 @@ export class Player {
     
     drawChargingEffects(ctx) {
         const now = Date.now();
-        const chargeTime = now - this.chargeStartTime;
+        const chargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
         
         // Apply charge speed upgrades
         const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
@@ -812,6 +891,9 @@ export class Player {
         const spreadAngle = spreadShotStacks > 0 ? 
                            Math.min(0.6, spreadShotStacks * 0.15) : 0; // Max 0.6 radians spread
         
+        // Start tracking hits for this shot
+        this.startNewShot(bulletCount);
+        
         // Fire bullets
         for (let i = 0; i < bulletCount; i++) {
             let angle = this.angle;
@@ -824,6 +906,9 @@ export class Player {
             
             const bullet = bulletPool.get(this.x, this.y, angle);
             if (bullet) {
+                // Set up callback for when bullet is destroyed (for combo tracking)
+                bullet.onOffScreen = () => this.onBulletDestroyed();
+                
                 // Apply charge scaling to bullet speed
                 bullet.vel.x *= speedMultiplier;
                 bullet.vel.y *= speedMultiplier;

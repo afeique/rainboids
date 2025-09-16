@@ -71,6 +71,10 @@ export class Bullet {
         if (this.x < -50 || this.x > this.width + 50 || 
             this.y < -50 || this.y > this.height + 50) {
             this.active = false;
+            // Notify that bullet went off-screen (for combo tracking)
+            if (this.onOffScreen) {
+                this.onOffScreen();
+            }
         }
     }
     

@@ -34,6 +34,9 @@ export class GameEngine {
         // Initialize game state properties
         this.initializeGameState();
         
+        // Hide DOM title screen so we only see the wavy canvas version
+        // this.uiManager.hideTitleScreen();
+        
         this.initializePools();
         this.setupEventListeners();
         this.playerCanFire = true;
@@ -277,6 +280,22 @@ Type any cheat name in the console to activate!`);
             }
         });
         
+        // Auto-pause when window loses focus
+        window.addEventListener('blur', () => {
+            // Only auto-pause if currently playing (not already paused, in shop, etc.)
+            if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
+                this.togglePause();
+            }
+        });
+        
+        // Optional: Resume when window regains focus (commented out to avoid accidental resume)
+        // window.addEventListener('focus', () => {
+        //     // Could auto-resume here, but might be annoying for users
+        //     // if (this.game.state === GAME_STATES.PAUSED) {
+        //     //     this.togglePause();
+        //     // }
+        // });
+        
         // Shop click handling with click-outside-to-close
         this.canvas.addEventListener('click', (e) => {
             if (this.game.state === GAME_STATES.SHOP) {
@@ -296,6 +315,29 @@ Type any cheat name in the console to activate!`);
                     
                     if (isOutsideShop) {
                         this.closeShop();
+                        return;
+                    }
+                }
+                
+                // Check for tab clicks first
+                if (this.shopTabBounds) {
+                    // Check OFFENSE tab
+                    if (clickX >= this.shopTabBounds.offense.x && 
+                        clickX <= this.shopTabBounds.offense.x + this.shopTabBounds.offense.width &&
+                        clickY >= this.shopTabBounds.offense.y && 
+                        clickY <= this.shopTabBounds.offense.y + this.shopTabBounds.offense.height) {
+                        this.shopCategory = 'OFFENSE';
+                        this.shopScrollOffset = 0; // Reset scroll when switching tabs
+                        return;
+                    }
+                    
+                    // Check DEFENSE tab
+                    if (clickX >= this.shopTabBounds.defense.x && 
+                        clickX <= this.shopTabBounds.defense.x + this.shopTabBounds.defense.width &&
+                        clickY >= this.shopTabBounds.defense.y && 
+                        clickY <= this.shopTabBounds.defense.y + this.shopTabBounds.defense.height) {
+                        this.shopCategory = 'DEFENSE';
+                        this.shopScrollOffset = 0; // Reset scroll when switching tabs
                         return;
                     }
                 }
@@ -652,7 +694,7 @@ Type any cheat name in the console to activate!`);
         };
         
         // Also show DOM message as backup
-        this.uiManager.showMessage('WAVE COMPLETE!', `WAVE ${nextWave} INCOMING...`, this.game.waveCountdownDuration, 'center');
+        // this.uiManager.showMessage('WAVE COMPLETE!', `WAVE ${nextWave} INCOMING...`, this.game.waveCountdownDuration, 'center');
     }
     
     // Method to draw wavy rainbow text for wave messages
@@ -674,9 +716,9 @@ Type any cheat name in the console to activate!`);
         chars.forEach((char, index) => {
             if (char === ' ') {
                 currentX += fontSize * 0.5; // Space width
-                return;
-            }
-            
+            return;
+        }
+        
             // Wave animation
             const waveOffset = Math.sin(time * 3 + index * 0.8) * 20;
             
@@ -712,6 +754,47 @@ Type any cheat name in the console to activate!`);
         this.ctx.restore();
     }
     
+    drawTitleScreen() {
+        // Draw title screen with amazing wavy text
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        
+        // Main title - RAINBOIDS
+        this.drawWavyText('RAINBOIDS', centerX, centerY - 100, 72);
+        
+        // Subtitle
+        this.ctx.save();
+        this.ctx.font = '24px "Press Start 2P", monospace';
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20);
+        this.ctx.restore();
+        
+        // Animated "Press Any Key" text
+        const time = Date.now() * 0.001;
+        const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3; // Pulsing between 0.2 and 0.8
+        
+        this.ctx.save();
+        this.ctx.font = '18px "Press Start 2P", monospace';
+        this.ctx.fillStyle = `rgba(255, 255, 255, ${pulseAlpha})`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('PRESS ANY KEY TO START', centerX, centerY + 80);
+        this.ctx.restore();
+        
+        // High score display (if available)
+        if (this.game.highScore > 0) {
+            this.ctx.save();
+            this.ctx.font = '16px "Press Start 2P", monospace';
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(`HIGH SCORE: ${this.game.highScore}`, centerX, centerY + 120);
+            this.ctx.restore();
+        }
+    }
+    
     startNextWave() {
         this.game.currentWave++;
         this.game.waveComplete = false;
@@ -735,7 +818,7 @@ Type any cheat name in the console to activate!`);
         };
         
         // Also show DOM message as backup
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, 'FIGHT!', 3000, 'top');
+        // this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, 'FIGHT!', 3000, 'top');
     }
     
     spawnWaveEntities() {
@@ -853,6 +936,11 @@ Type any cheat name in the console to activate!`);
         
         // Transition to shop state from any valid state
         this.game.state = GAME_STATES.SHOP;
+        
+        // Pause the charge shot system when opening shop
+        if (this.player) {
+            this.player.pauseChargeShot();
+        }
         
         
         // Initialize shop state
@@ -1075,6 +1163,11 @@ Type any cheat name in the console to activate!`);
             
             this.game.state = GAME_STATES.WAVE_TRANSITION;
             
+            // Resume the charge shot system when closing shop
+            if (this.player) {
+                this.player.resumeChargeShot();
+            }
+            
             // Clear shop bounds to prevent memory leaks
             this.shopItemBounds = null;
             
@@ -1153,8 +1246,8 @@ Type any cheat name in the console to activate!`);
                     return false;
                 }
             } else {
-                if (this.game.money < actualCost) {
-                    return false;
+            if (this.game.money < actualCost) {
+                return false;
                 }
             }
             
@@ -1162,7 +1255,7 @@ Type any cheat name in the console to activate!`);
             if (item.currency === 'SP') {
                 this.player.skillPoints -= actualCost;
             } else {
-                this.game.money -= actualCost;
+            this.game.money -= actualCost;
             }
             
             // Special handling for Spare Ship
@@ -1230,9 +1323,9 @@ Type any cheat name in the console to activate!`);
         
         // Calculate shop window dimensions
         const shopWindowWidth = Math.min(600, this.width - 40);
-        const shopWindowHeight = Math.min(this.height - 160, 600);
+        const shopWindowHeight = Math.min(this.height - 120, 650); // Increased height and reduced top margin
         const shopWindowX = (this.width - shopWindowWidth) / 2;
-        const shopWindowY = 120;
+        const shopWindowY = 80; // Moved up from 120 to 80
         
         // Store shop window bounds for click detection
         this.shopWindowBounds = {
@@ -1308,13 +1401,14 @@ Type any cheat name in the console to activate!`);
         
         // Calculate total content height for scroll limits
         const totalContentHeight = filteredItems.length * (itemHeight + padding);
-        const maxScroll = Math.max(0, totalContentHeight - (shopWindowHeight - 80));
+        const availableHeight = shopWindowHeight - (contentStartY - shopWindowY) - 20; // Height available for items
+        const maxScroll = Math.max(0, totalContentHeight - availableHeight);
         
         // Clamp scroll offset
         this.shopScrollOffset = Math.max(0, Math.min(maxScroll, this.shopScrollOffset));
         
         // Calculate start Y position after clamping scroll offset
-        const startY = shopWindowY + 30 - this.shopScrollOffset;
+        const startY = contentStartY + 10 - this.shopScrollOffset;
         
         // Draw filtered shop items with hover detection
         filteredItems.forEach((item, index) => {
@@ -1369,15 +1463,35 @@ Type any cheat name in the console to activate!`);
         const totalTabsWidth = (tabWidth * 2) + tabSpacing;
         const tabStartX = shopX + (shopWidth - totalTabsWidth) / 2;
         
+        // Check hover states
+        const offenseHovered = this.mouseX >= tabStartX && this.mouseX <= tabStartX + tabWidth &&
+                              this.mouseY >= tabY && this.mouseY <= tabY + tabHeight;
+        const defenseTabX = tabStartX + tabWidth + tabSpacing;
+        const defenseHovered = this.mouseX >= defenseTabX && this.mouseX <= defenseTabX + tabWidth &&
+                              this.mouseY >= tabY && this.mouseY <= tabY + tabHeight;
+        
         // Draw OFFENSE tab
         const offenseActive = this.shopCategory === 'OFFENSE';
-        this.ctx.fillStyle = offenseActive ? '#FFD700' : 'rgba(255, 215, 0, 0.3)';
+        let offenseFillStyle, offenseTextStyle;
+        
+        if (offenseActive) {
+            offenseFillStyle = '#FFD700';
+            offenseTextStyle = '#000000';
+        } else if (offenseHovered) {
+            offenseFillStyle = 'rgba(255, 215, 0, 0.6)'; // Brighter on hover
+            offenseTextStyle = '#FFD700';
+        } else {
+            offenseFillStyle = 'rgba(255, 215, 0, 0.3)';
+            offenseTextStyle = '#FFD700';
+        }
+        
+        this.ctx.fillStyle = offenseFillStyle;
         this.ctx.strokeStyle = '#FFD700';
         this.ctx.lineWidth = 2;
         this.ctx.fillRect(tabStartX, tabY, tabWidth, tabHeight);
         this.ctx.strokeRect(tabStartX, tabY, tabWidth, tabHeight);
         
-        this.ctx.fillStyle = offenseActive ? '#000000' : '#FFD700';
+        this.ctx.fillStyle = offenseTextStyle;
         this.ctx.font = 'bold 12px "Press Start 2P", monospace';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
@@ -1385,14 +1499,26 @@ Type any cheat name in the console to activate!`);
         
         // Draw DEFENSE tab
         const defenseActive = this.shopCategory === 'DEFENSE';
-        this.ctx.fillStyle = defenseActive ? '#4A90E2' : 'rgba(74, 144, 226, 0.3)';
+        let defenseFillStyle, defenseTextStyle;
+        
+        if (defenseActive) {
+            defenseFillStyle = '#4A90E2';
+            defenseTextStyle = '#FFFFFF';
+        } else if (defenseHovered) {
+            defenseFillStyle = 'rgba(74, 144, 226, 0.6)'; // Brighter on hover
+            defenseTextStyle = '#4A90E2';
+        } else {
+            defenseFillStyle = 'rgba(74, 144, 226, 0.3)';
+            defenseTextStyle = '#4A90E2';
+        }
+        
+        this.ctx.fillStyle = defenseFillStyle;
         this.ctx.strokeStyle = '#4A90E2';
         this.ctx.lineWidth = 2;
-        const defenseTabX = tabStartX + tabWidth + tabSpacing;
         this.ctx.fillRect(defenseTabX, tabY, tabWidth, tabHeight);
         this.ctx.strokeRect(defenseTabX, tabY, tabWidth, tabHeight);
         
-        this.ctx.fillStyle = defenseActive ? '#FFFFFF' : '#4A90E2';
+        this.ctx.fillStyle = defenseTextStyle;
         this.ctx.fillText('DEFENSE', defenseTabX + tabWidth/2, tabY + tabHeight/2);
         
         // Store tab bounds for click detection
@@ -1502,7 +1628,7 @@ Type any cheat name in the console to activate!`);
         if (item.currency === 'SP') {
             this.ctx.fillStyle = canAfford ? '#4A90E2' : '#FF6666';
         } else {
-            this.ctx.fillStyle = canAfford ? '#FFD700' : '#FF6666';
+        this.ctx.fillStyle = canAfford ? '#FFD700' : '#FF6666';
         }
         
         this.ctx.textAlign = 'right';
@@ -1515,7 +1641,7 @@ Type any cheat name in the console to activate!`);
             this.ctx.fillText('SP', costX, y + 52);
         } else {
             this.ctx.fillStyle = canAfford ? '#B8860B' : '#CC4444';
-            this.ctx.fillText('coins', costX, y + 52);
+        this.ctx.fillText('coins', costX, y + 52);
         }
         
         // Item level beneath coin cost (right side)
@@ -2019,6 +2145,9 @@ Type any cheat name in the console to activate!`);
         const healthDropQuantityStacks = this.player.getPowerupStacks('HEALTH_ORB_DROP_QUANTITY');
         const moneyDropQuantityStacks = this.player.getPowerupStacks('MONEY_ORB_DROP_QUANTITY');
         
+        // Get hit streak multiplier for increased orb drops
+        const hitStreakMultiplier = this.player.getHitStreakMultiplier();
+        
         // Calculate effective drop rates with upgrades (Vitamix cheat: guaranteed drops)
         const healthDropRate = this.cheats.vitamix ? 1.0 : Math.min(1.0, GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + (healthDropChanceStacks * GAME_CONFIG.HEALTH_ORB_DROP_CHANCE_UPGRADE));
         const moneyDropRate = this.cheats.vitamix ? 1.0 : Math.min(1.0, GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + (moneyDropChanceStacks * GAME_CONFIG.MONEY_ORB_DROP_CHANCE_UPGRADE));
@@ -2026,7 +2155,8 @@ Type any cheat name in the console to activate!`);
         // Drop health orbs
         if (Math.random() < healthDropRate) {
             const baseHealthOrbCount = Math.floor(Math.random() * (GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX - GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MIN + 1)) + GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MIN;
-            const totalHealthOrbCount = baseHealthOrbCount + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
+            const upgradeHealthOrbCount = baseHealthOrbCount + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
+            const totalHealthOrbCount = Math.floor(upgradeHealthOrbCount * hitStreakMultiplier);
             
             for (let i = 0; i < totalHealthOrbCount; i++) {
                 this.createHealthOrb(x, y);
@@ -2036,7 +2166,8 @@ Type any cheat name in the console to activate!`);
         // Drop money orbs
         if (Math.random() < moneyDropRate) {
             const baseMoneyOrbCount = Math.floor(Math.random() * (GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX - GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MIN + 1)) + GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MIN;
-            const totalMoneyOrbCount = baseMoneyOrbCount + (moneyDropQuantityStacks * GAME_CONFIG.MONEY_ORB_DROP_QUANTITY_UPGRADE);
+            const upgradeMoneyOrbCount = baseMoneyOrbCount + (moneyDropQuantityStacks * GAME_CONFIG.MONEY_ORB_DROP_QUANTITY_UPGRADE);
+            const totalMoneyOrbCount = Math.floor(upgradeMoneyOrbCount * hitStreakMultiplier);
             
             for (let i = 0; i < totalMoneyOrbCount; i++) {
                 this.createMoneyOrb(x, y);
@@ -2246,6 +2377,9 @@ Type any cheat name in the console to activate!`);
                 if (collision(bullet, ast)) {
                     triggerHapticFeedback(60);
                     this.audioManager.playHit();
+                    
+                    // Register hit for combo system
+                    this.player.registerHit();
                     
                     // Damage the asteroid (One Punch Man cheat: instant kill)
                     const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
@@ -2524,6 +2658,9 @@ Type any cheat name in the console to activate!`);
                     triggerHapticFeedback(40);
                     this.audioManager.playHit();
                     
+                    // Register hit for combo system
+                    this.player.registerHit();
+                    
                     // Damage the enemy (One Punch Man cheat: instant kill)
                     const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
                     const destroyed = enemy.takeDamage(damage);
@@ -2604,6 +2741,10 @@ Type any cheat name in the console to activate!`);
                 }
                 
                 bullet.active = false;
+                // Notify that bullet was destroyed (for combo tracking)
+                if (bullet.onOffScreen) {
+                    bullet.onOffScreen();
+                }
             }
         });
         
@@ -2701,6 +2842,10 @@ Type any cheat name in the console to activate!`);
                     
                     // Destroy the bullet
                     bullet.active = false;
+                    // Notify that bullet was destroyed (for combo tracking)
+                    if (bullet.onOffScreen) {
+                        bullet.onOffScreen();
+                    }
                     break;
                 }
             }
@@ -3032,6 +3177,11 @@ Type any cheat name in the console to activate!`);
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
             // Draw health bar and UI elements
             this.updateHUD();
+            // Show shop button during gameplay
+            this.uiManager.showShopButton();
+        } else {
+            // Hide shop button on title screen
+            this.uiManager.hideShopButton();
         }
         
         // Draw wave message if active
@@ -3063,6 +3213,87 @@ Type any cheat name in the console to activate!`);
                 this.waveMessage.active = false;
             }
         }
+        
+        // Draw title screen with wavy text
+        if (this.game.state === GAME_STATES.TITLE_SCREEN) {
+            this.drawTitleScreen();
+        }
+    }
+    
+    drawCursorCooldownTimer() {
+        if (!this.player || !this.inputHandler) return;
+        
+        const input = this.inputHandler.getInput();
+        if (!input.aimX || !input.aimY) return; // No cursor position available
+        
+        const now = Date.now();
+        const timeSinceLastShot = now - this.player.lastShotTime;
+        const cooldownProgress = Math.min(1, timeSinceLastShot / this.player.shotCooldownTime);
+        
+        // Only draw if cooldown is active (not fully ready)
+        if (cooldownProgress >= 1) return;
+        
+        const cursorX = input.aimX;
+        const cursorY = input.aimY;
+        const timerRadius = 12; // Much tighter radius around cursor
+        
+        this.ctx.save();
+        
+        // Calculate remaining time (countdown)
+        const remainingProgress = 1 - cooldownProgress; // Invert for countdown
+        
+        // Calculate color based on remaining time (red -> yellow -> green as time counts down)
+        let color;
+        if (remainingProgress > 0.5) {
+            // Yellow to green (1.0 to 0.5 remaining)
+            const t = (remainingProgress - 0.5) * 2; // 0 to 1
+            const red = Math.floor(255 * (1 - t));
+            const green = 255;
+            color = `rgb(${red}, ${green}, 0)`;
+        } else {
+            // Red to yellow (0.5 to 0 remaining)
+            const t = remainingProgress * 2; // 0 to 1
+            const red = 255;
+            const green = Math.floor(255 * t);
+            color = `rgb(${red}, ${green}, 0)`;
+        }
+        
+        // Draw background circle (dark, thinner)
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(cursorX, cursorY, timerRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Draw countdown arc (colored, empties as cooldown completes)
+        const startAngle = -Math.PI / 2; // Start at top
+        const endAngle = startAngle + (remainingProgress * Math.PI * 2);
+        
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 3;
+        this.ctx.lineCap = 'round';
+        
+        // Add subtle glow effect
+        this.ctx.shadowColor = color;
+        this.ctx.shadowBlur = 4;
+        
+        this.ctx.beginPath();
+        this.ctx.arc(cursorX, cursorY, timerRadius, startAngle, endAngle);
+        this.ctx.stroke();
+        
+        // Draw inner fill for better visibility (only if significant time remaining)
+        if (remainingProgress > 0.1) {
+            this.ctx.shadowBlur = 0;
+            this.ctx.globalAlpha = 0.2;
+            this.ctx.fillStyle = color;
+            this.ctx.beginPath();
+            this.ctx.moveTo(cursorX, cursorY);
+            this.ctx.arc(cursorX, cursorY, timerRadius - 1, startAngle, endAngle);
+            this.ctx.closePath();
+            this.ctx.fill();
+        }
+        
+        this.ctx.restore();
     }
     
     // Optimized starfield rendering with batching and sprite caching
@@ -3187,6 +3418,11 @@ Type any cheat name in the console to activate!`);
         // Draw HUD elements outside of screen shake transform
         this.drawHUD();
         
+        // Draw cursor cooldown timer
+        if (this.game.state === GAME_STATES.PLAYING) {
+            this.drawCursorCooldownTimer();
+        }
+        
         if (this.game.state === GAME_STATES.GAME_OVER) {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             this.ctx.fillRect(0, 0, this.width, this.height);
@@ -3213,11 +3449,19 @@ Type any cheat name in the console to activate!`);
             // Playing → Paused
             this.game.state = GAME_STATES.PAUSED;
             this.uiManager.togglePause();
+            // Pause the charge shot system
+            if (this.player) {
+                this.player.pauseChargeShot();
+            }
             // Removed thruster sound on pause to reduce noise issues
         } else if (this.game.state === GAME_STATES.PAUSED) {
             // Paused → Playing
             this.game.state = GAME_STATES.PLAYING;
             this.uiManager.togglePause();
+            // Resume the charge shot system
+            if (this.player) {
+                this.player.resumeChargeShot();
+            }
         } else if (this.game.state === GAME_STATES.SHOP) {
             // Shop → Paused (close shop and show pause menu)
             this.closeShopToPause();
@@ -3291,9 +3535,9 @@ Type any cheat name in the console to activate!`);
     start() {
         this.loadHighScore();
         this.uiManager.checkOrientation();
-        this.uiManager.setupTitleScreen();
-        this.uiManager.showTitleScreen();
-        this.uiManager.updateHighScore(this.game.highScore);
+        // this.uiManager.setupTitleScreen();
+        // this.uiManager.showTitleScreen();
+        // this.uiManager.updateHighScore(this.game.highScore);
         this.inputHandler.setupTouchControls();
         this.gameLoop();
     }
@@ -3590,6 +3834,7 @@ Type any cheat name in the console to activate!`);
             const distance = Math.sqrt(dx * dx + dy * dy);
             if (distance < radius) {
                 bullet.active = false;
+                // Note: This is for enemy bullets, not player bullets, so no combo tracking needed
             }
         });
         
@@ -4046,6 +4291,40 @@ Type any cheat name in the console to activate!`);
         //     const shopY = startY + verticalSpacing;
         //     this.drawCircularTimer(ctx, timerX, shopY, radius, shopProgress, '#ffaa00', '🛒', timeUntilShop);
         // }
+        
+        // Draw hit streak combo counter (bottom right)
+        if (this.player.hitStreak >= 2) {
+            const comboX = this.width - 20;
+            const comboY = this.height - 40;
+            
+            ctx.save();
+            
+            // Background glow effect
+            const glowSize = Math.min(10, this.player.hitStreak * 0.5);
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = glowSize;
+            
+            // Draw combo text
+            ctx.font = `${Math.min(32, 20 + this.player.hitStreak * 0.5)}px 'Press Start 2P', monospace`;
+            ctx.fillStyle = '#FFD700';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            
+            const comboText = `${this.player.hitStreak}x`;
+            ctx.strokeText(comboText, comboX, comboY);
+            ctx.fillText(comboText, comboX, comboY);
+            
+            // Draw "COMBO" label below
+            ctx.font = '12px "Press Start 2P", monospace';
+            ctx.fillStyle = '#FFFFFF';
+            ctx.shadowBlur = 3;
+            ctx.strokeText('COMBO', comboX, comboY + 15);
+            ctx.fillText('COMBO', comboX, comboY + 15);
+            
+            ctx.restore();
+        }
         
         ctx.restore();
     }
