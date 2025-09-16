@@ -25,7 +25,6 @@ export class MusicPlayer {
     async initializePlaylist() {
         // Use the pre-generated playlist data
         this.playlist = [...PLAYLIST_DATA];
-        console.log(`Loaded ${this.playlist.length} tracks from playlist data`);
         
         // Add duration property to each track
         this.playlist.forEach(track => {
@@ -119,7 +118,6 @@ export class MusicPlayer {
                     this.onPlayStateChange(true);
                 }
             }).catch(error => {
-                console.log("Music playback blocked by browser:", error);
                 // Set playing to false if blocked
                 this.isPlaying = false;
                 if (this.onPlayStateChange) {

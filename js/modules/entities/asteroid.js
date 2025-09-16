@@ -46,25 +46,40 @@ export class Asteroid {
 
         // Calculate health based on size tiers and level:
         // Use baseRadius for consistent health calculation
-        // Biggest asteroids (40-60 baseRadius): 12-18 base health
-        // Medium asteroids (20-40 baseRadius): 8-12 base health  
-        // Smallest asteroids (10-20 baseRadius): 4-8 base health
         let baseHealth;
+        let health;
         const sizeRef = this.baseRadius || this.radius;
-        if (sizeRef >= 40) {
-            // Big asteroids: 12-18 base health
-            baseHealth = Math.floor(12 + (sizeRef - 40) / 20 * 6); // Scale from 12 to 18 based on radius 40-60
-        } else if (sizeRef >= 20) {
-            // Medium asteroids: 8-12 base health
-            baseHealth = Math.floor(8 + (sizeRef - 20) / 20 * 4); // Scale from 8 to 12 based on radius 20-40
-        } else {
-            // Small asteroids: 4-8 base health
-            baseHealth = Math.floor(4 + (sizeRef - 10) / 10 * 4); // Scale from 4 to 8 based on radius 10-20
-        }
         
-        // Scale health based on level (30% increase per level)
-        const levelMultiplier = 1 + (this.level - 1) * 0.3;
-        const health = Math.round(baseHealth * levelMultiplier);
+        if (this.level === 1) {
+            // Level 1 asteroids: Reduced health for better early game balance
+            if (sizeRef >= 40) {
+                // Big Level 1 asteroids: 4-7 health
+                baseHealth = Math.floor(4 + (sizeRef - 40) / 20 * 3); // Scale from 4 to 7 based on radius 40-60
+            } else if (sizeRef >= 20) {
+                // Medium Level 1 asteroids: 2-4 health
+                baseHealth = Math.floor(2 + (sizeRef - 20) / 20 * 2); // Scale from 2 to 4 based on radius 20-40
+            } else {
+                // Small Level 1 asteroids: 1-3 health
+                baseHealth = Math.floor(1 + (sizeRef - 10) / 10 * 2); // Scale from 1 to 3 based on radius 10-20
+            }
+            health = baseHealth; // No level multiplier for Level 1
+        } else {
+            // Higher level asteroids: Original scaling system
+            if (sizeRef >= 40) {
+                // Big asteroids: 12-18 base health
+                baseHealth = Math.floor(12 + (sizeRef - 40) / 20 * 6); // Scale from 12 to 18 based on radius 40-60
+            } else if (sizeRef >= 20) {
+                // Medium asteroids: 8-12 base health
+                baseHealth = Math.floor(8 + (sizeRef - 20) / 20 * 4); // Scale from 8 to 12 based on radius 20-40
+            } else {
+                // Small asteroids: 4-8 base health
+                baseHealth = Math.floor(4 + (sizeRef - 10) / 10 * 4); // Scale from 4 to 8 based on radius 10-20
+            }
+            
+            // Scale health based on level (30% increase per level)
+            const levelMultiplier = 1 + (this.level - 1) * 0.3;
+            health = Math.round(baseHealth * levelMultiplier);
+        }
         
         this.maxHealth = Math.max(1, health); // Ensure minimum 1 health
         this.health = this.maxHealth;
@@ -208,7 +223,9 @@ export class Asteroid {
         ctx.lineWidth = 2;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        const healthNumber = `${Math.round(this.health)}/${this.maxHealth}`;
+        // Round up health display when between 0-1 to show 1 HP
+        const displayHealth = this.health > 0 && this.health < 1 ? 1 : Math.round(this.health);
+        const healthNumber = `${displayHealth}/${this.maxHealth}`;
         const numberY = barY - 6; // Position above the bar with 6px gap
         
         // Measure text widths for proper centering

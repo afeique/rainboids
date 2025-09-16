@@ -100,14 +100,12 @@ export class EnhancedPerformanceManager {
             if (success) {
                 this.workersInitialized = true;
                 this.settings.useWorkers = true;
-                console.log('✅ Web Workers initialized successfully');
                 
                 // Set up worker callbacks
                 this.workerManager.onPhysicsUpdate = this.handlePhysicsUpdate.bind(this);
                 this.workerManager.onCollisions = this.handleCollisions.bind(this);
                 this.workerManager.onParticleRender = this.handleParticleRender.bind(this);
             } else {
-                console.log('❌ Web Workers not available, using main thread');
             }
         } catch (error) {
             console.error('Failed to initialize workers:', error);

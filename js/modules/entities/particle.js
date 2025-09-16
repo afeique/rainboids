@@ -101,21 +101,21 @@ export class Particle {
                 this.sat = random(95, 100);     // more saturated
                 this.light = random(55, 70);    // lighter
                 break;
-            case 'tractorBeamRing':
+            case 'spawnRing':
                 this.life = 1;
                 this.radius = args[0] || 80;
                 this.maxRadius = this.radius;
                 this.color = 'rgba(0,255,255,0.7)';
                 break;
-            case 'tractorCircle':
+            case 'spawnCircle':
                 this.life = 1;
                 this.radius = args[0] || 120;
                 this.maxRadius = this.radius;
                 this.colorStart = 'rgba(80,255,80,0.7)';
                 this.colorEnd = 'rgba(0,80,0,0.2)';
                 break;
-            case 'tractorBeamParticle': {
-                // args: targetX, targetY
+            case 'spawnParticle': {
+                // args: targetX, targetY (renamed from tractorBeamParticle)
                 const [targetX, targetY] = args;
                 this.targetX = targetX;
                 this.targetY = targetY;
@@ -215,15 +215,15 @@ export class Particle {
                 this.radius = (1 - this.life) * this.maxRadius;
                 this.life -= 0.025;
                 break;
-            case 'tractorBeamRing':
+            case 'spawnRing':
                 this.radius = this.maxRadius * this.life;
                 this.life -= 0.06;
                 break;
-            case 'tractorCircle':
+            case 'spawnCircle':
                 this.radius = this.maxRadius * this.life;
                 this.life -= 0.04;
                 break;
-            case 'tractorBeamParticle': {
+            case 'spawnParticle': {
                 this.x += this.vel.x;
                 this.y += this.vel.y;
                 // Fade out as it nears the ship
@@ -339,7 +339,7 @@ export class Particle {
                 ctx.restore();
                 break;
             }
-            case 'tractorBeamRing':
+            case 'spawnRing':
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, this.life * 1.2);
                 ctx.strokeStyle = this.color;
@@ -349,7 +349,7 @@ export class Particle {
                 ctx.stroke();
                 ctx.restore();
                 break;
-            case 'tractorCircle': {
+            case 'spawnCircle': {
                 ctx.save();
                 // Interpolate color from bright to dark green
                 const t = 1 - this.life;
@@ -365,7 +365,7 @@ export class Particle {
                 ctx.restore();
                 break;
             }
-            case 'tractorBeamParticle': {
+            case 'spawnParticle': {
                 // Draw main glowing particle only (no trail)
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, this.life);

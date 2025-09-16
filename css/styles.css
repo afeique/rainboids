@@ -60,8 +60,8 @@ canvas.asteroid-hover {
 #lives-display {
     position: absolute;
     top: 20px;
-    left: 20px; /* Will be positioned dynamically relative to other HUD elements */
-    z-index: 0; /* Behind shop overlay (canvas z-index is 1) */
+    left: 10px; /* Positioned to the left of HP bar */
+    z-index: 2; /* Above canvas (z-index 1) but behind shop overlay */
     display: none; /* Hidden initially until game starts */
 }
 
@@ -640,7 +640,7 @@ canvas.asteroid-hover {
     font-size: 18px;
     font-weight: bold;
     transition: all 0.2s;
-    z-index: 0; /* Behind shop overlay (canvas z-index is 1) */
+    z-index: 2; /* Above canvas (z-index 1) but behind shop overlay */
     border-radius: 8px;
     text-shadow: 0 0 8px rgba(255, 215, 0, 0.8);
 }

@@ -243,15 +243,12 @@ export class Bullet {
             if (target !== null) {
                 this.hitTargets.add(target);
             }
-            console.log(`🔹 Piercing bullet hit ${this.piercedEnemies}/${this.piercing} targets, active=${this.active}`);
             // Allow piercing bullets to hit piercing+1 targets (so piercing=1 means it can hit 2 targets)
             if (this.piercedEnemies > this.piercing) {
-                console.log(`🔹 Piercing bullet exhausted, destroying`);
                 this.startDying(this.x, this.y);
             }
             // Continue flying if still has piercing left
         } else {
-            console.log(`🔹 Non-piercing bullet hit, destroying`);
             this.startDying(this.x, this.y);
         }
     }

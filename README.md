@@ -18,20 +18,66 @@ This is an asteroids clone with its own interesting mechanics and visual aesthet
 It features countless enhancements and tweaks over the original 
 [Monolithic Rainboids](https://github.com/afeique/rainboids-monolithic).
 
-Most importantly, the underlying JavaScript code has been modularized for 
-easier maintenance.
+Most importantly, the underlying JavaScript code has been modularized for easier maintenance.
 
 ---
 
 ## 🚀 Gameplay Overview
 
-- **Pilot your ship** through waves of 3D wireframe asteroids.
-- **Shoot asteroids** for points, but watch your energy bar!
-- **Collect stars** for bonus points and energy.
-- **Use the tractor beam** (space/⊙) to attract stars.
-- **Avoid running out of energy** or colliding with asteroids.
-- **Visual direction/wing/engine triangles** help you orient your ship.
-- **Asteroids near the screen edge** are nudged back toward the center for smoother gameplay.
+<!-- - 🌟 Starfield Depth Batching Active
+-   gameEngine.debugStarfieldPerformance() - Show performance stats
+-   gameEngine.showDepthBatchStats() - Show depth batching details -->
+- 🤖 Enemy System Ready:
+-   🔴 HUNTER (Triangle) - 10 HP - Fast aggressive chaser
+-   🟢 GUARDIAN (Square) - 20 HP - Defensive spread shooter
+-   🟡 WASP (Diamond) - 8 HP - Fast swarm enemy
+-   🟣 TITAN (Hexagon) - 30 HP - Heavy orbital enemy
+-   🔵 STALKER (Cross) - 10 HP - Stealth approach enemy
+-   🟠 BOMBER (Spiked Circle) - 15 HP - Explosive projectiles
+- 💥 Combat System: Player bullets = 1 dmg, Enemy bullets = 2 dmg
+- 💚 Health System: Health orbs heal! Configurable drop rates and counts!
+- 🪨 Asteroid Interactions: Enemy bullets deal damage to asteroids, enemies bounce off (no damage)
+- 💥 Player Damage Feedback: Screen shake, red damage numbers, and colored explosions when hit
+- 🎆 Bullet Impact Effects: Colored particle explosions for all enemy bullet impacts
+- 🟠 Player Bullet Effects: Satisfying orange explosions on all player bullet hits
+- ♻️  Enemy Bullet Lifecycle: No fade decay, recycled when off-screen for efficiency
+- 👻 Enemy Phase-Through: Enemies pass through each other and enemy bullets
+- 🕶️ Enemy Dodging: Enemies actively dodge each other\'s bullets with predictive AI
+- 💊 Tunable Healing: Health orb heal amount now configurable in constants
+- 🌊 Enhanced Waves: Multi-phase waves with asteroids first, then enemy sub-waves
+- ⚡ Performance Optimizations Active:
+-   🔧 Reduced particle counts for explosions and effects
+-   🧹 Automatic particle cleanup and limits
+-   📊 gameEngine.showPerformanceStats() - View current object counts
+- 🎁 Powerup System Active:
+-   💨 Rapid Fire - Faster shooting (stacks up to 5x)
+-   🎯 Homing Bullets - Track enemies automatically
+-   💥 Multi-Shot & Spread Shot - More bullets per shot
+-   🔸 Big Bullets - Easier to hit agile enemies
+-   ⚡ Speed Boost - Enhanced movement speed
+-   🏹 Piercing Shots - Bullets go through enemies
+-   💣 Explosive Rounds - Area damage on impact
+-   🛡️ Shield Boost - +15% damage reduction per stack
+- ✨ Enhanced Star System:
+-   ⭐ Larger stars to showcase beautiful geometric shapes
+-   🎭 15% chance for spectacular big stars
+-   🔶 Complex shapes: stars, hexagons, diamonds, sparkles & bursts
+-   💫 Enhanced animations: rotation, pulsing, and glow effects
+- 🚀 Enhanced WASD + Mouse Controls:
+-   ⬆️ WASD = Move in 8 directions with tight control
+-   🖱️ Mouse = Aim direction (ship faces mouse cursor)
+-   🔫 Auto-fire = Ship continuously fires (no fire button!)
+-   📱 Mobile = Joystick: WASD movement, touch for aiming
+- 🎁 Enhanced Powerup System:
+-   ✨ Spectacular gradient visual effects and distinctive shapes
+-   🎯 Unique icons: ⚡💨🎯●💥🛡 etc. for each powerup type
+-   🔊 Magical treasure pickup sound with pitch variations
+-   📊 Console shows powerup drop rolls and spawns
+-   🎮 Beautiful gradient UI indicators at bottom of screen
+-   ⏱️ Timer bars show remaining duration (1 minute each)
+-   📺 Powerup names display at top in Silkscreen font with smooth fade
+-   🎨 Bullets change shape/color based on active powerups
+-   🧪 Press "P" key to test spawn a powerup near player
 
 ---
 

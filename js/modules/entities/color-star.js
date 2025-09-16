@@ -91,17 +91,15 @@ export class ColorStar {
             this.y = y || random(0, this.height);
             this.z = random(1.5, 3.0); // Close and bright
             this.density = 0.8;
-            this.radius = (this.z * 1.2 + 0.4) * scale * 1.8; // Even larger for better visibility and collection
-
-            // Initial velocity will be set by createOrbBurst for explosion effect
-            this.vel = { x: 0, y: 0 };
-            this.life = 1800;
             
             // Set colors and symbols based on orb type
             if (this.starType === 'health') {
                 this.color = '#00ff7f'; // Green for health orbs
                 this.borderColor = '#ffd700'; // Gold border
-                this.shape = 'circle'; // Health orbs are circular
+                // Health orbs use random star geometries like other orbs
+                const healthStarShapes = ['star4', 'star5', 'star6', 'star8', 'burst', 'sparkle'];
+                this.shape = healthStarShapes[Math.floor(Math.random() * healthStarShapes.length)];
+                this.radius = (this.z * 1.2 + 0.4) * scale * 1.8; // Standard orb size
             } else if (this.starType === 'money') {
                 this.color = '#FFD700'; // Gold for money orbs
                 this.borderColor = '#FFA500'; // Orange border
@@ -109,7 +107,12 @@ export class ColorStar {
                 // Add money symbol
                 const symbols = ['$', '¥', '£', '€'];
                 this.moneySymbol = symbols[Math.floor(Math.random() * symbols.length)];
+                this.radius = (this.z * 1.2 + 0.4) * scale * 3.2; // Even larger radius for money orbs to prevent symbol overlap
             }
+
+            // Initial velocity will be set by createOrbBurst for explosion effect
+            this.vel = { x: 0, y: 0 };
+            this.life = 1800;
         } else {
             // Decorative stars use normal colors
             this.color = NORMAL_STAR_COLORS[Math.floor(Math.random() * NORMAL_STAR_COLORS.length)];
@@ -117,7 +120,7 @@ export class ColorStar {
             this.life = -1;
         }
         
-        // Legacy support for old burst star property - both health and money orbs should be attracted to player
+        // Legacy support for old property - both health and money orbs should be attracted to player
         this.isBurst = (this.starType === 'health' || this.starType === 'money');
     }
     
@@ -131,8 +134,8 @@ export class ColorStar {
                 return;
             }
             
-            this.vel.x *= GAME_CONFIG.STAR_FRIC;
-            this.vel.y *= GAME_CONFIG.STAR_FRIC;
+            this.vel.x *= GAME_CONFIG.ORB_FRIC;
+            this.vel.y *= GAME_CONFIG.ORB_FRIC;
             this.x += this.vel.x;
             this.y += this.vel.y;
             
@@ -187,13 +190,13 @@ export class ColorStar {
             // Pulse size
             this.pulseOffset += this.pulseSpeed;
             
-            // Non-burst stars are no longer attracted to player - they just exist for visual effect
+            // Non-orb stars are no longer attracted to player - they just exist for visual effect
             // Remove all tractor beam and attraction logic
         }
         
                     // Reduced parallax effect for less distraction
             // Distant stars move much slower, close stars move faster
-            // But burst stars don't have parallax - they're gameplay elements
+            // But orbs don't have parallax - they're gameplay elements
             if (!this.isBurst) {
                 const parallaxFactor = Math.pow(this.z, 1.8) * 0.12; // Reduced exponent and multiplier for gentler parallax
             this.x -= shipVel.x * parallaxFactor;
@@ -246,7 +249,8 @@ export class ColorStar {
             );
             ctx.fillStyle = this.color;
             ctx.fillRect(-dynamicRadius / 2, -dynamicRadius / 2, dynamicRadius, dynamicRadius);
-        } else {
+        } else if (this.starType !== 'money') {
+            // Skip normal shape drawing for money orbs - they have custom rendering
             ctx.beginPath();
             
             switch (this.shape) {
@@ -363,6 +367,11 @@ export class ColorStar {
                     }
                     break;
                     
+                case 'circle':
+                    // For money orbs and other circular shapes, draw a filled circle
+                    ctx.arc(0, 0, dynamicRadius, 0, 2 * Math.PI);
+                    break;
+                    
                 default:
                     // Default X shape
                     ctx.moveTo(-dynamicRadius, -dynamicRadius);
@@ -386,6 +395,15 @@ export class ColorStar {
             if (['star4', 'star5', 'star6', 'star8', 'hexagon', 'diamond', 'triangle'].includes(this.shape)) {
                 ctx.save();
                 ctx.globalAlpha = this.finalOpacity * 0.3; // Subtle fill
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+            
+            // Special fill for money orbs - make them more subtle to highlight the symbol
+            if (this.starType === 'money' && this.shape === 'circle') {
+                ctx.save();
+                ctx.globalAlpha = this.finalOpacity * 0.2; // Very subtle fill for money orbs
                 ctx.fillStyle = this.color;
                 ctx.fill();
                 ctx.restore();
@@ -428,8 +446,8 @@ export class ColorStar {
             ctx.restore();
         }
         
-        // Special glow effect for collectible orbs to indicate they're collectible
-        if (this.isBurst || this.isCollectible) {
+        // Special glow effect for collectible orbs to indicate they're collectible (skip for money orbs)
+        if ((this.isBurst || this.isCollectible) && this.starType !== 'money') {
             ctx.save();
             
             // Pulsing glow effect
@@ -459,24 +477,57 @@ export class ColorStar {
             ctx.restore();
         }
         
-        // Draw money symbol for money orbs
+        // Custom rendering for money orbs - optimized for gameplay visibility
         if (this.starType === 'money' && this.moneySymbol) {
             ctx.save();
-            ctx.globalAlpha = this.finalOpacity;
             
-            // Draw symbol with outline for better visibility
-            const fontSize = Math.floor(dynamicRadius * 0.7);
-            ctx.font = `${fontSize}px "Press Start 2P", monospace`;
+            // Pulsing effect for the circle
+            const pulseIntensity = 0.5 + 0.4 * Math.sin(Date.now() * 0.01 + this.x * 0.01);
+            const circleRadius = dynamicRadius * (0.9 + pulseIntensity * 0.2);
+            
+            // Draw pulsating gold circle - more visible
+            ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.8;
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, circleRadius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // Draw inner glow circle
+            ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.4;
+            ctx.strokeStyle = '#FFFF88';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, circleRadius * 0.6, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // Draw semi-transparent dark background for symbol contrast
+            ctx.globalAlpha = this.finalOpacity * 0.7;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.beginPath();
+            ctx.arc(0, 0, dynamicRadius * 0.7, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Reset for symbol drawing
+            ctx.globalAlpha = 1.0;
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            
+            // Draw the money symbol - large and highly visible
+            const fontSize = Math.max(16, Math.floor(dynamicRadius * 1.2));
+            ctx.font = `${fontSize}px "Fira Code", "Consolas", "Courier New", monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            // Draw white outline first
+            // Draw thin white outline for contrast
             ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1;
             ctx.strokeText(this.moneySymbol, 0, 0);
             
-            // Draw black symbol on top for contrast
-            ctx.fillStyle = '#000000';
+            // Draw bright golden symbol (single draw call)
+            ctx.fillStyle = '#FFD700';
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 2;
             ctx.fillText(this.moneySymbol, 0, 0);
             
             ctx.restore();

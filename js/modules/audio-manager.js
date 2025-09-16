@@ -393,18 +393,15 @@ export class AudioManager {
         // Update audio cache
         this.audioCache[soundName] = newSound;
         
-        console.log(`Rerolled sound: ${soundName}`);
     }
     
     rerollAllSounds() {
         const soundNames = Object.keys(this.sounds);
-        console.log('Rerolling all sound effects...');
         
         soundNames.forEach(soundName => {
             this.rerollSound(soundName);
         });
         
-        console.log('All sound effects rerolled!');
     }
 } 
 

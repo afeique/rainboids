@@ -620,9 +620,7 @@ export class UIManager {
         // Pause menu action buttons
         if (this.elements.pauseShopButton) {
             this.elements.pauseShopButton.addEventListener('click', () => {
-                console.log('🛒 Shop button clicked from pause menu');
                 if (window.game) {
-                    console.log('🛒 window.game available, current state:', window.game.game?.state);
                     // Close pause menu and open shop
                     this.elements.pauseOverlay.style.display = 'none';
                     window.game.openShop();
@@ -636,7 +634,6 @@ export class UIManager {
         
         if (this.elements.pauseResumeButton) {
             this.elements.pauseResumeButton.addEventListener('click', () => {
-                console.log('▶ Resume button clicked from pause menu');
                 if (window.game) {
                     window.game.togglePause();
                 } else {

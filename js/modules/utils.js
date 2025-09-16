@@ -87,8 +87,27 @@ export function starCollision(player, star) {
     return false;
 }
 
+// Track user interaction to enable vibration
+let userHasInteracted = false;
+
+// Set up user interaction listeners
+if (typeof window !== 'undefined') {
+    const markUserInteraction = () => {
+        userHasInteracted = true;
+        // Remove listeners after first interaction
+        document.removeEventListener('click', markUserInteraction);
+        document.removeEventListener('touchstart', markUserInteraction);
+        document.removeEventListener('keydown', markUserInteraction);
+    };
+    
+    document.addEventListener('click', markUserInteraction, { once: true });
+    document.addEventListener('touchstart', markUserInteraction, { once: true });
+    document.addEventListener('keydown', markUserInteraction, { once: true });
+}
+
 export function triggerHapticFeedback(duration = 10) {
-    if (navigator.vibrate) {
+    // Only vibrate if user has interacted with the page
+    if (navigator.vibrate && userHasInteracted) {
         navigator.vibrate(duration);
     }
 }

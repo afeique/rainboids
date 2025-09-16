@@ -13,13 +13,16 @@ export class InputHandler {
             aimY: window.innerHeight / 2,
         };
         
-        console.log(`📱 InputHandler initialized with default aim: (${this.input.aimX}, ${this.input.aimY})`);
         
         this.gameEngine = null; // Will be set by game engine
         
         this.setupKeyboardControls();
         this.setupMouseControls();
         this.setupTouchControls();
+    }
+    
+    isMobile() {
+        return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
     }
     
     setupKeyboardControls() {
@@ -37,13 +40,11 @@ export class InputHandler {
         document.addEventListener('mousemove', e => {
             // Skip mouse input on mobile devices to prevent interference with touch
             if (isMobile()) {
-                console.log(`📱 BLOCKING MOUSE: mousemove at (${e.clientX}, ${e.clientY}) - mobile device detected`);
                 return;
             }
             
             // Console log to verify mouse is working on desktop
             if (Math.random() < 0.01) {
-                console.log(`🖱️ DESKTOP MOUSE: Setting aim to (${e.clientX}, ${e.clientY})`);
             }
             
             this.input.aimX = e.clientX;
@@ -64,7 +65,6 @@ export class InputHandler {
         document.addEventListener('mousedown', e => {
             // Skip mouse input on mobile devices
             if (isMobile()) {
-                console.log('📱 Ignoring mouse down on mobile device');
                 return;
             }
             this.input.fire = true;
@@ -72,7 +72,6 @@ export class InputHandler {
         document.addEventListener('mouseup', e => {
             // Skip mouse input on mobile devices
             if (isMobile()) {
-                console.log('📱 Ignoring mouse up on mobile device');
                 return;
             }
             this.input.fire = false;
@@ -137,7 +136,6 @@ export class InputHandler {
         // Multi-touch detection and fallback
         this.touchSupported = 'ontouchstart' in window;
         this.maxTouchPoints = navigator.maxTouchPoints || 1;
-        console.log(`📱 Touch info: Supported=${this.touchSupported}, MaxPoints=${this.maxTouchPoints}`);
         
         // Pure two-finger system - no static joystick elements needed
         
@@ -146,13 +144,11 @@ export class InputHandler {
 
         document.addEventListener('touchstart', e => {
             e.preventDefault();
-            console.log(`📱 TouchStart: ${e.changedTouches.length} new touches, total active: ${e.touches.length}`);
             
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
                 const touchId = touch.identifier;
                 
-                console.log(`📱 Processing touch ID ${touchId} at (${touch.clientX}, ${touch.clientY})`);
                 
                 // Store touch info
                 this.activeTouches.set(touchId, {
@@ -168,7 +164,6 @@ export class InputHandler {
                     this.joystickCenter = { x: touch.clientX, y: touch.clientY };
                     this.showDynamicJoystick(touch.clientX, touch.clientY);
                     triggerHapticFeedback(20);
-                    console.log(`📱 First touch: Joystick center set at (${touch.clientX}, ${touch.clientY}) with ID ${touchId}`);
                 } else if (this.aimTouchId === null) {
                     // Second touch - set up aiming
                     this.aimTouchId = touchId;
@@ -176,17 +171,13 @@ export class InputHandler {
                     this.input.aimX = touch.clientX;
                     this.input.aimY = touch.clientY;
                     triggerHapticFeedback(15);
-                    console.log(`📱 SECOND TOUCH: Aiming started at (${touch.clientX}, ${touch.clientY}) with ID ${touchId}`);
-                    console.log(`📱 INPUT NOW: aimX=${this.input.aimX}, aimY=${this.input.aimY}, fire=${this.input.fire}`);
                     
                     // Create visual debug marker for aim point
                     this.showDebugAimPoint(touch.clientX, touch.clientY);
                 } else {
-                    console.log(`📱 Third+ touch ignored: ID ${touchId}`);
                 }
             }
             
-            console.log(`📱 Active touches: ${this.activeTouches.size}, Joystick: ${this.joystickTouchId}, Aim: ${this.aimTouchId}`);
         }, { passive: false });
 
         document.addEventListener('touchmove', e => {
@@ -197,7 +188,6 @@ export class InputHandler {
                 const touchId = touch.identifier;
                 
                 if (!this.activeTouches.has(touchId)) {
-                    console.log(`📱 TouchMove: Unknown touch ID ${touchId}, skipping`);
                     continue;
                 }
                 
@@ -232,7 +222,6 @@ export class InputHandler {
                     
                     // Throttled movement logging
                     if (Math.random() < 0.01) { // 1% of moves logged
-                        console.log(`📱 Joystick move: (${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)}) up:${this.input.up} down:${this.input.down} left:${this.input.left} right:${this.input.right}`);
                     }
                 } else if (touchId === this.aimTouchId) {
                     // Handle aiming
@@ -246,7 +235,6 @@ export class InputHandler {
                     
                     // Throttled aim logging
                     if (Math.random() < 0.02) { // 2% of aims logged
-                        console.log(`📱 AIM UPDATE: (${oldAimX}, ${oldAimY}) → (${touch.clientX}, ${touch.clientY})`);
                     }
                 }
             }
@@ -254,57 +242,51 @@ export class InputHandler {
 
         document.addEventListener('touchend', e => {
             e.preventDefault();
-            console.log(`📱 TouchEnd: ${e.changedTouches.length} ended touches, remaining active: ${e.touches.length}`);
             
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
                 const touchId = touch.identifier;
                 
-                console.log(`📱 Ending touch ID ${touchId}`);
                 this.activeTouches.delete(touchId);
                 
                 if (touchId === this.joystickTouchId) {
                     // Joystick touch ended
                     this.joystickTouchId = null;
-            this.input.up = false;
-            this.input.down = false;
-            this.input.left = false;
-            this.input.right = false;
-                    console.log(`📱 Joystick touch ended (ID ${touchId})`);
+                    this.joystickCenter = null;
+                    this.hideDynamicJoystick();
+                    // Only reset movement input if we're on mobile (touch controls)
+                    // Don't interfere with keyboard input on desktop
+                    if (this.isMobile()) {
+                        this.input.up = false;
+                        this.input.down = false;
+                        this.input.left = false;
+                        this.input.right = false;
+                    }
                 } else if (touchId === this.aimTouchId) {
                     // Aim touch ended
                     this.aimTouchId = null;
                     this.input.fire = false;
                     this.hideDebugAimPoint();
-                    console.log(`📱 Aiming touch ended (ID ${touchId})`);
                 }
             }
             
             // If both fingers are lifted, reset the system
             if (this.activeTouches.size === 0) {
                 this.resetDynamicJoystick();
-                console.log('📱 All touches ended - joystick reset');
             }
             
-            console.log(`📱 Touch state after end: Active touches: ${this.activeTouches.size}, Joystick: ${this.joystickTouchId}, Aim: ${this.aimTouchId}`);
         }, { passive: false });
     }
     
     testMultiTouch() {
-        console.log('📱 Testing multi-touch capability...');
-        console.log(`📱 window.TouchEvent: ${typeof window.TouchEvent !== 'undefined'}`);
-        console.log(`📱 window.touches: ${typeof window.touches}`);
-        console.log(`📱 Document touch events supported: ${typeof document.ontouchstart !== 'undefined'}`);
         
         if (navigator.maxTouchPoints) {
-            console.log(`📱 Navigator reports max touch points: ${navigator.maxTouchPoints}`);
         }
         
         // Test if touch events fire properly
         let testTouchCount = 0;
         const testHandler = (e) => {
             testTouchCount++;
-            console.log(`📱 Test touch event ${testTouchCount}: ${e.type}, touches: ${e.touches ? e.touches.length : 'N/A'}`);
             if (testTouchCount >= 3) {
                 document.removeEventListener('touchstart', testHandler);
                 document.removeEventListener('touchmove', testHandler);
@@ -316,7 +298,6 @@ export class InputHandler {
         document.addEventListener('touchmove', testHandler, { passive: false });
         document.addEventListener('touchend', testHandler, { passive: false });
         
-        console.log('📱 Multi-touch test handlers installed (will auto-remove after 3 events)');
     }
     
     showDebugAimPoint(x, y) {
@@ -341,7 +322,6 @@ export class InputHandler {
         aimMarker.style.left = x + 'px';
         aimMarker.style.top = y + 'px';
         aimMarker.style.display = 'block';
-        console.log(`📱 DEBUG AIM MARKER: Created/moved to (${x}, ${y})`);
     }
     
     updateDebugAimPoint(x, y) {
@@ -413,6 +393,14 @@ export class InputHandler {
         }
     }
     
+    hideDynamicJoystick() {
+        const joystickBase = document.getElementById('dynamic-joystick-base');
+        const joystickHandle = document.getElementById('dynamic-joystick-handle');
+        
+        if (joystickBase) joystickBase.style.display = 'none';
+        if (joystickHandle) joystickHandle.style.display = 'none';
+    }
+    
     resetDynamicJoystick() {
         // Hide dynamic joystick
         const joystickBase = document.getElementById('dynamic-joystick-base');
@@ -426,11 +414,13 @@ export class InputHandler {
         this.joystickTouchId = null;
         this.aimTouchId = null;
         
-        // Reset input state
-        this.input.up = false;
-        this.input.down = false;
-        this.input.left = false;
-        this.input.right = false;
+        // Reset input state - only reset movement keys on mobile to avoid interfering with keyboard
+        if (this.isMobile()) {
+            this.input.up = false;
+            this.input.down = false;
+            this.input.left = false;
+            this.input.right = false;
+        }
         this.input.fire = false;
         
         // Hide debug markers
@@ -440,17 +430,18 @@ export class InputHandler {
     getInput() {
         // Debug: Log input values occasionally
         if (Math.random() < 0.005) { // 0.5% chance
-            console.log(`📱 INPUT STATE: aim=(${this.input.aimX}, ${this.input.aimY}), fire=${this.input.fire}, movement=(up:${this.input.up}, down:${this.input.down}, left:${this.input.left}, right:${this.input.right})`);
-            console.log(`📱 TOUCH STATE: joystickId=${this.joystickTouchId}, aimId=${this.aimTouchId}, activeTouches=${this.activeTouches.size}`);
         }
         return { ...this.input };
     }
     
     reset() {
-        this.input.up = false;
-        this.input.down = false;
-        this.input.left = false;
-        this.input.right = false;
+        // Only reset movement keys on mobile to avoid interfering with keyboard input
+        if (this.isMobile()) {
+            this.input.up = false;
+            this.input.down = false;
+            this.input.left = false;
+            this.input.right = false;
+        }
         this.input.fire = false;
         
         // Reset touch state

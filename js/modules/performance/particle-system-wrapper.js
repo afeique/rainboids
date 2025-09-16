@@ -16,7 +16,7 @@ export class ParticleSystemWrapper {
             'damageNumber': this.system.PARTICLE_TYPES.DAMAGE_NUMBER,
             'shieldHit': this.system.PARTICLE_TYPES.SHIELD_HIT,
             'asteroidCollisionDebris': this.system.PARTICLE_TYPES.LINE_DEBRIS,
-            'tractorBeam': this.system.PARTICLE_TYPES.TRACTOR_BEAM
+            'spawnParticle': this.system.PARTICLE_TYPES.TRACTOR_BEAM
         };
         
         // Store damage numbers separately for text rendering
@@ -112,8 +112,8 @@ export class ParticleSystemWrapper {
                 }
                 break;
                 
-            case 'tractorBeam':
-                // Create tractor beam particle
+            case 'spawnParticle':
+                // Create spawn particle (renamed from tractor beam)
                 const targetX = value?.targetX || x;
                 const targetY = value?.targetY || y;
                 const dx = targetX - x;

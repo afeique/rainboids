@@ -1,4 +1,5 @@
 // Worker Manager - Coordinates all web workers for parallel processing
+
 export class WorkerManager {
     constructor() {
         this.workers = {
@@ -287,7 +288,6 @@ export class WorkerGameIntegration {
         const success = await this.workerManager.init(config);
         if (!success) {
             this.useWorkers = false;
-            console.log('Falling back to main thread processing');
         }
         
         return success;

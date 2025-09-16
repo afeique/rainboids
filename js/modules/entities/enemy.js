@@ -12,7 +12,7 @@ export const ENEMY_TYPES = {
         size: 25,
         shootPattern: 'aimed',
         shootRate: 0.8,
-        movePattern: 'chase',
+        movePattern: 'fish_dart',  // Changed to fish-like darting movement
         points: 50
     },
     GUARDIAN: {
@@ -34,7 +34,7 @@ export const ENEMY_TYPES = {
         size: 22,                // Increased from 18
         shootPattern: 'rapid',
         shootRate: 1.0,          // Reduced from 1.2 - still rapid but less overwhelming
-        movePattern: 'swarm',
+        movePattern: 'cardinal_grid',  // Changed to 90-degree movement
         points: 35
     },
     TITAN: {
@@ -52,11 +52,11 @@ export const ENEMY_TYPES = {
         name: 'Stalker',
         color: '#44ffff',        // Cyan
         health: 10,
-        speed: 1.8,              // Significantly reduced from 2.6 - less frantic
+        speed: 2.5,              // Higher speed for burst knight movement
         size: 22,
         shootPattern: 'burst',
         shootRate: 0.6,
-        movePattern: 'stealth',
+        movePattern: 'knight',   // L-shaped movement like chess knight
         points: 45
     },
     BOMBER: {
@@ -163,6 +163,38 @@ export class Enemy {
         this.evasiveTimer = 0;
         this.lastPlayerPosition = { x: 0, y: 0 };
         
+        // Fish dart movement properties
+        this.dartState = 'idle'; // 'idle', 'darting', 'slowing'
+        this.dartDirection = { x: 0, y: 0 };
+        this.dartTimer = 0;
+        this.dartCooldown = 0;
+        this.dartAngle = 0; // Current movement angle (45-degree increments)
+        
+        // Cardinal grid movement properties
+        this.gridDirection = { x: 0, y: 0 };
+        this.gridDistance = 0;
+        this.gridTargetDistance = 0;
+        this.gridDirections = [
+            { x: 0, y: -1 }, // Up
+            { x: 1, y: 0 },  // Right
+            { x: 0, y: 1 },  // Down
+            { x: -1, y: 0 }  // Left
+        ];
+        
+        // Wavy movement properties
+        this.wavyBaseAngle = random(0, Math.PI * 2);
+        this.wavyTime = 0;
+        this.wavyAmplitude = 30;
+        this.wavyFrequency = 0.02;
+        
+        // Knight movement properties (L-shaped like chess knight)
+        this.knightMoveTimer = 0;
+        this.knightMoveDuration = 800 + Math.random() * 400; // 800-1200ms between moves
+        this.knightTargetX = this.x;
+        this.knightTargetY = this.y;
+        this.knightMoving = false;
+        this.knightMoveStartTime = 0;
+        
         // Circulating shield indicator with music sync
         this.shield = {
             rotation: 0,
@@ -256,8 +288,8 @@ export class Enemy {
         if (this.y < -this.radius) this.y = GameDimensions.height + this.radius;
         if (this.y > GameDimensions.height + this.radius) this.y = -this.radius;
         
-        // Death check
-        if (this.health <= 0) {
+        // Death check (use tolerance for floating-point precision)
+        if (this.health <= 0.001) {
             this.active = false;
         }
     }
@@ -303,6 +335,18 @@ export class Enemy {
                 break;
             case 'stealth':
                 this.stealthMovement(now);
+                break;
+            case 'fish_dart':
+                this.fishDartMovement();
+                break;
+            case 'cardinal_grid':
+                this.cardinalGridMovement();
+                break;
+            case 'wavy':
+                this.wavyMovement();
+                break;
+            case 'knight':
+                this.knightMovement();
                 break;
             case 'straight':
                 // Enhanced straight movement with subtle course corrections
@@ -525,6 +569,280 @@ export class Enemy {
             // Reset cycle
             this.stealthTimer = 0;
         }
+    }
+    
+    fishDartMovement() {
+        if (!this.targetPlayer) return;
+        
+        // Update timers
+        this.dartTimer -= 16; // Assume 60fps
+        this.dartCooldown -= 16;
+        
+        switch (this.dartState) {
+            case 'idle':
+                // Apply friction when idle
+                this.vel.x *= 0.95;
+                this.vel.y *= 0.95;
+                
+                // Check if ready to dart (cooldown finished and random chance)
+                if (this.dartCooldown <= 0 && Math.random() < 0.02) {
+                    this.startFishDart();
+                }
+                break;
+                
+            case 'darting':
+                // Move in the dart direction at full speed
+                const dartSpeed = this.config.speed * 1.8;
+                this.vel.x = this.dartDirection.x * dartSpeed;
+                this.vel.y = this.dartDirection.y * dartSpeed;
+                
+                // Check if dart duration is over
+                if (this.dartTimer <= 0) {
+                    this.dartState = 'slowing';
+                    this.dartTimer = 800; // Slowing duration (800ms)
+                }
+                break;
+                
+            case 'slowing':
+                // Apply strong friction to slow down
+                this.vel.x *= 0.88;
+                this.vel.y *= 0.88;
+                
+                // Check if slowing duration is over
+                if (this.dartTimer <= 0) {
+                    this.dartState = 'idle';
+                    this.dartCooldown = random(1000, 2500); // Random cooldown between darts
+                }
+                break;
+        }
+        
+        // Slight bias toward player when idle
+        if (this.dartState === 'idle') {
+            const dx = this.targetPlayer.x - this.x;
+            const dy = this.targetPlayer.y - this.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance > 0) {
+                const bias = 0.008;
+                this.vel.x += (dx / distance) * bias;
+                this.vel.y += (dy / distance) * bias;
+            }
+        }
+    }
+    
+    startFishDart() {
+        // Choose one of 8 possible 45-degree angles
+        const angleIndex = Math.floor(random(0, 8));
+        this.dartAngle = (angleIndex * Math.PI) / 4; // 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
+        
+        // Set dart direction
+        this.dartDirection.x = Math.cos(this.dartAngle);
+        this.dartDirection.y = Math.sin(this.dartAngle);
+        
+        // Bias toward player direction
+        if (this.targetPlayer) {
+            const dx = this.targetPlayer.x - this.x;
+            const dy = this.targetPlayer.y - this.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance > 0) {
+                const playerAngle = Math.atan2(dy, dx);
+                
+                // Find the closest 45-degree angle to the player
+                let bestAngle = 0;
+                let smallestDiff = Math.PI * 2;
+                
+                for (let i = 0; i < 8; i++) {
+                    const testAngle = (i * Math.PI) / 4;
+                    let diff = Math.abs(testAngle - playerAngle);
+                    if (diff > Math.PI) diff = Math.PI * 2 - diff;
+                    
+                    if (diff < smallestDiff) {
+                        smallestDiff = diff;
+                        bestAngle = testAngle;
+                    }
+                }
+                
+                // Use the best angle with some randomness
+                if (Math.random() < 0.7) { // 70% chance to dart toward player
+                    this.dartAngle = bestAngle;
+                    this.dartDirection.x = Math.cos(this.dartAngle);
+                    this.dartDirection.y = Math.sin(this.dartAngle);
+                }
+            }
+        }
+        
+        this.dartState = 'darting';
+        this.dartTimer = random(400, 800); // Dart duration (400-800ms)
+    }
+    
+    cardinalGridMovement() {
+        // Update distance traveled in current direction
+        this.gridDistance += Math.hypot(this.vel.x, this.vel.y);
+        
+        // Check if we need to change direction
+        if (this.gridDistance >= this.gridTargetDistance || 
+            (this.gridDirection.x === 0 && this.gridDirection.y === 0)) {
+            this.chooseNewGridDirection();
+        }
+        
+        // Move at constant speed in the chosen direction
+        const speed = this.config.speed;
+        this.vel.x = this.gridDirection.x * speed;
+        this.vel.y = this.gridDirection.y * speed;
+        
+        // Add slight bias toward player when choosing directions
+        if (this.targetPlayer && Math.random() < 0.3) {
+            const dx = this.targetPlayer.x - this.x;
+            const dy = this.targetPlayer.y - this.y;
+            
+            // Find the cardinal direction that gets us closest to the player
+            let bestDirection = this.gridDirection;
+            let bestDot = -2;
+            
+            for (const dir of this.gridDirections) {
+                const dot = dir.x * dx + dir.y * dy;
+                if (dot > bestDot) {
+                    bestDot = dot;
+                    bestDirection = dir;
+                }
+            }
+            
+            // Sometimes use the best direction toward player
+            if (Math.random() < 0.4) {
+                this.gridDirection = bestDirection;
+            }
+        }
+    }
+    
+    chooseNewGridDirection() {
+        // Choose a random cardinal direction
+        const dirIndex = Math.floor(random(0, this.gridDirections.length));
+        this.gridDirection = this.gridDirections[dirIndex];
+        
+        // Set a new target distance to travel
+        this.gridTargetDistance = random(60, 150); // Distance before changing direction
+        this.gridDistance = 0; // Reset distance counter
+    }
+    
+    wavyMovement() {
+        if (!this.targetPlayer) return;
+        
+        // Update wavy time
+        this.wavyTime += 16; // Assume 60fps, add ~16ms per frame
+        
+        // Calculate base direction toward player
+        const dx = this.targetPlayer.x - this.x;
+        const dy = this.targetPlayer.y - this.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance > 0) {
+            // Base movement toward player
+            const baseSpeed = this.config.speed * 0.6; // Reduced base speed
+            let baseVelX = (dx / distance) * baseSpeed;
+            let baseVelY = (dy / distance) * baseSpeed;
+            
+            // Add wavy motion perpendicular to the player direction
+            const perpAngle = Math.atan2(dy, dx) + Math.PI / 2;
+            const waveOffset = Math.sin(this.wavyTime * this.wavyFrequency) * this.wavyAmplitude;
+            
+            // Convert wave offset to velocity
+            const waveVelX = Math.cos(perpAngle) * waveOffset * 0.01;
+            const waveVelY = Math.sin(perpAngle) * waveOffset * 0.01;
+            
+            // Combine base movement with wave motion
+            this.vel.x = baseVelX + waveVelX;
+            this.vel.y = baseVelY + waveVelY;
+            
+            // Apply speed limit to prevent too fast movement
+            const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+            const maxSpeed = this.config.speed * 1.1; // Allow slightly higher speed
+            
+            if (currentSpeed > maxSpeed) {
+                this.vel.x = (this.vel.x / currentSpeed) * maxSpeed;
+                this.vel.y = (this.vel.y / currentSpeed) * maxSpeed;
+            }
+        }
+    }
+    
+    knightMovement() {
+        if (!this.targetPlayer) return;
+        
+        const now = Date.now();
+        
+        // Update knight move timer
+        this.knightMoveTimer += 16; // Assume 60fps, ~16ms per frame
+        
+        if (!this.knightMoving) {
+            // Time to start a new knight move
+            if (this.knightMoveTimer >= this.knightMoveDuration) {
+                this.startKnightMove();
+            } else {
+                // Drift slowly toward player when not making knight moves
+                const dx = this.targetPlayer.x - this.x;
+                const dy = this.targetPlayer.y - this.y;
+                const distance = Math.hypot(dx, dy);
+                
+                if (distance > 1) {
+                    const driftSpeed = 0.3;
+                    this.vel.x = (dx / distance) * driftSpeed;
+                    this.vel.y = (dy / distance) * driftSpeed;
+                }
+            }
+        } else {
+            // Execute the knight move with burst movement
+            const moveProgress = (now - this.knightMoveStartTime) / 300; // 300ms move duration
+            
+            if (moveProgress >= 1) {
+                // Move completed
+                this.knightMoving = false;
+                this.knightMoveTimer = 0;
+                this.knightMoveDuration = 800 + Math.random() * 400; // Next move in 800-1200ms
+                this.vel.x = 0;
+                this.vel.y = 0;
+            } else {
+                // Burst movement toward target with easing
+                const easeProgress = 1 - Math.pow(1 - moveProgress, 3); // Ease out cubic
+                const dx = this.knightTargetX - this.x;
+                const dy = this.knightTargetY - this.y;
+                const distance = Math.hypot(dx, dy);
+                
+                if (distance > 1) {
+                    const burstSpeed = this.config.speed * 3; // 3x normal speed for burst
+                    this.vel.x = (dx / distance) * burstSpeed * (1 - easeProgress);
+                    this.vel.y = (dy / distance) * burstSpeed * (1 - easeProgress);
+                }
+            }
+        }
+    }
+    
+    startKnightMove() {
+        if (!this.targetPlayer) return;
+        
+        // Calculate L-shaped knight moves (like chess knight: 2 squares in one direction, 1 in perpendicular)
+        const knightMoves = [
+            { x: 2, y: 1 },   { x: 2, y: -1 },
+            { x: -2, y: 1 },  { x: -2, y: -1 },
+            { x: 1, y: 2 },   { x: 1, y: -2 },
+            { x: -1, y: 2 },  { x: -1, y: -2 }
+        ];
+        
+        // Choose a random knight move
+        const move = knightMoves[Math.floor(Math.random() * knightMoves.length)];
+        const moveDistance = 80; // Distance for each "square" in the L-move
+        
+        // Calculate target position
+        this.knightTargetX = this.x + (move.x * moveDistance);
+        this.knightTargetY = this.y + (move.y * moveDistance);
+        
+        // Keep target within screen bounds
+        const margin = 50;
+        this.knightTargetX = Math.max(margin, Math.min(this.width - margin, this.knightTargetX));
+        this.knightTargetY = Math.max(margin, Math.min(this.height - margin, this.knightTargetY));
+        
+        // Start the move
+        this.knightMoving = true;
+        this.knightMoveStartTime = Date.now();
     }
     
     avoidAsteroids(gameEngine) {
@@ -883,7 +1201,7 @@ export class Enemy {
                 this.drawSquare(ctx);
                 break;
             case 'WASP':
-                this.drawDiamond(ctx);
+                this.drawSquare(ctx);
                 break;
             case 'TITAN':
                 this.drawHexagon(ctx);
@@ -1168,7 +1486,9 @@ export class Enemy {
         ctx.lineWidth = 2;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        const healthNumber = `${Math.round(this.health)}/${Math.round(this.maxHealth)}`;
+        // Round up health display when between 0-1 to show 1 HP
+        const displayHealth = this.health > 0 && this.health < 1 ? 1 : Math.round(this.health);
+        const healthNumber = `${displayHealth}/${Math.round(this.maxHealth)}`;
         const numberY = barY - 6;
         
         // Measure text widths for proper centering
@@ -1252,7 +1572,8 @@ export class Enemy {
         // Safeguard: clamp health between 0 and maxHealth
         this.health = Math.max(0, Math.min(this.health, this.maxHealth));
         
-        return this.health <= 0;
+        // Use small tolerance for floating-point precision issues
+        return this.health <= 0.001;
     }
     
     getDestructionReward() {

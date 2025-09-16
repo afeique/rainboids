@@ -1,6 +1,6 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES } from './constants.js';
-import { debugConsole, debug, toggleDebugMode, setDebugMode, getDebugMode } from './debug.js';
+import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats } from './wave-data.js';
 import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
 import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
 import { PoolManager } from './pool-manager.js';
@@ -62,75 +62,6 @@ export class GameEngine {
         // Ghost preview positions (stored to prevent flickering)
         this.ghostEnemyPosition = this.generateGhostPosition();
         this.ghostAsteroidPosition = this.generateGhostPosition();
-        
-        // Depth-based starfield rendering initialized
-        console.log('🌟 Starfield Depth Batching Active');
-        console.log('  gameEngine.debugStarfieldPerformance() - Show performance stats');
-        console.log('  gameEngine.showDepthBatchStats() - Show depth batching details');
-        console.log('🤖 Enemy System Ready:');
-        console.log('  🔴 HUNTER (Triangle) - 10 HP - Fast aggressive chaser');
-        console.log('  🟢 GUARDIAN (Square) - 20 HP - Defensive spread shooter');
-        console.log('  🟡 WASP (Diamond) - 8 HP - Fast swarm enemy');
-        console.log('  🟣 TITAN (Hexagon) - 30 HP - Heavy orbital enemy');
-        console.log('  🔵 STALKER (Cross) - 10 HP - Stealth approach enemy');
-        console.log('  🟠 BOMBER (Spiked Circle) - 15 HP - Explosive projectiles');
-        console.log('💥 Combat System: Player bullets = 1 dmg, Enemy bullets = 2 dmg');
-        console.log(`💚 Health System: Health orbs heal ${GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT}HP each! Configurable drop rates and counts!`);
-        console.log(`🪨 Asteroid Interactions: Enemy bullets deal ${GAME_CONFIG.ENEMY_BULLET_ASTEROID_DAMAGE} damage to asteroids, enemies bounce off (no damage)`);
-        console.log('💥 Player Damage Feedback: Screen shake, red damage numbers, and colored explosions when hit');
-        console.log('🎆 Bullet Impact Effects: Colored particle explosions for all enemy bullet impacts');
-        console.log('🟠 Player Bullet Effects: Satisfying orange explosions on all player bullet hits');
-        console.log('♻️  Enemy Bullet Lifecycle: No fade decay, recycled when off-screen for efficiency');
-        console.log('👻 Enemy Phase-Through: Enemies pass through each other and enemy bullets');
-        console.log('🕶️ Enemy Dodging: Enemies actively dodge each other\'s bullets with predictive AI');
-        console.log('💊 Tunable Healing: Health orb heal amount now configurable in constants');
-        console.log('🌊 Enhanced Waves: Multi-phase waves with asteroids first, then enemy sub-waves');
-        console.log('⚡ Performance Optimizations Active:');
-        console.log('  🔧 Reduced particle counts for explosions and effects');
-        console.log('  🧹 Automatic particle cleanup and limits');
-        console.log('  📊 gameEngine.showPerformanceStats() - View current object counts');
-        console.log('🎁 Powerup System Active:');
-        console.log('  💨 Rapid Fire - Faster shooting (stacks up to 5x)');
-        console.log('  🎯 Homing Bullets - Track enemies automatically');
-        console.log('  💥 Multi-Shot & Spread Shot - More bullets per shot');
-        console.log('  🔸 Big Bullets - Easier to hit agile enemies');
-        console.log('  ⚡ Speed Boost - Enhanced movement speed');
-        console.log('  🏹 Piercing Shots - Bullets go through enemies');
-        console.log('  💣 Explosive Rounds - Area damage on impact');
-        console.log('  🛡️ Shield Boost - +15% damage reduction per stack');
-        console.log('✨ Enhanced Star System:');
-        console.log('  ⭐ Larger stars to showcase beautiful geometric shapes');
-        console.log('  🎭 15% chance for spectacular big stars');
-        console.log('  🔶 Complex shapes: stars, hexagons, diamonds, sparkles & bursts');
-        console.log('  💫 Enhanced animations: rotation, pulsing, and glow effects');
-        console.log('😌 Calmed Down All Enemies:');
-        console.log('  🐌 Significantly reduced all enemy speeds (STALKER: 2.6→1.8, HUNTER: 2.2→1.6)');
-        console.log('  🎯 Toned down dodge mechanics, erratic movement, and acceleration');
-        console.log('  💨 Reduced weaving, sine waves, and speed multipliers');
-        console.log('  🎮 Much more manageable and less frantic gameplay');
-        console.log('🚀 Enhanced WASD + Mouse Controls:');
-        console.log('  ⬆️ WASD = Move in 8 directions with tight control');
-        console.log('  🖱️ Mouse = Aim direction (ship faces mouse cursor)');
-        console.log('  🔫 Auto-fire = Ship continuously fires (no fire button!)');
-        console.log('  📱 Mobile = Joystick: WASD movement, touch for aiming');
-        console.log('');
-        console.log('🎮 Simplified Gameplay:');
-        console.log('  🪨 Max 5 asteroids on field at once');
-        console.log('  👾 Max 3 enemies on field at once');
-        console.log('  🎯 Single enemy per sub-wave for focused combat');
-        console.log('  ⏰ Sub-waves auto-progress after 2 minutes');
-        console.log('  🎨 Much less agile enemies - easier to hit!');
-        console.log('');
-        console.log('🎁 Enhanced Powerup System:');
-        console.log('  ✨ Spectacular gradient visual effects and distinctive shapes');
-        console.log('  🎯 Unique icons: ⚡💨🎯●💥🛡 etc. for each powerup type');
-        console.log('  🔊 Magical treasure pickup sound with pitch variations');
-        console.log('  📊 Console shows powerup drop rolls and spawns');
-        console.log('  🎮 Beautiful gradient UI indicators at bottom of screen');
-        console.log('  ⏱️ Timer bars show remaining duration (1 minute each)');
-        console.log('  📺 Powerup names display at top in Silkscreen font with smooth fade');
-        console.log('  🎨 Bullets change shape/color based on active powerups');
-        console.log('  🧪 Press "P" key to test spawn a powerup near player');
     }
     
     // Performance monitoring
@@ -180,18 +111,24 @@ export class GameEngine {
             respawnDuration: 5000 // 5 seconds respawn sequence
         };
         
+        // Initialize wave message system
+        this.waveMessage = {
+            active: false,
+            startTime: 0,
+            duration: 0,
+            title: '',
+            subtitle: ''
+        };
+        
         // Initialize cheat flags
         this.cheats = {
             onePunchMan: false,    // Player destroys everything with one hit
-            freeWilly: false,      // 100,000 coins (one-time activation)
             vitamix: false         // Enemies and asteroids ALWAYS drop health and money
         };
         
         // Expose cheat functions globally (case insensitive)
         this.setupCheatCodes();
         
-        // Expose debug functions globally
-        this.setupDebugFunctions();
     }
     
     setupCheatCodes() {
@@ -199,69 +136,53 @@ export class GameEngine {
         window.onepunchman = window.ONEPUNCHMAN = () => this.activateOnePunchMan();
         window.freewilly = window.FREEWILLY = () => this.activateFreeWilly();
         window.vitamix = window.VITAMIX = () => this.activateVitamix();
-        window.gdb = window.GDB = () => this.activateGdb();
         
-        console.log('🎮 Cheat codes activated! Available cheats: onepunchman, freewilly, vitamix, gdb');
-        console.log('🐛 Debug mode is currently:', getDebugMode() ? 'ENABLED' : 'DISABLED');
+        // Display available cheats with descriptions
+        console.log(`
+🎮 CHEAT CODES:
+🥊 onepunchman() 
+    One-hit kill mode
+💰 freewilly() 
+    100,000 coins
+💊 vitamix()
+    Guaranteed drops
+Type any cheat name in the console to activate!`);
     }
     
     activateOnePunchMan() {
         this.cheats.onePunchMan = !this.cheats.onePunchMan;
         const status = this.cheats.onePunchMan ? 'ACTIVATED' : 'DEACTIVATED';
+        console.log('Cheat Activated!');
         console.log(`🥊 ONE PUNCH MAN ${status} - Player destroys everything with one hit!`);
-        debugConsole.log(`🥊 [DEBUG] ONE PUNCH MAN ${status} - Player destroys everything with one hit!`);
         if (this.cheats.onePunchMan) {
             this.uiManager.showMessage('ONE PUNCH MAN', 'Activated! One hit destroys all!', 3000);
+        } else {
+            this.uiManager.showMessage('ONE PUNCH MAN', 'Deactivated', 2000);
         }
         return `One Punch Man ${status}`;
     }
     
     activateFreeWilly() {
-        if (!this.cheats.freeWilly) {
-            this.cheats.freeWilly = true;
-            this.game.money += 100000;
-            console.log(`💰 FREE WILLY ACTIVATED - Added 100,000 coins! Total: ${this.game.money}`);
-            debugConsole.log(`💰 [DEBUG] FREE WILLY ACTIVATED - Added 100,000 coins! Total: ${this.game.money}`);
-            this.uiManager.showMessage('FREE WILLY', '+100,000 Coins!', 3000);
-            return 'Free Willy ACTIVATED - 100,000 coins added!';
-        } else {
-            console.log(`💰 FREE WILLY already used this session`);
-            debugConsole.log(`💰 [DEBUG] FREE WILLY already used this session`);
-            return 'Free Willy already used this session';
-        }
+        this.game.money += 100000;
+        console.log('Cheat Activated!');
+        console.log(`💰 FREE WILLY ACTIVATED - Added 100,000 coins! Total: ${this.game.money}`);
+        this.uiManager.showMessage('FREE WILLY', '+100,000 Coins!', 3000);
+        return 'Free Willy ACTIVATED - 100,000 coins added!';
     }
     
     activateVitamix() {
         this.cheats.vitamix = !this.cheats.vitamix;
         const status = this.cheats.vitamix ? 'ACTIVATED' : 'DEACTIVATED';
+        console.log('Cheat Activated!');
         console.log(`💊 VITAMIX ${status} - Enemies and asteroids ALWAYS drop health and money!`);
-        debugConsole.log(`💊 [DEBUG] VITAMIX ${status} - Enemies and asteroids ALWAYS drop health and money!`);
         if (this.cheats.vitamix) {
             this.uiManager.showMessage('VITAMIX', 'Activated! Guaranteed drops!', 3000);
+        } else {
+            this.uiManager.showMessage('VITAMIX', 'Deactivated', 2000);
         }
         return `Vitamix ${status}`;
     }
     
-    activateGdb() {
-        const newState = toggleDebugMode();
-        const status = newState ? 'ENABLED' : 'DISABLED';
-        console.log(`🐛 GDB (Debug Mode) ${status}`);
-        if (newState) {
-            this.uiManager.showMessage('DEBUG MODE', 'Enabled! Check console for debug output', 3000);
-        } else {
-            this.uiManager.showMessage('DEBUG MODE', 'Disabled', 2000);
-        }
-        return `Debug Mode ${status}`;
-    }
-    
-    setupDebugFunctions() {
-        // Make debug functions available globally
-        window.debugConsole = debugConsole;
-        window.debug = debug;
-        window.toggleDebugMode = toggleDebugMode;
-        window.setDebugMode = setDebugMode;
-        window.getDebugMode = getDebugMode;
-    }
     
     initializePools() {
         this.player = new Player();
@@ -326,12 +247,10 @@ export class GameEngine {
                 const offsetX = random(-50, 50);
                 const offsetY = random(-50, 50);
                 this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY);
-                console.log('🧪 Test powerup spawned near player');
             }
             // Open shop manually (disabled - use pause menu instead)
             // if (e.code === 'KeyS' && this.game.state === GAME_STATES.PLAYING) {
             //     this.openShop();
-            //     console.log('🛒 Shop opened manually with S key');
             // }
         });
         
@@ -346,7 +265,7 @@ export class GameEngine {
             if (this.game.state === GAME_STATES.GAME_OVER) {
                 this.init();
             }
-        });
+        }, { passive: true });
         
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Enter' && this.game.state === GAME_STATES.GAME_OVER) {
@@ -376,7 +295,6 @@ export class GameEngine {
                                         clickY > this.shopWindowBounds.y + this.shopWindowBounds.height;
                     
                     if (isOutsideShop) {
-                        console.log('🛒 Clicked outside shop, closing...');
                         this.closeShop();
                         return;
                     }
@@ -387,10 +305,8 @@ export class GameEngine {
                     for (const bound of this.shopItemBounds) {
                         if (clickX >= bound.x && clickX <= bound.x + bound.width &&
                             clickY >= bound.y && clickY <= bound.y + bound.height) {
-                            console.log(`🛒 Attempting to buy ${bound.item.name}...`);
                             const success = this.buyShopItem(bound.item.id);
                             if (success) {
-                                console.log(`🛒 Purchase successful!`);
                             }
                             break;
                         }
@@ -427,7 +343,7 @@ export class GameEngine {
                     }
                 }
             }
-        });
+        }, { passive: false });
         
         // Mobile touch support for shop
         let touchStartY = 0;
@@ -449,7 +365,6 @@ export class GameEngine {
                     
                     if (isOutsideShop) {
                         e.preventDefault();
-                        console.log('🛒 Touched outside shop, closing...');
                         this.closeShop();
                         return;
                     }
@@ -459,7 +374,7 @@ export class GameEngine {
                 touchStartY = touchY;
                 touchStartScrollOffset = this.shopScrollOffset || 0;
             }
-        });
+        }, { passive: false });
         
         this.canvas.addEventListener('touchmove', (e) => {
             if (this.game.state === GAME_STATES.SHOP) {
@@ -476,7 +391,7 @@ export class GameEngine {
                 }
                 this.shopScrollOffset = touchStartScrollOffset + deltaY;
             }
-        });
+        }, { passive: false });
         
         this.canvas.addEventListener('touchend', (e) => {
             if (this.game.state === GAME_STATES.SHOP) {
@@ -493,10 +408,8 @@ export class GameEngine {
                     for (const bound of this.shopItemBounds) {
                         if (touchX >= bound.x && touchX <= bound.x + bound.width &&
                             touchY >= bound.y && touchY <= bound.y + bound.height) {
-                            console.log(`🛒 Attempting to buy ${bound.item.name}...`);
                             const success = this.buyShopItem(bound.item.id);
                             if (success) {
-                                console.log(`🛒 Purchase successful!`);
                             }
                             break;
                         }
@@ -512,6 +425,8 @@ export class GameEngine {
         this.game.state = GAME_STATES.PLAYING;
         // Reset player
         this.player = new Player();
+        // Initialize lives display
+        this.uiManager.updateLives(this.game.lives);
         // Wave bonus shield system removed
         // Reset shields
         this.playerShields = 25; // Start with 25 health
@@ -528,7 +443,6 @@ export class GameEngine {
         this.nextShopTime = Date.now() + this.shopInterval;
         this.forceSpawnEnabled = true;
         
-        console.log('🔄 Bulletproof spawning reset - continuous 5s intervals + 5s emergency backup');
         
         // Reset ghost preview positions
         this.ghostEnemyPosition = this.generateGhostPosition();
@@ -555,7 +469,7 @@ export class GameEngine {
         this.uiManager.updateLives(this.game.lives); // Initialize lives display
                 this.game.state = GAME_STATES.PLAYING;
         
-        // Spawn initial wave (4 asteroids for wave 1)
+        // Spawn initial wave (asteroids only for wave 1)
         this.spawnWaveEntities();
     }
     
@@ -710,7 +624,6 @@ export class GameEngine {
             this.game.waveCountdownTime = Date.now() + this.game.waveCountdownDuration;
             this.game.state = GAME_STATES.WAVE_TRANSITION;
             
-            console.log(`🌊 Wave ${this.game.currentWave} completed!`);
             this.showWaveComplete();
         }
         
@@ -726,58 +639,74 @@ export class GameEngine {
     }
     
     showWaveComplete() {
-        // Show WAVE COMPLETE with wavy color-changing text
-        this.uiManager.showWavyMessage('WAVE COMPLETE', '', this.game.waveCountdownDuration, 'center');
+        // Show WAVE COMPLETE message with next wave number
+        const nextWave = this.game.currentWave + 1;
+        
+        // Set up canvas-based wavy text animation
+        this.waveMessage = {
+            active: true,
+            startTime: Date.now(),
+            duration: this.game.waveCountdownDuration,
+            title: 'WAVE COMPLETE!',
+            subtitle: `WAVE ${nextWave} INCOMING...`
+        };
+        
+        // Also show DOM message as backup
+        this.uiManager.showMessage('WAVE COMPLETE!', `WAVE ${nextWave} INCOMING...`, this.game.waveCountdownDuration, 'center');
     }
     
-    // Method to draw wavy rainbow text like the title screen
+    // Method to draw wavy rainbow text for wave messages
     drawWavyText(text, x, y, fontSize = 48) {
+        if (!text) return;
+        
         const time = Date.now() * 0.001; // Convert to seconds
         const chars = text.split('');
-        let currentX = x;
         
         this.ctx.save();
-        this.ctx.font = `${fontSize}px "Press Start 2P", monospace`;
+        this.ctx.font = `${fontSize}px 'Press Start 2P', monospace`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
+        
+        // Calculate total text width for centering
+        const totalWidth = this.ctx.measureText(text).width;
+        let currentX = x - totalWidth / 2;
         
         chars.forEach((char, index) => {
             if (char === ' ') {
                 currentX += fontSize * 0.5; // Space width
-            return;
-        }
-        
-            // Wave animation
-            const waveOffset = Math.sin(time * 2 + index * 0.5) * 15;
+                return;
+            }
             
-            // Color cycling (rainbow effect)
-            const colorTime = (time * 0.1 + index * 0.1) % 1;
-            let color, shadowColor;
+            // Wave animation
+            const waveOffset = Math.sin(time * 3 + index * 0.8) * 20;
+            
+            // Rainbow color cycling
+            const colorTime = (time * 0.15 + index * 0.1) % 1;
+            let color;
             
             if (colorTime < 0.16) {
-                color = '#00F'; shadowColor = '#00F';
+                color = '#FF0000'; // Red
             } else if (colorTime < 0.32) {
-                color = '#4B0082'; shadowColor = '#4B0082';
+                color = '#FF8000'; // Orange
             } else if (colorTime < 0.48) {
-                color = '#8A2BE2'; shadowColor = '#8A2BE2';
+                color = '#FFFF00'; // Yellow
             } else if (colorTime < 0.64) {
-                color = '#FF00FF'; shadowColor = '#FF00FF';
+                color = '#00FF00'; // Green
             } else if (colorTime < 0.80) {
-                color = '#FF4500'; shadowColor = '#FF4500';
+                color = '#0080FF'; // Blue
             } else {
-                color = '#F00'; shadowColor = '#F00';
+                color = '#8000FF'; // Purple
             }
             
             this.ctx.fillStyle = color;
-            this.ctx.shadowColor = shadowColor;
+            this.ctx.shadowColor = color;
             this.ctx.shadowBlur = 15;
             
             // Draw character with wave offset
             this.ctx.fillText(char, currentX, y + waveOffset);
             
             // Move to next character position
-            const charWidth = this.ctx.measureText(char).width;
-            currentX += charWidth + fontSize * 0.1; // Small spacing between chars
+            currentX += this.ctx.measureText(char).width;
         });
         
         this.ctx.restore();
@@ -792,28 +721,38 @@ export class GameEngine {
         this.game.enemyLevel = Math.floor(this.game.currentWave / 2) + 1;
         this.game.asteroidLevel = Math.floor(this.game.currentWave / 3) + 1;
         
-        console.log(`🚀 Starting Wave ${this.game.currentWave} - Enemy LV.${this.game.enemyLevel}, Asteroid LV.${this.game.asteroidLevel}`);
         
         // Spawn wave entities based on wave number
         this.spawnWaveEntities();
         
-        // Show wave start message
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 3000, 'top');
+        // Show wave start message with wavy animation
+        this.waveMessage = {
+            active: true,
+            startTime: Date.now(),
+            duration: 3000,
+            title: `WAVE ${this.game.currentWave}`,
+            subtitle: 'FIGHT!'
+        };
+        
+        // Also show DOM message as backup
+        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, 'FIGHT!', 3000, 'top');
     }
     
     spawnWaveEntities() {
-        // Wave 1: 4 asteroids only
-        if (this.game.currentWave === 1) {
-            this.spawnAsteroids(4);
-        } else {
-            // Later waves: mix of asteroids and enemies (limit total for performance)
-            const maxEntities = 8; // Performance limit
-            const asteroidCount = Math.min(4, Math.floor(maxEntities * 0.6));
-            const enemyCount = Math.min(4, maxEntities - asteroidCount);
-            
-            this.spawnAsteroids(asteroidCount);
-            this.spawnEnemies(enemyCount);
-        }
+        // Get wave configuration from wave data
+        const waveConfig = getWaveConfig(this.game.currentWave);
+        
+        // Calculate levels for this wave
+        this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
+        this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
+        
+        // Spawn asteroids with level scaling
+        this.spawnLeveledAsteroids(waveConfig.asteroids);
+        
+        // Spawn enemies by type with level scaling
+        waveConfig.enemies.forEach(enemyGroup => {
+            this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count);
+        });
     }
     
     spawnAsteroids(count) {
@@ -821,7 +760,6 @@ export class GameEngine {
             const asteroid = this.asteroidPool.get();
             if (asteroid) {
                 this.initializeWaveAsteroid(asteroid);
-                console.log(`🪨 Spawned asteroid ${i + 1}/${count}`);
             }
         }
     }
@@ -833,9 +771,54 @@ export class GameEngine {
                 const enemyType = this.getRandomEnemyType();
                 const spawnPos = this.getRandomSpawnPosition();
                 enemy.reset(spawnPos.x, spawnPos.y, enemyType, this.game.enemyLevel);
-                console.log(`👾 Spawned ${enemyType} enemy ${i + 1}/${count}`);
             }
         }
+    }
+    
+    spawnLeveledAsteroids(count) {
+        for (let i = 0; i < count; i++) {
+            const asteroid = this.asteroidPool.get();
+            if (asteroid) {
+                this.initializeLeveledAsteroid(asteroid);
+            }
+        }
+    }
+    
+    spawnLeveledEnemies(enemyType, count) {
+        for (let i = 0; i < count; i++) {
+            const enemy = this.enemyPool.get();
+            if (enemy) {
+                const spawnPos = this.getRandomSpawnPosition();
+                enemy.reset(spawnPos.x, spawnPos.y, enemyType, this.game.enemyLevel);
+                this.applyEnemyLevelScaling(enemy);
+            }
+        }
+    }
+    
+    initializeLeveledAsteroid(asteroid) {
+        // Use existing initialization but with level scaling
+        this.initializeWaveAsteroid(asteroid);
+        
+        // Apply level scaling to health
+        const baseHealth = asteroid.health;
+        asteroid.health = getLevelScaledAsteroidStats(baseHealth, this.game.asteroidLevel);
+        asteroid.maxHealth = asteroid.health;
+    }
+    
+    applyEnemyLevelScaling(enemy) {
+        // Get base stats from enemy type
+        const baseStats = ENEMY_TYPES[enemy.type];
+        
+        // Apply level scaling
+        const scaledStats = getLevelScaledEnemyStats(baseStats, this.game.enemyLevel);
+        
+        // Update enemy properties
+        enemy.health = scaledStats.health;
+        enemy.maxHealth = scaledStats.health;
+        enemy.config.speed = scaledStats.speed;
+        
+        // Update points value for higher level enemies
+        enemy.config.points = scaledStats.points;
     }
     
     // Legacy wave methods removed - replaced by continuous spawning system
@@ -850,18 +833,15 @@ export class GameEngine {
         this.game.enemyLevel = Math.floor(this.game.currentWave / 2) + 1; // Level 1-2 = wave 1-3, Level 3 = wave 5-6, etc.
         this.game.asteroidLevel = Math.floor(this.game.currentWave / 3) + 1; // Slower asteroid scaling
         
-        console.log(`🌊 Wave ${this.game.currentWave} completed! Enemy Level: ${this.game.enemyLevel}, Asteroid Level: ${this.game.asteroidLevel}`);
         
         // Shop removed from wave completion - players can access via pause menu
         // setTimeout(() => {
         //     this.openShop();
         // }, 500); // Brief delay to ensure clean transition
         
-        console.log(`✅ Wave ${this.game.currentWave} complete! Use pause menu to access shop.`);
     }
     
     openShop() {
-        console.log(`🛒 Opening shop from state: ${this.game.state}`);
         
         // Hide any active wave messages when opening shop
         this.uiManager.hideMessage();
@@ -874,155 +854,209 @@ export class GameEngine {
         // Transition to shop state from any valid state
         this.game.state = GAME_STATES.SHOP;
         
-        console.log(`🛒 Shop state set to: ${this.game.state}`);
         
-        // Define shop items with balanced costs based on power output
+        // Initialize shop state
+        this.shopCategory = 'OFFENSE'; // Current tab: 'OFFENSE' or 'DEFENSE'
+        
+        // Define shop items with categories and currency types
         this.shopItems = [
             {
                 id: 'MEDPACK',
                 name: 'Medpack',
                 description: 'Increases green health orb healing by 1',
-                cost: 500,  // Premium healing upgrade
+                cost: 1,
                 icon: '💊',
-                maxStacks: 5  // 5 stacks for max +5 healing (1 base + 5 bonus = 6 total)
+                maxStacks: 5,
+                category: 'DEFENSE',
+                currency: 'SP'
             },
             {
                 id: 'HEALTH_BOOST',
                 name: 'Health Boost', 
                 description: 'Increases max health by 25',
-                cost: 1000,  // Very expensive for significant health increase
+                cost: 1,
                 icon: '❤️',
-                maxStacks: 20   // 20 stacks × 25 = 500 extra health (25 base + 500 = 525 max)
+                maxStacks: 20,
+                category: 'DEFENSE',
+                currency: 'SP'
             },
             {
                 id: 'SPEED_BOOST',
                 name: 'Speed Boost',
                 description: 'Move 30% faster',
-                cost: 5000,  // Ultra expensive utility upgrade
+                cost: 1,
                 icon: '💨',
-                maxStacks: 4
+                maxStacks: 4,
+                category: 'DEFENSE',
+                currency: 'SP'
             },
             {
                 id: 'RAPID_FIRE',
                 name: 'Rapid Fire',
                 description: 'Shoot 25% faster',
-                cost: 1500,  // Expensive DPS increase
+                cost: 1500,
                 icon: '⚡',
-                maxStacks: 5
+                maxStacks: 5,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'SHIELD_BOOST',
                 name: 'Shielding',
                 description: 'Reduces damage by 5%',
-                cost: 1500, // Premium shield enhancement
-                icon: '🛡️', // Shield icon
-                maxStacks: 15  // 15 stacks × 5% = 75% max
+                cost: 1,
+                icon: '🛡️',
+                maxStacks: 15,
+                category: 'DEFENSE',
+                currency: 'SP'
             },
             {
                 id: 'MULTI_SHOT',
                 name: 'Multi Shot',
                 description: 'Fire one extra bullet',
-                cost: 2000, // Very expensive DPS boost
+                cost: 2000,
                 icon: '🎯',
-                maxStacks: 5   // Unlimited stacking for high cost
+                maxStacks: 5,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'SPREAD_SHOT',
                 name: 'Spread Shot',
                 description: 'Fire spread bullets (3/5/7)',
-                cost: 5000, // Base cost, escalates with purchases
+                cost: 5000,
                 icon: '📐',
-                maxStacks: 3   // Now upgradeable 3 times
+                maxStacks: 3,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'HOMING',
                 name: 'Homing',
                 description: 'Bullets track enemies',
-                cost: 1500, // Very expensive utility upgrade
+                cost: 1500,
                 icon: '🎪',
-                maxStacks: 5   // More stacks for scaling effect
+                maxStacks: 5,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'PIERCING',
                 name: 'Piercing',
                 description: 'Bullets go through enemies',
-                cost: 5000, // Ultra expensive for game-changing effect
+                cost: 5000,
                 icon: '🏹',
-                maxStacks: 5   // More stacks for multiple piercing
+                maxStacks: 5,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'EXPLOSIVE',
                 name: 'Explosive',
                 description: 'Bullets explode on impact',
-                cost: 3000, // Ultra expensive for massive area damage
+                cost: 3000,
                 icon: '💣',
-                maxStacks: 3
+                maxStacks: 3,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'CRIT_CHANCE',
                 name: 'Critical Chance',
                 description: 'Increases crit chance by 5%',
-                cost: 3000, // Ultra expensive DPS multiplier
+                cost: 3000,
                 icon: '🎯',
-                maxStacks: 10  // Max 50% crit chance
+                maxStacks: 10,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'CRIT_DAMAGE',
                 name: 'Critical Damage',
                 description: 'Increases crit damage by 10%',
-                cost: 1500, // Expensive damage scaling
+                cost: 1500,
                 icon: '💥',
-                maxStacks: 15  // Max 300% crit damage (150% base + 150% from upgrades)
+                maxStacks: 15,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'HEALTH_ORB_DROP_CHANCE',
                 name: 'Health Orb Luck',
-                description: 'Increases health orb drop chance by 10%',
-                cost: 2000, // Expensive utility upgrade
+                description: 'Increases health orb drop chance by 5%',
+                cost: 1,
                 icon: '🍀',
-                maxStacks: 2  // Max 20% bonus (80% base + 20% = 100% guaranteed)
+                maxStacks: 16,
+                category: 'DEFENSE',
+                currency: 'SP'
             },
             {
                 id: 'MONEY_ORB_DROP_CHANCE',
                 name: 'Money Orb Luck',
-                description: 'Increases money orb drop chance by 10%',
-                cost: 2000, // Expensive utility upgrade
+                description: 'Increases money orb drop chance by 5%',
+                cost: 1,
                 icon: '💰',
-                maxStacks: 1  // Max 10% bonus (90% base + 10% = 100% guaranteed)
+                maxStacks: 10,
+                category: 'DEFENSE',
+                currency: 'SP'
             },
             {
                 id: 'HEALTH_ORB_DROP_QUANTITY',
                 name: 'Health Orb Bounty',
                 description: 'Increases health orbs dropped by 1',
-                cost: 3000, // Very expensive for more healing
+                cost: 1,
                 icon: '💚',
-                maxStacks: 3  // Max +3 extra orbs per drop
+                maxStacks: 3,
+                category: 'DEFENSE',
+                currency: 'SP'
             },
             {
                 id: 'MONEY_ORB_DROP_QUANTITY',
                 name: 'Money Orb Bounty',
                 description: 'Increases money orbs dropped by 1',
-                cost: 2500, // Expensive for more money
+                cost: 1,
                 icon: '🪙',
-                maxStacks: 4  // Max +4 extra orbs per drop
+                maxStacks: 4,
+                category: 'DEFENSE',
+                currency: 'SP'
+            },
+            {
+                id: 'CHARGE_SPEED',
+                name: 'Charge Speed',
+                description: 'Reduces charge time by 1 second',
+                cost: 10000,
+                icon: '⚡',
+                maxStacks: 3,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
+                id: 'CHARGE_DAMAGE',
+                name: 'Charge Power',
+                description: 'Increases charge shot base damage by 1',
+                cost: 2500,
+                icon: '💥',
+                maxStacks: 10,
+                category: 'OFFENSE',
+                currency: 'COINS'
             },
             {
                 id: 'SPARE_SHIP',
                 name: 'Spare Ship',
                 description: 'Adds an extra life (max 3)',
-                cost: 10000, // Expensive flat cost, no scaling
+                cost: 10000,
                 icon: '🚀',
-                maxStacks: 1,  // Only one purchase allowed
-                flatCost: true // Flag to indicate no cost scaling
+                maxStacks: 1,
+                flatCost: true,
+                category: 'OFFENSE',
+                currency: 'COINS'
             }
         ];
         
-        console.log('🛒 Shop opened!');
     }
     
     closeShop() {
         try {
-            console.log('🛒 Closing shop...');
             
             if (!this.game) {
                 console.error('❌ Game object is undefined in closeShop!');
@@ -1037,32 +1071,25 @@ export class GameEngine {
                 this.lastSpawnTime += timeInShop; // Adjust last spawn time instead of next spawn time
                 this.lastEmergencySpawn += timeInShop; // Adjust emergency timer too
                 this.nextShopTime += timeInShop;
-                console.log(`⏱️ Adjusted all timers for ${timeInShop}ms spent in shop`);
             }
             
             this.game.state = GAME_STATES.WAVE_TRANSITION;
-            console.log(`🎮 Game state changed to: ${this.game.state}`);
             
             // Clear shop bounds to prevent memory leaks
             this.shopItemBounds = null;
-            console.log('🧹 Shop bounds cleared');
             
             // Respect the WAVE_BREAK_TIME timer instead of immediately starting the wave
             const remainingTime = this.waveTimer - Date.now();
             if (remainingTime > 0) {
-                console.log(`⏱️ Waiting ${remainingTime}ms before starting next wave (respecting WAVE_BREAK_TIME)`);
                 setTimeout(() => {
                     if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
-                        console.log('🚀 Starting new wave after timer...');
                         this.startNewWave();
                     }
                 }, remainingTime);
             } else {
-                console.log('🚀 Timer expired, starting new wave immediately...');
                 this.startNewWave();
             }
             
-            console.log('🛒 Shop closed!');
             
         } catch (error) {
             console.error('❌ Error in closeShop:', error);
@@ -1072,7 +1099,6 @@ export class GameEngine {
     
     buyShopItem(itemId) {
         try {
-            console.log(`🛒 buyShopItem called with itemId: ${itemId}`);
             
             const item = this.shopItems.find(i => i.id === itemId);
             if (!item) {
@@ -1080,7 +1106,6 @@ export class GameEngine {
                 return false;
             }
             
-            console.log(`🛒 Found item: ${item.name}`);
             
             if (!this.player) {
                 console.error(`❌ Player is undefined!`);
@@ -1089,16 +1114,13 @@ export class GameEngine {
             
             // Special check for Spare Ship - can't buy if already at 3 lives
             if (itemId === 'SPARE_SHIP' && this.game.lives >= 3) {
-                console.log(`❌ Cannot purchase ${item.name} - already at maximum lives (3)`);
                 return false;
             }
             
             const currentStacks = this.player.getPowerupStacks(itemId);
             if (currentStacks >= item.maxStacks) {
                 if (item.maxStacks === 1) {
-                    console.log(`❌ ${item.name} can only be purchased once`);
                 } else {
-                    console.log(`❌ ${item.name} is already at max level (${item.maxStacks})`);
                 }
                 return false;
             }
@@ -1118,22 +1140,35 @@ export class GameEngine {
                 if (currentStacks === 0) actualCost = 5000;      // First purchase
                 else if (currentStacks === 1) actualCost = 10000; // Second purchase  
                 else if (currentStacks === 2) actualCost = 20000; // Third purchase
+            } else if (item.id === 'CHARGE_SPEED') {
+                const currentStacks = this.player.getPowerupStacks(item.id);
+                if (currentStacks === 0) actualCost = 10000;     // First purchase
+                else if (currentStacks === 1) actualCost = 15000; // Second purchase  
+                else if (currentStacks === 2) actualCost = 20000; // Third purchase
             }
             
-            if (this.game.money < actualCost) {
-                console.log(`❌ Not enough coins for ${item.name} (need ${actualCost}, have ${this.game.money})`);
-                return false;
+            // Check affordability based on currency type
+            if (item.currency === 'SP') {
+                if (this.player.skillPoints < actualCost) {
+                    return false;
+                }
+            } else {
+                if (this.game.money < actualCost) {
+                    return false;
+                }
             }
             
-            // Purchase successful
-            this.game.money -= actualCost;
-            console.log(`💰 Money deducted. New balance: ${this.game.money}`);
+            // Purchase successful - deduct appropriate currency
+            if (item.currency === 'SP') {
+                this.player.skillPoints -= actualCost;
+            } else {
+                this.game.money -= actualCost;
+            }
             
             // Special handling for Spare Ship
             if (itemId === 'SPARE_SHIP') {
                 this.game.lives = Math.min(3, this.game.lives + 1); // Cap at 3 lives
                 this.uiManager.updateLives(this.game.lives);
-                console.log(`🚀 Spare Ship purchased! Lives: ${this.game.lives}`);
             } else {
                 // Add powerup to player (permanent for the run)
                 const powerupConfig = this.getPowerupConfig(itemId);
@@ -1142,14 +1177,12 @@ export class GameEngine {
                     return false;
                 }
                 
-                console.log(`🛒 Adding powerup to player...`);
                 this.player.addPowerup(itemId, {
                     ...powerupConfig,
                     duration: Infinity // Permanent for the run
                 }, true); // isShopItem = true
             }
             
-            console.log(`✅ Purchased ${item.name} for ${actualCost} coins!`);
             
             if (!this.audioManager) {
                 console.error(`❌ AudioManager is undefined!`);
@@ -1222,30 +1255,46 @@ export class GameEngine {
         this.ctx.textAlign = 'center';
         this.ctx.fillText('SHOP', this.width / 2, 60);
         
-        // Money display with icon and gold text
-        const moneyY = 90;
-        const iconSize = 20;
-        const moneyText = `${Math.floor(this.game.money)}`;
+        // Currency display - both coins and skill points
+        const currencyY = 90;
+        const iconSize = 16;
         
-        // Measure text width to center the icon + text combination
-        this.ctx.font = 'bold 20px "Press Start 2P", monospace';
-        const textWidth = this.ctx.measureText(moneyText).width;
-        const totalWidth = iconSize + 8 + textWidth; // icon + spacing + text
-        const moneyStartX = (this.width - totalWidth) / 2;
+        // Calculate layout for both currencies
+        this.ctx.font = 'bold 16px "Press Start 2P", monospace';
+        const coinsText = `${Math.floor(this.game.money)}`;
+        const spText = `${this.player.skillPoints}`;
         
-        // Draw money icon
-        drawCachedMoneyIcon(this.ctx, moneyStartX + iconSize/2, moneyY - 2, iconSize, '#FFD700', '#B8860B');
+        const coinsWidth = this.ctx.measureText(coinsText).width;
+        const spWidth = this.ctx.measureText(spText).width;
+        const spLabelWidth = this.ctx.measureText('SP:').width;
         
-        // Draw money amount in gold
-        this.ctx.fillStyle = '#FFD700'; // Gold color
+        // Total width: coin_icon + coins + spacing + "SP:" + sp_value
+        const totalWidth = iconSize + 8 + coinsWidth + 40 + spLabelWidth + 8 + spWidth;
+        const currencyStartX = (this.width - totalWidth) / 2;
+        
+        // Draw coin icon and amount
+        drawCachedMoneyIcon(this.ctx, currencyStartX + iconSize/2, currencyY - 2, iconSize, '#FFD700', '#B8860B');
+        this.ctx.fillStyle = '#FFD700';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(moneyText, moneyStartX + iconSize + 8, moneyY);
+        this.ctx.fillText(coinsText, currencyStartX + iconSize + 8, currencyY);
         
-        // Setup clipping for scrollable area
+        // Draw skill points
+        const spStartX = currencyStartX + iconSize + 8 + coinsWidth + 40;
+        this.ctx.fillStyle = '#4A90E2'; // Blue color for SP
+        this.ctx.fillText('SP:', spStartX, currencyY);
+        this.ctx.fillStyle = '#6AB7FF'; // Lighter blue for SP value
+        this.ctx.fillText(spText, spStartX + spLabelWidth + 8, currencyY);
+        
+        // Draw category tabs below currency display
+        const tabsY = currencyY + 25;
+        this.drawShopTabs(shopWindowX, tabsY, shopWindowWidth);
+        
+        // Setup clipping for scrollable area (adjusted for tabs)
+        const contentStartY = tabsY + 40; // Start content below tabs
         this.ctx.save();
         this.ctx.beginPath();
-        this.ctx.rect(shopWindowX + 10, shopWindowY + 20, shopWindowWidth - 20, shopWindowHeight - 80);
+        this.ctx.rect(shopWindowX + 10, contentStartY, shopWindowWidth - 20, shopWindowHeight - (contentStartY - shopWindowY) - 20);
         this.ctx.clip();
         
         // Calculate scrollable list layout
@@ -1254,8 +1303,11 @@ export class GameEngine {
         const padding = 12; // Slightly increased padding
         const startX = shopWindowX + 20;
         
+        // Filter items by current category
+        const filteredItems = this.shopItems.filter(item => item.category === this.shopCategory);
+        
         // Calculate total content height for scroll limits
-        const totalContentHeight = this.shopItems.length * (itemHeight + padding);
+        const totalContentHeight = filteredItems.length * (itemHeight + padding);
         const maxScroll = Math.max(0, totalContentHeight - (shopWindowHeight - 80));
         
         // Clamp scroll offset
@@ -1264,8 +1316,8 @@ export class GameEngine {
         // Calculate start Y position after clamping scroll offset
         const startY = shopWindowY + 30 - this.shopScrollOffset;
         
-        // Draw shop items with hover detection
-        this.shopItems.forEach((item, index) => {
+        // Draw filtered shop items with hover detection
+        filteredItems.forEach((item, index) => {
             const x = startX;
             const y = startY + index * (itemHeight + padding);
             
@@ -1310,18 +1362,64 @@ export class GameEngine {
         this.ctx.fillText('Click items to purchase • Press SPACE or click outside to continue', this.width / 2, this.height - 30);
     }
     
+    drawShopTabs(shopX, tabY, shopWidth) {
+        const tabWidth = 120;
+        const tabHeight = 30;
+        const tabSpacing = 10;
+        const totalTabsWidth = (tabWidth * 2) + tabSpacing;
+        const tabStartX = shopX + (shopWidth - totalTabsWidth) / 2;
+        
+        // Draw OFFENSE tab
+        const offenseActive = this.shopCategory === 'OFFENSE';
+        this.ctx.fillStyle = offenseActive ? '#FFD700' : 'rgba(255, 215, 0, 0.3)';
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.fillRect(tabStartX, tabY, tabWidth, tabHeight);
+        this.ctx.strokeRect(tabStartX, tabY, tabWidth, tabHeight);
+        
+        this.ctx.fillStyle = offenseActive ? '#000000' : '#FFD700';
+        this.ctx.font = 'bold 12px "Press Start 2P", monospace';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('OFFENSE', tabStartX + tabWidth/2, tabY + tabHeight/2);
+        
+        // Draw DEFENSE tab
+        const defenseActive = this.shopCategory === 'DEFENSE';
+        this.ctx.fillStyle = defenseActive ? '#4A90E2' : 'rgba(74, 144, 226, 0.3)';
+        this.ctx.strokeStyle = '#4A90E2';
+        this.ctx.lineWidth = 2;
+        const defenseTabX = tabStartX + tabWidth + tabSpacing;
+        this.ctx.fillRect(defenseTabX, tabY, tabWidth, tabHeight);
+        this.ctx.strokeRect(defenseTabX, tabY, tabWidth, tabHeight);
+        
+        this.ctx.fillStyle = defenseActive ? '#FFFFFF' : '#4A90E2';
+        this.ctx.fillText('DEFENSE', defenseTabX + tabWidth/2, tabY + tabHeight/2);
+        
+        // Store tab bounds for click detection
+        this.shopTabBounds = {
+            offense: { x: tabStartX, y: tabY, width: tabWidth, height: tabHeight },
+            defense: { x: defenseTabX, y: tabY, width: tabWidth, height: tabHeight }
+        };
+    }
+    
     drawShopItem(item, x, y, width, height, index, isHovered = false) {
         const currentStacks = this.player.getPowerupStacks(item.id);
         
-        // Calculate dynamic cost for spread shot
+        // Calculate dynamic cost for special items
         let actualCost = item.cost;
         if (item.id === 'SPREAD_SHOT') {
             if (currentStacks === 0) actualCost = 5000;      // First purchase
             else if (currentStacks === 1) actualCost = 10000; // Second purchase  
             else if (currentStacks === 2) actualCost = 20000; // Third purchase
+        } else if (item.id === 'CHARGE_SPEED') {
+            if (currentStacks === 0) actualCost = 10000;     // First purchase
+            else if (currentStacks === 1) actualCost = 15000; // Second purchase  
+            else if (currentStacks === 2) actualCost = 20000; // Third purchase
         }
         
-        const canAfford = this.game.money >= actualCost;
+        const canAfford = item.currency === 'SP' ? 
+            this.player.skillPoints >= actualCost : 
+            this.game.money >= actualCost;
         const maxedOut = currentStacks >= item.maxStacks;
         
         // Item background with hover effect
@@ -1399,14 +1497,26 @@ export class GameEngine {
         // Cost (right side) - larger, more visible
         const costX = x + width - padding;
         this.ctx.font = 'bold 16px "Press Start 2P", monospace';
-        this.ctx.fillStyle = canAfford ? '#FFD700' : '#FF6666';
+        
+        // Color based on currency type and affordability
+        if (item.currency === 'SP') {
+            this.ctx.fillStyle = canAfford ? '#4A90E2' : '#FF6666';
+        } else {
+            this.ctx.fillStyle = canAfford ? '#FFD700' : '#FF6666';
+        }
+        
         this.ctx.textAlign = 'right';
         this.ctx.fillText(`${actualCost}`, costX, y + 35);
         
-        // "coins" label larger
+        // Currency label
         this.ctx.font = '12px "Press Start 2P", monospace';
-        this.ctx.fillStyle = canAfford ? '#B8860B' : '#CC4444'; // Darker versions
-        this.ctx.fillText('coins', costX, y + 52);
+        if (item.currency === 'SP') {
+            this.ctx.fillStyle = canAfford ? '#6AB7FF' : '#CC4444';
+            this.ctx.fillText('SP', costX, y + 52);
+        } else {
+            this.ctx.fillStyle = canAfford ? '#B8860B' : '#CC4444';
+            this.ctx.fillText('coins', costX, y + 52);
+        }
         
         // Item level beneath coin cost (right side)
         this.ctx.font = '10px "Press Start 2P", monospace';
@@ -1460,7 +1570,6 @@ export class GameEngine {
     
     startNewWave() {
         try {
-            console.log('🚀 startNewWave called');
             
             if (!this.game) {
                 console.error('❌ Game object is undefined in startNewWave!');
@@ -1473,23 +1582,17 @@ export class GameEngine {
         this.currentSubWave = 0;
         this.enemiesRemainingInSubWave = 0;
             
-            console.log('📊 Wave state initialized');
         
         // Spawn asteroids first
-            console.log('🪨 Spawning asteroids...');
         this.spawnWaveAsteroids();
         
         // Show wave notification
             if (this.uiManager) {
-                console.log('📢 Showing wave notification...');
                 this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 7000, 'top');
             } else {
                 console.error('❌ UIManager is undefined!');
             }
         
-        console.log(`🚨 Wave ${this.game.currentWave} starting!`);
-        console.log(`🪨 Spawning asteroids first...`);
-        console.log(`👾 ${GAME_CONFIG.SUB_WAVES_PER_WAVE} enemy sub-waves incoming!`);
             
         } catch (error) {
             console.error('❌ Error in startNewWave:', error);
@@ -1517,7 +1620,6 @@ export class GameEngine {
             }, i * 200); // Stagger asteroid spawning
         }
         
-        console.log(`🪨 Spawning ${asteroidsToSpawn} asteroids (${currentAsteroids} already active, max: ${GAME_CONFIG.MAX_ASTEROIDS})`);
     }
     
     startEnemySubWave() {
@@ -1527,7 +1629,6 @@ export class GameEngine {
         this.subWaveTimer = Date.now();
         this.lastEnemySpawn = 0; // Spawn first enemy immediately
         
-        console.log(`🔥 Sub-wave ${this.currentSubWave + 1}/${GAME_CONFIG.SUB_WAVES_PER_WAVE}: ${this.enemiesRemainingInSubWave} enemies!`);
     }
     
     initializeWaveAsteroid(asteroid) {
@@ -1561,20 +1662,16 @@ export class GameEngine {
         const activeEnemies = this.enemyPool.activeObjects.length;
         const activeAsteroids = this.asteroidPool.activeObjects.length;
         
-        console.log(`🔧 FORCE SPAWN: E:${activeEnemies}/${GAME_CONFIG.MAX_ENEMIES}, A:${activeAsteroids}/${GAME_CONFIG.MAX_ASTEROIDS}`);
         
         // Try both types - don't respect limits if we're empty
         const totalEntities = activeEnemies + activeAsteroids;
         
         // If battlefield is empty, ignore all limits
         if (totalEntities === 0) {
-            console.log(`🚨 EMERGENCY: Battlefield empty! Forcing spawn regardless of limits`);
             if (this.forceSpawnEnemy()) {
-                console.log(`👾 EMERGENCY spawned enemy`);
                 return true;
             }
             if (this.forceSpawnAsteroid()) {
-                console.log(`🪨 EMERGENCY spawned asteroid`);
                 return true;
             }
         }
@@ -1588,39 +1685,32 @@ export class GameEngine {
         } else if (activeAsteroids >= GAME_CONFIG.MAX_ASTEROIDS && activeEnemies < GAME_CONFIG.MAX_ENEMIES) {
             spawnEnemy = true; // Force enemy
         } else if (activeEnemies >= GAME_CONFIG.MAX_ENEMIES && activeAsteroids >= GAME_CONFIG.MAX_ASTEROIDS) {
-            console.log('🚫 Both pools at limit but forcing spawn anyway');
             spawnEnemy = Math.random() < 0.5; // Still try to spawn something
         }
         
         // Try to spawn the chosen type
         if (spawnEnemy) {
             if (this.forceSpawnEnemy()) {
-                console.log(`👾 SPAWNED enemy (${activeEnemies + 1}/${GAME_CONFIG.MAX_ENEMIES})`);
                 return true;
             }
         } else {
             if (this.forceSpawnAsteroid()) {
-                console.log(`🪨 SPAWNED asteroid (${activeAsteroids + 1}/${GAME_CONFIG.MAX_ASTEROIDS})`);
                 return true;
             }
         }
         
         // If first choice failed, try the other type
-        console.log(`⚠️ First choice failed, trying other type...`);
         if (spawnEnemy) {
             if (this.forceSpawnAsteroid()) {
-                console.log(`🪨 FALLBACK spawned asteroid`);
                 return true;
             }
         } else {
             if (this.forceSpawnEnemy()) {
-                console.log(`👾 FALLBACK spawned enemy`);
                 return true;
             }
         }
         
         // LAST RESORT - try both again
-        console.log(`🆘 LAST RESORT: Trying both types again...`);
         if (this.forceSpawnEnemy()) return true;
         if (this.forceSpawnAsteroid()) return true;
         
@@ -1629,20 +1719,16 @@ export class GameEngine {
     }
     
     forceSpawnEnemy() {
-        console.log(`🔨 Attempting to spawn enemy...`);
         
         // Method 1: Try normal pool
         const enemy = this.enemyPool.get();
         if (enemy) {
-            console.log(`✅ Got enemy from pool`);
             const { x, y } = this.getRandomSpawnPosition();
             const enemyType = this.getRandomEnemyType();
             enemy.reset(x, y, enemyType, this.game.enemyLevel);
-            console.log(`✅ Enemy spawned at (${x.toFixed(0)}, ${y.toFixed(0)}) type:${enemyType} level:${this.game.enemyLevel}`);
             return true;
         }
         
-        console.log(`⚠️ Pool failed, creating new enemy...`);
         
         // Method 2: Force create new enemy if pool failed
         try {
@@ -1651,7 +1737,6 @@ export class GameEngine {
             const enemyType = this.getRandomEnemyType();
             newEnemy.reset(x, y, enemyType, this.game.enemyLevel);
             this.enemyPool.activeObjects.push(newEnemy);
-            console.log(`✅ NEW Enemy created at (${x.toFixed(0)}, ${y.toFixed(0)}) type:${enemyType}`);
             return true;
         } catch (error) {
             console.error('❌ Failed to create new enemy:', error);
@@ -1660,25 +1745,20 @@ export class GameEngine {
     }
     
     forceSpawnAsteroid() {
-        console.log(`🔨 Attempting to spawn asteroid...`);
         
         // Method 1: Try normal pool
         const asteroid = this.asteroidPool.get();
         if (asteroid) {
-            console.log(`✅ Got asteroid from pool`);
             this.initializeWaveAsteroid(asteroid);
-            console.log(`✅ Asteroid spawned at (${asteroid.x.toFixed(0)}, ${asteroid.y.toFixed(0)}) level:${this.game.asteroidLevel}`);
             return true;
         }
         
-        console.log(`⚠️ Pool failed, creating new asteroid...`);
         
         // Method 2: Force create new asteroid if pool failed
         try {
             const newAsteroid = new Asteroid();
             this.initializeWaveAsteroid(newAsteroid);
             this.asteroidPool.activeObjects.push(newAsteroid);
-            console.log(`✅ NEW Asteroid created at (${newAsteroid.x.toFixed(0)}, ${newAsteroid.y.toFixed(0)})`);
             return true;
         } catch (error) {
             console.error('❌ Failed to create new asteroid:', error);
@@ -1754,31 +1834,95 @@ export class GameEngine {
         
         const enemy = this.enemyPool.get(x, y, enemyType, this.game.enemyLevel);
         if (enemy) {
-            console.log(`👾 ${enemyType} LV.${this.game.enemyLevel} spawned at wave ${this.game.currentWave}`);
         } else {
             console.warn('⚠️ Failed to get enemy from pool!');
             // Force create a new enemy if pool is empty
             const newEnemy = new Enemy();
             newEnemy.reset(x, y, enemyType, this.game.enemyLevel);
             this.enemyPool.activeObjects.push(newEnemy);
-            console.log(`👾 ${enemyType} LV.${this.game.enemyLevel} force-spawned at wave ${this.game.currentWave}`);
         }
     }
     
     createEnemyDebris(enemy) {
-        // Create explosion particles
-        for (let i = 0; i < 20; i++) {
+        // EPIC EXPLOSION EFFECTS!
+        
+        // Multiple explosion rings with different sizes and colors
+        for (let ring = 0; ring < 4; ring++) {
+            const ringDelay = ring * 50; // Stagger the rings
+            setTimeout(() => {
+                const explosionRing = this.particlePool.get(enemy.x, enemy.y, 'explosionPulse');
+                if (explosionRing) {
+                    explosionRing.maxRadius = 30 + ring * 25; // Growing rings
+                    explosionRing.color = ring === 0 ? '#ffffff' : 
+                                        ring === 1 ? enemy.color : 
+                                        ring === 2 ? '#ffaa00' : '#ff4400';
+                }
+            }, ringDelay);
+        }
+        
+        // Massive amount of explosion particles
+        for (let i = 0; i < 60; i++) {
             const particle = this.particlePool.get(enemy.x, enemy.y, 'explosion');
             if (particle) {
-                particle.color = enemy.color;
+                particle.color = i < 20 ? '#ffffff' : 
+                               i < 40 ? enemy.color : '#ffaa00';
+                // Vary the explosion velocities for more chaos
+                const angle = (i / 60) * Math.PI * 2 + Math.random() * 0.5;
+                const speed = 2 + Math.random() * 4;
+                particle.vel = {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                };
+            }
+        }
+        
+        // Additional fiery explosion particles
+        for (let i = 0; i < 30; i++) {
+            const particle = this.particlePool.get(enemy.x, enemy.y, 'explosionRedOrange');
+            if (particle) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1 + Math.random() * 3;
+                particle.vel = {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                };
+            }
+        }
+        
+        // Sparkle effects
+        for (let i = 0; i < 15; i++) {
+            const sparkle = this.particlePool.get(enemy.x, enemy.y, 'starSparkle');
+            if (sparkle) {
+                sparkle.color = '#ffffff';
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.5 + Math.random() * 2;
+                sparkle.vel = {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                };
             }
         }
         
         // Create colored line debris based on enemy shape
         this.createShapeDebris(enemy);
         
-        // Screen shake
-        this.triggerScreenShake(12, 8, enemy.radius);
+        // EPIC screen shake - much stronger!
+        this.triggerScreenShake(25, 15, enemy.radius * 2);
+        
+        // Additional delayed explosion effects
+        setTimeout(() => {
+            // Secondary explosion burst
+            for (let i = 0; i < 20; i++) {
+                const particle = this.particlePool.get(
+                    enemy.x + (Math.random() - 0.5) * 40,
+                    enemy.y + (Math.random() - 0.5) * 40,
+                    'explosion'
+                );
+                if (particle) {
+                    particle.color = '#ff6600';
+                }
+            }
+        }, 100);
     }
     
     createShapeDebris(enemy) {
@@ -1908,9 +2052,7 @@ export class GameEngine {
             const speed = random(0.5, 1.5);
             powerup.vel.x = Math.cos(angle) * speed;
             powerup.vel.y = Math.sin(angle) * speed;
-            console.log(`🎁 Powerup spawned: ${powerup.type} at (${Math.round(x)}, ${Math.round(y)})`);
         } else {
-            console.log('❌ Failed to spawn powerup - pool issue');
         }
         return powerup;
     }
@@ -1936,7 +2078,6 @@ export class GameEngine {
         // Audio feedback - magical powerup sound
         this.audioManager.playPowerup();
         
-        console.log(`🎁 Collected ${powerup.config.name}! Current stacks: ${this.player.getPowerupStacks(powerup.type)}`);
         
         // Display powerup name at top of screen
         this.showPowerupDisplay(powerup.config.name, powerup.powerupColor);
@@ -1958,7 +2099,7 @@ export class GameEngine {
         
         // Position at top center, above wave number
         const centerX = this.width / 2;
-        const topY = 60; // Above where wave number appears
+        const topY = 80; // Moved down 20px from HUD
         
         // Set font to Silkscreen with fallback
         ctx.font = "32px 'Silkscreen', 'Press Start 2P', monospace";
@@ -2099,7 +2240,6 @@ export class GameEngine {
                 
                 // Skip if this piercing bullet has already hit this asteroid
                 if (bullet.piercing > 0 && bullet.hasHitEnemy(ast)) {
-                    console.log(`🔹 Skipping already hit asteroid: piercing=${bullet.piercing}, hitTargets=${bullet.hitTargets.size}`);
                     continue;
                 }
                 
@@ -2108,8 +2248,11 @@ export class GameEngine {
                     this.audioManager.playHit();
                     
                     // Damage the asteroid (One Punch Man cheat: instant kill)
-                    const damage = this.cheats.onePunchMan ? 99999 : 1;
+                    const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
                     ast.health -= damage;
+                    
+                    // Award XP for hitting asteroid
+                    this.player.gainExperience(2);
 
                     // Impart momentum from bullet
                     const impulse = 0.05; // Adjust for desired push effect
@@ -2134,7 +2277,8 @@ export class GameEngine {
                     
                     // No screen shake for asteroid hits
                     
-                    if (ast.health <= 0) {
+                    // Use small tolerance for floating-point precision issues
+                    if (ast.health <= 0.001) {
                         if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                             this.audioManager.playExplosion();
                             // Multiple fiery shockwave pulses for destruction
@@ -2173,6 +2317,8 @@ export class GameEngine {
                                 }
                                 this.createDebris(ast);
                                 this.createColorStarBurst(ast.x, ast.y);
+                                // Drop health and money orbs from splitting asteroids too
+                                this.dropOrbsFromEntity(ast.x, ast.y);
                                 // Chance to drop powerup from large asteroids (20% chance)
                                 if (Math.random() < 0.2) {
                                     this.dropPowerup(ast.x, ast.y);
@@ -2371,7 +2517,6 @@ export class GameEngine {
                 
                 // Skip if this piercing bullet has already hit this enemy
                 if (bullet.piercing > 0 && bullet.hasHitEnemy(enemy)) {
-                    console.log(`🔹 Skipping already hit enemy: piercing=${bullet.piercing}, hitTargets=${bullet.hitTargets.size}`);
                     continue;
                 }
                 
@@ -2380,8 +2525,11 @@ export class GameEngine {
                     this.audioManager.playHit();
                     
                     // Damage the enemy (One Punch Man cheat: instant kill)
-                    const damage = this.cheats.onePunchMan ? 99999 : this.baseDamage;
+                    const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
                     const destroyed = enemy.takeDamage(damage);
+                    
+                    // Award XP for hitting enemy
+                    this.player.gainExperience(3);
                     
                     // Reduced explosion effects for performance
                     for (let p = 0; p < 4; p++) {
@@ -2423,12 +2571,10 @@ export class GameEngine {
                                             enemy.type === 'TITAN' ? 0.5 : 
                                             enemy.type === 'BOMBER' ? 0.45 : 0.25;
                         const roll = Math.random();
-                        console.log(`🎲 Powerup roll for ${enemy.type}: ${roll.toFixed(3)} vs ${powerupChance}`);
                         if (roll < powerupChance) {
                             this.dropPowerup(enemy.x, enemy.y);
                         }
                         
-                        console.log(`💥 ${reward.type} destroyed! +${reward.points} points`);
                         
                         this.enemyPool.release(enemy);
                     }
@@ -2480,8 +2626,8 @@ export class GameEngine {
                     ast.vel.x += bullet.vel.x * impulse;
                     ast.vel.y += bullet.vel.y * impulse;
                     
-                    // Handle asteroid destruction
-                    if (ast.health <= 0) {
+                    // Handle asteroid destruction (use tolerance for floating-point precision)
+                    if (ast.health <= 0.001) {
                         if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                             this.audioManager.playExplosion();
                             // Create destruction effects
@@ -2519,6 +2665,8 @@ export class GameEngine {
                                 }
                             }
                             this.createDebris(ast);
+                            // Drop health and money orbs from splitting asteroids
+                            this.dropOrbsFromEntity(ast.x, ast.y);
                             this.asteroidPool.release(ast);
                         }
                     }
@@ -2579,6 +2727,9 @@ export class GameEngine {
         const reducedDamage = baseDamage * (1 - effectiveShield / 100);
         const finalDamage = Math.round(reducedDamage);
         player.health -= finalDamage;
+        
+        // Award XP for surviving enemy collision
+        this.player.gainExperience(5);
         
         // Check for death/shield tank usage
         if (player.health <= 0) {
@@ -2657,6 +2808,9 @@ export class GameEngine {
         const reducedDamage = baseDamage * (1 - effectiveShield / 100);
         const finalDamage = Math.round(reducedDamage);
         player.health -= finalDamage;
+        
+        // Award XP for surviving enemy bullet hit
+        this.player.gainExperience(3);
         
         // Check for death/shield tank usage
         if (player.health <= 0) {
@@ -2759,8 +2913,8 @@ export class GameEngine {
                 return; // Skip normal gameplay updates during respawn
             }
 
-            // Calculate tractor beam state
-            const tractorEngaged = !input.up && !input.down && !input.left && !input.right && !input.fire;
+            // Calculate tractor beam state - active when not charging
+            const tractorEngaged = !this.player.isCharging;
             
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged);
@@ -2773,7 +2927,7 @@ export class GameEngine {
             this.asteroidPool.updateActive();
             
             // Update enemies and enemy bullets (only during active gameplay)
-            // this.updateWaveSystem(); // Commented out continuous spawning system
+            this.updateWaveSystem(); // Wave progression system
             this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this));
             this.enemyBulletPool.updateActive();
             
@@ -2802,8 +2956,8 @@ export class GameEngine {
                 this.powerupPool.cleanupInactive();
             }
             
-            // Note: Wave completion now handled by enhanced wave system in updateWaves()
-            // Old asteroid-only trigger removed to prevent conflicts
+            // Update wave system to check for completion and progression
+            this.updateWaveSystem();
             
             this.uiManager.updateScore(this.game.money);
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
@@ -2878,6 +3032,36 @@ export class GameEngine {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
             // Draw health bar and UI elements
             this.updateHUD();
+        }
+        
+        // Draw wave message if active
+        if (this.waveMessage.active) {
+            const now = Date.now();
+            const elapsed = now - this.waveMessage.startTime;
+            
+            if (elapsed < this.waveMessage.duration) {
+                // Calculate fade effect
+                const fadeProgress = elapsed / this.waveMessage.duration;
+                const alpha = fadeProgress < 0.8 ? 1 : (1 - fadeProgress) / 0.2; // Fade out in last 20%
+                
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha;
+                
+                // Draw title (larger, centered)
+                const centerX = this.width / 2;
+                const centerY = this.height / 2 - 50;
+                this.drawWavyText(this.waveMessage.title, centerX, centerY, 48);
+                
+                // Draw subtitle (smaller, below title)
+                if (this.waveMessage.subtitle) {
+                    this.drawWavyText(this.waveMessage.subtitle, centerX, centerY + 80, 24);
+                }
+                
+                this.ctx.restore();
+            } else {
+                // Message expired
+                this.waveMessage.active = false;
+            }
         }
     }
     
@@ -2968,6 +3152,8 @@ export class GameEngine {
     }
     
     gameLoop() {
+        const frameStart = performance.now();
+        
         this.update();
         
         this.ctx.save();
@@ -3010,6 +3196,15 @@ export class GameEngine {
             this.drawShop();
         }
         
+        // Performance monitoring - warn if frame takes too long
+        const frameTime = performance.now() - frameStart;
+        if (frameTime > 16.67) { // More than 60fps budget
+            // Skip some non-critical updates next frame if we're running slow
+            this.performanceMode = true;
+        } else {
+            this.performanceMode = false;
+        }
+        
         requestAnimationFrame(() => this.gameLoop());
     }
     
@@ -3018,23 +3213,19 @@ export class GameEngine {
             // Playing → Paused
             this.game.state = GAME_STATES.PAUSED;
             this.uiManager.togglePause();
-            console.log('⏸️ Game paused');
             // Removed thruster sound on pause to reduce noise issues
         } else if (this.game.state === GAME_STATES.PAUSED) {
             // Paused → Playing
             this.game.state = GAME_STATES.PLAYING;
             this.uiManager.togglePause();
-            console.log('▶️ Game resumed');
         } else if (this.game.state === GAME_STATES.SHOP) {
             // Shop → Paused (close shop and show pause menu)
             this.closeShopToPause();
-            console.log('🛒 Shop closed, showing pause menu');
         }
     }
     
     closeShopToPause() {
         try {
-            console.log('🛒 Closing shop to show pause menu...');
             
             if (!this.game) {
                 console.error('❌ Game object is undefined in closeShopToPause!');
@@ -3049,17 +3240,14 @@ export class GameEngine {
                 this.lastSpawnTime += timeInShop;
                 this.lastEmergencySpawn += timeInShop;
                 this.nextShopTime += timeInShop;
-                console.log(`⏱️ Adjusted all timers for ${timeInShop}ms spent in shop`);
             }
             
             // Set state to paused instead of wave transition
             this.game.state = GAME_STATES.PAUSED;
             this.uiManager.togglePause(); // Show pause menu
-            console.log(`🎮 Game state changed to: ${this.game.state}`);
             
             // Clear shop bounds to prevent memory leaks
             this.shopItemBounds = null;
-            console.log('🧹 Shop bounds cleared');
             
         } catch (error) {
             console.error('❌ Error in closeShopToPause:', error);
@@ -3186,10 +3374,14 @@ export class GameEngine {
                 const dy = mouseY - colorStar.y;
                 const distance = Math.hypot(dx, dy);
                 
-                // Use enhanced collision radius for burst stars to match collection behavior
+                // Use enhanced collision radius for orbs to match collection behavior
                 let targetRadius = colorStar.radius;
                 if (colorStar.isBurst) {
-                    targetRadius += GAME_CONFIG.BURST_STAR_COLLECTION_RADIUS; // Match the enhanced collection radius
+                    // Use appropriate orb collection radius based on type
+                    const collectionRadius = colorStar.starType === 'health' ? 
+                        GAME_CONFIG.HEALTH_ORB_COLLECTION_RADIUS : 
+                        GAME_CONFIG.MONEY_ORB_COLLECTION_RADIUS;
+                    targetRadius += collectionRadius;
                 }
                 
                 if (distance <= targetRadius) {
@@ -3231,7 +3423,6 @@ export class GameEngine {
         // Lose a life first
         this.game.lives--;
         console.log(`💀 Player died! Lives remaining: ${this.game.lives}`); // Always show player death
-        debugConsole.debug('PLAYER', `Death details - Lives: ${this.game.lives}, Score: ${this.game.score}, Money: ${this.game.money}`);
         
         // Update lives display
         this.uiManager.updateLives(this.game.lives);
@@ -3304,7 +3495,6 @@ export class GameEngine {
             this.player.active = false;
             this.checkHighScore();
             this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
-            console.log('💀 GAME OVER - No lives remaining!');
         } else {
             // Still have lives - respawn player
             this.respawnPlayer();
@@ -3312,7 +3502,6 @@ export class GameEngine {
     }
     
     respawnPlayer() {
-        console.log(`🔄 Starting respawn sequence with ${this.game.lives} lives remaining`);
         
         // Start respawn animation sequence
         this.game.respawning = true;
@@ -3334,7 +3523,6 @@ export class GameEngine {
         // Clear nearby enemies and bullets to give player a chance
         this.clearAreaAroundPlayer(150);
         
-        console.log('✨ Respawn animation started');
     }
     
     updateRespawnAnimation(input) {
@@ -3354,8 +3542,8 @@ export class GameEngine {
             const startX = this.player.x + Math.cos(angle) * distance;
             const startY = this.player.y + Math.sin(angle) * distance;
             
-            // Create tractor beam particle that moves toward player
-            const particle = this.particlePool.get(startX, startY, 'tractorBeamParticle', this.player.x, this.player.y);
+            // Create spawn particle that moves toward player (renamed from tractor beam)
+            const particle = this.particlePool.get(startX, startY, 'spawnParticle', this.player.x, this.player.y);
             if (particle) {
                 // Override color to bright blue
                 particle.color = `hsl(210, 100%, ${70 + Math.random() * 30}%)`;
@@ -3377,7 +3565,6 @@ export class GameEngine {
             const livesText = this.game.lives === 1 ? '1 life' : `${this.game.lives} lives`;
             this.uiManager.showMessage('RESPAWNED', `${livesText} remaining`, 'top');
             
-            console.log('✨ Player respawned successfully with invincibility');
         }
     }
     
@@ -3406,7 +3593,6 @@ export class GameEngine {
             }
         });
         
-        console.log(`🧹 Cleared area around player (radius: ${radius}px)`);
     }
     
     updateHUD() {
@@ -3518,6 +3704,9 @@ export class GameEngine {
         }
         
         // Remove segmentation lines for cleaner look
+        
+        // Draw XP bar at the bottom of the health bar
+        this.drawXPBar(ctx, barX, barY, barWidth, barHeight);
 
         // Draw HP text below the health bar with matching colors
         ctx.font = "12px 'Press Start 2P', monospace";
@@ -3571,26 +3760,40 @@ export class GameEngine {
         // Use cached shield icon sprite instead of complex path drawing
         drawCachedShieldIcon(ctx, centerX, centerY, iconSize);
         
+        // Draw "LV" text inside the shield icon
+        ctx.save();
+        ctx.font = "8px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#2A4A6B'; // Darker blue color for text inside shield
+        ctx.strokeStyle = '#000000'; // Black stroke outline
+        ctx.lineWidth = 1;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Draw "LV" text with stroke outline inside shield
+        ctx.strokeText('LV', centerX, centerY);
+        ctx.fillText('LV', centerX, centerY);
+        ctx.restore();
+        
+        // Draw level number to the right of shield
         ctx.font = "12px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#4A90E2'; // Consistent blue color for shield text
+        ctx.fillStyle = '#4A90E2'; // Consistent blue color for level number
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)'; // Dark outline
         ctx.lineWidth = 0.5;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         
-        const effectiveShield = Math.round(this.player.getEffectiveShield());
-        const shieldText = `${effectiveShield}`;
-        const shieldTextX = shieldIconX + iconSize + 8;
-        const shieldTextY = shieldIconY + iconSize / 2;
+        const levelNumber = `${this.player.level}`;
+        const levelNumberX = shieldIconX + iconSize + 8;
+        const levelNumberY = shieldIconY + iconSize / 2;
         
-        // Draw shield text with outline
-        ctx.strokeText(shieldText, shieldTextX, shieldTextY);
-        ctx.fillText(shieldText, shieldTextX, shieldTextY);
+        // Draw level number with outline
+        ctx.strokeText(levelNumber, levelNumberX, levelNumberY);
+        ctx.fillText(levelNumber, levelNumberX, levelNumberY);
 
-        // Draw money icon to the right of the shield text
-        const shieldTextWidth = ctx.measureText(shieldText).width;
-        const moneyIconX = shieldTextX + shieldTextWidth + 25; // Position to the right of shield text with extra margin (moved right by 10px)
-        const moneyIconY = shieldTextY; // Align vertically with shield text
+        // Draw money icon to the right of the level number
+        const levelNumberWidth = ctx.measureText(levelNumber).width;
+        const moneyIconX = levelNumberX + levelNumberWidth + 25; // Position to the right of level number with extra margin
+        const moneyIconY = levelNumberY; // Align vertically with level number
         const moneyIconSize = 16;
         
         // Draw money icon using cached sprite for better performance
@@ -3715,6 +3918,9 @@ export class GameEngine {
             
             // Apply the calculated damage
             this.player.health -= finalDamage;
+            
+            // Award XP for surviving asteroid collision
+            this.player.gainExperience(4);
 
             // Handle death/shield tank usage
             if (this.player.health <= 0) {
@@ -3842,9 +4048,78 @@ export class GameEngine {
         // }
         
         ctx.restore();
+    }
+    
+    drawXPBar(ctx, barX, barY, barWidth, barHeight) {
+        // XP bar dimensions - positioned at the bottom of the health bar
+        const xpBarHeight = 8;
+        const xpBarY = barY + barHeight - xpBarHeight;
+        const bevelSize = 12; // Match health bar bevel exactly
         
-        // Draw ghost previews (simplified)
-        this.drawGhostPreviews(spawnProgress);
+        // Calculate XP progress
+        const xpProgress = this.player.getExperienceProgress();
+        const filledWidth = barWidth * xpProgress;
+        
+        ctx.save();
+        
+        // Use the EXACT same health bar clipping path, then clip to bottom section
+        const createHealthBarPath = (width) => {
+            ctx.beginPath();
+            // Exact copy of health bar path
+            ctx.moveTo(barX + bevelSize, barY);
+            ctx.lineTo(barX + width - bevelSize * 0.5, barY);
+            ctx.lineTo(barX + width, barY + bevelSize);
+            ctx.lineTo(barX + width, barY + barHeight - bevelSize);
+            ctx.lineTo(barX + width - bevelSize, barY + barHeight);
+            ctx.lineTo(barX + bevelSize * 0.5, barY + barHeight);
+            ctx.lineTo(barX, barY + barHeight - bevelSize);
+            ctx.lineTo(barX, barY + bevelSize);
+            ctx.closePath();
+        };
+        
+        // First, clip to the health bar shape
+        createHealthBarPath(barWidth);
+        ctx.clip();
+        
+        // Then clip to just the bottom portion for XP bar
+        ctx.beginPath();
+        ctx.rect(barX - 5, xpBarY, barWidth + 10, xpBarHeight);
+        ctx.clip();
+        
+        // Draw XP bar background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(barX - 5, xpBarY, barWidth + 10, xpBarHeight);
+        
+        // Draw segmented XP fill with precise clipping
+        if (filledWidth > 0) {
+            // Create gradient for XP fill
+            const gradient = ctx.createLinearGradient(barX, xpBarY, barX, xpBarY + xpBarHeight);
+            gradient.addColorStop(0, '#FFFF99'); // Bright yellow top
+            gradient.addColorStop(0.5, '#FFD700'); // Gold middle
+            gradient.addColorStop(1, '#FFA500'); // Orange bottom
+            
+            // Draw the filled area as one solid shape
+            ctx.fillStyle = gradient;
+            ctx.fillRect(barX, xpBarY, filledWidth, xpBarHeight);
+            
+            // Add inner highlight
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.fillRect(barX, xpBarY, filledWidth, 1);
+            
+            // Draw segment separators over the filled area
+            const segments = 20;
+            const segmentWidth = barWidth / segments;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            
+            for (let i = 1; i < segments; i++) {
+                const separatorX = barX + (i * segmentWidth);
+                if (separatorX < barX + filledWidth) {
+                    ctx.fillRect(separatorX, xpBarY, 0.5, xpBarHeight);
+                }
+            }
+        }
+        
+        ctx.restore();
     }
     
     drawCircularTimer(ctx, x, y, radius, progress, color, icon, timeRemaining) {
