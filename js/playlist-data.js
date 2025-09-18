@@ -214,7 +214,7 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/people-are-not-scary.mp3",
-    "name": "People Aren't Scary (Remastered)",
+    "name": "People Aren't Scary",
     "artist": "afeique"
   },
   {

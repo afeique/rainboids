@@ -203,6 +203,31 @@ export class EnemyBullet {
                 }
                 break;
                 
+            case 'titan_homing':
+                // Titan tank missiles - faster but weaker homing than bomber
+                if (this.targetPlayer) {
+                    const dx = this.targetPlayer.x - this.x;
+                    const dy = this.targetPlayer.y - this.y;
+                    const distance = Math.hypot(dx, dy);
+                    
+                    if (distance > 0) {
+                        const homingStrength = 0.02; // Weaker homing than bomber (0.03) and missile (0.05)
+                        const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+                        
+                        // Gradually turn toward player
+                        this.vel.x += (dx / distance) * homingStrength;
+                        this.vel.y += (dy / distance) * homingStrength;
+                        
+                        // Maintain speed
+                        const newSpeed = Math.hypot(this.vel.x, this.vel.y);
+                        if (newSpeed > 0) {
+                            this.vel.x = (this.vel.x / newSpeed) * currentSpeed;
+                            this.vel.y = (this.vel.y / newSpeed) * currentSpeed;
+                        }
+                    }
+                }
+                break;
+                
             case 'pulse':
                 // Pulse shot - accelerates over time
                 const pulseAccel = 1 + this.patternTimer * 0.8;

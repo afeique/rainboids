@@ -88,6 +88,7 @@ export class Player {
         this.invincibilityTimer = 0;
         this.firingDisabled = false;
         this.justRespawned = false;
+        this.levelUpAnimation = { active: false };
         
         // Reset auto-fire timer
         this.autoFireTimer = 0;
@@ -134,7 +135,62 @@ export class Player {
             this.health = Math.min(this.health + 5, this.maxHealth);
         }
         
+        // Trigger level up effects
+        this.triggerLevelUpEffects();
+        
         return true; // Indicates a level up occurred
+    }
+    
+    triggerLevelUpEffects() {
+        // Set level up animation flag
+        this.levelUpAnimation = {
+            active: true,
+            startTime: Date.now(),
+            duration: 2000 // 2 second animation
+        };
+        
+        // Display level up message via game engine
+        if (window.gameEngine && window.gameEngine.uiManager) {
+            window.gameEngine.uiManager.showMessage(`LEVEL ${this.level}!`, 'Skill Point Gained!', 3000, 'top');
+        }
+        
+        // Create level up particles via game engine
+        if (window.gameEngine && window.gameEngine.particlePool) {
+            this.createLevelUpParticles();
+        }
+    }
+    
+    createLevelUpParticles() {
+        const gameEngine = window.gameEngine;
+        if (!gameEngine || !gameEngine.particlePool) return;
+        
+        // Create golden burst particles around player
+        for (let i = 0; i < 20; i++) {
+            const particle = gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
+            if (particle) {
+                const angle = (i / 20) * Math.PI * 2;
+                const speed = 2 + Math.random() * 3;
+                particle.vel.x = Math.cos(angle) * speed;
+                particle.vel.y = Math.sin(angle) * speed;
+                particle.color = '#FFD700'; // Gold color
+                particle.radius = 2 + Math.random() * 2;
+                particle.life = 60 + Math.random() * 40;
+            }
+        }
+        
+        // Create expanding golden ring
+        const ring = gameEngine.particlePool.get(this.x, this.y, 'explosionPulse', this.radius * 3);
+        if (ring) {
+            ring.color = '#FFD700';
+        }
+        
+        // Create secondary ring with delay
+        setTimeout(() => {
+            const ring2 = gameEngine.particlePool.get(this.x, this.y, 'explosionPulse', this.radius * 5);
+            if (ring2) {
+                ring2.color = '#FFA500'; // Orange
+            }
+        }, 300);
     }
     
     getExperienceProgress() {
@@ -319,6 +375,14 @@ export class Player {
                 this.invincibilityTimer = 0;
                 this.firingDisabled = false; // Re-enable firing when invincibility ends
                 this.justRespawned = false; // Clear respawn flag when invincibility ends
+            }
+        }
+        
+        // Update level up animation
+        if (this.levelUpAnimation.active) {
+            const elapsed = Date.now() - this.levelUpAnimation.startTime;
+            if (elapsed >= this.levelUpAnimation.duration) {
+                this.levelUpAnimation.active = false;
             }
         }
 
@@ -573,6 +637,11 @@ export class Player {
             this.drawChargingEffects(ctx);
         }
         
+        // Draw level up animation effects
+        if (this.levelUpAnimation.active) {
+            this.drawLevelUpEffects(ctx);
+        }
+        
         // Draw cooldown timer at ship tip
         this.drawCooldownTimer(ctx);
         
@@ -676,6 +745,65 @@ export class Player {
                     ctx.fill();
                 }
             }
+        }
+        
+        ctx.restore();
+    }
+    
+    drawLevelUpEffects(ctx) {
+        const now = Date.now();
+        const elapsed = now - this.levelUpAnimation.startTime;
+        const progress = elapsed / this.levelUpAnimation.duration;
+        
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        
+        // Pulsing golden glow around player
+        const pulseSpeed = 0.1;
+        const pulseIntensity = 0.8 + Math.sin(now * pulseSpeed) * 0.2;
+        
+        // Expanding golden aura
+        const auraRadius = this.radius * (2 + progress * 3); // Expands over time
+        const auraAlpha = (1 - progress) * pulseIntensity * 0.6; // Fades over time
+        
+        const gradient = ctx.createRadialGradient(0, 0, this.radius * 0.5, 0, 0, auraRadius);
+        gradient.addColorStop(0, `rgba(255, 215, 0, ${auraAlpha})`); // Gold center
+        gradient.addColorStop(0.3, `rgba(255, 165, 0, ${auraAlpha * 0.8})`); // Orange
+        gradient.addColorStop(0.6, `rgba(255, 255, 0, ${auraAlpha * 0.6})`); // Yellow
+        gradient.addColorStop(1, `rgba(255, 255, 255, 0)`); // Transparent edge
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, auraRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Rotating energy rings
+        const ringCount = 3;
+        for (let i = 0; i < ringCount; i++) {
+            const ringRadius = this.radius * (1.5 + i * 0.5 + progress * 2);
+            const ringAlpha = (1 - progress) * pulseIntensity * (0.8 - i * 0.2);
+            const rotation = (now * 0.005 + i * Math.PI / 3) % (Math.PI * 2);
+            
+            ctx.strokeStyle = `rgba(255, 215, 0, ${ringAlpha})`;
+            ctx.lineWidth = 2 + i;
+            ctx.setLineDash([10, 5]);
+            ctx.lineDashOffset = rotation * 10;
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        // Reset line dash
+        ctx.setLineDash([]);
+        
+        // Bright center flash
+        if (progress < 0.3) {
+            const flashAlpha = (0.3 - progress) / 0.3 * pulseIntensity;
+            ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius * 1.2, 0, Math.PI * 2);
+            ctx.fill();
         }
         
         ctx.restore();

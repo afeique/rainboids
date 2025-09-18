@@ -2205,14 +2205,19 @@ Type any cheat name in the console to activate!`);
         // Get hit streak multiplier for increased orb drops
         const hitStreakMultiplier = this.player.getHitStreakMultiplier();
         
+        // Check if entity is an enemy (has type property) for bonus drops
+        const isEnemy = entity && entity.type && typeof entity.type === 'string';
+        const enemyDropRateBonus = isEnemy ? 0.4 : 0; // +40% drop rate for enemies
+        const enemyQuantityMultiplier = isEnemy ? 1.8 : 1; // +80% more orbs for enemies
+        
         // Get level-based bonuses (higher level entities have better drop rates and quantities)
         const entityLevel = entity?.level || 1;
         const levelDropRateBonus = (entityLevel - 1) * 0.15; // 15% increased drop rate per level
         const levelQuantityMultiplier = 1 + (entityLevel - 1) * 0.25; // 25% more orbs per level
         
-        // Calculate effective drop rates with upgrades and level bonuses (Vitamix cheat: guaranteed drops)
-        const baseHealthDropRate = GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + (healthDropChanceStacks * GAME_CONFIG.HEALTH_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus;
-        const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + (moneyDropChanceStacks * GAME_CONFIG.MONEY_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus;
+        // Calculate effective drop rates with upgrades, level bonuses, and enemy bonuses
+        const baseHealthDropRate = GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + (healthDropChanceStacks * GAME_CONFIG.HEALTH_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
+        const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + (moneyDropChanceStacks * GAME_CONFIG.MONEY_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
         
         const healthDropRate = this.cheats.vitamix ? 1.0 : Math.min(1.0, baseHealthDropRate);
         const moneyDropRate = this.cheats.vitamix ? 1.0 : Math.min(1.0, baseMoneyDropRate);
@@ -2222,7 +2227,8 @@ Type any cheat name in the console to activate!`);
             const baseHealthOrbCount = Math.floor(Math.random() * (GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX - GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MIN + 1)) + GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MIN;
             const upgradeHealthOrbCount = baseHealthOrbCount + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
             const levelScaledHealthOrbCount = Math.floor(upgradeHealthOrbCount * levelQuantityMultiplier);
-            const totalHealthOrbCount = Math.floor(levelScaledHealthOrbCount * hitStreakMultiplier);
+            const enemyScaledHealthOrbCount = Math.floor(levelScaledHealthOrbCount * enemyQuantityMultiplier);
+            const totalHealthOrbCount = Math.floor(enemyScaledHealthOrbCount * hitStreakMultiplier);
             
             for (let i = 0; i < totalHealthOrbCount; i++) {
                 this.createHealthOrb(x, y);
@@ -2234,7 +2240,8 @@ Type any cheat name in the console to activate!`);
             const baseMoneyOrbCount = Math.floor(Math.random() * (GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX - GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MIN + 1)) + GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MIN;
             const upgradeMoneyOrbCount = baseMoneyOrbCount + (moneyDropQuantityStacks * GAME_CONFIG.MONEY_ORB_DROP_QUANTITY_UPGRADE);
             const levelScaledMoneyOrbCount = Math.floor(upgradeMoneyOrbCount * levelQuantityMultiplier);
-            const totalMoneyOrbCount = Math.floor(levelScaledMoneyOrbCount * hitStreakMultiplier);
+            const enemyScaledMoneyOrbCount = Math.floor(levelScaledMoneyOrbCount * enemyQuantityMultiplier);
+            const totalMoneyOrbCount = Math.floor(enemyScaledMoneyOrbCount * hitStreakMultiplier);
             
             for (let i = 0; i < totalMoneyOrbCount; i++) {
                 this.createMoneyOrb(x, y);
@@ -3399,7 +3406,7 @@ Type any cheat name in the console to activate!`);
         
         const cursorX = this.cursor.x;
         const cursorY = this.cursor.y;
-        const timerRadius = 12; // Much tighter radius around cursor
+        const timerRadius = 20; // Larger radius for better visibility and no overlap
         
         this.ctx.save();
         
@@ -3424,7 +3431,7 @@ Type any cheat name in the console to activate!`);
         
         // Draw background circle (dark, thinner)
         this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = 3;
         this.ctx.beginPath();
         this.ctx.arc(cursorX, cursorY, timerRadius, 0, Math.PI * 2);
         this.ctx.stroke();
@@ -3434,12 +3441,12 @@ Type any cheat name in the console to activate!`);
         const endAngle = startAngle + (remainingProgress * Math.PI * 2);
         
         this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 3;
+        this.ctx.lineWidth = 4;
         this.ctx.lineCap = 'round';
         
         // Add subtle glow effect
         this.ctx.shadowColor = color;
-        this.ctx.shadowBlur = 4;
+        this.ctx.shadowBlur = 6;
         
         this.ctx.beginPath();
         this.ctx.arc(cursorX, cursorY, timerRadius, startAngle, endAngle);

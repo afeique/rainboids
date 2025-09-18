@@ -20,7 +20,7 @@ export const ENEMY_TYPES = {
         color: '#44ff44',        // Green  
         health: 18,              // Reduced to 18 - still tanky but manageable
         speed: 1.0,              // Reduced from 1.4 - slower patrol movement
-        size: 35,
+        size: 38,
         shootPattern: 'spread',
         shootRate: 2.0,  // Increased for testing
         movePattern: 'square',     // Square geometric movement
@@ -30,33 +30,33 @@ export const ENEMY_TYPES = {
         name: 'Wasp',
         color: '#ffff44',        // Yellow
         health: 10,              // Reduced to 10 - fast but fragile
-        speed: 1.9,              // Further reduced from 2.4 - still quick but not crazy
-        size: 22,                // Increased from 18
-        shootPattern: 'line_4',  // Line of 4 shots
-        shootRate: 1.8,          // Slower rate for line pattern
-        movePattern: 'diamond',        // Diamond geometric movement
+        speed: 1.9,              // Quick and agile like a real wasp
+        size: 28,                // Increased from 18
+        shootPattern: 'burst_2', // Two-round bursts
+        shootRate: 0.8,          // Slower rate with time between bursts
+        movePattern: 'zigzag',   // Random zig-zag movement like real wasps
         points: 35
     },
     TITAN: {
         name: 'Titan',
         color: '#ff44ff',        // Magenta
         health: 20,              // Reduced to 20 - boss-like but not overwhelming
-        speed: 0.8,              // Slightly faster for spiral movement
+        speed: 0.8,              // Tank movement speed
         size: 45,
-        shootPattern: 'circle_6', // Six shots in a circle
-        shootRate: 1.2,          // Slower rate for circle pattern
-        movePattern: 'hexagon',       // Hexagon geometric movement
+        shootPattern: 'titan_missile', // Tank missiles with weak homing
+        shootRate: 0.6,          // Slower rate for powerful missiles
+        movePattern: 'tank',          // Tank-like movement: rotate, move, stop, repeat
         points: 100
     },
     STALKER: {
         name: 'Stalker',
         color: '#44ffff',        // Cyan
         health: 14,              // Reduced to 14 - stealthy but not too tanky
-        speed: 2.5,              // Higher speed for burst knight movement
-        size: 22,
+        speed: 2.5,              // Higher speed for swooping arcs
+        size: 30,
         shootPattern: 'burst',
-        shootRate: 2.0,  // Increased for testing
-        movePattern: 'cross',    // Cross/Plus geometric movement
+        shootRate: 1.0, 
+        movePattern: 'arc',      // Arc swooping movement
         points: 45
     },
     BOMBER: {
@@ -504,8 +504,17 @@ export class Enemy {
             case 'diamond':
                 this.diamondMovement();
                 break;
+            case 'zigzag':
+                this.zigzagMovement();
+                break;
             case 'hexagon':
                 this.hexagonMovement();
+                break;
+            case 'tank':
+                this.tankMovement();
+                break;
+            case 'arc':
+                this.arcMovement();
                 break;
             case 'cross':
                 this.crossMovement();
@@ -1718,6 +1727,260 @@ export class Enemy {
         return vertices;
     }
     
+    tankMovement() {
+        if (!this.targetPlayer) return;
+        
+        // Initialize tank movement properties
+        if (this.tankState === undefined) {
+            this.tankState = 'rotating'; // 'rotating', 'moving', 'stopped'
+            this.tankTimer = 0;
+            this.tankRotationDuration = 1500; // 1.5 seconds to rotate
+            this.tankMoveDuration = 2000; // 2 seconds to move forward
+            this.tankStopDuration = 800; // 0.8 seconds stopped
+            this.tankTargetAngle = 0;
+            this.tankCurrentAngle = 0;
+            this.tankStartAngle = 0;
+        }
+        
+        this.tankTimer += 16; // Assume 60fps
+        
+        switch (this.tankState) {
+            case 'rotating':
+                // Stop moving while rotating
+                this.vel.x *= 0.9;
+                this.vel.y *= 0.9;
+                
+                // Calculate target angle toward player
+                const dx = this.targetPlayer.x - this.x;
+                const dy = this.targetPlayer.y - this.y;
+                this.tankTargetAngle = Math.atan2(dy, dx);
+                
+                // Smoothly rotate toward target angle
+                const rotationProgress = this.tankTimer / this.tankRotationDuration;
+                if (rotationProgress >= 1) {
+                    // Rotation complete
+                    this.tankCurrentAngle = this.tankTargetAngle;
+                    this.tankState = 'moving';
+                    this.tankTimer = 0;
+                } else {
+                    // Interpolate rotation
+                    const angleDiff = this.tankTargetAngle - this.tankStartAngle;
+                    // Handle angle wrapping
+                    let adjustedAngleDiff = angleDiff;
+                    if (adjustedAngleDiff > Math.PI) adjustedAngleDiff -= Math.PI * 2;
+                    if (adjustedAngleDiff < -Math.PI) adjustedAngleDiff += Math.PI * 2;
+                    
+                    this.tankCurrentAngle = this.tankStartAngle + adjustedAngleDiff * rotationProgress;
+                }
+                break;
+                
+            case 'moving':
+                // Move forward in the direction we're facing
+                const moveSpeed = this.config.speed * 1.5; // Tank moves with authority
+                this.vel.x = Math.cos(this.tankCurrentAngle) * moveSpeed;
+                this.vel.y = Math.sin(this.tankCurrentAngle) * moveSpeed;
+                
+                if (this.tankTimer >= this.tankMoveDuration) {
+                    this.tankState = 'stopped';
+                    this.tankTimer = 0;
+                }
+                break;
+                
+            case 'stopped':
+                // Come to a complete stop
+                this.vel.x *= 0.85;
+                this.vel.y *= 0.85;
+                
+                if (this.tankTimer >= this.tankStopDuration) {
+                    // Prepare for next rotation
+                    this.tankState = 'rotating';
+                    this.tankTimer = 0;
+                    this.tankStartAngle = this.tankCurrentAngle;
+                }
+                break;
+        }
+        
+        // Update visual rotation for drawing
+        this.faceAngle = this.tankCurrentAngle;
+    }
+    
+    arcMovement() {
+        if (!this.targetPlayer) return;
+        
+        // Initialize arc movement properties
+        if (this.arcState === undefined) {
+            this.arcState = 'swooping'; // 'swooping', 'aiming', 'firing'
+            this.arcTimer = 0;
+            this.arcSwoopDuration = 3000; // 3 seconds of swooping
+            this.arcAimDuration = 800; // 0.8 seconds to aim
+            this.arcFiringDuration = 400; // 0.4 seconds firing window
+            
+            // Arc parameters
+            this.arcCenter = { x: this.x, y: this.y };
+            this.arcRadius = 120 + Math.random() * 80; // 120-200 radius
+            this.arcStartAngle = Math.random() * Math.PI * 2;
+            this.arcSweepDirection = Math.random() > 0.5 ? 1 : -1; // Clockwise or counter-clockwise
+            this.arcSweepSpeed = 0.8 + Math.random() * 0.4; // 0.8-1.2 radians per second
+            
+            // Track if we can shoot (only when stopped)
+            this.canShoot = false;
+        }
+        
+        this.arcTimer += 16; // Assume 60fps
+        
+        switch (this.arcState) {
+            case 'swooping':
+                this.canShoot = false; // Cannot shoot while swooping
+                
+                // Update arc center to slowly follow player
+                const centerFollowSpeed = 0.02;
+                this.arcCenter.x += (this.targetPlayer.x - this.arcCenter.x) * centerFollowSpeed;
+                this.arcCenter.y += (this.targetPlayer.y - this.arcCenter.y) * centerFollowSpeed;
+                
+                // Calculate current position on arc
+                const arcProgress = (this.arcTimer / this.arcSwoopDuration);
+                const currentAngle = this.arcStartAngle + (this.arcSweepDirection * this.arcSweepSpeed * arcProgress * 2 * Math.PI);
+                
+                // Target position on arc
+                const targetX = this.arcCenter.x + Math.cos(currentAngle) * this.arcRadius;
+                const targetY = this.arcCenter.y + Math.sin(currentAngle) * this.arcRadius;
+                
+                // Move toward arc position with swooping speed
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                const distance = Math.hypot(dx, dy);
+                
+                if (distance > 0) {
+                    const swoopSpeed = this.config.speed * 1.2; // Fast swooping
+                    this.vel.x = (dx / distance) * swoopSpeed;
+                    this.vel.y = (dy / distance) * swoopSpeed;
+                    
+                    // Face movement direction for swooping
+                    this.faceAngle = Math.atan2(dy, dx);
+                }
+                
+                if (this.arcTimer >= this.arcSwoopDuration) {
+                    this.arcState = 'aiming';
+                    this.arcTimer = 0;
+                }
+                break;
+                
+            case 'aiming':
+                // Come to a complete stop
+                this.vel.x *= 0.8;
+                this.vel.y *= 0.8;
+                
+                // Aim at player
+                const aimDx = this.targetPlayer.x - this.x;
+                const aimDy = this.targetPlayer.y - this.y;
+                this.faceAngle = Math.atan2(aimDy, aimDx);
+                
+                if (this.arcTimer >= this.arcAimDuration) {
+                    this.arcState = 'firing';
+                    this.arcTimer = 0;
+                    this.canShoot = true; // Enable shooting
+                }
+                break;
+                
+            case 'firing':
+                // Stay completely still while firing
+                this.vel.x *= 0.9;
+                this.vel.y *= 0.9;
+                
+                // Keep aiming at player
+                const fireDx = this.targetPlayer.x - this.x;
+                const fireDy = this.targetPlayer.y - this.y;
+                this.faceAngle = Math.atan2(fireDy, fireDx);
+                
+                if (this.arcTimer >= this.arcFiringDuration) {
+                    // Prepare for next arc
+                    this.arcState = 'swooping';
+                    this.arcTimer = 0;
+                    this.canShoot = false;
+                    
+                    // Generate new arc parameters
+                    this.arcRadius = 120 + Math.random() * 80;
+                    this.arcStartAngle = Math.atan2(this.y - this.targetPlayer.y, this.x - this.targetPlayer.x); // Start from current relative position
+                    this.arcSweepDirection = Math.random() > 0.5 ? 1 : -1;
+                    this.arcSweepSpeed = 0.8 + Math.random() * 0.4;
+                }
+                break;
+        }
+    }
+    
+    zigzagMovement() {
+        if (!this.targetPlayer) return;
+        
+        // Initialize zigzag movement properties
+        if (this.zigzagState === undefined) {
+            this.zigzagState = 'moving';
+            this.zigzagTimer = 0;
+            this.zigzagDirection = { x: 0, y: 0 };
+            this.zigzagChangeInterval = 300 + Math.random() * 400; // 300-700ms between direction changes
+            this.zigzagIntensity = 0.8 + Math.random() * 0.4; // 0.8-1.2 intensity
+            this.zigzagBaseSpeed = this.config.speed;
+        }
+        
+        this.zigzagTimer += 16; // Assume 60fps
+        
+        // Change direction randomly like a real wasp/hummingbird
+        if (this.zigzagTimer >= this.zigzagChangeInterval) {
+            this.zigzagTimer = 0;
+            this.zigzagChangeInterval = 300 + Math.random() * 400; // Randomize next interval
+            this.zigzagIntensity = 0.8 + Math.random() * 0.4; // Randomize intensity
+            
+            // Calculate general direction toward player
+            const dx = this.targetPlayer.x - this.x;
+            const dy = this.targetPlayer.y - this.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance > 0) {
+                const baseDirectionX = dx / distance;
+                const baseDirectionY = dy / distance;
+                
+                // Add random zigzag component
+                const zigzagAngle = Math.random() * Math.PI * 2;
+                const zigzagStrength = 0.6 + Math.random() * 0.8; // 0.6-1.4 strength
+                
+                // Combine base direction with random zigzag
+                this.zigzagDirection.x = baseDirectionX * 0.7 + Math.cos(zigzagAngle) * zigzagStrength;
+                this.zigzagDirection.y = baseDirectionY * 0.7 + Math.sin(zigzagAngle) * zigzagStrength;
+                
+                // Normalize and apply intensity
+                const zigzagMagnitude = Math.hypot(this.zigzagDirection.x, this.zigzagDirection.y);
+                if (zigzagMagnitude > 0) {
+                    this.zigzagDirection.x = (this.zigzagDirection.x / zigzagMagnitude) * this.zigzagIntensity;
+                    this.zigzagDirection.y = (this.zigzagDirection.y / zigzagMagnitude) * this.zigzagIntensity;
+                }
+            }
+        }
+        
+        // Apply zigzag movement with some smoothing
+        const smoothing = 0.15; // Smooth transitions between direction changes
+        const targetVelX = this.zigzagDirection.x * this.zigzagBaseSpeed;
+        const targetVelY = this.zigzagDirection.y * this.zigzagBaseSpeed;
+        
+        this.vel.x += (targetVelX - this.vel.x) * smoothing;
+        this.vel.y += (targetVelY - this.vel.y) * smoothing;
+        
+        // Add small random jitter for wasp-like twitchiness
+        const jitterStrength = 0.1;
+        this.vel.x += (Math.random() - 0.5) * jitterStrength;
+        this.vel.y += (Math.random() - 0.5) * jitterStrength;
+        
+        // Face movement direction
+        if (Math.hypot(this.vel.x, this.vel.y) > 0.1) {
+            this.faceAngle = Math.atan2(this.vel.y, this.vel.x);
+        }
+        
+        // Occasional hover behavior (like hummingbirds)
+        if (Math.random() < 0.005) { // 0.5% chance per frame
+            this.vel.x *= 0.3;
+            this.vel.y *= 0.3;
+            this.zigzagTimer = this.zigzagChangeInterval - 100; // Force direction change soon
+        }
+    }
+    
     crossMovement() {
         if (!this.targetPlayer) return;
         
@@ -2104,6 +2367,9 @@ export class Enemy {
         if (!gameEngine.enemyBulletPool) return;
         if (!this.targetPlayer) return;
         
+        // Arc movement enemies can only shoot when stopped
+        if (this.config.movePattern === 'arc' && !this.canShoot) return;
+        
         const playerDistance = Math.hypot(this.x - this.targetPlayer.x, this.y - this.targetPlayer.y);
         const maxShootingRange = this.getTerritorySize() * 1.5;
         
@@ -2114,8 +2380,8 @@ export class Enemy {
         
         const now = Date.now();
         
-        // Handle burst patterns (only burst_3 now, line_4 shoots all at once)
-        if (this.config.shootPattern === 'burst_3') {
+        // Handle burst patterns (burst_3 and burst_2)
+        if (this.config.shootPattern === 'burst_3' || this.config.shootPattern === 'burst_2') {
             this.handleBurstShooting(gameEngine, now);
         } else {
             // Handle non-burst patterns (circle_6, homing, etc.)
@@ -2143,8 +2409,16 @@ export class Enemy {
         // Start new burst if not active
         if (!this.burstState.active) {
             this.burstState.active = true;
-            this.burstState.shotsRemaining = this.config.shootPattern === 'burst_3' ? 3 : 4;
-            this.burstState.shotDelay = this.config.shootPattern === 'burst_3' ? 150 : 100; // ms between shots in burst
+            if (this.config.shootPattern === 'burst_3') {
+                this.burstState.shotsRemaining = 3;
+                this.burstState.shotDelay = 150; // ms between shots in burst
+            } else if (this.config.shootPattern === 'burst_2') {
+                this.burstState.shotsRemaining = 2;
+                this.burstState.shotDelay = 200; // ms between shots in burst (slightly slower for wasps)
+            } else {
+                this.burstState.shotsRemaining = 4;
+                this.burstState.shotDelay = 100;
+            }
             this.burstState.lastBurstShot = 0;
         }
         
@@ -2157,7 +2431,13 @@ export class Enemy {
             // End burst and start cooldown
             if (this.burstState.shotsRemaining <= 0) {
                 this.burstState.active = false;
-                this.burstState.cooldownUntil = now + (this.config.shootPattern === 'burst_3' ? 2000 : 1500); // Cooldown period
+                if (this.config.shootPattern === 'burst_3') {
+                    this.burstState.cooldownUntil = now + 2000; // 2 second cooldown for hunters
+                } else if (this.config.shootPattern === 'burst_2') {
+                    this.burstState.cooldownUntil = now + 1800; // 1.8 second cooldown for wasps
+                } else {
+                    this.burstState.cooldownUntil = now + 1500; // Default cooldown
+                }
             }
         }
     }
@@ -2173,6 +2453,9 @@ export class Enemy {
             case 'burst_3':
                 this.shootBurst3(gameEngine, targetX, targetY);
                 break;
+            case 'burst_2':
+                this.shootBurst2(gameEngine, targetX, targetY);
+                break;
             case 'line_4':
                 this.shootLine4(gameEngine, targetX, targetY);
                 break;
@@ -2181,6 +2464,9 @@ export class Enemy {
                 break;
             case 'homing':
                 this.shootHoming(gameEngine, targetX, targetY);
+                break;
+            case 'titan_missile':
+                this.shootTitanMissile(gameEngine, targetX, targetY);
                 break;
             // Keep existing patterns for other enemies
             case 'spread':
@@ -2318,6 +2604,19 @@ export class Enemy {
         this.createEnemyBullet(gameEngine, angle, 4, '#ff4444', false, 'aimed');
     }
     
+    shootBurst2(gameEngine, targetX, targetY) {
+        // Yellow wasps - aimed shot with slight spread for wasp-like behavior
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const baseAngle = Math.atan2(dy, dx);
+        
+        // Small random spread to simulate wasp agility
+        const spread = 0.15; // Slightly wider spread than precise aiming
+        const angle = baseAngle + (Math.random() - 0.5) * spread;
+        
+        this.createEnemyBullet(gameEngine, angle, 3.5, '#ffff44', false, 'aimed');
+    }
+    
     shootLine4(gameEngine, targetX, targetY) {
         // Yellow squares - horizontal plane of 4 shots
         const dx = targetX - this.x;
@@ -2358,6 +2657,16 @@ export class Enemy {
         this.createEnemyBullet(gameEngine, angle, 1.5, '#ff8844', false, 'homing', this.targetPlayer);
     }
     
+    shootTitanMissile(gameEngine, targetX, targetY) {
+        // Titan tank - larger, faster missile with weaker homing
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const angle = Math.atan2(dy, dx);
+        
+        // Create larger, faster missile with weaker homing
+        this.createEnemyBullet(gameEngine, angle, 3.0, '#ff00ff', false, 'titan_homing', this.targetPlayer);
+    }
+    
     createEnemyBullet(gameEngine, angle, speed, color, explosive = false, movementPattern = 'aimed', target = null) {
         if (!gameEngine.enemyBulletPool) return;
         
@@ -2376,13 +2685,20 @@ export class Enemy {
             const baseDamage = explosive ? 3 : 2;
             bullet.damage = this.getLevelScaledDamage(baseDamage);
             
+            // Make titan missiles larger and more powerful
+            if (movementPattern === 'titan_homing') {
+                bullet.radius = 6; // Larger than normal bullets (usually 3-4)
+                bullet.glowRadius = 12; // Larger glow effect
+                bullet.damage = this.getLevelScaledDamage(4); // Higher damage than normal bullets
+            }
+            
             // Set unique movement pattern for this bullet
             bullet.movementPattern = movementPattern;
             bullet.patternTimer = 0;
             bullet.patternPhase = Math.random() * Math.PI * 2; // Random starting phase
             
             // For homing missiles and homing shots, provide player reference
-            if (movementPattern === 'missile' || movementPattern === 'homing') {
+            if (movementPattern === 'missile' || movementPattern === 'homing' || movementPattern === 'titan_homing') {
                 bullet.targetPlayer = target || this.targetPlayer;
             }
             
@@ -2434,16 +2750,16 @@ export class Enemy {
                 this.drawTriangle(ctx);
                 break;
             case 'GUARDIAN':
-                this.drawSquare(ctx);
+                this.drawEmeraldGuardian(ctx);
                 break;
             case 'WASP':
-                this.drawSquare(ctx);
+                this.drawWaspShip(ctx);
                 break;
             case 'TITAN':
-                this.drawHexagon(ctx);
+                this.drawTitanTank(ctx);
                 break;
             case 'STALKER':
-                this.drawCross(ctx);
+                this.drawStalkerSword(ctx);
                 break;
             case 'BOMBER':
                 this.drawSpikedCircle(ctx);
@@ -2715,6 +3031,613 @@ export class Enemy {
             ctx.arc(x, y, 3, 0, Math.PI * 2);
             ctx.fill();
         }
+    }
+    
+    drawWaspShip(ctx) {
+        // Sleek wasp-like ship with triangular wings
+        const size = this.radius * 0.8;
+        
+        ctx.save();
+        
+        // Main wasp body - elongated oval
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        
+        // Body segments (wasp-like segmentation)
+        const bodyLength = size * 1.4;
+        const bodyWidth = size * 0.6;
+        
+        // Front segment (head)
+        ctx.beginPath();
+        ctx.ellipse(bodyLength * 0.3, 0, bodyWidth * 0.4, bodyWidth * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Middle segment (thorax)
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bodyWidth * 0.5, bodyWidth * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Rear segment (abdomen)
+        ctx.beginPath();
+        ctx.ellipse(-bodyLength * 0.4, 0, bodyWidth * 0.6, bodyWidth * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Triangular wings - sleek and dangerous
+        ctx.fillStyle = this.color + '60'; // Semi-transparent wings
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 1.5;
+        
+        // Upper wings
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.2, 0); // Wing root
+        ctx.lineTo(-size * 0.8, -size * 0.9); // Wing tip
+        ctx.lineTo(-size * 0.6, -size * 0.3); // Wing trailing edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.2, 0); // Wing root
+        ctx.lineTo(-size * 0.8, size * 0.9); // Wing tip
+        ctx.lineTo(-size * 0.6, size * 0.3); // Wing trailing edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Lower wings (smaller)
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.4, 0); // Wing root
+        ctx.lineTo(-size * 0.9, -size * 0.6); // Wing tip
+        ctx.lineTo(-size * 0.7, -size * 0.2); // Wing trailing edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.4, 0); // Wing root
+        ctx.lineTo(-size * 0.9, size * 0.6); // Wing tip
+        ctx.lineTo(-size * 0.7, size * 0.2); // Wing trailing edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Stinger/weapon at front
+        ctx.strokeStyle = '#FFFF00'; // Bright yellow stinger
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(bodyLength * 0.5, 0);
+        ctx.lineTo(bodyLength * 0.8, 0);
+        ctx.stroke();
+        
+        // Wing veins for detail
+        ctx.strokeStyle = this.color + 'AA';
+        ctx.lineWidth = 1;
+        
+        // Upper wing veins
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.3, -size * 0.1);
+        ctx.lineTo(-size * 0.7, -size * 0.7);
+        ctx.moveTo(-size * 0.4, -size * 0.2);
+        ctx.lineTo(-size * 0.6, -size * 0.5);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.3, size * 0.1);
+        ctx.lineTo(-size * 0.7, size * 0.7);
+        ctx.moveTo(-size * 0.4, size * 0.2);
+        ctx.lineTo(-size * 0.6, size * 0.5);
+        ctx.stroke();
+        
+        ctx.restore();
+    }
+    
+    drawEmeraldGuardian(ctx) {
+        // Emerald gemstone-like ship with triangular wings
+        const size = this.radius * 0.8;
+        
+        ctx.save();
+        
+        // Main emerald body - faceted gemstone shape
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        
+        // Central emerald facets
+        const facets = [
+            // Top facet
+            [0, -size * 0.8, size * 0.4, -size * 0.3, 0, -size * 0.1],
+            // Bottom facet
+            [0, size * 0.8, size * 0.4, size * 0.3, 0, size * 0.1],
+            // Left facets
+            [-size * 0.6, 0, -size * 0.3, -size * 0.4, 0, -size * 0.1],
+            [-size * 0.6, 0, -size * 0.3, size * 0.4, 0, size * 0.1],
+            // Right facets
+            [size * 0.6, 0, size * 0.3, -size * 0.4, 0, -size * 0.1],
+            [size * 0.6, 0, size * 0.3, size * 0.4, 0, size * 0.1]
+        ];
+        
+        facets.forEach((facet, index) => {
+            ctx.beginPath();
+            ctx.moveTo(facet[0], facet[1]);
+            ctx.lineTo(facet[2], facet[3]);
+            ctx.lineTo(facet[4], facet[5]);
+            ctx.closePath();
+            
+            // Vary the brightness for different facets
+            const brightness = 0.6 + (index % 3) * 0.2;
+            ctx.fillStyle = this.color + Math.floor(brightness * 255).toString(16).padStart(2, '0');
+            ctx.fill();
+            ctx.stroke();
+        });
+        
+        // Triangular wings - crystalline and sharp
+        ctx.fillStyle = this.color + '50'; // Semi-transparent wings
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        
+        // Upper triangular wings
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.3, -size * 0.2); // Wing root
+        ctx.lineTo(-size * 1.1, -size * 1.0); // Wing tip
+        ctx.lineTo(-size * 0.8, -size * 0.1); // Wing trailing edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.3, size * 0.2); // Wing root
+        ctx.lineTo(-size * 1.1, size * 1.0); // Wing tip
+        ctx.lineTo(-size * 0.8, size * 0.1); // Wing trailing edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Lower triangular wings (smaller, more swept)
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.5, -size * 0.1); // Wing root
+        ctx.lineTo(-size * 1.2, -size * 0.6); // Wing tip
+        ctx.lineTo(-size * 0.9, 0); // Wing trailing edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.5, size * 0.1); // Wing root
+        ctx.lineTo(-size * 1.2, size * 0.6); // Wing tip
+        ctx.lineTo(-size * 0.9, 0); // Wing trailing edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Crystalline details on wings
+        ctx.strokeStyle = '#FFFFFF'; // White crystal veins
+        ctx.lineWidth = 1;
+        
+        // Wing crystal veins
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.4, -size * 0.15);
+        ctx.lineTo(-size * 0.9, -size * 0.7);
+        ctx.moveTo(-size * 0.5, -size * 0.3);
+        ctx.lineTo(-size * 0.8, -size * 0.5);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.4, size * 0.15);
+        ctx.lineTo(-size * 0.9, size * 0.7);
+        ctx.moveTo(-size * 0.5, size * 0.3);
+        ctx.lineTo(-size * 0.8, size * 0.5);
+        ctx.stroke();
+        
+        // Central emerald highlight
+        ctx.fillStyle = '#FFFFFF';
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.ellipse(size * 0.1, -size * 0.2, size * 0.15, size * 0.1, Math.PI / 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+    }
+    
+    drawTitanTank(ctx) {
+        // Heavy hexagon-shaped tank with magenta armor plating
+        const size = this.radius * 0.9;
+        
+        ctx.save();
+        
+        // Main hexagon hull - based on original hexagon but tank-like
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 3;
+        
+        // Create hexagon hull with forward stretch like original
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            // Stretch the first point forward to create directionality like original
+            const stretch = i === 0 ? 1.4 : 1;
+            const x = Math.cos(angle) * size * stretch;
+            const y = Math.sin(angle) * size * stretch;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Magenta armor plating on each hexagon face
+        ctx.fillStyle = '#FF00FF'; // Magenta
+        ctx.strokeStyle = '#FF00FF';
+        ctx.lineWidth = 2;
+        
+        // Front armor plate (on the stretched forward face)
+        ctx.beginPath();
+        const frontStretch = 1.4;
+        const frontX = Math.cos(0) * size * frontStretch * 0.8;
+        const frontY1 = Math.cos(Math.PI / 3) * size * 0.6;
+        const frontY2 = Math.cos(Math.PI / 3) * size * -0.6;
+        ctx.moveTo(frontX, 0);
+        ctx.lineTo(frontX * 0.7, frontY1);
+        ctx.lineTo(frontX * 0.7, frontY2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Side armor plates on each hexagon face
+        for (let i = 1; i < 6; i++) {
+            const angle1 = (i / 6) * Math.PI * 2;
+            const angle2 = ((i + 1) / 6) * Math.PI * 2;
+            
+            const x1 = Math.cos(angle1) * size * 0.8;
+            const y1 = Math.sin(angle1) * size * 0.8;
+            const x2 = Math.cos(angle2) * size * 0.8;
+            const y2 = Math.sin(angle2) * size * 0.8;
+            
+            // Create armor plate on each face
+            ctx.beginPath();
+            ctx.moveTo(x1 * 0.9, y1 * 0.9);
+            ctx.lineTo(x2 * 0.9, y2 * 0.9);
+            ctx.lineTo(x2 * 0.7, y2 * 0.7);
+            ctx.lineTo(x1 * 0.7, y1 * 0.7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+        
+        // Hexagonal turret - smaller, centered
+        const turretSize = size * 0.5;
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        
+        // Hexagonal turret shape
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const x = Math.cos(angle) * turretSize;
+            const y = Math.sin(angle) * turretSize;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Turret armor edges - magenta
+        ctx.strokeStyle = '#FF00FF';
+        ctx.lineWidth = 2;
+        
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const x1 = Math.cos(angle) * turretSize * 0.7;
+            const y1 = Math.sin(angle) * turretSize * 0.7;
+            const x2 = Math.cos(angle) * turretSize;
+            const y2 = Math.sin(angle) * turretSize;
+            
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+        
+        // Tank cannon - extending forward from hexagon
+        const cannonLength = size * 1.3;
+        const cannonWidth = size * 0.15;
+        
+        ctx.fillStyle = '#CCCCCC'; // Metallic cannon
+        ctx.strokeStyle = '#999999';
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.roundRect(turretSize * 0.8, -cannonWidth * 0.5, cannonLength, cannonWidth, 3);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Cannon muzzle
+        ctx.fillStyle = '#666666';
+        ctx.beginPath();
+        ctx.arc(turretSize * 0.8 + cannonLength, 0, cannonWidth * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Hexagonal tank treads following the hull shape
+        ctx.strokeStyle = '#444444';
+        ctx.lineWidth = 4;
+        
+        // Outer hexagonal track
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const stretch = i === 0 ? 1.4 : 1;
+            const x = Math.cos(angle) * size * stretch * 1.1;
+            const y = Math.sin(angle) * size * stretch * 1.1;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Inner hexagonal track
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const stretch = i === 0 ? 1.4 : 1;
+            const x = Math.cos(angle) * size * stretch * 0.9;
+            const y = Math.sin(angle) * size * stretch * 0.9;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Track tread marks on each hexagon face
+        ctx.strokeStyle = '#666666';
+        ctx.lineWidth = 1;
+        
+        for (let face = 0; face < 6; face++) {
+            const angle1 = (face / 6) * Math.PI * 2;
+            const angle2 = ((face + 1) / 6) * Math.PI * 2;
+            const stretch1 = face === 0 ? 1.4 : 1;
+            const stretch2 = (face + 1) % 6 === 0 ? 1.4 : 1;
+            
+            const x1 = Math.cos(angle1) * size * stretch1;
+            const y1 = Math.sin(angle1) * size * stretch1;
+            const x2 = Math.cos(angle2) * size * stretch2;
+            const y2 = Math.sin(angle2) * size * stretch2;
+            
+            // Draw tread marks along each face
+            for (let i = 0; i < 4; i++) {
+                const t = (i + 1) / 5;
+                const x = x1 + (x2 - x1) * t;
+                const y = y1 + (y2 - y1) * t;
+                
+                // Outer tread mark
+                ctx.beginPath();
+                ctx.moveTo(x * 1.05, y * 1.05);
+                ctx.lineTo(x * 1.15, y * 1.15);
+                ctx.stroke();
+                
+                // Inner tread mark
+                ctx.beginPath();
+                ctx.moveTo(x * 0.85, y * 0.85);
+                ctx.lineTo(x * 0.95, y * 0.95);
+                ctx.stroke();
+            }
+        }
+        
+        // Armor detail lines - magenta highlights on each face
+        ctx.strokeStyle = '#FF66FF'; // Lighter magenta
+        ctx.lineWidth = 1;
+        
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const stretch = i === 0 ? 1.4 : 1;
+            const x = Math.cos(angle) * size * stretch * 0.8;
+            const y = Math.sin(angle) * size * stretch * 0.8;
+            
+            // Radial armor detail lines
+            ctx.beginPath();
+            ctx.moveTo(x * 0.6, y * 0.6);
+            ctx.lineTo(x * 0.9, y * 0.9);
+            ctx.stroke();
+        }
+        
+        // Warning stripes on front armor
+        ctx.strokeStyle = '#FFFF00'; // Yellow warning stripes
+        ctx.lineWidth = 2;
+        
+        const frontArmorX = Math.cos(0) * size * 1.4 * 0.8;
+        for (let i = 0; i < 3; i++) {
+            const y = -size * 0.3 + (i / 2) * size * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(frontArmorX * 0.7, y);
+            ctx.lineTo(frontArmorX * 0.9, y - size * 0.1);
+            ctx.stroke();
+        }
+        
+        // Hexagonal armor panel outlines
+        ctx.strokeStyle = '#FF00FF';
+        ctx.lineWidth = 1;
+        
+        // Draw hexagonal panel lines on turret
+        for (let i = 0; i < 6; i++) {
+            const angle1 = (i / 6) * Math.PI * 2;
+            const angle2 = ((i + 1) / 6) * Math.PI * 2;
+            
+            const x1 = Math.cos(angle1) * turretSize * 0.8;
+            const y1 = Math.sin(angle1) * turretSize * 0.8;
+            const x2 = Math.cos(angle2) * turretSize * 0.8;
+            const y2 = Math.sin(angle2) * turretSize * 0.8;
+            
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+    }
+    
+    drawStalkerSword(ctx) {
+        // Sharp, sword-like design for stealth and speed
+        const size = this.radius * 0.9;
+        
+        ctx.save();
+        
+        // Main sword blade - long and sharp
+        const bladeLength = size * 1.8;
+        const bladeWidth = size * 0.4;
+        
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        
+        // Sword blade - pointed diamond shape
+        ctx.beginPath();
+        ctx.moveTo(bladeLength * 0.6, 0); // Sharp tip
+        ctx.lineTo(bladeLength * 0.1, -bladeWidth * 0.5); // Top edge
+        ctx.lineTo(-bladeLength * 0.4, -bladeWidth * 0.3); // Taper to hilt
+        ctx.lineTo(-bladeLength * 0.6, 0); // Hilt connection
+        ctx.lineTo(-bladeLength * 0.4, bladeWidth * 0.3); // Bottom taper
+        ctx.lineTo(bladeLength * 0.1, bladeWidth * 0.5); // Bottom edge
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Sword fuller (blood groove) - central line for sharpness
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(bladeLength * 0.5, 0);
+        ctx.lineTo(-bladeLength * 0.3, 0);
+        ctx.stroke();
+        
+        // Cross guard - sharp and angular
+        const guardWidth = size * 0.8;
+        const guardThickness = size * 0.15;
+        
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        
+        // Angular cross guard with sharp points
+        ctx.beginPath();
+        ctx.moveTo(-bladeLength * 0.4, -guardWidth * 0.5); // Top point
+        ctx.lineTo(-bladeLength * 0.3, -guardThickness * 0.5); // Top inner
+        ctx.lineTo(-bladeLength * 0.3, guardThickness * 0.5); // Bottom inner
+        ctx.lineTo(-bladeLength * 0.4, guardWidth * 0.5); // Bottom point
+        ctx.lineTo(-bladeLength * 0.5, guardWidth * 0.4); // Bottom outer
+        ctx.lineTo(-bladeLength * 0.6, 0); // Center back
+        ctx.lineTo(-bladeLength * 0.5, -guardWidth * 0.4); // Top outer
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Sword hilt/handle
+        const hiltLength = size * 0.6;
+        const hiltWidth = size * 0.2;
+        
+        ctx.fillStyle = '#CCCCCC'; // Metallic hilt
+        ctx.strokeStyle = '#999999';
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.roundRect(-bladeLength * 0.6, -hiltWidth * 0.5, hiltLength, hiltWidth, 3);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Hilt grip details
+        ctx.strokeStyle = '#666666';
+        ctx.lineWidth = 1;
+        
+        for (let i = 0; i < 4; i++) {
+            const x = -bladeLength * 0.55 + (i / 3) * (hiltLength * 0.8);
+            ctx.beginPath();
+            ctx.moveTo(x, -hiltWidth * 0.3);
+            ctx.lineTo(x, hiltWidth * 0.3);
+            ctx.stroke();
+        }
+        
+        // Pommel - weighted end
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.arc(-bladeLength * 0.6 - hiltLength * 0.1, 0, hiltWidth * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Sharp edge highlights
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        
+        // Top blade edge highlight
+        ctx.beginPath();
+        ctx.moveTo(bladeLength * 0.6, 0);
+        ctx.lineTo(bladeLength * 0.2, -bladeWidth * 0.4);
+        ctx.lineTo(-bladeLength * 0.2, -bladeWidth * 0.25);
+        ctx.stroke();
+        
+        // Bottom blade edge highlight
+        ctx.beginPath();
+        ctx.moveTo(bladeLength * 0.6, 0);
+        ctx.lineTo(bladeLength * 0.2, bladeWidth * 0.4);
+        ctx.lineTo(-bladeLength * 0.2, bladeWidth * 0.25);
+        ctx.stroke();
+        
+        // Secondary blade edges for extra sharpness
+        ctx.strokeStyle = this.color + 'CC';
+        ctx.lineWidth = 1;
+        
+        // Inner edge lines
+        ctx.beginPath();
+        ctx.moveTo(bladeLength * 0.4, 0);
+        ctx.lineTo(0, -bladeWidth * 0.2);
+        ctx.lineTo(-bladeLength * 0.3, -bladeWidth * 0.15);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(bladeLength * 0.4, 0);
+        ctx.lineTo(0, bladeWidth * 0.2);
+        ctx.lineTo(-bladeLength * 0.3, bladeWidth * 0.15);
+        ctx.stroke();
+        
+        // Energy/stealth effect - subtle glow
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = this.color + '40';
+        ctx.lineWidth = 4;
+        
+        // Blade glow outline
+        ctx.beginPath();
+        ctx.moveTo(bladeLength * 0.6, 0);
+        ctx.lineTo(bladeLength * 0.1, -bladeWidth * 0.5);
+        ctx.lineTo(-bladeLength * 0.4, -bladeWidth * 0.3);
+        ctx.lineTo(-bladeLength * 0.6, 0);
+        ctx.lineTo(-bladeLength * 0.4, bladeWidth * 0.3);
+        ctx.lineTo(bladeLength * 0.1, bladeWidth * 0.5);
+        ctx.closePath();
+        ctx.stroke();
+        
+        ctx.restore();
+        
+        ctx.restore();
     }
     
     drawCirculatingShield(ctx) {
