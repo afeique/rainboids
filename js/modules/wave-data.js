@@ -3,7 +3,18 @@
 
 export const WAVE_DATA = {
     // Waves 1-10: Introduction and basic progression
-    1: { asteroids: 4, enemies: [] },
+    1: { asteroids: 16, enemies: [
+        { type: 'HUNTER', count: 2 },
+        { type: 'GUARDIAN', count: 2 },
+        { type: 'WASP', count: 2 },
+        { type: 'TITAN', count: 2 },
+        { type: 'STALKER', count: 2 },
+        { type: 'BOMBER', count: 2 },
+        { type: 'LASER_TURRET', count: 1 },
+        { type: 'MISSILE_TURRET', count: 1 },
+        { type: 'PULSE_TURRET', count: 1 },
+        { type: 'SHIELD_TURRET', count: 1 }
+    ] },
     2: { asteroids: 2, enemies: [{ type: 'HUNTER', count: 2 }] },
     3: { asteroids: 2, enemies: [{ type: 'HUNTER', count: 3 }] },
     4: { asteroids: 1, enemies: [{ type: 'HUNTER', count: 4 }] },
@@ -19,19 +30,19 @@ export const WAVE_DATA = {
     12: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }, { type: 'STALKER', count: 1 }] },
     13: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 3 }, { type: 'STALKER', count: 1 }] },
     14: { asteroids: 2, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }, { type: 'STALKER', count: 2 }] },
-    15: { asteroids: 5, enemies: [{ type: 'HUNTER', count: 1 }, { type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 2 }, { type: 'STALKER', count: 2 }] },
+    15: { asteroids: 5, enemies: [{ type: 'HUNTER', count: 1 }, { type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PULSE_TURRET', count: 1 }] },
     16: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 3 }] },
     17: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 1 }, { type: 'WASP', count: 3 }, { type: 'STALKER', count: 3 }] },
-    18: { asteroids: 2, enemies: [{ type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }, { type: 'STALKER', count: 2 }] },
+    18: { asteroids: 2, enemies: [{ type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'LASER_TURRET', count: 1 }] },
     19: { asteroids: 6, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }] },
     20: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 3 }, { type: 'STALKER', count: 3 }] },
 
     // Waves 21-30: Introduce BOMBER and TITAN, higher difficulty
-    21: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 2 }, { type: 'BOMBER', count: 1 }] },
+    21: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 2 }, { type: 'BOMBER', count: 1 }, { type: 'MISSILE_TURRET', count: 1 }] },
     22: { asteroids: 3, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }, { type: 'STALKER', count: 1 }, { type: 'BOMBER', count: 2 }] },
     23: { asteroids: 5, enemies: [{ type: 'HUNTER', count: 1 }, { type: 'WASP', count: 3 }, { type: 'BOMBER', count: 2 }] },
     24: { asteroids: 2, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'BOMBER', count: 2 }, { type: 'TITAN', count: 1 }] },
-    25: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }, { type: 'BOMBER', count: 1 }, { type: 'TITAN', count: 1 }] },
+    25: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }, { type: 'BOMBER', count: 1 }, { type: 'TITAN', count: 1 }, { type: 'SHIELD_TURRET', count: 1 }] },
     26: { asteroids: 6, enemies: [{ type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 3 }, { type: 'STALKER', count: 2 }, { type: 'BOMBER', count: 1 }] },
     27: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'BOMBER', count: 2 }, { type: 'TITAN', count: 2 }] },
     28: { asteroids: 5, enemies: [{ type: 'WASP', count: 3 }, { type: 'STALKER', count: 2 }, { type: 'BOMBER', count: 2 }] },

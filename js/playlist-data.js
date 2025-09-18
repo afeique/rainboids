@@ -1,5 +1,5 @@
 // Auto-generated playlist data
-// Generated on 2025-07-16T18:27:55.560Z
+// Generated on 2025-09-18T04:05:24.625Z
 
 export const PLAYLIST_DATA = [
   {
@@ -18,9 +18,24 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/angels-fall.mp3",
+    "name": "angel's fall",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/arabian-nights.mp3",
+    "name": "arabian nights",
+    "artist": "afeique"
+  },
+  {
     "path": "music/aura.mp3",
     "name": "Aura",
     "artist": "Karl Casey"
+  },
+  {
+    "path": "music/bat-caves-icy-glades.mp3",
+    "name": "bat caves, icy glades",
+    "artist": "afeique"
   },
   {
     "path": "music/beyond-shadows.mp3",
@@ -33,6 +48,21 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/car-crusher.mp3",
+    "name": "car crusher",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/caustic-acrylic-cyanide.mp3",
+    "name": "caustic acrylic cyanide",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/china-doll.mp3",
+    "name": "china doll",
+    "artist": "afeique"
+  },
+  {
     "path": "music/command-console.mp3",
     "name": "command console",
     "artist": "afeique"
@@ -40,6 +70,11 @@ export const PLAYLIST_DATA = [
   {
     "path": "music/cosmic-wander.mp3",
     "name": "cosmic wander",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/cyber-fox.mp3",
+    "name": "cyber fox",
     "artist": "afeique"
   },
   {
@@ -60,6 +95,16 @@ export const PLAYLIST_DATA = [
   {
     "path": "music/death-star-valley.mp3",
     "name": "death star valley",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/desert-storm-rose.mp3",
+    "name": "desert storm rose",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/devils-dont-cry.mp3",
+    "name": "devils don't cry",
     "artist": "afeique"
   },
   {
@@ -88,8 +133,18 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/etude-of-madness.mp3",
+    "name": "etude of madness",
+    "artist": "afeique"
+  },
+  {
     "path": "music/exodus-de-novo.mp3",
     "name": "exodus de novo",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/gonna-catch-ya.mp3",
+    "name": "gonna catch ya",
     "artist": "afeique"
   },
   {
@@ -118,6 +173,16 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/lightspeed-eye.mp3",
+    "name": "lightspeed eye",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/make-it-be.mp3",
+    "name": "make it be",
+    "artist": "afeique"
+  },
+  {
     "path": "music/melodia-nostalgíque.mp3",
     "name": "melodia nostalgíque",
     "artist": "afeique"
@@ -133,9 +198,29 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/nightride-2029.mp3",
+    "name": "nightride 2029",
+    "artist": "afeique"
+  },
+  {
     "path": "music/out-for-blood.mp3",
     "name": "Out for Blood",
     "artist": "Karl Casey"
+  },
+  {
+    "path": "music/over-the-horizon.mp3",
+    "name": "over the horizon",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/people-are-not-scary.mp3",
+    "name": "People Aren't Scary (Remastered)",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/polished-jewel.mp3",
+    "name": "polished jewel",
+    "artist": "afeique"
   },
   {
     "path": "music/rainbow-vision.mp3",
@@ -163,13 +248,23 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/samus.mp3",
+    "path": "music/tension-in-resonance.mp3",
+    "name": "tension in resonance",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/thats-not-samus.mp3",
     "name": "that's not samus",
     "artist": "afeique"
   },
   {
     "path": "music/violencia.mp3",
     "name": "Violencia",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/voices-in-my-head.mp3",
+    "name": "voices in my head",
     "artist": "afeique"
   },
   {

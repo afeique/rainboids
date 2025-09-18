@@ -73,6 +73,7 @@ export class Player {
     
     // Helper method to initialize/reset player properties
     initializePlayer() {
+        // Initialize at center of game field (will be updated by game engine)
         this.x = this.width / 2;
         this.y = this.height / 2;
         this.lastX = this.x;
@@ -86,6 +87,7 @@ export class Player {
         this.invincible = false;
         this.invincibilityTimer = 0;
         this.firingDisabled = false;
+        this.justRespawned = false;
         
         // Reset auto-fire timer
         this.autoFireTimer = 0;
@@ -302,8 +304,12 @@ export class Player {
         this.invincibilityTimer = duration;
     }
     
-    update(input, particlePool, bulletPool, audioManager, starPool, tractorEngaged) {
+    update(input, particlePool, bulletPool, audioManager, starPool, tractorEngaged, gameField = null) {
         if (!this.active) return;
+        
+        // Store previous position to track movement
+        const prevX = this.x;
+        const prevY = this.y;
         
         // Update invincibility timer
         if (this.invincibilityTimer > 0) {
@@ -312,6 +318,7 @@ export class Player {
                 this.invincible = false;
                 this.invincibilityTimer = 0;
                 this.firingDisabled = false; // Re-enable firing when invincibility ends
+                this.justRespawned = false; // Clear respawn flag when invincibility ends
             }
         }
 
@@ -368,7 +375,7 @@ export class Player {
             const dist = 60 + Math.random() * 40;
             const px = this.x + Math.cos(angle) * dist;
             const py = this.y + Math.sin(angle) * dist;
-            particlePool.get(px, py, 'spawnParticle', this.x, this.y);
+            particlePool.get(px, py, 'spawnParticle', this.x, this.y, this);
         }
         
         // Shield boost visual effect - green shimmer around player
@@ -400,7 +407,37 @@ export class Player {
 
         this.x += this.vel.x;
         this.y += this.vel.y;
-        wrap(this, this.width, this.height);
+        
+        // Boundary bouncing instead of wrapping
+        if (gameField) {
+            // Bounce off left/right boundaries
+            if (this.x - this.radius < 0) {
+                this.x = this.radius;
+                this.vel.x = Math.abs(this.vel.x) * 0.8; // Bounce with some energy loss
+            } else if (this.x + this.radius > gameField.width) {
+                this.x = gameField.width - this.radius;
+                this.vel.x = -Math.abs(this.vel.x) * 0.8;
+            }
+            
+            // Bounce off top/bottom boundaries
+            if (this.y - this.radius < 0) {
+                this.y = this.radius;
+                this.vel.y = Math.abs(this.vel.y) * 0.8;
+            } else if (this.y + this.radius > gameField.height) {
+                this.y = gameField.height - this.radius;
+                this.vel.y = -Math.abs(this.vel.y) * 0.8;
+            }
+        } else {
+            // Fallback to old wrapping if no game field provided
+            wrap(this, this.width, this.height);
+        }
+        
+        // Calculate movement delta and update aim coordinates if player moved
+        const deltaX = this.x - prevX;
+        const deltaY = this.y - prevY;
+        if ((deltaX !== 0 || deltaY !== 0) && input.updateAimForPlayerMovement) {
+            input.updateAimForPlayerMovement(deltaX, deltaY);
+        }
 
         // Charging shot system - charge when holding left-click, fire on release
         this.updateChargingSystem(input, bulletPool, audioManager);
@@ -707,7 +744,7 @@ export class Player {
             const startY = this.y + Math.sin(angle) * distance;
             
             // Create particle that moves toward player
-            const particle = particlePool.get(startX, startY, 'spawnParticle', this.x, this.y);
+            const particle = particlePool.get(startX, startY, 'spawnParticle', this.x, this.y, this);
             if (particle) {
                 // Blue energy colors
                 const hue = 200 + Math.random() * 40; // Blue to cyan range

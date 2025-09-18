@@ -40,7 +40,7 @@ export class BackgroundStar {
         this.active = true;
     }
     
-    update(shipVel) {
+    update(shipVel, gameField = null) {
         if (!this.active) return;
         
         // Simple twinkling - brighter
@@ -51,7 +51,11 @@ export class BackgroundStar {
         const parallaxFactor = Math.pow(this.z, 1.8) * 0.12;
         this.x -= shipVel.x * parallaxFactor;
         this.y -= shipVel.y * parallaxFactor;
-        wrap(this, this.width, this.height);
+        
+        // Use game field dimensions if available, otherwise fall back to screen dimensions
+        const wrapWidth = gameField ? gameField.width : this.width;
+        const wrapHeight = gameField ? gameField.height : this.height;
+        wrap(this, wrapWidth, wrapHeight);
     }
     
     draw(ctx) {

@@ -23,10 +23,14 @@ export class Asteroid {
     }
     
     // Helper method to initialize/reset asteroid properties
-    initializeAsteroid(x, y, radius, level = 1) {
+    initializeAsteroid(x, y, radius, level = 1, gameEngine = null) {
         this.level = level;
-        this.x = x !== undefined ? x : random(0, GameDimensions.width);
-        this.y = y !== undefined ? y : random(0, GameDimensions.height);
+        // Use gameField dimensions if available, otherwise fall back to screen dimensions
+        const fieldWidth = gameEngine?.gameField?.width || window.gameEngine?.gameField?.width || GameDimensions.width;
+        const fieldHeight = gameEngine?.gameField?.height || window.gameEngine?.gameField?.height || GameDimensions.height;
+        
+        this.x = x !== undefined ? x : random(0, fieldWidth);
+        this.y = y !== undefined ? y : random(0, fieldHeight);
         this.vel = {
             x: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2,
             y: random(-GAME_CONFIG.AST_SPEED, GAME_CONFIG.AST_SPEED) || 0.2
@@ -91,8 +95,8 @@ export class Asteroid {
         return Math.round(baseDamage * levelMultiplier);
     }
 
-    reset(x, y, radius, level = 1) {
-        this.initializeAsteroid(x, y, radius, level);
+    reset(x, y, radius, level = 1, gameEngine = null) {
+        this.initializeAsteroid(x, y, radius, level, gameEngine);
     }
 
     rescale(newBaseRadius) {
@@ -166,7 +170,7 @@ export class Asteroid {
         });
     }
     
-    update() {
+    update(gameField = null) {
         if (!this.active) return;
         
         // Cap asteroid speed to keep them manageable to hit
@@ -180,12 +184,33 @@ export class Asteroid {
         this.x += this.vel.x;
         this.y += this.vel.y;
         
-        // Wrap around screen with buffer
-        const wrapBuffer = this.radius * 2;
-        if (this.x < -wrapBuffer) this.x = GameDimensions.width + wrapBuffer;
-        if (this.x > GameDimensions.width + wrapBuffer) this.x = -wrapBuffer;
-        if (this.y < -wrapBuffer) this.y = GameDimensions.height + wrapBuffer;
-        if (this.y > GameDimensions.height + wrapBuffer) this.y = -wrapBuffer;
+        // Boundary bouncing instead of wrapping
+        if (gameField) {
+            // Bounce off left/right boundaries
+            if (this.x - this.radius < 0) {
+                this.x = this.radius;
+                this.vel.x = Math.abs(this.vel.x) * 0.9; // Bounce with slight energy loss
+            } else if (this.x + this.radius > gameField.width) {
+                this.x = gameField.width - this.radius;
+                this.vel.x = -Math.abs(this.vel.x) * 0.9;
+            }
+            
+            // Bounce off top/bottom boundaries
+            if (this.y - this.radius < 0) {
+                this.y = this.radius;
+                this.vel.y = Math.abs(this.vel.y) * 0.9;
+            } else if (this.y + this.radius > gameField.height) {
+                this.y = gameField.height - this.radius;
+                this.vel.y = -Math.abs(this.vel.y) * 0.9;
+            }
+        } else {
+            // Fallback to old wrapping if no game field provided
+            const wrapBuffer = this.radius * 2;
+            if (this.x < -wrapBuffer) this.x = GameDimensions.width + wrapBuffer;
+            if (this.x > GameDimensions.width + wrapBuffer) this.x = -wrapBuffer;
+            if (this.y < -wrapBuffer) this.y = GameDimensions.height + wrapBuffer;
+            if (this.y > GameDimensions.height + wrapBuffer) this.y = -wrapBuffer;
+        }
         
         // Update rotation
         this.rot3D.x += this.rotVel3D.x;

@@ -47,7 +47,7 @@ export class Bullet {
         this.active = false;
     }
     
-    update(particlePool, asteroidPool, enemyPool = null, gameEngine = null) {
+    update(particlePool, asteroidPool, enemyPool = null, gameEngine = null, gameField = null) {
         if (!this.active) return;
         
         this.life++;
@@ -67,9 +67,12 @@ export class Bullet {
         this.x += this.vel.x;
         this.y += this.vel.y;
         
-        // Screen boundary check (bullets disappear when off screen)
-        if (this.x < -50 || this.x > this.width + 50 || 
-            this.y < -50 || this.y > this.height + 50) {
+        // Boundary check (bullets disappear when off game field or screen)
+        const boundaryWidth = gameField ? gameField.width : this.width;
+        const boundaryHeight = gameField ? gameField.height : this.height;
+        
+        if (this.x < -50 || this.x > boundaryWidth + 50 || 
+            this.y < -50 || this.y > boundaryHeight + 50) {
             this.active = false;
             // Notify that bullet went off-screen (for combo tracking)
             if (this.onOffScreen) {

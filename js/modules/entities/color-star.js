@@ -124,7 +124,7 @@ export class ColorStar {
         this.isBurst = (this.starType === 'health' || this.starType === 'money');
     }
     
-    update(shipVel, playerPos, tractorEngaged) {
+    update(shipVel, playerPos, tractorEngaged, gameField = null) {
         if (!this.active) return;
         
         if (this.isBurst) {
@@ -199,10 +199,14 @@ export class ColorStar {
             // But orbs don't have parallax - they're gameplay elements
             if (!this.isBurst) {
                 const parallaxFactor = Math.pow(this.z, 1.8) * 0.12; // Reduced exponent and multiplier for gentler parallax
-            this.x -= shipVel.x * parallaxFactor;
-            this.y -= shipVel.y * parallaxFactor;
-            wrap(this, this.width, this.height);
-        }
+                this.x -= shipVel.x * parallaxFactor;
+                this.y -= shipVel.y * parallaxFactor;
+                
+                // Use game field dimensions if available, otherwise fall back to screen dimensions
+                const wrapWidth = gameField ? gameField.width : this.width;
+                const wrapHeight = gameField ? gameField.height : this.height;
+                wrap(this, wrapWidth, wrapHeight);
+            }
     }
     
     draw(ctx) {

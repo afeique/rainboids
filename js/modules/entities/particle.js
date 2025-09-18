@@ -115,10 +115,11 @@ export class Particle {
                 this.colorEnd = 'rgba(0,80,0,0.2)';
                 break;
             case 'spawnParticle': {
-                // args: targetX, targetY (renamed from tractorBeamParticle)
-                const [targetX, targetY] = args;
+                // args: targetX, targetY, playerRef (renamed from tractorBeamParticle)
+                const [targetX, targetY, playerRef] = args;
                 this.targetX = targetX;
                 this.targetY = targetY;
+                this.playerRef = playerRef; // Store reference to player for dynamic tracking
                 this.radius = random(1, 3);
                 this.baseRadius = this.radius;
                 this.life = 1;
@@ -224,6 +225,23 @@ export class Particle {
                 this.life -= 0.04;
                 break;
             case 'spawnParticle': {
+                // Update target position to current player position if player reference exists
+                if (this.playerRef && this.playerRef.active) {
+                    this.targetX = this.playerRef.x;
+                    this.targetY = this.playerRef.y;
+                    
+                    // Recalculate velocity to track current player position
+                    const dx = this.targetX - this.x;
+                    const dy = this.targetY - this.y;
+                    const distance = Math.hypot(dx, dy);
+                    
+                    if (distance > 1) { // Avoid division by zero
+                        const speed = random(0.02, 0.045);
+                        this.vel.x = (dx / distance) * speed * distance;
+                        this.vel.y = (dy / distance) * speed * distance;
+                    }
+                }
+                
                 this.x += this.vel.x;
                 this.y += this.vel.y;
                 // Fade out as it nears the ship

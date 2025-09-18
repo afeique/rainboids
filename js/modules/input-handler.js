@@ -9,8 +9,10 @@ export class InputHandler {
             left: false,
             right: false,
             fire: false, // Keep for potential future use
-            aimX: window.innerWidth / 2, // Default to center of screen
+            aimX: window.innerWidth / 2, // World coordinates for gameplay
             aimY: window.innerHeight / 2,
+            screenAimX: window.innerWidth / 2, // Screen coordinates for UI elements
+            screenAimY: window.innerHeight / 2,
         };
         
         
@@ -43,22 +45,36 @@ export class InputHandler {
                 return;
             }
             
+            // Track when mouse was last moved
+            this.lastMouseMoveTime = Date.now();
+            
             // Console log to verify mouse is working on desktop
             if (Math.random() < 0.01) {
             }
             
-            this.input.aimX = e.clientX;
-            this.input.aimY = e.clientY;
+            // Store screen coordinates for UI elements
+            this.input.screenAimX = e.clientX;
+            this.input.screenAimY = e.clientY;
             
-            // Update cursor style based on what's under it
-            if (this.gameEngine) {
-                const target = this.gameEngine.checkCursorTarget(e.clientX, e.clientY);
-                const body = document.body;
+            // Convert screen coordinates to world coordinates for gameplay
+            if (this.gameEngine && this.gameEngine.screenToWorldCoordinates) {
+                const worldCoords = this.gameEngine.screenToWorldCoordinates(e.clientX, e.clientY);
+                this.input.aimX = worldCoords.x;
+                this.input.aimY = worldCoords.y;
                 
-                if (target === 'enemy') {
-                    body.classList.add('cursor-red');
-                } else {
-                    body.classList.remove('cursor-red');
+            } else {
+                // Fallback to screen coordinates if no camera system
+                this.input.aimX = e.clientX;
+                this.input.aimY = e.clientY;
+            }
+            
+            // Update cursor style based on what's under it (use world coordinates)
+            if (this.gameEngine && this.gameEngine.checkCursorTarget) {
+                const target = this.gameEngine.checkCursorTarget(this.input.aimX, this.input.aimY);
+                
+                // Set cursor state in game engine for canvas-based rendering
+                if (this.gameEngine.setCursorState) {
+                    this.gameEngine.setCursorState(target === 'enemy' || target === 'asteroid');
                 }
             }
         });
@@ -168,8 +184,18 @@ export class InputHandler {
                     // Second touch - set up aiming
                     this.aimTouchId = touchId;
                     this.input.fire = true;
-                    this.input.aimX = touch.clientX;
-                    this.input.aimY = touch.clientY;
+                    // Store screen coordinates for UI elements
+                    this.input.screenAimX = touch.clientX;
+                    this.input.screenAimY = touch.clientY;
+                    // Convert screen coordinates to world coordinates for gameplay
+                    if (this.gameEngine && this.gameEngine.screenToWorldCoordinates) {
+                        const worldCoords = this.gameEngine.screenToWorldCoordinates(touch.clientX, touch.clientY);
+                        this.input.aimX = worldCoords.x;
+                        this.input.aimY = worldCoords.y;
+                    } else {
+                        this.input.aimX = touch.clientX;
+                        this.input.aimY = touch.clientY;
+                    }
                     triggerHapticFeedback(15);
                     
                     // Create visual debug marker for aim point
@@ -227,8 +253,18 @@ export class InputHandler {
                     // Handle aiming
                     const oldAimX = this.input.aimX;
                     const oldAimY = this.input.aimY;
-                    this.input.aimX = touch.clientX;
-                    this.input.aimY = touch.clientY;
+                    // Store screen coordinates for UI elements
+                    this.input.screenAimX = touch.clientX;
+                    this.input.screenAimY = touch.clientY;
+                    // Convert screen coordinates to world coordinates for gameplay
+                    if (this.gameEngine && this.gameEngine.screenToWorldCoordinates) {
+                        const worldCoords = this.gameEngine.screenToWorldCoordinates(touch.clientX, touch.clientY);
+                        this.input.aimX = worldCoords.x;
+                        this.input.aimY = worldCoords.y;
+                    } else {
+                        this.input.aimX = touch.clientX;
+                        this.input.aimY = touch.clientY;
+                    }
                     
                     // Update visual debug marker
                     this.updateDebugAimPoint(touch.clientX, touch.clientY);
@@ -425,6 +461,19 @@ export class InputHandler {
         
         // Hide debug markers
         this.hideDebugAimPoint();
+    }
+    
+    // Update aim coordinates when player moves to maintain relative aiming direction
+    updateAimForPlayerMovement(deltaX, deltaY) {
+        // Only update if mouse hasn't moved recently (within last 100ms)
+        const now = Date.now();
+        if (!this.lastMouseMoveTime || (now - this.lastMouseMoveTime) > 100) {
+            this.input.aimX += deltaX;
+            this.input.aimY += deltaY;
+            // Also update screen coordinates for UI consistency
+            this.input.screenAimX += deltaX;
+            this.input.screenAimY += deltaY;
+        }
     }
     
     getInput() {

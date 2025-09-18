@@ -59,12 +59,26 @@ export class EnemyBullet {
         // Update pattern timer
         this.patternTimer += 0.016; // Assuming 60fps
         
-        // Don't fade over time - bullets stay strong until they hit something or go off-screen
+        // Gradually fade out over time (3 second lifespan)
+        const maxLifetime = 3000; // 3 seconds in milliseconds
+        const age = Date.now() - this.creationTime;
+        this.life = Math.max(0, 1 - (age / maxLifetime));
         
-        // Check bounds - recycle if off screen (no fade decay)
+        // Deactivate when opacity drops to 50%
+        if (this.life <= 0.5) {
+            this.createDisappearEffect();
+            this.active = false;
+            return;
+        }
+        
+        // Check bounds - recycle if off screen (use gameField dimensions)
         const margin = 50;
-        if (this.x < -margin || this.x > GameDimensions.width + margin ||
-            this.y < -margin || this.y > GameDimensions.height + margin) {
+        const fieldWidth = window.gameEngine?.gameField?.width || GameDimensions.width;
+        const fieldHeight = window.gameEngine?.gameField?.height || GameDimensions.height;
+        
+        if (this.x < -margin || this.x > fieldWidth + margin ||
+            this.y < -margin || this.y > fieldHeight + margin) {
+            // Don't create disappear effect for off-screen bullets (too far away to see)
             this.active = false; // Will be recycled by pool manager
         }
     }
@@ -130,6 +144,79 @@ export class EnemyBullet {
                 this.vel.x = this.baseVel.x * explosiveFactor;
                 this.vel.y = this.baseVel.y * explosiveFactor;
                 break;
+                
+            case 'laser':
+                // Laser beam - very fast and straight
+                const laserSpeed = Math.hypot(this.baseVel.x, this.baseVel.y) * 2;
+                const laserAngle = Math.atan2(this.baseVel.y, this.baseVel.x);
+                this.vel.x = Math.cos(laserAngle) * laserSpeed;
+                this.vel.y = Math.sin(laserAngle) * laserSpeed;
+                break;
+                
+            case 'missile':
+                // Homing missile - tracks player
+                if (this.targetPlayer) {
+                    const dx = this.targetPlayer.x - this.x;
+                    const dy = this.targetPlayer.y - this.y;
+                    const distance = Math.hypot(dx, dy);
+                    
+                    if (distance > 0) {
+                        const homingStrength = 0.05;
+                        const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+                        
+                        // Gradually turn toward player
+                        this.vel.x += (dx / distance) * homingStrength;
+                        this.vel.y += (dy / distance) * homingStrength;
+                        
+                        // Maintain speed
+                        const newSpeed = Math.hypot(this.vel.x, this.vel.y);
+                        if (newSpeed > 0) {
+                            this.vel.x = (this.vel.x / newSpeed) * currentSpeed;
+                            this.vel.y = (this.vel.y / newSpeed) * currentSpeed;
+                        }
+                    }
+                }
+                break;
+                
+            case 'homing':
+                // Bomber homing shots - slower but more persistent tracking
+                if (this.targetPlayer) {
+                    const dx = this.targetPlayer.x - this.x;
+                    const dy = this.targetPlayer.y - this.y;
+                    const distance = Math.hypot(dx, dy);
+                    
+                    if (distance > 0) {
+                        const homingStrength = 0.03; // Slower turning than missiles
+                        const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+                        
+                        // Gradually turn toward player
+                        this.vel.x += (dx / distance) * homingStrength;
+                        this.vel.y += (dy / distance) * homingStrength;
+                        
+                        // Maintain speed
+                        const newSpeed = Math.hypot(this.vel.x, this.vel.y);
+                        if (newSpeed > 0) {
+                            this.vel.x = (this.vel.x / newSpeed) * currentSpeed;
+                            this.vel.y = (this.vel.y / newSpeed) * currentSpeed;
+                        }
+                    }
+                }
+                break;
+                
+            case 'pulse':
+                // Pulse shot - accelerates over time
+                const pulseAccel = 1 + this.patternTimer * 0.8;
+                this.vel.x = this.baseVel.x * pulseAccel;
+                this.vel.y = this.baseVel.y * pulseAccel;
+                break;
+                
+            case 'shield_burst':
+                // Shield burst - steady speed with slight wobble
+                const wobble = Math.sin(this.patternTimer * 8) * 0.2;
+                const shieldPerpAngle = Math.atan2(this.baseVel.y, this.baseVel.x) + Math.PI / 2;
+                this.vel.x = this.baseVel.x + Math.cos(shieldPerpAngle) * wobble;
+                this.vel.y = this.baseVel.y + Math.sin(shieldPerpAngle) * wobble;
+                break;
         }
     }
     
@@ -190,7 +277,7 @@ export class EnemyBullet {
         outerGlow.addColorStop(0.7, this.color + '33');
         outerGlow.addColorStop(1, this.color + '00');
         
-        ctx.globalAlpha = pulseIntensity * 0.8;
+        ctx.globalAlpha = pulseIntensity * 0.8 * this.life;
         ctx.fillStyle = outerGlow;
         ctx.beginPath();
         ctx.arc(0, 0, this.glowRadius * 1.5, 0, Math.PI * 2);
@@ -202,14 +289,14 @@ export class EnemyBullet {
         middleGlow.addColorStop(0.5, this.color + '88');
         middleGlow.addColorStop(1, this.color + '00');
         
-        ctx.globalAlpha = pulseIntensity;
+        ctx.globalAlpha = pulseIntensity * this.life;
         ctx.fillStyle = middleGlow;
         ctx.beginPath();
         ctx.arc(0, 0, this.glowRadius, 0, Math.PI * 2);
         ctx.fill();
         
         // Core bullet with enhanced brightness
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
         ctx.beginPath();
         ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
@@ -217,14 +304,14 @@ export class EnemyBullet {
         
         // Bright inner core for visibility
         ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = 0.9 * this.life;
         ctx.beginPath();
         ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
         ctx.fill();
         
         // Inner highlight with pulsing effect
         ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.7 + pulseIntensity * 0.3;
+        ctx.globalAlpha = (0.7 + pulseIntensity * 0.3) * this.life;
         ctx.beginPath();
         ctx.arc(-this.radius * 0.2, -this.radius * 0.2, this.radius * 0.3, 0, Math.PI * 2);
         ctx.fill();
@@ -243,7 +330,7 @@ export class EnemyBullet {
         outerGlow.addColorStop(0.8, this.color + '22');
         outerGlow.addColorStop(1, this.color + '00');
         
-        ctx.globalAlpha = pulse * 0.9;
+        ctx.globalAlpha = pulse * 0.9 * this.life;
         ctx.fillStyle = outerGlow;
         ctx.beginPath();
         ctx.arc(0, 0, glowSize * 1.8, 0, Math.PI * 2);
@@ -256,14 +343,14 @@ export class EnemyBullet {
         middleGlow.addColorStop(0.7, this.color + '66');
         middleGlow.addColorStop(1, this.color + '00');
         
-        ctx.globalAlpha = pulse;
+        ctx.globalAlpha = pulse * this.life;
         ctx.fillStyle = middleGlow;
         ctx.beginPath();
         ctx.arc(0, 0, glowSize, 0, Math.PI * 2);
         ctx.fill();
         
         // Spinning core with enhanced spikes
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = this.life;
         ctx.strokeStyle = this.color;
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -285,14 +372,14 @@ export class EnemyBullet {
         
         // Bright warning center core
         ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = pulse;
+        ctx.globalAlpha = pulse * this.life;
         ctx.beginPath();
         ctx.arc(0, 0, this.radius * 0.4, 0, Math.PI * 2);
         ctx.fill();
         
         // Pulsing danger indicator
         ctx.fillStyle = '#ffff00'; // Yellow warning color
-        ctx.globalAlpha = pulse * 0.8;
+        ctx.globalAlpha = pulse * 0.8 * this.life;
         ctx.beginPath();
         ctx.arc(0, 0, this.radius * 0.2, 0, Math.PI * 2);
         ctx.fill();
@@ -315,6 +402,36 @@ export class EnemyBullet {
         // Screen shake
         if (gameEngine.triggerScreenShake) {
             gameEngine.triggerScreenShake(8, 4, this.radius);
+        }
+    }
+    
+    createDisappearEffect() {
+        // Create small spray of particles in the same color as the bullet
+        const gameEngine = window.gameEngine;
+        if (!gameEngine || !gameEngine.particlePool) return;
+        
+        const particleCount = 4 + Math.random() * 4; // 4-8 particles
+        
+        for (let i = 0; i < particleCount; i++) {
+            const particle = gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
+            if (particle) {
+                // Random direction for spray effect
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.5 + Math.random() * 2; // Slow speed for subtle effect
+                
+                particle.vel.x = Math.cos(angle) * speed;
+                particle.vel.y = Math.sin(angle) * speed;
+                
+                // Use the same color as the bullet
+                particle.color = this.color;
+                
+                // Small particles with short life
+                particle.radius = 0.5 + Math.random() * 1.5;
+                particle.life = 15 + Math.random() * 15; // 15-30 frames
+                
+                // Add some friction to make them slow down
+                particle.friction = 0.95;
+            }
         }
     }
     
