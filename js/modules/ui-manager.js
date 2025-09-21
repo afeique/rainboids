@@ -207,9 +207,23 @@ export class UIManager {
         if (position === 'top') {
             overlay.style.justifyContent = 'flex-start';
             overlay.style.paddingTop = '12.5vh'; // 7/8 from top = 1/8 from top = 12.5% of viewport height
+            // Reset font size for top messages
+            this.elements.messageTitle.style.fontSize = '48px';
+            this.elements.messageSubtitle.style.fontSize = '20px';
+        } else if (position === 'shop') {
+            overlay.style.justifyContent = 'flex-end';
+            overlay.style.paddingTop = '0';
+            overlay.style.paddingBottom = '120px'; // Position above shop button
+            // Smaller font size for shop position
+            this.elements.messageTitle.style.fontSize = '24px';
+            this.elements.messageSubtitle.style.fontSize = '14px';
         } else {
             overlay.style.justifyContent = 'center';
             overlay.style.paddingTop = '0';
+            overlay.style.paddingBottom = '0';
+            // Reset font size for center messages
+            this.elements.messageTitle.style.fontSize = '48px';
+            this.elements.messageSubtitle.style.fontSize = '20px';
         }
         
         if (duration > 0) {

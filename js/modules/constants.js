@@ -5,7 +5,7 @@ export const GAME_CONFIG = {
     SHIP_FRICTION: 0.995,
     MAX_V: 3,
     BULLET_SPEED: 12,
-    INITIAL_AST_COUNT: 3,
+    INITIAL_AST_COUNT: 8, // Fixed asteroid count per wave
     AST_SPEED: 2.2,
     COLOR_STAR_COUNT: 60, // Increased slightly to show more variety of shapes
     BACKGROUND_STAR_COUNT: 40, // Non-collectible background stars
@@ -14,18 +14,24 @@ export const GAME_CONFIG = {
     ORB_FRIC: 0.92, // Increased friction to slow down money and health orbs
     
     // Health Orb Configuration (renamed from health stars)
-    HEALTH_ORB_HEAL_AMOUNT: 1, // Health restored per health orb
-    HEALTH_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop health orbs
+    HEALTH_ORB_HEAL_AMOUNT_MIN: 1, // Minimum health restored per health orb
+    HEALTH_ORB_HEAL_AMOUNT_MAX: 4, // Maximum health restored per health orb
+    HEALTH_ORB_BASE_DROP_RATE: 0.3, // 30% base chance to drop health orbs
     HEALTH_ORB_BASE_DROP_COUNT_MIN: 1, // Minimum health orbs dropped
     HEALTH_ORB_BASE_DROP_COUNT_MAX: 4, // Maximum health orbs dropped
     HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
+    HEALTH_ORB_SIZE_MIN: 0.8, // Minimum size multiplier for health orbs
+    HEALTH_ORB_SIZE_MAX: 2.5, // Maximum size multiplier for health orbs
     
     // Money Orb Configuration (renamed from money stars)
-    MONEY_ORB_MONEY_AMOUNT: 25, // Money gained per money orb
+    MONEY_ORB_MONEY_AMOUNT_MIN: 15, // Minimum money gained per money orb
+    MONEY_ORB_MONEY_AMOUNT_MAX: 50, // Maximum money gained per money orb
     MONEY_ORB_BASE_DROP_RATE: 0.5, // 50% base chance to drop money orbs
     MONEY_ORB_BASE_DROP_COUNT_MIN: 1, // Minimum money orbs dropped
     MONEY_ORB_BASE_DROP_COUNT_MAX: 3, // Maximum money orbs dropped
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
+    MONEY_ORB_SIZE_MIN: 1.0, // Minimum size multiplier for money orbs
+    MONEY_ORB_SIZE_MAX: 3.5, // Maximum size multiplier for money orbs
     
     // Orb Drop Upgrade Configuration
     HEALTH_ORB_DROP_CHANCE_UPGRADE: 0.05, // +5% drop chance per upgrade stack
@@ -36,8 +42,8 @@ export const GAME_CONFIG = {
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,
     
-    // Entity limits reduced for better performance
-    MAX_ASTEROIDS: 4, // Reduced from 6 for better performance
+    // Entity limits adjusted for gameplay balance
+    MAX_ASTEROIDS: 8, // Increased to match fixed asteroid count
     MAX_ENEMIES: 3, // Reduced from 5 for better performance
     
     // Wave system configuration - aggressive timing for continuous action

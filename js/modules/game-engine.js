@@ -124,8 +124,31 @@ export class GameEngine {
         this.cursor = {
             isOverTarget: false,
             x: 0,
-            y: 0
+            y: 0,
+            hoveredEntity: null
         };
+        
+        // Targeted entity system (click-based targeting)
+        this.targetedEntity = null;
+        
+        // Target info display system
+        this.targetInfo = {
+            active: false,
+            target: null,
+            displayTime: 0,
+            maxDisplayTime: 3000 // 3 seconds
+        };
+        
+        // Money pickup display system
+        this.moneyPickupDisplay = {
+            amount: 0,
+            displayTime: 0,
+            maxDisplayTime: 3000, // 3 seconds
+            fadeStartTime: 2000 // Start fading after 2 seconds
+        };
+        
+        // Damage numbers system
+        this.damageNumbers = [];
         
         // Initialize wave message system
         this.waveMessage = {
@@ -138,8 +161,8 @@ export class GameEngine {
         
         // Camera and game field system
         this.gameField = {
-            width: this.width * 3,  // Game field is 3x screen size
-            height: this.height * 3
+            width: this.width * 2,  // Game field is 2x screen size (reduced from 3x)
+            height: this.height * 2
         };
         
         this.camera = {
@@ -311,6 +334,25 @@ Type any cheat name in the console to activate!`);
         //     // }
         // });
         
+        // Entity targeting click handling (for gameplay)
+        this.canvas.addEventListener('click', (e) => {
+            if (this.game.state === GAME_STATES.PLAYING) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+                
+                // Convert screen coordinates to world coordinates
+                const worldX = clickX + this.camera.x;
+                const worldY = clickY + this.camera.y;
+                
+                this.handleEntityTargeting(worldX, worldY);
+                return;
+            }
+        });
+        
         // Shop click handling with click-outside-to-close
         this.canvas.addEventListener('click', (e) => {
             if (this.game.state === GAME_STATES.SHOP) {
@@ -357,6 +399,65 @@ Type any cheat name in the console to activate!`);
                     }
                 }
                 
+                // Check for scrollbar interactions
+                if (this.shopScrollbarBounds) {
+                    // Check up arrow
+                    if (clickX >= this.shopScrollbarBounds.upArrow.x && 
+                        clickX <= this.shopScrollbarBounds.upArrow.x + this.shopScrollbarBounds.upArrow.width &&
+                        clickY >= this.shopScrollbarBounds.upArrow.y && 
+                        clickY <= this.shopScrollbarBounds.upArrow.y + this.shopScrollbarBounds.upArrow.height) {
+                        this.shopScrollOffset = Math.max(0, this.shopScrollOffset - 40);
+                        return;
+                    }
+                    
+                    // Check down arrow
+                    if (clickX >= this.shopScrollbarBounds.downArrow.x && 
+                        clickX <= this.shopScrollbarBounds.downArrow.x + this.shopScrollbarBounds.downArrow.width &&
+                        clickY >= this.shopScrollbarBounds.downArrow.y && 
+                        clickY <= this.shopScrollbarBounds.downArrow.y + this.shopScrollbarBounds.downArrow.height) {
+                        // Calculate max scroll based on content
+                        const filteredItems = this.shopItems.filter(item => item.category === this.shopCategory);
+                        const itemsPerRow = 2;
+                        const rows = Math.ceil(filteredItems.length / itemsPerRow);
+                        const itemHeight = 120;
+                        const totalContentHeight = rows * (itemHeight + 10);
+                        const maxScroll = Math.max(0, totalContentHeight - (this.shopWindowBounds.height - 140));
+                        
+                        this.shopScrollOffset = Math.min(maxScroll, this.shopScrollOffset + 40);
+                        return;
+                    }
+                    
+                    // Check thumb drag start
+                    if (clickX >= this.shopScrollbarBounds.x && 
+                        clickX <= this.shopScrollbarBounds.x + this.shopScrollbarBounds.width &&
+                        clickY >= this.shopScrollbarBounds.thumbY && 
+                        clickY <= this.shopScrollbarBounds.thumbY + this.shopScrollbarBounds.thumbHeight) {
+                        this.shopScrollThumbDrag = true;
+                        this.shopScrollDragStartY = clickY;
+                        this.shopScrollDragStartOffset = this.shopScrollOffset;
+                        return;
+                    }
+                    
+                    // Check track click (jump to position)
+                    if (clickX >= this.shopScrollbarBounds.x && 
+                        clickX <= this.shopScrollbarBounds.x + this.shopScrollbarBounds.width &&
+                        clickY >= this.shopScrollbarBounds.trackY && 
+                        clickY <= this.shopScrollbarBounds.trackY + this.shopScrollbarBounds.trackHeight) {
+                        // Calculate max scroll
+                        const filteredItems = this.shopItems.filter(item => item.category === this.shopCategory);
+                        const itemsPerRow = 2;
+                        const rows = Math.ceil(filteredItems.length / itemsPerRow);
+                        const itemHeight = 120;
+                        const totalContentHeight = rows * (itemHeight + 10);
+                        const maxScroll = Math.max(0, totalContentHeight - (this.shopWindowBounds.height - 140));
+                        
+                        // Jump to clicked position
+                        const clickRatio = (clickY - this.shopScrollbarBounds.trackY) / this.shopScrollbarBounds.trackHeight;
+                        this.shopScrollOffset = Math.max(0, Math.min(maxScroll, clickRatio * maxScroll));
+                        return;
+                    }
+                }
+                
                 // Check for item clicks
                 if (this.shopItemBounds) {
                     for (const bound of this.shopItemBounds) {
@@ -381,6 +482,41 @@ Type any cheat name in the console to activate!`);
                 // Update cursor position for canvas rendering
                 this.cursor.x = this.mouseX;
                 this.cursor.y = this.mouseY;
+                
+                // Handle scrollbar dragging
+                if (this.shopScrollThumbDrag && this.game.state === GAME_STATES.SHOP) {
+                    const dragDelta = this.mouseY - this.shopScrollDragStartY;
+                    const filteredItems = this.shopItems.filter(item => item.category === this.shopCategory);
+                    const itemsPerRow = 2;
+                    const rows = Math.ceil(filteredItems.length / itemsPerRow);
+                    const itemHeight = 120;
+                    const totalContentHeight = rows * (itemHeight + 10);
+                    const maxScroll = Math.max(0, totalContentHeight - (this.shopWindowBounds.height - 140));
+                    
+                    if (maxScroll > 0 && this.shopScrollbarBounds) {
+                        const scrollRatio = dragDelta / this.shopScrollbarBounds.trackHeight;
+                        const newOffset = this.shopScrollDragStartOffset + (scrollRatio * maxScroll);
+                        this.shopScrollOffset = Math.max(0, Math.min(maxScroll, newOffset));
+                    }
+                }
+                
+                // Update hover states for scrollbar arrows
+                if (this.game.state === GAME_STATES.SHOP && this.shopScrollbarBounds) {
+                    this.shopScrollUpHover = this.mouseX >= this.shopScrollbarBounds.upArrow.x && 
+                                           this.mouseX <= this.shopScrollbarBounds.upArrow.x + this.shopScrollbarBounds.upArrow.width &&
+                                           this.mouseY >= this.shopScrollbarBounds.upArrow.y && 
+                                           this.mouseY <= this.shopScrollbarBounds.upArrow.y + this.shopScrollbarBounds.upArrow.height;
+                    
+                    this.shopScrollDownHover = this.mouseX >= this.shopScrollbarBounds.downArrow.x && 
+                                             this.mouseX <= this.shopScrollbarBounds.downArrow.x + this.shopScrollbarBounds.downArrow.width &&
+                                             this.mouseY >= this.shopScrollbarBounds.downArrow.y && 
+                                             this.mouseY <= this.shopScrollbarBounds.downArrow.y + this.shopScrollbarBounds.downArrow.height;
+                }
+        });
+        
+        // Mouse up to stop dragging
+        this.canvas.addEventListener('mouseup', (e) => {
+            this.shopScrollThumbDrag = false;
         });
         
         // Shop scroll support
@@ -539,8 +675,9 @@ Type any cheat name in the console to activate!`);
     
     // Generate all initial color stars using purely generative method
     generateInitialColorStars() {
-        const spawnWidth = Math.max(this.width, this.height);
-        const spawnHeight = this.height;
+        // Use game field dimensions for full coverage, same as background stars
+        const spawnWidth = this.gameField.width;
+        const spawnHeight = this.gameField.height;
         
         const starPositions = generateStarPositions(spawnWidth, spawnHeight, GAME_CONFIG.COLOR_STAR_COUNT);
         
@@ -567,8 +704,9 @@ Type any cheat name in the console to activate!`);
     
     // Spawn a single color star using simple random generation (for replacement color stars)
     spawnColorStar() {
-        const spawnWidth = Math.max(this.width, this.height);
-        const spawnHeight = this.height;
+        // Use game field dimensions for full coverage, same as other star generation
+        const spawnWidth = this.gameField.width;
+        const spawnHeight = this.gameField.height;
         
         // Simple random position
         const x = random(0, spawnWidth);
@@ -1464,19 +1602,70 @@ Type any cheat name in the console to activate!`);
         
         // Draw scroll indicators if needed
         if (maxScroll > 0) {
-            const scrollBarX = shopWindowX + shopWindowWidth - 15;
-            const scrollBarY = shopWindowY + 20;
-            const scrollBarHeight = shopWindowHeight - 80;
+            const scrollBarWidth = 20; // Wider scrollbar
+            const scrollBarX = shopWindowX + shopWindowWidth - scrollBarWidth - 5;
+            const arrowButtonHeight = 20;
+            const scrollBarY = shopWindowY + 20 + arrowButtonHeight;
+            const scrollBarHeight = shopWindowHeight - 80 - (arrowButtonHeight * 2);
             const scrollThumbHeight = Math.max(20, scrollBarHeight * (shopWindowHeight - 80) / totalContentHeight);
             const scrollThumbY = scrollBarY + (this.shopScrollOffset / maxScroll) * (scrollBarHeight - scrollThumbHeight);
             
+            // Store scrollbar bounds for interaction
+            this.shopScrollbarBounds = {
+                x: scrollBarX,
+                y: scrollBarY - arrowButtonHeight,
+                width: scrollBarWidth,
+                height: scrollBarHeight + (arrowButtonHeight * 2),
+                thumbY: scrollThumbY,
+                thumbHeight: scrollThumbHeight,
+                trackY: scrollBarY,
+                trackHeight: scrollBarHeight,
+                upArrow: { x: scrollBarX, y: scrollBarY - arrowButtonHeight, width: scrollBarWidth, height: arrowButtonHeight },
+                downArrow: { x: scrollBarX, y: scrollBarY + scrollBarHeight, width: scrollBarWidth, height: arrowButtonHeight }
+            };
+            
+            // Up arrow button
+            this.ctx.fillStyle = this.shopScrollUpHover ? 'rgba(255, 215, 0, 0.8)' : 'rgba(150, 150, 150, 0.8)';
+            this.ctx.fillRect(scrollBarX, scrollBarY - arrowButtonHeight, scrollBarWidth, arrowButtonHeight);
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(scrollBarX, scrollBarY - arrowButtonHeight, scrollBarWidth, arrowButtonHeight);
+            
+            // Up arrow
+            this.ctx.fillStyle = '#000';
+            this.ctx.beginPath();
+            this.ctx.moveTo(scrollBarX + scrollBarWidth/2, scrollBarY - arrowButtonHeight + 4);
+            this.ctx.lineTo(scrollBarX + 4, scrollBarY - 4);
+            this.ctx.lineTo(scrollBarX + scrollBarWidth - 4, scrollBarY - 4);
+            this.ctx.closePath();
+            this.ctx.fill();
+            
             // Scroll track
             this.ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
-            this.ctx.fillRect(scrollBarX, scrollBarY, 10, scrollBarHeight);
+            this.ctx.fillRect(scrollBarX, scrollBarY, scrollBarWidth, scrollBarHeight);
             
             // Scroll thumb
-            this.ctx.fillStyle = '#FFD700';
-            this.ctx.fillRect(scrollBarX, scrollThumbY, 10, scrollThumbHeight);
+            this.ctx.fillStyle = this.shopScrollThumbDrag ? '#FFF700' : '#FFD700';
+            this.ctx.fillRect(scrollBarX, scrollThumbY, scrollBarWidth, scrollThumbHeight);
+            this.ctx.strokeStyle = '#FFA500';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(scrollBarX, scrollThumbY, scrollBarWidth, scrollThumbHeight);
+            
+            // Down arrow button
+            this.ctx.fillStyle = this.shopScrollDownHover ? 'rgba(255, 215, 0, 0.8)' : 'rgba(150, 150, 150, 0.8)';
+            this.ctx.fillRect(scrollBarX, scrollBarY + scrollBarHeight, scrollBarWidth, arrowButtonHeight);
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(scrollBarX, scrollBarY + scrollBarHeight, scrollBarWidth, arrowButtonHeight);
+            
+            // Down arrow
+            this.ctx.fillStyle = '#000';
+            this.ctx.beginPath();
+            this.ctx.moveTo(scrollBarX + scrollBarWidth/2, scrollBarY + scrollBarHeight + arrowButtonHeight - 4);
+            this.ctx.lineTo(scrollBarX + 4, scrollBarY + scrollBarHeight + 4);
+            this.ctx.lineTo(scrollBarX + scrollBarWidth - 4, scrollBarY + scrollBarHeight + 4);
+            this.ctx.closePath();
+            this.ctx.fill();
         }
         
         // Instructions - larger and more visible
@@ -1757,11 +1946,8 @@ Type any cheat name in the console to activate!`);
     }
     
     spawnWaveAsteroids() {
-        // Respect MAX_ASTEROIDS limit for simpler gameplay
-        const desiredAsteroids = Math.min(
-            GAME_CONFIG.INITIAL_AST_COUNT + Math.floor(this.game.currentWave / 2),
-            GAME_CONFIG.MAX_ASTEROIDS
-        );
+        // Use fixed asteroid count for consistent gameplay
+        const desiredAsteroids = GAME_CONFIG.INITIAL_AST_COUNT; // Fixed count of 8 asteroids
         
         // Only spawn if we're under the limit
         const currentAsteroids = this.asteroidPool.activeObjects.length;
@@ -1963,7 +2149,7 @@ Type any cheat name in the console to activate!`);
     getRandomEnemyType() {
         let availableTypes = ['HUNTER', 'WASP'];
         if (this.game.currentWave >= 2) availableTypes.push('GUARDIAN', 'STALKER');
-        if (this.game.currentWave >= 4) availableTypes.push('BOMBER');
+        if (this.game.currentWave >= 4) availableTypes.push('TANGERINE_BOMBER');
         if (this.game.currentWave >= 6) availableTypes.push('TITAN');
         return availableTypes[Math.floor(Math.random() * availableTypes.length)];
     }
@@ -1987,7 +2173,7 @@ Type any cheat name in the console to activate!`);
         let availableTypes = ['HUNTER', 'WASP']; // Start with basic types
         
         if (this.game.currentWave >= 2) availableTypes.push('GUARDIAN', 'STALKER');
-        if (this.game.currentWave >= 4) availableTypes.push('BOMBER');
+        if (this.game.currentWave >= 4) availableTypes.push('TANGERINE_BOMBER');
         if (this.game.currentWave >= 6) availableTypes.push('TITAN');
         
         const enemyType = availableTypes[Math.floor(random(0, availableTypes.length))];
@@ -2153,7 +2339,7 @@ Type any cheat name in the console to activate!`);
                     }
                     break;
                     
-                case 'BOMBER': // Spiked circle debris
+                case 'TANGERINE_BOMBER': // Spiked circle debris
                     const spikeAngle = (i / 8) * Math.PI * 2;
                     p1 = { x: Math.cos(spikeAngle) * size * 0.3, y: Math.sin(spikeAngle) * size * 0.3 };
                     p2 = { x: Math.cos(spikeAngle) * size * 0.6, y: Math.sin(spikeAngle) * size * 0.6 };
@@ -2174,6 +2360,21 @@ Type any cheat name in the console to activate!`);
     createHealthOrb(x, y) {
         const healthOrb = this.colorStarPool.get(x, y, 'health'); // health orb type
         if (healthOrb) {
+            // Assign random heal amount and corresponding size
+            const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN;
+            const maxHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX;
+            healthOrb.healAmount = Math.floor(Math.random() * (maxHeal - minHeal + 1)) + minHeal;
+            
+            // Scale size based on heal amount
+            const healRatio = (healthOrb.healAmount - minHeal) / (maxHeal - minHeal);
+            const minSize = GAME_CONFIG.HEALTH_ORB_SIZE_MIN;
+            const maxSize = GAME_CONFIG.HEALTH_ORB_SIZE_MAX;
+            healthOrb.sizeMultiplier = minSize + (healRatio * (maxSize - minSize));
+            
+            // Apply size multiplier to radius
+            const baseRadius = healthOrb.baseRadius || healthOrb.radius;
+            healthOrb.radius = baseRadius * healthOrb.sizeMultiplier;
+            
             // Give it some random velocity to scatter from the entity position
             const angle = random(0, Math.PI * 2);
             const speed = random(1, 3);
@@ -2186,6 +2387,21 @@ Type any cheat name in the console to activate!`);
     createMoneyOrb(x, y) {
         const moneyOrb = this.colorStarPool.get(x, y, 'money'); // money orb type
         if (moneyOrb) {
+            // Assign random money amount and corresponding size
+            const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN;
+            const maxMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX;
+            moneyOrb.moneyAmount = Math.floor(Math.random() * (maxMoney - minMoney + 1)) + minMoney;
+            
+            // Scale size based on money amount
+            const moneyRatio = (moneyOrb.moneyAmount - minMoney) / (maxMoney - minMoney);
+            const minSize = GAME_CONFIG.MONEY_ORB_SIZE_MIN;
+            const maxSize = GAME_CONFIG.MONEY_ORB_SIZE_MAX;
+            moneyOrb.sizeMultiplier = minSize + (moneyRatio * (maxSize - minSize));
+            
+            // Apply size multiplier to radius
+            const baseRadius = moneyOrb.baseRadius || moneyOrb.radius;
+            moneyOrb.radius = baseRadius * moneyOrb.sizeMultiplier;
+            
             // Give it some random velocity to scatter from the entity position
             const angle = random(0, Math.PI * 2);
             const speed = random(1, 3);
@@ -2427,6 +2643,333 @@ Type any cheat name in the console to activate!`);
         ctx.restore();
     }
     
+    setTargetInfo(target) {
+        this.targetInfo.active = true;
+        this.targetInfo.target = target;
+        this.targetInfo.displayTime = 0;
+    }
+    
+    updateTargetInfo(deltaTime) {
+        if (this.targetInfo.active) {
+            this.targetInfo.displayTime += deltaTime;
+            if (this.targetInfo.displayTime >= this.targetInfo.maxDisplayTime || 
+                (this.targetInfo.target && this.targetInfo.target.health <= 0)) {
+                this.targetInfo.active = false;
+                this.targetInfo.target = null;
+            }
+        }
+    }
+    
+    handleEntityTargeting(worldX, worldY) {
+        let clickedEntity = null;
+        
+        // Check enemies first (higher priority)
+        for (const enemy of this.enemyPool.activeObjects) {
+            if (!enemy.active) continue;
+            
+            const dx = worldX - enemy.x;
+            const dy = worldY - enemy.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance <= enemy.radius + 15) { // 15px click tolerance
+                clickedEntity = enemy;
+                break;
+            }
+        }
+        
+        // Check asteroids if no enemy clicked
+        if (!clickedEntity) {
+            for (const asteroid of this.asteroidPool.activeObjects) {
+                if (!asteroid.active) continue;
+                
+                const dx = worldX - asteroid.x;
+                const dy = worldY - asteroid.y;
+                const distance = Math.hypot(dx, dy);
+                
+                if (distance <= asteroid.radius + 15) { // 15px click tolerance
+                    clickedEntity = asteroid;
+                    break;
+                }
+            }
+        }
+        
+        // Update targeted entity only if a new entity was clicked
+        // Keep previous target if clicking empty space
+        if (clickedEntity) {
+            this.targetedEntity = clickedEntity;
+            this.setTargetInfo(clickedEntity);
+        }
+        // If clicking empty space, keep the current target unchanged
+    }
+
+    updateHoverDetection() {
+        if (this.game.state !== GAME_STATES.PLAYING) {
+            this.cursor.hoveredEntity = null;
+            return;
+        }
+        
+        // Convert screen coordinates to world coordinates
+        const worldX = this.cursor.x + this.camera.x;
+        const worldY = this.cursor.y + this.camera.y;
+        
+        let hoveredEntity = null;
+        
+        // Check enemies first (higher priority)
+        for (const enemy of this.enemyPool.activeObjects) {
+            if (!enemy.active) continue;
+            
+            const dx = worldX - enemy.x;
+            const dy = worldY - enemy.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance <= enemy.radius + 10) { // 10px hover tolerance
+                hoveredEntity = enemy;
+                break;
+            }
+        }
+        
+        // Check asteroids if no enemy hovered
+        if (!hoveredEntity) {
+            for (const asteroid of this.asteroidPool.activeObjects) {
+                if (!asteroid.active) continue;
+                
+                const dx = worldX - asteroid.x;
+                const dy = worldY - asteroid.y;
+                const distance = Math.hypot(dx, dy);
+                
+                if (distance <= asteroid.radius + 10) { // 10px hover tolerance
+                    hoveredEntity = asteroid;
+                    break;
+                }
+            }
+        }
+        
+        this.cursor.hoveredEntity = hoveredEntity;
+        this.cursor.isOverTarget = hoveredEntity !== null;
+    }
+    
+    addMoneyPickup(amount) {
+        // Add to existing amount or start new display
+        this.moneyPickupDisplay.amount += amount;
+        this.moneyPickupDisplay.displayTime = 0; // Reset timer
+    }
+    
+    updateMoneyPickupDisplay(deltaTime) {
+        if (this.moneyPickupDisplay.amount > 0) {
+            this.moneyPickupDisplay.displayTime += deltaTime;
+            
+            if (this.moneyPickupDisplay.displayTime >= this.moneyPickupDisplay.maxDisplayTime) {
+                this.moneyPickupDisplay.amount = 0;
+                this.moneyPickupDisplay.displayTime = 0;
+            }
+        }
+    }
+    
+    drawMoneyPickupDisplay() {
+        if (this.moneyPickupDisplay.amount <= 0) return;
+        
+        const ctx = this.ctx;
+        ctx.save();
+        
+        // Position to the right of the coin number in HUD (matching drawLevelAndCoinsDisplay exactly)
+        const barX = 80; // From updateHUD
+        const barY = 20; // From updateHUD  
+        const barHeight = 30; // From updateHUD
+        const livesX = 10;
+        const triforceWidth = 60;
+        const triforceCenterX = livesX + triforceWidth / 2;
+        const levelY = barY + barHeight + 26;
+        const coinsY = levelY + 40; // Exact match from drawLevelAndCoinsDisplay
+        
+        const coinIconSize = 30;
+        const coinIconX = triforceCenterX - coinIconSize / 2;
+        const coinsTextX = coinIconX + coinIconSize + 10;
+        
+        // Calculate width of coins text to position pickup display after it
+        ctx.font = "14px 'Press Start 2P', monospace";
+        const coinsText = `${Math.floor(this.game.money)}`;
+        const coinsTextWidth = ctx.measureText(coinsText).width;
+        
+        const x = coinsTextX + coinsTextWidth + 15; // 15px margin after coins text
+        const y = coinsY; // Exact same Y position as coins display
+        
+        // Calculate fade effect
+        let alpha = 1;
+        if (this.moneyPickupDisplay.displayTime > this.moneyPickupDisplay.fadeStartTime) {
+            const fadeProgress = (this.moneyPickupDisplay.displayTime - this.moneyPickupDisplay.fadeStartTime) / 
+                               (this.moneyPickupDisplay.maxDisplayTime - this.moneyPickupDisplay.fadeStartTime);
+            alpha = 1 - fadeProgress;
+        }
+        
+        // Draw darker gold +amount text
+        ctx.font = "14px 'Press Start 2P', monospace";
+        ctx.fillStyle = `rgba(184, 134, 11, ${alpha})`; // Darker gold
+        ctx.strokeStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
+        ctx.lineWidth = 2;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        
+        const text = `+${this.moneyPickupDisplay.amount}`;
+        ctx.strokeText(text, x, y);
+        ctx.fillText(text, x, y);
+        
+        ctx.restore();
+    }
+    
+    createDamageNumber(x, y, damage) {
+        const damageNumber = {
+            x: x,
+            y: y,
+            damage: Math.round(damage),
+            life: 1.0,
+            maxLife: 1.5, // 1.5 seconds
+            vel: {
+                x: (Math.random() - 0.5) * 2, // Random horizontal velocity
+                y: -2 - Math.random() * 2 // Upward velocity with randomness
+            },
+            gravity: 0.1,
+            creationTime: Date.now()
+        };
+        
+        this.damageNumbers.push(damageNumber);
+    }
+    
+    updateDamageNumbers(deltaTime) {
+        for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+            const dmgNum = this.damageNumbers[i];
+            
+            // Update position with parabolic trajectory
+            dmgNum.x += dmgNum.vel.x;
+            dmgNum.y += dmgNum.vel.y;
+            dmgNum.vel.y += dmgNum.gravity; // Apply gravity
+            
+            // Update life
+            dmgNum.life -= deltaTime / 1000;
+            
+            // Remove expired damage numbers
+            if (dmgNum.life <= 0) {
+                this.damageNumbers.splice(i, 1);
+            }
+        }
+    }
+    
+    drawDamageNumbers() {
+        const ctx = this.ctx;
+        
+        this.damageNumbers.forEach(dmgNum => {
+            ctx.save();
+            
+            // Calculate alpha based on life remaining
+            const alpha = Math.max(0, dmgNum.life);
+            
+            // Convert world coordinates to screen coordinates
+            const screenX = dmgNum.x - this.camera.x;
+            const screenY = dmgNum.y - this.camera.y;
+            
+            // Only draw if on screen
+            if (screenX >= -50 && screenX <= this.width + 50 && 
+                screenY >= -50 && screenY <= this.height + 50) {
+                
+                // Golden damage number without stroke
+                ctx.font = "16px 'Press Start 2P', monospace";
+                ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`; // Golden
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                const text = dmgNum.damage.toString();
+                ctx.fillText(text, screenX, screenY);
+            }
+            
+            ctx.restore();
+        });
+    }
+    
+    drawTargetInfo() {
+        // Show info for currently targeted entity (clicked entity)
+        if (!this.targetedEntity) return;
+        
+        const target = this.targetedEntity;
+        const ctx = this.ctx;
+        
+        // Position centered horizontally on screen, to the right of player health bar without overlap
+        const healthBarEndX = 80 + 220 + 20; // barX + barWidth + margin from updateHUD
+        const availableWidth = this.width - healthBarEndX - 20; // 20px margin from right edge
+        const x = healthBarEndX + (availableWidth / 2); // Center in available space
+        const y = 30;  // Top of screen
+        
+        ctx.save();
+        
+        // Draw target name (all caps) - GOLD STYLING TO MATCH ENEMY NAMES
+        ctx.font = "14px 'Press Start 2P', monospace";
+        ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'; // Same gold color as enemy names
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        
+        const targetName = target.config ? target.config.name.toUpperCase() : 'ASTEROID';
+        ctx.fillText(targetName, x, y);
+        
+        // Draw health bar
+        const barWidth = 100;
+        const barHeight = 4;
+        const barY = y + 25;
+        const barX = x - barWidth / 2;
+        
+        const healthPercentage = target.health / target.maxHealth;
+        
+        // Background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+        
+        // Health bar gradient
+        let healthGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+        if (healthPercentage > 0.5) {
+            healthGradient.addColorStop(0, '#66ff66');
+            healthGradient.addColorStop(1, '#00cc00');
+        } else if (healthPercentage > 0.25) {
+            healthGradient.addColorStop(0, '#ffff99');
+            healthGradient.addColorStop(1, '#ffcc00');
+        } else {
+            healthGradient.addColorStop(0, '#ff6666');
+            healthGradient.addColorStop(1, '#cc0000');
+        }
+        
+        ctx.fillStyle = healthGradient;
+        ctx.fillRect(barX, barY, barWidth * healthPercentage, barHeight);
+        
+        // Draw LV and HP numbers below health bar with proper spacing
+        const displayHealth = target.health > 0 && target.health < 1 ? 1 : Math.round(target.health);
+        const healthNumber = `${displayHealth}/${Math.round(target.maxHealth)}`;
+        const levelText = `LV${target.level || 1}`;
+        
+        ctx.font = "10px 'Press Start 2P', monospace";
+        
+        // Measure text widths for proper spacing
+        const levelWidth = ctx.measureText(levelText).width;
+        const healthWidth = ctx.measureText(healthNumber).width;
+        const spacing = 20; // Minimum space between LV and HP text
+        const totalWidth = levelWidth + spacing + healthWidth;
+        
+        // Calculate positions to center the combined text
+        const startX = x - (totalWidth / 2);
+        const levelX = startX;
+        const healthX = startX + levelWidth + spacing;
+        const numberY = barY + 18;
+        
+        // Level text in light blue
+        ctx.fillStyle = '#88ccff';
+        ctx.textAlign = 'left';
+        ctx.strokeText(levelText, levelX, numberY);
+        ctx.fillText(levelText, levelX, numberY);
+        
+        // Health number in gold
+        ctx.fillStyle = '#FFD700';
+        ctx.textAlign = 'left'; // Changed to left align for consistent positioning
+        ctx.strokeText(healthNumber, healthX, numberY);
+        ctx.fillText(healthNumber, healthX, numberY);
+        
+        ctx.restore();
+    }
+    
     handleCollisions() {
         // Player-asteroid collisions
         this.asteroidPool.activeObjects.forEach(ast => {
@@ -2450,6 +2993,9 @@ Type any cheat name in the console to activate!`);
                 
                 if (collision(bullet, ast)) {
                     triggerHapticFeedback(60);
+                    
+                    // Set target info for hit asteroid
+                    this.setTargetInfo(ast);
                     
                     // Only play hit sound if asteroid is on screen
                     if (this.isEntityOnScreen(ast)) {
@@ -2659,8 +3205,9 @@ Type any cheat name in the console to activate!`);
                 // Uses larger radius + predictive collision to prevent fast orbs from passing through player
                 if (colorStar.isCollectible && starCollision(this.player, colorStar)) {
                     if (colorStar.starType === 'health') {
-                        // Health orb collected
-                        const healAmount = this.player.getEffectiveHealthStarHealing();
+                        // Health orb collected - use the orb's individual heal amount
+                        const baseHealAmount = colorStar.healAmount || GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN; // Fallback for legacy orbs
+                        const healAmount = this.player.getEffectiveHealthOrbHealing(baseHealAmount);
                     const oldHealth = this.player.health;
                     this.player.health = Math.min(this.player.getEffectiveMaxHealth(), this.player.health + healAmount);
                     const actualHeal = this.player.health - oldHealth;
@@ -2678,10 +3225,13 @@ Type any cheat name in the console to activate!`);
                         this.audioManager.playCoin(); // Normal sound if already at max health
                         }
                     } else if (colorStar.starType === 'money') {
-                        // Money orb collected
-                        const moneyAmount = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT;
+                        // Money orb collected - use the orb's individual money amount
+                        const moneyAmount = colorStar.moneyAmount || GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN; // Fallback for legacy orbs
                         this.game.score += moneyAmount;
                         this.game.money += moneyAmount;
+                        
+                        // Add to pickup display
+                        this.addMoneyPickup(moneyAmount);
                         
                         // Play pickup sound (always play regardless of music beat)
                         this.audioManager.playCoin();
@@ -2764,6 +3314,9 @@ Type any cheat name in the console to activate!`);
                 if (collision(bullet, enemy)) {
                     triggerHapticFeedback(40);
                     
+                    // Set target info for hit enemy
+                    this.setTargetInfo(enemy);
+                    
                     // Only play hit sound if enemy is on screen
                     if (this.isEntityOnScreen(enemy)) {
                         this.audioManager.playHit();
@@ -2844,7 +3397,7 @@ Type any cheat name in the console to activate!`);
                         // Chance to drop powerup (higher chance for stronger enemies)
                         const powerupChance = enemy.type === 'WASP' ? 0.4 : 
                                             enemy.type === 'TITAN' ? 0.5 : 
-                                            enemy.type === 'BOMBER' ? 0.45 : 0.25;
+                                            enemy.type === 'TANGERINE_BOMBER' ? 0.45 : 0.25;
                         const roll = Math.random();
                         if (roll < powerupChance) {
                             this.dropPowerup(enemy.x, enemy.y);
@@ -2886,118 +3439,9 @@ Type any cheat name in the console to activate!`);
             }
         });
         
-        // Enemy bullet-asteroid collisions
-        for (let i = this.enemyBulletPool.activeObjects.length - 1; i >= 0; i--) {
-            const bullet = this.enemyBulletPool.activeObjects[i];
-            if (!bullet.active) continue;
-            
-            for (let j = this.asteroidPool.activeObjects.length - 1; j >= 0; j--) {
-                const ast = this.asteroidPool.activeObjects[j];
-                if (!ast.active) continue;
-                
-                if (bullet.checkCollision(ast)) {
-                    // Damage the asteroid
-                    ast.health -= GAME_CONFIG.ENEMY_BULLET_ASTEROID_DAMAGE;
-                    
-                    // Only play hit sound if asteroid is on screen
-                    if (this.isEntityOnScreen(ast)) {
-                        this.audioManager.playHit(); // Sound for impact
-                    }
-                    
-                    // Impart momentum from enemy bullet
-                    const impulse = 0.03; // Slightly less than player bullets
-                    ast.vel.x += bullet.vel.x * impulse;
-                    ast.vel.y += bullet.vel.y * impulse;
-                    
-                    // Handle asteroid destruction (use tolerance for floating-point precision)
-                    if (ast.health <= 0.001) {
-                        if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
-                            // Only play explosion sound if asteroid is on screen
-                            if (this.isEntityOnScreen(ast)) {
-                                this.audioManager.playExplosion();
-                            }
-                            // Create destruction effects
-                            this.createDebris(ast);
-                            this.createColorStarBurst(ast.x, ast.y);
-                            // Drop health and money orbs
-                            this.dropOrbsFromEntity(ast.x, ast.y, ast);
-                            this.asteroidPool.release(ast);
-                            this.triggerScreenShake(8, ast.baseRadius * 0.3, ast.baseRadius);
-                        } else {
-                            // Split larger asteroids
-                            // Only play explosion sound if asteroid is on screen
-                            if (this.isEntityOnScreen(ast)) {
-                                this.audioManager.playExplosion();
-                            }
-                            this.triggerScreenShake(12, ast.baseRadius * 0.4, ast.baseRadius);
-                            
-                            // Create 2-3 smaller asteroids
-                            const numFragments = Math.floor(random(2, 4));
-                            for (let f = 0; f < numFragments; f++) {
-                                const fragment = this.asteroidPool.get();
-                                if (fragment) {
-                                    const newRadius = ast.baseRadius * random(0.4, 0.7);
-                                    if (newRadius >= GAME_CONFIG.MIN_AST_RAD) {
-                                        const angle = random(0, Math.PI * 2);
-                                        const distance = ast.baseRadius * 0.8;
-                                        fragment.initializeAsteroid(
-                                            ast.x + Math.cos(angle) * distance,
-                                            ast.y + Math.sin(angle) * distance,
-                                            newRadius,
-                                            ast.level
-                                        );
-                                        fragment.vel.x = Math.cos(angle) * random(1, 3);
-                                        fragment.vel.y = Math.sin(angle) * random(1, 3);
-                                    } else {
-                                        this.asteroidPool.release(fragment);
-                                    }
-                                }
-                            }
-                            this.createDebris(ast);
-                            // Drop health and money orbs from splitting asteroids
-                            this.dropOrbsFromEntity(ast.x, ast.y, ast);
-                            this.asteroidPool.release(ast);
-                        }
-                    }
-                    
-                    // Create explosion particles with bullet color
-                    for (let p = 0; p < 8; p++) {
-                        const particle = this.particlePool.get(bullet.x, bullet.y, 'explosion');
-                        if (particle) {
-                            particle.color = bullet.color;
-                            // Add random velocity for explosion effect
-                            const angle = random(0, Math.PI * 2);
-                            const speed = random(1, 3);
-                            particle.vel = {
-                                x: Math.cos(angle) * speed,
-                                y: Math.sin(angle) * speed
-                            };
-                        }
-                    }
-                    
-                    // Additional hit particles at impact point
-                    for (let p = 0; p < 4; p++) {
-                        const particle = this.particlePool.get(bullet.x, bullet.y, 'hit');
-                        if (particle) {
-                            particle.color = bullet.color;
-                        }
-                    }
-                    
-                    // Explode if it's an explosive bullet
-                    if (bullet.explosive) {
-                        bullet.explode(this);
-                    }
-                    
-                    // Destroy the bullet
-                    bullet.active = false;
-                    // Notify that bullet was destroyed (for combo tracking)
-                    if (bullet.onOffScreen) {
-                        bullet.onOffScreen();
-                    }
-                    break;
-                }
-            }
-        }
+        // Enemy bullet-asteroid collisions - DISABLED
+        // Enemy shots now travel through asteroids without collision
+        // This allows for more dynamic combat where enemy fire isn't blocked by asteroids
         
         // Enemy-asteroid collisions
         this.enemyPool.activeObjects.forEach(enemy => {
@@ -3019,7 +3463,7 @@ Type any cheat name in the console to activate!`);
         const effectiveShield = player.getEffectiveShield();
         const reducedDamage = baseDamage * (1 - effectiveShield / 100);
         const finalDamage = Math.round(reducedDamage);
-        player.health -= finalDamage;
+        player.health = Math.max(0, player.health - finalDamage);
         
         // Award XP for surviving enemy collision
         this.player.gainExperience(5);
@@ -3104,7 +3548,7 @@ Type any cheat name in the console to activate!`);
         const effectiveShield = player.getEffectiveShield();
         const reducedDamage = baseDamage * (1 - effectiveShield / 100);
         const finalDamage = Math.round(reducedDamage);
-        player.health -= finalDamage;
+        player.health = Math.max(0, player.health - finalDamage);
         
         // Award XP for surviving enemy bullet hit
         this.player.gainExperience(3);
@@ -3220,6 +3664,23 @@ Type any cheat name in the console to activate!`);
             
             // Update camera to follow player
             this.updateCamera();
+            
+            // Update target info display
+            this.updateTargetInfo(16); // Assume 60fps
+            
+            // Update money pickup display
+            this.updateMoneyPickupDisplay(16); // Assume 60fps
+            
+            // Update damage numbers
+            this.updateDamageNumbers(16); // Assume 60fps
+            
+            // Update hover detection
+            this.updateHoverDetection();
+            
+            // Clean up targeted entity if it's no longer active
+            if (this.targetedEntity && !this.targetedEntity.active) {
+                this.targetedEntity = null;
+            }
             
             this.bulletPool.activeObjects.forEach(bullet => 
                 bullet.update(this.particlePool, this.asteroidPool, this.enemyPool, this, this.gameField));
@@ -3734,6 +4195,15 @@ Type any cheat name in the console to activate!`);
         // Draw HUD elements outside of screen shake transform
         this.drawHUD();
         
+        // Draw target info display
+        this.drawTargetInfo();
+        
+        // Draw money pickup display
+        this.drawMoneyPickupDisplay();
+        
+        // Draw damage numbers
+        this.drawDamageNumbers();
+        
         // Draw cursor cooldown timer
         if (this.game.state === GAME_STATES.PLAYING) {
             this.drawCursorCooldownTimer();
@@ -4077,7 +4547,7 @@ Type any cheat name in the console to activate!`);
         // Apply shield damage reduction (including powerup boosts)
         const effectiveShield = this.player.getEffectiveShield();
         const reducedDamage = damageAmount * (1 - effectiveShield / 100);
-        this.player.health -= reducedDamage;
+        this.player.health = Math.max(0, this.player.health - reducedDamage);
 
         if (this.player.health <= 0) {
             if (this.shieldTanks > 0) {
@@ -4164,9 +4634,14 @@ Type any cheat name in the console to activate!`);
         
         // Dramatic line debris explosion
         for (let i = 0; i < 60; i++) {
-            const lineDebris = this.lineDebrisPool.get(explosionX, explosionY);
+            // Create random line debris with proper p1 and p2 points
+            const angle = Math.random() * Math.PI * 2;
+            const length = 10 + Math.random() * 20;
+            const p1 = { x: 0, y: 0 };
+            const p2 = { x: Math.cos(angle) * length, y: Math.sin(angle) * length };
+            
+            const lineDebris = this.lineDebrisPool.get(explosionX, explosionY, p1, p2);
             if (lineDebris) {
-                const angle = Math.random() * Math.PI * 2;
                 const speed = 3 + Math.random() * 10;
                 lineDebris.vel.x = Math.cos(angle) * speed;
                 lineDebris.vel.y = Math.sin(angle) * speed;
@@ -4600,10 +5075,10 @@ Type any cheat name in the console to activate!`);
         ctx.save();
         
         // Level display beneath the triforce (lives) - first line
-        const levelY = barY + barHeight + 20; // 20px below health bar for more space
+        const levelY = barY + barHeight + 26; // 20px below health bar for more space
         
         // Draw shield icon with "LV" text beneath lives, centered with triforce
-        const shieldIconSize = 24; // Larger shield icon
+        const shieldIconSize = 30; // Slightly larger shield icon
         const shieldIconX = triforceCenterX - shieldIconSize / 2; // Center shield with triforce
         const shieldCenterX = shieldIconX + shieldIconSize / 2;
         const shieldCenterY = levelY;
@@ -4614,8 +5089,8 @@ Type any cheat name in the console to activate!`);
         // Draw "LV" text inside the shield icon
         ctx.save();
         ctx.font = "10px 'Press Start 2P', monospace"; // Larger font for larger icon
-        ctx.fillStyle = '#FFD700'; // Golden yellow color for better visibility
-        ctx.strokeStyle = '#000000'; // Black stroke outline
+        ctx.fillStyle = '#102342'; // Dark blue color
+        ctx.strokeStyle = '#155379'; // gray-blue stroke outline
         ctx.lineWidth = 1;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -4626,8 +5101,8 @@ Type any cheat name in the console to activate!`);
         ctx.restore();
         
         // Draw level number to the right of shield
-        const levelNumberX = shieldIconX + shieldIconSize + 6;
-        ctx.font = "10px 'Press Start 2P', monospace"; // Original level number size
+        const levelNumberX = shieldIconX + shieldIconSize + 10;
+        ctx.font = "14px 'Press Start 2P', monospace"; // Original level number size
         ctx.fillStyle = '#4A90E2'; // Blue color for level number
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 1;
@@ -4639,18 +5114,18 @@ Type any cheat name in the console to activate!`);
         ctx.fillText(levelNumber, levelNumberX, levelY);
         
         // Coins display on its own line beneath the level - second line
-        const coinsY = levelY + 30; // 30px below level for more spacing
+        const coinsY = levelY + 40; // 30px below level for more spacing
         
         // Draw coin icon, centered with triforce
-        const coinIconSize = 18; // Larger coin icon
+        const coinIconSize = 30; // Larger coin icon
         const coinIconX = triforceCenterX - coinIconSize / 2; // Center coin with triforce
         const coinIconY = coinsY - coinIconSize/2;
         
         drawCachedMoneyIcon(ctx, coinIconX + coinIconSize/2, coinIconY + coinIconSize/2, coinIconSize, '#FFD700', '#B8860B');
         
         // Draw coins text
-        const coinsTextX = coinIconX + coinIconSize + 6;
-        ctx.font = "12px 'Press Start 2P', monospace"; // Original coins text size
+        const coinsTextX = coinIconX + coinIconSize + 10;
+        ctx.font = "14px 'Press Start 2P', monospace"; // Original coins text size
         ctx.fillStyle = '#FFD700'; // Gold color for coins
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 1;
@@ -4739,7 +5214,7 @@ Type any cheat name in the console to activate!`);
             const finalDamage = Math.round(reducedDamage);
             
             // Apply the calculated damage
-            this.player.health -= finalDamage;
+            this.player.health = Math.max(0, this.player.health - finalDamage);
             
             // Award XP for surviving asteroid collision
             this.player.gainExperience(4);

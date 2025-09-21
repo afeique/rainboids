@@ -99,7 +99,8 @@ export class ColorStar {
                 // Health orbs use random star geometries like other orbs
                 const healthStarShapes = ['star4', 'star5', 'star6', 'star8', 'burst', 'sparkle'];
                 this.shape = healthStarShapes[Math.floor(Math.random() * healthStarShapes.length)];
-                this.radius = (this.z * 1.2 + 0.4) * scale * 1.8; // Standard orb size
+                this.baseRadius = (this.z * 1.2 + 0.4) * scale * 1.8; // Store base radius for scaling
+                this.radius = this.baseRadius; // Will be modified by size multiplier in game engine
             } else if (this.starType === 'money') {
                 this.color = '#FFD700'; // Gold for money orbs
                 this.borderColor = '#FFA500'; // Orange border
@@ -107,7 +108,8 @@ export class ColorStar {
                 // Add money symbol
                 const symbols = ['$', '¥', '£', '€'];
                 this.moneySymbol = symbols[Math.floor(Math.random() * symbols.length)];
-                this.radius = (this.z * 1.2 + 0.4) * scale * 3.2; // Even larger radius for money orbs to prevent symbol overlap
+                this.baseRadius = (this.z * 1.2 + 0.4) * scale * 3.2; // Store base radius for scaling
+                this.radius = this.baseRadius; // Will be modified by size multiplier in game engine
             }
 
             // Initial velocity will be set by createOrbBurst for explosion effect

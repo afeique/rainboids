@@ -21,8 +21,8 @@ export const ENEMY_TYPES = {
         health: 18,              // Reduced to 18 - still tanky but manageable
         speed: 1.0,              // Reduced from 1.4 - slower patrol movement
         size: 38,
-        shootPattern: 'spread',
-        shootRate: 2.0,  // Increased for testing
+        shootPattern: 'crescent_wave',
+        shootRate: 0.25, // Very long cooldown - 4 second intervals between attacks
         movePattern: 'square',     // Square geometric movement
         points: 75
     },
@@ -30,11 +30,11 @@ export const ENEMY_TYPES = {
         name: 'Wasp',
         color: '#ffff44',        // Yellow
         health: 10,              // Reduced to 10 - fast but fragile
-        speed: 1.9,              // Quick and agile like a real wasp
+        speed: 2.2,              // Quick and agile like a real wasp
         size: 28,                // Increased from 18
-        shootPattern: 'burst_2', // Two-round bursts
-        shootRate: 0.8,          // Slower rate with time between bursts
-        movePattern: 'zigzag',   // Random zig-zag movement like real wasps
+        shootPattern: 'pulse', // Three-round bursts
+        shootRate: 0.6,          // Slower rate with time between bursts
+        movePattern: 'wasp_dart',   // Fast darting movement like triangles but more frequent
         points: 35
     },
     TITAN: {
@@ -43,7 +43,7 @@ export const ENEMY_TYPES = {
         health: 20,              // Reduced to 20 - boss-like but not overwhelming
         speed: 0.8,              // Tank movement speed
         size: 45,
-        shootPattern: 'titan_missile', // Tank missiles with weak homing
+        shootPattern: 'missile', // Tank missiles with weak homing
         shootRate: 0.6,          // Slower rate for powerful missiles
         movePattern: 'tank',          // Tank-like movement: rotate, move, stop, repeat
         points: 100
@@ -54,12 +54,12 @@ export const ENEMY_TYPES = {
         health: 14,              // Reduced to 14 - stealthy but not too tanky
         speed: 2.5,              // Higher speed for swooping arcs
         size: 30,
-        shootPattern: 'burst',
-        shootRate: 1.0, 
+        shootPattern: 'charged_laser',
+        shootRate: 0.3,          // Slower rate for powerful laser attacks
         movePattern: 'arc',      // Arc swooping movement
         points: 45
     },
-    BOMBER: {
+    TANGERINE_BOMBER: {
         name: 'Bomber',
         color: '#ff8844',        // Orange
         health: 20,              // Reduced to 20 - heavy but not excessive
@@ -70,48 +70,48 @@ export const ENEMY_TYPES = {
         movePattern: 'circle',       // Circle geometric movement
         points: 65
     },
-    LASER_TURRET: {
-        name: 'Laser Turret',
+    DRIFTER: {
+        name: 'Drifter',
         color: '#00ffff',        // Cyan
-        health: 16,              // Reduced to 16 - durable turret
-        speed: 0,                // Completely stationary
+        health: 16,              // Reduced to 16 - durable but mobile
+        speed: 0.8,              // Slow, methodical movement
         size: 30,
         shootPattern: 'laser',
-        shootRate: 0.15,         // Much slower rate - long charging
-        movePattern: 'stationary',
+        shootRate: 0.3,          // Increased rate - still slow but more responsive
+        movePattern: 'patrol',   // Slow patrol movement
         points: 80
     },
-    MISSILE_TURRET: {
-        name: 'Missile Turret',
+    PROWLER: {
+        name: 'Prowler',
         color: '#ff00ff',        // Magenta
-        health: 15,              // Reduced to 15 - medium durability turret
-        speed: 0,                // Completely stationary
+        health: 15,              // Reduced to 15 - medium durability
+        speed: 0.8,              // Slower speed for better positioning
         size: 28,
         shootPattern: 'missile',
-        shootRate: 0.4,          // Much slower rate
-        movePattern: 'stationary',
+        shootRate: 0.6,          // Increased rate for more consistent firing
+        movePattern: 'circle',   // Circular movement pattern
         points: 90
     },
-    PULSE_TURRET: {
-        name: 'Pulse Turret',
+    WEAVER: {
+        name: 'Weaver',
         color: '#ffff00',        // Yellow
-        health: 12,              // Reduced to 12 - lighter turret
-        speed: 0,                // Completely stationary
+        health: 12,              // Reduced to 12 - lighter but agile
+        speed: 1.8,              // Fast and agile
         size: 25,
         shootPattern: 'pulse',
-        shootRate: 0.8,          // Much slower rate
-        movePattern: 'stationary',
+        shootRate: 1.0,          // Increased rate for pulse turret rapid fire
+        movePattern: 'swarm',    // Swarm movement for agility
         points: 70
     },
-    SHIELD_TURRET: {
-        name: 'Shield Turret',
+    SENTINEL: {
+        name: 'Sentinel',
         color: '#00ff00',        // Green
-        health: 18,              // Reduced to 18 - very durable but not excessive
-        speed: 0,                // Completely stationary
+        health: 18,              // Reduced to 18 - very durable
+        speed: 0.6,              // Very slow but steady
         size: 32,
         shootPattern: 'shield_burst',
-        shootRate: 0.5,          // Much slower rate
-        movePattern: 'stationary',
+        shootRate: 0.7,          // Increased rate for shield turret
+        movePattern: 'slow_orbit', // Slow orbital movement
         points: 100
     }
 };
@@ -190,12 +190,7 @@ export class Enemy {
             lastBurstShot: 0
         };
         
-        // Turret cooldown visualization
-        this.cooldownTimer = {
-            isActive: false,
-            startTime: 0,
-            duration: 0
-        };
+        // Cooldown timer removed - all enemies are now mobile
         
         // Line-of-sight caching for performance
         this.lastLOSCheck = 0;
@@ -507,6 +502,12 @@ export class Enemy {
             case 'zigzag':
                 this.zigzagMovement();
                 break;
+            case 'tactical_hover':
+                this.tacticalHoverMovement();
+                break;
+            case 'wasp_dart':
+                this.waspDartMovement();
+                break;
             case 'hexagon':
                 this.hexagonMovement();
                 break;
@@ -682,27 +683,76 @@ export class Enemy {
     orbitalMovement() {
         if (!this.targetPlayer) return;
         
-        // Enhanced orbital movement with variable radius and speed
-        this.orbitalAngle += 0.015; // Slightly faster orbit
-        const baseOrbitRadius = 180;
-        const radiusVariation = Math.sin(Date.now() * 0.003) * 50; // Varying orbit radius
-        const orbitRadius = baseOrbitRadius + radiusVariation;
-        
-        const targetX = this.targetPlayer.x + Math.cos(this.orbitalAngle) * orbitRadius;
-        const targetY = this.targetPlayer.y + Math.sin(this.orbitalAngle) * orbitRadius;
-        
-        const dx = targetX - this.x;
-        const dy = targetY - this.y;
-        
-        // Enhanced movement with acceleration
-        const acceleration = 0.018; // Increased from 0.01
-        this.vel.x = dx * acceleration;
-        this.vel.y = dy * acceleration;
-        
-        // Add some orbital wobble for unpredictability
-        const wobbleAngle = this.orbitalAngle * 3 + Date.now() * 0.008;
-        this.vel.x += Math.cos(wobbleAngle) * 0.3;
-        this.vel.y += Math.sin(wobbleAngle) * 0.3;
+        // Initialize orbital state for Shield Turret
+        if (this.type === 'SENTINEL') {
+            if (this.orbitalState === undefined) {
+                this.orbitalState = 'moving'; // 'moving', 'stopping', 'firing'
+                this.orbitalTimer = 0;
+                this.orbitalStopDuration = 800; // 0.8 seconds stopped before firing
+            }
+            
+            this.orbitalTimer += 16; // Assume 60fps
+            
+            // Shield Turret specific behavior - larger orbit, slower movement, stops to fire
+            this.orbitalAngle += 0.008; // Much slower orbit
+            const baseOrbitRadius = 280; // Larger orbit radius
+            const radiusVariation = Math.sin(Date.now() * 0.002) * 30; // Smaller variation
+            const orbitRadius = baseOrbitRadius + radiusVariation;
+            
+            const targetX = this.targetPlayer.x + Math.cos(this.orbitalAngle) * orbitRadius;
+            const targetY = this.targetPlayer.y + Math.sin(this.orbitalAngle) * orbitRadius;
+            
+            const dx = targetX - this.x;
+            const dy = targetY - this.y;
+            
+            switch (this.orbitalState) {
+                case 'moving':
+                    // Slow orbital movement
+                    const acceleration = 0.008; // Much slower acceleration
+                    this.vel.x = dx * acceleration;
+                    this.vel.y = dy * acceleration;
+                    
+                    // Check if it's time to stop and fire
+                    if (this.orbitalTimer >= 3000) { // Stop every 3 seconds
+                        this.orbitalState = 'stopping';
+                        this.orbitalTimer = 0;
+                    }
+                    break;
+                    
+                case 'stopping':
+                    // Come to a complete stop
+                    this.vel.x *= 0.85;
+                    this.vel.y *= 0.85;
+                    
+                    if (this.orbitalTimer >= this.orbitalStopDuration) {
+                        this.orbitalState = 'moving';
+                        this.orbitalTimer = 0;
+                    }
+                    break;
+            }
+        } else {
+            // Original orbital movement for other enemies
+            this.orbitalAngle += 0.015; // Slightly faster orbit
+            const baseOrbitRadius = 180;
+            const radiusVariation = Math.sin(Date.now() * 0.003) * 50; // Varying orbit radius
+            const orbitRadius = baseOrbitRadius + radiusVariation;
+            
+            const targetX = this.targetPlayer.x + Math.cos(this.orbitalAngle) * orbitRadius;
+            const targetY = this.targetPlayer.y + Math.sin(this.orbitalAngle) * orbitRadius;
+            
+            const dx = targetX - this.x;
+            const dy = targetY - this.y;
+            
+            // Enhanced movement with acceleration
+            const acceleration = 0.018; // Increased from 0.01
+            this.vel.x = dx * acceleration;
+            this.vel.y = dy * acceleration;
+            
+            // Add some orbital wobble for unpredictability
+            const wobbleAngle = this.orbitalAngle * 3 + Date.now() * 0.008;
+            this.vel.x += Math.cos(wobbleAngle) * 0.3;
+            this.vel.y += Math.sin(wobbleAngle) * 0.3;
+        }
     }
     
     stealthMovement(now) {
@@ -1205,16 +1255,16 @@ export class Enemy {
         // Different enemy types have different territory sizes (1-2 screen sizes)
         switch (this.type) {
             case 'TITAN': return avgScreenSize * 1.8; // Large territory ~1.8 screen sizes
-            case 'BOMBER': return avgScreenSize * 1.6; // Large territory ~1.6 screen sizes
+            case 'TANGERINE_BOMBER': return avgScreenSize * 1.6; // Large territory ~1.6 screen sizes
             case 'GUARDIAN': return avgScreenSize * 1.4; // Medium-large territory ~1.4 screen sizes
             case 'HUNTER': return avgScreenSize * 1.2; // Medium territory ~1.2 screen sizes
             case 'STALKER': return avgScreenSize * 1.0; // Smaller territory ~1 screen size
             case 'WASP': return avgScreenSize * 0.8; // Small territory ~0.8 screen sizes
             // Turrets have smaller territories since they're stationary
-            case 'LASER_TURRET': return avgScreenSize * 1.0; // Medium range for laser
-            case 'MISSILE_TURRET': return avgScreenSize * 1.2; // Longer range for missiles
-            case 'PULSE_TURRET': return avgScreenSize * 0.8; // Shorter range for rapid fire
-            case 'SHIELD_TURRET': return avgScreenSize * 0.9; // Medium-short range
+            case 'DRIFTER': return avgScreenSize * 1.0; // Medium range for laser
+            case 'PROWLER': return avgScreenSize * 1.2; // Longer range for missiles
+            case 'WEAVER': return avgScreenSize * 0.8; // Shorter range for rapid fire
+            case 'SENTINEL': return avgScreenSize * 0.9; // Medium-short range
             default: return avgScreenSize * 1.2; // Default medium territory ~1.2 screen sizes
         }
     }
@@ -1732,76 +1782,150 @@ export class Enemy {
         
         // Initialize tank movement properties
         if (this.tankState === undefined) {
-            this.tankState = 'rotating'; // 'rotating', 'moving', 'stopped'
+            this.tankState = 'moving'; // 'moving', 'aiming', 'firing', 'rotating'
             this.tankTimer = 0;
-            this.tankRotationDuration = 1500; // 1.5 seconds to rotate
-            this.tankMoveDuration = 2000; // 2 seconds to move forward
-            this.tankStopDuration = 800; // 0.8 seconds stopped
-            this.tankTargetAngle = 0;
-            this.tankCurrentAngle = 0;
-            this.tankStartAngle = 0;
+            this.tankMoveDuration = 1500; // 1.5 seconds of straight movement (faster)
+            this.tankAimDuration = 500; // 0.5 seconds to aim turret (faster)
+            this.tankFiringDuration = 800; // 0.8 seconds firing window (longer firing)
+            this.tankRotationDuration = 300; // 0.3 seconds to rotate hull (faster)
+            
+            // Separate hull and turret angles
+            this.tankHullAngle = Math.random() * Math.PI * 2; // Random initial direction
+            this.tankTurretAngle = 0;
+            this.tankTurretTargetAngle = 0;
+            this.tankTurretStartAngle = 0;
+            this.tankHullStartAngle = 0;
+            this.tankHullTargetAngle = 0;
         }
         
         this.tankTimer += 16; // Assume 60fps
         
         switch (this.tankState) {
-            case 'rotating':
-                // Stop moving while rotating
-                this.vel.x *= 0.9;
-                this.vel.y *= 0.9;
+            case 'moving':
+                // Move in straight line bursts at constant speed
+                const moveSpeed = this.config.speed * 1.8; // Fast burst movement
+                this.vel.x = Math.cos(this.tankHullAngle) * moveSpeed;
+                this.vel.y = Math.sin(this.tankHullAngle) * moveSpeed;
                 
-                // Calculate target angle toward player
+                if (this.tankTimer >= this.tankMoveDuration) {
+                    // Sudden stop and start aiming
+                    this.tankState = 'aiming';
+                    this.tankTimer = 0;
+                    this.tankTurretStartAngle = this.tankTurretAngle;
+                }
+                break;
+                
+            case 'aiming':
+                // Come to sudden stop
+                this.vel.x *= 0.7; // Quick deceleration
+                this.vel.y *= 0.7;
+                
+                // Calculate turret target angle toward player with 120° rotation limit
                 const dx = this.targetPlayer.x - this.x;
                 const dy = this.targetPlayer.y - this.y;
-                this.tankTargetAngle = Math.atan2(dy, dx);
+                const desiredAngle = Math.atan2(dy, dx);
                 
-                // Smoothly rotate toward target angle
-                const rotationProgress = this.tankTimer / this.tankRotationDuration;
-                if (rotationProgress >= 1) {
-                    // Rotation complete
-                    this.tankCurrentAngle = this.tankTargetAngle;
-                    this.tankState = 'moving';
+                // Limit turret rotation to ±60° from hull direction
+                const maxTurretOffset = Math.PI / 3; // 60 degrees
+                const hullAngle = this.tankHullAngle;
+                
+                // Calculate relative angle from hull direction
+                let relativeAngle = desiredAngle - hullAngle;
+                if (relativeAngle > Math.PI) relativeAngle -= Math.PI * 2;
+                if (relativeAngle < -Math.PI) relativeAngle += Math.PI * 2;
+                
+                // Clamp to ±60° range
+                relativeAngle = Math.max(-maxTurretOffset, Math.min(maxTurretOffset, relativeAngle));
+                this.tankTurretTargetAngle = hullAngle + relativeAngle;
+                
+                // Smoothly rotate turret toward target with easing
+                const aimProgress = this.tankTimer / this.tankAimDuration;
+                if (aimProgress >= 1) {
+                    this.tankTurretAngle = this.tankTurretTargetAngle;
+                    this.tankState = 'firing';
                     this.tankTimer = 0;
                 } else {
-                    // Interpolate rotation
-                    const angleDiff = this.tankTargetAngle - this.tankStartAngle;
-                    // Handle angle wrapping
+                    // Smooth interpolation with easing
+                    const easedProgress = 1 - Math.pow(1 - aimProgress, 3); // Ease-out cubic
+                    const angleDiff = this.tankTurretTargetAngle - this.tankTurretStartAngle;
                     let adjustedAngleDiff = angleDiff;
                     if (adjustedAngleDiff > Math.PI) adjustedAngleDiff -= Math.PI * 2;
                     if (adjustedAngleDiff < -Math.PI) adjustedAngleDiff += Math.PI * 2;
                     
-                    this.tankCurrentAngle = this.tankStartAngle + adjustedAngleDiff * rotationProgress;
+                    this.tankTurretAngle = this.tankTurretStartAngle + adjustedAngleDiff * easedProgress;
                 }
                 break;
                 
-            case 'moving':
-                // Move forward in the direction we're facing
-                const moveSpeed = this.config.speed * 1.5; // Tank moves with authority
-                this.vel.x = Math.cos(this.tankCurrentAngle) * moveSpeed;
-                this.vel.y = Math.sin(this.tankCurrentAngle) * moveSpeed;
+            case 'firing':
+                // Stay completely still while firing
+                this.vel.x *= 0.9;
+                this.vel.y *= 0.9;
                 
-                if (this.tankTimer >= this.tankMoveDuration) {
-                    this.tankState = 'stopped';
-                    this.tankTimer = 0;
-                }
-                break;
+                // Keep turret aimed at player within rotation limits
+                const fireDx = this.targetPlayer.x - this.x;
+                const fireDy = this.targetPlayer.y - this.y;
+                const fireDesiredAngle = Math.atan2(fireDy, fireDx);
                 
-            case 'stopped':
-                // Come to a complete stop
-                this.vel.x *= 0.85;
-                this.vel.y *= 0.85;
+                // Apply same rotation limits during firing
+                const fireMaxTurretOffset = Math.PI / 3; // 60 degrees
+                const fireHullAngle = this.tankHullAngle;
                 
-                if (this.tankTimer >= this.tankStopDuration) {
-                    // Prepare for next rotation
+                let fireRelativeAngle = fireDesiredAngle - fireHullAngle;
+                if (fireRelativeAngle > Math.PI) fireRelativeAngle -= Math.PI * 2;
+                if (fireRelativeAngle < -Math.PI) fireRelativeAngle += Math.PI * 2;
+                
+                fireRelativeAngle = Math.max(-fireMaxTurretOffset, Math.min(fireMaxTurretOffset, fireRelativeAngle));
+                this.tankTurretAngle = fireHullAngle + fireRelativeAngle;
+                
+                if (this.tankTimer >= this.tankFiringDuration) {
+                    // Start rotation to new direction
                     this.tankState = 'rotating';
                     this.tankTimer = 0;
-                    this.tankStartAngle = this.tankCurrentAngle;
+                    
+                    // Choose new movement direction that's compatible with turret position
+                    // Hull should face roughly the same direction as turret (within ±120°)
+                    const currentTurretAngle = this.tankTurretAngle;
+                    const maxHullOffset = Math.PI * 2/3; // 120 degrees
+                    const randomOffset = (Math.random() - 0.5) * maxHullOffset * 2;
+                    
+                    this.tankHullStartAngle = this.tankHullAngle;
+                    this.tankHullTargetAngle = currentTurretAngle + randomOffset;
+                }
+                break;
+                
+            case 'rotating':
+                // Stay still while rotating hull and turret together
+                this.vel.x *= 0.9;
+                this.vel.y *= 0.9;
+                
+                // Animate hull rotation with easing
+                const rotationProgress = this.tankTimer / this.tankRotationDuration;
+                if (rotationProgress >= 1) {
+                    // Rotation complete, start moving
+                    this.tankHullAngle = this.tankHullTargetAngle;
+                    this.tankTurretAngle = this.tankHullTargetAngle; // Turret follows hull
+                    this.tankState = 'moving';
+                    this.tankTimer = 0;
+                } else {
+                    // Smooth interpolation with easing
+                    const easedProgress = 1 - Math.pow(1 - rotationProgress, 3); // Ease-out cubic
+                    let angleDiff = this.tankHullTargetAngle - this.tankHullStartAngle;
+                    
+                    // Handle angle wrapping
+                    if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    
+                    this.tankHullAngle = this.tankHullStartAngle + angleDiff * easedProgress;
+                    this.tankTurretAngle = this.tankHullAngle; // Turret rotates with hull
                 }
                 break;
         }
         
-        // Update visual rotation for drawing
-        this.faceAngle = this.tankCurrentAngle;
+        // Update visual rotation for drawing (hull faces movement direction)
+        this.faceAngle = this.tankHullAngle;
+        
+        // Store turret angle for drawing
+        if (!this.tankTurretAngle) this.tankTurretAngle = 0;
     }
     
     arcMovement() {
@@ -1809,11 +1933,11 @@ export class Enemy {
         
         // Initialize arc movement properties
         if (this.arcState === undefined) {
-            this.arcState = 'swooping'; // 'swooping', 'aiming', 'firing'
+            this.arcState = 'swooping'; // 'swooping', 'charging', 'firing'
             this.arcTimer = 0;
             this.arcSwoopDuration = 3000; // 3 seconds of swooping
-            this.arcAimDuration = 800; // 0.8 seconds to aim
-            this.arcFiringDuration = 400; // 0.4 seconds firing window
+            this.arcChargeDuration = 1200; // 1.2 seconds to charge laser
+            this.arcFiringDuration = 800; // 0.8 seconds firing window
             
             // Arc parameters
             this.arcCenter = { x: this.x, y: this.y };
@@ -1822,7 +1946,9 @@ export class Enemy {
             this.arcSweepDirection = Math.random() > 0.5 ? 1 : -1; // Clockwise or counter-clockwise
             this.arcSweepSpeed = 0.8 + Math.random() * 0.4; // 0.8-1.2 radians per second
             
-            // Track if we can shoot (only when stopped)
+            // Laser charging properties
+            this.laserCharging = false;
+            this.laserChargeProgress = 0;
             this.canShoot = false;
         }
         
@@ -1860,25 +1986,39 @@ export class Enemy {
                 }
                 
                 if (this.arcTimer >= this.arcSwoopDuration) {
-                    this.arcState = 'aiming';
+                    this.arcState = 'charging';
                     this.arcTimer = 0;
+                    this.laserCharging = true;
+                    this.laserChargeProgress = 0;
                 }
                 break;
                 
-            case 'aiming':
-                // Come to a complete stop
+            case 'charging':
+                // Come to a complete stop and charge laser
                 this.vel.x *= 0.8;
                 this.vel.y *= 0.8;
                 
-                // Aim at player
-                const aimDx = this.targetPlayer.x - this.x;
-                const aimDy = this.targetPlayer.y - this.y;
-                this.faceAngle = Math.atan2(aimDy, aimDx);
+                // Smoothly aim at player while charging
+                const chargeDx = this.targetPlayer.x - this.x;
+                const chargeDy = this.targetPlayer.y - this.y;
+                const targetAngle = Math.atan2(chargeDy, chargeDx);
                 
-                if (this.arcTimer >= this.arcAimDuration) {
+                // Smooth rotation animation
+                let angleDiff = targetAngle - this.faceAngle;
+                if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                
+                const rotationSpeed = 0.08; // Smooth rotation speed
+                this.faceAngle += angleDiff * rotationSpeed;
+                
+                // Update charge progress
+                this.laserChargeProgress = Math.min(this.arcTimer / this.arcChargeDuration, 1);
+                
+                if (this.arcTimer >= this.arcChargeDuration) {
                     this.arcState = 'firing';
                     this.arcTimer = 0;
                     this.canShoot = true; // Enable shooting
+                    this.laserCharging = false;
                 }
                 break;
                 
@@ -1897,6 +2037,8 @@ export class Enemy {
                     this.arcState = 'swooping';
                     this.arcTimer = 0;
                     this.canShoot = false;
+                    this.laserCharging = false;
+                    this.laserChargeProgress = 0;
                     
                     // Generate new arc parameters
                     this.arcRadius = 120 + Math.random() * 80;
@@ -1981,6 +2123,244 @@ export class Enemy {
         }
     }
     
+    tacticalHoverMovement() {
+        if (!this.targetPlayer) return;
+        
+        // Initialize tactical hover state
+        if (this.tacticalState === undefined) {
+            this.tacticalState = 'positioning'; // positioning, hovering, darting
+            this.tacticalTimer = 0;
+            this.hoverPosition = null;
+            this.dartTarget = null;
+            this.burstCount = 0;
+            this.lastBurstTime = 0;
+            this.safeDistance = 180 + Math.random() * 120; // 180-300px safe distance
+            this.hoverDuration = 1500 + Math.random() * 1000; // 1.5-2.5s hover time
+            this.dartSpeed = this.config.speed * 3.5; // Fast dart speed
+        }
+        
+        this.tacticalTimer += 16; // Assume 60fps
+        
+        const dx = this.targetPlayer.x - this.x;
+        const dy = this.targetPlayer.y - this.y;
+        const distanceToPlayer = Math.hypot(dx, dy);
+        
+        switch (this.tacticalState) {
+            case 'positioning':
+                // Move to a safe distance from player
+                if (distanceToPlayer < this.safeDistance) {
+                    // Too close - retreat
+                    const retreatAngle = Math.atan2(-dy, -dx);
+                    this.vel.x += Math.cos(retreatAngle) * 0.3;
+                    this.vel.y += Math.sin(retreatAngle) * 0.3;
+                } else if (distanceToPlayer > this.safeDistance + 80) {
+                    // Too far - approach
+                    const approachAngle = Math.atan2(dy, dx);
+                    this.vel.x += Math.cos(approachAngle) * 0.2;
+                    this.vel.y += Math.sin(approachAngle) * 0.2;
+                } else {
+                    // Good distance - start hovering
+                    this.tacticalState = 'hovering';
+                    this.tacticalTimer = 0;
+                    this.hoverPosition = { x: this.x, y: this.y };
+                    this.burstCount = 0;
+                }
+                
+                // Apply drag to slow down
+                this.vel.x *= 0.85;
+                this.vel.y *= 0.85;
+                break;
+                
+            case 'hovering':
+                // Hover in place with small movements
+                if (this.hoverPosition) {
+                    const hoverDx = this.hoverPosition.x - this.x;
+                    const hoverDy = this.hoverPosition.y - this.y;
+                    this.vel.x += hoverDx * 0.02;
+                    this.vel.y += hoverDy * 0.02;
+                }
+                
+                // Add small random hover movements
+                this.vel.x += (Math.random() - 0.5) * 0.1;
+                this.vel.y += (Math.random() - 0.5) * 0.1;
+                
+                // Apply strong drag for hovering
+                this.vel.x *= 0.7;
+                this.vel.y *= 0.7;
+                
+                // Check if it's time to dart away
+                if (this.tacticalTimer >= this.hoverDuration || distanceToPlayer < this.safeDistance * 0.7) {
+                    this.tacticalState = 'darting';
+                    this.tacticalTimer = 0;
+                    
+                    // Choose dart direction - perpendicular to player direction with some randomness
+                    const playerAngle = Math.atan2(dy, dx);
+                    const perpAngle = playerAngle + (Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2);
+                    const randomOffset = (Math.random() - 0.5) * Math.PI * 0.4; // ±36 degrees
+                    const dartAngle = perpAngle + randomOffset;
+                    
+                    const dartDistance = 150 + Math.random() * 100; // 150-250px dart
+                    this.dartTarget = {
+                        x: this.x + Math.cos(dartAngle) * dartDistance,
+                        y: this.y + Math.sin(dartAngle) * dartDistance
+                    };
+                }
+                break;
+                
+            case 'darting':
+                // Dart rapidly to new position
+                if (this.dartTarget) {
+                    const dartDx = this.dartTarget.x - this.x;
+                    const dartDy = this.dartTarget.y - this.y;
+                    const dartDistance = Math.hypot(dartDx, dartDy);
+                    
+                    if (dartDistance > 20) {
+                        // Still darting
+                        const dartAngle = Math.atan2(dartDy, dartDx);
+                        this.vel.x = Math.cos(dartAngle) * this.dartSpeed;
+                        this.vel.y = Math.sin(dartAngle) * this.dartSpeed;
+                    } else {
+                        // Reached dart target - return to positioning
+                        this.tacticalState = 'positioning';
+                        this.tacticalTimer = 0;
+                        this.dartTarget = null;
+                        this.hoverPosition = null;
+                        this.safeDistance = 180 + Math.random() * 120; // Randomize new safe distance
+                        this.hoverDuration = 1500 + Math.random() * 1000; // Randomize new hover duration
+                    }
+                }
+                break;
+        }
+        
+        // Limit maximum speed
+        const maxSpeed = this.tacticalState === 'darting' ? this.dartSpeed : this.config.speed;
+        const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+        if (currentSpeed > maxSpeed) {
+            this.vel.x = (this.vel.x / currentSpeed) * maxSpeed;
+            this.vel.y = (this.vel.y / currentSpeed) * maxSpeed;
+        }
+    }
+    
+    waspDartMovement() {
+        if (!this.targetPlayer) return;
+        
+        // Initialize wasp zig-zag attack movement properties
+        if (this.waspAttackState === undefined) {
+            this.waspAttackState = 'approaching'; // 'approaching', 'shooting', 'rotating', 'retreating'
+            this.waspAttackTimer = 0;
+            this.waspApproachDuration = 1200; // 1.2 seconds zig-zagging toward player
+            this.waspShootDuration = 400; // 0.4 seconds shooting
+            this.waspRotateDuration = 300; // 0.3 seconds rotating
+            this.waspRetreatDuration = 800; // 0.8 seconds zig-zagging away
+            this.zigzagOffset = 0;
+            this.zigzagDirection = 1; // 1 or -1 for left/right zig-zag
+            this.safeDistance = 150; // Preferred distance from player
+            this.targetAngle = 0;
+            this.startAngle = 0;
+        }
+        
+        this.waspAttackTimer += 16; // Assume 60fps
+        
+        const dx = this.targetPlayer.x - this.x;
+        const dy = this.targetPlayer.y - this.y;
+        const distanceToPlayer = Math.hypot(dx, dy);
+        const angleToPlayer = Math.atan2(dy, dx);
+        
+        switch (this.waspAttackState) {
+            case 'approaching':
+                // Zig-zag toward player
+                this.zigzagOffset += 0.15; // Zig-zag frequency
+                const zigzagAmplitude = 40; // How wide the zig-zag is
+                const zigzagAngle = angleToPlayer + Math.sin(this.zigzagOffset) * this.zigzagDirection * 0.8;
+                
+                const approachSpeed = this.config.speed * 1.8;
+                this.vel.x = Math.cos(zigzagAngle) * approachSpeed;
+                this.vel.y = Math.sin(zigzagAngle) * approachSpeed;
+                
+                // Face movement direction
+                this.faceAngle = zigzagAngle;
+                
+                // Switch to shooting when close enough or time runs out
+                if (distanceToPlayer < 100 || this.waspAttackTimer >= this.waspApproachDuration) {
+                    this.waspAttackState = 'shooting';
+                    this.waspAttackTimer = 0;
+                    this.vel.x *= 0.3; // Slow down for shooting
+                    this.vel.y *= 0.3;
+                }
+                break;
+                
+            case 'shooting':
+                // Come to near stop and shoot at player
+                this.vel.x *= 0.7;
+                this.vel.y *= 0.7;
+                
+                // Face player for shooting
+                this.faceAngle = angleToPlayer;
+                
+                if (this.waspAttackTimer >= this.waspShootDuration) {
+                    this.waspAttackState = 'rotating';
+                    this.waspAttackTimer = 0;
+                    this.startAngle = this.faceAngle;
+                    // Choose retreat direction (away from player)
+                    this.targetAngle = angleToPlayer + Math.PI + (Math.random() - 0.5) * Math.PI * 0.6;
+                }
+                break;
+                
+            case 'rotating':
+                // Smooth rotation to retreat direction
+                this.vel.x *= 0.8;
+                this.vel.y *= 0.8;
+                
+                const rotationProgress = this.waspAttackTimer / this.waspRotateDuration;
+                if (rotationProgress >= 1) {
+                    this.faceAngle = this.targetAngle;
+                    this.waspAttackState = 'retreating';
+                    this.waspAttackTimer = 0;
+                    this.zigzagOffset = 0;
+                    this.zigzagDirection *= -1; // Switch zig-zag direction for next approach
+                } else {
+                    // Smooth interpolation with easing
+                    const easedProgress = 1 - Math.pow(1 - rotationProgress, 3);
+                    let angleDiff = this.targetAngle - this.startAngle;
+                    
+                    // Handle angle wrapping
+                    if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    
+                    this.faceAngle = this.startAngle + angleDiff * easedProgress;
+                }
+                break;
+                
+            case 'retreating':
+                // Zig-zag away from player to safe distance
+                this.zigzagOffset += 0.12; // Slightly slower zig-zag when retreating
+                const retreatZigzagAngle = this.targetAngle + Math.sin(this.zigzagOffset) * this.zigzagDirection * 0.6;
+                
+                const retreatSpeed = this.config.speed * 2.2; // Fast retreat
+                this.vel.x = Math.cos(retreatZigzagAngle) * retreatSpeed;
+                this.vel.y = Math.sin(retreatZigzagAngle) * retreatSpeed;
+                
+                // Face movement direction
+                this.faceAngle = retreatZigzagAngle;
+                
+                // Switch back to approaching when far enough or time runs out
+                if (distanceToPlayer > this.safeDistance || this.waspAttackTimer >= this.waspRetreatDuration) {
+                    this.waspAttackState = 'approaching';
+                    this.waspAttackTimer = 0;
+                    this.zigzagOffset = 0;
+                }
+                break;
+        }
+        
+        // Apply speed limit
+        const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+        const maxSpeed = this.config.speed * 2.5; // Reasonable speed limit
+        if (currentSpeed > maxSpeed) {
+            this.vel.x = (this.vel.x / currentSpeed) * maxSpeed;
+            this.vel.y = (this.vel.y / currentSpeed) * maxSpeed;
+        }
+    }
+    
     crossMovement() {
         if (!this.targetPlayer) return;
         
@@ -2041,7 +2421,7 @@ export class Enemy {
         // Initialize circle movement properties
         if (this.circleAngle === undefined) {
             this.circleAngle = Math.random() * Math.PI * 2;
-            this.circleRadius = 150; // Maintain distance from player
+            this.circleRadius = 220; // Maintain larger distance from player
             this.circleDirection = Math.random() < 0.5 ? 1 : -1; // Random clockwise/counterclockwise
         }
         
@@ -2065,14 +2445,14 @@ export class Enemy {
         const toIdealX = idealX - this.x;
         const toIdealY = idealY - this.y;
         
-        // Apply movement with bomber's slow speed
-        const moveSpeed = this.config.speed * 0.8;
-        this.vel.x = toIdealX * moveSpeed * 0.05;
-        this.vel.y = toIdealY * moveSpeed * 0.05;
+        // Apply movement with reduced speed for safer approach
+        const moveSpeed = this.config.speed * 0.5; // Reduced from 0.8 to 0.5
+        this.vel.x = toIdealX * moveSpeed * 0.03; // Reduced from 0.05 to 0.03
+        this.vel.y = toIdealY * moveSpeed * 0.03;
         
-        // Add slight distance correction if too close or far from player
-        if (Math.abs(radiusDifference) > 20) {
-            const correctionStrength = 0.02;
+        // Add conservative distance correction if too close or far from player
+        if (Math.abs(radiusDifference) > 40) { // Increased tolerance from 20 to 40
+            const correctionStrength = 0.01; // Reduced from 0.02 to 0.01
             this.vel.x += (dx / distanceToPlayer) * radiusDifference * correctionStrength;
             this.vel.y += (dy / distanceToPlayer) * radiusDifference * correctionStrength;
         }
@@ -2370,6 +2750,12 @@ export class Enemy {
         // Arc movement enemies can only shoot when stopped
         if (this.config.movePattern === 'arc' && !this.canShoot) return;
         
+        // Tank movement enemies can only shoot when in firing state
+        if (this.config.movePattern === 'tank' && this.tankState !== 'firing') return;
+        
+        // Shield Turret can only shoot when stopped
+        if (this.type === 'SENTINEL' && this.orbitalState !== 'stopping') return;
+        
         const playerDistance = Math.hypot(this.x - this.targetPlayer.x, this.y - this.targetPlayer.y);
         const maxShootingRange = this.getTerritorySize() * 1.5;
         
@@ -2383,6 +2769,9 @@ export class Enemy {
         // Handle burst patterns (burst_3 and burst_2)
         if (this.config.shootPattern === 'burst_3' || this.config.shootPattern === 'burst_2') {
             this.handleBurstShooting(gameEngine, now);
+        } else if (this.config.shootPattern === 'laser') {
+            // Laser turrets need frequent updates for charging mechanism
+            this.shoot(gameEngine);
         } else {
             // Handle non-burst patterns (circle_6, homing, etc.)
             const shootInterval = 1000 / this.config.shootRate;
@@ -2390,12 +2779,7 @@ export class Enemy {
             this.shoot(gameEngine);
             this.lastShot = now;
                 
-                // Start cooldown timer for turrets
-                if (this.config.movePattern === 'stationary') {
-                    this.cooldownTimer.isActive = true;
-                    this.cooldownTimer.startTime = now;
-                    this.cooldownTimer.duration = shootInterval;
-                }
+                // Cooldown timer removed - turrets are now mobile
             }
         }
     }
@@ -2468,6 +2852,12 @@ export class Enemy {
             case 'titan_missile':
                 this.shootTitanMissile(gameEngine, targetX, targetY);
                 break;
+            case 'charged_laser':
+                this.shootChargedLaser(gameEngine, targetX, targetY);
+                break;
+            case 'crescent_wave':
+                this.shootCrescentWave(gameEngine, targetX, targetY);
+                break;
             // Keep existing patterns for other enemies
             case 'spread':
                 this.shootSpread(gameEngine, targetX, targetY);
@@ -2490,10 +2880,25 @@ export class Enemy {
         }
     }
     
+    // Check if enemy is a stationary turret
+    isStationary() {
+        return this.config.movePattern === 'stationary' || 
+               this.type === 'DRIFTER' || 
+               this.type === 'PROWLER' || 
+               this.type === 'WEAVER' || 
+               this.type === 'SENTINEL';
+    }
+    
     shootAimed(gameEngine, targetX, targetY) {
         const dx = targetX - this.x;
         const dy = targetY - this.y;
         const angle = Math.atan2(dy, dx);
+        
+        // Update facing direction for non-turret, non-titan enemies
+        if (!this.isStationary() && this.type !== 'TITAN') {
+            this.rotation = angle;
+            this.faceAngle = angle;
+        }
         
         this.createEnemyBullet(gameEngine, angle, 3, this.color, false, 'aimed');
     }
@@ -2535,44 +2940,109 @@ export class Enemy {
     }
     
     shootLaser(gameEngine, targetX, targetY) {
-        // Laser turret needs charging - only shoot when fully charged
+        // Initialize laser charging state
         if (!this.laserCharge) {
             this.laserCharge = 0;
             this.laserCharging = false;
+            this.laserCooldown = 0;
+        }
+        
+        const now = Date.now();
+        
+        // Handle cooldown after firing
+        if (this.laserCooldown > now) {
+            return;
         }
         
         if (!this.laserCharging) {
             // Start charging
             this.laserCharging = true;
-            this.laserChargeStartTime = Date.now();
-            return;
+            this.laserChargeStartTime = now;
+            
+            // Create charging visual effect
+            this.createLaserChargingEffect(gameEngine);
         }
         
-        const chargeTime = Date.now() - this.laserChargeStartTime;
-        const maxChargeTime = 2000; // 2 seconds to charge
+        const chargeTime = now - this.laserChargeStartTime;
+        const maxChargeTime = 800; // 0.8 seconds to charge
         this.laserCharge = Math.min(1, chargeTime / maxChargeTime);
         
         if (this.laserCharge >= 1) {
-            // Fire powerful laser beam
+            // Fire powerful laser beam with cool effect
             const angle = Math.atan2(targetY - this.y, targetX - this.x);
-            this.createEnemyBullet(gameEngine, angle, 5, '#00ffff', false, 'laser');
+            this.createLaserBeam(gameEngine, angle);
             
-            // Reset charging
+            // Reset charging and set cooldown
             this.laserCharging = false;
             this.laserCharge = 0;
+            this.laserCooldown = now + 2000; // 2 second cooldown
+        }
+    }
+    
+    createLaserChargingEffect(gameEngine) {
+        // Create charging particles around the turret
+        for (let i = 0; i < 3; i++) {
+            const angle = (i / 3) * Math.PI * 2;
+            const distance = this.radius + 10;
+            const x = this.x + Math.cos(angle) * distance;
+            const y = this.y + Math.sin(angle) * distance;
+            
+            const particle = gameEngine.particlePool.get(x, y, 'starSparkle');
+            if (particle) {
+                particle.color = '#00ffff';
+                particle.life = 0.8;
+                particle.vel = { x: 0, y: 0 }; // Stationary charging effect
+            }
+        }
+    }
+    
+    createLaserBeam(gameEngine, angle) {
+        // Create multiple laser bullets for beam effect
+        const beamLength = 5; // Number of laser segments
+        const segmentSpacing = 15; // Distance between segments
+        
+        for (let i = 0; i < beamLength; i++) {
+            const offsetX = Math.cos(angle) * segmentSpacing * i;
+            const offsetY = Math.sin(angle) * segmentSpacing * i;
+            
+            this.createEnemyBullet(gameEngine, angle, 12, '#00ffff', false, 'laser');
+        }
+        
+        // Create muzzle flash effect
+        for (let i = 0; i < 8; i++) {
+            const flashAngle = angle + (Math.random() - 0.5) * 0.5;
+            const particle = gameEngine.particlePool.get(this.x, this.y, 'explosion');
+            if (particle) {
+                particle.color = '#00ffff';
+                particle.vel.x = Math.cos(flashAngle) * 3;
+                particle.vel.y = Math.sin(flashAngle) * 3;
+            }
         }
     }
     
     shootMissile(gameEngine, targetX, targetY) {
-        const angle = Math.atan2(targetY - this.y, targetX - this.x);
-        
-        // Create homing missile
-        this.createEnemyBullet(gameEngine, angle, 2, '#ff00ff', true, 'missile');
+        if (this.type === 'TITAN') {
+            // Titan tank - purple accelerating missile fired from turret
+            const turretAngle = this.tankTurretAngle || 0;
+            
+            // Fire straight from turret direction (accelerating missile)
+            this.createEnemyBullet(gameEngine, turretAngle, 1.0, '#8A2BE2', true, 'titan_accelerating', null);
+        } else {
+            // Regular missile turret - homing missile that decelerates
+            const angle = Math.atan2(targetY - this.y, targetX - this.x);
+            this.createEnemyBullet(gameEngine, angle, 3.5, '#ff00ff', true, 'missile_decelerate');
+        }
     }
     
     shootPulse(gameEngine, targetX, targetY) {
         // Fire 3 rapid pulses
         const baseAngle = Math.atan2(targetY - this.y, targetX - this.x);
+        
+        // Update facing direction for non-turret, non-titan enemies
+        if (!this.isStationary() && this.type !== 'TITAN') {
+            this.rotation = baseAngle;
+            this.faceAngle = baseAngle;
+        }
         
         for (let i = 0; i < 3; i++) {
             setTimeout(() => {
@@ -2584,13 +3054,13 @@ export class Enemy {
     }
     
     shootShieldBurst(gameEngine, targetX, targetY) {
-        // Fire 5 bullets in a spread pattern
-        const baseAngle = Math.atan2(targetY - this.y, targetX - this.x);
-        const spread = Math.PI / 6; // 30 degree spread
+        // Fire 8 bullets in a 360° circle pattern
+        const bulletCount = 8;
+        const angleStep = (Math.PI * 2) / bulletCount; // 45 degrees between shots
         
-        for (let i = 0; i < 5; i++) {
-            const angle = baseAngle + (i - 2) * (spread / 4);
-            this.createEnemyBullet(gameEngine, angle, 3, '#00ff00', false, 'shield_burst');
+        for (let i = 0; i < bulletCount; i++) {
+            const angle = i * angleStep;
+            this.createEnemyBullet(gameEngine, angle, 2.5, '#00ff00', false, 'shield_burst');
         }
     }
     
@@ -2601,6 +3071,12 @@ export class Enemy {
         const dy = targetY - this.y;
         const angle = Math.atan2(dy, dx);
         
+        // Update facing direction for non-turret, non-titan enemies
+        if (!this.isStationary() && this.type !== 'TITAN') {
+            this.rotation = angle;
+            this.faceAngle = angle;
+        }
+        
         this.createEnemyBullet(gameEngine, angle, 4, '#ff4444', false, 'aimed');
     }
     
@@ -2609,6 +3085,12 @@ export class Enemy {
         const dx = targetX - this.x;
         const dy = targetY - this.y;
         const baseAngle = Math.atan2(dy, dx);
+        
+        // Update facing direction for non-turret, non-titan enemies
+        if (!this.isStationary() && this.type !== 'TITAN') {
+            this.rotation = baseAngle;
+            this.faceAngle = baseAngle;
+        }
         
         // Small random spread to simulate wasp agility
         const spread = 0.15; // Slightly wider spread than precise aiming
@@ -2658,25 +3140,211 @@ export class Enemy {
     }
     
     shootTitanMissile(gameEngine, targetX, targetY) {
-        // Titan tank - larger, faster missile with weaker homing
-        const dx = targetX - this.x;
-        const dy = targetY - this.y;
-        const angle = Math.atan2(dy, dx);
+        // Titan tank - purple accelerating missile fired from turret
+        const turretAngle = this.tankTurretAngle || 0;
         
-        // Create larger, faster missile with weaker homing
-        this.createEnemyBullet(gameEngine, angle, 3.0, '#ff00ff', false, 'titan_homing', this.targetPlayer);
+        // Fire straight from turret direction (no homing)
+        this.createEnemyBullet(gameEngine, turretAngle, 1.0, '#8A2BE2', false, 'titan_accelerating', null);
+    }
+    
+    shootChargedLaser(gameEngine, targetX, targetY) {
+        // STALKER - wide beam laser attack
+        const angle = Math.atan2(targetY - this.y, targetX - this.x);
+        
+        // Create wide laser beam effect
+        this.createLaserBeam(gameEngine, angle);
+    }
+    
+    createLaserBeam(gameEngine, angle) {
+        if (!gameEngine) return;
+        
+        // Create wide laser beam effect
+        const beamLength = 600; // Long range laser
+        const beamWidth = 40; // Wide beam
+        const segments = 8; // Number of beam segments for visual effect
+        
+        const startX = this.x + Math.cos(angle) * this.radius;
+        const startY = this.y + Math.sin(angle) * this.radius;
+        const endX = startX + Math.cos(angle) * beamLength;
+        const endY = startY + Math.sin(angle) * beamLength;
+        
+        // Create multiple laser segments for wide beam effect
+        for (let i = 0; i < segments; i++) {
+            const offsetAngle = angle + (Math.PI / 2); // Perpendicular to beam direction
+            const offset = (i - segments / 2) * (beamWidth / segments);
+            const segmentStartX = startX + Math.cos(offsetAngle) * offset;
+            const segmentStartY = startY + Math.sin(offsetAngle) * offset;
+            const segmentEndX = endX + Math.cos(offsetAngle) * offset;
+            const segmentEndY = endY + Math.sin(offsetAngle) * offset;
+            
+            // Create laser bullet for each segment
+            const laserBullet = gameEngine.enemyBulletPool.get();
+            if (laserBullet) {
+                laserBullet.reset(
+                    segmentStartX,
+                    segmentStartY,
+                    Math.cos(angle) * 8, // Reduced laser speed for shorter range
+                    Math.sin(angle) * 8,
+                    '#44ffff', // Cyan laser color
+                    false
+                );
+                
+                laserBullet.radius = 3 + Math.abs(offset) * 0.1; // Varying thickness
+                laserBullet.glowRadius = 8 + Math.abs(offset) * 0.2;
+                laserBullet.damage = this.getLevelScaledDamage(6); // High damage
+                laserBullet.movementPattern = 'laser_beam';
+                laserBullet.life = 0.15; // Even shorter-lived for much reduced range
+            }
+        }
+        
+        // Create particle effects at firing point
+        if (gameEngine.particlePool) {
+            for (let i = 0; i < 15; i++) {
+                const particle = gameEngine.particlePool.get(startX, startY, 'starSparkle');
+                if (particle) {
+                    const particleAngle = angle + (Math.random() - 0.5) * 0.5;
+                    const speed = 2 + Math.random() * 4;
+                    particle.vel.x = Math.cos(particleAngle) * speed;
+                    particle.vel.y = Math.sin(particleAngle) * speed;
+                    particle.color = '#44ffff';
+                    particle.radius = 1 + Math.random() * 2;
+                    particle.life = 20 + Math.random() * 20;
+                }
+            }
+        }
+        
+        // Screen shake for powerful laser
+        if (gameEngine.triggerScreenShake) {
+            gameEngine.triggerScreenShake(15, 8);
+        }
+    }
+    
+    shootCrescentWave(gameEngine, targetX, targetY) {
+        // GUARDIAN - crescent energy beam like Stalker's laser but curved
+        const baseAngle = Math.atan2(targetY - this.y, targetX - this.x);
+        
+        // Update facing direction for non-turret, non-titan enemies
+        if (!this.isStationary() && this.type !== 'TITAN') {
+            this.rotation = baseAngle;
+            this.faceAngle = baseAngle;
+        }
+        
+        // Create curved laser beam effect
+        this.createCrescentBeam(gameEngine, baseAngle);
+    }
+    
+    createCrescentBeam(gameEngine, baseAngle) {
+        if (!gameEngine) return;
+        
+        // Crescent beam parameters
+        const beamLength = 400; // Long range crescent
+        const waveSpread = Math.PI * 0.6; // 108 degrees total spread
+        const beamSegments = 12; // Number of beam rays in the crescent (reduced from 15)
+        const beamThickness = 2; // Parallel rays per beam segment for thickness (reduced from 3)
+        
+        const startX = this.x + Math.cos(baseAngle) * this.radius;
+        const startY = this.y + Math.sin(baseAngle) * this.radius;
+        
+        // Create crescent slice - all bullets travel parallel in same direction
+        const crescentWidth = 120; // Width of the crescent formation
+        const travelDirection = baseAngle; // All bullets travel toward target
+        const perpAngle = baseAngle + Math.PI / 2; // Perpendicular to travel direction
+        
+        for (let i = 0; i < beamSegments; i++) {
+            const progress = i / (beamSegments - 1); // 0 to 1
+            
+            // Position along the crescent arc (perpendicular to travel direction)
+            const crescentOffset = (progress - 0.5) * crescentWidth;
+            
+            // Create curved crescent shape using sine function
+            const curveHeight = Math.sin(progress * Math.PI) * 25; // Curve depth
+            
+            // Calculate starting position for this segment
+            const segmentStartX = this.x + Math.cos(perpAngle) * crescentOffset + Math.cos(travelDirection) * (this.radius + curveHeight);
+            const segmentStartY = this.y + Math.sin(perpAngle) * crescentOffset + Math.sin(travelDirection) * (this.radius + curveHeight);
+            
+            // Create multiple parallel bullets for beam thickness
+            for (let thickness = 0; thickness < beamThickness; thickness++) {
+                const thicknessOffset = (thickness - beamThickness / 2) * 6; // Spacing between parallel rays
+                
+                const rayStartX = segmentStartX + Math.cos(perpAngle) * thicknessOffset;
+                const rayStartY = segmentStartY + Math.sin(perpAngle) * thicknessOffset;
+                
+                // Create laser bullet for this ray segment
+                const laserBullet = gameEngine.enemyBulletPool.get();
+                if (laserBullet) {
+                    laserBullet.reset(
+                        rayStartX,
+                        rayStartY,
+                        Math.cos(travelDirection) * (6 * 0.7 * (1 + Math.min(0.4, (this.level - 1) * 0.08))), // Apply same speed scaling as other bullets
+                        Math.sin(travelDirection) * (6 * 0.7 * (1 + Math.min(0.4, (this.level - 1) * 0.08))),
+                        '#44ff44', // Green energy color
+                        false
+                    );
+                    
+                    // Laser beam properties - thicker in middle of crescent
+                    const distanceFromCenter = Math.abs(progress - 0.5);
+                    laserBullet.radius = 3 - distanceFromCenter * 1.5; // Thicker in center
+                    laserBullet.glowRadius = 10 - distanceFromCenter * 3;
+                    laserBullet.damage = this.getLevelScaledDamage(5); // High damage
+                    laserBullet.movementPattern = 'crescent_slice';
+                    laserBullet.life = 0.25; // Short-lived for quick fade effect
+                    laserBullet.maxLife = 0.25; // Store max life for opacity calculations
+                    
+                    // Store beam properties
+                    laserBullet.beamProgress = progress;
+                    laserBullet.crescentOffset = crescentOffset;
+                    laserBullet.beamBaseAngle = baseAngle;
+                }
+            }
+        }
+        
+        // Create dramatic launch effect at Guardian
+        if (gameEngine.particlePool) {
+            for (let i = 0; i < 15; i++) {
+                const particle = gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
+                if (particle) {
+                    const particleAngle = baseAngle + (Math.random() - 0.5) * waveSpread * 1.3;
+                    const speed = 3 + Math.random() * 6;
+                    particle.vel.x = Math.cos(particleAngle) * speed;
+                    particle.vel.y = Math.sin(particleAngle) * speed;
+                    particle.color = '#44ff44'; // Green energy color
+                    particle.radius = 1 + Math.random() * 3;
+                    particle.life = 25 + Math.random() * 30;
+                }
+            }
+            
+            // Add energy burst rings
+            for (let ring = 0; ring < 3; ring++) {
+                const ringParticle = gameEngine.particlePool.get(this.x, this.y, 'explosionPulse', 20 + ring * 15);
+                if (ringParticle) {
+                    ringParticle.color = '#44ff44';
+                    ringParticle.life = 0.6; // Slightly longer for dramatic effect
+                }
+            }
+        }
+        
+        // Screen shake for powerful crescent beam
+        if (gameEngine.triggerScreenShake) {
+            gameEngine.triggerScreenShake(12, 6);
+        }
     }
     
     createEnemyBullet(gameEngine, angle, speed, color, explosive = false, movementPattern = 'aimed', target = null) {
         if (!gameEngine.enemyBulletPool) return;
+        
+        // Apply level scaling to bullet speed (slower base, reasonable scaling)
+        const baseSpeedMultiplier = 0.7; // Make all shots 30% slower by default
+        const levelSpeedBonus = Math.min(0.4, (this.level - 1) * 0.08); // Max 40% speed increase at level 6+
+        const scaledSpeed = speed * baseSpeedMultiplier * (1 + levelSpeedBonus);
         
         const bullet = gameEngine.enemyBulletPool.get();
         if (bullet) {
             bullet.reset(
                 this.x + Math.cos(angle) * this.radius,
                 this.y + Math.sin(angle) * this.radius,
-                Math.cos(angle) * speed,
-                Math.sin(angle) * speed,
+                Math.cos(angle) * scaledSpeed,
+                Math.sin(angle) * scaledSpeed,
                 color,
                 explosive
             );
@@ -2686,10 +3354,33 @@ export class Enemy {
             bullet.damage = this.getLevelScaledDamage(baseDamage);
             
             // Make titan missiles larger and more powerful
-            if (movementPattern === 'titan_homing') {
+            if (movementPattern === 'titan_homing' || movementPattern === 'titan_accelerating') {
                 bullet.radius = 6; // Larger than normal bullets (usually 3-4)
                 bullet.glowRadius = 12; // Larger glow effect
                 bullet.damage = this.getLevelScaledDamage(4); // Higher damage than normal bullets
+                
+                // For accelerating missiles, track distance traveled
+                if (movementPattern === 'titan_accelerating') {
+                    bullet.distanceTraveled = 0;
+                    bullet.startX = bullet.x;
+                    bullet.startY = bullet.y;
+                    bullet.maxDistance = 800; // Approximately one screen width
+                }
+            }
+            
+            // Make laser bullets more visible and powerful
+            if (movementPattern === 'laser') {
+                bullet.radius = 5; // Larger laser bullets
+                bullet.glowRadius = 15; // Strong glow effect
+                bullet.damage = this.getLevelScaledDamage(8); // High laser damage
+                bullet.life = 0.8; // Longer life for visibility
+            }
+            
+            // Make missile turret bullets larger and spiky
+            if (movementPattern === 'missile_decelerate') {
+                bullet.radius = 6; // Large spiky orbs
+                bullet.glowRadius = 12; // Strong glow
+                bullet.damage = this.getLevelScaledDamage(5); // High damage
             }
             
             // Set unique movement pattern for this bullet
@@ -2702,6 +3393,8 @@ export class Enemy {
                 bullet.targetPlayer = target || this.targetPlayer;
             }
             
+            // Titan accelerating missiles don't need target reference (they fly straight)
+            
             // Enemy shooting sounds removed to reduce audio confusion
         }
     }
@@ -2713,6 +3406,11 @@ export class Enemy {
         
         // Draw light trail first (behind enemy)
         this.drawLightTrail(ctx);
+        
+        // Draw targeting effect if this enemy is currently targeted (clicked)
+        if (window.gameEngine && window.gameEngine.targetedEntity === this) {
+            this.drawTargetingEffect(ctx);
+        }
         
         ctx.save();
         ctx.translate(this.x, this.y);
@@ -2728,16 +3426,57 @@ export class Enemy {
         
         ctx.restore();
         
-        // Draw circulating shield indicator (outside of transform)
-        this.drawCirculatingShield(ctx);
+        // Draw pulsating circle only when targeted (outside of transform)
+        if (window.gameEngine && window.gameEngine.targetedEntity === this) {
+            this.drawPulsatingCircle(ctx);
+        }
         
         // Draw health bar (outside of transform)
         this.drawHealthBar(ctx);
         
-        // Draw cooldown timer for turrets (outside of transform)
-        if (this.config.movePattern === 'stationary') {
-            this.drawCooldownTimer(ctx);
+        // Cooldown timer removed - turrets are now mobile
+    }
+    
+    drawTargetingEffect(ctx) {
+        ctx.save();
+        
+        // Pulsing glow effect
+        const time = Date.now() * 0.003;
+        const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
+        
+        // Calculate center position (adjust for Guardian visual offset)
+        let centerX = this.x;
+        let centerY = this.y;
+        
+        // Guardian-specific adjustment to center the targeting circle better
+        if (this.type === 'GUARDIAN') {
+            // Adjust slightly forward to account for Guardian's visual center
+            centerX += Math.cos(this.faceAngle) * (this.radius * 0.1);
+            centerY += Math.sin(this.faceAngle) * (this.radius * 0.1);
         }
+        
+        // Outer glow
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 15 * pulseIntensity;
+        ctx.globalAlpha = 0.4 * pulseIntensity;
+        
+        // Draw subtle ring around entity
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, this.radius + 8, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Inner highlight ring
+        ctx.shadowBlur = 8 * pulseIntensity;
+        ctx.globalAlpha = 0.6 * pulseIntensity;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, this.radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.restore();
     }
     
     drawEnemyShape(ctx) {
@@ -2761,70 +3500,29 @@ export class Enemy {
             case 'STALKER':
                 this.drawStalkerSword(ctx);
                 break;
-            case 'BOMBER':
+            case 'TANGERINE_BOMBER':
                 this.drawSpikedCircle(ctx);
                 break;
-            case 'LASER_TURRET':
+            case 'DRIFTER':
                 this.drawLaserTurret(ctx);
                 break;
-            case 'MISSILE_TURRET':
+            case 'PROWLER':
                 this.drawMissileTurret(ctx);
                 break;
-            case 'PULSE_TURRET':
+            case 'WEAVER':
                 this.drawPulseTurret(ctx);
                 break;
-            case 'SHIELD_TURRET':
+            case 'SENTINEL':
                 this.drawShieldTurret(ctx);
                 break;
             default:
                 this.drawTriangle(ctx);
         }
         
-        // Draw red aiming triangle for all enemy types (except turrets which have their own indicators)
-        if (this.config.movePattern !== 'stationary') {
-            this.drawAimingTriangle(ctx);
-        }
+        // Aiming triangles removed - not working as intended
     }
     
-    drawAimingTriangle(ctx) {
-        // Draw a white triangle pointing outward with arrow line
-        const size = this.radius * 0.3; // Slightly larger triangle
-        
-        ctx.save();
-        
-        // Calculate aiming angle (toward player if targeting)
-        let aimAngle = 0;
-        if (this.targetPlayer && this.targetPlayer.active) {
-            const dx = this.targetPlayer.x - this.x;
-            const dy = this.targetPlayer.y - this.y;
-            aimAngle = Math.atan2(dy, dx) - this.faceAngle; // Relative to enemy's facing direction
-        }
-        
-        ctx.rotate(aimAngle);
-        
-        // Draw white triangle pointing outward
-        ctx.beginPath();
-        ctx.moveTo(size, 0); // Point forward
-        ctx.lineTo(-size * 0.5, -size * 0.5); // Left back
-        ctx.lineTo(-size * 0.5, size * 0.5); // Right back
-        ctx.closePath();
-        
-        ctx.fillStyle = '#ffffff'; // White color
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
-        ctx.fill();
-        ctx.stroke();
-        
-        // Draw arrow line extending from the bottom of the triangle
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.5, 0); // Start from bottom center of triangle
-        ctx.lineTo(-size * 1.2, 0); // Extend backward to create arrow shaft
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        ctx.restore();
-    }
+    // drawAimingTriangle method removed - not working as intended
     
     drawTriangle(ctx) {
         // Aggressive arrow pointing forward (toward player)
@@ -3133,6 +3831,11 @@ export class Enemy {
         ctx.stroke();
         
         ctx.restore();
+        
+        // Draw laser charging effect if charging
+        if (this.laserCharging && this.laserChargeProgress > 0) {
+            this.drawLaserChargingEffect(ctx);
+        }
     }
     
     drawEmeraldGuardian(ctx) {
@@ -3349,25 +4052,7 @@ export class Enemy {
             ctx.stroke();
         }
         
-        // Tank cannon - extending forward from hexagon
-        const cannonLength = size * 1.3;
-        const cannonWidth = size * 0.15;
-        
-        ctx.fillStyle = '#CCCCCC'; // Metallic cannon
-        ctx.strokeStyle = '#999999';
-        ctx.lineWidth = 2;
-        
-        ctx.beginPath();
-        ctx.roundRect(turretSize * 0.8, -cannonWidth * 0.5, cannonLength, cannonWidth, 3);
-        ctx.fill();
-        ctx.stroke();
-        
-        // Cannon muzzle
-        ctx.fillStyle = '#666666';
-        ctx.beginPath();
-        ctx.arc(turretSize * 0.8 + cannonLength, 0, cannonWidth * 0.6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        // Turret will be drawn at the end to appear on top
         
         // Hexagonal tank treads following the hull shape
         ctx.strokeStyle = '#444444';
@@ -3489,6 +4174,38 @@ export class Enemy {
             ctx.lineTo(x2, y2);
             ctx.stroke();
         }
+        
+        // Draw turret on top of everything else
+        // Save context for independent turret rotation
+        ctx.save();
+        
+        // Rotate turret independently from hull
+        const turretAngle = this.tankTurretAngle || 0;
+        const hullAngle = this.faceAngle || 0;
+        const relativeAngle = turretAngle - hullAngle;
+        ctx.rotate(relativeAngle);
+        
+        // Tank cannon - extending forward from hexagon
+        const cannonLength = size * 1.3;
+        const cannonWidth = size * 0.15;
+        
+        ctx.fillStyle = '#CCCCCC'; // Metallic cannon
+        ctx.strokeStyle = '#999999';
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.roundRect(turretSize * 0.8, -cannonWidth * 0.5, cannonLength, cannonWidth, 3);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Cannon muzzle
+        ctx.fillStyle = '#666666';
+        ctx.beginPath();
+        ctx.arc(turretSize * 0.8 + cannonLength, 0, cannonWidth * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.restore(); // Restore context after turret drawing
         
         ctx.restore();
     }
@@ -3640,7 +4357,7 @@ export class Enemy {
         ctx.restore();
     }
     
-    drawCirculatingShield(ctx) {
+    drawPulsatingCircle(ctx) {
         ctx.save();
         
         // Use music-synchronized intensity
@@ -3815,17 +4532,29 @@ export class Enemy {
         const barHeight = 3;
         const barY = this.y - this.radius - 18;
 
-        // Health number and level text setup
+        // Ship name setup (above level and health) - GOLD TEXT ONLY
+        ctx.font = "10px 'Press Start 2P', monospace";
+        ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'; // Golden text only, no stroke
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const shipName = (this.config.name || 'Unknown Ship').toUpperCase();
+        const nameY = barY - 3; // Position ship name closer to health bar
+        
+        // Draw ship name (fill only, no stroke)
+        ctx.fillText(shipName, this.x, nameY);
+
+        // Health number and level text setup - COMMENTED OUT (now shown in target display)
+        /*
         ctx.font = "10px 'Press Start 2P', monospace";
         ctx.fillStyle = '#FFD700'; // Bright gold for health number
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 2;
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
+        ctx.textBaseline = 'top';
         // Round up health display when between 0-1 to show 1 HP
         const displayHealth = this.health > 0 && this.health < 1 ? 1 : Math.round(this.health);
         const healthNumber = `${displayHealth}/${Math.round(this.maxHealth)}`;
-        const numberY = barY - 6;
+        const numberY = barY + barHeight + 6; // Position below the health bar
         
         // Measure text widths for proper centering
         const healthWidth = ctx.measureText(healthNumber).width;
@@ -3855,6 +4584,10 @@ export class Enemy {
         ctx.textAlign = 'center';
         ctx.strokeText(healthNumber, numberX, numberY);
         ctx.fillText(healthNumber, numberX, numberY);
+        */
+        
+        // Center the health bar under the ship name
+        const barX = this.x - barWidth / 2;
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;
@@ -3902,70 +4635,86 @@ export class Enemy {
         ctx.restore();
     }
     
-    drawCooldownTimer(ctx) {
-        if (!this.cooldownTimer.isActive) return;
-        
-        const now = Date.now();
-        const elapsed = now - this.cooldownTimer.startTime;
-        const progress = Math.min(elapsed / this.cooldownTimer.duration, 1);
-        
-        // Deactivate timer when complete
-        if (progress >= 1) {
-            this.cooldownTimer.isActive = false;
-            return;
-        }
+    drawLaserChargingEffect(ctx) {
+        if (!this.laserChargeProgress || this.laserChargeProgress <= 0) return;
         
         ctx.save();
         
         // Position at enemy center
-        const centerX = this.x;
-        const centerY = this.y;
-        const radius = this.radius * 0.6; // Smaller than enemy
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.faceAngle);
         
-        // Color transition: blue -> orange -> red
-        let color;
-        if (progress < 0.33) {
-            // Blue to orange (0 to 0.33)
-            const t = progress / 0.33;
-            const r = Math.floor(0 + (255 - 0) * t);
-            const g = Math.floor(100 + (165 - 100) * t);
-            const b = Math.floor(255 + (0 - 255) * t);
-            color = `rgb(${r}, ${g}, ${b})`;
-        } else if (progress < 0.66) {
-            // Orange to red (0.33 to 0.66)
-            const t = (progress - 0.33) / 0.33;
-            const r = Math.floor(255 + (255 - 255) * t);
-            const g = Math.floor(165 + (0 - 165) * t);
-            const b = Math.floor(0 + (0 - 0) * t);
-            color = `rgb(${r}, ${g}, ${b})`;
-        } else {
-            // Stay red (0.66 to 1)
-            color = 'rgb(255, 0, 0)';
+        const progress = this.laserChargeProgress;
+        const intensity = 0.3 + progress * 0.7; // Increase intensity as charging
+        
+        // Charging energy buildup at the front of the ship
+        const chargeX = this.radius * 0.8; // In front of the ship
+        const chargeRadius = 5 + progress * 15; // Growing charge effect
+        
+        // Pulsing energy core
+        const pulseIntensity = 0.8 + Math.sin(Date.now() * 0.02) * 0.2;
+        
+        // Outer energy ring
+        const outerGradient = ctx.createRadialGradient(chargeX, 0, 0, chargeX, 0, chargeRadius);
+        outerGradient.addColorStop(0, `rgba(68, 255, 255, ${intensity * pulseIntensity})`);
+        outerGradient.addColorStop(0.5, `rgba(68, 255, 255, ${intensity * 0.6})`);
+        outerGradient.addColorStop(1, 'rgba(68, 255, 255, 0)');
+        
+        ctx.fillStyle = outerGradient;
+        ctx.beginPath();
+        ctx.arc(chargeX, 0, chargeRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Inner energy core
+        const coreRadius = chargeRadius * 0.4;
+        const coreGradient = ctx.createRadialGradient(chargeX, 0, 0, chargeX, 0, coreRadius);
+        coreGradient.addColorStop(0, `rgba(255, 255, 255, ${intensity * pulseIntensity})`);
+        coreGradient.addColorStop(0.7, `rgba(68, 255, 255, ${intensity * 0.8})`);
+        coreGradient.addColorStop(1, 'rgba(68, 255, 255, 0)');
+        
+        ctx.fillStyle = coreGradient;
+        ctx.beginPath();
+        ctx.arc(chargeX, 0, coreRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Energy sparks around the charge point
+        if (progress > 0.3) {
+            const sparkCount = Math.floor(progress * 8);
+            for (let i = 0; i < sparkCount; i++) {
+                const angle = (i / sparkCount) * Math.PI * 2 + Date.now() * 0.01;
+                const distance = chargeRadius * 0.8 + Math.sin(Date.now() * 0.03 + i) * 5;
+                const sparkX = chargeX + Math.cos(angle) * distance;
+                const sparkY = Math.sin(angle) * distance;
+                
+                ctx.fillStyle = `rgba(255, 255, 255, ${intensity * 0.8})`;
+                ctx.beginPath();
+                ctx.arc(sparkX, sparkY, 1 + Math.random() * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
         
-        // Draw background circle
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Draw progress arc
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + (progress * Math.PI * 2));
-        ctx.stroke();
-        
-        // Add glow effect
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+        // Charging beam preview (thin line showing where laser will fire)
+        if (progress > 0.5) {
+            const beamLength = 100 + progress * 200;
+            const beamAlpha = (progress - 0.5) * 2 * intensity;
+            
+            ctx.strokeStyle = `rgba(68, 255, 255, ${beamAlpha})`;
+            ctx.lineWidth = 2 + progress * 3;
+            ctx.beginPath();
+            ctx.moveTo(chargeX, 0);
+            ctx.lineTo(chargeX + beamLength, 0);
+            ctx.stroke();
+            
+            // Beam glow
+            ctx.strokeStyle = `rgba(255, 255, 255, ${beamAlpha * 0.5})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
         
         ctx.restore();
     }
+    
+    // Cooldown timer method removed - turrets are now mobile
     
     hasLineOfSight(target, gameEngine) {
         if (!target || !gameEngine) return false;
@@ -4037,6 +4786,11 @@ export class Enemy {
     
     takeDamage(damage) {
         this.health -= damage;
+        
+        // Create damage number
+        if (window.gameEngine) {
+            window.gameEngine.createDamageNumber(this.x, this.y - this.radius, damage);
+        }
         
         // Safeguard: clamp health between 0 and maxHealth
         this.health = Math.max(0, Math.min(this.health, this.maxHealth));

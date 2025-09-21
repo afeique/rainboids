@@ -149,9 +149,9 @@ export class Player {
             duration: 2000 // 2 second animation
         };
         
-        // Display level up message via game engine
+        // Display level up message via game engine - smaller and above shop button
         if (window.gameEngine && window.gameEngine.uiManager) {
-            window.gameEngine.uiManager.showMessage(`LEVEL ${this.level}!`, 'Skill Point Gained!', 3000, 'top');
+            window.gameEngine.uiManager.showMessage(`LEVEL ${this.level}!`, 'Skill Point Gained!', 3000, 'shop');
         }
         
         // Create level up particles via game engine
@@ -1167,13 +1167,12 @@ export class Player {
         return Math.min(300, totalCritDamage); // Cap at 300% (3x damage)
     }
     
-    getEffectiveHealthOrbHealing() {
-        const baseHealing = 1; // Will be passed from game engine using GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT
+    getEffectiveHealthOrbHealing(baseHealing = 1) {
         const medpackStacks = this.getPowerupStacks('MEDPACK');
         const bonusHealing = medpackStacks * 1; // +1 healing per medpack stack
         
         const totalHealing = baseHealing + bonusHealing;
-        return Math.min(6, totalHealing); // Cap at 6 (base 1 + 5 stacks × 1 = 6 max)
+        return Math.min(10, totalHealing); // Cap at 10 (max base 4 + 5 stacks × 1 = 9, rounded to 10)
     }
     
     // Legacy support for old method names

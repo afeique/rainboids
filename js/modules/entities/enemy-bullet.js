@@ -228,6 +228,54 @@ export class EnemyBullet {
                 }
                 break;
                 
+            case 'titan_accelerating':
+                // Purple titan missiles - start slow, accelerate, explode after one screen distance
+                const acceleration = 0.08; // Acceleration per frame
+                const maxSpeed = 8; // Maximum speed
+                
+                // Accelerate in current direction
+                const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+                if (currentSpeed < maxSpeed) {
+                    const direction = Math.atan2(this.vel.y, this.vel.x);
+                    const newSpeed = Math.min(currentSpeed + acceleration, maxSpeed);
+                    this.vel.x = Math.cos(direction) * newSpeed;
+                    this.vel.y = Math.sin(direction) * newSpeed;
+                }
+                
+                // Track distance traveled
+                if (this.distanceTraveled !== undefined) {
+                    const dx = this.x - this.startX;
+                    const dy = this.y - this.startY;
+                    this.distanceTraveled = Math.hypot(dx, dy);
+                    
+                    // Explode after traveling max distance
+                    if (this.distanceTraveled >= this.maxDistance) {
+                        // Create explosion effect
+                        this.createExplosionEffect();
+                        this.active = false;
+                    }
+                }
+                break;
+                
+            case 'missile_decelerate':
+                // Missile turret missiles - start fast, decelerate, then explode
+                const deceleration = 0.05; // Deceleration per frame
+                const minSpeed = 0.5; // Minimum speed before exploding
+                
+                // Decelerate in current direction
+                const currentSpeedDeccel = Math.hypot(this.vel.x, this.vel.y);
+                if (currentSpeedDeccel > minSpeed) {
+                    const direction = Math.atan2(this.vel.y, this.vel.x);
+                    const newSpeed = Math.max(currentSpeedDeccel - deceleration, minSpeed);
+                    this.vel.x = Math.cos(direction) * newSpeed;
+                    this.vel.y = Math.sin(direction) * newSpeed;
+                } else {
+                    // Reached minimum speed - explode and disappear
+                    this.createExplosionEffect();
+                    this.active = false;
+                }
+                break;
+                
             case 'pulse':
                 // Pulse shot - accelerates over time
                 const pulseAccel = 1 + this.patternTimer * 0.8;
@@ -241,6 +289,60 @@ export class EnemyBullet {
                 const shieldPerpAngle = Math.atan2(this.baseVel.y, this.baseVel.x) + Math.PI / 2;
                 this.vel.x = this.baseVel.x + Math.cos(shieldPerpAngle) * wobble;
                 this.vel.y = this.baseVel.y + Math.sin(shieldPerpAngle) * wobble;
+                break;
+                
+            case 'wave_energy':
+                // Guardian crescent wave - slight sine wave motion
+                const waveFrequency = 3; // How many waves per second
+                const waveAmplitude = 15; // How far the wave deviates
+                
+                // Calculate perpendicular direction for wave motion
+                const baseDirection = Math.atan2(this.baseVel.y, this.baseVel.x);
+                const perpDirection = baseDirection + Math.PI / 2;
+                
+                // Apply sine wave offset
+                const energyWaveOffset = Math.sin(this.patternTimer * waveFrequency) * waveAmplitude;
+                const waveVelX = Math.cos(perpDirection) * energyWaveOffset * 0.1;
+                const waveVelY = Math.sin(perpDirection) * energyWaveOffset * 0.1;
+                
+                // Combine base velocity with wave motion
+                this.vel.x = this.baseVel.x + waveVelX;
+                this.vel.y = this.baseVel.y + waveVelY;
+                break;
+                
+            case 'energy_slash':
+                // Guardian energy slash - maintains formation while moving forward
+                const slashSpeed = Math.hypot(this.baseVel.x, this.baseVel.y);
+                const slashDirection = Math.atan2(this.baseVel.y, this.baseVel.x);
+                
+                // Slight curve effect based on position in slash
+                const curveIntensity = 0.3;
+                const curveOffset = Math.sin(this.slashProgress * Math.PI) * curveIntensity;
+                const perpSlashDirection = slashDirection + Math.PI / 2;
+                
+                // Apply curve to maintain crescent shape while moving
+                const curveVelX = Math.cos(perpSlashDirection) * curveOffset;
+                const curveVelY = Math.sin(perpSlashDirection) * curveOffset;
+                
+                // Maintain forward momentum with slight curve
+                this.vel.x = this.baseVel.x + curveVelX;
+                this.vel.y = this.baseVel.y + curveVelY;
+                
+                // Slight pulsing effect for energy
+                const pulseIntensity = 1 + Math.sin(this.patternTimer * 8) * 0.1;
+                this.vel.x *= pulseIntensity;
+                this.vel.y *= pulseIntensity;
+                break;
+                
+            case 'crescent_beam':
+                // Guardian crescent beam - straight laser rays like Stalker but in crescent formation
+                // No movement modification needed - straight laser beams
+                break;
+                
+            case 'crescent_slice':
+                // Guardian crescent slice - maintains parallel formation while moving
+                // All bullets travel in same direction to maintain concentrated front
+                // No movement modification needed - straight parallel movement
                 break;
         }
     }
@@ -262,8 +364,15 @@ export class EnemyBullet {
     drawTrail(ctx) {
         if (this.trail.length < 2) return;
         
+        // Calculate base opacity for trail (same as bullet)
+        let baseOpacity = this.life;
+        if (this.movementPattern === 'crescent_slice' && this.maxLife) {
+            const ageRatio = (Date.now() - this.creationTime) / (this.maxLife * 1000);
+            baseOpacity = Math.max(0, 1 - ageRatio);
+        }
+        
         for (let i = 0; i < this.trail.length - 1; i++) {
-            const alpha = (1 - i / this.trail.length) * 0.6 * this.life;
+            const alpha = (1 - i / this.trail.length) * 0.6 * baseOpacity;
             const width = this.radius * (1 - i / this.trail.length) * 0.5;
             
             ctx.globalAlpha = alpha;
@@ -279,7 +388,15 @@ export class EnemyBullet {
     }
     
     drawBullet(ctx) {
-        ctx.globalAlpha = this.life;
+        // Calculate opacity with fade effect for crescent slice bullets
+        let opacity = this.life;
+        if (this.movementPattern === 'crescent_slice' && this.maxLife) {
+            // Create smooth fade from full opacity to 0 over the bullet's lifetime
+            const ageRatio = (Date.now() - this.creationTime) / (this.maxLife * 1000);
+            opacity = Math.max(0, 1 - ageRatio);
+        }
+        
+        ctx.globalAlpha = opacity;
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
         
@@ -457,6 +574,35 @@ export class EnemyBullet {
                 // Add some friction to make them slow down
                 particle.friction = 0.95;
             }
+        }
+    }
+    
+    createExplosionEffect() {
+        const gameEngine = window.gameEngine;
+        if (!gameEngine || !gameEngine.particlePool) return;
+        
+        // Create larger explosion for titan missiles
+        const particleCount = 12 + Math.random() * 8; // 12-20 particles
+        
+        for (let i = 0; i < particleCount; i++) {
+            const particle = gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
+            if (particle) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 6;
+                
+                particle.vel.x = Math.cos(angle) * speed;
+                particle.vel.y = Math.sin(angle) * speed;
+                particle.color = '#8A2BE2'; // Purple explosion
+                particle.radius = 1 + Math.random() * 3;
+                particle.life = 30 + Math.random() * 30;
+                particle.friction = 0.92;
+            }
+        }
+        
+        // Add explosion pulse
+        const explosionPulse = gameEngine.particlePool.get(this.x, this.y, 'explosionPulse', this.radius * 4);
+        if (explosionPulse) {
+            explosionPulse.color = '#8A2BE2';
         }
     }
     

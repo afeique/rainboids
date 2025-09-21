@@ -223,6 +223,11 @@ export class Asteroid {
     draw(ctx) {
         if (!this.active) return;
         
+        // Draw targeting effect if this asteroid is currently targeted (clicked)
+        if (window.gameEngine && window.gameEngine.targetedEntity === this) {
+            this.drawTargetingEffect(ctx);
+        }
+        
         // Draw main asteroid
         ctx.save();
         ctx.translate(this.x, this.y);
@@ -241,7 +246,8 @@ export class Asteroid {
         const barHeight = 3; // Reduced from 5px to 3px for more compact appearance
         const barY = this.y - this.radius - 18;
 
-        // Health number and level text setup
+        // Health number and level text setup - COMMENTED OUT (now shown in target display)
+        /*
         ctx.font = "10px 'Press Start 2P', monospace";
         ctx.fillStyle = '#FFD700'; // Bright gold for health number
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
@@ -281,6 +287,10 @@ export class Asteroid {
         ctx.textAlign = 'center';
         ctx.strokeText(healthNumber, numberX, numberY);
         ctx.fillText(healthNumber, numberX, numberY);
+        */
+        
+        // Center the health bar under the asteroid
+        const barX = this.x - barWidth / 2;
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;
@@ -356,5 +366,36 @@ export class Asteroid {
             ctx.lineTo(v2.x, v2.y);
             ctx.stroke();
         });
+    }
+    
+    drawTargetingEffect(ctx) {
+        ctx.save();
+        
+        // Pulsing glow effect
+        const time = Date.now() * 0.003;
+        const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
+        
+        // Outer glow
+        ctx.shadowColor = '#888888'; // Gray glow for asteroids
+        ctx.shadowBlur = 15 * pulseIntensity;
+        ctx.globalAlpha = 0.4 * pulseIntensity;
+        
+        // Draw subtle ring around entity
+        ctx.strokeStyle = '#888888';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Inner highlight ring
+        ctx.shadowBlur = 8 * pulseIntensity;
+        ctx.globalAlpha = 0.6 * pulseIntensity;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.restore();
     }
 }
