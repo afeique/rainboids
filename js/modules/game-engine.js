@@ -101,9 +101,10 @@ export class GameEngine {
     // Helper method to initialize/reset game state
     initializeGameState() {
         this.game = {
-            score: 0,
             money: 0,
-            highScore: 0,
+            survivalTime: 0, // Time survived in milliseconds
+            survivalRecord: parseInt(localStorage.getItem('rainboidsSurvivalRecord')) || 0, // Best survival time
+            gameStartTime: 0, // When the current game started
             currentWave: 0,
             lives: 3, // Start with 3 lives
             state: GAME_STATES.TITLE_SCREEN,
@@ -617,9 +618,10 @@ Type any cheat name in the console to activate!`);
     }
     
     init() {
-        // Reset core game state (score, money, wave)
+        // Reset core game state (money, wave, survival timer)
         this.initializeGameState();
         this.game.state = GAME_STATES.PLAYING;
+        this.game.gameStartTime = Date.now(); // Start survival timer
         // Reset player
         this.player = new Player();
         // Position player at center of game field
@@ -951,14 +953,15 @@ Type any cheat name in the console to activate!`);
         this.ctx.fillText('PRESS ANY KEY TO START', centerX, centerY + 80);
         this.ctx.restore();
         
-        // High score display (if available)
-        if (this.game.highScore > 0) {
+        // Survival record display (if available)
+        if (this.game.survivalRecord > 0) {
             this.ctx.save();
             this.ctx.font = '16px "Press Start 2P", monospace';
             this.ctx.fillStyle = '#FFD700';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(`HIGH SCORE: ${this.game.highScore}`, centerX, centerY + 120);
+            const survivalText = this.formatSurvivalTime(this.game.survivalRecord);
+            this.ctx.fillText(`Survival Record: ${survivalText}`, centerX, centerY + 120);
             this.ctx.restore();
         }
     }
@@ -2994,7 +2997,8 @@ Type any cheat name in the console to activate!`);
                 if (collision(bullet, ast)) {
                     triggerHapticFeedback(60);
                     
-                    // Set target info for hit asteroid
+                    // Set target info and targeting for hit asteroid
+                    this.targetedEntity = ast;
                     this.setTargetInfo(ast);
                     
                     // Only play hit sound if asteroid is on screen
@@ -3227,7 +3231,6 @@ Type any cheat name in the console to activate!`);
                     } else if (colorStar.starType === 'money') {
                         // Money orb collected - use the orb's individual money amount
                         const moneyAmount = colorStar.moneyAmount || GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN; // Fallback for legacy orbs
-                        this.game.score += moneyAmount;
                         this.game.money += moneyAmount;
                         
                         // Add to pickup display
@@ -3314,7 +3317,8 @@ Type any cheat name in the console to activate!`);
                 if (collision(bullet, enemy)) {
                     triggerHapticFeedback(40);
                     
-                    // Set target info for hit enemy
+                    // Set target info and targeting for hit enemy
+                    this.targetedEntity = enemy;
                     this.setTargetInfo(enemy);
                     
                     // Only play hit sound if enemy is on screen
@@ -3378,9 +3382,8 @@ Type any cheat name in the console to activate!`);
                     }
                     
                     if (destroyed) {
-                        // Award points
+                        // Award money
                         const reward = enemy.getDestructionReward();
-                        this.game.score += reward.points;
                         this.game.money += reward.points;
                         
                         // Play explosion sound only if enemy is on screen
@@ -3458,64 +3461,66 @@ Type any cheat name in the console to activate!`);
     }
     
     handlePlayerEnemyCollision(player, enemy) {
-        // Apply balanced damage with shield calculation and enemy level scaling
-        const baseDamage = enemy.getLevelScaledDamage(25); // Level-scaled collision damage (scaled back down)
-        const effectiveShield = player.getEffectiveShield();
-        const reducedDamage = baseDamage * (1 - effectiveShield / 100);
-        const finalDamage = Math.round(reducedDamage);
-        player.health = Math.max(0, player.health - finalDamage);
+        // Apply damage only if not invincible
+        if (!this.player.invincible) {
+            // Apply balanced damage with shield calculation and enemy level scaling
+            const baseDamage = enemy.getLevelScaledDamage(25); // Level-scaled collision damage (scaled back down)
+            const effectiveShield = player.getEffectiveShield();
+            const reducedDamage = baseDamage * (1 - effectiveShield / 100);
+            const finalDamage = Math.round(reducedDamage);
+            player.health = Math.max(0, player.health - finalDamage);
         
-        // Award XP for surviving enemy collision
-        this.player.gainExperience(5);
-        
-        // Check for death/shield tank usage
-        if (player.health <= 0) {
-            if (this.shieldTanks > 0) {
-                this.shieldTanks--;
-                this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-                player.health = player.getEffectiveMaxHealth();
-                this.audioManager.playCoin(); // Tank used sound
-            } else {
-                this.gameOver();
-                return; // Exit early if game over
+            // Award XP for surviving enemy collision
+            this.player.gainExperience(5);
+            
+            // Check for death/shield tank usage
+            if (player.health <= 0) {
+                if (this.shieldTanks > 0) {
+                    this.shieldTanks--;
+                    this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
+                    player.health = player.getEffectiveMaxHealth();
+                    this.audioManager.playCoin(); // Tank used sound
+                } else {
+                    this.gameOver();
+                    return; // Exit early if game over
+                }
             }
-        }
-        
-        // Visual feedback
-        this.triggerScreenShake(18, 10, enemy.radius); // Strong screen shake for collision
-        
-        // Only play explosion sound if enemy is on screen
-        if (this.isEntityOnScreen(enemy)) {
-            this.audioManager.playExplosion();
-        }
-        
-        // Show red damage number
-        this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
-        
-        // Create explosion particles at player position with enemy color
-        for (let i = 0; i < 15; i++) {
-            const particle = this.particlePool.get(player.x, player.y, 'explosion');
-            if (particle) {
-                particle.color = enemy.color;
-                // Add random velocity for explosion effect
-                const angle = random(0, Math.PI * 2);
-                const speed = random(2, 6);
-                particle.vel = {
-                    x: Math.cos(angle) * speed,
-                    y: Math.sin(angle) * speed
-                };
+            
+            // Visual feedback for player damage
+            this.triggerScreenShake(18, 10, enemy.radius); // Strong screen shake for collision
+            
+            // Show red damage number
+            this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
+            
+            // Create explosion particles at player position with enemy color
+            for (let i = 0; i < 15; i++) {
+                const particle = this.particlePool.get(player.x, player.y, 'explosion');
+                if (particle) {
+                    particle.color = enemy.color;
+                    // Add random velocity for explosion effect
+                    const angle = random(0, Math.PI * 2);
+                    const speed = random(2, 6);
+                    particle.vel = {
+                        x: Math.cos(angle) * speed,
+                        y: Math.sin(angle) * speed
+                    };
+                }
             }
+            
+            // Make player invulnerable briefly after taking damage
+            this.player.makeInvincible(1500);
         }
         
-        // Damage the enemy too (collision damage)
-        const destroyed = enemy.takeDamage(2); // Reduced enemy collision damage
+        // Always damage the enemy when colliding with player (massive damage)
+        const enemyCollisionDamage = 50; // Massive damage to enemies
+        const destroyed = enemy.takeDamage(enemyCollisionDamage);
         
         if (destroyed) {
             const reward = enemy.getDestructionReward();
-            this.game.score += reward.points / 2; // Reduced points for collision kill
+            this.game.money += reward.points; // Full money for collision kill (player took risk)
             this.createEnemyDebris(enemy);
-        // Drop health and money orbs
-        this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
+            // Drop health and money orbs
+            this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
             this.enemyPool.release(enemy);
         }
         
@@ -3650,6 +3655,11 @@ Type any cheat name in the console to activate!`);
     
     update() {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
+            // Update survival timer
+            if (this.game.gameStartTime > 0) {
+                this.game.survivalTime = Date.now() - this.game.gameStartTime;
+            }
+            
             const input = this.inputHandler.getInput();
             // Add the update method to the input object so player can call it
             input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
@@ -3713,7 +3723,7 @@ Type any cheat name in the console to activate!`);
             }
 
             // Performance: Clean up inactive particles periodically
-            if (this.game.score % GAME_CONFIG.PARTICLE_CLEANUP_INTERVAL === 0) {
+            if (Math.floor(this.game.survivalTime / 1000) % GAME_CONFIG.PARTICLE_CLEANUP_INTERVAL === 0) {
                 this.particlePool.cleanupInactive();
                 this.lineDebrisPool.cleanupInactive();
                 this.powerupPool.cleanupInactive();
@@ -4310,19 +4320,34 @@ Type any cheat name in the console to activate!`);
         }
     }
     
-    loadHighScore() {
-        this.game.highScore = parseInt(localStorage.getItem('rainboidsHighScore')) || 0;
+    loadSurvivalRecord() {
+        this.game.survivalRecord = parseInt(localStorage.getItem('rainboidsSurvivalRecord')) || 0;
     }
     
-    checkHighScore() {
-        if (this.game.score > this.game.highScore) {
-            this.game.highScore = this.game.score;
-            localStorage.setItem('rainboidsHighScore', this.game.highScore);
+    checkSurvivalRecord() {
+        if (this.game.survivalTime > this.game.survivalRecord) {
+            this.game.survivalRecord = this.game.survivalTime;
+            localStorage.setItem('rainboidsSurvivalRecord', this.game.survivalRecord);
+        }
+    }
+    
+    formatSurvivalTime(milliseconds) {
+        const totalSeconds = Math.floor(milliseconds / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        
+        if (hours > 0) {
+            return `${hours} hours, ${minutes} minutes, ${seconds} seconds`;
+        } else if (minutes > 0) {
+            return `${minutes} minutes, ${seconds} seconds`;
+        } else {
+            return `${seconds} seconds`;
         }
     }
     
     start() {
-        this.loadHighScore();
+        this.loadSurvivalRecord();
         this.uiManager.checkOrientation();
         // this.uiManager.setupTitleScreen();
         // this.uiManager.showTitleScreen();
@@ -4705,7 +4730,7 @@ Type any cheat name in the console to activate!`);
             // True game over - no lives left
             this.game.state = GAME_STATES.GAME_OVER;
             this.player.active = false;
-            this.checkHighScore();
+            this.checkSurvivalRecord();
             this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
         } else {
             // Still have lives - wait for explosion animation then respawn player
@@ -5237,6 +5262,23 @@ Type any cheat name in the console to activate!`);
             this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
             this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
             this.audioManager.playShield();
+        }
+
+        // Always damage the asteroid when colliding with player (massive damage)
+        const asteroidCollisionDamage = 25; // Massive damage to asteroids
+        asteroid.health -= asteroidCollisionDamage;
+        
+        // Check if asteroid is destroyed
+        if (asteroid.health <= 0) {
+            // Award XP and money for destroying asteroid
+            this.player.gainExperience(8);
+            this.game.money += 10; // Bonus money for collision destruction
+            
+            // Create destruction effects
+            this.createAsteroidDebris(asteroid);
+            this.dropOrbsFromEntity(asteroid.x, asteroid.y, asteroid);
+            this.asteroidPool.release(asteroid);
+            return; // Exit early if asteroid is destroyed
         }
 
         // Asteroid bounces off player

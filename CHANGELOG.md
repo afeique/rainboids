@@ -5,6 +5,115 @@ All notable changes to Rainboids will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.23.18] - 2025-09-20
+
+### Fixed
+- **Respawn Invincibility**: Player is now properly invincible during respawn period - cannot be damaged by enemy or asteroid collisions
+- **Collision Vulnerability**: Fixed critical bug where player could die during invincibility frames after respawn
+
+### Enhanced
+- **Collision Damage System**: Enemies and asteroids now take massive damage when colliding with the player
+- **Risk vs Reward**: Ramming enemies/asteroids is now a viable (but risky) combat strategy
+- **Collision Destruction**: Both enemies and asteroids can be destroyed through player collision
+
+### Added
+- **Enemy Collision Damage**: Enemies take 50 damage when colliding with player (often fatal)
+- **Asteroid Collision Damage**: Asteroids take 25 damage when colliding with player
+- **Collision Rewards**: Full money rewards for collision kills, bonus XP for asteroid destruction
+- **Destruction Effects**: Proper debris and orb drops when entities are destroyed by collision
+
+### Improved
+- **Invincibility Consistency**: Both enemy and asteroid collisions now properly respect player invincibility
+- **Combat Variety**: Players can now use ramming as an aggressive combat tactic
+- **Risk Management**: High-risk, high-reward gameplay for skilled players
+
+### Technical
+- **Player-Enemy Collision**: Added invincibility check `if (!this.player.invincible)` before damage application
+- **Massive Damage**: 50 damage to enemies, 25 damage to asteroids on player collision
+- **Proper Cleanup**: Destroyed entities properly release resources and drop rewards
+- **Invincibility Duration**: 1.5 seconds after enemy collision, 3 seconds after asteroid collision
+
+---
+
+## [4.23.17] - 2025-09-20
+
+### Enhanced
+- **Automatic Targeting**: Player bullets now automatically target the last enemy or asteroid hit
+- **Intuitive Targeting**: No need to manually click enemies - shooting them automatically selects them
+- **Visual Feedback**: Hit enemies/asteroids immediately show pulsating targeting circle and top display info
+
+### Improved
+- **Targeting System**: Combines manual click targeting with automatic bullet-hit targeting
+- **User Experience**: More responsive targeting that follows player's combat actions
+- **Combat Flow**: Seamless transition between shooting and targeting without manual intervention
+
+### Technical
+- **Bullet Collision**: Added `this.targetedEntity = target` to both enemy and asteroid bullet collision handlers
+- **Dual Targeting**: Both pulsating circle (`targetedEntity`) and info display (`targetInfo`) now update on bullet hits
+- **Consistent Behavior**: Bullet hits now behave identically to manual clicks for targeting
+
+---
+
+## [4.23.16] - 2025-09-20
+
+### Replaced
+- **Score System**: Completely replaced with survival timer tracking
+- **High Score**: Replaced with "Survival Record" showing longest survival time
+- **Title Screen**: Now displays "Survival Record: X hours, Y minutes, Z seconds" instead of high score
+
+### Enhanced
+- **Survival Tracking**: Real-time survival timer updates during gameplay
+- **Record Persistence**: Survival records saved to localStorage and displayed on title screen
+- **Time Formatting**: Intelligent time display (shows hours only if > 0, minutes only if > 0)
+
+### Fixed
+- **Level Up Text**: Moved level up message higher (180px padding) to prevent overlap with shop button
+- **UI Positioning**: Level up text and subtitle now properly positioned above shop button
+
+### Changed
+- **Game State**: Removed `score` and `highScore`, added `survivalTime`, `survivalRecord`, and `gameStartTime`
+- **Money System**: Enemy destruction and orb collection now only award money (no score)
+- **Performance Cleanup**: Particle cleanup now based on survival time instead of score
+- **Storage Keys**: Changed from `rainboidsHighScore` to `rainboidsSurvivalRecord` in localStorage
+
+### Technical
+- **Timer Implementation**: Survival timer starts when game begins, updates every frame during gameplay
+- **Record Checking**: Survival record updated and saved when game ends
+- **Time Formatting**: New `formatSurvivalTime()` method for human-readable time display
+- **UI Manager**: Updated 'shop' position padding from 120px to 180px for better spacing
+
+---
+
+## [4.23.15] - 2025-09-20
+
+### Enhanced
+- **Titan Tank Missiles**: Significantly improved with longer range (800px) and faster acceleration
+- **Enemy Bullet System**: Comprehensive constants-based configuration for all bullet types
+- **Level Scaling**: Enhanced bullet speed and range scaling with proper min/max bounds
+- **Missile Performance**: Titan missiles now start very slow (0.5 speed) and accelerate much faster
+
+### Added
+- **ENEMY_BULLET_CONFIG**: New comprehensive constants in `constants.js` for bullet behavior
+- **Speed Limits**: Min/max speed constraints for all bullet types to maintain balance
+- **Lifetime Limits**: Min/max range constraints for all bullet types
+- **Missile Configuration**: Detailed constants for both Titan and Turret missile types
+- **Level-Based Scaling**: Proper acceleration and max speed scaling for missiles based on enemy level
+
+### Changed
+- **Titan Missiles**: Initial speed reduced from 1.0 to 0.5, acceleration increased from 0.08 to 0.12, max speed increased from 8 to 12
+- **Missile Range**: Titan missile max distance increased from 600px to 800px
+- **Bullet Scaling**: All enemy bullets now use centralized constants for consistent behavior
+- **Speed Scaling**: Global 30% speed reduction with level-based increases capped at 40% maximum
+- **Range Scaling**: Bullet lifetimes now scale with level (5% per level, max 30% increase)
+
+### Technical
+- **Constants Integration**: All bullet creation now uses `ENEMY_BULLET_CONFIG` constants
+- **Level Progression**: Missile acceleration and max speed scale smoothly from level 1-6
+- **Performance Optimization**: Centralized bullet parameter management
+- **Code Organization**: Separated missile configuration into distinct Titan and Turret sections
+
+---
+
 ## [4.23.14] - 2025-09-20
 
 ### Fixed

@@ -213,7 +213,7 @@ export class UIManager {
         } else if (position === 'shop') {
             overlay.style.justifyContent = 'flex-end';
             overlay.style.paddingTop = '0';
-            overlay.style.paddingBottom = '120px'; // Position above shop button
+            overlay.style.paddingBottom = '180px'; // Position well above shop button to avoid overlap
             // Smaller font size for shop position
             this.elements.messageTitle.style.fontSize = '24px';
             this.elements.messageSubtitle.style.fontSize = '14px';

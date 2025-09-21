@@ -1,5 +1,6 @@
 // Enemy bullets with different colors and effects
 import { GameDimensions } from '../utils.js';
+import { ENEMY_BULLET_CONFIG } from '../constants.js';
 
 export class EnemyBullet {
     constructor() {
@@ -229,9 +230,10 @@ export class EnemyBullet {
                 break;
                 
             case 'titan_accelerating':
-                // Purple titan missiles - start slow, accelerate, explode after one screen distance
-                const acceleration = 0.08; // Acceleration per frame
-                const maxSpeed = 8; // Maximum speed
+                // Purple titan missiles - start very slow, accelerate quickly, explode after long distance
+                // Use bullet-specific acceleration and max speed (set during creation based on level)
+                const acceleration = this.acceleration || ENEMY_BULLET_CONFIG.MISSILE.TITAN_ACCELERATING.ACCELERATION;
+                const maxSpeed = this.maxSpeed || ENEMY_BULLET_CONFIG.MISSILE.TITAN_ACCELERATING.MAX_SPEED;
                 
                 // Accelerate in current direction
                 const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
@@ -248,8 +250,9 @@ export class EnemyBullet {
                     const dy = this.y - this.startY;
                     this.distanceTraveled = Math.hypot(dx, dy);
                     
-                    // Explode after traveling max distance
-                    if (this.distanceTraveled >= this.maxDistance) {
+                    // Explode after traveling max distance (set during creation)
+                    const maxDistance = this.maxDistance || ENEMY_BULLET_CONFIG.MISSILE.TITAN_ACCELERATING.MAX_DISTANCE;
+                    if (this.distanceTraveled >= maxDistance) {
                         // Create explosion effect
                         this.createExplosionEffect();
                         this.active = false;
@@ -259,8 +262,9 @@ export class EnemyBullet {
                 
             case 'missile_decelerate':
                 // Missile turret missiles - start fast, decelerate, then explode
-                const deceleration = 0.05; // Deceleration per frame
-                const minSpeed = 0.5; // Minimum speed before exploding
+                // Use constants for deceleration parameters
+                const deceleration = ENEMY_BULLET_CONFIG.MISSILE.TURRET_DECELERATE.DECELERATION;
+                const minSpeed = ENEMY_BULLET_CONFIG.MISSILE.TURRET_DECELERATE.MIN_SPEED;
                 
                 // Decelerate in current direction
                 const currentSpeedDeccel = Math.hypot(this.vel.x, this.vel.y);

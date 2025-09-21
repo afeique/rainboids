@@ -1,5 +1,5 @@
 // Enhanced enemy system with multiple types and behaviors
-import { GAME_CONFIG } from '../constants.js';
+import { GAME_CONFIG, ENEMY_BULLET_CONFIG } from '../constants.js';
 import { random, GameDimensions } from '../utils.js';
 
 // Enemy type definitions with unique characteristics
@@ -3025,12 +3025,14 @@ export class Enemy {
             // Titan tank - purple accelerating missile fired from turret
             const turretAngle = this.tankTurretAngle || 0;
             
-            // Fire straight from turret direction (accelerating missile)
-            this.createEnemyBullet(gameEngine, turretAngle, 1.0, '#8A2BE2', true, 'titan_accelerating', null);
+            // Fire straight from turret direction (accelerating missile) with very slow initial speed
+            const titanConfig = ENEMY_BULLET_CONFIG.MISSILE.TITAN_ACCELERATING;
+            this.createEnemyBullet(gameEngine, turretAngle, titanConfig.INITIAL_SPEED, '#8A2BE2', true, 'titan_accelerating', null);
         } else {
             // Regular missile turret - homing missile that decelerates
             const angle = Math.atan2(targetY - this.y, targetX - this.x);
-            this.createEnemyBullet(gameEngine, angle, 3.5, '#ff00ff', true, 'missile_decelerate');
+            const turretConfig = ENEMY_BULLET_CONFIG.MISSILE.TURRET_DECELERATE;
+            this.createEnemyBullet(gameEngine, angle, turretConfig.INITIAL_SPEED, '#ff00ff', true, 'missile_decelerate');
         }
     }
     
@@ -3333,10 +3335,19 @@ export class Enemy {
     createEnemyBullet(gameEngine, angle, speed, color, explosive = false, movementPattern = 'aimed', target = null) {
         if (!gameEngine.enemyBulletPool) return;
         
-        // Apply level scaling to bullet speed (slower base, reasonable scaling)
-        const baseSpeedMultiplier = 0.7; // Make all shots 30% slower by default
-        const levelSpeedBonus = Math.min(0.4, (this.level - 1) * 0.08); // Max 40% speed increase at level 6+
-        const scaledSpeed = speed * baseSpeedMultiplier * (1 + levelSpeedBonus);
+        // Apply level scaling to bullet speed using constants
+        const baseSpeedMultiplier = ENEMY_BULLET_CONFIG.BASE_SPEED_MULTIPLIER;
+        const levelSpeedBonus = Math.min(
+            ENEMY_BULLET_CONFIG.MAX_LEVEL_SPEED_BONUS, 
+            (this.level - 1) * ENEMY_BULLET_CONFIG.LEVEL_SPEED_BONUS_PER_LEVEL
+        );
+        let scaledSpeed = speed * baseSpeedMultiplier * (1 + levelSpeedBonus);
+        
+        // Apply speed limits based on bullet type
+        const speedLimits = ENEMY_BULLET_CONFIG.SPEED_LIMITS[movementPattern.toUpperCase()];
+        if (speedLimits) {
+            scaledSpeed = Math.max(speedLimits.MIN, Math.min(speedLimits.MAX, scaledSpeed));
+        }
         
         const bullet = gameEngine.enemyBulletPool.get();
         if (bullet) {
@@ -3359,12 +3370,22 @@ export class Enemy {
                 bullet.glowRadius = 12; // Larger glow effect
                 bullet.damage = this.getLevelScaledDamage(4); // Higher damage than normal bullets
                 
-                // For accelerating missiles, track distance traveled
+                // For accelerating missiles, track distance traveled and set level-scaled properties
                 if (movementPattern === 'titan_accelerating') {
                     bullet.distanceTraveled = 0;
                     bullet.startX = bullet.x;
                     bullet.startY = bullet.y;
-                    bullet.maxDistance = 800; // Approximately one screen width
+                    
+                    // Use level-scaled max distance from constants
+                    const titanConfig = ENEMY_BULLET_CONFIG.MISSILE.TITAN_ACCELERATING;
+                    bullet.maxDistance = titanConfig.MAX_DISTANCE;
+                    
+                    // Set level-scaled acceleration and max speed
+                    const levelProgress = Math.min(1, (this.level - 1) / 5); // Normalize to 0-1 over 6 levels
+                    bullet.acceleration = titanConfig.MIN_ACCELERATION + 
+                        (titanConfig.MAX_ACCELERATION - titanConfig.MIN_ACCELERATION) * levelProgress;
+                    bullet.maxSpeed = titanConfig.MIN_MAX_SPEED + 
+                        (titanConfig.MAX_MAX_SPEED - titanConfig.MIN_MAX_SPEED) * levelProgress;
                 }
             }
             
@@ -3387,6 +3408,18 @@ export class Enemy {
             bullet.movementPattern = movementPattern;
             bullet.patternTimer = 0;
             bullet.patternPhase = Math.random() * Math.PI * 2; // Random starting phase
+            
+            // Apply lifetime scaling based on bullet type and level
+            const lifetimeLimits = ENEMY_BULLET_CONFIG.LIFETIME_LIMITS[movementPattern.toUpperCase()];
+            if (lifetimeLimits && !bullet.life) { // Don't override if already set (like laser bullets)
+                const baseLifeMultiplier = ENEMY_BULLET_CONFIG.BASE_LIFE_MULTIPLIER;
+                const levelLifeBonus = Math.min(
+                    ENEMY_BULLET_CONFIG.MAX_LEVEL_LIFE_BONUS,
+                    (this.level - 1) * ENEMY_BULLET_CONFIG.LEVEL_LIFE_BONUS_PER_LEVEL
+                );
+                const scaledLife = lifetimeLimits.MIN * baseLifeMultiplier * (1 + levelLifeBonus);
+                bullet.life = Math.max(lifetimeLimits.MIN, Math.min(lifetimeLimits.MAX, scaledLife));
+            }
             
             // For homing missiles and homing shots, provide player reference
             if (movementPattern === 'missile' || movementPattern === 'homing' || movementPattern === 'titan_homing') {

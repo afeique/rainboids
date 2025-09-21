@@ -60,6 +60,75 @@ export const GAME_CONFIG = {
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 };
 
+// Enemy Bullet Configuration
+export const ENEMY_BULLET_CONFIG = {
+    // Global bullet speed scaling
+    BASE_SPEED_MULTIPLIER: 0.7, // Make all enemy shots 30% slower by default
+    LEVEL_SPEED_BONUS_PER_LEVEL: 0.08, // 8% speed increase per level
+    MAX_LEVEL_SPEED_BONUS: 0.4, // Maximum 40% speed increase (reached at level 6+)
+    
+    // Global bullet range/lifetime scaling
+    BASE_LIFE_MULTIPLIER: 1.0, // Base bullet lifetime multiplier
+    LEVEL_LIFE_BONUS_PER_LEVEL: 0.05, // 5% range increase per level
+    MAX_LEVEL_LIFE_BONUS: 0.3, // Maximum 30% range increase (reached at level 7+)
+    
+    // Missile-specific configuration
+    MISSILE: {
+        // Titan accelerating missiles
+        TITAN_ACCELERATING: {
+            INITIAL_SPEED: 0.5, // Very slow start (was 1.0)
+            ACCELERATION: 0.12, // Faster acceleration (was 0.08)
+            MAX_SPEED: 12, // Higher max speed (was 8)
+            MAX_DISTANCE: 800, // Longer range (was 600)
+            MIN_ACCELERATION: 0.08, // Minimum acceleration at level 1
+            MAX_ACCELERATION: 0.18, // Maximum acceleration at high levels
+            MIN_MAX_SPEED: 8, // Minimum max speed at level 1
+            MAX_MAX_SPEED: 15, // Maximum max speed at high levels
+        },
+        
+        // Missile turret decelerating missiles
+        TURRET_DECELERATE: {
+            INITIAL_SPEED: 3.5, // Fast start
+            DECELERATION: 0.05, // Deceleration rate
+            MIN_SPEED: 0.5, // Speed at which missile explodes
+            MAX_DISTANCE: 400, // Maximum travel distance
+            MIN_DECELERATION: 0.03, // Minimum deceleration at level 1
+            MAX_DECELERATION: 0.08, // Maximum deceleration at high levels
+            MIN_INITIAL_SPEED: 2.5, // Minimum initial speed at level 1
+            MAX_INITIAL_SPEED: 5.0, // Maximum initial speed at high levels
+        }
+    },
+    
+    // Bullet type speed limits
+    SPEED_LIMITS: {
+        AIMED: { MIN: 2.0, MAX: 6.0 },
+        SPREAD: { MIN: 1.5, MAX: 4.5 },
+        RAPID: { MIN: 3.0, MAX: 7.0 },
+        SPIRAL: { MIN: 1.5, MAX: 4.0 },
+        BURST: { MIN: 1.5, MAX: 4.0 },
+        EXPLOSIVE: { MIN: 2.0, MAX: 5.0 },
+        LASER: { MIN: 8.0, MAX: 15.0 },
+        PULSE: { MIN: 3.0, MAX: 7.0 },
+        SHIELD_BURST: { MIN: 2.0, MAX: 5.0 },
+        HOMING: { MIN: 1.0, MAX: 3.0 },
+    },
+    
+    // Bullet type lifetime limits (in seconds)
+    LIFETIME_LIMITS: {
+        AIMED: { MIN: 1.5, MAX: 3.0 },
+        SPREAD: { MIN: 1.2, MAX: 2.5 },
+        RAPID: { MIN: 1.0, MAX: 2.0 },
+        SPIRAL: { MIN: 2.0, MAX: 4.0 },
+        BURST: { MIN: 1.0, MAX: 2.0 },
+        EXPLOSIVE: { MIN: 1.5, MAX: 3.0 },
+        LASER: { MIN: 0.6, MAX: 1.2 },
+        PULSE: { MIN: 1.2, MAX: 2.5 },
+        SHIELD_BURST: { MIN: 1.5, MAX: 3.0 },
+        HOMING: { MIN: 3.0, MAX: 6.0 },
+        CRESCENT_SLICE: { MIN: 0.2, MAX: 0.4 },
+    }
+};
+
 export const NOISE_CONFIG = {
     // General settings
     DENSITY_MULTIPLIER: 2.5, // Overall control of star density
