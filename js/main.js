@@ -46,21 +46,23 @@ class RainboidsGame {
     }
     
     setupLoadingScreen() {
-        this.loadingScreen = document.getElementById('loading-screen');
+        // Loading screen is now commented out to prevent flash
+        this.loadingScreen = null; // document.getElementById('loading-screen');
         this.assetLoader = new AssetLoader();
         
-        // Set up progress callback
+        // Set up progress callback (elements are commented out)
         this.assetLoader.setProgressCallback((progress) => {
-            const progressBar = document.getElementById('loading-progress');
-            const loadingText = document.getElementById('loading-text');
+            // Progress elements are commented out to prevent flash
+            // const progressBar = document.getElementById('loading-progress');
+            // const loadingText = document.getElementById('loading-text');
             
-            if (progressBar) {
-                progressBar.style.width = `${progress}%`;
-            }
+            // if (progressBar) {
+            //     progressBar.style.width = `${progress}%`;
+            // }
             
-            if (loadingText) {
-                loadingText.textContent = `Loading... ${Math.round(progress)}%`;
-            }
+            // if (loadingText) {
+            //     loadingText.textContent = `Loading... ${Math.round(progress)}%`;
+            // }
         });
     }
     
@@ -78,9 +80,10 @@ class RainboidsGame {
     }
     
     hideLoadingScreen() {
-        if (this.loadingScreen) {
-            this.loadingScreen.style.display = 'none';
-        }
+        // Loading screen is commented out to prevent flash
+        // if (this.loadingScreen) {
+        //     this.loadingScreen.style.display = 'none';
+        // }
     }
     
     setupCanvas() {

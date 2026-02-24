@@ -149,9 +149,19 @@ export class Player {
             duration: 2000 // 2 second animation
         };
         
+        // Debug logging
+        console.log(`🎉 LEVEL UP! Player reached LEVEL ${this.level}!`);
+        console.log('window.gameEngine:', window.gameEngine);
+        console.log('uiManager:', window.gameEngine?.uiManager);
+        
         // Display level up message via game engine - smaller and above shop button
         if (window.gameEngine && window.gameEngine.uiManager) {
+            console.log('✅ Showing level up message via UI manager');
             window.gameEngine.uiManager.showMessage(`LEVEL ${this.level}!`, 'Skill Point Gained!', 3000, 'shop');
+        } else {
+            // Fallback: log to console if UI manager not available
+            console.log('❌ UI manager not available, using fallback');
+            console.log(`Player reached LEVEL ${this.level}! Skill Point Gained!`);
         }
         
         // Create level up particles via game engine
@@ -197,7 +207,7 @@ export class Player {
         return this.experience / this.experienceToNextLevel;
     }
     
-    updateChargingSystem(input, bulletPool, audioManager) {
+    updateChargingSystem(input, bulletPool, audioManager, particlePool) {
         // Skip charging updates if paused
         if (this.chargePaused) {
             return;
@@ -244,6 +254,9 @@ export class Player {
             
             this.tractorBeamActive = !isFullyCharged; // Stop tractor when fully charged
             this.isFullyCharged = isFullyCharged; // Store for visual effects
+            
+            // Charging particle effects disabled to save resources
+            // this.createChargingParticleEffects(particlePool, currentChargeTime, reducedMaxChargeTime);
         } else {
             this.tractorBeamActive = false; // No tractor when not charging
             this.isFullyCharged = false;
@@ -265,6 +278,97 @@ export class Player {
             this.chargePaused = false;
             // pausedChargeTime keeps the accumulated time
         }
+    }
+    
+    createChargingParticleEffects(particlePool, currentChargeTime, maxChargeTime) {
+        // Charging particle effects disabled to save resources
+        // Method kept for compatibility but does nothing
+        return;
+        
+        /* DISABLED - Resource intensive charging effects
+        if (!particlePool) return;
+        
+        const chargeProgress = Math.min(1, currentChargeTime / maxChargeTime);
+        const isBasicCharged = currentChargeTime >= this.minChargeTime;
+        
+        // ORIGINAL player particle effects - more intense as charge builds
+        const spawnChance = isBasicCharged ? 0.8 : 0.4; // Higher spawn rate when charged
+        
+        if (Math.random() < spawnChance) {
+            const particleCount = isBasicCharged ? (4 + Math.random() * 6) : (2 + Math.random() * 3); // 4-10 or 2-5 particles
+            
+            for (let i = 0; i < particleCount; i++) {
+                // Spawn particles around the player that get drawn in
+                const angle = Math.random() * Math.PI * 2;
+                const distance = (80 + Math.random() * 120) * (1 + chargeProgress * 0.5); // 80-200 pixels away, further when more charged
+                const startX = this.x + Math.cos(angle) * distance;
+                const startY = this.y + Math.sin(angle) * distance;
+                
+                // Create particle that moves toward player
+                const particle = particlePool.get(startX, startY, 'spawnParticle', this.x, this.y, this);
+                if (particle) {
+                    if (this.isFullyCharged) {
+                        // Fully charged - brilliant white/cyan energy
+                        if (Math.random() < 0.4) {
+                            particle.color = '#FFFFFF'; // Pure white sparkles
+                        } else {
+                            const hue = 180 + Math.random() * 20; // Cyan to light blue
+                            const lightness = 70 + Math.random() * 30; // 70-100% lightness
+                            particle.color = `hsl(${hue}, 100%, ${lightness}%)`;
+                        }
+                        particle.radius = 3 + Math.random() * 4; // Large, dramatic particles
+                    } else if (isBasicCharged) {
+                        // Basic charged - cyan energy
+                        const hue = 180 + Math.random() * 30; // Cyan to blue range
+                        const lightness = 60 + Math.random() * 30; // 60-90% lightness
+                        particle.color = `hsl(${hue}, 100%, ${lightness}%)`;
+                        particle.radius = 2 + Math.random() * 3; // Medium particles
+                        
+                        // Some white sparkles
+                        if (Math.random() < 0.2) {
+                            particle.color = '#FFFFFF';
+                            particle.radius *= 1.2;
+                        }
+                    } else {
+                        // Charging - blue energy
+                        const hue = 200 + Math.random() * 40; // Blue range
+                        const lightness = 50 + Math.random() * 30; // 50-80% lightness
+                        particle.color = `hsl(${hue}, 100%, ${lightness}%)`;
+                        particle.radius = 1.5 + Math.random() * 2; // Smaller particles
+                    }
+                }
+            }
+        }
+        
+        // ADDITIONAL Drifter-style charge animation ON TOP of existing effects
+        if (Math.random() < 0.6) { // Frequent particle spawning like Drifter
+            const drifterParticleCount = 3 + Math.random() * 4; // 3-7 particles
+            
+            for (let i = 0; i < drifterParticleCount; i++) {
+                // Spawn particles around the player that get drawn in (Drifter style)
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 60 + Math.random() * 80; // 60-140 pixels away
+                const startX = this.x + Math.cos(angle) * distance;
+                const startY = this.y + Math.sin(angle) * distance;
+                
+                // Create particle that moves toward player (Drifter style)
+                const particle = particlePool.get(startX, startY, 'spawnParticle', this.x, this.y, this);
+                if (particle) {
+                    // Red/orange energy colors for laser charging (Drifter colors)
+                    const hue = 0 + Math.random() * 30; // Red to orange range
+                    const lightness = 60 + Math.random() * 30; // 60-90% lightness
+                    particle.color = `hsl(${hue}, 100%, ${lightness}%)`;
+                    particle.radius = 2 + Math.random() * 3; // Larger charging particles
+                    
+                    // Add some white sparkles (Drifter style)
+                    if (Math.random() < 0.2) {
+                        particle.color = '#FFFFFF';
+                        particle.radius *= 1.2;
+                    }
+                }
+            }
+        }
+        */
     }
     
     // Hit streak combo system methods
@@ -383,6 +487,7 @@ export class Player {
             const elapsed = Date.now() - this.levelUpAnimation.startTime;
             if (elapsed >= this.levelUpAnimation.duration) {
                 this.levelUpAnimation.active = false;
+                this.levelUpTextInfo = { active: false }; // Clear level up text
             }
         }
 
@@ -504,11 +609,11 @@ export class Player {
         }
 
         // Charging shot system - charge when holding left-click, fire on release
-        this.updateChargingSystem(input, bulletPool, audioManager);
+        this.updateChargingSystem(input, bulletPool, audioManager, particlePool);
         
-        // Tractor beam particle effects when charging (but not fully charged)
-        if (this.tractorBeamActive && Math.random() < 0.3) {
-            this.spawnTractorBeamParticles(particlePool);
+        // Charge beam particle effects - re-enabled when player can shoot
+        if (this.tractorBeamActive && this.canShoot && Math.random() < 0.3) {
+            this.spawnChargeBeamParticles(particlePool);
         }
 
     }
@@ -632,8 +737,8 @@ export class Player {
         ctx.stroke();
         ctx.restore();
         
-        // Draw charging effects
-        if (this.isCharging) {
+        // Draw charging effects when player is charging and can shoot (cooldown complete)
+        if (this.isCharging && this.canShoot) {
             this.drawChargingEffects(ctx);
         }
         
@@ -649,6 +754,7 @@ export class Player {
     }
     
     drawChargingEffects(ctx) {
+        // Re-enabled charging effects - only called when player can shoot (cooldown complete)
         const now = Date.now();
         const chargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
         
@@ -807,6 +913,13 @@ export class Player {
         }
         
         ctx.restore();
+        
+        // Store level up text info for game engine to draw in screen coordinates
+        this.levelUpTextInfo = {
+            level: this.level,
+            progress: progress,
+            active: true
+        };
     }
     
     drawCooldownTimer(ctx) {
@@ -860,18 +973,30 @@ export class Player {
         ctx.restore();
     }
     
-    spawnTractorBeamParticles(particlePool) {
+    spawnChargeBeamParticles(particlePool) {
+        // Re-enabled charge beam particles - only when player can shoot
+        if (!particlePool) return;
         // Spawn blue energy particles around the player that get drawn in
         const particleCount = 2 + Math.random() * 3; // 2-5 particles (reasonable amount)
         
+        // Calculate player speed to adjust particle spawn pattern
+        const playerSpeed = Math.hypot(this.vel.x, this.vel.y);
+        const movementAngle = Math.atan2(this.vel.y, this.vel.x);
+        
         for (let i = 0; i < particleCount; i++) {
-            // Spawn particles closer to the ship like the original
+            // Spawn particles in a pattern that accounts for player movement
             const angle = Math.random() * Math.PI * 2;
             const distance = 40 + Math.random() * 60; // 40-100 pixels away (much closer)
-            const startX = this.x + Math.cos(angle) * distance;
-            const startY = this.y + Math.sin(angle) * distance;
             
-            // Create particle that moves toward player
+            // Offset spawn position based on player velocity to create centered effect
+            const velocityOffset = playerSpeed * 2; // Adjust multiplier as needed
+            const offsetX = Math.cos(movementAngle) * velocityOffset;
+            const offsetY = Math.sin(movementAngle) * velocityOffset;
+            
+            const startX = this.x + Math.cos(angle) * distance + offsetX;
+            const startY = this.y + Math.sin(angle) * distance + offsetY;
+            
+            // Create particle that moves toward current player position (dynamic tracking handles movement)
             const particle = particlePool.get(startX, startY, 'spawnParticle', this.x, this.y, this);
             if (particle) {
                 // Blue energy colors

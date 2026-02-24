@@ -18,8 +18,8 @@ export class UIManager {
             livesDisplay: document.getElementById('lives-display'),
             waveDisplay: document.getElementById('wave-display'),
             pauseOverlay: document.getElementById('pause-overlay'),
-            messageTitle: document.getElementById('message-title'),
-            messageSubtitle: document.getElementById('message-subtitle'),
+            messageTitle: document.getElementById('message-title'), // Commented out in HTML
+            messageSubtitle: document.getElementById('message-subtitle'), // Commented out in HTML
             mobileControls: document.getElementById('mobile-controls'),
             // titleScreen: document.getElementById('title-screen'),
             // gameTitle: document.getElementById('game-title'),
@@ -32,7 +32,7 @@ export class UIManager {
             musicProgress: null, // Removed from main display
             musicInfoCurrentTime: null, // Removed from main display
             musicInfoDuration: null, // Removed from main display
-            shopButton: document.getElementById('shop-button'),
+            shopButton: document.getElementById('shop-button'), // Commented out in HTML
             pauseShopButton: document.getElementById('pause-shop-button'),
             pauseResumeButton: document.getElementById('pause-resume-button'),
             // Music tab elements
@@ -68,7 +68,9 @@ export class UIManager {
     }
     
     updateScore(money) {
-        this.elements.score.textContent = `${Math.floor(money)}`;
+        if (this.elements.score) {
+            this.elements.score.textContent = `${Math.floor(money)}`;
+        }
     }
     
     updateLives(lives) {
@@ -112,6 +114,11 @@ export class UIManager {
     }
     
     positionLivesDisplay() {
+        // Check if lives display element exists (it's commented out in HTML)
+        if (!this.elements.livesDisplay) {
+            return;
+        }
+        
         // Position triforce all the way on the left, before the health bar
         const livesX = 10; // Far left position with small margin from edge
         
@@ -193,6 +200,14 @@ export class UIManager {
     }
     
     showMessage(title, subtitle = '', duration = 0, position = 'center') {
+        console.log(`🎯 UI Manager showMessage called: "${title}" | "${subtitle}" | duration: ${duration} | position: ${position}`);
+        
+        // Check if message elements exist (they're commented out in HTML)
+        if (!this.elements.messageTitle || !this.elements.messageSubtitle) {
+            console.log('Message elements are commented out, skipping message display');
+            return;
+        }
+        
         this.elements.messageTitle.textContent = title;
         this.elements.messageTitle.style.display = 'block';
         this.elements.messageSubtitle.innerHTML = subtitle.replace(/\n/g, '<br>');
@@ -204,20 +219,20 @@ export class UIManager {
         
         // Position the message overlay
         const overlay = document.getElementById('game-message-overlay');
-        if (position === 'top') {
+        if (overlay && position === 'top') {
             overlay.style.justifyContent = 'flex-start';
             overlay.style.paddingTop = '12.5vh'; // 7/8 from top = 1/8 from top = 12.5% of viewport height
             // Reset font size for top messages
             this.elements.messageTitle.style.fontSize = '48px';
             this.elements.messageSubtitle.style.fontSize = '20px';
-        } else if (position === 'shop') {
+        } else if (overlay && position === 'shop') {
             overlay.style.justifyContent = 'flex-end';
             overlay.style.paddingTop = '0';
-            overlay.style.paddingBottom = '180px'; // Position well above shop button to avoid overlap
+            overlay.style.paddingBottom = '120px'; // Position above shop button
             // Smaller font size for shop position
             this.elements.messageTitle.style.fontSize = '24px';
             this.elements.messageSubtitle.style.fontSize = '14px';
-        } else {
+        } else if (overlay) {
             overlay.style.justifyContent = 'center';
             overlay.style.paddingTop = '0';
             overlay.style.paddingBottom = '0';
@@ -227,9 +242,10 @@ export class UIManager {
         }
         
         if (duration > 0) {
-            // Check if this is a wave message to apply slow fade-out
+            // Check if this is a wave message or level up message to apply slow fade-out
             const isWaveMessage = title.startsWith('WAVE ');
-            if (isWaveMessage) {
+            const isLevelUpMessage = title.startsWith('LEVEL ');
+            if (isWaveMessage || isLevelUpMessage) {
                 // Show for 60% of duration, then fade out over remaining 40%
                 const fadeStartTime = duration * 0.6;
                 const fadeOutDuration = duration * 0.4;
@@ -238,7 +254,7 @@ export class UIManager {
                     this.fadeOutMessage(fadeOutDuration);
                 }, fadeStartTime);
             } else {
-                // Regular instant hide for non-wave messages
+                // Regular instant hide for non-wave/non-levelup messages
                 setTimeout(() => this.hideMessage(), duration);
             }
         }
@@ -275,6 +291,11 @@ export class UIManager {
     }
 
     hideMessage() {
+        // Check if message elements exist (they're commented out in HTML)
+        if (!this.elements.messageTitle || !this.elements.messageSubtitle) {
+            return;
+        }
+        
         this.elements.messageTitle.style.display = 'none';
         this.elements.messageSubtitle.style.display = 'none';
         
@@ -286,11 +307,17 @@ export class UIManager {
         
         // Reset positioning to center for next message
         const overlay = document.getElementById('game-message-overlay');
-        overlay.style.justifyContent = 'center';
-        overlay.style.paddingTop = '0';
+        if (overlay) {
+            overlay.style.justifyContent = 'center';
+            overlay.style.paddingTop = '0';
+        }
     }
     
     togglePause() {
+        if (!this.elements.pauseOverlay) {
+            return;
+        }
+        
         const isPaused = this.elements.pauseOverlay.style.display === 'flex';
         if (isPaused) {
             this.elements.pauseOverlay.style.display = 'none';
@@ -335,7 +362,9 @@ export class UIManager {
     
     checkOrientation() {
         // Portrait mode now supported
-        this.elements.orientationOverlay.style.display = 'none';
+        if (this.elements.orientationOverlay) {
+            this.elements.orientationOverlay.style.display = 'none';
+        }
         return false;
     }
     
@@ -609,7 +638,9 @@ export class UIManager {
         };
         
         this.musicPlayer.onPlayStateChange = (isPlaying) => {
-            this.elements.musicPlayPause.textContent = isPlaying ? '⏸' : '▶';
+            if (this.elements.musicPlayPause) {
+                this.elements.musicPlayPause.textContent = isPlaying ? '⏸' : '▶';
+            }
         };
         
         this.musicPlayer.onProgressUpdate = (progress, currentTime, duration) => {
@@ -623,13 +654,15 @@ export class UIManager {
             });
         }
         
-        this.elements.shopButton.addEventListener('click', () => {
-            if (window.game) {
-                // Pause game and open shop
-                window.game.game.state = window.game.GAME_STATES?.PAUSED || 'PAUSED';
-                window.game.openShop();
-            }
-        });
+        if (this.elements.shopButton) {
+            this.elements.shopButton.addEventListener('click', () => {
+                if (window.game) {
+                    // Pause game and open shop
+                    window.game.game.state = window.game.GAME_STATES?.PAUSED || 'PAUSED';
+                    window.game.openShop();
+                }
+            });
+        }
         
         // Pause menu action buttons
         if (this.elements.pauseShopButton) {

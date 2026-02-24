@@ -11,6 +11,8 @@ export class EnemyBullet {
     reset(x = 0, y = 0, velX = 0, velY = 0, color = '#ff4444', explosive = false) {
         this.x = x;
         this.y = y;
+        this.startX = x; // Track starting position for distance calculations
+        this.startY = y;
         this.vel = { x: velX, y: velY };
         this.color = color;
         this.explosive = explosive;
@@ -154,6 +156,17 @@ export class EnemyBullet {
                 this.vel.y = Math.sin(laserAngle) * laserSpeed;
                 break;
                 
+            case 'laser_beam':
+                // Wide laser beam segment - extremely fast and destructive
+                const beamSpeed = Math.hypot(this.baseVel.x, this.baseVel.y) * 3;
+                const beamAngle = Math.atan2(this.baseVel.y, this.baseVel.x);
+                this.vel.x = Math.cos(beamAngle) * beamSpeed;
+                this.vel.y = Math.sin(beamAngle) * beamSpeed;
+                // Reduced damage for balance - was (damage || 15) * 1.5
+                this.damage = (this.damage || 3) * 1.0; // Much lower base damage
+                this.radius = Math.max(this.radius, 8);
+                break;
+                
             case 'missile':
                 // Homing missile - tracks player
                 if (this.targetPlayer) {
@@ -229,19 +242,16 @@ export class EnemyBullet {
                 }
                 break;
                 
-            case 'titan_accelerating':
-                // Purple titan missiles - start very slow, accelerate quickly, explode after long distance
-                // Use bullet-specific acceleration and max speed (set during creation based on level)
-                const acceleration = this.acceleration || ENEMY_BULLET_CONFIG.MISSILE.TITAN_ACCELERATING.ACCELERATION;
-                const maxSpeed = this.maxSpeed || ENEMY_BULLET_CONFIG.MISSILE.TITAN_ACCELERATING.MAX_SPEED;
-                
-                // Accelerate in current direction
+            case 'titan_rocket':
+                // Fast, direct rockets - maintain constant speed
+                const rocketSpeed = this.rocketSpeed || ENEMY_BULLET_CONFIG.MISSILE.TITAN_ROCKET.SPEED;
                 const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
-                if (currentSpeed < maxSpeed) {
+                
+                // Maintain constant rocket speed
+                if (currentSpeed !== rocketSpeed) {
                     const direction = Math.atan2(this.vel.y, this.vel.x);
-                    const newSpeed = Math.min(currentSpeed + acceleration, maxSpeed);
-                    this.vel.x = Math.cos(direction) * newSpeed;
-                    this.vel.y = Math.sin(direction) * newSpeed;
+                    this.vel.x = Math.cos(direction) * rocketSpeed;
+                    this.vel.y = Math.sin(direction) * rocketSpeed;
                 }
                 
                 // Track distance traveled
@@ -250,8 +260,8 @@ export class EnemyBullet {
                     const dy = this.y - this.startY;
                     this.distanceTraveled = Math.hypot(dx, dy);
                     
-                    // Explode after traveling max distance (set during creation)
-                    const maxDistance = this.maxDistance || ENEMY_BULLET_CONFIG.MISSILE.TITAN_ACCELERATING.MAX_DISTANCE;
+                    // Explode after traveling max distance
+                    const maxDistance = this.maxDistance || ENEMY_BULLET_CONFIG.MISSILE.TITAN_ROCKET.MAX_DISTANCE;
                     if (this.distanceTraveled >= maxDistance) {
                         // Create explosion effect
                         this.createExplosionEffect();
@@ -262,9 +272,14 @@ export class EnemyBullet {
                 
             case 'missile_decelerate':
                 // Missile turret missiles - start fast, decelerate, then explode
-                // Use constants for deceleration parameters
-                const deceleration = ENEMY_BULLET_CONFIG.MISSILE.TURRET_DECELERATE.DECELERATION;
-                const minSpeed = ENEMY_BULLET_CONFIG.MISSILE.TURRET_DECELERATE.MIN_SPEED;
+                // Use level-scaled deceleration or fall back to constants
+                const prowlerConfig = ENEMY_BULLET_CONFIG.MISSILE.PROWLER_PIKE;
+                if (!prowlerConfig) {
+                    console.error('PROWLER_PIKE configuration not found!');
+                    return; // Exit early if config is missing
+                }
+                const deceleration = this.deceleration || prowlerConfig.DECELERATION;
+                const minSpeed = prowlerConfig.MIN_SPEED;
                 
                 // Decelerate in current direction
                 const currentSpeedDeccel = Math.hypot(this.vel.x, this.vel.y);
@@ -277,6 +292,18 @@ export class EnemyBullet {
                     // Reached minimum speed - explode and disappear
                     this.createExplosionEffect();
                     this.active = false;
+                }
+                
+                // Check max distance for Prowler missiles
+                if (this.maxDistance && this.startX !== undefined && this.startY !== undefined) {
+                    const dx = this.x - this.startX;
+                    const dy = this.y - this.startY;
+                    const distanceTraveled = Math.hypot(dx, dy);
+                    
+                    if (distanceTraveled >= this.maxDistance) {
+                        this.createExplosionEffect();
+                        this.active = false;
+                    }
                 }
                 break;
                 
@@ -545,10 +572,7 @@ export class EnemyBullet {
             }
         }
         
-        // Screen shake
-        if (gameEngine.triggerScreenShake) {
-            gameEngine.triggerScreenShake(8, 4, this.radius);
-        }
+        // No screen shake for enemy bullet explosions - only player-related events should shake
     }
     
     createDisappearEffect() {

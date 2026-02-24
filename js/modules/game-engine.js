@@ -1,5 +1,5 @@
 // Main game engine and state management
-import { GAME_CONFIG, GAME_STATES } from './constants.js';
+import { GAME_CONFIG, GAME_STATES, getEnemyFiringCooldown } from './constants.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats } from './wave-data.js';
 import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
 import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
@@ -62,7 +62,7 @@ export class GameEngine {
         this.spawnInterval = 5000; // Spawn something every 5 seconds
         this.lastSpawnTime = 0; // Track last spawn
         this.gameStartTime = Date.now();
-        this.forceSpawnEnabled = true; // Emergency spawning when battlefield is empty
+        this.forceSpawnEnabled = false; // Disabled - wave-based spawning only
         
         // BACKUP SPAWNING SYSTEM - independent emergency spawner
         this.emergencySpawnInterval = 5000; // Emergency spawn every 5 seconds
@@ -162,8 +162,8 @@ export class GameEngine {
         
         // Camera and game field system
         this.gameField = {
-            width: this.width * 2,  // Game field is 2x screen size (reduced from 3x)
-            height: this.height * 2
+            width: 1920,  // 1080p width for better performance
+            height: 1080  // 1080p height for better performance
         };
         
         this.camera = {
@@ -244,15 +244,15 @@ Type any cheat name in the console to activate!`);
         this.player.x = this.gameField.width / 2;
         this.player.y = this.gameField.height / 2;
         
-        this.bulletPool = new PoolManager(Bullet, 20);
-        this.particlePool = new PoolManager(Particle, 200);
-        this.lineDebrisPool = new PoolManager(LineDebris, 100);
-        this.asteroidPool = new PoolManager(Asteroid, 20);
-        this.enemyPool = new PoolManager(Enemy, 15);
-        this.enemyBulletPool = new PoolManager(EnemyBullet, 50);
-        this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 100);
-        this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 36);
-        this.powerupPool = new PoolManager(Powerup, 20);
+        this.bulletPool = new PoolManager(Bullet, 10);     // Reduced from 20  
+        this.particlePool = new PoolManager(Particle, 50); // Reduced from 200
+        this.lineDebrisPool = new PoolManager(LineDebris, 20); // Reduced from 100
+        this.asteroidPool = new PoolManager(Asteroid, 5);  // Reduced from 20
+        this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
+        this.enemyBulletPool = new PoolManager(EnemyBullet, 20); // Reduced from 50
+        this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 10);
+        this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT);
+        this.powerupPool = new PoolManager(Powerup, 5); // Reduced from 20
         
         // Powerup display system
         this.powerupDisplay = {
@@ -643,7 +643,7 @@ Type any cheat name in the console to activate!`);
         this.lastSpawnTime = 0; // Reset spawn timer
         this.lastEmergencySpawn = 0; // Reset emergency timer
         this.nextShopTime = Date.now() + this.shopInterval;
-        this.forceSpawnEnabled = true;
+        this.forceSpawnEnabled = false; // Keep disabled for wave-based spawning
         
         
         // Reset ghost preview positions
@@ -694,8 +694,8 @@ Type any cheat name in the console to activate!`);
         const spawnWidth = this.gameField.width;
         const spawnHeight = this.gameField.height;
         
-        // Quadruple the star count for denser starfield (was 9x, now 36x)
-        const scaledStarCount = GAME_CONFIG.BACKGROUND_STAR_COUNT * 36;
+        // Use base star count for 60fps performance (was 36x, now 1x)
+        const scaledStarCount = GAME_CONFIG.BACKGROUND_STAR_COUNT;
         
         const backgroundStarPositions = generateStarPositions(spawnWidth, spawnHeight, scaledStarCount);
         
@@ -1003,10 +1003,16 @@ Type any cheat name in the console to activate!`);
         // Spawn asteroids with level scaling
         this.spawnLeveledAsteroids(waveConfig.asteroids);
         
-        // Spawn enemies by type with level scaling
-        waveConfig.enemies.forEach(enemyGroup => {
-            this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count);
-        });
+        // Spawn enemies by type with level scaling (respect MAX_ENEMIES limit)
+        let totalEnemiesSpawned = this.enemyPool.activeObjects.length;
+        for (const enemyGroup of waveConfig.enemies) {
+            const remainingSlots = GAME_CONFIG.MAX_ENEMIES - totalEnemiesSpawned;
+            if (remainingSlots <= 0) break;
+            
+            const countToSpawn = Math.min(enemyGroup.count, remainingSlots);
+            this.spawnLeveledEnemies(enemyGroup.type, countToSpawn);
+            totalEnemiesSpawned += countToSpawn;
+        }
     }
     
     spawnAsteroids(count) {
@@ -1030,7 +1036,11 @@ Type any cheat name in the console to activate!`);
     }
     
     spawnLeveledAsteroids(count) {
-        for (let i = 0; i < count; i++) {
+        // Respect MAX_ASTEROIDS limit for performance
+        const activeAsteroids = this.asteroidPool.activeObjects.length;
+        const maxToSpawn = Math.min(count, GAME_CONFIG.MAX_ASTEROIDS - activeAsteroids);
+        
+        for (let i = 0; i < maxToSpawn; i++) {
             const asteroid = this.asteroidPool.get(undefined, undefined, undefined, 1, this);
             if (asteroid) {
                 this.initializeLeveledAsteroid(asteroid);
@@ -1039,7 +1049,11 @@ Type any cheat name in the console to activate!`);
     }
     
     spawnLeveledEnemies(enemyType, count) {
-        for (let i = 0; i < count; i++) {
+        // Respect MAX_ENEMIES limit for performance
+        const activeEnemies = this.enemyPool.activeObjects.length;
+        const maxToSpawn = Math.min(count, GAME_CONFIG.MAX_ENEMIES - activeEnemies);
+        
+        for (let i = 0; i < maxToSpawn; i++) {
             const enemy = this.enemyPool.get();
             if (enemy) {
                 const spawnPos = this.getRandomSpawnPosition();
@@ -1070,6 +1084,9 @@ Type any cheat name in the console to activate!`);
         enemy.health = scaledStats.health;
         enemy.maxHealth = scaledStats.health;
         enemy.config.speed = scaledStats.speed;
+        
+        // Set level-based firing cooldown
+        enemy.firingCooldown = getEnemyFiringCooldown(enemy.type, this.game.enemyLevel);
         
         // Update points value for higher level enemies
         enemy.config.points = scaledStats.points;
@@ -1283,7 +1300,7 @@ Type any cheat name in the console to activate!`);
                 id: 'CHARGE_SPEED',
                 name: 'Charge Speed',
                 description: 'Reduces charge time by 1 second',
-                cost: 10000,
+                cost: 5000,
                 icon: '⚡',
                 maxStacks: 3,
                 category: 'OFFENSE',
@@ -1303,7 +1320,7 @@ Type any cheat name in the console to activate!`);
                 id: 'SPARE_SHIP',
                 name: 'Spare Ship',
                 description: 'Adds an extra life (max 3)',
-                cost: 10000,
+                cost: 1000,
                 icon: '🚀',
                 maxStacks: 1,
                 flatCost: true,
@@ -1562,7 +1579,8 @@ Type any cheat name in the console to activate!`);
         this.ctx.clip();
         
         // Calculate scrollable list layout
-        const itemWidth = shopWindowWidth - 40;
+        const scrollBarWidth = 25; // Reserve space for scrollbar
+        const itemWidth = shopWindowWidth - 40 - scrollBarWidth; // Leave space for scrollbar
         const itemHeight = 100; // Increased from 80 to accommodate larger fonts
         const padding = 12; // Slightly increased padding
         const startX = shopWindowX + 20;
@@ -1593,7 +1611,7 @@ Type any cheat name in the console to activate!`);
                 if (this.mouseX !== undefined && this.mouseY !== undefined) {
                     isHovered = this.mouseX >= x && this.mouseX <= x + itemWidth &&
                                this.mouseY >= y && this.mouseY <= y + itemHeight &&
-                               this.mouseX >= shopWindowX + 10 && this.mouseX <= shopWindowX + shopWindowWidth - 10 &&
+                               this.mouseX >= shopWindowX + 10 && this.mouseX <= shopWindowX + shopWindowWidth - 35 && // Account for scrollbar space
                                this.mouseY >= shopWindowY + 20 && this.mouseY <= shopWindowY + shopWindowHeight - 60;
                 }
                 
@@ -1605,7 +1623,7 @@ Type any cheat name in the console to activate!`);
         
         // Draw scroll indicators if needed
         if (maxScroll > 0) {
-            const scrollBarWidth = 20; // Wider scrollbar
+            const scrollBarWidth = 25; // Wider scrollbar to match reserved space
             const scrollBarX = shopWindowX + shopWindowWidth - scrollBarWidth - 5;
             const arrowButtonHeight = 20;
             const scrollBarY = shopWindowY + 20 + arrowButtonHeight;
@@ -2068,6 +2086,10 @@ Type any cheat name in the console to activate!`);
     }
     
     forceSpawnEnemy() {
+        // Check MAX_ENEMIES limit first
+        if (this.enemyPool.activeObjects.length >= GAME_CONFIG.MAX_ENEMIES) {
+            return false;
+        }
         
         // Method 1: Try normal pool
         const enemy = this.enemyPool.get();
@@ -2094,6 +2116,10 @@ Type any cheat name in the console to activate!`);
     }
     
     forceSpawnAsteroid() {
+        // Check MAX_ASTEROIDS limit first
+        if (this.asteroidPool.activeObjects.length >= GAME_CONFIG.MAX_ASTEROIDS) {
+            return false;
+        }
         
         // Method 1: Try normal pool
         const asteroid = this.asteroidPool.get();
@@ -2152,7 +2178,7 @@ Type any cheat name in the console to activate!`);
     getRandomEnemyType() {
         let availableTypes = ['HUNTER', 'WASP'];
         if (this.game.currentWave >= 2) availableTypes.push('GUARDIAN', 'STALKER');
-        if (this.game.currentWave >= 4) availableTypes.push('TANGERINE_BOMBER');
+        if (this.game.currentWave >= 4) availableTypes.push('TANGERINE');
         if (this.game.currentWave >= 6) availableTypes.push('TITAN');
         return availableTypes[Math.floor(Math.random() * availableTypes.length)];
     }
@@ -2176,7 +2202,7 @@ Type any cheat name in the console to activate!`);
         let availableTypes = ['HUNTER', 'WASP']; // Start with basic types
         
         if (this.game.currentWave >= 2) availableTypes.push('GUARDIAN', 'STALKER');
-        if (this.game.currentWave >= 4) availableTypes.push('TANGERINE_BOMBER');
+        if (this.game.currentWave >= 4) availableTypes.push('TANGERINE');
         if (this.game.currentWave >= 6) availableTypes.push('TITAN');
         
         const enemyType = availableTypes[Math.floor(random(0, availableTypes.length))];
@@ -2278,8 +2304,10 @@ Type any cheat name in the console to activate!`);
         // Create colored line debris based on enemy shape
         this.createShapeDebris(enemy);
         
-        // EPIC screen shake - much stronger!
-        this.triggerScreenShake(25, 15, enemy.radius * 2);
+        // EPIC screen shake for enemy deaths (only if on screen)!
+        if (this.isEntityOnScreen(enemy)) {
+            this.triggerScreenShake(25, 15, enemy.radius * 2);
+        }
         
         // Additional delayed explosion effects
         setTimeout(() => {
@@ -2342,7 +2370,7 @@ Type any cheat name in the console to activate!`);
                     }
                     break;
                     
-                case 'TANGERINE_BOMBER': // Spiked circle debris
+                case 'TANGERINE': // Spiked circle debris
                     const spikeAngle = (i / 8) * Math.PI * 2;
                     p1 = { x: Math.cos(spikeAngle) * size * 0.3, y: Math.sin(spikeAngle) * size * 0.3 };
                     p2 = { x: Math.cos(spikeAngle) * size * 0.6, y: Math.sin(spikeAngle) * size * 0.6 };
@@ -2411,6 +2439,12 @@ Type any cheat name in the console to activate!`);
             moneyOrb.vel.x = Math.cos(angle) * speed;
             moneyOrb.vel.y = Math.sin(angle) * speed;
         }
+    }
+    
+    dropStarsFromEntity(x, y) {
+        // Create both health and money orbs when an entity is destroyed
+        this.createHealthOrb(x, y);
+        this.createMoneyOrb(x, y);
     }
     
     // Drop orbs based on configuration and upgrades
@@ -2521,12 +2555,12 @@ Type any cheat name in the console to activate!`);
         const ctx = this.ctx;
         ctx.save();
         
-        // Position at top center, above wave number
+        // Position at top center, below HUD elements to avoid overlap
         const centerX = this.width / 2;
-        const topY = 80; // Moved down 20px from HUD
+        const topY = 120; // Moved down to clear HUD elements (health bar + level/coins + margin)
         
-        // Set font to Silkscreen with fallback
-        ctx.font = "32px 'Silkscreen', 'Press Start 2P', monospace";
+        // Set font to Press Start 2P for consistency (avoid font loading flash)
+        ctx.font = "32px 'Press Start 2P', monospace";
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
@@ -2894,18 +2928,19 @@ Type any cheat name in the console to activate!`);
         const target = this.targetedEntity;
         const ctx = this.ctx;
         
-        // Position centered horizontally on screen, to the right of player health bar without overlap
-        const healthBarEndX = 80 + 220 + 20; // barX + barWidth + margin from updateHUD
-        const availableWidth = this.width - healthBarEndX - 20; // 20px margin from right edge
-        const x = healthBarEndX + (availableWidth / 2); // Center in available space
-        const y = 30;  // Top of screen
+        // Position flush with right border with padding
+        const paddingRight = 15; // Padding from right edge
+        const paddingTop = 25;   // Padding from top edge
+        const x = this.width - paddingRight; // Flush with right border minus padding
+        const y = paddingTop;  // Top padding
         
         ctx.save();
         
         // Draw target name (all caps) - GOLD STYLING TO MATCH ENEMY NAMES
-        ctx.font = "14px 'Press Start 2P', monospace";
+        ctx.font = "16px 'Press Start 2P', monospace"; // Increased from 14px to 16px
+        ctx.letterSpacing = '1px'; // Added letter spacing
         ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'; // Same gold color as enemy names
-        ctx.textAlign = 'center';
+        ctx.textAlign = 'right'; // Align right since positioned at top right
         ctx.textBaseline = 'top';
         
         const targetName = target.config ? target.config.name.toUpperCase() : 'ASTEROID';
@@ -2915,7 +2950,7 @@ Type any cheat name in the console to activate!`);
         const barWidth = 100;
         const barHeight = 4;
         const barY = y + 25;
-        const barX = x - barWidth / 2;
+        const barX = x - barWidth; // Align right edge with text (flush with right border)
         
         const healthPercentage = target.health / target.maxHealth;
         
@@ -2944,7 +2979,8 @@ Type any cheat name in the console to activate!`);
         const healthNumber = `${displayHealth}/${Math.round(target.maxHealth)}`;
         const levelText = `LV${target.level || 1}`;
         
-        ctx.font = "10px 'Press Start 2P', monospace";
+        ctx.font = "12px 'Press Start 2P', monospace"; // Increased from 10px to 12px
+        ctx.letterSpacing = '0.5px'; // Added letter spacing
         
         // Measure text widths for proper spacing
         const levelWidth = ctx.measureText(levelText).width;
@@ -2952,8 +2988,8 @@ Type any cheat name in the console to activate!`);
         const spacing = 20; // Minimum space between LV and HP text
         const totalWidth = levelWidth + spacing + healthWidth;
         
-        // Calculate positions to center the combined text
-        const startX = x - (totalWidth / 2);
+        // Calculate positions to align right with the text and health bar
+        const startX = x - totalWidth;
         const levelX = startX;
         const healthX = startX + levelWidth + spacing;
         const numberY = barY + 18;
@@ -2997,9 +3033,8 @@ Type any cheat name in the console to activate!`);
                 if (collision(bullet, ast)) {
                     triggerHapticFeedback(60);
                     
-                    // Set target info and targeting for hit asteroid
+                    // Set targeting for hit asteroid (target info display removed)
                     this.targetedEntity = ast;
-                    this.setTargetInfo(ast);
                     
                     // Only play hit sound if asteroid is on screen
                     if (this.isEntityOnScreen(ast)) {
@@ -3011,7 +3046,7 @@ Type any cheat name in the console to activate!`);
                     
                     // Damage the asteroid (One Punch Man cheat: instant kill)
                     const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
-                    ast.health -= damage;
+                    ast.health = Math.max(0, ast.health - damage);
                     
                     // Award XP for hitting asteroid
                     this.player.gainExperience(2);
@@ -3058,7 +3093,10 @@ Type any cheat name in the console to activate!`);
                         }
                     }
                     
-                    // No screen shake for asteroid hits
+                    // Light screen shake for asteroid hits (only if on screen)
+                    if (this.isEntityOnScreen(ast)) {
+                        this.triggerScreenShake(8, ast.baseRadius * 0.3, ast.baseRadius);
+                    }
                     
                     // Use small tolerance for floating-point precision issues
                     if (ast.health <= 0.001) {
@@ -3086,18 +3124,17 @@ Type any cheat name in the console to activate!`);
                             if (Math.random() < 0.15) {
                                 this.dropPowerup(ast.x, ast.y);
                             }
+                            // Enhanced screen shake for small asteroid destruction (only if on screen)
+                            if (this.isEntityOnScreen(ast)) {
+                                this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
+                            }
                             this.asteroidPool.release(ast);
-                            // Enhanced screen shake for small asteroid destruction
-                            this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
                         } else {
                             // Make the explosion really dramatic
                             // Only play explosion sound if asteroid is on screen
                             if (this.isEntityOnScreen(ast)) {
                                 this.audioManager.playExplosion();
                             }
-                            // Massive screen shake for large asteroid destruction
-                            this.triggerScreenShake(25, ast.baseRadius * 0.8, ast.baseRadius);
-
                             // Add a bunch of particle effects
                             this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.5);
                             this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * 1.2);
@@ -3112,6 +3149,11 @@ Type any cheat name in the console to activate!`);
                                 if (Math.random() < 0.2) {
                                     this.dropPowerup(ast.x, ast.y);
                                 }
+                            
+                            // Massive screen shake for large asteroid destruction (only if on screen)
+                            if (this.isEntityOnScreen(ast)) {
+                                this.triggerScreenShake(25, ast.baseRadius * 0.8, ast.baseRadius);
+                            }
                             
                             const count = (Math.random() < 0.5 ? 2 : 3) + 1; // Now 3 or 4
                             const newR = ast.baseRadius / Math.sqrt(count);
@@ -3317,9 +3359,8 @@ Type any cheat name in the console to activate!`);
                 if (collision(bullet, enemy)) {
                     triggerHapticFeedback(40);
                     
-                    // Set target info and targeting for hit enemy
+                    // Set targeting for hit enemy (target info display removed)
                     this.targetedEntity = enemy;
-                    this.setTargetInfo(enemy);
                     
                     // Only play hit sound if enemy is on screen
                     if (this.isEntityOnScreen(enemy)) {
@@ -3391,7 +3432,7 @@ Type any cheat name in the console to activate!`);
                             this.audioManager.playExplosion();
                         }
                         
-                        // Create colored explosion effects
+                        // Create colored explosion effects (includes screen shake)
                         this.createEnemyDebris(enemy);
                         
         // Drop health and money orbs
@@ -3400,7 +3441,7 @@ Type any cheat name in the console to activate!`);
                         // Chance to drop powerup (higher chance for stronger enemies)
                         const powerupChance = enemy.type === 'WASP' ? 0.4 : 
                                             enemy.type === 'TITAN' ? 0.5 : 
-                                            enemy.type === 'TANGERINE_BOMBER' ? 0.45 : 0.25;
+                                            enemy.type === 'TANGERINE' ? 0.45 : 0.25;
                         const roll = Math.random();
                         if (roll < powerupChance) {
                             this.dropPowerup(enemy.x, enemy.y);
@@ -3476,13 +3517,16 @@ Type any cheat name in the console to activate!`);
             // Check for death/shield tank usage
             if (player.health <= 0) {
                 if (this.shieldTanks > 0) {
+                    // Use shield tank to restore health (no life lost)
                     this.shieldTanks--;
                     this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
                     player.health = player.getEffectiveMaxHealth();
                     this.audioManager.playCoin(); // Tank used sound
+                    player.makeInvincible(2000); // Brief invincibility after revival
                 } else {
-                    this.gameOver();
-                    return; // Exit early if game over
+                    // No shield tanks - lose a life and respawn
+                    this.handlePlayerDeath();
+                    return;
                 }
             }
             
@@ -3518,21 +3562,68 @@ Type any cheat name in the console to activate!`);
         if (destroyed) {
             const reward = enemy.getDestructionReward();
             this.game.money += reward.points; // Full money for collision kill (player took risk)
+            
+            // Create colored explosion effects (includes screen shake)
             this.createEnemyDebris(enemy);
             // Drop health and money orbs
             this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
             this.enemyPool.release(enemy);
         }
         
-        // Push player away
+        // Physics-based bounce with conservation of momentum
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const distance = Math.hypot(dx, dy);
         
         if (distance > 0) {
-            const pushForce = 5;
-            player.vel.x += (dx / distance) * pushForce;
-            player.vel.y += (dy / distance) * pushForce;
+            // Normalize collision direction
+            const nx = dx / distance;
+            const ny = dy / distance;
+            
+            // Calculate relative velocity
+            const relativeVelX = player.vel.x - enemy.vel.x;
+            const relativeVelY = player.vel.y - enemy.vel.y;
+            
+            // Calculate relative velocity in collision normal direction
+            const velAlongNormal = relativeVelX * nx + relativeVelY * ny;
+            
+            // Don't resolve if velocities are separating
+            if (velAlongNormal > 0) return;
+            
+            // Calculate restitution (bounciness)
+            const restitution = 0.8; // 80% energy retained
+            
+            // Calculate impulse scalar
+            const playerMass = this.player.mass || 1;
+            const enemyMass = enemy.mass || 1;
+            const impulseScalar = -(1 + restitution) * velAlongNormal / (playerMass + enemyMass);
+            
+            // Apply impulse
+            const impulseX = impulseScalar * nx;
+            const impulseY = impulseScalar * ny;
+            
+            // Enhanced collision force for more dramatic effect
+            const forceMultiplier = 6.0; // Increased from 3.0 for more visible bounce
+            
+            player.vel.x += impulseX * enemyMass * forceMultiplier;
+            player.vel.y += impulseY * enemyMass * forceMultiplier;
+            
+            if (!destroyed) {
+                enemy.vel.x -= impulseX * playerMass * forceMultiplier;
+                enemy.vel.y -= impulseY * playerMass * forceMultiplier;
+            }
+            
+            // Separate overlapping objects
+            const overlap = player.radius + enemy.radius - distance;
+            if (overlap > 0) {
+                const separationForce = overlap * 0.6; // 60% separation
+                player.x += nx * separationForce;
+                player.y += ny * separationForce;
+                if (!destroyed) {
+                    enemy.x -= nx * separationForce;
+                    enemy.y -= ny * separationForce;
+                }
+            }
         }
         
         // Additional impact particles at collision point
@@ -3561,13 +3652,16 @@ Type any cheat name in the console to activate!`);
         // Check for death/shield tank usage
         if (player.health <= 0) {
             if (this.shieldTanks > 0) {
+                // Use shield tank to restore health (no life lost)
                 this.shieldTanks--;
                 this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
                 player.health = player.getEffectiveMaxHealth();
                 this.audioManager.playCoin(); // Tank used sound
+                player.makeInvincible(2000); // Brief invincibility after revival
             } else {
-                this.gameOver();
-                return; // Exit early if game over
+                // No shield tanks - lose a life and respawn
+                this.handlePlayerDeath();
+                return;
             }
         }
         
@@ -3634,7 +3728,7 @@ Type any cheat name in the console to activate!`);
         }
         
         // Light visual feedback (no damage, just bump)
-        this.triggerScreenShake(4, 2, enemy.radius);
+        // Screen shake removed for enemy-asteroid collisions
         
         // Only play hit sound if enemy is on screen
         if (this.isEntityOnScreen(enemy)) {
@@ -3675,8 +3769,8 @@ Type any cheat name in the console to activate!`);
             // Update camera to follow player
             this.updateCamera();
             
-            // Update target info display
-            this.updateTargetInfo(16); // Assume 60fps
+            // Target info updates removed for cleaner UI
+            // this.updateTargetInfo(16); // Assume 60fps
             
             // Update money pickup display
             this.updateMoneyPickupDisplay(16); // Assume 60fps
@@ -3824,6 +3918,11 @@ Type any cheat name in the console to activate!`);
         } else {
             // Hide shop button on title screen and when shop is open
             this.uiManager.hideShopButton();
+        }
+        
+        // Draw level up text if active
+        if (this.player && this.player.levelUpTextInfo && this.player.levelUpTextInfo.active) {
+            this.drawLevelUpText();
         }
         
         // Draw wave message if active
@@ -4016,7 +4115,7 @@ Type any cheat name in the console to activate!`);
     drawMinimap() {
         const minimapSize = 150;
         const minimapX = this.width - minimapSize - 20;
-        const minimapY = 20;
+        const minimapY = this.height - minimapSize - 20; // Move to bottom right
         const scaleX = minimapSize / this.gameField.width;
         const scaleY = minimapSize / this.gameField.height;
         
@@ -4205,8 +4304,8 @@ Type any cheat name in the console to activate!`);
         // Draw HUD elements outside of screen shake transform
         this.drawHUD();
         
-        // Draw target info display
-        this.drawTargetInfo();
+        // Target info display removed for cleaner UI
+        // this.drawTargetInfo();
         
         // Draw money pickup display
         this.drawMoneyPickupDisplay();
@@ -4576,12 +4675,16 @@ Type any cheat name in the console to activate!`);
 
         if (this.player.health <= 0) {
             if (this.shieldTanks > 0) {
+                // Use shield tank to restore health (no life lost)
                 this.shieldTanks--;
                 this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
                 this.player.health = this.player.getEffectiveMaxHealth();
                 this.audioManager.playCoin(); // Tank used sound
-                } else {
-                this.gameOver();
+                this.player.makeInvincible(2000); // Brief invincibility after revival
+            } else {
+                // No shield tanks - lose a life and respawn
+                this.handlePlayerDeath();
+                return;
             }
         }
 
@@ -4589,6 +4692,37 @@ Type any cheat name in the console to activate!`);
         this.audioManager.playHit();
         this.particlePool.get(this.player.x, this.player.y, 'damageNumber', Math.round(reducedDamage));
         this.triggerScreenShake(15, 8);
+    }
+    
+    handlePlayerDeath() {
+        // Store death location for safe respawn calculation
+        this.deathLocation = { x: this.player.x, y: this.player.y };
+        
+        // Lose a life
+        this.game.lives--;
+        console.log(`💀 Player died! Lives remaining: ${this.game.lives}`);
+        this.uiManager.updateLives(this.game.lives);
+        
+        // Create player explosion effect
+        this.audioManager.playPlayerExplosion();
+        for (let i = 0; i < 30; i++) {
+            this.particlePool.get(this.player.x, this.player.y, 'playerExplosion');
+        }
+        this.triggerScreenShake(40, 20, 60); // Strong screen shake for player death
+        
+        if (this.game.lives <= 0) {
+            // True game over - no lives left
+            this.game.state = GAME_STATES.GAME_OVER;
+            this.player.active = false;
+            this.checkSurvivalRecord();
+            this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
+        } else {
+            // Still have lives - respawn after brief delay
+            this.player.active = false; // Deactivate player during respawn delay
+            setTimeout(() => {
+                this.respawnPlayerSafely();
+            }, 1500); // 1.5 second delay for dramatic effect
+        }
     }
 
     gameOver() {
@@ -5090,6 +5224,109 @@ Type any cheat name in the console to activate!`);
         
         // Draw level and coins beneath lives and health bar
         this.drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight);
+        
+        // Draw survival timer at bottom left
+        this.drawSurvivalTimer(ctx);
+    }
+    
+    drawSurvivalTimer(ctx) {
+        // Position at bottom left of screen
+        const timerX = 20;
+        const timerY = this.canvas.height - 40;
+        
+        ctx.save();
+        
+        // Format survival time as H:M:SS:mmm
+        const totalMs = this.game.survivalTime || 0;
+        const hours = Math.floor(totalMs / (1000 * 60 * 60));
+        const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
+        const milliseconds = totalMs % 1000;
+        
+        const timeString = `${hours}:${minutes}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
+        
+        // Draw stopwatch SVG icon
+        const iconSize = 24;
+        const iconX = timerX;
+        const iconY = timerY - iconSize/2;
+        
+        this.drawStopwatchIcon(ctx, iconX, iconY, iconSize);
+        
+        // Draw time text
+        ctx.font = "16px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#FFA500'; // Subdued orange color
+        ctx.strokeStyle = '#CC8400'; // Darker orange for outline
+        ctx.lineWidth = 1;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        
+        const textX = iconX + iconSize + 8;
+        
+        // Draw text outline
+        ctx.strokeText(timeString, textX, timerY);
+        // Draw text fill
+        ctx.fillText(timeString, textX, timerY);
+        
+        ctx.restore();
+    }
+    
+    drawStopwatchIcon(ctx, x, y, size) {
+        ctx.save();
+        
+        // Scale and position the SVG
+        const scale = size / 24; // Original SVG is 24x24
+        ctx.translate(x, y);
+        ctx.scale(scale, scale);
+        
+        // Set subdued orange color for the stopwatch
+        ctx.strokeStyle = '#FFA500';
+        ctx.fillStyle = 'none';
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Main circle (outer)
+        ctx.beginPath();
+        ctx.arc(11.7, 13.5, 7, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Center dot
+        ctx.beginPath();
+        ctx.arc(11.2125, 13.965, 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Top button
+        ctx.beginPath();
+        ctx.moveTo(10.95, 6.5);
+        ctx.lineTo(10.95, 3.5);
+        ctx.lineTo(12.45, 3.5);
+        ctx.lineTo(12.45, 6.5);
+        ctx.stroke();
+        
+        // Clock hand
+        ctx.beginPath();
+        ctx.moveTo(11.2125, 13.965);
+        ctx.lineTo(15.1279, 11.0236);
+        ctx.stroke();
+        
+        // Top crown
+        ctx.beginPath();
+        ctx.moveTo(9.75, 2.75);
+        ctx.lineTo(13.65, 2.75);
+        ctx.stroke();
+        
+        // Side buttons (simplified)
+        ctx.beginPath();
+        ctx.moveTo(17.9637, 5.90252);
+        ctx.lineTo(16.0137, 8.10252);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(4.338, 6.92358);
+        ctx.lineTo(6.3855, 9.02358);
+        ctx.stroke();
+        
+        ctx.restore();
     }
     
     drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
@@ -5162,6 +5399,64 @@ Type any cheat name in the console to activate!`);
         ctx.fillText(coinsText, coinsTextX, coinsY);
         
         ctx.restore();
+    }
+    
+    drawLevelUpText() {
+        if (!this.player || !this.player.levelUpTextInfo || !this.player.levelUpTextInfo.active) {
+            return;
+        }
+        
+        const { level, progress } = this.player.levelUpTextInfo;
+        const screenWidth = this.width;
+        const screenHeight = this.height;
+        
+        // Position text at the bottom of the screen
+        const textY = screenHeight - 80; // 80px from bottom
+        const centerX = screenWidth / 2;
+        
+        this.ctx.save();
+        
+        // Calculate fade in/out effect
+        let textAlpha = 1;
+        if (progress < 0.2) {
+            // Fade in for first 20% of animation
+            textAlpha = progress / 0.2;
+        } else if (progress > 0.7) {
+            // Fade out for last 30% of animation
+            textAlpha = (1 - progress) / 0.3;
+        }
+        
+        // Pulsing effect
+        const pulseIntensity = 0.8 + Math.sin(Date.now() * 0.01) * 0.2;
+        const scale = 1 + pulseIntensity * 0.1;
+        
+        this.ctx.globalAlpha = textAlpha * pulseIntensity;
+        this.ctx.translate(centerX, textY);
+        this.ctx.scale(scale, scale);
+        
+        // Draw level up text with outline
+        this.ctx.font = 'bold 32px "Press Start 2P", monospace';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        
+        // Text outline (black)
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeText(`LEVEL ${level}!`, 0, -15);
+        
+        // Main text (gold)
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.fillText(`LEVEL ${level}!`, 0, -15);
+        
+        // Subtitle text
+        this.ctx.font = '16px "Press Start 2P", monospace';
+        this.ctx.fillStyle = '#FFA500';
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeText('Skill Point Gained!', 0, 15);
+        this.ctx.fillText('Skill Point Gained!', 0, 15);
+        
+        this.ctx.restore();
     }
     
     explodeTank(tankIndex) {
@@ -5247,12 +5542,16 @@ Type any cheat name in the console to activate!`);
             // Handle death/shield tank usage
             if (this.player.health <= 0) {
                 if (this.shieldTanks > 0) {
+                    // Use shield tank to restore health (no life lost)
                     this.shieldTanks--;
                     this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
                     this.player.health = this.player.getEffectiveMaxHealth();
                     this.audioManager.playCoin(); // Tank used sound
+                    this.player.makeInvincible(2000); // Brief invincibility after revival
                 } else {
-                    this.gameOver();
+                    // No shield tanks - lose a life and respawn
+                    this.handlePlayerDeath();
+                    return;
                 }
             }
 
@@ -5262,11 +5561,14 @@ Type any cheat name in the console to activate!`);
             this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
             this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
             this.audioManager.playShield();
+            
+            // Screen shake for asteroid collision
+            this.triggerScreenShake(20, 12, asteroid.radius); // Significant screen shake
         }
 
         // Always damage the asteroid when colliding with player (massive damage)
         const asteroidCollisionDamage = 25; // Massive damage to asteroids
-        asteroid.health -= asteroidCollisionDamage;
+        asteroid.health = Math.max(0, asteroid.health - asteroidCollisionDamage);
         
         // Check if asteroid is destroyed
         if (asteroid.health <= 0) {
@@ -5274,8 +5576,13 @@ Type any cheat name in the console to activate!`);
             this.player.gainExperience(8);
             this.game.money += 10; // Bonus money for collision destruction
             
+            // Screen shake for collision destruction (only if on screen)
+            if (this.isEntityOnScreen(asteroid)) {
+                this.triggerScreenShake(20, asteroid.baseRadius * 0.7, asteroid.baseRadius);
+            }
+            
             // Create destruction effects
-            this.createAsteroidDebris(asteroid);
+            this.createDebris(asteroid);
             this.dropOrbsFromEntity(asteroid.x, asteroid.y, asteroid);
             this.asteroidPool.release(asteroid);
             return; // Exit early if asteroid is destroyed
@@ -5291,7 +5598,7 @@ Type any cheat name in the console to activate!`);
         const enhancedImpulse = 2 * dvn / totalMass;
 
         // Apply MUCH MORE DRASTIC knockback multiplier
-        const knockbackMultiplier = 8.0; // Increased from ~1.0 to 8.0
+        const knockbackMultiplier = 12.0; // Increased from 8.0 to 12.0 for more visible bounce
         const enhancedKnockback = enhancedImpulse * knockbackMultiplier;
 
         // Apply jittered impulse to player velocity
@@ -5349,9 +5656,7 @@ Type any cheat name in the console to activate!`);
         
         this.audioManager.playHit();
         
-        // Enhanced screen shake based on impact force
-        const impactForce = Math.abs(enhancedKnockback) * totalMass;
-        this.triggerScreenShake(25, 15, impactForce * 0.8);
+        // No screen shake for asteroid-asteroid collisions - only player-related events should shake
     }
     
     drawSpawnTimer() {

@@ -271,7 +271,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Titan Tank Frequency**: Faster rotation/aim cycles - 1.5s movement, 0.5s aim, 0.8s firing, 0.3s rotation
 - **Sword Stalker Rotation**: Smooth animated rotation when aiming instead of instant snapping
 - **Wasp Movement**: Complete zig-zag attack pattern - approaches with zig-zag, shoots, rotates, retreats with zig-zag
-- **Enemy Naming**: Renamed BOMBER → TANGERINE_BOMBER, turrets use ship names (DRIFTER, PROWLER, WEAVER, SENTINEL)
+- **Enemy Naming**: Renamed BOMBER → TANGERINE, turrets use ship names (DRIFTER, PROWLER, WEAVER, SENTINEL)
 - **Titan Tank Behavior**: Rotations are now smoothly animated over 0.3 seconds (faster)
 - **Titan Tank Turret**: Turret now rotates with the tank body during direction changes
 - **Shield Turret (Sentinel) Movement**: Increased orbit radius from 180px to 280px for safer distance

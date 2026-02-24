@@ -1,228 +1,272 @@
 # Rainboids - Supercharged Asteroids
 
-Royalty-free background music ["Legend"](https://www.youtube.com/watch?v=mxygNM3b95M&ab_channel=WhiteBatAudio) 
-graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).
+A modern, feature-rich asteroids game with enhanced combat, powerups, enemies, and progression systems.
 
-Support White Bat Audio on [Bandcamp](https://karlcasey.bandcamp.com/) and 
-[YouTube](https://www.youtube.com/@WhiteBatAudio)!
+**Play now at: https://rainboids.cat.computer**
 
 <img width="928" alt="image" src="https://github.com/user-attachments/assets/f85765c7-a5ab-43eb-b239-cb8b67c861a1" />
 <img width="1609" height="865" alt="Screenshot 2025-08-13 at 22 25 26" src="https://github.com/user-attachments/assets/d6c98752-0d1e-4ae3-b5ce-8794610b3ecd" />
 
-## Synopsis
-
-This mobile-friendly game can be played at: https://rainboids.cat.computer
-
-This is an asteroids clone with its own interesting mechanics and visual aesthetics.
-
-It features countless enhancements and tweaks over the original 
-[Monolithic Rainboids](https://github.com/afeique/rainboids-monolithic).
-
-Most importantly, the underlying JavaScript code has been modularized for easier maintenance.
-
 ---
 
-## 🚀 Gameplay Overview
+## 🚀 Game Overview
 
-<!-- - 🌟 Starfield Depth Batching Active
--   gameEngine.debugStarfieldPerformance() - Show performance stats
--   gameEngine.showDepthBatchStats() - Show depth batching details -->
-- 🤖 Enemy System Ready:
--   🔴 HUNTER (Triangle) - 10 HP - Fast aggressive chaser
--   🟢 GUARDIAN (Square) - 20 HP - Defensive spread shooter
--   🟡 WASP (Diamond) - 8 HP - Fast swarm enemy
--   🟣 TITAN (Hexagon) - 30 HP - Heavy orbital enemy
--   🔵 STALKER (Cross) - 10 HP - Stealth approach enemy
--   🟠 BOMBER (Spiked Circle) - 15 HP - Explosive projectiles
-- 💥 Combat System: Player bullets = 1 dmg, Enemy bullets = 2 dmg
-- 💚 Health System: Health orbs heal! Configurable drop rates and counts!
-- 🪨 Asteroid Interactions: Enemy bullets deal damage to asteroids, enemies bounce off (no damage)
-- 💥 Player Damage Feedback: Screen shake, red damage numbers, and colored explosions when hit
-- 🎆 Bullet Impact Effects: Colored particle explosions for all enemy bullet impacts
-- 🟠 Player Bullet Effects: Satisfying orange explosions on all player bullet hits
-- ♻️  Enemy Bullet Lifecycle: No fade decay, recycled when off-screen for efficiency
-- 👻 Enemy Phase-Through: Enemies pass through each other and enemy bullets
-- 🕶️ Enemy Dodging: Enemies actively dodge each other\'s bullets with predictive AI
-- 💊 Tunable Healing: Health orb heal amount now configurable in constants
-- 🌊 Enhanced Waves: Multi-phase waves with asteroids first, then enemy sub-waves
-- ⚡ Performance Optimizations Active:
--   🔧 Reduced particle counts for explosions and effects
--   🧹 Automatic particle cleanup and limits
--   📊 gameEngine.showPerformanceStats() - View current object counts
-- 🎁 Powerup System Active:
--   💨 Rapid Fire - Faster shooting (stacks up to 5x)
--   🎯 Homing Bullets - Track enemies automatically
--   💥 Multi-Shot & Spread Shot - More bullets per shot
--   🔸 Big Bullets - Easier to hit agile enemies
--   ⚡ Speed Boost - Enhanced movement speed
--   🏹 Piercing Shots - Bullets go through enemies
--   💣 Explosive Rounds - Area damage on impact
--   🛡️ Shield Boost - +15% damage reduction per stack
-- ✨ Enhanced Star System:
--   ⭐ Larger stars to showcase beautiful geometric shapes
--   🎭 15% chance for spectacular big stars
--   🔶 Complex shapes: stars, hexagons, diamonds, sparkles & bursts
--   💫 Enhanced animations: rotation, pulsing, and glow effects
-- 🚀 Enhanced WASD + Mouse Controls:
--   ⬆️ WASD = Move in 8 directions with tight control
--   🖱️ Mouse = Aim direction (ship faces mouse cursor)
--   🔫 Auto-fire = Ship continuously fires (no fire button!)
--   📱 Mobile = Joystick: WASD movement, touch for aiming
-- 🎁 Enhanced Powerup System:
--   ✨ Spectacular gradient visual effects and distinctive shapes
--   🎯 Unique icons: ⚡💨🎯●💥🛡 etc. for each powerup type
--   🔊 Magical treasure pickup sound with pitch variations
--   📊 Console shows powerup drop rolls and spawns
--   🎮 Beautiful gradient UI indicators at bottom of screen
--   ⏱️ Timer bars show remaining duration (1 minute each)
--   📺 Powerup names display at top in Silkscreen font with smooth fade
--   🎨 Bullets change shape/color based on active powerups
--   🧪 Press "P" key to test spawn a powerup near player
+Rainboids is a supercharged asteroids clone featuring:
+- **6 unique enemy types** with distinct behaviors and attack patterns
+- **12 different powerups** with visual effects and stacking mechanics
+- **Comprehensive upgrade system** with offensive and defensive improvements
+- **Wave-based progression** with increasing difficulty
+- **Mobile-friendly controls** with touch support
+- **Rich audio system** with customizable sound effects and music
+- **Modern ES6 modular architecture** for maintainability
 
 ---
 
 ## 🎮 Controls
 
 ### Desktop
-- **Rotate**: Left/Right Arrow or A/D
-- **Thrust**: Up Arrow or W
-- **Brake**: Down Arrow or S
-- **Fire**: Z
-- **Tractor Beam**: Spacebar
+- **Movement**: WASD or Arrow Keys
+- **Aim & Fire**: Mouse (ship automatically fires toward cursor)
+- **Tractor Beam**: Spacebar (attracts collectibles)
 - **Pause**: Escape
+- **Shop**: Click shop button or use pause menu
 
 ### Mobile
-- **Joystick**: Rotate
-- **↑**: Thrust
-- **⌖**: Fire
-- **⊙**: Tractor Beam
-- **||**: Pause
+- **Movement**: Touch and drag anywhere on screen
+- **Aim**: Touch to aim, ship fires automatically
+- **Tractor Beam**: Dedicated touch button
+- **Pause**: Touch pause button
 
 ---
 
-## 🏆 Scoring
-- **Hit Asteroid**: 50 points
-- **Destroy Asteroid**: 100 points
-- **Collect Star**: 7 points (normal), 4 points (burst)
-- **Energy Use**: 1 point per unit of energy used for thrust
+## 👾 Enemy Types
+
+### 🔴 Hunter (Triangle)
+- **Behavior**: Fast, aggressive chaser that pursues the player relentlessly
+- **Attack**: 3-round burst fire pattern
+- **Movement**: Triangular geometric patterns while chasing
+- **Health**: Medium durability
+- **Threat Level**: High mobility, moderate firepower
+
+### 🟢 Guardian (Square) 
+- **Behavior**: Defensive tank that patrols areas and guards territory
+- **Attack**: Devastating crescent wave spread shots
+- **Movement**: Square geometric patrol patterns
+- **Health**: High durability, heavily armored
+- **Threat Level**: Low mobility, devastating firepower
+
+### 🟡 Wasp (Diamond)
+- **Behavior**: Fast, agile swarm enemy with darting movements
+- **Attack**: Quick pulse bursts in rapid succession
+- **Movement**: Erratic darting like an angry wasp
+- **Health**: Low durability but hard to hit
+- **Threat Level**: Very high mobility, moderate firepower
+
+### 🟣 Titan (Hexagon)
+- **Behavior**: Massive boss-like enemy with tank characteristics
+- **Attack**: Slow but powerful homing missiles
+- **Movement**: Deliberate tank-like rotation and positioning
+- **Health**: Very high durability
+- **Threat Level**: Low mobility, very high firepower
+
+### 🔵 Stalker (Cross)
+- **Behavior**: Stealthy enemy that approaches in wide arcs
+- **Attack**: Charged laser beams with high damage
+- **Movement**: Swooping arc patterns for positioning
+- **Health**: Medium-high durability
+- **Threat Level**: High mobility, high precision damage
+
+### 🟠 Bomber (Spiked Circle)
+- **Behavior**: Slow but dangerous explosive specialist
+- **Attack**: Slow-moving but deadly homing projectiles
+- **Movement**: Circular patterns, methodical positioning
+- **Health**: High durability, heavily armored
+- **Threat Level**: Low mobility, extreme firepower
 
 ---
 
-## ⚡ Energy System
-- **Thrusting** drains your energy bar (configurable in `game-engine.js`)
-- **Collecting stars** restores energy
-- **No firing allowed** when in CRITICAL state (energy depleted)
+## ⭐ Powerup System
+
+Powerups drop from destroyed enemies and provide temporary or permanent enhancements. Each powerup can stack multiple times for increased effectiveness.
+
+### Offensive Powerups
+- **⚡ Rapid Fire**: Increases firing rate by 25% per stack (max 5 stacks)
+- **※ Multi-Shot**: Adds +1 bullet per shot per stack (max 3 stacks)
+- **🎯 Homing Bullets**: Makes bullets track and follow enemies
+- **● Big Bullets**: Increases bullet size by 30% per stack for easier hits
+- **💨 Speed Boost**: Enhances movement speed for better maneuverability
+- **➤ Piercing Shots**: Bullets penetrate through multiple enemies
+- **⇶ Spread Shot**: Fires +2 bullets in a wide spread pattern
+- **💥 Explosive Rounds**: Bullets explode on impact for area damage
+
+### Defensive Powerups
+- **🛡 Shield Boost**: Provides temporary damage reduction
+- **💊 Medpack**: Increases health orb healing effectiveness
+- **🎯 Critical Chance**: +5% critical hit chance per stack
+- **💥 Critical Damage**: +10% critical hit damage per stack
 
 ---
 
-## Project Structure
+## 🛒 Shop & Upgrade System
+
+The shop offers permanent upgrades using two currencies:
+
+### Currencies
+- **Coins**: Earned by destroying enemies and collecting money orbs
+- **Skill Points (SP)**: Gained by leveling up through experience
+
+### Offensive Upgrades
+- **Rapid Fire**: Permanent firing rate increases
+- **Multi-Shot**: Additional bullets per shot
+- **Homing**: Bullet tracking capabilities
+- **Big Bullets**: Larger bullet size for easier hits
+- **Speed Boost**: Enhanced movement speed
+- **Piercing**: Bullets go through enemies
+- **Explosive**: Bullets explode on impact
+- **Critical Chance**: Increased critical hit probability
+- **Critical Damage**: Higher critical hit damage
+- **Charge Speed**: Faster charge shot charging
+- **Charge Power**: Increased charge shot damage
+- **Spare Ship**: Extra lives (maximum 3 total)
+
+### Defensive Upgrades
+- **Health Orb Luck**: Increases health orb drop chance
+- **Money Orb Luck**: Increases money orb drop chance  
+- **Health Orb Bounty**: More health orbs per drop
+- **Money Orb Bounty**: More money orbs per drop
+
+---
+
+## 🌊 Wave System
+
+### Wave Structure
+Each wave consists of multiple phases:
+1. **Asteroid Phase**: Fixed number of asteroids spawn
+2. **Enemy Sub-Waves**: Multiple waves of 2 enemies each
+3. **Wave Break**: Shop access and preparation time
+
+### Progression
+- Enemy health and damage scale with wave number
+- New enemy types introduced in later waves
+- Increased enemy spawn rates and variety
+- Asteroid count remains consistent for balanced gameplay
+
+---
+
+## 💫 Visual & Audio Features
+
+### Visual Effects
+- **Particle Systems**: Explosions, thrust trails, and impact effects
+- **Powerup Indicators**: Bottom-screen display showing active powerups
+- **Screen Shake**: Dynamic feedback for damage and impacts
+- **Gradient Backgrounds**: Beautiful starfield with depth layers
+- **Geometric Shapes**: Distinctive visual design for all entities
+
+### Audio System
+- **Dynamic Sound Effects**: Procedurally generated using SFXR
+- **Customizable Audio**: Individual sound effect toggles and volume control
+- **Music Player**: Built-in music player with playlist support
+- **Spatial Audio**: Positional audio effects for immersion
+
+---
+
+## 🎯 Scoring & Progression
+
+### Point Values
+- **Asteroid Hit**: Points for damaging asteroids
+- **Asteroid Destruction**: Bonus points for complete destruction
+- **Enemy Elimination**: Points based on enemy type and difficulty
+- **Star Collection**: Small point rewards for energy restoration
+
+### Experience System
+- Gain experience by destroying enemies and asteroids
+- Level up to earn skill points for permanent upgrades
+- Higher levels require exponentially more experience
+- Level-up effects include particle displays and temporary bonuses
+
+---
+
+## 🔧 Technical Features
+
+### Performance Optimizations
+- **Object Pooling**: Efficient memory management for bullets and particles
+- **Depth Batching**: Optimized rendering for starfield backgrounds
+- **Frustum Culling**: Only render visible objects
+- **Particle Limits**: Automatic cleanup and count management
+- **Web Workers**: Offloaded physics calculations for smooth gameplay
+
+### Modern Architecture
+- **ES6 Modules**: Clean, maintainable code structure
+- **Responsive Design**: Adapts to different screen sizes
+- **Touch Support**: Full mobile compatibility
+- **Local Storage**: Persistent settings and progress
+- **Error Handling**: Robust error recovery and logging
+
+---
+
+## 🎵 Music Credits
+
+Royalty-free background music graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).
+
+Support White Bat Audio:
+- [Bandcamp](https://karlcasey.bandcamp.com/)
+- [YouTube](https://www.youtube.com/@WhiteBatAudio)
+
+---
+
+## 🚀 Getting Started
+
+### Playing Online
+Simply visit https://rainboids.cat.computer in any modern web browser.
+
+### Local Development
+1. Clone this repository
+2. Serve the files using a local web server (required for ES6 modules)
+3. Open `index.html` in your browser
+4. Start playing and modifying!
+
+### Browser Requirements
+- Modern browser with ES6 module support
+- WebGL for optimal performance
+- Audio API support for sound effects
+
+---
+
+## 📁 Project Structure
 
 ```
-├── index.html              # Original monolithic version
-├── index-modular.html      # New modular version
+├── index.html              # Main game entry point
 ├── js/
-│   ├── main.js            # Main entry point
+│   ├── main.js            # Game initialization
+│   ├── playlist-data.js   # Music playlist configuration
 │   └── modules/
-│       ├── constants.js   # Game constants and configuration
+│       ├── constants.js   # Game configuration
 │       ├── utils.js       # Utility functions
-│       ├── pool-manager.js # Object pooling system
-│       ├── audio-manager.js # Audio management
-│       ├── input-handler.js # Input handling (keyboard/touch)
-│       ├── ui-manager.js  # UI management and overlays
-│       ├── game-engine.js # Main game engine
-│       └── entities/      # Game entity classes
-│           ├── player.js  # Player ship
-│           ├── bullet.js  # Bullet projectiles
-│           ├── asteroid.js # Asteroid entities
-│           ├── particle.js # Particle effects
-│           ├── star.js    # Star entities
-│           └── line-debris.js # Line debris effects
-└── bgm.mp3               # Background music
+│       ├── game-engine.js # Core game logic
+│       ├── entities/      # Game object classes
+│       └── performance/   # Optimization modules
+├── css/
+│   └── styles.css         # Game styling
+├── music/                 # Background music files
+└── assets/               # Game assets
 ```
 
 ---
 
-## Module Overview
+## 🤝 Contributing
 
-### Core Modules
-- **`main.js`**: Entry point that initializes all modules and starts the game
-- **`constants.js`**: All game configuration values and constants
-- **`utils.js`**: Helper functions like collision detection, random number generation, etc.
-- **`pool-manager.js`**: Object pooling system for efficient memory management
-
-### Management Modules
-- **`audio-manager.js`**: Handles sound effects and background music
-- **`input-handler.js`**: Manages keyboard and touch input
-- **`ui-manager.js`**: Handles all UI elements, overlays, and messages
-- **`game-engine.js`**: Main game loop, state management, and collision detection
-
-### Entity Modules
-- **`player.js`**: Player ship with movement, shooting, and collision
-- **`bullet.js`**: Bullet projectiles with wave motion effects
-- **`asteroid.js`**: 3D wireframe asteroids with physics
-- **`particle.js`**: Particle effects system (explosions, thrust, etc.)
-- **`star.js`**: Star entities with various shapes and behaviors
-- **`line-debris.js`**: Line debris from destroyed asteroids
+This project welcomes contributions! Areas for enhancement:
+- New enemy types and behaviors
+- Additional powerup effects
+- Visual effect improvements
+- Performance optimizations
+- Mobile UX enhancements
+- New music tracks
 
 ---
 
-## Usage
+## 📜 License
 
-### Running the Modular Version
-1. Open `index-modular.html` in a web browser
-2. The game will automatically initialize and show the title screen
-3. Click or press any key to start playing
+This project builds upon the original [Monolithic Rainboids](https://github.com/afeique/rainboids-monolithic) with extensive enhancements and modularization.
 
-### Development
-The modular structure makes it easy to:
-- **Modify game mechanics**: Edit `constants.js` for game balance
-- **Add new entities**: Create new classes in the `entities/` folder
-- **Change UI behavior**: Modify `ui-manager.js`
-- **Add new input methods**: Extend `input-handler.js`
-- **Modify audio**: Update `audio-manager.js`
-
----
-
-## Key Features
-- **Object Pooling**: Efficient memory management for particles and entities
-- **Modular Architecture**: Clean separation of concerns
-- **ES6 Modules**: Modern JavaScript with import/export
-- **Mobile Support**: Touch controls and responsive design
-- **Audio Integration**: Sound effects and background music
-- **State Management**: Clean game state handling
-- **Visual Direction/Thruster/Wing Triangles**: Enhanced player orientation
-- **Asteroid Border Impulse**: Keeps gameplay dynamic and fair
-- **Energy System**: Adds challenge and strategy
-
----
-
-## Browser Compatibility
-The modular version uses ES6 modules, which require:
-- Modern browsers with ES6 module support
-- HTTPS or localhost (modules don't work with `file://` protocol)
-
----
-
-## Migration from Monolithic Version
-The original `index.html` contains all code in a single file. The modular version:
-1. Separates concerns into logical modules
-2. Makes the codebase more maintainable
-3. Enables easier testing and debugging
-4. Provides better organization for future development
-
----
-
-## Building for Production
-For production deployment, you may want to:
-1. Bundle all modules into a single file using a tool like Webpack or Rollup
-2. Minify the JavaScript code
-3. Optimize assets (images, audio)
-
----
-
-## Contributing
-When adding new features:
-1. Create new modules in the appropriate directory
-2. Follow the existing naming conventions
-3. Use ES6 modules for imports/exports
-4. Update this README if adding new modules 
+Music provided by Karl Casey @ White Bat Audio under royalty-free license.

@@ -5,10 +5,10 @@ export const GAME_CONFIG = {
     SHIP_FRICTION: 0.995,
     MAX_V: 3,
     BULLET_SPEED: 12,
-    INITIAL_AST_COUNT: 8, // Fixed asteroid count per wave
+    INITIAL_AST_COUNT: 1, // Minimal asteroid count for best performance
     AST_SPEED: 2.2,
-    COLOR_STAR_COUNT: 60, // Increased slightly to show more variety of shapes
-    BACKGROUND_STAR_COUNT: 40, // Non-collectible background stars
+    COLOR_STAR_COUNT: 10, // Drastically reduced for 60fps performance
+    BACKGROUND_STAR_COUNT: 5, // Drastically reduced for 60fps performance
     ACTIVE_STAR_ATTR: 0.01,
     ACTIVE_STAR_ATTRACT_DIST: 100,
     ORB_FRIC: 0.92, // Increased friction to slow down money and health orbs
@@ -43,20 +43,20 @@ export const GAME_CONFIG = {
     MOBILE_SCALE: 0.65,
     
     // Entity limits adjusted for gameplay balance
-    MAX_ASTEROIDS: 8, // Increased to match fixed asteroid count
-    MAX_ENEMIES: 3, // Reduced from 5 for better performance
+    MAX_ASTEROIDS: 1, // Maximum 1 asteroid for best performance
+    MAX_ENEMIES: 1, // Maximum 1 enemy for best performance
     
     // Wave system configuration - aggressive timing for continuous action
     WAVE_ASTEROID_DELAY: 0, // Time before spawning asteroids (ms)
     WAVE_ENEMY_DELAY: 2000, // Time before first enemy sub-wave (ms) - reduced from 15s
     SUB_WAVE_INTERVAL: 3000, // Time between enemy sub-waves (ms) - reduced from 15s
-    ENEMIES_PER_SUB_WAVE: 2, // Enemies per sub-wave - increased from 1
+    ENEMIES_PER_SUB_WAVE: 1, // Enemies per sub-wave - reduced for performance
     SUB_WAVES_PER_WAVE: 4, // Number of enemy sub-waves per wave - increased from 3
     SUB_WAVE_TIMEOUT: 20000, // Auto-progress sub-wave after 20 seconds (ms) - reduced from 2 minutes
     WAVE_BREAK_TIME: 24000, // Time between waves (ms) - doubled again for maximum strategic planning
     
     // Performance settings optimized
-    MAX_PARTICLES: 50, // Reduced from 100 for better performance
+    MAX_PARTICLES: 30, // Reduced for better performance 
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 };
 
@@ -75,27 +75,22 @@ export const ENEMY_BULLET_CONFIG = {
     // Missile-specific configuration
     MISSILE: {
         // Titan accelerating missiles
-        TITAN_ACCELERATING: {
-            INITIAL_SPEED: 0.5, // Very slow start (was 1.0)
-            ACCELERATION: 0.12, // Faster acceleration (was 0.08)
-            MAX_SPEED: 12, // Higher max speed (was 8)
-            MAX_DISTANCE: 800, // Longer range (was 600)
-            MIN_ACCELERATION: 0.08, // Minimum acceleration at level 1
-            MAX_ACCELERATION: 0.18, // Maximum acceleration at high levels
-            MIN_MAX_SPEED: 8, // Minimum max speed at level 1
-            MAX_MAX_SPEED: 15, // Maximum max speed at high levels
+        TITAN_ROCKET: {
+            SPEED: 8.0, // Fast, direct rockets
+            MAX_DISTANCE: 600, // Medium range
+            DAMAGE: 3, // High damage
         },
         
-        // Missile turret decelerating missiles
-        TURRET_DECELERATE: {
-            INITIAL_SPEED: 3.5, // Fast start
-            DECELERATION: 0.05, // Deceleration rate
-            MIN_SPEED: 0.5, // Speed at which missile explodes
-            MAX_DISTANCE: 400, // Maximum travel distance
-            MIN_DECELERATION: 0.03, // Minimum deceleration at level 1
+        // Missile turret decelerating missiles (Prowler rockets)
+        PROWLER_PIKE: {
+            INITIAL_SPEED: 10.0, // Much faster start for better effectiveness
+            DECELERATION: 0.06, // Slower deceleration to maintain speed longer
+            MIN_SPEED: 0.5, // Higher minimum speed
+            MAX_DISTANCE: 800, // Limited to ~1 screen range (reduced from 1500)
+            MIN_DECELERATION: 0.04, // Minimum deceleration at level 1
             MAX_DECELERATION: 0.08, // Maximum deceleration at high levels
-            MIN_INITIAL_SPEED: 2.5, // Minimum initial speed at level 1
-            MAX_INITIAL_SPEED: 5.0, // Maximum initial speed at high levels
+            MIN_INITIAL_SPEED: 8.0, // Higher minimum initial speed at level 1
+            MAX_INITIAL_SPEED: 12.0, // Higher maximum initial speed at high levels
         }
     },
     
@@ -111,23 +106,54 @@ export const ENEMY_BULLET_CONFIG = {
         PULSE: { MIN: 3.0, MAX: 7.0 },
         SHIELD_BURST: { MIN: 2.0, MAX: 5.0 },
         HOMING: { MIN: 1.0, MAX: 3.0 },
+        TITAN_ROCKET: { MIN: 6.0, MAX: 12.0 }, // Fast rocket speed limits
     },
     
-    // Bullet type lifetime limits (in seconds)
+    // Bullet type lifetime limits (in seconds) - all limited to ~1 screen travel distance
     LIFETIME_LIMITS: {
-        AIMED: { MIN: 1.5, MAX: 3.0 },
-        SPREAD: { MIN: 1.2, MAX: 2.5 },
-        RAPID: { MIN: 1.0, MAX: 2.0 },
-        SPIRAL: { MIN: 2.0, MAX: 4.0 },
-        BURST: { MIN: 1.0, MAX: 2.0 },
-        EXPLOSIVE: { MIN: 1.5, MAX: 3.0 },
-        LASER: { MIN: 0.6, MAX: 1.2 },
-        PULSE: { MIN: 1.2, MAX: 2.5 },
-        SHIELD_BURST: { MIN: 1.5, MAX: 3.0 },
-        HOMING: { MIN: 3.0, MAX: 6.0 },
-        CRESCENT_SLICE: { MIN: 0.2, MAX: 0.4 },
+        AIMED: { MIN: 1.0, MAX: 1.5 }, // Reduced from 1.5-3.0
+        SPREAD: { MIN: 0.8, MAX: 1.2 }, // Reduced from 1.2-2.5
+        RAPID: { MIN: 0.8, MAX: 1.2 }, // Reduced from 1.0-2.0
+        SPIRAL: { MIN: 1.0, MAX: 1.5 }, // Reduced from 2.0-4.0
+        BURST: { MIN: 0.8, MAX: 1.2 }, // Reduced from 1.0-2.0
+        EXPLOSIVE: { MIN: 1.0, MAX: 1.5 }, // Reduced from 1.5-3.0
+        LASER: { MIN: 0.6, MAX: 1.0 }, // Reduced from 0.6-1.2
+        PULSE: { MIN: 0.8, MAX: 1.2 }, // Reduced from 1.2-2.5
+        SHIELD_BURST: { MIN: 1.0, MAX: 1.5 }, // Reduced from 1.5-3.0
+        HOMING: { MIN: 1.2, MAX: 2.0 }, // Reduced from 3.0-6.0
+        CRESCENT_SLICE: { MIN: 0.08, MAX: 0.12 }, // Drastically reduced for close-range attack only
+        TITAN_ROCKET: { MIN: 1.0, MAX: 2.0 }, // Medium range for Titan rockets
+    },
+    
+    // Enemy firing rate cooldowns (in milliseconds)
+    // Lower values = faster firing, scales with enemy level
+    ENEMY_FIRING_COOLDOWNS: {
+        HUNTER: { MIN: 800, MAX: 1800 },        // Fast burst shooter
+        GUARDIAN: { MIN: 3000, MAX: 6000 },     // Slow but devastating
+        WASP: { MIN: 600, MAX: 1200 },          // Rapid pulse shooter
+        TITAN: { MIN: 1200, MAX: 2500 },        // Tank missiles
+        STALKER: { MIN: 2000, MAX: 4000 },      // Charged laser
+        TANGERINE: { MIN: 2500, MAX: 5000 }, // Slow homing missiles
+        DRIFTER: { MIN: 2000, MAX: 4000 },      // Laser turret
+        PROWLER: { MIN: 1000, MAX: 2200 },      // Missile turret
+        WEAVER: { MIN: 400, MAX: 800 },         // Rapid pulse turret
+        SENTINEL: { MIN: 1800, MAX: 3500 },     // Shield burst turret
     }
 };
+
+// Enemy firing rate scaling function
+export function getEnemyFiringCooldown(enemyType, level) {
+    const cooldowns = ENEMY_BULLET_CONFIG.ENEMY_FIRING_COOLDOWNS[enemyType];
+    if (!cooldowns) {
+        // Default cooldown if enemy type not found
+        return 2000;
+    }
+    
+    // Scale from MAX cooldown at level 1 to MIN cooldown at high levels
+    const levelProgress = Math.min(1, (level - 1) / 9); // Normalize over 10 levels
+    const cooldown = cooldowns.MAX - (cooldowns.MAX - cooldowns.MIN) * levelProgress;
+    return Math.round(cooldown);
+}
 
 export const NOISE_CONFIG = {
     // General settings
@@ -194,14 +220,6 @@ export const GAME_STATES = {
     WAVE_TRANSITION: 'WAVE_TRANSITION',
     ORIENTATION_LOCK: 'ORIENTATION_LOCK',
     SHOP: 'SHOP'
-};
-
-export const PARTICLE_TYPES = {
-    EXPLOSION: 'explosion',
-    PLAYER_EXPLOSION: 'playerExplosion',
-    THRUST: 'thrust',
-    PHANTOM: 'phantom',
-    PICKUP_PULSE: 'pickupPulse'
 };
 
 export const STAR_SHAPES = [

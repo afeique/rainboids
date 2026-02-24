@@ -12,7 +12,9 @@
       "Bash(ls:*)",
       "Bash(grep:*)",
       "Bash(npm uninstall:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(npm run dev)"
     ],
     "deny": []
   }
