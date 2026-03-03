@@ -160,12 +160,22 @@ export class InputHandler {
 
         document.addEventListener('touchstart', e => {
             e.preventDefault();
-            
+
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
                 const touchId = touch.identifier;
-                
-                
+
+                // Check for pause button tap before starting joystick
+                if (this.gameEngine && this.gameEngine.pauseButtonRect) {
+                    const r = this.gameEngine.pauseButtonRect;
+                    if (touch.clientX >= r.x && touch.clientX <= r.x + r.w &&
+                        touch.clientY >= r.y && touch.clientY <= r.y + r.h) {
+                        this.gameEngine.togglePause();
+                        triggerHapticFeedback(30);
+                        continue;
+                    }
+                }
+
                 // Store touch info
                 this.activeTouches.set(touchId, {
                     x: touch.clientX,
@@ -173,37 +183,17 @@ export class InputHandler {
                     startX: touch.clientX,
                     startY: touch.clientY
                 });
-                
+
                 if (this.joystickTouchId === null) {
-                    // First touch - set up joystick
+                    // First touch - set up movement joystick
                     this.joystickTouchId = touchId;
                     this.joystickCenter = { x: touch.clientX, y: touch.clientY };
                     this.showDynamicJoystick(touch.clientX, touch.clientY);
                     triggerHapticFeedback(20);
-                } else if (this.aimTouchId === null) {
-                    // Second touch - set up aiming
-                    this.aimTouchId = touchId;
-                    this.input.fire = true;
-                    // Store screen coordinates for UI elements
-                    this.input.screenAimX = touch.clientX;
-                    this.input.screenAimY = touch.clientY;
-                    // Convert screen coordinates to world coordinates for gameplay
-                    if (this.gameEngine && this.gameEngine.screenToWorldCoordinates) {
-                        const worldCoords = this.gameEngine.screenToWorldCoordinates(touch.clientX, touch.clientY);
-                        this.input.aimX = worldCoords.x;
-                        this.input.aimY = worldCoords.y;
-                    } else {
-                        this.input.aimX = touch.clientX;
-                        this.input.aimY = touch.clientY;
-                    }
-                    triggerHapticFeedback(15);
-                    
-                    // Create visual debug marker for aim point
-                    this.showDebugAimPoint(touch.clientX, touch.clientY);
-                } else {
                 }
+                // Additional touches ignored — aiming is handled automatically
             }
-            
+
         }, { passive: false });
 
         document.addEventListener('touchmove', e => {
@@ -249,29 +239,6 @@ export class InputHandler {
                     // Throttled movement logging
                     if (Math.random() < 0.01) { // 1% of moves logged
                     }
-                } else if (touchId === this.aimTouchId) {
-                    // Handle aiming
-                    const oldAimX = this.input.aimX;
-                    const oldAimY = this.input.aimY;
-                    // Store screen coordinates for UI elements
-                    this.input.screenAimX = touch.clientX;
-                    this.input.screenAimY = touch.clientY;
-                    // Convert screen coordinates to world coordinates for gameplay
-                    if (this.gameEngine && this.gameEngine.screenToWorldCoordinates) {
-                        const worldCoords = this.gameEngine.screenToWorldCoordinates(touch.clientX, touch.clientY);
-                        this.input.aimX = worldCoords.x;
-                        this.input.aimY = worldCoords.y;
-                    } else {
-                        this.input.aimX = touch.clientX;
-                        this.input.aimY = touch.clientY;
-                    }
-                    
-                    // Update visual debug marker
-                    this.updateDebugAimPoint(touch.clientX, touch.clientY);
-                    
-                    // Throttled aim logging
-                    if (Math.random() < 0.02) { // 2% of aims logged
-                    }
                 }
             }
         }, { passive: false });
@@ -298,11 +265,6 @@ export class InputHandler {
                         this.input.left = false;
                         this.input.right = false;
                     }
-                } else if (touchId === this.aimTouchId) {
-                    // Aim touch ended
-                    this.aimTouchId = null;
-                    this.input.fire = false;
-                    this.hideDebugAimPoint();
                 }
             }
             
@@ -334,45 +296,6 @@ export class InputHandler {
         document.addEventListener('touchmove', testHandler, { passive: false });
         document.addEventListener('touchend', testHandler, { passive: false });
         
-    }
-    
-    showDebugAimPoint(x, y) {
-        // Create visual debug marker for aim point
-        let aimMarker = document.getElementById('debug-aim-marker');
-        if (!aimMarker) {
-            aimMarker = document.createElement('div');
-            aimMarker.id = 'debug-aim-marker';
-            aimMarker.style.cssText = `
-                position: fixed;
-                width: 20px;
-                height: 20px;
-                background: red;
-                border: 2px solid white;
-                border-radius: 50%;
-                z-index: 2000;
-                pointer-events: none;
-                transform: translate(-50%, -50%);
-            `;
-            document.body.appendChild(aimMarker);
-        }
-        aimMarker.style.left = x + 'px';
-        aimMarker.style.top = y + 'px';
-        aimMarker.style.display = 'block';
-    }
-    
-    updateDebugAimPoint(x, y) {
-        const aimMarker = document.getElementById('debug-aim-marker');
-        if (aimMarker) {
-            aimMarker.style.left = x + 'px';
-            aimMarker.style.top = y + 'px';
-        }
-    }
-    
-    hideDebugAimPoint() {
-        const aimMarker = document.getElementById('debug-aim-marker');
-        if (aimMarker) {
-            aimMarker.style.display = 'none';
-        }
     }
     
     showDynamicJoystick(x, y) {
@@ -449,7 +372,7 @@ export class InputHandler {
         this.joystickCenter = null;
         this.joystickTouchId = null;
         this.aimTouchId = null;
-        
+
         // Reset input state - only reset movement keys on mobile to avoid interfering with keyboard
         if (this.isMobile()) {
             this.input.up = false;
@@ -458,9 +381,6 @@ export class InputHandler {
             this.input.right = false;
         }
         this.input.fire = false;
-        
-        // Hide debug markers
-        this.hideDebugAimPoint();
     }
     
     // Update aim coordinates when player moves to maintain relative aiming direction

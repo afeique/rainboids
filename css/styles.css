@@ -58,17 +58,11 @@ canvas.asteroid-hover {
 }
 
 #lives-display {
-    position: absolute;
-    top: 20px;
-    left: 10px; /* Positioned to the left of HP bar */
-    z-index: 2; /* Above canvas (z-index 1) but behind shop overlay */
-    display: none; /* Hidden initially until game starts */
-    transition: opacity 0.2s ease;
+    display: none; /* Lives are rendered on the game canvas */
 }
 
 /* Dim all HUD elements when the shop overlay is active */
-body.shop-open .ui-element,
-body.shop-open #lives-display {
+body.shop-open .ui-element {
     opacity: 0.25;
     pointer-events: none;
     transition: opacity 0.2s ease;

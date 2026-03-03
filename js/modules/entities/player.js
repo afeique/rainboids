@@ -208,58 +208,57 @@ export class Player {
     }
     
     updateChargingSystem(input, bulletPool, audioManager, particlePool) {
-        // Skip charging updates if paused
+        // Skip updates while shop/pause is open
         if (this.chargePaused) {
             return;
         }
-        
+
         const now = Date.now();
-        
-        // Update cooldown status
         this.canShoot = (now - this.lastShotTime) >= this.shotCooldownTime;
-        
-        // Simple logic: charge when not firing, fire when clicking while charged and cooldown is ready
-        if (input.fire) {
-            // Player is clicking - fire if we have any charge and cooldown is ready
-            if (this.isCharging && this.canShoot) {
-                this.fireChargedShot(bulletPool, audioManager);
-                this.isCharging = false;
-                this.chargeLevel = 0;
-                this.pausedChargeTime = 0; // Reset accumulated charge time
-                this.lastShotTime = now; // Start cooldown
-            }
-        } else {
-            // Player is not clicking - always be charging (even during cooldown)
-            if (!this.isCharging) {
-                // Start new charge cycle
-                this.isCharging = true;
-                this.chargeStartTime = now;
-                this.chargeLevel = 0;
-            }
-            
-            // Update charge level (including any previously accumulated time)
-            const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
-            const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
-            const reducedMaxChargeTime = this.maxChargeTime - (chargeSpeedStacks * 1000);
-            
-            this.chargeLevel = Math.min(1, currentChargeTime / reducedMaxChargeTime);
-        }
-        
-        // Update tractor beam and visual effects
-        if (this.isCharging) {
-            const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
-            const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
-            const reducedMaxChargeTime = this.maxChargeTime - (chargeSpeedStacks * 1000);
-            const isFullyCharged = currentChargeTime >= reducedMaxChargeTime;
-            
-            this.tractorBeamActive = !isFullyCharged; // Stop tractor when fully charged
-            this.isFullyCharged = isFullyCharged; // Store for visual effects
-            
-            // Charging particle effects disabled to save resources
-            // this.createChargingParticleEffects(particlePool, currentChargeTime, reducedMaxChargeTime);
-        } else {
-            this.tractorBeamActive = false; // No tractor when not charging
+
+        const hasChargeShot = this.getPowerupStacks('CHARGE_SHOT') > 0;
+
+        if (!hasChargeShot) {
+            // ── Default weapon: small uncharged bullet, autofire every cooldown ──
+            this.isCharging = false;
+            this.chargeLevel = 0;
+            this.tractorBeamActive = false;
             this.isFullyCharged = false;
+
+            if (this.canShoot) {
+                const chargeDamageStacks = this.getPowerupStacks('CHARGE_DAMAGE');
+                const baseDamage = 1 + chargeDamageStacks;
+                this.createChargedBullets(bulletPool, 1, 1, baseDamage, 0, 0);
+                audioManager.playShoot();
+                this.lastShotTime = now;
+            }
+            return;
+        }
+
+        // ── Charge shot weapon: charge continuously, autofire when full ──
+        if (!this.isCharging) {
+            this.isCharging = true;
+            this.chargeStartTime = now;
+            this.chargeLevel = 0;
+        }
+
+        const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
+        const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
+        const reducedMaxChargeTime = this.maxChargeTime - (chargeSpeedStacks * 1000);
+
+        this.chargeLevel = Math.min(1, currentChargeTime / reducedMaxChargeTime);
+
+        const isFullyCharged = currentChargeTime >= reducedMaxChargeTime;
+        this.tractorBeamActive = !isFullyCharged;
+        this.isFullyCharged = isFullyCharged;
+
+        // Autofire: fire when fully charged and cooldown is ready
+        if (isFullyCharged && this.canShoot) {
+            this.fireChargedShot(bulletPool, audioManager);
+            this.isCharging = false;
+            this.chargeLevel = 0;
+            this.pausedChargeTime = 0;
+            this.lastShotTime = now;
         }
     }
     

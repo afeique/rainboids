@@ -74,42 +74,9 @@ export class UIManager {
     }
     
     updateLives(lives) {
+        // Lives are now rendered on the game canvas in drawCanvasTriforce() / updateHUD()
         if (this.elements.livesDisplay) {
-            // Show the lives display when game starts
-            this.elements.livesDisplay.style.display = 'block';
-            
-            // Position lives display relative to other HUD elements
-            this.positionLivesDisplay();
-            
-            // Clear existing content and render triangles manually
-            this.elements.livesDisplay.innerHTML = '';
-            
-            // Create canvas for manual triangle rendering
-            const canvas = document.createElement('canvas');
-            canvas.width = 60;
-            canvas.height = 40;
-            canvas.style.display = 'block';
-            canvas.style.background = 'transparent'; // Ensure transparent background
-            
-            const ctx = canvas.getContext('2d');
-            
-            // Clear canvas with transparent background
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw triangles based on lives count
-            this.drawTriforceFormation(ctx, lives, canvas.width, canvas.height);
-            
-            // Add canvas to lives display
-            this.elements.livesDisplay.appendChild(canvas);
-            
-            // Change intensity based on lives remaining
-            if (lives <= 1) {
-                this.elements.livesDisplay.style.filter = 'brightness(1.2)';
-            } else if (lives <= 2) {
-                this.elements.livesDisplay.style.filter = 'brightness(1.1)';
-            } else {
-                this.elements.livesDisplay.style.filter = 'brightness(1.0)';
-            }
+            this.elements.livesDisplay.style.display = 'none';
         }
     }
     

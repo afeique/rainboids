@@ -159,6 +159,16 @@ export class GameEngine {
             title: '',
             subtitle: ''
         };
+
+        // Pause button hit rect (top-right corner, updated each frame by drawPauseButton)
+        const btnSize = 44;
+        const margin = 16;
+        this.pauseButtonRect = {
+            x: window.innerWidth - margin - btnSize,
+            y: margin,
+            w: btnSize,
+            h: btnSize
+        };
         
         // Camera and game field system
         this.gameField = {
@@ -1202,7 +1212,7 @@ Type any cheat name in the console to activate!`);
                 name: 'Multi Shot',
                 description: 'Fire one extra bullet',
                 cost: 2000,
-                icon: '🎯',
+                icon: '✳️',
                 maxStacks: 5,
                 category: 'OFFENSE',
                 currency: 'COINS'
@@ -1222,7 +1232,7 @@ Type any cheat name in the console to activate!`);
                 name: 'Homing',
                 description: 'Bullets track enemies',
                 cost: 1500,
-                icon: '🎪',
+                icon: '🎯',
                 maxStacks: 5,
                 category: 'OFFENSE',
                 currency: 'COINS'
@@ -1252,7 +1262,7 @@ Type any cheat name in the console to activate!`);
                 name: 'Critical Chance',
                 description: 'Increases crit chance by 5%',
                 cost: 3000,
-                icon: '🎯',
+                icon: '⭐',
                 maxStacks: 10,
                 category: 'OFFENSE',
                 currency: 'COINS'
@@ -1262,7 +1272,7 @@ Type any cheat name in the console to activate!`);
                 name: 'Critical Damage',
                 description: 'Increases crit damage by 10%',
                 cost: 1500,
-                icon: '💥',
+                icon: '🗡️',
                 maxStacks: 15,
                 category: 'OFFENSE',
                 currency: 'COINS'
@@ -1308,11 +1318,21 @@ Type any cheat name in the console to activate!`);
                 currency: 'SP'
             },
             {
+                id: 'CHARGE_SHOT',
+                name: 'Charge Shot',
+                description: 'Unlocks the charge shot ability',
+                cost: 5000,
+                icon: '🔮',
+                maxStacks: 1,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
                 id: 'CHARGE_SPEED',
                 name: 'Charge Speed',
-                description: 'Reduces charge time by 1 second',
+                description: 'Reduces charge time by 1 second (requires Charge Shot)',
                 cost: 5000,
-                icon: '⚡',
+                icon: '⏱️',
                 maxStacks: 3,
                 category: 'OFFENSE',
                 currency: 'COINS'
@@ -1320,9 +1340,9 @@ Type any cheat name in the console to activate!`);
             {
                 id: 'CHARGE_DAMAGE',
                 name: 'Charge Power',
-                description: 'Increases charge shot base damage by 1',
+                description: 'Increases charge shot base damage by 1 (requires Charge Shot)',
                 cost: 2500,
-                icon: '💥',
+                icon: '🔋',
                 maxStacks: 10,
                 category: 'OFFENSE',
                 currency: 'COINS'
@@ -1497,18 +1517,19 @@ Type any cheat name in the console to activate!`);
         const configs = {
             'SHIELD_BOOST':             { name: 'Shielding',          duration: Infinity, icon: '🛡️', gradientColors: ['#33ff99', '#006644'] },
             'RAPID_FIRE':               { name: 'Rapid Fire',          duration: Infinity, icon: '⚡', gradientColors: ['#ff6600', '#ff0000'] },
-            'MULTI_SHOT':               { name: 'Multi Shot',          duration: Infinity, icon: '🎯', gradientColors: ['#66aaff', '#0033cc'] },
+            'CHARGE_SHOT':              { name: 'Charge Shot',         duration: Infinity, icon: '🔮', gradientColors: ['#00ffff', '#0033aa'] },
+            'MULTI_SHOT':               { name: 'Multi Shot',          duration: Infinity, icon: '✳️', gradientColors: ['#66aaff', '#0033cc'] },
             'SPREAD_SHOT':              { name: 'Spread Shot',         duration: Infinity, icon: '📐', gradientColors: ['#66ddff', '#0099cc'] },
             'SPEED_BOOST':              { name: 'Speed Boost',         duration: Infinity, icon: '💨', gradientColors: ['#ffff33', '#cc9900'] },
             'PIERCING':                 { name: 'Piercing',            duration: Infinity, icon: '🏹', gradientColors: ['#ffcc66', '#cc6600'] },
             'EXPLOSIVE':                { name: 'Explosive',           duration: Infinity, icon: '💣', gradientColors: ['#ff9933', '#cc3300'] },
-            'HOMING':                   { name: 'Homing',              duration: Infinity, icon: '🎪', gradientColors: ['#ff66cc', '#cc0066'] },
+            'HOMING':                   { name: 'Homing',              duration: Infinity, icon: '🎯', gradientColors: ['#ff66cc', '#cc0066'] },
             'MEDPACK':                  { name: 'Medpack',             duration: Infinity, icon: '💊', gradientColors: ['#ff99cc', '#cc3366'] },
             'HEALTH_BOOST':             { name: 'Health Boost',        duration: Infinity, icon: '❤️', gradientColors: ['#ff6666', '#cc0000'] },
-            'CRIT_CHANCE':              { name: 'Critical Chance',     duration: Infinity, icon: '🎯', gradientColors: ['#ffff66', '#cc9900'] },
-            'CRIT_DAMAGE':              { name: 'Critical Damage',     duration: Infinity, icon: '💥', gradientColors: ['#ff3399', '#cc0033'] },
-            'CHARGE_SPEED':             { name: 'Charge Speed',        duration: Infinity, icon: '⚡', gradientColors: ['#ffcc00', '#cc8800'] },
-            'CHARGE_DAMAGE':            { name: 'Charge Power',        duration: Infinity, icon: '💥', gradientColors: ['#ff6600', '#cc3300'] },
+            'CRIT_CHANCE':              { name: 'Critical Chance',     duration: Infinity, icon: '⭐', gradientColors: ['#ffff66', '#cc9900'] },
+            'CRIT_DAMAGE':              { name: 'Critical Damage',     duration: Infinity, icon: '🗡️', gradientColors: ['#ff3399', '#cc0033'] },
+            'CHARGE_SPEED':             { name: 'Charge Speed',        duration: Infinity, icon: '⏱️', gradientColors: ['#ffcc00', '#cc8800'] },
+            'CHARGE_DAMAGE':            { name: 'Charge Power',        duration: Infinity, icon: '🔋', gradientColors: ['#ff6600', '#cc3300'] },
             'HEALTH_ORB_DROP_CHANCE':   { name: 'Health Orb Luck',     duration: Infinity, icon: '🍀', gradientColors: ['#33ff99', '#009944'] },
             'MONEY_ORB_DROP_CHANCE':    { name: 'Money Orb Luck',      duration: Infinity, icon: '💰', gradientColors: ['#ffdd00', '#cc8800'] },
             'HEALTH_ORB_DROP_QUANTITY': { name: 'Health Orb Bounty',   duration: Infinity, icon: '💚', gradientColors: ['#66ff66', '#009900'] },
@@ -3933,11 +3954,30 @@ Type any cheat name in the console to activate!`);
             // Add the update method to the input object so player can call it
             input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
 
+            // Mobile auto-aim: point at nearest enemy, fall back to movement direction
+            if (this.inputHandler.isMobile() && this.player && this.player.active) {
+                const target = this.findNearestEnemy();
+                if (target) {
+                    input.aimX = target.x;
+                    input.aimY = target.y;
+                } else if (input.up || input.down || input.left || input.right) {
+                    let mx = 0, my = 0;
+                    if (input.left)  mx -= 1;
+                    if (input.right) mx += 1;
+                    if (input.up)    my -= 1;
+                    if (input.down)  my += 1;
+                    const len = Math.hypot(mx, my) || 1;
+                    input.aimX = this.player.x + (mx / len) * 500;
+                    input.aimY = this.player.y + (my / len) * 500;
+                }
+                // No enemy and no movement → keep current angle unchanged
+            }
+
             // Respawn is now instant - no animation needed
 
             // Calculate tractor beam state - active when not charging
             const tractorEngaged = !this.player.isCharging;
-            
+
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged, this.gameField);
             
@@ -4090,6 +4130,10 @@ Type any cheat name in the console to activate!`);
             this.updateHUD();
             // Show shop button during gameplay (but not when shop is open)
             this.uiManager.showShopButton();
+            // Draw mobile pause button on canvas (same layer as HP bar / timer)
+            if (this.inputHandler.isMobile()) {
+                this.drawPauseButton();
+            }
         } else {
             // Hide shop button on title screen and when shop is open
             this.uiManager.hideShopButton();
@@ -5226,7 +5270,10 @@ Type any cheat name in the console to activate!`);
         const segments = 10; // Number of segments for the bar
         
         ctx.save();
-        
+
+        // Draw triforce (lives indicator) on canvas — same layer as HP bar, coins, level
+        this.drawCanvasTriforce(ctx, this.game.lives, 10, barY);
+
         // Create futuristic angled health bar geometry
         const createHealthBarPath = (width) => {
             ctx.beginPath();
@@ -5405,6 +5452,25 @@ Type any cheat name in the console to activate!`);
         this.drawSurvivalTimer(ctx);
     }
     
+    findNearestEnemy() {
+        if (!this.player) return null;
+        let nearest = null;
+        let nearestDist = Infinity;
+        const check = (obj) => {
+            if (!obj.active) return;
+            const dx = obj.x - this.player.x;
+            const dy = obj.y - this.player.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearest = obj;
+            }
+        };
+        this.enemyPool.activeObjects.forEach(check);
+        this.asteroidPool.activeObjects.forEach(check);
+        return nearest;
+    }
+
     drawSurvivalTimer(ctx) {
         // Position at bottom left of screen
         const timerX = 20;
@@ -5446,6 +5512,49 @@ Type any cheat name in the console to activate!`);
         ctx.restore();
     }
     
+    drawPauseButton() {
+        const btnSize = 44; // touch-friendly hit area
+        const margin = 16;
+        const cx = this.canvas.width - margin - btnSize / 2;
+        const cy = margin + btnSize / 2;
+
+        // Store rect in screen coords for tap detection
+        this.pauseButtonRect = { x: cx - btnSize / 2, y: cy - btnSize / 2, w: btnSize, h: btnSize };
+
+        const ctx = this.ctx;
+        ctx.save();
+
+        // Subtle dark backing circle
+        ctx.beginPath();
+        ctx.arc(cx, cy, btnSize / 2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fill();
+
+        // Two vertical bars — match timer color
+        const barW = Math.round(btnSize * 0.16);
+        const barH = Math.round(btnSize * 0.48);
+        const gap  = Math.round(btnSize * 0.11);
+        const barTop = cy - barH / 2;
+
+        ctx.fillStyle = '#FFA500';
+        ctx.strokeStyle = '#CC8400';
+        ctx.lineWidth = 1;
+
+        // Left bar
+        ctx.beginPath();
+        ctx.rect(cx - gap - barW, barTop, barW, barH);
+        ctx.fill();
+        ctx.stroke();
+
+        // Right bar
+        ctx.beginPath();
+        ctx.rect(cx + gap, barTop, barW, barH);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
     drawStopwatchIcon(ctx, x, y, size) {
         ctx.save();
         
@@ -5505,6 +5614,47 @@ Type any cheat name in the console to activate!`);
         ctx.restore();
     }
     
+    drawCanvasTriforce(ctx, lives, baseX, baseY) {
+        const triangleSize = 12;
+        const spacing = 2;
+        const centerX = baseX + 30; // Center of the 60px-wide triforce slot
+        const topY = baseY + 8;
+        const bottomY = topY + triangleSize + spacing - 1;
+
+        const drawTri = (cx, cy) => {
+            const h = triangleSize * 0.866;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - h / 2);
+            ctx.lineTo(cx - triangleSize / 2, cy + h / 2);
+            ctx.lineTo(cx + triangleSize / 2, cy + h / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        };
+
+        ctx.save();
+        ctx.fillStyle = '#FFD700';
+        ctx.strokeStyle = '#B8860B';
+        ctx.lineWidth = 1;
+
+        const topTri  = { x: centerX, y: topY };
+        const btmLeft = { x: centerX - (triangleSize / 2 + spacing / 2), y: bottomY };
+        const btmRight = { x: centerX + (triangleSize / 2 + spacing / 2), y: bottomY };
+
+        if (lives >= 3) {
+            drawTri(topTri.x, topTri.y);
+            drawTri(btmLeft.x, btmLeft.y);
+            drawTri(btmRight.x, btmRight.y);
+        } else if (lives === 2) {
+            drawTri(btmLeft.x, btmLeft.y);
+            drawTri(btmRight.x, btmRight.y);
+        } else if (lives === 1) {
+            drawTri(btmLeft.x, btmLeft.y);
+        }
+
+        ctx.restore();
+    }
+
     drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
         const livesX = 10; // Same as lives display position
         const triforceWidth = 60; // Triforce canvas width from ui-manager.js

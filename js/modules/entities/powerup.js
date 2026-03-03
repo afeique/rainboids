@@ -17,7 +17,7 @@ export const POWERUP_TYPES = {
         name: 'Multi-Shot',
         color: '#3366ff',
         gradientColors: ['#66aaff', '#0033cc'],
-        icon: '※',
+        icon: '✳️',
         duration: 30000, // 30 seconds
         effect: 'multiShot',
         rarity: 0.25,
@@ -37,7 +37,7 @@ export const POWERUP_TYPES = {
         name: 'Big Bullets',
         color: '#33cc33',
         gradientColors: ['#66ff66', '#009900'],
-        icon: '●',
+        icon: '🔵',
         duration: 30000, // 30 seconds
         effect: 'bigBullets',
         rarity: 0.25,
@@ -57,7 +57,7 @@ export const POWERUP_TYPES = {
         name: 'Piercing Shots',
         color: '#ff9933',
         gradientColors: ['#ffcc66', '#cc6600'],
-        icon: '➤',
+        icon: '🏹',
         duration: 30000, // 30 seconds
         effect: 'piercing',
         rarity: 0.15,
@@ -67,7 +67,7 @@ export const POWERUP_TYPES = {
         name: 'Spread Shot',
         color: '#33ccff',
         gradientColors: ['#66ddff', '#0099cc'],
-        icon: '⇶',
+        icon: '📐',
         duration: 30000, // 30 seconds
         effect: 'spreadShot',
         rarity: 0.2,
@@ -77,7 +77,7 @@ export const POWERUP_TYPES = {
         name: 'Explosive Rounds',
         color: '#ff6600',
         gradientColors: ['#ff9933', '#cc3300'],
-        icon: '💥',
+        icon: '💣',
         duration: 30000, // 30 seconds
         effect: 'explosive',
         rarity: 0.1,
@@ -87,7 +87,7 @@ export const POWERUP_TYPES = {
         name: 'Critical Chance',
         color: '#ffcc00',
         gradientColors: ['#ffff66', '#cc9900'],
-        icon: '🎯',
+        icon: '⭐',
         duration: 30000, // 30 seconds for drops
         effect: 'critChance',
         rarity: 0.2,
@@ -97,7 +97,7 @@ export const POWERUP_TYPES = {
         name: 'Critical Damage',
         color: '#ff0066',
         gradientColors: ['#ff3399', '#cc0033'],
-        icon: '💥',
+        icon: '🗡️',
         duration: 30000, // 30 seconds for drops
         effect: 'critDamage',
         rarity: 0.15,
@@ -122,6 +122,16 @@ export const POWERUP_TYPES = {
         effect: 'medpack',
         rarity: 0.25,
         description: '+1 health star healing'
+    },
+    CHARGE_SHOT: {
+        name: 'Charge Shot',
+        color: '#00ccff',
+        gradientColors: ['#00ffff', '#0033aa'],
+        icon: '🔮',
+        duration: 30000,
+        effect: 'chargeShot',
+        rarity: 0.08,
+        description: 'Temporary charge shot ability'
     }
 };
 
