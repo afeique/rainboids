@@ -59,7 +59,9 @@ export class UIManager {
             rerollAllSfxButton: document.getElementById('reroll-all-sfx'),
             // Powerups tab elements
             powerupsList: document.getElementById('powerups-list'),
-            noPowerups: document.getElementById('no-powerups')
+            noPowerups: document.getElementById('no-powerups'),
+            // HUD pause button (top-left)
+            hudPauseBtn: document.getElementById('hud-pause-btn')
         };
     }
     
@@ -163,6 +165,18 @@ export class UIManager {
     showShopButton() {
         if (this.elements.shopButton) {
             this.elements.shopButton.style.display = 'block';
+        }
+    }
+
+    showHudPauseBtn() {
+        if (this.elements.hudPauseBtn) {
+            this.elements.hudPauseBtn.style.display = 'flex';
+        }
+    }
+
+    hideHudPauseBtn() {
+        if (this.elements.hudPauseBtn) {
+            this.elements.hudPauseBtn.style.display = 'none';
         }
     }
     
@@ -652,6 +666,25 @@ export class UIManager {
                     window.game.togglePause();
                 }
             });
+        }
+
+        if (this.elements.hudPauseBtn) {
+            this.elements.hudPauseBtn.addEventListener('click', () => {
+                if (window.game) {
+                    window.game.togglePause();
+                }
+            });
+            // On mobile the document-level touchstart calls e.preventDefault() on every
+            // touch, which kills the synthetic click.  Intercept touchstart on the button
+            // itself, stop it from bubbling to the document handler, and fire the action
+            // directly so the document handler never gets a chance to suppress it.
+            this.elements.hudPauseBtn.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (window.game) {
+                    window.game.togglePause();
+                }
+            }, { passive: false });
         }
         
         // Tab switching

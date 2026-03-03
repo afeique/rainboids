@@ -206,6 +206,19 @@ body.shop-open .ui-element {
     transform: translateY(-2px);
 }
 
+.pause-btn-icon {
+    font-size: 26px;
+    line-height: 1;
+    position: relative;
+    top: -3px; /* icon sits low in em square — nudge up */
+}
+
+.pause-btn-label {
+    line-height: 1;
+    position: relative;
+    top: 2px; /* Press Start 2P has large ascender, text renders high — nudge down */
+}
+
 #pause-shop-button {
     background: rgba(255, 165, 0, 0.2);
     border-color: rgba(255, 165, 0, 0.6);
@@ -215,6 +228,50 @@ body.shop-open .ui-element {
     background: rgba(255, 165, 0, 0.4);
     border-color: #ffaa00;
     box-shadow: 0 0 15px rgba(255, 165, 0, 0.5);
+}
+
+/* No-powerups placeholder text — suppress inherited text-shadow from .ui-element parent */
+#no-powerups {
+    text-shadow: none;
+}
+
+/* HUD pause button — top-left, goldenrod, semi-transparent until hovered */
+#hud-pause-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 90;
+    display: none; /* shown via showHudPauseBtn() */
+    align-items: center;
+    gap: 5px;
+    padding: 9px 11px;
+    background: rgba(218, 165, 32, 0.08);
+    border: 2px solid rgba(218, 165, 32, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.25s, background 0.25s, border-color 0.25s, box-shadow 0.25s;
+}
+
+#hud-pause-btn:hover {
+    opacity: 1;
+    background: rgba(218, 165, 32, 0.28);
+    border-color: goldenrod;
+    box-shadow: 0 0 14px rgba(218, 165, 32, 0.8), 0 0 28px rgba(218, 165, 32, 0.35);
+}
+
+.hud-pause-bar {
+    display: block;
+    width: 5px;
+    height: 22px;
+    background: goldenrod;
+    border-radius: 2px;
+}
+
+/* Hide HUD pause button when shop canvas is active */
+body.shop-open #hud-pause-btn {
+    opacity: 0;
+    pointer-events: none;
 }
 
 #customize-button {

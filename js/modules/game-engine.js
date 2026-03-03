@@ -4248,6 +4248,8 @@ export class GameEngine {
             this.updateHUD();
             // Show shop button during gameplay (but not when shop is open)
             this.uiManager.showShopButton();
+            // Show DOM pause button (top-left)
+            this.uiManager.showHudPauseBtn();
             // Draw mobile pause button on canvas (same layer as HP bar / timer)
             if (this.inputHandler.isMobile()) {
                 this.drawPauseButton();
@@ -4255,6 +4257,7 @@ export class GameEngine {
         } else {
             // Hide shop button on title screen and when shop is open
             this.uiManager.hideShopButton();
+            this.uiManager.hideHudPauseBtn();
         }
         
         // Draw level up text if active

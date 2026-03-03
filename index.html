@@ -50,6 +50,11 @@
         <p id="message-subtitle" class="message-subtitle" style="display: none;"></p>
     </div> -->
 
+    <button id="hud-pause-btn" aria-label="Pause">
+        <span class="hud-pause-bar"></span>
+        <span class="hud-pause-bar"></span>
+    </button>
+
     <div id="pause-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%;">
         <div id="pause-menu">
             <div class="pause-tabs">
@@ -60,8 +65,8 @@
             </div>
             
             <div class="pause-menu-actions">
-                <button id="pause-shop-button" class="pause-action-btn"><span>🛒</span><span>SHOP</span></button>
-                <button id="pause-resume-button" class="pause-action-btn"><span style="font-size:16px;line-height:1;">►</span><span>RESUME</span></button>
+                <button id="pause-shop-button" class="pause-action-btn"><span class="pause-btn-icon">🛒</span><span class="pause-btn-label">SHOP</span></button>
+                <button id="pause-resume-button" class="pause-action-btn"><span class="pause-btn-icon">►</span><span class="pause-btn-label">RESUME</span></button>
             </div>
             
             <div id="controls-tab" class="pause-tab-content active">
