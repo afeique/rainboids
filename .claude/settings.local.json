@@ -31,7 +31,10 @@
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js 2>&1 && echo \"OK\")",
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js 2>&1 && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js 2>&1 && echo \"enemy-bullet.js OK\")",
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js 2>&1 && node --check /Users/silvr/projects/rainboids/js/modules/entities/player.js 2>&1 && echo \"OK\")",
-      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"enemy-bullet.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"game-engine.js OK\")"
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"enemy-bullet.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"game-engine.js OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/wave-data.js && echo \"OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"game-engine.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"OK\")"
     ],
     "deny": []
   }

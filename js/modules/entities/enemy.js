@@ -4228,17 +4228,35 @@ export class Enemy {
         // Draw health bar (outside of transform)
         this.drawHealthBar(ctx);
 
-        // Draw enemy name label centered above the health bar (only after first hit)
+        // Draw enemy name label (with level prefix) centered above the health bar (only after first hit)
         if (showEnemyNames() && this.health < this.maxHealth) {
             const barY = this.y - this.radius - 8;   // matches drawHealthBar's barY
             ctx.save();
-            ctx.font = '13px "Pixelify Sans", "Press Start 2P", monospace';
-            ctx.fillStyle = 'goldenrod';
-            ctx.textAlign = 'center';
+            ctx.font = '15px "Pixelify Sans", "Press Start 2P", monospace';
             ctx.textBaseline = 'bottom';
             ctx.shadowColor = 'rgba(0,0,0,0.95)';
             ctx.shadowBlur = 4;
-            ctx.fillText(this.config.name.toUpperCase(), this.x, barY - 7);
+            ctx.textAlign = 'left';
+
+            const lvText  = 'Lv';
+            const numText = String(this.level || 1);
+            const nameText = ' ' + this.config.name.toUpperCase();
+
+            const lvWidth   = ctx.measureText(lvText).width;
+            const numWidth  = ctx.measureText(numText).width;
+            const nameWidth = ctx.measureText(nameText).width;
+            const startX = this.x - (lvWidth + numWidth + nameWidth) / 2;
+            const textY  = barY - 7;
+
+            ctx.fillStyle = '#ffffff';           // "Lv" — white
+            ctx.fillText(lvText, startX, textY);
+
+            ctx.fillStyle = '#88ccff';           // level number — light blue
+            ctx.fillText(numText, startX + lvWidth, textY);
+
+            ctx.fillStyle = 'goldenrod';         // enemy name — goldenrod
+            ctx.fillText(nameText, startX + lvWidth + numWidth, textY);
+
             ctx.restore();
         }
     }

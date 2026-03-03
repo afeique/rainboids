@@ -208,7 +208,22 @@ export class GameEngine {
   SHIFT+8  – spawn PROWLER
   SHIFT+9  – toggle one-hit kill (ONE PUNCH MAN)
   SHIFT+-  – add 100,000 coins (FREE WILLY)
-  SHIFT+0  – add 100 SP`);
+  SHIFT+0  – add 100 SP
+
+  DROP POWERUPS (Shift+letter):
+  SHIFT+Q  – Rapid Fire      ⚡
+  SHIFT+W  – Multi-Shot      ✳️
+  SHIFT+E  – Homing Bullets  🎯
+  SHIFT+R  – Big Bullets     🔵
+  SHIFT+T  – Speed Boost     💨
+  SHIFT+Y  – Piercing Shots  🏹
+  SHIFT+U  – Spread Shot     📐
+  SHIFT+I  – Explosive       💣
+  SHIFT+O  – Crit Chance     ⭐
+  SHIFT+P  – Crit Damage     🗡️
+  SHIFT+A  – Shield Boost    🛡
+  SHIFT+S  – Medpack         💊
+  SHIFT+D  – Charge Shot     🔮`);
     }
     
     initializePools() {
@@ -292,6 +307,29 @@ export class GameEngine {
                 if (e.code === 'Digit0') {
                     this.player.skillPoints += 100;
                     this.uiManager.showMessage('CHEAT', '+100 SP', 1500);
+                }
+                // Shift+letter: drop specific powerup near player
+                const powerupKeyMap = {
+                    'KeyQ': 'RAPID_FIRE',
+                    'KeyW': 'MULTI_SHOT',
+                    'KeyE': 'HOMING',
+                    'KeyR': 'BIG_BULLETS',
+                    'KeyT': 'SPEED_BOOST',
+                    'KeyY': 'PIERCING',
+                    'KeyU': 'SPREAD_SHOT',
+                    'KeyI': 'EXPLOSIVE',
+                    'KeyO': 'CRIT_CHANCE',
+                    'KeyP': 'CRIT_DAMAGE',
+                    'KeyA': 'SHIELD_BOOST',
+                    'KeyS': 'MEDPACK',
+                    'KeyD': 'CHARGE_SHOT',
+                };
+                if (powerupKeyMap[e.code] && this.player) {
+                    const type = powerupKeyMap[e.code];
+                    const offsetX = random(-40, 40);
+                    const offsetY = random(-40, 40);
+                    this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY, type);
+                    this.uiManager.showMessage('CHEAT', `Dropped ${type.replace(/_/g, ' ')}`, 1500);
                 }
             }
         });
@@ -2952,6 +2990,12 @@ export class GameEngine {
                     item.appendChild(timerWrap);
                 }
 
+                // Powerup name label beneath timer bar
+                const nameEl = document.createElement('div');
+                nameEl.className = 'powerup-hud-name';
+                nameEl.textContent = (powerupData.config.name || type).toUpperCase();
+                item.appendChild(nameEl);
+
                 hudEl.appendChild(item);
             }
 
@@ -2963,13 +3007,14 @@ export class GameEngine {
                 }
             }
 
-            // Sync stack count badge — "2x" format
+            // Sync stack count badge — "2x" format, anchored to bottom-right of circle
             let stacksEl = item.querySelector('.powerup-hud-stacks');
             if (powerupData.stacks > 1) {
                 if (!stacksEl) {
                     stacksEl = document.createElement('div');
                     stacksEl.className = 'powerup-hud-stacks';
-                    item.appendChild(stacksEl);
+                    const circleEl = item.querySelector('.powerup-hud-circle');
+                    (circleEl || item).appendChild(stacksEl);
                 }
                 stacksEl.textContent = powerupData.stacks + 'x';
             } else if (stacksEl) {
