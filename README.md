@@ -12,7 +12,7 @@ A modern, feature-rich asteroids game with enhanced combat, powerups, enemies, a
 ## 🚀 Game Overview
 
 Rainboids is a supercharged asteroids clone featuring:
-- **6 unique enemy types** with distinct behaviors and attack patterns
+- **10 unique enemy types** with distinct behaviors and attack patterns
 - **12 different powerups** with visual effects and stacking mechanics
 - **Comprehensive upgrade system** with offensive and defensive improvements
 - **Wave-based progression** with increasing difficulty
@@ -42,46 +42,74 @@ Rainboids is a supercharged asteroids clone featuring:
 ## 👾 Enemy Types
 
 ### 🔴 Hunter (Triangle)
-- **Behavior**: Fast, aggressive chaser that pursues the player relentlessly
-- **Attack**: 3-round burst fire pattern
-- **Movement**: Triangular geometric patterns while chasing
-- **Health**: Medium durability
-- **Threat Level**: High mobility, moderate firepower
+- **Behavior**: Aggressive hunter that surges at the player in sharp directional bursts
+- **Attack**: 3-round burst of **red triangle** projectiles pointing in their travel direction; 2s cooldown between bursts
+- **Movement**: Triangular burst-and-wait — darts a random direction at high speed, decelerates, waits, then bursts again
+- **Health**: Medium
+- **Threat Level**: High mobility, moderate burst damage
 
-### 🟢 Guardian (Square) 
-- **Behavior**: Defensive tank that patrols areas and guards territory
-- **Attack**: Devastating crescent wave spread shots
-- **Movement**: Square geometric patrol patterns
-- **Health**: High durability, heavily armored
-- **Threat Level**: Low mobility, devastating firepower
+### 🟢 Guardian (Square)
+- **Behavior**: Armored patrol enemy that holds territory with axis-aligned movement
+- **Attack**: 3-round burst of **spinning green squares**; long 4s cooldown between volleys
+- **Movement**: Square burst-and-wait — moves in strict horizontal or vertical bursts, then pauses
+- **Health**: High
+- **Threat Level**: Moderate mobility, sustained suppressive fire
 
-### 🟡 Wasp (Diamond)
-- **Behavior**: Fast, agile swarm enemy with darting movements
-- **Attack**: Quick pulse bursts in rapid succession
-- **Movement**: Erratic darting like an angry wasp
-- **Health**: Low durability but hard to hit
-- **Threat Level**: Very high mobility, moderate firepower
+### 🟡 Wasp (Wasp Ship)
+- **Behavior**: Agile harasser that darts back and forth in tight zigzag patterns
+- **Attack**: Fast **yellow needle/dart** projectiles — long and thin, fired at the player between zigzag runs
+- **Movement**: Zigzags perpendicular to the player 3–5 times at high speed, then hovers for a ~2s cooldown before repeating
+- **Health**: Low
+- **Threat Level**: Very high mobility, difficult to track
 
 ### 🟣 Titan (Hexagon)
-- **Behavior**: Massive boss-like enemy with tank characteristics
-- **Attack**: Slow but powerful homing missiles
-- **Movement**: Deliberate tank-like rotation and positioning
-- **Health**: Very high durability
-- **Threat Level**: Low mobility, very high firepower
+- **Behavior**: Lumbering juggernaut that builds momentum like a boulder
+- **Attack**: **Sweeping purple laser beam** — a 1.8s dashed warning arc telegraphs the sweep, then a glowing beam rotates ±60° over 1.6s, damaging anything in its path; 8s cooldown
+- **Movement**: Locks onto the player's direction, slowly accelerates to top speed, brakes past the player, comes to a full stop, then repeats
+- **Health**: Very high
+- **Threat Level**: Low agility but devastating area laser; must be respected at all ranges
 
 ### 🔵 Stalker (Cross)
-- **Behavior**: Stealthy enemy that approaches in wide arcs
-- **Attack**: Charged laser beams with high damage
-- **Movement**: Swooping arc patterns for positioning
-- **Health**: Medium-high durability
-- **Threat Level**: High mobility, high precision damage
+- **Behavior**: Stealthy predator that positions itself through wide swooping arcs
+- **Attack**: Charged laser beams — a charging ball builds at its tip before firing a close-range cyan beam slice
+- **Movement**: Wide arc swoops around the player, stopping to fire then arcing away
+- **Health**: Medium-high
+- **Threat Level**: High mobility, high burst damage on approach
 
 ### 🟠 Bomber (Spiked Circle)
-- **Behavior**: Slow but dangerous explosive specialist
-- **Attack**: Slow-moving but deadly homing projectiles
-- **Movement**: Circular patterns, methodical positioning
-- **Health**: High durability, heavily armored
-- **Threat Level**: Low mobility, extreme firepower
+- **Behavior**: Slow, relentless pursuer that litters the arena with hazards
+- **Attack**: Lays **spiky orange proximity mines** — stationary, pulsing mines that detonate on contact and persist for 18 seconds
+- **Movement**: Slowly but steadily chases the player at low speed, leaving a trail of mines in its path
+- **Health**: High
+- **Threat Level**: Low speed, but mines deny space and stack up quickly
+
+### 🔵 Drifter (Laser Turret)
+- **Behavior**: Methodical crystal turret that slowly patrols while charging and firing precision lasers
+- **Attack**: Charges a growing energy ball before releasing a cyan close-range laser beam slice
+- **Movement**: Slow patrol with occasional direction changes; stops to fire
+- **Health**: Medium-high
+- **Threat Level**: Moderate — predictable but hits hard if not dodged
+
+### 🟣 Prowler (Missile Turret)
+- **Behavior**: Armored missile platform that keeps its distance and peppers the player with exploding warheads
+- **Attack**: Missiles that launch fast and decelerate to a stop before exploding — dangerous area denial
+- **Movement**: Maintains a fixed distance from the player; retreats if approached
+- **Health**: High
+- **Threat Level**: Long-range, high damage, forces constant movement
+
+### 🟡 Weaver (Spinning Wheel)
+- **Behavior**: Three-phase spinning turbine that charges up, then unleashes a spiral laser barrage while zooming in an arc
+- **Attack**: **Spiral yellow lasers** — fires continuously during the arc phase while rotating at full speed, sending beams radiating outward in a circular spiral pattern
+- **Movement**: ① **Spin-up**: holds position while spinning faster and faster (2.4s charge, sparks fly); ② **Arc dash**: zooms in a tight circular orbit around the player at high speed while spraying lasers (3.6s); ③ **Cooldown**: decelerates and spin winds down (2.6s), then repeats
+- **Health**: Medium
+- **Threat Level**: Moderate normally, extremely dangerous during the arc — lasers cover all directions
+
+### 🟢 Sentinel (Shield Turret)
+- **Behavior**: Slow orbital fortress that sweeps the battlefield with a 360° shield burst
+- **Attack**: 8 bullets fired simultaneously in a full circle when it stops — unavoidable in close range
+- **Movement**: Slow orbital arc around the player; decelerates to fire, then resumes
+- **Health**: High
+- **Threat Level**: Low speed but the omni-directional burst punishes close-range fighting
 
 ---
 

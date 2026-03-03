@@ -19,25 +19,45 @@ export class EnemyBullet {
         this.active = true;
         this.life = 1.0;
         this.creationTime = Date.now();
-        
+
         // Visual properties
         this.radius = explosive ? 6 : 3;
         this.glowRadius = explosive ? 12 : 6;
         this.trailLength = explosive ? 8 : 4;
         this.trail = [];
-        
+
         // Rotation for visual effect
         this.rotation = 0;
         this.rotationSpeed = explosive ? 0.1 : 0.05;
-        
+
         // Damage (scaled back down to balanced levels)
         this.damage = explosive ? 3 : 2;
-        
+
         // Movement pattern properties (set by enemy when creating bullet)
         this.movementPattern = 'aimed'; // Default pattern
         this.patternTimer = 0;
         this.patternPhase = 0;
         this.baseVel = { x: velX, y: velY }; // Store original velocity
+
+        // Shape rendering
+        this.shape = null; // null = circle, 'triangle', 'square', 'needle', 'mine'
+
+        // Persistent bullets (mines) — bypass the life<=0.5 deactivation threshold
+        this.isPersistent = false;
+        this.maxLifetimeOverride = null; // Override default 3000ms lifetime (ms)
+
+        // For mine proximity: reference to player (set by enemy that laid the mine)
+        this.targetPlayer = null;
+
+        // Burst of particles on natural expiry (used by Stalker laser segments)
+        this.deathBurst = false;
+
+        // Sine-wave oscillation (used by Sentinel sine-needle)
+        this.sinePhase = 0;
+        this.sineFreq  = 0;
+        this.sineAmp   = 0;
+        this.sinePerpX = 0;
+        this.sinePerpY = 0;
     }
     
     update() {
@@ -62,16 +82,26 @@ export class EnemyBullet {
         // Update pattern timer
         this.patternTimer += 0.016; // Assuming 60fps
         
-        // Gradually fade out over time (3 second lifespan)
-        const maxLifetime = 3000; // 3 seconds in milliseconds
-        const age = Date.now() - this.creationTime;
-        this.life = Math.max(0, 1 - (age / maxLifetime));
-        
-        // Deactivate when opacity drops to 50%
-        if (this.life <= 0.5) {
-            this.createDisappearEffect();
-            this.active = false;
-            return;
+        // Persistent bullets (mines) use a fixed-duration lifetime, not life-fade
+        if (this.isPersistent) {
+            const maxLife = this.maxLifetimeOverride || 15000;
+            if (Date.now() - this.creationTime > maxLife) {
+                this.active = false;
+                return;
+            }
+            this.life = 1.0; // Always full opacity
+        } else {
+            // Gradually fade out over time
+            const maxLifetime = this.maxLifetimeOverride || 3000;
+            const age = Date.now() - this.creationTime;
+            this.life = Math.max(0, 1 - (age / maxLifetime));
+
+            // Deactivate when opacity drops to 50%
+            if (this.life <= 0.5) {
+                this.createDisappearEffect();
+                this.active = false;
+                return;
+            }
         }
         
         // Check bounds - recycle if off screen (use gameField dimensions)
@@ -95,6 +125,12 @@ export class EnemyBullet {
         switch (this.movementPattern) {
             case 'aimed':
                 // Standard straight movement - no modification needed
+                break;
+
+            case 'mine':
+                // Stationary proximity mine — zero velocity, large collision radius
+                this.vel.x = 0;
+                this.vel.y = 0;
                 break;
                 
             case 'spread':
@@ -375,6 +411,16 @@ export class EnemyBullet {
                 // All bullets travel in same direction to maintain concentrated front
                 // No movement modification needed - straight parallel movement
                 break;
+
+            case 'sine_wave':
+                // Sinusoidal oscillation perpendicular to travel direction (Sentinel)
+                this.sinePhase += this.sineFreq;
+                const sineDisp = Math.sin(this.sinePhase) * this.sineAmp;
+                this.vel.x = this.baseVel.x + this.sinePerpX * sineDisp;
+                this.vel.y = this.baseVel.y + this.sinePerpY * sineDisp;
+                // Keep needle oriented in actual travel direction
+                this.rotation = Math.atan2(this.vel.y, this.vel.x);
+                break;
         }
     }
     
@@ -439,6 +485,13 @@ export class EnemyBullet {
     }
     
     drawRegularBullet(ctx) {
+        // Route to shape-specific renderers
+        if (this.shape === 'triangle') { this.drawTriangleBullet(ctx); return; }
+        if (this.shape === 'square')   { this.drawSquareBullet(ctx);   return; }
+        if (this.shape === 'needle')   { this.drawNeedleBullet(ctx);   return; }
+        if (this.shape === 'mine')     { this.drawMineBullet(ctx);     return; }
+
+        // Default: circle bullet
         // Enhanced multi-layer glow effect for better visibility
         const time = Date.now() * 0.005;
         const pulseIntensity = 0.8 + Math.sin(time) * 0.2; // Subtle pulsing
@@ -579,26 +632,45 @@ export class EnemyBullet {
         // Create small spray of particles in the same color as the bullet
         const gameEngine = window.gameEngine;
         if (!gameEngine || !gameEngine.particlePool) return;
-        
+
+        if (this.deathBurst) {
+            // Stalker laser segments: vivid cyan burst with visible sparkle cloud
+            const particleCount = 8 + Math.random() * 6; // 8–14 particles
+            for (let i = 0; i < particleCount; i++) {
+                const particle = gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
+                if (particle) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 1.5 + Math.random() * 4;
+                    particle.vel.x = Math.cos(angle) * speed;
+                    particle.vel.y = Math.sin(angle) * speed;
+                    particle.color = this.color;
+                    particle.radius = 1.5 + Math.random() * 2.5;
+                    particle.life = 20 + Math.random() * 25; // 20–45 frames
+                    particle.friction = 0.93;
+                }
+            }
+            return;
+        }
+
         const particleCount = 4 + Math.random() * 4; // 4-8 particles
-        
+
         for (let i = 0; i < particleCount; i++) {
             const particle = gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
             if (particle) {
                 // Random direction for spray effect
                 const angle = Math.random() * Math.PI * 2;
                 const speed = 0.5 + Math.random() * 2; // Slow speed for subtle effect
-                
+
                 particle.vel.x = Math.cos(angle) * speed;
                 particle.vel.y = Math.sin(angle) * speed;
-                
+
                 // Use the same color as the bullet
                 particle.color = this.color;
-                
+
                 // Small particles with short life
                 particle.radius = 0.5 + Math.random() * 1.5;
                 particle.life = 15 + Math.random() * 15; // 15-30 frames
-                
+
                 // Add some friction to make them slow down
                 particle.friction = 0.95;
             }
@@ -634,14 +706,151 @@ export class EnemyBullet {
         }
     }
     
+    // ── Triangle bullet (Hunter) ─────────────────────────────────────────────
+    // ctx is already rotated so that +X axis = travel direction
+    drawTriangleBullet(ctx) {
+        const r = this.radius;
+        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.8);
+        glow.addColorStop(0, this.color + 'BB');
+        glow.addColorStop(1, this.color + '00');
+        ctx.globalAlpha = this.life * 0.9;
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 2.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(r * 1.1, 0);            // tip → forward
+        ctx.lineTo(-r * 0.65, -r * 0.85); // left back
+        ctx.lineTo(-r * 0.65, r * 0.85);  // right back
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    // ── Square bullet (Guardian) ─────────────────────────────────────────────
+    drawSquareBullet(ctx) {
+        const r = this.radius;
+        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.5);
+        glow.addColorStop(0, this.color + 'BB');
+        glow.addColorStop(1, this.color + '00');
+        ctx.globalAlpha = this.life * 0.85;
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.rect(-r, -r, r * 2, r * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Bright center
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.6 * this.life;
+        ctx.beginPath();
+        ctx.rect(-r * 0.35, -r * 0.35, r * 0.7, r * 0.7);
+        ctx.fill();
+    }
+
+    // ── Needle bullet (Wasp) ─────────────────────────────────────────────────
+    // ctx is rotated so +X = travel direction; draws an elongated needle
+    drawNeedleBullet(ctx) {
+        const len = this.radius * 5.5; // longer needle
+        const w   = this.radius * 0.25; // thinner
+
+        // Outer energy glow along the length
+        const gradient = ctx.createLinearGradient(-len, 0, len, 0);
+        gradient.addColorStop(0,   this.color + '00');
+        gradient.addColorStop(0.35, this.color + '88');
+        gradient.addColorStop(0.5, this.color + 'EE');
+        gradient.addColorStop(0.65, this.color + '88');
+        gradient.addColorStop(1,   this.color + '00');
+
+        ctx.globalAlpha = this.life * 0.85;
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, len, w * 2.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core needle
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, len * 0.85, w, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bright spine
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.85 * this.life;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, len * 0.55, w * 0.28, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // ── Mine bullet (Tangerine/Bomber) ───────────────────────────────────────
+    drawMineBullet(ctx) {
+        const pulse = 0.75 + Math.sin(Date.now() * 0.006) * 0.25;
+        const r = this.radius;
+
+        // Pulsing danger glow
+        const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.5);
+        outerGlow.addColorStop(0, this.color + 'AA');
+        outerGlow.addColorStop(0.5, this.color + '44');
+        outerGlow.addColorStop(1, this.color + '00');
+        ctx.globalAlpha = pulse * 0.7;
+        ctx.fillStyle = outerGlow;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner body
+        ctx.globalAlpha = 1.0;
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#ffaa44';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Spikes (8 of them)
+        const innerR = r * 0.55;
+        const outerR = r * 1.05;
+        ctx.strokeStyle = '#ffcc44';
+        ctx.lineWidth = 2.5;
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2 + this.rotation;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * innerR, Math.sin(a) * innerR);
+            ctx.lineTo(Math.cos(a) * outerR, Math.sin(a) * outerR);
+            ctx.stroke();
+        }
+
+        // Center warning dot
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = pulse * 0.9;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
     checkCollision(target) {
         if (!this.active || !target.active) return false;
-        
+
         const dx = this.x - target.x;
         const dy = this.y - target.y;
         const distance = Math.hypot(dx, dy);
         const collisionRadius = this.radius + (target.radius || 10);
-        
+
         return distance < collisionRadius;
     }
 } 

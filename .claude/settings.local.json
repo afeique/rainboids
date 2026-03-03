@@ -17,7 +17,13 @@
       "Bash(npm run dev)",
       "Bash(chmod +x /Users/silvr/projects/rainboids/cpp/build.sh)",
       "Bash(cd /Users/silvr/projects/rainboids/cpp && chmod +x build.sh && ./build.sh --install-deps 2>&1)",
-      "Bash(cd /Users/silvr/projects/rainboids/cpp && ./build.sh --install-deps 2>&1)"
+      "Bash(cd /Users/silvr/projects/rainboids/cpp && ./build.sh --install-deps 2>&1)",
+      "Bash(node --check js/modules/entities/enemy.js 2>&1 && echo \"enemy.js OK\" && node --check js/modules/entities/enemy-bullet.js 2>&1 && echo \"enemy-bullet.js OK\")",
+      "Bash(node --check js/modules/entities/enemy.js 2>&1 && echo \"OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"Both files: syntax OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"enemy-bullet.js OK\")"
     ],
     "deny": []
   }

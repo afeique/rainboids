@@ -7,7 +7,7 @@ export const ENEMY_TYPES = {
     HUNTER: {
         name: 'Hunter',
         color: '#ff4444',        // Red
-        health: 12,
+        health: 60,
         speed: 1.6,
         size: 25,
         shootPattern: 'burst_3',
@@ -17,41 +17,41 @@ export const ENEMY_TYPES = {
     },
     GUARDIAN: {
         name: 'Guardian',
-        color: '#44ff44',        // Green  
-        health: 18,              // Reduced to 18 - still tanky but manageable
+        color: '#44ff44',        // Green
+        health: 80,              // 4 shots to kill (bullet dmg=20)
         speed: 1.0,              // Reduced from 1.4 - slower patrol movement
         size: 38,
-        shootPattern: 'crescent_wave',
-        shootRate: 0.25, // Very long cooldown - 4 second intervals between attacks
+        shootPattern: 'square_burst', // Burst of green square shots
+        shootRate: 0.3,
         movePattern: 'square',     // Square geometric movement
         points: 75
     },
     WASP: {
         name: 'Wasp',
         color: '#ffff44',        // Yellow
-        health: 10,              // Fast but fragile
+        health: 60,              // Fast but fragile — 3 shots
         speed: 2.8,              // Fast burst speed
         size: 28,
-        shootPattern: 'pulse',
-        shootRate: 0.6,
-        movePattern: 'triangle', // Burst-and-wait like HUNTER, with WASP-specific tuning
+        shootPattern: 'needle',  // Sharp needle/dart projectiles
+        shootRate: 0.7,
+        movePattern: 'wasp_zigzag', // Zigzag N times then cooldown
         points: 35
     },
     TITAN: {
         name: 'Titan',
         color: '#ff44ff',        // Magenta
-        health: 25,              // Tanky but not overwhelming
+        health: 120,             // Juggernaut — 6 shots
         speed: 1.2,              // Lumbering but not too slow
         size: 50,                // Large tank
-        shootPattern: 'titan_rocket', // Fast direct rockets
-        shootRate: 0.6,          // Medium firing rate
-        movePattern: 'tank',          // Tank-like movement: rotate, move, stop, repeat
+        shootPattern: 'sweep_laser', // Very long sweeping purple laser
+        shootRate: 0.15,         // Slow - sweep laser handles its own timing
+        movePattern: 'boulder',  // Gain momentum toward player, brake past them
         points: 120
     },
     STALKER: {
         name: 'Stalker',
         color: '#44ffff',        // Cyan
-        health: 14,              // Reduced to 14 - stealthy but not too tanky
+        health: 80,              // 4 shots to kill
         speed: 2.5,              // Higher speed for swooping arcs
         size: 30,
         shootPattern: 'charged_laser',
@@ -62,29 +62,29 @@ export const ENEMY_TYPES = {
     TANGERINE: {
         name: 'Bomber',
         color: '#ff8844',        // Orange
-        health: 20,
-        speed: 0.6,              // Enough speed to retreat from an approaching player
+        health: 100,             // 5 shots to kill
+        speed: 0.8,              // Moderate chase speed - drops mines more actively
         size: 35,
-        shootPattern: 'homing',
-        shootRate: 0.8,
-        movePattern: 'keep_distance', // Hangs far back and retreats when approached
+        shootPattern: 'lay_mine', // Drops proximity mines
+        shootRate: 0.4,          // Drops mines more regularly
+        movePattern: 'chase',    // Slowly but surely pursues player
         points: 65
     },
     DRIFTER: {
         name: 'Drifter',
         color: '#00ffff',        // Cyan
-        health: 16,              // Reduced to 16 - durable but mobile
-        speed: 0.8,              // Slow, methodical movement
+        health: 80,              // 4 shots to kill
+        speed: 2.5,              // Zippy — sinusoidal wave orbit
         size: 30,
-        shootPattern: 'laser',
-        shootRate: 0.1,          // Much faster rate for more aggressive laser attacks
-        movePattern: 'patrol',   // Slow patrol movement
+        shootPattern: 'arc_lightning', // Charged arc lightning bolt toward player
+        shootRate: 0.1,
+        movePattern: 'drifter_wave',   // Sinusoidal wave at fixed distance from player
         points: 80
     },
     PROWLER: {
         name: 'Prowler',
         color: '#ff00ff',        // Magenta
-        health: 20,              // Tanky mini-tank
+        health: 100,             // 5 shots to kill
         speed: 0.6,              // Slow, lumbering mini-tank
         size: 35,                // Larger mini-tank
         shootPattern: 'missile_decelerate',
@@ -95,23 +95,23 @@ export const ENEMY_TYPES = {
     WEAVER: {
         name: 'Weaver',
         color: '#ffff00',        // Yellow
-        health: 12,              // Reduced to 12 - lighter but agile
-        speed: 1.8,              // Fast and agile
+        health: 60,              // 3 shots to kill — lighter but agile
+        speed: 2.2,              // Fast arc dash speed
         size: 25,
-        shootPattern: 'pulse',
-        shootRate: 1.0,          // Increased rate for pulse turret rapid fire
-        movePattern: 'swarm',    // Swarm movement for agility
+        shootPattern: 'spiral_laser', // Spiral lasers during arc phase
+        shootRate: 1.0,
+        movePattern: 'weaver_spinup', // Spin up → zoom arc while firing → cooldown
         points: 70
     },
     SENTINEL: {
         name: 'Sentinel',
         color: '#00ff00',        // Green
-        health: 18,              // Reduced to 18 - very durable
-        speed: 0.6,              // Very slow but steady
+        health: 80,              // 4 shots to kill
+        speed: 2.0,              // Fast arc dash (same as Weaver)
         size: 32,
-        shootPattern: 'shield_burst',
-        shootRate: 0.7,          // Increased rate for shield turret
-        movePattern: 'slow_orbit', // Slow orbital movement
+        shootPattern: 'sentinel_sweep', // 360° rotating green laser during arc phase
+        shootRate: 1.0,
+        movePattern: 'weaver_spinup', // Spin up → zoom arc while firing → cooldown
         points: 100
     }
 };
@@ -263,6 +263,18 @@ export class Enemy {
             { x: -1, y: 0 }  // Left
         ];
         
+        // Weaver spin-up state (initialized lazily in weaverSpinupMovement)
+        this.weaverState = undefined;
+
+        // Wasp zigzag movement state (initialized lazily in waspZigzagMovement)
+        this.waspZigzagState = undefined;
+
+        // Boulder (Titan) movement state (initialized lazily in boulderMovement)
+        this.boulderState = undefined;
+
+        // Sweep laser state (initialized lazily in updateSweepLaserSystem)
+        this.sweepState = undefined;
+
         // Wavy movement properties
         this.wavyBaseAngle = random(0, Math.PI * 2);
         this.wavyTime = 0;
@@ -337,7 +349,7 @@ export class Enemy {
         // Dodge player bullets
         this.dodgePlayerBullets(gameEngine);
         
-        // Update shooting
+        // Update shooting (sweep laser system handles itself separately)
         this.updateShooting(gameEngine);
         
         // Update rotation with agility-based speed
@@ -428,8 +440,13 @@ export class Enemy {
     }
     
     updateFaceDirection() {
+        // Weaver and Sentinel control their own faceAngle while spinning/arcing
+        if ((this.type === 'WEAVER' || this.type === 'SENTINEL') && (this.weaverState === 'spinning_up' || this.weaverState === 'arcing')) {
+            return;
+        }
+
         let targetX, targetY;
-        
+
         // Determine what to face based on current target
         if (this.currentTarget === 'player' && this.targetPlayer) {
             targetX = this.targetPlayer.x;
@@ -478,6 +495,9 @@ export class Enemy {
             case 'patrol':
                 this.patrolMovement();
                 break;
+            case 'drifter_wave':
+                this.drifterWaveMovement();
+                break;
             case 'swarm':
                 this.swarmMovement();
                 break;
@@ -519,6 +539,15 @@ export class Enemy {
                 break;
             case 'tank':
                 this.tankMovement();
+                break;
+            case 'weaver_spinup':
+                this.weaverSpinupMovement(gameEngine);
+                break;
+            case 'wasp_zigzag':
+                this.waspZigzagMovement();
+                break;
+            case 'boulder':
+                this.boulderMovement();
                 break;
             case 'arc':
                 this.arcMovement();
@@ -669,7 +698,46 @@ export class Enemy {
             this.vel.y = (this.vel.y / speed) * this.config.speed * 1.2;
         }
     }
-    
+
+    // ── Drifter Wave Movement ────────────────────────────────────────────────
+    // Orbits the player at a fixed distance (~220 px) using a sinusoidal
+    // tangential velocity so it traces an undulating wave arc rather than
+    // a clean circle.  The radial component continuously corrects distance.
+    drifterWaveMovement() {
+        if (!this.targetPlayer) return;
+
+        if (this.drifterWavePhase === undefined) {
+            this.drifterWavePhase = Math.random() * Math.PI * 2;
+            this.drifterOrbitDir  = Math.random() < 0.5 ? 1 : -1;
+            this.drifterOptimalDist = 220; // px — fixed orbit distance
+        }
+
+        const dx = this.targetPlayer.x - this.x;
+        const dy = this.targetPlayer.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1) return;
+
+        // Unit vectors: radial (toward player) and tangential (perpendicular)
+        const rx =  dx / dist;
+        const ry =  dy / dist;
+        const tx = -ry * this.drifterOrbitDir;
+        const ty =  rx * this.drifterOrbitDir;
+
+        // Advance sinusoidal phase
+        this.drifterWavePhase += 0.042;
+        const wave = Math.sin(this.drifterWavePhase); // −1 … +1
+
+        // Radial: proportional correction to reach optimal distance
+        const distErr = dist - this.drifterOptimalDist;
+        const radialSpeed = Math.sign(distErr) * Math.min(Math.abs(distErr) * 0.06, this.config.speed * 0.8);
+
+        // Tangential: sinusoidal wave (full amplitude at peak)
+        const tangentialSpeed = wave * this.config.speed * 1.6;
+
+        this.vel.x = rx * radialSpeed + tx * tangentialSpeed;
+        this.vel.y = ry * radialSpeed + ty * tangentialSpeed;
+    }
+
     swarmMovement() {
         if (!this.targetPlayer) return;
         
@@ -2861,9 +2929,6 @@ export class Enemy {
         // Tank movement enemies can only shoot when in firing state
         if (this.config.movePattern === 'tank' && this.tankState !== 'firing') return;
         
-        // Shield Turret can only shoot when stopped
-        if (this.type === 'SENTINEL' && this.orbitalState !== 'stopping') return;
-        
         const playerDistance = Math.hypot(this.x - this.targetPlayer.x, this.y - this.targetPlayer.y);
         // Limit shooting range to 1 screen maximum
         const screenWidth = window.innerWidth;
@@ -2878,12 +2943,26 @@ export class Enemy {
         
         const now = Date.now();
         
-        // Handle burst patterns (burst_3 and burst_2)
-        if (this.config.shootPattern === 'burst_3' || this.config.shootPattern === 'burst_2') {
+        // Sweep laser has its own timing system
+        if (this.config.shootPattern === 'sweep_laser') {
+            this.updateSweepLaserSystem(gameEngine);
+            return;
+        }
+
+        // Sentinel sweep: rotating green beam handled in updateSentinelSweep()
+        if (this.config.shootPattern === 'sentinel_sweep') {
+            this.updateSentinelSweep(gameEngine);
+            return;
+        }
+
+        // Spiral laser: shooting is triggered inside weaverSpinupMovement() during arc phase
+        if (this.config.shootPattern === 'spiral_laser') return;
+
+        // Handle burst patterns
+        if (this.config.shootPattern === 'burst_3' || this.config.shootPattern === 'burst_2' || this.config.shootPattern === 'square_burst') {
             this.handleBurstShooting(gameEngine, now);
-        } else if (this.config.shootPattern === 'laser') {
-            // Laser turrets need frequent updates for charging mechanism
-            // Always try to shoot to handle charging state
+        } else if (this.config.shootPattern === 'laser' || this.config.shootPattern === 'arc_lightning') {
+            // Charging patterns need per-frame calls to advance charge state
             this.shoot(gameEngine);
         } else {
             // Handle non-burst patterns (circle_6, homing, etc.)
@@ -2910,32 +2989,37 @@ export class Enemy {
             this.burstState.active = true;
             if (this.config.shootPattern === 'burst_3') {
                 this.burstState.shotsRemaining = 3;
-                this.burstState.shotDelay = 150; // ms between shots in burst
+                this.burstState.shotDelay = 150;
             } else if (this.config.shootPattern === 'burst_2') {
                 this.burstState.shotsRemaining = 2;
-                this.burstState.shotDelay = 200; // ms between shots in burst (slightly slower for wasps)
+                this.burstState.shotDelay = 200;
+            } else if (this.config.shootPattern === 'square_burst') {
+                this.burstState.shotsRemaining = 3;
+                this.burstState.shotDelay = 180;
             } else {
                 this.burstState.shotsRemaining = 4;
                 this.burstState.shotDelay = 100;
             }
             this.burstState.lastBurstShot = 0;
         }
-        
+
         // Fire shots in burst
         if (this.burstState.shotsRemaining > 0 && now - this.burstState.lastBurstShot > this.burstState.shotDelay) {
             this.shoot(gameEngine);
             this.burstState.shotsRemaining--;
             this.burstState.lastBurstShot = now;
-            
+
             // End burst and start cooldown
             if (this.burstState.shotsRemaining <= 0) {
                 this.burstState.active = false;
                 if (this.config.shootPattern === 'burst_3') {
-                    this.burstState.cooldownUntil = now + 2000; // 2 second cooldown for hunters
+                    this.burstState.cooldownUntil = now + 2000;
                 } else if (this.config.shootPattern === 'burst_2') {
-                    this.burstState.cooldownUntil = now + 1800; // 1.8 second cooldown for wasps
+                    this.burstState.cooldownUntil = now + 1800;
+                } else if (this.config.shootPattern === 'square_burst') {
+                    this.burstState.cooldownUntil = now + 4000; // 4s cooldown for guardians
                 } else {
-                    this.burstState.cooldownUntil = now + 1500; // Default cooldown
+                    this.burstState.cooldownUntil = now + 1500;
                 }
             }
         }
@@ -2954,6 +3038,21 @@ export class Enemy {
                 break;
             case 'burst_2':
                 this.shootBurst2(gameEngine, targetX, targetY);
+                break;
+            case 'needle':
+                this.shootNeedle(gameEngine, targetX, targetY);
+                break;
+            case 'square_burst':
+                this.shootSquareBurst(gameEngine, targetX, targetY);
+                break;
+            case 'lay_mine':
+                this.layMine(gameEngine, targetX, targetY);
+                break;
+            case 'spiral_laser':
+                this.shootSpiralLaser(gameEngine);
+                break;
+            case 'sweep_laser':
+                // handled by updateSweepLaserSystem
                 break;
             case 'line_4':
                 this.shootLine4(gameEngine, targetX, targetY);
@@ -2980,6 +3079,9 @@ export class Enemy {
             case 'laser':
                 this.shootLaser(gameEngine, targetX, targetY);
                 break;
+            case 'arc_lightning':
+                this.shootArcLightning(gameEngine, targetX, targetY);
+                break;
             case 'missile':
                 this.shootMissile(gameEngine, targetX, targetY);
                 break;
@@ -2989,32 +3091,26 @@ export class Enemy {
             case 'shield_burst':
                 this.shootShieldBurst(gameEngine, targetX, targetY);
                 break;
+            case 'sentinel_sweep':
+                // handled by updateSentinelSweep()
+                break;
             default:
                 this.shootAimed(gameEngine, targetX, targetY);
                 break;
         }
     }
-    
+
     // Check if enemy is a stationary turret
     isStationary() {
-        return this.config.movePattern === 'stationary' || 
-               this.type === 'DRIFTER' || 
-               this.type === 'PROWLER' || 
-               this.type === 'WEAVER' || 
-               this.type === 'SENTINEL';
+        return this.config.movePattern === 'stationary' ||
+               this.type === 'PROWLER';
     }
     
     shootAimed(gameEngine, targetX, targetY) {
         const dx = targetX - this.x;
         const dy = targetY - this.y;
         const angle = Math.atan2(dy, dx);
-        
-        // Update facing direction for non-turret, non-titan enemies
-        if (!this.isStationary() && this.type !== 'TITAN') {
-            this.rotation = angle;
-            this.faceAngle = angle;
-        }
-        
+        // faceAngle is smoothly updated by updateFaceDirection() — no snap here
         this.createEnemyBullet(gameEngine, angle, 3, this.color, false, 'aimed');
     }
     
@@ -3102,7 +3198,231 @@ export class Enemy {
         // This method is kept for compatibility but does nothing
         return;
     }
-    
+
+    // ── Arc Lightning (Drifter) ──────────────────────────────────────────────
+    // Charges up then fires a jagged cyan lightning bolt toward the player.
+    // Reuses laserCharge/laserCharging/laserTargetAngle so existing draw
+    // methods (drawLaserTargetingLine, drawLaserChargingBall) still work.
+    shootArcLightning(gameEngine, targetX, targetY) {
+        if (this.laserCharge === undefined) {
+            this.laserCharge = 0;
+            this.laserCharging = false;
+            this.laserCooldown = 0;
+            this.laserTargetAngle = 0;
+            this.lightningTargetX = 0;
+            this.lightningTargetY = 0;
+        }
+
+        const now = Date.now();
+        if (this.laserCooldown > now) return;
+
+        if (!this.laserCharging) {
+            this.laserCharging = true;
+            this.laserChargeStartTime = now;
+            this.laserTargetAngle = Math.atan2(targetY - this.y, targetX - this.x);
+            this.lightningTargetX = targetX;
+            this.lightningTargetY = targetY;
+        }
+
+        const maxChargeTime = 1200; // ms
+        this.laserCharge = Math.min(1, (now - this.laserChargeStartTime) / maxChargeTime);
+
+        if (this.laserCharge >= 1) {
+            this.createArcLightningBolt(gameEngine, this.lightningTargetX, this.lightningTargetY);
+            this.laserCharging = false;
+            this.laserCharge = 0;
+            this.laserCooldown = now + 1600;
+        }
+    }
+
+    // ── Fractal Lightning (Drifter) ──────────────────────────────────────────
+    // Builds a recursive midpoint-displacement bolt path, generates branches,
+    // stores everything on `this.lightningBolt` for drawLightningBolt(), and
+    // drops a handful of zero-velocity bullets along the main spine for damage.
+    createArcLightningBolt(gameEngine, targetX, targetY) {
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const totalDist = Math.hypot(dx, dy);
+        if (totalDist < 1) return;
+
+        // ── Build fractal main-bolt path ──────────────────────────────────
+        const mainPath = this.buildLightningPath(
+            this.x, this.y, targetX, targetY, 5  // 5 iterations → 2^5 = 32 segments
+        );
+
+        // ── Build branches off random points along the first 70% of the bolt ─
+        const branches = [];
+        const numBranches = 2 + Math.floor(Math.random() * 3); // 2-4
+        for (let b = 0; b < numBranches; b++) {
+            const startIdx = Math.floor(mainPath.length * (0.12 + Math.random() * 0.58));
+            const origin   = mainPath[startIdx];
+            const mainAngle = Math.atan2(dy, dx);
+            const branchAngle  = mainAngle + (Math.random() - 0.5) * Math.PI * 0.9;
+            const branchLength = totalDist * (0.18 + Math.random() * 0.32);
+            const branchPath = this.buildLightningPath(
+                origin.x, origin.y,
+                origin.x + Math.cos(branchAngle) * branchLength,
+                origin.y + Math.sin(branchAngle) * branchLength,
+                3  // 3 iterations → 8 segments per branch
+            );
+            branches.push({ path: branchPath, depth: 1 });
+
+            // Occasional sub-branch off a branch
+            if (Math.random() < 0.55) {
+                const si = Math.floor(branchPath.length * (0.3 + Math.random() * 0.4));
+                const so = branchPath[si];
+                const subAngle  = branchAngle + (Math.random() - 0.5) * Math.PI * 0.7;
+                const subLength = branchLength * (0.25 + Math.random() * 0.3);
+                const subPath = this.buildLightningPath(
+                    so.x, so.y,
+                    so.x + Math.cos(subAngle) * subLength,
+                    so.y + Math.sin(subAngle) * subLength,
+                    2
+                );
+                branches.push({ path: subPath, depth: 2 });
+            }
+        }
+
+        // ── Store for canvas rendering ────────────────────────────────────
+        this.lightningBolt = {
+            mainPath,
+            branches,
+            startTime: Date.now(),
+            lifetime: 460  // ms total display duration
+        };
+
+        // ── Damage bullets along main spine (every 5th point) ────────────
+        if (gameEngine?.enemyBulletPool) {
+            const step = Math.max(1, Math.floor(mainPath.length / 8));
+            for (let i = 0; i < mainPath.length; i += step) {
+                const pt = mainPath[i];
+                const b = gameEngine.enemyBulletPool.get();
+                if (b) {
+                    b.reset(pt.x, pt.y, 0, 0, '#44ffff', false);
+                    b.radius = 5;
+                    b.glowRadius = 0; // visual handled by drawLightningBolt
+                    b.damage = this.getLevelScaledDamage(2);
+                    b.maxLifetimeOverride = 460;
+                    b.life = 1.0;
+                }
+            }
+        }
+
+        // ── Impact sparks ─────────────────────────────────────────────────
+        if (gameEngine?.particlePool) {
+            for (let i = 0; i < 14; i++) {
+                const p = gameEngine.particlePool.get(targetX, targetY, 'starSparkle');
+                if (p) {
+                    const a = Math.random() * Math.PI * 2;
+                    const s = 2 + Math.random() * 6;
+                    p.vel.x = Math.cos(a) * s;
+                    p.vel.y = Math.sin(a) * s;
+                    p.color = '#88ffff';
+                    p.radius = 1.5 + Math.random() * 3;
+                    p.life   = 18 + Math.random() * 20;
+                }
+            }
+        }
+    }
+
+    // Iterative midpoint-displacement: each pass halves segment lengths and
+    // displaces midpoints perpendicular to the original line.
+    buildLightningPath(x1, y1, x2, y2, iterations) {
+        const dx = x2 - x1, dy = y2 - y1;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) return [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+
+        const perpX = -dy / len;
+        const perpY =  dx / len;
+
+        let pts = [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+        let disp = len * 0.38;
+
+        for (let iter = 0; iter < iterations; iter++) {
+            const next = [pts[0]];
+            for (let j = 1; j < pts.length; j++) {
+                const mid = {
+                    x: (pts[j - 1].x + pts[j].x) * 0.5 + perpX * (Math.random() - 0.5) * disp,
+                    y: (pts[j - 1].y + pts[j].y) * 0.5 + perpY * (Math.random() - 0.5) * disp
+                };
+                next.push(mid, pts[j]);
+            }
+            pts  = next;
+            disp *= 0.58;  // fractal roughness: smaller each pass
+        }
+        return pts;
+    }
+
+    // Draw stored lightning bolt (canvas lines, NOT bullet pool visuals).
+    // Called every frame from draw() until the bolt expires.
+    drawLightningBolt(ctx) {
+        if (!this.lightningBolt) return;
+        const now = Date.now();
+        const age = now - this.lightningBolt.startTime;
+        if (age >= this.lightningBolt.lifetime) {
+            this.lightningBolt = null;
+            return;
+        }
+
+        const t = age / this.lightningBolt.lifetime;
+        // Brightest at start, fast fade
+        const baseAlpha = Math.pow(1 - t, 1.2);
+        // Intense white flash during the first 80 ms
+        const flash = age < 80 ? (1 - age / 80) * 0.9 : 0;
+        const alpha = Math.min(1, baseAlpha + flash);
+
+        ctx.save();
+        ctx.lineCap  = 'round';
+        ctx.lineJoin = 'round';
+
+        const drawStroke = (pts, widthMult, alphaMult) => {
+            if (pts.length < 2) return;
+            const a = alpha * alphaMult;
+
+            // Wide outer glow
+            ctx.shadowBlur   = 28 * widthMult;
+            ctx.shadowColor  = '#00e8ff';
+            ctx.strokeStyle  = `rgba(0, 200, 255, ${0.28 * a})`;
+            ctx.lineWidth    = 14 * widthMult;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.stroke();
+
+            // Mid glow
+            ctx.shadowBlur   = 12 * widthMult;
+            ctx.strokeStyle  = `rgba(80, 230, 255, ${0.60 * a})`;
+            ctx.lineWidth    = 5 * widthMult;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.stroke();
+
+            // Bright white core
+            ctx.shadowBlur   = 5;
+            ctx.shadowColor  = '#ffffff';
+            ctx.strokeStyle  = `rgba(220, 255, 255, ${0.95 * a})`;
+            ctx.lineWidth    = 1.8 * widthMult;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.stroke();
+        };
+
+        // Main bolt (full thickness)
+        drawStroke(this.lightningBolt.mainPath, 1.0, 1.0);
+
+        // Branches (thinner / more transparent by depth)
+        for (const branch of this.lightningBolt.branches) {
+            const wm = branch.depth === 1 ? 0.55 : 0.28;
+            const am = branch.depth === 1 ? 0.75 : 0.50;
+            drawStroke(branch.path, wm, am);
+        }
+
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
     createWideLaserBeam(gameEngine, angle) {
         // Limit beam to ~1 screen length
         const screenWidth = gameEngine.canvas.width;
@@ -3188,21 +3508,25 @@ export class Enemy {
     }
     
     shootPulse(gameEngine, targetX, targetY) {
-        // Fire 3 rapid pulses
+        // Fire 3 rapid pulses toward target
         const baseAngle = Math.atan2(targetY - this.y, targetX - this.x);
-        
-        // Update facing direction for non-turret, non-titan enemies
-        if (!this.isStationary() && this.type !== 'TITAN') {
-            this.rotation = baseAngle;
-            this.faceAngle = baseAngle;
-        }
-        
+        // faceAngle smoothly updated by updateFaceDirection() — no snap
         for (let i = 0; i < 3; i++) {
             setTimeout(() => {
                 if (this.active) {
                     this.createEnemyBullet(gameEngine, baseAngle, 4, '#ffff00', false, 'pulse');
                 }
-            }, i * 100); // 100ms between pulses
+            }, i * 100);
+        }
+    }
+
+    shootSpiralLaser(gameEngine) {
+        // Fire a yellow laser in the current faceAngle — called while spinning during arc phase
+        const bullet = this.createEnemyBullet(gameEngine, this.faceAngle, 6, '#ffff44', false, 'aimed');
+        if (bullet) {
+            bullet.radius = 3;
+            bullet.glowRadius = 8;
+            bullet.damage = this.getLevelScaledDamage(2);
         }
     }
     
@@ -3219,37 +3543,82 @@ export class Enemy {
     
     // New shooting patterns
     shootBurst3(gameEngine, targetX, targetY) {
-        // Red triangles - single aimed shot (burst handled by updateShooting)
+        // Hunter - red triangle bullets (burst handled by updateShooting)
         const dx = targetX - this.x;
         const dy = targetY - this.y;
         const angle = Math.atan2(dy, dx);
-        
-        // Update facing direction for non-turret, non-titan enemies
-        if (!this.isStationary() && this.type !== 'TITAN') {
-            this.rotation = angle;
-            this.faceAngle = angle;
+        // faceAngle smoothly updated by updateFaceDirection() — no snap
+        const bullet = this.createEnemyBullet(gameEngine, angle, 4, '#ff4444', false, 'aimed');
+        if (bullet) {
+            bullet.shape = 'triangle';
+            bullet.rotation = angle; // Point in travel direction
+            bullet.rotationSpeed = 0;
+            bullet.radius = 7;
+            bullet.glowRadius = 14;
+            bullet.maxLifetimeOverride = 5500; // Extended range — was 3000ms default (~336px), now ~616px
         }
-        
-        this.createEnemyBullet(gameEngine, angle, 4, '#ff4444', false, 'aimed');
     }
-    
+
     shootBurst2(gameEngine, targetX, targetY) {
-        // Yellow wasps - aimed shot with slight spread for wasp-like behavior
+        // Legacy burst_2 — small random spread
         const dx = targetX - this.x;
         const dy = targetY - this.y;
         const baseAngle = Math.atan2(dy, dx);
-        
-        // Update facing direction for non-turret, non-titan enemies
-        if (!this.isStationary() && this.type !== 'TITAN') {
-            this.rotation = baseAngle;
-            this.faceAngle = baseAngle;
-        }
-        
-        // Small random spread to simulate wasp agility
-        const spread = 0.15; // Slightly wider spread than precise aiming
+        // faceAngle smoothly updated by updateFaceDirection() — no snap
+        const spread = 0.15;
         const angle = baseAngle + (Math.random() - 0.5) * spread;
-        
-        this.createEnemyBullet(gameEngine, angle, 3.5, '#ffff44', false, 'aimed');
+        this.createEnemyBullet(gameEngine, angle, 3.5, this.color, false, 'aimed');
+    }
+
+    shootNeedle(gameEngine, targetX, targetY) {
+        // Wasp - fast needle/dart bullet
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const angle = Math.atan2(dy, dx);
+        const bullet = this.createEnemyBullet(gameEngine, angle, 6, '#ffff44', false, 'aimed');
+        if (bullet) {
+            bullet.shape = 'needle';
+            bullet.rotation = angle; // Orient along travel direction
+            bullet.rotationSpeed = 0;
+            bullet.radius = 9;
+            bullet.glowRadius = 6;
+            bullet.damage = this.getLevelScaledDamage(2);
+        }
+    }
+
+    shootSquareBurst(gameEngine, targetX, targetY) {
+        // Guardian - green spinning square bullet
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const angle = Math.atan2(dy, dx);
+        const bullet = this.createEnemyBullet(gameEngine, angle, 4.5, '#44ff44', false, 'aimed');
+        if (bullet) {
+            bullet.shape = 'square';
+            bullet.rotation = angle + Math.PI / 4; // 45° offset for diamond look
+            bullet.rotationSpeed = 0.08; // Spinning square
+            bullet.radius = 7;
+            bullet.glowRadius = 14;
+            bullet.damage = this.getLevelScaledDamage(2);
+            bullet.maxLifetimeOverride = 5000; // Extended range (was default 3000ms)
+        }
+    }
+
+    layMine(gameEngine, targetX, targetY) {
+        // Tangerine/Bomber - drop a spiky orange proximity mine at current position
+        if (!gameEngine.enemyBulletPool) return;
+        const mine = gameEngine.enemyBulletPool.get();
+        if (!mine) return;
+        mine.reset(this.x, this.y, 0, 0, '#ff8844', false);
+        mine.shape = 'mine';
+        mine.isPersistent = true;
+        mine.maxLifetimeOverride = 18000; // 18 second lifetime
+        mine.radius = 12;   // Smaller mines — harder to see, still deadly
+        mine.glowRadius = 22;
+        mine.damage = this.getLevelScaledDamage(4);
+        mine.movementPattern = 'mine';
+        mine.rotation = Math.random() * Math.PI * 2;
+        mine.rotationSpeed = 0.015; // Slow spin
+        mine.targetPlayer = this.targetPlayer;
     }
     
     shootLine4(gameEngine, targetX, targetY) {
@@ -3346,7 +3715,7 @@ export class Enemy {
                 laserBullet.glowRadius = 6 + Math.abs(offset) * 0.1;
                 laserBullet.damage = this.getLevelScaledDamage(3); // Moderate damage for close-range
                 laserBullet.movementPattern = 'laser_beam';
-                laserBullet.life = 0.08; // Very short lifetime for close-range slice
+                laserBullet.deathBurst = true; // Fade and burst with particles on expire
             }
         }
         
@@ -3372,14 +3741,7 @@ export class Enemy {
     shootCrescentWave(gameEngine, targetX, targetY) {
         // GUARDIAN - crescent energy beam like Stalker's laser but curved
         const baseAngle = Math.atan2(targetY - this.y, targetX - this.x);
-        
-        // Update facing direction for non-turret, non-titan enemies
-        if (!this.isStationary() && this.type !== 'TITAN') {
-            this.rotation = baseAngle;
-            this.faceAngle = baseAngle;
-        }
-        
-        // Create curved laser beam effect
+        // faceAngle smoothly updated by updateFaceDirection() — no snap
         this.createCrescentBeam(gameEngine, baseAngle);
     }
     
@@ -3478,7 +3840,7 @@ export class Enemy {
     }
     
     createEnemyBullet(gameEngine, angle, speed, color, explosive = false, movementPattern = 'aimed', target = null) {
-        if (!gameEngine.enemyBulletPool) return;
+        if (!gameEngine.enemyBulletPool) return null;
         
         // Apply level scaling to bullet speed using constants
         // Titan rockets are exempt from global speed reduction for better effectiveness
@@ -3572,21 +3934,29 @@ export class Enemy {
             }
             
             // Titan accelerating missiles don't need target reference (they fly straight)
-            
+
             // Enemy shooting sounds removed to reduce audio confusion
+            return bullet;
         }
+        return null;
     }
     
 
     
     draw(ctx) {
         if (!this.active) return;
-        
+
         // Draw laser targeting line first (behind everything else)
         if (this.type === 'DRIFTER' && this.laserCharging && this.laserCharge > 0) {
             this.drawLaserTargetingLine(ctx);
         }
-        
+
+        // Draw TITAN sweep laser (behind enemy body)
+        if (this.type === 'TITAN' && this.sweepState && this.sweepState !== 'idle' && this.sweepState !== 'cooldown') {
+            this.drawSweepLaser(ctx);
+        }
+
+
         // Draw light trail first (behind enemy)
         this.drawLightTrail(ctx);
         
@@ -3613,6 +3983,11 @@ export class Enemy {
         if (this.type === 'DRIFTER' && this.laserCharging && this.laserCharge > 0) {
             this.drawLaserChargingBall(ctx);
         }
+
+        // Draw fractal lightning bolt (Drifter) — canvas-rendered, not bullet pool
+        if (this.type === 'DRIFTER' && this.lightningBolt) {
+            this.drawLightningBolt(ctx);
+        }
         
         // Draw pulsating circle only when targeted (outside of transform)
         if (window.gameEngine && window.gameEngine.targetedEntity === this) {
@@ -3626,98 +4001,102 @@ export class Enemy {
     }
     
     drawLaserTargetingLine(ctx) {
-        // Draw red targeting line showing where laser will fire
+        // Draw targeting line showing where the charged attack will fire
         if (!this.laserTargetAngle) return;
-        
+
         ctx.save();
-        
-        // Calculate screen diagonal for line length
+
         const gameEngine = window.gameEngine;
         if (!gameEngine) return;
-        
+
         const screenDiagonal = Math.hypot(gameEngine.canvas.width, gameEngine.canvas.height);
         const lineLength = screenDiagonal * 1.2;
-        
-        // Calculate line end point
+
         const endX = this.x + Math.cos(this.laserTargetAngle) * lineLength;
         const endY = this.y + Math.sin(this.laserTargetAngle) * lineLength;
-        
-        // Pulsing opacity based on charge progress
-        const pulseSpeed = 8; // Fast pulsing
-        const basePulse = Math.sin(Date.now() * 0.01 * pulseSpeed) * 0.3 + 0.7;
-        const chargeAlpha = this.laserCharge * 0.6 + 0.2; // 0.2 to 0.8 based on charge
+
+        const basePulse = Math.sin(Date.now() * 0.08) * 0.3 + 0.7;
+        const chargeAlpha = this.laserCharge * 0.6 + 0.2;
         const finalAlpha = basePulse * chargeAlpha;
-        
-        // Draw targeting line
-        ctx.strokeStyle = `rgba(255, 0, 0, ${finalAlpha})`;
-        ctx.lineWidth = 3 + this.laserCharge * 2; // Gets thicker as it charges
-        ctx.setLineDash([10, 5]); // Dashed line
-        
+
+        // Cyan for Drifter arc lightning, red for other lasers
+        const lineColor = this.type === 'DRIFTER'
+            ? `rgba(0, 220, 255, ${finalAlpha})`
+            : `rgba(255, 0, 0, ${finalAlpha})`;
+
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 3 + this.laserCharge * 2;
+        ctx.setLineDash([10, 5]);
+
         ctx.beginPath();
         ctx.moveTo(this.x, this.y);
         ctx.lineTo(endX, endY);
         ctx.stroke();
-        
-        ctx.setLineDash([]); // Reset line dash
+
+        ctx.setLineDash([]);
         ctx.restore();
     }
     
     drawLaserChargingBall(ctx) {
-        // Draw growing energy ball in front of drifter
+        // Draw growing energy ball in front of the enemy while charging
         if (!this.laserTargetAngle || this.laserCharge <= 0) return;
-        
+
         ctx.save();
-        
-        // Position ball in front of the drifter
+
         const ballDistance = this.radius + 15;
         const ballX = this.x + Math.cos(this.laserTargetAngle) * ballDistance;
         const ballY = this.y + Math.sin(this.laserTargetAngle) * ballDistance;
-        
-        // Ball grows with charge progress
-        const maxBallRadius = 40; // Maximum ball size
+
+        const maxBallRadius = 40;
         const ballRadius = this.laserCharge * maxBallRadius;
-        
-        // Pulsing glow effect
         const pulseIntensity = Math.sin(Date.now() * 0.02) * 0.3 + 0.7;
-        
-        // Draw outer glow
+
+        // Drifter uses cyan lightning ball; others use red
+        const isDrifter = this.type === 'DRIFTER';
+        const c1 = isDrifter ? `rgba(0, 220, 255, ${0.8 * pulseIntensity})` : `rgba(255, 0, 0, ${0.8 * pulseIntensity})`;
+        const c2 = isDrifter ? `rgba(0, 160, 255, ${0.4 * pulseIntensity})` : `rgba(255, 100, 0, ${0.4 * pulseIntensity})`;
+        const c3 = isDrifter ? 'rgba(0, 220, 255, 0)'                        : 'rgba(255, 0, 0, 0)';
+        const c4 = isDrifter ? `rgba(0, 200, 255, ${0.9 * pulseIntensity})`  : `rgba(255, 50, 0, ${0.9 * pulseIntensity})`;
+        const cSpark = isDrifter ? `rgba(100, 255, 255, ${0.6 * pulseIntensity})` : `rgba(255, 255, 0, ${0.6 * pulseIntensity})`;
+
+        // Outer glow
         const gradient = ctx.createRadialGradient(ballX, ballY, 0, ballX, ballY, ballRadius * 2);
-        gradient.addColorStop(0, `rgba(255, 0, 0, ${0.8 * pulseIntensity})`);
-        gradient.addColorStop(0.5, `rgba(255, 100, 0, ${0.4 * pulseIntensity})`);
-        gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
-        
+        gradient.addColorStop(0,   c1);
+        gradient.addColorStop(0.5, c2);
+        gradient.addColorStop(1,   c3);
+
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(ballX, ballY, ballRadius * 2, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Draw main energy ball
-        ctx.fillStyle = `rgba(255, 50, 0, ${0.9 * pulseIntensity})`;
+
+        // Main energy ball
+        ctx.fillStyle = c4;
         ctx.beginPath();
         ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Draw bright core
+
+        // Bright core
         ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * pulseIntensity})`;
         ctx.beginPath();
         ctx.arc(ballX, ballY, ballRadius * 0.4, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Add sparkling effects around the ball
+
+        // Orbiting sparks
         if (this.laserCharge > 0.3) {
             for (let i = 0; i < 6; i++) {
                 const sparkAngle = (i / 6) * Math.PI * 2 + Date.now() * 0.005;
                 const sparkDist = ballRadius + 10 + Math.sin(Date.now() * 0.01 + i) * 5;
                 const sparkX = ballX + Math.cos(sparkAngle) * sparkDist;
                 const sparkY = ballY + Math.sin(sparkAngle) * sparkDist;
-                
-                ctx.fillStyle = `rgba(255, 255, 0, ${0.6 * pulseIntensity})`;
+
+                ctx.fillStyle = cSpark;
                 ctx.beginPath();
                 ctx.arc(sparkX, sparkY, 2, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
-        
+
         ctx.restore();
     }
     
@@ -3971,32 +4350,78 @@ export class Enemy {
     }
     
     drawPulseTurret(ctx) {
-        // Pulse turret - rapid-fire energy cannon
+        // Spinning wheel laser turret — shape and glow react to weaverState
         const size = this.radius * 0.8;
-        
-        // Base ring
+
+        // Determine charge level: 0 during cooldown, 0→1 during spin_up, 1 during arc
+        let charge = 0;
+        const now = Date.now();
+        if (this.weaverState === 'spinning_up') {
+            charge = Math.min(1, (now - (this.weaverStateStart || now)) / (this.weaverSpinUpDuration || 2400));
+            charge = charge * charge; // ease-in
+        } else if (this.weaverState === 'arcing') {
+            charge = 1;
+        } else if (this.weaverState === 'cooldown') {
+            const p = Math.min(1, (now - (this.weaverStateStart || now)) / (this.weaverCooldownDuration || 2600));
+            charge = 1 - p;
+        }
+
+        // Outer glow ring scales with charge
+        if (charge > 0.05) {
+            ctx.globalAlpha = charge * 0.5;
+            ctx.shadowBlur = 20 * charge;
+            ctx.shadowColor = '#ffff00';
+            ctx.strokeStyle = '#ffff44';
+            ctx.lineWidth = 3 + charge * 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 1.25, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        ctx.globalAlpha = 1;
+
+        // Outer body ring
+        ctx.strokeStyle = this.color;
+        ctx.fillStyle = this.color + '40';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(0, 0, size, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
-        
-        // Energy chambers (3 barrels)
+
+        // 3 spoke arms (like a wheel / turbine)
+        const spokeColor = charge > 0 ? `rgba(255, 255, ${Math.floor(200 * (1 - charge))}, 1)` : this.color;
         for (let i = 0; i < 3; i++) {
-            const angle = (i / 3) * Math.PI * 2 - Math.PI / 2;
-            const x = Math.cos(angle) * size * 0.5;
-            const y = Math.sin(angle) * size * 0.5;
-            
+            const angle = (i / 3) * Math.PI * 2;
+            ctx.strokeStyle = spokeColor;
+            ctx.lineWidth = 2.5;
             ctx.beginPath();
-            ctx.arc(x, y, size * 0.2, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(angle) * size * 0.85, Math.sin(angle) * size * 0.85);
             ctx.stroke();
+
+            // Tip nozzle
+            const tx = Math.cos(angle) * size;
+            const ty = Math.sin(angle) * size;
+            ctx.fillStyle = charge > 0 ? '#ffffff' : this.color;
+            ctx.globalAlpha = 0.6 + charge * 0.4;
+            ctx.beginPath();
+            ctx.arc(tx, ty, size * 0.18, 0, Math.PI * 2);
+            ctx.fill();
         }
-        
-        // Central energy core
-        ctx.fillStyle = '#ffff00';
+
+        ctx.globalAlpha = 1;
+
+        // Central core — white-hot when fully charged
+        const coreColor = charge > 0.8 ? '#ffffff' : this.color;
+        ctx.fillStyle = coreColor;
+        ctx.shadowBlur = charge > 0.5 ? 15 : 0;
+        ctx.shadowColor = '#ffff00';
         ctx.beginPath();
-        ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+        ctx.arc(0, 0, size * (0.28 + charge * 0.12), 0, Math.PI * 2);
         ctx.fill();
+        ctx.shadowBlur = 0;
     }
     
     drawShieldTurret(ctx) {
@@ -5088,6 +5513,495 @@ export class Enemy {
         return this.health <= 0.001;
     }
     
+    // ── Weaver Spin-Up Movement ──────────────────────────────────────────────
+    weaverSpinupMovement(gameEngine) {
+        if (!this.targetPlayer) return;
+        const now = Date.now();
+
+        if (this.weaverState === undefined) {
+            this.weaverState = 'spinning_up';
+            this.weaverStateStart = now;
+            this.weaverSpinRate = 0;
+            this.weaverMaxSpinRate = 0.26;    // rad/frame at full spin
+            this.weaverSpinUpDuration = 2400; // ms to reach full spin
+            this.weaverArcDuration = 3600;    // ms spent zooming in an arc
+            this.weaverCooldownDuration = 2600;
+            this.weaverArcAngle = Math.atan2(this.y - this.targetPlayer.y, this.x - this.targetPlayer.x);
+            this.weaverArcRadius = 220;
+            this.weaverArcDirection = Math.random() < 0.5 ? 1 : -1; // CW or CCW
+            this.weaverLastShot = 0;
+            this.weaverFireInterval = 130; // ms between spiral shots
+        }
+
+        switch (this.weaverState) {
+
+            case 'spinning_up': {
+                // Hold position with friction
+                this.vel.x *= 0.88;
+                this.vel.y *= 0.88;
+
+                const progress = Math.min(1, (now - this.weaverStateStart) / this.weaverSpinUpDuration);
+                // Ease-in acceleration curve
+                const easedProgress = progress * progress;
+                this.weaverSpinRate = easedProgress * this.weaverMaxSpinRate;
+                this.faceAngle += this.weaverSpinRate;
+
+                // Spark particles intensify as spin builds
+                const ge = gameEngine || window.gameEngine;
+                if (ge?.particlePool && Math.random() < 0.25 * easedProgress) {
+                    const sparkAngle = Math.random() * Math.PI * 2;
+                    const sparkDist = this.radius * (0.8 + Math.random() * 0.5);
+                    const p = ge.particlePool.get(
+                        this.x + Math.cos(sparkAngle) * sparkDist,
+                        this.y + Math.sin(sparkAngle) * sparkDist,
+                        'starSparkle'
+                    );
+                    if (p) {
+                        p.vel.x = Math.cos(sparkAngle) * (1 + easedProgress * 3);
+                        p.vel.y = Math.sin(sparkAngle) * (1 + easedProgress * 3);
+                        p.color = this.type === 'SENTINEL' ? '#44ff88' : '#ffff44';
+                        p.radius = 1 + Math.random() * 2;
+                        p.life = 10 + Math.random() * 20;
+                    }
+                }
+
+                if (progress >= 1) {
+                    this.weaverState = 'arcing';
+                    this.weaverStateStart = now;
+                    // Lock arc orbit parameters to current distance
+                    const dx = this.x - this.targetPlayer.x;
+                    const dy = this.y - this.targetPlayer.y;
+                    this.weaverArcAngle = Math.atan2(dy, dx);
+                    const dist = Math.hypot(dx, dy);
+                    this.weaverArcRadius = Math.max(140, Math.min(dist, 280));
+                    this.weaverArcDirection = Math.random() < 0.5 ? 1 : -1;
+                    this.weaverLastShot = now;
+                    // Sentinel: reset sweep angle for the new arc cycle
+                    if (this.type === 'SENTINEL') {
+                        this.sentinelSweepAngle = Math.random() * Math.PI * 2;
+                        this.sentinelSweepLastDamage = 0;
+                        this.sentinelArcPhase = 0; // Reset sinusoidal arc phase
+                    }
+                }
+                break;
+            }
+
+            case 'arcing': {
+                const progress = Math.min(1, (now - this.weaverStateStart) / this.weaverArcDuration);
+
+                // Continue spinning at full rate
+                this.faceAngle += this.weaverSpinRate;
+
+                // Orbit around player — angular velocity creates the arc
+                const orbitRate = 0.028 * this.weaverArcDirection; // rad/frame
+                this.weaverArcAngle += orbitRate;
+
+                // Compute effective orbit radius — Sentinel adds sinusoidal radial wave
+                let orbitR = this.weaverArcRadius;
+                if (this.type === 'SENTINEL') {
+                    if (this.sentinelArcPhase === undefined) this.sentinelArcPhase = 0;
+                    this.sentinelArcPhase += 0.052; // wave frequency
+                    orbitR += Math.sin(this.sentinelArcPhase) * 70; // ±70 px radial oscillation
+                    orbitR = Math.max(60, orbitR); // never collapse to center
+                }
+
+                const targetX = this.targetPlayer.x + Math.cos(this.weaverArcAngle) * orbitR;
+                const targetY = this.targetPlayer.y + Math.sin(this.weaverArcAngle) * orbitR;
+                const tdx = targetX - this.x;
+                const tdy = targetY - this.y;
+                const dist = Math.hypot(tdx, tdy);
+                const arcSpeed = this.config.speed * 2.8;
+                if (dist > 0) {
+                    this.vel.x = (tdx / dist) * arcSpeed;
+                    this.vel.y = (tdy / dist) * arcSpeed;
+                }
+
+                if (this.type !== 'SENTINEL') {
+                    // Weaver: fire spiral lasers — each shot fires in the CURRENT faceAngle direction,
+                    // creating the spiral pattern as faceAngle rotates at weaverMaxSpinRate
+                    if (now - this.weaverLastShot > this.weaverFireInterval) {
+                        this.shootSpiralLaser(gameEngine || window.gameEngine);
+                        this.weaverLastShot = now;
+                    }
+                }
+                // Sentinel firing is handled by updateSentinelSweep() via updateShooting()
+
+                // Trailing sparks during arc
+                const ge = gameEngine || window.gameEngine;
+                if (ge?.particlePool && Math.random() < 0.35) {
+                    const p = ge.particlePool.get(this.x, this.y, 'starSparkle');
+                    if (p) {
+                        p.vel.x = -this.vel.x * 0.3 + (Math.random() - 0.5) * 2;
+                        p.vel.y = -this.vel.y * 0.3 + (Math.random() - 0.5) * 2;
+                        p.color = this.type === 'SENTINEL' ? '#00ff00' : '#ffff00';
+                        p.radius = 1 + Math.random() * 2;
+                        p.life = 12 + Math.random() * 18;
+                    }
+                }
+
+                if (progress >= 1) {
+                    this.weaverState = 'cooldown';
+                    this.weaverStateStart = now;
+                }
+                break;
+            }
+
+            case 'cooldown': {
+                // Friction to brake
+                this.vel.x *= 0.9;
+                this.vel.y *= 0.9;
+
+                // Wind down spin
+                this.weaverSpinRate *= 0.965;
+                if (this.weaverSpinRate > 0.001) {
+                    this.faceAngle += this.weaverSpinRate;
+                }
+
+                const progress = Math.min(1, (now - this.weaverStateStart) / this.weaverCooldownDuration);
+                if (progress >= 1) {
+                    this.weaverState = 'spinning_up';
+                    this.weaverStateStart = now;
+                    this.weaverSpinRate = 0;
+                }
+                break;
+            }
+        }
+    }
+
+    // ── Wasp Zigzag Movement ────────────────────────────────────────────────
+    waspZigzagMovement() {
+        if (!this.targetPlayer) return;
+        const now = Date.now();
+
+        if (this.waspZigzagState === undefined) {
+            this.waspZigzagState = 'zigzagging';
+            this.waspZigzagCount = 0;
+            this.waspZigzagMax = 3 + Math.floor(Math.random() * 3); // 3–5 segments
+            this.waspZigzagDirection = Math.random() < 0.5 ? 1 : -1;
+            this.waspZigzagTimer = now;
+            this.waspZigzagSegmentDuration = 350 + Math.random() * 150;
+            this.waspZigzagCooldownTimer = 0;
+            this.waspZigzagCooldownDuration = 2200 + Math.random() * 600;
+        }
+
+        const dx = this.targetPlayer.x - this.x;
+        const dy = this.targetPlayer.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        const toPlayerAngle = dist > 0 ? Math.atan2(dy, dx) : 0;
+        // Perpendicular to player direction, flipping each segment
+        const perpAngle = toPlayerAngle + (Math.PI / 2) * this.waspZigzagDirection;
+
+        switch (this.waspZigzagState) {
+            case 'zigzagging': {
+                const zigSpeed = this.config.speed * 2.6;
+                this.vel.x = Math.cos(perpAngle) * zigSpeed;
+                this.vel.y = Math.sin(perpAngle) * zigSpeed;
+                // Slight drift toward player
+                if (dist > 0) {
+                    this.vel.x += (dx / dist) * 0.4;
+                    this.vel.y += (dy / dist) * 0.4;
+                }
+                if (now - this.waspZigzagTimer > this.waspZigzagSegmentDuration) {
+                    this.waspZigzagDirection *= -1;
+                    this.waspZigzagCount++;
+                    this.waspZigzagTimer = now;
+                    this.waspZigzagSegmentDuration = 280 + Math.random() * 200;
+                    if (this.waspZigzagCount >= this.waspZigzagMax) {
+                        this.waspZigzagState = 'cooldown';
+                        this.waspZigzagCooldownTimer = now;
+                        this.waspZigzagCount = 0;
+                        this.waspZigzagMax = 3 + Math.floor(Math.random() * 3);
+                        this.waspZigzagCooldownDuration = 2000 + Math.random() * 800;
+                    }
+                }
+                break;
+            }
+            case 'cooldown':
+                // Friction to slow to a hover
+                this.vel.x *= 0.88;
+                this.vel.y *= 0.88;
+                if (now - this.waspZigzagCooldownTimer > this.waspZigzagCooldownDuration) {
+                    this.waspZigzagState = 'zigzagging';
+                    this.waspZigzagTimer = now;
+                    this.waspZigzagDirection = Math.random() < 0.5 ? 1 : -1;
+                }
+                break;
+        }
+    }
+
+    // ── Boulder (Titan) Movement ─────────────────────────────────────────────
+    boulderMovement() {
+        if (!this.targetPlayer) return;
+        const now = Date.now();
+
+        if (this.boulderState === undefined) {
+            this.boulderState = 'idle';
+            this.boulderIdleTimer = now;
+            this.boulderIdleDuration = 1500 + Math.random() * 1000;
+            this.boulderAngle = 0;
+            this.boulderMaxSpeed = this.config.speed * 3.0;
+            this.boulderAccel = 0.06;
+        }
+
+        const dx = this.targetPlayer.x - this.x;
+        const dy = this.targetPlayer.y - this.y;
+        const distToPlayer = Math.hypot(dx, dy);
+        const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+
+        switch (this.boulderState) {
+            case 'idle':
+                // Friction to halt
+                this.vel.x *= 0.92;
+                this.vel.y *= 0.92;
+                if (now - this.boulderIdleTimer > this.boulderIdleDuration) {
+                    this.boulderState = 'approaching';
+                    this.boulderAngle = Math.atan2(dy, dx); // Lock direction now
+                    this.boulderMaxSpeed = this.config.speed * 3.0;
+                }
+                break;
+
+            case 'approaching': {
+                // Accelerate in locked direction
+                this.vel.x += Math.cos(this.boulderAngle) * this.boulderAccel;
+                this.vel.y += Math.sin(this.boulderAngle) * this.boulderAccel;
+                // Cap speed
+                if (currentSpeed > this.boulderMaxSpeed) {
+                    this.vel.x = (this.vel.x / currentSpeed) * this.boulderMaxSpeed;
+                    this.vel.y = (this.vel.y / currentSpeed) * this.boulderMaxSpeed;
+                }
+                // Dot product of velocity with direction to player: negative = passed player
+                const velDotToPlayer = this.vel.x * dx + this.vel.y * dy;
+                const passedPlayer = velDotToPlayer < 0 && distToPlayer < 180;
+                if (passedPlayer || currentSpeed >= this.boulderMaxSpeed * 0.92) {
+                    this.boulderState = 'braking';
+                }
+                break;
+            }
+
+            case 'braking':
+                // Strong friction
+                this.vel.x *= 0.93;
+                this.vel.y *= 0.93;
+                if (currentSpeed < 0.18) {
+                    this.vel.x = 0;
+                    this.vel.y = 0;
+                    this.boulderState = 'idle';
+                    this.boulderIdleTimer = now;
+                    this.boulderIdleDuration = 1200 + Math.random() * 1000;
+                }
+                break;
+        }
+    }
+
+    // ── Sweep Laser System ───────────────────────────────────────────────────
+    updateSweepLaserSystem(gameEngine) {
+        if (!this.targetPlayer) return;
+        const now = Date.now();
+
+        if (this.sweepState === undefined) {
+            this.sweepState = 'cooldown';
+            this.sweepCooldownEnd = now + 4000; // First sweep after 4s
+            this.sweepAngle = 0;
+            this.sweepStartAngle = 0;
+            this.sweepEndAngle = 0;
+            this.sweepStartTime = 0;
+            this.sweepDuration = 1600;
+            this.sweepWarningStart = 0;
+            this.sweepWarningDuration = 1800;
+            this.sweepLastDamage = 0;
+            this.sweepLastBeam = 0;
+        }
+
+        switch (this.sweepState) {
+            case 'cooldown':
+                if (now >= this.sweepCooldownEnd) {
+                    // Transition to warning
+                    this.sweepState = 'warning';
+                    this.sweepWarningStart = now;
+                    const toPlayer = Math.atan2(
+                        this.targetPlayer.y - this.y,
+                        this.targetPlayer.x - this.x
+                    );
+                    this.sweepStartAngle = toPlayer - Math.PI / 9; // ±20° sweep (was ±60°)
+                    this.sweepEndAngle   = toPlayer + Math.PI / 9;
+                    this.sweepAngle = this.sweepStartAngle;
+                }
+                break;
+
+            case 'warning':
+                if (now - this.sweepWarningStart >= this.sweepWarningDuration) {
+                    this.sweepState = 'sweeping';
+                    this.sweepStartTime = now;
+                    this.sweepAngle = this.sweepStartAngle;
+                }
+                break;
+
+            case 'sweeping': {
+                const elapsed = now - this.sweepStartTime;
+                const progress = Math.min(1, elapsed / this.sweepDuration);
+                // Ease-in-out
+                const eased = 0.5 - 0.5 * Math.cos(progress * Math.PI);
+                this.sweepAngle = this.sweepStartAngle + (this.sweepEndAngle - this.sweepStartAngle) * eased;
+
+                // Deal damage to player if in beam
+                const beamLength = Math.min(window.innerWidth, window.innerHeight) * 0.65;
+                const beamHalfWidth = 28;
+                if (now - this.sweepLastDamage > 180 && this.isPlayerInSweepBeam(this.targetPlayer, this.sweepAngle, beamLength, beamHalfWidth)) {
+                    // Spawn a very-short-lived bullet at player position so existing collision handles damage
+                    const hitBullet = gameEngine.enemyBulletPool.get();
+                    if (hitBullet) {
+                        hitBullet.reset(this.targetPlayer.x, this.targetPlayer.y, 0, 0, '#aa44ff', false);
+                        hitBullet.radius = 8;
+                        hitBullet.damage = this.getLevelScaledDamage(3);
+                        hitBullet.movementPattern = 'aimed';
+                        hitBullet.isPersistent = false;
+                        hitBullet.maxLifetimeOverride = 120; // Dies in ~120ms
+                    }
+                    this.sweepLastDamage = now;
+
+                    // Visual spark at player
+                    if (gameEngine.particlePool) {
+                        for (let i = 0; i < 4; i++) {
+                            const p = gameEngine.particlePool.get(this.targetPlayer.x, this.targetPlayer.y, 'starSparkle');
+                            if (p) { p.color = '#cc66ff'; }
+                        }
+                    }
+                }
+
+                if (progress >= 1) {
+                    this.sweepState = 'cooldown';
+                    this.sweepCooldownEnd = now + 8000; // 8s between sweeps
+                }
+                break;
+            }
+        }
+    }
+
+    isPlayerInSweepBeam(player, beamAngle, beamLength, beamHalfWidth) {
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > beamLength) return false;
+        const angleToPlayer = Math.atan2(dy, dx);
+        let angleDiff = angleToPlayer - beamAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        const perpDist = Math.abs(Math.sin(angleDiff) * dist);
+        return perpDist < beamHalfWidth + (player.radius || 12);
+    }
+
+    // ── Sentinel Weapon: sine-wave needle lasers ─────────────────────────────
+    // Fired periodically during the arcing phase; each needle travels toward
+    // the player but oscillates perpendicularly in a sinusoidal wave.
+    updateSentinelSweep(gameEngine) {
+        if (!this.targetPlayer) return;
+        const now = Date.now();
+
+        // Only fire during arcing phase
+        if (this.weaverState !== 'arcing') return;
+
+        if (this.sentinelLastShot === undefined) this.sentinelLastShot = 0;
+
+        if (now - this.sentinelLastShot > 520) {
+            this.shootSineNeedle(gameEngine, this.targetPlayer.x, this.targetPlayer.y);
+            this.sentinelLastShot = now;
+        }
+    }
+
+    shootSineNeedle(gameEngine, targetX, targetY) {
+        const angle = Math.atan2(targetY - this.y, targetX - this.x);
+        const bullet = this.createEnemyBullet(gameEngine, angle, 5.5, '#00ff88', false, 'sine_wave');
+        if (bullet) {
+            bullet.shape = 'needle';
+            bullet.rotation = angle;
+            bullet.rotationSpeed = 0;
+            bullet.radius = 9;
+            bullet.glowRadius = 8;
+            bullet.damage = this.getLevelScaledDamage(2);
+            // Sine-wave oscillation parameters
+            bullet.sineAmp  = 3.2;                   // ± px perpendicular displacement per frame
+            bullet.sineFreq = 0.13;                  // radians added to phase per frame
+            bullet.sinePhase = Math.random() * Math.PI * 2; // randomise starting phase
+            // Perpendicular unit vector (rotated 90° from travel direction)
+            bullet.sinePerpX = -Math.sin(angle);
+            bullet.sinePerpY =  Math.cos(angle);
+        }
+    }
+
+    // ── Draw Sweep Laser (called from draw() outside ctx.translate/rotate) ──
+    drawSweepLaser(ctx) {
+        if (!this.sweepState || this.sweepState === 'idle' || this.sweepState === 'cooldown') return;
+
+        const beamLength = Math.min(window.innerWidth, window.innerHeight) * 0.65;
+        ctx.save();
+
+        if (this.sweepState === 'warning') {
+            const pulse = Math.sin(Date.now() * 0.015) * 0.35 + 0.65;
+            const progress = (Date.now() - this.sweepWarningStart) / this.sweepWarningDuration;
+
+            // Warning arc showing sweep range
+            ctx.strokeStyle = `rgba(180, 60, 255, ${0.25 * pulse})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 6]);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 130, this.sweepStartAngle, this.sweepEndAngle);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Dashed warning line (sweeping from start to end during warning)
+            const warningAngle = this.sweepStartAngle + (this.sweepEndAngle - this.sweepStartAngle) * progress;
+            const wEndX = this.x + Math.cos(warningAngle) * beamLength;
+            const wEndY = this.y + Math.sin(warningAngle) * beamLength;
+            ctx.strokeStyle = `rgba(200, 80, 255, ${0.45 * pulse})`;
+            ctx.lineWidth = 4;
+            ctx.setLineDash([16, 8]);
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(wEndX, wEndY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+        } else if (this.sweepState === 'sweeping') {
+            const endX = this.x + Math.cos(this.sweepAngle) * beamLength;
+            const endY = this.y + Math.sin(this.sweepAngle) * beamLength;
+
+            ctx.lineCap = 'round';
+
+            // Outer wide glow
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = '#aa44ff';
+            ctx.strokeStyle = 'rgba(170, 68, 255, 0.25)';
+            ctx.lineWidth = 50;
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // Middle glow
+            ctx.shadowBlur = 25;
+            ctx.strokeStyle = 'rgba(200, 100, 255, 0.55)';
+            ctx.lineWidth = 22;
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // Inner bright core
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ffffff';
+            ctx.strokeStyle = 'rgba(240, 200, 255, 0.95)';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            ctx.shadowBlur = 0;
+        }
+
+        ctx.restore();
+    }
+
     getDestructionReward() {
         return {
             points: this.config.points,
@@ -5098,4 +6012,4 @@ export class Enemy {
             type: this.type
         };
     }
-} 
+}
