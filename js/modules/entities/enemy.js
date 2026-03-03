@@ -4228,33 +4228,32 @@ export class Enemy {
         // Draw health bar (outside of transform)
         this.drawHealthBar(ctx);
 
-        // Draw enemy name label (with level prefix) centered above the health bar (only after first hit)
+        // Draw level + name label BENEATH the enemy (only after first hit)
         if (showEnemyNames() && this.health < this.maxHealth) {
-            const barY = this.y - this.radius - 8;   // matches drawHealthBar's barY
             ctx.save();
-            ctx.font = '15px "Pixelify Sans", "Press Start 2P", monospace';
-            ctx.textBaseline = 'bottom';
+            ctx.font = '8px "Press Start 2P", monospace';
+            ctx.textBaseline = 'top';
             ctx.shadowColor = 'rgba(0,0,0,0.95)';
             ctx.shadowBlur = 4;
             ctx.textAlign = 'left';
 
-            const lvText  = 'Lv';
-            const numText = String(this.level || 1);
+            const lvText   = 'LV';
+            const numText  = String(this.level || 1);
             const nameText = ' ' + this.config.name.toUpperCase();
 
             const lvWidth   = ctx.measureText(lvText).width;
             const numWidth  = ctx.measureText(numText).width;
             const nameWidth = ctx.measureText(nameText).width;
             const startX = this.x - (lvWidth + numWidth + nameWidth) / 2;
-            const textY  = barY - 7;
+            const textY  = this.y + this.radius + 10;
 
-            ctx.fillStyle = '#ffffff';           // "Lv" — white
+            ctx.fillStyle = '#ffffff';   // "LV" — white
             ctx.fillText(lvText, startX, textY);
 
-            ctx.fillStyle = '#88ccff';           // level number — light blue
+            ctx.fillStyle = '#88ccff';   // level number — light blue
             ctx.fillText(numText, startX + lvWidth, textY);
 
-            ctx.fillStyle = 'goldenrod';         // enemy name — goldenrod
+            ctx.fillStyle = 'goldenrod'; // enemy name — goldenrod
             ctx.fillText(nameText, startX + lvWidth + numWidth, textY);
 
             ctx.restore();
@@ -5724,6 +5723,17 @@ export class Enemy {
         
         // Center the health bar under the ship name
         const barX = this.x - barWidth / 2;
+
+        // Health text above the bar: "6/9"
+        const displayHealth = this.health > 0 && this.health < 1 ? 1 : Math.round(this.health);
+        const healthText = `${displayHealth}/${Math.round(this.maxHealth)}`;
+        ctx.font = '8px "Press Start 2P", monospace';
+        ctx.fillStyle = 'goldenrod';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0,0,0,0.95)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(healthText, this.x, barY - 6);
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;

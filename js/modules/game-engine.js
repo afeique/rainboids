@@ -2999,11 +2999,17 @@ export class GameEngine {
                 hudEl.appendChild(item);
             }
 
-            // Sync countdown text (seconds remaining)
+            // Sync countdown text (seconds remaining) with colour: green → yellow → red
             if (isTemporary) {
                 const countdown = item.querySelector('.powerup-hud-countdown');
                 if (countdown && isFinite(powerupData.timeRemaining)) {
                     countdown.textContent = Math.ceil(powerupData.timeRemaining / 1000) + 's';
+                    const frac = isFinite(powerupData.config.duration)
+                        ? Math.max(0, powerupData.timeRemaining / powerupData.config.duration)
+                        : 1;
+                    countdown.style.color = frac > 0.6 ? '#44ff88'   // green
+                                          : frac > 0.25 ? '#ffdd44'  // yellow
+                                          : '#ff4444';                // red
                 }
             }
 

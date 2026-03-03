@@ -1262,9 +1262,9 @@ body.shop-open #hud-pause-btn {
 }
 
 .powerup-hud-name {
-    font-family: 'Pixelify Sans', 'Press Start 2P', monospace;
+    font-family: 'Pixelify Sans', monospace;
     font-size: 11px;
-    color: #ffffff;
+    color: #aaddff;
     text-align: center;
     margin-top: 5px;
     white-space: nowrap;

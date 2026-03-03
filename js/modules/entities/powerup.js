@@ -4,7 +4,7 @@ import { random, wrap } from '../utils.js';
 
 export const POWERUP_TYPES = {
     RAPID_FIRE: {
-        name: 'Rapid Fire',
+        name: 'Rapid',
         color: '#ff3300',
         gradientColors: ['#ff6600', '#ff0000'],
         icon: '⚡',
@@ -14,7 +14,7 @@ export const POWERUP_TYPES = {
         description: '25% faster shooting per stack'
     },
     MULTI_SHOT: {
-        name: 'Multi-Shot',
+        name: 'Multi',
         color: '#3366ff',
         gradientColors: ['#66aaff', '#0033cc'],
         icon: '✳️',
@@ -24,7 +24,7 @@ export const POWERUP_TYPES = {
         description: 'Fire +1 bullet per stack'
     },
     HOMING: {
-        name: 'Homing Bullets',
+        name: 'Homing',
         color: '#ff3399',
         gradientColors: ['#ff66cc', '#cc0066'],
         icon: '🎯',
@@ -34,7 +34,7 @@ export const POWERUP_TYPES = {
         description: 'Bullets track enemies'
     },
     BIG_BULLETS: {
-        name: 'Big Bullets',
+        name: 'Big',
         color: '#33cc33',
         gradientColors: ['#66ff66', '#009900'],
         icon: '🔵',
@@ -44,7 +44,7 @@ export const POWERUP_TYPES = {
         description: '+30% bullet size per stack'
     },
     SPEED_BOOST: {
-        name: 'Speed Boost',
+        name: 'Speed',
         color: '#ffcc00',
         gradientColors: ['#ffff33', '#cc9900'],
         icon: '💨',
@@ -54,7 +54,7 @@ export const POWERUP_TYPES = {
         description: 'Increased movement speed'
     },
     PIERCING: {
-        name: 'Piercing Shots',
+        name: 'Pierce',
         color: '#ff9933',
         gradientColors: ['#ffcc66', '#cc6600'],
         icon: '🏹',
@@ -74,7 +74,7 @@ export const POWERUP_TYPES = {
         description: 'Fire +2 bullets in wide spread'
     },
     EXPLOSIVE: {
-        name: 'Explosive Rounds',
+        name: 'Explode',
         color: '#ff6600',
         gradientColors: ['#ff9933', '#cc3300'],
         icon: '💣',
@@ -84,7 +84,7 @@ export const POWERUP_TYPES = {
         description: 'Area damage on impact'
     },
     CRIT_CHANCE: {
-        name: 'Critical Chance',
+        name: 'Crit %',
         color: '#ffcc00',
         gradientColors: ['#ffff66', '#cc9900'],
         icon: '⭐',
@@ -94,7 +94,7 @@ export const POWERUP_TYPES = {
         description: '+5% critical hit chance'
     },
     CRIT_DAMAGE: {
-        name: 'Critical Damage',
+        name: 'Crit Dmg',
         color: '#ff0066',
         gradientColors: ['#ff3399', '#cc0033'],
         icon: '🗡️',
@@ -104,7 +104,7 @@ export const POWERUP_TYPES = {
         description: '+10% critical hit damage'
     },
     SHIELD_BOOST: {
-        name: 'Shield Boost',
+        name: 'Shield',
         color: '#00cc88',
         gradientColors: ['#33ff99', '#006644'],
         icon: '🛡',
@@ -114,7 +114,7 @@ export const POWERUP_TYPES = {
         description: 'Temporary damage reduction'
     },
     MEDPACK: {
-        name: 'Medpack',
+        name: 'Medic',
         color: '#ff6699',
         gradientColors: ['#ff99cc', '#cc3366'],
         icon: '💊',
@@ -124,7 +124,7 @@ export const POWERUP_TYPES = {
         description: '+1 health star healing'
     },
     CHARGE_SHOT: {
-        name: 'Charge Shot',
+        name: 'Charge',
         color: '#00ccff',
         gradientColors: ['#00ffff', '#0033aa'],
         icon: '🔮',
