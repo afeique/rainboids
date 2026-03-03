@@ -2,15 +2,19 @@
 import { GAME_CONFIG, ENEMY_BULLET_CONFIG, getEnemyFiringCooldown } from '../constants.js';
 import { random, GameDimensions } from '../utils.js';
 
+// ── Feature toggles ────────────────────────────────────────────────────────
+// Set window.SHOW_ENEMY_NAMES = false in the browser console to hide name labels
+const showEnemyNames = () => window.SHOW_ENEMY_NAMES !== false; // default: true
+
 // Enemy type definitions with unique characteristics
 export const ENEMY_TYPES = {
     HUNTER: {
         name: 'Hunter',
         color: '#ff4444',        // Red
-        health: 60,
+        health: 4,
         speed: 1.6,
         size: 25,
-        shootPattern: 'burst_3',
+        shootPattern: 'hunter_single',
         shootRate: 1.5,
         movePattern: 'triangle',   // Triangle geometric movement
         points: 50
@@ -18,10 +22,10 @@ export const ENEMY_TYPES = {
     GUARDIAN: {
         name: 'Guardian',
         color: '#44ff44',        // Green
-        health: 80,              // 4 shots to kill (bullet dmg=20)
+        health: 6,
         speed: 1.0,              // Reduced from 1.4 - slower patrol movement
         size: 38,
-        shootPattern: 'square_burst', // Burst of green square shots
+        shootPattern: 'guardian_spread', // Fan of sinusoidal square shots
         shootRate: 0.3,
         movePattern: 'square',     // Square geometric movement
         points: 75
@@ -29,10 +33,10 @@ export const ENEMY_TYPES = {
     WASP: {
         name: 'Wasp',
         color: '#ffff44',        // Yellow
-        health: 60,              // Fast but fragile — 3 shots
+        health: 3,
         speed: 2.8,              // Fast burst speed
         size: 28,
-        shootPattern: 'needle',  // Sharp needle/dart projectiles
+        shootPattern: 'wasp_machinegun', // Machine-gun spinning triangles with sine wave
         shootRate: 0.7,
         movePattern: 'wasp_zigzag', // Zigzag N times then cooldown
         points: 35
@@ -40,7 +44,7 @@ export const ENEMY_TYPES = {
     TITAN: {
         name: 'Titan',
         color: '#ff44ff',        // Magenta
-        health: 120,             // Juggernaut — 6 shots
+        health: 8,
         speed: 1.2,              // Lumbering but not too slow
         size: 50,                // Large tank
         shootPattern: 'sweep_laser', // Very long sweeping purple laser
@@ -51,7 +55,7 @@ export const ENEMY_TYPES = {
     STALKER: {
         name: 'Stalker',
         color: '#44ffff',        // Cyan
-        health: 80,              // 4 shots to kill
+        health: 5,
         speed: 2.5,              // Higher speed for swooping arcs
         size: 30,
         shootPattern: 'charged_laser',
@@ -62,8 +66,8 @@ export const ENEMY_TYPES = {
     TANGERINE: {
         name: 'Bomber',
         color: '#ff8844',        // Orange
-        health: 100,             // 5 shots to kill
-        speed: 0.8,              // Moderate chase speed - drops mines more actively
+        health: 6,
+        speed: 1.6,              // Faster roaming patrol bomber
         size: 35,
         shootPattern: 'lay_mine', // Drops proximity mines
         shootRate: 0.4,          // Drops mines more regularly
@@ -73,7 +77,7 @@ export const ENEMY_TYPES = {
     DRIFTER: {
         name: 'Drifter',
         color: '#00ffff',        // Cyan
-        health: 80,              // 4 shots to kill
+        health: 5,
         speed: 2.5,              // Zippy — sinusoidal wave orbit
         size: 30,
         shootPattern: 'arc_lightning', // Charged arc lightning bolt toward player
@@ -84,10 +88,10 @@ export const ENEMY_TYPES = {
     PROWLER: {
         name: 'Prowler',
         color: '#ff00ff',        // Magenta
-        health: 100,             // 5 shots to kill
+        health: 7,
         speed: 0.6,              // Slow, lumbering mini-tank
         size: 35,                // Larger mini-tank
-        shootPattern: 'missile_decelerate',
+        shootPattern: 'missile',
         shootRate: 0.5,          // Medium rate for missile turret
         movePattern: 'keep_distance', // Keep distance from player
         points: 100
@@ -95,7 +99,7 @@ export const ENEMY_TYPES = {
     WEAVER: {
         name: 'Weaver',
         color: '#ffff00',        // Yellow
-        health: 60,              // 3 shots to kill — lighter but agile
+        health: 4,
         speed: 2.2,              // Fast arc dash speed
         size: 25,
         shootPattern: 'spiral_laser', // Spiral lasers during arc phase
@@ -106,7 +110,7 @@ export const ENEMY_TYPES = {
     SENTINEL: {
         name: 'Sentinel',
         color: '#00ff00',        // Green
-        health: 80,              // 4 shots to kill
+        health: 6,
         speed: 2.0,              // Fast arc dash (same as Weaver)
         size: 32,
         shootPattern: 'sentinel_sweep', // 360° rotating green laser during arc phase
@@ -593,29 +597,86 @@ export class Enemy {
     
     chasePlayer() {
         if (!this.targetPlayer) return;
-        
+
+        const fieldWidth  = window.gameEngine?.gameField?.width  || GameDimensions.width;
+        const fieldHeight = window.gameEngine?.gameField?.height || GameDimensions.height;
+        const now = Date.now();
+
+        // ── TANGERINE (Bomber): player-seeking patrol with wall avoidance + mine-stop ──
+        if (this.type === 'TANGERINE') {
+            // Stop briefly after laying a mine
+            if (this.mineJustLaid && now - this.mineJustLaid < 700) {
+                this.vel.x *= 0.82;
+                this.vel.y *= 0.82;
+                return;
+            }
+
+            const toPlayer = Math.atan2(this.targetPlayer.y - this.y, this.targetPlayer.x - this.x);
+            const distToPlayer = Math.hypot(this.targetPlayer.x - this.x, this.targetPlayer.y - this.y);
+
+            // Lazy-init roaming direction state
+            if (!this.bomberRoamDir) {
+                this.bomberRoamDir = toPlayer + (Math.random() - 0.5) * Math.PI * 0.5;
+                this.bomberRoamChange = now + 800 + Math.random() * 800;
+            }
+
+            // Shorter roam intervals; strongly biased toward player when far away
+            if (now > this.bomberRoamChange) {
+                const spread = distToPlayer > 250 ? 0.35 : 0.85; // tight toward player when far
+                this.bomberRoamDir = toPlayer + (Math.random() - 0.5) * Math.PI * spread;
+                this.bomberRoamChange = now + 700 + Math.random() * 900;
+            }
+
+            // Stronger wall repulsion with larger margin
+            const wallMargin = 180;
+            let repX = 0, repY = 0;
+            if (this.x < wallMargin) repX += ((wallMargin - this.x) / wallMargin) * 0.2;
+            if (this.x > fieldWidth  - wallMargin) repX -= ((this.x - (fieldWidth  - wallMargin)) / wallMargin) * 0.2;
+            if (this.y < wallMargin) repY += ((wallMargin - this.y) / wallMargin) * 0.2;
+            if (this.y > fieldHeight - wallMargin) repY -= ((this.y - (fieldHeight - wallMargin)) / wallMargin) * 0.2;
+
+            // When near wall, blend repulsion with player direction to pull back toward center
+            if (Math.hypot(repX, repY) > 0.07) {
+                const blendAngle = Math.atan2(
+                    repY + Math.sin(toPlayer) * 0.6,
+                    repX + Math.cos(toPlayer) * 0.6
+                );
+                this.bomberRoamDir = blendAngle;
+                this.bomberRoamChange = now + 700;
+            }
+
+            const acc = 0.042;
+            this.vel.x += Math.cos(this.bomberRoamDir) * acc + repX;
+            this.vel.y += Math.sin(this.bomberRoamDir) * acc + repY;
+
+            const speed = Math.hypot(this.vel.x, this.vel.y);
+            if (speed > this.config.speed) {
+                this.vel.x = (this.vel.x / speed) * this.config.speed;
+                this.vel.y = (this.vel.y / speed) * this.config.speed;
+            }
+            return;
+        }
+
+        // ── Standard chase for other enemies ──────────────────────────────────
         const dx = this.targetPlayer.x - this.x;
         const dy = this.targetPlayer.y - this.y;
         const distance = Math.hypot(dx, dy);
-        
+
         if (distance > 0) {
-            // Minimal acceleration for predictable movement
-            const acceleration = 0.012; // Much reduced for easier targeting
+            const acceleration = 0.012;
             let targetVelX = (dx / distance) * acceleration;
             let targetVelY = (dy / distance) * acceleration;
-            
-            // Minimal weaving for easier targeting
+
             const weaveAngle = Math.atan2(dy, dx) + Math.PI / 2;
-            const weaveStrength = Math.sin(Date.now() * 0.002 + this.x * 0.01) * 0.1; // Much reduced
+            const weaveStrength = Math.sin(now * 0.002 + this.x * 0.01) * 0.1;
             targetVelX += Math.cos(weaveAngle) * weaveStrength * acceleration;
             targetVelY += Math.sin(weaveAngle) * weaveStrength * acceleration;
-            
+
             this.vel.x += targetVelX;
             this.vel.y += targetVelY;
-            
-            // Lower speed cap for predictable movement
+
             const speed = Math.hypot(this.vel.x, this.vel.y);
-            const maxSpeed = this.config.speed * 1.08; // Much reduced
+            const maxSpeed = this.config.speed * 1.08;
             if (speed > maxSpeed) {
                 this.vel.x = (this.vel.x / speed) * maxSpeed;
                 this.vel.y = (this.vel.y / speed) * maxSpeed;
@@ -705,6 +766,13 @@ export class Enemy {
     // a clean circle.  The radial component continuously corrects distance.
     drifterWaveMovement() {
         if (!this.targetPlayer) return;
+
+        // Freeze in place while charging or in post-fire cooldown
+        if (this.laserCharging || (this.laserCooldown !== undefined && Date.now() < this.laserCooldown)) {
+            this.vel.x = 0;
+            this.vel.y = 0;
+            return;
+        }
 
         if (this.drifterWavePhase === undefined) {
             this.drifterWavePhase = Math.random() * Math.PI * 2;
@@ -2616,33 +2684,87 @@ export class Enemy {
     }
     
     keepDistanceMovement() {
-        // Maintains a preferred distance from the player; retreats when too close
+        // Prowler: aggressive dive/strafe/retreat state machine
         if (!this.targetPlayer) return;
 
         const dx = this.targetPlayer.x - this.x;
         const dy = this.targetPlayer.y - this.y;
         const distance = Math.hypot(dx, dy);
-        // TANGERINE hangs much farther back than the default mini-tank distance
-        const idealDistance = this.type === 'TANGERINE' ? 350 : 200;
-        
-        if (distance < idealDistance) {
-            // Too close - move away from player
-            const angle = Math.atan2(dy, dx) + Math.PI; // Opposite direction
-            this.vel.x = Math.cos(angle) * this.config.speed;
-            this.vel.y = Math.sin(angle) * this.config.speed;
-        } else if (distance > idealDistance + 50) {
-            // Too far - move towards player
-            const angle = Math.atan2(dy, dx);
-            this.vel.x = Math.cos(angle) * this.config.speed * 0.5; // Slower approach
-            this.vel.y = Math.sin(angle) * this.config.speed * 0.5;
-        } else {
-            // Good distance - slow down
-            this.vel.x *= 0.8;
-            this.vel.y *= 0.8;
+        const angle = Math.atan2(dy, dx);
+        const now = Date.now();
+
+        // Lazy-init state machine
+        if (!this.prowlerState) {
+            this.prowlerState = 'patrol';
+            this.prowlerStateEnd = now + 2000 + Math.random() * 1500;
+            this.prowlerStrafeDir = Math.random() > 0.5 ? 1 : -1;
         }
-        
+
+        // State transitions
+        if (now > this.prowlerStateEnd) {
+            if (this.prowlerState === 'patrol') {
+                // Decide: dive in if reasonably close, otherwise keep patrolling
+                if (distance < 400) {
+                    this.prowlerState = 'dive';
+                    this.prowlerStateEnd = now + 700 + Math.random() * 500;
+                } else {
+                    this.prowlerStrafeDir *= -1; // reverse strafe
+                    this.prowlerStateEnd = now + 1500 + Math.random() * 1500;
+                }
+            } else if (this.prowlerState === 'dive') {
+                this.prowlerState = 'retreat';
+                this.prowlerStateEnd = now + 1000 + Math.random() * 800;
+            } else { // retreat
+                this.prowlerState = 'patrol';
+                this.prowlerStateEnd = now + 1800 + Math.random() * 1200;
+                this.prowlerStrafeDir *= -1;
+            }
+        }
+
+        const strafeAngle = angle + Math.PI / 2 * this.prowlerStrafeDir;
+
+        switch (this.prowlerState) {
+            case 'patrol': {
+                // Orbit at ~280px, drifting laterally
+                const idealDist = 280 + Math.sin(now * 0.0009) * 40;
+                if (distance < idealDist - 30) {
+                    this.vel.x += Math.cos(angle + Math.PI) * 0.06;
+                    this.vel.y += Math.sin(angle + Math.PI) * 0.06;
+                } else if (distance > idealDist + 30) {
+                    this.vel.x += Math.cos(angle) * 0.05;
+                    this.vel.y += Math.sin(angle) * 0.05;
+                }
+                // Lateral strafe
+                this.vel.x += Math.cos(strafeAngle) * 0.04;
+                this.vel.y += Math.sin(strafeAngle) * 0.04;
+                break;
+            }
+            case 'dive': {
+                // Rush toward player
+                this.vel.x += Math.cos(angle) * 0.18;
+                this.vel.y += Math.sin(angle) * 0.18;
+                break;
+            }
+            case 'retreat': {
+                // Pull back hard + strafe to avoid return fire
+                this.vel.x += Math.cos(angle + Math.PI) * 0.14;
+                this.vel.y += Math.sin(angle + Math.PI) * 0.14;
+                this.vel.x += Math.cos(strafeAngle) * 0.05;
+                this.vel.y += Math.sin(strafeAngle) * 0.05;
+                break;
+            }
+        }
+
+        // Speed cap (dive is faster)
+        const maxSpd = this.config.speed * (this.prowlerState === 'dive' ? 3.0 : 1.8);
+        const spd = Math.hypot(this.vel.x, this.vel.y);
+        if (spd > maxSpd) {
+            this.vel.x = (this.vel.x / spd) * maxSpd;
+            this.vel.y = (this.vel.y / spd) * maxSpd;
+        }
+
         // Always face the player for aiming
-        this.targetFaceAngle = Math.atan2(dy, dx);
+        this.targetFaceAngle = angle;
     }
     
     
@@ -2943,6 +3065,12 @@ export class Enemy {
         
         const now = Date.now();
         
+        // Wasp machine-gun: fully self-managed state machine
+        if (this.config.shootPattern === 'wasp_machinegun') {
+            this.updateWaspMachineGun(gameEngine);
+            return;
+        }
+
         // Sweep laser has its own timing system
         if (this.config.shootPattern === 'sweep_laser') {
             this.updateSweepLaserSystem(gameEngine);
@@ -2958,10 +3086,23 @@ export class Enemy {
         // Spiral laser: shooting is triggered inside weaverSpinupMovement() during arc phase
         if (this.config.shootPattern === 'spiral_laser') return;
 
+        // Aim check: don't fire unless roughly facing the player (~30°).
+        // Exempts charging patterns (laser/arc_lightning) which need per-frame calls to advance state.
+        const isChargingPattern = this.config.shootPattern === 'laser' || this.config.shootPattern === 'arc_lightning';
+        if (!isChargingPattern && this.targetPlayer) {
+            const aimDx = this.targetPlayer.x - this.x;
+            const aimDy = this.targetPlayer.y - this.y;
+            const toPlayer = Math.atan2(aimDy, aimDx);
+            let aimDiff = toPlayer - this.faceAngle;
+            while (aimDiff > Math.PI) aimDiff -= Math.PI * 2;
+            while (aimDiff < -Math.PI) aimDiff += Math.PI * 2;
+            if (Math.abs(aimDiff) > Math.PI / 6) return; // ~30° tolerance
+        }
+
         // Handle burst patterns
         if (this.config.shootPattern === 'burst_3' || this.config.shootPattern === 'burst_2' || this.config.shootPattern === 'square_burst') {
             this.handleBurstShooting(gameEngine, now);
-        } else if (this.config.shootPattern === 'laser' || this.config.shootPattern === 'arc_lightning') {
+        } else if (isChargingPattern) {
             // Charging patterns need per-frame calls to advance charge state
             this.shoot(gameEngine);
         } else {
@@ -2972,7 +3113,7 @@ export class Enemy {
             this.lastShot = now;
             // Update cooldown for next shot (in case level changed)
             this.firingCooldown = getEnemyFiringCooldown(this.type, this.level || 1);
-                
+
                 // Cooldown timer removed - turrets are now mobile
             }
         }
@@ -3033,17 +3174,17 @@ export class Enemy {
         const targetY = this.targetPlayer.y;
         
         switch (this.config.shootPattern) {
+            case 'hunter_single':
+                this.shootBurst3(gameEngine, targetX, targetY);
+                break;
+            case 'guardian_spread':
+                this.shootGuardianSpread(gameEngine, targetX, targetY);
+                break;
             case 'burst_3':
                 this.shootBurst3(gameEngine, targetX, targetY);
                 break;
             case 'burst_2':
                 this.shootBurst2(gameEngine, targetX, targetY);
-                break;
-            case 'needle':
-                this.shootNeedle(gameEngine, targetX, targetY);
-                break;
-            case 'square_burst':
-                this.shootSquareBurst(gameEngine, targetX, targetY);
                 break;
             case 'lay_mine':
                 this.layMine(gameEngine, targetX, targetY);
@@ -3494,16 +3635,25 @@ export class Enemy {
             const titanConfig = ENEMY_BULLET_CONFIG.MISSILE.TITAN_TOMAHAWK;
             this.createEnemyBullet(gameEngine, turretAngle, titanConfig.INITIAL_SPEED, '#8A2BE2', true, 'titan_tonahawk', null);
         } else {
-            // Regular missile turret - homing missile that decelerates (Prowler)
-            const angle = Math.atan2(targetY - this.y, targetX - this.x);
-            const turretConfig = ENEMY_BULLET_CONFIG.MISSILE.PROWLER_PIKE;
-            
-            // Use level-scaled initial speed for Prowler missiles
-            const levelProgress = Math.min(1, (this.level - 1) / 5);
-            const initialSpeed = turretConfig.MIN_INITIAL_SPEED + 
-                (turretConfig.MAX_INITIAL_SPEED - turretConfig.MIN_INITIAL_SPEED) * levelProgress;
-            
-            this.createEnemyBullet(gameEngine, angle, initialSpeed, '#ff00ff', true, 'missile_decelerate');
+            // Prowler - fires missile in the direction the ship is facing
+            const angle = this.faceAngle;
+            const bullet = this.createEnemyBullet(gameEngine, angle, 12, '#cc44ff', true, 'missile_fast_slow');
+            if (bullet) {
+                // Spawn from the front of the ship
+                const frontX = this.x + Math.cos(this.faceAngle) * this.radius;
+                const frontY = this.y + Math.sin(this.faceAngle) * this.radius;
+                bullet.x = frontX; bullet.y = frontY;
+                bullet.startX = frontX; bullet.startY = frontY;
+                bullet.shape = 'missile_shape';
+                bullet.targetPlayer = this.targetPlayer;
+                bullet.rotation = angle;
+                bullet.rotationSpeed = 0;
+                bullet.radius = 7;
+                bullet.glowRadius = 14;
+                bullet.color = '#cc44ff';
+                bullet.damage = this.getLevelScaledDamage(3);
+                bullet.maxLifetimeOverride = 8000;
+            }
         }
     }
     
@@ -3543,19 +3693,21 @@ export class Enemy {
     
     // New shooting patterns
     shootBurst3(gameEngine, targetX, targetY) {
-        // Hunter - red triangle bullets (burst handled by updateShooting)
-        const dx = targetX - this.x;
-        const dy = targetY - this.y;
-        const angle = Math.atan2(dy, dx);
-        // faceAngle smoothly updated by updateFaceDirection() — no snap
+        // Hunter - fires in the direction the ship is facing
+        const angle = this.faceAngle;
         const bullet = this.createEnemyBullet(gameEngine, angle, 4, '#ff4444', false, 'aimed');
         if (bullet) {
+            // Spawn from the front of the ship
+            const frontX = this.x + Math.cos(this.faceAngle) * this.radius;
+            const frontY = this.y + Math.sin(this.faceAngle) * this.radius;
+            bullet.x = frontX; bullet.y = frontY;
+            bullet.startX = frontX; bullet.startY = frontY;
             bullet.shape = 'triangle';
             bullet.rotation = angle; // Point in travel direction
-            bullet.rotationSpeed = 0;
+            bullet.rotationSpeed = 0.1; // Spin as they fly
             bullet.radius = 7;
             bullet.glowRadius = 14;
-            bullet.maxLifetimeOverride = 5500; // Extended range — was 3000ms default (~336px), now ~616px
+            bullet.maxLifetimeOverride = 10000; // Long-range single shot — ~1120px
         }
     }
 
@@ -3570,55 +3722,136 @@ export class Enemy {
         this.createEnemyBullet(gameEngine, angle, 3.5, this.color, false, 'aimed');
     }
 
-    shootNeedle(gameEngine, targetX, targetY) {
-        // Wasp - fast needle/dart bullet
-        const dx = targetX - this.x;
-        const dy = targetY - this.y;
-        const angle = Math.atan2(dy, dx);
-        const bullet = this.createEnemyBullet(gameEngine, angle, 6, '#ffff44', false, 'aimed');
-        if (bullet) {
-            bullet.shape = 'needle';
-            bullet.rotation = angle; // Orient along travel direction
-            bullet.rotationSpeed = 0;
-            bullet.radius = 9;
-            bullet.glowRadius = 6;
-            bullet.damage = this.getLevelScaledDamage(2);
+    updateWaspMachineGun(gameEngine) {
+        // 2-3s rapid fire, then 2-3s reload — self-managed state machine
+        if (!this.targetPlayer) return;
+        const now = Date.now();
+        if (this.waspGunState === undefined) {
+            this.waspGunState = 'firing';
+            this.waspGunPhaseStart = now;
+            this.waspGunPhaseDuration = 4000 + Math.random() * 1000; // 4-5s firing phase
+            this.waspGunLastShot = 0;
+            this.waspSinePhase = 0; // global phase tracker for coherent wave
+        }
+        // Advance global phase each call (~60fps) so it stays in sync with bullet sineFreq
+        this.waspSinePhase = (this.waspSinePhase || 0) + 0.12;
+
+        if (now - this.waspGunPhaseStart > this.waspGunPhaseDuration) {
+            this.waspGunState = this.waspGunState === 'firing' ? 'charging' : 'firing';
+            this.waspGunPhaseStart = now;
+            // 4-5s firing, 2-3s reloading
+            this.waspGunPhaseDuration = this.waspGunState === 'firing' ? 4000 + Math.random() * 1000 : 2000 + Math.random() * 1000;
+        }
+        if (this.waspGunState === 'firing' && now - this.waspGunLastShot > 520) {
+            // Aim check before firing — 30° tolerance
+            const aimDx = this.targetPlayer.x - this.x;
+            const aimDy = this.targetPlayer.y - this.y;
+            const toPlayer = Math.atan2(aimDy, aimDx);
+            let aimDiff = toPlayer - this.faceAngle;
+            while (aimDiff > Math.PI) aimDiff -= Math.PI * 2;
+            while (aimDiff < -Math.PI) aimDiff += Math.PI * 2;
+            if (Math.abs(aimDiff) <= Math.PI / 6) {
+                this.shootWaspBullet(gameEngine, this.targetPlayer.x, this.targetPlayer.y);
+            }
+            this.waspGunLastShot = now;
         }
     }
 
-    shootSquareBurst(gameEngine, targetX, targetY) {
-        // Guardian - green spinning square bullet
-        const dx = targetX - this.x;
-        const dy = targetY - this.y;
-        const angle = Math.atan2(dy, dx);
-        const bullet = this.createEnemyBullet(gameEngine, angle, 4.5, '#44ff44', false, 'aimed');
+    shootWaspBullet(gameEngine, targetX, targetY) {
+        // Wasp - fires yellow circle in the direction the ship is facing
+        const angle = this.faceAngle;
+        const bullet = this.createEnemyBullet(gameEngine, angle, 6, '#ffff44', false, 'sine_wave_nospin');
         if (bullet) {
-            bullet.shape = 'square';
-            bullet.rotation = angle + Math.PI / 4; // 45° offset for diamond look
-            bullet.rotationSpeed = 0.08; // Spinning square
-            bullet.radius = 7;
-            bullet.glowRadius = 14;
-            bullet.damage = this.getLevelScaledDamage(2);
-            bullet.maxLifetimeOverride = 5000; // Extended range (was default 3000ms)
+            // Spawn from the front of the ship
+            const frontX = this.x + Math.cos(this.faceAngle) * this.radius;
+            const frontY = this.y + Math.sin(this.faceAngle) * this.radius;
+            bullet.x = frontX; bullet.y = frontY;
+            bullet.startX = frontX; bullet.startY = frontY;
+            bullet.shape = null; // circle (default)
+            bullet.rotation = 0;
+            bullet.rotationSpeed = 0;
+            bullet.radius = 3.5;
+            bullet.glowRadius = 6;
+            bullet.color = '#ffff44';
+            bullet.damage = this.getLevelScaledDamage(1);
+            bullet.maxLifetimeOverride = 12000; // 2x extended range
+            // Synchronized phase: all bullets from this wasp share the same phase
+            bullet.sineAmp   = 2.2;
+            bullet.sineFreq  = 0.12;
+            bullet.sinePhase = this.waspSinePhase || 0;
+            bullet.sinePerpX = -Math.sin(angle);
+            bullet.sinePerpY =  Math.cos(angle);
+        }
+    }
+
+    shootGuardianSpread(gameEngine, targetX, targetY) {
+        // Guardian - 5-bullet fan spread alternating between rectangles and triangles
+        // Each volley fires the same shape; shapes alternate: 0=rectangle, 1=triangle
+        // All bullets originate from the front face of the Guardian, firing in faceAngle direction
+        const baseAngle = this.faceAngle;
+
+        // Front spawn point (center of forward face)
+        const frontX = this.x + Math.cos(baseAngle) * this.radius;
+        const frontY = this.y + Math.sin(baseAngle) * this.radius;
+
+        // Advance the shared sinusoidal phase each volley so successive volleys stay coherent
+        if (this.guardianSinePhase === undefined) this.guardianSinePhase = 0;
+        this.guardianSinePhase += 0.45;
+
+        // Track which volley we're on (even = rectangle/square, odd = triangle)
+        if (this.guardianVolleyIndex === undefined) this.guardianVolleyIndex = 0;
+        const shape = (this.guardianVolleyIndex % 2 === 0) ? 'square' : 'triangle';
+        this.guardianVolleyIndex++;
+
+        const offsets = [-0.5, -0.25, 0, 0.25, 0.5];
+        for (const offset of offsets) {
+            const angle = baseAngle + offset;
+            const bullet = this.createEnemyBullet(gameEngine, angle, 4.5, '#44ff44', false, 'sine_wave_nospin');
+            if (bullet) {
+                // Override spawn to come from the front face
+                bullet.x = frontX;
+                bullet.y = frontY;
+                bullet.startX = frontX;
+                bullet.startY = frontY;
+                bullet.shape = shape;
+                bullet.rotation = angle;
+                bullet.rotationSpeed = 0;    // no spin
+                bullet.radius = 6;
+                bullet.glowRadius = 12;
+                bullet.color = '#44ff44';
+                bullet.damage = this.getLevelScaledDamage(2);
+                bullet.maxLifetimeOverride = 5000;
+                bullet.sineAmp   = 2.5;
+                bullet.sineFreq  = 0.10;
+                bullet.sinePhase = this.guardianSinePhase; // same phase for all = in-phase wave
+                bullet.sinePerpX = -Math.sin(angle);
+                bullet.sinePerpY =  Math.cos(angle);
+            }
         }
     }
 
     layMine(gameEngine, targetX, targetY) {
-        // Tangerine/Bomber - drop a spiky orange proximity mine at current position
+        // Tangerine/Bomber - drop a homing proximity mine that slowly crawls toward the player
         if (!gameEngine.enemyBulletPool) return;
         const mine = gameEngine.enemyBulletPool.get();
         if (!mine) return;
         mine.reset(this.x, this.y, 0, 0, '#ff8844', false);
         mine.shape = 'mine';
         mine.isPersistent = true;
-        mine.maxLifetimeOverride = 18000; // 18 second lifetime
-        mine.radius = 12;   // Smaller mines — harder to see, still deadly
+        mine.maxLifetimeOverride = 60000; // 60-second lifetime
+        mine.radius = 12;
         mine.glowRadius = 22;
         mine.damage = this.getLevelScaledDamage(4);
-        mine.movementPattern = 'mine';
+        mine.movementPattern = 'homing_mine'; // slowly crawl toward player
         mine.rotation = Math.random() * Math.PI * 2;
-        mine.rotationSpeed = 0.015; // Slow spin
+        mine.rotationSpeed = 0.015;
         mine.targetPlayer = this.targetPlayer;
+        // Health scales with Tangerine level
+        const baseHealth = 5;
+        mine.maxHealth = Math.floor(baseHealth * (1 + (this.level - 1) * 0.25));
+        mine.health = mine.maxHealth;
+        // Signal bomber to briefly stop after laying this mine
+        this.mineJustLaid = Date.now();
     }
     
     shootLine4(gameEngine, targetX, targetY) {
@@ -3670,11 +3903,8 @@ export class Enemy {
     }
     
     shootChargedLaser(gameEngine, targetX, targetY) {
-        // STALKER - wide beam laser attack
-        const angle = Math.atan2(targetY - this.y, targetX - this.x);
-        
-        // Create wide laser beam effect
-        this.createLaserBeam(gameEngine, angle);
+        // STALKER - fires laser in the direction the ship is facing
+        this.createLaserBeam(gameEngine, this.faceAngle);
     }
     
     createLaserBeam(gameEngine, angle) {
@@ -3685,8 +3915,9 @@ export class Enemy {
         const beamWidth = 30; // Narrower beam for close-range attack
         const segments = 8; // Number of beam segments for visual effect
         
-        const startX = this.x + Math.cos(angle) * this.radius;
-        const startY = this.y + Math.sin(angle) * this.radius;
+        // Spawn from the front of the ship (faceAngle direction)
+        const startX = this.x + Math.cos(this.faceAngle) * this.radius;
+        const startY = this.y + Math.sin(this.faceAngle) * this.radius;
         const endX = startX + Math.cos(angle) * beamLength;
         const endY = startY + Math.sin(angle) * beamLength;
         
@@ -3996,8 +4227,20 @@ export class Enemy {
         
         // Draw health bar (outside of transform)
         this.drawHealthBar(ctx);
-        
-        // Cooldown timer removed - turrets are now mobile
+
+        // Draw enemy name label centered above the health bar (only after first hit)
+        if (showEnemyNames() && this.health < this.maxHealth) {
+            const barY = this.y - this.radius - 8;   // matches drawHealthBar's barY
+            ctx.save();
+            ctx.font = '13px "Pixelify Sans", "Press Start 2P", monospace';
+            ctx.fillStyle = 'goldenrod';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.shadowColor = 'rgba(0,0,0,0.95)';
+            ctx.shadowBlur = 4;
+            ctx.fillText(this.config.name.toUpperCase(), this.x, barY - 7);
+            ctx.restore();
+        }
     }
     
     drawLaserTargetingLine(ctx) {
@@ -4188,15 +4431,82 @@ export class Enemy {
     // drawAimingTriangle method removed - not working as intended
     
     drawTriangle(ctx) {
-        // Aggressive arrow pointing forward (toward player)
-        const size = this.radius * 0.8;
+        // Predatory hunter fighter — swept wings, engine glow, cockpit
+        const size = this.radius * 0.9;
+        const t = Date.now() * 0.001;
+        const pulse = 0.82 + Math.sin(t * 3.8) * 0.18;
+
+        ctx.save();
+        ctx.shadowColor = '#ff4444';
+        ctx.shadowBlur = 10 * pulse;
+
+        // ── Main elongated body ───────────────────────────────────────────────
+        ctx.fillStyle = '#1a0000';
+        ctx.strokeStyle = '#ff4444';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(size, 0); // Point (tip of arrow)
-        ctx.lineTo(-size * 0.6, -size * 0.8); // Left back corner
-        ctx.lineTo(-size * 0.6, size * 0.8); // Right back corner
+        ctx.moveTo(size * 1.15, 0);            // sharp nose
+        ctx.lineTo(size * 0.18, -size * 0.3);  // upper shoulder
+        ctx.lineTo(-size * 0.52, -size * 0.2); // upper rear
+        ctx.lineTo(-size * 0.72, 0);           // tail center
+        ctx.lineTo(-size * 0.52, size * 0.2);  // lower rear
+        ctx.lineTo(size * 0.18, size * 0.3);   // lower shoulder
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+
+        // ── Swept wings ───────────────────────────────────────────────────────
+        ctx.fillStyle = 'rgba(255, 40, 40, 0.15)';
+        ctx.strokeStyle = '#ff6666';
+        ctx.lineWidth = 1.5;
+        // Upper wing
+        ctx.beginPath();
+        ctx.moveTo(size * 0.18, -size * 0.3);
+        ctx.lineTo(-size * 0.08, -size * 1.05);
+        ctx.lineTo(-size * 0.62, -size * 0.38);
+        ctx.lineTo(-size * 0.52, -size * 0.2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Lower wing (mirror)
+        ctx.beginPath();
+        ctx.moveTo(size * 0.18, size * 0.3);
+        ctx.lineTo(-size * 0.08, size * 1.05);
+        ctx.lineTo(-size * 0.62, size * 0.38);
+        ctx.lineTo(-size * 0.52, size * 0.2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // ── Hull spine line ────────────────────────────────────────────────────
+        ctx.strokeStyle = 'rgba(255, 110, 110, 0.65)';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(size * 0.85, 0);
+        ctx.lineTo(-size * 0.45, 0);
+        ctx.stroke();
+
+        // ── Engine exhaust glow ────────────────────────────────────────────────
+        const engGrad = ctx.createRadialGradient(-size * 0.72, 0, 0, -size * 0.72, 0, size * 0.38);
+        engGrad.addColorStop(0,   `rgba(255, 220, 120, ${pulse})`);
+        engGrad.addColorStop(0.35, `rgba(255, 80, 0, ${0.75 * pulse})`);
+        engGrad.addColorStop(1,   'rgba(255, 0, 0, 0)');
+        ctx.fillStyle = engGrad;
+        ctx.globalAlpha = pulse;
+        ctx.beginPath();
+        ctx.arc(-size * 0.72, 0, size * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // ── Cockpit glow ──────────────────────────────────────────────────────
+        ctx.shadowColor = '#ff8888';
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = `rgba(255, 150, 150, ${0.7 * pulse})`;
+        ctx.beginPath();
+        ctx.ellipse(size * 0.32, 0, size * 0.14, size * 0.09, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
     
     drawSquare(ctx) {
@@ -4285,68 +4595,208 @@ export class Enemy {
     }
     
     drawLaserTurret(ctx) {
-        // Laser turret - crystalline structure with charging indicator
-        const size = this.radius * 0.8;
-        
-        // Base platform - more crystalline looking
+        // Lightning Entity — a living being of pure electricity
+        const size = this.radius * 0.85;
+        const t = Date.now() * 0.001;
+        const pulse = 0.7 + Math.sin(t * 5.5) * 0.3;
+        const charging = this.laserCharging;
+        const chargeBoost = charging ? 1.5 : 1.0;
+
+        ctx.save();
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = (16 + 10 * pulse) * chargeBoost;
+
+        // ── Outer arc-discharge ring ──────────────────────────────────────────
+        const outerPts = 18;
+        ctx.strokeStyle = `rgba(0, 220, 255, ${0.4 * pulse})`;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-            const angle = (i / 8) * Math.PI * 2;
-            const radius = size * (0.8 + Math.sin(i * 2) * 0.2); // Varied radius for crystal effect
-            const x = Math.cos(angle) * radius;
-            const y = Math.sin(angle) * radius;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+        for (let i = 0; i <= outerPts; i++) {
+            const angle = (i / outerPts) * Math.PI * 2;
+            const jitter = Math.sin(t * 11 + i * 2.3) * size * 0.14;
+            const r = size * 1.5 + jitter;
+            const x = Math.cos(angle) * r;
+            const y = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+
+        // ── Six radial lightning bolts ─────────────────────────────────────
+        for (let i = 0; i < 6; i++) {
+            const baseAngle = (i / 6) * Math.PI * 2 + t * 1.2;
+            const opacity = 0.45 + Math.sin(t * 9 + i * 1.5) * 0.35;
+            ctx.strokeStyle = `rgba(120, 250, 255, ${opacity})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            const numSteps = 5;
+            for (let s = 1; s <= numSteps; s++) {
+                const prog = s / numSteps;
+                const boltX = Math.cos(baseAngle) * size * prog;
+                const boltY = Math.sin(baseAngle) * size * prog;
+                const perpX = -Math.sin(baseAngle);
+                const perpY =  Math.cos(baseAngle);
+                const jag = Math.sin(t * 15 + i * 3.1 + s * 7.3) * size * 0.2 * prog;
+                ctx.lineTo(boltX + perpX * jag, boltY + perpY * jag);
+            }
+            ctx.stroke();
+        }
+
+        // ── Body: jagged electric star ────────────────────────────────────────
+        const bodyPts = 10;
+        ctx.fillStyle = '#000a10';
+        ctx.strokeStyle = `rgba(0, 255, 255, ${0.85 + pulse * 0.15})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < bodyPts; i++) {
+            const angle = (i / bodyPts) * Math.PI * 2;
+            const jitter = Math.sin(t * 7 + i * 1.9) * size * 0.07;
+            const r = (i % 2 === 0) ? size * 0.88 + jitter : size * 0.48 + jitter;
+            const x = Math.cos(angle) * r;
+            const y = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
-        // Central laser focus crystal
+
+        // ── Inner sheen ────────────────────────────────────────────────────────
+        ctx.strokeStyle = `rgba(0, 180, 255, 0.4)`;
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        
-        // Laser barrel - more prominent
-            ctx.beginPath();
-        ctx.rect(-size * 0.1, -size * 0.15, size * 1.4, size * 0.3);
-            ctx.fill();
-        ctx.stroke();
-        
-        // Laser tip
-        ctx.beginPath();
-        ctx.moveTo(size * 1.3, 0);
-        ctx.lineTo(size * 1.1, -size * 0.1);
-        ctx.lineTo(size * 1.1, size * 0.1);
+        for (let i = 0; i < bodyPts; i++) {
+            const angle = (i / bodyPts) * Math.PI * 2;
+            const r = (i % 2 === 0) ? size * 0.52 : size * 0.28;
+            const x = Math.cos(angle) * r;
+            const y = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
         ctx.closePath();
-        ctx.fill();
         ctx.stroke();
+
+        // ── Core glow ─────────────────────────────────────────────────────────
+        const coreSize = size * (0.3 + pulse * 0.08) * chargeBoost;
+        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreSize);
+        coreGrad.addColorStop(0,    '#ffffff');
+        coreGrad.addColorStop(0.25, '#88ffff');
+        coreGrad.addColorStop(0.6,  '#0055ff');
+        coreGrad.addColorStop(1,    'transparent');
+        ctx.fillStyle = coreGrad;
+        ctx.globalAlpha = (0.8 + pulse * 0.2) * Math.min(chargeBoost, 1.2);
+        ctx.beginPath();
+        ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.restore();
     }
     
     drawMissileTurret(ctx) {
-        // Missile turret - angular launcher with missile pods
+        // Armored missile fortress — angular hull, visible warheads, targeting sensor array
         const size = this.radius * 0.8;
-        
-        // Base
+        const t = Date.now() * 0.001;
+        const pulse = 0.75 + Math.sin(t * 2.5) * 0.25;
+
+        ctx.save();
+        ctx.shadowColor = '#cc44ff';
+        ctx.shadowBlur = 10 * pulse;
+
+        // ── Main armored hull (angular hexagon) ──────────────────────────────
+        ctx.fillStyle = '#1a0028';
+        ctx.strokeStyle = '#cc44ff';
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.rect(-size, -size * 0.6, size * 2, size * 1.2);
+        // Asymmetric angular hull — wider at rear
+        ctx.moveTo( size * 1.1,  0);           // nose
+        ctx.lineTo( size * 0.6,  size * 0.7);  // front flare r
+        ctx.lineTo(-size * 0.5,  size * 0.9);  // rear r
+        ctx.lineTo(-size * 1.1,  size * 0.4);  // rear spur r
+        ctx.lineTo(-size * 1.1, -size * 0.4);  // rear spur l
+        ctx.lineTo(-size * 0.5, -size * 0.9);  // rear l
+        ctx.lineTo( size * 0.6, -size * 0.7);  // front flare l
+        ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
-        // Missile pods
-        for (let i = -1; i <= 1; i += 2) {
+
+        // ── Armor plate seams ────────────────────────────────────────────────
+        ctx.strokeStyle = '#8822cc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(size * 0.4, 0);  ctx.lineTo(-size * 0.6, 0);
+        ctx.moveTo(size * 0.0, size * 0.55);  ctx.lineTo(-size * 0.8, size * 0.35);
+        ctx.moveTo(size * 0.0, -size * 0.55); ctx.lineTo(-size * 0.8, -size * 0.35);
+        ctx.stroke();
+
+        // ── Missile pods (3 tubes visible per side) ───────────────────────────
+        for (const side of [-1, 1]) {
+            const podY = side * size * 0.55;
+            // Pod housing
+            ctx.fillStyle = '#220033';
+            ctx.strokeStyle = '#aa33ee';
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.rect(size * 0.2, i * size * 0.3, size * 0.6, size * 0.2);
+            ctx.rect(size * 0.1, podY - size * 0.22, size * 0.7, size * 0.44);
             ctx.fill();
             ctx.stroke();
+            // Individual missile tubes
+            for (let tube = 0; tube < 3; tube++) {
+                const tubeX = size * (0.18 + tube * 0.2);
+                const tubeY = podY;
+                // Tube bore
+                ctx.fillStyle = '#110022';
+                ctx.beginPath();
+                ctx.ellipse(tubeX, tubeY, size * 0.07, size * 0.13, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Warhead tip (purple glow if loaded)
+                const tipGrad = ctx.createRadialGradient(tubeX, tubeY, 0, tubeX, tubeY, size * 0.08);
+                tipGrad.addColorStop(0, `rgba(220,100,255,${0.8 * pulse})`);
+                tipGrad.addColorStop(1, 'rgba(100,0,180,0)');
+                ctx.fillStyle = tipGrad;
+                ctx.beginPath();
+                ctx.ellipse(tubeX, tubeY, size * 0.08, size * 0.14, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
-        
-        // Targeting array
-        ctx.fillStyle = '#ff00ff';
+
+        // ── Targeting sensor array (rotating dish at nose) ───────────────────
+        ctx.save();
+        ctx.translate(size * 0.85, 0);
+        ctx.rotate(t * 2.2); // spin
+        ctx.strokeStyle = `rgba(255, 100, 255, ${0.7 * pulse})`;
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(a) * size * 0.22, Math.sin(a) * size * 0.22);
+            ctx.stroke();
+        }
+        ctx.restore();
+        // Sensor center dot
+        const sensorGrad = ctx.createRadialGradient(size * 0.85, 0, 0, size * 0.85, 0, size * 0.14 * pulse);
+        sensorGrad.addColorStop(0, '#ffffff');
+        sensorGrad.addColorStop(0.4, '#ff44ff');
+        sensorGrad.addColorStop(1, 'rgba(180,0,200,0)');
+        ctx.fillStyle = sensorGrad;
         ctx.beginPath();
-        ctx.arc(size * 0.8, 0, 2, 0, Math.PI * 2);
+        ctx.arc(size * 0.85, 0, size * 0.14 * pulse, 0, Math.PI * 2);
         ctx.fill();
+
+        // ── Rear engine glows ─────────────────────────────────────────────────
+        for (const side of [-1, 1]) {
+            const engGrad = ctx.createRadialGradient(-size * 0.95, side * size * 0.2, 0,
+                                                      -size * 0.95, side * size * 0.2, size * 0.22);
+            engGrad.addColorStop(0,   `rgba(220,100,255,${0.9 * pulse})`);
+            engGrad.addColorStop(0.5, 'rgba(100,0,180,0.4)');
+            engGrad.addColorStop(1,   'rgba(60,0,120,0)');
+            ctx.fillStyle = engGrad;
+            ctx.beginPath();
+            ctx.ellipse(-size * 0.95, side * size * 0.2, size * 0.22, size * 0.13, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
     }
     
     drawPulseTurret(ctx) {
@@ -4425,658 +4875,612 @@ export class Enemy {
     }
     
     drawShieldTurret(ctx) {
-        // Shield turret - defensive barrier generator
+        // Orbital sentinel — nested spinning hex rings, rotating emitter arms
         const size = this.radius * 0.8;
-        
-        // Hexagonal base
+        const t = Date.now() * 0.001;
+        const pulse = 0.8 + Math.sin(t * 3.2) * 0.2;
+        const spinAngle = t * 0.8; // independent slow spin for decoration
+
+        ctx.save();
+        ctx.shadowColor = '#00ff44';
+        ctx.shadowBlur = 14 * pulse;
+
+        // ── Outer rotating hex ring ──────────────────────────────────────────
+        ctx.save();
+        ctx.rotate(spinAngle);
+        ctx.strokeStyle = `rgba(0,255,100,${0.5 * pulse})`;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            const x = Math.cos(angle) * size;
-            const y = Math.sin(angle) * size;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+            const a = (i / 6) * Math.PI * 2;
+            if (i === 0) ctx.moveTo(Math.cos(a) * size * 1.2, Math.sin(a) * size * 1.2);
+            else         ctx.lineTo(Math.cos(a) * size * 1.2, Math.sin(a) * size * 1.2);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+
+        // ── Inner counter-rotating hex ring ──────────────────────────────────
+        ctx.save();
+        ctx.rotate(-spinAngle * 1.4);
+        ctx.strokeStyle = `rgba(100,255,160,${0.6 * pulse})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+            if (i === 0) ctx.moveTo(Math.cos(a) * size * 0.88, Math.sin(a) * size * 0.88);
+            else         ctx.lineTo(Math.cos(a) * size * 0.88, Math.sin(a) * size * 0.88);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+
+        // ── Emitter arms (6, rotating with faceAngle) ────────────────────────
+        ctx.strokeStyle = '#00cc55';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            const innerR = size * 0.28;
+            const outerR = size * 0.75;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * innerR, Math.sin(a) * innerR);
+            ctx.lineTo(Math.cos(a) * outerR, Math.sin(a) * outerR);
+            ctx.stroke();
+            // Emitter node at tip
+            const glow = ctx.createRadialGradient(
+                Math.cos(a) * outerR, Math.sin(a) * outerR, 0,
+                Math.cos(a) * outerR, Math.sin(a) * outerR, size * 0.16 * pulse
+            );
+            glow.addColorStop(0,   '#ffffff');
+            glow.addColorStop(0.4, '#00ff88');
+            glow.addColorStop(1,   'rgba(0,200,80,0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(Math.cos(a) * outerR, Math.sin(a) * outerR, size * 0.16 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // ── Solid inner hex hull ─────────────────────────────────────────────
+        ctx.fillStyle = '#001a0a';
+        ctx.strokeStyle = '#00ff55';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            if (i === 0) ctx.moveTo(Math.cos(a) * size * 0.4, Math.sin(a) * size * 0.4);
+            else         ctx.lineTo(Math.cos(a) * size * 0.4, Math.sin(a) * size * 0.4);
         }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
-        // Shield projectors
-        for (let i = 0; i < 3; i++) {
-            const angle = (i / 3) * Math.PI * 2;
-            const x = Math.cos(angle) * size * 0.7;
-            const y = Math.sin(angle) * size * 0.7;
-            
-            ctx.fillStyle = '#00ff00';
-            ctx.beginPath();
-            ctx.arc(x, y, 3, 0, Math.PI * 2);
-            ctx.fill();
-        }
+
+        // ── Pulsing core ─────────────────────────────────────────────────────
+        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.22 * pulse);
+        coreGrad.addColorStop(0,   '#ffffff');
+        coreGrad.addColorStop(0.3, '#88ffcc');
+        coreGrad.addColorStop(1,   'rgba(0,200,100,0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.22 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
     
     drawWaspShip(ctx) {
-        // Sleek wasp-like ship with triangular wings
+        // Sleek aggressive interceptor with glowing engine trails and blade wings
         const size = this.radius * 0.8;
-        
+        const t = Date.now() * 0.001;
+        const pulse = 0.85 + Math.sin(t * 6) * 0.15; // fast flicker like an insect
+
         ctx.save();
-        
-        // Main wasp body - elongated oval
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        
-        // Body segments (wasp-like segmentation)
-        const bodyLength = size * 1.4;
-        const bodyWidth = size * 0.6;
-        
-        // Front segment (head)
-        ctx.beginPath();
-        ctx.ellipse(bodyLength * 0.3, 0, bodyWidth * 0.4, bodyWidth * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        
-        // Middle segment (thorax)
-        ctx.beginPath();
-        ctx.ellipse(0, 0, bodyWidth * 0.5, bodyWidth * 0.4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        
-        // Rear segment (abdomen)
-        ctx.beginPath();
-        ctx.ellipse(-bodyLength * 0.4, 0, bodyWidth * 0.6, bodyWidth * 0.35, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        
-        // Triangular wings - sleek and dangerous
-        ctx.fillStyle = this.color + '60'; // Semi-transparent wings
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 1.5;
-        
-        // Upper wings
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.2, 0); // Wing root
-        ctx.lineTo(-size * 0.8, -size * 0.9); // Wing tip
-        ctx.lineTo(-size * 0.6, -size * 0.3); // Wing trailing edge
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.2, 0); // Wing root
-        ctx.lineTo(-size * 0.8, size * 0.9); // Wing tip
-        ctx.lineTo(-size * 0.6, size * 0.3); // Wing trailing edge
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        // Lower wings (smaller)
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.4, 0); // Wing root
-        ctx.lineTo(-size * 0.9, -size * 0.6); // Wing tip
-        ctx.lineTo(-size * 0.7, -size * 0.2); // Wing trailing edge
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.4, 0); // Wing root
-        ctx.lineTo(-size * 0.9, size * 0.6); // Wing tip
-        ctx.lineTo(-size * 0.7, size * 0.2); // Wing trailing edge
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        // Stinger/weapon at front
-        ctx.strokeStyle = '#FFFF00'; // Bright yellow stinger
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(bodyLength * 0.5, 0);
-        ctx.lineTo(bodyLength * 0.8, 0);
-        ctx.stroke();
-        
-        // Wing veins for detail
-        ctx.strokeStyle = this.color + 'AA';
-        ctx.lineWidth = 1;
-        
-        // Upper wing veins
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.3, -size * 0.1);
-        ctx.lineTo(-size * 0.7, -size * 0.7);
-        ctx.moveTo(-size * 0.4, -size * 0.2);
-        ctx.lineTo(-size * 0.6, -size * 0.5);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.3, size * 0.1);
-        ctx.lineTo(-size * 0.7, size * 0.7);
-        ctx.moveTo(-size * 0.4, size * 0.2);
-        ctx.lineTo(-size * 0.6, size * 0.5);
-        ctx.stroke();
-        
-        ctx.restore();
-        
-        // Draw laser charging effect if charging
-        if (this.laserCharging && this.laserChargeProgress > 0) {
-            this.drawLaserChargingEffect(ctx);
+        ctx.shadowColor = '#ffff00';
+        ctx.shadowBlur = 8 * pulse;
+
+        // ── Engine exhaust glow (behind body) ────────────────────────────────
+        for (const side of [-1, 1]) {
+            const exhaustGrad = ctx.createRadialGradient(-size * 0.95, side * size * 0.18, 0,
+                                                          -size * 0.95, side * size * 0.18, size * 0.35);
+            exhaustGrad.addColorStop(0,   `rgba(255,220,0,${0.9 * pulse})`);
+            exhaustGrad.addColorStop(0.4, 'rgba(255,120,0,0.5)');
+            exhaustGrad.addColorStop(1,   'rgba(200,80,0,0)');
+            ctx.fillStyle = exhaustGrad;
+            ctx.beginPath();
+            ctx.ellipse(-size * 0.95, side * size * 0.18, size * 0.35, size * 0.18, 0, 0, Math.PI * 2);
+            ctx.fill();
         }
+
+        // ── Razor blade wings ─────────────────────────────────────────────────
+        for (const side of [-1, 1]) {
+            // Outer swept blade
+            ctx.fillStyle = 'rgba(200,200,0,0.35)';
+            ctx.strokeStyle = '#cccc00';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(size * 0.15, 0);
+            ctx.lineTo(size * 0.8,  side * size * 0.22);
+            ctx.lineTo(-size * 0.05, side * size * 1.05);
+            ctx.lineTo(-size * 0.65, side * size * 0.9);
+            ctx.lineTo(-size * 0.75, side * size * 0.28);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Inner secondary blade
+            ctx.fillStyle = 'rgba(255,255,0,0.25)';
+            ctx.strokeStyle = '#ffff44';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.1, 0);
+            ctx.lineTo(-size * 0.3, side * size * 0.55);
+            ctx.lineTo(-size * 0.65, side * size * 0.45);
+            ctx.lineTo(-size * 0.5, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Glowing wing edge stripe
+            ctx.strokeStyle = `rgba(255,255,100,${0.7 * pulse})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(size * 0.7, side * size * 0.18);
+            ctx.lineTo(-size * 0.05, side * size * 0.95);
+            ctx.stroke();
+        }
+
+        // ── Abdomen (rear tapered segment) ────────────────────────────────────
+        ctx.fillStyle = '#1a1a00';
+        ctx.strokeStyle = '#aaaa00';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(-size * 0.45, 0, size * 0.55, size * 0.28, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Abdomen stripes
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+            const x = -size * 0.25 - i * size * 0.2;
+            ctx.beginPath();
+            ctx.moveTo(x, -size * 0.24);
+            ctx.lineTo(x, size * 0.24);
+            ctx.stroke();
+        }
+
+        // ── Thorax (center body) ──────────────────────────────────────────────
+        const thoraxGrad = ctx.createRadialGradient(-size * 0.05, 0, 0, -size * 0.05, 0, size * 0.42);
+        thoraxGrad.addColorStop(0,   '#ffff66');
+        thoraxGrad.addColorStop(0.5, '#aaaa00');
+        thoraxGrad.addColorStop(1,   '#333300');
+        ctx.fillStyle = thoraxGrad;
+        ctx.strokeStyle = '#ffff44';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(-size * 0.05, 0, size * 0.42, size * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // ── Head + stinger ────────────────────────────────────────────────────
+        ctx.fillStyle = '#222200';
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(size * 0.38, 0, size * 0.3, size * 0.22, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Eyes (two bright dots)
+        for (const ey of [-1, 1]) {
+            ctx.fillStyle = `rgba(255,255,0,${pulse})`;
+            ctx.beginPath();
+            ctx.arc(size * 0.44, ey * size * 0.1, size * 0.06, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // Stinger tip
+        ctx.fillStyle = '#ffff88';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(size * 0.75, 0);
+        ctx.lineTo(size * 0.58, -size * 0.1);
+        ctx.lineTo(size * 0.58,  size * 0.1);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
     }
     
     drawEmeraldGuardian(ctx) {
-        // Emerald gemstone-like ship with triangular wings
+        // Armored emerald fortress — glowing energy core, swept shield wings, battle scarred
         const size = this.radius * 0.8;
-        
+        const pulse = 0.8 + Math.sin(Date.now() * 0.004) * 0.2;
+
         ctx.save();
-        
-        // Main emerald body - faceted gemstone shape
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        
-        // Central emerald facets
-        const facets = [
-            // Top facet
-            [0, -size * 0.8, size * 0.4, -size * 0.3, 0, -size * 0.1],
-            // Bottom facet
-            [0, size * 0.8, size * 0.4, size * 0.3, 0, size * 0.1],
-            // Left facets
-            [-size * 0.6, 0, -size * 0.3, -size * 0.4, 0, -size * 0.1],
-            [-size * 0.6, 0, -size * 0.3, size * 0.4, 0, size * 0.1],
-            // Right facets
-            [size * 0.6, 0, size * 0.3, -size * 0.4, 0, -size * 0.1],
-            [size * 0.6, 0, size * 0.3, size * 0.4, 0, size * 0.1]
-        ];
-        
-        facets.forEach((facet, index) => {
+        ctx.shadowColor = '#00ff44';
+        ctx.shadowBlur = 10 * pulse;
+
+        // ── Outer shield ring ────────────────────────────────────────────────
+        ctx.strokeStyle = `rgba(0,255,80,${0.35 * pulse})`;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 1.28, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // ── Swept battle wings (large, aggressive) ───────────────────────────
+        const wingColor = '#00bb44';
+        const wingFill  = 'rgba(0,180,60,0.45)';
+        ctx.lineWidth = 1.8;
+
+        for (const side of [-1, 1]) {
+            // Primary swept wing
+            ctx.fillStyle = wingFill;
+            ctx.strokeStyle = wingColor;
             ctx.beginPath();
-            ctx.moveTo(facet[0], facet[1]);
-            ctx.lineTo(facet[2], facet[3]);
-            ctx.lineTo(facet[4], facet[5]);
+            ctx.moveTo(size * 0.25, 0);            // root
+            ctx.lineTo(size * 1.5,  side * size * 0.3);  // swept forward tip
+            ctx.lineTo(size * 1.25, side * size * 0.9);  // outer tip
+            ctx.lineTo(-size * 0.5, side * size * 1.1);  // rear outer
+            ctx.lineTo(-size * 0.7, side * size * 0.35); // rear root
             ctx.closePath();
-            
-            // Vary the brightness for different facets
-            const brightness = 0.6 + (index % 3) * 0.2;
-            ctx.fillStyle = this.color + Math.floor(brightness * 255).toString(16).padStart(2, '0');
             ctx.fill();
             ctx.stroke();
-        });
-        
-        // Triangular wings - crystalline and sharp
-        ctx.fillStyle = this.color + '50'; // Semi-transparent wings
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        
-        // Upper triangular wings
+
+            // Secondary rear blade
+            ctx.fillStyle = 'rgba(0,200,70,0.3)';
+            ctx.strokeStyle = '#00dd55';
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.4, side * size * 0.2);
+            ctx.lineTo(-size * 1.2, side * size * 0.85);
+            ctx.lineTo(-size * 0.95, side * size * 0.38);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Wing energy veins
+            ctx.strokeStyle = `rgba(120,255,160,${0.6 * pulse})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(size * 0.1, side * size * 0.05);
+            ctx.lineTo(size * 1.1, side * size * 0.55);
+            ctx.moveTo(size * 0.0, side * size * 0.12);
+            ctx.lineTo(size * 0.6, side * size * 0.75);
+            ctx.stroke();
+        }
+
+        // ── Central hexagonal hull ───────────────────────────────────────────
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#00ff66';
+        ctx.fillStyle = '#001a08';
         ctx.beginPath();
-        ctx.moveTo(-size * 0.3, -size * 0.2); // Wing root
-        ctx.lineTo(-size * 1.1, -size * 1.0); // Wing tip
-        ctx.lineTo(-size * 0.8, -size * 0.1); // Wing trailing edge
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            const r = size * (i % 2 === 0 ? 0.68 : 0.58); // alternating for interest
+            if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+            else         ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
+
+        // ── Faceted armor panels ─────────────────────────────────────────────
+        for (let i = 0; i < 6; i++) {
+            const a1 = (i / 6) * Math.PI * 2;
+            const a2 = ((i + 1) / 6) * Math.PI * 2;
+            const brightness = i % 2 === 0 ? '88' : '44';
+            ctx.fillStyle = '#00ff44' + brightness;
+            ctx.strokeStyle = '#00cc33';
+            ctx.lineWidth = 1;
+            const r1 = size * (i % 2 === 0 ? 0.68 : 0.58);
+            const r2 = size * ((i+1) % 2 === 0 ? 0.68 : 0.58);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(a1) * r1, Math.sin(a1) * r1);
+            ctx.lineTo(Math.cos(a2) * r2, Math.sin(a2) * r2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        // ── Glowing energy core ──────────────────────────────────────────────
+        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.32 * pulse);
+        coreGrad.addColorStop(0,   '#ffffff');
+        coreGrad.addColorStop(0.25,'#aaffcc');
+        coreGrad.addColorStop(0.6, '#00ff66');
+        coreGrad.addColorStop(1,   'rgba(0,200,80,0)');
+        ctx.fillStyle = coreGrad;
         ctx.beginPath();
-        ctx.moveTo(-size * 0.3, size * 0.2); // Wing root
-        ctx.lineTo(-size * 1.1, size * 1.0); // Wing tip
-        ctx.lineTo(-size * 0.8, size * 0.1); // Wing trailing edge
-        ctx.closePath();
+        ctx.arc(0, 0, size * 0.32 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ── Forward cannon barrel ────────────────────────────────────────────
+        ctx.fillStyle = '#005522';
+        ctx.strokeStyle = '#00ff44';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.rect(size * 0.55, -size * 0.1, size * 0.7, size * 0.2);
         ctx.fill();
         ctx.stroke();
-        
-        // Lower triangular wings (smaller, more swept)
+        // Muzzle glow
+        const muzzleGrad = ctx.createRadialGradient(size * 1.25, 0, 0, size * 1.25, 0, size * 0.18 * pulse);
+        muzzleGrad.addColorStop(0, '#ffffff');
+        muzzleGrad.addColorStop(0.4,'#00ff88');
+        muzzleGrad.addColorStop(1, 'rgba(0,200,80,0)');
+        ctx.fillStyle = muzzleGrad;
         ctx.beginPath();
-        ctx.moveTo(-size * 0.5, -size * 0.1); // Wing root
-        ctx.lineTo(-size * 1.2, -size * 0.6); // Wing tip
-        ctx.lineTo(-size * 0.9, 0); // Wing trailing edge
-        ctx.closePath();
+        ctx.arc(size * 1.25, 0, size * 0.18 * pulse, 0, Math.PI * 2);
         ctx.fill();
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.5, size * 0.1); // Wing root
-        ctx.lineTo(-size * 1.2, size * 0.6); // Wing tip
-        ctx.lineTo(-size * 0.9, 0); // Wing trailing edge
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        // Crystalline details on wings
-        ctx.strokeStyle = '#FFFFFF'; // White crystal veins
-        ctx.lineWidth = 1;
-        
-        // Wing crystal veins
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.4, -size * 0.15);
-        ctx.lineTo(-size * 0.9, -size * 0.7);
-        ctx.moveTo(-size * 0.5, -size * 0.3);
-        ctx.lineTo(-size * 0.8, -size * 0.5);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(-size * 0.4, size * 0.15);
-        ctx.lineTo(-size * 0.9, size * 0.7);
-        ctx.moveTo(-size * 0.5, size * 0.3);
-        ctx.lineTo(-size * 0.8, size * 0.5);
-        ctx.stroke();
-        
-        // Central emerald highlight
-        ctx.fillStyle = '#FFFFFF';
-        ctx.globalAlpha = 0.3;
-        ctx.beginPath();
-        ctx.ellipse(size * 0.1, -size * 0.2, size * 0.15, size * 0.1, Math.PI / 4, 0, Math.PI * 2);
-        ctx.fill();
-        
+
         ctx.restore();
     }
     
     drawTitanTank(ctx) {
-        // Heavy hexagon-shaped tank with magenta armor plating
+        // Imposing hexagonal juggernaut with glowing energy core and armored plating
         const size = this.radius * 0.9;
-        
+        const pulse = 0.85 + Math.sin(Date.now() * 0.003) * 0.15; // 0.7–1.0 pulse
+
         ctx.save();
-        
-        // Main hexagon hull - based on original hexagon but tank-like
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 3;
-        
-        // Create hexagon hull with forward stretch like original
+        ctx.shadowColor = '#ff00ff';
+        ctx.shadowBlur = 12 * pulse;
+
+        // ── Outer armor ring (thick hex outline) ─────────────────────────────
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#ff44ff';
+        ctx.fillStyle = '#1a0020';
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            // Stretch the first point forward to create directionality like original
-            const stretch = i === 0 ? 1.4 : 1;
-            const x = Math.cos(angle) * size * stretch;
-            const y = Math.sin(angle) * size * stretch;
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
+            const a = (i / 6) * Math.PI * 2;
+            const s = i === 0 ? 1.35 : 1.0; // forward stretch
+            if (i === 0) ctx.moveTo(Math.cos(a) * size * s, Math.sin(a) * size * s);
+            else         ctx.lineTo(Math.cos(a) * size * s, Math.sin(a) * size * s);
         }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
-        // Magenta armor plating on each hexagon face
-        ctx.fillStyle = '#FF00FF'; // Magenta
-        ctx.strokeStyle = '#FF00FF';
-        ctx.lineWidth = 2;
-        
-        // Front armor plate (on the stretched forward face)
-        ctx.beginPath();
-        const frontStretch = 1.4;
-        const frontX = Math.cos(0) * size * frontStretch * 0.8;
-        const frontY1 = Math.cos(Math.PI / 3) * size * 0.6;
-        const frontY2 = Math.cos(Math.PI / 3) * size * -0.6;
-        ctx.moveTo(frontX, 0);
-        ctx.lineTo(frontX * 0.7, frontY1);
-        ctx.lineTo(frontX * 0.7, frontY2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        // Side armor plates on each hexagon face
-        for (let i = 1; i < 6; i++) {
-            const angle1 = (i / 6) * Math.PI * 2;
-            const angle2 = ((i + 1) / 6) * Math.PI * 2;
-            
-            const x1 = Math.cos(angle1) * size * 0.8;
-            const y1 = Math.sin(angle1) * size * 0.8;
-            const x2 = Math.cos(angle2) * size * 0.8;
-            const y2 = Math.sin(angle2) * size * 0.8;
-            
-            // Create armor plate on each face
+
+        // ── Corner spikes on each hex vertex ─────────────────────────────────
+        ctx.fillStyle = '#ff00ff';
+        ctx.strokeStyle = '#ff88ff';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            const s = i === 0 ? 1.35 : 1.0;
+            const vx = Math.cos(a) * size * s;
+            const vy = Math.sin(a) * size * s;
+            const tipLen = size * 0.22;
             ctx.beginPath();
-            ctx.moveTo(x1 * 0.9, y1 * 0.9);
-            ctx.lineTo(x2 * 0.9, y2 * 0.9);
-            ctx.lineTo(x2 * 0.7, y2 * 0.7);
-            ctx.lineTo(x1 * 0.7, y1 * 0.7);
+            ctx.moveTo(vx + Math.cos(a) * tipLen, vy + Math.sin(a) * tipLen);
+            ctx.lineTo(vx + Math.cos(a + 0.35) * size * 0.15, vy + Math.sin(a + 0.35) * size * 0.15);
+            ctx.lineTo(vx + Math.cos(a - 0.35) * size * 0.15, vy + Math.sin(a - 0.35) * size * 0.15);
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
         }
-        
-        // Hexagonal turret - smaller, centered
-        const turretSize = size * 0.5;
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = this.color;
+
+        // ── Inner hex with energy gradient ───────────────────────────────────
+        const innerGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.72);
+        innerGrad.addColorStop(0,   'rgba(255, 80, 255, 0.9)');
+        innerGrad.addColorStop(0.5, 'rgba(120, 0, 180, 0.7)');
+        innerGrad.addColorStop(1,   'rgba(30, 0, 50, 0.5)');
+        ctx.fillStyle = innerGrad;
+        ctx.strokeStyle = '#cc00cc';
         ctx.lineWidth = 2;
-        
-        // Hexagonal turret shape
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            const x = Math.cos(angle) * turretSize;
-            const y = Math.sin(angle) * turretSize;
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
+            const a = (i / 6) * Math.PI * 2;
+            if (i === 0) ctx.moveTo(Math.cos(a) * size * 0.72, Math.sin(a) * size * 0.72);
+            else         ctx.lineTo(Math.cos(a) * size * 0.72, Math.sin(a) * size * 0.72);
         }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
-        // Turret armor edges - magenta
-        ctx.strokeStyle = '#FF00FF';
-        ctx.lineWidth = 2;
-        
+
+        // ── Energy lines from center to hex midpoints ─────────────────────────
+        ctx.strokeStyle = `rgba(255, 180, 255, ${0.4 * pulse})`;
+        ctx.lineWidth = 1.5;
         for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            const x1 = Math.cos(angle) * turretSize * 0.7;
-            const y1 = Math.sin(angle) * turretSize * 0.7;
-            const x2 = Math.cos(angle) * turretSize;
-            const y2 = Math.sin(angle) * turretSize;
-            
+            const a = (i / 6 + 1 / 12) * Math.PI * 2; // midpoints between vertices
             ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(a) * size * 0.72, Math.sin(a) * size * 0.72);
             ctx.stroke();
         }
-        
-        // Turret will be drawn at the end to appear on top
-        
-        // Hexagonal tank treads following the hull shape
-        ctx.strokeStyle = '#444444';
-        ctx.lineWidth = 4;
-        
-        // Outer hexagonal track
+
+        // ── Pulsing energy core ──────────────────────────────────────────────
+        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.28 * pulse);
+        coreGrad.addColorStop(0,   '#ffffff');
+        coreGrad.addColorStop(0.3, '#ff88ff');
+        coreGrad.addColorStop(1,   'rgba(200, 0, 200, 0)');
+        ctx.fillStyle = coreGrad;
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            const stretch = i === 0 ? 1.4 : 1;
-            const x = Math.cos(angle) * size * stretch * 1.1;
-            const y = Math.sin(angle) * size * stretch * 1.1;
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
-        }
-        ctx.closePath();
-        ctx.stroke();
-        
-        // Inner hexagonal track
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            const stretch = i === 0 ? 1.4 : 1;
-            const x = Math.cos(angle) * size * stretch * 0.9;
-            const y = Math.sin(angle) * size * stretch * 0.9;
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
-        }
-        ctx.closePath();
-        ctx.stroke();
-        
-        // Track tread marks on each hexagon face
-        ctx.strokeStyle = '#666666';
-        ctx.lineWidth = 1;
-        
-        for (let face = 0; face < 6; face++) {
-            const angle1 = (face / 6) * Math.PI * 2;
-            const angle2 = ((face + 1) / 6) * Math.PI * 2;
-            const stretch1 = face === 0 ? 1.4 : 1;
-            const stretch2 = (face + 1) % 6 === 0 ? 1.4 : 1;
-            
-            const x1 = Math.cos(angle1) * size * stretch1;
-            const y1 = Math.sin(angle1) * size * stretch1;
-            const x2 = Math.cos(angle2) * size * stretch2;
-            const y2 = Math.sin(angle2) * size * stretch2;
-            
-            // Draw tread marks along each face
-            for (let i = 0; i < 4; i++) {
-                const t = (i + 1) / 5;
-                const x = x1 + (x2 - x1) * t;
-                const y = y1 + (y2 - y1) * t;
-                
-                // Outer tread mark
-                ctx.beginPath();
-                ctx.moveTo(x * 1.05, y * 1.05);
-                ctx.lineTo(x * 1.15, y * 1.15);
-                ctx.stroke();
-                
-                // Inner tread mark
-                ctx.beginPath();
-                ctx.moveTo(x * 0.85, y * 0.85);
-                ctx.lineTo(x * 0.95, y * 0.95);
-                ctx.stroke();
-            }
-        }
-        
-        // Armor detail lines - magenta highlights on each face
-        ctx.strokeStyle = '#FF66FF'; // Lighter magenta
-        ctx.lineWidth = 1;
-        
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            const stretch = i === 0 ? 1.4 : 1;
-            const x = Math.cos(angle) * size * stretch * 0.8;
-            const y = Math.sin(angle) * size * stretch * 0.8;
-            
-            // Radial armor detail lines
+        ctx.arc(0, 0, size * 0.28 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ── Rear exhaust pods ────────────────────────────────────────────────
+        for (const side of [-1, 1]) {
+            const podX = -size * 0.55;
+            const podY = side * size * 0.38;
+            const podGrad = ctx.createRadialGradient(podX, podY, 0, podX, podY, size * 0.22);
+            podGrad.addColorStop(0,   `rgba(255, 120, 255, ${0.9 * pulse})`);
+            podGrad.addColorStop(0.5, 'rgba(120, 0, 160, 0.6)');
+            podGrad.addColorStop(1,   'rgba(60, 0, 80, 0)');
+            ctx.fillStyle = podGrad;
             ctx.beginPath();
-            ctx.moveTo(x * 0.6, y * 0.6);
-            ctx.lineTo(x * 0.9, y * 0.9);
-            ctx.stroke();
+            ctx.ellipse(podX, podY, size * 0.22, size * 0.14, 0, 0, Math.PI * 2);
+            ctx.fill();
         }
         
-        // Warning stripes on front armor
-        ctx.strokeStyle = '#FFFF00'; // Yellow warning stripes
-        ctx.lineWidth = 2;
-        
-        const frontArmorX = Math.cos(0) * size * 1.4 * 0.8;
-        for (let i = 0; i < 3; i++) {
-            const y = -size * 0.3 + (i / 2) * size * 0.6;
-            ctx.beginPath();
-            ctx.moveTo(frontArmorX * 0.7, y);
-            ctx.lineTo(frontArmorX * 0.9, y - size * 0.1);
-            ctx.stroke();
-        }
-        
-        // Hexagonal armor panel outlines
-        ctx.strokeStyle = '#FF00FF';
-        ctx.lineWidth = 1;
-        
-        // Draw hexagonal panel lines on turret
-        for (let i = 0; i < 6; i++) {
-            const angle1 = (i / 6) * Math.PI * 2;
-            const angle2 = ((i + 1) / 6) * Math.PI * 2;
-            
-            const x1 = Math.cos(angle1) * turretSize * 0.8;
-            const y1 = Math.sin(angle1) * turretSize * 0.8;
-            const x2 = Math.cos(angle2) * turretSize * 0.8;
-            const y2 = Math.sin(angle2) * turretSize * 0.8;
-            
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            ctx.stroke();
-        }
-        
-        // Draw turret on top of everything else
-        // Save context for independent turret rotation
+        // ── Turret (independently rotated) ───────────────────────────────────
         ctx.save();
-        
-        // Rotate turret independently from hull
         const turretAngle = this.tankTurretAngle || 0;
-        const hullAngle = this.faceAngle || 0;
-        const relativeAngle = turretAngle - hullAngle;
+        const relativeAngle = turretAngle - (this.faceAngle || 0);
         ctx.rotate(relativeAngle);
-        
-        // Tank cannon - extending forward from hexagon
-        const cannonLength = size * 1.3;
-        const cannonWidth = size * 0.15;
-        
-        ctx.fillStyle = '#CCCCCC'; // Metallic cannon
-        ctx.strokeStyle = '#999999';
+        ctx.shadowColor = '#ff00ff';
+        ctx.shadowBlur = 10 * pulse;
+
+        // Turret base ring
+        ctx.fillStyle = '#2a0035';
+        ctx.strokeStyle = '#ff44ff';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Barrel body
+        const barrelLen = size * 1.5;
+        const barrelW   = size * 0.13;
+        ctx.fillStyle = '#aa00cc';
+        ctx.strokeStyle = '#ff66ff';
         ctx.lineWidth = 2;
-        
         ctx.beginPath();
-        ctx.roundRect(turretSize * 0.8, -cannonWidth * 0.5, cannonLength, cannonWidth, 3);
+        ctx.rect(size * 0.28, -barrelW * 0.5, barrelLen, barrelW);
         ctx.fill();
         ctx.stroke();
-        
-        // Cannon muzzle
-        ctx.fillStyle = '#666666';
+
+        // Barrel highlight stripe
+        ctx.strokeStyle = 'rgba(255,180,255,0.5)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(turretSize * 0.8 + cannonLength, 0, cannonWidth * 0.6, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(size * 0.28, -barrelW * 0.12);
+        ctx.lineTo(size * 0.28 + barrelLen * 0.9, -barrelW * 0.12);
         ctx.stroke();
-        
-        ctx.restore(); // Restore context after turret drawing
-        
-        ctx.restore();
+
+        // Glowing muzzle tip
+        const muzzleX = size * 0.28 + barrelLen;
+        const muzzleGrad = ctx.createRadialGradient(muzzleX, 0, 0, muzzleX, 0, barrelW * 1.4 * pulse);
+        muzzleGrad.addColorStop(0,   '#ffffff');
+        muzzleGrad.addColorStop(0.4, '#ff88ff');
+        muzzleGrad.addColorStop(1,   'rgba(200,0,200,0)');
+        ctx.fillStyle = muzzleGrad;
+        ctx.beginPath();
+        ctx.arc(muzzleX, 0, barrelW * 1.4 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore(); // end turret
+
+        ctx.restore(); // end main transform
     }
     
     drawStalkerSword(ctx) {
-        // Sharp, sword-like design for stealth and speed
-        const size = this.radius * 0.9;
-        
+        // Cloaked stealth interceptor — mantis-like blade wings, plasma edges, shimmer
+        const size = this.radius * 0.92;
+        const t = Date.now() * 0.001;
+        const pulse = 0.75 + Math.sin(t * 4.2) * 0.25;
+        const shimmer = Math.sin(t * 11.3) * 0.15; // fast flicker for cloak shimmer
+
         ctx.save();
-        
-        // Main sword blade - long and sharp
-        const bladeLength = size * 1.8;
-        const bladeWidth = size * 0.4;
-        
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        
-        // Sword blade - pointed diamond shape
+        ctx.shadowColor = '#44ffff';
+        ctx.shadowBlur = 12 * pulse;
+
+        // ── Main hull — narrow swept fuselage ─────────────────────────────────
+        ctx.fillStyle = '#000d10';
+        ctx.strokeStyle = `rgba(0, 220, 255, ${0.75 + shimmer})`;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(bladeLength * 0.6, 0); // Sharp tip
-        ctx.lineTo(bladeLength * 0.1, -bladeWidth * 0.5); // Top edge
-        ctx.lineTo(-bladeLength * 0.4, -bladeWidth * 0.3); // Taper to hilt
-        ctx.lineTo(-bladeLength * 0.6, 0); // Hilt connection
-        ctx.lineTo(-bladeLength * 0.4, bladeWidth * 0.3); // Bottom taper
-        ctx.lineTo(bladeLength * 0.1, bladeWidth * 0.5); // Bottom edge
+        ctx.moveTo( size * 1.3,  0);            // sharp nose tip
+        ctx.lineTo( size * 0.4, -size * 0.22);  // upper shoulder
+        ctx.lineTo(-size * 0.5, -size * 0.18);  // upper rear
+        ctx.lineTo(-size * 0.75, 0);            // tail
+        ctx.lineTo(-size * 0.5,  size * 0.18);  // lower rear
+        ctx.lineTo( size * 0.4,  size * 0.22);  // lower shoulder
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
-        // Sword fuller (blood groove) - central line for sharpness
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 1;
+
+        // ── Upper mantis blade arm ────────────────────────────────────────────
+        ctx.fillStyle = `rgba(0, 30, 40, 0.85)`;
+        ctx.strokeStyle = `rgba(0, 255, 220, ${0.65 + shimmer})`;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(bladeLength * 0.5, 0);
-        ctx.lineTo(-bladeLength * 0.3, 0);
-        ctx.stroke();
-        
-        // Cross guard - sharp and angular
-        const guardWidth = size * 0.8;
-        const guardThickness = size * 0.15;
-        
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        
-        // Angular cross guard with sharp points
-        ctx.beginPath();
-        ctx.moveTo(-bladeLength * 0.4, -guardWidth * 0.5); // Top point
-        ctx.lineTo(-bladeLength * 0.3, -guardThickness * 0.5); // Top inner
-        ctx.lineTo(-bladeLength * 0.3, guardThickness * 0.5); // Bottom inner
-        ctx.lineTo(-bladeLength * 0.4, guardWidth * 0.5); // Bottom point
-        ctx.lineTo(-bladeLength * 0.5, guardWidth * 0.4); // Bottom outer
-        ctx.lineTo(-bladeLength * 0.6, 0); // Center back
-        ctx.lineTo(-bladeLength * 0.5, -guardWidth * 0.4); // Top outer
+        ctx.moveTo( size * 0.55, -size * 0.2);   // root at hull
+        ctx.lineTo( size * 1.05, -size * 0.85);  // blade tip (forward-angled)
+        ctx.lineTo( size * 0.05, -size * 1.1);   // swept back wingtip
+        ctx.lineTo(-size * 0.45, -size * 0.55);  // rear root
+        ctx.lineTo(-size * 0.35, -size * 0.18);  // hull attach
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
-        // Sword hilt/handle
-        const hiltLength = size * 0.6;
-        const hiltWidth = size * 0.2;
-        
-        ctx.fillStyle = '#CCCCCC'; // Metallic hilt
-        ctx.strokeStyle = '#999999';
-        ctx.lineWidth = 2;
-        
+
+        // ── Lower mantis blade arm (mirror) ───────────────────────────────────
         ctx.beginPath();
-        ctx.roundRect(-bladeLength * 0.6, -hiltWidth * 0.5, hiltLength, hiltWidth, 3);
+        ctx.moveTo( size * 0.55,  size * 0.2);
+        ctx.lineTo( size * 1.05,  size * 0.85);
+        ctx.lineTo( size * 0.05,  size * 1.1);
+        ctx.lineTo(-size * 0.45,  size * 0.55);
+        ctx.lineTo(-size * 0.35,  size * 0.18);
+        ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        
-        // Hilt grip details
-        ctx.strokeStyle = '#666666';
-        ctx.lineWidth = 1;
-        
-        for (let i = 0; i < 4; i++) {
-            const x = -bladeLength * 0.55 + (i / 3) * (hiltLength * 0.8);
+
+        // ── Cloaking interference grid ────────────────────────────────────────
+        ctx.save();
+        ctx.globalAlpha = 0.10 + Math.abs(shimmer) * 0.5;
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 0.8;
+        for (let i = -3; i <= 3; i++) {
+            const xOff = i * size * 0.22 + Math.sin(t * 8 + i * 1.7) * size * 0.04;
             ctx.beginPath();
-            ctx.moveTo(x, -hiltWidth * 0.3);
-            ctx.lineTo(x, hiltWidth * 0.3);
+            ctx.moveTo(xOff, -size * 0.2);
+            ctx.lineTo(xOff,  size * 0.2);
             ctx.stroke();
         }
-        
-        // Pommel - weighted end
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        
-        ctx.beginPath();
-        ctx.arc(-bladeLength * 0.6 - hiltLength * 0.1, 0, hiltWidth * 0.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        
-        // Sharp edge highlights
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 1;
-        
-        // Top blade edge highlight
-        ctx.beginPath();
-        ctx.moveTo(bladeLength * 0.6, 0);
-        ctx.lineTo(bladeLength * 0.2, -bladeWidth * 0.4);
-        ctx.lineTo(-bladeLength * 0.2, -bladeWidth * 0.25);
-        ctx.stroke();
-        
-        // Bottom blade edge highlight
-        ctx.beginPath();
-        ctx.moveTo(bladeLength * 0.6, 0);
-        ctx.lineTo(bladeLength * 0.2, bladeWidth * 0.4);
-        ctx.lineTo(-bladeLength * 0.2, bladeWidth * 0.25);
-        ctx.stroke();
-        
-        // Secondary blade edges for extra sharpness
-        ctx.strokeStyle = this.color + 'CC';
-        ctx.lineWidth = 1;
-        
-        // Inner edge lines
-        ctx.beginPath();
-        ctx.moveTo(bladeLength * 0.4, 0);
-        ctx.lineTo(0, -bladeWidth * 0.2);
-        ctx.lineTo(-bladeLength * 0.3, -bladeWidth * 0.15);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(bladeLength * 0.4, 0);
-        ctx.lineTo(0, bladeWidth * 0.2);
-        ctx.lineTo(-bladeLength * 0.3, bladeWidth * 0.15);
-        ctx.stroke();
-        
-        // Energy/stealth effect - subtle glow
+        ctx.restore();
+
+        // ── Plasma edge glow (additive blend) ─────────────────────────────────
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = this.color + '40';
-        ctx.lineWidth = 4;
-        
-        // Blade glow outline
+        ctx.globalAlpha = 0.35 * pulse;
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 3;
+        // Hull edge glow
         ctx.beginPath();
-        ctx.moveTo(bladeLength * 0.6, 0);
-        ctx.lineTo(bladeLength * 0.1, -bladeWidth * 0.5);
-        ctx.lineTo(-bladeLength * 0.4, -bladeWidth * 0.3);
-        ctx.lineTo(-bladeLength * 0.6, 0);
-        ctx.lineTo(-bladeLength * 0.4, bladeWidth * 0.3);
-        ctx.lineTo(bladeLength * 0.1, bladeWidth * 0.5);
+        ctx.moveTo( size * 1.3,  0);
+        ctx.lineTo( size * 0.4, -size * 0.22);
+        ctx.lineTo(-size * 0.5, -size * 0.18);
+        ctx.lineTo(-size * 0.75, 0);
+        ctx.lineTo(-size * 0.5,  size * 0.18);
+        ctx.lineTo( size * 0.4,  size * 0.22);
         ctx.closePath();
         ctx.stroke();
-        
+        // Blade tip plasma accents
+        ctx.globalAlpha = 0.55 * pulse;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(size * 1.05, -size * 0.85);
+        ctx.lineTo(size * 0.05, -size * 1.1);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(size * 1.05,  size * 0.85);
+        ctx.lineTo(size * 0.05,  size * 1.1);
+        ctx.stroke();
         ctx.restore();
-        
+
+        // ── Rear engine exhaust pods ───────────────────────────────────────────
+        const engGrad = ctx.createRadialGradient(-size * 0.75, 0, 0, -size * 0.75, 0, size * 0.3);
+        engGrad.addColorStop(0,   `rgba(200, 255, 255, ${pulse})`);
+        engGrad.addColorStop(0.4, `rgba(0, 180, 220, ${0.6 * pulse})`);
+        engGrad.addColorStop(1,   'rgba(0, 50, 80, 0)');
+        ctx.fillStyle = engGrad;
+        ctx.globalAlpha = pulse;
+        ctx.beginPath();
+        ctx.arc(-size * 0.75, 0, size * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // ── Core sensor orb ────────────────────────────────────────────────────
+        const coreGrad = ctx.createRadialGradient(size * 0.15, 0, 0, size * 0.15, 0, size * 0.18);
+        coreGrad.addColorStop(0,   '#ffffff');
+        coreGrad.addColorStop(0.3, '#88ffff');
+        coreGrad.addColorStop(1,   'rgba(0, 200, 255, 0)');
+        ctx.fillStyle = coreGrad;
+        ctx.globalAlpha = 0.9 * pulse;
+        ctx.beginPath();
+        ctx.arc(size * 0.15, 0, size * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
         ctx.restore();
     }
     
@@ -5566,6 +5970,12 @@ export class Enemy {
                 }
 
                 if (progress >= 1) {
+                    // Sentinel must fire 3 bursts before it arcs/moves
+                    if (this.type === 'SENTINEL' && (this.sentinelBurstsFired || 0) < 3) {
+                        // Hold at max spin rate while waiting for remaining bursts
+                        this.weaverSpinRate = this.weaverMaxSpinRate;
+                        break;
+                    }
                     this.weaverState = 'arcing';
                     this.weaverStateStart = now;
                     // Lock arc orbit parameters to current distance
@@ -5642,6 +6052,8 @@ export class Enemy {
                 if (progress >= 1) {
                     this.weaverState = 'cooldown';
                     this.weaverStateStart = now;
+                    // Sentinel: reset burst counter so it fires 3 more times next spin-up
+                    if (this.type === 'SENTINEL') this.sentinelBurstsFired = 0;
                 }
                 break;
             }
@@ -5818,6 +6230,8 @@ export class Enemy {
                     // Transition to warning
                     this.sweepState = 'warning';
                     this.sweepWarningStart = now;
+                    // Save current turret angle so warning lerps smoothly from it
+                    this.sweepTurretStartAngle = this.tankTurretAngle || 0;
                     const toPlayer = Math.atan2(
                         this.targetPlayer.y - this.y,
                         this.targetPlayer.x - this.x
@@ -5828,13 +6242,20 @@ export class Enemy {
                 }
                 break;
 
-            case 'warning':
-                if (now - this.sweepWarningStart >= this.sweepWarningDuration) {
+            case 'warning': {
+                // Smoothly rotate turret from its current angle to sweepStartAngle — no jump
+                const warningProg = Math.min(1, (now - this.sweepWarningStart) / this.sweepWarningDuration);
+                let turretDiff = this.sweepStartAngle - (this.sweepTurretStartAngle || 0);
+                while (turretDiff > Math.PI) turretDiff -= Math.PI * 2;
+                while (turretDiff < -Math.PI) turretDiff += Math.PI * 2;
+                this.tankTurretAngle = (this.sweepTurretStartAngle || 0) + turretDiff * warningProg;
+                if (warningProg >= 1) {
                     this.sweepState = 'sweeping';
                     this.sweepStartTime = now;
                     this.sweepAngle = this.sweepStartAngle;
                 }
                 break;
+            }
 
             case 'sweeping': {
                 const elapsed = now - this.sweepStartTime;
@@ -5842,6 +6263,8 @@ export class Enemy {
                 // Ease-in-out
                 const eased = 0.5 - 0.5 * Math.cos(progress * Math.PI);
                 this.sweepAngle = this.sweepStartAngle + (this.sweepEndAngle - this.sweepStartAngle) * eased;
+                // Turret tracks the laser as it sweeps
+                this.tankTurretAngle = this.sweepAngle;
 
                 // Deal damage to player if in beam
                 const beamLength = Math.min(window.innerWidth, window.innerHeight) * 0.65;
@@ -5890,47 +6313,54 @@ export class Enemy {
         return perpDist < beamHalfWidth + (player.radius || 12);
     }
 
-    // ── Sentinel Weapon: sine-wave needle lasers ─────────────────────────────
-    // Fired periodically during the arcing phase; each needle travels toward
-    // the player but oscillates perpendicularly in a sinusoidal wave.
+    // ── Sentinel Weapon: 8-bullet circle burst ───────────────────────────────
+    // Fires when NOT arcing (during spin-up or cooldown phases).
     updateSentinelSweep(gameEngine) {
         if (!this.targetPlayer) return;
         const now = Date.now();
 
-        // Only fire during arcing phase
-        if (this.weaverState !== 'arcing') return;
+        // Fire during spin-up and cooldown phases (not while arcing)
+        if (this.weaverState === 'arcing') return;
 
         if (this.sentinelLastShot === undefined) this.sentinelLastShot = 0;
+        if (this.sentinelBurstsFired === undefined) this.sentinelBurstsFired = 0;
 
-        if (now - this.sentinelLastShot > 520) {
-            this.shootSineNeedle(gameEngine, this.targetPlayer.x, this.targetPlayer.y);
+        // Reduced interval (1400ms) so 3 bursts happen before the arc move
+        if (now - this.sentinelLastShot > 1400) {
+            this.shootCircleBurst(gameEngine, 8);
             this.sentinelLastShot = now;
+            this.sentinelBurstsFired++;
         }
     }
 
-    shootSineNeedle(gameEngine, targetX, targetY) {
-        const angle = Math.atan2(targetY - this.y, targetX - this.x);
-        const bullet = this.createEnemyBullet(gameEngine, angle, 5.5, '#00ff88', false, 'sine_wave');
-        if (bullet) {
-            bullet.shape = 'needle';
-            bullet.rotation = angle;
-            bullet.rotationSpeed = 0;
-            bullet.radius = 9;
-            bullet.glowRadius = 8;
-            bullet.damage = this.getLevelScaledDamage(2);
-            // Sine-wave oscillation parameters
-            bullet.sineAmp  = 3.2;                   // ± px perpendicular displacement per frame
-            bullet.sineFreq = 0.13;                  // radians added to phase per frame
-            bullet.sinePhase = Math.random() * Math.PI * 2; // randomise starting phase
-            // Perpendicular unit vector (rotated 90° from travel direction)
-            bullet.sinePerpX = -Math.sin(angle);
-            bullet.sinePerpY =  Math.cos(angle);
+    shootCircleBurst(gameEngine, count = 8) {
+        // Fire `count` green hexagon bullets evenly spaced around 360°, from center
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const bullet = this.createEnemyBullet(gameEngine, angle, 4, '#00ff44', false, 'aimed');
+            if (bullet) {
+                bullet.shape = 'hexagon';
+                bullet.rotation = angle;
+                bullet.rotationSpeed = 0.12; // visibly spinning
+                bullet.radius = 7;
+                bullet.glowRadius = 14;
+                bullet.color = '#00ff88';
+                bullet.damage = this.getLevelScaledDamage(2);
+                bullet.maxLifetimeOverride = 4000;
+            }
         }
     }
 
     // ── Draw Sweep Laser (called from draw() outside ctx.translate/rotate) ──
     drawSweepLaser(ctx) {
         if (!this.sweepState || this.sweepState === 'idle' || this.sweepState === 'cooldown') return;
+
+        // Muzzle world position — barrel tip of the turret
+        const size = this.radius * 0.9;
+        const muzzleOffset = size * 0.28 + size * 1.5; // barrel start + barrel length
+        const turretAngle = this.tankTurretAngle || 0;
+        const muzzleX = this.x + Math.cos(turretAngle) * muzzleOffset;
+        const muzzleY = this.y + Math.sin(turretAngle) * muzzleOffset;
 
         const beamLength = Math.min(window.innerWidth, window.innerHeight) * 0.65;
         ctx.save();
@@ -5939,60 +6369,65 @@ export class Enemy {
             const pulse = Math.sin(Date.now() * 0.015) * 0.35 + 0.65;
             const progress = (Date.now() - this.sweepWarningStart) / this.sweepWarningDuration;
 
-            // Warning arc showing sweep range
+            // Warning arc showing sweep range (from muzzle)
             ctx.strokeStyle = `rgba(180, 60, 255, ${0.25 * pulse})`;
             ctx.lineWidth = 2;
             ctx.setLineDash([10, 6]);
             ctx.beginPath();
-            ctx.arc(this.x, this.y, 130, this.sweepStartAngle, this.sweepEndAngle);
+            ctx.arc(muzzleX, muzzleY, 100, this.sweepStartAngle, this.sweepEndAngle);
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Dashed warning line (sweeping from start to end during warning)
+            // Dashed warning line from muzzle
             const warningAngle = this.sweepStartAngle + (this.sweepEndAngle - this.sweepStartAngle) * progress;
-            const wEndX = this.x + Math.cos(warningAngle) * beamLength;
-            const wEndY = this.y + Math.sin(warningAngle) * beamLength;
+            const wEndX = muzzleX + Math.cos(warningAngle) * beamLength;
+            const wEndY = muzzleY + Math.sin(warningAngle) * beamLength;
             ctx.strokeStyle = `rgba(200, 80, 255, ${0.45 * pulse})`;
             ctx.lineWidth = 4;
             ctx.setLineDash([16, 8]);
             ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
+            ctx.moveTo(muzzleX, muzzleY);
             ctx.lineTo(wEndX, wEndY);
             ctx.stroke();
             ctx.setLineDash([]);
 
         } else if (this.sweepState === 'sweeping') {
-            const endX = this.x + Math.cos(this.sweepAngle) * beamLength;
-            const endY = this.y + Math.sin(this.sweepAngle) * beamLength;
+            // Fade in at start, fade out at end using sin curve
+            const sweepElapsed = Date.now() - this.sweepStartTime;
+            const sweepProg = Math.min(1, sweepElapsed / this.sweepDuration);
+            const fadeAlpha = Math.sin(sweepProg * Math.PI); // 0 → 1 → 0
+
+            const endX = muzzleX + Math.cos(this.sweepAngle) * beamLength;
+            const endY = muzzleY + Math.sin(this.sweepAngle) * beamLength;
 
             ctx.lineCap = 'round';
 
             // Outer wide glow
             ctx.shadowBlur = 50;
             ctx.shadowColor = '#aa44ff';
-            ctx.strokeStyle = 'rgba(170, 68, 255, 0.25)';
+            ctx.strokeStyle = `rgba(170, 68, 255, ${0.25 * fadeAlpha})`;
             ctx.lineWidth = 50;
             ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
+            ctx.moveTo(muzzleX, muzzleY);
             ctx.lineTo(endX, endY);
             ctx.stroke();
 
             // Middle glow
             ctx.shadowBlur = 25;
-            ctx.strokeStyle = 'rgba(200, 100, 255, 0.55)';
+            ctx.strokeStyle = `rgba(200, 100, 255, ${0.55 * fadeAlpha})`;
             ctx.lineWidth = 22;
             ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
+            ctx.moveTo(muzzleX, muzzleY);
             ctx.lineTo(endX, endY);
             ctx.stroke();
 
             // Inner bright core
             ctx.shadowBlur = 10;
             ctx.shadowColor = '#ffffff';
-            ctx.strokeStyle = 'rgba(240, 200, 255, 0.95)';
+            ctx.strokeStyle = `rgba(240, 200, 255, ${0.95 * fadeAlpha})`;
             ctx.lineWidth = 6;
             ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
+            ctx.moveTo(muzzleX, muzzleY);
             ctx.lineTo(endX, endY);
             ctx.stroke();
 

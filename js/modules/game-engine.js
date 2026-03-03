@@ -3779,6 +3779,37 @@ export class GameEngine {
             }
         }
         
+        // Player bullet vs homing mines
+        for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
+            const bullet = this.bulletPool.activeObjects[i];
+            if (!bullet.active) continue;
+            for (const mine of this.enemyBulletPool.activeObjects) {
+                if (!mine.active || mine.shape !== 'mine' || mine.health === undefined) continue;
+                if (collision(bullet, mine)) {
+                    const dmg = this.cheats?.onePunchMan ? 99999 : (bullet.damage || 1);
+                    mine.health = Math.max(0, mine.health - dmg);
+                    this.createDamageNumber(mine.x, mine.y - mine.radius, dmg);
+                    for (let p = 0; p < 4; p++) {
+                        const pt = this.particlePool.get(bullet.x, bullet.y, 'hit');
+                        if (pt) pt.color = '#ff8844';
+                    }
+                    if (mine.health <= 0) {
+                        mine.active = false;
+                        this.audioManager.playExplosion();
+                        this.particlePool.get(mine.x, mine.y, 'explosionPulse', mine.radius * 2);
+                        for (let p = 0; p < 8; p++) {
+                            const pt = this.particlePool.get(mine.x, mine.y, 'explosion');
+                            if (pt) pt.color = '#ff8844';
+                        }
+                    } else {
+                        this.audioManager.playHit();
+                    }
+                    bullet.onHit(mine);
+                    if (!bullet.active) break;
+                }
+            }
+        }
+
         // Enemy bullet-player collisions
         this.enemyBulletPool.activeObjects.forEach(bullet => {
             if (bullet.active && this.player.active && bullet.checkCollision(this.player)) {
@@ -4127,7 +4158,6 @@ export class GameEngine {
             this.asteroidPool.updateActive(this.gameField);
             
             // Update enemies and enemy bullets (only during active gameplay)
-            this.updateWaveSystem(); // Wave progression system
             this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this, this.gameField));
             this.enemyBulletPool.updateActive();
             

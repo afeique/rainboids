@@ -82,6 +82,12 @@ export class EnemyBullet {
         // Update pattern timer
         this.patternTimer += 0.016; // Assuming 60fps
         
+        // Homing mine health-based death
+        if (this.shape === 'mine' && this.health !== undefined && this.health <= 0) {
+            this.active = false;
+            return;
+        }
+
         // Persistent bullets (mines) use a fixed-duration lifetime, not life-fade
         if (this.isPersistent) {
             const maxLife = this.maxLifetimeOverride || 15000;
@@ -132,6 +138,26 @@ export class EnemyBullet {
                 this.vel.x = 0;
                 this.vel.y = 0;
                 break;
+
+            case 'homing_mine': {
+                // Slowly crawl toward player with strong homing
+                if (this.targetPlayer && this.targetPlayer.active !== false) {
+                    const dx = this.targetPlayer.x - this.x;
+                    const dy = this.targetPlayer.y - this.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > 5) {
+                        this.vel.x += (dx / dist) * 0.09;
+                        this.vel.y += (dy / dist) * 0.09;
+                        const maxSpeed = 1.8;
+                        const spd = Math.hypot(this.vel.x, this.vel.y);
+                        if (spd > maxSpeed) {
+                            this.vel.x = (this.vel.x / spd) * maxSpeed;
+                            this.vel.y = (this.vel.y / spd) * maxSpeed;
+                        }
+                    }
+                }
+                break;
+            }
                 
             case 'spread':
                 // Sinusoidal weaving pattern
@@ -209,15 +235,15 @@ export class EnemyBullet {
                     const dx = this.targetPlayer.x - this.x;
                     const dy = this.targetPlayer.y - this.y;
                     const distance = Math.hypot(dx, dy);
-                    
+
                     if (distance > 0) {
                         const homingStrength = 0.05;
                         const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
-                        
+
                         // Gradually turn toward player
                         this.vel.x += (dx / distance) * homingStrength;
                         this.vel.y += (dy / distance) * homingStrength;
-                        
+
                         // Maintain speed
                         const newSpeed = Math.hypot(this.vel.x, this.vel.y);
                         if (newSpeed > 0) {
@@ -225,6 +251,10 @@ export class EnemyBullet {
                             this.vel.y = (this.vel.y / newSpeed) * currentSpeed;
                         }
                     }
+                }
+                // Track rotation to velocity so missile_shape visually leads its direction
+                if (this.vel.x !== 0 || this.vel.y !== 0) {
+                    this.rotation = Math.atan2(this.vel.y, this.vel.x);
                 }
                 break;
                 
@@ -413,7 +443,7 @@ export class EnemyBullet {
                 break;
 
             case 'sine_wave':
-                // Sinusoidal oscillation perpendicular to travel direction (Sentinel)
+                // Sinusoidal oscillation perpendicular to travel direction (needle tracking)
                 this.sinePhase += this.sineFreq;
                 const sineDisp = Math.sin(this.sinePhase) * this.sineAmp;
                 this.vel.x = this.baseVel.x + this.sinePerpX * sineDisp;
@@ -421,20 +451,109 @@ export class EnemyBullet {
                 // Keep needle oriented in actual travel direction
                 this.rotation = Math.atan2(this.vel.y, this.vel.x);
                 break;
+
+            case 'sine_wave_nospin':
+                // Sine wave without overriding rotation — lets rotationSpeed drive shape spin
+                this.sinePhase += this.sineFreq;
+                const snDisp = Math.sin(this.sinePhase) * this.sineAmp;
+                this.vel.x = this.baseVel.x + this.sinePerpX * snDisp;
+                this.vel.y = this.baseVel.y + this.sinePerpY * snDisp;
+                // rotation is NOT touched here; update() adds rotationSpeed for free spin
+                break;
+
+            case 'missile_fast_slow': {
+                // Prowler missile: fast launch + strong homing, decelerates after ~1s
+                if (this.targetPlayer) {
+                    const mDx = this.targetPlayer.x - this.x;
+                    const mDy = this.targetPlayer.y - this.y;
+                    const mDist = Math.hypot(mDx, mDy);
+                    if (mDist > 0) {
+                        this.vel.x += (mDx / mDist) * 0.18; // strong homing
+                        this.vel.y += (mDy / mDist) * 0.18;
+                    }
+                }
+                const mSpd = Math.hypot(this.vel.x, this.vel.y);
+                // Fast for first ~1s (patternTimer < 1.0 at 60fps), then cruise
+                const mMaxSpd = this.patternTimer < 0.95 ? 14 : 5;
+                if (mSpd > mMaxSpd && mSpd > 0) {
+                    this.vel.x = (this.vel.x / mSpd) * mMaxSpd;
+                    this.vel.y = (this.vel.y / mSpd) * mMaxSpd;
+                }
+                const mMinSpd = 2.5;
+                if (mSpd > 0 && mSpd < mMinSpd) {
+                    this.vel.x = (this.vel.x / mSpd) * mMinSpd;
+                    this.vel.y = (this.vel.y / mSpd) * mMinSpd;
+                }
+                // Track rotation so missile nose always points forward
+                if (this.vel.x !== 0 || this.vel.y !== 0) {
+                    this.rotation = Math.atan2(this.vel.y, this.vel.x);
+                }
+                break;
+            }
         }
     }
     
     draw(ctx) {
         if (!this.active) return;
-        
+
         ctx.save();
-        
+
         // Draw trail
         this.drawTrail(ctx);
-        
+
         // Draw bullet
         this.drawBullet(ctx);
-        
+
+        ctx.restore();
+
+        // Draw bomb health bar + name after bullet is drawn (world coordinates)
+        if (this.shape === 'mine' && this.health !== undefined && this.health < this.maxHealth) {
+            this.drawBombOverlay(ctx);
+        }
+    }
+
+    drawBombOverlay(ctx) {
+        const barWidth = this.radius * 3.5;
+        const barHeight = 3;
+        const barX = this.x - barWidth / 2;
+        const barY = this.y - this.radius - 8;
+        const healthPct = Math.max(0, this.health / this.maxHealth);
+
+        ctx.save();
+
+        // Health bar background
+        const bgColor = healthPct > 0.5 ? 'rgba(0,80,0,0.6)' : healthPct > 0.25 ? 'rgba(80,80,0,0.6)' : 'rgba(80,0,0,0.6)';
+        ctx.fillStyle = bgColor;
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barWidth, barHeight, 1);
+        ctx.fill();
+
+        // Health bar fill
+        let fillGrad = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+        if (healthPct > 0.5) {
+            fillGrad.addColorStop(0, '#66ff66'); fillGrad.addColorStop(1, '#00cc00');
+        } else if (healthPct > 0.25) {
+            fillGrad.addColorStop(0, '#ffff99'); fillGrad.addColorStop(1, '#cccc00');
+        } else {
+            fillGrad.addColorStop(0, '#ff6666'); fillGrad.addColorStop(1, '#cc0000');
+        }
+        const filled = barWidth * healthPct;
+        if (filled > 0) {
+            ctx.fillStyle = fillGrad;
+            ctx.beginPath();
+            ctx.roundRect(barX, barY, filled, barHeight, 1);
+            ctx.fill();
+        }
+
+        // "BOMB" label above bar
+        ctx.font = '13px "Pixelify Sans", "Press Start 2P", monospace';
+        ctx.fillStyle = 'goldenrod';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0,0,0,0.95)';
+        ctx.shadowBlur = 4;
+        ctx.fillText('BOMB', this.x, barY - 7);
+
         ctx.restore();
     }
     
@@ -472,7 +591,16 @@ export class EnemyBullet {
             const ageRatio = (Date.now() - this.creationTime) / (this.maxLife * 1000);
             opacity = Math.max(0, 1 - ageRatio);
         }
-        
+
+        // Fade in quickly (first 180ms) + smooth fade out (remap life 1→0.5 to opacity 1→0)
+        if (!this.isPersistent && this.creationTime) {
+            const age = Date.now() - this.creationTime;
+            const fadeIn = Math.min(1.0, age / 180);
+            // Remap life from [0.5, 1.0] → [0, 1] so bullet reaches zero opacity at deactivation
+            const fadeOut = Math.max(0, (opacity - 0.5) * 2.0);
+            opacity = Math.min(fadeIn, fadeOut);
+        }
+
         ctx.globalAlpha = opacity;
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
@@ -486,10 +614,12 @@ export class EnemyBullet {
     
     drawRegularBullet(ctx) {
         // Route to shape-specific renderers
-        if (this.shape === 'triangle') { this.drawTriangleBullet(ctx); return; }
-        if (this.shape === 'square')   { this.drawSquareBullet(ctx);   return; }
-        if (this.shape === 'needle')   { this.drawNeedleBullet(ctx);   return; }
-        if (this.shape === 'mine')     { this.drawMineBullet(ctx);     return; }
+        if (this.shape === 'triangle')      { this.drawTriangleBullet(ctx);  return; }
+        if (this.shape === 'square')        { this.drawSquareBullet(ctx);    return; }
+        if (this.shape === 'needle')        { this.drawNeedleBullet(ctx);    return; }
+        if (this.shape === 'mine')          { this.drawMineBullet(ctx);      return; }
+        if (this.shape === 'missile_shape') { this.drawMissileShape(ctx);    return; }
+        if (this.shape === 'hexagon')       { this.drawHexagonBullet(ctx);   return; }
 
         // Default: circle bullet
         // Enhanced multi-layer glow effect for better visibility
@@ -841,6 +971,113 @@ export class EnemyBullet {
         ctx.beginPath();
         ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
         ctx.fill();
+    }
+
+    drawHexagonBullet(ctx) {
+        const r = this.radius;
+        // Outer glow
+        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.6);
+        glow.addColorStop(0,   this.color + 'AA');
+        glow.addColorStop(0.5, this.color + '44');
+        glow.addColorStop(1,   this.color + '00');
+        ctx.globalAlpha = this.life * 0.85;
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 2.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hexagon body (already rotated by ctx.rotate(this.rotation) in drawBullet)
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            if (i === 0) ctx.moveTo(Math.cos(a) * r * 1.05, Math.sin(a) * r * 1.05);
+            else         ctx.lineTo(Math.cos(a) * r * 1.05, Math.sin(a) * r * 1.05);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Bright inner core
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.85 * this.life;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawMissileShape(ctx) {
+        // Elongated missile: rounded nose (+x), swept fins at tail, engine glow
+        // drawBullet already applied ctx.rotate(this.rotation), so +x = forward
+        const r = this.radius;
+
+        // Outer glow halo
+        const haloGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.8);
+        haloGrad.addColorStop(0,   this.color + '55');
+        haloGrad.addColorStop(0.5, this.color + '22');
+        haloGrad.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.globalAlpha = this.life * 0.8;
+        ctx.fillStyle = haloGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 2.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = this.life;
+
+        // ── Main body with rounded nose ───────────────────────────────────────
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-r * 1.15, -r * 0.42);  // top-rear
+        ctx.lineTo( r * 0.55, -r * 0.42);  // top-front
+        ctx.arc(r * 0.55, 0, r * 0.42, -Math.PI / 2, Math.PI / 2); // rounded nose cap
+        ctx.lineTo(-r * 1.15,  r * 0.42);  // bottom-front to rear
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Nose highlight
+        ctx.fillStyle = 'rgba(255, 200, 255, 0.75)';
+        ctx.beginPath();
+        ctx.arc(r * 0.68, -r * 0.11, r * 0.17, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ── Swept fins ────────────────────────────────────────────────────────
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = 'rgba(180, 100, 255, 0.85)';
+        ctx.lineWidth = 1;
+        // Upper swept fin
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.12, -r * 0.42);
+        ctx.lineTo(-r * 0.92, -r * 1.18);
+        ctx.lineTo(-r * 1.2,  -r * 0.42);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Lower swept fin (mirror)
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.12,  r * 0.42);
+        ctx.lineTo(-r * 0.92,  r * 1.18);
+        ctx.lineTo(-r * 1.2,   r * 0.42);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // ── Engine exhaust glow ───────────────────────────────────────────────
+        const exhaust = ctx.createRadialGradient(-r * 0.9, 0, 0, -r * 0.9, 0, r * 0.58);
+        exhaust.addColorStop(0,    '#ffffff');
+        exhaust.addColorStop(0.25, '#ff8800');
+        exhaust.addColorStop(0.65, '#ff2200');
+        exhaust.addColorStop(1,    'rgba(200,0,0,0)');
+        ctx.fillStyle = exhaust;
+        ctx.globalAlpha = this.life * 0.92;
+        ctx.beginPath();
+        ctx.ellipse(-r * 0.9, 0, r * 0.58, r * 0.26, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = this.life;
     }
 
     checkCollision(target) {

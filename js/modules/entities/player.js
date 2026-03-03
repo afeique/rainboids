@@ -619,136 +619,164 @@ export class Player {
     
     draw(ctx) {
         if (!this.active) return;
-        
+
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle + Math.PI / 2);
-        
+
         // Flash effect during invincibility
         if (this.invincible) {
             const flash = Math.sin(Date.now() * 0.02) > 0;
-            ctx.globalAlpha = flash ? 0.4 : 0.8;
+            ctx.globalAlpha = flash ? 0.35 : 0.85;
         }
-        
-        ctx.strokeStyle = '#0ff';
-        ctx.lineWidth = 2;
+
         ctx.globalCompositeOperation = 'lighter';
-        
+
         const r = this.radius;
-        const w = 1.15;
-        
-        // Draw ship body
-        ctx.beginPath();
-        ctx.moveTo(0, -r);
-        ctx.lineTo(r * 0.96 * w, r * 0.9);
-        ctx.lineTo(r * 0.6 * w, r * 0.9);
-        ctx.lineTo(0, -r * 0.1);
-        ctx.closePath();
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(0, -r);
-        ctx.lineTo(-r * 0.96 * w, r * 0.9);
-        ctx.lineTo(-r * 0.6 * w, r * 0.9);
-        ctx.lineTo(0, -r * 0.1);
-        ctx.closePath();
-        ctx.stroke();
-        
-        // Draw visual-only direction triangle (guillemet/raquo) at the head (blue)
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.strokeStyle = '#3399ff'; // blue
-        ctx.lineWidth = 3;
-        const triangleOffset = -r; // tip of ship
-        const triangleLength = r * 1.5;
-        const tip = triangleOffset - triangleLength; // tip of triangle
-        const base = triangleOffset - triangleLength * 0.45; // base closer to tip
-        const side = r * 0.37;
-        ctx.beginPath();
-        ctx.moveTo(0, tip);
-        ctx.lineTo(side, base);
-        ctx.lineTo(-side, base);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
+        const t = Date.now() * 0.001;
+        const engPulse = 0.7 + Math.sin(t * 9) * 0.3; // fast engine flicker
 
-        // Draw visual-only thruster triangles (at the base/rear of the ship, red)
-        const thrusterAngle = Math.PI / 5; // angle outward from rear
-        const thrusterDistance = r * 0.7; // how far from center (rear)
-        const thrusterLength = r * 1.2; // length of thruster triangle
-        const thrusterBase = r * 0.35; // base width of thruster triangle
-        // Left thruster
-        ctx.save();
-        ctx.globalAlpha = 0.7;
-        ctx.strokeStyle = '#ff3333'; // red
-        ctx.lineWidth = 2.5;
-        ctx.rotate(Math.PI + thrusterAngle); // rear left
-        ctx.beginPath();
-        ctx.moveTo(0, -thrusterDistance - thrusterLength); // tip
-        ctx.lineTo(-thrusterBase, -thrusterDistance - thrusterLength * 0.45); // left base
-        ctx.lineTo(thrusterBase, -thrusterDistance - thrusterLength * 0.45); // right base
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-        // Right thruster
-        ctx.save();
-        ctx.globalAlpha = 0.7;
-        ctx.strokeStyle = '#ff3333'; // red
-        ctx.lineWidth = 2.5;
-        ctx.rotate(Math.PI - thrusterAngle); // rear right
-        ctx.beginPath();
-        ctx.moveTo(0, -thrusterDistance - thrusterLength); // tip
-        ctx.lineTo(-thrusterBase, -thrusterDistance - thrusterLength * 0.45); // left base
-        ctx.lineTo(thrusterBase, -thrusterDistance - thrusterLength * 0.45); // right base
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
+        // ── Engine exhaust flames ─────────────────────────────────────────────
+        const engines = [
+            { x:  r * 0.42, y: r * 0.78 },
+            { x: -r * 0.42, y: r * 0.78 },
+        ];
+        for (const eng of engines) {
+            const exhaustLen = r * (0.9 + engPulse * 0.8);
+            const grad = ctx.createLinearGradient(eng.x, eng.y, eng.x, eng.y + exhaustLen);
+            grad.addColorStop(0,   `rgba(255, 210, 90, ${0.95 * engPulse})`);
+            grad.addColorStop(0.4, `rgba(255, 70, 0,  ${0.65 * engPulse})`);
+            grad.addColorStop(1,   'transparent');
+            ctx.fillStyle = grad;
+            ctx.shadowColor = '#ff8800';
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.ellipse(eng.x, eng.y + exhaustLen * 0.5, r * 0.1, exhaustLen * 0.52, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
-        // Draw long blue wing triangles pointing downward/outward from the sides
-        const wingAngle = Math.PI / 1.5; // steeper angle, about 120 degrees from forward
-        const wingDistance = r * 0.2; // how far from center (side)
-        const wingLength = r * 2.2; // long wing triangle
-        const wingBase = r * 0.32; // base width of wing triangle
-        // Left wing
-        ctx.save();
-        ctx.globalAlpha = 0.6;
-        ctx.strokeStyle = '#a259ff'; // purple
-        ctx.lineWidth = 2.2;
-        ctx.rotate(-wingAngle);
-        ctx.beginPath();
-        ctx.moveTo(0, -wingDistance - wingLength); // tip
-        ctx.lineTo(-wingBase, -wingDistance - wingLength * 0.45); // left base
-        ctx.lineTo(wingBase, -wingDistance - wingLength * 0.45); // right base
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
+        // ── Primary swept wings ───────────────────────────────────────────────
+        ctx.shadowColor = '#0088ff';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = 'rgba(0, 90, 180, 0.45)';
+        ctx.strokeStyle = '#0088ff';
+        ctx.lineWidth = 1.6;
         // Right wing
-        ctx.save();
-        ctx.globalAlpha = 0.6;
-        ctx.strokeStyle = '#a259ff'; // purple
-        ctx.lineWidth = 2.2;
-        ctx.rotate(wingAngle);
         ctx.beginPath();
-        ctx.moveTo(0, -wingDistance - wingLength); // tip
-        ctx.lineTo(-wingBase, -wingDistance - wingLength * 0.45); // left base
-        ctx.lineTo(wingBase, -wingDistance - wingLength * 0.45); // right base
+        ctx.moveTo( r * 0.32, -r * 0.18);
+        ctx.lineTo( r * 1.12,  r * 0.28);
+        ctx.lineTo( r * 0.82,  r * 0.68);
+        ctx.lineTo( r * 0.28,  r * 0.58);
         ctx.closePath();
+        ctx.fill();
         ctx.stroke();
-        ctx.restore();
-        
+        // Left wing
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.32, -r * 0.18);
+        ctx.lineTo(-r * 1.12,  r * 0.28);
+        ctx.lineTo(-r * 0.82,  r * 0.68);
+        ctx.lineTo(-r * 0.28,  r * 0.58);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // ── Wing tip extensions ───────────────────────────────────────────────
+        ctx.fillStyle = 'rgba(0, 160, 255, 0.25)';
+        ctx.strokeStyle = '#44aaff';
+        ctx.lineWidth = 1.1;
+        // Right tip
+        ctx.beginPath();
+        ctx.moveTo( r * 1.12,  r * 0.28);
+        ctx.lineTo( r * 1.42,  r * 0.08);
+        ctx.lineTo( r * 1.18,  r * 0.56);
+        ctx.lineTo( r * 0.82,  r * 0.68);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Left tip
+        ctx.beginPath();
+        ctx.moveTo(-r * 1.12,  r * 0.28);
+        ctx.lineTo(-r * 1.42,  r * 0.08);
+        ctx.lineTo(-r * 1.18,  r * 0.56);
+        ctx.lineTo(-r * 0.82,  r * 0.68);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // ── Central hull ─────────────────────────────────────────────────────
+        ctx.shadowColor = '#00ccff';
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = 'rgba(0, 25, 55, 0.92)';
+        ctx.strokeStyle = '#00ccff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -r);               // nose tip
+        ctx.lineTo( r * 0.32, -r * 0.18); // upper-right
+        ctx.lineTo( r * 0.28,  r * 0.58); // lower-right
+        ctx.lineTo(0,           r * 0.38); // tail notch
+        ctx.lineTo(-r * 0.28,  r * 0.58); // lower-left
+        ctx.lineTo(-r * 0.32, -r * 0.18); // upper-left
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // ── Hull panel detail lines ───────────────────────────────────────────
+        ctx.strokeStyle = 'rgba(0, 200, 255, 0.35)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(0, -r * 0.75); ctx.lineTo(0, r * 0.3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo( r * 0.14, -r * 0.45); ctx.lineTo( r * 0.24, r * 0.28); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-r * 0.14, -r * 0.45); ctx.lineTo(-r * 0.24, r * 0.28); ctx.stroke();
+
+        // ── Engine pod rings ──────────────────────────────────────────────────
+        for (const eng of engines) {
+            ctx.fillStyle = '#001530';
+            ctx.strokeStyle = '#0066ff';
+            ctx.lineWidth = 1.2;
+            ctx.shadowColor = '#0088ff';
+            ctx.shadowBlur = 5;
+            ctx.beginPath();
+            ctx.ellipse(eng.x, eng.y, r * 0.13, r * 0.09, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        // ── Cockpit ───────────────────────────────────────────────────────────
+        ctx.shadowColor = '#aaeeff';
+        ctx.shadowBlur = 7;
+        const cpGrad = ctx.createRadialGradient(0, -r * 0.42, 0, 0, -r * 0.42, r * 0.21);
+        cpGrad.addColorStop(0,   'rgba(160, 235, 255, 0.95)');
+        cpGrad.addColorStop(0.55,'rgba(0, 110, 200, 0.75)');
+        cpGrad.addColorStop(1,   'rgba(0, 50, 110, 0.25)');
+        ctx.fillStyle = cpGrad;
+        ctx.strokeStyle = 'rgba(140, 220, 255, 0.6)';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.ellipse(0, -r * 0.42, r * 0.17, r * 0.21, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // ── Nose glow ─────────────────────────────────────────────────────────
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = 'rgba(200, 245, 255, 0.9)';
+        ctx.beginPath();
+        ctx.arc(0, -r, r * 0.075, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
         // Draw charging effects when player is charging and can shoot (cooldown complete)
         if (this.isCharging && this.canShoot) {
             this.drawChargingEffects(ctx);
         }
-        
+
         // Draw level up animation effects
         if (this.levelUpAnimation.active) {
             this.drawLevelUpEffects(ctx);
         }
-        
+
         // Draw cooldown timer at ship tip
         this.drawCooldownTimer(ctx);
-        
+
         ctx.restore();
     }
     
@@ -926,9 +954,9 @@ export class Player {
         const timeSinceLastShot = now - this.lastShotTime;
         const cooldownProgress = Math.min(1, timeSinceLastShot / this.shotCooldownTime);
         
-        // Position at the tip of the ship
+        // Position slightly ahead of the ship tip
         const tipX = 0;
-        const tipY = -this.radius - 5; // Just above the ship tip
+        const tipY = -this.radius - 14; // Offset above the ship tip
         const timerRadius = 8;
         
         ctx.save();

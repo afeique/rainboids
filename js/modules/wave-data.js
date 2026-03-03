@@ -10,10 +10,10 @@ export const WAVE_DATA = {
         { type: 'TITAN', count: 2 },
         { type: 'STALKER', count: 2 },
         { type: 'TANGERINE', count: 2 },
-        { type: 'DRIFTER', count: 1 },
-        { type: 'PROWLER', count: 1 },
-        { type: 'WEAVER', count: 1 },
-        { type: 'SENTINEL', count: 1 }
+        { type: 'DRIFTER', count: 2 },
+        { type: 'PROWLER', count: 2 },
+        { type: 'WEAVER', count: 2 },
+        { type: 'SENTINEL', count: 2 }
     ] },
     2: { asteroids: 2, enemies: [{ type: 'HUNTER', count: 2 }] },
     3: { asteroids: 2, enemies: [{ type: 'HUNTER', count: 3 }] },

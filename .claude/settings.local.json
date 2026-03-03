@@ -23,7 +23,15 @@
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"OK\")",
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"Both files: syntax OK\")",
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"OK\")",
-      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"enemy-bullet.js OK\")"
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"enemy-bullet.js OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && grep -n \"health:\" /Users/silvr/projects/rainboids/js/modules/entities/enemy.js | head -20)",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"All OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"Both files OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"enemy-bullet.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/player.js && echo \"player.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/wave-data.js && echo \"wave-data.js OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js 2>&1 && echo \"OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js 2>&1 && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js 2>&1 && echo \"enemy-bullet.js OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js 2>&1 && node --check /Users/silvr/projects/rainboids/js/modules/entities/player.js 2>&1 && echo \"OK\")",
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy-bullet.js && echo \"enemy-bullet.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"game-engine.js OK\")"
     ],
     "deny": []
   }
