@@ -14,7 +14,10 @@
       "Bash(npm uninstall:*)",
       "Bash(find:*)",
       "Bash(pkill -f \"vite\")",
-      "Bash(npm run dev)"
+      "Bash(npm run dev)",
+      "Bash(chmod +x /Users/silvr/projects/rainboids/cpp/build.sh)",
+      "Bash(cd /Users/silvr/projects/rainboids/cpp && chmod +x build.sh && ./build.sh --install-deps 2>&1)",
+      "Bash(cd /Users/silvr/projects/rainboids/cpp && ./build.sh --install-deps 2>&1)"
     ],
     "deny": []
   }

@@ -251,7 +251,7 @@ Type any cheat name in the console to activate!`);
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
         this.enemyBulletPool = new PoolManager(EnemyBullet, 20); // Reduced from 50
         this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 10);
-        this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT);
+        this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 4);
         this.powerupPool = new PoolManager(Powerup, 5); // Reduced from 20
         
         // Powerup display system
@@ -377,6 +377,16 @@ Type any cheat name in the console to activate!`);
                     }
                 }
                 
+                // Check for close button click
+                if (this.shopCloseBounds &&
+                    clickX >= this.shopCloseBounds.x &&
+                    clickX <= this.shopCloseBounds.x + this.shopCloseBounds.width &&
+                    clickY >= this.shopCloseBounds.y &&
+                    clickY <= this.shopCloseBounds.y + this.shopCloseBounds.height) {
+                    this.closeShopToPause();
+                    return;
+                }
+
                 // Check for tab clicks first
                 if (this.shopTabBounds) {
                     // Check OFFENSE tab
@@ -694,8 +704,8 @@ Type any cheat name in the console to activate!`);
         const spawnWidth = this.gameField.width;
         const spawnHeight = this.gameField.height;
         
-        // Use base star count for 60fps performance (was 36x, now 1x)
-        const scaledStarCount = GAME_CONFIG.BACKGROUND_STAR_COUNT;
+        // Use moderate multiplier for visual depth while maintaining performance (was 36x, now 4x)
+        const scaledStarCount = GAME_CONFIG.BACKGROUND_STAR_COUNT * 4;
         
         const backgroundStarPositions = generateStarPositions(spawnWidth, spawnHeight, scaledStarCount);
         
@@ -889,8 +899,8 @@ Type any cheat name in the console to activate!`);
             return;
         }
         
-            // Wave animation
-            const waveOffset = Math.sin(time * 3 + index * 0.8) * 20;
+            // Wave animation — amplitude scales with font size so all text looks proportional
+            const waveOffset = Math.sin(time * 3 + index * 0.8) * (fontSize * 20 / 72);
             
             // Rainbow color cycling
             const colorTime = (time * 0.15 + index * 0.1) % 1;
@@ -1124,7 +1134,8 @@ Type any cheat name in the console to activate!`);
         
         // Transition to shop state from any valid state
         this.game.state = GAME_STATES.SHOP;
-        
+        document.body.classList.add('shop-open'); // Dim HUD DOM elements behind canvas overlay
+
         // Pause the charge shot system when opening shop
         if (this.player) {
             this.player.pauseChargeShot();
@@ -1350,15 +1361,16 @@ Type any cheat name in the console to activate!`);
             }
             
             this.game.state = GAME_STATES.WAVE_TRANSITION;
-            
+            document.body.classList.remove('shop-open'); // Restore HUD DOM element visibility
+
             // Resume the charge shot system when closing shop
             if (this.player) {
                 this.player.resumeChargeShot();
             }
-            
+
             // Clear shop bounds to prevent memory leaks
             this.shopItemBounds = null;
-            
+
             // Respect the WAVE_BREAK_TIME timer instead of immediately starting the wave
             const remainingTime = this.waveTimer - Date.now();
             if (remainingTime > 0) {
@@ -1481,20 +1493,26 @@ Type any cheat name in the console to activate!`);
     }
     
     getPowerupConfig(type) {
-        // Return powerup configurations for shop items
+        // Return powerup configurations for shop items (includes icon + colors for HUD display)
         const configs = {
-            'SHIELD_BOOST': { name: 'Shielding', duration: Infinity },
-            'RAPID_FIRE': { name: 'Rapid Fire', duration: Infinity },
-            'MULTI_SHOT': { name: 'Multi Shot', duration: Infinity },
-            'SPREAD_SHOT': { name: 'Spread Shot', duration: Infinity },
-            'SPEED_BOOST': { name: 'Speed Boost', duration: Infinity },
-            'PIERCING': { name: 'Piercing', duration: Infinity },
-            'EXPLOSIVE': { name: 'Explosive', duration: Infinity },
-            'HOMING': { name: 'Homing', duration: Infinity },
-            'MEDPACK': { name: 'Medpack', duration: Infinity },
-            'HEALTH_BOOST': { name: 'Health Boost', duration: Infinity },
-            'CRIT_CHANCE': { name: 'Critical Chance', duration: Infinity },
-            'CRIT_DAMAGE': { name: 'Critical Damage', duration: Infinity }
+            'SHIELD_BOOST':             { name: 'Shielding',          duration: Infinity, icon: '🛡️', gradientColors: ['#33ff99', '#006644'] },
+            'RAPID_FIRE':               { name: 'Rapid Fire',          duration: Infinity, icon: '⚡', gradientColors: ['#ff6600', '#ff0000'] },
+            'MULTI_SHOT':               { name: 'Multi Shot',          duration: Infinity, icon: '🎯', gradientColors: ['#66aaff', '#0033cc'] },
+            'SPREAD_SHOT':              { name: 'Spread Shot',         duration: Infinity, icon: '📐', gradientColors: ['#66ddff', '#0099cc'] },
+            'SPEED_BOOST':              { name: 'Speed Boost',         duration: Infinity, icon: '💨', gradientColors: ['#ffff33', '#cc9900'] },
+            'PIERCING':                 { name: 'Piercing',            duration: Infinity, icon: '🏹', gradientColors: ['#ffcc66', '#cc6600'] },
+            'EXPLOSIVE':                { name: 'Explosive',           duration: Infinity, icon: '💣', gradientColors: ['#ff9933', '#cc3300'] },
+            'HOMING':                   { name: 'Homing',              duration: Infinity, icon: '🎪', gradientColors: ['#ff66cc', '#cc0066'] },
+            'MEDPACK':                  { name: 'Medpack',             duration: Infinity, icon: '💊', gradientColors: ['#ff99cc', '#cc3366'] },
+            'HEALTH_BOOST':             { name: 'Health Boost',        duration: Infinity, icon: '❤️', gradientColors: ['#ff6666', '#cc0000'] },
+            'CRIT_CHANCE':              { name: 'Critical Chance',     duration: Infinity, icon: '🎯', gradientColors: ['#ffff66', '#cc9900'] },
+            'CRIT_DAMAGE':              { name: 'Critical Damage',     duration: Infinity, icon: '💥', gradientColors: ['#ff3399', '#cc0033'] },
+            'CHARGE_SPEED':             { name: 'Charge Speed',        duration: Infinity, icon: '⚡', gradientColors: ['#ffcc00', '#cc8800'] },
+            'CHARGE_DAMAGE':            { name: 'Charge Power',        duration: Infinity, icon: '💥', gradientColors: ['#ff6600', '#cc3300'] },
+            'HEALTH_ORB_DROP_CHANCE':   { name: 'Health Orb Luck',     duration: Infinity, icon: '🍀', gradientColors: ['#33ff99', '#009944'] },
+            'MONEY_ORB_DROP_CHANCE':    { name: 'Money Orb Luck',      duration: Infinity, icon: '💰', gradientColors: ['#ffdd00', '#cc8800'] },
+            'HEALTH_ORB_DROP_QUANTITY': { name: 'Health Orb Bounty',   duration: Infinity, icon: '💚', gradientColors: ['#66ff66', '#009900'] },
+            'MONEY_ORB_DROP_QUANTITY':  { name: 'Money Orb Bounty',    duration: Infinity, icon: '🪙', gradientColors: ['#ffcc00', '#996600'] },
         };
         return configs[type];
     }
@@ -1530,6 +1548,53 @@ Type any cheat name in the console to activate!`);
         this.ctx.fillRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
         this.ctx.strokeRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
         
+        // Close (X) button — square, margin from border, opacity + glow on hover
+        const closeBtnSize = 28;
+        const closeBtnMargin = 12;
+        const closeBtnX = shopWindowX + closeBtnMargin;
+        const closeBtnY = shopWindowY + closeBtnMargin;
+        const closeBtnCorner = 5;
+        this.shopCloseBounds = { x: closeBtnX, y: closeBtnY, width: closeBtnSize, height: closeBtnSize };
+
+        const closeHovered = this.mouseX !== undefined &&
+            this.mouseX >= closeBtnX && this.mouseX <= closeBtnX + closeBtnSize &&
+            this.mouseY >= closeBtnY && this.mouseY <= closeBtnY + closeBtnSize;
+
+        this.ctx.save();
+        this.ctx.globalAlpha = closeHovered ? 1.0 : 0.5;
+
+        // Fill
+        this.ctx.fillStyle = closeHovered ? 'rgba(220, 50, 50, 1.0)' : 'rgba(150, 25, 25, 1.0)';
+        this.ctx.beginPath();
+        this.ctx.roundRect(closeBtnX, closeBtnY, closeBtnSize, closeBtnSize, closeBtnCorner);
+        this.ctx.fill();
+
+        // Stroke with glow on hover
+        if (closeHovered) {
+            this.ctx.shadowColor = 'rgba(255, 80, 80, 0.9)';
+            this.ctx.shadowBlur = 14;
+        }
+        this.ctx.strokeStyle = closeHovered ? '#ff9999' : '#993333';
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.roundRect(closeBtnX, closeBtnY, closeBtnSize, closeBtnSize, closeBtnCorner);
+        this.ctx.stroke();
+
+        // X lines (no shadow)
+        this.ctx.shadowBlur = 0;
+        const closeCx = closeBtnX + closeBtnSize / 2;
+        const closeCy = closeBtnY + closeBtnSize / 2;
+        const xOff = 6;
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(closeCx - xOff, closeCy - xOff);
+        this.ctx.lineTo(closeCx + xOff, closeCy + xOff);
+        this.ctx.moveTo(closeCx + xOff, closeCy - xOff);
+        this.ctx.lineTo(closeCx - xOff, closeCy + xOff);
+        this.ctx.stroke();
+        this.ctx.restore();
+
         // Shop title - larger and more prominent
         this.ctx.fillStyle = '#FFD700';
         this.ctx.font = 'bold 32px "Press Start 2P", monospace';
@@ -1538,34 +1603,34 @@ Type any cheat name in the console to activate!`);
         
         // Currency display - both coins and skill points
         const currencyY = shopWindowY + 50; // Position inside shop window with proper spacing
-        const iconSize = 16;
-        
+        const iconSize = 20;
+
         // Calculate layout for both currencies
         this.ctx.font = 'bold 16px "Press Start 2P", monospace';
         const coinsText = `${Math.floor(this.game.money)}`;
         const spText = `${this.player.skillPoints}`;
-        
+
         const coinsWidth = this.ctx.measureText(coinsText).width;
         const spWidth = this.ctx.measureText(spText).width;
-        const spLabelWidth = this.ctx.measureText('SP:').width;
-        
-        // Total width: coin_icon + coins + spacing + "SP:" + sp_value
-        const totalWidth = iconSize + 8 + coinsWidth + 40 + spLabelWidth + 8 + spWidth;
+        const spLabelWidth = this.ctx.measureText('SP').width;
+
+        // Total width: coin_icon + coins + spacing + sp_value + " SP"
+        const totalWidth = iconSize + 8 + coinsWidth + 40 + spWidth + 8 + spLabelWidth;
         const currencyStartX = (this.width - totalWidth) / 2;
-        
-        // Draw coin icon and amount
-        drawCachedMoneyIcon(this.ctx, currencyStartX + iconSize/2, currencyY - 2, iconSize, '#FFD700', '#B8860B');
+
+        // Draw coin icon and amount (center Y matches text middle baseline)
+        drawCachedMoneyIcon(this.ctx, currencyStartX + iconSize/2, currencyY, iconSize, '#FFD700', '#B8860B');
         this.ctx.fillStyle = '#FFD700';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(coinsText, currencyStartX + iconSize + 8, currencyY);
-        
-        // Draw skill points
+
+        // Draw skill points as "0 SP"
         const spStartX = currencyStartX + iconSize + 8 + coinsWidth + 40;
-        this.ctx.fillStyle = '#4A90E2'; // Blue color for SP
-        this.ctx.fillText('SP:', spStartX, currencyY);
-        this.ctx.fillStyle = '#6AB7FF'; // Lighter blue for SP value
-        this.ctx.fillText(spText, spStartX + spLabelWidth + 8, currencyY);
+        this.ctx.fillStyle = '#6AB7FF';
+        this.ctx.fillText(spText, spStartX, currencyY);
+        this.ctx.fillStyle = '#4A90E2';
+        this.ctx.fillText('SP', spStartX + spWidth + 8, currencyY);
         
         // Draw category tabs below currency display
         const tabsY = currencyY + 25;
@@ -1713,52 +1778,75 @@ Type any cheat name in the console to activate!`);
         // Draw OFFENSE tab
         const offenseActive = this.shopCategory === 'OFFENSE';
         let offenseFillStyle, offenseTextStyle;
-        
+
         if (offenseActive) {
-            offenseFillStyle = '#FFD700';
-            offenseTextStyle = '#000000';
+            offenseFillStyle = 'rgba(180, 130, 0, 1.0)';
+            offenseTextStyle = '#FFFFFF';
         } else if (offenseHovered) {
-            offenseFillStyle = 'rgba(255, 215, 0, 0.6)'; // Brighter on hover
-            offenseTextStyle = '#FFD700';
+            offenseFillStyle = 'rgba(140, 100, 0, 0.95)';
+            offenseTextStyle = '#FFFFFF';
         } else {
-            offenseFillStyle = 'rgba(255, 215, 0, 0.3)';
-            offenseTextStyle = '#FFD700';
+            offenseFillStyle = 'rgba(100, 70, 0, 0.85)';
+            offenseTextStyle = '#FFFFFF';
         }
         
+        const tabCorner = 6;
+
+        // OFFENSE tab
+        this.ctx.save();
+        if (offenseHovered && !offenseActive) {
+            this.ctx.shadowColor = 'rgba(255, 215, 0, 0.3)';
+            this.ctx.shadowBlur = 6;
+        }
         this.ctx.fillStyle = offenseFillStyle;
         this.ctx.strokeStyle = '#FFD700';
         this.ctx.lineWidth = 2;
-        this.ctx.fillRect(tabStartX, tabY, tabWidth, tabHeight);
-        this.ctx.strokeRect(tabStartX, tabY, tabWidth, tabHeight);
-        
+        this.ctx.beginPath();
+        this.ctx.roundRect(tabStartX, tabY, tabWidth, tabHeight, tabCorner);
+        this.ctx.fill();
+        this.ctx.stroke();
+        this.ctx.restore();
+
         this.ctx.fillStyle = offenseTextStyle;
         this.ctx.font = 'bold 12px "Press Start 2P", monospace';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText('OFFENSE', tabStartX + tabWidth/2, tabY + tabHeight/2);
-        
+
         // Draw DEFENSE tab
         const defenseActive = this.shopCategory === 'DEFENSE';
         let defenseFillStyle, defenseTextStyle;
-        
+
         if (defenseActive) {
-            defenseFillStyle = '#4A90E2';
+            defenseFillStyle = 'rgba(50, 100, 200, 1.0)';
             defenseTextStyle = '#FFFFFF';
         } else if (defenseHovered) {
-            defenseFillStyle = 'rgba(74, 144, 226, 0.6)'; // Brighter on hover
-            defenseTextStyle = '#4A90E2';
+            defenseFillStyle = 'rgba(40, 80, 160, 0.95)';
+            defenseTextStyle = '#FFFFFF';
         } else {
-            defenseFillStyle = 'rgba(74, 144, 226, 0.3)';
-            defenseTextStyle = '#4A90E2';
+            defenseFillStyle = 'rgba(25, 55, 110, 0.85)';
+            defenseTextStyle = '#FFFFFF';
         }
-        
+
+        // DEFENSE tab
+        this.ctx.save();
+        if (defenseHovered && !defenseActive) {
+            this.ctx.shadowColor = 'rgba(74, 144, 226, 0.3)';
+            this.ctx.shadowBlur = 6;
+        }
         this.ctx.fillStyle = defenseFillStyle;
         this.ctx.strokeStyle = '#4A90E2';
         this.ctx.lineWidth = 2;
-        this.ctx.fillRect(defenseTabX, tabY, tabWidth, tabHeight);
-        this.ctx.strokeRect(defenseTabX, tabY, tabWidth, tabHeight);
-        
+        this.ctx.beginPath();
+        this.ctx.roundRect(defenseTabX, tabY, tabWidth, tabHeight, tabCorner);
+        this.ctx.fill();
+        this.ctx.stroke();
+        this.ctx.restore();
+
         this.ctx.fillStyle = defenseTextStyle;
+        this.ctx.font = 'bold 12px "Press Start 2P", monospace';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
         this.ctx.fillText('DEFENSE', defenseTabX + tabWidth/2, tabY + tabHeight/2);
         
         // Store tab bounds for click detection
@@ -1788,7 +1876,8 @@ Type any cheat name in the console to activate!`);
             this.game.money >= actualCost;
         const maxedOut = currentStacks >= item.maxStacks;
         
-        // Item background with hover effect
+        // Item background — rounded corners
+        const itemCorner = 8;
         if (maxedOut) {
             this.ctx.fillStyle = isHovered ? 'rgba(150, 150, 150, 0.6)' : 'rgba(100, 100, 100, 0.5)';
         } else if (canAfford) {
@@ -1796,17 +1885,24 @@ Type any cheat name in the console to activate!`);
         } else {
             this.ctx.fillStyle = isHovered ? 'rgba(255, 0, 0, 0.4)' : 'rgba(255, 0, 0, 0.2)';
         }
-        this.ctx.fillRect(x, y, width, height);
-        
-        // Item border with hover effect
-        if (isHovered) {
-            this.ctx.strokeStyle = maxedOut ? '#AAA' : (canAfford ? '#00FF88' : '#FF4444');
-            this.ctx.lineWidth = 3;
-        } else {
-            this.ctx.strokeStyle = maxedOut ? '#666' : (canAfford ? '#00FF00' : '#FF0000');
-            this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.roundRect(x, y, width, height, itemCorner);
+        this.ctx.fill();
+
+        // Item border with hover glow
+        this.ctx.save();
+        if (isHovered && !maxedOut) {
+            this.ctx.shadowColor = canAfford ? 'rgba(0, 255, 136, 0.6)' : 'rgba(255, 68, 68, 0.6)';
+            this.ctx.shadowBlur = 14;
         }
-        this.ctx.strokeRect(x, y, width, height);
+        this.ctx.strokeStyle = isHovered
+            ? (maxedOut ? '#AAAAAA' : (canAfford ? '#00FF88' : '#FF4444'))
+            : (maxedOut ? '#666666' : (canAfford ? '#00FF00' : '#FF0000'));
+        this.ctx.lineWidth = isHovered ? 3 : 2;
+        this.ctx.beginPath();
+        this.ctx.roundRect(x, y, width, height, itemCorner);
+        this.ctx.stroke();
+        this.ctx.restore();
         
         // Horizontal layout for list items - larger, more visible fonts
         const iconSize = 32; // Increased from 24 for better visibility
@@ -1863,25 +1959,28 @@ Type any cheat name in the console to activate!`);
         // Cost (right side) - larger, more visible
         const costX = x + width - padding;
         this.ctx.font = 'bold 16px "Press Start 2P", monospace';
-        
-        // Color based on currency type and affordability
+
         if (item.currency === 'SP') {
+            // SP cost: number then "SP" label below
             this.ctx.fillStyle = canAfford ? '#4A90E2' : '#FF6666';
-        } else {
-        this.ctx.fillStyle = canAfford ? '#FFD700' : '#FF6666';
-        }
-        
-        this.ctx.textAlign = 'right';
-        this.ctx.fillText(`${actualCost}`, costX, y + 35);
-        
-        // Currency label
-        this.ctx.font = '12px "Press Start 2P", monospace';
-        if (item.currency === 'SP') {
+            this.ctx.textAlign = 'right';
+            this.ctx.fillText(`${actualCost}`, costX, y + 35);
+            this.ctx.font = '12px "Press Start 2P", monospace';
             this.ctx.fillStyle = canAfford ? '#6AB7FF' : '#CC4444';
             this.ctx.fillText('SP', costX, y + 52);
         } else {
-            this.ctx.fillStyle = canAfford ? '#B8860B' : '#CC4444';
-        this.ctx.fillText('coins', costX, y + 52);
+            // Coin cost: icon to the left of the number, both vertically centered on same Y
+            const costCenterY = y + 35;
+            this.ctx.textBaseline = 'middle';
+            this.ctx.textAlign = 'right';
+            this.ctx.fillStyle = canAfford ? '#FFD700' : '#FF6666';
+            const costStr = `${actualCost}`;
+            const costTextWidth = this.ctx.measureText(costStr).width;
+            const coinIconSize = 20;
+            const coinIconGap = 5;
+            const coinIconX = costX - costTextWidth - coinIconGap - coinIconSize / 2;
+            drawCachedMoneyIcon(this.ctx, coinIconX, costCenterY, coinIconSize, '#FFD700', '#B8860B');
+            this.ctx.fillText(costStr, costX, costCenterY);
         }
         
         // Item level beneath coin cost (right side)
@@ -2679,7 +2778,83 @@ Type any cheat name in the console to activate!`);
         
         ctx.restore();
     }
-    
+
+    syncPowerupHUD() {
+        const hudEl = document.getElementById('powerup-hud');
+        if (!hudEl) return;
+
+        if (!this.player || !this.player.powerups ||
+                this.game.state === GAME_STATES.TITLE_SCREEN) {
+            hudEl.innerHTML = '';
+            return;
+        }
+
+        const currentTypes = new Set(this.player.powerups.keys());
+
+        // Remove DOM items for expired powerups
+        hudEl.querySelectorAll('.powerup-hud-item').forEach(item => {
+            if (!currentTypes.has(item.dataset.type)) item.remove();
+        });
+
+        // Add or update one item per active powerup
+        for (const [type, powerupData] of this.player.powerups.entries()) {
+            const colors = powerupData.config.gradientColors || ['#ff4444', '#990000'];
+            const isTemporary = powerupData.timeRemaining !== Infinity &&
+                                powerupData.config.duration !== Infinity;
+
+            let item = hudEl.querySelector(`[data-type="${type}"]`);
+
+            if (!item) {
+                item = document.createElement('div');
+                item.className = 'powerup-hud-item';
+                item.dataset.type = type;
+
+                const circle = document.createElement('div');
+                circle.className = 'powerup-hud-circle';
+                circle.style.borderColor = colors[0];
+                circle.style.boxShadow = `0 0 8px ${colors[0]}80`;
+                circle.textContent = powerupData.config.icon || '⭐';
+                item.appendChild(circle);
+
+                if (isTemporary) {
+                    const timerWrap = document.createElement('div');
+                    timerWrap.className = 'powerup-hud-timer';
+                    const bar = document.createElement('div');
+                    bar.className = 'powerup-hud-timer-bar';
+                    bar.style.background = colors[0];
+                    timerWrap.appendChild(bar);
+                    item.appendChild(timerWrap);
+                }
+
+                hudEl.appendChild(item);
+            }
+
+            // Sync stack count badge
+            let stacksEl = item.querySelector('.powerup-hud-stacks');
+            if (powerupData.stacks > 1) {
+                if (!stacksEl) {
+                    stacksEl = document.createElement('div');
+                    stacksEl.className = 'powerup-hud-stacks';
+                    item.appendChild(stacksEl);
+                }
+                stacksEl.textContent = 'x' + powerupData.stacks;
+            } else if (stacksEl) {
+                stacksEl.remove();
+            }
+
+            // Sync timer bar width
+            if (isTemporary) {
+                const bar = item.querySelector('.powerup-hud-timer-bar');
+                if (bar && isFinite(powerupData.timeRemaining) && isFinite(powerupData.config.duration)) {
+                    const pct = Math.max(0, Math.min(100,
+                        (powerupData.timeRemaining / powerupData.config.duration) * 100));
+                    bar.style.width = `${pct}%`;
+                    bar.style.background = pct < 30 ? '#ff3333' : colors[0];
+                }
+            }
+        }
+    }
+
     setTargetInfo(target) {
         this.targetInfo.active = true;
         this.targetInfo.target = target;
@@ -3885,8 +4060,8 @@ Type any cheat name in the console to activate!`);
             this.ctx.restore();
             
             // Draw UI elements without camera transformation
-            // Draw powerup indicators
-            this.drawPowerupIndicators();
+            // Sync DOM powerup HUD
+            this.syncPowerupHUD();
             
             // Draw powerup display at top
             this.drawPowerupDisplay();
@@ -4386,8 +4561,9 @@ Type any cheat name in the console to activate!`);
             
             // Set state to paused instead of wave transition
             this.game.state = GAME_STATES.PAUSED;
+            document.body.classList.remove('shop-open'); // Restore HUD DOM element visibility
             this.uiManager.togglePause(); // Show pause menu
-            
+
             // Clear shop bounds to prevent memory leaks
             this.shopItemBounds = null;
             

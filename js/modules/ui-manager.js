@@ -679,17 +679,13 @@ export class UIManager {
             console.error('❌ pauseShopButton element not found!');
         }
         
-        // if (this.elements.pauseResumeButton) {
-        //     this.elements.pauseResumeButton.addEventListener('click', () => {
-        //         if (window.game) {
-        //             window.game.togglePause();
-        //         } else {
-        //             console.error('❌ window.game not available for resume button');
-        //         }
-        //     });
-        // } else {
-        //     console.error('❌ pauseResumeButton element not found!');
-        // }
+        if (this.elements.pauseResumeButton) {
+            this.elements.pauseResumeButton.addEventListener('click', () => {
+                if (window.game) {
+                    window.game.togglePause();
+                }
+            });
+        }
         
         // Tab switching
         this.elements.pauseTabs.forEach(tab => {

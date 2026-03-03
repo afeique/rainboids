@@ -1028,11 +1028,10 @@ export class Player {
                 existing.timeRemaining = Infinity;
                 existing.isPermanent = true;
             } else {
-                // Dropped powerups reset timer but don't stack if already permanent
-                if (existing.isPermanent) {
-                    return;
-                } else {
-                    // Refresh temporary powerup
+                // Dropped powerups always add a stack
+                existing.stacks += 1;
+                if (!existing.isPermanent) {
+                    // Also refresh the timer for temporary powerups
                     existing.timeRemaining = duration;
                 }
             }
@@ -1107,13 +1106,17 @@ export class Player {
         }
         
         // Calculate spread angle
-        const spreadAngle = spreadShotStacks > 0 ? 
+        let spreadAngle = spreadShotStacks > 0 ?
                            Math.min(0.6, spreadShotStacks * 0.15) : 0; // Max 0.6 radians spread
-        
+        // Multi-shot without spread-shot: add small fixed spread so bullets don't overlap
+        if (bulletCount > 1 && spreadAngle === 0) {
+            spreadAngle = 0.1 * (bulletCount - 1);
+        }
+
         // Fire bullets
         for (let i = 0; i < bulletCount; i++) {
             let angle = this.angle;
-            
+
             // Apply spread for multiple bullets
             if (bulletCount > 1) {
                 const angleOffset = (i - (bulletCount - 1) / 2) * (spreadAngle / Math.max(1, bulletCount - 1));
@@ -1178,9 +1181,13 @@ export class Player {
         }
         
         // Calculate spread angle
-        const spreadAngle = spreadShotStacks > 0 ? 
+        let spreadAngle = spreadShotStacks > 0 ?
                            Math.min(0.6, spreadShotStacks * 0.15) : 0; // Max 0.6 radians spread
-        
+        // Multi-shot without spread-shot: add small fixed spread so bullets don't overlap
+        if (bulletCount > 1 && spreadAngle === 0) {
+            spreadAngle = 0.1 * (bulletCount - 1);
+        }
+
         // Start tracking hits for this shot
         this.startNewShot(bulletCount);
         

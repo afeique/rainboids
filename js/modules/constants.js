@@ -7,8 +7,8 @@ export const GAME_CONFIG = {
     BULLET_SPEED: 12,
     INITIAL_AST_COUNT: 1, // Minimal asteroid count for best performance
     AST_SPEED: 2.2,
-    COLOR_STAR_COUNT: 10, // Drastically reduced for 60fps performance
-    BACKGROUND_STAR_COUNT: 5, // Drastically reduced for 60fps performance
+    COLOR_STAR_COUNT: 25, // Increased for visual appeal while maintaining performance
+    BACKGROUND_STAR_COUNT: 30, // Increased for richer starfield while maintaining performance
     ACTIVE_STAR_ATTR: 0.01,
     ACTIVE_STAR_ATTRACT_DIST: 100,
     ORB_FRIC: 0.92, // Increased friction to slow down money and health orbs
