@@ -1141,7 +1141,21 @@ body.shop-open .ui-element {
 
 .powerup-hud-item {
     position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     width: 40px;
+}
+
+.powerup-hud-countdown {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #ffffff;
+    text-align: center;
+    white-space: nowrap;
+    margin-bottom: 2px;
+    line-height: 1.2;
+    text-shadow: 0 0 4px rgba(0,0,0,0.8);
 }
 
 .powerup-hud-circle {
@@ -1160,7 +1174,7 @@ body.shop-open .ui-element {
 
 .powerup-hud-stacks {
     position: absolute;
-    bottom: 8px;
+    bottom: 12px;
     right: -6px;
     background: white;
     color: black;
@@ -1174,6 +1188,7 @@ body.shop-open .ui-element {
 
 .powerup-hud-timer {
     margin: 8px 2px 0; /* 8px gap above, 2px side insets — wider bar, centered under circle */
+    align-self: stretch; /* fill full width of flex column parent */
     height: 4px;
     background: rgba(255, 255, 255, 0.25);
     border-radius: 2px;

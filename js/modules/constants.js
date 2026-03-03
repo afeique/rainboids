@@ -44,7 +44,6 @@ export const GAME_CONFIG = {
     
     // Entity limits adjusted for gameplay balance
     MAX_ASTEROIDS: 1, // Maximum 1 asteroid for best performance
-    MAX_ENEMIES: 1, // Maximum 1 enemy for best performance
     
     // Wave system configuration - aggressive timing for continuous action
     WAVE_ASTEROID_DELAY: 0, // Time before spawning asteroids (ms)

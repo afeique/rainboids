@@ -187,7 +187,6 @@ export class GameEngine {
         // Initialize cheat flags
         this.cheats = {
             onePunchMan: false,    // Player destroys everything with one hit
-            vitamix: false         // Enemies and asteroids ALWAYS drop health and money
         };
         
         // Expose cheat functions globally (case insensitive)
@@ -196,57 +195,21 @@ export class GameEngine {
     }
     
     setupCheatCodes() {
-        // Make cheat functions available globally
-        window.onepunchman = window.ONEPUNCHMAN = () => this.activateOnePunchMan();
-        window.freewilly = window.FREEWILLY = () => this.activateFreeWilly();
-        window.vitamix = window.VITAMIX = () => this.activateVitamix();
-        
-        // Display available cheats with descriptions
+        // Display available keyboard cheats
         console.log(`
-🎮 CHEAT CODES:
-🥊 onepunchman() 
-    One-hit kill mode
-💰 freewilly() 
-    100,000 coins
-💊 vitamix()
-    Guaranteed drops
-Type any cheat name in the console to activate!`);
+  CHEAT CODES (keyboard, during gameplay):
+  SHIFT+1  – spawn HUNTER
+  SHIFT+2  – spawn GUARDIAN
+  SHIFT+3  – spawn WASP
+  SHIFT+4  – spawn TITAN
+  SHIFT+5  – spawn STALKER
+  SHIFT+6  – spawn TANGERINE
+  SHIFT+7  – spawn DRIFTER
+  SHIFT+8  – spawn PROWLER
+  SHIFT+9  – toggle one-hit kill (ONE PUNCH MAN)
+  SHIFT+-  – add 100,000 coins (FREE WILLY)
+  SHIFT+0  – add 100 SP`);
     }
-    
-    activateOnePunchMan() {
-        this.cheats.onePunchMan = !this.cheats.onePunchMan;
-        const status = this.cheats.onePunchMan ? 'ACTIVATED' : 'DEACTIVATED';
-        console.log('Cheat Activated!');
-        console.log(`🥊 ONE PUNCH MAN ${status} - Player destroys everything with one hit!`);
-        if (this.cheats.onePunchMan) {
-            this.uiManager.showMessage('ONE PUNCH MAN', 'Activated! One hit destroys all!', 3000);
-        } else {
-            this.uiManager.showMessage('ONE PUNCH MAN', 'Deactivated', 2000);
-        }
-        return `One Punch Man ${status}`;
-    }
-    
-    activateFreeWilly() {
-        this.game.money += 100000;
-        console.log('Cheat Activated!');
-        console.log(`💰 FREE WILLY ACTIVATED - Added 100,000 coins! Total: ${this.game.money}`);
-        this.uiManager.showMessage('FREE WILLY', '+100,000 Coins!', 3000);
-        return 'Free Willy ACTIVATED - 100,000 coins added!';
-    }
-    
-    activateVitamix() {
-        this.cheats.vitamix = !this.cheats.vitamix;
-        const status = this.cheats.vitamix ? 'ACTIVATED' : 'DEACTIVATED';
-        console.log('Cheat Activated!');
-        console.log(`💊 VITAMIX ${status} - Enemies and asteroids ALWAYS drop health and money!`);
-        if (this.cheats.vitamix) {
-            this.uiManager.showMessage('VITAMIX', 'Activated! Guaranteed drops!', 3000);
-        } else {
-            this.uiManager.showMessage('VITAMIX', 'Deactivated', 2000);
-        }
-        return `Vitamix ${status}`;
-    }
-    
     
     initializePools() {
         this.player = new Player();
@@ -303,6 +266,33 @@ Type any cheat name in the console to activate!`);
                 const offsetX = random(-50, 50);
                 const offsetY = random(-50, 50);
                 this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY);
+            }
+            // Debug cheat codes (Shift+key, gameplay only)
+            if (e.shiftKey && this.game.state === GAME_STATES.PLAYING) {
+                // Shift+1–8: spawn individual enemy ship types
+                const debugEnemyTypes = ['HUNTER','GUARDIAN','WASP','TITAN','STALKER','TANGERINE','DRIFTER','PROWLER'];
+                const shipKeyMap = {'Digit1':0,'Digit2':1,'Digit3':2,'Digit4':3,'Digit5':4,'Digit6':5,'Digit7':6,'Digit8':7};
+                if (shipKeyMap[e.code] !== undefined) {
+                    const type = debugEnemyTypes[shipKeyMap[e.code]];
+                    this.spawnLeveledEnemies(type, 1);
+                    this.uiManager.showMessage('CHEAT', `Spawned ${type}`, 1500);
+                }
+                // Shift+9: toggle one-hit kill
+                if (e.code === 'Digit9') {
+                    this.cheats.onePunchMan = !this.cheats.onePunchMan;
+                    const status = this.cheats.onePunchMan ? 'ON' : 'OFF';
+                    this.uiManager.showMessage('ONE PUNCH MAN', `One-hit kills ${status}`, 2000);
+                }
+                // Shift+-: add 100,000 coins
+                if (e.code === 'Minus') {
+                    this.game.money += 100000;
+                    this.uiManager.showMessage('FREE WILLY', '+100,000 Coins!', 2000);
+                }
+                // Shift+0: add 100 SP
+                if (e.code === 'Digit0') {
+                    this.player.skillPoints += 100;
+                    this.uiManager.showMessage('CHEAT', '+100 SP', 1500);
+                }
             }
         });
         
@@ -479,6 +469,17 @@ Type any cheat name in the console to activate!`);
                     }
                 }
                 
+                // Check for sell button clicks before buy clicks
+                if (this.shopSellButtonBounds) {
+                    for (const sb of this.shopSellButtonBounds) {
+                        if (clickX >= sb.x && clickX <= sb.x + sb.w &&
+                            clickY >= sb.y && clickY <= sb.y + sb.h) {
+                            this.sellShopItem(sb.itemId);
+                            return;
+                        }
+                    }
+                }
+
                 // Check for item clicks
                 if (this.shopItemBounds) {
                     for (const bound of this.shopItemBounds) {
@@ -622,14 +623,28 @@ Type any cheat name in the console to activate!`);
                 
                 // Check for item taps (only if not much scrolling happened)
                 const scrollDelta = Math.abs((this.shopScrollOffset || 0) - touchStartScrollOffset);
-                if (scrollDelta < 20 && this.shopItemBounds) { // 20px tolerance for tap vs scroll
-                    for (const bound of this.shopItemBounds) {
-                        if (touchX >= bound.x && touchX <= bound.x + bound.width &&
-                            touchY >= bound.y && touchY <= bound.y + bound.height) {
-                            const success = this.buyShopItem(bound.item.id);
-                            if (success) {
+                if (scrollDelta < 20) {
+                    // Sell button taps take priority
+                    let tappedSell = false;
+                    if (this.shopSellButtonBounds) {
+                        for (const sb of this.shopSellButtonBounds) {
+                            if (touchX >= sb.x && touchX <= sb.x + sb.w &&
+                                touchY >= sb.y && touchY <= sb.y + sb.h) {
+                                this.sellShopItem(sb.itemId);
+                                tappedSell = true;
+                                break;
                             }
-                            break;
+                        }
+                    }
+                    if (!tappedSell && this.shopItemBounds) {
+                        for (const bound of this.shopItemBounds) {
+                            if (touchX >= bound.x && touchX <= bound.x + bound.width &&
+                                touchY >= bound.y && touchY <= bound.y + bound.height) {
+                                const success = this.buyShopItem(bound.item.id);
+                                if (success) {
+                                }
+                                break;
+                            }
                         }
                     }
                 }
@@ -1023,15 +1038,9 @@ Type any cheat name in the console to activate!`);
         // Spawn asteroids with level scaling
         this.spawnLeveledAsteroids(waveConfig.asteroids);
         
-        // Spawn enemies by type with level scaling (respect MAX_ENEMIES limit)
-        let totalEnemiesSpawned = this.enemyPool.activeObjects.length;
+        // Spawn enemies by type with level scaling
         for (const enemyGroup of waveConfig.enemies) {
-            const remainingSlots = GAME_CONFIG.MAX_ENEMIES - totalEnemiesSpawned;
-            if (remainingSlots <= 0) break;
-            
-            const countToSpawn = Math.min(enemyGroup.count, remainingSlots);
-            this.spawnLeveledEnemies(enemyGroup.type, countToSpawn);
-            totalEnemiesSpawned += countToSpawn;
+            this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count);
         }
     }
     
@@ -1069,11 +1078,7 @@ Type any cheat name in the console to activate!`);
     }
     
     spawnLeveledEnemies(enemyType, count) {
-        // Respect MAX_ENEMIES limit for performance
-        const activeEnemies = this.enemyPool.activeObjects.length;
-        const maxToSpawn = Math.min(count, GAME_CONFIG.MAX_ENEMIES - activeEnemies);
-        
-        for (let i = 0; i < maxToSpawn; i++) {
+        for (let i = 0; i < count; i++) {
             const enemy = this.enemyPool.get();
             if (enemy) {
                 const spawnPos = this.getRandomSpawnPosition();
@@ -1132,8 +1137,55 @@ Type any cheat name in the console to activate!`);
         
     }
     
+    sellShopItem(itemId) {
+        const item = this.shopItems.find(i => i.id === itemId);
+        if (!item) return false;
+
+        const currentStacks = this.player.getPowerupStacks(itemId);
+        if (currentStacks === 0) return false;
+
+        // Calculate refund: 50% of the cost of the most-recently-bought stack
+        let lastStackCost = item.cost;
+        if (item.id === 'SPREAD_SHOT') {
+            if (currentStacks === 1) lastStackCost = 5000;
+            else if (currentStacks === 2) lastStackCost = 10000;
+            else if (currentStacks >= 3) lastStackCost = 20000;
+        } else if (item.id === 'CHARGE_SPEED') {
+            if (currentStacks === 1) lastStackCost = 10000;
+            else if (currentStacks === 2) lastStackCost = 15000;
+            else if (currentStacks >= 3) lastStackCost = 20000;
+        }
+        const refund = Math.floor(lastStackCost * 0.5);
+
+        if (itemId === 'SPARE_SHIP') {
+            if (this.game.lives <= 1) return false;
+            this.game.lives--;
+            this.uiManager.updateLives(this.game.lives);
+        } else {
+            const entry = this.player.powerups.get(itemId);
+            if (!entry) return false;
+            if (entry.stacks <= 1) {
+                this.player.powerups.delete(itemId);
+            } else {
+                entry.stacks--;
+            }
+            // Clamp health after selling HEALTH_BOOST
+            if (itemId === 'HEALTH_BOOST') {
+                this.player.health = Math.min(this.player.health, this.player.getEffectiveMaxHealth());
+            }
+        }
+
+        if (item.currency === 'SP') {
+            this.player.skillPoints += refund;
+        } else {
+            this.game.money += refund;
+        }
+        this.audioManager.playCoin();
+        return true;
+    }
+
     openShop() {
-        
+
         // Hide any active wave messages when opening shop
         this.uiManager.hideMessage();
         
@@ -1543,6 +1595,9 @@ Type any cheat name in the console to activate!`);
         if (this.shopScrollOffset === undefined) {
             this.shopScrollOffset = 0;
         }
+        // Reset hit-test arrays each frame
+        this.shopItemBounds = [];
+        this.shopSellButtonBounds = [];
         
         // Draw semi-transparent overlay
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
@@ -1622,39 +1677,46 @@ Type any cheat name in the console to activate!`);
         this.ctx.textAlign = 'center';
         this.ctx.fillText('SHOP', this.width / 2, 60);
         
-        // Currency display - both coins and skill points
-        const currencyY = shopWindowY + 50; // Position inside shop window with proper spacing
-        const iconSize = 20;
+        // Currency display — single line, centered: [💰 amount]   [amount SP]
+        const centerX      = shopWindowX + shopWindowWidth / 2;
+        const currencyRowY = shopWindowY + 52;
+        const iconSize     = 18;
+        const labelGap     = 8;   // gap between coin icon and coin amount
+        const sectionGap   = 28;  // gap between coin section and SP section
+        const spLabelGap   = 4;   // tight gap between SP number and "SP" label
 
-        // Calculate layout for both currencies
-        this.ctx.font = 'bold 16px "Press Start 2P", monospace';
-        const coinsText = `${Math.floor(this.game.money)}`;
-        const spText = `${this.player.skillPoints}`;
+        this.ctx.font = 'bold 14px "Press Start 2P", monospace';
+        this.ctx.textBaseline = 'middle';
 
-        const coinsWidth = this.ctx.measureText(coinsText).width;
-        const spWidth = this.ctx.measureText(spText).width;
-        const spLabelWidth = this.ctx.measureText('SP').width;
+        const coinStr  = `${Math.floor(this.game.money)}`;
+        const spNum    = `${this.player.skillPoints}`;
+        const spLabel  = 'SP';
 
-        // Total width: coin_icon + coins + spacing + sp_value + " SP"
-        const totalWidth = iconSize + 8 + coinsWidth + 40 + spWidth + 8 + spLabelWidth;
-        const currencyStartX = (this.width - totalWidth) / 2;
+        const coinTextW  = this.ctx.measureText(coinStr).width;
+        const spNumW     = this.ctx.measureText(spNum).width;
+        const spLabelW   = this.ctx.measureText(spLabel).width;
 
-        // Draw coin icon and amount (center Y matches text middle baseline)
-        drawCachedMoneyIcon(this.ctx, currencyStartX + iconSize/2, currencyY, iconSize, '#FFD700', '#B8860B');
+        // Total line width: [icon + gap + coinAmount] [sectionGap] [spAmount + labelGap + SP]
+        const coinSectionW = iconSize + labelGap + coinTextW;
+        const spSectionW   = spNumW + spLabelGap + spLabelW;
+        const totalLineW   = coinSectionW + sectionGap + spSectionW;
+        const lineLeft     = centerX - totalLineW / 2;
+
+        // Coin icon + amount
+        drawCachedMoneyIcon(this.ctx, lineLeft + iconSize / 2, currencyRowY, iconSize, '#FFD700', '#B8860B');
         this.ctx.fillStyle = '#FFD700';
         this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(coinsText, currencyStartX + iconSize + 8, currencyY);
+        this.ctx.fillText(coinStr, lineLeft + iconSize + labelGap, currencyRowY);
 
-        // Draw skill points as "0 SP"
-        const spStartX = currencyStartX + iconSize + 8 + coinsWidth + 40;
+        // SP amount + label (tight gap)
+        const spStartX = lineLeft + coinSectionW + sectionGap;
         this.ctx.fillStyle = '#6AB7FF';
-        this.ctx.fillText(spText, spStartX, currencyY);
+        this.ctx.fillText(spNum, spStartX, currencyRowY);
         this.ctx.fillStyle = '#4A90E2';
-        this.ctx.fillText('SP', spStartX + spWidth + 8, currencyY);
-        
+        this.ctx.fillText(spLabel, spStartX + spNumW + spLabelGap, currencyRowY);
+
         // Draw category tabs below currency display
-        const tabsY = currencyY + 25;
+        const tabsY = currencyRowY + 34; // keeps tabs at same absolute position as before
         this.drawShopTabs(shopWindowX, tabsY, shopWindowWidth);
         
         // Setup clipping for scrollable area (adjusted for tabs)
@@ -1962,7 +2024,7 @@ Type any cheat name in the console to activate!`);
                 }
                 displayLine += '...';
             }
-            this.ctx.fillText(displayLine, textX, y + 25 + (index * nameLineHeight)); // Multi-line support
+            this.ctx.fillText(displayLine, textX, y + 32 + (index * nameLineHeight)); // +7px top margin
         });
         
         // Item description - larger, more readable font
@@ -1973,7 +2035,7 @@ Type any cheat name in the console to activate!`);
         // Word wrap description to fit in available space (shifted down by 20px)
         const maxDescLines = 2;
         const lineHeight = 16; // Increased line height for larger font
-        const descStartY = y + 62; // Shifted down by 20px from original y + 42
+        const descStartY = y + 66; // Shifted down to match name top-margin increase
         
         this.drawMultilineText(item.description, textX, descStartY, textWidth, lineHeight, maxDescLines);
         
@@ -1982,13 +2044,11 @@ Type any cheat name in the console to activate!`);
         this.ctx.font = 'bold 16px "Press Start 2P", monospace';
 
         if (item.currency === 'SP') {
-            // SP cost: number then "SP" label below
+            // SP cost: number and "SP" on the same line
             this.ctx.fillStyle = canAfford ? '#4A90E2' : '#FF6666';
             this.ctx.textAlign = 'right';
-            this.ctx.fillText(`${actualCost}`, costX, y + 35);
-            this.ctx.font = '12px "Press Start 2P", monospace';
-            this.ctx.fillStyle = canAfford ? '#6AB7FF' : '#CC4444';
-            this.ctx.fillText('SP', costX, y + 52);
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(`${actualCost} SP`, costX, y + 35);
         } else {
             // Coin cost: icon to the left of the number, both vertically centered on same Y
             const costCenterY = y + 35;
@@ -2004,12 +2064,59 @@ Type any cheat name in the console to activate!`);
             this.ctx.fillText(costStr, costX, costCenterY);
         }
         
-        // Item level beneath coin cost (right side)
+        // Item level beneath cost (right side)
         this.ctx.font = '10px "Press Start 2P", monospace';
         this.ctx.fillStyle = maxedOut ? '#666' : '#00FFFF';
         this.ctx.textAlign = 'right';
-        this.ctx.fillText(`Level ${currentStacks}`, costX, y + 70);
-        
+        this.ctx.textBaseline = 'alphabetic';
+        this.ctx.fillText(`Level ${currentStacks}`, costX, y + 72);
+
+        // Sell button — only when player owns at least one stack
+        if (currentStacks > 0) {
+            // Calculate sell refund for display
+            let sellCost = item.cost;
+            if (item.id === 'SPREAD_SHOT') {
+                if (currentStacks === 1) sellCost = 5000;
+                else if (currentStacks === 2) sellCost = 10000;
+                else sellCost = 20000;
+            } else if (item.id === 'CHARGE_SPEED') {
+                if (currentStacks === 1) sellCost = 10000;
+                else if (currentStacks === 2) sellCost = 15000;
+                else sellCost = 20000;
+            }
+            const refund = Math.floor(sellCost * 0.5);
+            const sellLabel = item.currency === 'SP' ? `SELL +${refund}SP` : `SELL +${refund}`;
+
+            const sbW = 80, sbH = 18;
+            const sbX = costX - sbW;
+            const sbY = y + height - sbH - 6;
+
+            const sellHovered = this.mouseX !== undefined &&
+                this.mouseX >= sbX && this.mouseX <= sbX + sbW &&
+                this.mouseY >= sbY && this.mouseY <= sbY + sbH;
+
+            this.ctx.save();
+            this.ctx.fillStyle = sellHovered ? 'rgba(220,80,80,0.9)' : 'rgba(160,40,40,0.7)';
+            this.ctx.beginPath();
+            this.ctx.roundRect(sbX, sbY, sbW, sbH, 4);
+            this.ctx.fill();
+            this.ctx.strokeStyle = sellHovered ? '#ff9999' : '#993333';
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            this.ctx.roundRect(sbX, sbY, sbW, sbH, 4);
+            this.ctx.stroke();
+            this.ctx.font = '8px "Press Start 2P", monospace';
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(sellLabel, sbX + sbW / 2, sbY + sbH / 2);
+            this.ctx.restore();
+
+            // Store sell button bounds
+            if (!this.shopSellButtonBounds) this.shopSellButtonBounds = [];
+            this.shopSellButtonBounds.push({ x: sbX, y: sbY, w: sbW, h: sbH, itemId: item.id });
+        }
+
         // Store item bounds for click detection
         if (!this.shopItemBounds) this.shopItemBounds = [];
         this.shopItemBounds[index] = { x, y, width, height, item };
@@ -2163,16 +2270,12 @@ Type any cheat name in the console to activate!`);
             }
         }
         
-        // Normal spawn logic - try to balance types
+        // Normal spawn logic - randomly balance between enemy and asteroid types
         let spawnEnemy = Math.random() < 0.5;
-        
-        // Override if one type is at limit
-        if (activeEnemies >= GAME_CONFIG.MAX_ENEMIES && activeAsteroids < GAME_CONFIG.MAX_ASTEROIDS) {
-            spawnEnemy = false; // Force asteroid
-        } else if (activeAsteroids >= GAME_CONFIG.MAX_ASTEROIDS && activeEnemies < GAME_CONFIG.MAX_ENEMIES) {
-            spawnEnemy = true; // Force enemy
-        } else if (activeEnemies >= GAME_CONFIG.MAX_ENEMIES && activeAsteroids >= GAME_CONFIG.MAX_ASTEROIDS) {
-            spawnEnemy = Math.random() < 0.5; // Still try to spawn something
+
+        // Override if asteroids are at their limit
+        if (activeAsteroids >= GAME_CONFIG.MAX_ASTEROIDS) {
+            spawnEnemy = true; // Force enemy when asteroid cap is reached
         }
         
         // Try to spawn the chosen type
@@ -2206,11 +2309,6 @@ Type any cheat name in the console to activate!`);
     }
     
     forceSpawnEnemy() {
-        // Check MAX_ENEMIES limit first
-        if (this.enemyPool.activeObjects.length >= GAME_CONFIG.MAX_ENEMIES) {
-            return false;
-        }
-        
         // Method 1: Try normal pool
         const enemy = this.enemyPool.get();
         if (enemy) {
@@ -2592,8 +2690,8 @@ Type any cheat name in the console to activate!`);
         const baseHealthDropRate = GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + (healthDropChanceStacks * GAME_CONFIG.HEALTH_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
         const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + (moneyDropChanceStacks * GAME_CONFIG.MONEY_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
         
-        const healthDropRate = this.cheats.vitamix ? 1.0 : Math.min(1.0, baseHealthDropRate);
-        const moneyDropRate = this.cheats.vitamix ? 1.0 : Math.min(1.0, baseMoneyDropRate);
+        const healthDropRate = Math.min(1.0, baseHealthDropRate);
+        const moneyDropRate = Math.min(1.0, baseMoneyDropRate);
         
         // Drop health orbs
         if (Math.random() < healthDropRate) {
@@ -2830,6 +2928,13 @@ Type any cheat name in the console to activate!`);
                 item.className = 'powerup-hud-item';
                 item.dataset.type = type;
 
+                // Countdown label above circle (temporary powerups only)
+                if (isTemporary) {
+                    const countdown = document.createElement('div');
+                    countdown.className = 'powerup-hud-countdown';
+                    item.appendChild(countdown);
+                }
+
                 const circle = document.createElement('div');
                 circle.className = 'powerup-hud-circle';
                 circle.style.borderColor = colors[0];
@@ -2850,7 +2955,15 @@ Type any cheat name in the console to activate!`);
                 hudEl.appendChild(item);
             }
 
-            // Sync stack count badge
+            // Sync countdown text (seconds remaining)
+            if (isTemporary) {
+                const countdown = item.querySelector('.powerup-hud-countdown');
+                if (countdown && isFinite(powerupData.timeRemaining)) {
+                    countdown.textContent = Math.ceil(powerupData.timeRemaining / 1000) + 's';
+                }
+            }
+
+            // Sync stack count badge — "2x" format
             let stacksEl = item.querySelector('.powerup-hud-stacks');
             if (powerupData.stacks > 1) {
                 if (!stacksEl) {
@@ -2858,7 +2971,7 @@ Type any cheat name in the console to activate!`);
                     stacksEl.className = 'powerup-hud-stacks';
                     item.appendChild(stacksEl);
                 }
-                stacksEl.textContent = 'x' + powerupData.stacks;
+                stacksEl.textContent = powerupData.stacks + 'x';
             } else if (stacksEl) {
                 stacksEl.remove();
             }
@@ -3243,6 +3356,11 @@ Type any cheat name in the console to activate!`);
                     // Damage the asteroid (One Punch Man cheat: instant kill)
                     const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
                     ast.health = Math.max(0, ast.health - damage);
+
+                    // Show damage number (same as enemy ships)
+                    if (this.isEntityOnScreen(ast)) {
+                        this.createDamageNumber(ast.x, ast.y - ast.baseRadius, damage);
+                    }
                     
                     // Award XP for hitting asteroid
                     this.player.gainExperience(2);
@@ -5262,7 +5380,7 @@ Type any cheat name in the console to activate!`);
     
     updateHUD() {
         const ctx = this.ctx;
-        const barX = 80; // Moved right to make room for triforce on the left
+        const barX = 60; // Close to triforce (triforce rightmost pixel ≈ x=53)
         const barY = 20;
         const barHeight = 30;
         const barWidth = 220;
@@ -5895,6 +6013,9 @@ Type any cheat name in the console to activate!`);
         // Always damage the asteroid when colliding with player (massive damage)
         const asteroidCollisionDamage = 25; // Massive damage to asteroids
         asteroid.health = Math.max(0, asteroid.health - asteroidCollisionDamage);
+        if (this.isEntityOnScreen(asteroid)) {
+            this.createDamageNumber(asteroid.x, asteroid.y - asteroid.baseRadius, asteroidCollisionDamage);
+        }
         
         // Check if asteroid is destroyed
         if (asteroid.health <= 0) {

@@ -29,12 +29,12 @@ export const ENEMY_TYPES = {
     WASP: {
         name: 'Wasp',
         color: '#ffff44',        // Yellow
-        health: 10,              // Reduced to 10 - fast but fragile
-        speed: 2.2,              // Quick and agile like a real wasp
-        size: 28,                // Increased from 18
-        shootPattern: 'pulse', // Three-round bursts
-        shootRate: 0.6,          // Slower rate with time between bursts
-        movePattern: 'dart',     // Quick darting movement
+        health: 10,              // Fast but fragile
+        speed: 2.8,              // Fast burst speed
+        size: 28,
+        shootPattern: 'pulse',
+        shootRate: 0.6,
+        movePattern: 'triangle', // Burst-and-wait like HUNTER, with WASP-specific tuning
         points: 35
     },
     TITAN: {
@@ -62,12 +62,12 @@ export const ENEMY_TYPES = {
     TANGERINE: {
         name: 'Bomber',
         color: '#ff8844',        // Orange
-        health: 20,              // Reduced to 20 - heavy but not excessive
-        speed: 0.3,              // Much slower - crawling speed
-        size: 35,                // Slightly bigger to show their bulk
-        shootPattern: 'homing',  // Slow but homing shots
-        shootRate: 0.8,          // Very slow rate for homing shots
-        movePattern: 'circle',       // Circle geometric movement
+        health: 20,
+        speed: 0.6,              // Enough speed to retreat from an approaching player
+        size: 35,
+        shootPattern: 'homing',
+        shootRate: 0.8,
+        movePattern: 'keep_distance', // Hangs far back and retreats when approached
         points: 65
     },
     DRIFTER: {
@@ -1509,31 +1509,41 @@ export class Enemy {
         if (this.triangleBurstState === undefined) {
             this.triangleBurstState = 'waiting'; // 'waiting', 'bursting'
             this.triangleBurstTimer = 0;
-            this.triangleBurstDuration = 1000; // 1 second burst
-            this.triangleWaitDuration = 1800; // 1.8 second wait between bursts
+            // WASP: shorter burst, much longer wait; others: standard timing
+            this.triangleBurstDuration = this.type === 'WASP' ? 400  : 1000;
+            this.triangleWaitDuration  = this.type === 'WASP' ? 2800 : 1800;
             this.burstDirection = { x: 0, y: 0 };
             this.burstStartPos = { x: this.x, y: this.y };
             this.burstDistance = 0;
         }
-        
+
         this.triangleBurstTimer += 16; // Assume 60fps
-        
-        // Calculate screen-based burst distance (1/5 to 1/7 of screen size)
+
+        // Screen-based burst distance — WASPs dart farther per burst
         const screenSize = Math.min(window.innerWidth, window.innerHeight);
-        const minBurstDistance = screenSize / 7;
-        const maxBurstDistance = screenSize / 5;
-        
+        const minBurstDistance = this.type === 'WASP' ? screenSize / 5 : screenSize / 7;
+        const maxBurstDistance = this.type === 'WASP' ? screenSize / 3 : screenSize / 5;
+
         switch (this.triangleBurstState) {
             case 'waiting':
                 // Apply friction to slow down
                 this.vel.x *= 0.88;
                 this.vel.y *= 0.88;
-                
+
                 if (this.triangleBurstTimer >= this.triangleWaitDuration) {
-                    // Choose random direction (any angle)
-                    const angle = Math.random() * Math.PI * 2;
+                    // Choose burst direction — WASPs bias away from player when too close
+                    let angle = Math.random() * Math.PI * 2;
+                    if (this.type === 'WASP') {
+                        const dxP = this.targetPlayer.x - this.x;
+                        const dyP = this.targetPlayer.y - this.y;
+                        const distP = Math.hypot(dxP, dyP);
+                        if (distP < 280) {
+                            // Retreat: bias burst in the direction away from player
+                            angle = Math.atan2(-dyP, -dxP) + (Math.random() - 0.5) * 0.8;
+                        }
+                    }
                     this.burstDistance = minBurstDistance + Math.random() * (maxBurstDistance - minBurstDistance);
-                    
+
                     this.burstDirection.x = Math.cos(angle);
                     this.burstDirection.y = Math.sin(angle);
                     
@@ -2538,13 +2548,14 @@ export class Enemy {
     }
     
     keepDistanceMovement() {
-        // Mini-tank that maintains distance from player
+        // Maintains a preferred distance from the player; retreats when too close
         if (!this.targetPlayer) return;
-        
+
         const dx = this.targetPlayer.x - this.x;
         const dy = this.targetPlayer.y - this.y;
         const distance = Math.hypot(dx, dy);
-        const idealDistance = 200; // Keep 200px away from player
+        // TANGERINE hangs much farther back than the default mini-tank distance
+        const idealDistance = this.type === 'TANGERINE' ? 350 : 200;
         
         if (distance < idealDistance) {
             // Too close - move away from player
