@@ -235,6 +235,54 @@ body.shop-open .ui-element {
     text-shadow: none;
 }
 
+/* Mobile pause menu — smaller, scrollable */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+    #pause-menu {
+        padding: 14px 10px;
+        max-width: 96vw;
+        width: 96%;
+        max-height: 80vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .pause-tabs {
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .pause-tab {
+        padding: 7px 9px;
+        font-size: 9px;
+    }
+
+    .pause-tab-content {
+        font-size: 12px;
+        line-height: 1.9;
+    }
+
+    .pause-tab-content h2 {
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+
+    .pause-menu-actions {
+        gap: 8px;
+        margin: 10px 0 4px 0;
+        padding-top: 10px;
+    }
+
+    .pause-action-btn {
+        padding: 9px 14px;
+        font-size: 10px;
+    }
+
+    .pause-btn-icon {
+        font-size: 20px;
+    }
+}
+
 /* HUD pause button — top-left, goldenrod, semi-transparent until hovered */
 #hud-pause-btn {
     position: fixed;

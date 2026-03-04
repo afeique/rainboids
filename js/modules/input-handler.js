@@ -159,6 +159,8 @@ export class InputHandler {
         this.testMultiTouch();
 
         document.addEventListener('touchstart', e => {
+            // Let pause overlay handle its own touches so click events fire on buttons
+            if (e.target.closest && e.target.closest('#pause-overlay')) return;
             e.preventDefault();
 
             for (let i = 0; i < e.changedTouches.length; i++) {
@@ -197,6 +199,8 @@ export class InputHandler {
         }, { passive: false });
 
         document.addEventListener('touchmove', e => {
+            // Allow native scroll inside pause overlay
+            if (e.target.closest && e.target.closest('#pause-overlay')) return;
             e.preventDefault();
             
             for (let i = 0; i < e.changedTouches.length; i++) {
@@ -244,6 +248,7 @@ export class InputHandler {
         }, { passive: false });
 
         document.addEventListener('touchend', e => {
+            if (e.target.closest && e.target.closest('#pause-overlay')) return;
             e.preventDefault();
             
             for (let i = 0; i < e.changedTouches.length; i++) {

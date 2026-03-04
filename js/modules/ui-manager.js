@@ -304,17 +304,42 @@ export class UIManager {
             this.elements.pauseOverlay.style.display = 'none';
         } else {
             this.elements.pauseOverlay.style.display = 'flex';
-            
+
             // Update powerups list when pause menu is shown
             this.updatePowerupsList();
-            
+
             // Sync music player button state when pause menu is shown
             this.syncMusicPlayerState();
-            
+
             // Check marquee for playing track when pause menu is shown
             this.checkPlaylistMarquees();
+
+            // Update controls tab for platform (mobile vs desktop)
+            this.updateControlsTab();
         }
         return !isPaused;
+    }
+
+    updateControlsTab() {
+        const controlsTab = document.getElementById('controls-tab');
+        if (!controlsTab) return;
+        const isMob = (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) || window.innerWidth <= 768;
+        if (isMob) {
+            controlsTab.innerHTML = `
+                <h2>CONTROLS</h2>
+                <div><span class="control-symbol">LEFT THUMB</span> Move</div>
+                <div><span class="control-symbol">RIGHT THUMB</span> Aim + Shoot</div>
+                <div><span class="control-symbol">|| BTN</span> Pause / Resume</div>
+                <div>Tap outside menu to unpause</div>
+            `;
+        } else {
+            controlsTab.innerHTML = `
+                <h2>CONTROLS</h2>
+                <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
+                <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
+                <div>ESC or P to Pause / Resume</div>
+            `;
+        }
     }
     
     // showTitleScreen() {
@@ -645,27 +670,48 @@ export class UIManager {
             });
         }
         
+        // Pause overlay backdrop dismiss (tap outside menu unpauses)
+        if (this.elements.pauseOverlay) {
+            const dismissOnBackdrop = (e) => {
+                if (!e.target.closest('#pause-menu')) {
+                    if (window.game) window.game.togglePause();
+                }
+            };
+            this.elements.pauseOverlay.addEventListener('click', dismissOnBackdrop);
+            this.elements.pauseOverlay.addEventListener('touchstart', dismissOnBackdrop, { passive: true });
+        }
+
         // Pause menu action buttons
         if (this.elements.pauseShopButton) {
             this.elements.pauseShopButton.addEventListener('click', () => {
                 if (window.game) {
-                    // Close pause menu and open shop
                     this.elements.pauseOverlay.style.display = 'none';
                     window.game.openShop();
                 } else {
                     console.error('❌ window.game not available for shop button');
                 }
             });
+            this.elements.pauseShopButton.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+                if (window.game) {
+                    this.elements.pauseOverlay.style.display = 'none';
+                    window.game.openShop();
+                }
+            }, { passive: true });
         } else {
             console.error('❌ pauseShopButton element not found!');
         }
-        
+
         if (this.elements.pauseResumeButton) {
             this.elements.pauseResumeButton.addEventListener('click', () => {
                 if (window.game) {
                     window.game.togglePause();
                 }
             });
+            this.elements.pauseResumeButton.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+                if (window.game) window.game.togglePause();
+            }, { passive: true });
         }
 
         if (this.elements.hudPauseBtn) {
@@ -693,6 +739,11 @@ export class UIManager {
                 const tabName = tab.dataset.tab;
                 this.switchTab(tabName);
             });
+            tab.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+                const tabName = tab.dataset.tab;
+                this.switchTab(tabName);
+            }, { passive: true });
         });
         
         // Music controls
