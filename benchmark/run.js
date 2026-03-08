@@ -3,21 +3,22 @@
  * Rainboids benchmark runner
  *
  * Usage:
- *   node benchmark/run.js                          # run all suites
- *   node benchmark/run.js --suite pool             # run one suite
- *   node benchmark/run.js --suite pool,collision   # run multiple suites
- *   node benchmark/run.js --json                   # output raw JSON
- *   node benchmark/run.js --output results/x.json  # save JSON to file
- *   node benchmark/run.js --quiet                  # no console output (use with --output)
+ *   node benchmark/run.js                           # run all suites once
+ *   node benchmark/run.js --runs 5                  # run all suites 5 times and average
+ *   node benchmark/run.js --suite pool              # run one suite
+ *   node benchmark/run.js --suite pool,collision    # run multiple suites
+ *   node benchmark/run.js --suite pool --runs 3     # run pool suite 3 times
+ *   node benchmark/run.js --json                    # output raw JSON
+ *   node benchmark/run.js --output results/x.json   # save JSON to file
+ *   node benchmark/run.js --quiet                   # no console output (use with --output)
  *
  * The --output path is relative to the repo root (not benchmark/).
  */
 
-import { createRequire }  from 'module';
 import { writeFileSync, mkdirSync } from 'fs';
-import { dirname, resolve, join } from 'path';
-import { fileURLToPath }  from 'url';
-import { printSuite, toJSON } from './lib/bench.js';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { printSuite, toJSON, aggregateRuns, ANSI, c } from './lib/bench.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot  = resolve(__dirname, '..');
@@ -27,10 +28,7 @@ const repoRoot  = resolve(__dirname, '..');
 // ---------------------------------------------------------------------------
 const args = process.argv.slice(2);
 
-function getFlag(name) {
-  const i = args.indexOf(name);
-  return i !== -1;
-}
+function getFlag(name)   { return args.includes(name); }
 function getOption(name) {
   const i = args.indexOf(name);
   return i !== -1 ? args[i + 1] : null;
@@ -38,9 +36,10 @@ function getOption(name) {
 
 const wantJson   = getFlag('--json');
 const outputPath = getOption('--output');
-const quiet      = getFlag('--quiet') || (outputPath && !wantJson);
+const quiet      = getFlag('--quiet') || (!!outputPath && !wantJson);
 const suiteArg   = getOption('--suite');
 const wantSuites = suiteArg ? new Set(suiteArg.split(',').map(s => s.toLowerCase().trim())) : null;
+const runs       = Math.max(1, parseInt(getOption('--runs') || '1', 10));
 
 // ---------------------------------------------------------------------------
 // Suite registry
@@ -52,6 +51,27 @@ const ALL_SUITES = [
   { key: 'wave',      file: './suites/wave.bench.js' },
   { key: 'math',      file: './suites/math.bench.js' },
 ];
+
+// ---------------------------------------------------------------------------
+// Progress display
+// ---------------------------------------------------------------------------
+
+function clearLine() {
+  process.stdout.write('\r\x1b[2K');
+}
+
+function showProgress(suiteKey, run, totalRuns) {
+  const bar    = progressBar(run, totalRuns, 16);
+  const label  = `  ${c(ANSI.cyan, suiteKey.padEnd(12))}  run ${run}/${totalRuns}  ${bar}`;
+  process.stdout.write(`\r${label}`);
+}
+
+function progressBar(current, total, width) {
+  const filled = Math.round((current / total) * width);
+  const empty  = width - filled;
+  return c(ANSI.green,  '█'.repeat(filled)) +
+         c(ANSI.gray,   '░'.repeat(empty));
+}
 
 // ---------------------------------------------------------------------------
 // Main
@@ -68,18 +88,38 @@ async function main() {
   }
 
   if (!quiet) {
-    const label = suitesToRun.map(s => s.key).join(', ');
-    console.log(`\nRainboids Benchmark  –  running: ${label}`);
+    const suiteLabel = suitesToRun.map(s => s.key).join(', ');
+    const runLabel   = runs > 1 ? `  ×${runs} runs` : '';
+    console.log(`\nRainboids Benchmark  –  ${suiteLabel}${runLabel}`);
     console.log(`Node ${process.version}   ${new Date().toISOString()}`);
   }
 
   const results = [];
 
   for (const entry of suitesToRun) {
-    const mod    = await import(entry.file);
-    const result = mod.runSuite();
-    results.push(result);
-    if (!quiet) printSuite(result);
+    const mod = await import(entry.file);
+
+    if (runs === 1) {
+      if (!quiet) process.stdout.write(`\n  ${c(ANSI.cyan, entry.key)}  measuring...\r`);
+      const result = mod.runSuite();
+      if (!quiet) clearLine();
+      results.push(result);
+      if (!quiet) printSuite(result);
+    } else {
+      // ── Multi-run: collect N runs then aggregate ──────────────────────
+      const suiteRuns = [];
+
+      for (let r = 1; r <= runs; r++) {
+        if (!quiet) showProgress(entry.key, r, runs);
+        suiteRuns.push(mod.runSuite());
+      }
+
+      if (!quiet) clearLine();
+
+      const aggregated = aggregateRuns(suiteRuns);
+      results.push(aggregated);
+      if (!quiet) printSuite(aggregated);
+    }
   }
 
   if (!quiet) console.log();
@@ -87,7 +127,7 @@ async function main() {
   // ── JSON output ───────────────────────────────────────────────────────────
   if (wantJson || outputPath) {
     const gitHash = await getGitHash();
-    const json = toJSON(results, { gitHash, cwd: process.cwd() });
+    const json    = toJSON(results, { gitHash, runs, cwd: process.cwd() });
     const jsonStr = JSON.stringify(json, null, 2);
 
     if (wantJson) {

@@ -40,7 +40,8 @@
       "Bash(node:*)",
       "Bash(git:*)",
       "Bash(chmod +x:*)",
-      "Bash(/Users/silvr/projects/rainboids/.gitignore:*)"
+      "Bash(/Users/silvr/projects/rainboids/.gitignore:*)",
+      "Bash(npm run:*)"
     ],
     "deny": []
   }

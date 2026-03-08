@@ -9,6 +9,7 @@
  *   node benchmark/compare.js <target>
  *   node benchmark/compare.js <target> --suite pool
  *   node benchmark/compare.js <target> --suite pool,collision
+ *   node benchmark/compare.js <target> --runs 5
  *   node benchmark/compare.js <commit1> <commit2>   # compare two specific commits
  *
  * <target> can be:
@@ -17,11 +18,16 @@
  *   - A tag          (e.g. v1.0.0)
  *   - HEAD~N         (e.g. HEAD~5)
  *
+ * --runs N  runs each benchmark suite N times on both sides and averages the
+ *           results before comparing. Produces more stable Δ values. Adds a
+ *           ±σ (between-run stddev) column so you can see measurement noise.
+ *
  * Examples:
  *   node benchmark/compare.js master
- *   node benchmark/compare.js HEAD~10
- *   node benchmark/compare.js abc1234 --suite collision
+ *   node benchmark/compare.js HEAD~10 --runs 5
+ *   node benchmark/compare.js abc1234 --suite collision --runs 3
  *   node benchmark/compare.js abc1234 def5678
+ *   node benchmark/compare.js abc1234 def5678 --runs 5
  */
 
 import { execSync, spawnSync } from 'child_process';
@@ -56,6 +62,7 @@ function getOption(name) {
 function getFlag(name)   { return rawArgs.includes(name); }
 
 const suiteFilter = getOption('--suite');
+const runsOption  = getOption('--runs');
 const noCleanup   = getFlag('--no-cleanup');   // keep worktree on failure (debugging)
 
 // Positional args (not flags or flag values)
@@ -68,15 +75,18 @@ const positional = rawArgs.filter((a, i) => {
 if (positional.length === 0) {
   console.error(`
 ${c(ANSI.bold, 'Usage:')}
-  node benchmark/compare.js <target> [--suite <suite,...>]
-  node benchmark/compare.js <commit1> <commit2> [--suite <suite,...>]
+  node benchmark/compare.js <target> [--suite <suite,...>] [--runs N]
+  node benchmark/compare.js <commit1> <commit2> [--suite <suite,...>] [--runs N]
 
 ${c(ANSI.dim, '<target> can be a commit hash, branch name, tag, or HEAD~N')}
+${c(ANSI.dim, '--runs N  run each suite N times and average (shows ±σ stddev)')}
 
 ${c(ANSI.dim, 'Examples:')}
   node benchmark/compare.js master
-  node benchmark/compare.js HEAD~10 --suite collision
+  node benchmark/compare.js master --runs 5
+  node benchmark/compare.js HEAD~10 --suite collision --runs 3
   node benchmark/compare.js abc1234 def5678
+  node benchmark/compare.js abc1234 def5678 --runs 5
 `);
   process.exit(1);
 }
@@ -119,14 +129,17 @@ function currentBranchOrHash() {
 
 function runBenchmarks(cwd, label, outputFile) {
   const suiteArg = suiteFilter ? ['--suite', suiteFilter] : [];
+  const runsArg  = runsOption  ? ['--runs',  runsOption]  : [];
   const nodeArgs = [
     join(cwd, 'benchmark', 'run.js'),
     '--output', outputFile,
     '--quiet',
     ...suiteArg,
+    ...runsArg,
   ];
 
-  console.log(`  ${c(ANSI.dim, '→')} Running benchmarks for ${c(ANSI.cyan, label)}...`);
+  const runsLabel = runsOption ? c(ANSI.dim, ` ×${runsOption}`) : '';
+  console.log(`  ${c(ANSI.dim, '→')} Running benchmarks for ${c(ANSI.cyan, label)}${runsLabel}...`);
 
   const result = spawnSync(process.execPath, nodeArgs, {
     cwd,
@@ -221,7 +234,8 @@ async function main() {
     const hash1 = gitHash(ref1);
     const hash2 = gitHash(ref2);
 
-    console.log(`\n${c(ANSI.bold, 'Rainboids Benchmark Comparison')}`);
+    const runsLabel = runsOption ? c(ANSI.dim, `  (${runsOption} runs, averaged)`) : '';
+    console.log(`\n${c(ANSI.bold, 'Rainboids Benchmark Comparison')}${runsLabel}`);
     console.log(`  ${c(ANSI.cyan, hash1)}  vs  ${c(ANSI.cyan, hash2)}`);
     console.log();
 
@@ -267,7 +281,8 @@ async function main() {
     const targetHash = gitHash(targetRef);
     const currentLabel = currentBranchOrHash();
 
-    console.log(`\n${c(ANSI.bold, 'Rainboids Benchmark Comparison')}`);
+    const runsLabel = runsOption ? c(ANSI.dim, `  (${runsOption} runs, averaged)`) : '';
+    console.log(`\n${c(ANSI.bold, 'Rainboids Benchmark Comparison')}${runsLabel}`);
     console.log(`  current (${c(ANSI.cyan, currentLabel)})  vs  target (${c(ANSI.cyan, targetHash)})`);
 
     const uncommitted = hasUncommittedChanges();
