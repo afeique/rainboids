@@ -6,4 +6,4 @@ npm-debug.log*
 .bench-worktree-*
 allure-results/*
 archive/perf/results*
-perf/comparisons
+perf/comparisons/*
