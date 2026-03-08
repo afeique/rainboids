@@ -168,4 +168,4 @@ group('broad phase – naive O(n²) vs grid bucket', () => {
   });
 });
 
-await run();
+await run(process.env.MITATA_JSON ? { format: { json: { debug: false, samples: false } } } : {});

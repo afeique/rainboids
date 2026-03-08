@@ -1,6 +1,6 @@
 // Powerup system for enhanced combat capabilities
 import { GAME_CONFIG } from '../constants.js';
-import { random, wrap } from '../utils.js';
+import { random, wrap, glowSpriteCache } from '../utils.js';
 
 export const POWERUP_TYPES = {
     RAPID_FIRE: {
@@ -298,9 +298,10 @@ export class Powerup {
         ctx.fillStyle = bodyGradient;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = 8;
-        
+        // OPT-2: pre-rendered glow sprite replaces live GPU blur
+        glowSpriteCache.draw(ctx, 0, 0, this.color, currentRadius, 8, 0.6);
+        ctx.shadowBlur = 0;
+
         if (this.type === 'HOMING') {
             // Diamond shape for homing
             ctx.beginPath();

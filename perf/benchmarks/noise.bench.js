@@ -159,4 +159,4 @@ group('generateStarPositions() – end-to-end', () => {
   });
 });
 
-await run();
+await run(process.env.MITATA_JSON ? { format: { json: { debug: false, samples: false } } } : {});

@@ -700,6 +700,7 @@ class GlowSpriteCache {
     // Caller must have ctx.save()/restore() around the section if globalAlpha
     // needs to be isolated.
     draw(ctx, x, y, color, radius, blur, alpha) {
+        if (!(radius > 0) || !(alpha > 0)) return; // guard NaN, zero, negative
         const sprite = this.getSprite(color, radius, blur);
         ctx.globalAlpha = alpha;
         ctx.drawImage(sprite.canvas, x - sprite.half, y - sprite.half);

@@ -25,6 +25,7 @@ const enginesArg = getArg('--engine') || 'v8';
 const requestedEngines = enginesArg.split(',').map(s => s.trim());
 const suiteFilter = getArg('--suite') ? getArg('--suite').split(',').map(s => s.trim()) : null;
 const save = hasFlag('--save') || hasFlag('--output');
+const jsonMode = hasFlag('--json');
 const outputFile = getArg('--output');
 
 const BENCH_DIR = new URL('./benchmarks/', import.meta.url).pathname;
@@ -56,9 +57,11 @@ async function main() {
       continue;
     }
 
-    console.log(`\n${'═'.repeat(60)}`);
-    console.log(`  Engine: ${engineName.toUpperCase()}  ${available[engineName]?.version || ''}`);
-    console.log('═'.repeat(60));
+    // Status goes to stderr in JSON mode so stdout stays clean JSON
+    const log = jsonMode ? console.error : console.log;
+    log(`\n${'═'.repeat(60)}`);
+    log(`  Engine: ${engineName.toUpperCase()}  ${available[engineName]?.version || ''}`);
+    log('═'.repeat(60));
 
     const engineResults = {};
 
@@ -66,12 +69,12 @@ async function main() {
       const suiteName = basename(file, '.bench.js');
       const filePath = resolve(BENCH_DIR, file);
 
-      console.log(`\n  Running: ${suiteName}`);
+      log(`\n  Running: ${suiteName}`);
 
       const result = spawnSync('node', [filePath], {
         encoding: 'utf8',
         timeout: 120000,
-        env: { ...process.env },
+        env: { ...process.env, ...(jsonMode ? { MITATA_JSON: '1' } : {}) },
       });
 
       if (result.status !== 0) {
@@ -80,12 +83,30 @@ async function main() {
         continue;
       }
 
-      process.stdout.write(result.stdout);
-      if (result.stderr) process.stderr.write(result.stderr);
-      engineResults[suiteName] = { raw: result.stdout };
+      if (jsonMode) {
+        try {
+          const parsed = JSON.parse(result.stdout);
+          engineResults[suiteName] = {
+            benchmarks: parsed.benchmarks || [],
+            layout: parsed.layout || [],
+          };
+        } catch {
+          engineResults[suiteName] = { raw: result.stdout };
+        }
+      } else {
+        process.stdout.write(result.stdout);
+        if (result.stderr) process.stderr.write(result.stderr);
+        engineResults[suiteName] = { raw: result.stdout };
+      }
     }
 
     results.engines[engineName] = engineResults;
+  }
+
+  if (jsonMode) {
+    // In JSON mode, output the structured results to stdout for compare.js to consume
+    process.stdout.write(JSON.stringify(results, null, 2));
+    return results;
   }
 
   if (save) {

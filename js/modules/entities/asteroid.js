@@ -1,6 +1,6 @@
 // Asteroid entity with 3D wireframe rendering
 import { GAME_CONFIG } from '../constants.js';
-import { random, GameDimensions } from '../utils.js';
+import { random, GameDimensions, glowSpriteCache } from '../utils.js';
 const DEBRIS_COUNT = 5;
 
 function isMobile() {
@@ -18,6 +18,13 @@ export class Asteroid {
             [4,5],[4,9],[4,11],[5,9],[5,11],[6,7],[6,8],[6,10],
             [7,8],[7,10],[8,9],[10,11]
         ];
+
+        // OPT: Pre-allocate bucket arrays for drawAsteroidShape — reused every frame
+        this._BUCKETS = 5;
+        this._bucketEdges = new Array(this._BUCKETS);
+        for (let i = 0; i < this._BUCKETS; i++) this._bucketEdges[i] = [];
+        this._bucketHue   = new Float64Array(this._BUCKETS);
+        this._bucketCount = new Uint8Array(this._BUCKETS);
         
         this.initializeAsteroid(x, y, radius, level);
     }
@@ -357,11 +364,18 @@ export class Asteroid {
         ctx.shadowOffsetY = 0;
 
         // Compute per-edge alpha and hue, then group into ~5 depth buckets.
-        // Using a fixed-size array of 5 buckets avoids per-frame Map allocation.
-        const BUCKETS = 5;
-        const bucketEdges = [[], [], [], [], []];
-        const bucketHue   = [0, 0, 0, 0, 0];
-        const bucketCount = [0, 0, 0, 0, 0];
+        // Pre-allocated arrays on `this` — zero per-frame allocation.
+        const BUCKETS = this._BUCKETS;
+        const bucketEdges = this._bucketEdges;
+        const bucketHue   = this._bucketHue;
+        const bucketCount = this._bucketCount;
+
+        // Clear buckets (reuse arrays)
+        for (let b = 0; b < BUCKETS; b++) {
+            bucketEdges[b].length = 0;
+            bucketHue[b]   = 0;
+            bucketCount[b] = 0;
+        }
 
         for (let i = 0; i < this.edges.length; i++) {
             const edge = this.edges[i];
@@ -406,19 +420,21 @@ export class Asteroid {
         const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
         
         // Outer glow
-        ctx.shadowColor = '#888888'; // Gray glow for asteroids
-        ctx.shadowBlur = 15 * pulseIntensity;
+        // OPT-2: pre-rendered glow sprite replaces live GPU blur
+        glowSpriteCache.draw(ctx, this.x, this.y, '#888888', this.radius + 8, 15, 0.4 * pulseIntensity);
+        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.4 * pulseIntensity;
-        
+
         // Draw subtle ring around entity
         ctx.strokeStyle = '#888888';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
         ctx.stroke();
-        
+
         // Inner highlight ring
-        ctx.shadowBlur = 8 * pulseIntensity;
+        glowSpriteCache.draw(ctx, this.x, this.y, '#FFFFFF', this.radius + 5, 8, 0.6 * pulseIntensity);
+        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.6 * pulseIntensity;
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 1;

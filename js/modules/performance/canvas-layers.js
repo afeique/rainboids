@@ -8,13 +8,14 @@ export class CanvasLayers {
         this.contexts = {};
         this.dirty = new Set();
         
-        // Define layer order (z-index)
+        // OPT: Reduced from 5 layers to 3 — saves 2 GPU texture allocs + compositing passes.
+        // 'background' merges background + stars (stars twinkle every frame so separate layer had no benefit).
+        // 'game' merges game objects + effects (both redrawn every frame).
+        // 'ui' remains separate (only redrawn when HUD values change).
         this.layerOrder = [
-            'background',   // Static background
-            'stars',        // Star field (rarely changes)
-            'game',         // Main game objects
-            'effects',      // Particles and effects
-            'ui'           // HUD (static unless values change)
+            'background',   // Background + star field
+            'game',         // Game objects + particles + effects
+            'ui'            // HUD (static unless values change)
         ];
         
         this.initializeLayers();

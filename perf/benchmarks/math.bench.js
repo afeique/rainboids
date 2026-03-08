@@ -202,4 +202,4 @@ group('clamping – 1000 calls', () => {
   });
 });
 
-await run();
+await run(process.env.MITATA_JSON ? { format: { json: { debug: false, samples: false } } } : {});

@@ -1,8 +1,9 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES, getEnemyFiringCooldown } from './constants.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats } from './wave-data.js';
-import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
+import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon, glowSpriteCache } from './utils.js';
 import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
+import { SpatialGrid } from './performance/spatial-grid.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
@@ -249,7 +250,18 @@ export class GameEngine {
         this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 10);
         this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 4);
         this.powerupPool = new PoolManager(Powerup, 5); // Reduced from 20
-        
+
+        // OPT-8: Spatial grid for O(1) insert / O(k) collision query
+        this.spatialGrid = new SpatialGrid(this.gameField.width, this.gameField.height, 8, 6);
+
+        // OPT-7: Temporal upsampling — 30fps logic, 60fps render with interpolation.
+        // Halves the cost of all game logic (collision, movement, AI, physics).
+        this.useTemporalUpsampling = true;
+        this.logicTickRate = 1000 / 30;        // 30 Hz fixed timestep
+        this.logicAccumulator = 0;
+        this.maxLogicStepsPerFrame = 3;         // spiral-of-death guard
+        this.lastFrameTime = performance.now();
+
         // Powerup display system
         this.powerupDisplay = {
             active: false,
@@ -3405,6 +3417,12 @@ export class GameEngine {
     }
     
     handleCollisions() {
+        // OPT-8: Populate spatial grid for broad-phase collision culling
+        this.spatialGrid.clear();
+        this.spatialGrid.insertPool(this.asteroidPool);
+        this.spatialGrid.insertPool(this.enemyPool);
+        this.spatialGrid.insertPool(this.enemyBulletPool);
+
         // Player-asteroid collisions
         this.asteroidPool.activeObjects.forEach(ast => {
             if (this.player.active && collision(this.player, ast)) {
@@ -3412,19 +3430,20 @@ export class GameEngine {
             }
         });
 
-        // Bullet-asteroid collisions
+        // Bullet-asteroid collisions — OPT-8: spatial grid broad-phase
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
-            if (!bullet.active) continue; // Allow piercing bullets to continue
-            for (let j = this.asteroidPool.activeObjects.length - 1; j >= 0; j--) {
-                const ast = this.asteroidPool.activeObjects[j];
-                if (!ast.active) continue;
-                
+            if (!bullet.active) continue;
+            const nearby = this.spatialGrid.retrieve(bullet);
+            for (let j = nearby.length - 1; j >= 0; j--) {
+                const ast = nearby[j];
+                if (!ast.active || ast.constructor.name !== 'Asteroid') continue;
+
                 // Skip if this piercing bullet has already hit this asteroid
                 if (bullet.piercing > 0 && bullet.hasHitEnemy(ast)) {
                     continue;
                 }
-                
+
                 if (collision(bullet, ast)) {
                     triggerHapticFeedback(60);
                     
@@ -3742,20 +3761,20 @@ export class GameEngine {
             }
         });
         
-        // Bullet-enemy collisions
+        // Bullet-enemy collisions — OPT-8: spatial grid broad-phase
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
             if (!bullet.active) continue;
-            
-            for (let j = this.enemyPool.activeObjects.length - 1; j >= 0; j--) {
-                const enemy = this.enemyPool.activeObjects[j];
-                if (!enemy.active) continue;
-                
+            const nearbyEn = this.spatialGrid.retrieve(bullet);
+            for (let j = nearbyEn.length - 1; j >= 0; j--) {
+                const enemy = nearbyEn[j];
+                if (!enemy.active || enemy.constructor.name !== 'Enemy') continue;
+
                 // Skip if this piercing bullet has already hit this enemy
                 if (bullet.piercing > 0 && bullet.hasHitEnemy(enemy)) {
                     continue;
                 }
-                
+
                 if (collision(bullet, enemy)) {
                     triggerHapticFeedback(40);
                     
@@ -4473,10 +4492,10 @@ export class GameEngine {
         this.ctx.lineWidth = 4;
         this.ctx.lineCap = 'round';
         
-        // Add subtle glow effect
-        this.ctx.shadowColor = color;
-        this.ctx.shadowBlur = 6;
-        
+        // OPT-2: pre-rendered glow sprite replaces live GPU blur
+        glowSpriteCache.draw(this.ctx, cursorX, cursorY, color, timerRadius, 6, 0.5);
+        this.ctx.shadowBlur = 0;
+
         this.ctx.beginPath();
         this.ctx.arc(cursorX, cursorY, timerRadius, startAngle, endAngle);
         this.ctx.stroke();
@@ -4729,9 +4748,24 @@ export class GameEngine {
     
     gameLoop() {
         const frameStart = performance.now();
-        
-        this.update();
-        
+
+        // OPT-7: Fixed-timestep accumulator — logic runs at 30 Hz, render at display refresh.
+        if (this.useTemporalUpsampling) {
+            const dt = Math.min(frameStart - this.lastFrameTime, 100); // cap large gaps
+            this.lastFrameTime = frameStart;
+            this.logicAccumulator += dt;
+            let steps = 0;
+            while (this.logicAccumulator >= this.logicTickRate && steps < this.maxLogicStepsPerFrame) {
+                this.update();
+                this.logicAccumulator -= this.logicTickRate;
+                steps++;
+            }
+            // Spiral-of-death guard: drop accumulated time if we fell too far behind
+            if (steps >= this.maxLogicStepsPerFrame) this.logicAccumulator = 0;
+        } else {
+            this.update();
+        }
+
         this.ctx.save();
         if (this.game.screenShakeDuration > 0) {
             // Enhanced shake algorithm with multiple frequencies and smooth decay
@@ -6265,10 +6299,10 @@ export class GameEngine {
             
             ctx.save();
             
-            // Background glow effect
+            // OPT-2: pre-rendered glow sprite replaces live GPU blur
             const glowSize = Math.min(10, this.player.hitStreak * 0.5);
-            ctx.shadowColor = '#FFD700';
-            ctx.shadowBlur = glowSize;
+            glowSpriteCache.draw(ctx, this.width - 20, this.height - 40, '#FFD700', glowSize, glowSize, 0.5);
+            ctx.shadowBlur = 0;
             
             // Draw combo text
             ctx.font = `${Math.min(32, 20 + this.player.hitStreak * 0.5)}px 'Press Start 2P', monospace`;
@@ -6285,7 +6319,7 @@ export class GameEngine {
             // Draw "COMBO" label below
             ctx.font = '12px "Press Start 2P", monospace';
             ctx.fillStyle = '#FFFFFF';
-            ctx.shadowBlur = 3;
+            ctx.shadowBlur = 0;
             ctx.strokeText('COMBO', comboX, comboY + 15);
             ctx.fillText('COMBO', comboX, comboY + 15);
         

@@ -11,8 +11,11 @@ export class Bullet {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         this.active = false;
-        this.trail = []; // Array to store trail positions
-        this.maxTrailLength = 8; // Maximum trail segments
+        // OPT: ring buffer for trail — eliminates Array.shift() O(n) per frame
+        this.maxTrailLength = 8;
+        this.trail = new Array(this.maxTrailLength);
+        this.trailHead = 0;
+        this.trailCount = 0;
     }
     
     reset(x, y, angle) {
@@ -39,7 +42,9 @@ export class Bullet {
         this.hitTargets = new Set(); // Track which targets (enemies/asteroids) this bullet has already hit
         this.explosive = false;
         this.explosionRadius = 30;
-        this.trail = []; // Clear trail on reset
+        // Reset ring buffer trail
+        this.trailHead = 0;
+        this.trailCount = 0;
     }
     
     // Simple bullet removal on impact
@@ -57,11 +62,10 @@ export class Bullet {
             this.applyHoming(enemyPool, asteroidPool, gameEngine);
         }
         
-        // Add current position to trail before moving
-        this.trail.push({ x: this.x, y: this.y });
-        if (this.trail.length > this.maxTrailLength) {
-            this.trail.shift(); // Remove oldest trail segment
-        }
+        // OPT: ring buffer trail — O(1) insert, no shifting
+        this.trail[this.trailHead] = { x: this.x, y: this.y };
+        this.trailHead = (this.trailHead + 1) % this.maxTrailLength;
+        if (this.trailCount < this.maxTrailLength) this.trailCount++;
         
         // Movement
         this.x += this.vel.x;
@@ -358,25 +362,26 @@ export class Bullet {
     }
     
     drawTrail(ctx, visualData) {
-        if (this.trail.length < 2) return;
-        
+        if (this.trailCount < 2) return;
+
         ctx.save();
-        ctx.globalCompositeOperation = 'screen'; // Additive blending for bright trails
-        
-        // Draw trail segments with decreasing opacity and size
-        for (let i = 0; i < this.trail.length - 1; i++) {
-            const segment = this.trail[i];
-            const alpha = (i + 1) / this.trail.length; // Fade from 0 to 1
-            const size = visualData.size * alpha * 0.6; // Smaller trail segments
-            
-            ctx.globalAlpha = alpha * 0.7; // Semi-transparent trail
-            ctx.fillStyle = visualData.glowColor;
-            
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = visualData.glowColor;
+
+        // OPT: iterate ring buffer oldest→newest
+        for (let i = 0; i < this.trailCount - 1; i++) {
+            const idx = (this.trailHead - this.trailCount + i + this.maxTrailLength) % this.maxTrailLength;
+            const segment = this.trail[idx];
+            if (!segment) continue;
+            const alpha = (i + 1) / this.trailCount;
+            const size = visualData.size * alpha * 0.6;
+
+            ctx.globalAlpha = alpha * 0.7;
             ctx.beginPath();
             ctx.arc(segment.x, segment.y, size, 0, 2 * Math.PI);
             ctx.fill();
         }
-        
+
         ctx.restore();
     }
     

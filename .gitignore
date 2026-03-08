@@ -3,5 +3,6 @@ js/dist/
 .DS_Store
 *.log
 npm-debug.log*
-benchmark/results/*.json
 .bench-worktree-*
+allure-results/*
+archive/perf/results*

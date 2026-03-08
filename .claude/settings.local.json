@@ -50,7 +50,9 @@
       "Bash(wc:*)",
       "Read(//System/Library/Frameworks/JavaScriptCore.framework/Helpers/**)",
       "Bash(brew list)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(MITATA_JSON=1 node:*)",
+      "Bash(__NEW_LINE_0f5acefe25eae61d__ echo:*)"
     ],
     "deny": []
   }

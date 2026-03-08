@@ -1,6 +1,6 @@
 // Player ship entity
 import { GAME_CONFIG } from '../constants.js';
-import { random, wrap } from '../utils.js';
+import { random, wrap, glowSpriteCache } from '../utils.js';
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -652,16 +652,17 @@ export class Player {
             grad.addColorStop(0.4, `rgba(255, 70, 0,  ${0.65 * engPulse})`);
             grad.addColorStop(1,   'transparent');
             ctx.fillStyle = grad;
-            ctx.shadowColor = '#ff8800';
-            ctx.shadowBlur = 6;
+            // OPT-2: pre-rendered glow sprite replaces live GPU blur
+            glowSpriteCache.draw(ctx, eng.x, eng.y + exhaustLen * 0.5, '#ff8800', r * 0.1, 6, 0.8 * engPulse);
+            ctx.shadowBlur = 0;
             ctx.beginPath();
             ctx.ellipse(eng.x, eng.y + exhaustLen * 0.5, r * 0.1, exhaustLen * 0.52, 0, 0, Math.PI * 2);
             ctx.fill();
         }
 
         // ── Primary swept wings ───────────────────────────────────────────────
-        ctx.shadowColor = '#0088ff';
-        ctx.shadowBlur = 6;
+        // OPT-2: live GPU blur removed — stroke provides sufficient wing edge glow
+        ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(0, 90, 180, 0.45)';
         ctx.strokeStyle = '#0088ff';
         ctx.lineWidth = 1.6;
@@ -708,8 +709,8 @@ export class Player {
         ctx.stroke();
 
         // ── Central hull ─────────────────────────────────────────────────────
-        ctx.shadowColor = '#00ccff';
-        ctx.shadowBlur = 8;
+        // OPT-2: live GPU blur removed — stroke provides hull edge glow
+        ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(0, 25, 55, 0.92)';
         ctx.strokeStyle = '#00ccff';
         ctx.lineWidth = 2;
@@ -736,8 +737,9 @@ export class Player {
             ctx.fillStyle = '#001530';
             ctx.strokeStyle = '#0066ff';
             ctx.lineWidth = 1.2;
-            ctx.shadowColor = '#0088ff';
-            ctx.shadowBlur = 5;
+            // OPT-2: pre-rendered glow sprite replaces live GPU blur
+            glowSpriteCache.draw(ctx, eng.x, eng.y, '#0088ff', r * 0.13, 5, 0.9);
+            ctx.shadowBlur = 0;
             ctx.beginPath();
             ctx.ellipse(eng.x, eng.y, r * 0.13, r * 0.09, 0, 0, Math.PI * 2);
             ctx.fill();
@@ -745,8 +747,9 @@ export class Player {
         }
 
         // ── Cockpit ───────────────────────────────────────────────────────────
-        ctx.shadowColor = '#aaeeff';
-        ctx.shadowBlur = 7;
+        // OPT-2: pre-rendered glow sprite replaces live GPU blur
+        glowSpriteCache.draw(ctx, 0, -r * 0.42, '#aaeeff', r * 0.21, 7, 0.7);
+        ctx.shadowBlur = 0;
         const cpGrad = ctx.createRadialGradient(0, -r * 0.42, 0, 0, -r * 0.42, r * 0.21);
         cpGrad.addColorStop(0,   'rgba(160, 235, 255, 0.95)');
         cpGrad.addColorStop(0.55,'rgba(0, 110, 200, 0.75)');
@@ -760,13 +763,13 @@ export class Player {
         ctx.stroke();
 
         // ── Nose glow ─────────────────────────────────────────────────────────
-        ctx.shadowColor = '#ffffff';
-        ctx.shadowBlur = 12;
+        // OPT-2: pre-rendered glow sprite replaces live GPU blur
+        glowSpriteCache.draw(ctx, 0, -r, '#ffffff', r * 0.075, 12, 0.9);
+        ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(200, 245, 255, 0.9)';
         ctx.beginPath();
         ctx.arc(0, -r, r * 0.075, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
 
         // Draw charging effects when player is charging and can shoot (cooldown complete)
         if (this.isCharging && this.canShoot) {
@@ -981,20 +984,21 @@ export class Player {
             ctx.lineWidth = 3;
             ctx.lineCap = 'round';
             
-            // Add glow effect when ready to shoot
+            // OPT-2: pre-rendered glow sprite replaces live GPU blur
             if (this.canShoot) {
-                ctx.shadowColor = '#FFD700';
-                ctx.shadowBlur = 8;
+                glowSpriteCache.draw(ctx, tipX, tipY, '#FFD700', timerRadius, 8, 0.6);
             }
-            
+            ctx.shadowBlur = 0;
+
             ctx.beginPath();
             ctx.arc(tipX, tipY, timerRadius, startAngle, endAngle);
             ctx.stroke();
-            
+
             // Draw center dot when fully ready
             if (this.canShoot) {
                 ctx.fillStyle = '#FFD700';
-                ctx.shadowBlur = 4;
+                glowSpriteCache.draw(ctx, tipX, tipY, '#FFD700', 2, 4, 0.8);
+                ctx.shadowBlur = 0;
                 ctx.beginPath();
                 ctx.arc(tipX, tipY, 2, 0, Math.PI * 2);
                 ctx.fill();
