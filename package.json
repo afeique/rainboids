@@ -9,7 +9,15 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "vite",
-    "generate-playlist": "node scripts/generate-playlist.js"
+    "generate-playlist": "node scripts/generate-playlist.js",
+    "bench": "node benchmark/run.js",
+    "bench:pool": "node benchmark/run.js --suite pool",
+    "bench:collision": "node benchmark/run.js --suite collision",
+    "bench:noise": "node benchmark/run.js --suite noise",
+    "bench:wave": "node benchmark/run.js --suite wave",
+    "bench:math": "node benchmark/run.js --suite math",
+    "bench:save": "node benchmark/run.js --output benchmark/results/latest.json",
+    "bench:compare": "node benchmark/compare.js"
   },
   "repository": {
     "type": "git",

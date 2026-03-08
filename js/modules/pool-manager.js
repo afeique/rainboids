@@ -35,7 +35,9 @@ export class PoolManager {
     release(obj) {
         const index = this.activeObjects.indexOf(obj);
         if (index > -1) {
-            this.activeObjects.splice(index, 1);
+            // Swap with last element then pop — O(1) vs O(n) splice
+            this.activeObjects[index] = this.activeObjects[this.activeObjects.length - 1];
+            this.activeObjects.pop();
             obj.active = false;
             this.pool.push(obj);
         }

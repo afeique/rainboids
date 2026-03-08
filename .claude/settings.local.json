@@ -35,7 +35,12 @@
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/wave-data.js && echo \"OK\")",
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"game-engine.js OK\" && node --check /Users/silvr/projects/rainboids/js/modules/entities/enemy.js && echo \"enemy.js OK\")",
       "Bash(node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"OK\")",
-      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/input-handler.js && node --check /Users/silvr/projects/rainboids/js/modules/ui-manager.js && node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"All OK\")"
+      "Bash(node --check /Users/silvr/projects/rainboids/js/modules/input-handler.js && node --check /Users/silvr/projects/rainboids/js/modules/ui-manager.js && node --check /Users/silvr/projects/rainboids/js/modules/game-engine.js && echo \"All OK\")",
+      "Bash(node --check js/modules/pool-manager.js && echo \"pool-manager OK\" && node --check js/modules/game-engine.js && echo \"game-engine OK\" && node --check js/modules/input-handler.js && echo \"input-handler OK\" && node --check js/modules/wave-data.js && echo \"wave-data OK\" && node --check js/main.js && echo \"main OK\")",
+      "Bash(node:*)",
+      "Bash(git:*)",
+      "Bash(chmod +x:*)",
+      "Bash(/Users/silvr/projects/rainboids/.gitignore:*)"
     ],
     "deny": []
   }
