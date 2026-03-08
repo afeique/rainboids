@@ -56,21 +56,48 @@ const ALL_SUITES = [
 // Progress display
 // ---------------------------------------------------------------------------
 
+// Progress always writes to stderr so it shows through even when stdout is
+// captured (e.g. when compare.js spawns run.js with --quiet + --output).
 function clearLine() {
-  process.stdout.write('\r\x1b[2K');
+  process.stderr.write('\r\x1b[2K');
 }
 
-function showProgress(suiteKey, run, totalRuns) {
-  const bar    = progressBar(run, totalRuns, 16);
-  const label  = `  ${c(ANSI.cyan, suiteKey.padEnd(12))}  run ${run}/${totalRuns}  ${bar}`;
-  process.stdout.write(`\r${label}`);
+/**
+ * Render a progress bar for a multi-run suite.
+ *
+ * @param {string} suiteKey      - suite name
+ * @param {number} suiteIdx      - 1-based index of this suite (for multi-suite display)
+ * @param {number} totalSuites   - total number of suites being run
+ * @param {number} currentRun    - 1-based run currently executing
+ * @param {number} totalRuns     - total runs requested
+ */
+function showProgress(suiteKey, suiteIdx, totalSuites, currentRun, totalRuns) {
+  // Bar and percentage fill based on *completed* runs so progress grows as work finishes.
+  // currentRun may be passed as totalRuns + 1 as a "done" sentinel — clamp for display.
+  const displayRun = Math.min(currentRun, totalRuns);
+  const completed  = currentRun - 1;
+  const pct        = Math.min(100, Math.floor(completed / totalRuns * 100));
+
+  // Right-align the run counter so digits don't shift as numbers grow (e.g. "  1/100" → " 99/100").
+  const digits = String(totalRuns).length;
+  const runStr = `run ${String(displayRun).padStart(digits)}/${totalRuns}`;
+  const pctStr = `${String(pct).padStart(3)}%`;
+  const bar    = progressBar(completed, totalRuns, 30);
+
+  // When running multiple suites, prefix with "[N/M]" so the user knows overall progress.
+  const suiteTag = totalSuites > 1
+    ? `${c(ANSI.gray, `[${suiteIdx}/${totalSuites}]`)} ${c(ANSI.cyan, suiteKey)}`
+    : c(ANSI.cyan, suiteKey);
+
+  // \x1b[K erases to end of line — prevents ghost characters if a previous line was longer.
+  process.stderr.write(`\r  ${suiteTag}  ${runStr}  ${bar}  ${pctStr}\x1b[K`);
 }
 
-function progressBar(current, total, width) {
-  const filled = Math.round((current / total) * width);
+function progressBar(completed, total, width) {
+  const filled = total > 0 ? Math.round((completed / total) * width) : width;
   const empty  = width - filled;
-  return c(ANSI.green,  '█'.repeat(filled)) +
-         c(ANSI.gray,   '░'.repeat(empty));
+  return c(ANSI.green, '█'.repeat(filled)) +
+         c(ANSI.gray,  '░'.repeat(empty));
 }
 
 // ---------------------------------------------------------------------------
@@ -94,15 +121,17 @@ async function main() {
     console.log(`Node ${process.version}   ${new Date().toISOString()}`);
   }
 
-  const results = [];
+  const results     = [];
+  const totalSuites = suitesToRun.length;
 
-  for (const entry of suitesToRun) {
-    const mod = await import(entry.file);
+  for (let si = 0; si < totalSuites; si++) {
+    const entry = suitesToRun[si];
+    const mod   = await import(entry.file);
 
     if (runs === 1) {
-      if (!quiet) process.stdout.write(`\n  ${c(ANSI.cyan, entry.key)}  measuring...\r`);
+      process.stderr.write(`\r  ${c(ANSI.cyan, entry.key)}  measuring...\x1b[K`);
       const result = mod.runSuite();
-      if (!quiet) clearLine();
+      clearLine();
       results.push(result);
       if (!quiet) printSuite(result);
     } else {
@@ -110,11 +139,13 @@ async function main() {
       const suiteRuns = [];
 
       for (let r = 1; r <= runs; r++) {
-        if (!quiet) showProgress(entry.key, r, runs);
+        showProgress(entry.key, si + 1, totalSuites, r, runs);
         suiteRuns.push(mod.runSuite());
       }
 
-      if (!quiet) clearLine();
+      // Show the completed (100%) state momentarily before printing the table.
+      showProgress(entry.key, si + 1, totalSuites, runs + 1, runs);
+      clearLine();
 
       const aggregated = aggregateRuns(suiteRuns);
       results.push(aggregated);

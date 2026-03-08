@@ -153,6 +153,32 @@ function mergeBenchResults(runResults) {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
+/** Strip ANSI escape codes to get the visual (rendered) length of a string. */
+function visualLength(str) {
+  return str.replace(/\x1b\[[0-9;]*m/g, '').length;
+}
+
+/** Like String.prototype.padEnd, but measures visual width (ignores ANSI codes). */
+function padEndVisual(str, width) {
+  const vlen = visualLength(str);
+  return vlen >= width ? str : str + ' '.repeat(width - vlen);
+}
+
+/**
+ * Wrap a benchmark name to at most `width` characters.
+ * Splits at the last space before `width` for a natural word break.
+ * Returns [firstLine, ...continuationLines].
+ */
+function wrapName(name, width) {
+  if (name.length <= width) return [name];
+  let splitAt = name.lastIndexOf(' ', width);
+  if (splitAt <= 0) splitAt = width; // no space found — hard cut
+  const lines = [name.slice(0, splitAt)];
+  const rest = name.slice(splitAt).trimStart();
+  if (rest.length > 0) lines.push(rest);
+  return lines;
+}
+
 function fmtTime(ms) {
   if (ms < 0.001)  return `${(ms * 1e6).toFixed(1)} ns`;
   if (ms < 1)      return `${(ms * 1e3).toFixed(1)} µs`;
@@ -198,13 +224,17 @@ export function printSuite(s) {
   console.log(c(ANSI.gray, `  ${hr}`));
 
   for (const b of s.benchmarks) {
-    const name  = b.name.padEnd(COL_NAME);
+    const nameLines = wrapName(b.name, COL_NAME);
+    const name1 = nameLines[0].padEnd(COL_NAME);
     const ops   = fmtOps(b.opsPerSec).padEnd(COL_OPS);
     const mean  = fmtTime(b.mean).padEnd(COL_MEAN);
     const sigma = multiRun ? `  ${c(ANSI.yellow, fmtSigma(b.stddev).padEnd(COL_SIGMA))}` : '';
     const p95   = fmtTime(b.p95).padEnd(COL_P95);
     const min   = fmtTime(b.min).padEnd(COL_MIN);
-    console.log(`  ${c(ANSI.white, name)}  ${c(ANSI.green, ops)}  ${mean}${sigma}  ${c(ANSI.gray, p95)}  ${c(ANSI.gray, min)}`);
+    console.log(`  ${c(ANSI.white, name1)}  ${c(ANSI.green, ops)}  ${mean}${sigma}  ${c(ANSI.gray, p95)}  ${c(ANSI.gray, min)}`);
+    for (let i = 1; i < nameLines.length; i++) {
+      console.log(`    ${c(ANSI.dim, nameLines[i])}`);
+    }
   }
 
   console.log(c(ANSI.gray, `  ${hr}`));
@@ -245,23 +275,26 @@ export function printComparison(currentSuites, targetSuites, targetLabel) {
     console.log(c(ANSI.gray, `  ${hr}`));
 
     for (const b of s.benchmarks) {
-      const key    = `${s.suite}::${b.name}`;
-      const target = targetMap.get(key);
-      const name   = b.name.padEnd(COL_NAME);
+      const key       = `${s.suite}::${b.name}`;
+      const target    = targetMap.get(key);
+      const nameLines = wrapName(b.name, COL_NAME);
+      const name1     = nameLines[0].padEnd(COL_NAME);
 
       // Format a value cell: "1.7 µs ±0.1 µs" or just "1.7 µs"
+      // Use padEndVisual so ANSI escape codes don't inflate the measured length.
       const fmtCell = (bench, colW) => {
         const base  = fmtTime(bench.mean);
         const sigma = (bench.runs > 1 && bench.stddev > 0)
           ? ` ${c(ANSI.yellow, fmtSigma(bench.stddev))}`
           : '';
-        return (base + sigma).padEnd(colW);
+        return padEndVisual(base + sigma, colW);
       };
 
       const curr = fmtCell(b, COL_CURR);
 
       if (!target) {
-        console.log(`  ${name}  ${curr}  ${'(no data)'.padEnd(COL_TGT)}  ${''.padEnd(COL_CHANGE)}`);
+        console.log(`  ${c(ANSI.white, name1)}  ${curr}  ${'(no data)'.padEnd(COL_TGT)}  ${''.padEnd(COL_CHANGE)}`);
+        for (let i = 1; i < nameLines.length; i++) console.log(`    ${c(ANSI.dim, nameLines[i])}`);
         continue;
       }
 
@@ -284,7 +317,8 @@ export function printComparison(currentSuites, targetSuites, targetLabel) {
           ? c(ANSI.red,   pctStr + ' ▼') + noiseFlag
           : c(ANSI.gray,  pctStr + '   ');
 
-      console.log(`  ${c(ANSI.white, name)}  ${curr}  ${tgt}  ${changeColored}`);
+      console.log(`  ${c(ANSI.white, name1)}  ${curr}  ${tgt}  ${changeColored}`);
+      for (let i = 1; i < nameLines.length; i++) console.log(`    ${c(ANSI.dim, nameLines[i])}`);
     }
 
     console.log(c(ANSI.gray, `  ${hr}`));

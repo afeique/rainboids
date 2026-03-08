@@ -143,7 +143,9 @@ function runBenchmarks(cwd, label, outputFile) {
 
   const result = spawnSync(process.execPath, nodeArgs, {
     cwd,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    // inherit stderr so the progress bar (written to stderr by run.js) is visible.
+    // stdout is piped so any accidental output doesn't corrupt compare's own output.
+    stdio: ['ignore', 'pipe', 'inherit'],
     encoding: 'utf8',
     timeout: 5 * 60 * 1000, // 5 minute timeout
   });
@@ -151,7 +153,6 @@ function runBenchmarks(cwd, label, outputFile) {
   if (result.status !== 0) {
     console.error(`\n${c(ANSI.red, 'Benchmark failed')} for ${label}:`);
     if (result.stdout) console.error(result.stdout);
-    if (result.stderr) console.error(result.stderr);
     return false;
   }
 
