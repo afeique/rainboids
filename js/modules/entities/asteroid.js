@@ -419,10 +419,9 @@ export class Asteroid {
         const time = Date.now() * 0.003;
         const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
         
-        // Outer glow
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, this.x, this.y, '#888888', this.radius + 8, 15, 0.4 * pulseIntensity);
-        ctx.shadowBlur = 0;
+        // Outer glow — shadowBlur on stroked arcs (ring outline, not fillable)
+        ctx.shadowColor = '#888888';
+        ctx.shadowBlur = 15 * pulseIntensity;
         ctx.globalAlpha = 0.4 * pulseIntensity;
 
         // Draw subtle ring around entity
@@ -433,8 +432,7 @@ export class Asteroid {
         ctx.stroke();
 
         // Inner highlight ring
-        glowSpriteCache.draw(ctx, this.x, this.y, '#FFFFFF', this.radius + 5, 8, 0.6 * pulseIntensity);
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur = 8 * pulseIntensity;
         ctx.globalAlpha = 0.6 * pulseIntensity;
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 1;

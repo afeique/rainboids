@@ -984,11 +984,11 @@ export class Player {
             ctx.lineWidth = 3;
             ctx.lineCap = 'round';
             
-            // OPT-2: pre-rendered glow sprite replaces live GPU blur
+            // shadowBlur on stroked arcs — ring outline needs real blur
             if (this.canShoot) {
-                glowSpriteCache.draw(ctx, tipX, tipY, '#FFD700', timerRadius, 8, 0.6);
+                ctx.shadowColor = '#FFD700';
+                ctx.shadowBlur = 8;
             }
-            ctx.shadowBlur = 0;
 
             ctx.beginPath();
             ctx.arc(tipX, tipY, timerRadius, startAngle, endAngle);
@@ -997,8 +997,7 @@ export class Player {
             // Draw center dot when fully ready
             if (this.canShoot) {
                 ctx.fillStyle = '#FFD700';
-                glowSpriteCache.draw(ctx, tipX, tipY, '#FFD700', 2, 4, 0.8);
-                ctx.shadowBlur = 0;
+                ctx.shadowBlur = 4;
                 ctx.beginPath();
                 ctx.arc(tipX, tipY, 2, 0, Math.PI * 2);
                 ctx.fill();

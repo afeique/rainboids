@@ -4379,12 +4379,9 @@ export class Enemy {
             centerY += Math.sin(this.faceAngle) * (this.radius * 0.3);
         }
         
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, centerX, centerY, this.color, this.radius + 12, this.radius * 0.6, 0.3 * pulseIntensity);
-
-        // Outer glow
+        // Outer glow — shadowBlur on stroked arcs (ring outline, not fillable)
         ctx.shadowColor = this.color;
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur = 15 * pulseIntensity;
         ctx.globalAlpha = 0.4 * pulseIntensity;
 
         // Draw subtle ring around entity
@@ -4395,7 +4392,7 @@ export class Enemy {
         ctx.stroke();
 
         // Inner highlight ring
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur = 8 * pulseIntensity;
         ctx.globalAlpha = 0.6 * pulseIntensity;
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 1;

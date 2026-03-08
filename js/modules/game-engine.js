@@ -4492,9 +4492,9 @@ export class GameEngine {
         this.ctx.lineWidth = 4;
         this.ctx.lineCap = 'round';
         
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(this.ctx, cursorX, cursorY, color, timerRadius, 6, 0.5);
-        this.ctx.shadowBlur = 0;
+        // shadowBlur on stroked arcs — cannot be replaced with filled glow sprites
+        this.ctx.shadowColor = color;
+        this.ctx.shadowBlur = 6;
 
         this.ctx.beginPath();
         this.ctx.arc(cursorX, cursorY, timerRadius, startAngle, endAngle);
@@ -6299,10 +6299,10 @@ export class GameEngine {
             
             ctx.save();
             
-            // OPT-2: pre-rendered glow sprite replaces live GPU blur
+            // shadowBlur on text — glow follows text shape
             const glowSize = Math.min(10, this.player.hitStreak * 0.5);
-            glowSpriteCache.draw(ctx, this.width - 20, this.height - 40, '#FFD700', glowSize, glowSize, 0.5);
-            ctx.shadowBlur = 0;
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = glowSize;
             
             // Draw combo text
             ctx.font = `${Math.min(32, 20 + this.player.hitStreak * 0.5)}px 'Press Start 2P', monospace`;
