@@ -1,4 +1,5 @@
 // Wave configuration data for enemy and asteroid spawning
+import { GAME_CONFIG } from './constants.js';
 //
 // PHASE 1  (wave  1)      — Asteroids only
 // PHASE 2  (waves  2–19)  — Solo enemy introductions, one type per wave
@@ -113,7 +114,11 @@ export function getWaveConfig(waveNumber) {
         const scaleFactor = 1 + ((waveNumber - 80) * 0.1); // 10% increase per wave beyond 80
 
         const config = {
-            asteroids: Math.floor(baseWave.asteroids * scaleFactor),
+            // Hard cap: never exceed MAX_WAVE_ASTEROIDS regardless of scaling
+            asteroids: Math.min(
+                Math.floor(baseWave.asteroids * scaleFactor),
+                GAME_CONFIG.MAX_WAVE_ASTEROIDS
+            ),
             enemies: baseWave.enemies.map(enemy => ({
                 type: enemy.type,
                 count: Math.floor(enemy.count * scaleFactor)

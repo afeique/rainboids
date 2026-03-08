@@ -20,7 +20,7 @@ export class PoolManager {
                 this.release(oldestParticle);
             }
         }
-        
+
         let obj;
         if (this.pool.length > 0) {
             obj = this.pool.pop();
@@ -28,19 +28,37 @@ export class PoolManager {
             obj = new this.ObjectClass();
         }
         obj.reset(...args);
+        // OPT-3: track position in activeObjects for O(1) release
+        obj._poolIndex = this.activeObjects.length;
         this.activeObjects.push(obj);
         return obj;
     }
-    
+
     release(obj) {
-        const index = this.activeObjects.indexOf(obj);
-        if (index > -1) {
-            // Swap with last element then pop — O(1) vs O(n) splice
-            this.activeObjects[index] = this.activeObjects[this.activeObjects.length - 1];
+        // OPT-3: O(1) swap-and-pop using _poolIndex — eliminates O(n) indexOf scan
+        const index = obj._poolIndex;
+        if (index === undefined || index < 0 || this.activeObjects[index] !== obj) {
+            // Fallback: object not tracked (e.g. pre-existing objects without _poolIndex)
+            const i = this.activeObjects.indexOf(obj);
+            if (i === -1) return; // already released
+            this.activeObjects[i] = this.activeObjects[this.activeObjects.length - 1];
+            if (this.activeObjects[this.activeObjects.length - 1] !== obj) {
+                this.activeObjects[this.activeObjects.length - 1]._poolIndex = i;
+            }
             this.activeObjects.pop();
             obj.active = false;
+            obj._poolIndex = -1;
             this.pool.push(obj);
+            return;
         }
+        // Fast path: use stored index directly
+        const last = this.activeObjects[this.activeObjects.length - 1];
+        this.activeObjects[index] = last;
+        last._poolIndex = index;   // update swapped object's tracked position
+        this.activeObjects.pop();
+        obj.active = false;
+        obj._poolIndex = -1;
+        this.pool.push(obj);
     }
     
     updateActive(...args) {
@@ -54,11 +72,10 @@ export class PoolManager {
     }
 
     cleanupInactive() {
+        // OPT: iterate backwards so swap-and-pop inside release() doesn't skip elements
         for (let i = this.activeObjects.length - 1; i >= 0; i--) {
-            const obj = this.activeObjects[i];
-            if (!obj.active) {
-                this.activeObjects.splice(i, 1);
-                this.pool.push(obj);
+            if (!this.activeObjects[i].active) {
+                this.release(this.activeObjects[i]);
             }
         }
     }

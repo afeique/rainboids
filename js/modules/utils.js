@@ -665,6 +665,49 @@ class IconSpriteCache {
 // Global sprite cache instance
 const iconSpriteCache = new IconSpriteCache();
 
+// OPT-2: Pre-rendered glow sprite cache — eliminates live ctx.shadowBlur calls
+// (shadowBlur triggers an O(r²) GPU blur kernel every frame; a cached drawImage is O(1))
+class GlowSpriteCache {
+    constructor() {
+        this.cache = new Map();
+    }
+
+    // Get or create a pre-rendered glow circle sprite.
+    // Radius and blur are quantised to 0.5-pixel steps to limit cache size.
+    getSprite(color, radius, blur) {
+        const r = Math.max(0.5, Math.round(radius * 2) / 2);
+        const b = Math.max(0, Math.round(blur));
+        const key = `${color}_${r}_${b}`;
+        if (!this.cache.has(key)) {
+            const pad = b * 2 + 2;
+            const size = Math.ceil(r * 2) + pad * 2;
+            const canvas = document.createElement('canvas');
+            canvas.width  = size;
+            canvas.height = size;
+            const octx = canvas.getContext('2d');
+            octx.shadowColor = color;
+            octx.shadowBlur  = b;
+            octx.fillStyle   = color;
+            octx.beginPath();
+            octx.arc(size / 2, size / 2, r, 0, Math.PI * 2);
+            octx.fill();
+            this.cache.set(key, { canvas, half: size / 2 });
+        }
+        return this.cache.get(key);
+    }
+
+    // Draw a cached glow circle centred at (x, y) with the given alpha.
+    // Caller must have ctx.save()/restore() around the section if globalAlpha
+    // needs to be isolated.
+    draw(ctx, x, y, color, radius, blur, alpha) {
+        const sprite = this.getSprite(color, radius, blur);
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(sprite.canvas, x - sprite.half, y - sprite.half);
+    }
+}
+
+export const glowSpriteCache = new GlowSpriteCache();
+
 /**
  * Optimized function to draw a cached shield icon sprite
  * @param {CanvasRenderingContext2D} ctx - The canvas context

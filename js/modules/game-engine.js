@@ -879,7 +879,7 @@ export class GameEngine {
         ast.edges.forEach(edge => {
             const p1 = ast.vertices3D[edge[0]];
             const p2 = ast.vertices3D[edge[1]];
-            this.lineDebrisPool.get(ast.x, ast.y, p1, p2);
+            this.lineDebrisPool.get(ast.x, ast.y, p1, p2, '#88aacc');
         });
     }
     
@@ -4279,11 +4279,13 @@ export class GameEngine {
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
-            // Continue background star animation even when paused
-            this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.gameField));
+            // Stars twinkle but don't drift when paused — player can't move in these states
+            const zeroVel = { x: 0, y: 0 };
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(zeroVel, this.gameField));
         } else if (this.game.state === GAME_STATES.SHOP) {
-            // When in shop, only update background stars for ambiance
-            this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.gameField));
+            // When in shop, only update background stars for ambiance (no parallax)
+            const zeroVel = { x: 0, y: 0 };
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(zeroVel, this.gameField));
             // Keep existing particles moving but don't create new ones
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();

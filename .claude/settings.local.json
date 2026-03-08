@@ -41,7 +41,16 @@
       "Bash(git:*)",
       "Bash(chmod +x:*)",
       "Bash(/Users/silvr/projects/rainboids/.gitignore:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npm test:*)",
+      "Bash(wait:*)",
+      "Bash(CI=1 npm run:*)",
+      "Bash(python3:*)",
+      "Bash(wc:*)",
+      "Read(//System/Library/Frameworks/JavaScriptCore.framework/Helpers/**)",
+      "Bash(brew list)",
+      "Bash(npm list:*)"
     ],
     "deny": []
   }

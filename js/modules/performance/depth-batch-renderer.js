@@ -49,23 +49,25 @@ export class DepthBatchRenderer {
     // Render all stars in depth-sorted batches
     renderDepthBatches(ctx) {
         this.frameCount++;
-        
-        // Sort buckets by opacity (back to front)
+
+        // Sort buckets by opacity (back to front) — Array.from is needed since Map
+        // does not have a sort method.  The bucket count is small (~10 entries) so
+        // this allocation is negligible compared to the actual drawing work.
         const sortedBuckets = Array.from(this.depthBuckets.entries()).sort((a, b) => a[0] - b[0]);
-        
+
         for (const [opacity, bucket] of sortedBuckets) {
             if (bucket.background.length === 0 && bucket.color.length === 0) continue;
-            
+
             // Set opacity once for the entire bucket
             ctx.save();
             ctx.globalAlpha = opacity;
-            
+
             // Render all background stars in this depth bucket
             this.renderBackgroundStarBatch(ctx, bucket.background);
-            
+
             // Render all color stars in this depth bucket
             this.renderColorStarBatch(ctx, bucket.color);
-            
+
             ctx.restore();
         }
     }

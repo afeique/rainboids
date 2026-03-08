@@ -566,6 +566,10 @@ export class Player {
         this.vel.x *= 0.95; // More friction for slower base movement
         this.vel.y *= 0.95;
 
+        // Snap to zero once velocity is negligible — prevents endless star drift
+        if (Math.abs(this.vel.x) < 0.05) this.vel.x = 0;
+        if (Math.abs(this.vel.y) < 0.05) this.vel.y = 0;
+
         // Limit velocity
         const mag = Math.hypot(this.vel.x, this.vel.y);
         if (mag > GAME_CONFIG.MAX_V) {
