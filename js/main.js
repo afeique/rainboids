@@ -146,9 +146,12 @@ class RainboidsGame {
     }
     
     setupStartHandlers() {
-        
+
+        let _gameStarted = false;
         const startGame = () => {
-            
+            if (_gameStarted) return;
+            _gameStarted = true;
+
             if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) {
                 return;
             }

@@ -1,7 +1,7 @@
 // Color star entity - decorative stars with various shapes and behaviors
 // Note: Health and money orbs (created from asteroid/enemy destruction) are collectible
 import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES } from '../constants.js';
-import { random, wrap } from '../utils.js';
+import { random, wrap, glowSpriteCache } from '../utils.js';
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -417,69 +417,49 @@ export class ColorStar {
         }
         
         // Add extra visibility for big stars - enhanced center glow
+        // OPT-2: use pre-rendered glow sprite instead of live ctx.shadowBlur
         if (this.isBigStar) {
             ctx.save();
-            ctx.globalAlpha = this.finalOpacity * 0.6;
-            ctx.fillStyle = this.color;
-            
-            // Add a subtle glow effect to make big stars more spectacular
-            ctx.shadowColor = this.color;
-            ctx.shadowBlur = 8;
-            
-            ctx.beginPath();
-            ctx.arc(0, 0, dynamicRadius * 0.3, 0, 2 * Math.PI);
-            ctx.fill();
-            
-            // Add sparkle effect for the most interesting shapes
+            const glowR = dynamicRadius * 0.3;
+            glowSpriteCache.draw(ctx, 0, 0, this.color, glowR, 8, this.finalOpacity * 0.6);
+
+            // Add sparkle effect for the most interesting shapes (no shadowBlur needed)
             if (['star5', 'star6', 'star8', 'sparkle', 'burst'].includes(this.shape)) {
-                ctx.shadowBlur = 15;
                 ctx.globalAlpha = this.finalOpacity * 0.4;
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 1;
-                
-                // Add small radiating lines for extra sparkle
+                ctx.beginPath();
                 for (let i = 0; i < 8; i++) {
                     const angle = (i / 8) * Math.PI * 2;
                     const innerR = dynamicRadius * 0.7;
                     const outerR = dynamicRadius * 1.1;
-                    ctx.beginPath();
                     ctx.moveTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR);
                     ctx.lineTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR);
-                    ctx.stroke();
                 }
+                ctx.stroke();
             }
-            
+
             ctx.restore();
         }
         
         // Special glow effect for collectible orbs to indicate they're collectible (skip for money orbs)
+        // OPT-2: use pre-rendered glow sprite for inner core; plain stroke for collection ring
         if ((this.isBurst || this.isCollectible) && this.starType !== 'money') {
             ctx.save();
-            
-            // Pulsing glow effect
+
             const pulseIntensity = 0.3 + 0.4 * Math.sin(Date.now() * 0.008 + this.x * 0.01);
-            ctx.globalAlpha = this.finalOpacity * pulseIntensity;
-            
-            // Collection area indicator - subtle outer glow
-            const collectionRadius = dynamicRadius + 15; // Match GAME_CONFIG collection radius
-            ctx.shadowColor = this.color;
-            ctx.shadowBlur = 15;
+
+            // Collection area indicator - plain stroke (no shadowBlur needed, ring is visible)
+            ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.3;
             ctx.strokeStyle = this.color;
             ctx.lineWidth = 2;
-            ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.3;
-            
             ctx.beginPath();
-            ctx.arc(0, 0, collectionRadius, 0, 2 * Math.PI);
+            ctx.arc(0, 0, dynamicRadius + 15, 0, 2 * Math.PI);
             ctx.stroke();
-            
-            // Inner bright core for better visibility
-            ctx.shadowBlur = 8;
-            ctx.globalAlpha = this.finalOpacity * 0.9;
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.arc(0, 0, dynamicRadius * 0.6, 0, 2 * Math.PI);
-            ctx.fill();
-            
+
+            // Inner bright core via pre-rendered glow sprite
+            glowSpriteCache.draw(ctx, 0, 0, this.color, dynamicRadius * 0.6, 8, this.finalOpacity * 0.9);
+
             ctx.restore();
         }
         

@@ -7,6 +7,7 @@ export const GAME_CONFIG = {
     BULLET_SPEED: 12,
     INITIAL_AST_COUNT: 1, // Minimal asteroid count for best performance
     AST_SPEED: 2.2,
+    MAX_WAVE_ASTEROIDS: 12, // Hard cap: max asteroids per wave (Wave 1 uses 12 — the proven safe limit)
     COLOR_STAR_COUNT: 25, // Increased for visual appeal while maintaining performance
     BACKGROUND_STAR_COUNT: 30, // Increased for richer starfield while maintaining performance
     ACTIVE_STAR_ATTR: 0.01,

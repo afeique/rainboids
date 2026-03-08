@@ -4,12 +4,57 @@
   "description": "Royalty-free background music [\"Legend\"](https://www.youtube.com/watch?v=mxygNM3b95M&ab_channel=WhiteBatAudio)  graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "start": "vite",
-    "generate-playlist": "node scripts/generate-playlist.js"
+    "generate-playlist": "node scripts/generate-playlist.js",
+
+    "__UNIT_TESTS__": "── Jest unit tests (fast, no browser) ──────────────────",
+    "test:unit": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:unit:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+    "test:unit:verbose": "node --experimental-vm-modules node_modules/.bin/jest --verbose",
+
+    "__QA_TESTS__": "── Playwright QA smoke tests (headless) ─────────────────",
+    "test:qa": "playwright test --project=qa",
+
+    "__E2E_TESTS__": "── Playwright E2E tests (comprehensive, headless, sequential)",
+    "test:e2e": "playwright test --project=e2e",
+    "test:e2e:menu": "playwright test --project=e2e --grep MENU",
+    "test:e2e:hud": "playwright test --project=e2e --grep HUD",
+    "test:e2e:weapons": "playwright test --project=e2e --grep WEAPONS",
+    "test:e2e:music": "playwright test --project=e2e --grep MUSIC",
+    "test:e2e:asteroids": "playwright test --project=e2e --grep ASTEROID",
+    "test:e2e:enemies": "playwright test --project=e2e tests/e2e/06-enemies/",
+    "test:e2e:powerups": "playwright test --project=e2e --grep POWERUP",
+    "test:e2e:waves": "playwright test --project=e2e --grep WAVE",
+    "test:e2e:survival": "playwright test --project=e2e tests/e2e/09-survival.spec.js",
+
+    "__PERF_E2E__": "── Playwright performance tests (FPS, headless) ─────────",
+    "test:perf": "playwright test --project=performance",
+    "test:perf:gpu": "playwright test --project=performance-gpu",
+
+    "__ALL__": "── Run everything (unit → qa → e2e → perf) ──────────────",
+    "test": "npm run test:unit && playwright test --project=qa && playwright test --project=e2e && playwright test --project=performance",
+    "test:all": "playwright test",
+
+    "__REPORTS__": "── Reports ──────────────────────────────────────────────",
+    "report:pw": "playwright show-report tests/report",
+    "report:allure": "allure generate allure-results --clean -o allure-report && allure open allure-report",
+    "report:unit": "allure generate allure-results/unit --clean -o allure-report/unit && allure open allure-report/unit",
+    "report:e2e": "allure generate allure-results/e2e --clean -o allure-report/e2e && allure open allure-report/e2e",
+    "report:perf": "allure generate allure-results/perf --clean -o allure-report/perf && allure open allure-report/perf",
+
+    "__PERF_BENCH__": "── Mitata microbenchmarks (Node.js / V8) ────────────────",
+    "perf": "node perf/run.js",
+    "perf:save": "node perf/run.js --save",
+    "perf:pool": "node perf/run.js --suite pool",
+    "perf:collision": "node perf/run.js --suite collision",
+    "perf:noise": "node perf/run.js --suite noise",
+    "perf:wave": "node perf/run.js --suite wave",
+    "perf:math": "node perf/run.js --suite math",
+    "perf:all-engines": "node perf/run.js --engine v8,jsc,spidermonkey",
+    "perf:compare": "node perf/compare.js"
   },
   "repository": {
     "type": "git",
@@ -28,6 +73,14 @@
     "jsmediatags": "^3.9.7"
   },
   "devDependencies": {
+    "@jest/globals": "^30.2.0",
+    "@playwright/test": "^1.58.2",
+    "allure-commandline": "^2.37.0",
+    "allure-jest": "^3.6.0",
+    "allure-playwright": "^3.6.0",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "mitata": "^1.0.34",
     "vite": "^7.0.4"
   }
 }

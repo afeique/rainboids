@@ -1,8 +1,9 @@
 // Main game engine and state management
 import { GAME_CONFIG, GAME_STATES, getEnemyFiringCooldown } from './constants.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats } from './wave-data.js';
-import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon } from './utils.js';
+import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon, glowSpriteCache } from './utils.js';
 import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
+import { SpatialGrid } from './performance/spatial-grid.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
 import { Bullet } from './entities/bullet.js';
@@ -14,6 +15,8 @@ import { ColorStar } from './entities/color-star.js';
 import { BackgroundStar } from './entities/background-star.js';
 import { LineDebris } from './entities/line-debris.js';
 import { Powerup } from './entities/powerup.js';
+
+const _charWidthCache = new Map();
 
 export const PLAYER_STATES = {
     NORMAL: 'normal'
@@ -188,10 +191,16 @@ export class GameEngine {
         this.cheats = {
             onePunchMan: false,    // Player destroys everything with one hit
         };
-        
+
+        // Powerup HUD DOM ref cache
+        this._powerupHudCache = new Map();
+
+        // Shop filtered items cache
+        this.shopFilteredItems = [];
+
         // Expose cheat functions globally (case insensitive)
         this.setupCheatCodes();
-        
+
     }
     
     setupCheatCodes() {
@@ -233,7 +242,7 @@ export class GameEngine {
         this.player.y = this.gameField.height / 2;
         
         this.bulletPool = new PoolManager(Bullet, 10);     // Reduced from 20  
-        this.particlePool = new PoolManager(Particle, 50); // Reduced from 200
+        this.particlePool = new PoolManager(Particle, 32); // Cap is MAX_PARTICLES=30
         this.lineDebrisPool = new PoolManager(LineDebris, 20); // Reduced from 100
         this.asteroidPool = new PoolManager(Asteroid, 5);  // Reduced from 20
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
@@ -241,7 +250,18 @@ export class GameEngine {
         this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 10);
         this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 4);
         this.powerupPool = new PoolManager(Powerup, 5); // Reduced from 20
-        
+
+        // OPT-8: Spatial grid for O(1) insert / O(k) collision query
+        this.spatialGrid = new SpatialGrid(this.gameField.width, this.gameField.height, 8, 6);
+
+        // OPT-7: Temporal upsampling — 30fps logic, 60fps render with interpolation.
+        // Halves the cost of all game logic (collision, movement, AI, physics).
+        this.useTemporalUpsampling = true;
+        this.logicTickRate = 1000 / 30;        // 30 Hz fixed timestep
+        this.logicAccumulator = 0;
+        this.maxLogicStepsPerFrame = 3;         // spiral-of-death guard
+        this.lastFrameTime = performance.now();
+
         // Powerup display system
         this.powerupDisplay = {
             active: false,
@@ -434,6 +454,7 @@ export class GameEngine {
                         clickY <= this.shopTabBounds.offense.y + this.shopTabBounds.offense.height) {
                         this.shopCategory = 'OFFENSE';
                         this.shopScrollOffset = 0; // Reset scroll when switching tabs
+                        this._rebuildShopCache();
                         return;
                     }
                     
@@ -444,6 +465,7 @@ export class GameEngine {
                         clickY <= this.shopTabBounds.defense.y + this.shopTabBounds.defense.height) {
                         this.shopCategory = 'DEFENSE';
                         this.shopScrollOffset = 0; // Reset scroll when switching tabs
+                        this._rebuildShopCache();
                         return;
                     }
                 }
@@ -465,7 +487,7 @@ export class GameEngine {
                         clickY >= this.shopScrollbarBounds.downArrow.y && 
                         clickY <= this.shopScrollbarBounds.downArrow.y + this.shopScrollbarBounds.downArrow.height) {
                         // Calculate max scroll based on content
-                        const filteredItems = this.shopItems.filter(item => item.category === this.shopCategory);
+                        const filteredItems = this.shopFilteredItems;
                         const itemsPerRow = 2;
                         const rows = Math.ceil(filteredItems.length / itemsPerRow);
                         const itemHeight = 120;
@@ -493,7 +515,7 @@ export class GameEngine {
                         clickY >= this.shopScrollbarBounds.trackY && 
                         clickY <= this.shopScrollbarBounds.trackY + this.shopScrollbarBounds.trackHeight) {
                         // Calculate max scroll
-                        const filteredItems = this.shopItems.filter(item => item.category === this.shopCategory);
+                        const filteredItems = this.shopFilteredItems;
                         const itemsPerRow = 2;
                         const rows = Math.ceil(filteredItems.length / itemsPerRow);
                         const itemHeight = 120;
@@ -546,7 +568,7 @@ export class GameEngine {
                 // Handle scrollbar dragging
                 if (this.shopScrollThumbDrag && this.game.state === GAME_STATES.SHOP) {
                     const dragDelta = this.mouseY - this.shopScrollDragStartY;
-                    const filteredItems = this.shopItems.filter(item => item.category === this.shopCategory);
+                    const filteredItems = this.shopFilteredItems;
                     const itemsPerRow = 2;
                     const rows = Math.ceil(filteredItems.length / itemsPerRow);
                     const itemHeight = 120;
@@ -869,7 +891,7 @@ export class GameEngine {
         ast.edges.forEach(edge => {
             const p1 = ast.vertices3D[edge[0]];
             const p2 = ast.vertices3D[edge[1]];
-            this.lineDebrisPool.get(ast.x, ast.y, p1, p2);
+            this.lineDebrisPool.get(ast.x, ast.y, p1, p2, '#88aacc');
         });
     }
     
@@ -943,32 +965,37 @@ export class GameEngine {
     // Method to draw wavy rainbow text for wave messages
     drawWavyText(text, x, y, fontSize = 48) {
         if (!text) return;
-        
+
         const time = Date.now() * 0.001; // Convert to seconds
         const chars = text.split('');
-        
+        const font = `${fontSize}px 'Press Start 2P', monospace`;
+
         this.ctx.save();
-        this.ctx.font = `${fontSize}px 'Press Start 2P', monospace`;
+        this.ctx.font = font;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        
+
         // Calculate total text width for centering
         const totalWidth = this.ctx.measureText(text).width;
         let currentX = x - totalWidth / 2;
-        
+
+        // Set shadow once outside the loop (fixed white glow)
+        this.ctx.shadowBlur = 15;
+        this.ctx.shadowColor = '#ffffff';
+
         chars.forEach((char, index) => {
             if (char === ' ') {
                 currentX += fontSize * 0.5; // Space width
-            return;
-        }
-        
+                return;
+            }
+
             // Wave animation — amplitude scales with font size so all text looks proportional
             const waveOffset = Math.sin(time * 3 + index * 0.8) * (fontSize * 20 / 72);
-            
+
             // Rainbow color cycling
             const colorTime = (time * 0.15 + index * 0.1) % 1;
             let color;
-            
+
             if (colorTime < 0.16) {
                 color = '#FF0000'; // Red
             } else if (colorTime < 0.32) {
@@ -982,18 +1009,22 @@ export class GameEngine {
             } else {
                 color = '#8000FF'; // Purple
             }
-            
+
             this.ctx.fillStyle = color;
-            this.ctx.shadowColor = color;
-            this.ctx.shadowBlur = 15;
-            
+
             // Draw character with wave offset
             this.ctx.fillText(char, currentX, y + waveOffset);
-            
-            // Move to next character position
-            currentX += this.ctx.measureText(char).width;
+
+            // Move to next character position — use cached width
+            const key = font + char;
+            let cw = _charWidthCache.get(key);
+            if (cw === undefined) {
+                cw = this.ctx.measureText(char).width;
+                _charWidthCache.set(key, cw);
+            }
+            currentX += cw;
         });
-        
+
         this.ctx.restore();
     }
     
@@ -1449,9 +1480,15 @@ export class GameEngine {
                 currency: 'COINS'
             }
         ];
-        
+
+        this._rebuildShopCache();
+
     }
-    
+
+    _rebuildShopCache() {
+        this.shopFilteredItems = this.shopItems.filter(i => i.category === this.shopCategory);
+    }
+
     closeShop() {
         try {
             
@@ -1772,7 +1809,7 @@ export class GameEngine {
         const startX = shopWindowX + 20;
         
         // Filter items by current category
-        const filteredItems = this.shopItems.filter(item => item.category === this.shopCategory);
+        const filteredItems = this.shopFilteredItems;
         
         // Calculate total content height for scroll limits
         const totalContentHeight = filteredItems.length * (itemHeight + padding);
@@ -2943,6 +2980,7 @@ export class GameEngine {
         if (!this.player || !this.player.powerups ||
                 this.game.state === GAME_STATES.TITLE_SCREEN) {
             hudEl.innerHTML = '';
+            this._powerupHudCache.clear();
             return;
         }
 
@@ -2950,7 +2988,10 @@ export class GameEngine {
 
         // Remove DOM items for expired powerups
         hudEl.querySelectorAll('.powerup-hud-item').forEach(item => {
-            if (!currentTypes.has(item.dataset.type)) item.remove();
+            if (!currentTypes.has(item.dataset.type)) {
+                this._powerupHudCache.delete(item.dataset.type);
+                item.remove();
+            }
         });
 
         // Add or update one item per active powerup
@@ -2959,16 +3000,17 @@ export class GameEngine {
             const isTemporary = powerupData.timeRemaining !== Infinity &&
                                 powerupData.config.duration !== Infinity;
 
-            let item = hudEl.querySelector(`[data-type="${type}"]`);
+            let cached = this._powerupHudCache.get(type);
 
-            if (!item) {
-                item = document.createElement('div');
+            if (!cached) {
+                const item = document.createElement('div');
                 item.className = 'powerup-hud-item';
                 item.dataset.type = type;
 
                 // Countdown label above circle (temporary powerups only)
+                let countdown = null;
                 if (isTemporary) {
-                    const countdown = document.createElement('div');
+                    countdown = document.createElement('div');
                     countdown.className = 'powerup-hud-countdown';
                     item.appendChild(countdown);
                 }
@@ -2980,10 +3022,11 @@ export class GameEngine {
                 circle.textContent = powerupData.config.icon || '⭐';
                 item.appendChild(circle);
 
+                let bar = null;
                 if (isTemporary) {
                     const timerWrap = document.createElement('div');
                     timerWrap.className = 'powerup-hud-timer';
-                    const bar = document.createElement('div');
+                    bar = document.createElement('div');
                     bar.className = 'powerup-hud-timer-bar';
                     bar.style.background = colors[0];
                     timerWrap.appendChild(bar);
@@ -2997,44 +3040,48 @@ export class GameEngine {
                 item.appendChild(nameEl);
 
                 hudEl.appendChild(item);
+
+                cached = { item, countdown, bar, lastSec: -1, lastPct: -1 };
+                this._powerupHudCache.set(type, cached);
             }
 
             // Sync countdown text (seconds remaining) with colour: green → yellow → red
-            if (isTemporary) {
-                const countdown = item.querySelector('.powerup-hud-countdown');
-                if (countdown && isFinite(powerupData.timeRemaining)) {
-                    countdown.textContent = Math.ceil(powerupData.timeRemaining / 1000) + 's';
+            if (isTemporary && cached.countdown && isFinite(powerupData.timeRemaining)) {
+                const newSec = Math.ceil(powerupData.timeRemaining / 1000);
+                if (cached.lastSec !== newSec) {
+                    cached.lastSec = newSec;
+                    cached.countdown.textContent = newSec + 's';
                     const frac = isFinite(powerupData.config.duration)
                         ? Math.max(0, powerupData.timeRemaining / powerupData.config.duration)
                         : 1;
-                    countdown.style.color = frac > 0.6 ? '#44ff88'   // green
-                                          : frac > 0.25 ? '#ffdd44'  // yellow
-                                          : '#ff4444';                // red
+                    cached.countdown.style.color = frac > 0.6 ? '#44ff88'   // green
+                                                 : frac > 0.25 ? '#ffdd44'  // yellow
+                                                 : '#ff4444';                // red
                 }
             }
 
             // Sync stack count badge — "2x" format, anchored to bottom-right of circle
-            let stacksEl = item.querySelector('.powerup-hud-stacks');
+            let stacksEl = cached.item.querySelector('.powerup-hud-stacks');
             if (powerupData.stacks > 1) {
                 if (!stacksEl) {
                     stacksEl = document.createElement('div');
                     stacksEl.className = 'powerup-hud-stacks';
-                    const circleEl = item.querySelector('.powerup-hud-circle');
-                    (circleEl || item).appendChild(stacksEl);
+                    const circleEl = cached.item.querySelector('.powerup-hud-circle');
+                    (circleEl || cached.item).appendChild(stacksEl);
                 }
                 stacksEl.textContent = powerupData.stacks + 'x';
             } else if (stacksEl) {
                 stacksEl.remove();
             }
 
-            // Sync timer bar width
-            if (isTemporary) {
-                const bar = item.querySelector('.powerup-hud-timer-bar');
-                if (bar && isFinite(powerupData.timeRemaining) && isFinite(powerupData.config.duration)) {
-                    const pct = Math.max(0, Math.min(100,
-                        (powerupData.timeRemaining / powerupData.config.duration) * 100));
-                    bar.style.width = `${pct}%`;
-                    bar.style.background = pct < 30 ? '#ff3333' : colors[0];
+            // Sync timer bar width — only write style when value changes by >0.1%
+            if (isTemporary && cached.bar && isFinite(powerupData.timeRemaining) && isFinite(powerupData.config.duration)) {
+                const newPct = Math.round((powerupData.timeRemaining / powerupData.config.duration) * 1000) / 10;
+                if (Math.abs(cached.lastPct - newPct) > 0.1) {
+                    cached.lastPct = newPct;
+                    const pct = Math.max(0, Math.min(100, newPct));
+                    cached.bar.style.width = `${pct}%`;
+                    cached.bar.style.background = pct < 30 ? '#ff3333' : colors[0];
                 }
             }
         }
@@ -3370,6 +3417,12 @@ export class GameEngine {
     }
     
     handleCollisions() {
+        // OPT-8: Populate spatial grid for broad-phase collision culling
+        this.spatialGrid.clear();
+        this.spatialGrid.insertPool(this.asteroidPool);
+        this.spatialGrid.insertPool(this.enemyPool);
+        this.spatialGrid.insertPool(this.enemyBulletPool);
+
         // Player-asteroid collisions
         this.asteroidPool.activeObjects.forEach(ast => {
             if (this.player.active && collision(this.player, ast)) {
@@ -3377,19 +3430,20 @@ export class GameEngine {
             }
         });
 
-        // Bullet-asteroid collisions
+        // Bullet-asteroid collisions — OPT-8: spatial grid broad-phase
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
-            if (!bullet.active) continue; // Allow piercing bullets to continue
-            for (let j = this.asteroidPool.activeObjects.length - 1; j >= 0; j--) {
-                const ast = this.asteroidPool.activeObjects[j];
-                if (!ast.active) continue;
-                
+            if (!bullet.active) continue;
+            const nearby = this.spatialGrid.retrieve(bullet);
+            for (let j = nearby.length - 1; j >= 0; j--) {
+                const ast = nearby[j];
+                if (!ast.active || ast.constructor.name !== 'Asteroid') continue;
+
                 // Skip if this piercing bullet has already hit this asteroid
                 if (bullet.piercing > 0 && bullet.hasHitEnemy(ast)) {
                     continue;
                 }
-                
+
                 if (collision(bullet, ast)) {
                     triggerHapticFeedback(60);
                     
@@ -3707,20 +3761,20 @@ export class GameEngine {
             }
         });
         
-        // Bullet-enemy collisions
+        // Bullet-enemy collisions — OPT-8: spatial grid broad-phase
         for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
             const bullet = this.bulletPool.activeObjects[i];
             if (!bullet.active) continue;
-            
-            for (let j = this.enemyPool.activeObjects.length - 1; j >= 0; j--) {
-                const enemy = this.enemyPool.activeObjects[j];
-                if (!enemy.active) continue;
-                
+            const nearbyEn = this.spatialGrid.retrieve(bullet);
+            for (let j = nearbyEn.length - 1; j >= 0; j--) {
+                const enemy = nearbyEn[j];
+                if (!enemy.active || enemy.constructor.name !== 'Enemy') continue;
+
                 // Skip if this piercing bullet has already hit this enemy
                 if (bullet.piercing > 0 && bullet.hasHitEnemy(enemy)) {
                     continue;
                 }
-                
+
                 if (collision(bullet, enemy)) {
                     triggerHapticFeedback(40);
                     
@@ -4244,11 +4298,13 @@ export class GameEngine {
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
-            // Continue background star animation even when paused
-            this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.gameField));
+            // Stars twinkle but don't drift when paused — player can't move in these states
+            const zeroVel = { x: 0, y: 0 };
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(zeroVel, this.gameField));
         } else if (this.game.state === GAME_STATES.SHOP) {
-            // When in shop, only update background stars for ambiance
-            this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.gameField));
+            // When in shop, only update background stars for ambiance (no parallax)
+            const zeroVel = { x: 0, y: 0 };
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(zeroVel, this.gameField));
             // Keep existing particles moving but don't create new ones
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
@@ -4436,10 +4492,10 @@ export class GameEngine {
         this.ctx.lineWidth = 4;
         this.ctx.lineCap = 'round';
         
-        // Add subtle glow effect
+        // shadowBlur on stroked arcs — cannot be replaced with filled glow sprites
         this.ctx.shadowColor = color;
         this.ctx.shadowBlur = 6;
-        
+
         this.ctx.beginPath();
         this.ctx.arc(cursorX, cursorY, timerRadius, startAngle, endAngle);
         this.ctx.stroke();
@@ -4692,9 +4748,24 @@ export class GameEngine {
     
     gameLoop() {
         const frameStart = performance.now();
-        
-        this.update();
-        
+
+        // OPT-7: Fixed-timestep accumulator — logic runs at 30 Hz, render at display refresh.
+        if (this.useTemporalUpsampling) {
+            const dt = Math.min(frameStart - this.lastFrameTime, 100); // cap large gaps
+            this.lastFrameTime = frameStart;
+            this.logicAccumulator += dt;
+            let steps = 0;
+            while (this.logicAccumulator >= this.logicTickRate && steps < this.maxLogicStepsPerFrame) {
+                this.update();
+                this.logicAccumulator -= this.logicTickRate;
+                steps++;
+            }
+            // Spiral-of-death guard: drop accumulated time if we fell too far behind
+            if (steps >= this.maxLogicStepsPerFrame) this.logicAccumulator = 0;
+        } else {
+            this.update();
+        }
+
         this.ctx.save();
         if (this.game.screenShakeDuration > 0) {
             // Enhanced shake algorithm with multiple frequencies and smooth decay
@@ -5534,35 +5605,33 @@ export class GameEngine {
         
         // Draw filled health bar with gradient
         if (filledWidth > 0) {
-            
-            // Create enhanced gradient for health bar
-            const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
-            const radialGradient = ctx.createRadialGradient(
-                barX + filledWidth / 2, barY + barHeight / 2, 0,
-                barX + filledWidth / 2, barY + barHeight / 2, barHeight * 2
-            );
-            
-            // Color based on health level with enhanced gradients
-            if (healthPercentage > 0.6) {
-                // Healthy - vibrant electric blue
-                gradient.addColorStop(0, 'rgba(0, 150, 255, 0.95)');
-                gradient.addColorStop(0.3, 'rgba(0, 120, 255, 0.9)');
-                gradient.addColorStop(0.7, 'rgba(0, 90, 255, 0.85)');
-                gradient.addColorStop(1, 'rgba(0, 60, 220, 0.8)');
-            } else if (healthPercentage > 0.3) {
-                // Warning - bright yellow
-                gradient.addColorStop(0, 'rgba(255, 255, 0, 0.95)');
-                gradient.addColorStop(0.3, 'rgba(255, 220, 0, 0.9)');
-                gradient.addColorStop(0.7, 'rgba(255, 180, 0, 0.85)');
-                gradient.addColorStop(1, 'rgba(220, 140, 0, 0.8)');
-                } else {
-                // Critical - bright red
-                gradient.addColorStop(0, 'rgba(255, 50, 50, 0.95)');
-                gradient.addColorStop(0.3, 'rgba(255, 20, 20, 0.9)');
-                gradient.addColorStop(0.7, 'rgba(220, 0, 0, 0.85)');
-                gradient.addColorStop(1, 'rgba(180, 0, 0, 0.8)');
+
+            // Lazily create and cache the 3 tier gradients (constant coordinates)
+            if (!this._hpGradients) {
+                const gHigh = ctx.createLinearGradient(60, 20, 60, 50);
+                gHigh.addColorStop(0, 'rgba(0, 150, 255, 0.95)');
+                gHigh.addColorStop(0.3, 'rgba(0, 120, 255, 0.9)');
+                gHigh.addColorStop(0.7, 'rgba(0, 90, 255, 0.85)');
+                gHigh.addColorStop(1, 'rgba(0, 60, 220, 0.8)');
+
+                const gMid = ctx.createLinearGradient(60, 20, 60, 50);
+                gMid.addColorStop(0, 'rgba(255, 255, 0, 0.95)');
+                gMid.addColorStop(0.3, 'rgba(255, 220, 0, 0.9)');
+                gMid.addColorStop(0.7, 'rgba(255, 180, 0, 0.85)');
+                gMid.addColorStop(1, 'rgba(220, 140, 0, 0.8)');
+
+                const gLow = ctx.createLinearGradient(60, 20, 60, 50);
+                gLow.addColorStop(0, 'rgba(255, 50, 50, 0.95)');
+                gLow.addColorStop(0.3, 'rgba(255, 20, 20, 0.9)');
+                gLow.addColorStop(0.7, 'rgba(220, 0, 0, 0.85)');
+                gLow.addColorStop(1, 'rgba(180, 0, 0, 0.8)');
+
+                this._hpGradients = { high: gHigh, mid: gMid, low: gLow };
             }
-            
+
+            const tier = healthPercentage > 0.6 ? 'high' : healthPercentage > 0.3 ? 'mid' : 'low';
+            const gradient = this._hpGradients[tier];
+
             createHealthBarPath(filledWidth);
             ctx.fillStyle = gradient;
             ctx.fill();
@@ -6230,7 +6299,7 @@ export class GameEngine {
             
             ctx.save();
             
-            // Background glow effect
+            // shadowBlur on text — glow follows text shape
             const glowSize = Math.min(10, this.player.hitStreak * 0.5);
             ctx.shadowColor = '#FFD700';
             ctx.shadowBlur = glowSize;
@@ -6250,7 +6319,7 @@ export class GameEngine {
             // Draw "COMBO" label below
             ctx.font = '12px "Press Start 2P", monospace';
             ctx.fillStyle = '#FFFFFF';
-            ctx.shadowBlur = 3;
+            ctx.shadowBlur = 0;
             ctx.strokeText('COMBO', comboX, comboY + 15);
             ctx.fillText('COMBO', comboX, comboY + 15);
         
@@ -6302,11 +6371,15 @@ export class GameEngine {
         
         // Draw segmented XP fill with precise clipping
         if (filledWidth > 0) {
-            // Create gradient for XP fill - orange-vermilion theme
-            const gradient = ctx.createLinearGradient(barX, xpBarY, barX, xpBarY + xpBarHeight);
-            gradient.addColorStop(0, '#FF6B35'); // Bright orange-vermilion top
-            gradient.addColorStop(0.5, '#FF4500'); // Orange-red middle
-            gradient.addColorStop(1, '#CC3300'); // Deep vermilion bottom
+            // Lazily create and cache the XP bar gradient (constant coordinates)
+            if (!this._xpBarGradient) {
+                const g = ctx.createLinearGradient(barX, xpBarY, barX, xpBarY + xpBarHeight);
+                g.addColorStop(0, '#FF6B35'); // Bright orange-vermilion top
+                g.addColorStop(0.5, '#FF4500'); // Orange-red middle
+                g.addColorStop(1, '#CC3300'); // Deep vermilion bottom
+                this._xpBarGradient = g;
+            }
+            const gradient = this._xpBarGradient;
             
             // Draw the filled area as one solid shape
             ctx.fillStyle = gradient;

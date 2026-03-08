@@ -1,7 +1,7 @@
 // Enhanced Performance Manager with all advanced optimizations
 import { RenderBatch, ParticleBatch } from './render-batch.js';
 import { pathCache } from './path-cache.js';
-import { Quadtree } from './quadtree.js';
+import { SpatialGrid } from './spatial-grid.js';
 import { ViewFrustum } from './frustum-culling.js';
 import { CanvasLayers, StarFieldCache } from './canvas-layers.js';
 import { textCache, damageNumberCache, scoreCache } from './text-cache.js';
@@ -46,13 +46,8 @@ export class EnhancedPerformanceManager {
         this.particleCtx = this.particleCanvas.getContext('2d');
         this.particleImageData = this.particleCtx.createImageData(width, height);
         
-        // Quadtree for spatial partitioning
-        this.quadtree = new Quadtree({
-            x: 0,
-            y: 0,
-            width: width,
-            height: height
-        });
+        // OPT-8: Spatial grid replaces quadtree — O(1) insert, no per-frame allocation
+        this.spatialGrid = new SpatialGrid(width, height, 8, 6);
         
         // Performance monitoring
         this.frameCount = 0;
@@ -69,7 +64,7 @@ export class EnhancedPerformanceManager {
             useLayering: true,
             useTextCaching: true,
             usePathCaching: true,
-            useTemporalUpsampling: false, // Temporarily disabled for debugging
+            useTemporalUpsampling: true, // OPT-7: 30fps logic, 60fps render with interpolation
             useTypedArrayParticles: true,
             useWorkers: false, // Disabled by default until initialized
             particleLimit: 10000,
@@ -125,8 +120,8 @@ export class EnhancedPerformanceManager {
         // Clear particle batch
         this.particleBatch.clear();
         
-        // Clear and rebuild quadtree
-        this.quadtree.clear();
+        // Clear spatial grid for new frame
+        this.spatialGrid.clear();
         
         // Update performance metrics
         this.updatePerformance();
@@ -155,17 +150,17 @@ export class EnhancedPerformanceManager {
         }
     }
     
-    // Add entity to quadtree
-    addToQuadtree(entity) {
+    // Add entity to spatial grid
+    addToGrid(entity) {
         if (this.settings.useQuadtree) {
-            this.quadtree.insert(entity);
+            this.spatialGrid.insert(entity);
         }
     }
-    
+
     // Get potential collisions for entity
     getPotentialCollisions(entity) {
         if (this.settings.useQuadtree) {
-            return this.quadtree.retrieve(entity);
+            return this.spatialGrid.retrieve(entity);
         }
         return [];
     }
@@ -257,8 +252,8 @@ export class EnhancedPerformanceManager {
     
     // Render particles
     renderParticles(ctx) {
-        // Temporarily disable typed array particles to debug rendering
-        if (false && this.settings.useTypedArrayParticles) {
+        // OPT-9: Typed array particle system enabled — cache-friendly SoA, zero GC from particle objects.
+        if (this.settings.useTypedArrayParticles) {
             // Render typed array particles to image data
             this.typedParticleSystem.renderToImageData(this.particleImageData, this.width, this.height);
             
@@ -392,13 +387,8 @@ export class EnhancedPerformanceManager {
         this.particleCanvas.height = height;
         this.particleImageData = this.particleCtx.createImageData(width, height);
         
-        // Update quadtree bounds
-        this.quadtree = new Quadtree({
-            x: 0,
-            y: 0,
-            width: width,
-            height: height
-        });
+        // Update spatial grid bounds
+        this.spatialGrid.resize(width, height);
         
         // Resize worker canvas if using workers
         if (this.settings.useWorkers && this.workersInitialized) {
@@ -415,7 +405,7 @@ export class EnhancedPerformanceManager {
             avgFrameTime: this.frameTimeHistory.length > 0 ?
                 this.frameTimeHistory.reduce((a, b) => a + b) / this.frameTimeHistory.length : 0,
             renderBatchCount: this.renderBatch.batches.size,
-            quadtreeObjects: this.quadtree.getAllObjects().length,
+            spatialGridCells: this.spatialGrid.cells.length,
             pathCacheSize: this.pathCache.size,
             textCacheSize: this.textCache.size
         };
@@ -462,7 +452,7 @@ export class EnhancedPerformanceManager {
         y += lineHeight;
         ctx.fillText(`Batches: ${stats.renderBatchCount}`, 20, y);
         y += lineHeight;
-        ctx.fillText(`Quadtree: ${stats.quadtreeObjects}`, 20, y);
+        ctx.fillText(`Grid cells: ${stats.spatialGridCells}`, 20, y);
         y += lineHeight;
         ctx.fillText(`Path Cache: ${stats.pathCacheSize}`, 20, y);
         y += lineHeight;
@@ -491,9 +481,9 @@ export class EnhancedPerformanceManager {
         
         ctx.restore();
         
-        // Draw quadtree structure
+        // Draw spatial grid
         if (this.settings.useQuadtree) {
-            this.quadtree.draw(ctx);
+            this.spatialGrid.draw(ctx);
         }
         
         // Draw frustum bounds
