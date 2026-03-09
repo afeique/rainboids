@@ -31,11 +31,31 @@ export class BackgroundStar {
         // Twinkling properties
         this.opacity = 0;
         this.opacityOffset = Math.random() * Math.PI * 2;
-        this.twinkleSpeed = random(0.005, 0.02) * (1 + this.z * 0.2) * densityFactor;
-        
-        // White color with slight variations
+        this.twinkleSpeed = random(0.004, 0.018) * (1 + this.z * 0.25) * densityFactor;
+        this.twinkleAmplitude = random(0.25, 0.45); // Vary how much each star twinkles
+
+        // Realistic star colors: mostly blue-white, some warm white, occasional tints
+        const colorRoll = Math.random();
         const brightness = 200 + Math.floor(Math.random() * 55); // 200-255
-        this.color = `rgb(${brightness}, ${brightness}, ${brightness})`;
+        if (colorRoll < 0.55) {
+            // Blue-white (hot stars) — most common
+            const b = Math.min(255, brightness + 15);
+            const g = Math.min(255, brightness + 5);
+            this.color = `rgb(${brightness}, ${g}, ${b})`;
+        } else if (colorRoll < 0.80) {
+            // Pure white
+            this.color = `rgb(${brightness}, ${brightness}, ${brightness})`;
+        } else if (colorRoll < 0.92) {
+            // Warm yellow-white (sun-like)
+            const r = Math.min(255, brightness + 10);
+            const b = Math.max(180, brightness - 20);
+            this.color = `rgb(${r}, ${brightness}, ${b})`;
+        } else {
+            // Rare faint orange-red (cool giants)
+            const r = Math.min(255, brightness + 20);
+            const b = Math.max(160, brightness - 35);
+            this.color = `rgb(${r}, ${brightness}, ${b})`;
+        }
         
         this.active = true;
     }
@@ -43,9 +63,10 @@ export class BackgroundStar {
     update(shipVel, gameField = null) {
         if (!this.active) return;
         
-        // Simple twinkling - brighter
+        // Natural twinkling with per-star amplitude variation
         this.opacityOffset += this.twinkleSpeed;
-        this.opacity = (Math.sin(this.opacityOffset) + 1) / 2 * 0.6 + 0.5; // 0.5 to 1.1 opacity (brighter)
+        const twinkle = (Math.sin(this.opacityOffset) + 1) / 2; // 0–1
+        this.opacity = (1 - this.twinkleAmplitude) + twinkle * this.twinkleAmplitude; // varies by star
         
         // Reduced parallax effect for less distraction
         const parallaxFactor = Math.pow(this.z, 1.8) * 0.12;

@@ -163,26 +163,33 @@ export class TypedArrayParticleSystem {
                     data[index + 3] = Math.min(255, data[index + 3] + 255 * alpha);
                 }
             } else {
-                // Circle rendering for larger particles
+                // OPT-5: squared-distance comparison — only sqrt for pixels inside the circle
                 const x0 = Math.max(0, Math.floor(x - radius));
                 const x1 = Math.min(width - 1, Math.ceil(x + radius));
                 const y0 = Math.max(0, Math.floor(y - radius));
                 const y1 = Math.min(height - 1, Math.ceil(y + radius));
-                
+                const radiusSq = radius * radius;
+                const cr = this.colorR[i];
+                const cg = this.colorG[i];
+                const cb = this.colorB[i];
+
                 for (let py = y0; py <= y1; py++) {
+                    const dy = py - y;
+                    const dySq = dy * dy;
+                    const rowOffset = py * width;
                     for (let px = x0; px <= x1; px++) {
                         const dx = px - x;
-                        const dy = py - y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (dist <= radius) {
-                            const falloff = 1 - (dist / radius);
-                            const index = (py * width + px) * 4;
-                            
-                            data[index] = Math.min(255, data[index] + this.colorR[i] * alpha * falloff);
-                            data[index + 1] = Math.min(255, data[index + 1] + this.colorG[i] * alpha * falloff);
-                            data[index + 2] = Math.min(255, data[index + 2] + this.colorB[i] * alpha * falloff);
-                            data[index + 3] = Math.min(255, data[index + 3] + 255 * alpha * falloff);
+                        const distSq = dx * dx + dySq;
+
+                        if (distSq <= radiusSq) {
+                            const falloff = 1 - (Math.sqrt(distSq) / radius);
+                            const af = alpha * falloff;
+                            const idx = (rowOffset + px) * 4;
+
+                            data[idx]     = Math.min(255, data[idx]     + cr  * af);
+                            data[idx + 1] = Math.min(255, data[idx + 1] + cg  * af);
+                            data[idx + 2] = Math.min(255, data[idx + 2] + cb  * af);
+                            data[idx + 3] = Math.min(255, data[idx + 3] + 255 * af);
                         }
                     }
                 }

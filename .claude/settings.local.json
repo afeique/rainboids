@@ -40,6 +40,22 @@
       "Bash(node:*)",
       "Bash(npm run:*)",
       "Bash(git mv:*)"
+      "Bash(node --check js/modules/pool-manager.js && echo \"pool-manager OK\" && node --check js/modules/game-engine.js && echo \"game-engine OK\" && node --check js/modules/input-handler.js && echo \"input-handler OK\" && node --check js/modules/wave-data.js && echo \"wave-data OK\" && node --check js/main.js && echo \"main OK\")",
+      "Bash(node:*)",
+      "Bash(git:*)",
+      "Bash(chmod +x:*)",
+      "Bash(/Users/silvr/projects/rainboids/.gitignore:*)",
+      "Bash(npm run:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npm test:*)",
+      "Bash(wait:*)",
+      "Bash(CI=1 npm run:*)",
+      "Bash(python3:*)",
+      "Bash(wc:*)",
+      "Read(//System/Library/Frameworks/JavaScriptCore.framework/Helpers/**)",
+      "Bash(brew list)",
+      "Bash(npm list:*)",
+      "Bash(MITATA_JSON=1 node:*)",
     ],
     "deny": []
   }

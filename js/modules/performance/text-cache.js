@@ -15,24 +15,27 @@ export class TextCache {
         const key = this.getCacheKey(text, font, fillStyle, strokeStyle, lineWidth);
         
         if (!this.cache.has(key)) {
-            // Limit cache size
+            // Limit cache size — OPT-10: true FIFO already (Map preserves insertion order)
             if (this.cache.size >= this.maxCacheSize) {
                 const firstKey = this.cache.keys().next().value;
                 this.cache.delete(firstKey);
             }
-            
+
             // Create canvas for text
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
-            
+
             // Set font to measure text
             tempCtx.font = font;
             const metrics = tempCtx.measureText(text);
-            
+
             // Calculate canvas size with padding
             const padding = Math.ceil(lineWidth) + 4;
             const width = Math.ceil(metrics.width) + padding * 2;
-            const height = parseInt(font) * 1.5 + padding * 2;
+            // OPT-10: parse font size safely — handle "bold 12px ..." as well as "12px ..."
+            const fontSizeMatch = font.match(/(\d+(?:\.\d+)?)px/);
+            const fontSize = fontSizeMatch ? parseFloat(fontSizeMatch[1]) : 12;
+            const height = fontSize * 1.5 + padding * 2;
             
             tempCanvas.width = width;
             tempCanvas.height = height;
@@ -81,7 +84,11 @@ export class TextCache {
             });
         }
         
-        return this.cache.get(key);
+        // OPT-10: LRU — promote hit entry to "newest" so eviction removes least-recently-used
+        const entry = this.cache.get(key);
+        this.cache.delete(key);
+        this.cache.set(key, entry);
+        return entry;
     }
     
     // Draw cached text at position
@@ -129,8 +136,9 @@ export class NumberCache extends TextCache {
         this.strokeStyle = strokeStyle;
         this.lineWidth = lineWidth;
         
-        // Pre-cache common numbers
-        this.precacheNumbers(0, Math.min(100, maxValue));
+        // OPT-10: pre-warm a broader range so common game values hit the cache immediately.
+        // Scores grow into the thousands quickly; pre-warm up to 1000 (or maxValue).
+        this.precacheNumbers(0, Math.min(1000, maxValue));
     }
     
     precacheNumbers(start, end) {

@@ -24,7 +24,10 @@ export class EnemyBullet {
         this.radius = explosive ? 6 : 3;
         this.glowRadius = explosive ? 12 : 6;
         this.trailLength = explosive ? 8 : 4;
-        this.trail = [];
+        // OPT: ring buffer trail — O(1) insert, no unshift/pop shifting
+        this.trail = new Array(this.trailLength);
+        this.trailHead = 0;
+        this.trailCount = 0;
 
         // Rotation for visual effect
         this.rotation = 0;
@@ -63,11 +66,10 @@ export class EnemyBullet {
     update() {
         if (!this.active) return;
         
-        // Store trail positions
-        this.trail.unshift({ x: this.x, y: this.y });
-        if (this.trail.length > this.trailLength) {
-            this.trail.pop();
-        }
+        // OPT: ring buffer trail insert — O(1)
+        this.trail[this.trailHead] = { x: this.x, y: this.y };
+        this.trailHead = (this.trailHead + 1) % this.trailLength;
+        if (this.trailCount < this.trailLength) this.trailCount++;
         
         // Apply movement pattern
         this.applyMovementPattern();
@@ -558,27 +560,34 @@ export class EnemyBullet {
     }
     
     drawTrail(ctx) {
-        if (this.trail.length < 2) return;
-        
+        if (this.trailCount < 2) return;
+
         // Calculate base opacity for trail (same as bullet)
         let baseOpacity = this.life;
         if (this.movementPattern === 'crescent_slice' && this.maxLife) {
             const ageRatio = (Date.now() - this.creationTime) / (this.maxLife * 1000);
             baseOpacity = Math.max(0, 1 - ageRatio);
         }
-        
-        for (let i = 0; i < this.trail.length - 1; i++) {
-            const alpha = (1 - i / this.trail.length) * 0.6 * baseOpacity;
-            const width = this.radius * (1 - i / this.trail.length) * 0.5;
-            
+
+        ctx.strokeStyle = this.color;
+        ctx.lineCap = 'round';
+
+        // OPT: iterate ring buffer newest→oldest (i=0 is newest)
+        for (let i = 0; i < this.trailCount - 1; i++) {
+            const idx  = (this.trailHead - 1 - i + this.trailLength * 2) % this.trailLength;
+            const idx2 = (this.trailHead - 2 - i + this.trailLength * 2) % this.trailLength;
+            const seg  = this.trail[idx];
+            const seg2 = this.trail[idx2];
+            if (!seg || !seg2) continue;
+
+            const alpha = (1 - i / this.trailCount) * 0.6 * baseOpacity;
+            const width = this.radius * (1 - i / this.trailCount) * 0.5;
+
             ctx.globalAlpha = alpha;
-            ctx.strokeStyle = this.color;
             ctx.lineWidth = width;
-            ctx.lineCap = 'round';
-            
             ctx.beginPath();
-            ctx.moveTo(this.trail[i].x, this.trail[i].y);
-            ctx.lineTo(this.trail[i + 1].x, this.trail[i + 1].y);
+            ctx.moveTo(seg.x, seg.y);
+            ctx.lineTo(seg2.x, seg2.y);
             ctx.stroke();
         }
     }

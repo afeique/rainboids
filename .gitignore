@@ -5,5 +5,7 @@ js/dist/
 npm-debug.log*
 
 # Benchmark output
-benchmark/results/
-benchmark/comparisons/
+benchmark/results/*
+benchmark/comparisons/*
+.bench-worktree-*
+allure-results/*

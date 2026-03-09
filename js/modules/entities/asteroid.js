@@ -1,6 +1,6 @@
 // Asteroid entity with 3D wireframe rendering
 import { GAME_CONFIG } from '../constants.js';
-import { random, GameDimensions } from '../utils.js';
+import { random, GameDimensions, glowSpriteCache } from '../utils.js';
 const DEBRIS_COUNT = 5;
 
 function isMobile() {
@@ -18,6 +18,13 @@ export class Asteroid {
             [4,5],[4,9],[4,11],[5,9],[5,11],[6,7],[6,8],[6,10],
             [7,8],[7,10],[8,9],[10,11]
         ];
+
+        // OPT: Pre-allocate bucket arrays for drawAsteroidShape — reused every frame
+        this._BUCKETS = 5;
+        this._bucketEdges = new Array(this._BUCKETS);
+        for (let i = 0; i < this._BUCKETS; i++) this._bucketEdges[i] = [];
+        this._bucketHue   = new Float64Array(this._BUCKETS);
+        this._bucketCount = new Uint8Array(this._BUCKETS);
         
         this.initializeAsteroid(x, y, radius, level);
     }
@@ -294,27 +301,32 @@ export class Asteroid {
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;
-        
-        // Create vertical gradient for health bar (light to dark) and background color
-        let healthGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
-        let backgroundColor;
-        
-        if (healthPercentage > 0.5) {
-            // Green gradient: light green to dark green
-            healthGradient.addColorStop(0, '#66ff66'); // Light green at top
-            healthGradient.addColorStop(1, '#00cc00'); // Dark green at bottom
-            backgroundColor = 'rgba(0, 102, 0, 0.6)'; // Dark green background with opacity
-        } else if (healthPercentage > 0.25) {
-            // Yellow gradient: light yellow to dark yellow
-            healthGradient.addColorStop(0, '#ffff99'); // Light yellow at top
-            healthGradient.addColorStop(1, '#cccc00'); // Dark yellow at bottom
-            backgroundColor = 'rgba(102, 102, 0, 0.6)'; // Dark yellow background with opacity
-        } else {
-            // Red gradient: light red to dark red
-            healthGradient.addColorStop(0, '#ff6666'); // Light red at top
-            healthGradient.addColorStop(1, '#cc0000'); // Dark red at bottom
-            backgroundColor = 'rgba(102, 0, 0, 0.6)'; // Dark red background with opacity
+
+        // OPT-6: cache the gradient per tier so createLinearGradient() is only called
+        // when the tier boundary (>50% / >25% / <=25%) changes, not every frame.
+        const tier = healthPercentage > 0.5 ? 'green' : healthPercentage > 0.25 ? 'yellow' : 'red';
+        if (tier !== this._healthBarTier || !this._healthBarGradient) {
+            this._healthBarTier = tier;
+            let healthGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+            let backgroundColor;
+            if (tier === 'green') {
+                healthGradient.addColorStop(0, '#66ff66');
+                healthGradient.addColorStop(1, '#00cc00');
+                backgroundColor = 'rgba(0, 102, 0, 0.6)';
+            } else if (tier === 'yellow') {
+                healthGradient.addColorStop(0, '#ffff99');
+                healthGradient.addColorStop(1, '#cccc00');
+                backgroundColor = 'rgba(102, 102, 0, 0.6)';
+            } else {
+                healthGradient.addColorStop(0, '#ff6666');
+                healthGradient.addColorStop(1, '#cc0000');
+                backgroundColor = 'rgba(102, 0, 0, 0.6)';
+            }
+            this._healthBarGradient   = healthGradient;
+            this._healthBarBackground = backgroundColor;
         }
+        let healthGradient = this._healthBarGradient;
+        let backgroundColor = this._healthBarBackground;
         
         const cornerRadius = 1; // Minimal rounding
         
@@ -339,33 +351,65 @@ export class Asteroid {
     }
     
     // Helper method to draw the asteroid shape
+    // OPT-1: hoist Date.now() + shadow props once; batch edges by depth-alpha bucket.
+    // Reduces GPU path flushes from 30 → ~5 and eliminates 29 redundant Date.now() calls.
     drawAsteroidShape(ctx) {
-        this.edges.forEach((edge, index) => {
+        const now = Date.now();
+
+        // Set constant state once — not 30× per edge
+        ctx.lineWidth = 2;
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Compute per-edge alpha and hue, then group into ~5 depth buckets.
+        // Pre-allocated arrays on `this` — zero per-frame allocation.
+        const BUCKETS = this._BUCKETS;
+        const bucketEdges = this._bucketEdges;
+        const bucketHue   = this._bucketHue;
+        const bucketCount = this._bucketCount;
+
+        // Clear buckets (reuse arrays)
+        for (let b = 0; b < BUCKETS; b++) {
+            bucketEdges[b].length = 0;
+            bucketHue[b]   = 0;
+            bucketCount[b] = 0;
+        }
+
+        for (let i = 0; i < this.edges.length; i++) {
+            const edge = this.edges[i];
             const v1 = this.projectedVertices[edge[0]];
             const v2 = this.projectedVertices[edge[1]];
-            
-            if (!v1 || !v2) return;
-            
-            const avg = (v1.depth + v2.depth) / 2;
-            const baseAlpha = Math.max(0.2, Math.pow(Math.max(0, (this.fov - avg) / (this.fov + this.radius)), 2.0));
-            
-            ctx.globalAlpha = baseAlpha;
-            
-            const hue = (Date.now() / 20 + index * 10) % 360;
-            ctx.strokeStyle = `hsl(${hue}, 100%, 75%)`; // Increased lightness from 70% to 85%
-            ctx.lineWidth = 2; // Thicker lines for more visibility
-            
-            // Remove all shadow effects
-            ctx.shadowColor = 'transparent';
-            ctx.shadowBlur = 0;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
+            if (!v1 || !v2) continue;
 
+            const avg = (v1.depth + v2.depth) / 2;
+            const alpha = Math.max(0.2, Math.pow(Math.max(0, (this.fov - avg) / (this.fov + this.radius)), 2.0));
+            const hue   = (now / 20 + i * 10) % 360;
+
+            // Map alpha [0.2, 1.0] → bucket index [0, 4]
+            const bi = Math.min(BUCKETS - 1, Math.floor((alpha - 0.2) / 0.8 * BUCKETS));
+            bucketEdges[bi].push(v1, v2, alpha);
+            bucketHue[bi]  += hue;
+            bucketCount[bi]++;
+        }
+
+        // One beginPath + stroke per non-empty bucket
+        for (let bi = 0; bi < BUCKETS; bi++) {
+            if (bucketCount[bi] === 0) continue;
+            const edges = bucketEdges[bi];
+            const alpha = edges[2]; // first edge's alpha for this bucket
+            const hue   = bucketHue[bi] / bucketCount[bi]; // average hue
+
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = `hsl(${hue}, 100%, 75%)`;
             ctx.beginPath();
-            ctx.moveTo(v1.x, v1.y);
-            ctx.lineTo(v2.x, v2.y);
+            for (let j = 0; j < edges.length; j += 3) {
+                ctx.moveTo(edges[j].x, edges[j].y);
+                ctx.lineTo(edges[j + 1].x, edges[j + 1].y);
+            }
             ctx.stroke();
-        });
+        }
     }
     
     drawTargetingEffect(ctx) {
@@ -375,18 +419,18 @@ export class Asteroid {
         const time = Date.now() * 0.003;
         const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
         
-        // Outer glow
-        ctx.shadowColor = '#888888'; // Gray glow for asteroids
+        // Outer glow — shadowBlur on stroked arcs (ring outline, not fillable)
+        ctx.shadowColor = '#888888';
         ctx.shadowBlur = 15 * pulseIntensity;
         ctx.globalAlpha = 0.4 * pulseIntensity;
-        
+
         // Draw subtle ring around entity
         ctx.strokeStyle = '#888888';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
         ctx.stroke();
-        
+
         // Inner highlight ring
         ctx.shadowBlur = 8 * pulseIntensity;
         ctx.globalAlpha = 0.6 * pulseIntensity;

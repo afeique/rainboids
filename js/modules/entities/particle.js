@@ -1,5 +1,5 @@
 // Particle effects system
-import { random } from '../utils.js';
+import { random, glowSpriteCache } from '../utils.js';
 
 export class Particle {
     constructor() {
@@ -316,23 +316,13 @@ export class Particle {
                 break;
                 
             case 'starSparkle':
-                ctx.save();
-                // Add glow effect to sparkles
-                ctx.shadowColor = this.color;
-                ctx.shadowBlur = this.radius * 4;
-                ctx.globalAlpha = Math.max(0, this.life * 2.5);
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
-                ctx.fill();
-                // Add bright center
-                ctx.shadowBlur = this.radius * 2;
-                ctx.globalAlpha = Math.max(0, this.life * 3);
-                ctx.fillStyle = '#FFFFAA'; // Bright yellow-white center
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 0.6, 0, 2 * Math.PI);
-                ctx.fill();
-                ctx.restore();
+                // OPT-2: use pre-rendered glow sprites instead of live ctx.shadowBlur
+                if (this.radius > 0.05) {
+                    ctx.save();
+                    glowSpriteCache.draw(ctx, this.x, this.y, this.color, this.radius, this.radius * 4, Math.max(0, this.life * 2.5));
+                    glowSpriteCache.draw(ctx, this.x, this.y, '#FFFFAA', this.radius * 0.6, this.radius * 2, Math.max(0, this.life * 3));
+                    ctx.restore();
+                }
                 break;
             case 'asteroidCollisionDebris':
                 ctx.save();

@@ -148,6 +148,8 @@ export class InputHandler {
         this.aimTouchId = null; // Touch ID for aiming
         this.joystickCenter = null; // Dynamic center position
         this.joystickMaxDist = 80; // Fixed joystick radius
+        this.joystickBaseEl = null; // Cached DOM ref
+        this.joystickHandleEl = null; // Cached DOM ref
         
         // Multi-touch detection and fallback
         this.touchSupported = 'ontouchstart' in window;
@@ -282,10 +284,10 @@ export class InputHandler {
     }
     
     testMultiTouch() {
-        
+
         if (navigator.maxTouchPoints) {
         }
-        
+
         // Test if touch events fire properly
         let testTouchCount = 0;
         const testHandler = (e) => {
@@ -296,18 +298,25 @@ export class InputHandler {
                 document.removeEventListener('touchend', testHandler);
             }
         };
-        
+
         document.addEventListener('touchstart', testHandler, { passive: false });
         document.addEventListener('touchmove', testHandler, { passive: false });
         document.addEventListener('touchend', testHandler, { passive: false });
-        
+
+        // Cleanup listeners after 10 seconds to avoid memory leak
+        setTimeout(() => {
+            document.removeEventListener('touchstart', testHandler);
+            document.removeEventListener('touchmove', testHandler);
+            document.removeEventListener('touchend', testHandler);
+        }, 10000);
+
     }
     
     showDynamicJoystick(x, y) {
         // Create or show dynamic joystick visual at the touch position
-        let joystickBase = document.getElementById('dynamic-joystick-base');
-        let joystickHandle = document.getElementById('dynamic-joystick-handle');
-        
+        let joystickBase = this.joystickBaseEl;
+        let joystickHandle = this.joystickHandleEl;
+
         if (!joystickBase) {
             // Create dynamic joystick elements
             joystickBase = document.createElement('div');
@@ -324,7 +333,7 @@ export class InputHandler {
                 transform: translate(-50%, -50%);
             `;
             document.body.appendChild(joystickBase);
-            
+
             joystickHandle = document.createElement('div');
             joystickHandle.id = 'dynamic-joystick-handle';
             joystickHandle.style.cssText = `
@@ -338,8 +347,11 @@ export class InputHandler {
                 transform: translate(-50%, -50%);
             `;
             document.body.appendChild(joystickHandle);
+
+            this.joystickBaseEl = joystickBase;
+            this.joystickHandleEl = joystickHandle;
         }
-        
+
         joystickBase.style.left = x + 'px';
         joystickBase.style.top = y + 'px';
         joystickBase.style.display = 'block';
@@ -350,28 +362,22 @@ export class InputHandler {
     }
     
     updateDynamicJoystick(dx, dy) {
-        const joystickHandle = document.getElementById('dynamic-joystick-handle');
+        const joystickHandle = this.joystickHandleEl;
         if (joystickHandle && this.joystickCenter) {
             joystickHandle.style.left = (this.joystickCenter.x + dx) + 'px';
             joystickHandle.style.top = (this.joystickCenter.y + dy) + 'px';
         }
     }
-    
+
     hideDynamicJoystick() {
-        const joystickBase = document.getElementById('dynamic-joystick-base');
-        const joystickHandle = document.getElementById('dynamic-joystick-handle');
-        
-        if (joystickBase) joystickBase.style.display = 'none';
-        if (joystickHandle) joystickHandle.style.display = 'none';
+        if (this.joystickBaseEl) this.joystickBaseEl.style.display = 'none';
+        if (this.joystickHandleEl) this.joystickHandleEl.style.display = 'none';
     }
-    
+
     resetDynamicJoystick() {
         // Hide dynamic joystick
-        const joystickBase = document.getElementById('dynamic-joystick-base');
-        const joystickHandle = document.getElementById('dynamic-joystick-handle');
-        
-        if (joystickBase) joystickBase.style.display = 'none';
-        if (joystickHandle) joystickHandle.style.display = 'none';
+        if (this.joystickBaseEl) this.joystickBaseEl.style.display = 'none';
+        if (this.joystickHandleEl) this.joystickHandleEl.style.display = 'none';
         
         // Reset state
         this.joystickCenter = null;
@@ -402,10 +408,7 @@ export class InputHandler {
     }
     
     getInput() {
-        // Debug: Log input values occasionally
-        if (Math.random() < 0.005) { // 0.5% chance
-        }
-        return { ...this.input };
+        return this.input;
     }
     
     reset() {
