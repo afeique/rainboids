@@ -1,6 +1,7 @@
 // Enhanced enemy system with multiple types and behaviors
 import { GAME_CONFIG, ENEMY_BULLET_CONFIG, getEnemyFiringCooldown } from '../constants.js';
 import { random, GameDimensions, glowSpriteCache } from '../utils.js';
+import { rgba } from '../color-cache.js';
 
 // ── Feature toggles ────────────────────────────────────────────────────────
 // Set window.SHOW_ENEMY_NAMES = false in the browser console to hide name labels
@@ -3524,7 +3525,7 @@ export class Enemy {
             // OPT-2: live GPU blur removed — multi-pass stroke provides glow
             ctx.shadowBlur   = 0;
             ctx.shadowColor  = '#00e8ff';
-            ctx.strokeStyle  = `rgba(0, 200, 255, ${0.28 * a})`;
+            ctx.strokeStyle  = rgba(0, 200, 255, 0.28 * a);
             ctx.lineWidth    = 14 * widthMult;
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
@@ -3533,7 +3534,7 @@ export class Enemy {
 
             // Mid glow
             ctx.shadowBlur   = 0;
-            ctx.strokeStyle  = `rgba(80, 230, 255, ${0.60 * a})`;
+            ctx.strokeStyle  = rgba(80, 230, 255, 0.60 * a);
             ctx.lineWidth    = 5 * widthMult;
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
@@ -3543,7 +3544,7 @@ export class Enemy {
             // Bright white core
             ctx.shadowBlur   = 0;
             ctx.shadowColor  = '#ffffff';
-            ctx.strokeStyle  = `rgba(220, 255, 255, ${0.95 * a})`;
+            ctx.strokeStyle  = rgba(220, 255, 255, 0.95 * a);
             ctx.lineWidth    = 1.8 * widthMult;
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
@@ -4282,8 +4283,8 @@ export class Enemy {
 
         // Cyan for Drifter arc lightning, red for other lasers
         const lineColor = this.type === 'DRIFTER'
-            ? `rgba(0, 220, 255, ${finalAlpha})`
-            : `rgba(255, 0, 0, ${finalAlpha})`;
+            ? rgba(0, 220, 255, finalAlpha)
+            : rgba(255, 0, 0, finalAlpha);
 
         ctx.strokeStyle = lineColor;
         ctx.lineWidth = 3 + this.laserCharge * 2;
@@ -4314,11 +4315,11 @@ export class Enemy {
 
         // Drifter uses cyan lightning ball; others use red
         const isDrifter = this.type === 'DRIFTER';
-        const c1 = isDrifter ? `rgba(0, 220, 255, ${0.8 * pulseIntensity})` : `rgba(255, 0, 0, ${0.8 * pulseIntensity})`;
-        const c2 = isDrifter ? `rgba(0, 160, 255, ${0.4 * pulseIntensity})` : `rgba(255, 100, 0, ${0.4 * pulseIntensity})`;
+        const c1 = isDrifter ? rgba(0, 220, 255, 0.8 * pulseIntensity) : rgba(255, 0, 0, 0.8 * pulseIntensity);
+        const c2 = isDrifter ? rgba(0, 160, 255, 0.4 * pulseIntensity) : rgba(255, 100, 0, 0.4 * pulseIntensity);
         const c3 = isDrifter ? 'rgba(0, 220, 255, 0)'                        : 'rgba(255, 0, 0, 0)';
-        const c4 = isDrifter ? `rgba(0, 200, 255, ${0.9 * pulseIntensity})`  : `rgba(255, 50, 0, ${0.9 * pulseIntensity})`;
-        const cSpark = isDrifter ? `rgba(100, 255, 255, ${0.6 * pulseIntensity})` : `rgba(255, 255, 0, ${0.6 * pulseIntensity})`;
+        const c4 = isDrifter ? rgba(0, 200, 255, 0.9 * pulseIntensity)  : rgba(255, 50, 0, 0.9 * pulseIntensity);
+        const cSpark = isDrifter ? rgba(100, 255, 255, 0.6 * pulseIntensity) : rgba(255, 255, 0, 0.6 * pulseIntensity);
 
         // Outer glow
         const gradient = ctx.createRadialGradient(ballX, ballY, 0, ballX, ballY, ballRadius * 2);
@@ -4338,7 +4339,7 @@ export class Enemy {
         ctx.fill();
 
         // Bright core
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * pulseIntensity})`;
+        ctx.fillStyle = rgba(255, 255, 255, 0.7 * pulseIntensity);
         ctx.beginPath();
         ctx.arc(ballX, ballY, ballRadius * 0.4, 0, Math.PI * 2);
         ctx.fill();
@@ -4507,8 +4508,8 @@ export class Enemy {
 
         // ── Engine exhaust glow ────────────────────────────────────────────────
         const engGrad = ctx.createRadialGradient(-size * 0.72, 0, 0, -size * 0.72, 0, size * 0.38);
-        engGrad.addColorStop(0,   `rgba(255, 220, 120, ${pulse})`);
-        engGrad.addColorStop(0.35, `rgba(255, 80, 0, ${0.75 * pulse})`);
+        engGrad.addColorStop(0,   rgba(255, 220, 120, pulse));
+        engGrad.addColorStop(0.35, rgba(255, 80, 0, 0.75 * pulse));
         engGrad.addColorStop(1,   'rgba(255, 0, 0, 0)');
         ctx.fillStyle = engGrad;
         ctx.globalAlpha = pulse;
@@ -4519,7 +4520,7 @@ export class Enemy {
 
         // ── Cockpit glow ──────────────────────────────────────────────────────
         ctx.shadowBlur = 0;
-        ctx.fillStyle = `rgba(255, 150, 150, ${0.7 * pulse})`;
+        ctx.fillStyle = rgba(255, 150, 150, 0.7 * pulse);
         ctx.beginPath();
         ctx.ellipse(size * 0.32, 0, size * 0.14, size * 0.09, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -4627,7 +4628,7 @@ export class Enemy {
 
         // ── Outer arc-discharge ring ──────────────────────────────────────────
         const outerPts = 18;
-        ctx.strokeStyle = `rgba(0, 220, 255, ${0.4 * pulse})`;
+        ctx.strokeStyle = rgba(0, 220, 255, 0.4 * pulse);
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         for (let i = 0; i <= outerPts; i++) {
@@ -4645,7 +4646,7 @@ export class Enemy {
         for (let i = 0; i < 6; i++) {
             const baseAngle = (i / 6) * Math.PI * 2 + t * 1.2;
             const opacity = 0.45 + Math.sin(t * 9 + i * 1.5) * 0.35;
-            ctx.strokeStyle = `rgba(120, 250, 255, ${opacity})`;
+            ctx.strokeStyle = rgba(120, 250, 255, opacity);
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(0, 0);
@@ -4665,7 +4666,7 @@ export class Enemy {
         // ── Body: jagged electric star ────────────────────────────────────────
         const bodyPts = 10;
         ctx.fillStyle = '#000a10';
-        ctx.strokeStyle = `rgba(0, 255, 255, ${0.85 + pulse * 0.15})`;
+        ctx.strokeStyle = rgba(0, 255, 255, 0.85 + pulse * 0.15);
         ctx.lineWidth = 2;
         ctx.beginPath();
         for (let i = 0; i < bodyPts; i++) {
@@ -4770,7 +4771,7 @@ export class Enemy {
                 ctx.fill();
                 // Warhead tip (purple glow if loaded)
                 const tipGrad = ctx.createRadialGradient(tubeX, tubeY, 0, tubeX, tubeY, size * 0.08);
-                tipGrad.addColorStop(0, `rgba(220,100,255,${0.8 * pulse})`);
+                tipGrad.addColorStop(0, rgba(220, 100, 255, 0.8 * pulse));
                 tipGrad.addColorStop(1, 'rgba(100,0,180,0)');
                 ctx.fillStyle = tipGrad;
                 ctx.beginPath();
@@ -4783,7 +4784,7 @@ export class Enemy {
         ctx.save();
         ctx.translate(size * 0.85, 0);
         ctx.rotate(t * 2.2); // spin
-        ctx.strokeStyle = `rgba(255, 100, 255, ${0.7 * pulse})`;
+        ctx.strokeStyle = rgba(255, 100, 255, 0.7 * pulse);
         ctx.lineWidth = 1.2;
         for (let i = 0; i < 4; i++) {
             const a = (i / 4) * Math.PI * 2;
@@ -4807,7 +4808,7 @@ export class Enemy {
         for (const side of [-1, 1]) {
             const engGrad = ctx.createRadialGradient(-size * 0.95, side * size * 0.2, 0,
                                                       -size * 0.95, side * size * 0.2, size * 0.22);
-            engGrad.addColorStop(0,   `rgba(220,100,255,${0.9 * pulse})`);
+            engGrad.addColorStop(0,   rgba(220, 100, 255, 0.9 * pulse));
             engGrad.addColorStop(0.5, 'rgba(100,0,180,0.4)');
             engGrad.addColorStop(1,   'rgba(60,0,120,0)');
             ctx.fillStyle = engGrad;
@@ -4913,7 +4914,7 @@ export class Enemy {
         // ── Outer rotating hex ring ──────────────────────────────────────────
         ctx.save();
         ctx.rotate(spinAngle);
-        ctx.strokeStyle = `rgba(0,255,100,${0.5 * pulse})`;
+        ctx.strokeStyle = rgba(0, 255, 100, 0.5 * pulse);
         ctx.lineWidth = 2;
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
@@ -4928,7 +4929,7 @@ export class Enemy {
         // ── Inner counter-rotating hex ring ──────────────────────────────────
         ctx.save();
         ctx.rotate(-spinAngle * 1.4);
-        ctx.strokeStyle = `rgba(100,255,160,${0.6 * pulse})`;
+        ctx.strokeStyle = rgba(100, 255, 160, 0.6 * pulse);
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
@@ -5007,7 +5008,7 @@ export class Enemy {
         for (const side of [-1, 1]) {
             const exhaustGrad = ctx.createRadialGradient(-size * 0.95, side * size * 0.18, 0,
                                                           -size * 0.95, side * size * 0.18, size * 0.35);
-            exhaustGrad.addColorStop(0,   `rgba(255,220,0,${0.9 * pulse})`);
+            exhaustGrad.addColorStop(0,   rgba(255, 220, 0, 0.9 * pulse));
             exhaustGrad.addColorStop(0.4, 'rgba(255,120,0,0.5)');
             exhaustGrad.addColorStop(1,   'rgba(200,80,0,0)');
             ctx.fillStyle = exhaustGrad;
@@ -5046,7 +5047,7 @@ export class Enemy {
             ctx.stroke();
 
             // Glowing wing edge stripe
-            ctx.strokeStyle = `rgba(255,255,100,${0.7 * pulse})`;
+            ctx.strokeStyle = rgba(255, 255, 100, 0.7 * pulse);
             ctx.lineWidth = 1.2;
             ctx.beginPath();
             ctx.moveTo(size * 0.7, side * size * 0.18);
@@ -5096,7 +5097,7 @@ export class Enemy {
         ctx.stroke();
         // Eyes (two bright dots)
         for (const ey of [-1, 1]) {
-            ctx.fillStyle = `rgba(255,255,0,${pulse})`;
+            ctx.fillStyle = rgba(255, 255, 0, pulse);
             ctx.beginPath();
             ctx.arc(size * 0.44, ey * size * 0.1, size * 0.06, 0, Math.PI * 2);
             ctx.fill();
@@ -5127,7 +5128,7 @@ export class Enemy {
         ctx.shadowBlur = 0;
 
         // ── Outer shield ring ────────────────────────────────────────────────
-        ctx.strokeStyle = `rgba(0,255,80,${0.35 * pulse})`;
+        ctx.strokeStyle = rgba(0, 255, 80, 0.35 * pulse);
         ctx.lineWidth = 3;
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
@@ -5166,7 +5167,7 @@ export class Enemy {
             ctx.stroke();
 
             // Wing energy veins
-            ctx.strokeStyle = `rgba(120,255,160,${0.6 * pulse})`;
+            ctx.strokeStyle = rgba(120, 255, 160, 0.6 * pulse);
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(size * 0.1, side * size * 0.05);
@@ -5305,7 +5306,7 @@ export class Enemy {
         ctx.stroke();
 
         // ── Energy lines from center to hex midpoints ─────────────────────────
-        ctx.strokeStyle = `rgba(255, 180, 255, ${0.4 * pulse})`;
+        ctx.strokeStyle = rgba(255, 180, 255, 0.4 * pulse);
         ctx.lineWidth = 1.5;
         for (let i = 0; i < 6; i++) {
             const a = (i / 6 + 1 / 12) * Math.PI * 2; // midpoints between vertices
@@ -5330,7 +5331,7 @@ export class Enemy {
             const podX = -size * 0.55;
             const podY = side * size * 0.38;
             const podGrad = ctx.createRadialGradient(podX, podY, 0, podX, podY, size * 0.22);
-            podGrad.addColorStop(0,   `rgba(255, 120, 255, ${0.9 * pulse})`);
+            podGrad.addColorStop(0,   rgba(255, 120, 255, 0.9 * pulse));
             podGrad.addColorStop(0.5, 'rgba(120, 0, 160, 0.6)');
             podGrad.addColorStop(1,   'rgba(60, 0, 80, 0)');
             ctx.fillStyle = podGrad;
@@ -5406,7 +5407,7 @@ export class Enemy {
 
         // ── Main hull — narrow swept fuselage ─────────────────────────────────
         ctx.fillStyle = '#000d10';
-        ctx.strokeStyle = `rgba(0, 220, 255, ${0.75 + shimmer})`;
+        ctx.strokeStyle = rgba(0, 220, 255, 0.75 + shimmer);
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo( size * 1.3,  0);            // sharp nose tip
@@ -5421,7 +5422,7 @@ export class Enemy {
 
         // ── Upper mantis blade arm ────────────────────────────────────────────
         ctx.fillStyle = `rgba(0, 30, 40, 0.85)`;
-        ctx.strokeStyle = `rgba(0, 255, 220, ${0.65 + shimmer})`;
+        ctx.strokeStyle = rgba(0, 255, 220, 0.65 + shimmer);
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.moveTo( size * 0.55, -size * 0.2);   // root at hull
@@ -5489,8 +5490,8 @@ export class Enemy {
 
         // ── Rear engine exhaust pods ───────────────────────────────────────────
         const engGrad = ctx.createRadialGradient(-size * 0.75, 0, 0, -size * 0.75, 0, size * 0.3);
-        engGrad.addColorStop(0,   `rgba(200, 255, 255, ${pulse})`);
-        engGrad.addColorStop(0.4, `rgba(0, 180, 220, ${0.6 * pulse})`);
+        engGrad.addColorStop(0,   rgba(200, 255, 255, pulse));
+        engGrad.addColorStop(0.4, rgba(0, 180, 220, 0.6 * pulse));
         engGrad.addColorStop(1,   'rgba(0, 50, 80, 0)');
         ctx.fillStyle = engGrad;
         ctx.globalAlpha = pulse;
@@ -5655,8 +5656,8 @@ export class Enemy {
             const prevFadeRatio = 1 - (prevAge / this.trail.fadeTime);
             const prevOpacity = Math.max(0, prevFadeRatio * 0.8);
             
-            gradient.addColorStop(0, `rgba(255, 255, 255, ${prevOpacity})`);
-            gradient.addColorStop(1, `rgba(255, 255, 255, ${opacity})`);
+            gradient.addColorStop(0, rgba(255, 255, 255, prevOpacity));
+            gradient.addColorStop(1, rgba(255, 255, 255, opacity));
             
             // Draw trail segment
             ctx.strokeStyle = gradient;
@@ -5812,8 +5813,8 @@ export class Enemy {
         
         // Outer energy ring
         const outerGradient = ctx.createRadialGradient(chargeX, 0, 0, chargeX, 0, chargeRadius);
-        outerGradient.addColorStop(0, `rgba(68, 255, 255, ${intensity * pulseIntensity})`);
-        outerGradient.addColorStop(0.5, `rgba(68, 255, 255, ${intensity * 0.6})`);
+        outerGradient.addColorStop(0, rgba(68, 255, 255, intensity * pulseIntensity));
+        outerGradient.addColorStop(0.5, rgba(68, 255, 255, intensity * 0.6));
         outerGradient.addColorStop(1, 'rgba(68, 255, 255, 0)');
         
         ctx.fillStyle = outerGradient;
@@ -5824,8 +5825,8 @@ export class Enemy {
         // Inner energy core
         const coreRadius = chargeRadius * 0.4;
         const coreGradient = ctx.createRadialGradient(chargeX, 0, 0, chargeX, 0, coreRadius);
-        coreGradient.addColorStop(0, `rgba(255, 255, 255, ${intensity * pulseIntensity})`);
-        coreGradient.addColorStop(0.7, `rgba(68, 255, 255, ${intensity * 0.8})`);
+        coreGradient.addColorStop(0, rgba(255, 255, 255, intensity * pulseIntensity));
+        coreGradient.addColorStop(0.7, rgba(68, 255, 255, intensity * 0.8));
         coreGradient.addColorStop(1, 'rgba(68, 255, 255, 0)');
         
         ctx.fillStyle = coreGradient;
@@ -5842,7 +5843,7 @@ export class Enemy {
                 const sparkX = chargeX + Math.cos(angle) * distance;
                 const sparkY = Math.sin(angle) * distance;
                 
-                ctx.fillStyle = `rgba(255, 255, 255, ${intensity * 0.8})`;
+                ctx.fillStyle = rgba(255, 255, 255, intensity * 0.8);
                 ctx.beginPath();
                 ctx.arc(sparkX, sparkY, 1 + Math.random() * 2, 0, Math.PI * 2);
                 ctx.fill();
@@ -5854,7 +5855,7 @@ export class Enemy {
             const beamLength = 100 + progress * 200;
             const beamAlpha = (progress - 0.5) * 2 * intensity;
             
-            ctx.strokeStyle = `rgba(68, 255, 255, ${beamAlpha})`;
+            ctx.strokeStyle = rgba(68, 255, 255, beamAlpha);
             ctx.lineWidth = 2 + progress * 3;
             ctx.beginPath();
             ctx.moveTo(chargeX, 0);
@@ -5862,7 +5863,7 @@ export class Enemy {
             ctx.stroke();
             
             // Beam glow
-            ctx.strokeStyle = `rgba(255, 255, 255, ${beamAlpha * 0.5})`;
+            ctx.strokeStyle = rgba(255, 255, 255, beamAlpha * 0.5);
             ctx.lineWidth = 1;
             ctx.stroke();
         }
@@ -6408,7 +6409,7 @@ export class Enemy {
             const progress = (Date.now() - this.sweepWarningStart) / this.sweepWarningDuration;
 
             // Warning arc showing sweep range (from muzzle)
-            ctx.strokeStyle = `rgba(180, 60, 255, ${0.25 * pulse})`;
+            ctx.strokeStyle = rgba(180, 60, 255, 0.25 * pulse);
             ctx.lineWidth = 2;
             ctx.setLineDash([10, 6]);
             ctx.beginPath();
@@ -6420,7 +6421,7 @@ export class Enemy {
             const warningAngle = this.sweepStartAngle + (this.sweepEndAngle - this.sweepStartAngle) * progress;
             const wEndX = muzzleX + Math.cos(warningAngle) * beamLength;
             const wEndY = muzzleY + Math.sin(warningAngle) * beamLength;
-            ctx.strokeStyle = `rgba(200, 80, 255, ${0.45 * pulse})`;
+            ctx.strokeStyle = rgba(200, 80, 255, 0.45 * pulse);
             ctx.lineWidth = 4;
             ctx.setLineDash([16, 8]);
             ctx.beginPath();
@@ -6444,7 +6445,7 @@ export class Enemy {
             // OPT-2: live GPU blur removed — multi-pass stroke provides glow
             ctx.shadowBlur = 0;
             ctx.shadowColor = '#aa44ff';
-            ctx.strokeStyle = `rgba(170, 68, 255, ${0.25 * fadeAlpha})`;
+            ctx.strokeStyle = rgba(170, 68, 255, 0.25 * fadeAlpha);
             ctx.lineWidth = 50;
             ctx.beginPath();
             ctx.moveTo(muzzleX, muzzleY);
@@ -6453,7 +6454,7 @@ export class Enemy {
 
             // Middle glow
             ctx.shadowBlur = 0;
-            ctx.strokeStyle = `rgba(200, 100, 255, ${0.55 * fadeAlpha})`;
+            ctx.strokeStyle = rgba(200, 100, 255, 0.55 * fadeAlpha);
             ctx.lineWidth = 22;
             ctx.beginPath();
             ctx.moveTo(muzzleX, muzzleY);
@@ -6463,7 +6464,7 @@ export class Enemy {
             // Inner bright core
             ctx.shadowBlur = 0;
             ctx.shadowColor = '#ffffff';
-            ctx.strokeStyle = `rgba(240, 200, 255, ${0.95 * fadeAlpha})`;
+            ctx.strokeStyle = rgba(240, 200, 255, 0.95 * fadeAlpha);
             ctx.lineWidth = 6;
             ctx.beginPath();
             ctx.moveTo(muzzleX, muzzleY);

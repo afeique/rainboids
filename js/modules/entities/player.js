@@ -1,6 +1,7 @@
 // Player ship entity
 import { GAME_CONFIG } from '../constants.js';
 import { random, wrap, glowSpriteCache } from '../utils.js';
+import { rgba } from '../color-cache.js';
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -648,8 +649,8 @@ export class Player {
         for (const eng of engines) {
             const exhaustLen = r * (0.9 + engPulse * 0.8);
             const grad = ctx.createLinearGradient(eng.x, eng.y, eng.x, eng.y + exhaustLen);
-            grad.addColorStop(0,   `rgba(255, 210, 90, ${0.95 * engPulse})`);
-            grad.addColorStop(0.4, `rgba(255, 70, 0,  ${0.65 * engPulse})`);
+            grad.addColorStop(0,   rgba(255, 210, 90, 0.95 * engPulse));
+            grad.addColorStop(0.4, rgba(255, 70, 0, 0.65 * engPulse));
             grad.addColorStop(1,   'transparent');
             ctx.fillStyle = grad;
             // OPT-2: pre-rendered glow sprite replaces live GPU blur
@@ -827,22 +828,22 @@ export class Player {
         
         if (this.isFullyCharged) {
             // Fully charged glow - brilliant white/cyan with intense brightness
-            gradient.addColorStop(0, `rgba(255, 255, 255, ${glowAlpha * 1.0})`);
-            gradient.addColorStop(0.2, `rgba(0, 255, 255, ${glowAlpha * 0.9})`);
-            gradient.addColorStop(0.5, `rgba(100, 220, 255, ${glowAlpha * 0.7})`);
-            gradient.addColorStop(0.8, `rgba(150, 240, 255, ${glowAlpha * 0.4})`);
+            gradient.addColorStop(0, rgba(255, 255, 255, glowAlpha * 1.0));
+            gradient.addColorStop(0.2, rgba(0, 255, 255, glowAlpha * 0.9));
+            gradient.addColorStop(0.5, rgba(100, 220, 255, glowAlpha * 0.7));
+            gradient.addColorStop(0.8, rgba(150, 240, 255, glowAlpha * 0.4));
             gradient.addColorStop(1, `rgba(200, 250, 255, 0)`);
         } else if (isBasicCharged) {
             // Charged glow - cyan to white
-            gradient.addColorStop(0, `rgba(0, 255, 255, ${glowAlpha * 0.8})`);
-            gradient.addColorStop(0.3, `rgba(100, 200, 255, ${glowAlpha * 0.6})`);
-            gradient.addColorStop(0.7, `rgba(150, 220, 255, ${glowAlpha * 0.3})`);
+            gradient.addColorStop(0, rgba(0, 255, 255, glowAlpha * 0.8));
+            gradient.addColorStop(0.3, rgba(100, 200, 255, glowAlpha * 0.6));
+            gradient.addColorStop(0.7, rgba(150, 220, 255, glowAlpha * 0.3));
             gradient.addColorStop(1, `rgba(200, 240, 255, 0)`);
         } else {
             // Charging glow - blue
-            gradient.addColorStop(0, `rgba(100, 150, 255, ${glowAlpha * 0.6})`);
-            gradient.addColorStop(0.4, `rgba(120, 180, 255, ${glowAlpha * 0.4})`);
-            gradient.addColorStop(0.8, `rgba(140, 200, 255, ${glowAlpha * 0.2})`);
+            gradient.addColorStop(0, rgba(100, 150, 255, glowAlpha * 0.6));
+            gradient.addColorStop(0.4, rgba(120, 180, 255, glowAlpha * 0.4));
+            gradient.addColorStop(0.8, rgba(140, 200, 255, glowAlpha * 0.2));
             gradient.addColorStop(1, `rgba(160, 220, 255, 0)`);
         }
         
@@ -856,7 +857,7 @@ export class Player {
             const ringRadius = this.radius * (1.2 + chargeProgress * 0.5);
             const ringAlpha = pulseIntensity * (0.5 + chargeProgress * 0.3);
             
-            ctx.strokeStyle = `rgba(0, 255, 255, ${ringAlpha})`;
+            ctx.strokeStyle = rgba(0, 255, 255, ringAlpha);
             ctx.lineWidth = 2 + chargeProgress * 2;
             ctx.beginPath();
             ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
@@ -865,7 +866,7 @@ export class Player {
             // Fully charged effects
             if (chargeProgress > 0.8) {
                 // Additional bright ring
-                ctx.strokeStyle = `rgba(255, 255, 255, ${pulseIntensity * 0.6})`;
+                ctx.strokeStyle = rgba(255, 255, 255, pulseIntensity * 0.6);
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.arc(0, 0, ringRadius * 1.1, 0, Math.PI * 2);
@@ -879,7 +880,7 @@ export class Player {
                     const sparkX = Math.cos(angle) * sparkRadius;
                     const sparkY = Math.sin(angle) * sparkRadius;
                     
-                    ctx.fillStyle = `rgba(255, 255, 255, ${pulseIntensity * 0.8})`;
+                    ctx.fillStyle = rgba(255, 255, 255, pulseIntensity * 0.8);
                     ctx.beginPath();
                     ctx.arc(sparkX, sparkY, 1 + Math.sin(now * 0.03 + i) * 0.5, 0, Math.PI * 2);
                     ctx.fill();
@@ -907,9 +908,9 @@ export class Player {
         const auraAlpha = (1 - progress) * pulseIntensity * 0.6; // Fades over time
         
         const gradient = ctx.createRadialGradient(0, 0, this.radius * 0.5, 0, 0, auraRadius);
-        gradient.addColorStop(0, `rgba(255, 215, 0, ${auraAlpha})`); // Gold center
-        gradient.addColorStop(0.3, `rgba(255, 165, 0, ${auraAlpha * 0.8})`); // Orange
-        gradient.addColorStop(0.6, `rgba(255, 255, 0, ${auraAlpha * 0.6})`); // Yellow
+        gradient.addColorStop(0, rgba(255, 215, 0, auraAlpha)); // Gold center
+        gradient.addColorStop(0.3, rgba(255, 165, 0, auraAlpha * 0.8)); // Orange
+        gradient.addColorStop(0.6, rgba(255, 255, 0, auraAlpha * 0.6)); // Yellow
         gradient.addColorStop(1, `rgba(255, 255, 255, 0)`); // Transparent edge
         
         ctx.fillStyle = gradient;
@@ -924,7 +925,7 @@ export class Player {
             const ringAlpha = (1 - progress) * pulseIntensity * (0.8 - i * 0.2);
             const rotation = (now * 0.005 + i * Math.PI / 3) % (Math.PI * 2);
             
-            ctx.strokeStyle = `rgba(255, 215, 0, ${ringAlpha})`;
+            ctx.strokeStyle = rgba(255, 215, 0, ringAlpha);
             ctx.lineWidth = 2 + i;
             ctx.setLineDash([10, 5]);
             ctx.lineDashOffset = rotation * 10;
@@ -940,7 +941,7 @@ export class Player {
         // Bright center flash
         if (progress < 0.3) {
             const flashAlpha = (0.3 - progress) / 0.3 * pulseIntensity;
-            ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+            ctx.fillStyle = rgba(255, 255, 255, flashAlpha);
             ctx.beginPath();
             ctx.arc(0, 0, this.radius * 1.2, 0, Math.PI * 2);
             ctx.fill();

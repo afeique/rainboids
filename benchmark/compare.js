@@ -3,12 +3,14 @@
  * benchmark/compare.js — compare mitata benchmark results between two git refs
  *
  * Usage:
- *   node benchmark/compare.js <ref-a> <ref-b>        # compare two refs
- *   node benchmark/compare.js <ref>                  # compare ref vs current working tree
- *   node benchmark/compare.js master feature-branch  # branch comparison
+ *   node benchmark/compare.js <other-ref>             # current branch vs other-ref
+ *   node benchmark/compare.js <ref-a> <ref-b>         # ref-a vs ref-b
+ *   node benchmark/compare.js master                  # current branch vs master
+ *   node benchmark/compare.js master feature-branch   # master vs feature-branch
  *
- * Both refs can be branch names, tags, or commit hashes.
- * ref-b defaults to current working tree if omitted.
+ * Refs can be branch names (uses latest commit), tags, or commit hashes.
+ * With one arg: current branch = ref-a (baseline), specified ref = ref-b.
+ * Positive Δ% = regression (slower), negative Δ% = improvement (faster).
  *
  * Output: a Δ% table showing improvement/regression per benchmark, e.g.:
  *
@@ -24,14 +26,48 @@ import { tmpdir } from 'os';
 import { generateCompareReport } from './html-report.js';
 
 const args = process.argv.slice(2);
-if (args.length < 1 || args[0] === '--help') {
-  console.log('Usage: node benchmark/compare.js <ref-a> [ref-b]');
-  console.log('       ref-b defaults to current working tree (HEAD)');
+const positionalArgs = args.filter(a => !a.startsWith('--'));
+
+if (positionalArgs.length < 1 || args[0] === '--help') {
+  console.log('Usage: node benchmark/compare.js <other-ref>           # current vs other');
+  console.log('       node benchmark/compare.js <ref-a> <ref-b>      # ref-a vs ref-b');
+  console.log('');
+  console.log('Refs can be branch names, tags, or commit hashes.');
+  console.log('With one arg, current branch is the baseline (ref-a).');
   process.exit(0);
 }
 
-const refA = args[0];
-const refB = args[1] && !args[1].startsWith('--') ? args[1] : 'HEAD';
+/** Resolve a ref to a display label like "branch-name (abc1234)" */
+function resolveRefLabel(ref) {
+  try {
+    const hash = execSync(`git rev-parse --short "${ref}"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    // Check if ref is a branch name (not already a raw hash)
+    const isBranch = ref !== hash && !ref.match(/^[0-9a-f]{6,}$/i);
+    return isBranch ? `${ref} (${hash})` : hash;
+  } catch {
+    return ref;
+  }
+}
+
+let refA, refB;
+if (positionalArgs.length === 1) {
+  // One arg: current branch (baseline) vs specified ref
+  refA = 'HEAD';
+  refB = positionalArgs[0];
+} else {
+  refA = positionalArgs[0];
+  refB = positionalArgs[1];
+}
+
+// Resolve display labels (with short hashes)
+const labelA = refA === 'HEAD' ? (() => {
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const hash = execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    return `${branch} (${hash})`;
+  } catch { return 'HEAD'; }
+})() : resolveRefLabel(refA);
+const labelB = resolveRefLabel(refB);
 const enginesArg      = (args.find(a => a.startsWith('--engine='))?.split('=')[1])    || 'v8';
 const suiteArg        = args.find(a => a.startsWith('--suite='))?.split('=')[1];
 const thresholdArg    = args.find(a => a.startsWith('--threshold='))?.split('=')[1];
@@ -46,15 +82,15 @@ const COMPARE_DIR = resolve(ROOT, 'benchmark', 'comparisons');
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 async function main() {
-  console.error(`\n  Comparing: ${refA}  vs  ${refB}`);
+  console.error(`\n  Comparing: ${labelA}  vs  ${labelB}`);
   console.error(`  Engine(s): ${enginesArg}`);
-  console.error('  Running ref-a benchmarks…');
+  console.error(`  Running ref-a (${labelA}) benchmarks…`);
 
   await mkdir(COMPARE_DIR, { recursive: true });
 
   // Run both refs sequentially (avoid CPU contention)
   const dataA = await runOnRef(refA);
-  console.error('  Running ref-b benchmarks…');
+  console.error(`  Running ref-b (${labelB}) benchmarks…`);
   const dataB = await runOnRef(refB);
 
   // Flatten both result sets into name→avg_ns maps
@@ -62,14 +98,14 @@ async function main() {
   const mapB = extractBenchmarks(dataB);
 
   // Build comparison rows
-  const rows = buildRows(mapA, mapB, refA, refB);
+  const rows = buildRows(mapA, mapB, labelA, labelB);
 
   // Print the table
-  printTable(rows, refA, refB);
+  printTable(rows, labelA, labelB);
 
   // Save artefacts
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const comparison = { timestamp: new Date().toISOString(), refs: { a: refA, b: refB }, rows };
+  const comparison = { timestamp: new Date().toISOString(), refs: { a: labelA, b: labelB }, rows };
 
   const jsonPath  = resolve(COMPARE_DIR, `compare-${ts}.json`);
   const htmlPath  = resolve(COMPARE_DIR, `compare-${ts}.html`);

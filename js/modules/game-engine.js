@@ -2,6 +2,7 @@
 import { GAME_CONFIG, GAME_STATES, getEnemyFiringCooldown } from './constants.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats } from './wave-data.js';
 import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon, glowSpriteCache } from './utils.js';
+import { rgba } from './color-cache.js';
 import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
 import { SpatialGrid } from './performance/spatial-grid.js';
 import { PoolManager } from './pool-manager.js';
@@ -1076,7 +1077,7 @@ export class GameEngine {
 
         this.ctx.save();
         this.ctx.font = `${startFS}px "Press Start 2P", monospace`;
-        this.ctx.fillStyle = `rgba(255, 255, 255, ${pulseAlpha})`;
+        this.ctx.fillStyle = rgba(255, 255, 255, pulseAlpha);
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(startText, centerX, centerY + 80);
@@ -3273,8 +3274,8 @@ export class GameEngine {
         
         // Draw darker gold +amount text
         ctx.font = "14px 'Press Start 2P', monospace";
-        ctx.fillStyle = `rgba(184, 134, 11, ${alpha})`; // Darker gold
-        ctx.strokeStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
+        ctx.fillStyle = rgba(184, 134, 11, alpha); // Darker gold
+        ctx.strokeStyle = rgba(0, 0, 0, alpha * 0.8);
         ctx.lineWidth = 2;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
@@ -3342,7 +3343,7 @@ export class GameEngine {
                 
                 // Golden damage number without stroke
                 ctx.font = "16px 'Press Start 2P', monospace";
-                ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`; // Golden
+                ctx.fillStyle = rgba(255, 215, 0, alpha); // Golden
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 

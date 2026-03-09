@@ -9,10 +9,6 @@
     "preview": "vite preview",
     "start": "vite",
     "generate-playlist": "node scripts/generate-playlist.js",
-<<<<<<< HEAD
-    "bench:run": "node benchmark/run.js",
-    "bench:compare": "node benchmark/compare.js"
-=======
 
     "__UNIT_TESTS__": "── Jest unit tests (fast, no browser) ──────────────────",
     "test:unit": "node --experimental-vm-modules node_modules/.bin/jest",
@@ -49,17 +45,16 @@
     "report:e2e": "allure generate allure-results/e2e --clean -o allure-report/e2e && allure open allure-report/e2e",
     "report:perf": "allure generate allure-results/perf --clean -o allure-report/perf && allure open allure-report/perf",
 
-    "__PERF_BENCH__": "── Mitata microbenchmarks (Node.js / V8) ────────────────",
-    "perf": "node perf/run.js",
-    "perf:save": "node perf/run.js --save",
-    "perf:pool": "node perf/run.js --suite pool",
-    "perf:collision": "node perf/run.js --suite collision",
-    "perf:noise": "node perf/run.js --suite noise",
-    "perf:wave": "node perf/run.js --suite wave",
-    "perf:math": "node perf/run.js --suite math",
-    "perf:all-engines": "node perf/run.js --engine v8,jsc,spidermonkey",
-    "perf:compare": "node perf/compare.js"
->>>>>>> f93dc43f81ba784575e41470dbbebef79a1d8e5f
+    "__BENCH__": "── Mitata microbenchmarks (Node.js / V8) ────────────────",
+    "bench": "node benchmark/run.js",
+    "bench:run": "node benchmark/run.js",
+    "bench:pool": "node benchmark/run.js --suite pool",
+    "bench:collision": "node benchmark/run.js --suite collision",
+    "bench:noise": "node benchmark/run.js --suite noise",
+    "bench:wave": "node benchmark/run.js --suite wave",
+    "bench:math": "node benchmark/run.js --suite math",
+    "bench:all-engines": "node benchmark/run.js --engine v8,jsc,spidermonkey",
+    "bench:compare": "node benchmark/compare.js"
   },
   "repository": {
     "type": "git",

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <title>Rainboids: Supercharged Asteroids</title>
+    <script src="https://sfxr.me/riffwave.js"></script>
+    <script src="https://sfxr.me/sfxr.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/assets/favicon-CuO7xADt.png">
+  <script type="module" crossorigin src="/assets/index-B8GClLLn.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DOsDM7lm.css">
+</head>
+<body>
+    <!-- <div id="loading-screen">
+        <h1>RAINBOIDS</h1>
+        <div id="loading-container">
+            <div id="loading-bar">
+                <div id="loading-progress"></div>
+            </div>
+            <p id="loading-text">Loading...</p>
+        </div>
+    </div> -->
+    
+    <!-- <div id="scanline-overlay"></div> -->
+    <!-- <div id="title-screen">
+        <h1 id="game-title"></h1>
+        <p id="high-score-display"></p>
+        <p id="start-prompt">Press Any Key To Start</p>
+    </div> -->
+    
+    <div id="orientation-overlay">
+        <div class="rotate-icon">📱</div>
+        <p>For the best experience,<br>please rotate your device to landscape mode.</p>
+    </div>
+
+    <!-- <div id="shield-tanks"></div> -->
+    <div id="lives-display" class="ui-element">▲<br>▲▲</div>
+    <!-- <div id="score" class="ui-element">0</div>
+    <div id="shop-button" class="ui-element">SHOP</div> -->
+    
+    <!-- <div id="game-message-overlay" class="ui-element">
+        <h1 id="message-title" class="message-title" style="display: none;"></h1>
+        <p id="message-subtitle" class="message-subtitle" style="display: none;"></p>
+    </div> -->
+
+    <button id="hud-pause-btn" aria-label="Pause">
+        <span class="hud-pause-bar"></span>
+        <span class="hud-pause-bar"></span>
+    </button>
+
+    <div id="pause-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%;">
+        <div id="pause-menu">
+            <div class="pause-tabs">
+                <button class="pause-tab active" data-tab="controls">CONTROLS</button>
+                <button class="pause-tab" data-tab="powerups">POWERUPS</button>
+                <button class="pause-tab" data-tab="music">MUSIC</button>
+                <button class="pause-tab" data-tab="sfx">SFX</button>
+            </div>
+            
+            <div class="pause-menu-actions">
+                <button id="pause-shop-button" class="pause-action-btn"><span class="pause-btn-icon">🛒</span><span class="pause-btn-label">SHOP</span></button>
+                <button id="pause-resume-button" class="pause-action-btn"><span class="pause-btn-icon">►</span><span class="pause-btn-label">RESUME</span></button>
+            </div>
+            
+            <div id="controls-tab" class="pause-tab-content active">
+                <h2>CONTROLS</h2>
+                <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
+                <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
+                <div>ESC to Pause / Resume</div>
+            </div>
+            
+            <div id="powerups-tab" class="pause-tab-content">
+                <h2>ACTIVE POWERUPS</h2>
+                <div id="powerups-list" style="max-height: 300px; overflow-y: auto; margin-top: 20px;">
+                    <div id="no-powerups" style="text-align: center; color: #888; font-style: italic;">
+                        No powerups collected yet
+                    </div>
+                </div>
+            </div>
+            
+            <div id="music-tab" class="pause-tab-content">
+                <div id="music-player">
+                    <div id="current-track-name" class="marquee-container">
+                        <span class="marquee-text"></span>
+                    </div>
+                    <div id="music-progress-container">
+                        <span id="music-current-time">0:00</span>
+                        <div id="music-player-progress-bar">
+                            <div id="music-player-progress"></div>
+                        </div>
+                        <span id="music-duration">0:00</span>
+                    </div>
+                    <div id="music-controls">
+                        <button id="music-shuffle" class="music-control-btn left">
+                            <svg width="28" height="28" viewBox="0 -2 27 27" xmlns="http://www.w3.org/2000/svg"><g fill="#00ccff"><path d="M22.528,15.166 C22.23,14.871 21.299,14.948 21,15.244 L21,17 L18,17 L14.71,12.887 L12.1,16.124 L16,21 L21,21 L21,22.781 C21.299,23.076 22.23,22.945 22.528,22.649 L26.771,19.442 C27.069,19.147 27.069,18.669 26.771,18.373 L22.528,15.166 Z M21,6 L21,7.688 C21.299,7.982 22.23,8.105 22.528,7.811 L26.771,4.604 C27.069,4.308 27.069,3.829 26.771,3.534 L22.528,0.326 C22.23,0.031 21.299,-0.139 21,0.156 L21,2 L16,2 L4,17 L2,17 C0.896,17 0,17.896 0,19 C0,20.104 0.896,21 2,21 L6,21 L18,6 L21,6 Z M2,6 L4,6 L7.29,10.113 L9.9,6.876 L6,2 L2,2 C0.896,2 0,2.896 0,4 C0,5.104 0.896,6 2,6 Z"/></g></svg>
+                        </button>
+                        <div class="music-main-controls">
+                            <button id="music-prev" class="music-control-btn">⏮</button>
+                            <button id="music-play-pause" class="music-control-btn large">▶</button>
+                            <button id="music-next" class="music-control-btn">⏭</button>
+                        </div>
+                        <button id="music-repeat" class="music-control-btn right">
+                            <svg width="28" height="28" viewBox="-5.5 0 32 32" xmlns="http://www.w3.org/2000/svg"><path fill="#00ccff" d="M14.156 5.406v2.969h-12.75c-0.5 0-0.938 0.438-0.938 0.969v8.25l3.344-2.969c0.156-0.188 0.313-0.25 0.469-0.344v-2.094h9.875v2.969c0 0.875 0.531 1.125 1.25 0.5l5.031-4.625c0.219-0.188 0.375-0.438 0.375-0.75 0-0.281-0.156-0.563-0.375-0.75l-5.031-4.625c-0.719-0.625-1.25-0.375-1.25 0.5zM20.313 14.406l-3.313 3c-0.156 0.125-0.375 0.219-0.5 0.313v2.094h-9.844v-3c0-0.875-0.531-1.094-1.25-0.469l-5.063 4.625c-0.219 0.188-0.344 0.438-0.344 0.75 0 0.281 0.125 0.563 0.344 0.75l5.063 4.594c0.719 0.625 1.25 0.406 1.25-0.469v-2.969h12.719c0.531 0 0.938-0.438 0.938-0.969v-8.25z"></path></svg>
+                        </button>
+                    </div>
+                    <div id="music-volume-container" style="margin: 20px 0; display: flex; align-items: center; gap: 15px;">
+                        <svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M6 1H8V15H6L2 11H0V5H2L6 1Z" fill="#0088ff"/>
+                            <path d="M14 8C14 5.79086 12.2091 4 10 4V2C13.3137 2 16 4.68629 16 8C16 11.3137 13.3137 14 10 14V12C12.2091 12 14 10.2091 14 8Z" fill="#0088ff"/>
+                            <path d="M12 8C12 9.10457 11.1046 10 10 10V6C11.1046 6 12 6.89543 12 8Z" fill="#0088ff"/>
+                        </svg>
+                        <input type="range" id="music-volume-slider" min="0" max="100" value="50" style="flex: 1;">
+                        <span id="music-volume-value" style="min-width: 45px; text-align: right;">50%</span>
+                    </div>
+                    <div id="playlist-container">
+                        <div id="playlist-tracks"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="sfx-tab" class="pause-tab-content">
+                <h2>SOUND EFFECTS</h2>
+                <div id="sfx-volume-container" style="margin-top: 30px;">
+                    <div style="margin-bottom: 15px; font-size: 14px;">Master Volume</div>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <input type="range" id="sfx-volume-slider" min="0" max="100" value="50" style="flex: 1;">
+                        <span id="sfx-volume-value" style="min-width: 45px; text-align: right;">50%</span>
+                    </div>
+                </div>
+                <div id="sfx-toggles-container" style="margin-top: 30px;">
+                    <div style="margin-bottom: 15px; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Individual Sounds</span>
+                        <button id="reroll-all-sfx" style="
+                            padding: 8px 16px;
+                            font-family: 'Silkscreen', monospace;
+                            font-size: 12px;
+                            background: rgba(255, 165, 0, 0.2);
+                            border: 1px solid rgba(255, 165, 0, 0.5);
+                            border-radius: 4px;
+                            color: white;
+                            cursor: pointer;
+                            transition: all 0.2s;
+                        ">🎲 REROLL ALL</button>
+                    </div>
+                    <div id="sfx-toggles" style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Sound toggles will be added dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="customization-overlay">
+        <h2>Control Layout</h2>
+        <p>Drag the controls to your desired positions, then press Save.</p>
+        <button id="save-layout-button">Save & Close</button>
+    </div>
+
+    <div id="powerup-hud" class="ui-element"></div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="mobile-controls">
+        <!-- Mobile controls now use dynamic two-finger system -->
+    </div>
+
+    <!-- Load the modular JavaScript after external libraries -->
+</body>
+</html> 
