@@ -165,13 +165,14 @@ export class GameEngine {
         };
 
         // Pause button hit rect (top-right corner, updated each frame by drawPauseButton)
-        const btnSize = 44;
-        const margin = 16;
+        const btnSize = 56;
+        const margin = 12;
+        const hitPad = 10;
         this.pauseButtonRect = {
-            x: window.innerWidth - margin - btnSize,
-            y: margin,
-            w: btnSize,
-            h: btnSize
+            x: window.innerWidth - margin - btnSize - hitPad,
+            y: margin - hitPad,
+            w: btnSize + hitPad * 2,
+            h: btnSize + hitPad * 2
         };
         
         // Camera and game field system
@@ -556,12 +557,15 @@ export class GameEngine {
             }
         });
         
-        // Mouse move tracking for hover effects and cursor
+        // Mouse move tracking for hover effects and cursor (desktop only)
         this.canvas.addEventListener('mousemove', (e) => {
+                // Skip on mobile — synthetic mouse events from touch must not set cursor
+                if (this.inputHandler && this.inputHandler.isMobile()) return;
+
                 const rect = this.canvas.getBoundingClientRect();
                 this.mouseX = e.clientX - rect.left;
                 this.mouseY = e.clientY - rect.top;
-                
+
                 // Update cursor position for canvas rendering
                 this.cursor.x = this.mouseX;
                 this.cursor.y = this.mouseY;
@@ -5099,6 +5103,8 @@ export class GameEngine {
     }
     
     drawCustomCursor() {
+        // Never show cursor on mobile — touch devices don't have a visible pointer
+        if (this.inputHandler.isMobile()) return;
         if (!this.cursor.x && !this.cursor.y) return; // Don't draw if no mouse position
         
         const ctx = this.ctx;
@@ -5823,13 +5829,19 @@ export class GameEngine {
     }
     
     drawPauseButton() {
-        const btnSize = 44; // touch-friendly hit area
-        const margin = 16;
+        const btnSize = 56; // larger touch target (Apple HIG recommends 44pt minimum)
+        const margin = 12;
         const cx = this.canvas.width - margin - btnSize / 2;
         const cy = margin + btnSize / 2;
 
-        // Store rect in screen coords for tap detection
-        this.pauseButtonRect = { x: cx - btnSize / 2, y: cy - btnSize / 2, w: btnSize, h: btnSize };
+        // Hit rect is padded larger than visual for easier tapping
+        const hitPad = 10;
+        this.pauseButtonRect = {
+            x: cx - btnSize / 2 - hitPad,
+            y: cy - btnSize / 2 - hitPad,
+            w: btnSize + hitPad * 2,
+            h: btnSize + hitPad * 2
+        };
 
         const ctx = this.ctx;
         ctx.save();
