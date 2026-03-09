@@ -3,3 +3,7 @@ js/dist/
 .DS_Store
 *.log
 npm-debug.log*
+
+# Benchmark output
+benchmark/results/
+benchmark/comparisons/

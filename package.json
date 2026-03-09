@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "vite",
-    "generate-playlist": "node scripts/generate-playlist.js"
+    "generate-playlist": "node scripts/generate-playlist.js",
+    "bench:run": "node benchmark/run.js",
+    "bench:compare": "node benchmark/compare.js"
   },
   "repository": {
     "type": "git",

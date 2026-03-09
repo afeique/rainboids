@@ -7,7 +7,7 @@ import { CanvasLayers, StarFieldCache } from './canvas-layers.js';
 import { textCache, damageNumberCache, scoreCache } from './text-cache.js';
 import { EnhancedFrameManager, TemporalUpsampler } from './temporal-upsampling.js';
 import { TypedArrayParticleSystem, TypedParticleEmitter } from './typed-array-particles.js';
-import { WorkerManager } from './worker-manager.js';
+
 
 export class EnhancedPerformanceManager {
     constructor(canvas, width, height) {
@@ -35,8 +35,6 @@ export class EnhancedPerformanceManager {
         this.typedParticleSystem = new TypedArrayParticleSystem(10000);
         this.particleEmitter = new TypedParticleEmitter(this.typedParticleSystem);
         
-        // NEW: Worker manager for parallel processing
-        this.workerManager = new WorkerManager();
         this.workersInitialized = false;
         
         // Create offscreen canvas for particle rendering
@@ -71,45 +69,11 @@ export class EnhancedPerformanceManager {
             usePathCaching: true,
             useTemporalUpsampling: false, // Temporarily disabled for debugging
             useTypedArrayParticles: true,
-            useWorkers: false, // Disabled by default until initialized
+            useWorkers: false,
             particleLimit: 10000,
             reduceSaveRestore: true
         };
         
-        // Initialize workers asynchronously
-        // Disabled for now - workers causing issues
-        // this.initWorkers();
-    }
-    
-    // Initialize web workers
-    async initWorkers() {
-        try {
-            const config = {
-                worldBounds: {
-                    x: 0,
-                    y: 0,
-                    width: this.width,
-                    height: this.height
-                },
-                maxParticles: 10000,
-                width: this.width,
-                height: this.height
-            };
-            
-            const success = await this.workerManager.init(config);
-            if (success) {
-                this.workersInitialized = true;
-                this.settings.useWorkers = true;
-                
-                // Set up worker callbacks
-                this.workerManager.onPhysicsUpdate = this.handlePhysicsUpdate.bind(this);
-                this.workerManager.onCollisions = this.handleCollisions.bind(this);
-                this.workerManager.onParticleRender = this.handleParticleRender.bind(this);
-            } else {
-            }
-        } catch (error) {
-            console.error('Failed to initialize workers:', error);
-        }
     }
     
     // Update viewport for frustum culling
@@ -332,50 +296,6 @@ export class EnhancedPerformanceManager {
         }
     }
     
-    // Handle physics update from worker
-    handlePhysicsUpdate(entities) {
-        // This would be implemented by the game engine
-        if (this.onPhysicsUpdate) {
-            this.onPhysicsUpdate(entities);
-        }
-    }
-    
-    // Handle collisions from worker
-    handleCollisions(collisions) {
-        // This would be implemented by the game engine
-        if (this.onCollisions) {
-            this.onCollisions(collisions);
-        }
-    }
-    
-    // Handle particle render from worker
-    handleParticleRender(imageData) {
-        // Draw particle image data from worker
-        this.ctx.putImageData(imageData, 0, 0);
-    }
-    
-    // Send entities to workers
-    updateWorkerEntities(entities) {
-        if (this.settings.useWorkers && this.workersInitialized) {
-            this.workerManager.updatePhysicsEntities(entities);
-            this.workerManager.updateCollisionEntities(entities);
-        }
-    }
-    
-    // Perform physics step in worker
-    performWorkerPhysicsStep(deltaTime) {
-        if (this.settings.useWorkers && this.workersInitialized) {
-            this.workerManager.performPhysicsStep(deltaTime);
-        }
-    }
-    
-    // Check collisions in worker
-    checkWorkerCollisions(groups) {
-        if (this.settings.useWorkers && this.workersInitialized) {
-            this.workerManager.checkCollisions(groups);
-        }
-    }
-    
     // Resize all systems
     resize(width, height) {
         this.width = width;
@@ -400,10 +320,6 @@ export class EnhancedPerformanceManager {
             height: height
         });
         
-        // Resize worker canvas if using workers
-        if (this.settings.useWorkers && this.workersInitialized) {
-            this.workerManager.resizeParticleCanvas(width, height);
-        }
     }
     
     // Get performance stats
@@ -433,12 +349,6 @@ export class EnhancedPerformanceManager {
             });
         }
         
-        // Add worker stats
-        if (this.settings.useWorkers) {
-            Object.assign(baseStats, {
-                workerStats: this.workerManager.getStats()
-            });
-        }
         
         return baseStats;
     }
@@ -483,11 +393,6 @@ export class EnhancedPerformanceManager {
             y += lineHeight;
         }
         
-        // Worker stats
-        if (stats.workerStats) {
-            ctx.fillText(`Workers: ${stats.workerStats.supported ? 'Yes' : 'No'}`, 20, y);
-            y += lineHeight;
-        }
         
         ctx.restore();
         
@@ -507,6 +412,5 @@ export class EnhancedPerformanceManager {
         this.canvasLayers.destroy();
         this.textCache.clear();
         this.pathCache.clear();
-        this.workerManager.terminate();
     }
 }

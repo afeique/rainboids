@@ -1,0 +1,298 @@
+{
+  "meta": {
+    "timestamp": "2026-03-08T08:57:11.647Z",
+    "platform": "darwin",
+    "headless": true,
+    "viewport": "1280×720",
+    "branch": "opt",
+    "gpu": {
+      "webglAvailable": true,
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "vendor": "Google Inc. (Google)",
+      "version": "WebGL 1.0 (OpenGL ES 2.0 Chromium)",
+      "shadingLanguageVersion": "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)"
+    },
+    "consoleLogs": [
+      "[GroupMarkerNotSet(crbug.com/242999)!:A0101D003C010000]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader (about:flags#enable-unsafe-swiftshader) flag to opt in to lower security guarantees for trusted content.",
+      "[.WebGL-0x11c061b4000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+    ]
+  },
+  "scenarios": [
+    {
+      "label": "Default (1 asteroid)",
+      "stats": {
+        "mean": 120.13416666666669,
+        "p50": 116.70000000000073,
+        "p95": 150,
+        "p99": 150,
+        "min": 99.89999999999782,
+        "max": 150,
+        "fps": 8.324026609138393
+      },
+      "counts": {
+        "particles": 31,
+        "bullets": 17,
+        "asteroids": 1,
+        "enemies": 2,
+        "enemyBullets": 10,
+        "colorStars": 0,
+        "backgroundStars": 30,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "5 asteroids",
+      "stats": {
+        "mean": 112.7733333333333,
+        "p50": 116.59999999999854,
+        "p95": 133.3000000000029,
+        "p99": 133.40000000000146,
+        "min": 99.89999999999782,
+        "max": 133.40000000000146,
+        "fps": 8.86734452589265
+      },
+      "counts": {
+        "particles": 26,
+        "bullets": 17,
+        "asteroids": 5,
+        "enemies": 3,
+        "enemyBullets": 7,
+        "colorStars": 0,
+        "backgroundStars": 30,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "10 asteroids",
+      "stats": {
+        "mean": 71.80333333333334,
+        "p50": 100,
+        "p95": 116.70000000000437,
+        "p99": 133.3000000000029,
+        "min": 16.599999999998545,
+        "max": 133.40000000000146,
+        "fps": 13.926930040388095
+      },
+      "counts": {
+        "particles": 31,
+        "bullets": 10,
+        "asteroids": 13,
+        "enemies": 2,
+        "enemyBullets": 0,
+        "colorStars": 7,
+        "backgroundStars": 30,
+        "lineDebris": 30,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "4 enemies",
+      "stats": {
+        "mean": 16.665833333333346,
+        "p50": 16.69999999999709,
+        "p95": 16.700000000004366,
+        "p99": 16.80000000000291,
+        "min": 16.5,
+        "max": 16.80000000000291,
+        "fps": 60.00300015000745
+      },
+      "counts": {
+        "particles": 0,
+        "bullets": 0,
+        "asteroids": 1,
+        "enemies": 4,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 30,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "8 enemies",
+      "stats": {
+        "mean": 16.665833333333346,
+        "p50": 16.69999999999709,
+        "p95": 16.700000000004366,
+        "p99": 16.80000000000291,
+        "min": 16.599999999998545,
+        "max": 16.80000000000291,
+        "fps": 60.00300015000745
+      },
+      "counts": {
+        "particles": 0,
+        "bullets": 0,
+        "asteroids": 1,
+        "enemies": 8,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 30,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "30 particles",
+      "stats": {
+        "mean": 16.665833333333346,
+        "p50": 16.69999999999709,
+        "p95": 16.799999999995634,
+        "p99": 16.80000000000291,
+        "min": 16.5,
+        "max": 16.80000000000291,
+        "fps": 60.00300015000745
+      },
+      "counts": {
+        "particles": 30,
+        "bullets": 0,
+        "asteroids": 1,
+        "enemies": 0,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 30,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "60 particles",
+      "stats": {
+        "mean": 16.665833333333286,
+        "p50": 16.69999999999709,
+        "p95": 16.799999999995634,
+        "p99": 16.80000000000291,
+        "min": 16.599999999998545,
+        "max": 16.80000000000291,
+        "fps": 60.00300015000767
+      },
+      "counts": {
+        "particles": 60,
+        "bullets": 0,
+        "asteroids": 1,
+        "enemies": 0,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 30,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "55 background stars",
+      "stats": {
+        "mean": 16.666666666666668,
+        "p50": 16.69999999999709,
+        "p95": 16.700000000004366,
+        "p99": 16.80000000000291,
+        "min": 16.599999999998545,
+        "max": 16.80000000000291,
+        "fps": 59.99999999999999
+      },
+      "counts": {
+        "particles": 0,
+        "bullets": 0,
+        "asteroids": 1,
+        "enemies": 0,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 55,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "200 background stars",
+      "stats": {
+        "mean": 16.665000000000024,
+        "p50": 16.69999999999709,
+        "p95": 16.799999999995634,
+        "p99": 16.80000000000291,
+        "min": 16.599999999998545,
+        "max": 16.80000000000291,
+        "fps": 60.00600060005992
+      },
+      "counts": {
+        "particles": 0,
+        "bullets": 0,
+        "asteroids": 1,
+        "enemies": 0,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 200,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "Combat mid (5+4+30)",
+      "stats": {
+        "mean": 16.665833333333346,
+        "p50": 16.69999999999709,
+        "p95": 16.799999999995634,
+        "p99": 16.80000000000291,
+        "min": 16.5,
+        "max": 16.80000000000291,
+        "fps": 60.00300015000745
+      },
+      "counts": {
+        "particles": 30,
+        "bullets": 0,
+        "asteroids": 5,
+        "enemies": 4,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 55,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "Combat heavy (10+8+60)",
+      "stats": {
+        "mean": 16.665833333333346,
+        "p50": 16.69999999999709,
+        "p95": 16.700000000004366,
+        "p99": 16.80000000000291,
+        "min": 16.5,
+        "max": 16.80000000000291,
+        "fps": 60.00300015000745
+      },
+      "counts": {
+        "particles": 60,
+        "bullets": 0,
+        "asteroids": 10,
+        "enemies": 8,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 55,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    },
+    {
+      "label": "Maximum stress (20+8+60)",
+      "stats": {
+        "mean": 16.666666666666668,
+        "p50": 16.69999999999709,
+        "p95": 16.80000000000291,
+        "p99": 16.80000000000291,
+        "min": 16.5,
+        "max": 16.80000000000291,
+        "fps": 59.99999999999999
+      },
+      "counts": {
+        "particles": 60,
+        "bullets": 0,
+        "asteroids": 20,
+        "enemies": 8,
+        "enemyBullets": 0,
+        "colorStars": 0,
+        "backgroundStars": 200,
+        "lineDebris": 0,
+        "powerups": 0
+      }
+    }
+  ]
+}

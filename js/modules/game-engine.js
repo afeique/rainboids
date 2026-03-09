@@ -941,100 +941,133 @@ export class GameEngine {
     }
     
     // Method to draw wavy rainbow text for wave messages
+    // Mobile-aware: scales font to fit within screen width with padding.
     drawWavyText(text, x, y, fontSize = 48) {
         if (!text) return;
-        
-        const time = Date.now() * 0.001; // Convert to seconds
+
+        const time = Date.now() * 0.001;
         const chars = text.split('');
-        
+        const isMobile = this.inputHandler.isMobile();
+
+        // ── Mobile-responsive font sizing ────────────────────────────────────
+        // On mobile, clamp fontSize so the full string fits within the viewport
+        // with 20px padding on each side. Account for portrait vs landscape.
+        let effectiveFontSize = fontSize;
+        if (isMobile) {
+            const pad = 40; // 20px each side
+            const availableWidth = this.width - pad;
+            // 'Press Start 2P' at size N is roughly 0.6*N per character
+            const estimatedWidth = text.length * fontSize * 0.6;
+            if (estimatedWidth > availableWidth) {
+                effectiveFontSize = Math.floor(availableWidth / (text.length * 0.6));
+            }
+            // Also cap at a sensible maximum for small screens
+            const maxMobile = Math.min(this.width, this.height) * 0.08;
+            effectiveFontSize = Math.min(effectiveFontSize, maxMobile, fontSize);
+            effectiveFontSize = Math.max(effectiveFontSize, 10); // floor
+        }
+
         this.ctx.save();
-        this.ctx.font = `${fontSize}px 'Press Start 2P', monospace`;
+        this.ctx.font = `${effectiveFontSize}px 'Press Start 2P', monospace`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        
+
         // Calculate total text width for centering
         const totalWidth = this.ctx.measureText(text).width;
         let currentX = x - totalWidth / 2;
-        
+
+        // Wave amplitude scales with font size
+        const waveAmp = effectiveFontSize * 20 / 72;
+
         chars.forEach((char, index) => {
             if (char === ' ') {
-                currentX += fontSize * 0.5; // Space width
-            return;
-        }
-        
-            // Wave animation — amplitude scales with font size so all text looks proportional
-            const waveOffset = Math.sin(time * 3 + index * 0.8) * (fontSize * 20 / 72);
-            
+                currentX += effectiveFontSize * 0.5;
+                return;
+            }
+
+            const waveOffset = Math.sin(time * 3 + index * 0.8) * waveAmp;
+
             // Rainbow color cycling
             const colorTime = (time * 0.15 + index * 0.1) % 1;
             let color;
-            
-            if (colorTime < 0.16) {
-                color = '#FF0000'; // Red
-            } else if (colorTime < 0.32) {
-                color = '#FF8000'; // Orange
-            } else if (colorTime < 0.48) {
-                color = '#FFFF00'; // Yellow
-            } else if (colorTime < 0.64) {
-                color = '#00FF00'; // Green
-            } else if (colorTime < 0.80) {
-                color = '#0080FF'; // Blue
-            } else {
-                color = '#8000FF'; // Purple
-            }
-            
+            if      (colorTime < 0.16) color = '#FF0000';
+            else if (colorTime < 0.32) color = '#FF8000';
+            else if (colorTime < 0.48) color = '#FFFF00';
+            else if (colorTime < 0.64) color = '#00FF00';
+            else if (colorTime < 0.80) color = '#0080FF';
+            else                       color = '#8000FF';
+
+            // Glow via double-draw: slightly larger translucent pass + crisp pass.
+            // Cheaper than shadowBlur (1 extra fillText vs GPU blur kernel per char).
+            this.ctx.globalAlpha = 0.35;
             this.ctx.fillStyle = color;
-            this.ctx.shadowColor = color;
-            this.ctx.shadowBlur = 15;
-            
-            // Draw character with wave offset
+            this.ctx.font = `${effectiveFontSize + 2}px 'Press Start 2P', monospace`;
             this.ctx.fillText(char, currentX, y + waveOffset);
-            
-            // Move to next character position
+
+            this.ctx.globalAlpha = 1;
+            this.ctx.font = `${effectiveFontSize}px 'Press Start 2P', monospace`;
+            this.ctx.fillText(char, currentX, y + waveOffset);
+
             currentX += this.ctx.measureText(char).width;
         });
-        
+
         this.ctx.restore();
     }
     
     drawTitleScreen() {
-        // Draw title screen with amazing wavy text
         const centerX = this.width / 2;
         const centerY = this.height / 2;
-        
+        const isMobile = this.inputHandler.isMobile();
+
+        // Mobile-responsive helper: scale font to fit within screen width
+        const fitFont = (baseFontSize, text) => {
+            if (!isMobile) return baseFontSize;
+            const pad = 40;
+            const availW = this.width - pad;
+            const estimated = text.length * baseFontSize * 0.6;
+            let fs = baseFontSize;
+            if (estimated > availW) fs = Math.floor(availW / (text.length * 0.6));
+            const maxMobile = Math.min(this.width, this.height) * 0.08;
+            return Math.max(10, Math.min(fs, maxMobile, baseFontSize));
+        };
+
         // Main title - RAINBOIDS
         this.drawWavyText('RAINBOIDS', centerX, centerY - 100, 72);
-        
+
         // Subtitle
+        const subFS = fitFont(24, 'SUPERCHARGED ASTEROIDS');
         this.ctx.save();
-        this.ctx.font = '24px "Press Start 2P", monospace';
+        this.ctx.font = `${subFS}px "Press Start 2P", monospace`;
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20);
         this.ctx.restore();
-        
+
         // Animated "Press Any Key" text
         const time = Date.now() * 0.001;
-        const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3; // Pulsing between 0.2 and 0.8
-        
+        const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3;
+        const startText = isMobile ? 'TAP TO START' : 'PRESS ANY KEY TO START';
+        const startFS = fitFont(18, startText);
+
         this.ctx.save();
-        this.ctx.font = '18px "Press Start 2P", monospace';
+        this.ctx.font = `${startFS}px "Press Start 2P", monospace`;
         this.ctx.fillStyle = `rgba(255, 255, 255, ${pulseAlpha})`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('PRESS ANY KEY TO START', centerX, centerY + 80);
+        this.ctx.fillText(startText, centerX, centerY + 80);
         this.ctx.restore();
-        
+
         // Survival record display (if available)
         if (this.game.survivalRecord > 0) {
+            const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
+            const recFS = fitFont(16, recText);
             this.ctx.save();
-            this.ctx.font = '16px "Press Start 2P", monospace';
+            this.ctx.font = `${recFS}px "Press Start 2P", monospace`;
             this.ctx.fillStyle = '#FFD700';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            const survivalText = this.formatSurvivalTime(this.game.survivalRecord);
-            this.ctx.fillText(`Survival Record: ${survivalText}`, centerX, centerY + 120);
+            this.ctx.fillText(recText, centerX, centerY + 120);
             this.ctx.restore();
         }
     }
@@ -4360,14 +4393,14 @@ export class GameEngine {
                 this.ctx.save();
                 this.ctx.globalAlpha = alpha;
                 
-                // Draw title (larger, centered)
+                // Draw title (larger, centered horizontally, near top of screen)
                 const centerX = this.width / 2;
-                const centerY = this.height / 2 - 50;
-                this.drawWavyText(this.waveMessage.title, centerX, centerY, 48);
-                
+                const topY = 80;
+                this.drawWavyText(this.waveMessage.title, centerX, topY, 48);
+
                 // Draw subtitle (smaller, below title)
                 if (this.waveMessage.subtitle) {
-                    this.drawWavyText(this.waveMessage.subtitle, centerX, centerY + 80, 24);
+                    this.drawWavyText(this.waveMessage.subtitle, centerX, topY + 60, 24);
                 }
                 
                 this.ctx.restore();
