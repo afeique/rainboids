@@ -974,20 +974,18 @@ export class GameEngine {
 
         // ── Mobile-responsive font sizing ────────────────────────────────────
         // On mobile, clamp fontSize so the full string fits within the viewport
-        // with 20px padding on each side. Account for portrait vs landscape.
+        // with 20px padding on each side.
         let effectiveFontSize = fontSize;
         if (isMobile) {
             const pad = 40; // 20px each side
             const availableWidth = this.width - pad;
-            // 'Press Start 2P' at size N is roughly 0.6*N per character
-            const estimatedWidth = text.length * fontSize * 0.6;
+            // 'Press Start 2P' is monospace — measured ratio ≈ 0.63 per char
+            const estimatedWidth = text.length * fontSize * 0.63;
             if (estimatedWidth > availableWidth) {
-                effectiveFontSize = Math.floor(availableWidth / (text.length * 0.6));
+                effectiveFontSize = Math.floor(availableWidth / (text.length * 0.63));
             }
-            // Also cap at a sensible maximum for small screens
-            const maxMobile = Math.min(this.width, this.height) * 0.08;
-            effectiveFontSize = Math.min(effectiveFontSize, maxMobile, fontSize);
-            effectiveFontSize = Math.max(effectiveFontSize, 10); // floor
+            effectiveFontSize = Math.min(effectiveFontSize, fontSize);
+            effectiveFontSize = Math.max(effectiveFontSize, 8); // floor
         }
 
         this.ctx.save();
@@ -1045,15 +1043,16 @@ export class GameEngine {
         const isMobile = this.inputHandler.isMobile();
 
         // Mobile-responsive helper: scale font to fit within screen width
+        // 'Press Start 2P' is monospace — measured ratio ≈ 0.63 per char
+        const CHAR_W = 0.63;
         const fitFont = (baseFontSize, text) => {
             if (!isMobile) return baseFontSize;
             const pad = 40;
             const availW = this.width - pad;
-            const estimated = text.length * baseFontSize * 0.6;
+            const estimated = text.length * baseFontSize * CHAR_W;
             let fs = baseFontSize;
-            if (estimated > availW) fs = Math.floor(availW / (text.length * 0.6));
-            const maxMobile = Math.min(this.width, this.height) * 0.08;
-            return Math.max(10, Math.min(fs, maxMobile, baseFontSize));
+            if (estimated > availW) fs = Math.floor(availW / (text.length * CHAR_W));
+            return Math.max(10, Math.min(fs, baseFontSize));
         };
 
         // Main title - RAINBOIDS
@@ -2465,14 +2464,17 @@ export class GameEngine {
         // Convert world coordinates to screen coordinates
         const screenX = worldX - this.camera.x;
         const screenY = worldY - this.camera.y;
-        
-        // Minimap area: top-right corner (170px from right, 170px from top)
-        const minimapLeft = this.width - 170;
-        const minimapTop = 20;
-        const minimapRight = this.width - 20;
-        const minimapBottom = 170;
-        
-        return screenX >= minimapLeft && screenX <= minimapRight && 
+
+        // Minimap area: bottom-right corner (matches drawMinimap sizing)
+        const minDim = Math.min(this.width, this.height);
+        const mmSize = minDim < 500 ? Math.max(80, Math.floor(minDim * 0.22)) : 150;
+        const mmMargin = mmSize < 120 ? 10 : 20;
+        const minimapLeft = this.width - mmSize - mmMargin;
+        const minimapTop = this.height - mmSize - mmMargin;
+        const minimapRight = this.width - mmMargin;
+        const minimapBottom = this.height - mmMargin;
+
+        return screenX >= minimapLeft && screenX <= minimapRight &&
                screenY >= minimapTop && screenY <= minimapBottom;
     }
     
@@ -4443,14 +4445,20 @@ export class GameEngine {
                 this.ctx.save();
                 this.ctx.globalAlpha = alpha;
                 
-                // Draw title (larger, centered horizontally, near top of screen)
+                // Draw title (larger, centered horizontally, below HUD)
                 const centerX = this.width / 2;
-                const topY = 80;
-                this.drawWavyText(this.waveMessage.title, centerX, topY, 48);
+                const isMob = this.inputHandler.isMobile();
+                // On mobile, push below HUD (health bar + level + coins ≈ 130px)
+                // and use smaller base font sizes to avoid overlap
+                const titleFS = isMob ? 28 : 48;
+                const subFS2 = isMob ? 16 : 24;
+                const topY = isMob ? 140 : 80;
+                const gap = isMob ? 36 : 60;
+                this.drawWavyText(this.waveMessage.title, centerX, topY, titleFS);
 
                 // Draw subtitle (smaller, below title)
                 if (this.waveMessage.subtitle) {
-                    this.drawWavyText(this.waveMessage.subtitle, centerX, topY + 60, 24);
+                    this.drawWavyText(this.waveMessage.subtitle, centerX, topY + gap, subFS2);
                 }
                 
                 this.ctx.restore();
@@ -4618,9 +4626,12 @@ export class GameEngine {
     }
     
     drawMinimap() {
-        const minimapSize = 150;
-        const minimapX = this.width - minimapSize - 20;
-        const minimapY = this.height - minimapSize - 20; // Move to bottom right
+        // Scale minimap on small screens so it doesn't clip
+        const minDim = Math.min(this.width, this.height);
+        const minimapSize = minDim < 500 ? Math.max(80, Math.floor(minDim * 0.22)) : 150;
+        const margin = minimapSize < 120 ? 10 : 20;
+        const minimapX = this.width - minimapSize - margin;
+        const minimapY = this.height - minimapSize - margin; // Move to bottom right
         const scaleX = minimapSize / this.gameField.width;
         const scaleY = minimapSize / this.gameField.height;
         
