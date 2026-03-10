@@ -2,6 +2,7 @@
 import { GAME_CONFIG } from '../constants.js';
 import { random, wrap, glowSpriteCache } from '../utils.js';
 import { rgba } from '../color-cache.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from '../weapon-data.js';
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -62,13 +63,77 @@ export class Player {
         
         // Powerup system
         this.powerups = new Map(); // Map of powerup type -> {stacks, timeRemaining}
-        
+
         // Player leveling system
         this.level = 1;
         this.experience = 0;
         this.experienceToNextLevel = 100; // EXP needed for level 2
         this.skillPoints = 0; // Skill points for defensive upgrades
-        
+
+        // Weapon system
+        this.activePrimary = 'PULSE_CANNON';
+        this.activePower = 'CHARGE_SHOT';
+        this.ownedPrimaries = new Set(['PULSE_CANNON']);
+        this.ownedPowers = new Set(['CHARGE_SHOT']);
+        this.ownedSkills = new Set();
+
+        // Defense skill slots (number keys 1-4)
+        this.skillSlots = [null, null, null, null];
+        this.skillCooldowns = [0, 0, 0, 0];
+        this.activeSkillEffects = new Map(); // skill id -> {timeRemaining, ...state}
+
+        // Power weapon cooldown
+        this.powerCooldown = 0;
+
+        // Lance beam state
+        this.beamActive = false;
+        this.beamTimer = 0;
+        this.beamAngle = 0;
+
+        // Mine state
+        this.activeMines = [];
+
+        // Nova blast state
+        this.novaRings = [];
+
+        // Lightning arc state
+        this.lightningChains = [];
+
+        // Missile state
+        this.activeMissiles = [];
+
+        // Rail driver state
+        this.lastPrimaryFireTime = 0; // for Railgun Capacitor upgrade
+
+        // Storm needles counter
+        this.needleCount = 0;
+
+        // Scatter gun shot counter
+        this.scatterShotCount = 0;
+
+        // Deflector orbs state
+        this.deflectorOrbs = [];
+
+        // Phase dash state
+        this.isDashing = false;
+        this.dashTimer = 0;
+        this.dashVelX = 0;
+        this.dashVelY = 0;
+
+        // Bulwark state
+        this.bulwarkActive = false;
+
+        // Repair nanites state
+        this.regenActive = false;
+        this.regenTimer = 0;
+
+        // EMP state
+        this.empActive = false;
+
+        // Tractor shield state
+        this.tractorShieldActive = false;
+        this.tractorShieldAngle = 0;
+
         this.initializePlayer();
     }
     
@@ -98,7 +163,29 @@ export class Player {
         
         // Reset powerups
         this.powerups.clear();
-        
+
+        // Reset weapon active states (keep owned weapons/skills)
+        this.powerCooldown = 0;
+        this.beamActive = false;
+        this.beamTimer = 0;
+        this.activeMines = [];
+        this.novaRings = [];
+        this.lightningChains = [];
+        this.activeMissiles = [];
+        this.needleCount = 0;
+        this.scatterShotCount = 0;
+        this.lastPrimaryFireTime = 0;
+        this.skillCooldowns = [0, 0, 0, 0];
+        this.activeSkillEffects = new Map();
+        this.deflectorOrbs = [];
+        this.isDashing = false;
+        this.dashTimer = 0;
+        this.bulwarkActive = false;
+        this.regenActive = false;
+        this.regenTimer = 0;
+        this.empActive = false;
+        this.tractorShieldActive = false;
+
         let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
         // Player mass (smaller than most asteroids)
@@ -270,46 +357,427 @@ export class Player {
         }
 
         const now = Date.now();
-        this.canShoot = (now - this.lastShotTime) >= this.getEffectiveCooldown();
+        const dt = 1000 / GAME_CONFIG.LOGIC_HZ; // ms per tick
+        this.updateSkillCooldowns(dt);
 
-        // ── Primary weapon: auto-fire rapid shots on cooldown ──
+        // ── Primary weapon: auto-fire on cooldown ──
+        const effectiveFireRate = this.getEffectivePrimaryFireRate();
+        this.canShoot = (now - this.lastShotTime) >= effectiveFireRate;
+
         if (this.canShoot) {
-            const chargeDamageStacks = this.getPowerupStacks('CHARGE_DAMAGE');
-            const baseDamage = 1 + chargeDamageStacks;
-            this.createChargedBullets(bulletPool, 1, 1, baseDamage, 0, 0);
-            audioManager.playShoot();
+            this.firePrimary(bulletPool, audioManager);
             this.lastShotTime = now;
+            this.lastPrimaryFireTime = now;
         }
 
-        // ── Secondary weapon: charge shot (builds continuously, right-click to release) ──
-        if (!this.isCharging) {
-            this.isCharging = true;
-            this.chargeStartTime = now;
-            this.chargeLevel = 0;
-        }
+        // ── Power weapon: charge-based or cooldown-based ──
+        const powerConfig = this.getActivePowerConfig();
 
-        const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
-        const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
-        const reducedMaxChargeTime = Math.max(1000, this.maxChargeTime - (chargeSpeedStacks * 1000));
+        if (powerConfig.isChargeBased) {
+            // Charge shot behavior (existing)
+            if (!this.isCharging) {
+                this.isCharging = true;
+                this.chargeStartTime = now;
+                this.chargeLevel = 0;
+            }
 
-        this.chargeLevel = Math.min(1, currentChargeTime / reducedMaxChargeTime);
+            const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
+            const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
+            const reducedMaxChargeTime = Math.max(1000, this.maxChargeTime - (chargeSpeedStacks * 1000));
 
-        const isFullyCharged = currentChargeTime >= reducedMaxChargeTime;
-        this.tractorBeamActive = this.isCharging && !isFullyCharged;
-        this.isFullyCharged = isFullyCharged;
+            this.chargeLevel = Math.min(1, currentChargeTime / reducedMaxChargeTime);
 
-        // Right-click releases the charged shot (must have charged at least minChargeTime)
-        // On mobile: auto-fire when fully charged (no right-click available)
-        const shouldFire = isMobile()
-            ? isFullyCharged
-            : (input.fireSecondary && currentChargeTime >= this.minChargeTime);
+            const isFullyCharged = currentChargeTime >= reducedMaxChargeTime;
+            this.tractorBeamActive = this.isCharging && !isFullyCharged;
+            this.isFullyCharged = isFullyCharged;
 
-        if (shouldFire) {
-            this.fireChargedShot(bulletPool, audioManager);
+            const shouldFire = isMobile()
+                ? isFullyCharged
+                : (input.fireSecondary && currentChargeTime >= this.minChargeTime);
+
+            if (shouldFire) {
+                this.fireChargedShot(bulletPool, audioManager);
+                this.isCharging = false;
+                this.chargeLevel = 0;
+                this.pausedChargeTime = 0;
+                input.fireSecondary = false;
+            }
+        } else {
+            // Cooldown-based power weapon
             this.isCharging = false;
             this.chargeLevel = 0;
-            this.pausedChargeTime = 0;
-            input.fireSecondary = false;
+            this.tractorBeamActive = false;
+            this.isFullyCharged = false;
+
+            if (input.fireSecondary && this.isPowerReady()) {
+                this.firePower(bulletPool, audioManager, particlePool);
+                input.fireSecondary = false;
+            }
+        }
+    }
+
+    // ── Primary weapon dispatch ──
+    firePrimary(bulletPool, audioManager) {
+        const config = this.getActivePrimaryConfig();
+
+        switch (this.activePrimary) {
+            case 'PULSE_CANNON':
+                this.firePulseCannon(bulletPool, audioManager, config);
+                break;
+            case 'STORM_NEEDLES':
+                this.fireStormNeedles(bulletPool, audioManager, config);
+                break;
+            case 'SCATTER_GUN':
+                this.fireScatterGun(bulletPool, audioManager, config);
+                break;
+            case 'RAIL_DRIVER':
+                this.fireRailDriver(bulletPool, audioManager, config);
+                break;
+            case 'LANCE_BEAM':
+                // Beam handled in update loop, not individual shots
+                this.startLanceBeam(audioManager, config);
+                break;
+            default:
+                this.firePulseCannon(bulletPool, audioManager, config);
+        }
+    }
+
+    firePulseCannon(bulletPool, audioManager, config) {
+        const damage = this.getEffectivePrimaryDamage();
+        const echoStacks = this.getPowerupStacks('ECHO_ROUND');
+        this.createChargedBullets(bulletPool, 1, 1, damage, 0, 0);
+        audioManager.playShoot();
+
+        // Echo Round: chance to fire a bonus bullet
+        if (echoStacks > 0 && Math.random() < echoStacks * 0.1) {
+            this.createChargedBullets(bulletPool, 0.8, 1, damage * 0.7, 0, 0);
+        }
+    }
+
+    fireStormNeedles(bulletPool, audioManager, config) {
+        this.needleCount++;
+        const damage = this.getEffectivePrimaryDamage();
+        const spreadAngle = config.spreadAngle;
+
+        // Fire a single small needle with random spread
+        const angleOffset = (Math.random() - 0.5) * spreadAngle;
+        const bullet = bulletPool.get(this.x, this.y, this.angle + angleOffset);
+        if (bullet) {
+            bullet.damage = damage;
+            bullet.radius *= config.bulletSize;
+            bullet.baseRadius = bullet.radius;
+            bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+            bullet.maxLife = Math.round(bullet.maxLife * config.range);
+            bullet.color = config.color;
+
+            // Apply global upgrades
+            this.applyGlobalBulletUpgrades(bullet);
+
+            // Poison Tip
+            if (this.getPowerupStacks('POISON_TIP') > 0) {
+                bullet.poisonDamage = 1;
+                bullet.poisonDuration = 2000;
+            }
+
+            // Suppression
+            if (this.getPowerupStacks('SUPPRESSION') > 0) {
+                bullet.suppressionDuration = 1500;
+            }
+
+            // Static Charge: every 10th needle
+            const staticStacks = this.getPowerupStacks('STATIC_CHARGE');
+            if (staticStacks > 0 && this.needleCount % 10 === 0) {
+                bullet.chainLightning = staticStacks;
+            }
+        }
+        audioManager.playShoot();
+    }
+
+    fireScatterGun(bulletPool, audioManager, config) {
+        this.scatterShotCount++;
+        const damage = this.getEffectivePrimaryDamage();
+        const buckshotStacks = this.getPowerupStacks('BUCKSHOT');
+        const tightChokeStacks = this.getPowerupStacks('TIGHT_CHOKE');
+        const slugRound = this.getPowerupStacks('SLUG_ROUND') > 0 && this.scatterShotCount % 4 === 0;
+
+        if (slugRound) {
+            // Single powerful slug
+            const bullet = bulletPool.get(this.x, this.y, this.angle);
+            if (bullet) {
+                bullet.damage = damage * 4;
+                bullet.radius *= 1.8;
+                bullet.baseRadius = bullet.radius;
+                bullet.rangeMultiplier = this.getRangeMultiplier() * config.range * 1.5;
+                bullet.maxLife = Math.round(bullet.maxLife * config.range * 1.5);
+                bullet.color = '#ffaa00';
+                this.applyGlobalBulletUpgrades(bullet);
+            }
+        } else {
+            // Pellet spread
+            const pelletCount = config.bulletCount + buckshotStacks;
+            const spread = config.spreadAngle * Math.pow(0.85, tightChokeStacks);
+            const startAngle = this.angle - spread / 2;
+
+            for (let i = 0; i < pelletCount; i++) {
+                const pelletAngle = startAngle + (spread * i / (pelletCount - 1 || 1)) + (Math.random() - 0.5) * 0.05;
+                const bullet = bulletPool.get(this.x, this.y, pelletAngle);
+                if (bullet) {
+                    bullet.damage = damage;
+                    bullet.radius *= config.bulletSize;
+                    bullet.baseRadius = bullet.radius;
+                    bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+                    bullet.maxLife = Math.round(bullet.maxLife * config.range);
+                    bullet.color = config.color;
+                    // Shrapnel upgrade
+                    if (this.getPowerupStacks('SHRAPNEL') > 0) {
+                        bullet.shrapnelOnExpire = true;
+                    }
+                    this.applyGlobalBulletUpgrades(bullet);
+                }
+            }
+        }
+        audioManager.playShoot();
+    }
+
+    fireRailDriver(bulletPool, audioManager, config) {
+        const damage = this.getEffectivePrimaryDamage();
+        const penetratorStacks = this.getPowerupStacks('PENETRATOR');
+        const rangeBonus = 1 + penetratorStacks * 0.5;
+        const capacitorStacks = this.getPowerupStacks('RAILGUN_CAPACITOR');
+
+        let finalDamage = damage;
+        // Capacitor: 2x damage if idle for 2s
+        if (capacitorStacks > 0) {
+            const idleTime = Date.now() - this.lastPrimaryFireTime;
+            if (idleTime > 2000) {
+                finalDamage *= 2;
+            }
+        }
+
+        const bullet = bulletPool.get(this.x, this.y, this.angle);
+        if (bullet) {
+            bullet.damage = finalDamage;
+            bullet.radius *= config.bulletSize;
+            bullet.baseRadius = bullet.radius;
+            bullet.piercing = config.piercing;
+            bullet.rangeMultiplier = this.getRangeMultiplier() * config.range * rangeBonus;
+            bullet.maxLife = Math.round(bullet.maxLife * config.range * rangeBonus);
+            bullet.color = config.color;
+
+            // Kinetic Impact
+            if (this.getPowerupStacks('KINETIC_IMPACT') > 0) {
+                bullet.knockback = 8;
+            }
+
+            // Through-and-Through
+            if (this.getPowerupStacks('THROUGH_AND_THROUGH') > 0) {
+                bullet.damageTrail = true;
+            }
+
+            // Speed boost for rail
+            const speed = Math.hypot(bullet.vel.x, bullet.vel.y);
+            bullet.vel.x = (bullet.vel.x / speed) * speed * config.bulletSpeed;
+            bullet.vel.y = (bullet.vel.y / speed) * speed * config.bulletSpeed;
+
+            this.applyGlobalBulletUpgrades(bullet);
+        }
+        audioManager.playShoot();
+    }
+
+    startLanceBeam(audioManager, config) {
+        const lingerStacks = this.getPowerupStacks('LINGER');
+        const duration = config.beamDuration + lingerStacks * 100;
+        this.beamActive = true;
+        this.beamTimer = duration;
+        this.beamAngle = this.angle;
+
+        const widthStacks = this.getPowerupStacks('BEAM_WIDTH');
+        this.beamCurrentWidth = config.beamWidth * (1 + widthStacks * 0.3);
+        this.beamDamagePerTick = config.damage;
+        this.beamMaxDuration = duration;
+
+        audioManager.playShoot();
+    }
+
+    // Apply global offense upgrades to any bullet
+    applyGlobalBulletUpgrades(bullet) {
+        const homingStacks = this.getPowerupStacks('HOMING');
+        const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
+        const piercingStacks = this.getPowerupStacks('PIERCING');
+        const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
+
+        // Range
+        bullet.rangeMultiplier = (bullet.rangeMultiplier || 1) * this.getRangeMultiplier();
+
+        // Crit
+        const critChance = this.getEffectiveCritChance();
+        if (Math.random() * 100 < critChance) {
+            const critMult = this.getEffectiveCritDamage() / 100;
+            bullet.damage *= critMult;
+            bullet.isCrit = true;
+            bullet.color = '#FFFF00';
+        }
+
+        // Homing
+        if (homingStacks > 0) {
+            bullet.homing = true;
+            bullet.homingStrength = Math.min(0.4, homingStacks * 0.05);
+        }
+
+        // Big bullets
+        if (bigBulletStacks > 0) {
+            bullet.radius *= (1 + bigBulletStacks * 0.3);
+            bullet.baseRadius = bullet.radius;
+        }
+
+        // Piercing (additive with weapon built-in)
+        if (piercingStacks > 0) {
+            bullet.piercing = (bullet.piercing || 0) + piercingStacks;
+        }
+
+        // Explosive
+        if (explosiveStacks > 0) {
+            bullet.explosive = true;
+            bullet.explosionRadius = 30 + explosiveStacks * 10;
+        }
+    }
+
+    // ── Power weapon dispatch ──
+    firePower(bulletPool, audioManager, particlePool) {
+        const config = this.getActivePowerConfig();
+
+        switch (this.activePower) {
+            case 'MINE_LAYER':
+                this.layMine(config);
+                break;
+            case 'NOVA_BLAST':
+                this.fireNova(config);
+                break;
+            case 'LIGHTNING_ARC':
+                this.fireLightning(config);
+                break;
+            case 'MISSILE_SALVO':
+                this.fireMissiles(bulletPool, config);
+                break;
+        }
+
+        this.powerCooldown = config.cooldown;
+        audioManager.playShoot();
+    }
+
+    layMine(config) {
+        const extraPayloadStacks = this.getPowerupStacks('EXTRA_PAYLOAD');
+        const maxMines = config.maxMines + extraPayloadStacks;
+        const blastRadiusStacks = this.getPowerupStacks('BLAST_RADIUS');
+
+        // Remove oldest mine if at max
+        while (this.activeMines.length >= maxMines) {
+            this.activeMines.shift();
+        }
+
+        this.activeMines.push({
+            x: this.x,
+            y: this.y,
+            armTimer: 1000,  // 1s to arm
+            triggerRadius: config.mineRadius,
+            blastRadius: config.blastRadius + blastRadiusStacks * 30,
+            damage: config.mineDamage,
+            magnetic: this.getPowerupStacks('MAGNETIC_MINE') > 0,
+            daisyChain: this.getPowerupStacks('DAISY_CHAIN') > 0,
+            active: true,
+        });
+    }
+
+    fireNova(config) {
+        const shockwaveStacks = this.getPowerupStacks('SHOCKWAVE');
+        const resonanceStacks = this.getPowerupStacks('RESONANCE');
+
+        // Reduce cooldown for resonance
+        if (resonanceStacks > 0) {
+            this.powerCooldown = Math.max(2000, config.cooldown - resonanceStacks * 1500);
+        }
+
+        this.novaRings.push({
+            x: this.x,
+            y: this.y,
+            radius: 0,
+            maxRadius: config.ringRadius + shockwaveStacks * 40,
+            damage: config.ringDamage,
+            duration: config.ringDuration,
+            elapsed: 0,
+            hitEnemies: new Set(),
+            aftershock: this.getPowerupStacks('AFTERSHOCK') > 0,
+        });
+
+        // Double Pulse
+        if (this.getPowerupStacks('DOUBLE_PULSE') > 0) {
+            setTimeout(() => {
+                this.novaRings.push({
+                    x: this.x,
+                    y: this.y,
+                    radius: 0,
+                    maxRadius: (config.ringRadius + shockwaveStacks * 40) * 0.7,
+                    damage: config.ringDamage * 0.6,
+                    duration: config.ringDuration,
+                    elapsed: 0,
+                    hitEnemies: new Set(),
+                    aftershock: false,
+                });
+            }, 300);
+        }
+    }
+
+    fireLightning(config) {
+        const conductorStacks = this.getPowerupStacks('CONDUCTOR');
+        const teslaCoilStacks = this.getPowerupStacks('TESLA_COIL');
+
+        if (teslaCoilStacks > 0) {
+            this.powerCooldown = Math.max(2000, config.cooldown - teslaCoilStacks * 1500);
+        }
+
+        this.lightningChains.push({
+            originX: this.x,
+            originY: this.y,
+            angle: this.angle,
+            maxChains: config.chainCount + conductorStacks,
+            damage: config.chainDamage,
+            falloff: config.chainFalloff,
+            range: config.chainRange,
+            amplifierStacks: this.getPowerupStacks('AMPLIFIER'),
+            staticField: this.getPowerupStacks('STATIC_FIELD') > 0,
+            timer: 500, // visual duration
+            hitEnemies: [],
+            resolved: false,
+        });
+    }
+
+    fireMissiles(bulletPool, config) {
+        const extraOrdnanceStacks = this.getPowerupStacks('EXTRA_ORDNANCE');
+        const lockOnStacks = this.getPowerupStacks('LOCK_ON');
+        const count = config.missileCount + extraOrdnanceStacks;
+
+        for (let i = 0; i < count; i++) {
+            const spreadAngle = this.angle + (i - (count - 1) / 2) * 0.3;
+            this.activeMissiles.push({
+                x: this.x,
+                y: this.y,
+                vel: {
+                    x: Math.cos(spreadAngle) * config.missileSpeed,
+                    y: Math.sin(spreadAngle) * config.missileSpeed,
+                },
+                damage: config.missileDamage,
+                homingStrength: config.missileHomingStrength + lockOnStacks * 0.03,
+                cluster: this.getPowerupStacks('CLUSTER_WARHEAD') > 0,
+                life: 3000,
+                radius: 5,
+                target: null,
+                active: true,
+            });
+        }
+
+        const quickReloadStacks = this.getPowerupStacks('QUICK_RELOAD');
+        if (quickReloadStacks > 0) {
+            this.powerCooldown = Math.max(3000, config.cooldown - quickReloadStacks * 2000);
         }
     }
     
@@ -479,7 +947,7 @@ export class Player {
         const chargeRatio = Math.min(1, chargeTime / reducedMaxChargeTime);
         
         // Get charge damage upgrade stacks
-        const chargeDamageStacks = this.getPowerupStacks('CHARGE_DAMAGE');
+        const chargeDamageStacks = this.getPowerupStacks('CHARGE_POWER');
         
         // Calculate base charge damage (1 base + upgrades)
         const baseDamage = 1 + chargeDamageStacks;
@@ -670,12 +1138,107 @@ export class Player {
 
         // Charging shot system - charge when holding left-click, fire on release
         this.updateChargingSystem(input, bulletPool, audioManager, particlePool);
-        
+
         // Charge beam particle effects — always show while charging (independent of primary cooldown)
         if (this.tractorBeamActive && Math.random() < 0.3) {
             this.spawnChargeBeamParticles(particlePool);
         }
 
+        // Defense skill activation (number keys 1-4)
+        for (let i = 0; i < 4; i++) {
+            const key = `skill${i + 1}`;
+            if (input[key]) {
+                this.activateSkill(i);
+                input[key] = false; // consume the input
+            }
+        }
+
+        // Update beam state
+        if (this.beamActive) {
+            this.beamTimer -= 1000 / GAME_CONFIG.LOGIC_HZ;
+            this.beamAngle = this.angle; // track current aim
+            if (this.beamTimer <= 0) {
+                this.beamActive = false;
+            }
+        }
+
+        // Update active skill effects (regen, dash, etc.)
+        this.updateActiveSkills(1000 / GAME_CONFIG.LOGIC_HZ);
+
+    }
+
+    updateActiveSkills(dt) {
+        // Repair nanites: heal over time
+        if (this.activeSkillEffects.has('REPAIR_NANITES')) {
+            const config = DEFENSE_SKILLS.REPAIR_NANITES;
+            const potencyStacks = this.getPowerupStacks('POTENCY');
+            const hps = config.healPerSecond + potencyStacks;
+            const healThisTick = hps * (dt / 1000);
+            this.health = Math.min(this.getEffectiveMaxHealth(), this.health + healThisTick);
+        }
+
+        // Bulwark: set flag for damage reduction
+        this.bulwarkActive = this.activeSkillEffects.has('BULWARK');
+
+        // Tractor shield: set flag
+        this.tractorShieldActive = this.activeSkillEffects.has('TRACTOR_SHIELD');
+        if (this.tractorShieldActive) {
+            this.tractorShieldAngle = this.angle;
+        }
+
+        // Phase dash
+        if (this.isDashing) {
+            this.dashTimer -= dt;
+            this.x += this.dashVelX * (dt / 1000);
+            this.y += this.dashVelY * (dt / 1000);
+            if (this.dashTimer <= 0) {
+                this.isDashing = false;
+                this.invulnerable = false;
+            }
+        }
+
+        // Update nova rings
+        for (let i = this.novaRings.length - 1; i >= 0; i--) {
+            const ring = this.novaRings[i];
+            ring.elapsed += dt;
+            ring.radius = (ring.elapsed / ring.duration) * ring.maxRadius;
+            if (ring.elapsed >= ring.duration) {
+                this.novaRings.splice(i, 1);
+            }
+        }
+
+        // Update lightning chains visual timer
+        for (let i = this.lightningChains.length - 1; i >= 0; i--) {
+            this.lightningChains[i].timer -= dt;
+            if (this.lightningChains[i].timer <= 0) {
+                this.lightningChains.splice(i, 1);
+            }
+        }
+
+        // Update missiles
+        for (let i = this.activeMissiles.length - 1; i >= 0; i--) {
+            const m = this.activeMissiles[i];
+            m.life -= dt;
+            if (m.life <= 0 || !m.active) {
+                this.activeMissiles.splice(i, 1);
+                continue;
+            }
+            m.x += m.vel.x;
+            m.y += m.vel.y;
+        }
+
+        // Update mine arm timers
+        for (const mine of this.activeMines) {
+            if (mine.armTimer > 0) mine.armTimer -= dt;
+        }
+
+        // Update deflector orbs positions
+        if (this.deflectorOrbs.length > 0) {
+            const orbitSpeed = 0.003;
+            for (const orb of this.deflectorOrbs) {
+                orb.angle += orbitSpeed * (1000 / GAME_CONFIG.LOGIC_HZ);
+            }
+        }
     }
     
     draw(ctx) {
@@ -1395,8 +1958,173 @@ export class Player {
         return this.getEffectiveHealthOrbHealing();
     }
     
+    // ── Weapon System Methods ──────────────────────────────────────────────
+
+    getActivePrimaryConfig() {
+        return PRIMARY_WEAPONS[this.activePrimary] || PRIMARY_WEAPONS.PULSE_CANNON;
+    }
+
+    getActivePowerConfig() {
+        return POWER_WEAPONS[this.activePower] || POWER_WEAPONS.CHARGE_SHOT;
+    }
+
+    equipPrimary(weaponId) {
+        if (this.ownedPrimaries.has(weaponId) && PRIMARY_WEAPONS[weaponId]) {
+            this.activePrimary = weaponId;
+            return true;
+        }
+        return false;
+    }
+
+    equipPower(weaponId) {
+        if (this.ownedPowers.has(weaponId) && POWER_WEAPONS[weaponId]) {
+            this.activePower = weaponId;
+            this.powerCooldown = 0;
+            // Reset charge state when switching away from charge shot
+            this.isCharging = false;
+            this.chargeLevel = 0;
+            this.pausedChargeTime = 0;
+            return true;
+        }
+        return false;
+    }
+
+    buyPrimary(weaponId) {
+        if (PRIMARY_WEAPONS[weaponId] && !this.ownedPrimaries.has(weaponId)) {
+            this.ownedPrimaries.add(weaponId);
+            this.activePrimary = weaponId;
+            return true;
+        }
+        return false;
+    }
+
+    buyPower(weaponId) {
+        if (POWER_WEAPONS[weaponId] && !this.ownedPowers.has(weaponId)) {
+            this.ownedPowers.add(weaponId);
+            this.activePower = weaponId;
+            this.powerCooldown = 0;
+            this.isCharging = false;
+            this.chargeLevel = 0;
+            this.pausedChargeTime = 0;
+            return true;
+        }
+        return false;
+    }
+
+    buySkill(skillId) {
+        if (DEFENSE_SKILLS[skillId] && !this.ownedSkills.has(skillId)) {
+            this.ownedSkills.add(skillId);
+            // Auto-assign to first empty slot
+            for (let i = 0; i < 4; i++) {
+                if (!this.skillSlots[i]) {
+                    this.skillSlots[i] = skillId;
+                    break;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    assignSkillToSlot(skillId, slotIndex) {
+        if (slotIndex < 0 || slotIndex > 3) return false;
+        if (!this.ownedSkills.has(skillId)) return false;
+        // Remove from any existing slot
+        for (let i = 0; i < 4; i++) {
+            if (this.skillSlots[i] === skillId) this.skillSlots[i] = null;
+        }
+        this.skillSlots[slotIndex] = skillId;
+        return true;
+    }
+
+    activateSkill(slotIndex) {
+        if (slotIndex < 0 || slotIndex > 3) return false;
+        const skillId = this.skillSlots[slotIndex];
+        if (!skillId) return false;
+        if (this.skillCooldowns[slotIndex] > 0) return false;
+
+        const config = DEFENSE_SKILLS[skillId];
+        if (!config) return false;
+
+        // Start cooldown
+        this.skillCooldowns[slotIndex] = config.cooldown;
+
+        // Activate effect
+        this.activeSkillEffects.set(skillId, {
+            timeRemaining: config.duration,
+            slotIndex,
+        });
+
+        return true;
+    }
+
+    getEffectivePrimaryFireRate() {
+        const config = this.getActivePrimaryConfig();
+        let rate = config.fireRate;
+
+        // Apply weapon-specific upgrades
+        if (this.activePrimary === 'STORM_NEEDLES') {
+            const stacks = this.getPowerupStacks('NEEDLE_STORM');
+            rate *= Math.pow(0.85, stacks); // -15% per stack compounding
+        }
+
+        // Apply global Rapid Fire
+        const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
+        rate *= Math.pow(0.85, rapidFireStacks);
+
+        return Math.round(rate);
+    }
+
+    getEffectivePrimaryDamage() {
+        const config = this.getActivePrimaryConfig();
+        let damage = config.damage;
+
+        if (this.activePrimary === 'PULSE_CANNON') {
+            const stacks = this.getPowerupStacks('OVERCHARGE');
+            damage *= (1 + stacks * 0.15);
+        }
+
+        return damage;
+    }
+
+    getPowerCooldownRemaining() {
+        return Math.max(0, this.powerCooldown);
+    }
+
+    isPowerReady() {
+        const config = this.getActivePowerConfig();
+        if (config.isChargeBased) return true;
+        return this.powerCooldown <= 0;
+    }
+
+    updateSkillCooldowns(dt) {
+        for (let i = 0; i < 4; i++) {
+            if (this.skillCooldowns[i] > 0) {
+                this.skillCooldowns[i] = Math.max(0, this.skillCooldowns[i] - dt);
+            }
+        }
+
+        // Update power weapon cooldown
+        if (this.powerCooldown > 0) {
+            this.powerCooldown = Math.max(0, this.powerCooldown - dt);
+        }
+
+        // Update active skill effects
+        for (const [skillId, effect] of this.activeSkillEffects) {
+            effect.timeRemaining -= dt;
+            if (effect.timeRemaining <= 0) {
+                this.activeSkillEffects.delete(skillId);
+                // Clean up specific effects
+                if (skillId === 'BULWARK') this.bulwarkActive = false;
+                if (skillId === 'REPAIR_NANITES') this.regenActive = false;
+                if (skillId === 'DEFLECTOR_ORBS') this.deflectorOrbs = [];
+                if (skillId === 'TRACTOR_SHIELD') this.tractorShieldActive = false;
+            }
+        }
+    }
+
     // Wave bonus shield system removed - replaced with shop system
-    
+
     die(particlePool, audioManager, uiManager, game, triggerScreenShake) {
         this.active = false;
         game.state = 'GAME_OVER';

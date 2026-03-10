@@ -3,10 +3,10 @@ export const GAME_CONFIG = {
     SHIP_SIZE: 30,
     SHIP_THRUST: 0.12,
     SHIP_FRICTION: 0.993,
-    MAX_V: 7 * (30 / 45),              // Scaled from 7 px/tick @30Hz
-    BULLET_SPEED: 16 * (30 / 45),    // Scaled from 16 px/tick @30Hz
+    MAX_V: 7 * (30 / 60),              // Scaled from 7 px/tick @30Hz
+    BULLET_SPEED: 16 * (30 / 60),    // Scaled from 16 px/tick @30Hz
     INITIAL_AST_COUNT: 1, // Minimal asteroid count for best performance
-    AST_SPEED: 3.5 * (30 / 45),       // Scaled from 3.5 px/tick @30Hz
+    AST_SPEED: 3.5 * (30 / 60),       // Scaled from 3.5 px/tick @30Hz
     MAX_WAVE_ASTEROIDS: 12, // Hard cap: max asteroids per wave (Wave 1 uses 12 — the proven safe limit)
     COLOR_STAR_COUNT: 25, // Increased for visual appeal while maintaining performance
     BACKGROUND_STAR_COUNT: 30, // Increased for richer starfield while maintaining performance
@@ -62,9 +62,9 @@ export const GAME_CONFIG = {
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 
     // Temporal settings
-    LOGIC_HZ: 45,                        // Logic tick rate (Hz)
-    LOGIC_TICK_MS: 1000 / 45,            // Milliseconds per logic tick
-    TICK_SCALE: 30 / 45,                 // Scale factor for frame-based timers calibrated at 30Hz
+    LOGIC_HZ: 60,                        // Logic tick rate (Hz)
+    LOGIC_TICK_MS: 1000 / 60,            // Milliseconds per logic tick
+    TICK_SCALE: 30 / 60,                 // Scale factor for frame-based timers calibrated at 30Hz
 };
 
 // Enemy Bullet Configuration

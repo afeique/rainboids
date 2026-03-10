@@ -17,6 +17,7 @@ import { ColorStar } from './entities/color-star.js';
 import { BackgroundStar } from './entities/background-star.js';
 import { LineDebris } from './entities/line-debris.js';
 import { Powerup } from './entities/powerup.js';
+import { PRIMARY_WEAPONS, PRIMARY_UPGRADES, POWER_WEAPONS, POWER_UPGRADES, DEFENSE_SKILLS, SKILL_UPGRADES, getPrimaryUpgrades, getPowerUpgrades, getSkillUpgrades } from './weapon-data.js';
 
 const _charWidthCache = new Map();
 
@@ -37,6 +38,7 @@ export class GameEngine {
         
         // Make game engine globally accessible for entities
         window.gameEngine = this;
+        this._defenseSkillsRef = DEFENSE_SKILLS; // Expose for UI manager skill slots
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         this.canvas.width = this.width;
@@ -257,9 +259,9 @@ export class GameEngine {
         // OPT-8: Spatial grid for O(1) insert / O(k) collision query
         this.spatialGrid = new SpatialGrid(this.gameField.width, this.gameField.height, 8, 6);
 
-        // OPT-7: Temporal upsampling — 45Hz logic, display-rate render with interpolation.
+        // OPT-7: Temporal upsampling — 60Hz logic, display-rate render with interpolation.
         this.useTemporalUpsampling = true;
-        this.logicTickRate = GAME_CONFIG.LOGIC_TICK_MS; // 45 Hz fixed timestep
+        this.logicTickRate = GAME_CONFIG.LOGIC_TICK_MS; // 60 Hz fixed timestep
         this.logicAccumulator = 0;
         this.maxLogicStepsPerFrame = 4;         // spiral-of-death guard (bumped for higher tick rate)
         this.lastFrameTime = performance.now();
@@ -1276,15 +1278,23 @@ export class GameEngine {
     }
     
     sellShopItem(itemId) {
-        const item = this.shopItems.find(i => i.id === itemId);
+        // Look in regular shop items first, then in current filtered items
+        let item = this.shopItems.find(i => i.id === itemId);
+        if (!item && this.shopFilteredItems) {
+            item = this.shopFilteredItems.find(i => i.id === itemId);
+        }
         if (!item) return false;
+
+        // Can't sell weapons or skills themselves
+        if (item.isWeapon || item.isSkill) return false;
 
         const currentStacks = this.player.getPowerupStacks(itemId);
         if (currentStacks === 0) return false;
 
-        // Calculate refund: 50% of the cost of the most-recently-bought stack
         let lastStackCost = item.cost;
-        if (item.id === 'CHARGE_SPEED') {
+        if (item.costOverrides) {
+            lastStackCost = item.costOverrides[Math.min(currentStacks - 1, item.costOverrides.length - 1)] || item.cost;
+        } else if (item.id === 'CHARGE_SPEED') {
             if (currentStacks === 1) lastStackCost = 1500;
             else if (currentStacks === 2) lastStackCost = 3000;
             else if (currentStacks >= 3) lastStackCost = 5000;
@@ -1303,7 +1313,6 @@ export class GameEngine {
             } else {
                 entry.stacks--;
             }
-            // Clamp health after selling HEALTH_BOOST
             if (itemId === 'HEALTH_BOOST') {
                 this.player.health = Math.min(this.player.health, this.player.getEffectiveMaxHealth());
             }
@@ -1315,6 +1324,7 @@ export class GameEngine {
             this.game.money += refund;
         }
         this.audioManager.playCoin();
+        this._rebuildShopCache();
         return true;
     }
 
@@ -1349,9 +1359,7 @@ export class GameEngine {
             { id: 'CRIT_CHANCE',    name: 'Critical Chance',  description: '+5% chance for critical hits',   cost: 500,  icon: '⭐', maxStacks: 8, category: 'OFFENSE', currency: 'COINS' },
             { id: 'CRIT_DAMAGE',    name: 'Critical Damage',  description: '+10% critical hit damage',       cost: 500,  icon: '🗡️', maxStacks: 8, category: 'OFFENSE', currency: 'COINS' },
             { id: 'HOMING',         name: 'Homing',           description: 'Bullets track nearest enemy',    cost: 750,  icon: '🎯', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'CHARGE_DAMAGE',  name: 'Charge Power',     description: '+1 charge shot base damage',     cost: 750,  icon: '🔋', maxStacks: 6, category: 'OFFENSE', currency: 'COINS' },
             { id: 'PIERCING',       name: 'Piercing',         description: 'Bullets pass through +1 enemy',  cost: 1200, icon: '🏹', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'CHARGE_SPEED',   name: 'Charge Speed',     description: '-1 second charge time',          cost: 1500, icon: '⏱️', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
             { id: 'MULTI_SHOT',     name: 'Multi Shot',       description: '+1 bullet in a spread per stack',cost: 1500, icon: '✳️', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
             { id: 'EXPLOSIVE',      name: 'Explosive',        description: 'AoE blast on bullet impact',     cost: 2000, icon: '💣', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
             { id: 'SPARE_SHIP',     name: 'Spare Ship',       description: '+1 extra life (max 3)',           cost: 5000, icon: '🚀', maxStacks: 1, flatCost: true, category: 'OFFENSE', currency: 'COINS' },
@@ -1377,7 +1385,141 @@ export class GameEngine {
     }
 
     _rebuildShopCache() {
-        this.shopFilteredItems = this.shopItems.filter(i => i.category === this.shopCategory);
+        if (this.shopCategory === 'PRIMARY') {
+            this._buildPrimaryTabItems();
+        } else if (this.shopCategory === 'POWER') {
+            this._buildPowerTabItems();
+        } else if (this.shopCategory === 'SKILLS') {
+            this._buildSkillsTabItems();
+        } else {
+            this.shopFilteredItems = this.shopItems.filter(i => i.category === this.shopCategory);
+        }
+    }
+
+    _buildPrimaryTabItems() {
+        // Build items list: primary weapons (buy/equip) + currently equipped weapon's upgrades
+        const items = [];
+        for (const weapon of Object.values(PRIMARY_WEAPONS)) {
+            const owned = this.player && this.player.ownedPrimaries && this.player.ownedPrimaries.has(weapon.id);
+            const equipped = this.player && this.player.activePrimary === weapon.id;
+            items.push({
+                id: weapon.id,
+                name: weapon.name,
+                description: weapon.description,
+                icon: weapon.icon,
+                cost: weapon.cost,
+                spCost: weapon.spCost,
+                maxStacks: 1,
+                category: 'PRIMARY',
+                currency: weapon.cost > 0 ? 'COINS' : 'FREE',
+                isWeapon: true,
+                weaponType: 'primary',
+                owned,
+                equipped,
+            });
+        }
+        // Add upgrades for currently equipped primary
+        if (this.player && this.player.activePrimary) {
+            const upgrades = getPrimaryUpgrades(this.player.activePrimary);
+            for (const upg of upgrades) {
+                items.push({
+                    id: upg.id,
+                    name: upg.name,
+                    description: upg.description,
+                    icon: upg.icon,
+                    cost: upg.cost,
+                    maxStacks: upg.maxStacks,
+                    category: 'PRIMARY',
+                    currency: 'COINS',
+                    isWeaponUpgrade: true,
+                    parentWeapon: upg.weapon,
+                });
+            }
+        }
+        this.shopFilteredItems = items;
+    }
+
+    _buildPowerTabItems() {
+        const items = [];
+        for (const weapon of Object.values(POWER_WEAPONS)) {
+            const owned = this.player && this.player.ownedPowers && this.player.ownedPowers.has(weapon.id);
+            const equipped = this.player && this.player.activePower === weapon.id;
+            items.push({
+                id: weapon.id,
+                name: weapon.name,
+                description: weapon.description,
+                icon: weapon.icon,
+                cost: weapon.cost,
+                spCost: weapon.spCost,
+                maxStacks: 1,
+                category: 'POWER',
+                currency: weapon.cost > 0 ? 'COINS' : 'FREE',
+                isWeapon: true,
+                weaponType: 'power',
+                owned,
+                equipped,
+            });
+        }
+        // Add upgrades for currently equipped power weapon
+        if (this.player && this.player.activePower) {
+            const upgrades = getPowerUpgrades(this.player.activePower);
+            for (const upg of upgrades) {
+                items.push({
+                    id: upg.id,
+                    name: upg.name,
+                    description: upg.description,
+                    icon: upg.icon,
+                    cost: upg.costOverrides ? upg.costOverrides[0] : upg.cost,
+                    maxStacks: upg.maxStacks,
+                    category: 'POWER',
+                    currency: 'COINS',
+                    isWeaponUpgrade: true,
+                    parentWeapon: upg.weapon,
+                    costOverrides: upg.costOverrides,
+                });
+            }
+        }
+        this.shopFilteredItems = items;
+    }
+
+    _buildSkillsTabItems() {
+        const items = [];
+        for (const skill of Object.values(DEFENSE_SKILLS)) {
+            const owned = this.player && this.player.ownedSkills && this.player.ownedSkills.has(skill.id);
+            items.push({
+                id: skill.id,
+                name: skill.name,
+                description: skill.description,
+                icon: skill.icon,
+                cost: skill.cost,
+                maxStacks: 1,
+                category: 'SKILLS',
+                currency: 'SP',
+                isSkill: true,
+                owned,
+            });
+        }
+        // Add upgrades for all owned skills
+        if (this.player && this.player.ownedSkills) {
+            for (const skillId of this.player.ownedSkills) {
+                const upgrades = getSkillUpgrades(skillId);
+                for (const upg of upgrades) {
+                    items.push({
+                        id: upg.id,
+                        name: upg.name,
+                        description: upg.description,
+                        icon: upg.icon,
+                        cost: upg.cost,
+                        maxStacks: upg.maxStacks,
+                        category: 'SKILLS',
+                        currency: 'SP',
+                        isSkillUpgrade: true,
+                        parentSkill: upg.skill,
+                    });
+                }
+            }
+        }
+        this.shopFilteredItems = items;
     }
 
     closeShop() {
@@ -1430,99 +1572,176 @@ export class GameEngine {
     
     buyShopItem(itemId) {
         try {
-            
+            if (!this.player || !this.game) return false;
+
+            // First check dynamic tab items (weapons/skills/their upgrades)
+            const filteredItem = this.shopFilteredItems && this.shopFilteredItems.find(i => i.id === itemId);
+
+            // Handle weapon buy/equip
+            if (filteredItem && filteredItem.isWeapon) {
+                return this._handleWeaponBuyOrEquip(filteredItem);
+            }
+
+            // Handle skill buy
+            if (filteredItem && filteredItem.isSkill) {
+                return this._handleSkillBuy(filteredItem);
+            }
+
+            // Handle weapon-specific upgrades
+            if (filteredItem && (filteredItem.isWeaponUpgrade || filteredItem.isSkillUpgrade)) {
+                return this._handleUpgradeBuy(filteredItem);
+            }
+
+            // Regular shop item
             const item = this.shopItems.find(i => i.id === itemId);
             if (!item) {
                 console.error(`❌ Item not found: ${itemId}`);
                 return false;
             }
-            
-            
-            if (!this.player) {
-                console.error(`❌ Player is undefined!`);
-                return false;
-            }
-            
-            // Special check for Spare Ship - can't buy if already at 3 lives
-            if (itemId === 'SPARE_SHIP' && this.game.lives >= 3) {
-                return false;
-            }
-            
+
+            if (itemId === 'SPARE_SHIP' && this.game.lives >= 3) return false;
+
             const currentStacks = this.player.getPowerupStacks(itemId);
-            if (currentStacks >= item.maxStacks) {
-                if (item.maxStacks === 1) {
-                } else {
-                }
-                return false;
-            }
-            
-            if (!this.game) {
-                console.error(`❌ Game object is undefined!`);
-                return false;
-            }
-            
-            // Calculate dynamic cost for special items
+            if (currentStacks >= item.maxStacks) return false;
+
             let actualCost = item.cost;
             if (item.flatCost) {
-                // Items with flat cost don't scale (like Spare Ship)
                 actualCost = item.cost;
             } else if (item.id === 'CHARGE_SPEED') {
-                const currentStacks = this.player.getPowerupStacks(item.id);
-                if (currentStacks === 0) actualCost = 1500;      // First purchase
-                else if (currentStacks === 1) actualCost = 3000;  // Second purchase
-                else if (currentStacks === 2) actualCost = 5000;  // Third purchase
+                if (currentStacks === 0) actualCost = 1500;
+                else if (currentStacks === 1) actualCost = 3000;
+                else if (currentStacks === 2) actualCost = 5000;
             }
-            
-            // Check affordability based on currency type
+
             if (item.currency === 'SP') {
-                if (this.player.skillPoints < actualCost) {
-                    return false;
-                }
+                if (this.player.skillPoints < actualCost) return false;
             } else {
-            if (this.game.money < actualCost) {
-                return false;
-                }
+                if (this.game.money < actualCost) return false;
             }
-            
-            // Purchase successful - deduct appropriate currency
+
             if (item.currency === 'SP') {
                 this.player.skillPoints -= actualCost;
             } else {
-            this.game.money -= actualCost;
+                this.game.money -= actualCost;
             }
-            
-            // Special handling for Spare Ship
+
             if (itemId === 'SPARE_SHIP') {
-                this.game.lives = Math.min(3, this.game.lives + 1); // Cap at 3 lives
+                this.game.lives = Math.min(3, this.game.lives + 1);
                 this.uiManager.updateLives(this.game.lives);
             } else {
-                // Add powerup to player (permanent for the run)
                 const powerupConfig = this.getPowerupConfig(itemId);
                 if (!powerupConfig) {
                     console.error(`❌ Powerup config not found for: ${itemId}`);
                     return false;
                 }
-                
                 this.player.addPowerup(itemId, {
                     ...powerupConfig,
-                    duration: Infinity // Permanent for the run
-                }, true); // isShopItem = true
+                    duration: Infinity
+                }, true);
             }
-            
-            
-            if (!this.audioManager) {
-                console.error(`❌ AudioManager is undefined!`);
-                return true; // Purchase was successful, just no sound
-            }
-            
-            this.audioManager.playCoin(); // Play purchase sound
+
+            if (this.audioManager) this.audioManager.playCoin();
             return true;
-            
+
         } catch (error) {
             console.error(`❌ Error in buyShopItem:`, error);
-            console.error(`❌ Stack trace:`, error.stack);
             return false;
         }
+    }
+
+    _handleWeaponBuyOrEquip(item) {
+        const isOwned = item.weaponType === 'primary'
+            ? this.player.ownedPrimaries.has(item.id)
+            : this.player.ownedPowers.has(item.id);
+
+        if (isOwned) {
+            // Equip the weapon
+            if (item.weaponType === 'primary') {
+                this.player.equipPrimary(item.id);
+            } else {
+                this.player.equipPower(item.id);
+            }
+            this._rebuildShopCache();
+            if (this.audioManager) this.audioManager.playCoin();
+            return true;
+        }
+
+        // Purchase: check dual cost (coins + SP)
+        const coinCost = item.cost || 0;
+        const spCost = item.spCost || 0;
+        if (coinCost > 0 && this.game.money < coinCost) return false;
+        if (spCost > 0 && this.player.skillPoints < spCost) return false;
+
+        if (coinCost > 0) this.game.money -= coinCost;
+        if (spCost > 0) this.player.skillPoints -= spCost;
+
+        if (item.weaponType === 'primary') {
+            this.player.buyPrimary(item.id);
+        } else {
+            this.player.buyPower(item.id);
+        }
+
+        this._rebuildShopCache();
+        if (this.audioManager) this.audioManager.playCoin();
+        return true;
+    }
+
+    _handleSkillBuy(item) {
+        if (this.player.ownedSkills.has(item.id)) {
+            // Already owned — auto-assign to first empty slot
+            for (let i = 0; i < 4; i++) {
+                if (!this.player.skillSlots[i]) {
+                    this.player.assignSkillToSlot(item.id, i);
+                    this._rebuildShopCache();
+                    if (this.audioManager) this.audioManager.playCoin();
+                    return true;
+                }
+            }
+            return false; // all slots full
+        }
+
+        const spCost = item.cost || 0;
+        if (spCost > 0 && this.player.skillPoints < spCost) return false;
+        if (spCost > 0) this.player.skillPoints -= spCost;
+
+        this.player.buySkill(item.id); // Also auto-assigns to first empty slot
+
+        this._rebuildShopCache();
+        if (this.audioManager) this.audioManager.playCoin();
+        return true;
+    }
+
+    _handleUpgradeBuy(item) {
+        const currentStacks = this.player.getPowerupStacks(item.id);
+        if (currentStacks >= item.maxStacks) return false;
+
+        let actualCost = item.cost;
+        if (item.costOverrides) {
+            actualCost = item.costOverrides[Math.min(currentStacks, item.costOverrides.length - 1)] || item.cost;
+        }
+
+        if (item.currency === 'SP') {
+            if (this.player.skillPoints < actualCost) return false;
+            this.player.skillPoints -= actualCost;
+        } else {
+            if (this.game.money < actualCost) return false;
+            this.game.money -= actualCost;
+        }
+
+        // Add as permanent powerup
+        const powerupConfig = this.getPowerupConfig(item.id) || {
+            icon: item.icon,
+            color: '#FFFFFF',
+            glowColor: '#FFFFFF',
+        };
+        this.player.addPowerup(item.id, {
+            ...powerupConfig,
+            duration: Infinity
+        }, true);
+
+        this._rebuildShopCache();
+        if (this.audioManager) this.audioManager.playCoin();
+        return true;
     }
     
     getPowerupConfig(type) {
@@ -1542,7 +1761,7 @@ export class GameEngine {
             'CRIT_DAMAGE':              { name: 'Critical Damage',     duration: Infinity, icon: '🗡️', gradientColors: ['#ff3399', '#cc0033'] },
             'LONG_RANGE':               { name: 'Long Range',          duration: Infinity, icon: '🏹', gradientColors: ['#bbff66', '#448800'] },
             'CHARGE_SPEED':             { name: 'Charge Speed',        duration: Infinity, icon: '⏱️', gradientColors: ['#ffcc00', '#cc8800'] },
-            'CHARGE_DAMAGE':            { name: 'Charge Power',        duration: Infinity, icon: '🔋', gradientColors: ['#ff6600', '#cc3300'] },
+            'CHARGE_POWER':             { name: 'Charge Power',        duration: Infinity, icon: '🔋', gradientColors: ['#ff6600', '#cc3300'] },
             'HEALTH_ORB_DROP_CHANCE':   { name: 'Health Orb Luck',     duration: Infinity, icon: '🍀', gradientColors: ['#33ff99', '#009944'] },
             'MONEY_ORB_DROP_CHANCE':    { name: 'Money Orb Luck',      duration: Infinity, icon: '💰', gradientColors: ['#ffdd00', '#cc8800'] },
             'HEALTH_ORB_DROP_QUANTITY': { name: 'Health Orb Bounty',   duration: Infinity, icon: '💚', gradientColors: ['#66ff66', '#009900'] },
@@ -1551,7 +1770,15 @@ export class GameEngine {
             'PAYDAY':                   { name: 'Payday',              duration: Infinity, icon: '💵', gradientColors: ['#66ff66', '#228822'] },
             'HIGH_ROLLER':              { name: 'High Roller',         duration: Infinity, icon: '🎰', gradientColors: ['#ffdd44', '#cc8800'] },
         };
-        return configs[type];
+        if (configs[type]) return configs[type];
+
+        // Dynamic fallback for weapon/skill upgrades from weapon-data.js
+        const allUpgrades = { ...PRIMARY_UPGRADES, ...POWER_UPGRADES, ...SKILL_UPGRADES };
+        if (allUpgrades[type]) {
+            const upg = allUpgrades[type];
+            return { name: upg.name, duration: Infinity, icon: upg.icon, gradientColors: ['#aaaaff', '#4444aa'] };
+        }
+        return null;
     }
 
     onEnemyKill(enemy) {
@@ -1877,19 +2104,23 @@ export class GameEngine {
     }
     
     drawShopTabs(shopX, tabY, shopWidth) {
-        const tabWidth = 110;
-        const tabHeight = 30;
-        const tabSpacing = 8;
-        const tabCount = 3;
-        const totalTabsWidth = (tabWidth * tabCount) + (tabSpacing * (tabCount - 1));
-        const tabStartX = shopX + (shopWidth - totalTabsWidth) / 2;
-        const tabCorner = 6;
-
         const tabs = [
             { key: 'OFFENSE', label: 'OFFENSE', color: [180, 130, 0], stroke: '#FFD700', glow: 'rgba(255, 215, 0, 0.3)' },
             { key: 'DEFENSE', label: 'DEFENSE', color: [50, 100, 200], stroke: '#4A90E2', glow: 'rgba(74, 144, 226, 0.3)' },
             { key: 'DROPS',   label: 'DROPS',   color: [40, 160, 80], stroke: '#44DD88', glow: 'rgba(68, 221, 136, 0.3)' },
+            { key: 'PRIMARY', label: 'PRIMARY', color: [0, 160, 200], stroke: '#00CCFF', glow: 'rgba(0, 204, 255, 0.3)' },
+            { key: 'POWER',   label: 'POWER',   color: [200, 60, 60], stroke: '#FF4444', glow: 'rgba(255, 68, 68, 0.3)' },
+            { key: 'SKILLS',  label: 'SKILLS',  color: [140, 80, 200], stroke: '#AA66FF', glow: 'rgba(170, 102, 255, 0.3)' },
         ];
+
+        const tabCount = tabs.length;
+        const tabSpacing = 5;
+        const totalAvailable = shopWidth - (tabSpacing * (tabCount - 1));
+        const tabWidth = Math.floor(totalAvailable / tabCount);
+        const tabHeight = 28;
+        const totalTabsWidth = (tabWidth * tabCount) + (tabSpacing * (tabCount - 1));
+        const tabStartX = shopX + (shopWidth - totalTabsWidth) / 2;
+        const tabCorner = 5;
 
         this.shopTabBounds = {};
 
@@ -1921,7 +2152,7 @@ export class GameEngine {
             this.ctx.restore();
 
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 12px "Press Start 2P", monospace';
+            this.ctx.font = 'bold 9px "Press Start 2P", monospace';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(tab.label, tx + tabWidth / 2, tabY + tabHeight / 2);
@@ -1932,23 +2163,55 @@ export class GameEngine {
     
     drawShopItem(item, x, y, width, height, index, isHovered = false) {
         const currentStacks = this.player.getPowerupStacks(item.id);
-        
+
+        // Determine item state for weapons/skills vs regular items
+        const isWeaponOrSkill = item.isWeapon || item.isSkill;
+        const isOwned = item.owned || (isWeaponOrSkill && currentStacks > 0);
+        const isEquipped = item.equipped;
+        const isFree = item.currency === 'FREE';
+
         // Calculate dynamic cost for special items
         let actualCost = item.cost;
-        if (item.id === 'CHARGE_SPEED') {
-            if (currentStacks === 0) actualCost = 1500;      // First purchase
-            else if (currentStacks === 1) actualCost = 3000;  // Second purchase
-            else if (currentStacks === 2) actualCost = 5000;  // Third purchase
+        if (item.costOverrides) {
+            actualCost = item.costOverrides[Math.min(currentStacks, item.costOverrides.length - 1)] || item.cost;
+        } else if (item.id === 'CHARGE_SPEED') {
+            if (currentStacks === 0) actualCost = 1500;
+            else if (currentStacks === 1) actualCost = 3000;
+            else if (currentStacks === 2) actualCost = 5000;
         }
-        
-        const canAfford = item.currency === 'SP' ? 
-            this.player.skillPoints >= actualCost : 
-            this.game.money >= actualCost;
-        const maxedOut = currentStacks >= item.maxStacks;
-        
+
+        let canAfford, maxedOut;
+        if (isWeaponOrSkill) {
+            // Weapons/skills: can only buy once, then it's "equip"
+            maxedOut = isOwned && isEquipped;
+            if (isOwned) {
+                canAfford = true; // can always equip an owned weapon
+            } else if (isFree) {
+                canAfford = true;
+            } else if (item.spCost && item.spCost > 0) {
+                // Weapon costs both coins and SP
+                canAfford = this.game.money >= actualCost && this.player.skillPoints >= item.spCost;
+            } else {
+                canAfford = item.currency === 'SP' ?
+                    this.player.skillPoints >= actualCost :
+                    this.game.money >= actualCost;
+            }
+        } else {
+            canAfford = item.currency === 'SP' ?
+                this.player.skillPoints >= actualCost :
+                this.game.money >= actualCost;
+            maxedOut = currentStacks >= item.maxStacks;
+        }
+
         // Item background — rounded corners
         const itemCorner = 8;
-        if (maxedOut) {
+        if (isWeaponOrSkill && isEquipped) {
+            // Equipped weapon: cyan/blue highlight
+            this.ctx.fillStyle = isHovered ? 'rgba(0, 180, 255, 0.5)' : 'rgba(0, 140, 200, 0.35)';
+        } else if (isWeaponOrSkill && isOwned) {
+            // Owned but not equipped: dimmer green
+            this.ctx.fillStyle = isHovered ? 'rgba(0, 200, 100, 0.4)' : 'rgba(0, 150, 80, 0.25)';
+        } else if (maxedOut) {
             this.ctx.fillStyle = isHovered ? 'rgba(150, 150, 150, 0.6)' : 'rgba(100, 100, 100, 0.5)';
         } else if (canAfford) {
             this.ctx.fillStyle = isHovered ? 'rgba(0, 255, 0, 0.4)' : 'rgba(0, 255, 0, 0.2)';
@@ -1962,82 +2225,115 @@ export class GameEngine {
         // Item border with hover glow
         this.ctx.save();
         if (isHovered && !maxedOut) {
-            this.ctx.shadowColor = canAfford ? 'rgba(0, 255, 136, 0.6)' : 'rgba(255, 68, 68, 0.6)';
+            this.ctx.shadowColor = (isWeaponOrSkill && isEquipped) ? 'rgba(0, 180, 255, 0.6)' :
+                                   canAfford ? 'rgba(0, 255, 136, 0.6)' : 'rgba(255, 68, 68, 0.6)';
             this.ctx.shadowBlur = 14;
         }
-        this.ctx.strokeStyle = isHovered
-            ? (maxedOut ? '#AAAAAA' : (canAfford ? '#00FF88' : '#FF4444'))
-            : (maxedOut ? '#666666' : (canAfford ? '#00FF00' : '#FF0000'));
+        if (isWeaponOrSkill && isEquipped) {
+            this.ctx.strokeStyle = isHovered ? '#44DDFF' : '#00AADD';
+        } else {
+            this.ctx.strokeStyle = isHovered
+                ? (maxedOut ? '#AAAAAA' : (canAfford ? '#00FF88' : '#FF4444'))
+                : (maxedOut ? '#666666' : (canAfford ? '#00FF00' : '#FF0000'));
+        }
         this.ctx.lineWidth = isHovered ? 3 : 2;
         this.ctx.beginPath();
         this.ctx.roundRect(x, y, width, height, itemCorner);
         this.ctx.stroke();
         this.ctx.restore();
-        
-        // Horizontal layout for list items - larger, more visible fonts
-        const iconSize = 32; // Increased from 24 for better visibility
-        const padding = 15; // Increased padding for better spacing
-        const iconAreaWidth = iconSize + padding; // Width allocated for icon area
-        
-        // Item icon (centered in icon area, shifted up by 10px)
+
+        // Horizontal layout for list items
+        const iconSize = 32;
+        const padding = 15;
+        const iconAreaWidth = iconSize + padding;
+
+        // Item icon
         this.ctx.font = `${iconSize}px "Press Start 2P", monospace`;
         this.ctx.textAlign = 'center';
         this.ctx.fillStyle = maxedOut ? '#666' : '#FFFFFF';
         const iconCenterX = x + padding + iconAreaWidth / 2;
         this.ctx.fillText(item.icon, iconCenterX, y + height / 2 + iconSize / 4 - 10);
-        
+
         // Text content area (right of icon area)
         const textX = x + padding + iconAreaWidth + padding;
-        const costAreaWidth = 100; // Fixed width for cost area
+        const costAreaWidth = 100;
         const textWidth = width - (padding + iconAreaWidth + padding + costAreaWidth + padding);
-        
-        // Item name - larger, more visible font
+
+        // Item name
         this.ctx.font = 'bold 16px "Press Start 2P", monospace';
         this.ctx.fillStyle = maxedOut ? '#666' : '#FFFFFF';
-        this.ctx.textAlign = 'left'; // Left-justified text
-        
-        // Handle multi-line names (like "Critical\nDamage")
+        this.ctx.textAlign = 'left';
+
         const nameLines = item.name.split('\n');
         const nameLineHeight = 18;
-        
-        nameLines.forEach((line, index) => {
-            // Truncate line if too long
+
+        nameLines.forEach((line, idx) => {
             let displayLine = line;
-            let lineWidth = this.ctx.measureText(displayLine).width;
-            if (lineWidth > textWidth) {
-                while (lineWidth > textWidth - 30 && displayLine.length > 3) {
+            let lw = this.ctx.measureText(displayLine).width;
+            if (lw > textWidth) {
+                while (lw > textWidth - 30 && displayLine.length > 3) {
                     displayLine = displayLine.slice(0, -1);
-                    lineWidth = this.ctx.measureText(displayLine + '...').width;
+                    lw = this.ctx.measureText(displayLine + '...').width;
                 }
                 displayLine += '...';
             }
-            this.ctx.fillText(displayLine, textX, y + 32 + (index * nameLineHeight)); // +7px top margin
+            this.ctx.fillText(displayLine, textX, y + 32 + (idx * nameLineHeight));
         });
-        
-        // Item description - larger, more readable font
+
+        // Item description
         this.ctx.font = '12px "Press Start 2P", monospace';
         this.ctx.fillStyle = maxedOut ? '#666' : '#CCCCCC';
-        this.ctx.textAlign = 'left'; // Ensure description is left-justified
-        
-        // Word wrap description to fit in available space (shifted down by 20px)
+        this.ctx.textAlign = 'left';
+
         const maxDescLines = 2;
-        const lineHeight = 16; // Increased line height for larger font
-        const descStartY = y + 66; // Shifted down to match name top-margin increase
-        
+        const lineHeight = 16;
+        const descStartY = y + 66;
+
         this.drawMultilineText(item.description, textX, descStartY, textWidth, lineHeight, maxDescLines);
-        
-        // Cost (right side) - larger, more visible
+
+        // Cost / status (right side)
         const costX = x + width - padding;
         this.ctx.font = 'bold 16px "Press Start 2P", monospace';
 
-        if (item.currency === 'SP') {
-            // SP cost: number and "SP" on the same line
+        if (isWeaponOrSkill) {
+            this.ctx.textAlign = 'right';
+            this.ctx.textBaseline = 'middle';
+            if (isEquipped) {
+                this.ctx.fillStyle = '#44DDFF';
+                this.ctx.fillText('EQUIPPED', costX, y + 35);
+            } else if (isOwned) {
+                this.ctx.fillStyle = '#44FF88';
+                this.ctx.font = 'bold 14px "Press Start 2P", monospace';
+                this.ctx.fillText('EQUIP', costX, y + 35);
+            } else if (isFree) {
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.fillText('FREE', costX, y + 35);
+            } else {
+                // Show dual cost: coins + SP
+                const costCenterY = y + 28;
+                if (actualCost > 0) {
+                    this.ctx.fillStyle = (this.game.money >= actualCost) ? '#FFD700' : '#FF6666';
+                    this.ctx.textAlign = 'right';
+                    const costStr = `${actualCost}`;
+                    const costTextW = this.ctx.measureText(costStr).width;
+                    const coinIconSz = 18;
+                    const coinIconGp = 4;
+                    drawCachedMoneyIcon(this.ctx, costX - costTextW - coinIconGp - coinIconSz / 2, costCenterY, coinIconSz, '#FFD700', '#B8860B');
+                    this.ctx.fillText(costStr, costX, costCenterY);
+                }
+                if (item.spCost && item.spCost > 0) {
+                    this.ctx.fillStyle = (this.player.skillPoints >= item.spCost) ? '#4A90E2' : '#FF6666';
+                    this.ctx.textAlign = 'right';
+                    this.ctx.font = 'bold 14px "Press Start 2P", monospace';
+                    this.ctx.fillText(`${item.spCost} SP`, costX, y + 50);
+                }
+            }
+        } else if (item.currency === 'SP') {
             this.ctx.fillStyle = canAfford ? '#4A90E2' : '#FF6666';
             this.ctx.textAlign = 'right';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(`${actualCost} SP`, costX, y + 35);
         } else {
-            // Coin cost: icon to the left of the number, both vertically centered on same Y
             const costCenterY = y + 35;
             this.ctx.textBaseline = 'middle';
             this.ctx.textAlign = 'right';
@@ -2050,19 +2346,27 @@ export class GameEngine {
             drawCachedMoneyIcon(this.ctx, coinIconX, costCenterY, coinIconSize, '#FFD700', '#B8860B');
             this.ctx.fillText(costStr, costX, costCenterY);
         }
-        
-        // Item level beneath cost (right side)
+
+        // Level/status beneath cost (right side)
         this.ctx.font = '10px "Press Start 2P", monospace';
-        this.ctx.fillStyle = maxedOut ? '#666' : '#00FFFF';
         this.ctx.textAlign = 'right';
         this.ctx.textBaseline = 'alphabetic';
-        this.ctx.fillText(`Level ${currentStacks}`, costX, y + 72);
+        if (isWeaponOrSkill) {
+            if (isOwned && !isEquipped) {
+                this.ctx.fillStyle = '#44FF88';
+                this.ctx.fillText('OWNED', costX, y + 72);
+            }
+        } else {
+            this.ctx.fillStyle = maxedOut ? '#666' : '#00FFFF';
+            this.ctx.fillText(`Level ${currentStacks}`, costX, y + 72);
+        }
 
-        // Sell button — only when player owns at least one stack
-        if (currentStacks > 0) {
-            // Calculate sell refund for display
+        // Sell button — only for regular items with stacks, and for weapon upgrades
+        if (!isWeaponOrSkill && currentStacks > 0) {
             let sellCost = item.cost;
-            if (item.id === 'CHARGE_SPEED') {
+            if (item.costOverrides) {
+                sellCost = item.costOverrides[Math.min(currentStacks - 1, item.costOverrides.length - 1)] || item.cost;
+            } else if (item.id === 'CHARGE_SPEED') {
                 if (currentStacks === 1) sellCost = 1500;
                 else if (currentStacks === 2) sellCost = 3000;
                 else sellCost = 5000;
@@ -2095,7 +2399,6 @@ export class GameEngine {
             this.ctx.fillText(sellLabel, sbX + sbW / 2, sbY + sbH / 2);
             this.ctx.restore();
 
-            // Store sell button bounds
             if (!this.shopSellButtonBounds) this.shopSellButtonBounds = [];
             this.shopSellButtonBounds.push({ x: sbX, y: sbY, w: sbW, h: sbH, itemId: item.id });
         }
@@ -3771,15 +4074,217 @@ export class GameEngine {
                 }
             });
         });
+
+        // ─── Weapon Effect Collisions ────────────────────────────────────
+        this.handleWeaponEffectCollisions();
     }
-    
+
+    handleWeaponEffectCollisions() {
+        if (!this.player || !this.player.active) return;
+        const p = this.player;
+
+        // ─── Lance Beam ─────────────────────────────────────────────────
+        if (p.beamActive && p.beamTimer > 0) {
+            const config = PRIMARY_WEAPONS.LANCE_BEAM;
+            const beamW = (config.beamWidth || 6) * (1 + p.getPowerupStacks('BEAM_WIDTH') * 0.3);
+            const range = config.range * 400;
+            const dx = Math.cos(p.angle);
+            const dy = Math.sin(p.angle);
+            const dmg = config.damage * (1 + p.getPowerupStacks('OVERLOAD_BEAM') * 2);
+
+            this.enemyPool.activeObjects.forEach(enemy => {
+                if (!enemy.active) return;
+                // Point-to-line distance check
+                const ex = enemy.x - p.x;
+                const ey = enemy.y - p.y;
+                const proj = ex * dx + ey * dy;
+                if (proj < 0 || proj > range) return;
+                const perpDist = Math.abs(ex * dy - ey * dx);
+                if (perpDist < beamW / 2 + (enemy.radius || 15)) {
+                    this.damageEnemy(enemy, dmg);
+                }
+            });
+        }
+
+        // ─── Mines ──────────────────────────────────────────────────────
+        if (p.activeMines) {
+            for (const mine of p.activeMines) {
+                if (!mine.active || !mine.armed) continue;
+                const blastR = (POWER_WEAPONS.MINE_LAYER.blastRadius || 80) + p.getPowerupStacks('BLAST_RADIUS') * 30;
+                let triggered = false;
+                this.enemyPool.activeObjects.forEach(enemy => {
+                    if (!enemy.active) return;
+                    const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
+                    if (dist < (mine.triggerRadius || 60)) triggered = true;
+                });
+                if (triggered) {
+                    // Explode
+                    this.enemyPool.activeObjects.forEach(enemy => {
+                        if (!enemy.active) return;
+                        const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
+                        if (dist < blastR) {
+                            const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
+                            this.damageEnemy(enemy, dmg);
+                        }
+                    });
+                    // Explosion particles
+                    for (let i = 0; i < 8; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = 2 + Math.random() * 3;
+                        this.particlePool.get(mine.x, mine.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 3, '#ff6600', 30);
+                    }
+                    mine.active = false;
+                }
+            }
+        }
+
+        // ─── Nova Rings ─────────────────────────────────────────────────
+        if (p.novaActive && p.novaRings) {
+            for (const ring of p.novaRings) {
+                if (!ring.active) continue;
+                this.enemyPool.activeObjects.forEach(enemy => {
+                    if (!enemy.active) return;
+                    const dist = Math.hypot(enemy.x - ring.x, enemy.y - ring.y);
+                    const ringWidth = 20;
+                    if (Math.abs(dist - ring.currentRadius) < ringWidth) {
+                        if (!ring.hitEnemies) ring.hitEnemies = new Set();
+                        if (!ring.hitEnemies.has(enemy)) {
+                            ring.hitEnemies.add(enemy);
+                            this.damageEnemy(enemy, POWER_WEAPONS.NOVA_BLAST.ringDamage);
+                        }
+                    }
+                });
+            }
+        }
+
+        // ─── Lightning Chains ───────────────────────────────────────────
+        if (p.lightningChains) {
+            for (const chain of p.lightningChains) {
+                if (!chain.active || chain.damageApplied) continue;
+                chain.damageApplied = true;
+                let dmg = POWER_WEAPONS.LIGHTNING_ARC.chainDamage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+                const falloff = POWER_WEAPONS.LIGHTNING_ARC.chainFalloff;
+                for (let i = 1; i < chain.targets.length; i++) {
+                    const target = chain.targets[i];
+                    if (target.enemy && target.enemy.active) {
+                        this.damageEnemy(target.enemy, dmg);
+                    }
+                    dmg *= falloff;
+                }
+            }
+        }
+
+        // ─── Missiles ──────────────────────────────────────────────────
+        if (p.activeMissiles) {
+            for (const missile of p.activeMissiles) {
+                if (!missile.active) continue;
+                this.enemyPool.activeObjects.forEach(enemy => {
+                    if (!enemy.active) return;
+                    const dist = Math.hypot(enemy.x - missile.x, enemy.y - missile.y);
+                    if (dist < (enemy.radius || 15) + 6) {
+                        this.damageEnemy(enemy, POWER_WEAPONS.MISSILE_SALVO.missileDamage);
+                        missile.active = false;
+                        // Impact particles
+                        for (let i = 0; i < 4; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            this.particlePool.get(missile.x, missile.y, Math.cos(angle) * 2, Math.sin(angle) * 2, 2, '#ff4444', 20);
+                        }
+                    }
+                });
+            }
+        }
+
+        // ─── Deflector Orbs (block enemy bullets) ───────────────────────
+        if (p.deflectorOrbs && p.deflectorOrbs.length > 0) {
+            this.enemyBulletPool.activeObjects.forEach(bullet => {
+                if (!bullet.active) return;
+                for (const orb of p.deflectorOrbs) {
+                    if (!orb.active || orb.hits <= 0) continue;
+                    const dist = Math.hypot(bullet.x - orb.x, bullet.y - orb.y);
+                    if (dist < 12) {
+                        bullet.active = false;
+                        orb.hits--;
+                        if (orb.hits <= 0) orb.active = false;
+                        // Reflect if upgrade owned
+                        if (p.getPowerupStacks('REFLECT') > 0) {
+                            // Fire reflected bullet back at nearest enemy
+                            const nearest = this.findNearestEnemy();
+                            if (nearest) {
+                                const ang = Math.atan2(nearest.y - orb.y, nearest.x - orb.x);
+                                this.bulletPool.get(orb.x, orb.y, ang, 8, 2, 3, 500, '#44ddff', this.player);
+                            }
+                        }
+                        break;
+                    }
+                }
+            });
+        }
+
+        // ─── Tractor Shield (absorb enemy bullets for coins) ────────────
+        if (p.activeSkillEffects && p.activeSkillEffects.has('TRACTOR_SHIELD')) {
+            const skill = DEFENSE_SKILLS.TRACTOR_SHIELD;
+            const arc = skill.shieldArc + p.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
+            const coinsPerBullet = skill.coinsPerBullet + p.getPowerupStacks('PROFIT') * 5;
+
+            this.enemyBulletPool.activeObjects.forEach(bullet => {
+                if (!bullet.active) return;
+                const dist = Math.hypot(bullet.x - p.x, bullet.y - p.y);
+                if (dist > 55) return;
+                const angleToBullet = Math.atan2(bullet.y - p.y, bullet.x - p.x);
+                let diff = angleToBullet - p.angle;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                if (Math.abs(diff) < arc / 2) {
+                    bullet.active = false;
+                    this.game.money += coinsPerBullet;
+                }
+            });
+        }
+
+        // ─── Bulwark damage reduction is handled in handlePlayerEnemyBulletCollision ──
+    }
+
+    damageEnemy(enemy, damage) {
+        if (!enemy || !enemy.active) return;
+        enemy.health -= damage;
+        this.createDamageNumber(enemy.x, enemy.y - 15, damage);
+        if (enemy.health <= 0) {
+            enemy.active = false;
+            const reward = enemy.getDestructionReward();
+            this.game.money += reward.points;
+            this.player.gainExperience(Math.ceil(reward.points / 5));
+            this.onEnemyKill(enemy);
+            if (this.isEntityOnScreen(enemy)) {
+                this.audioManager.playExplosion();
+            }
+            this.createEnemyDebris(enemy);
+            this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
+            const powerupChance = enemy.type === 'WASP' ? 0.65 :
+                                enemy.type === 'TITAN' ? 0.80 :
+                                enemy.type === 'TANGERINE' ? 0.70 : 0.55;
+            if (Math.random() < powerupChance) {
+                this.dropPowerup(enemy.x, enemy.y);
+            }
+            this.enemyPool.release(enemy);
+        }
+    }
+
     handlePlayerEnemyCollision(player, enemy) {
         // Apply damage only if not invincible
         if (!this.player.invincible) {
             // Apply balanced damage with shield calculation and enemy level scaling
-            const baseDamage = enemy.getLevelScaledDamage(25); // Level-scaled collision damage (scaled back down)
+            const baseDamage = enemy.getLevelScaledDamage(25);
             const effectiveShield = player.getEffectiveShield();
-            const reducedDamage = baseDamage * (1 - effectiveShield / 100);
+            let reducedDamage = baseDamage * (1 - effectiveShield / 100);
+            // Bulwark damage reduction
+            if (player.activeSkillEffects && player.activeSkillEffects.has('BULWARK')) {
+                const bulwarkReduction = player.getPowerupStacks('IRON_WILL') > 0 ? 0.65 : 0.5;
+                reducedDamage *= (1 - bulwarkReduction);
+            }
+            // Phase dash invulnerability
+            if (player.activeSkillEffects && player.activeSkillEffects.has('PHASE_DASH')) {
+                reducedDamage = 0;
+            }
             const finalDamage = Math.round(reducedDamage);
             player.health = Math.max(0, player.health - finalDamage);
         
@@ -3914,12 +4419,21 @@ export class GameEngine {
     
     handlePlayerEnemyBulletCollision(player, bullet) {
         // Apply balanced damage with shield calculation
-        const baseDamage = bullet.damage || 15; // Default 15 damage for enemy bullets (scaled back down)
+        const baseDamage = bullet.damage || 15;
         const effectiveShield = player.getEffectiveShield();
-        const reducedDamage = baseDamage * (1 - effectiveShield / 100);
+        let reducedDamage = baseDamage * (1 - effectiveShield / 100);
+        // Bulwark damage reduction
+        if (player.activeSkillEffects && player.activeSkillEffects.has('BULWARK')) {
+            const bulwarkReduction = player.getPowerupStacks('IRON_WILL') > 0 ? 0.65 : 0.5;
+            reducedDamage *= (1 - bulwarkReduction);
+        }
+        // Phase dash invulnerability
+        if (player.activeSkillEffects && player.activeSkillEffects.has('PHASE_DASH')) {
+            reducedDamage = 0;
+        }
         const finalDamage = Math.round(reducedDamage);
         player.health = Math.max(0, player.health - finalDamage);
-        
+
         // Award XP for surviving enemy bullet hit
         this.player.gainExperience(3);
         
@@ -4178,7 +4692,8 @@ export class GameEngine {
             this.enemyBulletPool.drawActive(this.ctx);
             this.bulletPool.drawActive(this.ctx, this);
             this.player.draw(this.ctx);
-            
+            this.drawWeaponEffects();
+
             // Draw game field boundaries
             this.drawGameFieldBoundaries();
             
@@ -4269,9 +4784,295 @@ export class GameEngine {
             }
         }
         
+        // Draw skill cooldown HUD
+        if (this.player && this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
+            this.drawSkillCooldownHUD();
+        }
+
         // Draw title screen with wavy text
         if (this.game.state === GAME_STATES.TITLE_SCREEN) {
             this.drawTitleScreen();
+        }
+    }
+
+    drawWeaponEffects() {
+        if (!this.player || !this.player.active) return;
+        const ctx = this.ctx;
+        const p = this.player;
+
+        // ─── Lance Beam ──────────────────────────────────────────────────
+        if (p.beamActive && p.beamTimer > 0) {
+            const config = PRIMARY_WEAPONS.LANCE_BEAM;
+            const beamW = (config.beamWidth || 6) * (1 + this.player.getPowerupStacks('BEAM_WIDTH') * 0.3);
+            const range = config.range * 400; // base beam range in px
+            const dx = Math.cos(p.angle);
+            const dy = Math.sin(p.angle);
+            const endX = p.x + dx * range;
+            const endY = p.y + dy * range;
+
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            ctx.strokeStyle = config.color;
+            ctx.lineWidth = beamW;
+            ctx.shadowColor = config.color;
+            ctx.shadowBlur = beamW * 2;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            // Inner bright core
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = Math.max(1, beamW * 0.3);
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // ─── Mines ──────────────────────────────────────────────────────
+        if (p.activeMines) {
+            for (const mine of p.activeMines) {
+                if (!mine.active) continue;
+                ctx.save();
+                const pulse = 0.7 + 0.3 * Math.sin(Date.now() * 0.005);
+                ctx.globalAlpha = pulse;
+                ctx.fillStyle = mine.armed ? '#ff6600' : '#884400';
+                ctx.beginPath();
+                ctx.arc(mine.x, mine.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+                // Trigger radius indicator
+                if (mine.armed) {
+                    ctx.strokeStyle = 'rgba(255, 100, 0, 0.25)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(mine.x, mine.y, mine.triggerRadius || 60, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        // ─── Nova Ring ──────────────────────────────────────────────────
+        if (p.novaActive && p.novaRings) {
+            for (const ring of p.novaRings) {
+                if (!ring.active) continue;
+                const progress = ring.elapsed / ring.duration;
+                ctx.save();
+                ctx.globalAlpha = 1 - progress;
+                ctx.strokeStyle = POWER_WEAPONS.NOVA_BLAST.color;
+                ctx.lineWidth = 4 * (1 - progress);
+                ctx.shadowColor = POWER_WEAPONS.NOVA_BLAST.color;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(ring.x, ring.y, ring.currentRadius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // ─── Lightning Chains ───────────────────────────────────────────
+        if (p.lightningChains && p.lightningChains.length > 0) {
+            ctx.save();
+            ctx.strokeStyle = POWER_WEAPONS.LIGHTNING_ARC.color;
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#aaaaff';
+            ctx.shadowBlur = 8;
+            for (const chain of p.lightningChains) {
+                if (!chain.active) continue;
+                for (let j = 0; j < chain.targets.length - 1; j++) {
+                    const from = chain.targets[j];
+                    const to = chain.targets[j + 1];
+                    // Jagged lightning line
+                    ctx.beginPath();
+                    ctx.moveTo(from.x, from.y);
+                    const segs = 5;
+                    for (let s = 1; s <= segs; s++) {
+                        const t = s / segs;
+                        const mx = from.x + (to.x - from.x) * t + (Math.random() - 0.5) * 20;
+                        const my = from.y + (to.y - from.y) * t + (Math.random() - 0.5) * 20;
+                        ctx.lineTo(mx, my);
+                    }
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+        }
+
+        // ─── Missiles ──────────────────────────────────────────────────
+        if (p.activeMissiles) {
+            for (const missile of p.activeMissiles) {
+                if (!missile.active) continue;
+                ctx.save();
+                ctx.fillStyle = POWER_WEAPONS.MISSILE_SALVO.color;
+                ctx.beginPath();
+                ctx.arc(missile.x, missile.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+                // Exhaust trail
+                ctx.fillStyle = 'rgba(255, 200, 100, 0.5)';
+                const trail = 8;
+                ctx.beginPath();
+                ctx.arc(missile.x - missile.vx * trail, missile.y - missile.vy * trail, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // ─── Deflector Orbs ─────────────────────────────────────────────
+        if (p.deflectorOrbs && p.deflectorOrbs.length > 0) {
+            for (const orb of p.deflectorOrbs) {
+                if (!orb.active || orb.hits <= 0) continue;
+                ctx.save();
+                ctx.fillStyle = DEFENSE_SKILLS.DEFLECTOR_ORBS.color;
+                ctx.globalAlpha = 0.7 + 0.3 * Math.sin(Date.now() * 0.006);
+                ctx.shadowColor = DEFENSE_SKILLS.DEFLECTOR_ORBS.color;
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.arc(orb.x, orb.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // ─── Bulwark Aura ───────────────────────────────────────────────
+        if (p.activeSkillEffects && p.activeSkillEffects.has('BULWARK')) {
+            ctx.save();
+            const pulse = 0.3 + 0.15 * Math.sin(Date.now() * 0.004);
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = DEFENSE_SKILLS.BULWARK.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // ─── Tractor Shield ────────────────────────────────────────────
+        if (p.activeSkillEffects && p.activeSkillEffects.has('TRACTOR_SHIELD')) {
+            const skill = DEFENSE_SKILLS.TRACTOR_SHIELD;
+            const arc = skill.shieldArc + this.player.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = skill.color;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.arc(p.x, p.y, 50, p.angle - arc / 2, p.angle + arc / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // ─── EMP Pulse ─────────────────────────────────────────────────
+        if (p.empPulseActive) {
+            const skill = DEFENSE_SKILLS.EMP_PULSE;
+            const radius = skill.radius + this.player.getPowerupStacks('WIDE_BAND') * 60;
+            const elapsed = Date.now() - (p.empPulseStartTime || 0);
+            const progress = Math.min(1, elapsed / 500);
+            ctx.save();
+            ctx.globalAlpha = 0.6 * (1 - progress);
+            ctx.strokeStyle = skill.color;
+            ctx.lineWidth = 3;
+            ctx.shadowColor = skill.color;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius * progress, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // ─── Phase Dash Trail ───────────────────────────────────────────
+        if (p.activeSkillEffects && p.activeSkillEffects.has('PHASE_DASH')) {
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = DEFENSE_SKILLS.PHASE_DASH.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    drawSkillCooldownHUD() {
+        if (!this.player.skillSlots) return;
+
+        const hasAnySkill = this.player.skillSlots.some(s => s !== null);
+        if (!hasAnySkill) return;
+
+        const slotSize = 40;
+        const slotGap = 8;
+        const totalWidth = 4 * slotSize + 3 * slotGap;
+        const startX = this.width / 2 - totalWidth / 2;
+        const slotY = this.height - 60;
+
+        for (let i = 0; i < 4; i++) {
+            const sx = startX + i * (slotSize + slotGap);
+            const skillId = this.player.skillSlots[i];
+            const skill = skillId ? DEFENSE_SKILLS[skillId] : null;
+
+            // Background
+            this.ctx.fillStyle = skill ? 'rgba(20, 20, 40, 0.8)' : 'rgba(20, 20, 40, 0.4)';
+            this.ctx.beginPath();
+            this.ctx.roundRect(sx, slotY, slotSize, slotSize, 6);
+            this.ctx.fill();
+
+            // Border
+            this.ctx.strokeStyle = skill ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.2)';
+            this.ctx.lineWidth = 1.5;
+            this.ctx.beginPath();
+            this.ctx.roundRect(sx, slotY, slotSize, slotSize, 6);
+            this.ctx.stroke();
+
+            // Key number
+            this.ctx.font = '8px "Press Start 2P", monospace';
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'top';
+            this.ctx.fillText(`${i + 1}`, sx + 3, slotY + 3);
+
+            if (!skill) continue;
+
+            // Cooldown overlay
+            const cdRemaining = this.player.skillCooldowns[i] || 0;
+            const cdTotal = skill.cooldown;
+            const cdRatio = cdRemaining > 0 ? cdRemaining / cdTotal : 0;
+
+            if (cdRatio > 0) {
+                // Dark overlay proportional to cooldown
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                this.ctx.beginPath();
+                this.ctx.rect(sx, slotY + slotSize * (1 - cdRatio), slotSize, slotSize * cdRatio);
+                this.ctx.fill();
+            }
+
+            // Active effect glow
+            if (this.player.activeSkillEffects && this.player.activeSkillEffects.has(skillId)) {
+                this.ctx.save();
+                this.ctx.shadowColor = skill.color;
+                this.ctx.shadowBlur = 12;
+                this.ctx.strokeStyle = skill.color;
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.roundRect(sx, slotY, slotSize, slotSize, 6);
+                this.ctx.stroke();
+                this.ctx.restore();
+            }
+
+            // Skill icon
+            this.ctx.font = '18px "Press Start 2P", monospace';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillStyle = cdRatio > 0 ? 'rgba(255, 255, 255, 0.4)' : '#FFFFFF';
+            this.ctx.fillText(skill.icon, sx + slotSize / 2, slotY + slotSize / 2);
+
+            // Cooldown seconds remaining
+            if (cdRatio > 0) {
+                const secs = Math.ceil(cdRemaining / 1000);
+                this.ctx.font = 'bold 10px "Press Start 2P", monospace';
+                this.ctx.fillStyle = '#FF8888';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'bottom';
+                this.ctx.fillText(`${secs}s`, sx + slotSize / 2, slotY + slotSize - 2);
+            }
         }
     }
     
@@ -4568,7 +5369,7 @@ export class GameEngine {
     gameLoop() {
         const frameStart = performance.now();
 
-        // OPT-7: Fixed-timestep accumulator — logic runs at 30 Hz, render at display refresh.
+        // OPT-7: Fixed-timestep accumulator — logic runs at 60 Hz, render at display refresh.
         if (this.useTemporalUpsampling) {
             const dt = Math.min(frameStart - this.lastFrameTime, 100); // cap large gaps
             this.lastFrameTime = frameStart;

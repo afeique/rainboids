@@ -146,20 +146,6 @@ test.describe('E2E-03: Weapon system', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Spread Shot upgrade
-    // -----------------------------------------------------------------------
-
-    test.describe('SPREAD_SHOT powerup', () => {
-        test('spread-shot powerup registers on the player', async ({ page }) => {
-            await addShopPowerup(page, 'SPREAD_SHOT');
-            const stacks = await page.evaluate(
-                () => window.gameEngine.player.powerups.get('SPREAD_SHOT')?.stacks ?? 0
-            );
-            expect(stacks).toBeGreaterThan(0);
-        });
-    });
-
-    // -----------------------------------------------------------------------
     // Homing upgrade
     // -----------------------------------------------------------------------
 
@@ -198,6 +184,90 @@ test.describe('E2E-03: Weapon system', () => {
                 () => window.gameEngine.player.powerups.get('EXPLOSIVE')?.stacks ?? 0
             );
             expect(stacks).toBeGreaterThan(0);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Primary weapon switching
+    // -----------------------------------------------------------------------
+
+    test.describe('primary weapon switching', () => {
+        test('buying Storm Needles changes active primary', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const ge = window.gameEngine;
+                ge.game.money = 10000;
+                ge.player.skillPoints = 10;
+                ge.openShop();
+                ge.shopCategory = 'PRIMARY';
+                ge._rebuildShopCache();
+                ge.buyShopItem('STORM_NEEDLES');
+                return ge.player.activePrimary;
+            });
+            expect(result).toBe('STORM_NEEDLES');
+        });
+
+        test('Storm Needles fire faster than Pulse Cannon', async ({ page }) => {
+            // Fire with Pulse Cannon and count bullets
+            const pulseCount = await burstFire(page, 600);
+
+            // Clear bullets and switch to Storm Needles
+            await page.evaluate(() => {
+                const ge = window.gameEngine;
+                ge.bulletPool.activeObjects.forEach(b => ge.bulletPool.release(b));
+                ge.bulletPool.activeObjects = [];
+                ge.game.money = 10000;
+                ge.player.skillPoints = 10;
+                ge.player.buyPrimary('STORM_NEEDLES');
+            });
+
+            const needleCount = await burstFire(page, 600);
+            // Storm Needles (130ms) should produce more bullets than Pulse Cannon (400ms)
+            expect(needleCount).toBeGreaterThan(pulseCount);
+        });
+
+        test('Scatter Gun fires multiple pellets per shot', async ({ page }) => {
+            await page.evaluate(() => {
+                const ge = window.gameEngine;
+                ge.game.money = 10000;
+                ge.player.skillPoints = 10;
+                ge.player.buyPrimary('SCATTER_GUN');
+                // Clear existing bullets
+                ge.bulletPool.activeObjects.forEach(b => ge.bulletPool.release(b));
+                ge.bulletPool.activeObjects = [];
+            });
+            const count = await burstFire(page, 800);
+            // One shot should produce 5 pellets
+            expect(count).toBeGreaterThanOrEqual(5);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Defense skill system
+    // -----------------------------------------------------------------------
+
+    test.describe('defense skills', () => {
+        test('buying and assigning Bulwark to slot 1', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const ge = window.gameEngine;
+                ge.player.skillPoints = 10;
+                ge.player.buySkill('BULWARK');
+                return {
+                    owned: ge.player.ownedSkills.has('BULWARK'),
+                    slot0: ge.player.skillSlots[0],
+                };
+            });
+            expect(result.owned).toBe(true);
+            expect(result.slot0).toBe('BULWARK');
+        });
+
+        test('skill cooldowns start at zero', async ({ page }) => {
+            const cooldowns = await page.evaluate(() => {
+                const ge = window.gameEngine;
+                ge.player.skillPoints = 10;
+                ge.player.buySkill('BULWARK');
+                return ge.player.skillCooldowns;
+            });
+            expect(cooldowns[0]).toBe(0);
         });
     });
 
