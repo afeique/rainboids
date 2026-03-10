@@ -4,6 +4,7 @@ import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStat
 import { random, collision, starCollision, triggerHapticFeedback, generateStarPositions, drawMoneyIcon, drawHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon, drawCachedHeartIcon, glowSpriteCache } from './utils.js';
 import { rgba } from './color-cache.js';
 import { depthBatchRenderer } from './performance/depth-batch-renderer.js';
+import { nebulaRenderer } from './performance/nebula-renderer.js';
 import { SpatialGrid } from './performance/spatial-grid.js';
 import { PoolManager } from './pool-manager.js';
 import { Player } from './entities/player.js';
@@ -55,7 +56,7 @@ export class GameEngine {
         this.setupEventListeners();
         this.playerCanFire = true;
         this.previousFire = false;
-        this.baseDamage = 1; // Base damage per hit
+        this.baseDamage = 2; // Base damage per hit
 
         this.playerState = PLAYER_STATES.NORMAL;
         this.pendingDamage = 0; // New property to track pending damage
@@ -256,12 +257,11 @@ export class GameEngine {
         // OPT-8: Spatial grid for O(1) insert / O(k) collision query
         this.spatialGrid = new SpatialGrid(this.gameField.width, this.gameField.height, 8, 6);
 
-        // OPT-7: Temporal upsampling — 30fps logic, 60fps render with interpolation.
-        // Halves the cost of all game logic (collision, movement, AI, physics).
+        // OPT-7: Temporal upsampling — 45Hz logic, display-rate render with interpolation.
         this.useTemporalUpsampling = true;
-        this.logicTickRate = 1000 / 30;        // 30 Hz fixed timestep
+        this.logicTickRate = GAME_CONFIG.LOGIC_TICK_MS; // 45 Hz fixed timestep
         this.logicAccumulator = 0;
-        this.maxLogicStepsPerFrame = 3;         // spiral-of-death guard
+        this.maxLogicStepsPerFrame = 4;         // spiral-of-death guard (bumped for higher tick rate)
         this.lastFrameTime = performance.now();
 
         // Powerup display system
@@ -338,13 +338,13 @@ export class GameEngine {
                     'KeyR': 'BIG_BULLETS',
                     'KeyT': 'SPEED_BOOST',
                     'KeyY': 'PIERCING',
-                    'KeyU': 'SPREAD_SHOT',
+                    'KeyU': 'LONG_RANGE',
                     'KeyI': 'EXPLOSIVE',
                     'KeyO': 'CRIT_CHANCE',
                     'KeyP': 'CRIT_DAMAGE',
                     'KeyA': 'SHIELD_BOOST',
                     'KeyS': 'MEDPACK',
-                    'KeyD': 'CHARGE_SHOT',
+                    'KeyD': 'CHARGE_DAMAGE',
                 };
                 if (powerupKeyMap[e.code] && this.player) {
                     const type = powerupKeyMap[e.code];
@@ -763,6 +763,9 @@ export class GameEngine {
         // Generate all color stars at once using generative method
         this.generateInitialColorStars();
         this.generateBackgroundStars();
+
+        // Generate nebula background (pre-rendered, no per-frame cost)
+        nebulaRenderer.generate(this.gameField.width, this.gameField.height);
         
         // Initialize first wave with fixed wave system
         this.game.currentWave = 1;
@@ -884,7 +887,7 @@ export class GameEngine {
         const tx = random(this.width * 0.3, this.width * 0.7);
         const ty = random(this.height * 0.3, this.height * 0.7);
         const ang = Math.atan2(ty - y, tx - x);
-        const spd = Math.min(2.5, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.1);
+        const spd = Math.min(5.0, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.15);
         newAst.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
     }
     
@@ -1157,8 +1160,9 @@ export class GameEngine {
             const enemy = this.enemyPool.get();
             if (enemy) {
                 const enemyType = this.getRandomEnemyType();
-                const spawnPos = this.getRandomSpawnPosition();
-                enemy.reset(spawnPos.x, spawnPos.y, enemyType, this.game.enemyLevel, this);
+                const sp = this.getRandomSpawnPosition();
+                enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+                enemy.startWarpIn(sp.targetX, sp.targetY);
             }
         }
     }
@@ -1180,9 +1184,10 @@ export class GameEngine {
         for (let i = 0; i < count; i++) {
             const enemy = this.enemyPool.get();
             if (enemy) {
-                const spawnPos = this.getRandomSpawnPosition();
-                enemy.reset(spawnPos.x, spawnPos.y, enemyType, this.game.enemyLevel, this);
+                const sp = this.getRandomSpawnPosition();
+                enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
                 this.applyEnemyLevelScaling(enemy);
+                enemy.startWarpIn(sp.targetX, sp.targetY);
             }
         }
     }
@@ -1219,21 +1224,23 @@ export class GameEngine {
     // Legacy wave methods removed - replaced by continuous spawning system
     
     completeWave() {
+        const clearedWave = this.game.currentWave;
         this.waveInProgress = false;
         this.game.currentWave++;
-        this.waveTimer = Date.now() + GAME_CONFIG.WAVE_BREAK_TIME; // Short break between waves
+        this.waveTimer = Date.now() + GAME_CONFIG.WAVE_BREAK_TIME;
         this.wavePhase = 'waiting';
-        
-        // Increase enemy and asteroid levels each wave for scaling difficulty
-        this.game.enemyLevel = Math.floor(this.game.currentWave / 2) + 1; // Level 1-2 = wave 1-3, Level 3 = wave 5-6, etc.
-        this.game.asteroidLevel = Math.floor(this.game.currentWave / 3) + 1; // Slower asteroid scaling
-        
-        
-        // Shop removed from wave completion - players can access via pause menu
-        // setTimeout(() => {
-        //     this.openShop();
-        // }, 500); // Brief delay to ensure clean transition
-        
+
+        // Use canonical level formulas from wave-data.js
+        this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
+        this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
+
+        // Wave clear bonus: XP + coins scale with wave number
+        const bonusXP = 20 + clearedWave * 10;
+        const bonusCoins = 50 + clearedWave * 25;
+        this.player.gainExperience(bonusXP);
+        this.game.money += bonusCoins;
+        this.queueNotification(`WAVE ${clearedWave} CLEARED`,
+            `+${bonusXP} XP  +${bonusCoins} coins`, 2500);
     }
     
     sellShopItem(itemId) {
@@ -1245,14 +1252,10 @@ export class GameEngine {
 
         // Calculate refund: 50% of the cost of the most-recently-bought stack
         let lastStackCost = item.cost;
-        if (item.id === 'SPREAD_SHOT') {
-            if (currentStacks === 1) lastStackCost = 5000;
-            else if (currentStacks === 2) lastStackCost = 10000;
-            else if (currentStacks >= 3) lastStackCost = 20000;
-        } else if (item.id === 'CHARGE_SPEED') {
-            if (currentStacks === 1) lastStackCost = 10000;
-            else if (currentStacks === 2) lastStackCost = 15000;
-            else if (currentStacks >= 3) lastStackCost = 20000;
+        if (item.id === 'CHARGE_SPEED') {
+            if (currentStacks === 1) lastStackCost = 1500;
+            else if (currentStacks === 2) lastStackCost = 3000;
+            else if (currentStacks >= 3) lastStackCost = 5000;
         }
         const refund = Math.floor(lastStackCost * 0.5);
 
@@ -1308,20 +1311,21 @@ export class GameEngine {
         
         // Define shop items with categories and currency types
         this.shopItems = [
+            // ── DEFENSE (SP) ──
             {
-                id: 'MEDPACK',
-                name: 'Medpack',
-                description: 'Increases green health orb healing by 1',
-                cost: 1,
-                icon: '💊',
-                maxStacks: 5,
+                id: 'SPEED_BOOST',
+                name: 'Afterburner',
+                description: '+50% thrust & +35% top speed per stack',
+                cost: 2,
+                icon: '💨',
+                maxStacks: 6,
                 category: 'DEFENSE',
                 currency: 'SP'
             },
             {
                 id: 'HEALTH_BOOST',
-                name: 'Health Boost', 
-                description: 'Increases max health by 25',
+                name: 'Health Boost',
+                description: '+25 max health',
                 cost: 1,
                 icon: '❤️',
                 maxStacks: 20,
@@ -1329,129 +1333,49 @@ export class GameEngine {
                 currency: 'SP'
             },
             {
-                id: 'SPEED_BOOST',
-                name: 'Speed Boost',
-                description: 'Move 30% faster',
-                cost: 1,
-                icon: '💨',
-                maxStacks: 4,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            {
-                id: 'RAPID_FIRE',
-                name: 'Rapid Fire',
-                description: 'Shoot 25% faster',
-                cost: 1500,
-                icon: '⚡',
-                maxStacks: 5,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
                 id: 'SHIELD_BOOST',
                 name: 'Shielding',
-                description: 'Reduces damage by 5%',
+                description: '-5% damage taken per stack',
                 cost: 1,
                 icon: '🛡️',
-                maxStacks: 15,
+                maxStacks: 12,
                 category: 'DEFENSE',
                 currency: 'SP'
             },
             {
-                id: 'MULTI_SHOT',
-                name: 'Multi Shot',
-                description: 'Fire one extra bullet',
-                cost: 2000,
-                icon: '✳️',
+                id: 'MEDPACK',
+                name: 'Medpack',
+                description: '+1 health orb healing',
+                cost: 1,
+                icon: '💊',
                 maxStacks: 5,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'SPREAD_SHOT',
-                name: 'Spread Shot',
-                description: 'Fire spread bullets (3/5/7)',
-                cost: 5000,
-                icon: '📐',
-                maxStacks: 3,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'HOMING',
-                name: 'Homing',
-                description: 'Bullets track enemies',
-                cost: 1500,
-                icon: '🎯',
-                maxStacks: 5,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'PIERCING',
-                name: 'Piercing',
-                description: 'Bullets go through enemies',
-                cost: 5000,
-                icon: '🏹',
-                maxStacks: 5,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'EXPLOSIVE',
-                name: 'Explosive',
-                description: 'Bullets explode on impact',
-                cost: 3000,
-                icon: '💣',
-                maxStacks: 3,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'CRIT_CHANCE',
-                name: 'Critical Chance',
-                description: 'Increases crit chance by 5%',
-                cost: 3000,
-                icon: '⭐',
-                maxStacks: 10,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'CRIT_DAMAGE',
-                name: 'Critical Damage',
-                description: 'Increases crit damage by 10%',
-                cost: 1500,
-                icon: '🗡️',
-                maxStacks: 15,
-                category: 'OFFENSE',
-                currency: 'COINS'
+                category: 'DEFENSE',
+                currency: 'SP'
             },
             {
                 id: 'HEALTH_ORB_DROP_CHANCE',
                 name: 'Health Orb Luck',
-                description: 'Increases health orb drop chance by 5%',
+                description: '+5% health orb drop chance',
                 cost: 1,
                 icon: '🍀',
-                maxStacks: 16,
+                maxStacks: 10,
                 category: 'DEFENSE',
                 currency: 'SP'
             },
             {
                 id: 'MONEY_ORB_DROP_CHANCE',
                 name: 'Money Orb Luck',
-                description: 'Increases money orb drop chance by 5%',
+                description: '+5% money orb drop chance',
                 cost: 1,
                 icon: '💰',
-                maxStacks: 10,
+                maxStacks: 8,
                 category: 'DEFENSE',
                 currency: 'SP'
             },
             {
                 id: 'HEALTH_ORB_DROP_QUANTITY',
                 name: 'Health Orb Bounty',
-                description: 'Increases health orbs dropped by 1',
+                description: '+1 health orbs per drop',
                 cost: 1,
                 icon: '💚',
                 maxStacks: 3,
@@ -1461,28 +1385,99 @@ export class GameEngine {
             {
                 id: 'MONEY_ORB_DROP_QUANTITY',
                 name: 'Money Orb Bounty',
-                description: 'Increases money orbs dropped by 1',
+                description: '+1 money orbs per drop',
                 cost: 1,
                 icon: '🪙',
                 maxStacks: 4,
                 category: 'DEFENSE',
                 currency: 'SP'
             },
+            // ── OFFENSE (Coins) ──
             {
-                id: 'CHARGE_SHOT',
-                name: 'Charge Shot',
-                description: 'Unlocks the charge shot ability',
-                cost: 5000,
-                icon: '🔮',
-                maxStacks: 1,
+                id: 'RAPID_FIRE',
+                name: 'Rapid Fire',
+                description: '15% faster shooting per stack',
+                cost: 600,
+                icon: '⚡',
+                maxStacks: 6,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
+                id: 'MULTI_SHOT',
+                name: 'Multi Shot',
+                description: '+1 bullet in a spread per stack',
+                cost: 1200,
+                icon: '✳️',
+                maxStacks: 4,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
+                id: 'HOMING',
+                name: 'Homing',
+                description: 'Bullets track nearest enemy',
+                cost: 400,
+                icon: '🎯',
+                maxStacks: 5,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
+                id: 'PIERCING',
+                name: 'Piercing',
+                description: 'Bullets pass through +1 enemy',
+                cost: 1000,
+                icon: '🏹',
+                maxStacks: 4,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
+                id: 'EXPLOSIVE',
+                name: 'Explosive',
+                description: 'AoE blast on bullet impact',
+                cost: 1500,
+                icon: '💣',
+                maxStacks: 3,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
+                id: 'CRIT_CHANCE',
+                name: 'Critical Chance',
+                description: '+5% chance for critical hits',
+                cost: 400,
+                icon: '⭐',
+                maxStacks: 10,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
+                id: 'CRIT_DAMAGE',
+                name: 'Critical Damage',
+                description: '+10% critical hit damage',
+                cost: 350,
+                icon: '🗡️',
+                maxStacks: 15,
+                category: 'OFFENSE',
+                currency: 'COINS'
+            },
+            {
+                id: 'LONG_RANGE',
+                name: 'Long Range',
+                description: '+40% bullet range per stack',
+                cost: 300,
+                icon: '🏹',
+                maxStacks: 6,
                 category: 'OFFENSE',
                 currency: 'COINS'
             },
             {
                 id: 'CHARGE_SPEED',
                 name: 'Charge Speed',
-                description: 'Reduces charge time by 1 second (requires Charge Shot)',
-                cost: 5000,
+                description: '-1 second charge time',
+                cost: 1500,
                 icon: '⏱️',
                 maxStacks: 3,
                 category: 'OFFENSE',
@@ -1491,8 +1486,8 @@ export class GameEngine {
             {
                 id: 'CHARGE_DAMAGE',
                 name: 'Charge Power',
-                description: 'Increases charge shot base damage by 1 (requires Charge Shot)',
-                cost: 2500,
+                description: '+1 charge shot base damage',
+                cost: 600,
                 icon: '🔋',
                 maxStacks: 10,
                 category: 'OFFENSE',
@@ -1501,8 +1496,8 @@ export class GameEngine {
             {
                 id: 'SPARE_SHIP',
                 name: 'Spare Ship',
-                description: 'Adds an extra life (max 3)',
-                cost: 1000,
+                description: '+1 extra life (max 3)',
+                cost: 2000,
                 icon: '🚀',
                 maxStacks: 1,
                 flatCost: true,
@@ -1605,16 +1600,11 @@ export class GameEngine {
             if (item.flatCost) {
                 // Items with flat cost don't scale (like Spare Ship)
                 actualCost = item.cost;
-            } else if (item.id === 'SPREAD_SHOT') {
-                const currentStacks = this.player.getPowerupStacks(item.id);
-                if (currentStacks === 0) actualCost = 5000;      // First purchase
-                else if (currentStacks === 1) actualCost = 10000; // Second purchase  
-                else if (currentStacks === 2) actualCost = 20000; // Third purchase
             } else if (item.id === 'CHARGE_SPEED') {
                 const currentStacks = this.player.getPowerupStacks(item.id);
-                if (currentStacks === 0) actualCost = 10000;     // First purchase
-                else if (currentStacks === 1) actualCost = 15000; // Second purchase  
-                else if (currentStacks === 2) actualCost = 20000; // Third purchase
+                if (currentStacks === 0) actualCost = 1500;      // First purchase
+                else if (currentStacks === 1) actualCost = 3000;  // Second purchase
+                else if (currentStacks === 2) actualCost = 5000;  // Third purchase
             }
             
             // Check affordability based on currency type
@@ -1674,10 +1664,9 @@ export class GameEngine {
         const configs = {
             'SHIELD_BOOST':             { name: 'Shielding',          duration: Infinity, icon: '🛡️', gradientColors: ['#33ff99', '#006644'] },
             'RAPID_FIRE':               { name: 'Rapid Fire',          duration: Infinity, icon: '⚡', gradientColors: ['#ff6600', '#ff0000'] },
-            'CHARGE_SHOT':              { name: 'Charge Shot',         duration: Infinity, icon: '🔮', gradientColors: ['#00ffff', '#0033aa'] },
             'MULTI_SHOT':               { name: 'Multi Shot',          duration: Infinity, icon: '✳️', gradientColors: ['#66aaff', '#0033cc'] },
-            'SPREAD_SHOT':              { name: 'Spread Shot',         duration: Infinity, icon: '📐', gradientColors: ['#66ddff', '#0099cc'] },
-            'SPEED_BOOST':              { name: 'Speed Boost',         duration: Infinity, icon: '💨', gradientColors: ['#ffff33', '#cc9900'] },
+            'SPEED_BOOST':              { name: 'Afterburner',         duration: Infinity, icon: '💨', gradientColors: ['#ffff33', '#cc9900'] },
+            'BIG_BULLETS':              { name: 'Big Bullets',         duration: Infinity, icon: '🔵', gradientColors: ['#66ff66', '#009900'] },
             'PIERCING':                 { name: 'Piercing',            duration: Infinity, icon: '🏹', gradientColors: ['#ffcc66', '#cc6600'] },
             'EXPLOSIVE':                { name: 'Explosive',           duration: Infinity, icon: '💣', gradientColors: ['#ff9933', '#cc3300'] },
             'HOMING':                   { name: 'Homing',              duration: Infinity, icon: '🎯', gradientColors: ['#ff66cc', '#cc0066'] },
@@ -1685,6 +1674,7 @@ export class GameEngine {
             'HEALTH_BOOST':             { name: 'Health Boost',        duration: Infinity, icon: '❤️', gradientColors: ['#ff6666', '#cc0000'] },
             'CRIT_CHANCE':              { name: 'Critical Chance',     duration: Infinity, icon: '⭐', gradientColors: ['#ffff66', '#cc9900'] },
             'CRIT_DAMAGE':              { name: 'Critical Damage',     duration: Infinity, icon: '🗡️', gradientColors: ['#ff3399', '#cc0033'] },
+            'LONG_RANGE':               { name: 'Long Range',          duration: Infinity, icon: '🏹', gradientColors: ['#bbff66', '#448800'] },
             'CHARGE_SPEED':             { name: 'Charge Speed',        duration: Infinity, icon: '⏱️', gradientColors: ['#ffcc00', '#cc8800'] },
             'CHARGE_DAMAGE':            { name: 'Charge Power',        duration: Infinity, icon: '🔋', gradientColors: ['#ff6600', '#cc3300'] },
             'HEALTH_ORB_DROP_CHANCE':   { name: 'Health Orb Luck',     duration: Infinity, icon: '🍀', gradientColors: ['#33ff99', '#009944'] },
@@ -1694,7 +1684,75 @@ export class GameEngine {
         };
         return configs[type];
     }
-    
+
+    onEnemyKill(enemy) {
+        // Track kills for streak notifications
+        if (!this.killCount) this.killCount = 0;
+        if (!this.killStreakTimer) this.killStreakTimer = 0;
+        if (!this.killStreakCount) this.killStreakCount = 0;
+
+        this.killCount++;
+        this.killStreakCount++;
+        this.killStreakTimer = Date.now();
+
+        // Rapid kill streak notifications (3+ kills within 3 seconds)
+        const streakMessages = {
+            3: 'TRIPLE KILL',
+            5: 'RAMPAGE',
+            8: 'UNSTOPPABLE',
+            12: 'GODLIKE',
+            20: 'LEGENDARY'
+        };
+
+        if (streakMessages[this.killStreakCount]) {
+            this.queueNotification(streakMessages[this.killStreakCount],
+                `+${this.killStreakCount * 10} bonus coins`, 2000);
+            this.game.money += this.killStreakCount * 10;
+        }
+
+        // Milestone notifications
+        const milestones = { 1: 'FIRST BLOOD', 25: '25 KILLS', 50: 'HALF CENTURY',
+            100: 'CENTURION', 200: 'DESTROYER', 500: 'ANNIHILATOR' };
+        if (milestones[this.killCount]) {
+            this.queueNotification(milestones[this.killCount],
+                `${this.killCount} enemies destroyed`, 2500);
+        }
+    }
+
+    updateKillStreak() {
+        // Reset streak if no kill in 3 seconds
+        if (this.killStreakTimer && Date.now() - this.killStreakTimer > 3000) {
+            this.killStreakCount = 0;
+        }
+    }
+
+    queueNotification(title, subtitle, duration) {
+        if (!this.notificationQueue) this.notificationQueue = [];
+        this.notificationQueue.push({ title, subtitle, duration, queued: Date.now() });
+
+        // Start processing if not already
+        if (!this.notificationActive) {
+            this.processNotificationQueue();
+        }
+    }
+
+    processNotificationQueue() {
+        if (!this.notificationQueue || this.notificationQueue.length === 0) {
+            this.notificationActive = false;
+            return;
+        }
+
+        this.notificationActive = true;
+        const notif = this.notificationQueue.shift();
+
+        if (this.uiManager) {
+            this.uiManager.showMessage(notif.title, notif.subtitle, notif.duration, 'top');
+        }
+
+        // Process next notification after this one finishes (with small gap)
+        setTimeout(() => this.processNotificationQueue(), notif.duration + 300);
+    }
+
     drawShop() {
         // Initialize scroll offset if not set
         if (this.shopScrollOffset === undefined) {
@@ -2049,13 +2107,9 @@ export class GameEngine {
         
         // Calculate dynamic cost for special items
         let actualCost = item.cost;
-        if (item.id === 'SPREAD_SHOT') {
-            if (currentStacks === 0) actualCost = 5000;      // First purchase
-            else if (currentStacks === 1) actualCost = 10000; // Second purchase  
-            else if (currentStacks === 2) actualCost = 20000; // Third purchase
-        } else if (item.id === 'CHARGE_SPEED') {
+        if (item.id === 'CHARGE_SPEED') {
             if (currentStacks === 0) actualCost = 10000;     // First purchase
-            else if (currentStacks === 1) actualCost = 15000; // Second purchase  
+            else if (currentStacks === 1) actualCost = 15000; // Second purchase
             else if (currentStacks === 2) actualCost = 20000; // Third purchase
         }
         
@@ -2180,11 +2234,7 @@ export class GameEngine {
         if (currentStacks > 0) {
             // Calculate sell refund for display
             let sellCost = item.cost;
-            if (item.id === 'SPREAD_SHOT') {
-                if (currentStacks === 1) sellCost = 5000;
-                else if (currentStacks === 2) sellCost = 10000;
-                else sellCost = 20000;
-            } else if (item.id === 'CHARGE_SPEED') {
+            if (item.id === 'CHARGE_SPEED') {
                 if (currentStacks === 1) sellCost = 10000;
                 else if (currentStacks === 2) sellCost = 15000;
                 else sellCost = 20000;
@@ -2344,7 +2394,7 @@ export class GameEngine {
             attempts++;
         } while (this.isInMinimapArea(x, y) && attempts < 10);
         
-        const spd = Math.min(2.5, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.1);
+        const spd = Math.min(5.0, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.15);
         const vel = {
             x: random(-spd, spd) || 0.2,
             y: random(-spd, spd) || 0.2
@@ -2417,19 +2467,20 @@ export class GameEngine {
         // Method 1: Try normal pool
         const enemy = this.enemyPool.get();
         if (enemy) {
-            const { x, y } = this.getRandomSpawnPosition();
+            const sp = this.getRandomSpawnPosition();
             const enemyType = this.getRandomEnemyType();
-            enemy.reset(x, y, enemyType, this.game.enemyLevel, this);
+            enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+            enemy.startWarpIn(sp.targetX, sp.targetY);
             return true;
         }
-        
-        
+
         // Method 2: Force create new enemy if pool failed
         try {
             const newEnemy = new Enemy();
-            const { x, y } = this.getRandomSpawnPosition();
+            const sp = this.getRandomSpawnPosition();
             const enemyType = this.getRandomEnemyType();
-            newEnemy.reset(x, y, enemyType, this.game.enemyLevel, this);
+            newEnemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+            newEnemy.startWarpIn(sp.targetX, sp.targetY);
             this.enemyPool.activeObjects.push(newEnemy);
             return true;
         } catch (error) {
@@ -2483,22 +2534,44 @@ export class GameEngine {
     }
     
     getRandomSpawnPosition() {
-        let attempts = 0;
-        let x, y;
-        
-        do {
-            const edge = Math.floor(Math.random() * 4);
-            switch (edge) {
-                case 0: x = Math.random() * this.gameField.width; y = -50; break; // Top
-                case 1: x = this.gameField.width + 50; y = Math.random() * this.gameField.height; break; // Right
-                case 2: x = Math.random() * this.gameField.width; y = this.gameField.height + 50; break; // Bottom
-                case 3: x = -50; y = Math.random() * this.gameField.height; break; // Left
-                default: x = 0; y = 0; break;
-            }
-            attempts++;
-        } while (this.isInMinimapArea(x, y) && attempts < 10);
-        
-        return { x, y };
+        // Spawn enemies well beyond the map edge so they fly in visibly
+        const margin = 200 + Math.random() * 200; // 200-400px offscreen
+        let x, y, targetX, targetY;
+
+        const edge = Math.floor(Math.random() * 4);
+        switch (edge) {
+            case 0: // Top
+                x = Math.random() * this.gameField.width;
+                y = -margin;
+                targetX = x + random(-100, 100);
+                targetY = 80 + Math.random() * (this.gameField.height * 0.3);
+                break;
+            case 1: // Right
+                x = this.gameField.width + margin;
+                y = Math.random() * this.gameField.height;
+                targetX = this.gameField.width - 80 - Math.random() * (this.gameField.width * 0.3);
+                targetY = y + random(-100, 100);
+                break;
+            case 2: // Bottom
+                x = Math.random() * this.gameField.width;
+                y = this.gameField.height + margin;
+                targetX = x + random(-100, 100);
+                targetY = this.gameField.height - 80 - Math.random() * (this.gameField.height * 0.3);
+                break;
+            case 3: // Left
+                x = -margin;
+                y = Math.random() * this.gameField.height;
+                targetX = 80 + Math.random() * (this.gameField.width * 0.3);
+                targetY = y + random(-100, 100);
+                break;
+            default: x = 0; y = 0; targetX = 200; targetY = 200; break;
+        }
+
+        // Clamp target inside field
+        targetX = Math.max(60, Math.min(this.gameField.width - 60, targetX));
+        targetY = Math.max(60, Math.min(this.gameField.height - 60, targetY));
+
+        return { x, y, targetX, targetY };
     }
     
     getRandomEnemyType() {
@@ -2523,46 +2596,17 @@ export class GameEngine {
     }
     
     spawnRandomEnemy() {
-        // Choose enemy type based on wave progression
-        const enemyTypes = Object.keys(ENEMY_TYPES);
-        let availableTypes = ['HUNTER', 'WASP']; // Start with basic types
-        
-        if (this.game.currentWave >= 2) availableTypes.push('GUARDIAN', 'STALKER');
-        if (this.game.currentWave >= 4) availableTypes.push('TANGERINE');
-        if (this.game.currentWave >= 6) availableTypes.push('TITAN');
-        
-        const enemyType = availableTypes[Math.floor(random(0, availableTypes.length))];
-        
-        // Spawn at random edge position
-        const edge = Math.floor(random(0, 4)); // 0=top, 1=right, 2=bottom, 3=left
-        let x, y;
-        
-        switch (edge) {
-            case 0: // Top
-                x = random(50, this.width - 50);
-                y = -50;
-                break;
-            case 1: // Right
-                x = this.width + 50;
-                y = random(50, this.height - 50);
-                break;
-            case 2: // Bottom
-                x = random(50, this.width - 50);
-                y = this.height + 50;
-                break;
-            case 3: // Left
-                x = -50;
-                y = random(50, this.height - 50);
-                break;
-        }
-        
-        const enemy = this.enemyPool.get(x, y, enemyType, this.game.enemyLevel);
+        const enemyType = this.getRandomEnemyType();
+        const sp = this.getRandomSpawnPosition();
+
+        const enemy = this.enemyPool.get();
         if (enemy) {
+            enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+            enemy.startWarpIn(sp.targetX, sp.targetY);
         } else {
-            console.warn('⚠️ Failed to get enemy from pool!');
-            // Force create a new enemy if pool is empty
             const newEnemy = new Enemy();
-            newEnemy.reset(x, y, enemyType, this.game.enemyLevel, this);
+            newEnemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+            newEnemy.startWarpIn(sp.targetX, sp.targetY);
             this.enemyPool.activeObjects.push(newEnemy);
         }
     }
@@ -3609,7 +3653,6 @@ export class GameEngine {
                             
                             const count = (Math.random() < 0.5 ? 2 : 3) + 1; // Now 3 or 4
                             const newR = ast.baseRadius / Math.sqrt(count);
-                            const angleSlice = (2 * Math.PI) / count;
                                 
                                 for (let k = 0; k < count; k++) {
                                 // Spawn fragments around the parent's center with jitter
@@ -3617,20 +3660,19 @@ export class GameEngine {
                                 const spawnY = ast.y + random(-ast.radius * 0.2, ast.radius * 0.2);
 
                                 const newAst = this.asteroidPool.get(spawnX, spawnY, newR, ast.level);
-                                
-                                if (newAst) {
-                                    // Give fragments an explosive, outward velocity
-                                    // Systematically spread angles to prevent overlap, with jitter
-                                    const baseAngle = k * angleSlice;
-                                    const angleJitter = random(-angleSlice / 5, angleSlice / 5);
-                                    const angle = baseAngle + angleJitter;
 
-                                    // Greater variance in speed, guaranteed non-zero
-                                    const speed = random(1.2, 5.5);
-                                    
-                                    // Inherit a small amount of parent velocity and add the explosion force
-                                    newAst.vel.x = ast.vel.x * 0.2 + Math.cos(angle) * speed;
-                                    newAst.vel.y = ast.vel.y * 0.2 + Math.sin(angle) * speed;
+                                if (newAst) {
+                                    // Fragments are slightly weaker than parent, with some randomness (70-90%)
+                                    const fragHP = Math.max(5, Math.round(ast.maxHealth * random(0.7, 0.9)));
+                                    newAst.maxHealth = fragHP;
+                                    newAst.health = fragHP;
+
+                                    // Explosive outward velocity — fast and chaotic
+                                    const angle = random(0, Math.PI * 2);
+                                    const speed = random(3.5, 8.0);
+
+                                    newAst.vel.x = ast.vel.x * 0.3 + Math.cos(angle) * speed;
+                                    newAst.vel.y = ast.vel.y * 0.3 + Math.sin(angle) * speed;
                                 }
                             }
                             this.asteroidPool.release(ast);
@@ -3787,8 +3829,9 @@ export class GameEngine {
             }
         }
         
-        // Player-enemy collisions
+        // Player-enemy collisions (skip warping enemies)
         this.enemyPool.activeObjects.forEach(enemy => {
+            if (enemy.warping) return;
             if (this.player.active && collision(this.player, enemy)) {
                 this.handlePlayerEnemyCollision(this.player, enemy);
             }
@@ -3801,7 +3844,7 @@ export class GameEngine {
             const nearbyEn = this.spatialGrid.retrieve(bullet);
             for (let j = nearbyEn.length - 1; j >= 0; j--) {
                 const enemy = nearbyEn[j];
-                if (!enemy.active || enemy.constructor.name !== 'Enemy') continue;
+                if (!enemy.active || enemy.warping || enemy.constructor.name !== 'Enemy') continue;
 
                 // Skip if this piercing bullet has already hit this enemy
                 if (bullet.piercing > 0 && bullet.hasHitEnemy(enemy)) {
@@ -3875,31 +3918,34 @@ export class GameEngine {
                     }
                     
                     if (destroyed) {
-                        // Award money
+                        // Award money + XP for kill
                         const reward = enemy.getDestructionReward();
                         this.game.money += reward.points;
-                        
+                        this.player.gainExperience(Math.ceil(reward.points / 5));
+
+                        // Track kill streak
+                        this.onEnemyKill(enemy);
+
                         // Play explosion sound only if enemy is on screen
                         if (this.isEntityOnScreen(enemy)) {
                             this.audioManager.playExplosion();
                         }
-                        
+
                         // Create colored explosion effects (includes screen shake)
                         this.createEnemyDebris(enemy);
-                        
-        // Drop health and money orbs
-        this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
-                        
-                        // Chance to drop powerup (higher chance for stronger enemies)
-                        const powerupChance = enemy.type === 'WASP' ? 0.4 : 
-                                            enemy.type === 'TITAN' ? 0.5 : 
-                                            enemy.type === 'TANGERINE' ? 0.45 : 0.25;
+
+                        // Drop health and money orbs
+                        this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
+
+                        // Enemies often drop powerups — stronger enemies drop more often
+                        const powerupChance = enemy.type === 'WASP' ? 0.65 :
+                                            enemy.type === 'TITAN' ? 0.80 :
+                                            enemy.type === 'TANGERINE' ? 0.70 : 0.55;
                         const roll = Math.random();
                         if (roll < powerupChance) {
                             this.dropPowerup(enemy.x, enemy.y);
                         }
-                        
-                        
+
                         this.enemyPool.release(enemy);
                     }
                     
@@ -4044,8 +4090,10 @@ export class GameEngine {
         
         if (destroyed) {
             const reward = enemy.getDestructionReward();
-            this.game.money += reward.points; // Full money for collision kill (player took risk)
-            
+            this.game.money += reward.points;
+            this.player.gainExperience(Math.ceil(reward.points / 5));
+            this.onEnemyKill(enemy);
+
             // Create colored explosion effects (includes screen shake)
             this.createEnemyDebris(enemy);
             // Drop health and money orbs
@@ -4275,13 +4323,16 @@ export class GameEngine {
             // this.updateTargetInfo(16); // Assume 60fps
             
             // Update money pickup display
-            this.updateMoneyPickupDisplay(16); // Assume 60fps
-            
+            this.updateMoneyPickupDisplay(GAME_CONFIG.LOGIC_TICK_MS);
+
             // Update damage numbers
-            this.updateDamageNumbers(16); // Assume 60fps
+            this.updateDamageNumbers(GAME_CONFIG.LOGIC_TICK_MS);
             
             // Update hover detection
             this.updateHoverDetection();
+
+            // Update kill streak timer
+            this.updateKillStreak();
             
             // Clean up targeted entity if it's no longer active
             if (this.targetedEntity && !this.targetedEntity.active) {
@@ -4354,6 +4405,9 @@ export class GameEngine {
             this.ctx.save();
             this.ctx.translate(-this.camera.x, -this.camera.y);
             
+            // Nebula layer — deepest background, before all stars
+            nebulaRenderer.draw(this.ctx, this.camera.x, this.camera.y);
+
             // Viewport culling for performance - only render stars visible in camera
             const visibleBackgroundStars = this.getVisibleStars(this.backgroundStarPool.activeObjects);
             const visibleColorStars = this.getVisibleStars(this.colorStarPool.activeObjects);
@@ -4479,78 +4533,58 @@ export class GameEngine {
     }
     
     drawCursorCooldownTimer() {
-        if (!this.player || !this.cursor) return;
-        
-        // Use actual cursor position (doesn't move with player)
-        if (!this.cursor.x && !this.cursor.y) return; // No cursor position available
-        
-        const now = Date.now();
-        const timeSinceLastShot = now - this.player.lastShotTime;
-        const cooldownProgress = Math.min(1, timeSinceLastShot / this.player.shotCooldownTime);
-        
-        // Only draw if cooldown is active (not fully ready)
-        if (cooldownProgress >= 1) return;
-        
+        if (!this.player || !this.cursor || !this.player.isCharging) return;
+        if (!this.cursor.x && !this.cursor.y) return;
+
+        const charge = this.player.chargeLevel; // 0-1
+        if (charge <= 0) return;
+
         const cursorX = this.cursor.x;
         const cursorY = this.cursor.y;
-        const timerRadius = 20; // Larger radius for better visibility and no overlap
-        
+        const timerRadius = 20;
+
         this.ctx.save();
-        
-        // Calculate remaining time (countdown)
-        const remainingProgress = 1 - cooldownProgress; // Invert for countdown
-        
-        // Calculate color based on remaining time (red -> yellow -> green as time counts down)
-        let color;
-        if (remainingProgress > 0.5) {
-            // Yellow to green (1.0 to 0.5 remaining)
-            const t = (remainingProgress - 0.5) * 2; // 0 to 1
-            const red = Math.floor(255 * (1 - t));
-            const green = 255;
-            color = `rgb(${red}, ${green}, 0)`;
-        } else {
-            // Red to yellow (0.5 to 0 remaining)
-            const t = remainingProgress * 2; // 0 to 1
-            const red = 255;
-            const green = Math.floor(255 * t);
-            color = `rgb(${red}, ${green}, 0)`;
-        }
-        
-        // Draw background circle (dark, thinner)
-        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+
+        // Background ring
+        this.ctx.strokeStyle = 'rgba(100, 180, 255, 0.25)';
         this.ctx.lineWidth = 3;
         this.ctx.beginPath();
         this.ctx.arc(cursorX, cursorY, timerRadius, 0, Math.PI * 2);
         this.ctx.stroke();
-        
-        // Draw countdown arc (colored, empties as cooldown completes)
-        const startAngle = -Math.PI / 2; // Start at top
-        const endAngle = startAngle + (remainingProgress * Math.PI * 2);
-        
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 4;
+
+        // Charge arc — fills as charge builds
+        const startAngle = -Math.PI / 2;
+        const endAngle = startAngle + (charge * Math.PI * 2);
+
+        if (this.player.isFullyCharged) {
+            // Pulsing bright when ready to fire
+            const pulse = 0.7 + Math.sin(Date.now() * 0.01) * 0.3;
+            this.ctx.strokeStyle = `rgba(200, 255, 255, ${pulse})`;
+            this.ctx.lineWidth = 5;
+        } else {
+            // Blue → cyan as charge builds
+            const r = Math.floor(80 + charge * 175);
+            const g = Math.floor(160 + charge * 95);
+            this.ctx.strokeStyle = `rgb(${r}, ${g}, 255)`;
+            this.ctx.lineWidth = 4;
+        }
         this.ctx.lineCap = 'round';
-        
-        // shadowBlur on stroked arcs — cannot be replaced with filled glow sprites
-        this.ctx.shadowColor = color;
-        this.ctx.shadowBlur = 6;
 
         this.ctx.beginPath();
         this.ctx.arc(cursorX, cursorY, timerRadius, startAngle, endAngle);
         this.ctx.stroke();
-        
-        // Draw inner fill for better visibility (only if significant time remaining)
-        if (remainingProgress > 0.1) {
-            this.ctx.shadowBlur = 0;
-            this.ctx.globalAlpha = 0.2;
-            this.ctx.fillStyle = color;
+
+        // Inner fill wedge for visibility
+        if (charge > 0.1) {
+            this.ctx.globalAlpha = this.player.isFullyCharged ? 0.15 : 0.1;
+            this.ctx.fillStyle = this.player.isFullyCharged ? '#ccffff' : '#6688ff';
             this.ctx.beginPath();
             this.ctx.moveTo(cursorX, cursorY);
             this.ctx.arc(cursorX, cursorY, timerRadius - 1, startAngle, endAngle);
             this.ctx.closePath();
             this.ctx.fill();
         }
-        
+
         this.ctx.restore();
     }
     
@@ -4867,7 +4901,7 @@ export class GameEngine {
         
         // Performance monitoring - warn if frame takes too long
         const frameTime = performance.now() - frameStart;
-        if (frameTime > 16.67) { // More than 60fps budget
+        if (frameTime > GAME_CONFIG.LOGIC_TICK_MS) { // Over budget for target tick rate
             // Skip some non-critical updates next frame if we're running slow
             this.performanceMode = true;
         } else {

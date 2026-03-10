@@ -25,11 +25,11 @@ export class Player {
         this.lastBlinkTime = 0;
         
         // Critical hit system
-        this.baseCritChance = 0; // 0% base critical hit chance
-        this.baseCritDamage = 150; // 150% base critical hit damage (50% extra)
+        this.baseCritChance = 5; // 5% base critical hit chance
+        this.baseCritDamage = 200; // 200% base critical hit damage (2x)
         
         // WASD + Mouse controls
-        this.thrustPower = 0.2; // Reduced thrust power to make speed upgrades more valuable
+        this.thrustPower = 0.18 * GAME_CONFIG.TICK_SCALE; // Scaled for tick rate
         
         // Auto-firing system
         this.autoFireTimer = 0;
@@ -50,7 +50,7 @@ export class Player {
         this.pausedChargeTime = 0; // Accumulated charge time when paused
         
         // Shot cooldown system
-        this.shotCooldownTime = 800; // 800ms cooldown between shots
+        this.shotCooldownTime = 400; // 400ms cooldown between shots
         this.lastShotTime = 0;
         this.canShoot = true;
         
@@ -122,24 +122,78 @@ export class Player {
     levelUp() {
         this.experience -= this.experienceToNextLevel;
         this.level++;
-        
+
         // Calculate next level requirements (exponential scaling)
         this.experienceToNextLevel = Math.floor(100 * Math.pow(1.5, this.level - 1));
-        
+
         // Grant skill points for leveling up
         this.skillPoints += 1;
-        
-        // Level up benefits (optional - can be expanded)
-        // For now, just a small health boost every few levels
+
+        // Health boost every 3 levels
         if (this.level % 3 === 0) {
             this.maxHealth += 5;
             this.health = Math.min(this.health + 5, this.maxHealth);
         }
-        
+
+        // Grant a random temporary bonus pair on level up
+        this.lastLevelUpBonus = this.grantLevelUpBonus();
+
         // Trigger level up effects
         this.triggerLevelUpEffects();
-        
-        return true; // Indicates a level up occurred
+
+        return true;
+    }
+
+    grantLevelUpBonus() {
+        // Pick 2 random upgrades to grant as temporary buffs (45 seconds)
+        const bonusPool = [
+            'RAPID_FIRE', 'MULTI_SHOT', 'HOMING', 'SPEED_BOOST',
+            'PIERCING', 'CRIT_CHANCE', 'CRIT_DAMAGE', 'LONG_RANGE',
+            'SHIELD_BOOST', 'BIG_BULLETS', 'EXPLOSIVE'
+        ];
+
+        // Shuffle and pick 2
+        const shuffled = bonusPool.sort(() => Math.random() - 0.5);
+        const picks = [shuffled[0], shuffled[1]];
+        const duration = 45000; // 45 seconds
+
+        // Track temporary bonuses for expiration
+        if (!this.tempBonuses) this.tempBonuses = [];
+
+        for (const pickId of picks) {
+            // Add 1 temporary stack
+            const config = window.gameEngine?.getPowerupConfig(pickId);
+            if (config) {
+                this.addPowerup(pickId, { ...config, duration }, false);
+                this.tempBonuses.push({
+                    id: pickId,
+                    name: config.name,
+                    expiresAt: Date.now() + duration
+                });
+            }
+        }
+
+        return picks;
+    }
+
+    updateTempBonuses() {
+        if (!this.tempBonuses || this.tempBonuses.length === 0) return;
+
+        const now = Date.now();
+        this.tempBonuses = this.tempBonuses.filter(bonus => {
+            if (now >= bonus.expiresAt) {
+                // Remove the temporary stack
+                const powerup = this.powerups.get(bonus.id);
+                if (powerup && powerup.stacks > 0) {
+                    powerup.stacks--;
+                    if (powerup.stacks <= 0) {
+                        this.powerups.delete(bonus.id);
+                    }
+                }
+                return false;
+            }
+            return true;
+        });
     }
     
     triggerLevelUpEffects() {
@@ -147,22 +201,23 @@ export class Player {
         this.levelUpAnimation = {
             active: true,
             startTime: Date.now(),
-            duration: 2000 // 2 second animation
+            duration: 2000
         };
-        
-        // Debug logging
-        console.log(`🎉 LEVEL UP! Player reached LEVEL ${this.level}!`);
-        console.log('window.gameEngine:', window.gameEngine);
-        console.log('uiManager:', window.gameEngine?.uiManager);
-        
-        // Display level up message via game engine - smaller and above shop button
+
+        // Build subtitle with bonus info
+        let subtitle = '+1 Skill Point';
+        if (this.lastLevelUpBonus && this.lastLevelUpBonus.length === 2) {
+            const ge = window.gameEngine;
+            const name1 = ge?.getPowerupConfig(this.lastLevelUpBonus[0])?.name || this.lastLevelUpBonus[0];
+            const name2 = ge?.getPowerupConfig(this.lastLevelUpBonus[1])?.name || this.lastLevelUpBonus[1];
+            subtitle += `\nBonus: ${name1} + ${name2} (45s)`;
+        }
+        if (this.level % 3 === 0) {
+            subtitle += '\n+5 Max Health';
+        }
+
         if (window.gameEngine && window.gameEngine.uiManager) {
-            console.log('✅ Showing level up message via UI manager');
-            window.gameEngine.uiManager.showMessage(`LEVEL ${this.level}!`, 'Skill Point Gained!', 3000, 'shop');
-        } else {
-            // Fallback: log to console if UI manager not available
-            console.log('❌ UI manager not available, using fallback');
-            console.log(`Player reached LEVEL ${this.level}! Skill Point Gained!`);
+            window.gameEngine.uiManager.showMessage(`LEVEL ${this.level}!`, subtitle, 4000, 'top');
         }
         
         // Create level up particles via game engine
@@ -215,28 +270,18 @@ export class Player {
         }
 
         const now = Date.now();
-        this.canShoot = (now - this.lastShotTime) >= this.shotCooldownTime;
+        this.canShoot = (now - this.lastShotTime) >= this.getEffectiveCooldown();
 
-        const hasChargeShot = this.getPowerupStacks('CHARGE_SHOT') > 0;
-
-        if (!hasChargeShot) {
-            // ── Default weapon: small uncharged bullet, autofire every cooldown ──
-            this.isCharging = false;
-            this.chargeLevel = 0;
-            this.tractorBeamActive = false;
-            this.isFullyCharged = false;
-
-            if (this.canShoot) {
-                const chargeDamageStacks = this.getPowerupStacks('CHARGE_DAMAGE');
-                const baseDamage = 1 + chargeDamageStacks;
-                this.createChargedBullets(bulletPool, 1, 1, baseDamage, 0, 0);
-                audioManager.playShoot();
-                this.lastShotTime = now;
-            }
-            return;
+        // ── Primary weapon: auto-fire rapid shots on cooldown ──
+        if (this.canShoot) {
+            const chargeDamageStacks = this.getPowerupStacks('CHARGE_DAMAGE');
+            const baseDamage = 1 + chargeDamageStacks;
+            this.createChargedBullets(bulletPool, 1, 1, baseDamage, 0, 0);
+            audioManager.playShoot();
+            this.lastShotTime = now;
         }
 
-        // ── Charge shot weapon: charge continuously, autofire when full ──
+        // ── Secondary weapon: charge shot (builds continuously, right-click to release) ──
         if (!this.isCharging) {
             this.isCharging = true;
             this.chargeStartTime = now;
@@ -245,21 +290,26 @@ export class Player {
 
         const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
         const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
-        const reducedMaxChargeTime = this.maxChargeTime - (chargeSpeedStacks * 1000);
+        const reducedMaxChargeTime = Math.max(1000, this.maxChargeTime - (chargeSpeedStacks * 1000));
 
         this.chargeLevel = Math.min(1, currentChargeTime / reducedMaxChargeTime);
 
         const isFullyCharged = currentChargeTime >= reducedMaxChargeTime;
-        this.tractorBeamActive = !isFullyCharged;
+        this.tractorBeamActive = this.isCharging && !isFullyCharged;
         this.isFullyCharged = isFullyCharged;
 
-        // Autofire: fire when fully charged and cooldown is ready
-        if (isFullyCharged && this.canShoot) {
+        // Right-click releases the charged shot (must have charged at least minChargeTime)
+        // On mobile: auto-fire when fully charged (no right-click available)
+        const shouldFire = isMobile()
+            ? isFullyCharged
+            : (input.fireSecondary && currentChargeTime >= this.minChargeTime);
+
+        if (shouldFire) {
             this.fireChargedShot(bulletPool, audioManager);
             this.isCharging = false;
             this.chargeLevel = 0;
             this.pausedChargeTime = 0;
-            this.lastShotTime = now;
+            input.fireSecondary = false;
         }
     }
     
@@ -466,14 +516,17 @@ export class Player {
     
     update(input, particlePool, bulletPool, audioManager, starPool, tractorEngaged, gameField = null) {
         if (!this.active) return;
-        
+
+        // Expire temporary level-up bonuses
+        this.updateTempBonuses();
+
         // Store previous position to track movement
         const prevX = this.x;
         const prevY = this.y;
         
         // Update invincibility timer
         if (this.invincibilityTimer > 0) {
-            this.invincibilityTimer -= 16; // Assuming 60fps, ~16ms per frame
+            this.invincibilityTimer -= GAME_CONFIG.LOGIC_TICK_MS;
             if (this.invincibilityTimer <= 0) {
                 this.invincible = false;
                 this.invincibilityTimer = 0;
@@ -563,19 +616,22 @@ export class Player {
             }
         }
 
-        // Increased friction to make movement slower and speed upgrades more valuable
-        this.vel.x *= 0.95; // More friction for slower base movement
-        this.vel.y *= 0.95;
+        // Apply friction — scaled for tick rate (equivalent to 0.988 at 30Hz)
+        const friction = Math.pow(0.988, GAME_CONFIG.TICK_SCALE);
+        this.vel.x *= friction;
+        this.vel.y *= friction;
 
         // Snap to zero once velocity is negligible — prevents endless star drift
         if (Math.abs(this.vel.x) < 0.05) this.vel.x = 0;
         if (Math.abs(this.vel.y) < 0.05) this.vel.y = 0;
 
-        // Limit velocity
+        // Limit velocity — speed boost raises the cap so upgrades feel powerful
+        const speedMultCap = this.getMovementSpeedMultiplier();
+        const effectiveMaxV = GAME_CONFIG.MAX_V * (1 + (speedMultCap - 1) * 0.7);
         const mag = Math.hypot(this.vel.x, this.vel.y);
-        if (mag > GAME_CONFIG.MAX_V) {
-            this.vel.x = (this.vel.x / mag) * GAME_CONFIG.MAX_V;
-            this.vel.y = (this.vel.y / mag) * GAME_CONFIG.MAX_V;
+        if (mag > effectiveMaxV) {
+            this.vel.x = (this.vel.x / mag) * effectiveMaxV;
+            this.vel.y = (this.vel.y / mag) * effectiveMaxV;
         }
 
         this.x += this.vel.x;
@@ -615,8 +671,8 @@ export class Player {
         // Charging shot system - charge when holding left-click, fire on release
         this.updateChargingSystem(input, bulletPool, audioManager, particlePool);
         
-        // Charge beam particle effects - re-enabled when player can shoot
-        if (this.tractorBeamActive && this.canShoot && Math.random() < 0.3) {
+        // Charge beam particle effects — always show while charging (independent of primary cooldown)
+        if (this.tractorBeamActive && Math.random() < 0.3) {
             this.spawnChargeBeamParticles(particlePool);
         }
 
@@ -772,8 +828,8 @@ export class Player {
         ctx.arc(0, -r, r * 0.075, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw charging effects when player is charging and can shoot (cooldown complete)
-        if (this.isCharging && this.canShoot) {
+        // Draw charging effects whenever charge is building (independent of primary fire cooldown)
+        if (this.isCharging) {
             this.drawChargingEffects(ctx);
         }
 
@@ -958,53 +1014,54 @@ export class Player {
     }
     
     drawCooldownTimer(ctx) {
-        const now = Date.now();
-        const timeSinceLastShot = now - this.lastShotTime;
-        const cooldownProgress = Math.min(1, timeSinceLastShot / this.shotCooldownTime);
-        
-        // Position slightly ahead of the ship tip
+        if (!this.isCharging) return;
+
         const tipX = 0;
-        const tipY = -this.radius - 14; // Offset above the ship tip
+        const tipY = -this.radius - 14;
         const timerRadius = 8;
-        
+        const charge = this.chargeLevel; // 0-1
+
         ctx.save();
-        
-        // Draw background circle (dark)
-        ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)'; // Semi-transparent gold
+
+        // Background circle
+        ctx.strokeStyle = 'rgba(100, 180, 255, 0.3)';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(tipX, tipY, timerRadius, 0, Math.PI * 2);
         ctx.stroke();
-        
-        // Draw progress arc (golden, fills up as cooldown completes)
-        if (cooldownProgress > 0) {
-            const startAngle = -Math.PI / 2; // Start at top
-            const endAngle = startAngle + (cooldownProgress * Math.PI * 2);
-            
-            ctx.strokeStyle = '#FFD700'; // Bright gold
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
-            
-            // shadowBlur on stroked arcs — ring outline needs real blur
-            if (this.canShoot) {
-                ctx.shadowColor = '#FFD700';
-                ctx.shadowBlur = 8;
+
+        // Charge arc — blue to cyan to white as it fills
+        if (charge > 0) {
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + (charge * Math.PI * 2);
+
+            if (this.isFullyCharged) {
+                // Pulsing white/cyan when fully charged
+                const pulse = 0.7 + Math.sin(Date.now() * 0.01) * 0.3;
+                ctx.strokeStyle = `rgba(200, 255, 255, ${pulse})`;
+                ctx.lineWidth = 4;
+            } else {
+                // Blue to cyan gradient as charge builds
+                const r = Math.floor(100 + charge * 155);
+                const g = Math.floor(180 + charge * 75);
+                ctx.strokeStyle = `rgb(${r}, ${g}, 255)`;
+                ctx.lineWidth = 3;
             }
+            ctx.lineCap = 'round';
 
             ctx.beginPath();
             ctx.arc(tipX, tipY, timerRadius, startAngle, endAngle);
             ctx.stroke();
 
-            // Draw center dot when fully ready
-            if (this.canShoot) {
-                ctx.fillStyle = '#FFD700';
-                ctx.shadowBlur = 4;
+            // Center dot when fully charged
+            if (this.isFullyCharged) {
+                ctx.fillStyle = '#ffffff';
                 ctx.beginPath();
-                ctx.arc(tipX, tipY, 2, 0, Math.PI * 2);
+                ctx.arc(tipX, tipY, 3, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
-        
+
         ctx.restore();
     }
     
@@ -1118,35 +1175,16 @@ export class Player {
     
     createBullets(bulletPool) {
         const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
-        const spreadShotStacks = this.getPowerupStacks('SPREAD_SHOT');
         const homingStacks = this.getPowerupStacks('HOMING');
         const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
         const piercingStacks = this.getPowerupStacks('PIERCING');
         const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
-        
-        // Debug powerup effects
-        if (multiShotStacks > 0 || spreadShotStacks > 0 || piercingStacks > 0 || explosiveStacks > 0 || homingStacks > 0) {
-        }
-        
-        // Calculate number of bullets to fire - scaling with stack levels
-        let bulletCount = 1;
-        if (multiShotStacks > 0) {
-            bulletCount += multiShotStacks; // +1 bullet per stack
-        }
-        if (spreadShotStacks > 0) {
-            // Progressive bullet count: 3, 5, 7 bullets
-            if (spreadShotStacks === 1) bulletCount = 3;
-            else if (spreadShotStacks === 2) bulletCount = 5;
-            else if (spreadShotStacks >= 3) bulletCount = 7;
-        }
-        
-        // Calculate spread angle
-        let spreadAngle = spreadShotStacks > 0 ?
-                           Math.min(0.6, spreadShotStacks * 0.15) : 0; // Max 0.6 radians spread
-        // Multi-shot without spread-shot: add small fixed spread so bullets don't overlap
-        if (bulletCount > 1 && spreadAngle === 0) {
-            spreadAngle = 0.1 * (bulletCount - 1);
-        }
+
+        // +1 bullet per multi-shot stack, spread evenly in a fan
+        const bulletCount = 1 + multiShotStacks;
+
+        // Spread scales with bullet count: gentle fan that widens per stack
+        const spreadAngle = bulletCount > 1 ? Math.min(0.8, 0.12 * (bulletCount - 1)) : 0;
 
         // Fire bullets
         for (let i = 0; i < bulletCount; i++) {
@@ -1160,32 +1198,36 @@ export class Player {
             
             const bullet = bulletPool.get(this.x, this.y, angle);
             if (bullet) {
+                // Apply range multiplier
+                bullet.rangeMultiplier = this.getRangeMultiplier();
+
                 // Calculate critical hit
                 const critChance = this.getEffectiveCritChance();
                 const isCritical = Math.random() * 100 < critChance;
-                
+
                 if (isCritical) {
                     const critDamage = this.getEffectiveCritDamage();
-                    bullet.damage = (bullet.damage || 20) * (critDamage / 100); // Default 20 base damage (scaled down)
+                    bullet.damage = (bullet.damage || 20) * (critDamage / 100);
                     bullet.isCritical = true;
-                    bullet.color = '#FFD700'; // Gold color for critical hits
+                    bullet.color = '#FFD700';
                 } else {
-                    bullet.damage = bullet.damage || 20; // Default base damage (scaled down)
+                    bullet.damage = bullet.damage || 20;
                     bullet.isCritical = false;
                 }
-                
+
                 // Apply homing effects to bullet - for regular shots, only use upgrade homing (no charge-based homing)
-                const upgradeHomingStrength = homingStacks > 0 ? Math.min(0.25, homingStacks * 0.08) : 0; // Stronger upgrade homing
-                
+                const upgradeHomingStrength = homingStacks > 0 ? Math.min(0.25, homingStacks * 0.08) : 0;
+
                 if (upgradeHomingStrength > 0) {
                     bullet.homing = true;
-                    bullet.homingStrength = upgradeHomingStrength; // Only upgrade homing for regular shots
+                    bullet.homingStrength = upgradeHomingStrength;
                 }
                 if (bigBulletStacks > 0) {
-                    bullet.radius *= (1 + bigBulletStacks * 0.3); // 30% bigger per stack
+                    bullet.radius *= (1 + bigBulletStacks * 0.3);
+                    bullet.baseRadius = bullet.radius; // Update base for shrink calc
                 }
                 if (piercingStacks > 0) {
-                    bullet.piercing = piercingStacks; // Number of enemies it can pierce
+                    bullet.piercing = piercingStacks;
                 }
                 if (explosiveStacks > 0) {
                     bullet.explosive = true;
@@ -1197,31 +1239,16 @@ export class Player {
     
     createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultiplier = 1, totalDamage = 20, critChanceBonus = 0, baseHomingStrength = 0) {
         const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
-        const spreadShotStacks = this.getPowerupStacks('SPREAD_SHOT');
         const homingStacks = this.getPowerupStacks('HOMING');
         const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
         const piercingStacks = this.getPowerupStacks('PIERCING');
         const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
-        
-        // Calculate number of bullets to fire - scaling with stack levels
-        let bulletCount = 1;
-        if (multiShotStacks > 0) {
-            bulletCount += multiShotStacks; // +1 bullet per stack
-        }
-        if (spreadShotStacks > 0) {
-            // Progressive bullet count: 3, 5, 7 bullets
-            if (spreadShotStacks === 1) bulletCount = 3;
-            else if (spreadShotStacks === 2) bulletCount = 5;
-            else if (spreadShotStacks >= 3) bulletCount = 7;
-        }
-        
-        // Calculate spread angle
-        let spreadAngle = spreadShotStacks > 0 ?
-                           Math.min(0.6, spreadShotStacks * 0.15) : 0; // Max 0.6 radians spread
-        // Multi-shot without spread-shot: add small fixed spread so bullets don't overlap
-        if (bulletCount > 1 && spreadAngle === 0) {
-            spreadAngle = 0.1 * (bulletCount - 1);
-        }
+
+        // +1 bullet per multi-shot stack, spread evenly in a fan
+        const bulletCount = 1 + multiShotStacks;
+
+        // Spread scales with bullet count: gentle fan that widens per stack
+        const spreadAngle = bulletCount > 1 ? Math.min(0.8, 0.12 * (bulletCount - 1)) : 0;
 
         // Start tracking hits for this shot
         this.startNewShot(bulletCount);
@@ -1238,15 +1265,19 @@ export class Player {
             
             const bullet = bulletPool.get(this.x, this.y, angle);
             if (bullet) {
+                // Apply range multiplier (charged shots get bonus range)
+                bullet.rangeMultiplier = this.getRangeMultiplier() * Math.max(1, speedMultiplier * 0.8);
+
                 // Set up callback for when bullet is destroyed (for combo tracking)
                 bullet.onOffScreen = () => this.onBulletDestroyed();
-                
+
                 // Apply charge scaling to bullet speed
                 bullet.vel.x *= speedMultiplier;
                 bullet.vel.y *= speedMultiplier;
                 
                 // Apply charge scaling to bullet size
                 bullet.radius *= sizeMultiplier;
+                bullet.baseRadius = bullet.radius;
                 
                 // Calculate critical hit with charge bonus
                 const baseCritChance = this.getEffectiveCritChance();
@@ -1272,7 +1303,8 @@ export class Player {
                     bullet.homingStrength = Math.min(0.4, totalHomingStrength); // Cap at 0.4 for balance
                 }
                 if (bigBulletStacks > 0) {
-                    bullet.radius *= (1 + bigBulletStacks * 0.3); // 30% bigger per stack
+                    bullet.radius *= (1 + bigBulletStacks * 0.3);
+                    bullet.baseRadius = bullet.radius;
                 }
                 if (piercingStacks > 0) {
                     bullet.piercing = piercingStacks; // Number of enemies it can pierce
@@ -1294,9 +1326,22 @@ export class Player {
     
     getMovementSpeedMultiplier() {
         const speedBoostStacks = this.getPowerupStacks('SPEED_BOOST');
-        return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.4) : 1; // Increased bonus per stack
+        // Each stack: +50% thrust, +35% max velocity (via velocity cap in update)
+        // At 6 stacks: 4x thrust, 3.1x max speed — you become a comet
+        return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.5) : 1;
     }
-    
+
+    getRangeMultiplier() {
+        const rangeStacks = this.getPowerupStacks('LONG_RANGE');
+        return 1 + rangeStacks * 0.4; // +40% range per stack
+    }
+
+    getEffectiveCooldown() {
+        const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
+        // Each stack reduces cooldown by 15% (compounding): 800 → 680 → 578 → 491 → 417 → 355
+        return Math.round(this.shotCooldownTime * Math.pow(0.85, rapidFireStacks));
+    }
+
     getEffectiveShield() {
         const baseShield = this.shield;
         const shieldBoostStacks = this.getPowerupStacks('SHIELD_BOOST');
@@ -1326,12 +1371,14 @@ export class Player {
     }
     
     getEffectiveCritDamage() {
-        const baseCritDamage = this.baseCritDamage;
         const critDamageStacks = this.getPowerupStacks('CRIT_DAMAGE');
         const critDamageBonus = critDamageStacks * 10; // +10% crit damage per stack
-        
-        const totalCritDamage = baseCritDamage + critDamageBonus;
-        return Math.min(300, totalCritDamage); // Cap at 300% (3x damage)
+
+        // Randomize between 2x (200%) and 3x (300%) base, plus stacks
+        const minCrit = this.baseCritDamage; // 200%
+        const maxCrit = 300 + critDamageBonus; // 300% + stacks
+        const totalCritDamage = minCrit + Math.random() * (maxCrit - minCrit);
+        return Math.min(500, totalCritDamage); // Cap at 500% (5x)
     }
     
     getEffectiveHealthOrbHealing(baseHealing = 1) {

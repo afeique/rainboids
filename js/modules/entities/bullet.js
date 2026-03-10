@@ -12,7 +12,7 @@ export class Bullet {
         this.height = window.innerHeight;
         this.active = false;
         // OPT: ring buffer for trail — eliminates Array.shift() O(n) per frame
-        this.maxTrailLength = 8;
+        this.maxTrailLength = 16;
         this.trail = new Array(this.maxTrailLength);
         this.trailHead = 0;
         this.trailCount = 0;
@@ -20,11 +20,12 @@ export class Bullet {
     
     reset(x, y, angle) {
         let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
-        
+
         // Use original angle without any jitter
         this.x = x + Math.cos(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
         this.y = y + Math.sin(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);
-        this.radius = 4 * scale; // Larger bullets for comet-like appearance
+        this.baseRadius = 4 * scale; // Store base for shrink calculations
+        this.radius = this.baseRadius;
         this.angle = angle; // Use the original angle
         this.vel = {
             x: Math.cos(angle) * GAME_CONFIG.BULLET_SPEED,
@@ -33,7 +34,13 @@ export class Bullet {
         this.life = 0;
         this.active = true;
         this.mass = 1;
-        
+
+        // Range/lifetime — base range ≈ half screen width (960px at BULLET_SPEED)
+        // Stacks with LONG_RANGE powerup/upgrade (+40% per stack)
+        this.maxLife = Math.round(60 / GAME_CONFIG.TICK_SCALE);
+        this.rangeMultiplier = 1.0; // Set by player before firing
+        this.fadeFactor = 1.0;
+
         // Powerup effects (will be set by player when creating bullets)
         this.homing = false;
         this.homingStrength = 0;
@@ -51,37 +58,66 @@ export class Bullet {
     startDying(impactX, impactY) {
         this.active = false;
     }
+
+    createDisappearPuff(gameEngine) {
+        if (!gameEngine || !gameEngine.particlePool) return;
+        const count = 5 + Math.floor(Math.random() * 4); // 5-8 sparkles
+        for (let i = 0; i < count; i++) {
+            const p = gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
+            if (!p) continue;
+            const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+            const speed = 0.6 + Math.random() * 1.5;
+            p.vel.x = Math.cos(angle) * speed;
+            p.vel.y = Math.sin(angle) * speed;
+            p.color = Math.random() < 0.3 ? '#ffffff' : '#FFDD00';
+            p.radius = 0.8 + Math.random() * 1.5;
+            p.life = 14 + Math.random() * 10;
+            p.friction = 0.91;
+        }
+    }
     
     update(particlePool, asteroidPool, enemyPool = null, gameEngine = null, gameField = null) {
         if (!this.active) return;
-        
+
         this.life++;
-        
+
+        // Lifetime expiry — shrink + puff when range is exhausted
+        const effectiveMaxLife = Math.round(this.maxLife * this.rangeMultiplier);
+        if (this.life >= effectiveMaxLife) {
+            this.createDisappearPuff(gameEngine);
+            this.active = false;
+            if (this.onOffScreen) this.onOffScreen();
+            return;
+        }
+
+        // Compute fade factor for final 35% of life (used by draw)
+        const remaining = 1 - this.life / effectiveMaxLife;
+        this.fadeFactor = remaining < 0.35 ? remaining / 0.35 : 1.0;
+        // Shrink radius during fade
+        this.radius = this.baseRadius * (0.3 + 0.7 * this.fadeFactor);
+
         // Homing behavior - can target both enemies and asteroids
         if (this.homing) {
             this.applyHoming(enemyPool, asteroidPool, gameEngine);
         }
-        
+
         // OPT: ring buffer trail — O(1) insert, no shifting
         this.trail[this.trailHead] = { x: this.x, y: this.y };
         this.trailHead = (this.trailHead + 1) % this.maxTrailLength;
         if (this.trailCount < this.maxTrailLength) this.trailCount++;
-        
+
         // Movement
         this.x += this.vel.x;
         this.y += this.vel.y;
-        
+
         // Boundary check (bullets disappear when off game field or screen)
         const boundaryWidth = gameField ? gameField.width : this.width;
         const boundaryHeight = gameField ? gameField.height : this.height;
-        
-        if (this.x < -50 || this.x > boundaryWidth + 50 || 
+
+        if (this.x < -50 || this.x > boundaryWidth + 50 ||
             this.y < -50 || this.y > boundaryHeight + 50) {
             this.active = false;
-            // Notify that bullet went off-screen (for combo tracking)
-            if (this.onOffScreen) {
-                this.onOffScreen();
-            }
+            if (this.onOffScreen) this.onOffScreen();
         }
     }
     
@@ -270,18 +306,22 @@ export class Bullet {
 
     draw(ctx, gameEngine = null) {
         if (!this.active) return;
-        
+
         ctx.save();
-        
+
+        // Fade opacity during final stretch of bullet life
+        const fade = this.fadeFactor !== undefined ? this.fadeFactor : 1.0;
+        ctx.globalAlpha = fade;
+
         // Get powerup-enhanced visuals
         const visualData = this.getBulletVisuals(gameEngine);
-        
+
         // Draw trail first (behind bullet)
         this.drawTrail(ctx, visualData);
-        
+
         // Apply enhanced colors (shadow effects removed for performance)
         ctx.fillStyle = visualData.color;
-        
+
         // Draw based on bullet type/powerups
         if (visualData.shape === 'star') {
             this.drawStarBullet(ctx, visualData);
@@ -295,7 +335,7 @@ export class Bullet {
             // Default circle shape
             this.drawCircleBullet(ctx, visualData);
         }
-        
+
         ctx.restore();
     }
     
@@ -337,11 +377,6 @@ export class Bullet {
                 glowColor = '#ff9933';
                 shape = 'diamond';
                 glowIntensity = 12;
-            }
-            if (powerups.has('SPREAD_SHOT')) {
-                color = '#66ddff';
-                glowColor = '#33ccff';
-                shape = 'star';
             }
             if (powerups.has('HOMING')) {
                 color = '#ff66cc';

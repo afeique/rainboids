@@ -43,11 +43,14 @@ export class ColorStar {
         this.opacityOffset = Math.random() * Math.PI * 2;
         this.twinkleSpeed = random(0.003, 0.008) * (1 + this.z * 0.2) * densityFactor; // Much slower, more gentle
         
-        // Shape selection - bias big stars toward more interesting shapes
-        if (isBigStar) {
-            // Big stars favor complex, interesting shapes to showcase variety
+        // Shape selection — foreground stars (z >= 2.0) are always simple white
+        // blinking points to avoid confusion with game entities
+        if (this.z >= 2.0) {
+            this.shape = 'point';
+            this.isBigStar = false;
+        } else if (isBigStar) {
             const interestingShapes = ['star4', 'star5', 'star6', 'star8', 'hexagon', 'diamond', 'triangle', 'sparkle', 'burst'];
-            this.shape = Math.random() < 0.8 ? 
+            this.shape = Math.random() < 0.8 ?
                         interestingShapes[Math.floor(Math.random() * interestingShapes.length)] :
                         STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
         } else {

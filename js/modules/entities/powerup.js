@@ -44,14 +44,14 @@ export const POWERUP_TYPES = {
         description: '+30% bullet size per stack'
     },
     SPEED_BOOST: {
-        name: 'Speed',
+        name: 'Afterburner',
         color: '#ffcc00',
         gradientColors: ['#ffff33', '#cc9900'],
         icon: '💨',
-        duration: 30000, // 30 seconds
+        duration: 30000,
         effect: 'speedBoost',
-        rarity: 0.3,
-        description: 'Increased movement speed'
+        rarity: 0.25,
+        description: '+50% thrust & top speed'
     },
     PIERCING: {
         name: 'Pierce',
@@ -62,16 +62,6 @@ export const POWERUP_TYPES = {
         effect: 'piercing',
         rarity: 0.15,
         description: 'Pierce through multiple enemies'
-    },
-    SPREAD_SHOT: {
-        name: 'Spread Shot',
-        color: '#33ccff',
-        gradientColors: ['#66ddff', '#0099cc'],
-        icon: '📐',
-        duration: 30000, // 30 seconds
-        effect: 'spreadShot',
-        rarity: 0.2,
-        description: 'Fire +2 bullets in wide spread'
     },
     EXPLOSIVE: {
         name: 'Explode',
@@ -101,7 +91,7 @@ export const POWERUP_TYPES = {
         duration: 30000, // 30 seconds for drops
         effect: 'critDamage',
         rarity: 0.15,
-        description: '+10% critical hit damage'
+        description: '+10% critical hit damage (2-3x base)'
     },
     SHIELD_BOOST: {
         name: 'Shield',
@@ -123,15 +113,15 @@ export const POWERUP_TYPES = {
         rarity: 0.25,
         description: '+1 health star healing'
     },
-    CHARGE_SHOT: {
-        name: 'Charge',
-        color: '#00ccff',
-        gradientColors: ['#00ffff', '#0033aa'],
-        icon: '🔮',
+    LONG_RANGE: {
+        name: 'Range',
+        color: '#88cc44',
+        gradientColors: ['#bbff66', '#448800'],
+        icon: '🏹',
         duration: 30000,
-        effect: 'chargeShot',
-        rarity: 0.08,
-        description: 'Temporary charge shot ability'
+        effect: 'longRange',
+        rarity: 0.25,
+        description: '+40% bullet range per stack'
     }
 };
 
@@ -182,19 +172,20 @@ export class Powerup {
         
         this.radius = 18; // Slightly larger for better visibility
         this.active = true;
-        this.life = 600; // 10 seconds at 60fps before despawning (start at max)
-        this.maxLife = 600;
+        this.life = 20 * GAME_CONFIG.LOGIC_HZ; // 20 seconds at logic tick rate
+        this.maxLife = this.life;
         this.pulsePhase = random(0, Math.PI * 2);
         
-        // Floating movement
+        // Floating movement (scaled for tick rate)
+        const ts = GAME_CONFIG.TICK_SCALE;
         this.vel = {
-            x: random(-0.5, 0.5),
-            y: random(-0.5, 0.5)
+            x: random(-0.5, 0.5) * ts,
+            y: random(-0.5, 0.5) * ts
         };
-        
+
         // Enhanced attraction to player when close
-        this.attractionRadius = 120; // Larger attraction radius for easier collection
-        this.attractionStrength = 0.03; // Stronger attraction
+        this.attractionRadius = 120;
+        this.attractionStrength = 0.03 * ts;
     }
     
     weightedRandomChoice(items, weights) {
@@ -214,11 +205,7 @@ export class Powerup {
     update(playerRef) {
         if (!this.active) return;
         
-        this.life--;
-        if (this.life <= 0) {
-            this.active = false;
-            return;
-        }
+        // Powerups never despawn — they stay until collected
         
         // Pulse effect
         this.pulsePhase += 0.1;
@@ -268,13 +255,7 @@ export class Powerup {
         const rotation = Date.now() * 0.003;
         ctx.rotate(rotation);
         
-        // Fade out as life decreases
-        const alpha = Math.min(1, this.life / 120); // Start fading in last 2 seconds
-        if (this.life <= 0) {
-            ctx.restore();
-            return;
-        }
-        ctx.globalAlpha = alpha;
+        // Always fully visible (powerups never despawn)
         
         // Spectacular outer aura/glow
         const glowRadius = currentRadius * 2.5;
@@ -399,7 +380,7 @@ export class Powerup {
         ctx.shadowBlur = 0;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        ctx.globalAlpha = alpha * 0.8;
+        ctx.globalAlpha = 0.8;
         
         const sparkleCount = 6;
         for (let i = 0; i < sparkleCount; i++) {
@@ -417,8 +398,24 @@ export class Powerup {
         }
         
         ctx.restore();
+
+        // Powerup name label above the icon (not rotated)
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.globalAlpha = 0.9;
+        ctx.font = 'bold 11px "Pixelify Sans", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        const labelY = -(this.radius + 14);
+        ctx.strokeText(this.config.name, 0, labelY);
+        ctx.fillStyle = this.color;
+        ctx.fillText(this.config.name, 0, labelY);
+        ctx.restore();
     }
-    
+
     checkCollision(player) {
         if (!this.active || !player.active) return false;
         

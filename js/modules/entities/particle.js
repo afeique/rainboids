@@ -1,5 +1,8 @@
 // Particle effects system
+import { GAME_CONFIG } from '../constants.js';
 import { random, glowSpriteCache } from '../utils.js';
+
+const TS = GAME_CONFIG.TICK_SCALE; // Temporal scale factor for frame-based timers
 
 export class Particle {
     constructor() {
@@ -160,107 +163,102 @@ export class Particle {
     
     update() {
         if (!this.active) return;
-        
+
         switch (this.type) {
             case 'explosion':
             case 'thrust':
             case 'phantom':
             case 'explosionRedOrange':
-                this.x += this.vel?.x || 0;
-                this.y += this.vel?.y || 0;
-                this.life -= 0.04;
+                this.x += (this.vel?.x || 0) * TS;
+                this.y += (this.vel?.y || 0) * TS;
+                this.life -= 0.04 * TS;
                 if (this.type === 'explosionRedOrange') {
-                    this.hue += random(-2, 2); // animate color
+                    this.hue += random(-2, 2);
                 }
                 break;
-                
+
             case 'phantom':
-                this.life -= 0.05;
+                this.life -= 0.05 * TS;
                 break;
-                
+
             case 'playerExplosion':
-                this.life -= 0.02;
+                this.life -= 0.02 * TS;
                 this.radius = (1 - this.life ** 2) * this.maxRadius;
                 break;
-                
+
             case 'pickupPulse':
-                this.life -= 0.04;
+                this.life -= 0.04 * TS;
                 this.radius = (1 - this.life) * this.maxRadius;
                 break;
-                
+
             case 'starBlip':
-                this.life -= this.fadeRate || 0.1;
-                this.radius += (this.growthRate || 0.15) * this.radius;
+                this.life -= (this.fadeRate || 0.1) * TS;
+                this.radius += (this.growthRate || 0.15) * this.radius * TS;
                 if (this.radius > this.maxRadius) this.radius = this.maxRadius;
                 break;
-                
+
             case 'starSparkle':
-                this.x += this.vel.x;
-                this.y += this.vel.y;
-                this.life -= 0.025;
-                this.radius *= 0.95; // Shrink as it moves
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                this.life -= 0.025 * TS;
+                this.radius *= Math.pow(0.95, TS);
                 break;
             case 'explosionPulse':
-                this.life -= 0.06;
+                this.life -= 0.06 * TS;
                 this.radius = (1 - this.life) * this.maxRadius;
                 break;
             case 'asteroidCollisionDebris':
-                this.x += this.vel.x;
-                this.y += this.vel.y;
-                // Apply velocity dampening to slow down
-                this.vel.x *= 0.92;
-                this.vel.y *= 0.92;
-                this.life -= 0.03;
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                this.vel.x *= Math.pow(0.92, TS);
+                this.vel.y *= Math.pow(0.92, TS);
+                this.life -= 0.03 * TS;
                 break;
             case 'fieryExplosionRing':
                 this.radius = (1 - this.life) * this.maxRadius;
-                this.life -= 0.025;
+                this.life -= 0.025 * TS;
                 break;
             case 'spawnRing':
                 this.radius = this.maxRadius * this.life;
-                this.life -= 0.06;
+                this.life -= 0.06 * TS;
                 break;
             case 'spawnCircle':
                 this.radius = this.maxRadius * this.life;
-                this.life -= 0.04;
+                this.life -= 0.04 * TS;
                 break;
             case 'spawnParticle': {
-                // Update target position to current player position if player reference exists
                 if (this.playerRef && this.playerRef.active) {
                     this.targetX = this.playerRef.x;
                     this.targetY = this.playerRef.y;
-                    
-                    // Recalculate velocity to track current player position
+
                     const dx = this.targetX - this.x;
                     const dy = this.targetY - this.y;
                     const distance = Math.hypot(dx, dy);
-                    
-                    if (distance > 1) { // Avoid division by zero
-                        const speed = random(0.02, 0.045);
+
+                    if (distance > 1) {
+                        const speed = random(0.02, 0.045) * TS;
                         this.vel.x = (dx / distance) * speed * distance;
                         this.vel.y = (dy / distance) * speed * distance;
                     }
                 }
-                
+
                 this.x += this.vel.x;
                 this.y += this.vel.y;
-                // Fade out as it nears the ship
-                this.life -= 0.04 + 0.02 * Math.random();
-                // Shrink as it fades
+                this.life -= (0.04 + 0.02 * Math.random()) * TS;
                 this.radius = this.baseRadius * this.life;
                 break;
             }
-            
+
             case 'shieldHit':
-                this.life -= 0.05;
-                this.radius += 2;
+                this.life -= 0.05 * TS;
+                this.radius += 2 * TS;
                 break;
 
             case 'damageNumber':
-                this.x += this.vel.x;
-                this.y += this.vel.y;
-                this.vel.y += 0.1; // Gravity effect
-                this.life -= 0.00625; // Further halved fade out rate to double lifetime again
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                this.vel.y += 0.1 * TS;
+                this.life -= 0.00625 * TS;
                 break;
         }
         
