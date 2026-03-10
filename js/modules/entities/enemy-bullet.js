@@ -1,6 +1,6 @@
 // Enemy bullets with different colors and effects
 import { GameDimensions } from '../utils.js';
-import { ENEMY_BULLET_CONFIG } from '../constants.js';
+import { ENEMY_BULLET_CONFIG, GAME_CONFIG } from '../constants.js';
 
 export class EnemyBullet {
     constructor() {
@@ -49,6 +49,10 @@ export class EnemyBullet {
         this.isPersistent = false;
         this.maxLifetimeOverride = null; // Override default 3000ms lifetime (ms)
 
+        // Distance-based range — matches player bullet range at level 1
+        // 1652px ≈ 3/4 of 1920x1080 screen diagonal
+        this.maxRange = 1652;
+
         // For mine proximity: reference to player (set by enemy that laid the mine)
         this.targetPlayer = null;
 
@@ -74,15 +78,16 @@ export class EnemyBullet {
         // Apply movement pattern
         this.applyMovementPattern();
         
-        // Update position
-        this.x += this.vel.x;
-        this.y += this.vel.y;
-        
+        // Update position (scaled for tick rate)
+        const ts = GAME_CONFIG.TICK_SCALE;
+        this.x += this.vel.x * ts;
+        this.y += this.vel.y * ts;
+
         // Update rotation
-        this.rotation += this.rotationSpeed;
-        
+        this.rotation += this.rotationSpeed * ts;
+
         // Update pattern timer
-        this.patternTimer += 0.016; // Assuming 60fps
+        this.patternTimer += GAME_CONFIG.LOGIC_TICK_MS / 1000;
         
         // Homing mine health-based death
         if (this.shape === 'mine' && this.health !== undefined && this.health <= 0) {
@@ -99,17 +104,20 @@ export class EnemyBullet {
             }
             this.life = 1.0; // Always full opacity
         } else {
-            // Gradually fade out over time
-            const maxLifetime = this.maxLifetimeOverride || 3000;
-            const age = Date.now() - this.creationTime;
-            this.life = Math.max(0, 1 - (age / maxLifetime));
+            // Distance-based range — bullet fades and dies after traveling maxRange
+            const dist = Math.hypot(this.x - this.startX, this.y - this.startY);
+            const progress = dist / this.maxRange; // 0 → 1
 
-            // Deactivate when opacity drops to 50%
-            if (this.life <= 0.5) {
+            if (progress >= 1.0) {
                 this.createDisappearEffect();
                 this.active = false;
                 return;
             }
+
+            // life stays 1.0 for first 65%, then fades 1.0→0.5 over final 35%
+            this.life = progress < 0.65
+                ? 1.0
+                : 1.0 - (progress - 0.65) / 0.35 * 0.5; // 1.0 → 0.5
         }
         
         // Check bounds - recycle if off screen (use gameField dimensions)
@@ -610,8 +618,16 @@ export class EnemyBullet {
             opacity = Math.min(fadeIn, fadeOut);
         }
 
+        // Shrink bullet during final 40% of its visible life
+        // life goes 1.0→0.5; remap so shrink starts at life=0.7 (fadeOut≤0.4)
+        const fadeOut = Math.max(0, (this.life - 0.5) * 2.0);
+        const shrink = fadeOut < 0.4 && !this.isPersistent
+            ? 0.3 + 0.7 * (fadeOut / 0.4)   // scale 0.3→1.0
+            : 1.0;
+
         ctx.globalAlpha = opacity;
         ctx.translate(this.x, this.y);
+        ctx.scale(shrink, shrink);
         ctx.rotate(this.rotation);
         
         if (this.explosive) {
@@ -630,123 +646,51 @@ export class EnemyBullet {
         if (this.shape === 'missile_shape') { this.drawMissileShape(ctx);    return; }
         if (this.shape === 'hexagon')       { this.drawHexagonBullet(ctx);   return; }
 
-        // Default: circle bullet
-        // Enhanced multi-layer glow effect for better visibility
-        const time = Date.now() * 0.005;
-        const pulseIntensity = 0.8 + Math.sin(time) * 0.2; // Subtle pulsing
-        
-        // Outer glow layer - larger and more prominent
-        const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, this.glowRadius * 1.5);
-        outerGlow.addColorStop(0, this.color + 'AA');
-        outerGlow.addColorStop(0.3, this.color + '66');
-        outerGlow.addColorStop(0.7, this.color + '33');
-        outerGlow.addColorStop(1, this.color + '00');
-        
-        ctx.globalAlpha = pulseIntensity * 0.8 * this.life;
-        ctx.fillStyle = outerGlow;
-        ctx.beginPath();
-        ctx.arc(0, 0, this.glowRadius * 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Middle glow layer
-        const middleGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, this.glowRadius);
-        middleGlow.addColorStop(0, this.color + 'CC');
-        middleGlow.addColorStop(0.5, this.color + '88');
-        middleGlow.addColorStop(1, this.color + '00');
-        
-        ctx.globalAlpha = pulseIntensity * this.life;
-        ctx.fillStyle = middleGlow;
-        ctx.beginPath();
-        ctx.arc(0, 0, this.glowRadius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Core bullet with enhanced brightness
+        // Default: crisp circle bullet — no glow halo
+        // Core bullet
         ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
         ctx.beginPath();
         ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Bright inner core for visibility
+
+        // Bright inner core
         ctx.fillStyle = '#ffffff';
         ctx.globalAlpha = 0.9 * this.life;
         ctx.beginPath();
-        ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Inner highlight with pulsing effect
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = (0.7 + pulseIntensity * 0.3) * this.life;
-        ctx.beginPath();
-        ctx.arc(-this.radius * 0.2, -this.radius * 0.2, this.radius * 0.3, 0, Math.PI * 2);
+        ctx.arc(0, 0, this.radius * 0.5, 0, Math.PI * 2);
         ctx.fill();
     }
     
     drawExplosiveBullet(ctx) {
-        // Enhanced pulsing glow effect for explosive bullets
+        // Crisp explosive bullet — no glow halo
         const pulse = Math.sin(Date.now() / 100) * 0.4 + 0.8;
-        const glowSize = this.glowRadius * pulse;
-        
-        // Outer danger glow - larger and more prominent
-        const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize * 1.8);
-        outerGlow.addColorStop(0, this.color + 'DD');
-        outerGlow.addColorStop(0.2, this.color + 'AA');
-        outerGlow.addColorStop(0.5, this.color + '66');
-        outerGlow.addColorStop(0.8, this.color + '22');
-        outerGlow.addColorStop(1, this.color + '00');
-        
-        ctx.globalAlpha = pulse * 0.9 * this.life;
-        ctx.fillStyle = outerGlow;
-        ctx.beginPath();
-        ctx.arc(0, 0, glowSize * 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Middle warning glow
-        const middleGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
-        middleGlow.addColorStop(0, this.color + 'FF');
-        middleGlow.addColorStop(0.3, this.color + 'BB');
-        middleGlow.addColorStop(0.7, this.color + '66');
-        middleGlow.addColorStop(1, this.color + '00');
-        
-        ctx.globalAlpha = pulse * this.life;
-        ctx.fillStyle = middleGlow;
-        ctx.beginPath();
-        ctx.arc(0, 0, glowSize, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Spinning core with enhanced spikes
+
+        // Spinning spikes
         ctx.globalAlpha = this.life;
         ctx.strokeStyle = this.color;
         ctx.lineWidth = 3;
         ctx.beginPath();
-        
         for (let i = 0; i < 8; i++) {
             const angle = (i / 8) * Math.PI * 2;
             const innerRadius = this.radius * 0.6;
-            const outerRadius = this.radius * (1 + pulse * 0.3); // Pulsing spikes
-            
-            const x1 = Math.cos(angle) * innerRadius;
-            const y1 = Math.sin(angle) * innerRadius;
-            const x2 = Math.cos(angle) * outerRadius;
-            const y2 = Math.sin(angle) * outerRadius;
-            
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
+            const outerRadius = this.radius * (1 + pulse * 0.3);
+            ctx.moveTo(Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius);
+            ctx.lineTo(Math.cos(angle) * outerRadius, Math.sin(angle) * outerRadius);
         }
         ctx.stroke();
-        
-        // Bright warning center core
+
+        // Solid core
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bright center
         ctx.fillStyle = '#ffffff';
         ctx.globalAlpha = pulse * this.life;
         ctx.beginPath();
-        ctx.arc(0, 0, this.radius * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Pulsing danger indicator
-        ctx.fillStyle = '#ffff00'; // Yellow warning color
-        ctx.globalAlpha = pulse * 0.8 * this.life;
-        ctx.beginPath();
-        ctx.arc(0, 0, this.radius * 0.2, 0, Math.PI * 2);
+        ctx.arc(0, 0, this.radius * 0.3, 0, Math.PI * 2);
         ctx.fill();
     }
     
@@ -791,28 +735,26 @@ export class EnemyBullet {
             return;
         }
 
-        const particleCount = 4 + Math.random() * 4; // 4-8 particles
+        // Magic smoke puff — ring of sparkles that expand, slow, and fade
+        const particleCount = 6 + Math.floor(Math.random() * 5); // 6-10 particles
 
         for (let i = 0; i < particleCount; i++) {
             const particle = gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
-            if (particle) {
-                // Random direction for spray effect
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 0.5 + Math.random() * 2; // Slow speed for subtle effect
+            if (!particle) continue;
 
-                particle.vel.x = Math.cos(angle) * speed;
-                particle.vel.y = Math.sin(angle) * speed;
+            const angle = (Math.PI * 2 * i) / particleCount + Math.random() * 0.4;
+            const speed = 0.8 + Math.random() * 1.8;
 
-                // Use the same color as the bullet
-                particle.color = this.color;
+            particle.vel.x = Math.cos(angle) * speed;
+            particle.vel.y = Math.sin(angle) * speed;
 
-                // Small particles with short life
-                particle.radius = 0.5 + Math.random() * 1.5;
-                particle.life = 15 + Math.random() * 15; // 15-30 frames
+            // Alternate between bullet color and a lighter tint for sparkle variety
+            particle.color = Math.random() < 0.35 ? '#ffffff' : this.color;
 
-                // Add some friction to make them slow down
-                particle.friction = 0.95;
-            }
+            // Start larger, then friction makes them drift to a stop
+            particle.radius = 1.0 + Math.random() * 2.0;
+            particle.life = 18 + Math.random() * 14; // 18-32 frames
+            particle.friction = 0.90; // Heavy drag — puff expands then hangs
         }
     }
     
@@ -849,23 +791,14 @@ export class EnemyBullet {
     // ctx is already rotated so that +X axis = travel direction
     drawTriangleBullet(ctx) {
         const r = this.radius;
-        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.8);
-        glow.addColorStop(0, this.color + 'BB');
-        glow.addColorStop(1, this.color + '00');
-        ctx.globalAlpha = this.life * 0.9;
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 2.8, 0, Math.PI * 2);
-        ctx.fill();
-
         ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(r * 1.1, 0);            // tip → forward
-        ctx.lineTo(-r * 0.65, -r * 0.85); // left back
-        ctx.lineTo(-r * 0.65, r * 0.85);  // right back
+        ctx.moveTo(r * 1.1, 0);
+        ctx.lineTo(-r * 0.65, -r * 0.85);
+        ctx.lineTo(-r * 0.65, r * 0.85);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
@@ -874,15 +807,6 @@ export class EnemyBullet {
     // ── Square bullet (Guardian) ─────────────────────────────────────────────
     drawSquareBullet(ctx) {
         const r = this.radius;
-        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.5);
-        glow.addColorStop(0, this.color + 'BB');
-        glow.addColorStop(1, this.color + '00');
-        ctx.globalAlpha = this.life * 0.85;
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 2.5, 0, Math.PI * 2);
-        ctx.fill();
-
         ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
         ctx.strokeStyle = '#ffffff';
@@ -903,24 +827,10 @@ export class EnemyBullet {
     // ── Needle bullet (Wasp) ─────────────────────────────────────────────────
     // ctx is rotated so +X = travel direction; draws an elongated needle
     drawNeedleBullet(ctx) {
-        const len = this.radius * 5.5; // longer needle
-        const w   = this.radius * 0.25; // thinner
+        const len = this.radius * 5.5;
+        const w   = this.radius * 0.25;
 
-        // Outer energy glow along the length
-        const gradient = ctx.createLinearGradient(-len, 0, len, 0);
-        gradient.addColorStop(0,   this.color + '00');
-        gradient.addColorStop(0.35, this.color + '88');
-        gradient.addColorStop(0.5, this.color + 'EE');
-        gradient.addColorStop(0.65, this.color + '88');
-        gradient.addColorStop(1,   this.color + '00');
-
-        ctx.globalAlpha = this.life * 0.85;
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, len, w * 2.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Core needle
+        // Core needle — crisp, no glow envelope
         ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
         ctx.beginPath();
@@ -940,18 +850,7 @@ export class EnemyBullet {
         const pulse = 0.75 + Math.sin(Date.now() * 0.006) * 0.25;
         const r = this.radius;
 
-        // Pulsing danger glow
-        const outerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.5);
-        outerGlow.addColorStop(0, this.color + 'AA');
-        outerGlow.addColorStop(0.5, this.color + '44');
-        outerGlow.addColorStop(1, this.color + '00');
-        ctx.globalAlpha = pulse * 0.7;
-        ctx.fillStyle = outerGlow;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 2.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Inner body
+        // Inner body — crisp, no glow halo
         ctx.globalAlpha = 1.0;
         ctx.fillStyle = this.color;
         ctx.strokeStyle = '#ffaa44';
@@ -961,7 +860,7 @@ export class EnemyBullet {
         ctx.fill();
         ctx.stroke();
 
-        // Spikes (8 of them)
+        // Spikes
         const innerR = r * 0.55;
         const outerR = r * 1.05;
         ctx.strokeStyle = '#ffcc44';
@@ -984,18 +883,7 @@ export class EnemyBullet {
 
     drawHexagonBullet(ctx) {
         const r = this.radius;
-        // Outer glow
-        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.6);
-        glow.addColorStop(0,   this.color + 'AA');
-        glow.addColorStop(0.5, this.color + '44');
-        glow.addColorStop(1,   this.color + '00');
-        ctx.globalAlpha = this.life * 0.85;
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 2.6, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Hexagon body (already rotated by ctx.rotate(this.rotation) in drawBullet)
+        // Hexagon body — crisp, no glow
         ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
         ctx.strokeStyle = '#ffffff';
@@ -1019,20 +907,8 @@ export class EnemyBullet {
     }
 
     drawMissileShape(ctx) {
-        // Elongated missile: rounded nose (+x), swept fins at tail, engine glow
-        // drawBullet already applied ctx.rotate(this.rotation), so +x = forward
+        // Elongated missile — crisp, no glow halo
         const r = this.radius;
-
-        // Outer glow halo
-        const haloGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.8);
-        haloGrad.addColorStop(0,   this.color + '55');
-        haloGrad.addColorStop(0.5, this.color + '22');
-        haloGrad.addColorStop(1,   'rgba(0,0,0,0)');
-        ctx.globalAlpha = this.life * 0.8;
-        ctx.fillStyle = haloGrad;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 2.8, 0, Math.PI * 2);
-        ctx.fill();
         ctx.globalAlpha = this.life;
 
         // ── Main body with rounded nose ───────────────────────────────────────

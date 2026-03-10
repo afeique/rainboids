@@ -1,12 +1,12 @@
 // Game constants and configuration
 export const GAME_CONFIG = {
     SHIP_SIZE: 30,
-    SHIP_THRUST: 0.15,
-    SHIP_FRICTION: 0.995,
-    MAX_V: 3,
-    BULLET_SPEED: 12,
+    SHIP_THRUST: 0.12,
+    SHIP_FRICTION: 0.993,
+    MAX_V: 7 * (30 / 45),              // Scaled from 7 px/tick @30Hz
+    BULLET_SPEED: 16 * (30 / 45),    // Scaled from 16 px/tick @30Hz
     INITIAL_AST_COUNT: 1, // Minimal asteroid count for best performance
-    AST_SPEED: 2.2,
+    AST_SPEED: 3.5 * (30 / 45),       // Scaled from 3.5 px/tick @30Hz
     MAX_WAVE_ASTEROIDS: 12, // Hard cap: max asteroids per wave (Wave 1 uses 12 — the proven safe limit)
     COLOR_STAR_COUNT: 25, // Increased for visual appeal while maintaining performance
     BACKGROUND_STAR_COUNT: 30, // Increased for richer starfield while maintaining performance
@@ -25,8 +25,8 @@ export const GAME_CONFIG = {
     HEALTH_ORB_SIZE_MAX: 2.5, // Maximum size multiplier for health orbs
     
     // Money Orb Configuration (renamed from money stars)
-    MONEY_ORB_MONEY_AMOUNT_MIN: 15, // Minimum money gained per money orb
-    MONEY_ORB_MONEY_AMOUNT_MAX: 50, // Maximum money gained per money orb
+    MONEY_ORB_MONEY_AMOUNT_MIN: 25, // Minimum money gained per money orb
+    MONEY_ORB_MONEY_AMOUNT_MAX: 75, // Maximum money gained per money orb
     MONEY_ORB_BASE_DROP_RATE: 0.5, // 50% base chance to drop money orbs
     MONEY_ORB_BASE_DROP_COUNT_MIN: 1, // Minimum money orbs dropped
     MONEY_ORB_BASE_DROP_COUNT_MAX: 3, // Maximum money orbs dropped
@@ -53,17 +53,22 @@ export const GAME_CONFIG = {
     ENEMIES_PER_SUB_WAVE: 1, // Enemies per sub-wave - reduced for performance
     SUB_WAVES_PER_WAVE: 4, // Number of enemy sub-waves per wave - increased from 3
     SUB_WAVE_TIMEOUT: 20000, // Auto-progress sub-wave after 20 seconds (ms) - reduced from 2 minutes
-    WAVE_BREAK_TIME: 24000, // Time between waves (ms) - doubled again for maximum strategic planning
+    WAVE_BREAK_TIME: 10000, // Time between waves (ms)
     
     // Performance settings optimized
-    MAX_PARTICLES: 30, // Reduced for better performance 
+    MAX_PARTICLES: 30, // Reduced for better performance
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
+
+    // Temporal settings
+    LOGIC_HZ: 45,                        // Logic tick rate (Hz)
+    LOGIC_TICK_MS: 1000 / 45,            // Milliseconds per logic tick
+    TICK_SCALE: 30 / 45,                 // Scale factor for frame-based timers calibrated at 30Hz
 };
 
 // Enemy Bullet Configuration
 export const ENEMY_BULLET_CONFIG = {
     // Global bullet speed scaling
-    BASE_SPEED_MULTIPLIER: 0.7, // Make all enemy shots 30% slower by default
+    BASE_SPEED_MULTIPLIER: 0.85, // Slightly slower than player bullets
     LEVEL_SPEED_BONUS_PER_LEVEL: 0.08, // 8% speed increase per level
     MAX_LEVEL_SPEED_BONUS: 0.4, // Maximum 40% speed increase (reached at level 6+)
     
@@ -126,18 +131,18 @@ export const ENEMY_BULLET_CONFIG = {
     },
     
     // Enemy firing rate cooldowns (in milliseconds)
-    // Lower values = faster firing, scales with enemy level
+    // MIN = fast (high level), MAX = slow (level 1 — dumb punching bags)
     ENEMY_FIRING_COOLDOWNS: {
-        HUNTER: { MIN: 800, MAX: 1800 },        // Fast burst shooter
-        GUARDIAN: { MIN: 3000, MAX: 6000 },     // Slow but devastating
-        WASP: { MIN: 600, MAX: 1200 },          // Rapid pulse shooter
-        TITAN: { MIN: 1200, MAX: 2500 },        // Tank missiles
-        STALKER: { MIN: 2000, MAX: 4000 },      // Charged laser
-        TANGERINE: { MIN: 2500, MAX: 5000 }, // Slow homing missiles
-        DRIFTER: { MIN: 2000, MAX: 4000 },      // Laser turret
-        PROWLER: { MIN: 1000, MAX: 2200 },      // Missile turret
-        WEAVER: { MIN: 400, MAX: 800 },         // Rapid pulse turret
-        SENTINEL: { MIN: 1800, MAX: 3500 },     // Shield burst turret
+        HUNTER: { MIN: 800, MAX: 3000 },        // Fast burst shooter
+        GUARDIAN: { MIN: 3000, MAX: 8000 },     // Slow but devastating
+        WASP: { MIN: 600, MAX: 2000 },          // Rapid pulse shooter
+        TITAN: { MIN: 1200, MAX: 4000 },        // Tank missiles
+        STALKER: { MIN: 2000, MAX: 6000 },      // Charged laser
+        TANGERINE: { MIN: 2500, MAX: 7000 },    // Slow homing missiles
+        DRIFTER: { MIN: 2000, MAX: 5500 },      // Laser turret
+        PROWLER: { MIN: 1000, MAX: 3500 },      // Missile turret
+        WEAVER: { MIN: 400, MAX: 1600 },        // Rapid pulse turret
+        SENTINEL: { MIN: 1800, MAX: 5000 },     // Shield burst turret
     }
 };
 

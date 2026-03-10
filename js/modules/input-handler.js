@@ -8,10 +8,11 @@ export class InputHandler {
             down: false,
             left: false,
             right: false,
-            fire: false, // Keep for potential future use
-            aimX: window.innerWidth / 2, // World coordinates for gameplay
+            fire: false,
+            fireSecondary: false, // Right-click: release charged shot
+            aimX: window.innerWidth / 2,
             aimY: window.innerHeight / 2,
-            screenAimX: window.innerWidth / 2, // Screen coordinates for UI elements
+            screenAimX: window.innerWidth / 2,
             screenAimY: window.innerHeight / 2,
         };
         
@@ -78,19 +79,22 @@ export class InputHandler {
                 }
             }
         });
+        // Prevent right-click context menu on the game canvas
+        document.addEventListener('contextmenu', e => {
+            e.preventDefault();
+        });
         document.addEventListener('mousedown', e => {
-            // Skip mouse input on mobile devices
-            if (isMobile()) {
-                return;
+            if (isMobile()) return;
+            if (e.button === 2) {
+                // Right-click: fire charged shot (secondary)
+                this.input.fireSecondary = true;
             }
-            this.input.fire = true;
         });
         document.addEventListener('mouseup', e => {
-            // Skip mouse input on mobile devices
-            if (isMobile()) {
-                return;
+            if (isMobile()) return;
+            if (e.button === 2) {
+                this.input.fireSecondary = false;
             }
-            this.input.fire = false;
         });
     }
     

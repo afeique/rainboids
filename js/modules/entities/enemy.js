@@ -12,112 +12,112 @@ export const ENEMY_TYPES = {
     HUNTER: {
         name: 'Hunter',
         color: '#ff4444',        // Red
-        health: 4,
+        health: 8,
         speed: 1.6,
-        size: 25,
+        size: 38,
         shootPattern: 'hunter_single',
         shootRate: 1.5,
-        movePattern: 'triangle',   // Triangle geometric movement
-        points: 50
+        movePattern: 'triangle',
+        points: 75
     },
     GUARDIAN: {
         name: 'Guardian',
         color: '#44ff44',        // Green
-        health: 6,
-        speed: 1.0,              // Reduced from 1.4 - slower patrol movement
-        size: 38,
-        shootPattern: 'guardian_spread', // Fan of sinusoidal square shots
+        health: 16,
+        speed: 1.0,
+        size: 57,
+        shootPattern: 'guardian_spread',
         shootRate: 0.3,
-        movePattern: 'square',     // Square geometric movement
-        points: 75
+        movePattern: 'square',
+        points: 120
     },
     WASP: {
         name: 'Wasp',
         color: '#ffff44',        // Yellow
-        health: 3,
-        speed: 2.8,              // Fast burst speed
-        size: 28,
-        shootPattern: 'wasp_machinegun', // Machine-gun spinning triangles with sine wave
+        health: 7,
+        speed: 2.8,
+        size: 42,
+        shootPattern: 'wasp_machinegun',
         shootRate: 0.7,
-        movePattern: 'wasp_zigzag', // Zigzag N times then cooldown
-        points: 35
+        movePattern: 'wasp_zigzag',
+        points: 60
     },
     TITAN: {
         name: 'Titan',
         color: '#ff44ff',        // Magenta
-        health: 8,
-        speed: 1.2,              // Lumbering but not too slow
-        size: 50,                // Large tank
-        shootPattern: 'sweep_laser', // Very long sweeping purple laser
-        shootRate: 0.15,         // Slow - sweep laser handles its own timing
-        movePattern: 'boulder',  // Gain momentum toward player, brake past them
-        points: 120
+        health: 30,
+        speed: 1.2,
+        size: 75,
+        shootPattern: 'sweep_laser',
+        shootRate: 0.15,
+        movePattern: 'boulder',
+        points: 200
     },
     STALKER: {
         name: 'Stalker',
         color: '#44ffff',        // Cyan
-        health: 5,
-        speed: 2.5,              // Higher speed for swooping arcs
-        size: 30,
+        health: 10,
+        speed: 2.5,
+        size: 45,
         shootPattern: 'charged_laser',
-        shootRate: 0.3,          // Slower rate for powerful laser attacks
-        movePattern: 'arc',      // Arc swooping movement
-        points: 45
+        shootRate: 0.3,
+        movePattern: 'arc',
+        points: 80
     },
     TANGERINE: {
         name: 'Bomber',
         color: '#ff8844',        // Orange
-        health: 6,
-        speed: 1.6,              // Faster roaming patrol bomber
-        size: 35,
-        shootPattern: 'lay_mine', // Drops proximity mines
-        shootRate: 0.4,          // Drops mines more regularly
-        movePattern: 'chase',    // Slowly but surely pursues player
-        points: 65
+        health: 12,
+        speed: 1.6,
+        size: 53,
+        shootPattern: 'lay_mine',
+        shootRate: 0.4,
+        movePattern: 'chase',
+        points: 100
     },
     DRIFTER: {
         name: 'Drifter',
         color: '#00ffff',        // Cyan
-        health: 5,
-        speed: 2.5,              // Zippy — sinusoidal wave orbit
-        size: 30,
-        shootPattern: 'arc_lightning', // Charged arc lightning bolt toward player
+        health: 11,
+        speed: 2.5,
+        size: 45,
+        shootPattern: 'arc_lightning',
         shootRate: 0.1,
-        movePattern: 'drifter_wave',   // Sinusoidal wave at fixed distance from player
-        points: 80
+        movePattern: 'drifter_wave',
+        points: 120
     },
     PROWLER: {
         name: 'Prowler',
         color: '#ff00ff',        // Magenta
-        health: 7,
-        speed: 0.6,              // Slow, lumbering mini-tank
-        size: 35,                // Larger mini-tank
+        health: 18,
+        speed: 0.6,
+        size: 53,
         shootPattern: 'missile',
-        shootRate: 0.5,          // Medium rate for missile turret
-        movePattern: 'keep_distance', // Keep distance from player
-        points: 100
+        shootRate: 0.5,
+        movePattern: 'keep_distance',
+        points: 150
     },
     WEAVER: {
         name: 'Weaver',
         color: '#ffff00',        // Yellow
-        health: 4,
-        speed: 2.2,              // Fast arc dash speed
-        size: 25,
-        shootPattern: 'spiral_laser', // Spiral lasers during arc phase
+        health: 8,
+        speed: 2.2,
+        size: 38,
+        shootPattern: 'spiral_laser',
         shootRate: 1.0,
-        movePattern: 'weaver_spinup', // Spin up → zoom arc while firing → cooldown
-        points: 70
+        movePattern: 'weaver_spinup',
+        points: 100
     },
     SENTINEL: {
         name: 'Sentinel',
         color: '#00ff00',        // Green
-        health: 6,
-        speed: 2.0,              // Fast arc dash (same as Weaver)
-        size: 32,
-        shootPattern: 'sentinel_sweep', // 360° rotating green laser during arc phase
+        health: 14,
+        speed: 2.0,
+        size: 48,
+        shootPattern: 'sentinel_sweep',
         shootRate: 1.0,
-        movePattern: 'weaver_spinup', // Spin up → zoom arc while firing → cooldown
-        points: 100
+        movePattern: 'weaver_spinup',
+        points: 140
     }
 };
 
@@ -146,8 +146,8 @@ export class Enemy {
         this.x = x !== undefined ? x : random(0, fieldWidth);
         this.y = y !== undefined ? y : random(0, fieldHeight);
         
-        // Scale health based on level (35% increase per level)
-        const levelMultiplier = 1 + (this.level - 1) * 0.35;
+        // Scale health based on level (15% increase per level — gentle curve)
+        const levelMultiplier = 1 + (this.level - 1) * 0.15;
         this.maxHealth = Math.round(this.config.health * levelMultiplier);
         this.health = this.maxHealth;
         
@@ -166,8 +166,8 @@ export class Enemy {
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
         
-        // Scale speed based on level (20% increase per level)
-        const speedMultiplier = 1 + (this.level - 1) * 0.2;
+        // Scale speed based on level (10% increase per level — gentle curve)
+        const speedMultiplier = 1 + (this.level - 1) * 0.1;
         const scaledSpeed = this.config.speed * speedMultiplier;
         
         // Initialize movement
@@ -308,14 +308,137 @@ export class Enemy {
     
     // Get level-scaled damage for enemy attacks
     getLevelScaledDamage(baseDamage) {
-        const levelMultiplier = 1 + (this.level - 1) * 0.25; // 25% damage increase per level
+        const levelMultiplier = 1 + (this.level - 1) * 0.25;
         return Math.round(baseDamage * levelMultiplier);
     }
 
-    
+    startWarpIn(targetX, targetY) {
+        this.warping = true;
+        this.warpTargetX = targetX;
+        this.warpTargetY = targetY;
+        this.warpStartX = this.x;
+        this.warpStartY = this.y;
+        this.warpStartTime = Date.now();
+        // Star Trek style: fast stretch toward target, then snap into place
+        const dist = Math.hypot(targetX - this.x, targetY - this.y);
+        this.warpDuration = Math.min(1200, 400 + dist * 0.4); // 400-1200ms based on distance
+        this.warpAngle = Math.atan2(targetY - this.y, targetX - this.x);
+        this.faceAngle = this.warpAngle; // Face the warp direction
+        this.warpTrail = []; // Store trail positions for streak effect
+    }
+
+    updateWarpIn() {
+        const now = Date.now();
+        const elapsed = now - this.warpStartTime;
+        const t = Math.min(1, elapsed / this.warpDuration);
+
+        // Star Trek warp curve: slow start, massive acceleration, snap to stop
+        // Ease-in-cubic for first 70%, then ease-out for final 30%
+        let progress;
+        if (t < 0.7) {
+            // Accelerating phase — cubic ease-in (slow then fast)
+            const p = t / 0.7;
+            progress = p * p * p * 0.7;
+        } else {
+            // Deceleration snap — ease-out (fast then stop)
+            const p = (t - 0.7) / 0.3;
+            progress = 0.7 + (1 - Math.pow(1 - p, 3)) * 0.3;
+        }
+
+        this.x = this.warpStartX + (this.warpTargetX - this.warpStartX) * progress;
+        this.y = this.warpStartY + (this.warpTargetY - this.warpStartY) * progress;
+
+        // Store trail points for the streak effect
+        this.warpTrail.push({ x: this.x, y: this.y, time: now });
+        // Keep trail to last 600ms
+        while (this.warpTrail.length > 0 && now - this.warpTrail[0].time > 600) {
+            this.warpTrail.shift();
+        }
+
+        if (t >= 1) {
+            this.warping = false;
+            this.x = this.warpTargetX;
+            this.y = this.warpTargetY;
+            this.warpTrail = [];
+        }
+    }
+
+    drawWarpEffect(ctx) {
+        if (!this.warping || this.warpTrail.length < 2) return;
+
+        const now = Date.now();
+        const elapsed = now - this.warpStartTime;
+        const t = Math.min(1, elapsed / this.warpDuration);
+
+        ctx.save();
+
+        // Star Trek warp streak: elongated light trail behind the ship
+        // The trail stretches in the direction of travel
+        const dx = Math.cos(this.warpAngle);
+        const dy = Math.sin(this.warpAngle);
+
+        // Stretch factor: peaks during acceleration phase (t ~0.4-0.7)
+        const stretchIntensity = t < 0.3 ? t / 0.3
+            : t < 0.7 ? 1.0
+            : 1.0 - (t - 0.7) / 0.3;
+        const streakLength = this.radius * (3 + stretchIntensity * 12); // Up to 15x radius
+
+        // Draw the warp streak — bright core fading to transparent tail
+        const gradient = ctx.createLinearGradient(
+            this.x - dx * streakLength, this.y - dy * streakLength,
+            this.x + dx * this.radius, this.y + dy * this.radius
+        );
+
+        const c = this.color;
+        gradient.addColorStop(0, 'rgba(255,255,255,0)');
+        gradient.addColorStop(0.3, c + '33');
+        gradient.addColorStop(0.7, c + '99');
+        gradient.addColorStop(0.9, '#ffffffcc');
+        gradient.addColorStop(1, '#ffffffff');
+
+        // Draw tapered streak shape
+        const perpX = -dy;
+        const perpY = dx;
+        const headWidth = this.radius * (0.8 + stretchIntensity * 0.5);
+        const tailWidth = this.radius * 0.15;
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(this.x + perpX * headWidth, this.y + perpY * headWidth);
+        ctx.lineTo(this.x - perpX * headWidth, this.y - perpY * headWidth);
+        ctx.lineTo(this.x - dx * streakLength - perpX * tailWidth,
+                   this.y - dy * streakLength - perpY * tailWidth);
+        ctx.lineTo(this.x - dx * streakLength + perpX * tailWidth,
+                   this.y - dy * streakLength + perpY * tailWidth);
+        ctx.closePath();
+        ctx.fill();
+
+        // Bright flash at arrival point when snapping in (final 20%)
+        if (t > 0.8) {
+            const flashAlpha = (1 - (t - 0.8) / 0.2) * 0.6;
+            const flashRadius = this.radius * (2 + (1 - flashAlpha) * 3);
+            const flash = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, flashRadius);
+            flash.addColorStop(0, `rgba(255,255,255,${flashAlpha})`);
+            flash.addColorStop(0.4, c + Math.round(flashAlpha * 99).toString(16).padStart(2, '0'));
+            flash.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = flash;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, flashRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
     update(playerRef, gameEngine, gameField = null) {
         if (!this.active) return;
-        
+
+        // Handle warp-in — skip normal AI during warp
+        if (this.warping) {
+            this.updateWarpIn();
+            return;
+        }
+
         this.targetPlayer = playerRef;
         
         // Calculate distance to player
@@ -398,9 +521,9 @@ export class Enemy {
         // Add fish-like swimming motion
         this.addFishLikeMovement();
         
-        // Update position
-        this.x += this.vel.x;
-        this.y += this.vel.y;
+        // Update position (scaled for tick rate)
+        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
+        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
         
         // Update light trail
         this.updateLightTrail();
@@ -4074,7 +4197,13 @@ export class Enemy {
     
     createEnemyBullet(gameEngine, angle, speed, color, explosive = false, movementPattern = 'aimed', target = null) {
         if (!gameEngine.enemyBulletPool) return null;
-        
+
+        // Accuracy jitter — low-level enemies aim poorly (up to ±0.35 rad at level 1, 0 at level 5+)
+        const aimJitter = Math.max(0, 0.35 * (1 - (this.level - 1) / 4));
+        if (aimJitter > 0) {
+            angle += (Math.random() - 0.5) * 2 * aimJitter;
+        }
+
         // Apply level scaling to bullet speed using constants
         // Titan rockets are exempt from global speed reduction for better effectiveness
         const isTitanRocket = movementPattern === 'titan_rocket';
@@ -4149,17 +4278,9 @@ export class Enemy {
             bullet.patternTimer = 0;
             bullet.patternPhase = Math.random() * Math.PI * 2; // Random starting phase
             
-            // Apply lifetime scaling based on bullet type and level
-            const lifetimeLimits = ENEMY_BULLET_CONFIG.LIFETIME_LIMITS[movementPattern.toUpperCase()];
-            if (lifetimeLimits && !bullet.life) { // Don't override if already set (like laser bullets)
-                const baseLifeMultiplier = ENEMY_BULLET_CONFIG.BASE_LIFE_MULTIPLIER;
-                const levelLifeBonus = Math.min(
-                    ENEMY_BULLET_CONFIG.MAX_LEVEL_LIFE_BONUS,
-                    (this.level - 1) * ENEMY_BULLET_CONFIG.LEVEL_LIFE_BONUS_PER_LEVEL
-                );
-                const scaledLife = lifetimeLimits.MIN * baseLifeMultiplier * (1 + levelLifeBonus);
-                bullet.life = Math.max(lifetimeLimits.MIN, Math.min(lifetimeLimits.MAX, scaledLife));
-            }
+            // Scale bullet range with enemy level — 12% more range per level
+            // Base 1652px (3/4 screen diagonal) matches player base range
+            bullet.maxRange = 1652 * (1 + (this.level - 1) * 0.12);
             
             // For homing missiles and homing shots, provide player reference
             if (movementPattern === 'missile' || movementPattern === 'homing' || movementPattern === 'titan_homing') {
@@ -4178,6 +4299,11 @@ export class Enemy {
     
     draw(ctx) {
         if (!this.active) return;
+
+        // Draw warp streak effect (behind everything)
+        if (this.warping) {
+            this.drawWarpEffect(ctx);
+        }
 
         // Draw laser targeting line first (behind everything else)
         if (this.type === 'DRIFTER' && this.laserCharging && this.laserCharge > 0) {
@@ -5909,6 +6035,9 @@ export class Enemy {
     }
     
     takeDamage(damage) {
+        // Invulnerable during warp-in
+        if (this.warping) return false;
+
         this.health -= damage;
         
         // Create damage number

@@ -52,6 +52,13 @@ export class Asteroid {
         
         this.active = true;
         this.creationTime = Date.now();
+
+        // Unique color palette per asteroid
+        this.baseHue = Math.random() * 360;           // random starting hue
+        this.hueSpread = 40 + Math.random() * 120;    // 40-160° spread across edges
+        this.hueCycleSpeed = 8 + Math.random() * 24;  // how fast the hue shifts (ms divisor)
+        this.saturation = 85 + Math.random() * 15;    // 85-100%
+        this.lightness = 65 + Math.random() * 15;     // 65-80%
         
         this.rescale(radius || random(30, 60));
 
@@ -61,36 +68,19 @@ export class Asteroid {
         let health;
         const sizeRef = this.baseRadius || this.radius;
         
-        if (this.level === 1) {
-            // Level 1 asteroids: Reduced health for better early game balance
-            if (sizeRef >= 40) {
-                // Big Level 1 asteroids: 4-7 health
-                baseHealth = Math.floor(4 + (sizeRef - 40) / 20 * 3); // Scale from 4 to 7 based on radius 40-60
-            } else if (sizeRef >= 20) {
-                // Medium Level 1 asteroids: 2-4 health
-                baseHealth = Math.floor(2 + (sizeRef - 20) / 20 * 2); // Scale from 2 to 4 based on radius 20-40
-            } else {
-                // Small Level 1 asteroids: 1-3 health
-                baseHealth = Math.floor(1 + (sizeRef - 10) / 10 * 2); // Scale from 1 to 3 based on radius 10-20
-            }
-            health = baseHealth; // No level multiplier for Level 1
+        // Every asteroid is a threat — fragments are NOT free kills.
+        // Health is independent of parent; small rocks are still tough.
+        if (sizeRef >= 40) {
+            baseHealth = Math.floor(14 + (sizeRef - 40) / 20 * 10); // 14-24
+        } else if (sizeRef >= 20) {
+            baseHealth = Math.floor(8 + (sizeRef - 20) / 20 * 6);  // 8-14
         } else {
-            // Higher level asteroids: Original scaling system
-            if (sizeRef >= 40) {
-                // Big asteroids: 12-18 base health
-                baseHealth = Math.floor(12 + (sizeRef - 40) / 20 * 6); // Scale from 12 to 18 based on radius 40-60
-            } else if (sizeRef >= 20) {
-                // Medium asteroids: 8-12 base health
-                baseHealth = Math.floor(8 + (sizeRef - 20) / 20 * 4); // Scale from 8 to 12 based on radius 20-40
-            } else {
-                // Small asteroids: 4-8 base health
-                baseHealth = Math.floor(4 + (sizeRef - 10) / 10 * 4); // Scale from 4 to 8 based on radius 10-20
-            }
-            
-            // Scale health based on level (30% increase per level)
-            const levelMultiplier = 1 + (this.level - 1) * 0.3;
-            health = Math.round(baseHealth * levelMultiplier);
+            baseHealth = Math.floor(5 + (sizeRef - 5) / 15 * 5);   // 5-10
         }
+
+        // Level scaling: +25% per level beyond 1
+        const levelMultiplier = 1 + (this.level - 1) * 0.25;
+        health = Math.round(baseHealth * levelMultiplier);
         
         this.maxHealth = Math.max(1, health); // Ensure minimum 1 health
         this.health = this.maxHealth;
@@ -188,8 +178,8 @@ export class Asteroid {
             this.vel.y = (this.vel.y / currentSpeed) * maxSpeed;
         }
         
-        this.x += this.vel.x;
-        this.y += this.vel.y;
+        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
+        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
         
         // Boundary bouncing instead of wrapping
         if (gameField) {
@@ -385,7 +375,7 @@ export class Asteroid {
 
             const avg = (v1.depth + v2.depth) / 2;
             const alpha = Math.max(0.2, Math.pow(Math.max(0, (this.fov - avg) / (this.fov + this.radius)), 2.0));
-            const hue   = (now / 20 + i * 10) % 360;
+            const hue   = (this.baseHue + now / this.hueCycleSpeed + (i / this.edges.length) * this.hueSpread) % 360;
 
             // Map alpha [0.2, 1.0] → bucket index [0, 4]
             const bi = Math.min(BUCKETS - 1, Math.floor((alpha - 0.2) / 0.8 * BUCKETS));
@@ -402,7 +392,7 @@ export class Asteroid {
             const hue   = bucketHue[bi] / bucketCount[bi]; // average hue
 
             ctx.globalAlpha = alpha;
-            ctx.strokeStyle = `hsl(${hue}, 100%, 75%)`;
+            ctx.strokeStyle = `hsl(${hue}, ${this.saturation}%, ${this.lightness}%)`;
             ctx.beginPath();
             for (let j = 0; j < edges.length; j += 3) {
                 ctx.moveTo(edges[j].x, edges[j].y);
