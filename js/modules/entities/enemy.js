@@ -1,6 +1,6 @@
 // Enhanced enemy system with multiple types and behaviors
 import { GAME_CONFIG, ENEMY_BULLET_CONFIG, getEnemyFiringCooldown } from '../constants.js';
-import { random, GameDimensions, glowSpriteCache } from '../utils.js';
+import { random, GameDimensions } from '../utils.js';
 import { rgba } from '../color-cache.js';
 
 // ── Feature toggles ────────────────────────────────────────────────────────
@@ -4456,9 +4456,6 @@ export class Enemy {
         const pulse = 0.82 + Math.sin(t * 3.8) * 0.18;
 
         ctx.save();
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#ff4444', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // ── Main elongated body ───────────────────────────────────────────────
         ctx.fillStyle = '#1a0000';
@@ -4622,9 +4619,6 @@ export class Enemy {
         const chargeBoost = charging ? 1.5 : 1.0;
 
         ctx.save();
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#00ffff', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // ── Outer arc-discharge ring ──────────────────────────────────────────
         const outerPts = 18;
@@ -4719,9 +4713,6 @@ export class Enemy {
         const pulse = 0.75 + Math.sin(t * 2.5) * 0.25;
 
         ctx.save();
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#cc44ff', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // ── Main armored hull (angular hexagon) ──────────────────────────────
         ctx.fillStyle = '#1a0028';
@@ -4839,9 +4830,6 @@ export class Enemy {
 
         // Outer glow ring scales with charge
         if (charge > 0.05) {
-            // OPT-2: pre-rendered glow sprite replaces live GPU blur
-            glowSpriteCache.draw(ctx, 0, 0, '#ffff00', size * 1.5, size * 0.8, charge * 0.4);
-            ctx.globalAlpha = charge * 0.5;
             ctx.shadowBlur = 0;
             ctx.shadowColor = '#ffff00';
             ctx.strokeStyle = '#ffff44';
@@ -4889,9 +4877,6 @@ export class Enemy {
         // Central core — white-hot when fully charged
         const coreColor = charge > 0.8 ? '#ffffff' : this.color;
         ctx.fillStyle = coreColor;
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        if (charge > 0.5) glowSpriteCache.draw(ctx, 0, 0, '#ffff00', size * 0.5, size * 0.4, 0.5);
-        ctx.shadowBlur = 0;
         ctx.shadowColor = '#ffff00';
         ctx.beginPath();
         ctx.arc(0, 0, size * (0.28 + charge * 0.12), 0, Math.PI * 2);
@@ -4907,9 +4892,6 @@ export class Enemy {
         const spinAngle = t * 0.8; // independent slow spin for decoration
 
         ctx.save();
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#00ff44', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // ── Outer rotating hex ring ──────────────────────────────────────────
         ctx.save();
@@ -5000,9 +4982,6 @@ export class Enemy {
         const pulse = 0.85 + Math.sin(t * 6) * 0.15; // fast flicker like an insect
 
         ctx.save();
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#ffff00', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // ── Engine exhaust glow (behind body) ────────────────────────────────
         for (const side of [-1, 1]) {
@@ -5123,9 +5102,6 @@ export class Enemy {
         const pulse = 0.8 + Math.sin(Date.now() * 0.004) * 0.2;
 
         ctx.save();
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#00ff44', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // ── Outer shield ring ────────────────────────────────────────────────
         ctx.strokeStyle = rgba(0, 255, 80, 0.35 * pulse);
@@ -5249,9 +5225,6 @@ export class Enemy {
         const pulse = 0.85 + Math.sin(Date.now() * 0.003) * 0.15; // 0.7–1.0 pulse
 
         ctx.save();
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#ff00ff', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // ── Outer armor ring (thick hex outline) ─────────────────────────────
         ctx.lineWidth = 4;
@@ -5345,9 +5318,6 @@ export class Enemy {
         const turretAngle = this.tankTurretAngle || 0;
         const relativeAngle = turretAngle - (this.faceAngle || 0);
         ctx.rotate(relativeAngle);
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#ff00ff', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // Turret base ring
         ctx.fillStyle = '#2a0035';
@@ -5401,9 +5371,6 @@ export class Enemy {
         const shimmer = Math.sin(t * 11.3) * 0.15; // fast flicker for cloak shimmer
 
         ctx.save();
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, '#44ffff', size * 1.3, size * 0.8, 0.35 * pulse);
-        ctx.shadowBlur = 0;
 
         // ── Main hull — narrow swept fuselage ─────────────────────────────────
         ctx.fillStyle = '#000d10';
