@@ -4,8 +4,9 @@ A modern, feature-rich asteroids game with enhanced combat, powerups, enemies, a
 
 **Play now at: https://rainboids.cat.computer**
 
-<img width="928" alt="image" src="https://github.com/user-attachments/assets/f85765c7-a5ab-43eb-b239-cb8b67c861a1" />
-<img width="1609" height="865" alt="Screenshot 2025-08-13 at 22 25 26" src="https://github.com/user-attachments/assets/d6c98752-0d1e-4ae3-b5ce-8794610b3ecd" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/afbf1039-b46c-4717-9aa2-1a8bc4083354" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f1bfe140-5e6b-43df-969d-d1f49427aa02" />
+
 
 ---
 
