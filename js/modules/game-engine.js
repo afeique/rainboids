@@ -449,26 +449,14 @@ export class GameEngine {
 
                 // Check for tab clicks first
                 if (this.shopTabBounds) {
-                    // Check OFFENSE tab
-                    if (clickX >= this.shopTabBounds.offense.x && 
-                        clickX <= this.shopTabBounds.offense.x + this.shopTabBounds.offense.width &&
-                        clickY >= this.shopTabBounds.offense.y && 
-                        clickY <= this.shopTabBounds.offense.y + this.shopTabBounds.offense.height) {
-                        this.shopCategory = 'OFFENSE';
-                        this.shopScrollOffset = 0; // Reset scroll when switching tabs
-                        this._rebuildShopCache();
-                        return;
-                    }
-                    
-                    // Check DEFENSE tab
-                    if (clickX >= this.shopTabBounds.defense.x && 
-                        clickX <= this.shopTabBounds.defense.x + this.shopTabBounds.defense.width &&
-                        clickY >= this.shopTabBounds.defense.y && 
-                        clickY <= this.shopTabBounds.defense.y + this.shopTabBounds.defense.height) {
-                        this.shopCategory = 'DEFENSE';
-                        this.shopScrollOffset = 0; // Reset scroll when switching tabs
-                        this._rebuildShopCache();
-                        return;
+                    for (const [key, bounds] of Object.entries(this.shopTabBounds)) {
+                        if (clickX >= bounds.x && clickX <= bounds.x + bounds.width &&
+                            clickY >= bounds.y && clickY <= bounds.y + bounds.height) {
+                            this.shopCategory = key.toUpperCase();
+                            this.shopScrollOffset = 0;
+                            this._rebuildShopCache();
+                            return;
+                        }
                     }
                 }
                 
@@ -1351,203 +1339,37 @@ export class GameEngine {
         
         
         // Initialize shop state
-        this.shopCategory = 'OFFENSE'; // Current tab: 'OFFENSE' or 'DEFENSE'
-        
+        this.shopCategory = 'OFFENSE'; // Current tab: 'OFFENSE', 'DEFENSE', or 'DROPS'
+
         // Define shop items with categories and currency types
         this.shopItems = [
-            // ── DEFENSE (SP) ──
-            {
-                id: 'SPEED_BOOST',
-                name: 'Afterburner',
-                description: '+50% thrust & +35% top speed per stack',
-                cost: 2,
-                icon: '💨',
-                maxStacks: 6,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            {
-                id: 'HEALTH_BOOST',
-                name: 'Health Boost',
-                description: '+25 max health',
-                cost: 1,
-                icon: '❤️',
-                maxStacks: 20,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            {
-                id: 'SHIELD_BOOST',
-                name: 'Shielding',
-                description: '-5% damage taken per stack',
-                cost: 1,
-                icon: '🛡️',
-                maxStacks: 12,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            {
-                id: 'MEDPACK',
-                name: 'Medpack',
-                description: '+1 health orb healing',
-                cost: 1,
-                icon: '💊',
-                maxStacks: 5,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            {
-                id: 'HEALTH_ORB_DROP_CHANCE',
-                name: 'Health Orb Luck',
-                description: '+5% health orb drop chance',
-                cost: 1,
-                icon: '🍀',
-                maxStacks: 10,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            {
-                id: 'MONEY_ORB_DROP_CHANCE',
-                name: 'Money Orb Luck',
-                description: '+5% money orb drop chance',
-                cost: 1,
-                icon: '💰',
-                maxStacks: 8,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            {
-                id: 'HEALTH_ORB_DROP_QUANTITY',
-                name: 'Health Orb Bounty',
-                description: '+1 health orbs per drop',
-                cost: 1,
-                icon: '💚',
-                maxStacks: 3,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            {
-                id: 'MONEY_ORB_DROP_QUANTITY',
-                name: 'Money Orb Bounty',
-                description: '+1 money orbs per drop',
-                cost: 1,
-                icon: '🪙',
-                maxStacks: 4,
-                category: 'DEFENSE',
-                currency: 'SP'
-            },
-            // ── OFFENSE (Coins) ──
-            {
-                id: 'RAPID_FIRE',
-                name: 'Rapid Fire',
-                description: '15% faster shooting per stack',
-                cost: 600,
-                icon: '⚡',
-                maxStacks: 6,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'MULTI_SHOT',
-                name: 'Multi Shot',
-                description: '+1 bullet in a spread per stack',
-                cost: 1200,
-                icon: '✳️',
-                maxStacks: 4,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'HOMING',
-                name: 'Homing',
-                description: 'Bullets track nearest enemy',
-                cost: 400,
-                icon: '🎯',
-                maxStacks: 5,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'PIERCING',
-                name: 'Piercing',
-                description: 'Bullets pass through +1 enemy',
-                cost: 1000,
-                icon: '🏹',
-                maxStacks: 4,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'EXPLOSIVE',
-                name: 'Explosive',
-                description: 'AoE blast on bullet impact',
-                cost: 1500,
-                icon: '💣',
-                maxStacks: 3,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'CRIT_CHANCE',
-                name: 'Critical Chance',
-                description: '+5% chance for critical hits',
-                cost: 400,
-                icon: '⭐',
-                maxStacks: 10,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'CRIT_DAMAGE',
-                name: 'Critical Damage',
-                description: '+10% critical hit damage',
-                cost: 350,
-                icon: '🗡️',
-                maxStacks: 15,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'LONG_RANGE',
-                name: 'Long Range',
-                description: '+40% bullet range per stack',
-                cost: 300,
-                icon: '🏹',
-                maxStacks: 6,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'CHARGE_SPEED',
-                name: 'Charge Speed',
-                description: '-1 second charge time',
-                cost: 1500,
-                icon: '⏱️',
-                maxStacks: 3,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'CHARGE_DAMAGE',
-                name: 'Charge Power',
-                description: '+1 charge shot base damage',
-                cost: 600,
-                icon: '🔋',
-                maxStacks: 10,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            },
-            {
-                id: 'SPARE_SHIP',
-                name: 'Spare Ship',
-                description: '+1 extra life (max 3)',
-                cost: 2000,
-                icon: '🚀',
-                maxStacks: 1,
-                flatCost: true,
-                category: 'OFFENSE',
-                currency: 'COINS'
-            }
+            // ── OFFENSE (Coins) — weapon & damage upgrades, ordered by cost ──
+            { id: 'LONG_RANGE',     name: 'Long Range',       description: '+40% bullet range per stack',    cost: 500,  icon: '🏹', maxStacks: 6, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'RAPID_FIRE',     name: 'Rapid Fire',       description: '15% faster shooting per stack',  cost: 500,  icon: '⚡', maxStacks: 5, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'CRIT_CHANCE',    name: 'Critical Chance',  description: '+5% chance for critical hits',   cost: 500,  icon: '⭐', maxStacks: 8, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'CRIT_DAMAGE',    name: 'Critical Damage',  description: '+10% critical hit damage',       cost: 500,  icon: '🗡️', maxStacks: 8, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'HOMING',         name: 'Homing',           description: 'Bullets track nearest enemy',    cost: 750,  icon: '🎯', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'CHARGE_DAMAGE',  name: 'Charge Power',     description: '+1 charge shot base damage',     cost: 750,  icon: '🔋', maxStacks: 6, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'PIERCING',       name: 'Piercing',         description: 'Bullets pass through +1 enemy',  cost: 1200, icon: '🏹', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'CHARGE_SPEED',   name: 'Charge Speed',     description: '-1 second charge time',          cost: 1500, icon: '⏱️', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'MULTI_SHOT',     name: 'Multi Shot',       description: '+1 bullet in a spread per stack',cost: 1500, icon: '✳️', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'EXPLOSIVE',      name: 'Explosive',        description: 'AoE blast on bullet impact',     cost: 2000, icon: '💣', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
+            { id: 'SPARE_SHIP',     name: 'Spare Ship',       description: '+1 extra life (max 3)',           cost: 5000, icon: '🚀', maxStacks: 1, flatCost: true, category: 'OFFENSE', currency: 'COINS' },
+
+            // ── DEFENSE (SP) — survivability, ordered: health → armor → mobility ──
+            { id: 'HEALTH_BOOST',   name: 'Health Boost',     description: '+25 max health',                           cost: 1, icon: '❤️', maxStacks: 10, category: 'DEFENSE', currency: 'SP' },
+            { id: 'SHIELD_BOOST',   name: 'Shielding',        description: '-5% damage taken per stack',               cost: 1, icon: '🛡️', maxStacks: 8,  category: 'DEFENSE', currency: 'SP' },
+            { id: 'SPEED_BOOST',    name: 'Afterburner',      description: '+50% thrust & +35% top speed per stack',   cost: 2, icon: '💨', maxStacks: 4,  category: 'DEFENSE', currency: 'SP' },
+
+            // ── DROPS (SP) — loot economy, ordered: health group → money group → quantity ──
+            { id: 'DOCTOR',                 name: 'Doctor',            description: 'Increases the max amount of health per orb', cost: 1, icon: '🏥', maxStacks: 99, category: 'DROPS', currency: 'SP' },
+            { id: 'HIGH_ROLLER',            name: 'High Roller',       description: 'Increases the max amount of money per orb', cost: 1, icon: '🎰', maxStacks: 99, category: 'DROPS', currency: 'SP' },
+            { id: 'MEDPACK',               name: 'Medpack',            description: 'More health per orb',                       cost: 2, icon: '💊', maxStacks: 99, category: 'DROPS', currency: 'SP' },
+            { id: 'PAYDAY',                name: 'Payday',             description: 'More money per orb',                        cost: 2, icon: '💵', maxStacks: 99, category: 'DROPS', currency: 'SP' },
+            { id: 'HEALTH_ORB_DROP_CHANCE', name: 'Health Orb Luck',   description: '+5% health orb drop chance',                cost: 2, icon: '🍀', maxStacks: 6,  category: 'DROPS', currency: 'SP' },
+            { id: 'MONEY_ORB_DROP_CHANCE',  name: 'Money Orb Luck',    description: '+5% money orb drop chance',                 cost: 2, icon: '💰', maxStacks: 6,  category: 'DROPS', currency: 'SP' },
+            { id: 'HEALTH_ORB_DROP_QUANTITY',name: 'Health Orb Bounty', description: '+1 max health orbs per drop',              cost: 3, icon: '💚', maxStacks: 3,  category: 'DROPS', currency: 'SP' },
+            { id: 'MONEY_ORB_DROP_QUANTITY', name: 'Money Orb Bounty',  description: '+1 max money orbs per drop',              cost: 3, icon: '🪙', maxStacks: 3,  category: 'DROPS', currency: 'SP' },
         ];
 
         this._rebuildShopCache();
@@ -1725,6 +1547,9 @@ export class GameEngine {
             'MONEY_ORB_DROP_CHANCE':    { name: 'Money Orb Luck',      duration: Infinity, icon: '💰', gradientColors: ['#ffdd00', '#cc8800'] },
             'HEALTH_ORB_DROP_QUANTITY': { name: 'Health Orb Bounty',   duration: Infinity, icon: '💚', gradientColors: ['#66ff66', '#009900'] },
             'MONEY_ORB_DROP_QUANTITY':  { name: 'Money Orb Bounty',    duration: Infinity, icon: '🪙', gradientColors: ['#ffcc00', '#996600'] },
+            'DOCTOR':                   { name: 'Doctor',              duration: Infinity, icon: '🏥', gradientColors: ['#ff6688', '#cc2244'] },
+            'PAYDAY':                   { name: 'Payday',              duration: Infinity, icon: '💵', gradientColors: ['#66ff66', '#228822'] },
+            'HIGH_ROLLER':              { name: 'High Roller',         duration: Infinity, icon: '🎰', gradientColors: ['#ffdd44', '#cc8800'] },
         };
         return configs[type];
     }
@@ -2052,98 +1877,57 @@ export class GameEngine {
     }
     
     drawShopTabs(shopX, tabY, shopWidth) {
-        const tabWidth = 120;
+        const tabWidth = 110;
         const tabHeight = 30;
-        const tabSpacing = 10;
-        const totalTabsWidth = (tabWidth * 2) + tabSpacing;
+        const tabSpacing = 8;
+        const tabCount = 3;
+        const totalTabsWidth = (tabWidth * tabCount) + (tabSpacing * (tabCount - 1));
         const tabStartX = shopX + (shopWidth - totalTabsWidth) / 2;
-        
-        // Check hover states
-        const offenseHovered = this.mouseX >= tabStartX && this.mouseX <= tabStartX + tabWidth &&
-                              this.mouseY >= tabY && this.mouseY <= tabY + tabHeight;
-        const defenseTabX = tabStartX + tabWidth + tabSpacing;
-        const defenseHovered = this.mouseX >= defenseTabX && this.mouseX <= defenseTabX + tabWidth &&
-                              this.mouseY >= tabY && this.mouseY <= tabY + tabHeight;
-        
-        // Draw OFFENSE tab
-        const offenseActive = this.shopCategory === 'OFFENSE';
-        let offenseFillStyle, offenseTextStyle;
-
-        if (offenseActive) {
-            offenseFillStyle = 'rgba(180, 130, 0, 1.0)';
-            offenseTextStyle = '#FFFFFF';
-        } else if (offenseHovered) {
-            offenseFillStyle = 'rgba(140, 100, 0, 0.95)';
-            offenseTextStyle = '#FFFFFF';
-        } else {
-            offenseFillStyle = 'rgba(100, 70, 0, 0.85)';
-            offenseTextStyle = '#FFFFFF';
-        }
-        
         const tabCorner = 6;
 
-        // OFFENSE tab
-        this.ctx.save();
-        if (offenseHovered && !offenseActive) {
-            this.ctx.shadowColor = 'rgba(255, 215, 0, 0.3)';
-            this.ctx.shadowBlur = 6;
+        const tabs = [
+            { key: 'OFFENSE', label: 'OFFENSE', color: [180, 130, 0], stroke: '#FFD700', glow: 'rgba(255, 215, 0, 0.3)' },
+            { key: 'DEFENSE', label: 'DEFENSE', color: [50, 100, 200], stroke: '#4A90E2', glow: 'rgba(74, 144, 226, 0.3)' },
+            { key: 'DROPS',   label: 'DROPS',   color: [40, 160, 80], stroke: '#44DD88', glow: 'rgba(68, 221, 136, 0.3)' },
+        ];
+
+        this.shopTabBounds = {};
+
+        for (let i = 0; i < tabs.length; i++) {
+            const tab = tabs[i];
+            const tx = tabStartX + i * (tabWidth + tabSpacing);
+            const isActive = this.shopCategory === tab.key;
+            const isHovered = this.mouseX >= tx && this.mouseX <= tx + tabWidth &&
+                              this.mouseY >= tabY && this.mouseY <= tabY + tabHeight;
+
+            const [r, g, b] = tab.color;
+            let fillStyle;
+            if (isActive) fillStyle = `rgba(${r}, ${g}, ${b}, 1.0)`;
+            else if (isHovered) fillStyle = `rgba(${Math.round(r*0.78)}, ${Math.round(g*0.78)}, ${Math.round(b*0.78)}, 0.95)`;
+            else fillStyle = `rgba(${Math.round(r*0.55)}, ${Math.round(g*0.55)}, ${Math.round(b*0.55)}, 0.85)`;
+
+            this.ctx.save();
+            if (isHovered && !isActive) {
+                this.ctx.shadowColor = tab.glow;
+                this.ctx.shadowBlur = 6;
+            }
+            this.ctx.fillStyle = fillStyle;
+            this.ctx.strokeStyle = tab.stroke;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.roundRect(tx, tabY, tabWidth, tabHeight, tabCorner);
+            this.ctx.fill();
+            this.ctx.stroke();
+            this.ctx.restore();
+
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 12px "Press Start 2P", monospace';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(tab.label, tx + tabWidth / 2, tabY + tabHeight / 2);
+
+            this.shopTabBounds[tab.key.toLowerCase()] = { x: tx, y: tabY, width: tabWidth, height: tabHeight };
         }
-        this.ctx.fillStyle = offenseFillStyle;
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.roundRect(tabStartX, tabY, tabWidth, tabHeight, tabCorner);
-        this.ctx.fill();
-        this.ctx.stroke();
-        this.ctx.restore();
-
-        this.ctx.fillStyle = offenseTextStyle;
-        this.ctx.font = 'bold 12px "Press Start 2P", monospace';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('OFFENSE', tabStartX + tabWidth/2, tabY + tabHeight/2);
-
-        // Draw DEFENSE tab
-        const defenseActive = this.shopCategory === 'DEFENSE';
-        let defenseFillStyle, defenseTextStyle;
-
-        if (defenseActive) {
-            defenseFillStyle = 'rgba(50, 100, 200, 1.0)';
-            defenseTextStyle = '#FFFFFF';
-        } else if (defenseHovered) {
-            defenseFillStyle = 'rgba(40, 80, 160, 0.95)';
-            defenseTextStyle = '#FFFFFF';
-        } else {
-            defenseFillStyle = 'rgba(25, 55, 110, 0.85)';
-            defenseTextStyle = '#FFFFFF';
-        }
-
-        // DEFENSE tab
-        this.ctx.save();
-        if (defenseHovered && !defenseActive) {
-            this.ctx.shadowColor = 'rgba(74, 144, 226, 0.3)';
-            this.ctx.shadowBlur = 6;
-        }
-        this.ctx.fillStyle = defenseFillStyle;
-        this.ctx.strokeStyle = '#4A90E2';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.roundRect(defenseTabX, tabY, tabWidth, tabHeight, tabCorner);
-        this.ctx.fill();
-        this.ctx.stroke();
-        this.ctx.restore();
-
-        this.ctx.fillStyle = defenseTextStyle;
-        this.ctx.font = 'bold 12px "Press Start 2P", monospace';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('DEFENSE', defenseTabX + tabWidth/2, tabY + tabHeight/2);
-        
-        // Store tab bounds for click detection
-        this.shopTabBounds = {
-            offense: { x: tabStartX, y: tabY, width: tabWidth, height: tabHeight },
-            defense: { x: defenseTabX, y: tabY, width: tabWidth, height: tabHeight }
-        };
     }
     
     drawShopItem(item, x, y, width, height, index, isHovered = false) {
@@ -2152,9 +1936,9 @@ export class GameEngine {
         // Calculate dynamic cost for special items
         let actualCost = item.cost;
         if (item.id === 'CHARGE_SPEED') {
-            if (currentStacks === 0) actualCost = 10000;     // First purchase
-            else if (currentStacks === 1) actualCost = 15000; // Second purchase
-            else if (currentStacks === 2) actualCost = 20000; // Third purchase
+            if (currentStacks === 0) actualCost = 1500;      // First purchase
+            else if (currentStacks === 1) actualCost = 3000;  // Second purchase
+            else if (currentStacks === 2) actualCost = 5000;  // Third purchase
         }
         
         const canAfford = item.currency === 'SP' ? 
@@ -2279,9 +2063,9 @@ export class GameEngine {
             // Calculate sell refund for display
             let sellCost = item.cost;
             if (item.id === 'CHARGE_SPEED') {
-                if (currentStacks === 1) sellCost = 10000;
-                else if (currentStacks === 2) sellCost = 15000;
-                else sellCost = 20000;
+                if (currentStacks === 1) sellCost = 1500;
+                else if (currentStacks === 2) sellCost = 3000;
+                else sellCost = 5000;
             }
             const refund = Math.floor(sellCost * 0.5);
             const sellLabel = item.currency === 'SP' ? `SELL +${refund}SP` : `SELL +${refund}`;
@@ -2783,13 +2567,15 @@ export class GameEngine {
     createHealthOrb(x, y) {
         const healthOrb = this.colorStarPool.get(x, y, 'health'); // health orb type
         if (healthOrb) {
-            // Assign random heal amount and corresponding size
-            const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN;
-            const maxHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX;
+            // Assign random heal amount scaled by upgrades
+            const medpackStacks = this.player.getPowerupStacks('MEDPACK');
+            const doctorStacks = this.player.getPowerupStacks('DOCTOR');
+            const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE);
+            const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE) + (doctorStacks * GAME_CONFIG.DOCTOR_HEAL_MAX_UPGRADE));
             healthOrb.healAmount = Math.floor(Math.random() * (maxHeal - minHeal + 1)) + minHeal;
             
             // Scale size based on heal amount
-            const healRatio = (healthOrb.healAmount - minHeal) / (maxHeal - minHeal);
+            const healRatio = maxHeal > minHeal ? (healthOrb.healAmount - minHeal) / (maxHeal - minHeal) : 0;
             const minSize = GAME_CONFIG.HEALTH_ORB_SIZE_MIN;
             const maxSize = GAME_CONFIG.HEALTH_ORB_SIZE_MAX;
             healthOrb.sizeMultiplier = minSize + (healRatio * (maxSize - minSize));
@@ -2810,13 +2596,15 @@ export class GameEngine {
     createMoneyOrb(x, y) {
         const moneyOrb = this.colorStarPool.get(x, y, 'money'); // money orb type
         if (moneyOrb) {
-            // Assign random money amount and corresponding size
-            const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN;
-            const maxMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX;
+            // Assign random money amount scaled by upgrades
+            const paydayStacks = this.player.getPowerupStacks('PAYDAY');
+            const highRollerStacks = this.player.getPowerupStacks('HIGH_ROLLER');
+            const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE);
+            const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE) + (highRollerStacks * GAME_CONFIG.HIGH_ROLLER_MONEY_MAX_UPGRADE));
             moneyOrb.moneyAmount = Math.floor(Math.random() * (maxMoney - minMoney + 1)) + minMoney;
             
             // Scale size based on money amount
-            const moneyRatio = (moneyOrb.moneyAmount - minMoney) / (maxMoney - minMoney);
+            const moneyRatio = maxMoney > minMoney ? (moneyOrb.moneyAmount - minMoney) / (maxMoney - minMoney) : 0;
             const minSize = GAME_CONFIG.MONEY_ORB_SIZE_MIN;
             const maxSize = GAME_CONFIG.MONEY_ORB_SIZE_MAX;
             moneyOrb.sizeMultiplier = minSize + (moneyRatio * (maxSize - minSize));

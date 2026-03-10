@@ -1382,11 +1382,8 @@ export class Player {
     }
     
     getEffectiveHealthOrbHealing(baseHealing = 1) {
-        const medpackStacks = this.getPowerupStacks('MEDPACK');
-        const bonusHealing = medpackStacks * 1; // +1 healing per medpack stack
-        
-        const totalHealing = baseHealing + bonusHealing;
-        return Math.min(10, totalHealing); // Cap at 10 (max base 4 + 5 stacks × 1 = 9, rounded to 10)
+        // MEDPACK now increases min heal at orb creation time, so no collection bonus needed
+        return baseHealing;
     }
     
     // Legacy support for old method names

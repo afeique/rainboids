@@ -16,7 +16,7 @@ export const GAME_CONFIG = {
     
     // Health Orb Configuration (renamed from health stars)
     HEALTH_ORB_HEAL_AMOUNT_MIN: 1, // Minimum health restored per health orb
-    HEALTH_ORB_HEAL_AMOUNT_MAX: 4, // Maximum health restored per health orb
+    HEALTH_ORB_HEAL_AMOUNT_MAX: 2, // Maximum health restored per health orb
     HEALTH_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop health orbs
     HEALTH_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum health orbs dropped (upgrade to get more)
     HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
@@ -24,8 +24,8 @@ export const GAME_CONFIG = {
     HEALTH_ORB_SIZE_MAX: 2.5, // Maximum size multiplier for health orbs
     
     // Money Orb Configuration (renamed from money stars)
-    MONEY_ORB_MONEY_AMOUNT_MIN: 25, // Minimum money gained per money orb
-    MONEY_ORB_MONEY_AMOUNT_MAX: 75, // Maximum money gained per money orb
+    MONEY_ORB_MONEY_AMOUNT_MIN: 10, // Minimum money gained per money orb
+    MONEY_ORB_MONEY_AMOUNT_MAX: 20, // Maximum money gained per money orb
     MONEY_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop money orbs
     MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum money orbs dropped (upgrade to get more)
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
@@ -37,6 +37,10 @@ export const GAME_CONFIG = {
     MONEY_ORB_DROP_CHANCE_UPGRADE: 0.05, // +5% drop chance per upgrade stack
     HEALTH_ORB_DROP_QUANTITY_UPGRADE: 1, // +1 orb per upgrade stack
     MONEY_ORB_DROP_QUANTITY_UPGRADE: 1, // +1 orb per upgrade stack
+    MEDPACK_HEAL_MIN_UPGRADE: 1, // +1 min heal per Medpack stack
+    PAYDAY_MONEY_MIN_UPGRADE: 5, // +5 min money per Payday stack
+    DOCTOR_HEAL_MAX_UPGRADE: 1, // +1 max heal per Doctor stack
+    HIGH_ROLLER_MONEY_MAX_UPGRADE: 10, // +10 max money per High Roller stack
     ENEMY_BULLET_ASTEROID_DAMAGE: 1, // Damage enemy bullets deal to asteroids
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,

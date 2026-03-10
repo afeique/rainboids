@@ -108,10 +108,40 @@ export const POWERUP_TYPES = {
         color: '#ff6699',
         gradientColors: ['#ff99cc', '#cc3366'],
         icon: '💊',
-        duration: 30000, // 30 seconds for drops
+        duration: 30000,
         effect: 'medpack',
-        rarity: 0.25,
-        description: '+1 health star healing'
+        rarity: 0.2,
+        description: 'More health per orb'
+    },
+    DOCTOR: {
+        name: 'Doctor',
+        color: '#ff6688',
+        gradientColors: ['#ff99aa', '#cc2244'],
+        icon: '🏥',
+        duration: 30000,
+        effect: 'doctor',
+        rarity: 0.1,
+        description: 'Increases the max amount of health per orb'
+    },
+    PAYDAY: {
+        name: 'Payday',
+        color: '#66ff66',
+        gradientColors: ['#88ff88', '#228822'],
+        icon: '💵',
+        duration: 30000,
+        effect: 'payday',
+        rarity: 0.15,
+        description: 'More money per orb'
+    },
+    HIGH_ROLLER: {
+        name: 'High Roller',
+        color: '#ffdd44',
+        gradientColors: ['#ffee66', '#cc8800'],
+        icon: '🎰',
+        duration: 30000,
+        effect: 'highRoller',
+        rarity: 0.1,
+        description: 'Increases the max amount of money per orb'
     },
     LONG_RANGE: {
         name: 'Range',
