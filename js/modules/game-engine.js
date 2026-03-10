@@ -892,14 +892,58 @@ export class GameEngine {
     }
     
     createDebris(ast) {
-        for (let i = 0; i < 25; i++) {
-            this.particlePool.get(ast.x, ast.y, 'explosion');
+        // Derive explosion color from the asteroid's unique hue
+        const hue = ast.baseHue || 0;
+        const sat = ast.saturation || 90;
+        const lit = ast.lightness || 70;
+        const baseColor = `hsl(${hue}, ${sat}%, ${lit}%)`;
+        const brightColor = `hsl(${hue}, ${sat}%, ${Math.min(95, lit + 20)}%)`;
+        const dimColor = `hsl(${(hue + 20) % 360}, ${sat}%, ${Math.max(40, lit - 15)}%)`;
+        const sizeScale = Math.min(1.5, ast.baseRadius / 25); // scale effects to asteroid size
+
+        // 1. Bright white core flash
+        this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 1.2 * sizeScale);
+
+        // 2. Expanding colored ring
+        this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 2 * sizeScale, baseColor);
+        // Staggered second ring
+        setTimeout(() => {
+            this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 2.8 * sizeScale, dimColor);
+        }, 60);
+
+        // 3. Directional shrapnel streaks in asteroid color
+        const shrapnelCount = Math.floor(8 + 6 * sizeScale);
+        for (let i = 0; i < shrapnelCount; i++) {
+            const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.3, 0.3);
+            const speed = random(4, 10) * sizeScale;
+            const color = i % 3 === 0 ? brightColor : i % 3 === 1 ? baseColor : dimColor;
+            this.particlePool.get(ast.x, ast.y, 'explosionShrapnel', angle, speed, color);
         }
-        
+
+        // 4. Lingering embers in asteroid's hue range
+        const emberCount = Math.floor(6 + 4 * sizeScale);
+        for (let i = 0; i < emberCount; i++) {
+            const eHue = hue + random(-30, 30);
+            const eColor = `hsl(${(eHue + 360) % 360}, ${sat}%, ${random(55, 80)}%)`;
+            this.particlePool.get(ast.x, ast.y, 'explosionEmber', eColor);
+        }
+
+        // 5. Classic small particles for density
+        for (let i = 0; i < 12; i++) {
+            const p = this.particlePool.get(ast.x, ast.y, 'explosion');
+            if (p) {
+                p.color = i < 4 ? '#ffffff' : i < 8 ? baseColor : brightColor;
+                const a = random(0, Math.PI * 2);
+                const s = random(1, 5);
+                p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
+            }
+        }
+
+        // 6. Line debris from wireframe edges
         ast.edges.forEach(edge => {
             const p1 = ast.vertices3D[edge[0]];
             const p2 = ast.vertices3D[edge[1]];
-            this.lineDebrisPool.get(ast.x, ast.y, p1, p2, '#88aacc');
+            this.lineDebrisPool.get(ast.x, ast.y, p1, p2, baseColor);
         });
     }
     
@@ -2612,87 +2656,65 @@ export class GameEngine {
     }
     
     createEnemyDebris(enemy) {
-        // EPIC EXPLOSION EFFECTS!
-        
-        // Multiple explosion rings with different sizes and colors
-        for (let ring = 0; ring < 4; ring++) {
-            const ringDelay = ring * 50; // Stagger the rings
+        const color = enemy.color || '#ff4444';
+        const sizeScale = Math.min(2, enemy.radius / 15);
+
+        // 1. Bright white core flash — the "pop"
+        this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 2 * sizeScale);
+
+        // 2. Staggered colored rings in enemy color
+        for (let ring = 0; ring < 3; ring++) {
             setTimeout(() => {
-                const explosionRing = this.particlePool.get(enemy.x, enemy.y, 'explosionPulse');
-                if (explosionRing) {
-                    explosionRing.maxRadius = 30 + ring * 25; // Growing rings
-                    explosionRing.color = ring === 0 ? '#ffffff' : 
-                                        ring === 1 ? enemy.color : 
-                                        ring === 2 ? '#ffaa00' : '#ff4400';
-                }
-            }, ringDelay);
+                const ringColor = ring === 0 ? '#ffffff' : color;
+                this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored',
+                    (30 + ring * 25) * sizeScale, ringColor);
+            }, ring * 50);
         }
-        
-        // Massive amount of explosion particles
-        for (let i = 0; i < 60; i++) {
-            const particle = this.particlePool.get(enemy.x, enemy.y, 'explosion');
-            if (particle) {
-                particle.color = i < 20 ? '#ffffff' : 
-                               i < 40 ? enemy.color : '#ffaa00';
-                // Vary the explosion velocities for more chaos
-                const angle = (i / 60) * Math.PI * 2 + Math.random() * 0.5;
-                const speed = 2 + Math.random() * 4;
-                particle.vel = {
-                    x: Math.cos(angle) * speed,
-                    y: Math.sin(angle) * speed
-                };
-            }
+
+        // 3. Directional shrapnel in enemy color — fast streaks flying outward
+        const shrapnelCount = Math.floor(12 + 6 * sizeScale);
+        for (let i = 0; i < shrapnelCount; i++) {
+            const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
+            const speed = random(5, 12) * sizeScale;
+            const sColor = i % 3 === 0 ? '#ffffff' : color;
+            this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', angle, speed, sColor);
         }
-        
-        // Additional fiery explosion particles
-        for (let i = 0; i < 30; i++) {
-            const particle = this.particlePool.get(enemy.x, enemy.y, 'explosionRedOrange');
-            if (particle) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 1 + Math.random() * 3;
-                particle.vel = {
-                    x: Math.cos(angle) * speed,
-                    y: Math.sin(angle) * speed
-                };
-            }
+
+        // 4. Lingering embers in enemy color
+        const emberCount = Math.floor(8 + 4 * sizeScale);
+        for (let i = 0; i < emberCount; i++) {
+            this.particlePool.get(enemy.x, enemy.y, 'explosionEmber',
+                i % 2 === 0 ? color : '#ffcc66');
         }
-        
-        // Sparkle effects
+
+        // 5. Classic small particles for density (mix of white + enemy color)
         for (let i = 0; i < 15; i++) {
-            const sparkle = this.particlePool.get(enemy.x, enemy.y, 'starSparkle');
-            if (sparkle) {
-                sparkle.color = '#ffffff';
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 0.5 + Math.random() * 2;
-                sparkle.vel = {
-                    x: Math.cos(angle) * speed,
-                    y: Math.sin(angle) * speed
-                };
+            const p = this.particlePool.get(enemy.x, enemy.y, 'explosion');
+            if (p) {
+                p.color = i < 5 ? '#ffffff' : color;
+                const a = random(0, Math.PI * 2);
+                const s = random(2, 6);
+                p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
+                p.radius = random(1.5, 4);
             }
         }
-        
-        // Create colored line debris based on enemy shape
+
+        // 6. Create colored line debris based on enemy shape
         this.createShapeDebris(enemy);
-        
-        // EPIC screen shake for enemy deaths (only if on screen)!
+
+        // 7. Screen shake (only if on screen)
         if (this.isEntityOnScreen(enemy)) {
             this.triggerScreenShake(25, 15, enemy.radius * 2);
         }
-        
-        // Additional delayed explosion effects
+
+        // 8. Delayed secondary burst — scattered sparks
         setTimeout(() => {
-            // Secondary explosion burst
-            for (let i = 0; i < 20; i++) {
-                const particle = this.particlePool.get(
-                    enemy.x + (Math.random() - 0.5) * 40,
-                    enemy.y + (Math.random() - 0.5) * 40,
-                    'explosion'
-                );
-                if (particle) {
-                    particle.color = '#ff6600';
-                }
+            for (let i = 0; i < 8; i++) {
+                const ox = enemy.x + random(-20, 20);
+                const oy = enemy.y + random(-20, 20);
+                this.particlePool.get(ox, oy, 'explosionEmber', color);
             }
-        }, 100);
+        }, 80);
     }
     
     createShapeDebris(enemy) {
@@ -2830,13 +2852,13 @@ export class GameEngine {
         
         // Check if entity is an enemy (has type property) for bonus drops
         const isEnemy = entity && entity.type && typeof entity.type === 'string';
-        const enemyDropRateBonus = isEnemy ? 0.4 : 0; // +40% drop rate for enemies
-        const enemyQuantityMultiplier = isEnemy ? 1.8 : 1; // +80% more orbs for enemies
+        const enemyDropRateBonus = isEnemy ? 0.15 : 0; // +15% drop rate for enemies
+        const enemyQuantityMultiplier = isEnemy ? 1.3 : 1; // +30% more orbs for enemies
         
         // Get level-based bonuses (higher level entities have better drop rates and quantities)
         const entityLevel = entity?.level || 1;
-        const levelDropRateBonus = (entityLevel - 1) * 0.15; // 15% increased drop rate per level
-        const levelQuantityMultiplier = 1 + (entityLevel - 1) * 0.25; // 25% more orbs per level
+        const levelDropRateBonus = (entityLevel - 1) * 0.05; // 5% increased drop rate per level
+        const levelQuantityMultiplier = 1 + (entityLevel - 1) * 0.1; // 10% more orbs per level
         
         // Calculate effective drop rates with upgrades, level bonuses, and enemy bonuses
         const baseHealthDropRate = GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + (healthDropChanceStacks * GAME_CONFIG.HEALTH_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
@@ -2847,25 +2869,25 @@ export class GameEngine {
         
         // Drop health orbs
         if (Math.random() < healthDropRate) {
-            const baseHealthOrbCount = Math.floor(Math.random() * (GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX - GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MIN + 1)) + GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MIN;
-            const upgradeHealthOrbCount = baseHealthOrbCount + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
-            const levelScaledHealthOrbCount = Math.floor(upgradeHealthOrbCount * levelQuantityMultiplier);
+            const maxHealthOrbs = GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
+            const baseHealthOrbCount = Math.floor(Math.random() * maxHealthOrbs) + 1; // 1 to max
+            const levelScaledHealthOrbCount = Math.floor(baseHealthOrbCount * levelQuantityMultiplier);
             const enemyScaledHealthOrbCount = Math.floor(levelScaledHealthOrbCount * enemyQuantityMultiplier);
-            const totalHealthOrbCount = Math.floor(enemyScaledHealthOrbCount * hitStreakMultiplier);
-            
+            const totalHealthOrbCount = Math.max(1, Math.floor(enemyScaledHealthOrbCount * hitStreakMultiplier));
+
             for (let i = 0; i < totalHealthOrbCount; i++) {
                 this.createHealthOrb(x, y);
             }
         }
-        
+
         // Drop money orbs
         if (Math.random() < moneyDropRate) {
-            const baseMoneyOrbCount = Math.floor(Math.random() * (GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX - GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MIN + 1)) + GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MIN;
-            const upgradeMoneyOrbCount = baseMoneyOrbCount + (moneyDropQuantityStacks * GAME_CONFIG.MONEY_ORB_DROP_QUANTITY_UPGRADE);
-            const levelScaledMoneyOrbCount = Math.floor(upgradeMoneyOrbCount * levelQuantityMultiplier);
+            const maxMoneyOrbs = GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX + (moneyDropQuantityStacks * GAME_CONFIG.MONEY_ORB_DROP_QUANTITY_UPGRADE);
+            const baseMoneyOrbCount = Math.floor(Math.random() * maxMoneyOrbs) + 1; // 1 to max
+            const levelScaledMoneyOrbCount = Math.floor(baseMoneyOrbCount * levelQuantityMultiplier);
             const enemyScaledMoneyOrbCount = Math.floor(levelScaledMoneyOrbCount * enemyQuantityMultiplier);
-            const totalMoneyOrbCount = Math.floor(enemyScaledMoneyOrbCount * hitStreakMultiplier);
-            
+            const totalMoneyOrbCount = Math.max(1, Math.floor(enemyScaledMoneyOrbCount * hitStreakMultiplier));
+
             for (let i = 0; i < totalMoneyOrbCount; i++) {
                 this.createMoneyOrb(x, y);
             }
@@ -3552,40 +3574,23 @@ export class GameEngine {
                     ast.vel.x += bullet.vel.x * impulse;
                     ast.vel.y += bullet.vel.y * impulse;
                     
-                    // Enhanced satisfying explosion effects
-                    // Orange explosion pulse (main effect)
-                    this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', ast.baseRadius * 0.8);
-                    
-                    // Secondary orange ring
-                    setTimeout(() => {
-                        this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', ast.baseRadius * 1.2);
-                    }, 50);
-                    
-                    // More explosion particles for satisfaction
-                    for (let p = 0; p < 8; p++) {
-                        const particle = this.particlePool.get(bullet.x, bullet.y, 'explosion');
-                        if (particle) {
-                            particle.color = p < 4 ? '#ff8800' : '#ffaa44'; // Orange variations
-                            // Add random velocity for explosion effect
+                    // Hit spark — colored shrapnel streaks + small flash at impact
+                    {
+                        const hitHue = ast.baseHue || 30;
+                        const hitColor = `hsl(${hitHue}, 90%, 70%)`;
+                        const hitBright = `hsl(${hitHue}, 90%, 85%)`;
+                        // Small flash at impact point
+                        this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', ast.baseRadius * 0.5);
+                        // 4-6 shrapnel streaks in asteroid color
+                        for (let p = 0; p < 5; p++) {
                             const angle = random(0, Math.PI * 2);
-                            const speed = random(2, 6);
-                            particle.vel = {
-                                x: Math.cos(angle) * speed,
-                                y: Math.sin(angle) * speed
-                            };
+                            const speed = random(3, 7);
+                            this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel',
+                                angle, speed, p < 2 ? hitBright : hitColor);
                         }
-                    }
-                    
-                    // Additional fiery particles
-                    for (let p = 0; p < 4; p++) {
-                        const particle = this.particlePool.get(bullet.x, bullet.y, 'explosionRedOrange');
-                        if (particle) {
-                            const angle = random(0, Math.PI * 2);
-                            const speed = random(1, 3);
-                            particle.vel = {
-                                x: Math.cos(angle) * speed,
-                                y: Math.sin(angle) * speed
-                            };
+                        // A few embers
+                        for (let p = 0; p < 3; p++) {
+                            this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', hitColor);
                         }
                     }
                     
@@ -3597,54 +3602,31 @@ export class GameEngine {
                     // Use small tolerance for floating-point precision issues
                     if (ast.health <= 0.001) {
                         if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
-                            // Only play explosion sound if asteroid is on screen
+                            // Small asteroid destroyed
                             if (this.isEntityOnScreen(ast)) {
                                 this.audioManager.playExplosion();
                             }
-                            // Multiple fiery shockwave pulses for destruction
-                            const pulseCount = 4;
-                            for (let n = 0; n < pulseCount; n++) {
-                                setTimeout(() => {
-                                    this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * (1.2 + n * 0.5));
-                                    this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * (1.1 + n * 0.2));
-                                }, n * 80);
-                            }
-                            for (let p = 0; p < 8; p++) {
-                                this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
-                            }
                             this.createDebris(ast);
                             this.createColorStarBurst(ast.x, ast.y);
-                            // Drop health and money orbs
                             this.dropOrbsFromEntity(ast.x, ast.y, ast);
-                            // Chance to drop powerup (15% chance)
                             if (Math.random() < 0.15) {
                                 this.dropPowerup(ast.x, ast.y);
                             }
-                            // Enhanced screen shake for small asteroid destruction (only if on screen)
                             if (this.isEntityOnScreen(ast)) {
                                 this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
                             }
                             this.asteroidPool.release(ast);
                         } else {
-                            // Make the explosion really dramatic
-                            // Only play explosion sound if asteroid is on screen
+                            // Large asteroid splits — bigger explosion
                             if (this.isEntityOnScreen(ast)) {
                                 this.audioManager.playExplosion();
                             }
-                            // Add a bunch of particle effects
-                            this.particlePool.get(ast.x, ast.y, 'explosionPulse', ast.baseRadius * 1.5);
-                            this.particlePool.get(ast.x, ast.y, 'fieryExplosionRing', ast.baseRadius * 1.2);
-                            for (let p = 0; p < 40; p++) {
-                                    this.particlePool.get(ast.x, ast.y, 'explosionRedOrange');
-                                }
-                                this.createDebris(ast);
-                                this.createColorStarBurst(ast.x, ast.y);
-                                // Drop health and money orbs from splitting asteroids too
-                                this.dropOrbsFromEntity(ast.x, ast.y, ast);
-                                // Chance to drop powerup from large asteroids (20% chance)
-                                if (Math.random() < 0.2) {
-                                    this.dropPowerup(ast.x, ast.y);
-                                }
+                            this.createDebris(ast);
+                            this.createColorStarBurst(ast.x, ast.y);
+                            this.dropOrbsFromEntity(ast.x, ast.y, ast);
+                            if (Math.random() < 0.2) {
+                                this.dropPowerup(ast.x, ast.y);
+                            }
                             
                             // Massive screen shake for large asteroid destruction (only if on screen)
                             if (this.isEntityOnScreen(ast)) {
@@ -3872,48 +3854,21 @@ export class GameEngine {
                     // Award XP for hitting enemy
                     this.player.gainExperience(3);
                     
-                    // Enhanced satisfying explosion effects for enemy hits
-                    // Orange explosion pulse (main effect)
-                    this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', enemy.radius * 0.9);
-                    
-                    // Secondary orange ring with delay
-                    setTimeout(() => {
-                        this.particlePool.get(bullet.x, bullet.y, 'explosionPulse', enemy.radius * 1.3);
-                    }, 40);
-                    
-                    // More explosion particles for satisfaction
-                    for (let p = 0; p < 10; p++) {
-                        const particle = this.particlePool.get(bullet.x, bullet.y, 'explosion');
-                        if (particle) {
-                            particle.color = p < 5 ? '#ff8800' : '#ffaa44'; // Orange variations
-                            // Add random velocity for explosion effect
+                    // Hit spark — colored shrapnel + flash in enemy color
+                    {
+                        const eColor = enemy.color || '#ff4444';
+                        // Small flash at impact
+                        this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', enemy.radius * 0.5);
+                        // Shrapnel streaks in enemy color
+                        for (let p = 0; p < 6; p++) {
                             const angle = random(0, Math.PI * 2);
-                            const speed = random(2, 7);
-                            particle.vel = {
-                                x: Math.cos(angle) * speed,
-                                y: Math.sin(angle) * speed
-                            };
+                            const speed = random(3, 8);
+                            this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel',
+                                angle, speed, p < 2 ? '#ffffff' : eColor);
                         }
-                    }
-                    
-                    // Additional fiery particles
-                    for (let p = 0; p < 6; p++) {
-                        const particle = this.particlePool.get(bullet.x, bullet.y, 'explosionRedOrange');
-                        if (particle) {
-                            const angle = random(0, Math.PI * 2);
-                            const speed = random(1, 4);
-                            particle.vel = {
-                                x: Math.cos(angle) * speed,
-                                y: Math.sin(angle) * speed
-                            };
-                        }
-                    }
-                    
-                    // Hit effects with enemy color for additional detail
-                    for (let p = 0; p < 6; p++) {
-                        const particle = this.particlePool.get(bullet.x, bullet.y, 'hit');
-                        if (particle) {
-                            particle.color = enemy.color; // Use enemy color for hit particles
+                        // A few embers
+                        for (let p = 0; p < 3; p++) {
+                            this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', eColor);
                         }
                     }
                     

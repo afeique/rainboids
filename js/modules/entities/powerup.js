@@ -122,6 +122,46 @@ export const POWERUP_TYPES = {
         effect: 'longRange',
         rarity: 0.25,
         description: '+40% bullet range per stack'
+    },
+    HEALTH_ORB_DROP_CHANCE: {
+        name: 'Health Luck',
+        color: '#33ff99',
+        gradientColors: ['#66ffbb', '#009944'],
+        icon: '🍀',
+        duration: 45000,
+        effect: 'healthOrbDropChance',
+        rarity: 0.15,
+        description: '+5% health orb drop chance'
+    },
+    MONEY_ORB_DROP_CHANCE: {
+        name: 'Gold Luck',
+        color: '#ffdd00',
+        gradientColors: ['#ffee66', '#cc8800'],
+        icon: '💰',
+        duration: 45000,
+        effect: 'moneyOrbDropChance',
+        rarity: 0.15,
+        description: '+5% money orb drop chance'
+    },
+    HEALTH_ORB_DROP_QUANTITY: {
+        name: 'Health Bounty',
+        color: '#66ff66',
+        gradientColors: ['#99ff99', '#009900'],
+        icon: '💚',
+        duration: 45000,
+        effect: 'healthOrbDropQuantity',
+        rarity: 0.1,
+        description: '+1 health orbs per drop'
+    },
+    MONEY_ORB_DROP_QUANTITY: {
+        name: 'Gold Bounty',
+        color: '#ffcc00',
+        gradientColors: ['#ffdd66', '#996600'],
+        icon: '🪙',
+        duration: 45000,
+        effect: 'moneyOrbDropQuantity',
+        rarity: 0.1,
+        description: '+1 money orbs per drop'
     }
 };
 
@@ -403,7 +443,7 @@ export class Powerup {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.globalAlpha = 0.9;
-        ctx.font = 'bold 11px "Pixelify Sans", monospace';
+        ctx.font = '13px "Silkscreen", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.strokeStyle = '#000000';

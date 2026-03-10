@@ -1265,8 +1265,8 @@ export class Player {
             
             const bullet = bulletPool.get(this.x, this.y, angle);
             if (bullet) {
-                // Apply range multiplier (charged shots get bonus range)
-                bullet.rangeMultiplier = this.getRangeMultiplier() * Math.max(1, speedMultiplier * 0.8);
+                // Apply range multiplier (charged shots get modest bonus range)
+                bullet.rangeMultiplier = this.getRangeMultiplier() * Math.max(1, speedMultiplier * 0.5);
 
                 // Set up callback for when bullet is destroyed (for combo tracking)
                 bullet.onOffScreen = () => this.onBulletDestroyed();

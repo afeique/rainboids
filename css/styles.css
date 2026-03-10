@@ -338,7 +338,7 @@ body.shop-open #hud-pause-btn {
     background: #555;
 }
 
-/* #scanline-overlay {
+#scanline-overlay {
     position: absolute;
     top: 0; left: 0;
     width: 100%; height: 100%;
@@ -346,8 +346,8 @@ body.shop-open #hud-pause-btn {
     background: linear-gradient( to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50% );
     background-size: 100% 4px;
     animation: scanline 10s linear infinite;
-    z-index: 500; 
-} */
+    z-index: 500;
+}
 
 #mobile-controls {
     display: none;
@@ -1254,8 +1254,8 @@ body.shop-open #hud-pause-btn {
 }
 
 .powerup-hud-countdown {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 10px;
+    font-family: 'Silkscreen', monospace;
+    font-size: 13px;
     color: #ffffff;
     text-align: center;
     white-space: nowrap;
@@ -1287,8 +1287,8 @@ body.shop-open #hud-pause-btn {
     color: #ffffff;
     border-radius: 5px;
     padding: 1px 3px;
-    font-size: 10px;
-    font-family: 'Press Start 2P', monospace;
+    font-size: 13px;
+    font-family: 'Silkscreen', monospace;
     line-height: 1.3;
     white-space: nowrap;
 }
@@ -1310,8 +1310,8 @@ body.shop-open #hud-pause-btn {
 }
 
 .powerup-hud-name {
-    font-family: 'Pixelify Sans', monospace;
-    font-size: 11px;
+    font-family: 'Silkscreen', monospace;
+    font-size: 13px;
     color: #aaddff;
     text-align: center;
     margin-top: 5px;
