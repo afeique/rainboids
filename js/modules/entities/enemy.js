@@ -12,7 +12,7 @@ export const ENEMY_TYPES = {
     HUNTER: {
         name: 'Hunter',
         color: '#ff4444',        // Red
-        health: 8,
+        health: 16,
         speed: 1.6,
         size: 38,
         shootPattern: 'hunter_single',
@@ -23,7 +23,7 @@ export const ENEMY_TYPES = {
     GUARDIAN: {
         name: 'Guardian',
         color: '#44ff44',        // Green
-        health: 16,
+        health: 32,
         speed: 1.0,
         size: 57,
         shootPattern: 'guardian_spread',
@@ -34,7 +34,7 @@ export const ENEMY_TYPES = {
     WASP: {
         name: 'Wasp',
         color: '#ffff44',        // Yellow
-        health: 7,
+        health: 14,
         speed: 2.8,
         size: 42,
         shootPattern: 'wasp_machinegun',
@@ -45,7 +45,7 @@ export const ENEMY_TYPES = {
     TITAN: {
         name: 'Titan',
         color: '#ff44ff',        // Magenta
-        health: 30,
+        health: 60,
         speed: 1.2,
         size: 75,
         shootPattern: 'sweep_laser',
@@ -56,7 +56,7 @@ export const ENEMY_TYPES = {
     STALKER: {
         name: 'Stalker',
         color: '#44ffff',        // Cyan
-        health: 10,
+        health: 20,
         speed: 2.5,
         size: 45,
         shootPattern: 'charged_laser',
@@ -67,7 +67,7 @@ export const ENEMY_TYPES = {
     TANGERINE: {
         name: 'Bomber',
         color: '#ff8844',        // Orange
-        health: 12,
+        health: 24,
         speed: 1.6,
         size: 53,
         shootPattern: 'lay_mine',
@@ -78,7 +78,7 @@ export const ENEMY_TYPES = {
     DRIFTER: {
         name: 'Drifter',
         color: '#00ffff',        // Cyan
-        health: 11,
+        health: 22,
         speed: 2.5,
         size: 45,
         shootPattern: 'arc_lightning',
@@ -89,7 +89,7 @@ export const ENEMY_TYPES = {
     PROWLER: {
         name: 'Prowler',
         color: '#ff00ff',        // Magenta
-        health: 18,
+        health: 36,
         speed: 0.6,
         size: 53,
         shootPattern: 'missile',
@@ -100,7 +100,7 @@ export const ENEMY_TYPES = {
     WEAVER: {
         name: 'Weaver',
         color: '#ffff00',        // Yellow
-        health: 8,
+        health: 16,
         speed: 2.2,
         size: 38,
         shootPattern: 'spiral_laser',
@@ -111,7 +111,7 @@ export const ENEMY_TYPES = {
     SENTINEL: {
         name: 'Sentinel',
         color: '#00ff00',        // Green
-        health: 14,
+        health: 28,
         speed: 2.0,
         size: 48,
         shootPattern: 'sentinel_sweep',
@@ -166,8 +166,8 @@ export class Enemy {
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
         
-        // Scale speed based on level (10% increase per level — gentle curve)
-        const speedMultiplier = 1 + (this.level - 1) * 0.1;
+        // Scale speed based on level (15% increase per level)
+        const speedMultiplier = 1 + (this.level - 1) * 0.15;
         const scaledSpeed = this.config.speed * speedMultiplier;
         
         // Initialize movement
@@ -4278,9 +4278,9 @@ export class Enemy {
             bullet.patternTimer = 0;
             bullet.patternPhase = Math.random() * Math.PI * 2; // Random starting phase
             
-            // Scale bullet range with enemy level — 12% more range per level
-            // Base 1652px (3/4 screen diagonal) matches player base range
-            bullet.maxRange = 1652 * (1 + (this.level - 1) * 0.12);
+            // Scale bullet range with enemy level — 15% more range per level
+            // Base 600px; level 5 = ~960px (half screen), level 8+ = full screen
+            bullet.maxRange = 600 * (1 + (this.level - 1) * 0.15);
             
             // For homing missiles and homing shots, provide player reference
             if (movementPattern === 'missile' || movementPattern === 'homing' || movementPattern === 'titan_homing') {
@@ -4359,7 +4359,7 @@ export class Enemy {
         // Draw level + name label BENEATH the enemy (only after first hit)
         if (showEnemyNames() && this.health < this.maxHealth) {
             ctx.save();
-            ctx.font = '8px "Press Start 2P", monospace';
+            ctx.font = '13px "Silkscreen", monospace';
             ctx.textBaseline = 'top';
             ctx.shadowColor = 'rgba(0,0,0,0.95)';
             ctx.shadowBlur = 4;

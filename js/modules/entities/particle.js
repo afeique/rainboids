@@ -158,6 +158,51 @@ export class Particle {
                 this.vel = { x: random(-0.5, 0.5), y: -2 }; // Float upward
                 this.fontSize = 16;
                 break;
+
+            // ── Enhanced explosion types ──────────────────────────────
+            case 'explosionFlash': {
+                // Bright white core flash that expands and fades fast
+                const [flashRadius] = args;
+                this.life = 1;
+                this.radius = 0;
+                this.maxRadius = flashRadius || 40;
+                this.color = '#ffffff';
+                break;
+            }
+            case 'explosionShrapnel': {
+                // Fast directional shrapnel piece in entity color
+                const [shrapAngle, shrapSpeed, shrapColor] = args;
+                const a2 = (shrapAngle || 0) + random(-0.3, 0.3);
+                const sp = (shrapSpeed || 5) * random(0.7, 1.3);
+                this.vel = { x: Math.cos(a2) * sp, y: Math.sin(a2) * sp };
+                this.radius = random(1.5, 4);
+                this.length = random(6, 16); // streak length
+                this.life = random(0.6, 1.0);
+                this.color = shrapColor || '#ff8800';
+                this.angle = a2;
+                break;
+            }
+            case 'explosionEmber': {
+                // Slow-drifting glowing ember that lingers
+                const [emberColor] = args;
+                const eAngle = random(0, Math.PI * 2);
+                const eSpeed = random(0.3, 1.8);
+                this.vel = { x: Math.cos(eAngle) * eSpeed, y: Math.sin(eAngle) * eSpeed };
+                this.radius = random(1, 3);
+                this.life = random(0.8, 1.5);
+                this.color = emberColor || '#ffaa44';
+                break;
+            }
+            case 'explosionRingColored': {
+                // Expanding ring in a specific color
+                const [ringRadius, ringColor] = args;
+                this.life = 0.8;
+                this.radius = 0;
+                this.maxRadius = ringRadius || 50;
+                this.color = ringColor || '#ff8800';
+                this.lineWidth = random(3, 8);
+                break;
+            }
         }
     }
     
@@ -259,6 +304,30 @@ export class Particle {
                 this.y += this.vel.y * TS;
                 this.vel.y += 0.1 * TS;
                 this.life -= 0.00625 * TS;
+                break;
+
+            case 'explosionFlash':
+                this.life -= 0.08 * TS;
+                this.radius = (1 - this.life ** 2) * this.maxRadius;
+                break;
+            case 'explosionShrapnel':
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                this.vel.x *= Math.pow(0.94, TS);
+                this.vel.y *= Math.pow(0.94, TS);
+                this.life -= 0.03 * TS;
+                this.angle = Math.atan2(this.vel.y, this.vel.x);
+                break;
+            case 'explosionEmber':
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                this.vel.x *= Math.pow(0.97, TS);
+                this.vel.y *= Math.pow(0.97, TS);
+                this.life -= 0.015 * TS;
+                break;
+            case 'explosionRingColored':
+                this.life -= 0.04 * TS;
+                this.radius = (1 - this.life / 0.8) * this.maxRadius;
                 break;
         }
         
@@ -407,8 +476,70 @@ export class Particle {
                 ctx.fillText(`${this.damage}`, this.x, this.y);
                 ctx.restore();
                 break;
+
+            case 'explosionFlash':
+                // Additive white flash — bright core
+                ctx.save();
+                ctx.globalCompositeOperation = 'screen';
+                ctx.globalAlpha = Math.max(0, this.life * this.life); // quadratic fade
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                break;
+
+            case 'explosionShrapnel': {
+                // Directional streak — line from position in movement direction
+                const speed = Math.hypot(this.vel.x, this.vel.y);
+                const streakLen = Math.min(this.length, speed * 3);
+                const tailX = this.x - Math.cos(this.angle) * streakLen;
+                const tailY = this.y - Math.sin(this.angle) * streakLen;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.radius;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(tailX, tailY);
+                ctx.lineTo(this.x, this.y);
+                ctx.stroke();
+                // Bright head dot
+                ctx.fillStyle = '#ffffff';
+                ctx.globalAlpha = Math.max(0, this.life * 0.8);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
+            case 'explosionEmber':
+                // Soft glowing dot
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Additive glow halo
+                ctx.save();
+                ctx.globalCompositeOperation = 'screen';
+                ctx.globalAlpha = Math.max(0, this.life * 0.4);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                break;
+
+            case 'explosionRingColored':
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life * 1.5);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.lineWidth * this.life;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+                break;
         }
-        
+
         ctx.restore();
     }
 } 

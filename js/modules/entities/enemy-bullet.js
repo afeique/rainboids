@@ -49,9 +49,8 @@ export class EnemyBullet {
         this.isPersistent = false;
         this.maxLifetimeOverride = null; // Override default 3000ms lifetime (ms)
 
-        // Distance-based range — matches player bullet range at level 1
-        // 1652px ≈ 3/4 of 1920x1080 screen diagonal
-        this.maxRange = 1652;
+        // Distance-based range — base ~600px, scaled by enemy level in createEnemyBullet
+        this.maxRange = 600;
 
         // For mine proximity: reference to player (set by enemy that laid the mine)
         this.targetPlayer = null;
@@ -556,7 +555,7 @@ export class EnemyBullet {
         }
 
         // "BOMB" label above bar
-        ctx.font = '13px "Pixelify Sans", "Press Start 2P", monospace';
+        ctx.font = '13px "Silkscreen", monospace';
         ctx.fillStyle = 'goldenrod';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';

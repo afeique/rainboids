@@ -35,9 +35,9 @@ export class Bullet {
         this.active = true;
         this.mass = 1;
 
-        // Range/lifetime — base range ≈ half screen width (960px at BULLET_SPEED)
-        // Stacks with LONG_RANGE powerup/upgrade (+40% per stack)
-        this.maxLife = Math.round(60 / GAME_CONFIG.TICK_SCALE);
+        // Range/lifetime — base range ≈ 24% screen width (~460px at BULLET_SPEED)
+        // Each LONG_RANGE stack adds +40%; ~4 stacks for full screen
+        this.maxLife = Math.round(30 / GAME_CONFIG.TICK_SCALE);
         this.rangeMultiplier = 1.0; // Set by player before firing
         this.fadeFactor = 1.0;
 
