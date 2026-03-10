@@ -14,6 +14,10 @@ export class InputHandler {
             aimY: window.innerHeight / 2,
             screenAimX: window.innerWidth / 2,
             screenAimY: window.innerHeight / 2,
+            skill1: false,
+            skill2: false,
+            skill3: false,
+            skill4: false,
         };
         
         
@@ -120,6 +124,19 @@ export class InputHandler {
             case 'ArrowRight':
             case 'KeyD':
                 this.input.right = true;
+                break;
+            // Defense skill activation (number keys 1-4, only without Shift)
+            case 'Digit1':
+                if (!e.shiftKey) this.input.skill1 = true;
+                break;
+            case 'Digit2':
+                if (!e.shiftKey) this.input.skill2 = true;
+                break;
+            case 'Digit3':
+                if (!e.shiftKey) this.input.skill3 = true;
+                break;
+            case 'Digit4':
+                if (!e.shiftKey) this.input.skill4 = true;
                 break;
         }
     }

@@ -124,19 +124,20 @@ body.shop-open .ui-element {
 
 .pause-tabs {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 6px;
     margin-bottom: 20px;
     justify-content: center;
 }
 
 .pause-tab {
-    padding: 10px 20px;
+    padding: 7px 12px;
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid rgba(255, 255, 255, 0.3);
     color: white;
     cursor: pointer;
     font-family: 'Press Start 2P', monospace;
-    font-size: 14px;
+    font-size: 11px;
     border-radius: 5px;
     transition: all 0.2s;
 }
