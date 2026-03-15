@@ -32,6 +32,12 @@ export class Player {
         
         // WASD + Mouse controls
         this.thrustPower = 0.18 * GAME_CONFIG.TICK_SCALE; // Scaled for tick rate
+
+        // ── Thrust juice state ──
+        this.thrustLevel = 0;         // 0 = idle, ramps to 1 when thrusting
+        this.lastThrustTime = 0;      // timestamp of last active thrust input
+        this.engineStartup = 0;       // 0→1 ramp for startup shudder
+        this.wasThrusting = false;    // edge detection for idle→thrust transition
         
         // Auto-firing system
         this.autoFireTimer = 0;
@@ -1053,8 +1059,25 @@ export class Player {
         }
 
         this.isMoving = input.up || input.down || input.left || input.right;
-        
 
+        // ── Thrust juice: ramp thrustLevel and detect startup ──
+        const now = Date.now();
+        if (this.isMoving && !this.thrustersDisabled) {
+            // Detect idle→thrust transition (startup shudder)
+            if (!this.wasThrusting && (now - this.lastThrustTime > 1200)) {
+                this.engineStartup = 1.0; // trigger startup shudder
+            }
+            this.lastThrustTime = now;
+            this.thrustLevel = Math.min(1, this.thrustLevel + 0.08); // ramp up over ~12 frames
+        } else {
+            this.thrustLevel = Math.max(0, this.thrustLevel - 0.03); // slow decay over ~33 frames
+        }
+        this.wasThrusting = this.isMoving && !this.thrustersDisabled;
+
+        // Decay startup shudder — fast punch, not a slow wobble
+        if (this.engineStartup > 0) {
+            this.engineStartup = Math.max(0, this.engineStartup - 0.06); // ~17 frames ≈ 0.28s
+        }
 
         // WASD movement with tight controls
         if (this.isMoving && !this.thrustersDisabled) {
@@ -1282,29 +1305,49 @@ export class Player {
             ctx.globalAlpha = flash ? 0.35 : 0.85;
         }
 
+        // Hit flash — brief white tint on collision
+        if (this._hitFlashTimer > 0) {
+            this._hitFlashTimer--;
+        }
+
         ctx.globalCompositeOperation = 'lighter';
 
         const r = this.radius;
         const t = Date.now() * 0.001;
-        const engPulse = 0.7 + Math.sin(t * 9) * 0.3; // fast engine flicker
 
-        // ── Engine exhaust flames ─────────────────────────────────────────────
+        // ── Engine startup shudder ──────────────────────────────────────────
+        // Brief mechanical vibration when engines re-engage after idle.
+        if (this.engineStartup > 0) {
+            const shudder = this.engineStartup * 2.2;
+            const sx = Math.sin(t * 65) * shudder;
+            const sy = Math.cos(t * 85) * shudder * 0.7;
+            ctx.translate(sx, sy);
+        }
+
+        // ── Engine exhaust — modulated by thrust level ──────────────────────
+        // Idle: small warm glow (ship stays visible). Thrusting: long bright plumes.
+        const thr = this.thrustLevel;
+        const idlePulse = 0.35 + Math.sin(t * 4) * 0.1;   // visible idle glow
+        const thrustPulse = 0.8 + Math.sin(t * 12) * 0.2;  // intense thrust flicker
+        const engPulse = idlePulse + (thrustPulse - idlePulse) * thr;
+
         const engines = [
             { x:  r * 0.42, y: r * 0.78 },
             { x: -r * 0.42, y: r * 0.78 },
         ];
         for (const eng of engines) {
-            const exhaustLen = r * (0.9 + engPulse * 0.8);
+            // Exhaust length: short warm stub at idle → long plume when thrusting
+            const exhaustLen = r * (0.45 + thr * 1.1) * (0.8 + engPulse * 0.4);
             const grad = ctx.createLinearGradient(eng.x, eng.y, eng.x, eng.y + exhaustLen);
-            grad.addColorStop(0,   rgba(255, 210, 90, 0.95 * engPulse));
-            grad.addColorStop(0.4, rgba(255, 70, 0, 0.65 * engPulse));
+            grad.addColorStop(0,   rgba(255, 220, 120, 0.9 * engPulse));
+            grad.addColorStop(0.35, rgba(255, 80, 10, 0.6 * engPulse));
             grad.addColorStop(1,   'transparent');
             ctx.fillStyle = grad;
-            // OPT-2: pre-rendered glow sprite replaces live GPU blur
-            glowSpriteCache.draw(ctx, eng.x, eng.y + exhaustLen * 0.5, '#ff8800', r * 0.1, 6, 0.8 * engPulse);
+            const glowIntensity = 0.4 + thr * 0.5;
+            glowSpriteCache.draw(ctx, eng.x, eng.y + exhaustLen * 0.5, '#ff8800', r * 0.12, 6, glowIntensity * engPulse);
             ctx.shadowBlur = 0;
             ctx.beginPath();
-            ctx.ellipse(eng.x, eng.y + exhaustLen * 0.5, r * 0.1, exhaustLen * 0.52, 0, 0, Math.PI * 2);
+            ctx.ellipse(eng.x, eng.y + exhaustLen * 0.5, r * 0.12, exhaustLen * 0.5, 0, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -1418,6 +1461,41 @@ export class Player {
         ctx.beginPath();
         ctx.arc(0, -r, r * 0.075, 0, Math.PI * 2);
         ctx.fill();
+
+        // ── Hull outline glow ────────────────────────────────────────────────
+        // Full ship silhouette stroke for visibility against dark backgrounds.
+        // Dims with idle engines but stays visible; brightens with thrust.
+        const outlineAlpha = 0.3 + thr * 0.3;
+        ctx.strokeStyle = `rgba(0, 180, 255, ${outlineAlpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, -r);
+        ctx.lineTo( r * 0.32, -r * 0.18);
+        ctx.lineTo( r * 1.12,  r * 0.28);
+        ctx.lineTo( r * 1.42,  r * 0.08);
+        ctx.lineTo( r * 1.18,  r * 0.56);
+        ctx.lineTo( r * 0.82,  r * 0.68);
+        ctx.lineTo( r * 0.42,  r * 0.78);
+        ctx.lineTo( r * 0.28,  r * 0.58);
+        ctx.lineTo(0,           r * 0.38);
+        ctx.lineTo(-r * 0.28,  r * 0.58);
+        ctx.lineTo(-r * 0.42,  r * 0.78);
+        ctx.lineTo(-r * 0.82,  r * 0.68);
+        ctx.lineTo(-r * 1.18,  r * 0.56);
+        ctx.lineTo(-r * 1.42,  r * 0.08);
+        ctx.lineTo(-r * 1.12,  r * 0.28);
+        ctx.lineTo(-r * 0.32, -r * 0.18);
+        ctx.closePath();
+        ctx.stroke();
+
+        // ── Hit flash overlay ─────────────────────────────────────────────
+        if (this._hitFlashTimer > 0) {
+            ctx.globalCompositeOperation = 'source-atop';
+            ctx.fillStyle = `rgba(255, 255, 255, ${this._hitFlashTimer / 8})`;
+            ctx.fillRect(-r * 1.5, -r * 1.2, r * 3, r * 2.4);
+            ctx.globalCompositeOperation = 'lighter';
+        }
 
         // Draw charging effects whenever charge is building (independent of primary fire cooldown)
         if (this.isCharging) {

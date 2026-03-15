@@ -71,10 +71,14 @@ export class Asteroid {
         this.creationTime = Date.now();
 
         // Unique color palette per asteroid
-        this.baseHue = Math.random() * 360;           // random starting hue
-        this.hueSpread = 40 + Math.random() * 120;    // 40-160° spread across edges
-        this.hueCycleSpeed = 8 + Math.random() * 24;  // how fast the hue shifts (ms divisor)
-        this.saturation = 85 + Math.random() * 15;    // 85-100%
+        // Hue range: teal/cyan/blue-violet family (150-280°) with occasional gold (40-60°)
+        // Matches nebula + player ship palette for stylistic consistency
+        this.baseHue = Math.random() < 0.2
+            ? 40 + Math.random() * 20            // 20%: warm gold (40-60°)
+            : 150 + Math.random() * 130;          // 80%: teal→cyan→blue→violet (150-280°)
+        this.hueSpread = 30 + Math.random() * 70;     // 30-100° spread (tighter than before)
+        this.hueCycleSpeed = 10 + Math.random() * 20;  // how fast the hue shifts (ms divisor)
+        this.saturation = 80 + Math.random() * 15;    // 80-95%
         this.lightness = 65 + Math.random() * 15;     // 65-80%
         
         this.rescale(radius || random(30, 60));
@@ -261,6 +265,59 @@ export class Asteroid {
         this.drawAsteroidShape(ctx);
 
         ctx.restore();
+
+        // Hit flash — non-rotating square burst with debris (world-space)
+        if (this._hitFlashTimer > 0) {
+            const maxT = 6;
+            const t = this._hitFlashTimer;
+            const alpha = t / maxT;
+            const progress = 1 - alpha;
+            const fr = this.radius * 1.05;
+            const hfT = frameClock.now * 0.001;
+
+            // Slight jitter on the main flash
+            const jx = Math.sin(hfT * 153) * 2;
+            const jy = Math.cos(hfT * 191) * 2;
+            const cx = this.x + jx;
+            const cy = this.y + jy;
+
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Main flash square — bright, non-rotating
+            const flashAlpha = alpha * alpha * 0.8;
+            ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+            ctx.fillRect(cx - fr, cy - fr, fr * 2, fr * 2);
+
+            // Debris squares bursting outward
+            const seed = ((this.x * 11.3 + this.y * 7.7) | 0) & 0xffff;
+            const debrisCount = 6;
+            const colors = [
+                '255,255,255',
+                '120,235,255',
+                '255,90,210',
+                '255,255,150',
+                '190,150,255',
+                '255,255,255',
+            ];
+            for (let i = 0; i < debrisCount; i++) {
+                const angle = (i / debrisCount) * Math.PI * 2 + (seed + i * 137) % 100 * 0.063;
+                const speed = 0.7 + ((seed + i * 31) % 10) * 0.06;
+                const dist = progress * fr * 2.8 * speed;
+                const dx = Math.cos(angle) * dist;
+                const dy = Math.sin(angle) * dist;
+
+                const sz = fr * (0.25 - progress * 0.16);
+                if (sz <= 0) continue;
+
+                const debrisAlpha = alpha * 0.5 * (1 - progress * 0.5);
+                ctx.fillStyle = `rgba(${colors[i]}, ${debrisAlpha})`;
+                ctx.fillRect(cx + dx - sz, cy + dy - sz, sz * 2, sz * 2);
+            }
+
+            ctx.restore();
+            this._hitFlashTimer--;
+        }
 
         // Draw health bar
         ctx.save();

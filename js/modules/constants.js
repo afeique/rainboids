@@ -58,7 +58,7 @@ export const GAME_CONFIG = {
     WAVE_BREAK_TIME: 10000, // Time between waves (ms)
     
     // Performance settings optimized
-    MAX_PARTICLES: 30, // Reduced for better performance
+    MAX_PARTICLES: 50, // Raised for dramatic death explosions
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 
     // Temporal settings
@@ -215,8 +215,8 @@ export const NOISE_CONFIG = {
 };
 
 export const NORMAL_STAR_COLORS = [
-    '#a6b3ff', '#c3a6ff', '#f3a6ff', '#ffa6f8', 
-    '#ffa6c7', '#ff528e', '#d98cff', '#ff8c00'
+    '#a6b3ff', '#c3a6ff', '#a6f3e8', '#a6e8ff',
+    '#b8d4ff', '#52e8ff', '#8cd9ff', '#a6ffcc'
 ];
 
 export const GAME_STATES = {

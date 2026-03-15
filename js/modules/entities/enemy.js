@@ -4336,9 +4336,64 @@ export class Enemy {
         
         // Draw distinct geometric shape based on enemy type
         this.drawEnemyShape(ctx);
-        
+
         ctx.restore();
-        
+
+        // Hit flash — non-rotating square burst with debris (world-space)
+        if (this._hitFlashTimer > 0) {
+            const maxT = 6;
+            const t = this._hitFlashTimer;
+            const alpha = t / maxT;
+            const progress = 1 - alpha;
+            const fr = this.radius * 1.15;
+            const hfT = frameClock.now * 0.001;
+
+            // Slight jitter on the main flash
+            const jx = Math.sin(hfT * 141) * 2;
+            const jy = Math.cos(hfT * 179) * 2;
+            const cx = this.x + jx;
+            const cy = this.y + jy;
+
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Main flash square — bright, non-rotating
+            const flashAlpha = alpha * alpha * 0.85; // quadratic falloff, starts very bright
+            ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+            ctx.fillRect(cx - fr, cy - fr, fr * 2, fr * 2);
+
+            // Debris squares bursting outward
+            const seed = ((this.x * 7.3 + this.y * 13.7) | 0) & 0xffff;
+            const debrisCount = 7;
+            const colors = [
+                '255,255,255',
+                '120,235,255',
+                '255,90,210',
+                '255,255,150',
+                '190,150,255',
+                '255,255,255',
+                '120,235,255',
+            ];
+            for (let i = 0; i < debrisCount; i++) {
+                const angle = (i / debrisCount) * Math.PI * 2 + (seed + i * 137) % 100 * 0.063;
+                const speed = 0.7 + ((seed + i * 31) % 10) * 0.06;
+                const dist = progress * fr * 3.0 * speed;
+                const dx = Math.cos(angle) * dist;
+                const dy = Math.sin(angle) * dist;
+
+                // Size: starts visible, shrinks as it flies out
+                const sz = fr * (0.28 - progress * 0.18);
+                if (sz <= 0) continue;
+
+                const debrisAlpha = alpha * 0.55 * (1 - progress * 0.5);
+                ctx.fillStyle = `rgba(${colors[i]}, ${debrisAlpha})`;
+                ctx.fillRect(cx + dx - sz, cy + dy - sz, sz * 2, sz * 2);
+            }
+
+            ctx.restore();
+            this._hitFlashTimer--;
+        }
+
         // Draw laser charging ball (outside of transform, in front of drifter)
         if (this.type === 'DRIFTER' && this.laserCharging && this.laserCharge > 0) {
             this.drawLaserChargingBall(ctx);

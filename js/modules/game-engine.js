@@ -248,7 +248,7 @@ export class GameEngine {
         this.player.y = this.gameField.height / 2;
         
         this.bulletPool = new PoolManager(Bullet, 10);     // Reduced from 20  
-        this.particlePool = new PoolManager(Particle, 32); // Cap is MAX_PARTICLES=30
+        this.particlePool = new PoolManager(Particle, 50); // Cap is MAX_PARTICLES=50
         this.lineDebrisPool = new PoolManager(LineDebris, 20); // Reduced from 100
         this.asteroidPool = new PoolManager(Asteroid, 5);  // Reduced from 20
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
@@ -890,29 +890,39 @@ export class GameEngine {
         const baseColor = `hsl(${hue}, ${sat}%, ${lit}%)`;
         const brightColor = `hsl(${hue}, ${sat}%, ${Math.min(95, lit + 20)}%)`;
         const dimColor = `hsl(${(hue + 20) % 360}, ${sat}%, ${Math.max(40, lit - 15)}%)`;
-        const sizeScale = Math.min(1.5, ast.baseRadius / 25); // scale effects to asteroid size
+        const sizeScale = Math.min(1.5, ast.baseRadius / 25);
+        const onScreen = this.isEntityOnScreen(ast);
+        const isLarge = ast.baseRadius > (GAME_CONFIG.MIN_AST_RAD + 5);
 
-        // 1. Bright white core flash
-        this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 1.2 * sizeScale);
+        // ── Kill juice: hitstop + camera kick + screen flash ──
+        if (onScreen) {
+            this.triggerHitstop(isLarge ? 6 : 4);
+            this.triggerScreenFlash(isLarge ? 0.1 : 0.06, 2);
+            const kdx = this.player.x - ast.x;
+            const kdy = this.player.y - ast.y;
+            this.triggerCameraKick(kdx, kdy, isLarge ? 12 : 7);
+        }
 
-        // 2. Expanding colored ring
-        this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 2 * sizeScale, baseColor);
-        // Staggered second ring
+        // 1. Bright white core flash — bigger pop
+        this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 1.8 * sizeScale);
+
+        // 2. Expanding colored rings
+        this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 2.5 * sizeScale, baseColor);
         setTimeout(() => {
-            this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 2.8 * sizeScale, dimColor);
+            this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 3.2 * sizeScale, dimColor);
         }, 60);
 
         // 3. Directional shrapnel streaks in asteroid color
-        const shrapnelCount = Math.floor(8 + 6 * sizeScale);
+        const shrapnelCount = Math.floor(12 + 8 * sizeScale);
         for (let i = 0; i < shrapnelCount; i++) {
             const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.3, 0.3);
-            const speed = random(4, 10) * sizeScale;
+            const speed = random(5, 12) * sizeScale;
             const color = i % 3 === 0 ? brightColor : i % 3 === 1 ? baseColor : dimColor;
             this.particlePool.get(ast.x, ast.y, 'explosionShrapnel', angle, speed, color);
         }
 
         // 4. Lingering embers in asteroid's hue range
-        const emberCount = Math.floor(6 + 4 * sizeScale);
+        const emberCount = Math.floor(8 + 5 * sizeScale);
         for (let i = 0; i < emberCount; i++) {
             const eHue = hue + random(-30, 30);
             const eColor = `hsl(${(eHue + 360) % 360}, ${sat}%, ${random(55, 80)}%)`;
@@ -920,13 +930,14 @@ export class GameEngine {
         }
 
         // 5. Classic small particles for density
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 16; i++) {
             const p = this.particlePool.get(ast.x, ast.y, 'explosion');
             if (p) {
-                p.color = i < 4 ? '#ffffff' : i < 8 ? baseColor : brightColor;
+                p.color = i < 5 ? '#ffffff' : i < 10 ? baseColor : brightColor;
                 const a = random(0, Math.PI * 2);
-                const s = random(1, 5);
+                const s = random(2, 7);
                 p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
+                p.radius = random(1.5, 4.5);
             }
         }
 
@@ -936,6 +947,15 @@ export class GameEngine {
             const p2 = ast.vertices3D[edge[1]];
             this.lineDebrisPool.get(ast.x, ast.y, p1, p2, baseColor);
         });
+
+        // 7. Delayed secondary burst (matches enemy death pattern)
+        setTimeout(() => {
+            for (let i = 0; i < 6; i++) {
+                const ox = ast.x + random(-18, 18);
+                const oy = ast.y + random(-18, 18);
+                this.particlePool.get(ox, oy, 'explosionEmber', baseColor);
+            }
+        }, 70);
     }
     
     createColorStarBurst(x, y) {
@@ -2744,44 +2764,54 @@ export class GameEngine {
     createEnemyDebris(enemy) {
         const color = enemy.color || '#ff4444';
         const sizeScale = Math.min(2, enemy.radius / 15);
+        const onScreen = this.isEntityOnScreen(enemy);
+
+        // ── Kill juice: hitstop + camera kick + screen flash ──
+        if (onScreen) {
+            this.triggerHitstop(8);   // longer than hit hitstop (3-5 frames)
+            this.triggerScreenFlash(0.12, 3); // brief white overlay
+            const kdx = this.player.x - enemy.x;
+            const kdy = this.player.y - enemy.y;
+            this.triggerCameraKick(kdx, kdy, 14);
+        }
 
         // 1. Bright white core flash — the "pop"
-        this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 2 * sizeScale);
+        this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 2.5 * sizeScale);
 
         // 2. Staggered colored rings in enemy color
         for (let ring = 0; ring < 3; ring++) {
             setTimeout(() => {
                 const ringColor = ring === 0 ? '#ffffff' : color;
                 this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored',
-                    (30 + ring * 25) * sizeScale, ringColor);
+                    (35 + ring * 30) * sizeScale, ringColor);
             }, ring * 50);
         }
 
         // 3. Directional shrapnel in enemy color — fast streaks flying outward
-        const shrapnelCount = Math.floor(12 + 6 * sizeScale);
+        const shrapnelCount = Math.floor(16 + 8 * sizeScale);
         for (let i = 0; i < shrapnelCount; i++) {
             const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
-            const speed = random(5, 12) * sizeScale;
+            const speed = random(6, 14) * sizeScale;
             const sColor = i % 3 === 0 ? '#ffffff' : color;
             this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', angle, speed, sColor);
         }
 
         // 4. Lingering embers in enemy color
-        const emberCount = Math.floor(8 + 4 * sizeScale);
+        const emberCount = Math.floor(10 + 6 * sizeScale);
         for (let i = 0; i < emberCount; i++) {
             this.particlePool.get(enemy.x, enemy.y, 'explosionEmber',
                 i % 2 === 0 ? color : '#ffcc66');
         }
 
         // 5. Classic small particles for density (mix of white + enemy color)
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 20; i++) {
             const p = this.particlePool.get(enemy.x, enemy.y, 'explosion');
             if (p) {
-                p.color = i < 5 ? '#ffffff' : color;
+                p.color = i < 6 ? '#ffffff' : color;
                 const a = random(0, Math.PI * 2);
-                const s = random(2, 6);
+                const s = random(2, 8);
                 p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
-                p.radius = random(1.5, 4);
+                p.radius = random(1.5, 5);
             }
         }
 
@@ -2789,15 +2819,15 @@ export class GameEngine {
         this.createShapeDebris(enemy);
 
         // 7. Screen shake (only if on screen)
-        if (this.isEntityOnScreen(enemy)) {
-            this.triggerScreenShake(25, 15, enemy.radius * 2);
+        if (onScreen) {
+            this.triggerScreenShake(30, 18, enemy.radius * 2.5);
         }
 
         // 8. Delayed secondary burst — scattered sparks
         setTimeout(() => {
-            for (let i = 0; i < 8; i++) {
-                const ox = enemy.x + random(-20, 20);
-                const oy = enemy.y + random(-20, 20);
+            for (let i = 0; i < 10; i++) {
+                const ox = enemy.x + random(-25, 25);
+                const oy = enemy.y + random(-25, 25);
                 this.particlePool.get(ox, oy, 'explosionEmber', color);
             }
         }, 80);
@@ -3651,6 +3681,9 @@ export class GameEngine {
                     const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
                     ast.health = Math.max(0, ast.health - damage);
 
+                    // Hit flash — asteroid briefly turns white when struck
+                    ast._hitFlashTimer = 6;
+
                     // Show damage number (same as enemy ships)
                     if (this.isEntityOnScreen(ast)) {
                         this.createDamageNumber(ast.x, ast.y - ast.baseRadius, damage);
@@ -3940,6 +3973,9 @@ export class GameEngine {
                     // Damage the enemy (One Punch Man cheat: instant kill)
                     const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
                     const destroyed = enemy.takeDamage(damage);
+
+                    // Hit flash on enemy when struck
+                    enemy._hitFlashTimer = 6;
                     
                     // Award XP for hitting enemy
                     this.player.gainExperience(3);
@@ -4306,8 +4342,12 @@ export class GameEngine {
                 }
             }
             
-            // Visual feedback for player damage
-            this.triggerScreenShake(18, 10, enemy.radius); // Strong screen shake for collision
+            // ── JUICE: hitstop + camera kick + screen shake ──
+            this.triggerHitstop(5); // ~83ms — enemies hit harder than asteroids
+            const kickDx = player.x - enemy.x;
+            const kickDy = player.y - enemy.y;
+            this.triggerCameraKick(kickDx, kickDy, 10);
+            this.triggerScreenShake(18, 10, enemy.radius);
             
             // Show red damage number
             this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
@@ -4329,8 +4369,9 @@ export class GameEngine {
             
             // Make player invulnerable briefly after taking damage
             this.player.makeInvincible(1500);
+            this.player._hitFlashTimer = 8; // white flash on hit
         }
-        
+
         // Always damage the enemy when colliding with player (massive damage)
         const enemyCollisionDamage = 50; // Massive damage to enemies
         const destroyed = enemy.takeDamage(enemyCollisionDamage);
@@ -4452,8 +4493,9 @@ export class GameEngine {
             }
         }
         
-        // Visual feedback
-        this.triggerScreenShake(12, 6, bullet.radius); // Increased screen shake
+        // ── JUICE: hitstop + screen shake (no camera kick for bullets — too small) ──
+        this.triggerHitstop(3); // ~50ms — quick jolt
+        this.triggerScreenShake(12, 6, bullet.radius);
         this.audioManager.playHit();
         
         // Show red damage number
@@ -4484,6 +4526,7 @@ export class GameEngine {
         
         // Make player invulnerable briefly
         player.makeInvincible(1000);
+        player._hitFlashTimer = 5; // briefer flash for bullet hits
     }
     
     handleEnemyAsteroidCollision(enemy, asteroid) {
@@ -5545,9 +5588,48 @@ export class GameEngine {
         }
     }
     
+    // ── Hitstop: freeze game logic for N frames on big impacts ─────────
+    triggerHitstop(frames) {
+        // Only apply if stronger than current hitstop
+        this._hitstopFrames = Math.max(this._hitstopFrames || 0, frames);
+    }
+
+    // ── Camera kick: directional lurch on impact ────────────────────────
+    triggerCameraKick(dx, dy, magnitude) {
+        const len = Math.hypot(dx, dy) || 1;
+        this._cameraKickX = (dx / len) * magnitude;
+        this._cameraKickY = (dy / len) * magnitude;
+    }
+
+    // ── Screen flash: brief white overlay on kill ────────────────────────
+    triggerScreenFlash(alpha, duration) {
+        this._screenFlashAlpha = alpha;
+        this._screenFlashDuration = duration;
+        this._screenFlashTimer = duration;
+    }
+
     gameLoop() {
         frameClock.tick();
         const frameStart = performance.now();
+
+        // ── Hitstop: skip logic updates, keep rendering ──
+        if (this._hitstopFrames > 0) {
+            this._hitstopFrames--;
+            // Still render (frozen frame) — but skip logic
+            this.draw();
+            requestAnimationFrame(() => this.gameLoop());
+            return;
+        }
+
+        // ── Camera kick decay ──
+        if (this._cameraKickX) {
+            this._cameraKickX *= 0.7; // fast exponential decay
+            if (Math.abs(this._cameraKickX) < 0.3) this._cameraKickX = 0;
+        }
+        if (this._cameraKickY) {
+            this._cameraKickY *= 0.7;
+            if (Math.abs(this._cameraKickY) < 0.3) this._cameraKickY = 0;
+        }
 
         // OPT-7: Fixed-timestep accumulator — logic runs at 60 Hz, render at display refresh.
         if (this.useTemporalUpsampling) {
@@ -5567,28 +5649,33 @@ export class GameEngine {
         }
 
         this.ctx.save();
+
+        // ── Camera kick (directional impact lurch) ──
+        let kickX = this._cameraKickX || 0;
+        let kickY = this._cameraKickY || 0;
+
         if (this.game.screenShakeDuration > 0) {
-            // Enhanced shake algorithm with multiple frequencies and smooth decay
+            // Enhanced shake — stronger random component for punchier feel
             const time = Date.now() * 0.01;
             const shakeIntensity = this.game.screenShakeMagnitude * (this.game.screenShakeDuration / this.game.originalShakeMagnitude);
-            
-            // Combine multiple sine waves for more natural shake
-            const dx = Math.sin(time * 15) * shakeIntensity * 0.3 + 
-                      Math.sin(time * 7) * shakeIntensity * 0.2 + 
-                      (Math.random() - 0.5) * shakeIntensity * 0.5;
-            const dy = Math.cos(time * 13) * shakeIntensity * 0.3 + 
-                      Math.cos(time * 5) * shakeIntensity * 0.2 + 
-                      (Math.random() - 0.5) * shakeIntensity * 0.5;
-            
-            this.ctx.translate(dx, dy);
+
+            // Multi-frequency shake with dominant random jitter (Vlambeer style)
+            const dx = Math.sin(time * 17) * shakeIntensity * 0.25 +
+                      (Math.random() - 0.5) * shakeIntensity * 0.75;
+            const dy = Math.cos(time * 13) * shakeIntensity * 0.25 +
+                      (Math.random() - 0.5) * shakeIntensity * 0.75;
+
+            this.ctx.translate(dx + kickX, dy + kickY);
             this.game.screenShakeDuration--;
-            
+
             // Smooth decay of shake magnitude
             if (this.game.screenShakeDuration > 0) {
                 this.game.screenShakeMagnitude = Math.max(0, this.game.screenShakeMagnitude - this.game.shakeDecayRate);
             } else {
                 this.game.screenShakeMagnitude = 0;
             }
+        } else if (kickX || kickY) {
+            this.ctx.translate(kickX, kickY);
         }
         
         this.draw();
@@ -5620,6 +5707,17 @@ export class GameEngine {
             this.drawShop();
         }
         
+        // Screen flash overlay (kill feedback — drawn over everything except cursor)
+        if (this._screenFlashTimer > 0) {
+            const flashAlpha = (this._screenFlashTimer / this._screenFlashDuration) * this._screenFlashAlpha;
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'lighter';
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            this.ctx.restore();
+            this._screenFlashTimer--;
+        }
+
         // Draw custom cursor (always on top, after all UI elements)
         this.drawCustomCursor();
         
@@ -6973,9 +7071,30 @@ export class GameEngine {
             this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
             this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
             this.audioManager.playShield();
-            
-            // Screen shake for asteroid collision
-            this.triggerScreenShake(20, 12, asteroid.radius); // Significant screen shake
+
+            // ── Impact sparks at collision point ──
+            const impactX = (this.player.x + asteroid.x) / 2;
+            const impactY = (this.player.y + asteroid.y) / 2;
+            const sparkCount = 10;
+            for (let i = 0; i < sparkCount; i++) {
+                const p = this.particlePool.get(impactX, impactY, 'hit');
+                if (p) {
+                    const a = random(0, Math.PI * 2);
+                    const s = random(2, 6);
+                    p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
+                    p.color = i < 4 ? '#ffffff' : i < 7 ? '#ffcc44' : '#ff8800';
+                }
+            }
+
+            // Brief white flash on the player
+            this.player._hitFlashTimer = 6;
+
+            // ── JUICE: hitstop + camera kick + screen shake ──
+            this.triggerHitstop(4); // ~67ms freeze — satisfying impact weight
+            const kickDx = this.player.x - asteroid.x;
+            const kickDy = this.player.y - asteroid.y;
+            this.triggerCameraKick(kickDx, kickDy, 8); // directional camera lurch
+            this.triggerScreenShake(20, 12, asteroid.radius);
         }
 
         // Always damage the asteroid when colliding with player (massive damage)

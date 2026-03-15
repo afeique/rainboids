@@ -114,8 +114,8 @@ test.describe('QA-06: Pool manager correctness', () => {
             }
         });
         const count = await page.evaluate(() => window.gameEngine.particlePool.activeObjects.length);
-        // MAX_PARTICLES is 30; allow a small tolerance for edge-of-cap behaviour
-        expect(count).toBeLessThanOrEqual(35);
+        // MAX_PARTICLES is 50; allow a small tolerance for edge-of-cap behaviour
+        expect(count).toBeLessThanOrEqual(55);
     });
 
     // ------------------------------------------------------------------

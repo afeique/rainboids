@@ -174,8 +174,8 @@ test.describe('QA-05: Entity spawning and lifecycle', () => {
             }
         });
         const count = (await getPoolCounts(page)).particles;
-        // Should be at or near the cap (30 by default), not 100
-        expect(count).toBeLessThanOrEqual(35); // small tolerance for cap edge cases
+        // Should be at or near the cap (50 by default), not 100
+        expect(count).toBeLessThanOrEqual(55); // small tolerance for cap edge cases
     });
 
     // ------------------------------------------------------------------

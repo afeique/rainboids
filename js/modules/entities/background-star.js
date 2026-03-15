@@ -34,27 +34,28 @@ export class BackgroundStar {
         this.twinkleSpeed = random(0.004, 0.018) * (1 + this.z * 0.25) * densityFactor;
         this.twinkleAmplitude = random(0.25, 0.45); // Vary how much each star twinkles
 
-        // Realistic star colors: mostly blue-white, some warm white, occasional tints
+        // Star colors: cool tones that contrast well with red danger indicators
         const colorRoll = Math.random();
         const brightness = 200 + Math.floor(Math.random() * 55); // 200-255
-        if (colorRoll < 0.55) {
+        if (colorRoll < 0.45) {
             // Blue-white (hot stars) — most common
             const b = Math.min(255, brightness + 15);
             const g = Math.min(255, brightness + 5);
             this.color = `rgb(${brightness}, ${g}, ${b})`;
-        } else if (colorRoll < 0.80) {
+        } else if (colorRoll < 0.70) {
             // Pure white
             this.color = `rgb(${brightness}, ${brightness}, ${brightness})`;
-        } else if (colorRoll < 0.92) {
-            // Warm yellow-white (sun-like)
-            const r = Math.min(255, brightness + 10);
-            const b = Math.max(180, brightness - 20);
-            this.color = `rgb(${r}, ${brightness}, ${b})`;
+        } else if (colorRoll < 0.85) {
+            // Cyan-white (blue giant)
+            const g = Math.min(255, brightness + 10);
+            const b = Math.min(255, brightness + 20);
+            this.color = `rgb(${brightness - 15}, ${g}, ${b})`;
         } else {
-            // Rare faint orange-red (cool giants)
-            const r = Math.min(255, brightness + 20);
-            const b = Math.max(160, brightness - 35);
-            this.color = `rgb(${r}, ${brightness}, ${b})`;
+            // Warm gold-white (sun-like, no red push)
+            const r = Math.min(255, brightness + 5);
+            const g = Math.min(255, brightness);
+            const b = Math.max(185, brightness - 15);
+            this.color = `rgb(${r}, ${g}, ${b})`;
         }
         
         this.active = true;

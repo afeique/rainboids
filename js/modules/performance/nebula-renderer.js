@@ -6,33 +6,29 @@ import { random } from '../utils.js';
 
 // Extended palette — each entry has multiple color stops for richer gradients
 const NEBULA_PALETTES = [
-    // Deep space purple → magenta
-    { colors: [[120, 40, 200], [180, 30, 140], [60, 15, 100], [40, 10, 60]] },
-    // Teal → cyan emission
-    { colors: [[20, 180, 160], [40, 220, 200], [10, 100, 110], [5, 50, 60]] },
-    // Crimson → orange star-forming
-    { colors: [[200, 30, 50], [220, 80, 30], [140, 20, 40], [60, 10, 20]] },
-    // Blue → violet reflection
-    { colors: [[40, 80, 220], [100, 50, 200], [20, 50, 140], [10, 25, 70]] },
-    // Warm gold → rose dust
-    { colors: [[180, 120, 40], [200, 80, 60], [100, 60, 25], [50, 30, 15]] },
-    // Green → teal planetary
-    { colors: [[30, 190, 80], [20, 160, 140], [10, 100, 60], [5, 50, 30]] },
-    // Pink → lavender
-    { colors: [[200, 60, 160], [160, 80, 200], [100, 30, 120], [50, 15, 60]] },
-    // Cyan → blue ice
-    { colors: [[60, 200, 240], [40, 140, 220], [20, 80, 160], [10, 40, 80]] },
-    // Amber → deep red
-    { colors: [[240, 160, 30], [200, 60, 20], [120, 40, 15], [60, 20, 10]] },
-    // Emerald → gold
-    { colors: [[40, 200, 60], [160, 180, 30], [20, 120, 40], [10, 60, 20]] },
+    // Deep indigo → midnight blue
+    { colors: [[50, 30, 160], [30, 20, 120], [70, 40, 180], [15, 10, 60]] },
+    // Sapphire → cobalt
+    { colors: [[30, 80, 220], [50, 120, 255], [15, 50, 140], [8, 25, 80]] },
+    // Violet → soft purple
+    { colors: [[100, 40, 200], [140, 60, 220], [60, 20, 130], [30, 10, 70]] },
+    // Cyan wisp → deep blue
+    { colors: [[40, 160, 220], [30, 100, 200], [20, 70, 140], [10, 35, 80]] },
+    // Periwinkle → lavender
+    { colors: [[100, 100, 240], [140, 110, 220], [60, 50, 160], [30, 25, 90]] },
+    // Teal accent → navy
+    { colors: [[20, 140, 160], [30, 100, 180], [10, 80, 110], [5, 40, 60]] },
+    // Nebula blue → ultraviolet
+    { colors: [[40, 60, 200], [80, 40, 220], [20, 30, 120], [10, 15, 60]] },
+    // Warm stardust — gold → amber (no red; rare warm contrast)
+    { colors: [[180, 160, 50], [200, 180, 80], [100, 90, 25], [50, 45, 12]] },
 ];
 
 // Parallax layers: far nebulae barely move, near ones move more
 const LAYER_CONFIG = [
-    { depth: 0.02, blobCount: [3, 5], radiusRange: [200, 450], opacityRange: [0.03, 0.08] },
-    { depth: 0.06, blobCount: [3, 5], radiusRange: [140, 320], opacityRange: [0.04, 0.10] },
-    { depth: 0.12, blobCount: [2, 4], radiusRange: [100, 250], opacityRange: [0.03, 0.07] },
+    { depth: 0.02, blobCount: [3, 5], radiusRange: [220, 500], opacityRange: [0.03, 0.07] },
+    { depth: 0.06, blobCount: [3, 5], radiusRange: [160, 360], opacityRange: [0.04, 0.09] },
+    { depth: 0.12, blobCount: [2, 4], radiusRange: [100, 260], opacityRange: [0.02, 0.06] },
 ];
 
 class NebulaRenderer {
