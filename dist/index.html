@@ -16,8 +16,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/assets/favicon-CuO7xADt.png">
-  <script type="module" crossorigin src="/assets/index-7pjje6NW.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-DOsDM7lm.css">
+  <script type="module" crossorigin src="/assets/index-BDdrDOsX.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-BeJQHU59.css">
 </head>
 <body>
     <!-- <div id="loading-screen">
@@ -30,7 +30,7 @@
         </div>
     </div> -->
     
-    <!-- <div id="scanline-overlay"></div> -->
+    <div id="scanline-overlay"></div>
     <!-- <div id="title-screen">
         <h1 id="game-title"></h1>
         <p id="high-score-display"></p>
@@ -64,6 +64,7 @@
                 <button class="pause-tab" data-tab="powerups">POWERUPS</button>
                 <button class="pause-tab" data-tab="music">MUSIC</button>
                 <button class="pause-tab" data-tab="sfx">SFX</button>
+                <button class="pause-tab" data-tab="skills">SKILLS</button>
             </div>
             
             <div class="pause-menu-actions">
@@ -153,6 +154,20 @@
                     </div>
                     <div id="sfx-toggles" style="display: flex; flex-direction: column; gap: 10px;">
                         <!-- Sound toggles will be added dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="skills-tab" class="pause-tab-content">
+                <h2>SKILL SLOTS</h2>
+                <div style="margin-bottom: 15px; color: #aaa; font-size: 12px;">Assign defense skills to number keys 1-4</div>
+                <div id="skill-slots-container" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                    <!-- Skill slots will be populated dynamically -->
+                </div>
+                <div id="owned-skills-list" style="margin-top: 20px;">
+                    <div style="margin-bottom: 10px; color: #aaa; font-size: 12px;">Owned Skills (click to assign)</div>
+                    <div id="owned-skills-grid" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <!-- Owned skills will be populated dynamically -->
                     </div>
                 </div>
             </div>

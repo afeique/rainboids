@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../constants.js';
 import { random, wrap, glowSpriteCache } from '../utils.js';
 import { rgba } from '../color-cache.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from '../weapon-data.js';
+import { autofireDiag } from '../autofire-diag.js';
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -50,8 +51,7 @@ export class Player {
         this.chargePaused = false;
         this.pausedChargeTime = 0; // Accumulated charge time when paused
         
-        // Shot cooldown system
-        this.shotCooldownTime = 400; // 400ms cooldown between shots
+        // Shot timing — Date.now() based (immune to frame rate variation)
         this.lastShotTime = 0;
         this.canShoot = true;
         
@@ -158,6 +158,7 @@ export class Player {
         
         // Reset auto-fire timer
         this.autoFireTimer = 0;
+        this.lastShotTime = 0; // Fire immediately on respawn
         
         // Wave bonus shield system removed
         
@@ -351,26 +352,50 @@ export class Player {
     }
     
     updateChargingSystem(input, bulletPool, audioManager, particlePool) {
-        // Skip updates while shop/pause is open
-        if (this.chargePaused) {
-            return;
-        }
-
         const now = Date.now();
         const dt = 1000 / GAME_CONFIG.LOGIC_HZ; // ms per tick
         this.updateSkillCooldowns(dt);
 
         // ── Primary weapon: auto-fire on cooldown ──
+        // Uses Date.now() — immune to tick-rate variation.
         const effectiveFireRate = this.getEffectivePrimaryFireRate();
-        this.canShoot = (now - this.lastShotTime) >= effectiveFireRate;
-
+        const timeSinceLastShot = now - this.lastShotTime;
+        this.canShoot = timeSinceLastShot >= effectiveFireRate;
+        const poolBefore = bulletPool.activeObjects.length;
+        let bulletCreated = false;
         if (this.canShoot) {
-            this.firePrimary(bulletPool, audioManager);
             this.lastShotTime = now;
             this.lastPrimaryFireTime = now;
+            try {
+                this.firePrimary(bulletPool, audioManager);
+                bulletCreated = bulletPool.activeObjects.length > poolBefore;
+            } catch (e) {
+                console.error('[AUTO-FIRE] firePrimary threw:', e.message, e.stack);
+            }
         }
 
+        // ── Diagnostic: record every tick ──
+        autofireDiag.record({
+            now,
+            dt: timeSinceLastShot,
+            rate: effectiveFireRate,
+            canShoot: this.canShoot,
+            poolBefore,
+            poolAfter: bulletPool.activeObjects.length,
+            bulletCreated,
+            primary: this.activePrimary,
+            charging: this.isCharging,
+            chargeLvl: +(this.chargeLevel || 0).toFixed(2),
+            chargePaused: this.chargePaused,
+            active: this.active,
+            px: Math.round(this.x),
+            py: Math.round(this.y),
+            angle: +this.angle.toFixed(3),
+        });
+
         // ── Power weapon: charge-based or cooldown-based ──
+        // Skip power weapon updates while shop/pause is open
+        if (this.chargePaused) return;
         const powerConfig = this.getActivePowerConfig();
 
         if (powerConfig.isChargeBased) {
@@ -418,6 +443,9 @@ export class Player {
 
     // ── Primary weapon dispatch ──
     firePrimary(bulletPool, audioManager) {
+        // Hard cap on player bullets to prevent pool explosion with RAPID_FIRE + MULTI_SHOT stacking
+        if (bulletPool.activeObjects.length >= 300) return false;
+
         const config = this.getActivePrimaryConfig();
 
         switch (this.activePrimary) {
@@ -1899,11 +1927,6 @@ export class Player {
         return 1 + rangeStacks * 0.4; // +40% range per stack
     }
 
-    getEffectiveCooldown() {
-        const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
-        // Each stack reduces cooldown by 15% (compounding): 800 → 680 → 578 → 491 → 417 → 355
-        return Math.round(this.shotCooldownTime * Math.pow(0.85, rapidFireStacks));
-    }
 
     getEffectiveShield() {
         const baseShield = this.shield;

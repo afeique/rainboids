@@ -54,7 +54,17 @@
     "bench:wave": "node benchmark/run.js --suite wave",
     "bench:math": "node benchmark/run.js --suite math",
     "bench:all-engines": "node benchmark/run.js --engine v8,jsc,spidermonkey",
-    "bench:compare": "node benchmark/compare.js"
+    "bench:compare": "node benchmark/compare.js",
+
+    "__QA_BOT__": "── AI QA Bot (automated playtesting) ────────────────────",
+    "qa:bot": "node ai-qa-bot/run.js",
+    "qa:bot:quick": "node ai-qa-bot/run.js --duration 3",
+    "qa:bot:long": "node ai-qa-bot/run.js --duration 30",
+    "qa:bot:bugs": "node ai-qa-bot/run.js --bugs-only",
+    "qa:bot:balance": "node ai-qa-bot/run.js --sessions 5 --build all --duration 10",
+    "qa:bot:headed": "node ai-qa-bot/run.js --headed --duration 5",
+    "qa:bot:novice": "node ai-qa-bot/run.js --skill novice --duration 5",
+    "qa:bot:report": "node ai-qa-bot/run.js --report"
   },
   "repository": {
     "type": "git",

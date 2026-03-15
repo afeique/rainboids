@@ -1,6 +1,7 @@
 // Enemy bullets with different colors and effects
 import { GameDimensions } from '../utils.js';
 import { ENEMY_BULLET_CONFIG, GAME_CONFIG } from '../constants.js';
+import { frameClock } from '../frame-clock.js';
 
 export class EnemyBullet {
     constructor() {
@@ -18,7 +19,7 @@ export class EnemyBullet {
         this.explosive = explosive;
         this.active = true;
         this.life = 1.0;
-        this.creationTime = Date.now();
+        this.creationTime = frameClock.now;
 
         // Visual properties
         this.radius = explosive ? 6 : 3;
@@ -97,7 +98,7 @@ export class EnemyBullet {
         // Persistent bullets (mines) use a fixed-duration lifetime, not life-fade
         if (this.isPersistent) {
             const maxLife = this.maxLifetimeOverride || 15000;
-            if (Date.now() - this.creationTime > maxLife) {
+            if (frameClock.now - this.creationTime > maxLife) {
                 this.active = false;
                 return;
             }
@@ -572,7 +573,7 @@ export class EnemyBullet {
         // Calculate base opacity for trail (same as bullet)
         let baseOpacity = this.life;
         if (this.movementPattern === 'crescent_slice' && this.maxLife) {
-            const ageRatio = (Date.now() - this.creationTime) / (this.maxLife * 1000);
+            const ageRatio = (frameClock.now - this.creationTime) / (this.maxLife * 1000);
             baseOpacity = Math.max(0, 1 - ageRatio);
         }
 
@@ -604,13 +605,13 @@ export class EnemyBullet {
         let opacity = this.life;
         if (this.movementPattern === 'crescent_slice' && this.maxLife) {
             // Create smooth fade from full opacity to 0 over the bullet's lifetime
-            const ageRatio = (Date.now() - this.creationTime) / (this.maxLife * 1000);
+            const ageRatio = (frameClock.now - this.creationTime) / (this.maxLife * 1000);
             opacity = Math.max(0, 1 - ageRatio);
         }
 
         // Fade in quickly (first 180ms) + smooth fade out (remap life 1→0.5 to opacity 1→0)
         if (!this.isPersistent && this.creationTime) {
-            const age = Date.now() - this.creationTime;
+            const age = frameClock.now - this.creationTime;
             const fadeIn = Math.min(1.0, age / 180);
             // Remap life from [0.5, 1.0] → [0, 1] so bullet reaches zero opacity at deactivation
             const fadeOut = Math.max(0, (opacity - 0.5) * 2.0);
@@ -663,7 +664,7 @@ export class EnemyBullet {
     
     drawExplosiveBullet(ctx) {
         // Crisp explosive bullet — no glow halo
-        const pulse = Math.sin(Date.now() / 100) * 0.4 + 0.8;
+        const pulse = Math.sin(frameClock.now / 100) * 0.4 + 0.8;
 
         // Spinning spikes
         ctx.globalAlpha = this.life;
@@ -846,7 +847,7 @@ export class EnemyBullet {
 
     // ── Mine bullet (Tangerine/Bomber) ───────────────────────────────────────
     drawMineBullet(ctx) {
-        const pulse = 0.75 + Math.sin(Date.now() * 0.006) * 0.25;
+        const pulse = 0.75 + Math.sin(frameClock.now * 0.006) * 0.25;
         const r = this.radius;
 
         // Inner body — crisp, no glow halo

@@ -1,7 +1,24 @@
 // Asteroid entity with 3D wireframe rendering
 import { GAME_CONFIG } from '../constants.js';
 import { random, GameDimensions, glowSpriteCache } from '../utils.js';
+import { frameClock } from '../frame-clock.js';
 const DEBRIS_COUNT = 5;
+
+// ── Shared sin/cos lookup table ──────────────────────────────────────────
+// 1024 entries ≈ 0.35° precision — imperceptible for tumbling rocks,
+// eliminates 6 trig calls per asteroid per frame.
+const TRIG_N = 1024;
+const TRIG_SCALE = TRIG_N / (Math.PI * 2);
+const SIN_LUT = new Float64Array(TRIG_N);
+const COS_LUT = new Float64Array(TRIG_N);
+for (let i = 0; i < TRIG_N; i++) {
+    const a = (i / TRIG_N) * Math.PI * 2;
+    SIN_LUT[i] = Math.sin(a);
+    COS_LUT[i] = Math.cos(a);
+}
+function lutIndex(rad) {
+    return ((rad * TRIG_SCALE) % TRIG_N + TRIG_N) & (TRIG_N - 1);
+}
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -68,14 +85,13 @@ export class Asteroid {
         let health;
         const sizeRef = this.baseRadius || this.radius;
         
-        // Every asteroid is a threat — fragments are NOT free kills.
-        // Health is independent of parent; small rocks are still tough.
+        // Health scales with size — fragments are weaker so waves clear faster.
         if (sizeRef >= 40) {
-            baseHealth = Math.floor(14 + (sizeRef - 40) / 20 * 10); // 14-24
+            baseHealth = Math.floor(10 + (sizeRef - 40) / 20 * 8); // 10-18
         } else if (sizeRef >= 20) {
-            baseHealth = Math.floor(8 + (sizeRef - 20) / 20 * 6);  // 8-14
+            baseHealth = Math.floor(4 + (sizeRef - 20) / 20 * 6);  // 4-10
         } else {
-            baseHealth = Math.floor(5 + (sizeRef - 5) / 15 * 5);   // 5-10
+            baseHealth = Math.floor(2 + (sizeRef - 5) / 15 * 3);   // 2-5
         }
 
         // Level scaling: +25% per level beyond 1
@@ -131,45 +147,51 @@ export class Asteroid {
     }
     
     project() {
-        const cosX = Math.cos(this.rot3D.x);
-        const sinX = Math.sin(this.rot3D.x);
-        const cosY = Math.cos(this.rot3D.y);
-        const sinY = Math.sin(this.rot3D.y);
-        const cosZ = Math.cos(this.rot3D.z);
-        const sinZ = Math.sin(this.rot3D.z);
-        
-        this.projectedVertices = this.vertices3D.map(v => {
-            let x = v.x, y = v.y, z = v.z;
-            
+        // LUT-based trig — 6 table lookups instead of 6 Math.sin/cos calls
+        const ix = lutIndex(this.rot3D.x), iy = lutIndex(this.rot3D.y), iz = lutIndex(this.rot3D.z);
+        const cosX = COS_LUT[ix], sinX = SIN_LUT[ix];
+        const cosY = COS_LUT[iy], sinY = SIN_LUT[iy];
+        const cosZ = COS_LUT[iz], sinZ = SIN_LUT[iz];
+
+        const verts = this.vertices3D;
+        const fov = this.fov;
+
+        // Re-use existing array — no allocation after first call
+        if (!this.projectedVertices || this.projectedVertices.length !== verts.length) {
+            this.projectedVertices = new Array(verts.length);
+            for (let i = 0; i < verts.length; i++) this.projectedVertices[i] = { x: 0, y: 0, depth: 0 };
+        }
+
+        for (let i = 0; i < verts.length; i++) {
+            let x = verts[i].x, y = verts[i].y, z = verts[i].z;
+
             // Rotate around Z axis
             let tx = x, ty = y;
             x = tx * cosZ - ty * sinZ;
             y = tx * sinZ + ty * cosZ;
-            
+
             // Rotate around X axis
-            tx = y;
-            let tz = z;
+            tx = y; let tz = z;
             y = tx * cosX - tz * sinX;
             z = tx * sinX + tz * cosX;
-            
+
             // Rotate around Y axis
-            tx = x;
-            tz = z;
+            tx = x; tz = z;
             x = tx * cosY + tz * sinY;
             z = -tx * sinY + tz * cosY;
-            
-            // Project to 2D
-            return {
-                x: (x * this.fov) / (this.fov + z),
-                y: (y * this.fov) / (this.fov + z),
-                depth: z
-            };
-        });
+
+            // Project to 2D (reuse object)
+            const scale = fov / (fov + z);
+            const p = this.projectedVertices[i];
+            p.x = x * scale;
+            p.y = y * scale;
+            p.depth = z;
+        }
     }
     
     update(gameField = null) {
         if (!this.active) return;
-        
+
         // Cap asteroid speed to keep them manageable to hit
         const maxSpeed = 2.0; // Maximum speed for asteroids
         const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
@@ -177,10 +199,10 @@ export class Asteroid {
             this.vel.x = (this.vel.x / currentSpeed) * maxSpeed;
             this.vel.y = (this.vel.y / currentSpeed) * maxSpeed;
         }
-        
+
         this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
         this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
-        
+
         // Boundary bouncing instead of wrapping
         if (gameField) {
             // Bounce off left/right boundaries
@@ -191,7 +213,7 @@ export class Asteroid {
                 this.x = gameField.width - this.radius;
                 this.vel.x = -Math.abs(this.vel.x) * 0.9;
             }
-            
+
             // Bounce off top/bottom boundaries
             if (this.y - this.radius < 0) {
                 this.y = this.radius;
@@ -208,27 +230,34 @@ export class Asteroid {
             if (this.y < -wrapBuffer) this.y = GameDimensions.height + wrapBuffer;
             if (this.y > GameDimensions.height + wrapBuffer) this.y = -wrapBuffer;
         }
-        
-        // Update rotation
+
+        // Update rotation angles (always, for consistency)
         this.rot3D.x += this.rotVel3D.x;
         this.rot3D.y += this.rotVel3D.y;
         this.rot3D.z += this.rotVel3D.z;
-        
-        this.project();
+
+        // Defer projection to draw — skip entirely for off-screen asteroids
+        this._projectionDirty = true;
     }
     
     draw(ctx) {
         if (!this.active) return;
-        
+
+        // Lazy projection — only compute when we actually draw
+        if (this._projectionDirty) {
+            this.project();
+            this._projectionDirty = false;
+        }
+
         // Draw targeting effect if this asteroid is currently targeted (clicked)
         if (window.gameEngine && window.gameEngine.targetedEntity === this) {
             this.drawTargetingEffect(ctx);
         }
-        
+
         // Draw main asteroid
         ctx.save();
         ctx.translate(this.x, this.y);
-        
+
         this.drawAsteroidShape(ctx);
 
         ctx.restore();
@@ -341,10 +370,8 @@ export class Asteroid {
     }
     
     // Helper method to draw the asteroid shape
-    // OPT-1: hoist Date.now() + shadow props once; batch edges by depth-alpha bucket.
-    // Reduces GPU path flushes from 30 → ~5 and eliminates 29 redundant Date.now() calls.
     drawAsteroidShape(ctx) {
-        const now = Date.now();
+        const now = frameClock.now;
 
         // Set constant state once — not 30× per edge
         ctx.lineWidth = 2;
@@ -406,7 +433,7 @@ export class Asteroid {
         ctx.save();
         
         // Pulsing glow effect
-        const time = Date.now() * 0.003;
+        const time = frameClock.now * 0.003;
         const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
         
         // Outer glow — shadowBlur on stroked arcs (ring outline, not fillable)

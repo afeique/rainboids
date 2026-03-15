@@ -67,8 +67,25 @@ export class PoolManager {
         }
     }
     
-    drawActive(ctx) {
-        this.activeObjects.forEach(obj => obj.draw(ctx));
+    drawActive(ctx, extra) {
+        for (let i = 0; i < this.activeObjects.length; i++) {
+            this.activeObjects[i].draw(ctx, extra);
+        }
+    }
+
+    /**
+     * Draw only objects whose bounding circle intersects the viewport.
+     * Objects must have .x, .y and .radius (or a default is used).
+     * Off-screen objects skip draw() entirely — update()/physics still run.
+     */
+    drawActiveVisible(ctx, viewLeft, viewTop, viewRight, viewBottom, extra) {
+        for (let i = 0; i < this.activeObjects.length; i++) {
+            const obj = this.activeObjects[i];
+            const r = obj.radius || 10;
+            if (obj.x + r < viewLeft || obj.x - r > viewRight ||
+                obj.y + r < viewTop  || obj.y - r > viewBottom) continue;
+            obj.draw(ctx, extra);
+        }
     }
 
     cleanupInactive() {

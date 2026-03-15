@@ -2,6 +2,7 @@
 import { GAME_CONFIG, ENEMY_BULLET_CONFIG, getEnemyFiringCooldown } from '../constants.js';
 import { random, GameDimensions } from '../utils.js';
 import { rgba } from '../color-cache.js';
+import { frameClock } from '../frame-clock.js';
 
 // ── Feature toggles ────────────────────────────────────────────────────────
 // Set window.SHOW_ENEMY_NAMES = false in the browser console to hide name labels
@@ -187,7 +188,7 @@ export class Enemy {
         
         // Behavior state
         this.active = true;
-        this.creationTime = Date.now();
+        this.creationTime = frameClock.now;
         this.lastShot = 0;
         this.firingCooldown = 2000; // Will be set based on type and level
         this.targetPlayer = null;
@@ -239,7 +240,7 @@ export class Enemy {
         // Movement pattern state
         this.patrolAngle = random(0, Math.PI * 2);
         this.patrolDirection = Math.random() < 0.5 ? 1 : -1; // Random initial patrol direction
-        this.lastDirectionChange = Date.now();
+        this.lastDirectionChange = frameClock.now;
         this.orbitalAngle = random(0, Math.PI * 2);
         this.swarmOffset = { x: random(-50, 50), y: random(-50, 50) };
         this.stealthTimer = 0;
@@ -318,7 +319,7 @@ export class Enemy {
         this.warpTargetY = targetY;
         this.warpStartX = this.x;
         this.warpStartY = this.y;
-        this.warpStartTime = Date.now();
+        this.warpStartTime = frameClock.now;
         // Star Trek style: fast stretch toward target, then snap into place
         const dist = Math.hypot(targetX - this.x, targetY - this.y);
         this.warpDuration = Math.min(1200, 400 + dist * 0.4); // 400-1200ms based on distance
@@ -328,7 +329,7 @@ export class Enemy {
     }
 
     updateWarpIn() {
-        const now = Date.now();
+        const now = frameClock.now;
         const elapsed = now - this.warpStartTime;
         const t = Math.min(1, elapsed / this.warpDuration);
 
@@ -366,7 +367,7 @@ export class Enemy {
     drawWarpEffect(ctx) {
         if (!this.warping || this.warpTrail.length < 2) return;
 
-        const now = Date.now();
+        const now = frameClock.now;
         const elapsed = now - this.warpStartTime;
         const t = Math.min(1, elapsed / this.warpDuration);
 
@@ -507,7 +508,7 @@ export class Enemy {
             musicIntensity = Math.max(0.1, Math.min(1.0, musicIntensity)); // Clamp to reasonable range
         } else {
             // Fallback to time-based pulsing when no music
-            const time = Date.now() * 0.001;
+            const time = frameClock.now * 0.001;
             const fallbackPhase = (time * 2.2 * Math.PI) + this.shield.basePulsePhase; // ~132 BPM equivalent
             musicIntensity = 0.5 + Math.sin(fallbackPhase) * 0.3;
         }
@@ -614,7 +615,7 @@ export class Enemy {
     }
     
     updateMovement(gameEngine) {
-        const now = Date.now();
+        const now = frameClock.now;
         
         switch (this.config.movePattern) {
             case 'chase':
@@ -707,9 +708,9 @@ export class Enemy {
                     }
                     
                     // Add slight wobble to make it harder to predict
-                    const wobble = Math.sin(Date.now() * 0.01 + this.x * 0.005) * 0.1;
+                    const wobble = Math.sin(frameClock.now * 0.01 + this.x * 0.005) * 0.1;
                     this.vel.x += wobble;
-                    this.vel.y += Math.cos(Date.now() * 0.01 + this.y * 0.005) * 0.1;
+                    this.vel.y += Math.cos(frameClock.now * 0.01 + this.y * 0.005) * 0.1;
                 }
                 break;
             default:
@@ -724,7 +725,7 @@ export class Enemy {
 
         const fieldWidth  = window.gameEngine?.gameField?.width  || GameDimensions.width;
         const fieldHeight = window.gameEngine?.gameField?.height || GameDimensions.height;
-        const now = Date.now();
+        const now = frameClock.now;
 
         // ── TANGERINE (Bomber): player-seeking patrol with wall avoidance + mine-stop ──
         if (this.type === 'TANGERINE') {
@@ -826,7 +827,7 @@ export class Enemy {
         const distanceToCenter = Math.hypot(dxCenter, dyCenter);
         
         // Base patrol pattern (circular movement) with direction changes
-        const now = Date.now();
+        const now = frameClock.now;
         
         // Occasionally change patrol direction for unpredictability
         if (now - this.lastDirectionChange > 3000 && Math.random() < 0.02) {
@@ -892,7 +893,7 @@ export class Enemy {
         if (!this.targetPlayer) return;
 
         // Freeze in place while charging or in post-fire cooldown
-        if (this.laserCharging || (this.laserCooldown !== undefined && Date.now() < this.laserCooldown)) {
+        if (this.laserCharging || (this.laserCooldown !== undefined && frameClock.now < this.laserCooldown)) {
             this.vel.x = 0;
             this.vel.y = 0;
             return;
@@ -952,7 +953,7 @@ export class Enemy {
         this.vel.y += random(-erraticStrength, erraticStrength);
         
         // Subtle sine wave movement
-        const time = Date.now() * 0.002; // Much slower oscillation
+        const time = frameClock.now * 0.002; // Much slower oscillation
         this.vel.x += Math.sin(time + this.x * 0.02) * 0.03; // Much reduced
         this.vel.y += Math.cos(time + this.y * 0.02) * 0.03;
         
@@ -981,7 +982,7 @@ export class Enemy {
             // Shield Turret specific behavior - larger orbit, slower movement, stops to fire
             this.orbitalAngle += 0.008; // Much slower orbit
             const baseOrbitRadius = 280; // Larger orbit radius
-            const radiusVariation = Math.sin(Date.now() * 0.002) * 30; // Smaller variation
+            const radiusVariation = Math.sin(frameClock.now * 0.002) * 30; // Smaller variation
             const orbitRadius = baseOrbitRadius + radiusVariation;
             
             const targetX = this.targetPlayer.x + Math.cos(this.orbitalAngle) * orbitRadius;
@@ -1019,7 +1020,7 @@ export class Enemy {
             // Original orbital movement for other enemies
             this.orbitalAngle += 0.015; // Slightly faster orbit
             const baseOrbitRadius = 180;
-            const radiusVariation = Math.sin(Date.now() * 0.003) * 50; // Varying orbit radius
+            const radiusVariation = Math.sin(frameClock.now * 0.003) * 50; // Varying orbit radius
             const orbitRadius = baseOrbitRadius + radiusVariation;
             
             const targetX = this.targetPlayer.x + Math.cos(this.orbitalAngle) * orbitRadius;
@@ -1034,7 +1035,7 @@ export class Enemy {
             this.vel.y = dy * acceleration;
             
             // Add some orbital wobble for unpredictability
-            const wobbleAngle = this.orbitalAngle * 3 + Date.now() * 0.008;
+            const wobbleAngle = this.orbitalAngle * 3 + frameClock.now * 0.008;
             this.vel.x += Math.cos(wobbleAngle) * 0.3;
             this.vel.y += Math.sin(wobbleAngle) * 0.3;
         }
@@ -1074,7 +1075,7 @@ export class Enemy {
                     
                     // Add evasive zigzag during retreat
                     const zigzagAngle = Math.atan2(dy, dx) + Math.PI / 2;
-                    const zigzag = Math.sin(Date.now() * 0.02) * 0.4;
+                    const zigzag = Math.sin(frameClock.now * 0.02) * 0.4;
                     this.vel.x += Math.cos(zigzagAngle) * zigzag;
                     this.vel.y += Math.sin(zigzagAngle) * zigzag;
                 }
@@ -1282,7 +1283,7 @@ export class Enemy {
     knightMovement() {
         if (!this.targetPlayer) return;
         
-        const now = Date.now();
+        const now = frameClock.now;
         
         // Update knight move timer
         this.knightMoveTimer += 16; // Assume 60fps, ~16ms per frame
@@ -1356,13 +1357,13 @@ export class Enemy {
         
         // Start the move
         this.knightMoving = true;
-        this.knightMoveStartTime = Date.now();
+        this.knightMoveStartTime = frameClock.now;
     }
     
     spiralBurstMovement() {
         if (!this.targetPlayer) return;
         
-        const now = Date.now();
+        const now = frameClock.now;
         
         // Initialize spiral properties if not set
         if (this.spiralAngle === undefined) {
@@ -1461,9 +1462,9 @@ export class Enemy {
         this.vel.y *= momentum;
         
         // Add slight wobble to show the weight/effort of movement
-        const heavyWobble = Math.sin(Date.now() * 0.003) * 0.05;
+        const heavyWobble = Math.sin(frameClock.now * 0.003) * 0.05;
         this.vel.x += heavyWobble;
-        this.vel.y += Math.cos(Date.now() * 0.003) * 0.05;
+        this.vel.y += Math.cos(frameClock.now * 0.003) * 0.05;
     }
     
     updateTargetPriority(playerDistance, gameEngine) {
@@ -1692,7 +1693,7 @@ export class Enemy {
     }
     
     updateLightTrail() {
-        const now = Date.now();
+        const now = frameClock.now;
         
         // Add new trail point if enough time has passed
         if (now - this.trail.lastUpdate > this.trail.updateInterval) {
@@ -2601,7 +2602,7 @@ export class Enemy {
             this.waspMovementState = {
                 zigzagPhase: Math.random() * Math.PI * 2, // Random starting phase
                 arcPhase: Math.random() * Math.PI * 2,
-                lastDirectionChange: Date.now(),
+                lastDirectionChange: frameClock.now,
                 currentDirection: Math.random() * Math.PI * 2, // Random initial direction
                 directionChangeInterval: 1200 + Math.random() * 800, // 1.2-2.0 seconds between direction changes (more strategic)
                 preferredDistance: 140 + Math.random() * 60, // 140-200 pixels from player (more consistent)
@@ -2610,7 +2611,7 @@ export class Enemy {
         }
         
         const state = this.waspMovementState;
-        const now = Date.now();
+        const now = frameClock.now;
         
         const dx = this.targetPlayer.x - this.x;
         const dy = this.targetPlayer.y - this.y;
@@ -2815,7 +2816,7 @@ export class Enemy {
         const dy = this.targetPlayer.y - this.y;
         const distance = Math.hypot(dx, dy);
         const angle = Math.atan2(dy, dx);
-        const now = Date.now();
+        const now = frameClock.now;
 
         // Lazy-init state machine
         if (!this.prowlerState) {
@@ -2943,7 +2944,7 @@ export class Enemy {
     updateEvasiveManeuvers(gameEngine) {
         if (!this.targetPlayer) return;
         
-        const now = Date.now();
+        const now = frameClock.now;
         const dx = this.targetPlayer.x - this.lastPlayerPosition.x;
         const dy = this.targetPlayer.y - this.lastPlayerPosition.y;
         const playerSpeed = Math.hypot(dx, dy);
@@ -3069,7 +3070,7 @@ export class Enemy {
         }
         
         // Add subtle oscillation based on time and position (much more subtle)
-        const time = Date.now() * 0.003; // Slower oscillation
+        const time = frameClock.now * 0.003; // Slower oscillation
         const oscillation = 0.025; // Halved the oscillation strength
         this.vel.x += Math.sin(time + this.x * 0.01) * oscillation;
         this.vel.y += Math.cos(time + this.y * 0.01) * oscillation;
@@ -3077,7 +3078,7 @@ export class Enemy {
     
     addFishLikeMovement() {
         // Fish-like swimming motion with undulating body movement
-        const time = Date.now() * 0.001; // Convert to seconds
+        const time = frameClock.now * 0.001; // Convert to seconds
         const fishId = this.x + this.y; // Unique phase offset for each enemy
         
         // Calculate current movement direction
@@ -3187,7 +3188,7 @@ export class Enemy {
         // Check line of sight - don't shoot if player is blocked by asteroids
         if (!this.hasLineOfSight(this.targetPlayer, gameEngine)) return;
         
-        const now = Date.now();
+        const now = frameClock.now;
         
         // Wasp machine-gun: fully self-managed state machine
         if (this.config.shootPattern === 'wasp_machinegun') {
@@ -3424,7 +3425,7 @@ export class Enemy {
             this.laserTargetAngle = 0;
         }
         
-        const now = Date.now();
+        const now = frameClock.now;
         
         // Handle cooldown after firing
         if (this.laserCooldown > now) {
@@ -3478,7 +3479,7 @@ export class Enemy {
             this.lightningTargetY = 0;
         }
 
-        const now = Date.now();
+        const now = frameClock.now;
         if (this.laserCooldown > now) return;
 
         if (!this.laserCharging) {
@@ -3552,7 +3553,7 @@ export class Enemy {
         this.lightningBolt = {
             mainPath,
             branches,
-            startTime: Date.now(),
+            startTime: frameClock.now,
             lifetime: 460  // ms total display duration
         };
 
@@ -3622,7 +3623,7 @@ export class Enemy {
     // Called every frame from draw() until the bolt expires.
     drawLightningBolt(ctx) {
         if (!this.lightningBolt) return;
-        const now = Date.now();
+        const now = frameClock.now;
         const age = now - this.lightningBolt.startTime;
         if (age >= this.lightningBolt.lifetime) {
             this.lightningBolt = null;
@@ -3850,7 +3851,7 @@ export class Enemy {
     updateWaspMachineGun(gameEngine) {
         // 2-3s rapid fire, then 2-3s reload — self-managed state machine
         if (!this.targetPlayer) return;
-        const now = Date.now();
+        const now = frameClock.now;
         if (this.waspGunState === undefined) {
             this.waspGunState = 'firing';
             this.waspGunPhaseStart = now;
@@ -3976,7 +3977,7 @@ export class Enemy {
         mine.maxHealth = Math.floor(baseHealth * (1 + (this.level - 1) * 0.25));
         mine.health = mine.maxHealth;
         // Signal bomber to briefly stop after laying this mine
-        this.mineJustLaid = Date.now();
+        this.mineJustLaid = frameClock.now;
     }
     
     shootLine4(gameEngine, targetX, targetY) {
@@ -4403,7 +4404,7 @@ export class Enemy {
         const endX = this.x + Math.cos(this.laserTargetAngle) * lineLength;
         const endY = this.y + Math.sin(this.laserTargetAngle) * lineLength;
 
-        const basePulse = Math.sin(Date.now() * 0.08) * 0.3 + 0.7;
+        const basePulse = Math.sin(frameClock.now * 0.08) * 0.3 + 0.7;
         const chargeAlpha = this.laserCharge * 0.6 + 0.2;
         const finalAlpha = basePulse * chargeAlpha;
 
@@ -4437,7 +4438,7 @@ export class Enemy {
 
         const maxBallRadius = 40;
         const ballRadius = this.laserCharge * maxBallRadius;
-        const pulseIntensity = Math.sin(Date.now() * 0.02) * 0.3 + 0.7;
+        const pulseIntensity = Math.sin(frameClock.now * 0.02) * 0.3 + 0.7;
 
         // Drifter uses cyan lightning ball; others use red
         const isDrifter = this.type === 'DRIFTER';
@@ -4473,8 +4474,8 @@ export class Enemy {
         // Orbiting sparks
         if (this.laserCharge > 0.3) {
             for (let i = 0; i < 6; i++) {
-                const sparkAngle = (i / 6) * Math.PI * 2 + Date.now() * 0.005;
-                const sparkDist = ballRadius + 10 + Math.sin(Date.now() * 0.01 + i) * 5;
+                const sparkAngle = (i / 6) * Math.PI * 2 + frameClock.now * 0.005;
+                const sparkDist = ballRadius + 10 + Math.sin(frameClock.now * 0.01 + i) * 5;
                 const sparkX = ballX + Math.cos(sparkAngle) * sparkDist;
                 const sparkY = ballY + Math.sin(sparkAngle) * sparkDist;
 
@@ -4492,7 +4493,7 @@ export class Enemy {
         ctx.save();
         
         // Pulsing glow effect
-        const time = Date.now() * 0.003;
+        const time = frameClock.now * 0.003;
         const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
         
         // Calculate center position (adjust for Guardian visual offset)
@@ -4578,7 +4579,7 @@ export class Enemy {
     drawTriangle(ctx) {
         // Predatory hunter fighter — swept wings, engine glow, cockpit
         const size = this.radius * 0.9;
-        const t = Date.now() * 0.001;
+        const t = frameClock.now * 0.001;
         const pulse = 0.82 + Math.sin(t * 3.8) * 0.18;
 
         ctx.save();
@@ -4739,7 +4740,7 @@ export class Enemy {
     drawLaserTurret(ctx) {
         // Lightning Entity — a living being of pure electricity
         const size = this.radius * 0.85;
-        const t = Date.now() * 0.001;
+        const t = frameClock.now * 0.001;
         const pulse = 0.7 + Math.sin(t * 5.5) * 0.3;
         const charging = this.laserCharging;
         const chargeBoost = charging ? 1.5 : 1.0;
@@ -4835,7 +4836,7 @@ export class Enemy {
     drawMissileTurret(ctx) {
         // Armored missile fortress — angular hull, visible warheads, targeting sensor array
         const size = this.radius * 0.8;
-        const t = Date.now() * 0.001;
+        const t = frameClock.now * 0.001;
         const pulse = 0.75 + Math.sin(t * 2.5) * 0.25;
 
         ctx.save();
@@ -4943,7 +4944,7 @@ export class Enemy {
 
         // Determine charge level: 0 during cooldown, 0→1 during spin_up, 1 during arc
         let charge = 0;
-        const now = Date.now();
+        const now = frameClock.now;
         if (this.weaverState === 'spinning_up') {
             charge = Math.min(1, (now - (this.weaverStateStart || now)) / (this.weaverSpinUpDuration || 2400));
             charge = charge * charge; // ease-in
@@ -5013,7 +5014,7 @@ export class Enemy {
     drawShieldTurret(ctx) {
         // Orbital sentinel — nested spinning hex rings, rotating emitter arms
         const size = this.radius * 0.8;
-        const t = Date.now() * 0.001;
+        const t = frameClock.now * 0.001;
         const pulse = 0.8 + Math.sin(t * 3.2) * 0.2;
         const spinAngle = t * 0.8; // independent slow spin for decoration
 
@@ -5104,7 +5105,7 @@ export class Enemy {
     drawWaspShip(ctx) {
         // Sleek aggressive interceptor with glowing engine trails and blade wings
         const size = this.radius * 0.8;
-        const t = Date.now() * 0.001;
+        const t = frameClock.now * 0.001;
         const pulse = 0.85 + Math.sin(t * 6) * 0.15; // fast flicker like an insect
 
         ctx.save();
@@ -5225,7 +5226,7 @@ export class Enemy {
     drawEmeraldGuardian(ctx) {
         // Armored emerald fortress — glowing energy core, swept shield wings, battle scarred
         const size = this.radius * 0.8;
-        const pulse = 0.8 + Math.sin(Date.now() * 0.004) * 0.2;
+        const pulse = 0.8 + Math.sin(frameClock.now * 0.004) * 0.2;
 
         ctx.save();
 
@@ -5348,7 +5349,7 @@ export class Enemy {
     drawTitanTank(ctx) {
         // Imposing hexagonal juggernaut with glowing energy core and armored plating
         const size = this.radius * 0.9;
-        const pulse = 0.85 + Math.sin(Date.now() * 0.003) * 0.15; // 0.7–1.0 pulse
+        const pulse = 0.85 + Math.sin(frameClock.now * 0.003) * 0.15; // 0.7–1.0 pulse
 
         ctx.save();
 
@@ -5492,7 +5493,7 @@ export class Enemy {
     drawStalkerSword(ctx) {
         // Cloaked stealth interceptor — mantis-like blade wings, plasma edges, shimmer
         const size = this.radius * 0.92;
-        const t = Date.now() * 0.001;
+        const t = frameClock.now * 0.001;
         const pulse = 0.75 + Math.sin(t * 4.2) * 0.25;
         const shimmer = Math.sin(t * 11.3) * 0.15; // fast flicker for cloak shimmer
 
@@ -5615,7 +5616,7 @@ export class Enemy {
         const pulseIntensity = this.shield.currentIntensity || 0.5;
         
         // Simplified shield pattern for performance
-        const time = Date.now() * 0.001;
+        const time = frameClock.now * 0.001;
         const waveFrequency = 4; // Reduced from 8 for better performance
         const waveAmplitude = 2; // Reduced from 4 for better performance
         
@@ -5725,7 +5726,7 @@ export class Enemy {
         
         ctx.save();
         
-        const now = Date.now();
+        const now = frameClock.now;
         
         // Draw trail as connected line segments with fading opacity
         for (let i = 1; i < this.trail.positions.length; i++) {
@@ -5902,7 +5903,7 @@ export class Enemy {
         const chargeRadius = 5 + progress * 15; // Growing charge effect
         
         // Pulsing energy core
-        const pulseIntensity = 0.8 + Math.sin(Date.now() * 0.02) * 0.2;
+        const pulseIntensity = 0.8 + Math.sin(frameClock.now * 0.02) * 0.2;
         
         // Outer energy ring
         const outerGradient = ctx.createRadialGradient(chargeX, 0, 0, chargeX, 0, chargeRadius);
@@ -5931,8 +5932,8 @@ export class Enemy {
         if (progress > 0.3) {
             const sparkCount = Math.floor(progress * 8);
             for (let i = 0; i < sparkCount; i++) {
-                const angle = (i / sparkCount) * Math.PI * 2 + Date.now() * 0.01;
-                const distance = chargeRadius * 0.8 + Math.sin(Date.now() * 0.03 + i) * 5;
+                const angle = (i / sparkCount) * Math.PI * 2 + frameClock.now * 0.01;
+                const distance = chargeRadius * 0.8 + Math.sin(frameClock.now * 0.03 + i) * 5;
                 const sparkX = chargeX + Math.cos(angle) * distance;
                 const sparkY = Math.sin(angle) * distance;
                 
@@ -5978,7 +5979,7 @@ export class Enemy {
         if (distance < 50) return true;
         
         // Cache line-of-sight check for performance (check every 100ms)
-        const now = Date.now();
+        const now = frameClock.now;
         if (this.lastLOSCheck && (now - this.lastLOSCheck < 100) && this.cachedLOSResult !== undefined) {
             return this.cachedLOSResult;
         }
@@ -6055,7 +6056,7 @@ export class Enemy {
     // ── Weaver Spin-Up Movement ──────────────────────────────────────────────
     weaverSpinupMovement(gameEngine) {
         if (!this.targetPlayer) return;
-        const now = Date.now();
+        const now = frameClock.now;
 
         if (this.weaverState === undefined) {
             this.weaverState = 'spinning_up';
@@ -6218,7 +6219,7 @@ export class Enemy {
     // ── Wasp Zigzag Movement ────────────────────────────────────────────────
     waspZigzagMovement() {
         if (!this.targetPlayer) return;
-        const now = Date.now();
+        const now = frameClock.now;
 
         if (this.waspZigzagState === undefined) {
             this.waspZigzagState = 'zigzagging';
@@ -6279,7 +6280,7 @@ export class Enemy {
     // ── Boulder (Titan) Movement ─────────────────────────────────────────────
     boulderMovement() {
         if (!this.targetPlayer) return;
-        const now = Date.now();
+        const now = frameClock.now;
 
         if (this.boulderState === undefined) {
             this.boulderState = 'idle';
@@ -6343,7 +6344,7 @@ export class Enemy {
     // ── Sweep Laser System ───────────────────────────────────────────────────
     updateSweepLaserSystem(gameEngine) {
         if (!this.targetPlayer) return;
-        const now = Date.now();
+        const now = frameClock.now;
 
         if (this.sweepState === undefined) {
             this.sweepState = 'cooldown';
@@ -6452,7 +6453,7 @@ export class Enemy {
     // Fires when NOT arcing (during spin-up or cooldown phases).
     updateSentinelSweep(gameEngine) {
         if (!this.targetPlayer) return;
-        const now = Date.now();
+        const now = frameClock.now;
 
         // Fire during spin-up and cooldown phases (not while arcing)
         if (this.weaverState === 'arcing') return;
@@ -6501,8 +6502,8 @@ export class Enemy {
         ctx.save();
 
         if (this.sweepState === 'warning') {
-            const pulse = Math.sin(Date.now() * 0.015) * 0.35 + 0.65;
-            const progress = (Date.now() - this.sweepWarningStart) / this.sweepWarningDuration;
+            const pulse = Math.sin(frameClock.now * 0.015) * 0.35 + 0.65;
+            const progress = (frameClock.now - this.sweepWarningStart) / this.sweepWarningDuration;
 
             // Warning arc showing sweep range (from muzzle)
             ctx.strokeStyle = rgba(180, 60, 255, 0.25 * pulse);
@@ -6528,7 +6529,7 @@ export class Enemy {
 
         } else if (this.sweepState === 'sweeping') {
             // Fade in at start, fade out at end using sin curve
-            const sweepElapsed = Date.now() - this.sweepStartTime;
+            const sweepElapsed = frameClock.now - this.sweepStartTime;
             const sweepProg = Math.min(1, sweepElapsed / this.sweepDuration);
             const fadeAlpha = Math.sin(sweepProg * Math.PI); // 0 → 1 → 0
 

@@ -15,26 +15,26 @@ export const WAVE_DATA = {
     // Solo introductions. High asteroid count, few enemies. Learn each foe.
     // ═══════════════════════════════════════════════════════════════════════
 
-    // Wave 1: Asteroid Field — pure shooting tutorial, no enemies
-    1:  { asteroids: 8, enemies: [] },
+    // Wave 1: First Contact — single scout amid asteroids
+    1:  { asteroids: 2, enemies: [{ type: 'HUNTER', count: 1 }] },
 
     // Wave 2: Scout — single hunter amid asteroids
-    2:  { asteroids: 6, enemies: [{ type: 'HUNTER', count: 1 }] },
+    2:  { asteroids: 2, enemies: [{ type: 'HUNTER', count: 1 }] },
 
     // Wave 3: Hunting Pack — learn to juggle threats
-    3:  { asteroids: 6, enemies: [{ type: 'HUNTER', count: 2 }] },
+    3:  { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }] },
 
     // Wave 4: Wall of Green — meet the tank
-    4:  { asteroids: 8, enemies: [{ type: 'GUARDIAN', count: 2 }] },
+    4:  { asteroids: 3, enemies: [{ type: 'GUARDIAN', count: 2 }] },
 
     // Wave 5: Fortress — spread shot pressure
-    5:  { asteroids: 6, enemies: [{ type: 'GUARDIAN', count: 3 }] },
+    5:  { asteroids: 3, enemies: [{ type: 'GUARDIAN', count: 3 }] },
 
     // Wave 6: Yellow Peril — fast and frantic
-    6:  { asteroids: 8, enemies: [{ type: 'WASP', count: 2 }] },
+    6:  { asteroids: 4, enemies: [{ type: 'WASP', count: 2 }] },
 
     // Wave 7: Swarm — bullet hell intro
-    7:  { asteroids: 6, enemies: [{ type: 'WASP', count: 4 }] },
+    7:  { asteroids: 3, enemies: [{ type: 'WASP', count: 4 }] },
 
     // Wave 8: Ambush — laser sniper
     8:  { asteroids: 6, enemies: [{ type: 'STALKER', count: 2 }] },

@@ -46,7 +46,7 @@ export const GAME_CONFIG = {
     MOBILE_SCALE: 0.65,
     
     // Entity limits adjusted for gameplay balance
-    MAX_ASTEROIDS: 1, // Maximum 1 asteroid for best performance
+    MAX_ASTEROIDS: 4, // Allow up to 4 concurrent asteroids for better pacing
     
     // Wave system configuration - aggressive timing for continuous action
     WAVE_ASTEROID_DELAY: 0, // Time before spawning asteroids (ms)

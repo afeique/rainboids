@@ -2,6 +2,7 @@
 // Note: Health and money orbs (created from asteroid/enemy destruction) are collectible
 import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES } from '../constants.js';
 import { random, wrap, glowSpriteCache } from '../utils.js';
+import { frameClock } from '../frame-clock.js';
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -187,7 +188,7 @@ export class ColorStar {
             }
         } else {
             // Update twinkle based on sine wave - much more subtle variation
-            this.opacity = 0.6 + 0.3 * (Math.sin(Date.now() * this.twinkleSpeed + this.opacityOffset) + 1) / 2;
+            this.opacity = 0.6 + 0.3 * (Math.sin(frameClock.now * this.twinkleSpeed + this.opacityOffset) + 1) / 2;
             
             // Rotate the star
             this.rotation += this.rotationSpeed;
@@ -370,7 +371,7 @@ export class ColorStar {
                     // Radiating lines of varying lengths - more dramatic
                     for (let i = 0; i < 16; i++) {
                         const a = i * Math.PI / 8;
-                        const length = dynamicRadius * (0.4 + Math.sin(Date.now() * 0.005 + i) * 0.3);
+                        const length = dynamicRadius * (0.4 + Math.sin(frameClock.now * 0.005 + i) * 0.3);
                         ctx.moveTo(0, 0);
                         ctx.lineTo(Math.cos(a) * length, Math.sin(a) * length);
                     }
@@ -450,7 +451,7 @@ export class ColorStar {
         if ((this.isBurst || this.isCollectible) && this.starType !== 'money') {
             ctx.save();
 
-            const pulseIntensity = 0.3 + 0.4 * Math.sin(Date.now() * 0.008 + this.x * 0.01);
+            const pulseIntensity = 0.3 + 0.4 * Math.sin(frameClock.now * 0.008 + this.x * 0.01);
 
             // Collection area indicator - plain stroke (no shadowBlur needed, ring is visible)
             ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.3;
@@ -471,7 +472,7 @@ export class ColorStar {
             ctx.save();
             
             // Pulsing effect for the circle
-            const pulseIntensity = 0.5 + 0.4 * Math.sin(Date.now() * 0.01 + this.x * 0.01);
+            const pulseIntensity = 0.5 + 0.4 * Math.sin(frameClock.now * 0.01 + this.x * 0.01);
             const circleRadius = dynamicRadius * (0.9 + pulseIntensity * 0.2);
             
             // Draw pulsating gold circle - more visible

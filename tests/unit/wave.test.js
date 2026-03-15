@@ -19,11 +19,12 @@ import {
 // ---------------------------------------------------------------------------
 
 describe('getWaveConfig() – static waves', () => {
-  test('wave 1 returns asteroids-only config', () => {
+  test('wave 1 has asteroids and a single enemy', () => {
     const cfg = getWaveConfig(1);
     expect(cfg).toBeDefined();
     expect(cfg.asteroids).toBeGreaterThan(0);
-    expect(cfg.enemies).toEqual([]);
+    expect(cfg.enemies.length).toBe(1);
+    expect(cfg.enemies[0].type).toBe('HUNTER');
   });
 
   test('wave 2 introduces HUNTER enemy', () => {
