@@ -1,6 +1,7 @@
 // Particle effects system
 import { GAME_CONFIG } from '../constants.js';
 import { random, glowSpriteCache } from '../utils.js';
+import { hsl } from '../color-cache.js';
 
 const TS = GAME_CONFIG.TICK_SCALE; // Temporal scale factor for frame-based timers
 
@@ -338,10 +339,16 @@ export class Particle {
     
     draw(ctx) {
         if (!this.active) return;
-        
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, this.life);
-        
+
+        // OPT: Instead of save/restore for every particle, we manually set and
+        // reset only the properties that change.  With 50+ active particles this
+        // eliminates 50-100 save/restore pairs per frame.
+        const baseAlpha = Math.max(0, this.life);
+        ctx.globalAlpha = baseAlpha;
+        // Track what we need to reset after the switch
+        let changedComposite = false;
+        let changedLineCap = false;
+
         switch (this.type) {
             case 'explosion':
             case 'thrust':
@@ -352,7 +359,7 @@ export class Particle {
                 ctx.fill();
                 break;
             case 'explosionRedOrange':
-                ctx.fillStyle = `hsl(${this.hue}, ${this.sat}%, ${this.light}%)`;
+                ctx.fillStyle = hsl(this.hue, this.sat, this.light);
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
@@ -364,7 +371,7 @@ export class Particle {
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
                 break;
-                
+
             case 'playerExplosion':
             case 'pickupPulse':
                 ctx.strokeStyle = this.color;
@@ -373,7 +380,7 @@ export class Particle {
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
                 break;
-                
+
             case 'starBlip':
                 // Simplified rendering without expensive shadow effects
                 ctx.fillStyle = this.color;
@@ -381,51 +388,43 @@ export class Particle {
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
                 break;
-                
+
             case 'starSparkle':
                 // OPT-2: use pre-rendered glow sprites instead of live ctx.shadowBlur
                 if (this.radius > 0.05) {
-                    ctx.save();
+                    // glowSpriteCache.draw manages its own alpha internally
                     glowSpriteCache.draw(ctx, this.x, this.y, this.color, this.radius, this.radius * 4, Math.max(0, this.life * 2.5));
                     glowSpriteCache.draw(ctx, this.x, this.y, '#FFFFAA', this.radius * 0.6, this.radius * 2, Math.max(0, this.life * 3));
-                    ctx.restore();
                 }
                 break;
             case 'asteroidCollisionDebris':
-                ctx.save();
-                ctx.globalAlpha = Math.max(0, this.life);
+                // globalAlpha already set to baseAlpha above
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
-                ctx.restore();
                 break;
             case 'fieryExplosionRing': {
-                ctx.save();
                 // Animate hue from start to end
                 const t = 1 - this.life / 0.9;
                 const hue = this.startHue + (this.endHue - this.startHue) * t;
                 ctx.globalAlpha = Math.max(0, this.life * 1.7); // higher alpha
-                ctx.strokeStyle = `hsl(${hue}, ${this.sat}%, ${this.light}%)`;
+                ctx.strokeStyle = hsl(hue, this.sat, this.light);
                 ctx.lineWidth = 12 * (this.life + 0.2); // thicker ring
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
-                ctx.restore();
                 break;
             }
             case 'spawnRing':
-                ctx.save();
                 ctx.globalAlpha = Math.max(0, this.life * 1.2);
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = 4 + 8 * this.life;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
-                ctx.restore();
                 break;
             case 'spawnCircle': {
-                ctx.save();
                 // Interpolate color from bright to dark green
                 const t = 1 - this.life;
                 const r1 = 80 + (0 - 80) * t;
@@ -437,21 +436,18 @@ export class Particle {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
-                ctx.restore();
                 break;
             }
             case 'spawnParticle': {
                 // Draw main glowing particle only (no trail)
-                ctx.save();
                 ctx.globalAlpha = Math.max(0, this.life);
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
-                ctx.restore();
                 break;
             }
-            
+
             case 'shieldHit':
                 // Simplified rendering without expensive shadow effects
                 ctx.strokeStyle = this.color;
@@ -462,7 +458,6 @@ export class Particle {
                 break;
 
             case 'damageNumber':
-                ctx.save();
                 ctx.font = `${this.fontSize}px 'Press Start 2P', monospace`;
                 ctx.fillStyle = '#ff0000';
                 ctx.strokeStyle = '#000000';
@@ -474,19 +469,17 @@ export class Particle {
                 ctx.strokeText(`${this.damage}`, this.x, this.y);
                 // Draw red text
                 ctx.fillText(`${this.damage}`, this.x, this.y);
-                ctx.restore();
                 break;
 
             case 'explosionFlash':
                 // Additive white flash — bright core
-                ctx.save();
                 ctx.globalCompositeOperation = 'screen';
+                changedComposite = true;
                 ctx.globalAlpha = Math.max(0, this.life * this.life); // quadratic fade
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.restore();
                 break;
 
             case 'explosionShrapnel': {
@@ -498,6 +491,7 @@ export class Particle {
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = this.radius;
                 ctx.lineCap = 'round';
+                changedLineCap = true;
                 ctx.beginPath();
                 ctx.moveTo(tailX, tailY);
                 ctx.lineTo(this.x, this.y);
@@ -518,28 +512,28 @@ export class Particle {
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
                 // Additive glow halo
-                ctx.save();
                 ctx.globalCompositeOperation = 'screen';
+                changedComposite = true;
                 ctx.globalAlpha = Math.max(0, this.life * 0.4);
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius * 3, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.restore();
                 break;
 
             case 'explosionRingColored':
-                ctx.save();
                 ctx.globalAlpha = Math.max(0, this.life * 1.5);
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = this.lineWidth * this.life;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.stroke();
-                ctx.restore();
                 break;
         }
 
-        ctx.restore();
+        // Reset changed properties instead of full restore
+        ctx.globalAlpha = 1;
+        if (changedComposite) ctx.globalCompositeOperation = 'source-over';
+        if (changedLineCap) ctx.lineCap = 'butt';
     }
 } 

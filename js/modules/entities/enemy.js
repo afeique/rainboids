@@ -4415,21 +4415,35 @@ export class Enemy {
         // Draw level + name label BENEATH the enemy (only after first hit)
         if (showEnemyNames() && this.health < this.maxHealth) {
             ctx.save();
-            ctx.font = '13px "Silkscreen", monospace';
             ctx.textBaseline = 'top';
-            ctx.shadowColor = 'rgba(0,0,0,0.95)';
-            ctx.shadowBlur = 4;
             ctx.textAlign = 'left';
 
             const lvText   = 'LV';
             const numText  = String(this.level || 1);
             const nameText = ' ' + this.config.name.toUpperCase();
 
+            ctx.font = '13px "Silkscreen", monospace';
             const lvWidth   = ctx.measureText(lvText).width;
             const numWidth  = ctx.measureText(numText).width;
             const nameWidth = ctx.measureText(nameText).width;
             const startX = this.x - (lvWidth + numWidth + nameWidth) / 2;
             const textY  = this.y + this.radius + 10;
+
+            // OPT: double-draw glow instead of shadowBlur
+            // First pass: slightly larger font at low alpha for glow
+            ctx.globalAlpha = 0.4;
+            ctx.font = '14px "Silkscreen", monospace';
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(lvText, startX, textY);
+            ctx.fillStyle = '#88ccff';
+            ctx.fillText(numText, startX + lvWidth, textY);
+            ctx.fillStyle = 'goldenrod';
+            ctx.fillText(nameText, startX + lvWidth + numWidth, textY);
+
+            // Second pass: crisp text on top at full alpha
+            ctx.globalAlpha = 1.0;
+            ctx.font = '13px "Silkscreen", monospace';
 
             ctx.fillStyle = '#ffffff';   // "LV" — white
             ctx.fillText(lvText, startX, textY);
@@ -5794,22 +5808,9 @@ export class Enemy {
             const opacity = Math.max(0, fadeRatio * 0.8); // Max 80% opacity
             
             if (opacity <= 0) continue;
-            
-            // Create gradient from previous to current point
-            const gradient = ctx.createLinearGradient(
-                prevPoint.x, prevPoint.y,
-                currentPoint.x, currentPoint.y
-            );
-            
-            const prevAge = now - prevPoint.age;
-            const prevFadeRatio = 1 - (prevAge / this.trail.fadeTime);
-            const prevOpacity = Math.max(0, prevFadeRatio * 0.8);
-            
-            gradient.addColorStop(0, rgba(255, 255, 255, prevOpacity));
-            gradient.addColorStop(1, rgba(255, 255, 255, opacity));
-            
-            // Draw trail segment
-            ctx.strokeStyle = gradient;
+
+            // OPT: use simple rgba color instead of per-segment gradient
+            ctx.strokeStyle = rgba(255, 255, 255, opacity);
             ctx.lineWidth = 3 * fadeRatio; // Thinner as it fades
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
@@ -5887,37 +5888,50 @@ export class Enemy {
         // Health text above the bar: "6/9"
         const displayHealth = this.health > 0 && this.health < 1 ? 1 : Math.round(this.health);
         const healthText = `${displayHealth}/${Math.round(this.maxHealth)}`;
-        ctx.font = '8px "Press Start 2P", monospace';
-        ctx.fillStyle = 'goldenrod';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.shadowColor = 'rgba(0,0,0,0.95)';
-        ctx.shadowBlur = 4;
+
+        // OPT: double-draw glow instead of shadowBlur
+        // First pass: slightly larger font at low alpha for glow
+        ctx.globalAlpha = 0.4;
+        ctx.font = '9px "Press Start 2P", monospace';
+        ctx.fillStyle = 'goldenrod';
+        ctx.fillText(healthText, this.x, barY - 6);
+
+        // Second pass: crisp text on top at full alpha
+        ctx.globalAlpha = 1.0;
+        ctx.font = '8px "Press Start 2P", monospace';
+        ctx.fillStyle = 'goldenrod';
         ctx.fillText(healthText, this.x, barY - 6);
 
         // Health calculation
         const healthPercentage = this.health / this.maxHealth;
-        
-        // Create vertical gradient for health bar based on health percentage
-        let healthGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
-        let backgroundColor;
-        
-        if (healthPercentage > 0.5) {
-            // Green gradient: light green to dark green
-            healthGradient.addColorStop(0, '#66ff66');
-            healthGradient.addColorStop(1, '#00cc00');
-            backgroundColor = 'rgba(0, 102, 0, 0.6)';
-        } else if (healthPercentage > 0.25) {
-            // Yellow gradient: light yellow to dark yellow
-            healthGradient.addColorStop(0, '#ffff99');
-            healthGradient.addColorStop(1, '#cccc00');
-            backgroundColor = 'rgba(102, 102, 0, 0.6)';
-        } else {
-            // Red gradient: light red to dark red
-            healthGradient.addColorStop(0, '#ff6666');
-            healthGradient.addColorStop(1, '#cc0000');
-            backgroundColor = 'rgba(102, 0, 0, 0.6)';
+
+        // OPT: cache the gradient per tier so createLinearGradient() is only called
+        // when the tier boundary (>50% / >25% / <=25%) changes, not every frame.
+        const tier = healthPercentage > 0.5 ? 'green' : healthPercentage > 0.25 ? 'yellow' : 'red';
+        if (tier !== this._healthBarTier || !this._healthBarGradient) {
+            this._healthBarTier = tier;
+            let healthGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+            let backgroundColor;
+            if (tier === 'green') {
+                healthGradient.addColorStop(0, '#66ff66');
+                healthGradient.addColorStop(1, '#00cc00');
+                backgroundColor = 'rgba(0, 102, 0, 0.6)';
+            } else if (tier === 'yellow') {
+                healthGradient.addColorStop(0, '#ffff99');
+                healthGradient.addColorStop(1, '#cccc00');
+                backgroundColor = 'rgba(102, 102, 0, 0.6)';
+            } else {
+                healthGradient.addColorStop(0, '#ff6666');
+                healthGradient.addColorStop(1, '#cc0000');
+                backgroundColor = 'rgba(102, 0, 0, 0.6)';
+            }
+            this._healthBarGradient   = healthGradient;
+            this._healthBarBackground = backgroundColor;
         }
+        let healthGradient = this._healthBarGradient;
+        let backgroundColor = this._healthBarBackground;
         
         const cornerRadius = 1;
         

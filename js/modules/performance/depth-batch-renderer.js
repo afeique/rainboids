@@ -1,48 +1,67 @@
 // Simple depth-based batching for stars - no sprites, just grouping by depth
+// Pre-allocated bucket count: opacity quantized to 0.1 steps → indices 0..10
+const BUCKET_COUNT = 11;
+
 export class DepthBatchRenderer {
     constructor() {
-        this.depthBuckets = new Map();
         this.frameCount = 0;
+
+        // Pre-allocate fixed depth buckets (index 0 = opacity 0.0, index 10 = opacity 1.0)
+        // Each bucket holds pre-allocated arrays that are reused every frame via length reset
+        this._bgBuckets = new Array(BUCKET_COUNT);
+        this._colorBuckets = new Array(BUCKET_COUNT);
+        for (let i = 0; i < BUCKET_COUNT; i++) {
+            this._bgBuckets[i] = [];
+            this._colorBuckets[i] = [];
+        }
+
+        // Pre-allocated structures for renderBackgroundStarBatch color grouping
+        // We reuse a flat list of {color, stars[]} entries with a length counter
+        this._bgColorEntries = [];   // [{color, stars[]}, ...]
+        this._bgColorIndex = {};     // color string → index into _bgColorEntries
+        this._bgColorCount = 0;
+
+        // Pre-allocated structures for renderColorStarBatch shape-color grouping
+        this._scEntries = [];        // [{shape, color, stars[]}, ...]
+        this._scIndex = {};          // "shape\0color" → index into _scEntries
+        this._scCount = 0;
     }
 
     // Group stars into depth buckets for efficient rendering
     groupStarsByDepth(backgroundStars, colorStars) {
-        // Clear previous frame buckets
-        this.depthBuckets.clear();
-        
+        // Clear previous frame bucket contents without deallocating
+        for (let i = 0; i < BUCKET_COUNT; i++) {
+            this._bgBuckets[i].length = 0;
+            this._colorBuckets[i].length = 0;
+        }
+
         // Group background stars by depth
         for (const star of backgroundStars) {
             if (!star.active) continue;
-            
+
             // Calculate depth bucket (quantize opacity to reduce buckets)
             const depthOpacity = Math.min(1, 0.4 + Math.pow(star.z / 4, 1.0));
             star.finalOpacity = star.opacity * depthOpacity;
-            const bucket = Math.round(star.finalOpacity * 10) / 10; // Quantize to 0.1 steps
-            
-            if (!this.depthBuckets.has(bucket)) {
-                this.depthBuckets.set(bucket, { background: [], color: [] });
-            }
-            this.depthBuckets.get(bucket).background.push(star);
+            const idx = Math.max(0, Math.min(10, Math.round(star.finalOpacity * 10)));
+
+            this._bgBuckets[idx].push(star);
         }
-        
+
         // Group simple color stars by depth (complex ones render separately)
         for (const star of colorStars) {
             if (!star.active) continue;
-            
+
             // Skip complex stars - they'll render individually
             if (star.isBurst || star.shape === 'sparkle' || star.shape === 'burst') {
                 continue;
             }
-            
+
             // Calculate depth bucket
             const depthOpacity = Math.min(1, 0.5 + Math.pow(star.z / 4, 1.2));
             star.finalOpacity = star.opacity * depthOpacity;
-            const bucket = Math.round(star.finalOpacity * 10) / 10;
-            
-            if (!this.depthBuckets.has(bucket)) {
-                this.depthBuckets.set(bucket, { background: [], color: [] });
-            }
-            this.depthBuckets.get(bucket).color.push(star);
+            const idx = Math.max(0, Math.min(10, Math.round(star.finalOpacity * 10)));
+
+            this._colorBuckets[idx].push(star);
         }
     }
 
@@ -50,23 +69,22 @@ export class DepthBatchRenderer {
     renderDepthBatches(ctx) {
         this.frameCount++;
 
-        // Sort buckets by opacity (back to front) — Array.from is needed since Map
-        // does not have a sort method.  The bucket count is small (~10 entries) so
-        // this allocation is negligible compared to the actual drawing work.
-        const sortedBuckets = Array.from(this.depthBuckets.entries()).sort((a, b) => a[0] - b[0]);
-
-        for (const [opacity, bucket] of sortedBuckets) {
-            if (bucket.background.length === 0 && bucket.color.length === 0) continue;
+        // Iterate buckets in index order (0→10 = opacity 0.0→1.0, back to front)
+        // No sorting needed — indices are already in ascending opacity order
+        for (let i = 0; i < BUCKET_COUNT; i++) {
+            const bg = this._bgBuckets[i];
+            const color = this._colorBuckets[i];
+            if (bg.length === 0 && color.length === 0) continue;
 
             // Set opacity once for the entire bucket
             ctx.save();
-            ctx.globalAlpha = opacity;
+            ctx.globalAlpha = i / 10;
 
             // Render all background stars in this depth bucket
-            this.renderBackgroundStarBatch(ctx, bucket.background);
+            this.renderBackgroundStarBatch(ctx, bg);
 
             // Render all color stars in this depth bucket
-            this.renderColorStarBatch(ctx, bucket.color);
+            this.renderColorStarBatch(ctx, color);
 
             ctx.restore();
         }
@@ -74,53 +92,84 @@ export class DepthBatchRenderer {
 
     renderBackgroundStarBatch(ctx, stars) {
         if (stars.length === 0) return;
-        
-        // Group by color for even more efficiency
-        const colorGroups = new Map();
+
+        // Reset pre-allocated color group structures (no new Map / new Array)
+        this._bgColorCount = 0;
+        // Clear index without reallocating the object — property delete is avoided;
+        // we just overwrite stale entries and only iterate up to _bgColorCount.
+        this._bgColorIndex = {};
+
         for (const star of stars) {
-            if (!colorGroups.has(star.color)) {
-                colorGroups.set(star.color, []);
+            let entryIdx = this._bgColorIndex[star.color];
+            if (entryIdx === undefined) {
+                entryIdx = this._bgColorCount++;
+                this._bgColorIndex[star.color] = entryIdx;
+                if (entryIdx < this._bgColorEntries.length) {
+                    this._bgColorEntries[entryIdx].color = star.color;
+                    this._bgColorEntries[entryIdx].stars.length = 0;
+                } else {
+                    this._bgColorEntries.push({ color: star.color, stars: [] });
+                }
             }
-            colorGroups.get(star.color).push(star);
+            this._bgColorEntries[entryIdx].stars.push(star);
         }
-        
+
         // Render each color group
-        for (const [color, colorStars] of colorGroups) {
-            ctx.fillStyle = color;
+        for (let g = 0; g < this._bgColorCount; g++) {
+            const entry = this._bgColorEntries[g];
+            ctx.fillStyle = entry.color;
             ctx.beginPath();
-            
+
             // Add all circles to the same path
-            for (const star of colorStars) {
+            const groupStars = entry.stars;
+            for (let s = 0; s < groupStars.length; s++) {
+                const star = groupStars[s];
                 ctx.moveTo(star.x + star.radius, star.y);
                 ctx.arc(star.x, star.y, star.radius, 0, 2 * Math.PI);
             }
-            
+
             ctx.fill();
         }
     }
 
     renderColorStarBatch(ctx, stars) {
         if (stars.length === 0) return;
-        
-        // Group by shape and color
-        const shapeColorGroups = new Map();
+
+        // Reset pre-allocated shape-color group structures
+        this._scCount = 0;
+        this._scIndex = {};
+
         for (const star of stars) {
-            const key = `${star.shape || 'circle'}-${star.color}`;
-            if (!shapeColorGroups.has(key)) {
-                shapeColorGroups.set(key, []);
+            const shape = star.shape || 'circle';
+            const key = shape + '\0' + star.color;
+            let entryIdx = this._scIndex[key];
+            if (entryIdx === undefined) {
+                entryIdx = this._scCount++;
+                this._scIndex[key] = entryIdx;
+                if (entryIdx < this._scEntries.length) {
+                    this._scEntries[entryIdx].shape = shape;
+                    this._scEntries[entryIdx].color = star.color;
+                    this._scEntries[entryIdx].stars.length = 0;
+                } else {
+                    this._scEntries.push({ shape, color: star.color, stars: [] });
+                }
             }
-            shapeColorGroups.get(key).push(star);
+            this._scEntries[entryIdx].stars.push(star);
         }
-        
+
         // Render each shape/color group
-        for (const [key, groupStars] of shapeColorGroups) {
-            const [shape, color] = key.split('-');
-            
+        for (let g = 0; g < this._scCount; g++) {
+            const entry = this._scEntries[g];
+            const shape = entry.shape;
+            const color = entry.color;
+            const groupStars = entry.stars;
+
             if (shape === 'circle' || shape === 'point') {
                 // Circles can be batched like background stars
                 ctx.fillStyle = color;
                 ctx.beginPath();
-                for (const star of groupStars) {
+                for (let s = 0; s < groupStars.length; s++) {
+                    const star = groupStars[s];
                     const radius = star.radius * (star.sizeVariation || 1);
                     ctx.moveTo(star.x + radius, star.y);
                     ctx.arc(star.x, star.y, radius, 0, 2 * Math.PI);
@@ -130,16 +179,17 @@ export class DepthBatchRenderer {
                 // Other shapes need individual rendering but can share stroke style
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1.5;
-                
-                for (const star of groupStars) {
+
+                for (let s = 0; s < groupStars.length; s++) {
+                    const star = groupStars[s];
                     ctx.save();
                     ctx.translate(star.x, star.y);
                     if (star.rotation) ctx.rotate(star.rotation);
-                    
+
                     ctx.beginPath();
                     this.drawStarShape(ctx, shape, star.radius * (star.sizeVariation || 1));
                     ctx.stroke();
-                    
+
                     ctx.restore();
                 }
             }
@@ -194,11 +244,18 @@ export class DepthBatchRenderer {
     }
 
     getStats() {
+        let activeBuckets = 0;
+        let totalStars = 0;
+        for (let i = 0; i < BUCKET_COUNT; i++) {
+            const bgLen = this._bgBuckets[i].length;
+            const colorLen = this._colorBuckets[i].length;
+            if (bgLen > 0 || colorLen > 0) activeBuckets++;
+            totalStars += bgLen + colorLen;
+        }
         return {
             frameCount: this.frameCount,
-            depthBuckets: this.depthBuckets.size,
-            totalStars: Array.from(this.depthBuckets.values()).reduce((sum, bucket) => 
-                sum + bucket.background.length + bucket.color.length, 0)
+            depthBuckets: activeBuckets,
+            totalStars
         };
     }
 }

@@ -2,6 +2,7 @@
 import { GAME_CONFIG } from '../constants.js';
 import { random, GameDimensions, glowSpriteCache } from '../utils.js';
 import { frameClock } from '../frame-clock.js';
+import { hsl } from '../color-cache.js';
 const DEBRIS_COUNT = 5;
 
 // ── Shared sin/cos lookup table ──────────────────────────────────────────
@@ -476,7 +477,7 @@ export class Asteroid {
             const hue   = bucketHue[bi] / bucketCount[bi]; // average hue
 
             ctx.globalAlpha = alpha;
-            ctx.strokeStyle = `hsl(${hue}, ${this.saturation}%, ${this.lightness}%)`;
+            ctx.strokeStyle = hsl(hue, this.saturation, this.lightness);
             ctx.beginPath();
             for (let j = 0; j < edges.length; j += 3) {
                 ctx.moveTo(edges[j].x, edges[j].y);

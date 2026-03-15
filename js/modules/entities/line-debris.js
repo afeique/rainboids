@@ -1,5 +1,6 @@
 // Line debris from destroyed asteroids
 import { random } from '../utils.js';
+import { hsl } from '../color-cache.js';
 
 export class LineDebris {
     constructor() {
@@ -67,7 +68,7 @@ export class LineDebris {
         if (this.useFixedColor) {
             ctx.strokeStyle = this.fixedColor;
         } else {
-            ctx.strokeStyle = `hsl(${this.hue}, 100%, 50%)`;
+            ctx.strokeStyle = hsl(this.hue, 100, 50);
         }
         
         ctx.lineWidth = 2;

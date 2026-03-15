@@ -4,6 +4,7 @@ import { random, wrap, glowSpriteCache } from '../utils.js';
 import { rgba } from '../color-cache.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from '../weapon-data.js';
 import { autofireDiag } from '../autofire-diag.js';
+import { frameClock } from '../frame-clock.js';
 
 function isMobile() {
     return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
@@ -1301,7 +1302,7 @@ export class Player {
 
         // Flash effect during invincibility
         if (this.invincible) {
-            const flash = Math.sin(Date.now() * 0.02) > 0;
+            const flash = Math.sin(frameClock.now * 0.02) > 0;
             ctx.globalAlpha = flash ? 0.35 : 0.85;
         }
 
@@ -1313,7 +1314,7 @@ export class Player {
         ctx.globalCompositeOperation = 'lighter';
 
         const r = this.radius;
-        const t = Date.now() * 0.001;
+        const t = frameClock.now * 0.001;
 
         // ── Engine startup shudder ──────────────────────────────────────────
         // Brief mechanical vibration when engines re-engage after idle.
@@ -1335,14 +1336,28 @@ export class Player {
             { x:  r * 0.42, y: r * 0.78 },
             { x: -r * 0.42, y: r * 0.78 },
         ];
-        for (const eng of engines) {
+        // Quantize thrustLevel to nearest 0.1 for gradient caching
+        const qThr = Math.round(thr * 10) / 10;
+        const qPulse = Math.round(engPulse * 10) / 10;
+        for (let ei = 0; ei < engines.length; ei++) {
+            const eng = engines[ei];
             // Exhaust length: short warm stub at idle → long plume when thrusting
             const exhaustLen = r * (0.45 + thr * 1.1) * (0.8 + engPulse * 0.4);
-            const grad = ctx.createLinearGradient(eng.x, eng.y, eng.x, eng.y + exhaustLen);
-            grad.addColorStop(0,   rgba(255, 220, 120, 0.9 * engPulse));
-            grad.addColorStop(0.35, rgba(255, 80, 10, 0.6 * engPulse));
-            grad.addColorStop(1,   'transparent');
-            ctx.fillStyle = grad;
+            // Cache gradient, invalidating when quantized thrust or pulse changes
+            const cacheSlot = this._engineGradCache || (this._engineGradCache = [{}, {}]);
+            const cache = cacheSlot[ei];
+            if (cache.qThr !== qThr || cache.qPulse !== qPulse || cache.r !== r) {
+                const qExhaustLen = r * (0.45 + qThr * 1.1) * (0.8 + qPulse * 0.4);
+                const grad = ctx.createLinearGradient(eng.x, eng.y, eng.x, eng.y + qExhaustLen);
+                grad.addColorStop(0,   rgba(255, 220, 120, 0.9 * qPulse));
+                grad.addColorStop(0.35, rgba(255, 80, 10, 0.6 * qPulse));
+                grad.addColorStop(1,   'transparent');
+                cache.grad = grad;
+                cache.qThr = qThr;
+                cache.qPulse = qPulse;
+                cache.r = r;
+            }
+            ctx.fillStyle = cache.grad;
             const glowIntensity = 0.4 + thr * 0.5;
             glowSpriteCache.draw(ctx, eng.x, eng.y + exhaustLen * 0.5, '#ff8800', r * 0.12, 6, glowIntensity * engPulse);
             ctx.shadowBlur = 0;

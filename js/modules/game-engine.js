@@ -65,7 +65,12 @@ export class GameEngine {
         this.pendingDamage = 0; // New property to track pending damage
 
         this.shieldIcon = new Image();
-        
+
+        // Pre-allocated typed arrays for drawOffScreenIndicators (avoid per-frame GC)
+        const _SEGMENTS = 24;
+        this._edgeGlow = [new Float32Array(_SEGMENTS), new Float32Array(_SEGMENTS), new Float32Array(_SEGMENTS), new Float32Array(_SEGMENTS)];
+        this._blurTemp = new Float32Array(_SEGMENTS);
+
         // Bulletproof continuous spawning system
         this.spawnInterval = 5000; // Spawn something every 5 seconds
         this.lastSpawnTime = 0; // Track last spawn
@@ -3509,9 +3514,10 @@ export class GameEngine {
             // Update life
             dmgNum.life -= deltaTime / 1000;
             
-            // Remove expired damage numbers
+            // Remove expired damage numbers (swap-and-pop to avoid O(n) splice)
             if (dmgNum.life <= 0) {
-                this.damageNumbers.splice(i, 1);
+                this.damageNumbers[i] = this.damageNumbers[this.damageNumbers.length - 1];
+                this.damageNumbers.pop();
             }
         }
     }
@@ -5278,13 +5284,17 @@ export class GameEngine {
         const w = this.width;
         const h = this.height;
 
-        // ── Segment buffers ──
+        // ── Segment buffers (pre-allocated, cleared each frame) ──
         const SEGMENTS = 24;
+        this._edgeGlow[0].fill(0);
+        this._edgeGlow[1].fill(0);
+        this._edgeGlow[2].fill(0);
+        this._edgeGlow[3].fill(0);
         const edges = {
-            top:    new Float32Array(SEGMENTS),
-            bottom: new Float32Array(SEGMENTS),
-            left:   new Float32Array(SEGMENTS),
-            right:  new Float32Array(SEGMENTS),
+            top:    this._edgeGlow[0],
+            bottom: this._edgeGlow[1],
+            left:   this._edgeGlow[2],
+            right:  this._edgeGlow[3],
         };
 
         // Fade-in margin: entities within this many px INSIDE the screen edge
@@ -5355,7 +5365,7 @@ export class GameEngine {
 
         // ── Gaussian-ish blur pass (3-tap, two passes) for smooth spatial blending ──
         const blur = (arr) => {
-            const tmp = new Float32Array(SEGMENTS);
+            const tmp = this._blurTemp;
             for (let i = 0; i < SEGMENTS; i++) {
                 const prev = i > 0 ? arr[i - 1] : 0;
                 const next = i < SEGMENTS - 1 ? arr[i + 1] : 0;
