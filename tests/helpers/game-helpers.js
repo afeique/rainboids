@@ -31,8 +31,8 @@ export async function loadGame(page) {
 
 /**
  * Transition from TITLE_SCREEN → PLAYING by:
- *  1. Directly calling gameEngine.init()
- *  2. Setting game state to PLAYING
+ *  1. Directly calling gameEngine.init() (starts WAVE_TRANSITION)
+ *  2. Waiting for the wave transition to naturally complete (2s delay)
  * This is equivalent to what happens on first click/keydown.
  */
 export async function startGame(page) {
@@ -43,11 +43,10 @@ export async function startGame(page) {
         if (ge.game.state === 'TITLE_SCREEN') {
             try { ge.audioManager?.initializeAudio?.(); } catch (_) {}
             ge.init();
-            ge.game.state = 'PLAYING';
         }
     });
 
-    // Confirm we are now in PLAYING state
+    // Wait for wave transition to finish and game to enter PLAYING state
     await page.waitForFunction(
         () => window.gameEngine?.game?.state === 'PLAYING',
         { timeout: 10_000 }

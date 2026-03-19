@@ -763,15 +763,28 @@ export class GameEngine {
         // Generate nebula background (pre-rendered, no per-frame cost)
         nebulaRenderer.generate(this.gameField.width, this.gameField.height);
         
-        // Initialize first wave with fixed wave system
+        // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
         this.game.waveComplete = false;
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 3000, 'top');
-        this.uiManager.updateLives(this.game.lives); // Initialize lives display
+        this.uiManager.updateLives(this.game.lives);
+        this.game.state = GAME_STATES.WAVE_TRANSITION;
+
+        // Show wave 1 intro with personality
+        this.waveMessage = {
+            active: true,
+            startTime: Date.now(),
+            duration: 3000,
+            title: 'WAVE 1',
+            subtitle: this.getWaveSubtitle(1),
+        };
+
+        // Delay spawning until message has been read
+        setTimeout(() => {
+            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.game.state = GAME_STATES.PLAYING;
-        
-        // Spawn initial wave (asteroids only for wave 1)
-        this.spawnWaveEntities();
+                this.spawnWaveEntities();
+            }
+        }, 2000);
     }
     
     // Generate all initial color stars using purely generative method
@@ -831,35 +844,6 @@ export class GameEngine {
         const colorStar = this.colorStarPool.get(x, y, false, z, density);
     }
     
-    startNextWave() {
-        // Clean up inactive objects in all pools before starting the next wave
-        this.bulletPool.cleanupInactive();
-        this.particlePool.cleanupInactive();
-        this.lineDebrisPool.cleanupInactive();
-        this.asteroidPool.cleanupInactive();
-        this.enemyPool.cleanupInactive();
-        this.enemyBulletPool.cleanupInactive();
-        this.colorStarPool.cleanupInactive();
-        this.backgroundStarPool.cleanupInactive();
-        // Note: Wave increment now handled by enhanced wave system (completeWave method)
-        this.uiManager.showMessage(`WAVE ${this.game.currentWave + 1}`, '', 7000, 'top');
-        this.game.state = GAME_STATES.WAVE_TRANSITION;
-        // Reset player state at wave start
-        this.playerState = PLAYER_STATES.NORMAL;
-        
-        // Restore player health to full between waves
-        this.player.health = this.player.getEffectiveMaxHealth();
-        
-        // Note: Asteroid spawning now handled by enhanced wave system
-        // via spawnWaveAsteroids() in startNewWave()
-        setTimeout(() => {
-            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
-                this.game.state = GAME_STATES.PLAYING;
-            }
-        }, 1500);
-        // No rapid recharge between waves - shields persist
-        // Only restore shields at game start
-    }
 
     
     spawnAsteroidOffscreen() {
@@ -1011,6 +995,83 @@ export class GameEngine {
         }
     }
     
+    getWaveSubtitle(waveNumber) {
+        const subtitles = {
+            1:  "Don't worry, they die easy.",
+            2:  "Okay maybe worry a little.",
+            3:  "They brought friends.",
+            4:  "These ones are chonky.",
+            5:  "The green means GO AWAY.",
+            6:  "Fast and angry. Like bees. Space bees.",
+            7:  "Bzz bzz bzz bzz.",
+            8:  "They have LASERS now?!",
+            9:  "Laser tag, but unfair.",
+            10: "Shocking, really.",
+            11: "They float weird and it's unsettling.",
+            12: "Missile lock! ...that's bad, right?",
+            13: "Webs. In space. Sure, why not.",
+            14: "Shields up! ...theirs, not yours.",
+            15: "Watch your step. Or your float.",
+            16: "He's a big boy.",
+            17: "Red vs Green. You vs both.",
+            18: "Speed and spite in equal measure.",
+            19: "Double the shields, double the pain.",
+            20: "Stay out of the crosshairs.",
+            21: "Invisible AND angry. Great.",
+            22: "Dodge THIS.",
+            23: "They learned teamwork. Rude.",
+            24: "More mines than a Minecraft server.",
+            25: "Halfway to glory. Or doom.",
+            26: "They're evolving. You're sweating.",
+            27: "The welcoming committee got bigger.",
+            28: "Not a great time to sneeze.",
+            29: "They're just showing off now.",
+            30: "Boss rush, baby!",
+            31: "Welcome to the gauntlet.",
+            32: "Three flavors of pain.",
+            33: "This is fine. Everything is fine.",
+            34: "Your shield called in sick today.",
+            35: "Asteroids are the LEAST of your problems.",
+            36: "Skill issue incoming.",
+            37: "The difficulty curve just went vertical.",
+            38: "Brought a ship to a knife fight.",
+            39: "It's not a party without explosions.",
+            40: "Round number! Celebrate by not dying.",
+            41: "Past the point of no return.",
+            42: "The answer to everything is MORE BULLETS.",
+            43: "They're not even trying to be fair.",
+            44: "Duck, weave, and pray.",
+            45: "The math is not in your favor.",
+            46: "Panic is an acceptable strategy.",
+            47: "Survival is a strong word.",
+            48: "Almost to the war zone!",
+            49: "One more and it gets REALLY bad.",
+            50: "Welcome to the war zone.",
+        };
+
+        if (subtitles[waveNumber]) return subtitles[waveNumber];
+
+        // Generic pool for waves beyond 50
+        const generic = [
+            "Good luck. You'll need it.",
+            "Still alive? Impressive.",
+            "They keep coming!",
+            "This is getting ridiculous.",
+            "You're built different.",
+            "No one said this would be easy.",
+            "Just another day at the office.",
+            "More enemies, more problems.",
+            "Are you even blinking?",
+            "Legend says no one survives this.",
+            "Your keyboard is begging for mercy.",
+            "Error 404: Easy mode not found.",
+            "Respawn? Never heard of it.",
+            "They're REALLY mad now.",
+            "Insert coin to continue. Oh wait.",
+        ];
+        return generic[(waveNumber * 7 + 3) % generic.length];
+    }
+
     showWaveComplete() {
         // Show WAVE COMPLETE message with next wave number
         const nextWave = this.game.currentWave + 1;
@@ -1162,29 +1223,42 @@ export class GameEngine {
     }
     
     startNextWave() {
+        // Clean up inactive objects in all pools before starting the next wave
+        this.bulletPool.cleanupInactive();
+        this.particlePool.cleanupInactive();
+        this.lineDebrisPool.cleanupInactive();
+        this.asteroidPool.cleanupInactive();
+        this.enemyPool.cleanupInactive();
+        this.enemyBulletPool.cleanupInactive();
+        this.colorStarPool.cleanupInactive();
+        this.backgroundStarPool.cleanupInactive();
+
         this.game.currentWave++;
         this.game.waveComplete = false;
-        this.game.state = GAME_STATES.PLAYING;
-        
-        // Update levels
-        this.game.enemyLevel = Math.floor(this.game.currentWave / 2) + 1;
-        this.game.asteroidLevel = Math.floor(this.game.currentWave / 3) + 1;
-        
-        
-        // Spawn wave entities based on wave number
-        this.spawnWaveEntities();
-        
-        // Show wave start message with wavy animation
+        this.game.state = GAME_STATES.WAVE_TRANSITION;
+
+        // Reset player state at wave start
+        this.playerState = PLAYER_STATES.NORMAL;
+
+        // Restore player health to full between waves
+        this.player.health = this.player.getEffectiveMaxHealth();
+
+        // Show wave start message with pithy subtitle
         this.waveMessage = {
             active: true,
             startTime: Date.now(),
             duration: 3000,
             title: `WAVE ${this.game.currentWave}`,
-            subtitle: 'FIGHT!'
+            subtitle: this.getWaveSubtitle(this.game.currentWave),
         };
-        
-        // Also show DOM message as backup
-        // this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, 'FIGHT!', 3000, 'top');
+
+        // Delay spawning until message has been read
+        setTimeout(() => {
+            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+                this.game.state = GAME_STATES.PLAYING;
+                this.spawnWaveEntities();
+            }
+        }, 2000);
     }
     
     spawnWaveEntities() {
@@ -5728,6 +5802,20 @@ export class GameEngine {
             this._screenFlashTimer--;
         }
 
+        // Death overlay — brief dark tint after player death
+        if (this._deathOverlayTimer > 0) {
+            const dt = this._deathOverlayTimer;
+            const dd = this._deathOverlayDuration;
+            // Ramp up quickly, fade out slowly
+            const progress = 1 - dt / dd;
+            const alpha = progress < 0.15
+                ? (progress / 0.15) * 0.18  // ramp up
+                : 0.18 * (dt / (dd * 0.85)); // fade out
+            this.ctx.fillStyle = `rgba(0, 0, 20, ${Math.max(0, alpha)})`;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            this._deathOverlayTimer--;
+        }
+
         // Draw custom cursor (always on top, after all UI elements)
         this.drawCustomCursor();
         
@@ -6104,186 +6192,184 @@ export class GameEngine {
     }
     
     handlePlayerDeath() {
+        const dx = this.player.x;
+        const dy = this.player.y;
+        const playerAngle = this.player.angle || 0;
+
         // Store death location for safe respawn calculation
-        this.deathLocation = { x: this.player.x, y: this.player.y };
-        
+        this.deathLocation = { x: dx, y: dy };
+
         // Lose a life
         this.game.lives--;
-        console.log(`💀 Player died! Lives remaining: ${this.game.lives}`);
         this.uiManager.updateLives(this.game.lives);
-        
-        // Create player explosion effect
         this.audioManager.playPlayerExplosion();
-        for (let i = 0; i < 30; i++) {
-            this.particlePool.get(this.player.x, this.player.y, 'playerExplosion');
+        this.player.active = false;
+
+        const isGameOver = this.game.lives <= 0;
+
+        // ── Phase 0: Impact Freeze (immediate) ──────────────────────────
+        this.triggerHitstop(15);
+        this.triggerScreenFlash(0.28, 5);
+        // Omnidirectional kick (no single "killer" direction)
+        const kickAngle = playerAngle + Math.PI; // push camera away from ship facing
+        this.triggerCameraKick(Math.cos(kickAngle), Math.sin(kickAngle), 25);
+
+        // Death overlay (dark blue tint that fades)
+        this._deathOverlayTimer = isGameOver ? 90 : 50;
+        this._deathOverlayDuration = this._deathOverlayTimer;
+        this._deathOverlayHold = isGameOver; // game-over holds longer
+
+        // ── Phase 1: Ship Fragmentation (immediate) ─────────────────────
+        // Core flash — big white pop
+        this.particlePool.get(dx, dy, 'explosionFlash', 55);
+        // Initial cyan ring
+        this.particlePool.get(dx, dy, 'explosionRingColored', 70, '#00ccff');
+        // Ship hull line debris
+        this.createPlayerShipDebris(dx, dy, playerAngle);
+        // Fast shrapnel streaks
+        for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2 + random(-0.3, 0.3);
+            const spd = random(10, 18);
+            const c = i % 3 === 0 ? '#ffffff' : i % 3 === 1 ? '#00ccff' : '#78ebff';
+            this.particlePool.get(dx, dy, 'explosionShrapnel', a, spd, c);
         }
-        this.triggerScreenShake(40, 20, 60); // Strong screen shake for player death
-        
-        if (this.game.lives <= 0) {
-            // True game over - no lives left
+
+        // ── Phase 2: Main Blast (100-300ms) ─────────────────────────────
+        setTimeout(() => {
+            this.triggerCameraKick(
+                Math.cos(kickAngle + random(-0.5, 0.5)),
+                Math.sin(kickAngle + random(-0.5, 0.5)), 18
+            );
+            this.triggerScreenFlash(0.18, 4);
+            this.triggerScreenShake(60, 30, 80);
+
+            // Shockwave rings — staggered, in player palette
+            const ringColors = ['#ffffff', '#78ebff', '#ff5ad2'];
+            const ringRadii = [90, 130, 175];
+            for (let r = 0; r < 3; r++) {
+                setTimeout(() => {
+                    this.particlePool.get(dx, dy, 'explosionRingColored',
+                        ringRadii[r], ringColors[r]);
+                }, r * 60);
+            }
+        }, 100);
+
+        // Secondary shrapnel wave
+        setTimeout(() => {
+            const palette = ['#00ccff', '#ff5ad2', '#be96ff', '#ffffff', '#ffff96'];
+            for (let i = 0; i < 14; i++) {
+                const a = (i / 14) * Math.PI * 2 + random(-0.4, 0.4);
+                const spd = random(4, 11);
+                this.particlePool.get(dx, dy, 'explosionShrapnel', a, spd,
+                    palette[i % palette.length]);
+            }
+        }, 160);
+
+        // Embers
+        setTimeout(() => {
+            const emberColors = ['#78ebff', '#ffffff', '#ff5ad2', '#be96ff'];
+            for (let i = 0; i < 10; i++) {
+                this.particlePool.get(dx, dy, 'explosionEmber',
+                    emberColors[i % emberColors.length]);
+            }
+        }, 220);
+
+        // ── Phase 3: Aftershock (400-1200ms) ────────────────────────────
+        setTimeout(() => {
+            this.triggerCameraKick(
+                Math.cos(kickAngle + random(-1, 1)),
+                Math.sin(kickAngle + random(-1, 1)), 10
+            );
+            this.triggerScreenFlash(0.08, 2);
+
+            // Scattered embers around the death point
+            for (let i = 0; i < 6; i++) {
+                const ox = dx + random(-35, 35);
+                const oy = dy + random(-35, 35);
+                this.particlePool.get(ox, oy, 'explosionEmber',
+                    i % 2 === 0 ? '#ff5ad2' : '#ffff96');
+            }
+        }, 400);
+
+        // Final massive ring
+        setTimeout(() => {
+            this.particlePool.get(dx, dy, 'explosionRingColored', 220, '#be96ff');
+        }, 650);
+
+        // Delayed re-ignition pops
+        for (let p = 0; p < 4; p++) {
+            setTimeout(() => {
+                const ox = dx + random(-45, 45);
+                const oy = dy + random(-45, 45);
+                this.particlePool.get(ox, oy, 'explosionFlash', random(15, 28));
+                for (let s = 0; s < 3; s++) {
+                    const a = random(0, Math.PI * 2);
+                    this.particlePool.get(ox, oy, 'explosionShrapnel', a,
+                        random(3, 7), s === 0 ? '#ffffff' : '#78ebff');
+                }
+            }, 650 + p * 120);
+        }
+
+        // ── Handle game state ───────────────────────────────────────────
+        if (isGameOver) {
             this.game.state = GAME_STATES.GAME_OVER;
-            this.player.active = false;
             this.checkSurvivalRecord();
             this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
         } else {
-            // Still have lives - respawn after brief delay
-            this.player.active = false; // Deactivate player during respawn delay
             setTimeout(() => {
                 this.respawnPlayerSafely();
-            }, 1500); // 1.5 second delay for dramatic effect
+            }, 1800);
         }
     }
 
-    gameOver() {
-        // Lose a life first
-        this.game.lives--;
-        console.log(`💀 Player died! Lives remaining: ${this.game.lives}`); // Always show player death
-        
-        // Update lives display
-        this.uiManager.updateLives(this.game.lives);
-        
-        this.audioManager.playPlayerExplosion();
-        
-        // Create spectacular colorful death explosion
-        const explosionX = this.player.x;
-        const explosionY = this.player.y;
-        
-        // Store death location for safe respawn calculation
-        this.deathLocation = { x: explosionX, y: explosionY };
-        
-        // Start death explosion animation
-        this.deathExplosionActive = true;
-        this.deathExplosionStartTime = Date.now();
-        this.deathExplosionDuration = 2000; // 2 second explosion animation
-        
-        // Massive colorful particle explosion
-        for (let i = 0; i < 200; i++) {
-            const particle = this.particlePool.get(explosionX, explosionY, 'explosion');
-            if (particle) {
-                // Multi-layered explosion with different speeds
-                const layer = Math.floor(Math.random() * 3);
-                let speed, life, radius;
-                
-                if (layer === 0) {
-                    // Inner fast explosion
-                    speed = 8 + Math.random() * 12;
-                    life = 40 + Math.random() * 30;
-                    radius = 3 + Math.random() * 5;
-                } else if (layer === 1) {
-                    // Middle medium explosion
-                    speed = 4 + Math.random() * 8;
-                    life = 60 + Math.random() * 40;
-                    radius = 2 + Math.random() * 4;
-                } else {
-                    // Outer slow explosion
-                    speed = 2 + Math.random() * 6;
-                    life = 80 + Math.random() * 50;
-                    radius = 1 + Math.random() * 3;
-                }
-                
-                const angle = Math.random() * Math.PI * 2;
-                particle.vel.x = Math.cos(angle) * speed;
-                particle.vel.y = Math.sin(angle) * speed;
-                particle.life = life;
-                particle.radius = radius;
-                
-                // Rainbow explosion colors
-                const colors = [
-                    '#ff0000', '#ff3300', '#ff6600', '#ff9900', '#ffcc00', '#ffff00',
-                    '#ccff00', '#99ff00', '#66ff00', '#33ff00', '#00ff00', '#00ff33',
-                    '#00ff66', '#00ff99', '#00ffcc', '#00ffff', '#00ccff', '#0099ff',
-                    '#0066ff', '#0033ff', '#0000ff', '#3300ff', '#6600ff', '#9900ff',
-                    '#cc00ff', '#ff00ff', '#ff00cc', '#ff0099', '#ff0066', '#ff0033',
-                    '#ffffff', '#ffcccc', '#ccffcc', '#ccccff'
-                ];
-                particle.color = colors[Math.floor(Math.random() * colors.length)];
+    createPlayerShipDebris(x, y, angle) {
+        const r = this.player.radius || 12;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+
+        // Hull vertices in local space (matching player.js draw)
+        const verts = [
+            { x: 0,          y: -r },          // nose
+            { x: r * 0.32,   y: -r * 0.18 },   // upper-right
+            { x: r * 1.12,   y: r * 0.28 },     // wing-right
+            { x: r * 1.42,   y: r * 0.08 },     // wingtip-right
+            { x: r * 0.28,   y: r * 0.58 },     // lower-right
+            { x: r * 0.42,   y: r * 0.78 },     // engine-right
+            { x: 0,          y: r * 0.38 },      // tail
+            { x: -r * 0.42,  y: r * 0.78 },     // engine-left
+            { x: -r * 0.28,  y: r * 0.58 },     // lower-left
+            { x: -r * 1.42,  y: r * 0.08 },     // wingtip-left
+            { x: -r * 1.12,  y: r * 0.28 },     // wing-left
+            { x: -r * 0.32,  y: -r * 0.18 },    // upper-left
+        ];
+
+        // Rotate vertices to world space and create debris between adjacent pairs
+        for (let i = 0; i < verts.length; i++) {
+            const v1 = verts[i];
+            const v2 = verts[(i + 1) % verts.length];
+            // Rotate to world orientation
+            const p1 = {
+                x: v1.x * cos - v1.y * sin,
+                y: v1.x * sin + v1.y * cos
+            };
+            const p2 = {
+                x: v2.x * cos - v2.y * sin,
+                y: v2.x * sin + v2.y * cos
+            };
+            const debris = this.lineDebrisPool.get(x, y, p1, p2, '#00ccff');
+            if (debris) {
+                // Boost outward speed for dramatic fragmentation
+                const midX = (p1.x + p2.x) / 2;
+                const midY = (p1.y + p2.y) / 2;
+                const outAngle = Math.atan2(midY, midX);
+                const spd = random(4, 10);
+                debris.vel.x = Math.cos(outAngle) * spd;
+                debris.vel.y = Math.sin(outAngle) * spd;
+                debris.rotVel = random(-0.2, 0.2);
             }
-        }
-        
-        // Dramatic line debris explosion
-        for (let i = 0; i < 60; i++) {
-            // Create random line debris with proper p1 and p2 points
-            const angle = Math.random() * Math.PI * 2;
-            const length = 10 + Math.random() * 20;
-            const p1 = { x: 0, y: 0 };
-            const p2 = { x: Math.cos(angle) * length, y: Math.sin(angle) * length };
-            
-            const lineDebris = this.lineDebrisPool.get(explosionX, explosionY, p1, p2);
-            if (lineDebris) {
-                const speed = 3 + Math.random() * 10;
-                lineDebris.vel.x = Math.cos(angle) * speed;
-                lineDebris.vel.y = Math.sin(angle) * speed;
-                lineDebris.life = 100 + Math.random() * 60;
-                lineDebris.length = 20 + Math.random() * 40;
-                lineDebris.width = 2 + Math.random() * 3;
-                
-                // Bright rainbow colors for line debris
-                const colors = [
-                    '#ff0044', '#ff4400', '#ffaa00', '#aaff00', '#44ff00', '#00ff44',
-                    '#00ffaa', '#00aaff', '#0044ff', '#4400ff', '#aa00ff', '#ff00aa',
-                    '#ffffff', '#ffff88', '#88ffff', '#ff88ff'
-                ];
-                lineDebris.color = colors[Math.floor(Math.random() * colors.length)];
-            }
-        }
-        
-        // Additional sparkle effects
-        for (let i = 0; i < 80; i++) {
-            const particle = this.particlePool.get(explosionX, explosionY, 'starSparkle');
-            if (particle) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 1 + Math.random() * 8;
-                particle.vel.x = Math.cos(angle) * speed;
-                particle.vel.y = Math.sin(angle) * speed;
-                particle.life = 60 + Math.random() * 80;
-                particle.radius = 1 + Math.random() * 2;
-                
-                // Sparkly bright colors
-                const sparkleColors = ['#ffffff', '#ffff00', '#ff00ff', '#00ffff', '#ff8800', '#88ff00'];
-                particle.color = sparkleColors[Math.floor(Math.random() * sparkleColors.length)];
-            }
-        }
-        
-        // Explosion pulse rings with rainbow colors
-        for (let i = 0; i < 8; i++) {
-            setTimeout(() => {
-                const pulse = this.particlePool.get(explosionX, explosionY, 'explosionPulse', 40 + i * 25);
-                if (pulse) {
-                    const pulseColors = ['#ff0000', '#ff8800', '#ffff00', '#88ff00', '#00ff88', '#0088ff', '#8800ff', '#ff0088'];
-                    pulse.color = pulseColors[i % pulseColors.length];
-                }
-            }, i * 120);
-        }
-        
-        // Fiery explosion rings with varied colors
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => {
-                const ring = this.particlePool.get(explosionX, explosionY, 'fieryExplosionRing', 60 + i * 40);
-                if (ring) {
-                    const ringColors = ['#ff4400', '#ff8800', '#ffcc00', '#88ff44', '#44ff88'];
-                    ring.color = ringColors[i % ringColors.length];
-                }
-            }, i * 180);
-        }
-        
-        // Massive screen shake for player death
-        this.triggerScreenShake(80, 45); // Much stronger and longer shake
-        
-        if (this.game.lives <= 0) {
-            // True game over - no lives left
-            this.game.state = GAME_STATES.GAME_OVER;
-            this.player.active = false;
-            this.checkSurvivalRecord();
-            this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
-        } else {
-            // Still have lives - wait for explosion animation then respawn player
-            this.player.active = false; // Deactivate player during explosion
-            setTimeout(() => {
-                this.respawnPlayerSafely();
-            }, this.deathExplosionDuration);
         }
     }
-    
+
     respawnPlayer() {
         // Legacy method - redirect to safe respawn
         this.respawnPlayerSafely();

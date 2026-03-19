@@ -14,6 +14,7 @@ async function clearEntities(page) {
         while (ge.enemyPool.activeObjects.length)    ge.enemyPool.release(ge.enemyPool.activeObjects[0]);
         while (ge.asteroidPool.activeObjects.length) ge.asteroidPool.release(ge.asteroidPool.activeObjects[0]);
         while (ge.enemyBulletPool.activeObjects.length) ge.enemyBulletPool.release(ge.enemyBulletPool.activeObjects[0]);
+        ge.game.waveComplete = true; // Prevent wave system from spawning new enemies
     });
 }
 

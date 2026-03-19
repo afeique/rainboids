@@ -42,9 +42,9 @@ export class DepthBatchRenderer {
             // Calculate depth bucket (quantize opacity to reduce buckets)
             const depthOpacity = Math.min(1, 0.4 + Math.pow(star.z / 4, 1.0));
             star.finalOpacity = star.opacity * depthOpacity;
-            const idx = Math.max(0, Math.min(10, Math.round(star.finalOpacity * 10)));
+            const idx = Math.round(star.finalOpacity * 10) | 0;  // |0 coerces NaN→0
 
-            this._bgBuckets[idx].push(star);
+            this._bgBuckets[idx < 0 ? 0 : idx > 10 ? 10 : idx].push(star);
         }
 
         // Group simple color stars by depth (complex ones render separately)
@@ -59,9 +59,9 @@ export class DepthBatchRenderer {
             // Calculate depth bucket
             const depthOpacity = Math.min(1, 0.5 + Math.pow(star.z / 4, 1.2));
             star.finalOpacity = star.opacity * depthOpacity;
-            const idx = Math.max(0, Math.min(10, Math.round(star.finalOpacity * 10)));
+            const idx = Math.round(star.finalOpacity * 10) | 0;  // |0 coerces NaN→0
 
-            this._colorBuckets[idx].push(star);
+            this._colorBuckets[idx < 0 ? 0 : idx > 10 ? 10 : idx].push(star);
         }
     }
 

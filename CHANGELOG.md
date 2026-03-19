@@ -5,462 +5,736 @@ All notable changes to Rainboids will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.23.18] - 2025-09-20
-
-### Fixed
-- **Respawn Invincibility**: Player is now properly invincible during respawn period - cannot be damaged by enemy or asteroid collisions
-- **Collision Vulnerability**: Fixed critical bug where player could die during invincibility frames after respawn
-
-### Enhanced
-- **Collision Damage System**: Enemies and asteroids now take massive damage when colliding with the player
-- **Risk vs Reward**: Ramming enemies/asteroids is now a viable (but risky) combat strategy
-- **Collision Destruction**: Both enemies and asteroids can be destroyed through player collision
-
-### Added
-- **Enemy Collision Damage**: Enemies take 50 damage when colliding with player (often fatal)
-- **Asteroid Collision Damage**: Asteroids take 25 damage when colliding with player
-- **Collision Rewards**: Full money rewards for collision kills, bonus XP for asteroid destruction
-- **Destruction Effects**: Proper debris and orb drops when entities are destroyed by collision
-
-### Improved
-- **Invincibility Consistency**: Both enemy and asteroid collisions now properly respect player invincibility
-- **Combat Variety**: Players can now use ramming as an aggressive combat tactic
-- **Risk Management**: High-risk, high-reward gameplay for skilled players
-
-### Technical
-- **Player-Enemy Collision**: Added invincibility check `if (!this.player.invincible)` before damage application
-- **Massive Damage**: 50 damage to enemies, 25 damage to asteroids on player collision
-- **Proper Cleanup**: Destroyed entities properly release resources and drop rewards
-- **Invincibility Duration**: 1.5 seconds after enemy collision, 3 seconds after asteroid collision
+- **MAJOR** = fundamental gameplay or architectural overhaul
+- **MINOR** = new features, systems, or significant content
+- **PATCH** = bug fixes, balance tuning, polish
 
 ---
+
+## [5.3.3] - 2026-03-18
+
+### Removed
+- Dead `gameOver()` method (~150 lines of unused rainbow explosion code)
+
+## [5.3.2] - 2026-03-18
+
+### Fixed
+- Game starting at wave 2 due to `main.js` and `startGame()` force-setting
+  state to PLAYING, bypassing the wave transition setTimeout
+- Wave progression broken after wave 1 (entities never spawned because
+  setTimeout callback checked for WAVE_TRANSITION but state was forced
+  to PLAYING)
+- Duplicate `startNextWave()` method (old dead version at line 847 merged
+  into the real one with pool cleanup, health restore, player state reset)
+
+## [5.3.1] - 2026-03-18
+
+### Fixed
+- Depth-batch-renderer NaN crash: `Math.max`/`Math.min` passes NaN through;
+  replaced with bitwise `|0` coercion + ternary bounds check
+
+## [5.3.0] - 2026-03-18
+
+### Added
+- Four-phase player death effect: impact freeze, ship fragmentation, main
+  blast with shockwave rings, and delayed aftershock re-ignition pops
+- Ship hull debris: player hull fragments into 12 line-debris pieces along
+  actual hull geometry on death, flung outward with rotation
+- Death overlay: brief dark-blue tint after death (holds longer on game over)
+- Three sequential camera kicks on player death (25px, 18px, 10px)
+- 15-frame hitstop on player death (longest in the game)
+- Pithy/humorous wave subtitles for all 50 hand-written waves plus a rotating
+  pool of 15 generic quips for waves 51+
+- Wave 1 intro message with 2-second delay before spawning
+- Wave transition delay on all waves (2s message → spawn)
+
+### Changed
+- Player death is now the most dramatic effect in the game, strictly above
+  enemy kills in every feedback channel (hitstop, flash, shake, rings)
+
+---
+
+## [5.2.3] - 2026-03-15
+
+### Changed
+- Background star colors improved: 55% blue-white, 25% white, 12% warm,
+  8% orange-red
+- Asteroid hue range narrowed to teal/cyan/blue/violet (150-280°) with 20%
+  warm gold accents (40-60°) for stylistic cohesion
+- Hit flash timer increased from 3 to 6 frames
+- MAX_PARTICLES raised from 30 to 50
+
+## [5.2.2] - 2026-03-15
+
+### Changed
+- HSL color cache added to color-cache.js: quantizes and caches `hsl()`
+  string construction (~50-100 fewer string allocations per frame)
+- Gradient caching for engine exhaust, health bars, and asteroid tiers
+  (~30-60 fewer `createLinearGradient`/`createRadialGradient` calls per frame)
+- Reduced `ctx.save()`/`restore()` calls by ~70-140 per frame in particle.js
+  (replaced with manual property resets)
+- HSL template literals in particle.js and line-debris.js replaced with
+  cached `hsl()` calls
+- `Date.now()` calls in player.js `draw()` replaced with `frameClock.now`
+- Pre-allocated typed arrays (Float32Array) for off-screen indicators
+- Swap-and-pop removal for damage numbers (O(1) vs splice O(n))
+
+## [5.2.1] - 2026-03-15
+
+### Fixed
+- Depth-batch-renderer crash after several waves: bucket index could exceed
+  0-10 range; added `Math.max`/`Math.min` clamping
+- Stars drifting when player is stationary: added epsilon snap
+  (`if abs(vel) < 0.05, vel = 0`)
+- Stars moving during PAUSE/SHOP: pass `{x:0,y:0}` instead of player velocity
+
+## [5.2.0] - 2026-03-15
+
+### Added
+- Hull outline glow on player ship: full silhouette stroke that dims/brightens
+  with thrust level but stays visible at idle (cyan, lineWidth 2.5)
+- Non-rotating hit flash aesthetic for enemies and asteroids: world-space white
+  square with 6-7 debris squares (cyan, magenta, yellow, lavender) bursting
+  outward radially
+- Hit flash jitter (high-frequency sine displacement)
+- Kill juice hierarchy: deaths use stronger effects than hits
+  - Enemy kill: hitstop 8, camera kick 14px, screen flash 0.12/3f
+  - Asteroid kill: hitstop 4-6, camera kick 7-12px, screen flash 0.06-0.1/2f
+- Screen flash overlay system: `triggerScreenFlash(alpha, duration)` renders
+  additive white fullscreen rect after HUD
+- Camera kick system: `triggerCameraKick(dx, dy, magnitude)` with directional
+  lurch and exponential decay
+- Hitstop system: `triggerHitstop(frames)` freezes game logic while still
+  rendering
+- Staggered explosion rings on enemy/asteroid death (3 rings, 50ms apart)
+- Directional shrapnel streaks on death (16-24 pieces in entity color)
+- Lingering embers on death (10-16 slow-drifting glowing dots)
+- Delayed secondary burst sparks (80ms after death)
+
+### Fixed
+- Hit flash rotating for enemies but not asteroids: moved all flash drawing
+  outside entity rotation transforms to world-space
+- Chromatic aberration fuzz looking sloppy on large entities: replaced offset
+  colored rectangles with small debris squares
+
+## [5.1.2] - 2026-03-15
+
+### Changed
+- Rendering optimizations for sustained frame rate
+
+## [5.1.1] - 2026-03-15
+
+### Fixed
+- Auto-fire bug where player couldn't fire
+
+## [5.1.0] - 2026-03-15
+
+### Added
+- AI QA bot: autonomous playtesting bot with combat AI, shop AI, bug
+  detection (stuck states, invariant violations), and performance monitoring
+  (16 modules in ai-qa-bot/ directory, created 2026-03-14)
+- Halo-style red glow indicator for off-screen enemies
+- Autofire diagnostics module (autofire-diag.js)
+- Frame clock module (frame-clock.js) for consistent timing
+- juice-capture.mjs for recording gameplay clips
+
+---
+
+## [5.0.3] - 2026-03-10
+
+### Changed
+- Game logic running at fixed 60 Hz tick rate (decoupled from render)
+- Pause menu redesigned to fit all buttons including weapon tabs
+
+## [5.0.2] - 2026-03-10
+
+### Changed
+- Further orb drop rate and upgrade scaling changes
+
+## [5.0.1] - 2026-03-10
+
+### Changed
+- Money/health orb drop rates decreased; game now starts dropping only
+  1 orb, must be upgraded through shop and powerups
+- Silkscreen font for small text (enemy names, levels, powerup labels)
+
+## [5.0.0] - 2026-03-10
+
+### Added
+- Weapon system with 5 primary weapons (Pulse Cannon, Storm Needles,
+  Scatter Gun, Rail Driver, Lance Beam)
+- 5 power weapons (Charge Shot, Mine Layer, Nova Blast, Lightning Arc,
+  Missile Salvo)
+- 6 defense skills (Bulwark, Repair Nanites, Phase Dash, Deflector Orbs,
+  EMP Pulse, Tractor Shield)
+- Weapon upgrade trees (54+ upgrades across primary, power, and defense)
+- Skill slot system with assignable defense skills
+- Nebula background renderer (pre-rendered, no per-frame cost)
+- Comprehensive wave data system: 100 explicitly designed waves across
+  5 acts (First Contact, Escalation, Gauntlet, War Zone, Endgame)
+  plus procedural scaling for waves 101+
+
+### Changed
+- Secondary weapon changed from built-in charge shot to selectable power
+  weapon slot
+
+---
+
+## [4.28.4] - 2026-03-08
+
+### Fixed
+- Package.json main entry corrected to js/main.js (was index.js)
+
+## [4.28.3] - 2026-03-08
+
+### Changed
+- Title screen and wavy text scale to fit mobile viewport
+
+## [4.28.2] - 2026-03-08
+
+### Fixed
+- Mobile: hide mouse cursor (was appearing on touch devices)
+- Mobile: increase pause button size for easier tapping
+
+## [4.28.1] - 2026-03-08
+
+### Added
+- CSS color string caching (color-cache.js with rgba() cache)
+- Pre-allocated depth buckets in depth-batch-renderer replacing Maps/Arrays
+
+### Changed
+- Moved perf/ to benchmark/ directory
+
+## [4.28.0] - 2026-03-08
+
+### Added
+- Test infrastructure: Jest for unit tests, Playwright for E2E/QA tests,
+  mitata for microbenchmarks
+- Allure Report integration for HTML test reporting
+- 68 Jest unit tests (pool, wave, math)
+- 92 Playwright QA smoke tests
+- Comprehensive E2E test suite (menu, HUD, weapons, music, asteroids,
+  enemies, powerups, waves, survival)
+- Performance FPS benchmark tests (baseline, asteroids, particles,
+  starfield, enemies, combined)
+- AI playtester (game-ai.js) with reactive gameplay and one-punch-man cheat
+- Microbenchmarks for pool, collision, wave, math, and noise systems
+- Benchmark comparison tool (`npm run perf:compare <refA> <refB>`)
+
+## [4.27.1] - 2026-03-07
+
+### Changed
+- Benchmark table formatting cleanup
+- Configurable number of averaged runs for benchmarking
+- Benchmark README added
+
+## [4.27.0] - 2026-03-07
+
+### Added
+- Performance benchmarking scripts and tools
+- Comprehensive performance analysis output
+
+## [4.26.5] - 2026-03-04
+
+### Fixed
+- Pause menu minor fixes on mobile
+
+## [4.26.4] - 2026-03-03
+
+### Changed
+- Powerup icon text polish: font choices, colors, sizing
+
+## [4.26.3] - 2026-03-03
+
+### Changed
+- Powerup icons now display powerup name, remaining time in seconds,
+  and number of stacks
+- Enemy names and levels restored above health bars
+- Enemy levels now scale with the number of waves
+
+## [4.26.2] - 2026-03-03
+
+### Changed
+- Much more variety in enemy movement and firing patterns
+- Enemies now rotate more smoothly
+- Enemies have more distinctive firing styles and bullet types
+
+## [4.26.1] - 2026-03-03
+
+### Fixed
+- Pause button working on desktop and mobile
+- Shop and resume text/icon alignment in pause menu
+
+## [4.26.0] - 2026-03-03
+
+### Added
+- Cheats for spawning individual enemies (SHIFT+1-8)
+- One-punch-man cheat (SHIFT+9)
+- Add coins cheat (SHIFT+-)
+- Pause button in top right (mobile support)
+
+### Fixed
+- HP bar moved closer to triforce (number of lives)
+- Coin and SP display in Shop menu
+
+### Changed
+- Removed hard enemy cap
+
+## [4.25.1] - 2026-03-02
+
+### Added
+- Close button for Shop
+
+### Changed
+- Powerup icon and timer bar aligned
+- Powerup icons moved up to avoid collision with play timer
+- Hover effects added to pause menu buttons
+
+## [4.25.0] - 2026-03-02
+
+### Added
+- Charge shot as purchasable upgrade (was built-in)
+- Unique upgrade and powerup icons
+- Auto-aim for mobile
+- Auto-fire system
+
+## [4.24.0] - 2026-02-24
+
+### Changed
+- Reduced map size for tighter combat encounters
+- Switched from continuous enemy spawning to discrete waves
+- Reduced star rendering to ensure performance
+
+---
+
+## [4.23.18] - 2025-09-20
+
+### Added
+- Respawn invincibility system (1.5-3 seconds)
+- Enemy collision damage (50 dmg) and asteroid collision damage (25 dmg)
+  when ramming player
+- Collision rewards: full money for collision kills, bonus XP for asteroids
+
+### Fixed
+- Player invincibility during respawn (critical collision vulnerability)
 
 ## [4.23.17] - 2025-09-20
 
-### Enhanced
-- **Automatic Targeting**: Player bullets now automatically target the last enemy or asteroid hit
-- **Intuitive Targeting**: No need to manually click enemies - shooting them automatically selects them
-- **Visual Feedback**: Hit enemies/asteroids immediately show pulsating targeting circle and top display info
-
-### Improved
-- **Targeting System**: Combines manual click targeting with automatic bullet-hit targeting
-- **User Experience**: More responsive targeting that follows player's combat actions
-- **Combat Flow**: Seamless transition between shooting and targeting without manual intervention
-
-### Technical
-- **Bullet Collision**: Added `this.targetedEntity = target` to both enemy and asteroid bullet collision handlers
-- **Dual Targeting**: Both pulsating circle (`targetedEntity`) and info display (`targetInfo`) now update on bullet hits
-- **Consistent Behavior**: Bullet hits now behave identically to manual clicks for targeting
-
----
+### Added
+- Automatic bullet-hit targeting: shooting enemies/asteroids now selects them
+- Hit enemies immediately show pulsating targeting circle and top display info
 
 ## [4.23.16] - 2025-09-20
 
-### Replaced
-- **Score System**: Completely replaced with survival timer tracking
-- **High Score**: Replaced with "Survival Record" showing longest survival time
-- **Title Screen**: Now displays "Survival Record: X hours, Y minutes, Z seconds" instead of high score
-
-### Enhanced
-- **Survival Tracking**: Real-time survival timer updates during gameplay
-- **Record Persistence**: Survival records saved to localStorage and displayed on title screen
-- **Time Formatting**: Intelligent time display (shows hours only if > 0, minutes only if > 0)
+### Added
+- Survival timer replacing score system
+- Survival record persistence in localStorage
+- Intelligent time formatting (hours/minutes/seconds as needed)
 
 ### Fixed
-- **Level Up Text**: Moved level up message higher (180px padding) to prevent overlap with shop button
-- **UI Positioning**: Level up text and subtitle now properly positioned above shop button
+- Level up text overlapping shop button (moved 180px higher)
 
 ### Changed
-- **Game State**: Removed `score` and `highScore`, added `survivalTime`, `survivalRecord`, and `gameStartTime`
-- **Money System**: Enemy destruction and orb collection now only award money (no score)
-- **Performance Cleanup**: Particle cleanup now based on survival time instead of score
-- **Storage Keys**: Changed from `rainboidsHighScore` to `rainboidsSurvivalRecord` in localStorage
-
-### Technical
-- **Timer Implementation**: Survival timer starts when game begins, updates every frame during gameplay
-- **Record Checking**: Survival record updated and saved when game ends
-- **Time Formatting**: New `formatSurvivalTime()` method for human-readable time display
-- **UI Manager**: Updated 'shop' position padding from 120px to 180px for better spacing
-
----
+- Score system fully replaced with survival timer
+- `rainboidsHighScore` localStorage key replaced with `rainboidsSurvivalRecord`
 
 ## [4.23.15] - 2025-09-20
 
-### Enhanced
-- **Titan Tank Missiles**: Significantly improved with longer range (800px) and faster acceleration
-- **Enemy Bullet System**: Comprehensive constants-based configuration for all bullet types
-- **Level Scaling**: Enhanced bullet speed and range scaling with proper min/max bounds
-- **Missile Performance**: Titan missiles now start very slow (0.5 speed) and accelerate much faster
-
 ### Added
-- **ENEMY_BULLET_CONFIG**: New comprehensive constants in `constants.js` for bullet behavior
-- **Speed Limits**: Min/max speed constraints for all bullet types to maintain balance
-- **Lifetime Limits**: Min/max range constraints for all bullet types
-- **Missile Configuration**: Detailed constants for both Titan and Turret missile types
-- **Level-Based Scaling**: Proper acceleration and max speed scaling for missiles based on enemy level
+- `ENEMY_BULLET_CONFIG` constants in constants.js for all bullet types
+- Speed and lifetime limits (min/max) for all bullet types
+- Level-based scaling for missile acceleration and max speed
 
 ### Changed
-- **Titan Missiles**: Initial speed reduced from 1.0 to 0.5, acceleration increased from 0.08 to 0.12, max speed increased from 8 to 12
-- **Missile Range**: Titan missile max distance increased from 600px to 800px
-- **Bullet Scaling**: All enemy bullets now use centralized constants for consistent behavior
-- **Speed Scaling**: Global 30% speed reduction with level-based increases capped at 40% maximum
-- **Range Scaling**: Bullet lifetimes now scale with level (5% per level, max 30% increase)
-
-### Technical
-- **Constants Integration**: All bullet creation now uses `ENEMY_BULLET_CONFIG` constants
-- **Level Progression**: Missile acceleration and max speed scale smoothly from level 1-6
-- **Performance Optimization**: Centralized bullet parameter management
-- **Code Organization**: Separated missile configuration into distinct Titan and Turret sections
-
----
+- Titan missiles: initial speed 1.0→0.5, acceleration 0.08→0.12,
+  max speed 8→12, range 600px→800px
+- All enemy bullets now use centralized constants
 
 ## [4.23.14] - 2025-09-20
 
 ### Fixed
-- **Damage Numbers**: Removed outer stroke from gold damage numbers for cleaner appearance
-- **Persistent Targeting**: Target selection now persists when clicking empty space, only changes when clicking different entities
-
-### Changed
-- **Damage Number Styling**: Simplified to gold fill only without darker stroke outline
-- **Targeting Behavior**: Enhanced targeting persistence - clicking empty space no longer clears the current target
-- **User Experience**: Improved target retention for better strategic gameplay
-
-### Technical
-- **Damage Numbers**: Removed `strokeStyle`, `lineWidth`, and `strokeText()` from damage number rendering
-- **Entity Targeting**: Modified `handleEntityTargeting()` to only update target when new entity is clicked
-- **Target Persistence**: Clicking empty space now preserves the current targeted entity
-
----
+- Damage number styling: removed outer stroke for cleaner gold fill
+- Persistent targeting: clicking empty space no longer clears current target
 
 ## [4.23.13] - 2025-09-20
 
-### Refactored
-- **Method Naming**: Renamed `drawCirculatingShield()` to `drawPulsatingCircle()` for better clarity
-- **Code Clarity**: Updated method name to better reflect its visual function as a pulsating targeting circle
-- **Comment Updates**: Updated related comments to reflect the new naming convention
-
-### Technical
-- **Enemy Class**: Renamed method definition from `drawCirculatingShield(ctx)` to `drawPulsatingCircle(ctx)`
-- **Method Calls**: Updated method invocation to use new `drawPulsatingCircle()` name
-- **Documentation**: Improved code readability with more descriptive method naming
-
----
+### Changed
+- Renamed `drawCirculatingShield()` to `drawPulsatingCircle()` for clarity
 
 ## [4.23.12] - 2025-09-20
 
 ### Fixed
-- **Shield Circle Display**: Removed constant pulsating shield circles around all enemies
-- **Targeted-Only Shields**: Shield circles now only appear when an enemy is specifically targeted (clicked)
-- **Visual Clarity**: Eliminated visual noise from unnecessary shield effects on non-targeted enemies
-
-### Changed
-- **Enemy Visual Effects**: Shield circles are now exclusive to targeted entities, providing clearer visual feedback
-- **Targeting System**: Enhanced distinction between targeted and non-targeted enemies
-
-### Technical
-- **Enemy Draw Method**: Modified `drawCirculatingShield()` call to be conditional based on `targetedEntity` status
-- **Performance**: Reduced visual processing by only rendering shield effects when needed
-
----
+- Shield circles removed from all enemies; now only appear on targeted entity
 
 ## [4.23.11] - 2025-09-20
 
 ### Added
-- **Click-Based Targeting System**: Replaced hover effects with click-to-target functionality for enemies and asteroids
-- **Persistent Target Selection**: Targeting circles now persist until clicking a different entity or empty space
-- **Enhanced Target Info Display**: Shows information for currently clicked/targeted entity instead of last hit entity
-
-### Changed
-- **Targeting Interaction**: Click on enemies/asteroids to select them and display targeting circles
-- **Target Info Behavior**: Target display at top of screen now reflects the currently selected (clicked) entity
-- **Guardian Targeting**: Improved targeting circle centering for Guardian enemies with visual offset adjustment
-- **Visual Feedback**: Targeting circles provide clear indication of selected entity until a new target is chosen
+- Click-based targeting system replacing hover effects
+- Persistent target selection (clicking different entity to change)
+- Target info display for clicked/selected entity
 
 ### Fixed
-- **Guardian Centering**: Adjusted targeting circle position for Guardian to account for visual center offset
-- **Target Persistence**: Targeting effects now remain visible until explicitly changing targets
-- **Target Info Sync**: Target information display properly syncs with click-selected entities
-
-### Technical
-- **Game Engine**: Added `targetedEntity` property and `handleEntityTargeting()` method for click-based selection
-- **Event Handling**: Implemented canvas click listener with world coordinate conversion for entity targeting
-- **Entity Cleanup**: Added automatic cleanup of targeted entity references when entities are destroyed
-- **Visual Effects**: Renamed `drawHoverEffect()` to `drawTargetingEffect()` across enemy and asteroid classes
-- **Target Display**: Modified `drawTargetInfo()` to use `targetedEntity` instead of hit-based targeting
-
----
+- Guardian targeting circle centering (visual offset adjustment)
 
 ## [4.23.10] - 2025-09-20
 
 ### Fixed
-- **Hover Effects**: Confirmed hover effects only appear when mouse is over entities (already working correctly)
-- **Guardian Centering**: Verified Guardian is properly centered in hover circle (visual perception issue resolved)
-- **Enemy Name Styling**: Removed stroke from enemy names above enemies, now using clean gold text only
-- **Target Info Consistency**: Updated target info display to use same gold color for enemy names
-
-### Changed
-- **Enemy Names Above Enemies**: Simplified to gold fill text only (`rgba(255, 215, 0, 1.0)`) without stroke
-- **Target Info Display**: Enemy names now use consistent gold styling matching in-world enemy names
-- **Visual Consistency**: Unified gold color scheme across all enemy name displays
-
-### Technical
-- **Enemy Health Bar**: Removed `strokeText` and stroke styling from enemy name rendering in `drawHealthBar()`
-- **Target Info**: Updated `drawTargetInfo()` to use gold fill color instead of white with black stroke
-- **UI Consistency**: Standardized color values across enemy name displays
-
----
+- Enemy name styling: removed stroke, now clean gold text only
+- Target info display: enemy names use consistent gold color
 
 ## [4.23.9] - 2025-09-20
 
 ### Fixed
-- **Screen Shake**: Confirmed asteroid-asteroid collisions don't trigger screen shake (only player damage does)
-- **Enemy Names**: Changed font size back to 10px and styled with gold text and darker gold border matching damage numbers
-- **Target Info Display**: Fixed LV and HP number spacing to prevent overlap using proper text width calculations
-
-### Changed
-- **Enemy Name Styling**: Updated to use golden color (`rgba(255, 215, 0, 1.0)`) with darker gold stroke (`rgba(184, 134, 11, 1.0)`) and 3px line width
-- **Target Info Layout**: Improved LV/HP positioning with 20px minimum spacing and centered alignment
-
-### Technical
-- **Enemy Health Bar**: Modified `drawHealthBar()` in `enemy.js` to use damage number color scheme
-- **Target Info**: Enhanced `drawTargetInfo()` in `game-engine.js` with proper text measurement and spacing calculations
-- **UI Consistency**: Unified gold styling across damage numbers, enemy names, and UI elements
-
----
+- Enemy name font size restored to 10px with gold text and darker gold border
+- Target info LV/HP number spacing fixed (20px minimum, centered alignment)
 
 ## [4.23.8] - 2025-09-20
 
 ### Fixed
-- **Enemy Display**: Increased enemy name font size from 10px to 12px for better visibility
-- **Enemy Health Bar**: Moved health bar closer to enemy name (reduced gap from 8px to 3px)
-- **Enemy Stats Position**: Updated commented LV/HP numbers to render below health bar instead of above
-- **Target Info Layout**: Centered target info display horizontally without overlapping player health bar
-- **Money Pickup Display**: Fixed positioning to show next to coin number instead of overlapping player HP bar
-- **HUD Layout**: Cleaned up all overlapping UI elements and improved spacing
-
-### Technical
-- **Enemy Health Bar**: Modified `drawHealthBar()` method in `enemy.js` with larger font and closer positioning
-- **Target Info**: Updated `drawTargetInfo()` positioning calculation in `game-engine.js`
-- **Money Display**: Fixed `drawMoneyPickupDisplay()` positioning to match `drawLevelAndCoinsDisplay()` exactly
-- **UI Spacing**: Improved coordinate calculations for proper HUD element alignment
-
----
+- Enemy name font size increased from 10px to 12px for visibility
+- Health bar moved closer to enemy name (gap 8px→3px)
+- Target info display centered horizontally without overlapping health bar
+- Money pickup display: positioned next to coin number instead of overlapping HP
 
 ## [4.23.7] - 2025-09-20
 
 ### Added
-- **Laser Turret Effects**: Cool laser charging and beam effects with cyan particles and muzzle flash
-- **Enemy Ship Names**: Ship names now display above level and HP readings for better identification (in ALL-CAPS)
-- **Target Info Display**: Shows enemy/asteroid name, health bar, and stats at top of screen when hit
-- **Hover Effects**: Pulsing glow rings around enemies and asteroids when cursor hovers over them
-- **Money Pickup Display**: Shows darker gold +amount next to coins with 3-second fade effect
-- **Damage Numbers**: Golden damage numbers with parabolic trajectory and fade-out animation
-- **Animated Rotation System**: Titan tanks with turret following body movement
-- **VERSION File**: Tracking major.minor.build numbers (3.10.21)
-- **CHANGELOG.md**: For tracking all game changes
+- Laser turret charging/beam effects with cyan particles and muzzle flash
+  (Drifter enemy)
+- Enemy ship names in ALL-CAPS above health bars
+- Target info display: name, health bar, stats at top of screen when hit
+- Hover effects: pulsing glow rings on enemies/asteroids under cursor
+- Money pickup display: darker gold +amount with 3-second fade
+- Damage numbers with parabolic trajectory and fade-out animation
+- Animated Titan turret rotation system (turret follows body)
+- VERSION file and CHANGELOG.md
 
 ### Changed
-- **Enemy Display**: Ship names now in ALL-CAPS, LV/HP numbers hidden above enemies (moved to target display)
-- **UI Information**: Enemy/asteroid stats now shown in dedicated target display when hit instead of cluttering world view
-- **Visual Feedback**: Enhanced cursor interaction with hover effects and target highlighting
-- **Money Collection**: Visual feedback shows accumulated pickup amounts with smooth fade animation
-- **Combat Feedback**: Damage numbers provide immediate visual confirmation of hits with physics-based animation
-- **Laser Turret (Drifter)**: Complete overhaul with charging mechanism, visual effects, and consistent firing
-- **Level Up Text**: Now smaller (24px) and positioned above Shop button instead of center screen
-- **Missile Turret (Prowler)**: Reduced speed from 1.2 to 0.8 for better positioning
-- **Titan Tank Frequency**: Faster rotation/aim cycles - 1.5s movement, 0.5s aim, 0.8s firing, 0.3s rotation
-- **Sword Stalker Rotation**: Smooth animated rotation when aiming instead of instant snapping
-- **Wasp Movement**: Complete zig-zag attack pattern - approaches with zig-zag, shoots, rotates, retreats with zig-zag
-- **Enemy Naming**: Renamed BOMBER → TANGERINE, turrets use ship names (DRIFTER, PROWLER, WEAVER, SENTINEL)
-- **Titan Tank Behavior**: Rotations are now smoothly animated over 0.3 seconds (faster)
-- **Titan Tank Turret**: Turret now rotates with the tank body during direction changes
-- **Shield Turret (Sentinel) Movement**: Increased orbit radius from 180px to 280px for safer distance
-- **Shield Turret (Sentinel) Speed**: Reduced movement speed by 55% and orbital speed by 47%
-- **Shield Turret (Sentinel) Combat**: Now comes to complete stop before firing shield burst
-- **Enemy Facing Direction**: All mobile enemies (Hunters, Guardians, Wasps, Stalkers) now face their shooting direction
-- **Game Map Size**: Reduced from 3x screen size to 2x screen size (33% smaller play area)
-- **Asteroid Count**: Fixed at 8 asteroids per wave (was scaling 3+ per wave)
-- **MAX_ASTEROIDS**: Increased limit from 4 to 8 to accommodate fixed count
+- Titan tank rotation: smooth animation over 0.3 seconds
+- Titan tank frequency: 1.5s movement, 0.5s aim, 0.8s firing, 0.3s rotation
+- Level up text: smaller (24px), positioned above Shop button
 
 ### Fixed
-- **Laser Turret**: Now fires consistently with proper charging mechanism and visual feedback
-- **Titan Tank**: Body no longer faces opposite direction from cannon
-- **Shield Turret**: No longer approaches too close to player during orbital movement
-- **Sword Stalker**: Smooth rotation animations prevent sudden direction changes
-- **Enemy Visual Consistency**: Facing direction now matches attack direction
+- Laser turret: fires consistently with proper charging mechanism
+- Titan tank: body no longer faces opposite direction from cannon
 
-### Technical
-- **Target Info System**: Added `targetInfo` state management with 3-second display timer and automatic cleanup
-- **Hover Detection**: World-to-screen coordinate conversion with 10px tolerance for precise cursor interaction
-- **Money Pickup Tracking**: Accumulative display system with fade timing and alpha blending
-- **Damage Numbers**: Physics-based animation system with parabolic trajectory, gravity, and lifetime management
-- **Visual Effects**: Pulsing glow effects with time-based sine wave animation and shadow rendering
-- **Laser System**: Added `createLaserChargingEffect()` and `createLaserBeam()` methods with particle effects
-- **UI Positioning**: Enhanced `showMessage()` with 'shop' position support and dynamic font sizing
-- **Enemy States**: Added `waspAttackState` system with 4-phase combat cycle (approaching, shooting, rotating, retreating)
-- **Rotation Animation**: Smooth interpolation with easing for Stalker aiming and Titan tank rotation
-- **Enemy Renaming**: Updated all references across enemy.js, wave-data.js, and game-engine.js
-- **Movement Patterns**: Enhanced wasp zig-zag with sine wave offset and directional switching
-- **Speed Management**: Improved speed limiting and state-based velocity control
+## [4.23.6] - 2025-09-19
 
-### Performance
-- **Laser Effects**: Optimized particle generation and beam rendering
-- **Combat Encounters**: Tighter due to smaller map size and improved enemy behaviors
-- **Predictable Gameplay**: Consistent asteroid density and more responsive enemy actions
-- **Visual Clarity**: Better enemy movement patterns and rotation animations
+### Changed
+- Game map reduced from 3x to 2x screen size (33% smaller play area)
+- Asteroid count fixed at 8 per wave (was scaling 3+ per wave)
+- MAX_ASTEROIDS increased from 4 to 8
+- Sentinel: orbit radius 180→280px, speed reduced 55%, stops before firing
+- Stalker: smooth animated rotation when aiming (no instant snapping)
+- All mobile enemies (Hunters, Guardians, Wasps, Stalkers) now face their
+  shooting direction
+- Orb value randomization: health and money orbs now have min/max ranges
+  for heal amounts, money values, and visual sizes
+
+## [4.23.5] - 2025-09-19
+
+### Changed
+- Turrets converted from stationary to mobile enemies with distinct
+  movement patterns: LASER_TURRET→DRIFTER (patrol), MISSILE_TURRET→PROWLER
+  (circle), PULSE_TURRET→WEAVER (swarm), SHIELD_TURRET→SENTINEL (slow_orbit)
+- Enemy renaming: BOMBER→TANGERINE, turrets use ship names
+  (DRIFTER, PROWLER, WEAVER, SENTINEL)
+- Wasp: new wasp_dart movement pattern replacing zigzag, speed 1.9→2.2,
+  shoot pattern changed to pulse
+- Wave data updated across all 50 waves for new enemy type names
+- Cooldown timer system removed (all enemies now mobile)
+
+## [4.23.4] - 2025-09-18
+
+### Changed
+- Enemy firing behaviors made more distinctive per type
+
+## [4.23.3] - 2025-09-18
+
+### Changed
+- Enemy spawning patterns revised for better pacing
+
+## [4.23.2] - 2025-09-18
+
+### Fixed
+- Enemy bullet fade-out (bullets now become transparent before despawning)
+
+## [4.23.1] - 2025-09-18
+
+### Fixed
+- Custom cursor rendering and hover-red state
+
+## [4.23.0] - 2025-09-18
+
+### Added
+- Updated enemy geometries with more distinctive visual designs
+- New enemy shooting patterns (spread shots, burst fire, laser sweeps)
+- Additional music tracks added to playlist
 
 ---
 
-## Version History
+## [4.22.1] - 2025-09-16
 
-**Version Format**: MAJOR.MINOR.BUILD
-- **Major**: Significant gameplay overhauls or breaking changes
-- **Minor**: New features, major improvements, or substantial content additions  
-- **Build**: Bug fixes, balance changes, and incremental improvements
+### Changed
+- Charge shot tuning (charge time, damage scaling, visual feedback)
+- Money orbs and health orbs cleaned up and rebalanced
+- Enemy movement patterns revised
 
-**Build Number**: Calculated as git commits since August 13, 2025
+## [4.22.0] - 2025-09-16
+
+### Added
+- Charge shot weapon (hold to charge, release for powerful blast)
+- Player leveling system with XP from kills
+- Skill point awards on level-up
+- Offensive upgrades: rapid fire, multi-shot, homing, piercing, big bullets
+- Defensive upgrades: health boost, shield boost, speed boost
+- Hit streak system for consecutive hits
+
+## [4.21.0] - 2025-09-14
+
+### Added
+- Player lives system (start with 3 lives)
+- Player respawning after death (safe location finding)
+- Money orbs (dropped by enemies, collected for currency)
+- Health orbs (renamed from "burst stars", heal player on collection)
+- Constants for fine-tuning health/money orb drop rates and values
+- Upgrades for health/money orb drop chance and quantity
+- Player lives display in HUD (Triforce-style icons)
+- Shop button in HUD (replaced Pause button)
+
+### Changed
+- Continuous enemy spawning disabled (switched to wave-based)
+- Burst stars renamed to health orbs
+- Pause button removed from HUD (accessible via keyboard/shop)
 
 ---
 
-## 📊 Comprehensive Development Analysis Since 14 Aug 2025 (Logged 20 Sep 2025)
+## [4.20.3] - 2025-08-14
 
-### **📈 Overall Development Statistics:**
-- **Total Files Changed**: 46 files
-- **Total Lines Added**: 7,384 lines
-- **Total Lines Deleted**: 1,371 lines  
-- **Net Change**: +6,013 lines of code
-- **New Files Added**: 20 files (mostly music tracks)
-- **Files Renamed**: 1 file (`samus.mp3` → `thats-not-samus.mp3`)
+### Changed
+- Further balance polish ("now super fun for a few minutes at a time")
+- Mobile joystick now supports simultaneous rotation and thrust
 
-### **🔥 Most Significantly Modified Files:**
-1. **`js/modules/entities/enemy.js`**: +3,236 lines, -440 lines (net +2,796)
-   - Complete enemy system overhaul with new AI behaviors
-   - New enemy types and movement patterns
-   - Enhanced shooting systems and visual effects
+## [4.20.2] - 2025-08-14
 
-2. **`js/modules/game-engine.js`**: +2,290 lines, -561 lines (net +1,729)
-   - Core gameplay systems enhancement
-   - Shop UI improvements with scrolling
-   - Collision detection and handling
-   - Target info and hover detection systems
+### Changed
+- Shop costs adjusted for progression curve
+- Powerup durations and stacking limits tuned
 
-3. **`js/modules/entities/player.js`**: +701 lines, -38 lines (net +663)
-   - Player leveling and skill systems
-   - Combat mechanics and progression
-   - Health and damage management
+## [4.20.1] - 2025-08-14
 
-4. **`js/modules/entities/enemy-bullet.js`**: +156 lines, -14 lines (net +142)
-   - Enhanced projectile systems
-   - Movement patterns and visual effects
-   - Fade and opacity systems
+### Changed
+- Extensive shop and powerup rebalancing across multiple iterations
 
-5. **`js/modules/ui-manager.js`**: +154 lines, -40 lines (net +114)
-   - Shop system implementation
-   - HUD improvements and positioning
-   - Message display enhancements
+## [4.20.0] - 2025-08-14
 
-6. **`js/modules/entities/bullet.js`**: +130 lines, -45 lines (net +85)
-   - Player projectile enhancements
-   - Visual feedback improvements
+### Added
+- Complete shop system with upgrade categories (offensive, defensive, utility)
+- Multi-touch support for mobile (simultaneous movement + firing)
+- Dynamic joystick positioning (spawns where finger touches)
+- Piercing bullets upgrade (bullets pass through multiple targets)
 
-7. **`js/modules/wave-data.js`**: +120 lines (new file)
-   - Structured wave progression system
-   - Enemy spawn configurations
+---
 
-8. **`js/modules/entities/color-star.js`**: +119 lines, -22 lines (net +97)
-   - Orb system enhancements
-   - Size and value randomization
+## [4.10.1] - 2025-08-13
 
-9. **`js/modules/input-handler.js`**: +100 lines, -60 lines (net +40)
-   - Input system improvements
-   - Touch and mouse handling
+### Changed
+- Major balancing pass on all game systems
+- Visual fine-tuning across entities and effects
+- Visibility improvements for game elements
 
-10. **`js/playlist-data.js`**: +97 lines, -2 lines (net +95)
-    - Music system expansion
+## [4.10.0] - 2025-08-13
 
-### **🎵 New Content Added:**
-- **19 New Music Tracks**: Comprehensive audio library including:
-  - `angels-fall.mp3`, `arabian-nights.mp3`, `bat-caves-icy-glades.mp3`
-  - `car-crusher.mp3`, `caustic-acrylic-cyanide.mp3`, `china-doll.mp3`
-  - `cyber-fox.mp3`, `desert-storm-rose.mp3`, `devils-dont-cry.mp3`
-  - `etude-of-madness.mp3`, `gonna-catch-ya.mp3`, `lightspeed-eye.mp3`
-  - `make-it-be.mp3`, `nightride-2029.mp3`, `over-the-horizon.mp3`
-  - `people-are-not-scary.mp3`, `polished-jewel.mp3`, `tension-in-resonance.mp3`
-  - `voices-in-my-head.mp3`
+### Added
+- Sound effects for various game events (explosions, pickups, firing)
+- Inter-wave messages ("WAVE COMPLETE", countdown to next wave)
+- 19 new background music tracks (White Bat Audio)
 
-- **Wave Data System**: New structured wave management system
-- **VERSION File**: Version tracking with major.minor.build format
-- **CHANGELOG.md**: Comprehensive change documentation
+---
 
-### **🚀 Major Feature Categories:**
+## [4.0.0] - 2025-07-22
 
-#### **Enemy System Overhaul** (~38% of changes)
-- Complete AI behavior rewrite
-- New enemy types and movement patterns
-- Enhanced shooting systems and visual effects
-- Facing direction improvements
-- Animated rotation systems
+### Added
+- Powerup drop system (12 types: rapid fire, multi-shot, homing, piercing,
+  big bullets, speed boost, spread shot, explosive, crit chance, crit damage,
+  shield boost, medpack)
+- Powerup stacking mechanics (each pickup extends duration and adds a stack)
+- Powerup timer bars in HUD showing remaining duration
 
-#### **Game Engine Enhancement** (~29% of changes)
-- Core gameplay systems improvement
-- UI enhancements and shop system
-- Collision detection optimization
-- Target info and hover systems
-- Money pickup and damage number displays
+---
 
-#### **Player Systems** (~9% of changes)
-- Leveling and skill progression
-- Combat mechanics enhancement
-- Health and damage management
-- Visual feedback improvements
+## [3.4.5] - 2025-07-18
 
-#### **Visual Effects** (~4% of changes)
-- Enhanced projectile systems
-- Fade and opacity effects
-- Particle systems and animations
+### Changed
+- Visual fidelity improvements ("it looks amazing")
+- Overall game feel polished and responsive
 
-#### **Audio Experience** (~15% of changes)
-- Comprehensive music library
-- Audio system improvements
-- Playlist management
+## [3.4.4] - 2025-07-18
 
-#### **Configuration/Data** (~5% of changes)
-- Constants and balance tuning
-- Wave data structuring
-- Documentation and versioning
+### Changed
+- Bullet speed increased for better game feel
+- Asteroid health reduced for faster destruction
 
-### **📊 Development Impact Analysis:**
+## [3.4.3] - 2025-07-18
 
-#### **Code Quality Improvements:**
-- **Modularization**: Better separation of concerns across files
-- **Documentation**: Comprehensive changelog and version tracking
-- **Structure**: New wave data system for better organization
-- **Maintainability**: Enhanced code organization and commenting
+### Changed
+- Extensive performance tuning ("clean, fast, good")
 
-#### **Gameplay Enhancements:**
-- **Enemy Variety**: Significant expansion of enemy types and behaviors
-- **Visual Feedback**: Enhanced UI and visual effects systems
-- **Player Progression**: Improved leveling and skill systems
-- **Audio Experience**: Rich musical soundtrack addition
+## [3.4.2] - 2025-07-17
 
-#### **Performance Optimizations:**
-- **Collision System**: Improved detection and handling
-- **Visual Effects**: Optimized rendering and particle systems
-- **Memory Management**: Better object pooling and cleanup
+### Changed
+- Star generation optimized with fewer stars, better distribution
+- Starfield parameters tuned for visual quality
 
-### **🎯 Recent Session Achievements:**
-The current development session has delivered:
-- **Target Info Display**: Real-time enemy/asteroid information
-- **Hover Effects**: Interactive visual feedback
-- **Money Pickup Display**: Enhanced collection feedback
-- **Damage Numbers**: Physics-based combat feedback
-- **Visual Polish**: ALL-CAPS enemy names and improved UI
+## [3.4.1] - 2025-07-17
 
-### **📈 Development Velocity:**
-This represents a **massive development effort** with:
-- **6,013 net lines** of new functionality
-- **46 files** touched across the entire codebase
-- **20 new assets** added to the project
-- **Multiple major systems** implemented and enhanced
+### Fixed
+- Asteroid collision detection bug
+- Burst star homing behavior (now properly curves toward player)
 
-The scope of changes indicates a significant evolution from a basic game to a feature-rich, polished gaming experience with comprehensive enemy AI, visual effects, audio integration, and user interface enhancements.
+## [3.4.0] - 2025-07-17
+
+### Added
+- Burst star attraction mechanic (stars home toward player)
+- Starfield depth parameters tuned for parallax effect
+
+## [3.3.0] - 2025-07-16
+
+### Added
+- Enhanced visual rendering (depth-based effects, opacity layers)
+- State saving for development iteration
+
+## [3.2.0] - 2025-07-15
+
+### Added
+- Star attraction mechanic (collectible stars gravitate toward player)
+- Custom cursor crosshairs
+- Hit point system for player and entities
+- Health bars on enemies and asteroids
+- Invincibility frames after taking damage
+
+## [3.1.0] - 2025-07-14
+
+### Added
+- Marquee scrolling text in audio player (track name display)
+- Pause button in UI
+
+### Changed
+- Converted project to Node.js with npm for package management
+
+## [3.0.0] - 2025-07-13
+
+### Added
+- Music player with play/pause controls and track info display
+- Energy bar system remade from scratch with energy tanks
+- Health bars on asteroids showing remaining HP
+
+### Changed
+- Energy system completely redesigned with tank-based display
+
+---
+
+## [2.3.5] - 2025-07-08
+
+### Changed
+- Firing changed from continuous to manual ('Z' key to fire)
+- Mobile joystick made larger and more responsive
+- Pause menu controls updated
+- Favicon updated
+
+## [2.3.4] - 2025-07-08
+
+### Fixed
+- Black screen bug on some devices (ctx reference fix)
+
+## [2.3.3] - 2025-07-08
+
+### Fixed
+- Stars not rendering correctly if cellphone starts in portrait orientation
+
+## [2.3.2] - 2025-07-08
+
+### Fixed
+- Font decoding issues (switched from local font to Google CDN)
+
+## [2.3.1] - 2025-07-08
+
+### Fixed
+- Ghost bullet bug (bullets spawning at wrong positions)
+
+## [2.3.0] - 2025-07-08
+
+### Added
+- Homing bullets (track nearest enemy/asteroid)
+- Energy bar and critical energy state (visual warning when low)
+- Tractor beam for collecting stars and recharging energy
+- Asteroid explosion particles and debris effects
+- Asteroid collision sounds
+- Loading screen for remote play
+- Enhanced screen shake on impacts
+- Ship rendering improved with triangular detail for visibility
+- Mobile controls: combined movement/rotation analog stick
+- Instant rotation with joystick on mobile
+
+## [2.2.0] - 2025-07-07
+
+### Changed
+- Codebase refactored from single monolithic file into separate ES6 modules:
+  game-engine.js, input-handler.js, audio-manager.js, ui-manager.js, and
+  entity classes (player, asteroid, bullet, particle, etc.)
+- CSS extracted into separate stylesheet
+- All external dependencies (Google Fonts, sfxr.js, riffwave.js) bundled
+  locally so the game runs fully offline
+
+---
+
+## [2.1.1] - 2025-06-16
+
+### Fixed
+- Game over state bug (game not properly resetting)
+
+## [2.1.0] - 2025-06-16
+
+### Added
+- Centralized game state management
+- Screen shake effect on collisions
+- Local high score persistence (localStorage)
+- Mobile touch support (basic)
+- Background music (BGM) system with procedural audio
+- Thruster engine sound effects
+- Different sounds for burst stars vs normal stars
+- Motion blur rendering option (experimental)
+
+### Changed
+- Visual fidelity improved (point-star palettes, attraction effects)
+- Points system tuned
+
+## [2.0.0] - 2025-06-16
+
+### Added
+- Wave-based spawning system for asteroids
+- Player-asteroid collision detection with damage
+- Sound effects (SFXR procedural audio)
+- Blending effects (additive rendering for stars/particles)
+- 3D wireframe asteroid rendering with opacity-based depth
+- Improved asteroid spawning (offscreen, varied sizes)
+- Physics: momentum conservation on collisions
+
+### Changed
+- Starfield effect made subtler
+- Collision system improved for accuracy
+
+---
+
+## [1.0.0] - 2025-06-16
+
+### Added
+- Initial release of Rainboids
+- Player ship with thrust-based movement and rotation
+- Asteroids spawning and drifting across the play field
+- Bullet firing system
+- Basic collision detection (bullets vs asteroids)
+- Parallax starfield background with depth layers
+- Decorative color stars with twinkling animation
+- Canvas-based rendering
+- GitHub Pages deployment (CNAME setup)

@@ -143,26 +143,19 @@ test.describe('QA-03: Player behaviour', () => {
     });
 
     test('firing produces bullets in the bullet pool', async ({ page }) => {
-        const bulletsBefore = await page.evaluate(() =>
-            window.gameEngine?.bulletPool?.activeObjects?.length ?? 0
-        );
-
-        // Simulate mouse down to fire
+        // Player auto-fires; wait for at least one bullet to appear
         await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.inputHandler.input.fire = true;
             ge.playerCanFire = true;
         });
-        await page.waitForTimeout(300);
-        await page.evaluate(() => {
-            window.gameEngine.inputHandler.input.fire = false;
-        });
+        await page.waitForTimeout(500);
 
-        const bulletsAfter = await page.evaluate(() =>
+        const bulletCount = await page.evaluate(() =>
             window.gameEngine?.bulletPool?.activeObjects?.length ?? 0
         );
 
-        expect(bulletsAfter).toBeGreaterThan(bulletsBefore);
+        expect(bulletCount).toBeGreaterThan(0);
     });
 
     test('player has a defined shield value', async ({ page }) => {

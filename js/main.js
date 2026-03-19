@@ -165,7 +165,6 @@ class RainboidsGame {
             this.audioManager.initializeAudio();
             this.uiManager.startMusic();
             this.gameEngine.init();
-            this.gameEngine.game.state = GAME_STATES.PLAYING;
         };
         
         window.addEventListener('keydown', startGame);
