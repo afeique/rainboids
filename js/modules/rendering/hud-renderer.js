@@ -562,18 +562,18 @@ export function drawHUD() {
             // Draw health bar and UI elements
             this.updateHUD();
             // Show shop button during gameplay (but not when shop is open)
-            this.uiManager.showShopButton();
+            this.events.emit('ui:show-shop-button');
             // Show DOM pause button on desktop; use canvas button on mobile
             if (this.inputHandler.isMobile()) {
-                this.uiManager.hideHudPauseBtn();
+                this.events.emit('ui:hide-pause-btn');
                 this.drawPauseButton();
             } else {
-                this.uiManager.showHudPauseBtn();
+                this.events.emit('ui:show-pause-btn');
             }
         } else {
             // Hide shop button on title screen and when shop is open
-            this.uiManager.hideShopButton();
-            this.uiManager.hideHudPauseBtn();
+            this.events.emit('ui:hide-shop-button');
+            this.events.emit('ui:hide-pause-btn');
         }
 
         // Draw level up text if active

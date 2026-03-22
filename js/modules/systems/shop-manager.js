@@ -36,7 +36,7 @@ export function sellShopItem(itemId) {
         if (itemId === 'SPARE_SHIP') {
             if (this.game.lives <= 1) return false;
             this.game.lives--;
-            this.uiManager.updateLives(this.game.lives);
+            this.events.emit('ui:update-lives', { lives: this.game.lives });
         } else {
             const entry = this.player.powerups.get(itemId);
             if (!entry) return false;
@@ -55,7 +55,7 @@ export function sellShopItem(itemId) {
         } else {
             this.game.money += refund;
         }
-        this.audioManager.playCoin();
+        this.events.emit('audio:coin');
         this._rebuildShopCache();
         return true;
 }
@@ -63,7 +63,7 @@ export function sellShopItem(itemId) {
 export function openShop() {
 
         // Hide any active wave messages when opening shop
-        this.uiManager.hideMessage();
+        this.events.emit('ui:hide-message');
 
         // Shop button will be naturally hidden behind shop overlay (z-index)
 
@@ -362,7 +362,7 @@ export function buyShopItem(itemId) {
 
             if (itemId === 'SPARE_SHIP') {
                 this.game.lives = Math.min(3, this.game.lives + 1);
-                this.uiManager.updateLives(this.game.lives);
+                this.events.emit('ui:update-lives', { lives: this.game.lives });
             } else {
                 const powerupConfig = this.getPowerupConfig(itemId);
                 if (!powerupConfig) {
@@ -375,7 +375,7 @@ export function buyShopItem(itemId) {
                 }, true);
             }
 
-            if (this.audioManager) this.audioManager.playCoin();
+            this.events.emit('audio:coin');
             return true;
 
         } catch (error) {
@@ -407,7 +407,7 @@ export function _handleWeaponBuyOrEquip(item) {
                 this.player.equipPower(item.id);
             }
             this._rebuildShopCache();
-            if (this.audioManager) this.audioManager.playCoin();
+            this.events.emit('audio:coin');
             return true;
         }
 
@@ -427,7 +427,7 @@ export function _handleWeaponBuyOrEquip(item) {
         }
 
         this._rebuildShopCache();
-        if (this.audioManager) this.audioManager.playCoin();
+        this.events.emit('audio:coin');
         return true;
 }
 
@@ -438,7 +438,7 @@ export function _handleSkillBuy(item) {
                 if (!this.player.skillSlots[i]) {
                     this.player.assignSkillToSlot(item.id, i);
                     this._rebuildShopCache();
-                    if (this.audioManager) this.audioManager.playCoin();
+                    this.events.emit('audio:coin');
                     return true;
                 }
             }
@@ -452,7 +452,7 @@ export function _handleSkillBuy(item) {
         this.player.buySkill(item.id); // Also auto-assigns to first empty slot
 
         this._rebuildShopCache();
-        if (this.audioManager) this.audioManager.playCoin();
+        this.events.emit('audio:coin');
         return true;
 }
 
@@ -485,7 +485,7 @@ export function _handleUpgradeBuy(item) {
         }, true);
 
         this._rebuildShopCache();
-        if (this.audioManager) this.audioManager.playCoin();
+        this.events.emit('audio:coin');
         return true;
 }
 
@@ -510,7 +510,7 @@ export function closeShopToPause() {
             // Set state to paused instead of wave transition
             this.game.state = GAME_STATES.PAUSED;
             document.body.classList.remove('shop-open'); // Restore HUD DOM element visibility
-            this.uiManager.togglePause(); // Show pause menu
+            this.events.emit('ui:toggle-pause'); // Show pause menu
 
             // Resume charge shot so it's not stuck paused when the user unpauses
             if (this.player) {

@@ -325,9 +325,7 @@ export function processNotificationQueue() {
     this.notificationActive = true;
     const notif = this.notificationQueue.shift();
 
-    if (this.uiManager) {
-        this.uiManager.showMessage(notif.title, notif.subtitle, notif.duration, 'top');
-    }
+    this.events.emit('ui:show-message', { title: notif.title, subtitle: notif.subtitle, duration: notif.duration, position: 'top' });
 
     // Process next notification after this one finishes (with small gap)
     setTimeout(() => this.processNotificationQueue(), notif.duration + 300);
@@ -352,11 +350,7 @@ export function startNewWave() {
     this.spawnWaveAsteroids();
 
     // Show wave notification
-        if (this.uiManager) {
-            this.uiManager.showMessage(`WAVE ${this.game.currentWave}`, '', 7000, 'top');
-        } else {
-            console.error('❌ UIManager is undefined!');
-        }
+        this.events.emit('ui:show-message', { title: `WAVE ${this.game.currentWave}`, subtitle: '', duration: 7000, position: 'top' });
 
 
     } catch (error) {

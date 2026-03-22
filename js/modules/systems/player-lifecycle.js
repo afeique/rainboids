@@ -14,7 +14,7 @@ export function takeDamage(damageAmount = this.baseDamage) {
             this.shieldTanks--;
             this.explodeTank(this.shieldTanks);
             this.player.health = this.player.getEffectiveMaxHealth();
-            this.audioManager.playCoin();
+            this.events.emit('audio:coin');
             this.player.makeInvincible(2000);
         } else {
             this.handlePlayerDeath();
@@ -23,7 +23,7 @@ export function takeDamage(damageAmount = this.baseDamage) {
     }
 
     this.player.makeInvincible(3000);
-    this.audioManager.playHit();
+    this.events.emit('audio:hit');
     this.particlePool.get(this.player.x, this.player.y, 'damageNumber', Math.round(reducedDamage));
     this.triggerScreenShake(15, 8);
 }
@@ -36,8 +36,8 @@ export function handlePlayerDeath() {
     this.deathLocation = { x: dx, y: dy };
 
     this.game.lives--;
-    this.uiManager.updateLives(this.game.lives);
-    this.audioManager.playPlayerExplosion();
+    this.events.emit('ui:update-lives', { lives: this.game.lives });
+    this.events.emit('audio:player-explosion');
     this.player.active = false;
 
     const isGameOver = this.game.lives <= 0;
@@ -142,7 +142,7 @@ export function handlePlayerDeath() {
     if (isGameOver) {
         this.game.state = GAME_STATES.GAME_OVER;
         this.checkSurvivalRecord();
-        this.uiManager.showMessage('GAME OVER', 'Press Enter or click to restart');
+        this.events.emit('ui:show-message', { title: 'GAME OVER', subtitle: 'Press Enter or click to restart' });
     } else {
         const respawnEpoch = this.stateMachine.epoch;
         setTimeout(() => {

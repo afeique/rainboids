@@ -25,7 +25,7 @@ A comprehensive plan for refactoring the Rainboids codebase to improve modularit
 
 | File | Lines | Role | Complexity |
 |------|-------|------|------------|
-| `game-engine.js` | **1,681** (was 7,746) | Core orchestrator | **Reduced — still large** |
+| `game-engine.js` | **1,248** (was 7,746) | Core orchestrator | **Reduced — still large** |
 | `entities/enemy.js` | 6,655 | 10 enemy types | High (15+ movement patterns, 10+ firing patterns) |
 | `entities/player.js` | 2,263 | Player entity | High (weapons, powerups, skills, combos) |
 | `ui-manager.js` | 1,277 | DOM-based UI | Moderate |
@@ -368,12 +368,22 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 - Added `Asteroid` and `Enemy` imports to wave-manager.js for force-spawn fallback paths
 - wave-manager.js: 441 → 616 lines (still under 800-line limit)
 
+**Step 3.9: EventSetup** (~434 lines moved) — **DONE (v5.7.0)**
+- Created `js/modules/systems/event-setup.js`
+- Moved `setupEventListeners` — all event listener setup: window resize/orientation, keyboard shortcuts, cheat codes, game restart handlers (click/touch/enter), shop click/touch/scroll handling, entity targeting, mouse tracking for hover/cursor, auto-pause on blur
+- game-engine.js: 1,681 → 1,248 lines
+- **Test:** Unit 61/68 (same baseline)
+
 ### Phase 4: Wire Events & Remove Globals (Higher Risk)
 
-**Step 4.1: Replace direct cross-system calls with events**
-- Where WaveManager currently calls `this.audioManager.playWaveComplete()`, emit `'wave:complete'` and have AudioManager subscribe
-- Where CollisionSystem detects a kill, emit `'enemy:killed'` and have WaveManager, CombatManager, and AudioManager subscribe
-- **Test:** Full QA + E2E suite
+**Step 4.1: EventBus wiring for audio and UI** — **DONE (v5.8.0)**
+- Activated the existing EventBus (`this.events`) for cross-system communication
+- Wired 7 audio events in GameEngine constructor: `audio:hit`, `audio:explosion`, `audio:coin`, `audio:shield`, `audio:health-regen`, `audio:powerup`, `audio:player-explosion`
+- Wired 9 UI events: `ui:show-message`, `ui:hide-message`, `ui:update-lives`, `ui:check-orientation`, `ui:toggle-pause`, `ui:show-shop-button`, `ui:hide-shop-button`, `ui:show-pause-btn`, `ui:hide-pause-btn`
+- Replaced all 31 `this.audioManager.playX()` calls in extracted modules with `this.events.emit('audio:x')`
+- Replaced all 16 `this.uiManager.method()` calls in extracted modules with `this.events.emit('ui:event', data)`
+- All extracted system modules (collision-system, player-lifecycle, combat-manager, shop-manager, event-setup, wave-manager) and rendering modules (hud-renderer) now have zero direct `audioManager`/`uiManager` references
+- **Test:** Unit 61/68 (same baseline), QA 94/95 (same baseline)
 
 **Step 4.2: Introduce GameContext, remove window.gameEngine**
 - Create the context object
@@ -406,10 +416,11 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 | 3.6 | PlayerLifecycle | 379 moved | Low | Pools, Player, AudioManager | **DONE** |
 | 3.7 | WeaponEffectsRenderer | 196 moved | Low | Weapon-data (read-only) | **DONE** |
 | 3.8 | Spawning → WaveManager | 196 moved | Low | Pools, Enemy, Asteroid | **DONE** |
-| 4.1 | Event wiring | ~0 (rewiring) | Medium | All managers | Pending |
+| 3.9 | EventSetup | 434 moved | Low | GAME_STATES, random | **DONE** |
+| 4.1 | EventBus wiring | ~0 (rewiring) | Low | All managers | **DONE** |
 | 4.2 | GameContext | ~0 (rewiring) | High | All entity files | Pending |
 
-**Current state:** GameEngine reduced from 7,746 to 1,681 lines (78% reduction). Remaining work (4.1, 4.2) targets further reduction to ~300-500 lines.
+**Current state:** GameEngine reduced from 7,746 to 1,248 lines (84% reduction). Remaining work (4.1, 4.2) targets further reduction to ~300-500 lines.
 
 ### Execution Notes (v5.5.0)
 
@@ -451,6 +462,7 @@ js/
       camera-manager.js         ← camera, shake, kick, flash (109 lines)
       collision-system.js       ← all collision detection & response (1,142 lines)
       combat-manager.js         ← debris, orbs, powerups, kill streaks, damage numbers (611 lines)
+      event-setup.js            ← all event listeners: input, shop, cheats, resize (434 lines)
       player-lifecycle.js       ← damage, death, respawn, shield tanks (379 lines)
       shop-manager.js           ← shop logic, purchase, tabs (528 lines)
       wave-manager.js           ← wave lifecycle, spawning, notifications (616 lines)

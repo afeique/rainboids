@@ -40,7 +40,7 @@ export function handleCollisions() {
 
                 // Only play hit sound if asteroid is on screen
                 if (this.isEntityOnScreen(ast)) {
-                    this.audioManager.playHit();
+                    this.events.emit('audio:hit');
                 }
 
                 // Register hit for combo system
@@ -96,7 +96,7 @@ export function handleCollisions() {
                     if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                         // Small asteroid destroyed
                         if (this.isEntityOnScreen(ast)) {
-                            this.audioManager.playExplosion();
+                            this.events.emit('audio:explosion');
                         }
                         this.createDebris(ast);
                         this.createColorStarBurst(ast.x, ast.y);
@@ -111,7 +111,7 @@ export function handleCollisions() {
                     } else {
                         // Large asteroid splits — bigger explosion
                         if (this.isEntityOnScreen(ast)) {
-                            this.audioManager.playExplosion();
+                            this.events.emit('audio:explosion');
                         }
                         this.createDebris(ast);
                         this.createColorStarBurst(ast.x, ast.y);
@@ -185,7 +185,7 @@ export function handleCollisions() {
 
                 // Play explosion sound only if collision is on screen
                 if (this.isEntityOnScreen(a1) || this.isEntityOnScreen(a2)) {
-                    this.audioManager.playExplosion();
+                    this.events.emit('audio:explosion');
                 }
                 // Reduced debris particles for performance
                 const debrisCount = Math.floor(random(3, 6));
@@ -227,7 +227,7 @@ export function handleCollisions() {
                     const actualHeal = this.player.health - oldHealth;
 
                     if (actualHeal > 0) {
-                        this.audioManager.playHealthRegen(); // Play healing sound
+                        this.events.emit('audio:health-regen'); // Play healing sound
                         // Create green healing particle
                         const healParticle = this.particlePool.get(this.player.x, this.player.y, 'starBlip');
                         if (healParticle) {
@@ -236,7 +236,7 @@ export function handleCollisions() {
                             healParticle.life = 0.6;
                         }
                     } else {
-                        this.audioManager.playCoin(); // Normal sound if already at max health
+                        this.events.emit('audio:coin'); // Normal sound if already at max health
                     }
                 } else if (colorStar.starType === 'money') {
                     // Money orb collected - use the orb's individual money amount
@@ -247,7 +247,7 @@ export function handleCollisions() {
                     this.addMoneyPickup(moneyAmount);
 
                     // Play pickup sound (always play regardless of music beat)
-                    this.audioManager.playCoin();
+                    this.events.emit('audio:coin');
 
                     // Create golden money particle
                     const moneyParticle = this.particlePool.get(this.player.x, this.player.y, 'starBlip');
@@ -333,7 +333,7 @@ export function handleCollisions() {
 
                 // Only play hit sound if enemy is on screen
                 if (this.isEntityOnScreen(enemy)) {
-                    this.audioManager.playHit();
+                    this.events.emit('audio:hit');
                 }
 
                 // Register hit for combo system
@@ -378,7 +378,7 @@ export function handleCollisions() {
 
                     // Play explosion sound only if enemy is on screen
                     if (this.isEntityOnScreen(enemy)) {
-                        this.audioManager.playExplosion();
+                        this.events.emit('audio:explosion');
                     }
 
                     // Create colored explosion effects (includes screen shake)
@@ -429,14 +429,14 @@ export function handleCollisions() {
                 }
                 if (mine.health <= 0) {
                     mine.active = false;
-                    this.audioManager.playExplosion();
+                    this.events.emit('audio:explosion');
                     this.particlePool.get(mine.x, mine.y, 'explosionPulse', mine.radius * 2);
                     for (let p = 0; p < 8; p++) {
                         const pt = this.particlePool.get(mine.x, mine.y, 'explosion');
                         if (pt) pt.color = '#ff8844';
                     }
                 } else {
-                    this.audioManager.playHit();
+                    this.events.emit('audio:hit');
                 }
                 bullet.onHit(mine);
                 if (!bullet.active) break;
@@ -659,7 +659,7 @@ export function damageEnemy(enemy, damage) {
         this.player.gainExperience(Math.ceil(reward.points / 5));
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {
-            this.audioManager.playExplosion();
+            this.events.emit('audio:explosion');
         }
         this.createEnemyDebris(enemy);
         this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
@@ -702,7 +702,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
                 this.shieldTanks--;
                 this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
                 player.health = player.getEffectiveMaxHealth();
-                this.audioManager.playCoin(); // Tank used sound
+                this.events.emit('audio:coin'); // Tank used sound
                 player.makeInvincible(2000); // Brief invincibility after revival
             } else {
                 // No shield tanks - lose a life and respawn
@@ -853,7 +853,7 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
             this.shieldTanks--;
             this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
             player.health = player.getEffectiveMaxHealth();
-            this.audioManager.playCoin(); // Tank used sound
+            this.events.emit('audio:coin'); // Tank used sound
             player.makeInvincible(2000); // Brief invincibility after revival
         } else {
             // No shield tanks - lose a life and respawn
@@ -865,7 +865,7 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     // ── JUICE: hitstop + screen shake (no camera kick for bullets — too small) ──
     this.triggerHitstop(3); // ~50ms — quick jolt
     this.triggerScreenShake(12, 6, bullet.radius);
-    this.audioManager.playHit();
+    this.events.emit('audio:hit');
 
     // Show red damage number
     this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
@@ -931,7 +931,7 @@ export function handleEnemyAsteroidCollision(enemy, asteroid) {
 
     // Only play hit sound if enemy is on screen
     if (this.isEntityOnScreen(enemy)) {
-        this.audioManager.playHit(); // Lighter sound than explosion
+        this.events.emit('audio:hit'); // Lighter sound than explosion
     }
 
     // Create small impact particles
@@ -985,7 +985,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
                 this.shieldTanks--;
                 this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
                 this.player.health = this.player.getEffectiveMaxHealth();
-                this.audioManager.playCoin(); // Tank used sound
+                this.events.emit('audio:coin'); // Tank used sound
                 this.player.makeInvincible(2000); // Brief invincibility after revival
             } else {
                 // No shield tanks - lose a life and respawn
@@ -996,10 +996,10 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
 
         // Visual and audio feedback
         this.player.makeInvincible(3000); // 3 seconds of invincibility
-        this.audioManager.playHit();
+        this.events.emit('audio:hit');
         this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
         this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
-        this.audioManager.playShield();
+        this.events.emit('audio:shield');
 
         // ── Impact sparks at collision point ──
         const impactX = (this.player.x + asteroid.x) / 2;
@@ -1117,7 +1117,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         }
     }
 
-    this.audioManager.playHit();
+    this.events.emit('audio:hit');
 
     // No screen shake for asteroid-asteroid collisions - only player-related events should shake
 }

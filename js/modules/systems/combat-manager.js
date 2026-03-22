@@ -366,7 +366,7 @@ export function collectPowerup(powerup) {
         }
     }
 
-    this.audioManager.playPowerup();
+    this.events.emit('audio:powerup');
     this.showPowerupDisplay(powerup.config.name, powerup.powerupColor);
 }
 
