@@ -29,11 +29,10 @@ export class FunMetricsCollector {
      */
     tick(state, events, botInputs) {
         if (!state || !state.player) return;
-        if (state.gameState !== 'PLAYING' && state.gameState !== 'WAVE_TRANSITION') return;
 
         const now = Date.now();
 
-        // Handle wave transitions
+        // Handle wave transitions in ALL states (events fire during SHOP too)
         for (const event of events) {
             if (event.type === 'wave_start') {
                 this._onWaveStart(event.wave, now);
@@ -44,6 +43,9 @@ export class FunMetricsCollector {
         if (!this.currentWave && state.wave) {
             this._onWaveStart(state.wave, now);
         }
+
+        // Only sample gameplay metrics during active states
+        if (state.gameState !== 'PLAYING' && state.gameState !== 'WAVE_TRANSITION') return;
 
         const bucket = this.waveBuckets.get(this.currentWave);
         if (!bucket) return;
@@ -62,6 +64,8 @@ export class FunMetricsCollector {
             switch (event.type) {
                 case 'enemy_killed':
                     bucket.recordKill(now, state.player.health / Math.max(1, state.player.maxHealth));
+                    // Approximate damage dealt from the kill (enemy maxHealth serves as proxy)
+                    bucket.recordDamageDealt(1, now);
                     break;
                 case 'damage_taken':
                     bucket.recordDamageTaken(event.amount || 1, now);

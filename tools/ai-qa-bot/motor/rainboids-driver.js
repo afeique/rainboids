@@ -69,6 +69,33 @@ export class RainboidsDriver {
         });
     }
 
+    /**
+     * Close the shop without calling startNextWave().
+     * Used when shopping during WAVE_TRANSITION — the wave transition
+     * timer should continue naturally after the shop closes.
+     */
+    async closeShopSilent() {
+        await this.page.evaluate(() => {
+            const ge = window.gameEngine;
+            if (ge.game.state !== 'SHOP') return;
+
+            // Adjust spawn timers for time in shop (same as closeShop)
+            if (ge.shopOpenTime) {
+                const timeInShop = Date.now() - ge.shopOpenTime;
+                ge.lastSpawnTime += timeInShop;
+                ge.lastEmergencySpawn += timeInShop;
+                ge.nextShopTime += timeInShop;
+            }
+
+            // Restore to WAVE_TRANSITION without calling startNextWave
+            ge.game.state = 'WAVE_TRANSITION';
+            document.body.classList.remove('shop-open');
+
+            if (ge.player) ge.player.resumeChargeShot();
+            ge.shopItemBounds = null;
+        });
+    }
+
     async setShopCategory(category) {
         await this.page.evaluate((cat) => {
             const ge = window.gameEngine;

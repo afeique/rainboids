@@ -10,7 +10,7 @@
  *   const report = await bot.run();
  */
 
-import { buildConfig } from './core/config.js';
+import { buildConfig, SKILL_PRESETS } from './core/config.js';
 import { SessionLogger } from './core/session-logger.js';
 import { StateReader } from './perception/state-reader.js';
 import { RainboidsDriver, GenericDriver } from './motor/rainboids-driver.js';
@@ -46,7 +46,12 @@ export class QABot {
 
         // Strategy
         this.combatAI = new CombatAI(this.driver, this.config);
-        this.shopAI = new ShopAI(this.driver, this.logger, this.config);
+        const preset = SKILL_PRESETS[this.config.skillLevel] || SKILL_PRESETS.advanced;
+        this.shopAI = new ShopAI(this.driver, this.logger, {
+            ...this.config,
+            shopStrategy: preset.shopStrategy || 'utility',
+            shop: preset.shop || { decisionQuality: 0.95, savingAwareness: 0.8, adaptability: 0.8 },
+        });
 
         // Detection
         this.invariantChecker = new InvariantChecker(this.logger);
@@ -64,6 +69,8 @@ export class QABot {
         this._lastPerfSample = 0;
         this._lastScreenshot = 0;
         this._jsErrors = [];
+        this._shoppedThisWave = false;
+        this._currentWave = 0;
 
         // Callbacks for external hooks (LLM or human)
         this._onTick = null;
@@ -175,11 +182,19 @@ export class QABot {
         // Process events
         for (const event of events) {
             this._handleEvent(event, state);
+            this.shopAI.recordEvent(event, state);
             if (this._onEvent) await this._onEvent(event);
+        }
+
+        // Track wave changes for shop gating
+        if (state.wave !== this._currentWave) {
+            this._currentWave = state.wave;
+            this._shoppedThisWave = false;
         }
 
         // Game over — stop
         if (state.gameState === 'GAME_OVER') {
+            this.funCollector.tick(state, events, null);
             this.logger.logGameOver(state.wave, {
                 health: state.player?.health,
                 money: state.money,
@@ -191,20 +206,25 @@ export class QABot {
 
         // Shop state — delegate to shop AI
         if (state.gameState === 'SHOP' && this.config.useShop) {
+            this.funCollector.tick(state, events, null);
             await this.shopAI.visit(state);
             return;
         }
 
-        // Wave transition — open shop if we have money/SP to spend.
-        // Note: For real players, shop is accessed via pause menu. The bot
-        // calls openShop() directly which works from any gameplay state.
-        if (state.gameState === 'WAVE_TRANSITION' && this.config.useShop) {
-            const canSpend = state.money > 0 || (state.player?.skillPoints || 0) > 0;
-            if (canSpend) {
-                await this.driver.openShop();
-                const shopState = await this.stateReader.read();
-                if (shopState?.gameState === 'SHOP') {
-                    await this.shopAI.visit(shopState);
+        // Wave transition — shop if we have funds, then let transition continue
+        if (state.gameState === 'WAVE_TRANSITION') {
+            this.funCollector.tick(state, events, null);
+            if (this.config.useShop && !this._shoppedThisWave) {
+                const canSpend = state.money > 0 || (state.player?.skillPoints || 0) > 0;
+                if (canSpend) {
+                    this._shoppedThisWave = true;
+                    await this.driver.openShop();
+                    const shopState = await this.stateReader.read();
+                    if (shopState?.gameState === 'SHOP') {
+                        await this.shopAI.visit(shopState);
+                        // shopAI.visit uses closeShopSilent — restores
+                        // WAVE_TRANSITION without calling startNextWave
+                    }
                 }
             }
             return;
@@ -219,7 +239,7 @@ export class QABot {
             }
         }
 
-        // Fun metrics collection (every tick during gameplay)
+        // Fun metrics collection — called with botInputs during PLAYING
         this.funCollector.tick(state, events, botInputs);
 
         // Bug detection (throttled)

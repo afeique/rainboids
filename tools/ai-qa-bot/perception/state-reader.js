@@ -36,6 +36,7 @@ export class StateReader {
             const enemies = (ge.enemyPool?.activeObjects || []).map(e => ({
                 x: e.x, y: e.y, type: e.type, level: e.level,
                 health: e.health, maxHealth: e.maxHealth, radius: e.radius,
+                vx: e.vel?.x || 0, vy: e.vel?.y || 0,
             }));
 
             const asteroids = (ge.asteroidPool?.activeObjects || []).map(a => ({

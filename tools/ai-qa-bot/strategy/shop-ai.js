@@ -1,28 +1,86 @@
 /**
  * AI QA Bot — Shop AI
  *
- * Makes intelligent shop purchase decisions based on build archetype,
- * current game state, and available items.
+ * Utility-based shop decision system that adapts purchases to session
+ * performance. Tracks telemetry across waves and computes need scores
+ * for each upgrade based on how the bot is actually performing.
+ *
+ * Strategies:
+ *   - 'utility' (default) — need-scored purchases from session telemetry
+ *   - 'random' — random affordable items (novice fallback)
+ *   - 'cheapest' — cheapest available items (beginner fallback)
+ *   - 'heuristic' — archetype priority list (legacy)
+ *   - 'optimal' — archetype priority with scanning (legacy)
  */
 
 import { BUILD_ARCHETYPES } from '../core/config.js';
 
-// All shop categories to visit
 const SHOP_CATEGORIES = ['OFFENSE', 'DEFENSE', 'DROPS', 'PRIMARY', 'POWER', 'SKILLS'];
+
+// How many waves of telemetry to use for need scoring
+const TELEMETRY_WINDOW = 5;
+
+// Re-evaluate build archetype every N waves
+const BUILD_EVAL_INTERVAL = 5;
 
 export class ShopAI {
     constructor(driver, logger, config = {}) {
         this.driver = driver;
         this.logger = logger;
         this.archetype = BUILD_ARCHETYPES[config.buildArchetype] || BUILD_ARCHETYPES.balanced;
-        this.strategy = config.shopStrategy || 'optimal';
+        this.archetypeName = config.buildArchetype || 'balanced';
+        this.strategy = config.shopStrategy || 'utility';
+        this.shopParams = config.shop || { decisionQuality: 0.95, savingAwareness: 0.8, adaptability: 0.8 };
         this._purchaseHistory = [];
+
+        // Session telemetry (accumulated from events)
+        this._telemetry = {
+            waveStats: [],        // per-wave snapshots
+            totalKills: 0,
+            totalDeaths: 0,
+            deathsByWave: [],
+            damageEvents: 0,
+            killsByType: {},
+            currentUpgrades: {},  // { upgradeId: stackCount }
+        };
+    }
+
+    /**
+     * Record a game event for telemetry tracking.
+     * Called from bot.js on each event.
+     */
+    recordEvent(event, state) {
+        switch (event.type) {
+            case 'enemy_killed':
+                this._telemetry.totalKills++;
+                this._telemetry.killsByType[event.enemyType] =
+                    (this._telemetry.killsByType[event.enemyType] || 0) + 1;
+                break;
+            case 'death':
+                this._telemetry.totalDeaths++;
+                this._telemetry.deathsByWave.push(event.wave);
+                break;
+            case 'damage_taken':
+                this._telemetry.damageEvents++;
+                break;
+            case 'wave_start': {
+                // Snapshot the state at wave start for telemetry
+                if (state?.player) {
+                    const healthRatio = state.player.health / Math.max(1, state.player.maxHealth);
+                    this._telemetry.waveStats.push({
+                        wave: event.wave,
+                        healthRatio,
+                        enemies: state.entities?.enemies?.length || 0,
+                        money: state.money || 0,
+                    });
+                }
+                break;
+            }
+        }
     }
 
     /**
      * Execute a full shop visit: scan items, buy best available, close.
-     * @param {object} state - Current game state snapshot
-     * @returns {Array} List of purchases made
      */
     async visit(state) {
         const purchases = [];
@@ -30,91 +88,266 @@ export class ShopAI {
         const sp = state.player?.skillPoints || 0;
 
         if (money <= 0 && sp <= 0) {
-            // Nothing to spend, close immediately
             await this.driver.closeShop();
             return purchases;
         }
 
-        // Decide what to buy based on strategy
         const plan = await this._buildPurchasePlan(state);
 
         for (const item of plan) {
-            // Re-check we can still afford it
             const currentState = await this._quickState();
             if (!currentState) break;
 
-            const currentMoney = currentState.money;
-            const currentSP = currentState.sp;
+            if (item.currency === 'COINS' && currentState.money < item.cost) continue;
+            if (item.currency === 'SP' && currentState.sp < item.cost) continue;
 
-            if (item.currency === 'COINS' && currentMoney < item.cost) continue;
-            if (item.currency === 'SP' && currentSP < item.cost) continue;
-
-            // Navigate to correct category and buy
             await this.driver.setShopCategory(item.category);
             const success = await this.driver.buyItem(item.id);
 
             if (success) {
                 purchases.push(item);
                 this._purchaseHistory.push(item.id);
+                this._telemetry.currentUpgrades[item.id] =
+                    (this._telemetry.currentUpgrades[item.id] || 0) + 1;
                 this.logger.logPurchase(item.id, item.cost, item.currency);
 
-                if (item.isWeapon) {
-                    this.logger.logWeaponBuy(item.id, item.weaponType);
-                }
-                if (item.isSkill) {
-                    this.logger.logSkillBuy(item.id);
-                }
+                if (item.isWeapon) this.logger.logWeaponBuy(item.id, item.weaponType);
+                if (item.isSkill) this.logger.logSkillBuy(item.id);
             }
         }
 
-        await this.driver.closeShop();
+        // Use silent close if we have one (avoids triggering startNextWave
+        // which would skip wave spawns during WAVE_TRANSITION)
+        if (this.driver.closeShopSilent) {
+            await this.driver.closeShopSilent();
+        } else {
+            await this.driver.closeShop();
+        }
         return purchases;
     }
 
     async _quickState() {
         return this.driver.page.evaluate(() => {
             const ge = window.gameEngine;
-            return ge ? {
-                money: ge.game.money,
-                sp: ge.player?.skillPoints || 0,
-                wave: ge.game.currentWave,
-            } : null;
+            return ge ? { money: ge.game.money, sp: ge.player?.skillPoints || 0, wave: ge.game.currentWave } : null;
         });
     }
 
-    /**
-     * Build a prioritized purchase plan.
-     */
     async _buildPurchasePlan(state) {
         switch (this.strategy) {
             case 'random': return this._randomPlan(state);
             case 'cheapest': return this._cheapestPlan(state);
             case 'heuristic': return this._heuristicPlan(state);
-            case 'optimal':
-            default: return this._optimalPlan(state);
+            case 'optimal': return this._optimalPlan(state);
+            case 'utility':
+            default: return this._utilityPlan(state);
         }
     }
 
-    /**
-     * Random strategy (novice simulation): buy random affordable items.
-     */
+    // ── Utility-Based Strategy ───────────────────────────────────
+
+    async _utilityPlan(state) {
+        const plan = [];
+        const allItems = await this._scanAllItems();
+        const money = state.money || 0;
+        const sp = state.player?.skillPoints || 0;
+        const wave = state.wave || 1;
+        let remainingCoins = money;
+        let remainingSP = sp;
+
+        // Possibly adapt build archetype based on telemetry
+        if (this.shopParams.adaptability > 0 && wave > 1 && wave % BUILD_EVAL_INTERVAL === 0) {
+            this._adaptBuild();
+        }
+
+        // Compute need scores for all upgrades
+        const needScores = this._computeNeedScores(state);
+
+        // Filter to affordable, not-maxed items
+        const candidates = allItems.filter(item => {
+            if (item.owned && !item.maxStacks) return false;
+            const stacks = this._telemetry.currentUpgrades[item.id] || 0;
+            if (item.maxStacks && stacks >= item.maxStacks) return false;
+            if (item.currency === 'COINS' && remainingCoins < item.cost) return false;
+            if (item.currency === 'SP' && remainingSP < item.cost) return false;
+            return true;
+        });
+
+        // Score each candidate: need / cost, with archetype bias
+        const scored = candidates.map(item => {
+            const need = needScores[item.id] || 0.1;
+            const costNorm = item.cost / 500; // normalize cost
+            let value = need / Math.max(0.1, costNorm);
+
+            // Archetype bias
+            if (this.archetype.priorities.includes(item.id)) {
+                value *= 1.3;
+            }
+
+            // Skill-level noise: lower quality = more random
+            const noiseRange = 1 - this.shopParams.decisionQuality;
+            if (noiseRange > 0) {
+                value *= (1 - noiseRange) + Math.random() * noiseRange * 2;
+            }
+
+            return { ...item, value, need };
+        });
+
+        scored.sort((a, b) => b.value - a.value);
+
+        // Saving logic: skip low-value purchases if close to affording something better
+        const maxPurchases = 3;
+        for (const item of scored) {
+            if (plan.length >= maxPurchases) break;
+
+            // Should we save?
+            if (this.shopParams.savingAwareness > 0 && item.need < 0.2) {
+                // Check if there's a high-need item we almost can afford
+                const highNeed = scored.find(s =>
+                    s.need > 0.6 && s.cost <= remainingCoins * 1.5 && s.cost > remainingCoins
+                );
+                if (highNeed && Math.random() < this.shopParams.savingAwareness) {
+                    continue; // Save for it
+                }
+            }
+
+            if (item.currency === 'COINS' && remainingCoins >= item.cost) {
+                plan.push(item);
+                remainingCoins -= item.cost;
+            } else if (item.currency === 'SP' && remainingSP >= item.cost) {
+                plan.push(item);
+                remainingSP -= item.cost;
+            }
+        }
+
+        // Weapon/skill purchases at appropriate waves
+        if (wave >= 4 && !this._hasBoughtWeapon() && remainingCoins >= 500) {
+            const weapon = await this._planWeaponPurchase(state);
+            if (weapon) plan.push(weapon);
+        }
+        if (wave >= 6 && !this._hasBoughtSkill() && remainingSP >= 1) {
+            const skill = await this._planSkillPurchase(state);
+            if (skill) plan.push(skill);
+        }
+
+        return plan;
+    }
+
+    _computeNeedScores(state) {
+        const scores = {};
+        const tel = this._telemetry;
+        const upgrades = tel.currentUpgrades;
+        const recentWaves = tel.waveStats.slice(-TELEMETRY_WINDOW);
+
+        // Average health ratio over recent waves
+        const avgHealth = recentWaves.length > 0
+            ? recentWaves.reduce((s, w) => s + w.healthRatio, 0) / recentWaves.length
+            : 0.8;
+
+        // Death rate
+        const deathRate = tel.totalDeaths / Math.max(1, tel.waveStats.length);
+
+        // Kill rate
+        const killRate = tel.totalKills / Math.max(1, tel.waveStats.length);
+
+        // LONG_RANGE: need if we're not killing many enemies (range problem)
+        const longRangeStacks = upgrades.LONG_RANGE || 0;
+        scores.LONG_RANGE = longRangeStacks < 6
+            ? clamp01(0.8 - killRate * 0.1) * (longRangeStacks < 2 ? 1.0 : 0.6)
+            : 0;
+
+        // RAPID_FIRE: need if kill rate is low (DPS problem)
+        scores.RAPID_FIRE = clamp01(0.6 - killRate * 0.08);
+
+        // MULTI_SHOT: moderate need, scales with enemies per wave
+        const avgEnemies = recentWaves.length > 0
+            ? recentWaves.reduce((s, w) => s + w.enemies, 0) / recentWaves.length
+            : 3;
+        scores.MULTI_SHOT = clamp01(avgEnemies / 10 - 0.2) * 0.7;
+
+        // HOMING: high need if kill rate is very low (accuracy problem)
+        scores.HOMING = killRate < 2 ? 0.7 : 0.2;
+
+        // PIERCING: moderate, more useful in later waves
+        scores.PIERCING = clamp01((state.wave || 1) / 30 - 0.1) * 0.5;
+
+        // EXPLOSIVE: moderate
+        scores.EXPLOSIVE = clamp01((state.wave || 1) / 25 - 0.15) * 0.4;
+
+        // HEALTH_BOOST: high need if health is consistently low
+        scores.HEALTH_BOOST = clamp01(1 - avgHealth);
+
+        // SHIELD_BOOST: need if taking frequent damage
+        scores.SHIELD_BOOST = clamp01(deathRate * 2);
+
+        // SPEED_BOOST: moderate, helps with dodging
+        scores.SPEED_BOOST = clamp01(deathRate * 1.5) * 0.6;
+
+        // SPARE_SHIP: high need if dying frequently
+        scores.SPARE_SHIP = deathRate > 0.3 ? 0.8 : 0.3;
+
+        // CRIT_CHANCE / CRIT_DAMAGE: need scales with existing DPS upgrades
+        const hasDPS = (upgrades.RAPID_FIRE || 0) >= 2;
+        scores.CRIT_CHANCE = hasDPS ? 0.5 : 0.2;
+        scores.CRIT_DAMAGE = (upgrades.CRIT_CHANCE || 0) >= 2 ? 0.6 : 0.1;
+
+        // Drop upgrades: lower priority
+        scores.MEDPACK = clamp01(1 - avgHealth) * 0.5;
+        scores.DOCTOR = clamp01(1 - avgHealth) * 0.3;
+        scores.PAYDAY = 0.3;
+        scores.HIGH_ROLLER = 0.2;
+        scores.HEALTH_ORB_DROP_CHANCE = clamp01(1 - avgHealth) * 0.4;
+        scores.HEALTH_ORB_DROP_QUANTITY = clamp01(1 - avgHealth) * 0.3;
+        scores.MONEY_ORB_DROP_CHANCE = 0.25;
+        scores.MONEY_ORB_DROP_QUANTITY = 0.2;
+
+        return scores;
+    }
+
+    _adaptBuild() {
+        const tel = this._telemetry;
+        const recentWaves = tel.waveStats.slice(-TELEMETRY_WINDOW);
+        if (recentWaves.length < 3) return;
+
+        const avgHealth = recentWaves.reduce((s, w) => s + w.healthRatio, 0) / recentWaves.length;
+        const deathRate = tel.totalDeaths / Math.max(1, tel.waveStats.length);
+        const killRate = tel.totalKills / Math.max(1, tel.waveStats.length);
+
+        // Blend based on adaptability parameter
+        if (Math.random() > this.shopParams.adaptability) return;
+
+        let newArch = this.archetypeName;
+        if (avgHealth < 0.4 || deathRate > 0.4) {
+            newArch = 'tank';
+        } else if (killRate < 2) {
+            newArch = 'dps';
+        } else if (avgHealth > 0.7 && killRate > 4) {
+            newArch = 'economy';
+        } else {
+            newArch = 'balanced';
+        }
+
+        if (newArch !== this.archetypeName && BUILD_ARCHETYPES[newArch]) {
+            this.archetypeName = newArch;
+            this.archetype = BUILD_ARCHETYPES[newArch];
+        }
+    }
+
+    // ── Legacy Strategies (kept for backward compat) ─────────────
+
     async _randomPlan(state) {
         const allItems = await this._scanAllItems();
         const affordable = allItems.filter(i =>
             (i.currency === 'COINS' && state.money >= i.cost) ||
             (i.currency === 'SP' && (state.player?.skillPoints || 0) >= i.cost)
         );
-        // Shuffle
         for (let i = affordable.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [affordable[i], affordable[j]] = [affordable[j], affordable[i]];
         }
-        return affordable.slice(0, 2); // Buy up to 2 random items
+        return affordable.slice(0, 2);
     }
 
-    /**
-     * Cheapest strategy (beginner): buy cheapest available items.
-     */
     async _cheapestPlan(state) {
         const allItems = await this._scanAllItems();
         const affordable = allItems.filter(i =>
@@ -125,13 +358,8 @@ export class ShopAI {
         return affordable.slice(0, 3);
     }
 
-    /**
-     * Heuristic strategy (intermediate): follow build archetype priorities.
-     */
     async _heuristicPlan(state) {
         const plan = [];
-
-        // Try to buy priority upgrades first
         for (const itemId of this.archetype.priorities) {
             const allItems = await this._scanCategoryItems(this._guessCategoryForItem(itemId));
             const item = allItems.find(i => i.id === itemId && !i.owned);
@@ -143,25 +371,15 @@ export class ShopAI {
                 }
             }
         }
-
         return plan;
     }
 
-    /**
-     * Optimal strategy (advanced): scan all categories, buy best affordable items
-     * following archetype priorities.
-     */
     async _optimalPlan(state) {
         const plan = [];
-        const money = state.money || 0;
-        const sp = state.player?.skillPoints || 0;
-        let remainingCoins = money;
-        let remainingSP = sp;
-
-        // Scan all categories for available items
+        let remainingCoins = state.money || 0;
+        let remainingSP = state.player?.skillPoints || 0;
         const allItems = await this._scanAllItems();
 
-        // First pass: buy priority items we can afford
         for (const priorityId of this.archetype.priorities) {
             const item = allItems.find(i => i.id === priorityId && !i.owned);
             if (!item) continue;
@@ -175,7 +393,6 @@ export class ShopAI {
             if (plan.length >= 4) break;
         }
 
-        // Second pass: if we still have coins, buy cheapest affordable offense item
         if (remainingCoins >= 100) {
             const affordable = allItems
                 .filter(i => i.currency === 'COINS' && remainingCoins >= i.cost &&
@@ -183,87 +400,32 @@ export class ShopAI {
                 .sort((a, b) => a.cost - b.cost);
             if (affordable.length > 0) {
                 plan.push(affordable[0]);
-                remainingCoins -= affordable[0].cost;
-            }
-        }
-
-        // Third pass: weapon purchase if wave >= 4 and we can afford it
-        const wave = state.wave || 1;
-        if (wave >= 4 && !this._hasBoughtWeapon() && remainingCoins >= 500) {
-            const weaponPlan = await this._planWeaponPurchase(state);
-            if (weaponPlan && remainingCoins >= weaponPlan.cost) {
-                plan.push(weaponPlan);
-            }
-        }
-
-        // Fourth pass: skill purchase if wave >= 6
-        if (wave >= 6 && !this._hasBoughtSkill() && remainingSP >= 1) {
-            const skillPlan = await this._planSkillPurchase(state);
-            if (skillPlan && remainingSP >= skillPlan.cost) {
-                plan.push(skillPlan);
             }
         }
 
         return plan;
     }
 
+    // ── Weapon & Skill Purchases ─────────────────────────────────
+
     async _planWeaponPurchase(state) {
         const preferred = this.archetype.preferredPrimary;
         if (!preferred) return null;
-
         await this.driver.setShopCategory('PRIMARY');
         const items = await this.driver.getShopItems();
         const weapon = items.find(i => i.id === preferred && !i.owned);
-        if (weapon && state.money >= weapon.cost && (state.player?.skillPoints || 0) >= 1) {
-            return weapon;
-        }
+        if (weapon && state.money >= weapon.cost) return weapon;
         return null;
     }
 
     async _planSkillPurchase(state) {
         const preferred = this.archetype.preferredSkills?.[0];
         if (!preferred) return null;
-
         await this.driver.setShopCategory('SKILLS');
         const items = await this.driver.getShopItems();
         const skill = items.find(i => i.id === preferred && !i.owned);
-        if (skill && (state.player?.skillPoints || 0) >= skill.cost) {
-            return skill;
-        }
+        if (skill && (state.player?.skillPoints || 0) >= skill.cost) return skill;
         return null;
-    }
-
-    async _planUpgrades(state, existingPlan) {
-        const upgrades = [];
-        const existingIds = new Set(existingPlan.map(i => i.id));
-        let remainingMoney = state.money - existingPlan
-            .filter(i => i.currency === 'COINS')
-            .reduce((sum, i) => sum + i.cost, 0);
-        let remainingSP = (state.player?.skillPoints || 0) - existingPlan
-            .filter(i => i.currency === 'SP')
-            .reduce((sum, i) => sum + i.cost, 0);
-
-        for (const itemId of this.archetype.priorities) {
-            if (existingIds.has(itemId)) continue;
-
-            const category = this._guessCategoryForItem(itemId);
-            await this.driver.setShopCategory(category);
-            const items = await this.driver.getShopItems();
-            const item = items.find(i => i.id === itemId);
-
-            if (!item) continue;
-            if (item.currency === 'COINS' && remainingMoney >= item.cost) {
-                upgrades.push(item);
-                remainingMoney -= item.cost;
-            } else if (item.currency === 'SP' && remainingSP >= item.cost) {
-                upgrades.push(item);
-                remainingSP -= item.cost;
-            }
-
-            if (upgrades.length >= 3) break;
-        }
-
-        return upgrades;
     }
 
     _hasBoughtWeapon() {
@@ -287,7 +449,6 @@ export class ShopAI {
         const drops = ['MEDPACK', 'DOCTOR', 'PAYDAY', 'HIGH_ROLLER',
                        'HEALTH_ORB_DROP_CHANCE', 'MONEY_ORB_DROP_CHANCE',
                        'HEALTH_ORB_DROP_QUANTITY', 'MONEY_ORB_DROP_QUANTITY'];
-
         if (offense.includes(itemId)) return 'OFFENSE';
         if (defense.includes(itemId)) return 'DEFENSE';
         if (drops.includes(itemId)) return 'DROPS';
@@ -308,3 +469,5 @@ export class ShopAI {
         return this.driver.getShopItems();
     }
 }
+
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
