@@ -141,8 +141,8 @@ export class Enemy {
     
     initializeEnemy(x, y, gameEngine = null) {
         // Use gameField dimensions if available, otherwise fall back to screen dimensions
-        const fieldWidth = gameEngine?.gameField?.width || window.gameEngine?.gameField?.width || GameDimensions.width;
-        const fieldHeight = gameEngine?.gameField?.height || window.gameEngine?.gameField?.height || GameDimensions.height;
+        const fieldWidth = GameDimensions.width;
+        const fieldHeight = GameDimensions.height;
         
         this.x = x !== undefined ? x : random(0, fieldWidth);
         this.y = y !== undefined ? y : random(0, fieldHeight);
@@ -216,17 +216,6 @@ export class Enemy {
         // Reset face direction
         this.faceAngle = Math.random() * Math.PI * 2; // Random starting direction
         this.targetFaceAngle = this.faceAngle;
-        
-        // Circulating shield indicator with music sync
-        this.shield = {
-            rotation: 0,
-            rotationSpeed: 0.04 + Math.random() * 0.02, // Rotation speed (0.04 - 0.06)
-            radius: this.radius + 18, // Shield distance from enemy center
-            basePulsePhase: Math.random() * Math.PI * 2, // Random starting pulse phase
-            segmentCount: 12 + Math.floor(Math.random() * 8), // 12-19 shield segments
-            musicSyncIntensity: 0.7 + Math.random() * 0.6, // How strongly it responds to music (0.7-1.3)
-            waveOffset: Math.random() * Math.PI * 2 // Phase offset for wave pattern
-        }
         
         // Light trail system
         this.trail = {
@@ -553,8 +542,8 @@ export class Enemy {
             }
         } else {
             // Fallback to wrapping using gameField dimensions if available
-            const fieldWidth = window.gameEngine?.gameField?.width || GameDimensions.width;
-            const fieldHeight = window.gameEngine?.gameField?.height || GameDimensions.height;
+            const fieldWidth = GameDimensions.width;
+            const fieldHeight = GameDimensions.height;
             
             if (this.x < -this.radius) this.x = fieldWidth + this.radius;
             if (this.x > fieldWidth + this.radius) this.x = -this.radius;
@@ -723,8 +712,8 @@ export class Enemy {
     chasePlayer() {
         if (!this.targetPlayer) return;
 
-        const fieldWidth  = window.gameEngine?.gameField?.width  || GameDimensions.width;
-        const fieldHeight = window.gameEngine?.gameField?.height || GameDimensions.height;
+        const fieldWidth  = GameDimensions.width;
+        const fieldHeight = GameDimensions.height;
         const now = frameClock.now;
 
         // ── TANGERINE (Bomber): player-seeking patrol with wall avoidance + mine-stop ──
@@ -818,8 +807,8 @@ export class Enemy {
         const distanceToPlayer = Math.hypot(dx, dy);
         
         // Calculate distance to game field center
-        const fieldWidth = window.gameEngine?.gameField?.width || GameDimensions.width;
-        const fieldHeight = window.gameEngine?.gameField?.height || GameDimensions.height;
+        const fieldWidth = GameDimensions.width;
+        const fieldHeight = GameDimensions.height;
         const centerX = fieldWidth / 2;
         const centerY = fieldHeight / 2;
         const dxCenter = centerX - this.x;

@@ -1,5 +1,9 @@
 // Game constants and configuration
 export const GAME_CONFIG = {
+    // Game field dimensions (fixed logical resolution)
+    FIELD_WIDTH: 1920,
+    FIELD_HEIGHT: 1080,
+
     SHIP_SIZE: 30,
     SHIP_THRUST: 0.12,
     SHIP_FRICTION: 0.993,

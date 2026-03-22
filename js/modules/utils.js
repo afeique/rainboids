@@ -1,9 +1,10 @@
 import { GAME_CONFIG, NOISE_CONFIG } from './constants.js';
 
-// Game dimensions singleton
+// Game field dimensions — authoritative source for all entity boundary checks.
+// Uses fixed logical resolution from GAME_CONFIG rather than window viewport size.
 export const GameDimensions = {
-    get width() { return window.innerWidth; },
-    get height() { return window.innerHeight; }
+    get width() { return GAME_CONFIG.FIELD_WIDTH; },
+    get height() { return GAME_CONFIG.FIELD_HEIGHT; }
 };
 
 // Utility functions

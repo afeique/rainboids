@@ -25,7 +25,7 @@ A comprehensive plan for refactoring the Rainboids codebase to improve modularit
 
 | File | Lines | Role | Complexity |
 |------|-------|------|------------|
-| `game-engine.js` | **7,746** | Core orchestrator | **Critical — god object** |
+| `game-engine.js` | **3,081** (was 7,746) | Core orchestrator | **Reduced — still large** |
 | `entities/enemy.js` | 6,655 | 10 enemy types | High (15+ movement patterns, 10+ firing patterns) |
 | `entities/player.js` | 2,263 | Player entity | High (weapons, powerups, skills, combos) |
 | `ui-manager.js` | 1,277 | DOM-based UI | Moderate |
@@ -339,12 +339,12 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 - Emits events: `'wave:complete'`, `'wave:started'`, `'wave:entitySpawned'`
 - **Test:** QA wave tests + E2E survival test
 
-**Step 3.4: CollisionSystem** (~800 lines moved)
-- Create `js/modules/systems/collision-system.js`
-- Move `handleCollisions` and all sub-collision methods
+**Step 3.4: CollisionSystem** (~1,142 lines moved) — **DONE (v5.6.0)**
+- Created `js/modules/systems/collision-system.js`
+- Moved 8 methods: `handleCollisions`, `handleWeaponEffectCollisions`, `damageEnemy`, `handlePlayerEnemyCollision`, `handlePlayerEnemyBulletCollision`, `handleEnemyAsteroidCollision`, `handlePlayerAsteroidCollision`, `findNearestEnemy`
 - Uses spatial grid for broad phase
-- Emits events for kill results: `'enemy:killed'`, `'asteroid:destroyed'`, `'player:hit'`
-- **Test:** E2E combat tests + QA entity tests
+- Event emission deferred to Phase 4 (currently uses `this.*` delegator calls back to GameEngine for effects/audio)
+- **Test:** QA 94/95 pass (same baseline), unit 61/68 (same baseline)
 
 ### Phase 4: Wire Events & Remove Globals (Higher Risk)
 
@@ -379,11 +379,11 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 | 3.1 | CameraManager | 109 moved | Low | None | **DONE** |
 | 3.2 | ShopManager | 528 moved | Medium | StateMachine | **DONE** |
 | 3.3 | WaveManager | 441 moved | Medium | StateMachine, Pools | **DONE** |
-| 3.4 | CollisionSystem | ~800 | Medium | All pools, Player | Pending |
+| 3.4 | CollisionSystem | 1,142 moved | Medium | All pools, Player | **DONE** |
 | 4.1 | Event wiring | ~0 (rewiring) | Medium | All managers | Pending |
 | 4.2 | GameContext | ~0 (rewiring) | High | All entity files | Pending |
 
-**Current state:** GameEngine reduced from 7,746 to 4,206 lines (46% reduction). Remaining work (3.4, 4.1, 4.2) targets further reduction to ~300-500 lines.
+**Current state:** GameEngine reduced from 7,746 to 3,081 lines (60% reduction). Remaining work (4.1, 4.2) targets further reduction to ~300-500 lines.
 
 ### Execution Notes (v5.5.0)
 
@@ -421,15 +421,15 @@ js/
       game-state.js             ← state machine (127 lines)
       event-bus.js              ← pub/sub (46 lines)
       game-timer.js             ← frame-counted timer (79 lines)
-    systems/                    ← Stateful systems (Phase 3 — partially done)
-      camera-manager.js         ← camera, shake, kick, flash (109 lines) — DONE
-      shop-manager.js           ← shop logic, purchase, tabs (528 lines) — DONE
-      wave-manager.js           ← wave lifecycle, spawning, notifications (441 lines) — DONE
-      collision-system.js       ← (future extraction)
+    systems/                    ← Stateful systems (Phase 3 — DONE)
+      camera-manager.js         ← camera, shake, kick, flash (109 lines)
+      collision-system.js       ← all collision detection & response (1,142 lines)
+      shop-manager.js           ← shop logic, purchase, tabs (528 lines)
+      wave-manager.js           ← wave lifecycle, spawning, notifications (441 lines)
     rendering/                  ← Read-only renderers (Phase 2 — DONE)
       hud-renderer.js           ← all HUD draw methods (2,058 lines)
       shop-renderer.js          ← shop window rendering (619 lines)
-    game-engine.js              ← orchestrator (4,206 lines, target <500)
+    game-engine.js              ← orchestrator (3,081 lines, target <500)
     entities/                   ← unchanged
     performance/                ← unchanged
     constants.js
@@ -993,7 +993,7 @@ These rules apply to **all code changes** in the Rainboids project, whether part
 4. **Non-code changes** (docs, planning, memory files) do NOT get version bumps.
 5. **Commit messages** are concise and describe the "why", not the "what". The diff shows what changed.
 
-### 10.10 Extraction Rules (Lessons Learned from v5.5.0)
+### 10.10 Extraction Rules (Lessons Learned from v5.5.0 — v5.6.0)
 
 1. **Use `.call(this)` delegation for strangler fig extractions.** Move method bodies unchanged to new files as exported functions. In the original class, replace each method with a one-liner: `method() { return module.method.call(this); }`. This eliminates the need to change any `this.` references during extraction, achieving zero behavioral risk.
 
@@ -1008,6 +1008,14 @@ These rules apply to **all code changes** in the Rainboids project, whether part
 6. **Do not version-bump during extraction — wait until the phase is complete.** A single MINOR version bump covers all extractions in a refactor phase. Bumping after each file move creates unnecessary version churn.
 
 7. **Preserve the delegator methods in GameEngine.** External code (tests, InputHandler, UIManager) may call `gameEngine.openShop()`, `gameEngine.buyShopItem()`, etc. The one-line delegators ensure backward compatibility. Do NOT remove them until all external callers are updated to use the manager directly.
+
+8. **Centralize shared constants instead of hardcoding.** The game field dimensions (1920×1080) were hardcoded in GameEngine's constructor and duplicated as fallback chains (`gameEngine?.gameField?.width || window.gameEngine?.gameField?.width || GameDimensions.width`) in every entity file. Moving field dimensions to `GAME_CONFIG.FIELD_WIDTH/HEIGHT` and wiring `GameDimensions` to read from there eliminated all fallback chains in one step. Lesson: before extracting a system, check if its dependencies can be simplified into shared constants first.
+
+9. **Fix `GameDimensions` to return game field dimensions, not window viewport size.** The `GameDimensions` singleton originally returned `window.innerWidth/innerHeight`, which differs from the fixed 1920×1080 game field. This meant entities falling back to `GameDimensions` would get incorrect boundary values. Always validate that fallback/default values are semantically correct, not just syntactically present.
+
+10. **Remove duplicate initialization code during extraction.** When preparing to extract a system, scan for duplicate code blocks that set identical properties. Enemy shield initialization appeared twice in `initializeEnemy()` (lines 221-229 and 299-307 — identical). The second overwrote the first harmlessly, but duplicate code increases maintenance burden and confusion. Fix these before extracting.
+
+11. **`window.gameEngine` removal is incremental, not all-or-nothing.** Production entity code used `window.gameEngine` for two purposes: (a) gameField dimensions (fixed by centralizing in GameDimensions), and (b) calling back to GameEngine for effects/audio/targeting. Category (a) can be eliminated immediately via constants; category (b) requires passing callbacks through update/draw signatures or using EventBus, which is Phase 4.2 work. Don't block on the harder category — ship the easy wins.
 
 ---
 
@@ -1027,4 +1035,8 @@ The core problem is a 7,746-line god object that makes every change risky and ev
 7. **Input Abstraction** (Phase 2-3 — enables gamepad support and multi-SKU input)
 8. **Performance Module Integration** (Phase 2-5 — integrate Tier 1 modules, evaluate Tier 2, remove Tier 3 dead code)
 
-**Target state:** GameEngine drops from 7,746 lines to ~300-500 lines. Each subsystem is independently testable. State mutations are traceable to their owning manager. setTimeout bugs are eliminated. Platform-specific code is isolated behind adapters. New features and optimizations can be added to isolated modules without risking the entire game. The codebase is ready for multi-SKU deployment with minimal per-platform work.
+**Current progress (v5.6.0):** GameEngine reduced from 7,746 to 3,081 lines (60% reduction). Extracted modules: GameStateMachine (127), EventBus (46), GameTimer (79), HUDRenderer (2,058), ShopRenderer (619), CameraManager (109), ShopManager (528), WaveManager (441), CollisionSystem (1,142). GameDimensions now returns fixed game field dimensions. Duplicate enemy shield initialization removed.
+
+**Remaining:** Phase 4.1 (event wiring), Phase 4.2 (GameContext + remaining window.gameEngine removal from entity draw/fire callbacks), Phase 5 (pool audit, pool sizing).
+
+**Target state:** GameEngine drops to ~300-500 lines. Each subsystem is independently testable. State mutations are traceable to their owning manager. setTimeout bugs are eliminated. Platform-specific code is isolated behind adapters. New features and optimizations can be added to isolated modules without risking the entire game. The codebase is ready for multi-SKU deployment with minimal per-platform work.

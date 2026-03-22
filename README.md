@@ -288,9 +288,10 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │       │   ├── event-bus.js   #   Lightweight synchronous pub/sub
 │       │   └── game-timer.js  #   Frame-counted timers (freeze during pause/shop)
 │       ├── systems/           # Stateful game systems (extracted from game-engine)
-│       │   ├── camera-manager.js  #   Camera follow, screen shake, kick, flash
-│       │   ├── shop-manager.js    #   Shop logic, purchases, tab builders
-│       │   └── wave-manager.js    #   Wave lifecycle, spawning, notifications
+│       │   ├── camera-manager.js    #   Camera follow, screen shake, kick, flash
+│       │   ├── collision-system.js  #   All collision detection and response (~1,142 lines)
+│       │   ├── shop-manager.js      #   Shop logic, purchases, tab builders
+│       │   └── wave-manager.js      #   Wave lifecycle, spawning, notifications
 │       ├── rendering/         # Canvas rendering (extracted from game-engine)
 │       │   ├── hud-renderer.js    #   32 HUD draw methods (health, minimap, cursor, etc.)
 │       │   └── shop-renderer.js   #   Shop window, tabs, items, scrollbar

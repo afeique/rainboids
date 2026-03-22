@@ -122,8 +122,8 @@ export class EnemyBullet {
         
         // Check bounds - recycle if off screen (use gameField dimensions)
         const margin = 50;
-        const fieldWidth = window.gameEngine?.gameField?.width || GameDimensions.width;
-        const fieldHeight = window.gameEngine?.gameField?.height || GameDimensions.height;
+        const fieldWidth = GameDimensions.width;
+        const fieldHeight = GameDimensions.height;
         
         if (this.x < -margin || this.x > fieldWidth + margin ||
             this.y < -margin || this.y > fieldHeight + margin) {

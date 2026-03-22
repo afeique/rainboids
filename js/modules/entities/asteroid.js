@@ -51,8 +51,8 @@ export class Asteroid {
     initializeAsteroid(x, y, radius, level = 1, gameEngine = null) {
         this.level = level;
         // Use gameField dimensions if available, otherwise fall back to screen dimensions
-        const fieldWidth = gameEngine?.gameField?.width || window.gameEngine?.gameField?.width || GameDimensions.width;
-        const fieldHeight = gameEngine?.gameField?.height || window.gameEngine?.gameField?.height || GameDimensions.height;
+        const fieldWidth = GameDimensions.width;
+        const fieldHeight = GameDimensions.height;
         
         this.x = x !== undefined ? x : random(0, fieldWidth);
         this.y = y !== undefined ? y : random(0, fieldHeight);
