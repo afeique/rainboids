@@ -20,6 +20,9 @@ import { InvariantChecker } from './detection/invariant-checker.js';
 import { StuckDetector } from './detection/stuck-detector.js';
 import { PerformanceMonitor } from './detection/performance-monitor.js';
 import { ReportGenerator } from './analysis/report-generator.js';
+import { FunMetricsCollector } from './analysis/fun-metrics-collector.js';
+import { FunAnalyzer } from './analysis/fun-analyzer.js';
+import { FunReportGenerator } from './analysis/fun-report-generator.js';
 import { getAdapter } from './adapters/index.js';
 import { join } from 'path';
 
@@ -52,6 +55,7 @@ export class QABot {
 
         // Analysis
         this.reportGen = new ReportGenerator(this.config.reportsDir);
+        this.funCollector = new FunMetricsCollector();
 
         // Internal state
         this._running = false;
@@ -125,6 +129,13 @@ export class QABot {
         report.jsErrors = this._jsErrors;
         report.performance = this.perfMonitor.getStats();
 
+        // Fun metrics analysis
+        const waveBuckets = this.funCollector.finalize();
+        const funAnalyzer = new FunAnalyzer(waveBuckets);
+        const funAnalysis = funAnalyzer.analyze();
+        report.funScore = funAnalysis;
+        report.waveBuckets = this.funCollector.toJSON();
+
         // Save to disk
         const sessionDir = this.logger.save(this.config.reportsDir);
         report.sessionDir = sessionDir;
@@ -133,6 +144,9 @@ export class QABot {
         const llmPrompt = this.reportGen.generateLLMAnalysisPrompt(report);
         const { writeFileSync } = await import('fs');
         writeFileSync(join(sessionDir, 'llm-analysis-prompt.md'), llmPrompt);
+
+        // Generate fun report
+        FunReportGenerator.generate(funAnalysis, report.waveBuckets, report.meta, sessionDir);
 
         if (this._onSessionEnd) {
             await this._onSessionEnd(report);
@@ -197,12 +211,16 @@ export class QABot {
         }
 
         // Playing state — combat AI
+        let botInputs = null;
         if (state.gameState === 'PLAYING') {
-            const inputs = this.combatAI.computeInputs(state);
-            if (inputs) {
-                await this.driver.setInputs(inputs);
+            botInputs = this.combatAI.computeInputs(state);
+            if (botInputs) {
+                await this.driver.setInputs(botInputs);
             }
         }
+
+        // Fun metrics collection (every tick during gameplay)
+        this.funCollector.tick(state, events, botInputs);
 
         // Bug detection (throttled)
         if (this.config.enableInvariantChecks &&

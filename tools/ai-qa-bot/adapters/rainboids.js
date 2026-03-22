@@ -28,11 +28,13 @@ export const rainboidsAdapter = {
             const ge = window.gameEngine;
             try { ge.audioManager?.initializeAudio?.(); } catch (_) {}
             ge.init();
-            ge.game.state = 'PLAYING';
+            // Don't force state to PLAYING — init() sets WAVE_TRANSITION with a
+            // 2s timer that spawns wave 1 entities then transitions to PLAYING.
+            // Forcing PLAYING early causes the spawn timer to skip.
         });
         await page.waitForFunction(
             () => window.gameEngine?.game?.state === 'PLAYING',
-            { timeout: 10_000 }
+            { timeout: 15_000 }
         );
     },
 

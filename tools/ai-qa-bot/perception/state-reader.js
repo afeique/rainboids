@@ -9,6 +9,7 @@ export class StateReader {
     constructor(page) {
         this.page = page;
         this._prev = null;
+        this._killBufferInitialized = false;
     }
 
     /**
@@ -119,6 +120,12 @@ export class StateReader {
         const state = await this.read();
         if (!state) return { state: null, events: [] };
 
+        // Initialize kill buffer on first read (once per session)
+        if (!this._killBufferInitialized) {
+            await this.page.evaluate(() => { window._qaBotKillBuffer = []; });
+            this._killBufferInitialized = true;
+        }
+
         const events = [];
         const prev = this._prev;
 
@@ -173,29 +180,19 @@ export class StateReader {
                     events.push({ type: 'sp_earned', amount: spDelta });
                 }
             }
+        }
 
-            // Enemy kills (enemy count decreased while playing)
-            if (state.gameState === 'PLAYING' || prev.gameState === 'PLAYING') {
-                const prevCount = prev.entities.enemies.length;
-                const curCount = state.entities.enemies.length;
-                if (curCount < prevCount) {
-                    // Find which types disappeared
-                    const prevTypes = {};
-                    for (const e of prev.entities.enemies) {
-                        prevTypes[e.type] = (prevTypes[e.type] || 0) + 1;
-                    }
-                    const curTypes = {};
-                    for (const e of state.entities.enemies) {
-                        curTypes[e.type] = (curTypes[e.type] || 0) + 1;
-                    }
-                    for (const [type, count] of Object.entries(prevTypes)) {
-                        const diff = count - (curTypes[type] || 0);
-                        for (let i = 0; i < diff; i++) {
-                            events.push({ type: 'enemy_killed', enemyType: type });
-                        }
-                    }
-                }
-            }
+        // Enemy kills — drain authoritative kill buffer from game engine.
+        // This replaces the old delta-based inference which missed kills during
+        // state transitions (PLAYING → WAVE_TRANSITION) and pool cleanup.
+        const kills = await this.page.evaluate(() => {
+            const buf = window._qaBotKillBuffer;
+            if (!buf || buf.length === 0) return [];
+            const result = buf.splice(0);
+            return result;
+        });
+        for (const kill of kills) {
+            events.push({ type: 'enemy_killed', enemyType: kill.type });
         }
 
         this._prev = state;

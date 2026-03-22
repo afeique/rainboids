@@ -382,8 +382,10 @@ export class Enemy {
         }
         
         // Death check (use tolerance for floating-point precision)
-        if (this.health <= 0.001) {
+        if (this.health <= 0.001 && this.active) {
             this.active = false;
+            // QA bot kill tracking — catch kills not routed through collision system
+            if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: this.type, wave: this.gameEngine?.game?.currentWave, ts: Date.now() });
         }
     }
     

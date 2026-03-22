@@ -17,6 +17,8 @@
 import { chromium } from '@playwright/test';
 import { QABot } from './bot.js';
 import { ReportGenerator } from './analysis/report-generator.js';
+import { FunReportGenerator } from './analysis/fun-report-generator.js';
+import { FunAnalyzer } from './analysis/fun-analyzer.js';
 import { buildConfig } from './core/config.js';
 import { resolve } from 'path';
 
@@ -54,6 +56,15 @@ if (reportOnly) {
     console.log(`Bug report: ${bugReportPath}`);
     const balanceReportPath = reportGen.generateBalanceReport(sessions);
     console.log(`Balance report: ${balanceReportPath}`);
+
+    // Fun aggregate
+    const funSessions = sessions.filter(s => s.funScore);
+    if (funSessions.length > 0) {
+        FunReportGenerator.generateAggregate(funSessions, reportsDir);
+        console.log(`Fun report: ${resolve(reportsDir, 'fun-report-aggregate.md')}`);
+        const choiceDepth = FunAnalyzer.scoreChoiceDepth(funSessions);
+        console.log(`Choice depth: ${choiceDepth.score}/100`);
+    }
     process.exit(0);
 }
 
@@ -129,6 +140,22 @@ async function main() {
             // Print session summary
             const s = report.summary;
             console.log(`  Results: ${s.wavesReached} waves, ${s.totalKills} kills, ${s.deaths} deaths, ${s.bugsFound} bugs`);
+
+            // Print fun score
+            if (report.funScore) {
+                const f = report.funScore;
+                console.log(`  Fun Score: ${f.overall}/100 (${f.rating})`);
+                const dims = f.dimensions;
+                const dimStrs = Object.entries(dims)
+                    .filter(([, v]) => v.score != null)
+                    .map(([k, v]) => `${k}:${v.score}`)
+                    .join(' | ');
+                console.log(`  Dimensions: ${dimStrs}`);
+                if (f.hotspots && f.hotspots.length > 0) {
+                    console.log(`  Hotspots: ${f.hotspots.slice(0, 3).map(h => `wave ${h.wave} (${h.dimension}: ${h.score})`).join(', ')}`);
+                }
+            }
+
             console.log(`  Saved to: ${report.sessionDir}`);
             console.log('');
         } catch (err) {
@@ -146,6 +173,19 @@ async function main() {
         console.log(`Bug report: ${bugReportPath}`);
         const balanceReportPath = reportGen.generateBalanceReport(allReports);
         console.log(`Balance report: ${balanceReportPath}`);
+
+        // Fun aggregate report
+        FunReportGenerator.generateAggregate(allReports, reportsDir);
+        console.log(`Fun report: ${resolve(reportsDir, 'fun-report-aggregate.md')}`);
+
+        // Cross-session choice depth
+        const choiceDepth = FunAnalyzer.scoreChoiceDepth(allReports);
+        console.log(`Choice depth: ${choiceDepth.score}/100`);
+        if (choiceDepth.issues.length > 0) {
+            for (const issue of choiceDepth.issues) {
+                console.log(`  - ${issue}`);
+            }
+        }
     }
 
     // Also generate the LLM prompt for the latest session

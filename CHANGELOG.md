@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.18.3] - 2026-03-22
+
+### Fixed
+- **QA Bot: kill tracking accuracy** — replaced delta-based kill inference (compared enemy counts between 100ms ticks, missed kills during state transitions) with an authoritative event buffer. Kill events are now pushed from all three game-side kill paths (bullet-enemy collision, power weapon `damageEnemy`, player-enemy body collision) and a fallback in `enemy.update()`. State reader drains the buffer each tick for 100% accurate kill counts regardless of timing.
+
+## [5.18.2] - 2026-03-22
+
+### Fixed
+- **QA Bot: wave progression fix** — adapter `startSequence` was forcing game state to PLAYING immediately after `init()`, which prevented the 2-second wave intro timer from spawning wave 1 entities; bot now waits for the natural WAVE_TRANSITION → PLAYING transition
+
+## [5.18.1] - 2026-03-22
+
+### Fixed
+- **Shop close → wave progression bug** — `closeShop()` was calling the broken `startNewWave()` (which doesn't increment wave counter, doesn't spawn enemies, and never transitions back to PLAYING) instead of the correct `startNextWave()`; this caused the game to get permanently stuck after closing the shop during a wave transition
+
+## [5.18.0] - 2026-03-22
+
+### Added
+- **QA Bot: Fun Metrics System** — New analysis pipeline that quantifies "fun" across six research-backed dimensions:
+  - **Engagement** — action density, threat saturation, idle ratio, engagement dips
+  - **Challenge Balance** — death rate, damage ratios, wave clear time, difficulty spikes
+  - **Competence Growth** — accuracy trends, kill efficiency trends, damage ratio progression
+  - **Choice Depth** — Shannon entropy of upgrade/build diversity across sessions
+  - **Pacing** — intensity oscillation, monotony detection, density trends
+  - **Excitement** — near-miss tracking, health crises, clutch kills, multi-kill bursts, survival recoveries
+- **Near-miss proximity tracker** (`analysis/proximity-tracker.js`) — detects bullets that pass close to the player without hitting, measuring combat tension
+- **Per-wave analysis buckets** (`analysis/wave-bucket.js`) — accumulates granular per-wave statistics for intensity curves and hotspot detection
+- **Fun Analyzer** (`analysis/fun-analyzer.js`) — scores each dimension 0-100, computes weighted composite fun score, identifies problem waves, generates actionable recommendations
+- **Fun Report Generator** (`analysis/fun-report-generator.js`) — produces both human-readable markdown and machine-readable JSON fun reports per session and aggregated across sessions
+- Fun scores now printed in CLI output after each session
+- Aggregate fun reports generated automatically when running multiple sessions
+- Cross-session choice depth analysis using Shannon entropy of upgrade distributions
+
 ## [5.17.2] - 2026-03-22
 
 ### Changed

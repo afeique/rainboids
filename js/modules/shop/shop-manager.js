@@ -7,7 +7,7 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS, getPrimaryUpgrades, getPowerUpgrades, getSkillUpgrades } from '../combat/weapon-data.js';
-import { GameTimer } from '../core/game-timer.js';
+
 
 export function sellShopItem(itemId) {
         // Look in regular shop items first, then in current filtered items
@@ -286,17 +286,8 @@ export function closeShop() {
             // Clear shop bounds to prevent memory leaks
             this.shopItemBounds = null;
 
-            // Respect the WAVE_BREAK_TIME timer instead of immediately starting the wave
-            const remainingTime = this.waveTimer - Date.now();
-            if (remainingTime > 0) {
-                this._gameTimers.push(new GameTimer(remainingTime, () => {
-                    if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
-                        this.startNewWave();
-                    }
-                }));
-            } else {
-                this.startNewWave();
-            }
+            // Start the next wave (increments wave counter, spawns enemies + asteroids)
+            this.startNextWave();
 
 
         } catch (error) {
