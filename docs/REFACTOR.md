@@ -26,8 +26,8 @@ A comprehensive plan for refactoring the Rainboids codebase to improve modularit
 | File | Lines | Role | Complexity |
 |------|-------|------|------------|
 | `game-engine.js` | **1,248** (was 7,746) | Core orchestrator | **Reduced — still large** |
-| `entities/enemy.js` | 6,655 | 10 enemy types | High (15+ movement patterns, 10+ firing patterns) |
-| `entities/player.js` | 2,263 | Player entity | High (weapons, powerups, skills, combos) |
+| `entities/enemy.js` | **1,011** (was 6,655) | 10 enemy types | **85% reduced** — movement, firing, shapes, AI extracted |
+| `entities/player.js` | **702** (was 2,263) | Player entity | **69% reduced** — weapons, skills, progression, renderer extracted |
 | `ui-manager.js` | 1,277 | DOM-based UI | Moderate |
 | `entities/enemy-bullet.js` | 977 | Enemy projectiles | Moderate |
 | `utils.js` | 749 | Shared utilities | Low |
@@ -427,7 +427,218 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 | 4.1 | EventBus wiring | ~0 (rewiring) | Low | All managers | **DONE** |
 | 4.2 | Remove window.gameEngine | ~0 (rewiring) | Medium | All entity files | **DONE** |
 
-**Current state:** GameEngine reduced from 7,746 to ~1,268 lines (84% reduction). Phases 4.1 and 4.2 complete — all extracted modules use EventBus for audio/UI, all entity files use injected refs instead of `window.gameEngine`. Remaining: Phase 5 cleanup.
+**Current state:** GameEngine 7,746 → 1,268 (84%). Enemy.js 6,655 → 1,011 (85%). Player.js 2,263 → 702 (69%). HUD-renderer.js 2,058 → split into 5 files (all under 600 LOC). Phases 1–10.1 complete. Remaining: Phase 9.3 (HUD theme config, optional), Phase 10.2 (split utils, optional), Phase 10.3 (enemy bullet patterns, medium risk).
+
+---
+
+### Phase 6: Enemy System Decomposition (6,644 → ~2,000 LOC)
+
+**Motivation:** `enemy.js` is the largest file at 6,644 lines. It contains 10 enemy types with 30+ movement methods, 30+ firing methods, 10 custom draw methods, and 80+ scattered type-check conditionals (`if (this.type === 'HUNTER')`). Every new enemy type or behavior tweak requires touching 5+ locations. The goal is a **data-driven, composable** enemy system where new enemy types can be added by writing config, not code.
+
+**Architecture: Strategy Pattern + Data-Driven Config**
+
+The refactored enemy system uses three registries of pluggable behaviors:
+1. **MovementRegistry** — named movement strategies (chase, orbit, zigzag, weave, etc.)
+2. **FiringRegistry** — named firing strategies (spread, burst, laser, mine, missile, etc.)
+3. **ShapeRegistry** — named visual renderers (triangle, guardian-emerald, wasp-wings, etc.)
+
+Each enemy type is defined entirely in config:
+```js
+HUNTER: {
+    // ... existing stats (health, speed, size, points) ...
+    movement: { pattern: 'geometric', params: { shape: 'triangle', speed: 1.6, radius: 200 } },
+    firing:   { pattern: 'aimed_burst', params: { count: 1, spread: 0, cooldown: 1.5 } },
+    visual:   { shape: 'triangle', color: '#ff4444', glowColor: '#ff6666', trailLength: 15 },
+    ai:       { evasion: 0.3, preferredRange: 250, dodgeBullets: true }
+}
+```
+
+The `Enemy` class becomes a thin orchestrator: `this.movement.execute()`, `this.firing.execute()`, `this.renderer.draw()`.
+
+**Step 6.1: Extract Enemy Config** (~200 lines) — **DONE (v5.9.0)**
+- Moved `ENEMY_TYPES` from `enemy.js` to `js/modules/entities/enemy-data.js`
+- Expanded each type's config with `movement`, `firing`, `visual`, and `ai` parameter blocks
+- Added `ENEMY_TYPE_KEYS` and `SHAPE_DRAW_MAP` convenience exports
+- `enemy.js` imports from `enemy-data.js` and re-exports `ENEMY_TYPES` for backward compat
+- Pure data extraction — no behavior change
+
+**Step 6.2: Movement Strategy Extraction** (~2,170 lines extracted) — **DONE (v5.10.0)**
+- Created `js/modules/systems/enemy-movement.js` with 36 exported functions
+- Extracted all 28 movement patterns + 8 helper functions using `.call(this)` delegation
+- `enemy.js` methods become one-liner delegators; `updateMovement()` switch unchanged
+- `enemy.js` reduced from 6,544 to 4,443 lines (32% reduction)
+- Future step: consolidate into composable primitives + registry dispatch (replacing switch)
+
+**Step 6.3: Firing Strategy Extraction** (~1,177 lines extracted) — **DONE (v5.11.0)**
+- Created `js/modules/systems/enemy-firing.js` with 38 exported functions
+- Extracted all shooting patterns, burst/sweep/sentinel state machines, lightning generation, and `createEnemyBullet` factory
+- Drawing methods (`drawLightningBolt`, `drawSweepLaser`) and `updateShooting` dispatcher remain in enemy.js
+- `enemy.js` reduced from 4,443 to 3,393 lines (24% reduction, 49% from original)
+- Future step: consolidate into parameterized strategies + registry dispatch
+
+**Step 6.4: Enemy Shape Renderers** (~1,807 lines extracted) — **DONE (v5.12.0)**
+- Created `js/modules/rendering/enemy-shapes.js` with 25 exported functions
+- Extracted all 10 type-specific draw methods + 15 shared rendering utilities (health bar, light trail, targeting effects, laser visuals, sweep laser, warp effect, etc.)
+- Main `draw()` orchestrator remains in enemy.js
+- `enemy.js` reduced from 3,393 to 1,649 lines (51% reduction, 75% from original)
+
+**Step 6.5: Enemy AI Extraction** (~701 lines extracted) — **DONE (v5.13.0)**
+- Created `js/modules/systems/enemy-ai.js` with 21 exported functions
+- Extracted face direction, targeting, territory system, evasion, distance maintenance, trail particles, line-of-sight
+- `enemy.js` reduced from 1,649 to 1,011 lines (85% from original 6,655)
+- Future step: consolidate into unified AI system with configurable weights
+
+**Step 6.6: Slim Enemy Class** (cleanup)
+- After 6.1–6.5, enemy.js is at 1,011 LOC (target was ~2,000) — ahead of plan
+  - Constructor + `reset()` + `initializeEnemy()` (~300 LOC)
+  - `update()` orchestrator (~140 LOC)
+  - `draw()` orchestrator (~80 LOC)
+  - Warp-in system (~70 LOC)
+  - `updateShooting()` dispatcher + `updateMovement()` dispatcher (~110 LOC)
+  - `takeDamage()`, `getDestructionReward()`, lifecycle (~40 LOC)
+  - One-liner delegators to movement/firing/shapes/AI modules (~100 LOC)
+  - `getLevelScaledDamage()` + remaining utilities (~20 LOC)
+- Further cleanup: remove remaining type-check conditionals, consolidate dispatchers
+- **Risk:** Low (if 6.1–6.5 are done correctly)
+- **Test:** Full E2E suite
+
+**Estimated enemy.js reduction: 6,644 → ~2,000 LOC (70% reduction)**
+
+---
+
+### Phase 7: Player Subsystem Extraction (2,263 → 702 LOC) — **DONE (v5.14.0)**
+
+**Motivation:** `player.js` at 2,263 lines mixes movement, weapons, powerups, skills, leveling, charge mechanics, and rendering.
+
+**Step 7.1: Weapon Extraction** (924 lines) — **DONE**
+- Created `js/modules/systems/player-weapons.js` with 35 weapon methods
+- Charging system, all 5 primary fire methods, 5 power fire methods, bullet creation, charge shot, equip/buy
+
+**Step 7.2: Skill Extraction** (158 lines) — **DONE**
+- Created `js/modules/systems/player-skills.js` with 5 skill methods
+
+**Step 7.3+7.4: Progression + Powerups** (284 lines) — **DONE**
+- Created `js/modules/systems/player-progression.js` with 18 methods (leveling, powerups, stat getters)
+
+**Step 7.5: Player Renderer** (513 lines) — **DONE**
+- Created `js/modules/rendering/player-renderer.js` with 5 draw methods
+
+**Result: player.js 2,263 → 702 LOC (69% reduction, exceeded 56% target)**
+
+---
+
+### Phase 8: Collision & Combat Refinement
+
+**Motivation:** `collision-system.js` (1,142 LOC) has repetitive particle effect spawning and hardcoded physics values. `combat-manager.js` (611 LOC) has bespoke explosion effects per entity type. Both can benefit from shared abstractions.
+
+**Step 8.1: Effect Factory** — **SKIPPED**
+- Assessed and deferred: `createDebris` and `createEnemyDebris` share structural patterns but each has entity-specific logic (asteroid hue extraction, line debris from edges, shape-specific debris) that would require extensive parameterization
+- Net savings would be ~100 lines with added indirection — not worth the abstraction cost
+- The explosion effects are already well-organized in combat-manager.js
+
+**Step 8.2: Collision Config** — **DONE (v5.15.0)**
+- Added `COLLISION_CONFIG` object at top of collision-system.js with 15 named constants
+- Extracted: `BULLET_KNOCKBACK`, `HIT_FLASH_FRAMES`, `PLAYER_ENEMY_COLLISION_DAMAGE`, `PLAYER_ASTEROID_COLLISION_DAMAGE`, `BOUNCE_RESTITUTION`, `BOUNCE_FORCE_MULTIPLIER`, `OVERLAP_SEPARATION_RATIO`, `ASTEROID_KNOCKBACK_MULTIPLIER`, `SEPARATION_BUFFER`, `OVERLAP_PUSH_FORCE`, `ENEMY_ASTEROID_PUSH`, `ASTEROID_ENEMY_PUSH`
+- Extracted `POWERUP_DROP_CHANCE` sub-object with per-entity-type drop rates
+- All inline magic numbers replaced with config references
+- **Test:** Unit 61/68, QA 94/95 (same baseline)
+
+**Step 8.3: Weapon Effect Collision Modules** — **DONE (v5.15.0)**
+- Split `handleWeaponEffectCollisions()` into 7 focused exported functions: `checkLanceBeamCollisions`, `checkMineCollisions`, `checkNovaCollisions`, `checkLightningCollisions`, `checkMissileCollisions`, `checkDeflectorOrbCollisions`, `checkTractorShieldCollisions`
+- Each wired via `.call(this)` delegators in game-engine.js
+- **Test:** Unit 61/68, QA 94/95 (same baseline)
+
+---
+
+### Phase 9: HUD & UI Decomposition
+
+**Motivation:** `hud-renderer.js` (2,058 LOC) is well-organized but exceeds the 800-line limit by 2.5x. `ui-manager.js` (1,281 LOC) mixes DOM management with game logic. Both can be split by responsibility.
+
+**Step 9.1: Split HUD Renderer by Domain** — **DONE (v5.16.0)**
+- Split `hud-renderer.js` (2,058 LOC, 32 functions) into 5 focused modules:
+  - `rendering/hud-status.js` (599 LOC, 7 functions) — drawHUD, drawSkillCooldownHUD, drawCanvasTriforce, drawLevelAndCoinsDisplay, drawXPBar, drawLevelUpText, updateHUD
+  - `rendering/hud-combat.js` (421 LOC, 6 functions) — drawDamageNumbers, drawTargetInfo, drawPowerupDisplay, drawPowerupIndicators, syncPowerupHUD, drawMoneyPickupDisplay
+  - `rendering/hud-navigation.js` (241 LOC, 2 functions) — drawMinimap, drawOffScreenIndicators
+  - `rendering/hud-overlays.js` (596 LOC, 12 functions) — drawWavyText, drawTitleScreen, drawSurvivalTimer, drawPauseButton, drawStopwatchIcon, drawSpawnTimer, drawCircularTimer, drawRespawnCountdown, drawInvincibilityCountdown, drawGhostPreviews, drawGhostEnemy, drawGhostAsteroid
+  - `rendering/hud-cursor.js` (219 LOC, 5 functions) — drawCustomCursor, drawDefaultCrosshair, drawRedTargetingCursor, drawJitterCircle, drawCursorCooldownTimer
+- Original `hud-renderer.js` retained as barrel re-export (8 lines)
+- All files under 800-line limit
+- **Test:** Unit 61/68, QA 94/95 (same baseline)
+
+**Step 9.2: UI Manager Cleanup** — **ASSESSED, DEFERRED**
+- Reviewed `ui-manager.js` (1,281 LOC): no significant stale code, commented-out code, or obvious extraction targets found
+- The file is well-organized at its current size; splitting would add indirection without clear benefit
+- Will revisit if UIManager grows beyond ~1,500 LOC
+
+**Step 9.3: HUD Theme Config** (~0 new LOC, data extraction)
+- Extract hardcoded colors, font sizes, and positions into a `HUD_THEME` config object
+- Centralizes visual tuning: `HUD_THEME.healthBar.color`, `HUD_THEME.xpBar.gradient`, etc.
+- Enables future theme/skin support
+- **Risk:** Low — no behavior change
+- **Test:** Visual inspection
+
+---
+
+### Phase 10: Data-Driven Polish & Utilities
+
+**Step 10.1: Wave Subtitle Externalization** — **DONE (v5.16.1)**
+- Moved 50 wave-specific subtitles and 15 generic fallback subtitles from `wave-manager.js` to `wave-data.js`
+- Exported as `WAVE_SUBTITLES` and `WAVE_SUBTITLES_GENERIC`
+- `getWaveSubtitle()` reduced from 75 LOC to 3 LOC
+- Pure data relocation, no behavior change
+- **Test:** Unit 61/68 (same baseline)
+
+**Step 10.2: Split Utils** (~750 LOC → 3-4 focused files)
+- `js/modules/math-utils.js` — `random()`, vector math, angle helpers
+- `js/modules/collision-utils.js` — `collision()`, `starCollision()`, swept detection
+- `js/modules/asset-cache.js` — icon caching, sprite caching, `glowSpriteCache`
+- Keep `utils.js` as a re-export barrel: `export { random } from './math-utils.js'` (backward compat)
+- **Risk:** Low — no behavior change, just file organization
+- **Test:** Unit tests pass unchanged
+
+**Step 10.3: Enemy Bullet Pattern Composition**
+- Refactor `enemy-bullet.js` (977 LOC) movement patterns from 12-case switch to registry pattern (same as enemy movement)
+- Enable pattern composition: a bullet could have `homing + boomerang` instead of requiring a new hardcoded pattern
+- **Risk:** Medium — bullet behavior affects gameplay
+- **Test:** E2E tests
+
+---
+
+### Extended Extraction Priority Table
+
+| Priority | Module | Lines | Risk | Status |
+|----------|--------|-------|------|--------|
+| 6.1 | Enemy Config (enemy-data.js) | ~319 extracted | Low | **DONE** (v5.9.0) |
+| 6.2 | Movement Strategies | ~2,174 extracted | Medium | **DONE** (v5.10.0) |
+| 6.3 | Firing Strategies | ~1,177 extracted | Medium | **DONE** (v5.11.0) |
+| 6.4 | Enemy Shape Renderers | ~1,807 extracted | Low | **DONE** (v5.12.0) |
+| 6.5 | Enemy AI Module | ~701 extracted | Medium | **DONE** (v5.13.0) |
+| 6.6 | Slim Enemy Class | cleanup | Low | **DONE** (exceeded target: 1,011 LOC vs 2,000 target) |
+| 7.1 | Player Weapons | ~924 extracted | Medium | **DONE** (v5.14.0) |
+| 7.2 | Player Skills | ~158 extracted | Low | **DONE** (v5.14.0) |
+| 7.3+7.4 | Player Progression | ~284 extracted | Low | **DONE** (v5.14.0) |
+| 7.5 | Player Renderer | ~513 extracted | Low | **DONE** (v5.14.0) |
+| 8.1 | Effect Factory | ~200 new | Low | **SKIPPED** (over-engineering for ~100 LOC savings) |
+| 8.2 | Collision Config | cleanup | Low | **DONE** (v5.15.0) |
+| 8.3 | Weapon Effect Modules | 7 functions split | Low | **DONE** (v5.15.0) |
+| 9.1 | Split HUD Renderer | 2,058 → 5 files | Low | **DONE** (v5.16.0) |
+| 9.2 | UI Manager Cleanup | cleanup | Low | **DEFERRED** (1,281 LOC is clean, no clear targets) |
+| 9.3 | HUD Theme Config | data extraction | Low | Optional |
+| 10.1 | Wave Subtitles → Data | data move | None | **DONE** (v5.16.1) |
+| 10.2 | Split Utils | reorganize | Low | Optional (750 LOC, under 800-line limit) |
+| 10.3 | Enemy Bullet Patterns | refactor | Medium | Optional |
+
+### Achieved Metrics
+
+| File | Original LOC | Current LOC | Reduction | Notes |
+|------|-------------|------------|-----------|-------|
+| game-engine.js | 7,746 | 1,268 | **84%** | Core orchestrator |
+| enemy.js | 6,655 | 1,011 | **85%** | Exceeded 70% target |
+| player.js | 2,263 | 702 | **69%** | Exceeded 56% target |
+| hud-renderer.js | 2,058 | 8 (barrel) | **100%** | Split into 5 modules (219-599 LOC each) |
+| collision-system.js | 1,142 | ~1,180 | — | Config extracted, weapon effects split into 7 functions |
+| ui-manager.js | 1,281 | 1,281 | — | Assessed, no actionable cleanup found |
+| **New files created** | | **16** | | 5 enemy, 4 player, 5 HUD, 1 enemy-data, 1 collision config |
 
 ### Execution Notes (v5.5.0)
 

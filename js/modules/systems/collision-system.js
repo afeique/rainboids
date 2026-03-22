@@ -4,6 +4,43 @@ import { GAME_CONFIG } from '../constants.js';
 import { random, collision, starCollision, triggerHapticFeedback } from '../utils.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from '../weapon-data.js';
 
+// ─── Collision Physics Config ────────────────────────────────────────────────
+export const COLLISION_CONFIG = {
+    // Bullet-to-asteroid knockback impulse multiplier
+    BULLET_KNOCKBACK: 0.05,
+    // Frames for hit-flash on asteroids and enemies
+    HIT_FLASH_FRAMES: 6,
+    // Damage dealt to enemy when player collides with it
+    PLAYER_ENEMY_COLLISION_DAMAGE: 50,
+    // Damage dealt to asteroid when player collides with it
+    PLAYER_ASTEROID_COLLISION_DAMAGE: 25,
+    // Bounce energy retention (0-1)
+    BOUNCE_RESTITUTION: 0.8,
+    // Multiplier for bounce impulse force
+    BOUNCE_FORCE_MULTIPLIER: 6.0,
+    // Ratio of overlap used for separation push
+    OVERLAP_SEPARATION_RATIO: 0.6,
+    // Knockback multiplier for player-asteroid collisions
+    ASTEROID_KNOCKBACK_MULTIPLIER: 12.0,
+    // Extra pixels buffer when separating overlapping entities
+    SEPARATION_BUFFER: 5,
+    // Additional velocity push when separating overlapping player/asteroid
+    OVERLAP_PUSH_FORCE: 2.0,
+    // Push force applied to enemy in enemy-asteroid collision
+    ENEMY_ASTEROID_PUSH: 4,
+    // Push force applied to asteroid in enemy-asteroid collision
+    ASTEROID_ENEMY_PUSH: 2,
+    // Powerup drop chances by context
+    POWERUP_DROP_CHANCE: {
+        SMALL_ASTEROID: 0.15,
+        LARGE_ASTEROID: 0.2,
+        ENEMY_WASP: 0.65,
+        ENEMY_TITAN: 0.80,
+        ENEMY_TANGERINE: 0.70,
+        ENEMY_DEFAULT: 0.55,
+    },
+};
+
 export function handleCollisions() {
     // OPT-8: Populate spatial grid for broad-phase collision culling
     this.spatialGrid.clear();
@@ -51,7 +88,7 @@ export function handleCollisions() {
                 ast.health = Math.max(0, ast.health - damage);
 
                 // Hit flash — asteroid briefly turns white when struck
-                ast._hitFlashTimer = 6;
+                ast._hitFlashTimer = COLLISION_CONFIG.HIT_FLASH_FRAMES;
 
                 // Show damage number (same as enemy ships)
                 if (this.isEntityOnScreen(ast)) {
@@ -62,9 +99,8 @@ export function handleCollisions() {
                 this.player.gainExperience(2);
 
                 // Impart momentum from bullet
-                const impulse = 0.05; // Adjust for desired push effect
-                ast.vel.x += bullet.vel.x * impulse;
-                ast.vel.y += bullet.vel.y * impulse;
+                ast.vel.x += bullet.vel.x * COLLISION_CONFIG.BULLET_KNOCKBACK;
+                ast.vel.y += bullet.vel.y * COLLISION_CONFIG.BULLET_KNOCKBACK;
 
                 // Hit spark — colored shrapnel streaks + small flash at impact
                 {
@@ -101,7 +137,7 @@ export function handleCollisions() {
                         this.createDebris(ast);
                         this.createColorStarBurst(ast.x, ast.y);
                         this.dropOrbsFromEntity(ast.x, ast.y, ast);
-                        if (Math.random() < 0.15) {
+                        if (Math.random() < COLLISION_CONFIG.POWERUP_DROP_CHANCE.SMALL_ASTEROID) {
                             this.dropPowerup(ast.x, ast.y);
                         }
                         if (this.isEntityOnScreen(ast)) {
@@ -116,7 +152,7 @@ export function handleCollisions() {
                         this.createDebris(ast);
                         this.createColorStarBurst(ast.x, ast.y);
                         this.dropOrbsFromEntity(ast.x, ast.y, ast);
-                        if (Math.random() < 0.2) {
+                        if (Math.random() < COLLISION_CONFIG.POWERUP_DROP_CHANCE.LARGE_ASTEROID) {
                             this.dropPowerup(ast.x, ast.y);
                         }
 
@@ -344,7 +380,7 @@ export function handleCollisions() {
                 const destroyed = enemy.takeDamage(damage);
 
                 // Hit flash on enemy when struck
-                enemy._hitFlashTimer = 6;
+                enemy._hitFlashTimer = COLLISION_CONFIG.HIT_FLASH_FRAMES;
 
                 // Award XP for hitting enemy
                 this.player.gainExperience(3);
@@ -388,9 +424,9 @@ export function handleCollisions() {
                     this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
 
                     // Enemies often drop powerups — stronger enemies drop more often
-                    const powerupChance = enemy.type === 'WASP' ? 0.65 :
-                                        enemy.type === 'TITAN' ? 0.80 :
-                                        enemy.type === 'TANGERINE' ? 0.70 : 0.55;
+                    const powerupChance = enemy.type === 'WASP' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_WASP :
+                                        enemy.type === 'TITAN' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TITAN :
+                                        enemy.type === 'TANGERINE' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TANGERINE : COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_DEFAULT;
                     const roll = Math.random();
                     if (roll < powerupChance) {
                         this.dropPowerup(enemy.x, enemy.y);
@@ -485,9 +521,18 @@ export function handleCollisions() {
 
 export function handleWeaponEffectCollisions() {
     if (!this.player || !this.player.active) return;
-    const p = this.player;
+    this.checkLanceBeamCollisions();
+    this.checkMineCollisions();
+    this.checkNovaCollisions();
+    this.checkLightningCollisions();
+    this.checkMissileCollisions();
+    this.checkDeflectorOrbCollisions();
+    this.checkTractorShieldCollisions();
+}
 
-    // ─── Lance Beam ─────────────────────────────────────────────────
+// ─── Lance Beam ─────────────────────────────────────────────────
+export function checkLanceBeamCollisions() {
+    const p = this.player;
     if (p.beamActive && p.beamTimer > 0) {
         const config = PRIMARY_WEAPONS.LANCE_BEAM;
         const beamW = (config.beamWidth || 6) * (1 + p.getPowerupStacks('BEAM_WIDTH') * 0.3);
@@ -509,8 +554,11 @@ export function handleWeaponEffectCollisions() {
             }
         });
     }
+}
 
-    // ─── Mines ──────────────────────────────────────────────────────
+// ─── Mines ──────────────────────────────────────────────────────
+export function checkMineCollisions() {
+    const p = this.player;
     if (p.activeMines) {
         for (const mine of p.activeMines) {
             if (!mine.active || !mine.armed) continue;
@@ -541,8 +589,11 @@ export function handleWeaponEffectCollisions() {
             }
         }
     }
+}
 
-    // ─── Nova Rings ─────────────────────────────────────────────────
+// ─── Nova Rings ─────────────────────────────────────────────────
+export function checkNovaCollisions() {
+    const p = this.player;
     if (p.novaActive && p.novaRings) {
         for (const ring of p.novaRings) {
             if (!ring.active) continue;
@@ -560,8 +611,11 @@ export function handleWeaponEffectCollisions() {
             });
         }
     }
+}
 
-    // ─── Lightning Chains ───────────────────────────────────────────
+// ─── Lightning Chains ───────────────────────────────────────────
+export function checkLightningCollisions() {
+    const p = this.player;
     if (p.lightningChains) {
         for (const chain of p.lightningChains) {
             if (!chain.active || chain.damageApplied) continue;
@@ -577,8 +631,11 @@ export function handleWeaponEffectCollisions() {
             }
         }
     }
+}
 
-    // ─── Missiles ──────────────────────────────────────────────────
+// ─── Missiles ──────────────────────────────────────────────────
+export function checkMissileCollisions() {
+    const p = this.player;
     if (p.activeMissiles) {
         for (const missile of p.activeMissiles) {
             if (!missile.active) continue;
@@ -597,8 +654,11 @@ export function handleWeaponEffectCollisions() {
             });
         }
     }
+}
 
-    // ─── Deflector Orbs (block enemy bullets) ───────────────────────
+// ─── Deflector Orbs (block enemy bullets) ───────────────────────
+export function checkDeflectorOrbCollisions() {
+    const p = this.player;
     if (p.deflectorOrbs && p.deflectorOrbs.length > 0) {
         this.enemyBulletPool.activeObjects.forEach(bullet => {
             if (!bullet.active) return;
@@ -623,8 +683,11 @@ export function handleWeaponEffectCollisions() {
             }
         });
     }
+}
 
-    // ─── Tractor Shield (absorb enemy bullets for coins) ────────────
+// ─── Tractor Shield (absorb enemy bullets for coins) ────────────
+export function checkTractorShieldCollisions() {
+    const p = this.player;
     if (p.activeSkillEffects && p.activeSkillEffects.has('TRACTOR_SHIELD')) {
         const skill = DEFENSE_SKILLS.TRACTOR_SHIELD;
         const arc = skill.shieldArc + p.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
@@ -644,7 +707,6 @@ export function handleWeaponEffectCollisions() {
             }
         });
     }
-
     // ─── Bulwark damage reduction is handled in handlePlayerEnemyBulletCollision ──
 }
 
@@ -663,9 +725,9 @@ export function damageEnemy(enemy, damage) {
         }
         this.createEnemyDebris(enemy);
         this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
-        const powerupChance = enemy.type === 'WASP' ? 0.65 :
-                            enemy.type === 'TITAN' ? 0.80 :
-                            enemy.type === 'TANGERINE' ? 0.70 : 0.55;
+        const powerupChance = enemy.type === 'WASP' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_WASP :
+                            enemy.type === 'TITAN' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TITAN :
+                            enemy.type === 'TANGERINE' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TANGERINE : COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_DEFAULT;
         if (Math.random() < powerupChance) {
             this.dropPowerup(enemy.x, enemy.y);
         }
@@ -742,8 +804,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
     }
 
     // Always damage the enemy when colliding with player (massive damage)
-    const enemyCollisionDamage = 50; // Massive damage to enemies
-    const destroyed = enemy.takeDamage(enemyCollisionDamage);
+    const destroyed = enemy.takeDamage(COLLISION_CONFIG.PLAYER_ENEMY_COLLISION_DAMAGE);
 
     if (destroyed) {
         const reward = enemy.getDestructionReward();
@@ -779,7 +840,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         if (velAlongNormal > 0) return;
 
         // Calculate restitution (bounciness)
-        const restitution = 0.8; // 80% energy retained
+        const restitution = COLLISION_CONFIG.BOUNCE_RESTITUTION;
 
         // Calculate impulse scalar
         const playerMass = this.player.mass || 1;
@@ -791,7 +852,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         const impulseY = impulseScalar * ny;
 
         // Enhanced collision force for more dramatic effect
-        const forceMultiplier = 6.0; // Increased from 3.0 for more visible bounce
+        const forceMultiplier = COLLISION_CONFIG.BOUNCE_FORCE_MULTIPLIER;
 
         player.vel.x += impulseX * enemyMass * forceMultiplier;
         player.vel.y += impulseY * enemyMass * forceMultiplier;
@@ -804,7 +865,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         // Separate overlapping objects
         const overlap = player.radius + enemy.radius - distance;
         if (overlap > 0) {
-            const separationForce = overlap * 0.6; // 60% separation
+            const separationForce = overlap * COLLISION_CONFIG.OVERLAP_SEPARATION_RATIO;
             player.x += nx * separationForce;
             player.y += ny * separationForce;
             if (!destroyed) {
@@ -908,12 +969,12 @@ export function handleEnemyAsteroidCollision(enemy, asteroid) {
 
     if (distance > 0) {
         // Push enemy away from asteroid
-        const enemyPushForce = 4;
+        const enemyPushForce = COLLISION_CONFIG.ENEMY_ASTEROID_PUSH;
         enemy.vel.x += (dx / distance) * enemyPushForce;
         enemy.vel.y += (dy / distance) * enemyPushForce;
 
         // Impart momentum to asteroid (like bullet impact)
-        const asteroidPushForce = 2;
+        const asteroidPushForce = COLLISION_CONFIG.ASTEROID_ENEMY_PUSH;
         asteroid.vel.x += enemy.vel.x * 0.3; // Transfer some of enemy's momentum
         asteroid.vel.y += enemy.vel.y * 0.3;
         asteroid.vel.x -= (dx / distance) * asteroidPushForce;
@@ -1027,10 +1088,9 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
     }
 
     // Always damage the asteroid when colliding with player (massive damage)
-    const asteroidCollisionDamage = 25; // Massive damage to asteroids
-    asteroid.health = Math.max(0, asteroid.health - asteroidCollisionDamage);
+    asteroid.health = Math.max(0, asteroid.health - COLLISION_CONFIG.PLAYER_ASTEROID_COLLISION_DAMAGE);
     if (this.isEntityOnScreen(asteroid)) {
-        this.createDamageNumber(asteroid.x, asteroid.y - asteroid.baseRadius, asteroidCollisionDamage);
+        this.createDamageNumber(asteroid.x, asteroid.y - asteroid.baseRadius, COLLISION_CONFIG.PLAYER_ASTEROID_COLLISION_DAMAGE);
     }
 
     // Check if asteroid is destroyed
@@ -1061,7 +1121,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
     const enhancedImpulse = 2 * dvn / totalMass;
 
     // Apply MUCH MORE DRASTIC knockback multiplier
-    const knockbackMultiplier = 12.0; // Increased from 8.0 to 12.0 for more visible bounce
+    const knockbackMultiplier = COLLISION_CONFIG.ASTEROID_KNOCKBACK_MULTIPLIER;
     const enhancedKnockback = enhancedImpulse * knockbackMultiplier;
 
     // Apply jittered impulse to player velocity
@@ -1085,7 +1145,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         const dy = (this.player.y - asteroid.y) / distance;
 
         // Apply full overlap distance plus a buffer to ensure separation
-        const separationBuffer = 5; // Extra pixels to ensure they don't stick
+        const separationBuffer = COLLISION_CONFIG.SEPARATION_BUFFER;
         const totalSeparation = overlap + separationBuffer;
 
         // Move player away from asteroid by the full separation amount
@@ -1093,7 +1153,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         this.player.y += dy * totalSeparation;
 
         // Also apply velocity to push player away
-        const pushForce = 2.0; // Additional velocity push
+        const pushForce = COLLISION_CONFIG.OVERLAP_PUSH_FORCE;
         this.player.vel.x += dx * pushForce;
         this.player.vel.y += dy * pushForce;
     }

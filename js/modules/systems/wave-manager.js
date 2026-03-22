@@ -8,7 +8,7 @@
 import { GAME_CONFIG, GAME_STATES, getEnemyFiringCooldown } from '../constants.js';
 import { Asteroid } from '../entities/asteroid.js';
 import { Enemy } from '../entities/enemy.js';
-import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats } from '../wave-data.js';
+import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC } from '../wave-data.js';
 import { random } from '../utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../entities/enemy.js';
@@ -51,80 +51,8 @@ export function updateWaveSystem() {
 }
 
 export function getWaveSubtitle(waveNumber) {
-    const subtitles = {
-        1:  "Don't worry, they die easy.",
-        2:  "Okay maybe worry a little.",
-        3:  "They brought friends.",
-        4:  "These ones are chonky.",
-        5:  "The green means GO AWAY.",
-        6:  "Fast and angry. Like bees. Space bees.",
-        7:  "Bzz bzz bzz bzz.",
-        8:  "They have LASERS now?!",
-        9:  "Laser tag, but unfair.",
-        10: "Shocking, really.",
-        11: "They float weird and it's unsettling.",
-        12: "Missile lock! ...that's bad, right?",
-        13: "Webs. In space. Sure, why not.",
-        14: "Shields up! ...theirs, not yours.",
-        15: "Watch your step. Or your float.",
-        16: "He's a big boy.",
-        17: "Red vs Green. You vs both.",
-        18: "Speed and spite in equal measure.",
-        19: "Double the shields, double the pain.",
-        20: "Stay out of the crosshairs.",
-        21: "Invisible AND angry. Great.",
-        22: "Dodge THIS.",
-        23: "They learned teamwork. Rude.",
-        24: "More mines than a Minecraft server.",
-        25: "Halfway to glory. Or doom.",
-        26: "They're evolving. You're sweating.",
-        27: "The welcoming committee got bigger.",
-        28: "Not a great time to sneeze.",
-        29: "They're just showing off now.",
-        30: "Boss rush, baby!",
-        31: "Welcome to the gauntlet.",
-        32: "Three flavors of pain.",
-        33: "This is fine. Everything is fine.",
-        34: "Your shield called in sick today.",
-        35: "Asteroids are the LEAST of your problems.",
-        36: "Skill issue incoming.",
-        37: "The difficulty curve just went vertical.",
-        38: "Brought a ship to a knife fight.",
-        39: "It's not a party without explosions.",
-        40: "Round number! Celebrate by not dying.",
-        41: "Past the point of no return.",
-        42: "The answer to everything is MORE BULLETS.",
-        43: "They're not even trying to be fair.",
-        44: "Duck, weave, and pray.",
-        45: "The math is not in your favor.",
-        46: "Panic is an acceptable strategy.",
-        47: "Survival is a strong word.",
-        48: "Almost to the war zone!",
-        49: "One more and it gets REALLY bad.",
-        50: "Welcome to the war zone.",
-    };
-
-    if (subtitles[waveNumber]) return subtitles[waveNumber];
-
-    // Generic pool for waves beyond 50
-    const generic = [
-        "Good luck. You'll need it.",
-        "Still alive? Impressive.",
-        "They keep coming!",
-        "This is getting ridiculous.",
-        "You're built different.",
-        "No one said this would be easy.",
-        "Just another day at the office.",
-        "More enemies, more problems.",
-        "Are you even blinking?",
-        "Legend says no one survives this.",
-        "Your keyboard is begging for mercy.",
-        "Error 404: Easy mode not found.",
-        "Respawn? Never heard of it.",
-        "They're REALLY mad now.",
-        "Insert coin to continue. Oh wait.",
-    ];
-    return generic[(waveNumber * 7 + 3) % generic.length];
+    if (WAVE_SUBTITLES[waveNumber]) return WAVE_SUBTITLES[waveNumber];
+    return WAVE_SUBTITLES_GENERIC[(waveNumber * 7 + 3) % WAVE_SUBTITLES_GENERIC.length];
 }
 
 export function showWaveComplete() {

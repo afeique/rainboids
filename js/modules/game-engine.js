@@ -21,7 +21,11 @@ import { DEFENSE_SKILLS } from './weapon-data.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
-import * as hud from './rendering/hud-renderer.js';
+import * as hudStatus from './rendering/hud-status.js';
+import * as hudCombat from './rendering/hud-combat.js';
+import * as hudNav from './rendering/hud-navigation.js';
+import * as hudOverlays from './rendering/hud-overlays.js';
+import * as hudCursor from './rendering/hud-cursor.js';
 import * as shopRenderer from './rendering/shop-renderer.js';
 import * as cam from './systems/camera-manager.js';
 import * as shop from './systems/shop-manager.js';
@@ -474,9 +478,9 @@ export class GameEngine {
     
     // Method to draw wavy rainbow text for wave messages
     // Mobile-aware: scales font to fit within screen width with padding.
-    drawWavyText(text, x, y, fontSize = 48) { return hud.drawWavyText.call(this, text, x, y, fontSize); }
+    drawWavyText(text, x, y, fontSize = 48) { return hudOverlays.drawWavyText.call(this, text, x, y, fontSize); }
     
-    drawTitleScreen() { return hud.drawTitleScreen.call(this); }
+    drawTitleScreen() { return hudOverlays.drawTitleScreen.call(this); }
     
     startNextWave() { return wave.startNextWave.call(this); }
 
@@ -567,11 +571,11 @@ export class GameEngine {
     collectPowerup(powerup) { return combat.collectPowerup.call(this, powerup); }
     showPowerupDisplay(name, color) { return combat.showPowerupDisplay.call(this, name, color); }
     
-    drawPowerupDisplay() { return hud.drawPowerupDisplay.call(this); }
+    drawPowerupDisplay() { return hudCombat.drawPowerupDisplay.call(this); }
     
-    drawPowerupIndicators() { return hud.drawPowerupIndicators.call(this); }
+    drawPowerupIndicators() { return hudCombat.drawPowerupIndicators.call(this); }
 
-    syncPowerupHUD() { return hud.syncPowerupHUD.call(this); }
+    syncPowerupHUD() { return hudCombat.syncPowerupHUD.call(this); }
 
     setTargetInfo(target) { return combat.setTargetInfo.call(this, target); }
     updateTargetInfo(deltaTime) { return combat.updateTargetInfo.call(this, deltaTime); }
@@ -581,17 +585,24 @@ export class GameEngine {
     addMoneyPickup(amount) { return combat.addMoneyPickup.call(this, amount); }
     updateMoneyPickupDisplay(deltaTime) { return combat.updateMoneyPickupDisplay.call(this, deltaTime); }
     
-    drawMoneyPickupDisplay() { return hud.drawMoneyPickupDisplay.call(this); }
+    drawMoneyPickupDisplay() { return hudCombat.drawMoneyPickupDisplay.call(this); }
     
     createDamageNumber(x, y, damage) { return combat.createDamageNumber.call(this, x, y, damage); }
     updateDamageNumbers(deltaTime) { return combat.updateDamageNumbers.call(this, deltaTime); }
     
-    drawDamageNumbers() { return hud.drawDamageNumbers.call(this); }
+    drawDamageNumbers() { return hudCombat.drawDamageNumbers.call(this); }
     
-    drawTargetInfo() { return hud.drawTargetInfo.call(this); }
+    drawTargetInfo() { return hudCombat.drawTargetInfo.call(this); }
     
     handleCollisions() { return col.handleCollisions.call(this); }
     handleWeaponEffectCollisions() { return col.handleWeaponEffectCollisions.call(this); }
+    checkLanceBeamCollisions() { return col.checkLanceBeamCollisions.call(this); }
+    checkMineCollisions() { return col.checkMineCollisions.call(this); }
+    checkNovaCollisions() { return col.checkNovaCollisions.call(this); }
+    checkLightningCollisions() { return col.checkLightningCollisions.call(this); }
+    checkMissileCollisions() { return col.checkMissileCollisions.call(this); }
+    checkDeflectorOrbCollisions() { return col.checkDeflectorOrbCollisions.call(this); }
+    checkTractorShieldCollisions() { return col.checkTractorShieldCollisions.call(this); }
     damageEnemy(enemy, damage) { return col.damageEnemy.call(this, enemy, damage); }
     handlePlayerEnemyCollision(player, enemy) { return col.handlePlayerEnemyCollision.call(this, player, enemy); }
     handlePlayerEnemyBulletCollision(player, bullet) { return col.handlePlayerEnemyBulletCollision.call(this, player, bullet); }
@@ -819,13 +830,13 @@ export class GameEngine {
         }
     }
     
-    drawHUD() { return hud.drawHUD.call(this); }
+    drawHUD() { return hudStatus.drawHUD.call(this); }
 
     drawWeaponEffects() { return weaponFx.drawWeaponEffects.call(this); }
 
-    drawSkillCooldownHUD() { return hud.drawSkillCooldownHUD.call(this); }
+    drawSkillCooldownHUD() { return hudStatus.drawSkillCooldownHUD.call(this); }
     
-    drawCursorCooldownTimer() { return hud.drawCursorCooldownTimer.call(this); }
+    drawCursorCooldownTimer() { return hudCursor.drawCursorCooldownTimer.call(this); }
     
     updateCamera() { return cam.updateCamera.call(this); }
     screenToWorldCoordinates(screenX, screenY) { return cam.screenToWorldCoordinates.call(this, screenX, screenY); }
@@ -842,9 +853,9 @@ export class GameEngine {
         this.ctx.restore();
     }
     
-    drawOffScreenIndicators() { return hud.drawOffScreenIndicators.call(this); }
+    drawOffScreenIndicators() { return hudNav.drawOffScreenIndicators.call(this); }
 
-    drawMinimap() { return hud.drawMinimap.call(this); }
+    drawMinimap() { return hudNav.drawMinimap.call(this); }
     
     // Optimized starfield rendering with batching and sprite caching
     renderOptimizedStarfield() {
@@ -872,7 +883,7 @@ export class GameEngine {
         starfieldRenderer.renderBatchedStars(this.ctx);
     }
 
-    drawJitterCircle() { return hud.drawJitterCircle.call(this); }
+    drawJitterCircle() { return hudCursor.drawJitterCircle.call(this); }
     
     triggerHitstop(frames) { return cam.triggerHitstop.call(this, frames); }
     triggerCameraKick(dx, dy, magnitude) { return cam.triggerCameraKick.call(this, dx, dy, magnitude); }
@@ -1192,10 +1203,10 @@ export class GameEngine {
         this.cursor.isOverTarget = isOverTarget;
     }
     
-    drawCustomCursor() { return hud.drawCustomCursor.call(this); }
+    drawCustomCursor() { return hudCursor.drawCustomCursor.call(this); }
     
-    drawDefaultCrosshair(ctx, x, y) { return hud.drawDefaultCrosshair.call(this, ctx, x, y); }
-    drawRedTargetingCursor(ctx, x, y) { return hud.drawRedTargetingCursor.call(this, ctx, x, y); }
+    drawDefaultCrosshair(ctx, x, y) { return hudCursor.drawDefaultCrosshair.call(this, ctx, x, y); }
+    drawRedTargetingCursor(ctx, x, y) { return hudCursor.drawRedTargetingCursor.call(this, ctx, x, y); }
 
     
     takeDamage(damageAmount = this.baseDamage) { return lifecycle.takeDamage.call(this, damageAmount); }
@@ -1207,27 +1218,27 @@ export class GameEngine {
     updateRespawnAnimation(input) { return lifecycle.updateRespawnAnimation.call(this, input); }
     clearAreaAroundPlayer(radius) { return lifecycle.clearAreaAroundPlayer.call(this, radius); }
     
-    updateHUD() { return hud.updateHUD.call(this); }
+    updateHUD() { return hudStatus.updateHUD.call(this); }
     
     findNearestEnemy() { return col.findNearestEnemy.call(this); }
 
-    drawSurvivalTimer(ctx) { return hud.drawSurvivalTimer.call(this, ctx); }
-    drawPauseButton() { return hud.drawPauseButton.call(this); }
-    drawStopwatchIcon(ctx, x, y, size) { return hud.drawStopwatchIcon.call(this, ctx, x, y, size); }
-    drawCanvasTriforce(ctx, lives, baseX, baseY) { return hud.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }
-    drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) { return hud.drawLevelAndCoinsDisplay.call(this, ctx, barX, barY, barHeight); }
-    drawLevelUpText() { return hud.drawLevelUpText.call(this); }
+    drawSurvivalTimer(ctx) { return hudOverlays.drawSurvivalTimer.call(this, ctx); }
+    drawPauseButton() { return hudOverlays.drawPauseButton.call(this); }
+    drawStopwatchIcon(ctx, x, y, size) { return hudOverlays.drawStopwatchIcon.call(this, ctx, x, y, size); }
+    drawCanvasTriforce(ctx, lives, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }
+    drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) { return hudStatus.drawLevelAndCoinsDisplay.call(this, ctx, barX, barY, barHeight); }
+    drawLevelUpText() { return hudStatus.drawLevelUpText.call(this); }
     
     explodeTank(tankIndex) { return lifecycle.explodeTank.call(this, tankIndex); }
 
     handlePlayerAsteroidCollision(player, asteroid) { return col.handlePlayerAsteroidCollision.call(this, player, asteroid); }
     
-    drawSpawnTimer() { return hud.drawSpawnTimer.call(this); }
-    drawXPBar(ctx, barX, barY, barWidth, barHeight) { return hud.drawXPBar.call(this, ctx, barX, barY, barWidth, barHeight); }
-    drawCircularTimer(ctx, x, y, radius, progress, color, icon, timeRemaining) { return hud.drawCircularTimer.call(this, ctx, x, y, radius, progress, color, icon, timeRemaining); }
-    drawRespawnCountdown() { return hud.drawRespawnCountdown.call(this); }
-    drawInvincibilityCountdown() { return hud.drawInvincibilityCountdown.call(this); }
-    drawGhostPreviews(spawnProgress) { return hud.drawGhostPreviews.call(this, spawnProgress); }
+    drawSpawnTimer() { return hudOverlays.drawSpawnTimer.call(this); }
+    drawXPBar(ctx, barX, barY, barWidth, barHeight) { return hudStatus.drawXPBar.call(this, ctx, barX, barY, barWidth, barHeight); }
+    drawCircularTimer(ctx, x, y, radius, progress, color, icon, timeRemaining) { return hudOverlays.drawCircularTimer.call(this, ctx, x, y, radius, progress, color, icon, timeRemaining); }
+    drawRespawnCountdown() { return hudOverlays.drawRespawnCountdown.call(this); }
+    drawInvincibilityCountdown() { return hudOverlays.drawInvincibilityCountdown.call(this); }
+    drawGhostPreviews(spawnProgress) { return hudOverlays.drawGhostPreviews.call(this, spawnProgress); }
 
     generateGhostPosition() {
         const side = Math.floor(Math.random() * 4);
@@ -1255,6 +1266,6 @@ export class GameEngine {
         return { x, y };
     }
     
-    drawGhostEnemy(progress) { return hud.drawGhostEnemy.call(this, progress); }
-    drawGhostAsteroid(progress) { return hud.drawGhostAsteroid.call(this, progress); }
+    drawGhostEnemy(progress) { return hudOverlays.drawGhostEnemy.call(this, progress); }
+    drawGhostAsteroid(progress) { return hudOverlays.drawGhostAsteroid.call(this, progress); }
 } 

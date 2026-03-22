@@ -294,11 +294,24 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │       │   ├── event-setup.js       #   All event listeners: input, shop, cheats, resize
 │       │   ├── player-lifecycle.js  #   Damage, death, respawn, shield tanks
 │       │   ├── shop-manager.js      #   Shop logic, purchases, tab builders
-│       │   └── wave-manager.js      #   Wave lifecycle, spawning, notifications
+│       │   ├── wave-manager.js      #   Wave lifecycle, spawning, notifications
+│       │   ├── enemy-movement.js   #   36 enemy movement strategies
+│       │   ├── enemy-firing.js    #   38 enemy firing/shooting functions
+│       │   ├── enemy-ai.js        #   21 enemy AI, evasion, territory functions
+│       │   ├── player-weapons.js  #   35 player weapon methods
+│       │   ├── player-skills.js   #   5 player skill methods
+│       │   └── player-progression.js #  18 leveling, powerup, stat methods
 │       ├── rendering/         # Canvas rendering (extracted from game-engine)
-│       │   ├── hud-renderer.js    #   32 HUD draw methods (health, minimap, cursor, etc.)
+│       │   ├── hud-renderer.js    #   Barrel re-export for 5 HUD modules below
+│       │   ├── hud-status.js      #   Health bar, lives, level/coins, XP, skill cooldowns
+│       │   ├── hud-combat.js      #   Damage numbers, target info, powerups, money pickup
+│       │   ├── hud-navigation.js  #   Minimap, off-screen enemy indicators
+│       │   ├── hud-overlays.js    #   Title screen, wavy text, timers, respawn, ghosts
+│       │   ├── hud-cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer
 │       │   ├── shop-renderer.js   #   Shop window, tabs, items, scrollbar
-│       │   └── weapon-effects-renderer.js  #   Weapon/skill visual effects
+│       │   ├── weapon-effects-renderer.js  #   Weapon/skill visual effects
+│       │   ├── enemy-shapes.js    #   25 enemy shape renderers and visual effects
+│       │   └── player-renderer.js #   5 player drawing methods
 │       ├── entities/          # Player, enemy, asteroid, bullet, powerup, etc.
 │       └── performance/       # Spatial grid, depth-batch-renderer, nebula renderer
 ├── css/
