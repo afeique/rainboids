@@ -65,6 +65,12 @@ export class CombatAI {
         // Bullet dodge timing
         this._lastDodgeReaction = 0;
 
+        // Skill degradation state
+        this._driftAngle = Math.random() * TWO_PI;
+        this._driftChangeTime = 0;
+        this._panicMode = false;
+        this._aimWanderAngle = 0;
+
         // Interest/danger maps (reused each tick to avoid allocation)
         this._interest = new Float32Array(STEERING_DIRS);
         this._danger = new Float32Array(STEERING_DIRS);
@@ -100,7 +106,10 @@ export class CombatAI {
         this._buildSteeringMaps(player, entities, field, target, engagement);
 
         // Resolve movement from steering maps
-        const move = this._resolveMovement();
+        let move = this._resolveMovement();
+
+        // Apply skill-level degradation to movement
+        move = this._degradeMovement(move, player, now);
 
         // Map movement to WASD inputs
         const inputs = {
@@ -112,6 +121,12 @@ export class CombatAI {
             fireSecondary: false,
             skill1: false, skill2: false, skill3: false, skill4: false,
         };
+
+        // Fire hesitation — lower-skill players sometimes stop firing
+        const fireReliability = 0.3 + this.preset.aimAccuracy * 0.7; // novice: 0.51, advanced: 0.965
+        if (Math.random() > fireReliability) {
+            inputs.fire = false;
+        }
 
         // Compute aim with lead prediction
         if (target) {
@@ -378,6 +393,61 @@ export class CombatAI {
         return { x: x / mag * 0.5, y: y / mag * 0.5 };
     }
 
+    // ── Skill Degradation ──────────────────────────────────────────
+
+    /**
+     * Degrade movement quality based on skill level.
+     * Novice: random drift, hesitation, panic under pressure.
+     * Advanced: clean, optimal movement (passes through unchanged).
+     */
+    _degradeMovement(move, player, now) {
+        const skillFactor = this.preset.aimAccuracy; // 0.3 (novice) to 0.95 (advanced)
+        const driftChance = Math.max(0, 0.5 - skillFactor * 0.5); // novice: 0.35, advanced: 0.025
+        const hesitationChance = Math.max(0, 0.3 - skillFactor * 0.3); // novice: 0.21, advanced: 0.015
+
+        // Panic mode — when health is low, novice moves erratically
+        const healthPct = player.health / Math.max(1, player.maxHealth);
+        if (healthPct < 0.4 && skillFactor < 0.6) {
+            this._panicMode = true;
+        } else if (healthPct > 0.6 || skillFactor >= 0.6) {
+            this._panicMode = false;
+        }
+
+        if (this._panicMode) {
+            // Panic: rapid random direction changes
+            if (now - this._driftChangeTime > 200) {
+                this._driftAngle = Math.random() * TWO_PI;
+                this._driftChangeTime = now;
+            }
+            return {
+                x: Math.cos(this._driftAngle) * 0.5,
+                y: Math.sin(this._driftAngle) * 0.5,
+            };
+        }
+
+        // Random drift — novice wanders off course
+        if (Math.random() < driftChance) {
+            // Change drift direction every 0.5-2s
+            if (now - this._driftChangeTime > 500 + Math.random() * 1500) {
+                this._driftAngle = Math.random() * TWO_PI;
+                this._driftChangeTime = now;
+            }
+            // Blend steering with random drift (novice: mostly drift, advanced: mostly steering)
+            const driftWeight = 1 - skillFactor; // novice: 0.7, advanced: 0.05
+            return {
+                x: move.x * (1 - driftWeight) + Math.cos(this._driftAngle) * 0.5 * driftWeight,
+                y: move.y * (1 - driftWeight) + Math.sin(this._driftAngle) * 0.5 * driftWeight,
+            };
+        }
+
+        // Movement hesitation — novice sometimes freezes
+        if (Math.random() < hesitationChance) {
+            return { x: 0, y: 0 };
+        }
+
+        return move;
+    }
+
     // ── Predictive Aiming ──────────────────────────────────────────
 
     _computeAim(player, target) {
@@ -410,6 +480,16 @@ export class CombatAI {
         const aimError = (1 - this.preset.aimAccuracy) * target.dist * 0.5;
         aimX += (Math.random() - 0.5) * 2 * aimError;
         aimY += (Math.random() - 0.5) * 2 * aimError;
+
+        // Aim wander — low-skill players have a slow drifting bias
+        // This creates consistent "missing to one side" instead of random scatter
+        if (this.preset.aimAccuracy < 0.8) {
+            const wanderSpeed = 0.02 + (1 - this.preset.aimAccuracy) * 0.05; // novice: 0.055, advanced: 0.02
+            this._aimWanderAngle += (Math.random() - 0.5) * wanderSpeed;
+            const wanderMag = (1 - this.preset.aimAccuracy) * target.dist * 0.25;
+            aimX += Math.cos(this._aimWanderAngle) * wanderMag;
+            aimY += Math.sin(this._aimWanderAngle) * wanderMag;
+        }
 
         return { x: aimX, y: aimY };
     }

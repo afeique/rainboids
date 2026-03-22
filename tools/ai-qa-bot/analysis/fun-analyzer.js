@@ -99,31 +99,32 @@ export class FunAnalyzer {
 
         for (const w of this.waves) {
             // Low action density = boredom
-            if (w.actionDensity < 1.0) {
-                score -= 4 * (1.0 - w.actionDensity);
-                issues.push(`Wave ${w.wave}: low action density (${w.actionDensity.toFixed(1)} events/s)`);
+            // Calibrated for 2-4 enemies per wave: 0.3 events/s is reasonable
+            if (w.actionDensity < 0.3) {
+                score -= 5 * (0.3 - w.actionDensity) / 0.3;
+                issues.push(`Wave ${w.wave}: low action density (${w.actionDensity.toFixed(2)} events/s)`);
             }
             // Excessive action density = chaos
-            if (w.actionDensity > 5.0) {
-                score -= 2 * (w.actionDensity - 5.0);
+            if (w.actionDensity > 3.0) {
+                score -= 2 * (w.actionDensity - 3.0);
                 issues.push(`Wave ${w.wave}: chaotic action density (${w.actionDensity.toFixed(1)} events/s)`);
             }
-            // High idle ratio
-            if (w.idleRatio > 0.20) {
-                score -= 8 * (w.idleRatio - 0.20);
+            // High idle ratio (no enemies or bullets on screen)
+            if (w.idleRatio > 0.30) {
+                score -= 6 * (w.idleRatio - 0.30);
                 issues.push(`Wave ${w.wave}: high idle ratio (${(w.idleRatio * 100).toFixed(0)}%)`);
             }
             // Low threat saturation
-            if (w.threatSaturation < 0.002) {
-                score -= 3;
+            if (w.threatSaturation < 0.001) {
+                score -= 2;
             }
         }
 
-        // Engagement dips: waves with very low action density
-        const dips = this.waves.filter(w => w.actionDensity < 0.5);
+        // Engagement dips: waves with essentially zero action
+        const dips = this.waves.filter(w => w.actionDensity < 0.1);
         if (dips.length > 0) {
-            score -= dips.length * 6;
-            issues.push(`${dips.length} wave(s) with < 0.5 action density (engagement dips)`);
+            score -= dips.length * 5;
+            issues.push(`${dips.length} wave(s) with < 0.1 action density (engagement dips)`);
         }
 
         return { score: clamp(score), issues: dedup(issues, 5) };

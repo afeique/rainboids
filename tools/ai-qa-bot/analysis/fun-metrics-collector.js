@@ -76,6 +76,30 @@ export class FunMetricsCollector {
             }
         }
 
+        // Track close encounters as action events (enemy within 200px)
+        for (const e of state.entities.enemies) {
+            const dist = Math.hypot(e.x - state.player.x, e.y - state.player.y);
+            if (dist < 200) {
+                bucket.addActionEvent('close_encounter', now);
+                break; // one per tick max
+            }
+        }
+
+        // Track enemy bullets as threat events (bullets within 150px heading toward player)
+        for (const b of state.entities.enemyBullets) {
+            const dx = b.x - state.player.x;
+            const dy = b.y - state.player.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < 150) {
+                // Check if approaching (dot product of displacement and velocity)
+                const dot = dx * (b.vx || 0) + dy * (b.vy || 0);
+                if (dot < 0) { // approaching
+                    bucket.addActionEvent('bullet_threat', now);
+                    break; // one per tick max
+                }
+            }
+        }
+
         // Track bullets fired (delta of player bullet count)
         const curBullets = state.entities.playerBulletCount || 0;
         if (curBullets > this._prevPlayerBulletCount) {
