@@ -344,6 +344,7 @@ export function createArcLightningBolt(gameEngine, targetX, targetY) {
                 b.radius = 5;
                 b.glowRadius = 0; // visual handled by drawLightningBolt
                 b.damage = this.getLevelScaledDamage(2);
+                b.isPersistent = true;
                 b.maxLifetimeOverride = 460;
                 b.life = 1.0;
             }
