@@ -1,0 +1,703 @@
+// Player ship entity
+import { GAME_CONFIG } from '../core/constants.js';
+import { random, wrap } from '../core/utils.js';
+import * as weapons from './weapons.js';
+import * as skills from './skills.js';
+import * as progression from './progression.js';
+import * as playerRenderer from './renderer.js';
+
+function isMobile() {
+    return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
+}
+
+export class Player {
+    constructor() {
+        // One-time setup properties
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.lastX = 0;
+        this.lastY = 0;
+        this.rotation = 0;
+        this.radius = 12;
+        this.health = 25;
+        this.maxHealth = 25;
+        this.shieldTanks = 1; // Start with 1 shield tank
+        this.shield = 15; // 15% damage reduction (start with basic armor for survivability)
+        this.invulnerable = false;
+        this.lastHitTime = 0;
+        this.lastBlinkTime = 0;
+        
+        // Critical hit system
+        this.baseCritChance = 5; // 5% base critical hit chance
+        this.baseCritDamage = 200; // 200% base critical hit damage (2x)
+        
+        // WASD + Mouse controls
+        this.thrustPower = 0.18 * GAME_CONFIG.TICK_SCALE; // Scaled for tick rate
+
+        // ── Thrust juice state ──
+        this.thrustLevel = 0;         // 0 = idle, ramps to 1 when thrusting
+        this.lastThrustTime = 0;      // timestamp of last active thrust input
+        this.engineStartup = 0;       // 0→1 ramp for startup shudder
+        this.wasThrusting = false;    // edge detection for idle→thrust transition
+        
+        // Auto-firing system
+        this.autoFireTimer = 0;
+        this.baseFireRate = 400; // Base auto-fire rate in ms (halved frequency for more rapid fire upgrade value)
+        
+        // Audio sync - shoot sound matches fire rate exactly
+        this.lastShootSound = 0;
+        
+        // Charging shot system
+        this.isCharging = false;
+        this.chargeStartTime = 0;
+        this.chargeLevel = 0; // 0-1 charge level
+        this.maxChargeTime = 5000; // 5 seconds for full charge
+        this.minChargeTime = 3000; // 3 seconds for basic charge
+        
+        // Pause system for charge shot
+        this.chargePaused = false;
+        this.pausedChargeTime = 0; // Accumulated charge time when paused
+        
+        // Shot timing — Date.now() based (immune to frame rate variation)
+        this.lastShotTime = 0;
+        this.canShoot = true;
+        
+        // Hit streak combo system
+        this.hitStreak = 0; // Current consecutive hit streak
+        this.currentShotHits = 0; // Hits for the current shot
+        this.shotFired = false; // Whether a shot is currently active
+        this.activeShotBullets = 0; // Number of bullets from current shot still active
+        
+        // Powerup system
+        this.powerups = new Map(); // Map of powerup type -> {stacks, timeRemaining}
+
+        // Player leveling system
+        this.level = 1;
+        this.experience = 0;
+        this.experienceToNextLevel = 100; // EXP needed for level 2
+        this.skillPoints = 0; // Skill points for defensive upgrades
+
+        // Weapon system
+        this.activePrimary = 'PULSE_CANNON';
+        this.activePower = 'CHARGE_SHOT';
+        this.ownedPrimaries = new Set(['PULSE_CANNON']);
+        this.ownedPowers = new Set(['CHARGE_SHOT']);
+        this.ownedSkills = new Set();
+
+        // Defense skill slots (number keys 1-4)
+        this.skillSlots = [null, null, null, null];
+        this.skillCooldowns = [0, 0, 0, 0];
+        this.activeSkillEffects = new Map(); // skill id -> {timeRemaining, ...state}
+
+        // Power weapon cooldown
+        this.powerCooldown = 0;
+
+        // Lance beam state
+        this.beamActive = false;
+        this.beamTimer = 0;
+        this.beamAngle = 0;
+
+        // Mine state
+        this.activeMines = [];
+
+        // Nova blast state
+        this.novaRings = [];
+
+        // Lightning arc state
+        this.lightningChains = [];
+
+        // Missile state
+        this.activeMissiles = [];
+
+        // Rail driver state
+        this.lastPrimaryFireTime = 0; // for Railgun Capacitor upgrade
+
+        // Storm needles counter
+        this.needleCount = 0;
+
+        // Scatter gun shot counter
+        this.scatterShotCount = 0;
+
+        // Deflector orbs state
+        this.deflectorOrbs = [];
+
+        // Phase dash state
+        this.isDashing = false;
+        this.dashTimer = 0;
+        this.dashVelX = 0;
+        this.dashVelY = 0;
+
+        // Bulwark state
+        this.bulwarkActive = false;
+
+        // Repair nanites state
+        this.regenActive = false;
+        this.regenTimer = 0;
+
+        // EMP state
+        this.empActive = false;
+
+        // Tractor shield state
+        this.tractorShieldActive = false;
+        this.tractorShieldAngle = 0;
+
+        this.initializePlayer();
+    }
+    
+    // Helper method to initialize/reset player properties
+    initializePlayer() {
+        // Initialize at center of game field (will be updated by game engine)
+        this.x = this.width / 2;
+        this.y = this.height / 2;
+        this.lastX = this.x;
+        this.lastY = this.y;
+        this.vel = { x: 0, y: 0 };
+        this.angle = -Math.PI / 2;
+        this.isThrusting = false;
+        this.active = true;
+        this.canShoot = true;
+        this.thrustersDisabled = false;
+        this.invincible = false;
+        this.invincibilityTimer = 0;
+        this.firingDisabled = false;
+        this.justRespawned = false;
+        this.levelUpAnimation = { active: false };
+        
+        // Reset auto-fire timer
+        this.autoFireTimer = 0;
+        this.lastShotTime = 0; // Fire immediately on respawn
+        
+        // Wave bonus shield system removed
+        
+        // Reset powerups
+        this.powerups.clear();
+
+        // Reset weapon active states (keep owned weapons/skills)
+        this.powerCooldown = 0;
+        this.beamActive = false;
+        this.beamTimer = 0;
+        this.activeMines = [];
+        this.novaRings = [];
+        this.lightningChains = [];
+        this.activeMissiles = [];
+        this.needleCount = 0;
+        this.scatterShotCount = 0;
+        this.lastPrimaryFireTime = 0;
+        this.skillCooldowns = [0, 0, 0, 0];
+        this.activeSkillEffects = new Map();
+        this.deflectorOrbs = [];
+        this.isDashing = false;
+        this.dashTimer = 0;
+        this.bulwarkActive = false;
+        this.regenActive = false;
+        this.regenTimer = 0;
+        this.empActive = false;
+        this.tractorShieldActive = false;
+
+        let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
+        this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
+        // Player mass (smaller than most asteroids)
+        this.mass = Math.PI * Math.pow(this.radius, 2) * 0.5;
+    }
+    
+    reset() {
+        this.initializePlayer();
+    }
+    
+    // Player leveling system methods
+    gainExperience(amount) {
+        return progression.gainExperience.call(this, amount);
+    }
+
+    levelUp() {
+        return progression.levelUp.call(this);
+    }
+
+    grantLevelUpBonus() {
+        return progression.grantLevelUpBonus.call(this);
+    }
+
+    updateTempBonuses() {
+        return progression.updateTempBonuses.call(this);
+    }
+
+    triggerLevelUpEffects() {
+        return progression.triggerLevelUpEffects.call(this);
+    }
+
+    createLevelUpParticles() {
+        return progression.createLevelUpParticles.call(this);
+    }
+
+    getExperienceProgress() {
+        return progression.getExperienceProgress.call(this);
+    }
+    
+    updateChargingSystem(input, bulletPool, audioManager, particlePool) {
+        return weapons.updateChargingSystem.call(this, input, bulletPool, audioManager, particlePool);
+    }
+
+    firePrimary(bulletPool, audioManager) {
+        return weapons.firePrimary.call(this, bulletPool, audioManager);
+    }
+
+    firePulseCannon(bulletPool, audioManager, config) {
+        return weapons.firePulseCannon.call(this, bulletPool, audioManager, config);
+    }
+
+    fireStormNeedles(bulletPool, audioManager, config) {
+        return weapons.fireStormNeedles.call(this, bulletPool, audioManager, config);
+    }
+
+    fireScatterGun(bulletPool, audioManager, config) {
+        return weapons.fireScatterGun.call(this, bulletPool, audioManager, config);
+    }
+
+    fireRailDriver(bulletPool, audioManager, config) {
+        return weapons.fireRailDriver.call(this, bulletPool, audioManager, config);
+    }
+
+    startLanceBeam(audioManager, config) {
+        return weapons.startLanceBeam.call(this, audioManager, config);
+    }
+
+    applyGlobalBulletUpgrades(bullet) {
+        return weapons.applyGlobalBulletUpgrades.call(this, bullet);
+    }
+
+    firePower(bulletPool, audioManager, particlePool) {
+        return weapons.firePower.call(this, bulletPool, audioManager, particlePool);
+    }
+
+    layMine(config) {
+        return weapons.layMine.call(this, config);
+    }
+
+    fireNova(config) {
+        return weapons.fireNova.call(this, config);
+    }
+
+    fireLightning(config) {
+        return weapons.fireLightning.call(this, config);
+    }
+
+    fireMissiles(bulletPool, config) {
+        return weapons.fireMissiles.call(this, bulletPool, config);
+    }
+
+    pauseChargeShot() {
+        return weapons.pauseChargeShot.call(this);
+    }
+
+    resumeChargeShot() {
+        return weapons.resumeChargeShot.call(this);
+    }
+
+    createChargingParticleEffects(particlePool, currentChargeTime, maxChargeTime) {
+        return weapons.createChargingParticleEffects.call(this, particlePool, currentChargeTime, maxChargeTime);
+    }
+
+    startNewShot(bulletCount = 1) {
+        return weapons.startNewShot.call(this, bulletCount);
+    }
+
+    registerHit() {
+        return weapons.registerHit.call(this);
+    }
+
+    onBulletDestroyed() {
+        return weapons.onBulletDestroyed.call(this);
+    }
+
+    finalizeShotResult() {
+        return weapons.finalizeShotResult.call(this);
+    }
+
+    getHitStreakMultiplier() {
+        return weapons.getHitStreakMultiplier.call(this);
+    }
+
+    fireChargedShot(bulletPool, audioManager) {
+        return weapons.fireChargedShot.call(this, bulletPool, audioManager);
+    }
+
+    disableThrusters(duration) {
+        this.thrustersDisabled = true;
+        setTimeout(() => {
+            this.thrustersDisabled = false;
+        }, duration);
+    }
+    
+    makeInvincible(duration) {
+        this.invincible = true;
+        this.invincibilityTimer = duration;
+    }
+    
+    update(input, particlePool, bulletPool, audioManager, starPool, tractorEngaged, gameField = null) {
+        if (!this.active) return;
+
+        // Expire temporary level-up bonuses
+        this.updateTempBonuses();
+
+        // Store previous position to track movement
+        const prevX = this.x;
+        const prevY = this.y;
+        
+        // Update invincibility timer
+        if (this.invincibilityTimer > 0) {
+            this.invincibilityTimer -= GAME_CONFIG.LOGIC_TICK_MS;
+            if (this.invincibilityTimer <= 0) {
+                this.invincible = false;
+                this.invincibilityTimer = 0;
+                this.firingDisabled = false; // Re-enable firing when invincibility ends
+                this.justRespawned = false; // Clear respawn flag when invincibility ends
+            }
+        }
+        
+        // Update level up animation
+        if (this.levelUpAnimation.active) {
+            const elapsed = Date.now() - this.levelUpAnimation.startTime;
+            if (elapsed >= this.levelUpAnimation.duration) {
+                this.levelUpAnimation.active = false;
+                this.levelUpTextInfo = { active: false }; // Clear level up text
+            }
+        }
+
+        // Update powerups
+        this.updatePowerups();
+
+        // Mouse aiming
+        const dx = input.aimX - this.x;
+        const dy = input.aimY - this.y;
+        this.angle = Math.atan2(dy, dx);
+        
+        // Debug player aiming occasionally
+        if (Math.random() < 0.01) { // 1% chance
+        }
+
+        this.isMoving = input.up || input.down || input.left || input.right;
+
+        // ── Thrust juice: ramp thrustLevel and detect startup ──
+        const now = Date.now();
+        if (this.isMoving && !this.thrustersDisabled) {
+            // Detect idle→thrust transition (startup shudder)
+            if (!this.wasThrusting && (now - this.lastThrustTime > 1200)) {
+                this.engineStartup = 1.0; // trigger startup shudder
+            }
+            this.lastThrustTime = now;
+            this.thrustLevel = Math.min(1, this.thrustLevel + 0.08); // ramp up over ~12 frames
+        } else {
+            this.thrustLevel = Math.max(0, this.thrustLevel - 0.03); // slow decay over ~33 frames
+        }
+        this.wasThrusting = this.isMoving && !this.thrustersDisabled;
+
+        // Decay startup shudder — fast punch, not a slow wobble
+        if (this.engineStartup > 0) {
+            this.engineStartup = Math.max(0, this.engineStartup - 0.06); // ~17 frames ≈ 0.28s
+        }
+
+        // WASD movement with tight controls
+        if (this.isMoving && !this.thrustersDisabled) {
+            let moveX = 0, moveY = 0;
+            if (input.left) moveX -= 1;
+            if (input.right) moveX += 1;
+            if (input.up) moveY -= 1;
+            if (input.down) moveY += 1;
+
+            const moveAngle = Math.atan2(moveY, moveX);
+            const speedMultiplier = this.getMovementSpeedMultiplier();
+            const thrustForce = this.thrustPower * speedMultiplier;
+            this.vel.x += Math.cos(moveAngle) * thrustForce;
+            this.vel.y += Math.sin(moveAngle) * thrustForce;
+
+            // Thrust particles commented out
+            // const rear = moveAngle + Math.PI;
+            // const dist = this.radius * 1.2;
+            // const spread = this.radius * 0.8;
+
+            // for (let i = 0; i < 2; i++) {
+            //     const p_angle = rear + random(-0.3, 0.3);
+            //     const p_dist = random(0, spread);
+            //     const p_x = this.x + Math.cos(p_angle) * dist + Math.cos(p_angle + Math.PI / 2) * p_dist;
+            //     const p_y = this.y + Math.sin(p_angle) * dist + Math.sin(p_angle + Math.PI / 2) * p_dist;
+            //     particlePool.get(p_x, p_y, 'thrust', rear);
+            // }
+            
+            // Thruster sound removed for cleaner audio experience
+        }
+
+        // Spawn particles during invulnerability (renamed from tractor beam)
+        if (this.invincible && Math.random() < 0.3) {
+            // Spawn fewer particles less frequently
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 60 + Math.random() * 40;
+            const px = this.x + Math.cos(angle) * dist;
+            const py = this.y + Math.sin(angle) * dist;
+            particlePool.get(px, py, 'spawnParticle', this.x, this.y, this);
+        }
+        
+        // Shield boost visual effect - green shimmer around player
+        const shieldBoostStacks = this.getPowerupStacks('SHIELD_BOOST');
+        if (shieldBoostStacks > 0 && Math.random() < 0.3) {
+            const particle = particlePool.get(this.x, this.y, 'starSparkle');
+            if (particle) {
+                particle.color = '#00ff88'; // Green color matching shield boost
+                const angle = random(0, Math.PI * 2);
+                const distance = random(20, 35);
+                particle.x = this.x + Math.cos(angle) * distance;
+                particle.y = this.y + Math.sin(angle) * distance;
+                particle.vel.x = Math.cos(angle) * 0.3;
+                particle.vel.y = Math.sin(angle) * 0.3;
+                particle.life = 30; // Short lived for subtle effect
+            }
+        }
+
+        // Apply friction — scaled for tick rate (equivalent to 0.988 at 30Hz)
+        const friction = Math.pow(0.988, GAME_CONFIG.TICK_SCALE);
+        this.vel.x *= friction;
+        this.vel.y *= friction;
+
+        // Snap to zero once velocity is negligible — prevents endless star drift
+        if (Math.abs(this.vel.x) < 0.05) this.vel.x = 0;
+        if (Math.abs(this.vel.y) < 0.05) this.vel.y = 0;
+
+        // Limit velocity — speed boost raises the cap so upgrades feel powerful
+        const speedMultCap = this.getMovementSpeedMultiplier();
+        const effectiveMaxV = GAME_CONFIG.MAX_V * (1 + (speedMultCap - 1) * 0.7);
+        const mag = Math.hypot(this.vel.x, this.vel.y);
+        if (mag > effectiveMaxV) {
+            this.vel.x = (this.vel.x / mag) * effectiveMaxV;
+            this.vel.y = (this.vel.y / mag) * effectiveMaxV;
+        }
+
+        this.x += this.vel.x;
+        this.y += this.vel.y;
+        
+        // Boundary bouncing instead of wrapping
+        if (gameField) {
+            // Bounce off left/right boundaries
+            if (this.x - this.radius < 0) {
+                this.x = this.radius;
+                this.vel.x = Math.abs(this.vel.x) * 0.8; // Bounce with some energy loss
+            } else if (this.x + this.radius > gameField.width) {
+                this.x = gameField.width - this.radius;
+                this.vel.x = -Math.abs(this.vel.x) * 0.8;
+            }
+            
+            // Bounce off top/bottom boundaries
+            if (this.y - this.radius < 0) {
+                this.y = this.radius;
+                this.vel.y = Math.abs(this.vel.y) * 0.8;
+            } else if (this.y + this.radius > gameField.height) {
+                this.y = gameField.height - this.radius;
+                this.vel.y = -Math.abs(this.vel.y) * 0.8;
+            }
+        } else {
+            // Fallback to old wrapping if no game field provided
+            wrap(this, this.width, this.height);
+        }
+        
+        // Calculate movement delta and update aim coordinates if player moved
+        const deltaX = this.x - prevX;
+        const deltaY = this.y - prevY;
+        if ((deltaX !== 0 || deltaY !== 0) && input.updateAimForPlayerMovement) {
+            input.updateAimForPlayerMovement(deltaX, deltaY);
+        }
+
+        // Charging shot system - charge when holding left-click, fire on release
+        this.updateChargingSystem(input, bulletPool, audioManager, particlePool);
+
+        // Charge beam particle effects — always show while charging (independent of primary cooldown)
+        if (this.tractorBeamActive && Math.random() < 0.3) {
+            this.spawnChargeBeamParticles(particlePool);
+        }
+
+        // Defense skill activation (number keys 1-4)
+        for (let i = 0; i < 4; i++) {
+            const key = `skill${i + 1}`;
+            if (input[key]) {
+                this.activateSkill(i);
+                input[key] = false; // consume the input
+            }
+        }
+
+        // Update beam state
+        if (this.beamActive) {
+            this.beamTimer -= 1000 / GAME_CONFIG.LOGIC_HZ;
+            this.beamAngle = this.angle; // track current aim
+            if (this.beamTimer <= 0) {
+                this.beamActive = false;
+            }
+        }
+
+        // Update active skill effects (regen, dash, etc.)
+        this.updateActiveSkills(1000 / GAME_CONFIG.LOGIC_HZ);
+
+    }
+
+    updateActiveSkills(dt) {
+        return skills.updateActiveSkills.call(this, dt);
+    }
+    
+    draw(ctx) {
+        return playerRenderer.draw.call(this, ctx);
+    }
+
+    drawChargingEffects(ctx) {
+        return playerRenderer.drawChargingEffects.call(this, ctx);
+    }
+
+    drawLevelUpEffects(ctx) {
+        return playerRenderer.drawLevelUpEffects.call(this, ctx);
+    }
+
+    drawCooldownTimer(ctx) {
+        return playerRenderer.drawCooldownTimer.call(this, ctx);
+    }
+
+    spawnChargeBeamParticles(particlePool) {
+        return playerRenderer.spawnChargeBeamParticles.call(this, particlePool);
+    }
+    
+    // Powerup management methods
+    addPowerup(type, config, isShopItem = false) {
+        return progression.addPowerup.call(this, type, config, isShopItem);
+    }
+
+    updatePowerups() {
+        return progression.updatePowerups.call(this);
+    }
+
+    getPowerupStacks(type) {
+        return progression.getPowerupStacks.call(this, type);
+    }
+    
+    fireWeapons(bulletPool, audioManager) {
+        return weapons.fireWeapons.call(this, bulletPool, audioManager);
+    }
+
+    createBullets(bulletPool) {
+        return weapons.createBullets.call(this, bulletPool);
+    }
+
+    createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultiplier = 1, totalDamage = 20, critChanceBonus = 0, baseHomingStrength = 0) {
+        return weapons.createChargedBullets.call(this, bulletPool, sizeMultiplier, speedMultiplier, totalDamage, critChanceBonus, baseHomingStrength);
+    }
+    
+    getMovementSpeedMultiplier() {
+        return progression.getMovementSpeedMultiplier.call(this);
+    }
+
+    getRangeMultiplier() {
+        return progression.getRangeMultiplier.call(this);
+    }
+
+    getEffectiveShield() {
+        return progression.getEffectiveShield.call(this);
+    }
+
+    getEffectiveMaxHealth() {
+        return progression.getEffectiveMaxHealth.call(this);
+    }
+
+    getEffectiveCritChance() {
+        return progression.getEffectiveCritChance.call(this);
+    }
+
+    getEffectiveCritDamage() {
+        return progression.getEffectiveCritDamage.call(this);
+    }
+
+    getEffectiveHealthOrbHealing(baseHealing = 1) {
+        return progression.getEffectiveHealthOrbHealing.call(this, baseHealing);
+    }
+
+    getEffectiveHealthStarHealing() {
+        return progression.getEffectiveHealthStarHealing.call(this);
+    }
+
+    getEffectiveBurstStarHealing() {
+        return progression.getEffectiveBurstStarHealing.call(this);
+    }
+    
+    // ── Weapon System Methods ──────────────────────────────────────────────
+
+    getActivePrimaryConfig() {
+        return weapons.getActivePrimaryConfig.call(this);
+    }
+
+    getActivePowerConfig() {
+        return weapons.getActivePowerConfig.call(this);
+    }
+
+    equipPrimary(weaponId) {
+        return weapons.equipPrimary.call(this, weaponId);
+    }
+
+    equipPower(weaponId) {
+        return weapons.equipPower.call(this, weaponId);
+    }
+
+    buyPrimary(weaponId) {
+        return weapons.buyPrimary.call(this, weaponId);
+    }
+
+    buyPower(weaponId) {
+        return weapons.buyPower.call(this, weaponId);
+    }
+
+    buySkill(skillId) {
+        return skills.buySkill.call(this, skillId);
+    }
+
+    assignSkillToSlot(skillId, slotIndex) {
+        return skills.assignSkillToSlot.call(this, skillId, slotIndex);
+    }
+
+    activateSkill(slotIndex) {
+        return skills.activateSkill.call(this, slotIndex);
+    }
+
+    getEffectivePrimaryFireRate() {
+        return weapons.getEffectivePrimaryFireRate.call(this);
+    }
+
+    getEffectivePrimaryDamage() {
+        return weapons.getEffectivePrimaryDamage.call(this);
+    }
+
+    getPowerCooldownRemaining() {
+        return weapons.getPowerCooldownRemaining.call(this);
+    }
+
+    isPowerReady() {
+        return weapons.isPowerReady.call(this);
+    }
+
+    updateSkillCooldowns(dt) {
+        return skills.updateSkillCooldowns.call(this, dt);
+    }
+
+    // Wave bonus shield system removed - replaced with shop system
+
+    die(particlePool, audioManager, uiManager, game, triggerScreenShake) {
+        this.active = false;
+        game.state = 'GAME_OVER';
+        
+        audioManager.playPlayerExplosion();
+        particlePool.get(this.x, this.y, 'playerExplosion');
+        
+        // Dramatic screen shake for player death
+        if (triggerScreenShake) {
+            triggerScreenShake(25, 15, 50); // Much more intense than asteroid destruction
+        }
+        
+        // Show game over message
+        const isMobile = window.matchMedia("(any-pointer: coarse)").matches;
+        const restartPrompt = isMobile ? "Tap Screen to Restart" : "Press Enter to Restart";
+        const roundedScore = Math.round(game.score);
+        const roundedHighScore = Math.round(game.highScore);
+        const subtitle = `YOUR SCORE: ${roundedScore}\nHIGH SCORE: ${roundedHighScore}\n\n${restartPrompt}`;
+        uiManager.showMessage('GAME OVER', subtitle);
+    }
+} 

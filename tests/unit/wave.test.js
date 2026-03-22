@@ -12,7 +12,7 @@ import {
   getLevelScaledEnemyStats,
   getLevelScaledAsteroidStats,
   WAVE_DATA,
-} from '../../js/modules/wave-data.js';
+} from '../../js/modules/wave/wave-data.js';
 
 // ---------------------------------------------------------------------------
 // getWaveConfig()

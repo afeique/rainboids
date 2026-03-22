@@ -275,44 +275,65 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │   ├── main.js                # Game initialization
 │   ├── playlist-data.js       # Music playlist configuration
 │   └── modules/
-│       ├── game-engine.js     # Game loop orchestrator (delegates to managers/renderers)
-│       ├── constants.js       # Game configuration, states, tuning constants
-│       ├── utils.js           # Utility functions
-│       ├── input-handler.js   # Keyboard, mouse, and touch input
-│       ├── ui-manager.js      # DOM-based UI (pause menu, shop button, lives)
-│       ├── pool-manager.js    # O(1) object pooling system
-│       ├── weapon-data.js     # Weapon definitions and upgrade trees
-│       ├── wave-data.js       # 100 wave definitions across 5 acts
-│       ├── core/              # Foundation systems
-│       │   ├── game-state.js  #   State machine with transition validation + epoch guards
+│       ├── game-engine.js     # Game loop orchestrator
+│       ├── core/              # Foundation infrastructure
+│       │   ├── constants.js   #   Game config, states, tuning constants
+│       │   ├── utils.js       #   Utility functions (math, collision, noise)
+│       │   ├── frame-clock.js #   Monotonic frame clock singleton
+│       │   ├── color-cache.js #   RGBA string caching
+│       │   ├── pool-manager.js #  O(1) object pooling system
+│       │   ├── game-state.js  #   State machine with transition validation
 │       │   ├── event-bus.js   #   Lightweight synchronous pub/sub
 │       │   └── game-timer.js  #   Frame-counted timers (freeze during pause/shop)
-│       ├── systems/           # Stateful game systems (extracted from game-engine)
-│       │   ├── camera-manager.js    #   Camera follow, screen shake, kick, flash
-│       │   ├── collision-system.js  #   All collision detection and response (~1,142 lines)
-│       │   ├── combat-manager.js    #   Debris, orbs, powerups, kill streaks, damage numbers
-│       │   ├── event-setup.js       #   All event listeners: input, shop, cheats, resize
-│       │   ├── player-lifecycle.js  #   Damage, death, respawn, shield tanks
-│       │   ├── shop-manager.js      #   Shop logic, purchases, tab builders
-│       │   ├── wave-manager.js      #   Wave lifecycle, spawning, notifications
-│       │   ├── enemy-movement.js   #   36 enemy movement strategies
-│       │   ├── enemy-firing.js    #   38 enemy firing/shooting functions
-│       │   ├── enemy-ai.js        #   21 enemy AI, evasion, territory functions
-│       │   ├── player-weapons.js  #   35 player weapon methods
-│       │   ├── player-skills.js   #   5 player skill methods
-│       │   └── player-progression.js #  18 leveling, powerup, stat methods
-│       ├── rendering/         # Canvas rendering (extracted from game-engine)
-│       │   ├── hud-renderer.js    #   Barrel re-export for 5 HUD modules below
-│       │   ├── hud-status.js      #   Health bar, lives, level/coins, XP, skill cooldowns
-│       │   ├── hud-combat.js      #   Damage numbers, target info, powerups, money pickup
-│       │   ├── hud-navigation.js  #   Minimap, off-screen enemy indicators
-│       │   ├── hud-overlays.js    #   Title screen, wavy text, timers, respawn, ghosts
-│       │   ├── hud-cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer
-│       │   ├── shop-renderer.js   #   Shop window, tabs, items, scrollbar
-│       │   ├── weapon-effects-renderer.js  #   Weapon/skill visual effects
-│       │   ├── enemy-shapes.js    #   25 enemy shape renderers and visual effects
-│       │   └── player-renderer.js #   5 player drawing methods
-│       ├── entities/          # Player, enemy, asteroid, bullet, powerup, etc.
+│       ├── player/            # Player entity and subsystems
+│       │   ├── player.js      #   Player entity (movement, update, draw orchestration)
+│       │   ├── weapons.js     #   35 weapon methods (primary + power fire, charging, equip)
+│       │   ├── skills.js      #   5 defense skill methods
+│       │   ├── progression.js #   18 leveling, powerup, stat methods
+│       │   ├── renderer.js    #   5 player draw methods
+│       │   ├── lifecycle.js   #   Damage, death, respawn, shield tanks
+│       │   └── bullet.js      #   Player projectile entity
+│       ├── enemy/             # Enemy entity and subsystems
+│       │   ├── enemy.js       #   Enemy entity (10 types, update/draw orchestration)
+│       │   ├── enemy-data.js  #   ENEMY_TYPES config for all 10 enemy types
+│       │   ├── movement.js    #   36 enemy movement strategies
+│       │   ├── firing.js      #   38 enemy firing/shooting functions
+│       │   ├── ai.js          #   21 enemy AI, evasion, territory functions
+│       │   ├── shapes.js      #   25 enemy shape renderers and visual effects
+│       │   └── enemy-bullet.js #  Enemy projectile entity
+│       ├── hud/               # HUD rendering (split by domain)
+│       │   ├── index.js       #   Barrel re-export
+│       │   ├── status.js      #   Health bar, lives, level/coins, XP, skill cooldowns
+│       │   ├── combat.js      #   Damage numbers, target info, powerups, money pickup
+│       │   ├── navigation.js  #   Minimap, off-screen enemy indicators
+│       │   ├── overlays.js    #   Title screen, wavy text, timers, respawn, ghosts
+│       │   └── cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer
+│       ├── world/             # Game world entities and environment
+│       │   ├── asteroid.js    #   Asteroid entity (3D wireframe, splitting)
+│       │   ├── particle.js    #   Particle entity (explosions, sparks, etc.)
+│       │   ├── color-star.js  #   Collectible orbs (health, money)
+│       │   ├── background-star.js # Parallax starfield
+│       │   ├── line-debris.js #   Wireframe debris fragments
+│       │   ├── powerup.js     #   Powerup pickup entity
+│       │   └── camera-manager.js # Camera follow, screen shake, kick, flash
+│       ├── combat/            # Combat pipeline
+│       │   ├── collision-system.js  # All collision detection and response
+│       │   ├── combat-manager.js    # Debris, orbs, powerups, kill streaks, damage numbers
+│       │   ├── weapon-data.js       # Weapon definitions and upgrade trees
+│       │   └── weapon-effects-renderer.js # Weapon/skill visual effects
+│       ├── wave/              # Wave system
+│       │   ├── wave-manager.js #  Wave lifecycle, spawning, notifications
+│       │   └── wave-data.js   #   100 wave definitions across 5 acts
+│       ├── shop/              # Shop system
+│       │   ├── shop-manager.js #  Shop logic, purchases, tab builders
+│       │   └── shop-renderer.js # Shop window, tabs, items, scrollbar
+│       ├── audio/             # Audio pipeline
+│       │   ├── audio-manager.js # SFX playback (procedural SFXR)
+│       │   └── music-player.js #  Background music player with playlist
+│       ├── ui/                # DOM UI and input
+│       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button, lives)
+│       │   ├── input-handler.js # Keyboard, mouse, and touch input
+│       │   └── event-setup.js #   All event listeners: input, shop, cheats, resize
 │       └── performance/       # Spatial grid, depth-batch-renderer, nebula renderer
 ├── css/
 │   └── styles.css             # Game styling and mobile layout

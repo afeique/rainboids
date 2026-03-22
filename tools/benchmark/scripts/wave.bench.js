@@ -16,8 +16,8 @@ import {
   getAsteroidLevel,
   getLevelScaledEnemyStats,
   getLevelScaledAsteroidStats,
-} from '../../js/modules/wave-data.js';
-import { getEnemyFiringCooldown } from '../../js/modules/constants.js';
+} from '../../js/modules/wave/wave-data.js';
+import { getEnemyFiringCooldown } from '../../js/modules/core/constants.js';
 
 // ---------------------------------------------------------------------------
 // Reference data

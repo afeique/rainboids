@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.17.0] - 2026-03-22
+
+### Changed
+- **Architecture: Domain-oriented directory reorganization** — Restructured `js/modules/` from technical-layer grouping (entities/, systems/, rendering/) to domain-oriented grouping where related code is colocated:
+  - `player/` — player entity, weapons, skills, progression, renderer, lifecycle, bullet (7 files)
+  - `enemy/` — enemy entity, data, movement, firing, AI, shapes, enemy-bullet (7 files)
+  - `hud/` — all HUD rendering split by domain: status, combat, navigation, overlays, cursor (6 files)
+  - `world/` — game world entities: asteroid, particle, color-star, background-star, line-debris, powerup, camera (7 files)
+  - `combat/` — collision system, combat manager, weapon data, weapon effects renderer (4 files)
+  - `wave/` — wave manager + wave data (2 files)
+  - `shop/` — shop manager + shop renderer (2 files)
+  - `audio/` — audio manager + music player (2 files)
+  - `ui/` — UI manager, input handler, event setup (3 files)
+  - `core/` — absorbed loose infrastructure: constants, utils, frame-clock, color-cache, pool-manager (8 files)
+  - `game-engine.js`, `asset-loader.js`, `autofire-diag.js` remain at module root
+  - Old directories (entities/, systems/, rendering/) removed
+- All import paths updated across game code, unit tests, and benchmark scripts. No code logic changes.
+
 ## [5.16.1] - 2026-03-22
 
 ### Changed

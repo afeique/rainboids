@@ -12,7 +12,7 @@
  *   }, delay);
  */
 
-import { GAME_STATES } from '../constants.js';
+import { GAME_STATES } from './constants.js';
 
 // Valid state transitions — keys are source states, values are allowed targets
 const TRANSITION_TABLE = {

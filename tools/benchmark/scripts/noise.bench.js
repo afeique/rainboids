@@ -10,8 +10,8 @@
  */
 import { bench, group, run } from 'mitata';
 import '../browser-mock.js';
-import { getStarDensity, generateStarPositions } from '../../js/modules/utils.js';
-import { NOISE_CONFIG } from '../../js/modules/constants.js';
+import { getStarDensity, generateStarPositions } from '../../js/modules/core/utils.js';
+import { NOISE_CONFIG } from '../../js/modules/core/constants.js';
 
 // ---------------------------------------------------------------------------
 // Re-implement NoiseGenerator locally so we can benchmark primitives directly

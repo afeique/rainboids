@@ -2,7 +2,7 @@
 // Generates soft, colorful gas clouds on multiple offscreen canvases at
 // different depths, then blits each frame with depth-based parallax.
 
-import { random } from '../utils.js';
+import { random } from '../core/utils.js';
 
 // Extended palette — each entry has multiple color stops for richer gradients
 const NEBULA_PALETTES = [

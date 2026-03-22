@@ -26,7 +26,7 @@ if (typeof globalThis.navigator === 'undefined') {
   globalThis.navigator = { vibrate: undefined };
 }
 
-import { PoolManager } from '../../js/modules/pool-manager.js';
+import { PoolManager } from '../../js/modules/core/pool-manager.js';
 
 // ---------------------------------------------------------------------------
 // Minimal entity that satisfies PoolManager's contract

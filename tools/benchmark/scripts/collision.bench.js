@@ -9,7 +9,7 @@
  */
 import { bench, group, run } from 'mitata';
 import '../browser-mock.js';
-import { collision, starCollision, isCirclePolygonColliding } from '../../js/modules/utils.js';
+import { collision, starCollision, isCirclePolygonColliding } from '../../js/modules/core/utils.js';
 
 // ---------------------------------------------------------------------------
 // Test data helpers

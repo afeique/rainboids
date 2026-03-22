@@ -52,7 +52,7 @@ if (typeof globalThis.Path2D === 'undefined') {
   globalThis.Path2D = class Path2D { constructor() {} };
 }
 
-import { wrap, wrapValue, random, collision } from '../../js/modules/utils.js';
+import { wrap, wrapValue, random, collision } from '../../js/modules/core/utils.js';
 
 // ---------------------------------------------------------------------------
 // wrap()

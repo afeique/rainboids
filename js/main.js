@@ -1,10 +1,10 @@
 // Main entry point for the Rainboids game
 import { AssetLoader } from './modules/asset-loader.js';
-import { AudioManager } from './modules/audio-manager.js';
-import { InputHandler } from './modules/input-handler.js';
-import { UIManager } from './modules/ui-manager.js';
+import { AudioManager } from './modules/audio/audio-manager.js';
+import { InputHandler } from './modules/ui/input-handler.js';
+import { UIManager } from './modules/ui/ui-manager.js';
 import { GameEngine } from './modules/game-engine.js';
-import { GAME_STATES } from './modules/constants.js';
+import { GAME_STATES } from './modules/core/constants.js';
 
 class RainboidsGame {
     constructor() {
