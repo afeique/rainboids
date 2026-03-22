@@ -344,7 +344,36 @@ Since the game doesn't yet have gamepad support, this phase creates the infrastr
 4. Add intra-session learning: `learningRate` parameter that gradually improves accuracy and reaction time within a single session (simulates a player warming up)
 5. Add attention cycle model: sinusoidal accuracy modulation with period = `attentionCycleS`
 
-### Phase 7: Validation & Calibration
+### Phase 7: Combat AI Overhaul
+
+**Modified file:** `tools/ai-qa-bot/strategy/combat-ai.js`
+
+**Implements:**
+1. **Context steering** — replace simple approach/flee with 16-direction interest/danger maps. Interest sources: target enemy, weapon-range sweet spot, circle-strafe tangent. Danger sources: enemy bullets (velocity obstacle projection), enemy proximity, arena boundaries.
+2. **Predictive aiming** — quadratic intercept calculation for lead aiming. `leadFactor` parameter controls prediction quality (0 = aim at current pos, 1 = perfect intercept).
+3. **Target prioritization** — weighted composite score: threat × distance × health × angle. Replace "aim at nearest" with intelligent target selection. Configurable switching cooldown and threshold.
+4. **Weapon-specific engagement** — per-weapon ideal range, aim style (tracking vs snapshot), and burst pattern. Combat AI adjusts approach distance and fire behavior by equipped weapon.
+5. **Bullet dodging** — velocity obstacle method: project incoming bullet paths, add danger in approach direction, steer perpendicular to bullet travel. `bulletAwareness` controls how many bullets the AI tracks.
+
+**All parameters exposed as skill-level tunables** (see `COMBAT_SKILL_PROFILES` in Research section).
+
+### Phase 8: Shop Decision-Making
+
+**New file:** `tools/ai-qa-bot/strategy/shop-ai.js`
+
+**Implements:**
+1. **Session telemetry tracker** — accumulate per-wave stats: avgHealthRatio, avgKillTime, hitAccuracy, damageSourceBreakdown, bulletDodgeRate, engagementRange. Rolling window of last N waves (configurable).
+2. **Utility-based need scoring** — each upgrade gets a need score (0-1) computed from telemetry. LONG_RANGE scores high when engagement range exceeds weapon range; HEALTH_BOOST scores high when avgHealthRatio is low; etc.
+3. **Value scoring** — needScore / cost, with build archetype bias (1.3× for matching upgrades).
+4. **Adaptive build strategy** — re-evaluate build archetype every 5 waves based on damageStress, dpsStress, mobilityStress. Shift from BALANCED to TANK/GLASS_CANNON/SPEED_DEMON as session data dictates.
+5. **Saving logic** — skip purchases when best available need score is low, or when close to affording a high-value upgrade.
+6. **Skill-level noise** — novice applies random(0.5, 1.5) multiplier to scores; advanced uses raw scores with no noise.
+
+**Modified file:** `tools/ai-qa-bot/bot.js` — wire shop-ai into shop decision event, pass session telemetry.
+
+**Modified file:** `tools/ai-qa-bot/perception/state-reader.js` — track additional telemetry fields (hit accuracy, damage sources, engagement range).
+
+### Phase 9: Validation & Calibration
 
 **How to verify the humanizer produces realistic input:**
 
@@ -385,11 +414,12 @@ Since the game doesn't yet have gamepad support, this phase creates the infrastr
 | `tools/ai-qa-bot/motor/touch-simulator.js` | Create | Mobile touch input stub: dual joystick zones, touch noise, drift, viewport scaling |
 | `tools/ai-qa-bot/motor/gamepad-simulator.js` | Create | Gamepad analog stick stub: deadzone, response curves, stick drift, cross-talk |
 | `tools/ai-qa-bot/motor/noise.js` | Create | 1D/2D Perlin noise generator (shared utility for all humanizer components) |
-| `tools/ai-qa-bot/core/config.js` | Modify | Replace `SKILL_PRESETS` with `SKILL_PROFILES`, add platform profiles |
-| `tools/ai-qa-bot/strategy/combat-ai.js` | Modify | Output "ideal" inputs only; remove inline aim error (moved to humanizer) |
-| `tools/ai-qa-bot/bot.js` | Modify | Wire humanizer between combat AI and driver |
+| `tools/ai-qa-bot/strategy/shop-ai.js` | Create | Utility-based shop decisions: need scoring, adaptive build strategy, saving logic |
+| `tools/ai-qa-bot/core/config.js` | Modify | Replace `SKILL_PRESETS` with `SKILL_PROFILES`, add platform profiles, combat skill profiles |
+| `tools/ai-qa-bot/strategy/combat-ai.js` | Modify | Context steering, predictive aiming, target prioritization, weapon-specific behavior, bullet dodging |
+| `tools/ai-qa-bot/bot.js` | Modify | Wire humanizer between combat AI and driver; wire shop-ai into shop events |
 | `tools/ai-qa-bot/run.js` | Modify | Add `--platform` flag, JSON skill override parsing |
-| `tools/ai-qa-bot/perception/state-reader.js` | Modify | Drain kill event buffer instead of delta inference |
+| `tools/ai-qa-bot/perception/state-reader.js` | Modify | Drain kill event buffer; track session telemetry (hit accuracy, damage sources, engagement range) |
 | `js/modules/combat/collision-system.js` | Modify | Add kill event to `window._qaBotKillBuffer` (3 lines) |
 
 ---
@@ -399,18 +429,534 @@ Since the game doesn't yet have gamepad support, this phase creates the infrastr
 | Priority | Phase | Effort | Impact |
 |----------|-------|--------|--------|
 | ~~**P0**~~ | ~~Phase 1: Fix kill tracking~~ | ~~Small~~ | ~~DONE (5.18.3)~~ |
+| **P1** | Phase 7: Combat AI overhaul | Large | Fixes core effectiveness — bot currently can't kill enemies reliably |
 | **P1** | Phase 2: InputHumanizer core | Medium | Foundation for all realism improvements |
 | **P1** | Phase 3: Desktop mouse model | Medium | Most immediately useful (desktop is primary platform) |
+| **P2** | Phase 8: Shop decision-making | Medium | Adaptive purchases based on session performance |
 | **P2** | Phase 6: Enhanced skill profiles | Small | Better differentiation between player types |
 | **P3** | Phase 4: Mobile touch stub | Small | Infrastructure only — game lacks controls |
 | **P3** | Phase 5: Gamepad stick stub | Small | Infrastructure only — game lacks support |
-| **P4** | Phase 7: Validation | Medium | Proves the system works correctly |
+| **P4** | Phase 9: Validation | Medium | Proves the system works correctly |
+
+---
+
+## Research: Combat AI Effectiveness
+
+### Current Problems
+
+The bot reports 5-18 kills across 30-46 waves, with most kills from body collision (ramming) rather than aimed fire. Investigation identified these root causes:
+
+1. **Range gap**: Player bullets have ~460px base range (24% of the 1920px game field). Enemies spawn at field edges, 600-900px from the player. The combat AI's dodge-and-drift behavior keeps the player near center — well outside effective weapon range.
+
+2. **No engagement pursuit**: The current combat AI has a `DANGER_RADIUS` of 180px and approaches enemies at 0.4 speed units when "safe," but it doesn't actively close distance to bring enemies into weapon range. The bot essentially waits for enemies to come to it.
+
+3. **No lead aiming**: The bot aims at the enemy's current position, but fast enemies (WASP at 2.8 px/frame, HUNTER at 1.6) move significantly between when the bullet is fired and when it arrives. At 300px range with 8px/frame bullet speed, a WASP moves ~105px during bullet travel — a complete miss.
+
+4. **No weapon-specific behavior**: All weapons are treated identically. RAIL_DRIVER (720px range, piercing) should encourage long-range sniping; SCATTER_GUN (short range, wide spread) should encourage close-range brawling; LANCE_BEAM (continuous) should encourage tracking aim. The bot ignores these distinctions.
+
+5. **No target prioritization**: The bot doesn't prioritize high-threat enemies (WASP/STALKER rushing the player) over low-threat ones (GUARDIAN orbiting at distance).
+
+### Game Mechanics Relevant to Combat AI
+
+**Weapon Stats** (from `js/modules/combat/weapon-data.js`):
+
+| Weapon | Fire Rate | Damage | Range | Notes |
+|--------|-----------|--------|-------|-------|
+| PULSE_CANNON | 400ms | 0.8 | 408px | Balanced default |
+| STORM_NEEDLES | 130ms | 0.3 | 336px | Fast fire, short range |
+| SCATTER_GUN | 500ms | 0.5×5 | 300px | Shotgun spread |
+| RAIL_DRIVER | 1200ms | 3.0 | 720px | Pierce 99, long range |
+| LANCE_BEAM | continuous | 0.15/tick | 360px | Tracking beam |
+
+**Enemy Movement Patterns** (from `js/modules/enemy/movement.js`):
+
+| Enemy | Speed | Pattern | Threat Model |
+|-------|-------|---------|--------------|
+| HUNTER | 1.6 | Pursuit → player | Closes distance, high threat |
+| WASP | 2.8 | Fast zigzag rush | Fastest, hardest to hit |
+| STALKER | 1.4 | Flanking approach | Attacks from blind spots |
+| GUARDIAN | 1.0 | Orbit at distance | Ranged fire, stays away |
+| DRIFTER | 0.8 | Random float | Low threat, unpredictable |
+| PROWLER | 0.6 | Slow stalk | Stealth, surprise damage |
+| WEAVER | 1.2 | Sinusoidal weave | Hard to track |
+| SENTINEL | 0.9 | Stationary sniper | Doesn't move, easy to hit |
+| TANGERINE | 1.0 | Group cluster | Swarm behavior |
+| TITAN | 0.5 | Slow tank | High HP, low speed |
+
+**Upgrade Costs** (from `js/modules/shop/shop-manager.js`):
+
+| Upgrade | Cost | Max Stacks | Effect |
+|---------|------|------------|--------|
+| LONG_RANGE | 150 | 6 | +40% range per stack (max 1632px) |
+| RAPID_FIRE | 300 | 5 | +20% fire rate per stack |
+| HOMING | 750 | 3 | Bullet tracking per stack |
+| PIERCING | 1200 | 3 | +1 pierce per stack |
+| MULTI_SHOT | 1500 | 3 | +1 bullet per stack |
+| HEALTH_BOOST | 200 | 5 | +20% max health |
+| SHIELD_BOOST | 250 | 3 | +1 shield charge |
+| SPEED_BOOST | 300 | 3 | +15% max speed |
+| CRIT_CHANCE | 400 | 5 | +10% crit chance |
+| CRIT_DAMAGE | 500 | 5 | +25% crit multiplier |
+
+### Proposed Combat AI Improvements
+
+#### 1. Context Steering for Movement
+
+Replace the current simple approach/flee logic with a **context steering** system (as described in *Game AI Pro 2*). This uses two angular maps:
+
+```
+Interest Map: 16 directions, each scored 0-1 for "how much do I want to go this way?"
+Danger Map:   16 directions, each scored 0-1 for "how dangerous is this direction?"
+Result Map:   interest[i] × (1 - danger[i]) → highest-scoring direction wins
+```
+
+**Interest sources:**
+- **Target enemy direction**: High interest toward the nearest/priority enemy, scaled by engagement range needs. If the enemy is beyond weapon range, interest peaks toward it. If within range, interest peaks at the tangent (circling).
+- **Weapon range sweet spot**: For each weapon, define an ideal engagement distance. Interest pushes toward that distance — closing if too far, retreating if too close.
+  - PULSE_CANNON: 250-350px (mid-range comfort)
+  - STORM_NEEDLES: 150-250px (close range for DPS)
+  - SCATTER_GUN: 100-200px (point-blank for full pellet hits)
+  - RAIL_DRIVER: 400-600px (long range for safety)
+  - LANCE_BEAM: 200-300px (tracking range)
+- **Circle-strafe**: When within engagement range, add interest perpendicular to the enemy direction. This produces orbiting behavior — maintaining distance while staying mobile (harder to hit).
+
+**Danger sources:**
+- **Enemy bullets**: Each incoming bullet projects a danger cone in its travel direction. Magnitude scales with proximity and bullet speed.
+- **Enemy proximity**: Enemies within `DANGER_RADIUS` (scaled by enemy threat level) add danger in their direction.
+- **Arena boundaries**: Danger increases near walls to prevent cornering.
+- **Enemy fire prediction**: Enemies that are about to fire (based on their fire interval) project extra danger from their aim direction.
+
+**Skill parameterization:**
+```javascript
+combatAI: {
+    contextSteeringResolution: 16,       // directions (lower = less precise)
+    dangerSensitivity: 0.8,              // 0-1, how much danger affects decisions
+    interestDecayRate: 0.3,              // how fast old interest fades
+    pursuitAggression: 0.7,             // 0-1, how aggressively to close distance
+    circleStrafePreference: 0.5,         // 0-1, orbiting vs direct approach
+    retreatHealthThreshold: 0.3,         // health % below which to prioritize fleeing
+}
+```
+
+Skill level maps:
+- **Novice**: Low `dangerSensitivity` (0.3), low `pursuitAggression` (0.2), no circle-strafe — wanders aimlessly, doesn't dodge well, doesn't chase enemies
+- **Advanced**: High `dangerSensitivity` (0.95), high `pursuitAggression` (0.8), strong circle-strafe (0.7) — actively closes to optimal range, dodges bullets, maintains orbiting pressure
+
+#### 2. Predictive (Lead) Aiming
+
+Instead of aiming at the enemy's current position, compute the **intercept point** — where the enemy will be when the bullet arrives.
+
+**Algorithm**: Given enemy position `E`, enemy velocity `Ve`, player position `P`, and bullet speed `Vb`:
+
+```
+D = E - P                    // displacement vector
+a = |Ve|² - Vb²             // quadratic coefficient
+b = 2 × (D · Ve)            // linear coefficient
+c = |D|²                    // constant
+
+t = (-b - √(b² - 4ac)) / 2a   // time to intercept (smaller positive root)
+
+aimPoint = E + Ve × t         // where the enemy will be at intercept
+```
+
+If the discriminant is negative (no solution — enemy is outrunning the bullet), fall back to aiming at current position.
+
+**Skill parameterization:**
+```javascript
+aimPrediction: {
+    leadFactor: 0.8,          // 0-1, how much lead to apply (1 = perfect prediction)
+    predictionNoise: 0.1,     // adds error to estimated enemy velocity
+    maxLeadFrames: 30,        // cap on prediction horizon (prevents wild shots)
+}
+```
+
+- **Novice**: `leadFactor: 0.0` — aims at current position (no prediction)
+- **Beginner**: `leadFactor: 0.3` — slight lead, often undershoots
+- **Intermediate**: `leadFactor: 0.7` — good lead, occasional misses on fast enemies
+- **Advanced**: `leadFactor: 0.95` — near-perfect lead with minimal prediction noise
+
+#### 3. Target Prioritization
+
+Replace "aim at nearest enemy" with a **weighted composite score**:
+
+```
+score(enemy) = w_threat × threatScore(enemy)
+             + w_distance × distanceScore(enemy)
+             + w_health × healthScore(enemy)
+             + w_reward × rewardScore(enemy)
+             + w_angle × angleScore(enemy)
+```
+
+Where:
+- `threatScore`: Based on enemy type danger ranking and proximity. WASP/STALKER rushing the player score highest. Enemies currently firing at the player get a 1.5× multiplier.
+- `distanceScore`: Inverse distance, weighted by whether the enemy is within weapon range (in-range enemies score 2× higher).
+- `healthScore`: Lower health = higher score (finish off wounded enemies for quick kills).
+- `healthScore`: Lower health = higher score (finish off wounded enemies).
+- `rewardScore`: Higher coin/XP value enemies score slightly higher.
+- `angleScore`: Enemies closer to the current aim direction score higher (less aim movement needed, faster engagement).
+
+**Skill parameterization:**
+```javascript
+targeting: {
+    targetSwitchCooldown: 500,    // ms — minimum time before switching targets
+    targetSwitchThreshold: 1.5,   // new target must score 1.5× higher to switch
+    threatAwareness: 0.7,         // 0-1, weight of threat in scoring
+    opportunism: 0.5,             // 0-1, weight of low-health/reward targets
+}
+```
+
+- **Novice**: Slow target switching (2000ms cooldown), low threat awareness (0.2) — fixates on one enemy, ignores flanking threats
+- **Advanced**: Fast switching (300ms), high threat awareness (0.9) — rapidly re-prioritizes based on danger, finishes wounded enemies
+
+#### 4. Weapon-Specific Combat Behavior
+
+Define engagement profiles per weapon class:
+
+```javascript
+const WEAPON_ENGAGEMENT = {
+    PULSE_CANNON: {
+        idealRange: { min: 200, max: 380 },
+        aimStyle: 'tracking',        // smooth aim following
+        burstPattern: 'steady',      // fire continuously
+    },
+    STORM_NEEDLES: {
+        idealRange: { min: 100, max: 280 },
+        aimStyle: 'tracking',
+        burstPattern: 'continuous',  // spray at close range
+    },
+    SCATTER_GUN: {
+        idealRange: { min: 50, max: 200 },
+        aimStyle: 'snapshot',        // quick flick-aim then fire
+        burstPattern: 'burst',       // fire in bursts, reposition between
+    },
+    RAIL_DRIVER: {
+        idealRange: { min: 350, max: 650 },
+        aimStyle: 'snapshot',        // careful aim, single shot
+        burstPattern: 'deliberate',  // wait for clean shot
+    },
+    LANCE_BEAM: {
+        idealRange: { min: 150, max: 320 },
+        aimStyle: 'tracking',        // hold on target
+        burstPattern: 'continuous',
+    },
+};
+```
+
+The combat AI adjusts movement (approach/retreat to ideal range) and aim behavior (tracking vs. snapshot) based on the currently equipped weapon.
+
+#### 5. Bullet Dodging (Velocity Obstacle Method)
+
+For each incoming enemy bullet, compute a **velocity obstacle** — the set of player velocities that would result in collision:
+
+```
+For each bullet b:
+    relPos = b.position - player.position
+    relVel = b.velocity - player.velocity
+    timeToClosest = -(relPos · relVel) / |relVel|²
+    if timeToClosest > 0:
+        closestDist = |relPos + relVel × timeToClosest|
+        if closestDist < player.radius + b.radius + margin:
+            // This bullet is a threat — add danger in its approach direction
+            dodgeDir = perpendicular to relVel (away from bullet path)
+```
+
+This integrates into the context steering danger map — bullets approaching the player add danger in their travel direction, and the steering system naturally moves perpendicular to bullet paths.
+
+**Skill parameterization:**
+```javascript
+dodging: {
+    bulletAwareness: 0.7,         // 0-1, how many bullets the AI "sees"
+    dodgeReactionMs: 200,         // delay before dodge begins
+    dodgeCommitment: 0.6,         // 0-1, how hard it dodges (vs holding position)
+    preemptiveDodge: false,       // anticipate enemy fire timing
+}
+```
+
+- **Novice**: `bulletAwareness: 0.2`, `dodgeReactionMs: 500` — ignores most bullets, slow to react
+- **Advanced**: `bulletAwareness: 0.95`, `dodgeReactionMs: 100`, `preemptiveDodge: true` — sees nearly all threats, dodges preemptively based on enemy fire intervals
+
+### Integrated Combat Skill Profiles
+
+Combining the humanizer parameters (Phase 2-3) with the combat AI parameters above:
+
+```javascript
+const COMBAT_SKILL_PROFILES = {
+    novice: {
+        // ... existing humanizer params from SKILL_PROFILES ...
+        combat: {
+            pursuitAggression: 0.2,
+            circleStrafePreference: 0.0,
+            dangerSensitivity: 0.3,
+            leadFactor: 0.0,
+            predictionNoise: 0.5,
+            threatAwareness: 0.2,
+            opportunism: 0.2,
+            targetSwitchCooldown: 2000,
+            bulletAwareness: 0.2,
+            dodgeReactionMs: 500,
+            dodgeCommitment: 0.3,
+            preemptiveDodge: false,
+            weaponAdaptation: false,    // ignores weapon type
+            skillUsage: 'none',         // never uses active skills
+            retreatThreshold: 0.1,      // only retreats when nearly dead
+        },
+    },
+    beginner: {
+        combat: {
+            pursuitAggression: 0.4,
+            circleStrafePreference: 0.1,
+            dangerSensitivity: 0.5,
+            leadFactor: 0.3,
+            predictionNoise: 0.3,
+            threatAwareness: 0.4,
+            opportunism: 0.3,
+            targetSwitchCooldown: 1200,
+            bulletAwareness: 0.4,
+            dodgeReactionMs: 400,
+            dodgeCommitment: 0.4,
+            preemptiveDodge: false,
+            weaponAdaptation: false,
+            skillUsage: 'panic',        // only uses skills when health is low
+            retreatThreshold: 0.25,
+        },
+    },
+    intermediate: {
+        combat: {
+            pursuitAggression: 0.6,
+            circleStrafePreference: 0.4,
+            dangerSensitivity: 0.7,
+            leadFactor: 0.7,
+            predictionNoise: 0.15,
+            threatAwareness: 0.7,
+            opportunism: 0.5,
+            targetSwitchCooldown: 600,
+            bulletAwareness: 0.7,
+            dodgeReactionMs: 250,
+            dodgeCommitment: 0.6,
+            preemptiveDodge: false,
+            weaponAdaptation: true,     // adjusts range by weapon
+            skillUsage: 'tactical',     // uses skills when advantageous
+            retreatThreshold: 0.3,
+        },
+    },
+    advanced: {
+        combat: {
+            pursuitAggression: 0.8,
+            circleStrafePreference: 0.7,
+            dangerSensitivity: 0.95,
+            leadFactor: 0.95,
+            predictionNoise: 0.05,
+            threatAwareness: 0.9,
+            opportunism: 0.7,
+            targetSwitchCooldown: 300,
+            bulletAwareness: 0.95,
+            dodgeReactionMs: 100,
+            dodgeCommitment: 0.8,
+            preemptiveDodge: true,
+            weaponAdaptation: true,
+            skillUsage: 'optimal',      // uses skills for maximum effect
+            retreatThreshold: 0.35,
+        },
+    },
+};
+```
+
+---
+
+## Research: Shop Decision-Making
+
+### Current Problems
+
+The existing shop AI has four strategies:
+1. **random** — buys a random affordable upgrade
+2. **cheapest** — buys the cheapest available upgrade
+3. **heuristic** — hardcoded priority list per build archetype
+4. **optimal** — same as heuristic but with "better" priorities
+
+None of these respond to how the session is actually going. A bot that keeps dying to WASP rushes buys the same upgrades as one cruising through waves untouched. The shop strategy should adapt based on observed performance.
+
+### Game Shop Mechanics
+
+**Shop flow** (from `js/modules/shop/shop-manager.js`):
+- Shop opens after every wave (WAVE_TRANSITION → shop display)
+- Player sees available upgrades with costs
+- Player buys 0+ upgrades, then closes shop → next wave starts
+- Coins earned from killing enemies and collecting money orbs
+- Prices are fixed per upgrade type, not dynamic
+
+**Build archetypes** (from `tools/ai-qa-bot/core/config.js`):
+- `BALANCED`: mix of damage and defense
+- `GLASS_CANNON`: all damage, no defense
+- `TANK`: health and shields
+- `SPEED_DEMON`: speed and fire rate
+- Each has a `priorities` array like `['RAPID_FIRE', 'MULTI_SHOT', 'LONG_RANGE', ...]`
+
+### Proposed: Utility AI Shop System
+
+Replace hardcoded priority lists with a **utility scoring system** that evaluates each available upgrade based on session telemetry. Each upgrade gets a **need score** computed from recent performance data.
+
+#### Session Telemetry (Tracked by Bot)
+
+The bot already tracks some of this via fun metrics. Additional tracking needed:
+
+```javascript
+const sessionTelemetry = {
+    // Survival
+    avgHealthRatio: 0.0,          // mean health/maxHealth across last 5 waves
+    deathCount: 0,
+    deathsByCollision: 0,         // deaths from ramming enemies
+    deathsByBullet: 0,            // deaths from enemy fire
+    damageSourceBreakdown: {},    // { collision: 45%, bullet: 35%, ... }
+
+    // Offense
+    avgKillTime: 0,               // mean time (ms) to kill an enemy
+    hitAccuracy: 0,               // bullets hit / bullets fired
+    killsPerWave: 0,              // average
+    overkillRatio: 0,             // damage dealt / damage needed (>1 = wasted DPS)
+
+    // Economy
+    coinsEarned: 0,
+    coinsSpent: 0,
+    avgCoinsPerWave: 0,
+
+    // Engagement
+    avgEngagementRange: 0,        // mean distance to enemy at time of kill
+    timeInDangerZone: 0,          // % of time with enemy within DANGER_RADIUS
+    bulletDodgeRate: 0,           // enemy bullets dodged / total aimed at player
+
+    // Progression
+    currentWave: 0,
+    waveClearTime: [],            // ms per wave
+    stalledWaves: 0,              // waves where timer ran out
+};
+```
+
+#### Need Score Computation
+
+Each upgrade computes a need score (0-1) based on telemetry:
+
+```javascript
+function computeNeedScores(telemetry, currentUpgrades) {
+    const scores = {};
+
+    // LONG_RANGE: High need if engagement range is beyond weapon range
+    // (bot can't reach enemies → needs more range)
+    const rangeCoverage = telemetry.avgEngagementRange / currentWeaponRange;
+    scores.LONG_RANGE = clamp(rangeCoverage - 0.7, 0, 1);  // need rises above 70% range
+
+    // RAPID_FIRE: High need if kill times are slow
+    const killTimeFactor = clamp(telemetry.avgKillTime / 5000 - 0.3, 0, 1);
+    scores.RAPID_FIRE = killTimeFactor * 0.8;
+
+    // MULTI_SHOT: High need if accuracy is low (more bullets = more forgiving)
+    scores.MULTI_SHOT = clamp(1 - telemetry.hitAccuracy, 0, 1) * 0.7;
+
+    // HOMING: High need if accuracy is very low AND enemies are fast
+    scores.HOMING = clamp(1 - telemetry.hitAccuracy - 0.3, 0, 1) * 0.9;
+
+    // PIERCING: High need if overkill ratio is high (wasting DPS on single targets)
+    // or if many enemies cluster together
+    scores.PIERCING = clamp(telemetry.overkillRatio - 1.5, 0, 1) * 0.5;
+
+    // HEALTH_BOOST: High need if avg health is low
+    scores.HEALTH_BOOST = clamp(1 - telemetry.avgHealthRatio, 0, 1);
+
+    // SHIELD_BOOST: High need if taking collision damage (shields prevent one-shots)
+    const collisionPct = telemetry.damageSourceBreakdown.collision || 0;
+    scores.SHIELD_BOOST = collisionPct * 0.9;
+
+    // SPEED_BOOST: High need if dodging poorly
+    scores.SPEED_BOOST = clamp(1 - telemetry.bulletDodgeRate, 0, 1) * 0.6;
+
+    // CRIT_CHANCE / CRIT_DAMAGE: Moderate need in mid-game when base DPS is established
+    const hasDPS = (currentUpgrades.RAPID_FIRE || 0) >= 2;
+    scores.CRIT_CHANCE = hasDPS ? 0.5 : 0.2;
+    scores.CRIT_DAMAGE = (currentUpgrades.CRIT_CHANCE || 0) >= 2 ? 0.6 : 0.1;
+
+    return scores;
+}
+```
+
+#### Purchase Decision Algorithm
+
+```
+1. Compute need scores for all upgrades
+2. Filter to affordable upgrades (cost ≤ coins)
+3. Filter out maxed upgrades (stacks ≥ maxStacks)
+4. Compute value score = needScore / cost  (bang-for-buck)
+5. Apply build archetype bias: multiply by 1.3 for upgrades matching archetype
+6. Apply skill-level noise:
+   - Novice: multiply each score by random(0.5, 1.5) — erratic choices
+   - Advanced: no noise — always picks highest value
+7. Buy highest-scoring upgrade
+8. Repeat until coins < cheapest available or max 3 purchases per shop visit
+```
+
+#### Adaptive Build Strategy
+
+Instead of picking a build archetype at the start and never changing, the bot should **discover its preferred archetype** based on session performance:
+
+```javascript
+function evaluateBuildFit(telemetry) {
+    // If taking lots of damage → shift toward TANK
+    // If kill times are slow → shift toward GLASS_CANNON
+    // If dying to collisions → shift toward SPEED_DEMON
+    // If roughly balanced → stay BALANCED
+
+    const damageStress = 1 - telemetry.avgHealthRatio;
+    const dpsStress = telemetry.avgKillTime / 5000;
+    const mobilityStress = telemetry.deathsByCollision / Math.max(telemetry.deathCount, 1);
+
+    if (damageStress > 0.6) return 'TANK';
+    if (dpsStress > 0.6) return 'GLASS_CANNON';
+    if (mobilityStress > 0.5) return 'SPEED_DEMON';
+    return 'BALANCED';
+}
+```
+
+The build archetype is re-evaluated every 5 waves, applying a 1.3× multiplier to upgrades that match the current archetype.
+
+#### Saving Strategy (When NOT to Buy)
+
+The bot should sometimes save coins instead of buying the cheapest thing:
+
+```javascript
+function shouldSave(coins, bestUpgradeCost, bestNeedScore, telemetry) {
+    // Save if best available upgrade has low need
+    if (bestNeedScore < 0.2) return true;
+
+    // Save if close to affording a high-value upgrade
+    const highValueUpgrades = getUpgradesWithNeedScore(telemetry, 0.7);
+    const almostAffordable = highValueUpgrades.filter(u => u.cost <= coins * 1.5);
+    if (almostAffordable.length > 0 && coins >= bestUpgradeCost * 0.6) return true;
+
+    return false;
+}
+```
+
+#### Shop Skill Parameterization
+
+```javascript
+shop: {
+    decisionQuality: 0.7,      // 0-1, how optimal purchases are
+    savingAwareness: 0.5,       // 0-1, ability to save for expensive upgrades
+    adaptability: 0.6,          // 0-1, how quickly build shifts based on performance
+    maxPurchasesPerVisit: 3,    // spending cap per shop visit
+    evaluationWindow: 5,        // waves of telemetry to consider
+}
+```
+
+Skill level maps:
+- **Novice**: `decisionQuality: 0.2`, `savingAwareness: 0.0`, `adaptability: 0.1` — buys random cheap stuff, never saves, sticks to initial build
+- **Beginner**: `decisionQuality: 0.4`, `savingAwareness: 0.2`, `adaptability: 0.3` — slightly better choices, rarely saves
+- **Intermediate**: `decisionQuality: 0.7`, `savingAwareness: 0.5`, `adaptability: 0.6` — decent value assessment, sometimes saves for key upgrades, adapts build mid-session
+- **Advanced**: `decisionQuality: 0.95`, `savingAwareness: 0.8`, `adaptability: 0.8` — near-optimal purchases, frequently saves for high-value upgrades, rapidly adapts to session needs
 
 ---
 
 ## Non-Goals
 
-- **Replacing the combat AI's decision-making** — the humanizer only adds noise/delay to execution, not to strategy. The AI still decides *what* to do; the humanizer affects *how precisely* it's done.
+- **Replacing the combat AI's decision-making with the humanizer** — the humanizer adds noise/delay to execution, not strategy. The combat AI decides *what* to do; the humanizer affects *how precisely* it's done. (The combat AI improvements in this document are separate from the humanizer.)
 - **Implementing actual mobile/gamepad controls in the game** — that's tracked in SKU_deployment.md. This plan only creates the QA bot's simulation layer.
-- **Machine learning or reinforcement learning** — the humanizer uses parameterized noise models, not learned policies. This keeps it deterministic (given a seed), fast, and interpretable.
+- **Machine learning or reinforcement learning** — the system uses parameterized models, not learned policies. This keeps it deterministic (given a seed), fast, and interpretable.
 - **One-punch-man removal** — the QA bot does NOT use the one-punch-man cheat. The cheat is only used in `tests/helpers/game-ai.js` (E2E test helper) for fast test execution. No changes needed.
