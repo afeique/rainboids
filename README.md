@@ -55,13 +55,15 @@ Rainboids is a supercharged asteroids game featuring:
 ## Weapons & Skills
 
 ### Primary Weapons (5)
-| Weapon | Description |
-|--------|-------------|
-| Pulse Cannon | Reliable stream of energy shots |
-| Storm Needles | Rapid tiny shots — saturation fire |
-| Scatter Gun | Shotgun burst, devastating up close |
-| Rail Driver | Slow, powerful piercing rail shot |
-| Lance Beam | Precision sweep laser beam |
+Primary weapons are free — they auto-unlock at wave milestones as you progress:
+
+| Weapon | Unlocks | Description |
+|--------|---------|-------------|
+| Pulse Cannon | Start | Reliable stream of energy shots |
+| Storm Needles | Wave 3 | Rapid tiny shots — saturation fire |
+| Scatter Gun | Wave 5 | Shotgun burst, devastating up close |
+| Rail Driver | Wave 8 | Slow, powerful piercing rail shot |
+| Lance Beam | Wave 12 | Precision sweep laser beam |
 
 ### Power Weapons (5)
 | Weapon | Description |
@@ -157,7 +159,7 @@ The shop offers permanent upgrades using two currencies:
 - **Coins**: Earned by destroying enemies and collecting money orbs
 - **Skill Points (SP)**: Gained by leveling up through experience
 
-The shop has three tabs: **Primary Weapons**, **Power Weapons**, and **Defense Skills**, each with their own upgrade trees (54+ upgrades total). Additionally, offensive and defensive stat upgrades are available (rapid fire, multi-shot, homing, piercing, health/shield boosts, spare lives, orb drop tuning).
+The shop has six tabs: **Offense**, **Defense**, **Drops**, **Primary Weapons**, **Power Weapons**, and **Defense Skills**, each with their own upgrade trees (54+ upgrades total). Primary weapons unlock for free at wave milestones — spend your coins on upgrades that deepen your build instead.
 
 ---
 

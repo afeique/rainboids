@@ -244,6 +244,33 @@ export async function measureFrameStats(page, sampleCount = 120) {
 }
 
 // ---------------------------------------------------------------------------
+// Weapon helpers
+// ---------------------------------------------------------------------------
+
+/** Get the player's currently equipped primary weapon ID. */
+export async function getActivePrimary(page) {
+    return page.evaluate(() => window.gameEngine?.player?.activePrimary);
+}
+
+/** Get the set of owned primary weapon IDs as an array. */
+export async function getOwnedPrimaries(page) {
+    return page.evaluate(() => {
+        const p = window.gameEngine?.player;
+        return p ? [...p.ownedPrimaries] : [];
+    });
+}
+
+/** Equip a primary weapon by ID. Returns true if successful. */
+export async function equipPrimary(page, weaponId) {
+    return page.evaluate((id) => {
+        const p = window.gameEngine?.player;
+        if (!p || !p.ownedPrimaries.has(id)) return false;
+        p.equipPrimary(id);
+        return p.activePrimary === id;
+    }, weaponId);
+}
+
+// ---------------------------------------------------------------------------
 // Canvas pixel helpers
 // ---------------------------------------------------------------------------
 

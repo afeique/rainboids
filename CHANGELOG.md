@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.4.1] - 2026-03-21
+
+### Fixed
+- Weapons were purchasable in shop before reaching their unlockWave milestone, bypassing wave-gating entirely
+- Shop PRIMARY tab now hides locked weapons until the player reaches the required wave
+- `buyShopItem()` now rejects purchases of wave-locked weapons even if called programmatically
+
+### Added
+- E2E weapon economy analysis test suite (simulated 15-wave playthrough with purchase tracking)
+- Wave-gating verification tests (shop visibility + purchase blocking per wave)
+- Weapon stat differentiation test (verifies Pulse Cannon rebalance + unique damage values)
+
+## [5.4.0] - 2026-03-21
+
+### Changed
+- Primary weapons are now free — no coin or SP cost to acquire
+- Primary weapons auto-unlock at wave milestones (Storm Needles at wave 3, Scatter Gun at wave 5, Rail Driver at wave 8, Lance Beam at wave 12)
+- Reduced all 19 primary weapon upgrade costs by ~30% to redirect spending toward build depth
+- Pulse Cannon rebalanced: damage 1.0→0.8, range 1.0→0.85 to incentivize weapon switching
+- Shop chrome shifted from gold (#FFD700) to cyan (#00ccff) to match game's HUD aesthetic — title, border, scrollbar all cyan; gold preserved only for coin currency display
+- Shop tab label font size increased from 9px to 10px for readability
+- Purchase feedback: green flash on successful buy, red flash on insufficient funds
+
+### Added
+- AI playtester weapon-switching support (`switchWeapons` option in `GameAI.run()`)
+- `switchRandomPrimary()` method on GameAI for periodic weapon variety testing
+- Weapon test helpers: `getActivePrimary()`, `getOwnedPrimaries()`, `equipPrimary()`
+- QA tests for free weapon costs, wave-milestone auto-unlock, and AI weapon switching
+
 ## [5.3.3] - 2026-03-18
 
 ### Removed

@@ -176,14 +176,25 @@ export class GameAI {
     /**
      * @param {number} durationMs   How long to run the AI (ms)
      * @param {(state: object) => void} [onTick]  Optional callback after each tick
+     * @param {{ switchWeapons?: boolean, switchInterval?: number }} [opts]
      */
-    async run(durationMs, onTick = null) {
+    async run(durationMs, onTick = null, opts = {}) {
         this._running = true;
         const deadline = Date.now() + durationMs;
+        const switchWeapons = opts.switchWeapons ?? false;
+        const switchInterval = opts.switchInterval ?? 5000;
+        let lastSwitch = Date.now();
 
         while (this._running && Date.now() < deadline) {
             const state = await this.tick();
             if (onTick && state) onTick(state);
+
+            // Periodically switch to a random owned primary weapon
+            if (switchWeapons && Date.now() - lastSwitch > switchInterval) {
+                await this.switchRandomPrimary();
+                lastSwitch = Date.now();
+            }
+
             await this.page.waitForTimeout(TICK_INTERVAL);
         }
     }
@@ -252,6 +263,24 @@ export class GameAI {
     // getState — snapshot of the full game state
     // -----------------------------------------------------------------------
 
+    /**
+     * Switch to a random owned primary weapon (different from current if possible).
+     * Returns the new weapon ID or null.
+     */
+    async switchRandomPrimary() {
+        return this.page.evaluate(() => {
+            const ge = window.gameEngine;
+            if (!ge || !ge.player) return null;
+            const p = ge.player;
+            const owned = [...p.ownedPrimaries];
+            if (owned.length <= 1) return null;
+            const others = owned.filter(id => id !== p.activePrimary);
+            const pick = others[Math.floor(Math.random() * others.length)];
+            p.equipPrimary(pick);
+            return p.activePrimary;
+        });
+    }
+
     async getState() {
         return this.page.evaluate(() => {
             const ge = window.gameEngine;
@@ -269,6 +298,8 @@ export class GameAI {
                     maxHealth: p?.maxHealth,
                     level:    p?.level,
                     shield:   p?.shield,
+                    activePrimary: p?.activePrimary,
+                    ownedPrimaries: p ? [...p.ownedPrimaries] : [],
                 },
                 counts: {
                     asteroids:    ge.asteroidPool?.activeObjects?.length  ?? 0,

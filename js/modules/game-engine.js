@@ -545,6 +545,9 @@ export class GameEngine {
                             clickY >= bound.y && clickY <= bound.y + bound.height) {
                             const success = this.buyShopItem(bound.item.id);
                             if (success) {
+                                this._shopFlash = { time: performance.now(), color: 'rgba(0, 255, 128, 0.15)' };
+                            } else {
+                                this._shopFlash = { time: performance.now(), color: 'rgba(255, 60, 60, 0.2)' };
                             }
                             break;
                         }
@@ -552,7 +555,7 @@ export class GameEngine {
                 }
             }
         });
-        
+
         // Mouse move tracking for hover effects and cursor (desktop only)
         this.canvas.addEventListener('mousemove', (e) => {
                 // Skip on mobile — synthetic mouse events from touch must not set cursor
@@ -703,6 +706,9 @@ export class GameEngine {
                                 touchY >= bound.y && touchY <= bound.y + bound.height) {
                                 const success = this.buyShopItem(bound.item.id);
                                 if (success) {
+                                    this._shopFlash = { time: performance.now(), color: 'rgba(0, 255, 128, 0.15)' };
+                                } else {
+                                    this._shopFlash = { time: performance.now(), color: 'rgba(255, 60, 60, 0.2)' };
                                 }
                                 break;
                             }
@@ -1373,6 +1379,17 @@ export class GameEngine {
         this.game.money += bonusCoins;
         this.queueNotification(`WAVE ${clearedWave} CLEARED`,
             `+${bonusXP} XP  +${bonusCoins} coins`, 2500);
+
+        // Auto-unlock primary weapons at wave milestones
+        for (const [id, weapon] of Object.entries(PRIMARY_WEAPONS)) {
+            if (weapon.unlockWave > 0 &&
+                this.game.currentWave >= weapon.unlockWave &&
+                !this.player.ownedPrimaries.has(id)) {
+                this.player.ownedPrimaries.add(id);
+                this.queueNotification(`NEW WEAPON UNLOCKED`,
+                    `${weapon.name} — ${weapon.description}`, 4000);
+            }
+        }
     }
     
     sellShopItem(itemId) {
@@ -1500,6 +1517,9 @@ export class GameEngine {
         for (const weapon of Object.values(PRIMARY_WEAPONS)) {
             const owned = this.player && this.player.ownedPrimaries && this.player.ownedPrimaries.has(weapon.id);
             const equipped = this.player && this.player.activePrimary === weapon.id;
+            // Hide weapons that haven't reached their unlock wave yet (and aren't owned)
+            const locked = !owned && weapon.unlockWave > 0 && this.game.currentWave < weapon.unlockWave;
+            if (locked) continue;
             items.push({
                 id: weapon.id,
                 name: weapon.name,
@@ -1748,6 +1768,16 @@ export class GameEngine {
     }
 
     _handleWeaponBuyOrEquip(item) {
+        // Block purchase of wave-locked weapons
+        if (item.weaponType === 'primary') {
+            const weaponDef = PRIMARY_WEAPONS[item.id];
+            if (weaponDef && weaponDef.unlockWave > 0 &&
+                this.game.currentWave < weaponDef.unlockWave &&
+                !this.player.ownedPrimaries.has(item.id)) {
+                return false;
+            }
+        }
+
         const isOwned = item.weaponType === 'primary'
             ? this.player.ownedPrimaries.has(item.id)
             : this.player.ownedPowers.has(item.id);
@@ -1976,7 +2006,7 @@ export class GameEngine {
         
         // Draw shop window background
         this.ctx.fillStyle = 'rgba(20, 20, 30, 0.95)';
-        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.strokeStyle = '#00ccff';
         this.ctx.lineWidth = 3;
         this.ctx.fillRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
         this.ctx.strokeRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
@@ -2029,7 +2059,7 @@ export class GameEngine {
         this.ctx.restore();
 
         // Shop title - larger and more prominent
-        this.ctx.fillStyle = '#FFD700';
+        this.ctx.fillStyle = '#00ccff';
         this.ctx.font = 'bold 32px "Press Start 2P", monospace';
         this.ctx.textAlign = 'center';
         this.ctx.fillText('SHOP', this.width / 2, 60);
@@ -2151,9 +2181,9 @@ export class GameEngine {
             };
             
             // Up arrow button
-            this.ctx.fillStyle = this.shopScrollUpHover ? 'rgba(255, 215, 0, 0.8)' : 'rgba(150, 150, 150, 0.8)';
+            this.ctx.fillStyle = this.shopScrollUpHover ? 'rgba(0, 204, 255, 0.8)' : 'rgba(150, 150, 150, 0.8)';
             this.ctx.fillRect(scrollBarX, scrollBarY - arrowButtonHeight, scrollBarWidth, arrowButtonHeight);
-            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.strokeStyle = '#00ccff';
             this.ctx.lineWidth = 1;
             this.ctx.strokeRect(scrollBarX, scrollBarY - arrowButtonHeight, scrollBarWidth, arrowButtonHeight);
             
@@ -2171,16 +2201,16 @@ export class GameEngine {
             this.ctx.fillRect(scrollBarX, scrollBarY, scrollBarWidth, scrollBarHeight);
             
             // Scroll thumb
-            this.ctx.fillStyle = this.shopScrollThumbDrag ? '#FFF700' : '#FFD700';
+            this.ctx.fillStyle = this.shopScrollThumbDrag ? '#44ddff' : '#00ccff';
             this.ctx.fillRect(scrollBarX, scrollThumbY, scrollBarWidth, scrollThumbHeight);
-            this.ctx.strokeStyle = '#FFA500';
+            this.ctx.strokeStyle = '#0088aa';
             this.ctx.lineWidth = 1;
             this.ctx.strokeRect(scrollBarX, scrollThumbY, scrollBarWidth, scrollThumbHeight);
             
             // Down arrow button
-            this.ctx.fillStyle = this.shopScrollDownHover ? 'rgba(255, 215, 0, 0.8)' : 'rgba(150, 150, 150, 0.8)';
+            this.ctx.fillStyle = this.shopScrollDownHover ? 'rgba(0, 204, 255, 0.8)' : 'rgba(150, 150, 150, 0.8)';
             this.ctx.fillRect(scrollBarX, scrollBarY + scrollBarHeight, scrollBarWidth, arrowButtonHeight);
-            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.strokeStyle = '#00ccff';
             this.ctx.lineWidth = 1;
             this.ctx.strokeRect(scrollBarX, scrollBarY + scrollBarHeight, scrollBarWidth, arrowButtonHeight);
             
@@ -2194,6 +2224,22 @@ export class GameEngine {
             this.ctx.fill();
         }
         
+        // Purchase flash overlay
+        if (this._shopFlash) {
+            const elapsed = performance.now() - this._shopFlash.time;
+            const duration = 250;
+            if (elapsed < duration) {
+                const alpha = 1 - elapsed / duration;
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha;
+                this.ctx.fillStyle = this._shopFlash.color;
+                this.ctx.fillRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
+                this.ctx.restore();
+            } else {
+                this._shopFlash = null;
+            }
+        }
+
         // Instructions - larger and more visible
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '14px "Press Start 2P", monospace';
@@ -2250,7 +2296,7 @@ export class GameEngine {
             this.ctx.restore();
 
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 9px "Press Start 2P", monospace';
+            this.ctx.font = 'bold 10px "Press Start 2P", monospace';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(tab.label, tx + tabWidth / 2, tabY + tabHeight / 2);

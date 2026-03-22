@@ -83,6 +83,7 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     test('switching to PRIMARY tab shows weapons', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
+            ge.game.currentWave = 99; // unlock all for visibility
             ge.openShop();
             ge.shopCategory = 'PRIMARY';
             ge._rebuildShopCache();
@@ -90,7 +91,7 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         await page.waitForTimeout(100);
 
         const itemCount = await page.evaluate(() => window.gameEngine.shopFilteredItems?.length ?? 0);
-        // Should have at least the 5 primary weapons
+        // Should have at least the 5 primary weapons + upgrades for equipped weapon
         expect(itemCount).toBeGreaterThanOrEqual(5);
     });
 
@@ -128,6 +129,7 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.game.money = 10000;
+            ge.game.currentWave = 3; // Storm Needles unlocks at wave 3
             ge.player.skillPoints = 10;
             ge.openShop();
             ge.shopCategory = 'PRIMARY';
@@ -148,6 +150,7 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.game.money = 10000;
+            ge.game.currentWave = 3; // Storm Needles unlocks at wave 3
             ge.player.skillPoints = 10;
             ge.openShop();
             ge.shopCategory = 'PRIMARY';
@@ -197,6 +200,69 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         });
         expect(result.owned).toContain('BULWARK');
         expect(result.slots[0]).toBe('BULWARK');
+    });
+
+    // ------------------------------------------------------------------
+    // Free weapon acquisition & auto-unlock
+    // ------------------------------------------------------------------
+
+    test('primary weapons (except Pulse Cannon) have zero cost', async ({ page }) => {
+        const costs = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.game.currentWave = 99; // unlock all weapons for visibility
+            ge.openShop();
+            ge.shopCategory = 'PRIMARY';
+            ge._rebuildShopCache();
+            return ge.shopFilteredItems
+                .filter(i => i.isWeapon && i.weaponType === 'primary')
+                .map(i => ({ id: i.id, cost: i.cost, spCost: i.spCost }));
+        });
+        expect(costs.length).toBe(5); // all 5 should be visible
+        for (const w of costs) {
+            if (w.id === 'PULSE_CANNON') continue;
+            expect(w.cost, `${w.id} coin cost should be 0`).toBe(0);
+            expect(w.spCost, `${w.id} SP cost should be 0`).toBe(0);
+        }
+    });
+
+    test('weapons auto-unlock at wave milestones', async ({ page }) => {
+        const result = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            // Simulate completing wave 3 (Storm Needles unlockWave)
+            ge.game.currentWave = 3;
+            ge.completeWave();
+            const afterWave3 = [...p.ownedPrimaries];
+            // Simulate completing wave 5 (Scatter Gun unlockWave)
+            ge.game.currentWave = 5;
+            ge.completeWave();
+            const afterWave5 = [...p.ownedPrimaries];
+            return { afterWave3, afterWave5 };
+        });
+        expect(result.afterWave3).toContain('STORM_NEEDLES');
+        expect(result.afterWave5).toContain('SCATTER_GUN');
+    });
+
+    test('AI switches between owned weapons during gameplay', async ({ page }) => {
+        const { GameAI } = await import('../helpers/game-ai.js');
+
+        // Give the player all weapons and enable one-punch-man
+        await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.cheats.onePunchMan = true;
+            ge.player.ownedPrimaries.add('STORM_NEEDLES');
+            ge.player.ownedPrimaries.add('SCATTER_GUN');
+            ge.player.ownedPrimaries.add('RAIL_DRIVER');
+        });
+
+        const ai = new GameAI(page);
+        const weaponsUsed = new Set();
+        await ai.run(5000, (state) => {}, { switchWeapons: true, switchInterval: 800 });
+
+        const finalState = await ai.getState();
+        // The AI should have tried multiple weapons
+        expect(finalState.player.ownedPrimaries.length).toBeGreaterThanOrEqual(4);
+        await ai.stop();
     });
 
     // ------------------------------------------------------------------

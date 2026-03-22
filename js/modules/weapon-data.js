@@ -11,13 +11,13 @@ export const PRIMARY_WEAPONS = {
         icon: '🔫',
         color: '#00ccff',
         fireRate: 400,        // ms between shots
-        damage: 1,
+        damage: 0.8,
         bulletSpeed: 1.0,     // multiplier on BULLET_SPEED
         bulletSize: 1.0,      // multiplier on base radius
         bulletCount: 1,
         spreadAngle: 0,       // radians total spread
         piercing: 0,
-        range: 1.0,           // multiplier on base maxLife
+        range: 0.85,          // multiplier on base maxLife
         cost: 0,              // free — default weapon
         spCost: 0,
         unlockWave: 0,
@@ -37,9 +37,9 @@ export const PRIMARY_WEAPONS = {
         spreadAngle: 0.15,    // slight random spread
         piercing: 0,
         range: 0.7,           // shorter range
-        cost: 1500,
-        spCost: 1,
-        unlockWave: 2,
+        cost: 0,
+        spCost: 0,
+        unlockWave: 3,
         upgrades: ['NEEDLE_STORM', 'POISON_TIP', 'STATIC_CHARGE', 'SUPPRESSION'],
     },
     SCATTER_GUN: {
@@ -56,9 +56,9 @@ export const PRIMARY_WEAPONS = {
         spreadAngle: 0.6,     // wide cone
         piercing: 0,
         range: 0.5,           // short range
-        cost: 2000,
-        spCost: 2,
-        unlockWave: 3,
+        cost: 0,
+        spCost: 0,
+        unlockWave: 5,
         upgrades: ['TIGHT_CHOKE', 'BUCKSHOT', 'SHRAPNEL', 'SLUG_ROUND'],
     },
     RAIL_DRIVER: {
@@ -75,9 +75,9 @@ export const PRIMARY_WEAPONS = {
         spreadAngle: 0,
         piercing: 99,         // built-in full pierce
         range: 1.5,           // long range
-        cost: 2500,
-        spCost: 2,
-        unlockWave: 5,
+        cost: 0,
+        spCost: 0,
+        unlockWave: 8,
         upgrades: ['PENETRATOR', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH'],
     },
     LANCE_BEAM: {
@@ -96,9 +96,9 @@ export const PRIMARY_WEAPONS = {
         range: 1.2,
         beamDuration: 400,    // ms the beam is active
         beamWidth: 6,         // px beam thickness
-        cost: 3000,
-        spCost: 3,
-        unlockWave: 7,
+        cost: 0,
+        spCost: 0,
+        unlockWave: 12,
         upgrades: ['BEAM_WIDTH', 'LINGER', 'REFRACTION', 'OVERLOAD'],
     },
 };
@@ -107,33 +107,33 @@ export const PRIMARY_WEAPONS = {
 
 export const PRIMARY_UPGRADES = {
     // Pulse Cannon
-    STEADY_AIM:     { id: 'STEADY_AIM',     name: 'Steady Aim',     description: '-8% spread per stack',                    cost: 600,  maxStacks: 3,  weapon: 'PULSE_CANNON', icon: '🎯' },
-    OVERCHARGE:     { id: 'OVERCHARGE',      name: 'Overcharge',     description: '+15% auto-fire damage per stack',         cost: 800,  maxStacks: 4,  weapon: 'PULSE_CANNON', icon: '⚡' },
-    ECHO_ROUND:     { id: 'ECHO_ROUND',      name: 'Echo Round',     description: '10% chance to fire a bonus bullet',      cost: 1200, maxStacks: 3,  weapon: 'PULSE_CANNON', icon: '🔁' },
+    STEADY_AIM:     { id: 'STEADY_AIM',     name: 'Steady Aim',     description: '-8% spread per stack',                    cost: 400,  maxStacks: 3,  weapon: 'PULSE_CANNON', icon: '🎯' },
+    OVERCHARGE:     { id: 'OVERCHARGE',      name: 'Overcharge',     description: '+15% auto-fire damage per stack',         cost: 550,  maxStacks: 4,  weapon: 'PULSE_CANNON', icon: '⚡' },
+    ECHO_ROUND:     { id: 'ECHO_ROUND',      name: 'Echo Round',     description: '10% chance to fire a bonus bullet',      cost: 850,  maxStacks: 3,  weapon: 'PULSE_CANNON', icon: '🔁' },
 
     // Storm Needles
-    NEEDLE_STORM:   { id: 'NEEDLE_STORM',    name: 'Needle Storm',   description: '+15% fire rate per stack',                cost: 600,  maxStacks: 4,  weapon: 'STORM_NEEDLES', icon: '🌪️' },
-    POISON_TIP:     { id: 'POISON_TIP',      name: 'Poison Tip',     description: 'Enemies take 1 DoT for 2s',             cost: 1200, maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: '☠️' },
-    STATIC_CHARGE:  { id: 'STATIC_CHARGE',   name: 'Static Charge',  description: 'Every 10th needle chains to nearby enemy',cost: 1800, maxStacks: 2,  weapon: 'STORM_NEEDLES', icon: '⚡' },
-    SUPPRESSION:    { id: 'SUPPRESSION',     name: 'Suppression',    description: 'Hit enemies fire 15% slower for 1.5s',   cost: 1500, maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: '🔇' },
+    NEEDLE_STORM:   { id: 'NEEDLE_STORM',    name: 'Needle Storm',   description: '+15% fire rate per stack',                cost: 400,  maxStacks: 4,  weapon: 'STORM_NEEDLES', icon: '🌪️' },
+    POISON_TIP:     { id: 'POISON_TIP',      name: 'Poison Tip',     description: 'Enemies take 1 DoT for 2s',             cost: 850,  maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: '☠️' },
+    STATIC_CHARGE:  { id: 'STATIC_CHARGE',   name: 'Static Charge',  description: 'Every 10th needle chains to nearby enemy',cost: 1250, maxStacks: 2,  weapon: 'STORM_NEEDLES', icon: '⚡' },
+    SUPPRESSION:    { id: 'SUPPRESSION',     name: 'Suppression',    description: 'Hit enemies fire 15% slower for 1.5s',   cost: 1050, maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: '🔇' },
 
     // Scatter Gun
-    TIGHT_CHOKE:    { id: 'TIGHT_CHOKE',     name: 'Tight Choke',    description: '-15% spread angle per stack',             cost: 700,  maxStacks: 3,  weapon: 'SCATTER_GUN', icon: '🔧' },
-    BUCKSHOT:        { id: 'BUCKSHOT',        name: 'Buckshot',       description: '+1 pellet per stack',                     cost: 1000, maxStacks: 2,  weapon: 'SCATTER_GUN', icon: '💣' },
-    SHRAPNEL:        { id: 'SHRAPNEL',        name: 'Shrapnel',       description: 'Pellets fragment at max range',           cost: 1500, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: '💥' },
-    SLUG_ROUND:      { id: 'SLUG_ROUND',      name: 'Slug Round',     description: 'Every 4th shot is a single big slug',    cost: 2000, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: '🔵' },
+    TIGHT_CHOKE:    { id: 'TIGHT_CHOKE',     name: 'Tight Choke',    description: '-15% spread angle per stack',             cost: 500,  maxStacks: 3,  weapon: 'SCATTER_GUN', icon: '🔧' },
+    BUCKSHOT:        { id: 'BUCKSHOT',        name: 'Buckshot',       description: '+1 pellet per stack',                     cost: 700,  maxStacks: 2,  weapon: 'SCATTER_GUN', icon: '💣' },
+    SHRAPNEL:        { id: 'SHRAPNEL',        name: 'Shrapnel',       description: 'Pellets fragment at max range',           cost: 1050, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: '💥' },
+    SLUG_ROUND:      { id: 'SLUG_ROUND',      name: 'Slug Round',     description: 'Every 4th shot is a single big slug',    cost: 1400, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: '🔵' },
 
     // Rail Driver
-    PENETRATOR:      { id: 'PENETRATOR',      name: 'Penetrator',     description: '+50% range per stack',                   cost: 800,  maxStacks: 3,  weapon: 'RAIL_DRIVER', icon: '🏹' },
-    KINETIC_IMPACT:  { id: 'KINETIC_IMPACT',  name: 'Kinetic Impact', description: 'Enemies hit are knocked back',           cost: 1000, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '💨' },
-    RAILGUN_CAPACITOR:{ id: 'RAILGUN_CAPACITOR',name:'Capacitor',     description: '2x damage after 2s idle',                cost: 1500, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '🔋' },
-    THROUGH_AND_THROUGH:{ id: 'THROUGH_AND_THROUGH',name:'Through',   description: 'Leaves a lingering damage trail',        cost: 2500, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '✨' },
+    PENETRATOR:      { id: 'PENETRATOR',      name: 'Penetrator',     description: '+50% range per stack',                   cost: 550,  maxStacks: 3,  weapon: 'RAIL_DRIVER', icon: '🏹' },
+    KINETIC_IMPACT:  { id: 'KINETIC_IMPACT',  name: 'Kinetic Impact', description: 'Enemies hit are knocked back',           cost: 700,  maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '💨' },
+    RAILGUN_CAPACITOR:{ id: 'RAILGUN_CAPACITOR',name:'Capacitor',     description: '2x damage after 2s idle',                cost: 1050, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '🔋' },
+    THROUGH_AND_THROUGH:{ id: 'THROUGH_AND_THROUGH',name:'Through',   description: 'Leaves a lingering damage trail',        cost: 1750, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '✨' },
 
     // Lance Beam
-    BEAM_WIDTH:      { id: 'BEAM_WIDTH',      name: 'Beam Width',     description: '+30% beam width per stack',              cost: 700,  maxStacks: 3,  weapon: 'LANCE_BEAM', icon: '📐' },
-    LINGER:          { id: 'LINGER',          name: 'Linger',         description: '+0.1s beam duration per stack',           cost: 1000, maxStacks: 3,  weapon: 'LANCE_BEAM', icon: '⏱️' },
-    REFRACTION:      { id: 'REFRACTION',      name: 'Refraction',     description: 'Beam splits on hitting enemy',           cost: 1800, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: '🔀' },
-    OVERLOAD_BEAM:   { id: 'OVERLOAD_BEAM',   name: 'Overload',       description: 'Final 0.1s deals 3x damage',             cost: 1500, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: '🔥' },
+    BEAM_WIDTH:      { id: 'BEAM_WIDTH',      name: 'Beam Width',     description: '+30% beam width per stack',              cost: 500,  maxStacks: 3,  weapon: 'LANCE_BEAM', icon: '📐' },
+    LINGER:          { id: 'LINGER',          name: 'Linger',         description: '+0.1s beam duration per stack',           cost: 700,  maxStacks: 3,  weapon: 'LANCE_BEAM', icon: '⏱️' },
+    REFRACTION:      { id: 'REFRACTION',      name: 'Refraction',     description: 'Beam splits on hitting enemy',           cost: 1250, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: '🔀' },
+    OVERLOAD_BEAM:   { id: 'OVERLOAD_BEAM',   name: 'Overload',       description: 'Final 0.1s deals 3x damage',             cost: 1050, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: '🔥' },
 };
 
 // ─── POWER WEAPONS (Right Click) ────────────────────────────────────────────
