@@ -1,0 +1,196 @@
+// Weapon effects rendering: beams, mines, nova rings, lightning, missiles, skill effects
+import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from '../weapon-data.js';
+
+export function drawWeaponEffects() {
+    if (!this.player || !this.player.active) return;
+    const ctx = this.ctx;
+    const p = this.player;
+
+    // ─── Lance Beam ──────────────────────────────────────────────────
+    if (p.beamActive && p.beamTimer > 0) {
+        const config = PRIMARY_WEAPONS.LANCE_BEAM;
+        const beamW = (config.beamWidth || 6) * (1 + this.player.getPowerupStacks('BEAM_WIDTH') * 0.3);
+        const range = config.range * 400;
+        const dx = Math.cos(p.angle);
+        const dy = Math.sin(p.angle);
+        const endX = p.x + dx * range;
+        const endY = p.y + dy * range;
+
+        ctx.save();
+        ctx.globalAlpha = 0.8;
+        ctx.strokeStyle = config.color;
+        ctx.lineWidth = beamW;
+        ctx.shadowColor = config.color;
+        ctx.shadowBlur = beamW * 2;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        // Inner bright core
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1, beamW * 0.3);
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // ─── Mines ──────────────────────────────────────────────────────
+    if (p.activeMines) {
+        for (const mine of p.activeMines) {
+            if (!mine.active) continue;
+            ctx.save();
+            const pulse = 0.7 + 0.3 * Math.sin(Date.now() * 0.005);
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = mine.armed ? '#ff6600' : '#884400';
+            ctx.beginPath();
+            ctx.arc(mine.x, mine.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+            if (mine.armed) {
+                ctx.strokeStyle = 'rgba(255, 100, 0, 0.25)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(mine.x, mine.y, mine.triggerRadius || 60, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+
+    // ─── Nova Ring ──────────────────────────────────────────────────
+    if (p.novaActive && p.novaRings) {
+        for (const ring of p.novaRings) {
+            if (!ring.active) continue;
+            const progress = ring.elapsed / ring.duration;
+            ctx.save();
+            ctx.globalAlpha = 1 - progress;
+            ctx.strokeStyle = POWER_WEAPONS.NOVA_BLAST.color;
+            ctx.lineWidth = 4 * (1 - progress);
+            ctx.shadowColor = POWER_WEAPONS.NOVA_BLAST.color;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(ring.x, ring.y, ring.currentRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    // ─── Lightning Chains ───────────────────────────────────────────
+    if (p.lightningChains && p.lightningChains.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = POWER_WEAPONS.LIGHTNING_ARC.color;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#aaaaff';
+        ctx.shadowBlur = 8;
+        for (const chain of p.lightningChains) {
+            if (!chain.active) continue;
+            for (let j = 0; j < chain.targets.length - 1; j++) {
+                const from = chain.targets[j];
+                const to = chain.targets[j + 1];
+                ctx.beginPath();
+                ctx.moveTo(from.x, from.y);
+                const segs = 5;
+                for (let s = 1; s <= segs; s++) {
+                    const t = s / segs;
+                    const mx = from.x + (to.x - from.x) * t + (Math.random() - 0.5) * 20;
+                    const my = from.y + (to.y - from.y) * t + (Math.random() - 0.5) * 20;
+                    ctx.lineTo(mx, my);
+                }
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+    }
+
+    // ─── Missiles ──────────────────────────────────────────────────
+    if (p.activeMissiles) {
+        for (const missile of p.activeMissiles) {
+            if (!missile.active) continue;
+            ctx.save();
+            ctx.fillStyle = POWER_WEAPONS.MISSILE_SALVO.color;
+            ctx.beginPath();
+            ctx.arc(missile.x, missile.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255, 200, 100, 0.5)';
+            const trail = 8;
+            ctx.beginPath();
+            ctx.arc(missile.x - missile.vx * trail, missile.y - missile.vy * trail, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // ─── Deflector Orbs ─────────────────────────────────────────────
+    if (p.deflectorOrbs && p.deflectorOrbs.length > 0) {
+        for (const orb of p.deflectorOrbs) {
+            if (!orb.active || orb.hits <= 0) continue;
+            ctx.save();
+            ctx.fillStyle = DEFENSE_SKILLS.DEFLECTOR_ORBS.color;
+            ctx.globalAlpha = 0.7 + 0.3 * Math.sin(Date.now() * 0.006);
+            ctx.shadowColor = DEFENSE_SKILLS.DEFLECTOR_ORBS.color;
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(orb.x, orb.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // ─── Bulwark Aura ───────────────────────────────────────────────
+    if (p.activeSkillEffects && p.activeSkillEffects.has('BULWARK')) {
+        ctx.save();
+        const pulse = 0.3 + 0.15 * Math.sin(Date.now() * 0.004);
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = DEFENSE_SKILLS.BULWARK.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // ─── Tractor Shield ────────────────────────────────────────────
+    if (p.activeSkillEffects && p.activeSkillEffects.has('TRACTOR_SHIELD')) {
+        const skill = DEFENSE_SKILLS.TRACTOR_SHIELD;
+        const arc = skill.shieldArc + this.player.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = skill.color;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.arc(p.x, p.y, 50, p.angle - arc / 2, p.angle + arc / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // ─── EMP Pulse ─────────────────────────────────────────────────
+    if (p.empPulseActive) {
+        const skill = DEFENSE_SKILLS.EMP_PULSE;
+        const radius = skill.radius + this.player.getPowerupStacks('WIDE_BAND') * 60;
+        const elapsed = Date.now() - (p.empPulseStartTime || 0);
+        const progress = Math.min(1, elapsed / 500);
+        ctx.save();
+        ctx.globalAlpha = 0.6 * (1 - progress);
+        ctx.strokeStyle = skill.color;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = skill.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius * progress, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // ─── Phase Dash Trail ───────────────────────────────────────────
+    if (p.activeSkillEffects && p.activeSkillEffects.has('PHASE_DASH')) {
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = DEFENSE_SKILLS.PHASE_DASH.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}

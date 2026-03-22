@@ -25,7 +25,7 @@ A comprehensive plan for refactoring the Rainboids codebase to improve modularit
 
 | File | Lines | Role | Complexity |
 |------|-------|------|------------|
-| `game-engine.js` | **3,081** (was 7,746) | Core orchestrator | **Reduced — still large** |
+| `game-engine.js` | **1,681** (was 7,746) | Core orchestrator | **Reduced — still large** |
 | `entities/enemy.js` | 6,655 | 10 enemy types | High (15+ movement patterns, 10+ firing patterns) |
 | `entities/player.js` | 2,263 | Player entity | High (weapons, powerups, skills, combos) |
 | `ui-manager.js` | 1,277 | DOM-based UI | Moderate |
@@ -346,6 +346,28 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 - Event emission deferred to Phase 4 (currently uses `this.*` delegator calls back to GameEngine for effects/audio)
 - **Test:** QA 94/95 pass (same baseline), unit 61/68 (same baseline)
 
+**Step 3.5: CombatManager** (~611 lines moved) — **DONE (v5.7.0)**
+- Created `js/modules/systems/combat-manager.js`
+- Moved 22 methods: `createDebris`, `createColorStarBurst`, `createEnemyDebris`, `createShapeDebris`, `createHealthOrb`, `createMoneyOrb`, `dropStarsFromEntity`, `dropOrbsFromEntity`, `dropPowerup`, `collectPowerup`, `showPowerupDisplay`, `getPowerupConfig`, `onEnemyKill`, `updateKillStreak`, `createDamageNumber`, `updateDamageNumbers`, `addMoneyPickup`, `updateMoneyPickupDisplay`, `setTargetInfo`, `updateTargetInfo`, `handleEntityTargeting`, `updateHoverDetection`
+- Covers: asteroid/enemy debris effects, orb drops, powerup collection, kill streaks, damage numbers, entity targeting/hover
+- Removed unused `PRIMARY_UPGRADES`, `POWER_UPGRADES`, `SKILL_UPGRADES` imports from game-engine.js
+- **Test:** Unit 61/68 (same baseline), QA 94/95 (same baseline)
+
+**Step 3.6: PlayerLifecycle** (~379 lines moved) — **DONE (v5.7.0)**
+- Created `js/modules/systems/player-lifecycle.js`
+- Moved 9 methods: `takeDamage`, `handlePlayerDeath`, `createPlayerShipDebris`, `respawnPlayer`, `respawnPlayerSafely`, `findSafeRespawnLocation`, `updateRespawnAnimation`, `clearAreaAroundPlayer`, `explodeTank`
+- Covers: damage processing, shield tank usage, multi-phase death explosion, safe respawn location finding, area clearing
+
+**Step 3.7: WeaponEffectsRenderer** (~196 lines moved) — **DONE (v5.7.0)**
+- Created `js/modules/rendering/weapon-effects-renderer.js`
+- Moved `drawWeaponEffects` — renders all active weapon/skill visual effects: lance beam, mines, nova rings, lightning chains, missiles, deflector orbs, bulwark aura, tractor shield, EMP pulse, phase dash trail
+- Removed unused `PRIMARY_WEAPONS`, `POWER_WEAPONS` imports from game-engine.js
+
+**Step 3.8: Spawning methods → WaveManager** (~196 lines moved) — **DONE (v5.7.0)**
+- Moved 9 spawning methods into existing `wave-manager.js`: `spawnAsteroidOffscreen`, `spawnWaveAsteroids`, `startEnemySubWave`, `forceSpawnEntity`, `forceSpawnEnemy`, `forceSpawnAsteroid`, `isInMinimapArea`, `spawnContinuousAsteroid`, `spawnRandomEnemy`
+- Added `Asteroid` and `Enemy` imports to wave-manager.js for force-spawn fallback paths
+- wave-manager.js: 441 → 616 lines (still under 800-line limit)
+
 ### Phase 4: Wire Events & Remove Globals (Higher Risk)
 
 **Step 4.1: Replace direct cross-system calls with events**
@@ -380,10 +402,14 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 | 3.2 | ShopManager | 528 moved | Medium | StateMachine | **DONE** |
 | 3.3 | WaveManager | 441 moved | Medium | StateMachine, Pools | **DONE** |
 | 3.4 | CollisionSystem | 1,142 moved | Medium | All pools, Player | **DONE** |
+| 3.5 | CombatManager | 611 moved | Low | Pools, Player, Weapon-data | **DONE** |
+| 3.6 | PlayerLifecycle | 379 moved | Low | Pools, Player, AudioManager | **DONE** |
+| 3.7 | WeaponEffectsRenderer | 196 moved | Low | Weapon-data (read-only) | **DONE** |
+| 3.8 | Spawning → WaveManager | 196 moved | Low | Pools, Enemy, Asteroid | **DONE** |
 | 4.1 | Event wiring | ~0 (rewiring) | Medium | All managers | Pending |
 | 4.2 | GameContext | ~0 (rewiring) | High | All entity files | Pending |
 
-**Current state:** GameEngine reduced from 7,746 to 3,081 lines (60% reduction). Remaining work (4.1, 4.2) targets further reduction to ~300-500 lines.
+**Current state:** GameEngine reduced from 7,746 to 1,681 lines (78% reduction). Remaining work (4.1, 4.2) targets further reduction to ~300-500 lines.
 
 ### Execution Notes (v5.5.0)
 
@@ -424,12 +450,15 @@ js/
     systems/                    ← Stateful systems (Phase 3 — DONE)
       camera-manager.js         ← camera, shake, kick, flash (109 lines)
       collision-system.js       ← all collision detection & response (1,142 lines)
+      combat-manager.js         ← debris, orbs, powerups, kill streaks, damage numbers (611 lines)
+      player-lifecycle.js       ← damage, death, respawn, shield tanks (379 lines)
       shop-manager.js           ← shop logic, purchase, tabs (528 lines)
-      wave-manager.js           ← wave lifecycle, spawning, notifications (441 lines)
+      wave-manager.js           ← wave lifecycle, spawning, notifications (616 lines)
     rendering/                  ← Read-only renderers (Phase 2 — DONE)
       hud-renderer.js           ← all HUD draw methods (2,058 lines)
       shop-renderer.js          ← shop window rendering (619 lines)
-    game-engine.js              ← orchestrator (3,081 lines, target <500)
+      weapon-effects-renderer.js ← beam, mines, nova, lightning, missiles, skills (196 lines)
+    game-engine.js              ← orchestrator (1,681 lines, target <500)
     entities/                   ← unchanged
     performance/                ← unchanged
     constants.js
@@ -1035,7 +1064,7 @@ The core problem is a 7,746-line god object that makes every change risky and ev
 7. **Input Abstraction** (Phase 2-3 — enables gamepad support and multi-SKU input)
 8. **Performance Module Integration** (Phase 2-5 — integrate Tier 1 modules, evaluate Tier 2, remove Tier 3 dead code)
 
-**Current progress (v5.6.0):** GameEngine reduced from 7,746 to 3,081 lines (60% reduction). Extracted modules: GameStateMachine (127), EventBus (46), GameTimer (79), HUDRenderer (2,058), ShopRenderer (619), CameraManager (109), ShopManager (528), WaveManager (441), CollisionSystem (1,142). GameDimensions now returns fixed game field dimensions. Duplicate enemy shield initialization removed.
+**Current progress (v5.7.0):** GameEngine reduced from 7,746 to 1,681 lines (78% reduction). Extracted modules: GameStateMachine (127), EventBus (46), GameTimer (79), HUDRenderer (2,058), ShopRenderer (619), CameraManager (109), ShopManager (528), WaveManager (616, was 441), CollisionSystem (1,142), CombatManager (611), PlayerLifecycle (379), WeaponEffectsRenderer (196). GameDimensions now returns fixed game field dimensions. Duplicate enemy shield initialization removed.
 
 **Remaining:** Phase 4.1 (event wiring), Phase 4.2 (GameContext + remaining window.gameEngine removal from entity draw/fire callbacks), Phase 5 (pool audit, pool sizing).
 

@@ -6,6 +6,8 @@
  */
 
 import { GAME_CONFIG, GAME_STATES, getEnemyFiringCooldown } from '../constants.js';
+import { Asteroid } from '../entities/asteroid.js';
+import { Enemy } from '../entities/enemy.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats } from '../wave-data.js';
 import { random } from '../utils.js';
 import { GameTimer } from '../core/game-timer.js';
@@ -438,4 +440,177 @@ export function getRandomEnemyType() {
     if (this.game.currentWave >= 4) availableTypes.push('TANGERINE');
     if (this.game.currentWave >= 6) availableTypes.push('TITAN');
     return availableTypes[Math.floor(Math.random() * availableTypes.length)];
+}
+
+// ── Spawning Methods (Phase 3.8) ──
+
+export function spawnAsteroidOffscreen() {
+    let x, y;
+    let attempts = 0;
+    const r = random(30, 60);
+    const spawnBuffer = r * 4;
+
+    do {
+        const edge = Math.floor(random(0, 4));
+        switch (edge) {
+            case 0: x = random(0, this.width); y = -spawnBuffer; break;
+            case 1: x = this.width + spawnBuffer; y = random(0, this.height); break;
+            case 2: x = random(0, this.width); y = this.height + spawnBuffer; break;
+            default: x = -spawnBuffer; y = random(0, this.height); break;
+        }
+        attempts++;
+    } while (this.isInMinimapArea(x, y) && attempts < 10);
+
+    const newAst = this.asteroidPool.get(x, y, r, this.game.asteroidLevel);
+    const tx = random(this.width * 0.3, this.width * 0.7);
+    const ty = random(this.height * 0.3, this.height * 0.7);
+    const ang = Math.atan2(ty - y, tx - x);
+    const spd = Math.min(5.0, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.15);
+    newAst.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
+}
+
+export function spawnWaveAsteroids() {
+    const desiredAsteroids = GAME_CONFIG.INITIAL_AST_COUNT;
+    const currentAsteroids = this.asteroidPool.activeObjects.length;
+    const asteroidsToSpawn = Math.max(0, desiredAsteroids - currentAsteroids);
+
+    for (let i = 0; i < asteroidsToSpawn; i++) {
+        setTimeout(() => {
+            const asteroid = this.asteroidPool.get();
+            if (asteroid) {
+                this.initializeWaveAsteroid(asteroid);
+            }
+        }, i * 200);
+    }
+}
+
+export function startEnemySubWave() {
+    this.enemiesRemainingInSubWave = GAME_CONFIG.ENEMIES_PER_SUB_WAVE;
+    this.subWaveStartTime = Date.now();
+    this.subWaveTimer = Date.now();
+    this.lastEnemySpawn = 0;
+}
+
+export function forceSpawnEntity() {
+    const activeEnemies = this.enemyPool.activeObjects.length;
+    const activeAsteroids = this.asteroidPool.activeObjects.length;
+    const totalEntities = activeEnemies + activeAsteroids;
+
+    if (totalEntities === 0) {
+        if (this.forceSpawnEnemy()) return true;
+        if (this.forceSpawnAsteroid()) return true;
+    }
+
+    let spawnEnemy = Math.random() < 0.5;
+    if (activeAsteroids >= GAME_CONFIG.MAX_ASTEROIDS) {
+        spawnEnemy = true;
+    }
+
+    if (spawnEnemy) {
+        if (this.forceSpawnEnemy()) return true;
+    } else {
+        if (this.forceSpawnAsteroid()) return true;
+    }
+
+    if (spawnEnemy) {
+        if (this.forceSpawnAsteroid()) return true;
+    } else {
+        if (this.forceSpawnEnemy()) return true;
+    }
+
+    if (this.forceSpawnEnemy()) return true;
+    if (this.forceSpawnAsteroid()) return true;
+
+    console.error('❌ ALL SPAWN METHODS EXHAUSTED!');
+    return false;
+}
+
+export function forceSpawnEnemy() {
+    const enemy = this.enemyPool.get();
+    if (enemy) {
+        const sp = this.getRandomSpawnPosition();
+        const enemyType = this.getRandomEnemyType();
+        enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+        enemy.startWarpIn(sp.targetX, sp.targetY);
+        return true;
+    }
+
+    try {
+        const newEnemy = new Enemy();
+        const sp = this.getRandomSpawnPosition();
+        const enemyType = this.getRandomEnemyType();
+        newEnemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+        newEnemy.startWarpIn(sp.targetX, sp.targetY);
+        this.enemyPool.activeObjects.push(newEnemy);
+        return true;
+    } catch (error) {
+        console.error('❌ Failed to create new enemy:', error);
+        return false;
+    }
+}
+
+export function forceSpawnAsteroid() {
+    if (this.asteroidPool.activeObjects.length >= GAME_CONFIG.MAX_ASTEROIDS) {
+        return false;
+    }
+
+    const asteroid = this.asteroidPool.get();
+    if (asteroid) {
+        this.initializeWaveAsteroid(asteroid);
+        return true;
+    }
+
+    try {
+        const newAsteroid = new Asteroid();
+        this.initializeWaveAsteroid(newAsteroid);
+        this.asteroidPool.activeObjects.push(newAsteroid);
+        return true;
+    } catch (error) {
+        console.error('❌ Failed to create new asteroid:', error);
+        return false;
+    }
+}
+
+export function isInMinimapArea(worldX, worldY) {
+    const screenX = worldX - this.camera.x;
+    const screenY = worldY - this.camera.y;
+
+    const minDim = Math.min(this.width, this.height);
+    const mmSize = minDim < 500 ? Math.max(80, Math.floor(minDim * 0.22)) : 150;
+    const mmMargin = mmSize < 120 ? 10 : 20;
+    const minimapLeft = this.width - mmSize - mmMargin;
+    const minimapTop = this.height - mmSize - mmMargin;
+    const minimapRight = this.width - mmMargin;
+    const minimapBottom = this.height - mmMargin;
+
+    return screenX >= minimapLeft && screenX <= minimapRight &&
+           screenY >= minimapTop && screenY <= minimapBottom;
+}
+
+export function spawnContinuousAsteroid() {
+    const asteroid = this.asteroidPool.get();
+    if (asteroid) {
+        this.initializeWaveAsteroid(asteroid);
+    } else {
+        console.warn('⚠️ Failed to get asteroid from pool!');
+        const newAsteroid = new Asteroid();
+        this.initializeWaveAsteroid(newAsteroid);
+        this.asteroidPool.activeObjects.push(newAsteroid);
+    }
+}
+
+export function spawnRandomEnemy() {
+    const enemyType = this.getRandomEnemyType();
+    const sp = this.getRandomSpawnPosition();
+
+    const enemy = this.enemyPool.get();
+    if (enemy) {
+        enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+        enemy.startWarpIn(sp.targetX, sp.targetY);
+    } else {
+        const newEnemy = new Enemy();
+        newEnemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
+        newEnemy.startWarpIn(sp.targetX, sp.targetY);
+        this.enemyPool.activeObjects.push(newEnemy);
+    }
 }
