@@ -369,14 +369,14 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
                 unlocked: ge.player.ownedPrimaries.has('STORM_NEEDLES'),
                 newNotifs: notifsAfter - notifsBefore,
                 title: lastNotif?.title,
-                body: lastNotif?.body,
+                subtitle: lastNotif?.subtitle,
             };
         });
 
         expect(result.unlocked).toBe(true);
         expect(result.newNotifs).toBeGreaterThan(0);
         expect(result.title).toContain('WEAPON UNLOCKED');
-        console.log(`  Notification: "${result.title}" — "${result.body}"`);
+        console.log(`  Notification: "${result.title}" — "${result.subtitle}"`);
     });
 
     test('purchase flash feedback', async ({ page }) => {
