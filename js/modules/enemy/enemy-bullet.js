@@ -95,14 +95,21 @@ export class EnemyBullet {
             return;
         }
 
-        // Persistent bullets (mines) use a fixed-duration lifetime, not life-fade
+        // Persistent bullets (mines, lightning orbs) use time-based lifetime
         if (this.isPersistent) {
             const maxLife = this.maxLifetimeOverride || 15000;
-            if (frameClock.now - this.creationTime > maxLife) {
+            const age = frameClock.now - this.creationTime;
+            if (age > maxLife) {
                 this.active = false;
                 return;
             }
-            this.life = 1.0; // Always full opacity
+            // Mines stay full opacity; other persistent bullets fade over final 40%
+            if (this.shape === 'mine') {
+                this.life = 1.0;
+            } else {
+                const progress = age / maxLife;
+                this.life = progress < 0.6 ? 1.0 : 1.0 - (progress - 0.6) / 0.4;
+            }
         } else {
             // Distance-based range — bullet fades and dies after traveling maxRange
             const dist = Math.hypot(this.x - this.startX, this.y - this.startY);

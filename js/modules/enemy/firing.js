@@ -340,12 +340,18 @@ export function createArcLightningBolt(gameEngine, targetX, targetY) {
             const pt = mainPath[i];
             const b = gameEngine.enemyBulletPool.get();
             if (b) {
-                b.reset(pt.x, pt.y, 0, 0, '#44ffff', false);
-                b.radius = 5;
-                b.glowRadius = 0; // visual handled by drawLightningBolt
+                // Slight random drift so orbs feel organic
+                const driftAngle = Math.random() * Math.PI * 2;
+                const driftSpeed = 0.15 + Math.random() * 0.25;
+                b.reset(pt.x, pt.y,
+                    Math.cos(driftAngle) * driftSpeed,
+                    Math.sin(driftAngle) * driftSpeed,
+                    '#44ffff', false);
+                b.radius = 4 + Math.random() * 2;
+                b.glowRadius = 10;
                 b.damage = this.getLevelScaledDamage(2);
                 b.isPersistent = true;
-                b.maxLifetimeOverride = 460;
+                b.maxLifetimeOverride = 1000 + Math.random() * 500; // 1–1.5s
                 b.life = 1.0;
             }
         }
