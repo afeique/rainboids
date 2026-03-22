@@ -27,20 +27,22 @@ After completing any code changes in this project, you MUST:
 
 ## README.md Maintenance (MANDATORY)
 
-After completing code changes, check whether `README.md` needs updating. The README is the public face of the project on GitHub and must stay in sync with the current game state.
+After completing code changes, you MUST check whether `README.md` needs updating. The README is the public face of the project on GitHub and must stay in sync with the current codebase. **Treat this as a blocking step before considering your work complete — just like updating VERSION and CHANGELOG.**
 
-**Always update README.md when:**
+**Always update README.md when any of these are true (these OVERRIDE the "do NOT" list below):**
 - New game features are added or removed (weapons, enemies, powerups, skills, game modes)
 - Controls or input methods change
-- The project structure changes significantly (new directories, renamed files)
+- **The project structure changes** (new directories, new module files, renamed/moved files, deleted files) — this includes refactors that reorganize the codebase
 - Build/dev commands change (new npm scripts, build tool changes)
-- Test infrastructure changes (new test commands, new test types)
-- Technical architecture changes (rendering, audio, performance systems)
+- Test infrastructure changes (new test commands, new test types, test count changes)
+- Technical architecture changes (new systems, new patterns, rendering changes)
 
-**Do NOT update README.md for:**
-- Internal bug fixes that don't change player-facing behavior
+**Do NOT update README.md for (unless an "always" rule above also applies):**
+- Internal bug fixes that don't change player-facing behavior or project structure
 - Balance tuning (damage numbers, cooldown values, etc.)
-- Code refactoring that doesn't change features
+- Pure logic refactors within existing files (moving code between methods, renaming private variables)
 - Planning documents or non-code documentation changes
 
-Keep README.md concise and accurate. When in doubt about whether a change warrants a README update, err on the side of updating — stale documentation is worse than a small extra edit.
+**Key clarification:** A refactor that creates new directories or files (e.g., extracting modules into `core/`, `systems/`, `rendering/`) IS a structural change and MUST be reflected in README.md's project structure section — even if the player-facing feature set is unchanged.
+
+Keep README.md concise and accurate. When in doubt, update it — stale documentation is worse than a small extra edit.

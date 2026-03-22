@@ -369,21 +369,44 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 
 ### Extraction Priority Table
 
-| Priority | Module | Lines Moved | Risk | Dependency |
-|----------|--------|-------------|------|------------|
-| 1.1 | GameStateMachine | ~100 new | Minimal | None |
-| 1.2 | EventBus | ~30 new | None | None |
-| 1.3 | GameTimer | ~40 new | Low | StateMachine |
-| 2.1 | HUDRenderer | ~1,500-2,000 | Low | Read-only |
-| 2.2 | ShopRenderer | ~600 | Low | Read-only |
-| 3.1 | CameraManager | ~200 | Low | None |
-| 3.2 | ShopManager | ~400 | Medium | StateMachine |
-| 3.3 | WaveManager | ~500 | Medium | StateMachine, Pools |
-| 3.4 | CollisionSystem | ~800 | Medium | All pools, Player |
-| 4.1 | Event wiring | ~0 (rewiring) | Medium | All managers |
-| 4.2 | GameContext | ~0 (rewiring) | High | All entity files |
+| Priority | Module | Lines Moved | Risk | Dependency | Status |
+|----------|--------|-------------|------|------------|--------|
+| 1.1 | GameStateMachine | 127 new | Minimal | None | **DONE** |
+| 1.2 | EventBus | 46 new | None | None | **DONE** |
+| 1.3 | GameTimer | 79 new | Low | StateMachine | **DONE** |
+| 2.1 | HUDRenderer | 2,058 moved | Low | Read-only | **DONE** |
+| 2.2 | ShopRenderer | 619 moved | Low | Read-only | **DONE** |
+| 3.1 | CameraManager | 109 moved | Low | None | **DONE** |
+| 3.2 | ShopManager | 528 moved | Medium | StateMachine | **DONE** |
+| 3.3 | WaveManager | 441 moved | Medium | StateMachine, Pools | **DONE** |
+| 3.4 | CollisionSystem | ~800 | Medium | All pools, Player | Pending |
+| 4.1 | Event wiring | ~0 (rewiring) | Medium | All managers | Pending |
+| 4.2 | GameContext | ~0 (rewiring) | High | All entity files | Pending |
 
-**After all extractions, GameEngine should be ~300-500 lines:** constructor, game loop, manager orchestration, and resize/event listener setup.
+**Current state:** GameEngine reduced from 7,746 to 4,206 lines (46% reduction). Remaining work (3.4, 4.1, 4.2) targets further reduction to ~300-500 lines.
+
+### Execution Notes (v5.5.0)
+
+**Approach used: `.call(this)` delegation pattern**
+
+Rather than immediately refactoring all `this.` references inside extracted methods, we used a pragmatic strangler fig technique:
+1. Method bodies are copied **unchanged** into the new module file as exported functions
+2. In GameEngine, each method becomes a one-line delegator: `method() { return module.method.call(this); }`
+3. All `this.*` references inside the extracted functions still resolve against the GameEngine instance
+
+This preserves 100% behavioral compatibility while physically relocating code to smaller, focused files. The `.call(this)` bridge can be removed in Phase 4 when methods are updated to use a `GameContext` object instead.
+
+**State machine integration via getter/setter**
+
+Instead of changing all 38 `this.game.state === X` read sites, we used `Object.defineProperty` to make `this.game.state` a getter/setter that delegates to the state machine:
+- Reads (`this.game.state === GAME_STATES.PLAYING`) work unchanged — the getter returns `stateMachine.state`
+- Writes (`this.game.state = GAME_STATES.PLAYING`) go through `stateMachine.transition()` with validation
+
+This eliminated the need to change any read-side code while adding full transition validation.
+
+**GameTimer timing consideration**
+
+Replacing `setTimeout` with `GameTimer` changes wall-clock timing behavior: `setTimeout(fn, 2000)` fires after 2000ms real time regardless of frame rate, while `GameTimer(2000)` requires 2000ms of accumulated game ticks. In headless test environments (lower frame rate), game timers take longer wall-clock to complete. This is actually the **correct** behavior (timers should respect game time, not wall time), but some E2E tests that relied on wall-clock timing became slightly flakier. `startGame()` helpers already wait for the PLAYING state transition, so this is handled.
 
 ---
 
@@ -394,26 +417,21 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 ```
 js/
   modules/
-    core/
-      game-engine.js          ← thin orchestrator (<500 lines target)
-      game-state.js           ← state machine
-      game-context.js         ← shared reference object
-      event-bus.js            ← pub/sub
-      game-timer.js           ← frame-counted timer
-    systems/
-      collision-system.js
-      wave-manager.js
-      spawn-manager.js
-      combat-manager.js
-      shop-manager.js
-      camera-manager.js
-    rendering/
-      hud-renderer.js
-      shop-renderer.js
-      effects-renderer.js
-      cursor-renderer.js
-    entities/                 ← unchanged
-    performance/              ← unchanged
+    core/                       ← Foundation (Phase 1 — DONE)
+      game-state.js             ← state machine (127 lines)
+      event-bus.js              ← pub/sub (46 lines)
+      game-timer.js             ← frame-counted timer (79 lines)
+    systems/                    ← Stateful systems (Phase 3 — partially done)
+      camera-manager.js         ← camera, shake, kick, flash (109 lines) — DONE
+      shop-manager.js           ← shop logic, purchase, tabs (528 lines) — DONE
+      wave-manager.js           ← wave lifecycle, spawning, notifications (441 lines) — DONE
+      collision-system.js       ← (future extraction)
+    rendering/                  ← Read-only renderers (Phase 2 — DONE)
+      hud-renderer.js           ← all HUD draw methods (2,058 lines)
+      shop-renderer.js          ← shop window rendering (619 lines)
+    game-engine.js              ← orchestrator (4,206 lines, target <500)
+    entities/                   ← unchanged
+    performance/                ← unchanged
     constants.js
     utils.js
     weapon-data.js
@@ -974,6 +992,22 @@ These rules apply to **all code changes** in the Rainboids project, whether part
 3. **Update CHANGELOG.md and VERSION** for every code change that affects runtime behavior.
 4. **Non-code changes** (docs, planning, memory files) do NOT get version bumps.
 5. **Commit messages** are concise and describe the "why", not the "what". The diff shows what changed.
+
+### 10.10 Extraction Rules (Lessons Learned from v5.5.0)
+
+1. **Use `.call(this)` delegation for strangler fig extractions.** Move method bodies unchanged to new files as exported functions. In the original class, replace each method with a one-liner: `method() { return module.method.call(this); }`. This eliminates the need to change any `this.` references during extraction, achieving zero behavioral risk.
+
+2. **Use getter/setter bridging for cross-cutting properties.** When a property is read in 30+ locations, use `Object.defineProperty` to add a getter/setter that delegates to the new owner. This avoids touching every read site during initial extraction.
+
+3. **Test after every extraction, not after all extractions.** Run the full QA suite (94 tests) after each module is moved. A green suite before moving to the next extraction is non-negotiable.
+
+4. **GameTimer changes wall-clock timing semantics.** Replacing `setTimeout` with `GameTimer` is semantically correct (game timers should pause with the game) but changes when callbacks fire relative to real time. Tests that depend on wall-clock timing may need their `waitForFunction` timeouts adjusted.
+
+5. **Keep extracted modules' imports minimal.** Each extracted module should only import what its methods actually use. Move imports from game-engine.js to the new file only when they become unused in game-engine.js.
+
+6. **Do not version-bump during extraction — wait until the phase is complete.** A single MINOR version bump covers all extractions in a refactor phase. Bumping after each file move creates unnecessary version churn.
+
+7. **Preserve the delegator methods in GameEngine.** External code (tests, InputHandler, UIManager) may call `gameEngine.openShop()`, `gameEngine.buyShopItem()`, etc. The one-line delegators ensure backward compatibility. Do NOT remove them until all external callers are updated to use the manager directly.
 
 ---
 

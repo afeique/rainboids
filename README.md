@@ -22,7 +22,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **58 background music tracks** by Karl Casey @ White Bat Audio
 - **Procedural SFX** via SFXR
-- **Modern ES6 modular architecture** with Vite build system
+- **Modular ES6 architecture** — domain managers, extracted renderers, state machine, event bus, and frame-counted timers, built with Vite
 
 ---
 
@@ -270,26 +270,38 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 ├── package.json               # Dependencies and scripts
 ├── VERSION                    # Current semantic version
 ├── CHANGELOG.md               # Full version history
+├── REFACTOR.md                # Architecture plan, coding rules, extraction status
 ├── js/
 │   ├── main.js                # Game initialization
 │   ├── playlist-data.js       # Music playlist configuration
 │   └── modules/
-│       ├── constants.js       # Game configuration and tuning
+│       ├── game-engine.js     # Game loop orchestrator (delegates to managers/renderers)
+│       ├── constants.js       # Game configuration, states, tuning constants
 │       ├── utils.js           # Utility functions
-│       ├── game-engine.js     # Core game loop and rendering
 │       ├── input-handler.js   # Keyboard, mouse, and touch input
-│       ├── ui-manager.js      # HUD, pause menu, shop UI
-│       ├── pool-manager.js    # Object pooling system
+│       ├── ui-manager.js      # DOM-based UI (pause menu, shop button, lives)
+│       ├── pool-manager.js    # O(1) object pooling system
 │       ├── weapon-data.js     # Weapon definitions and upgrade trees
 │       ├── wave-data.js       # 100 wave definitions across 5 acts
+│       ├── core/              # Foundation systems
+│       │   ├── game-state.js  #   State machine with transition validation + epoch guards
+│       │   ├── event-bus.js   #   Lightweight synchronous pub/sub
+│       │   └── game-timer.js  #   Frame-counted timers (freeze during pause/shop)
+│       ├── systems/           # Stateful game systems (extracted from game-engine)
+│       │   ├── camera-manager.js  #   Camera follow, screen shake, kick, flash
+│       │   ├── shop-manager.js    #   Shop logic, purchases, tab builders
+│       │   └── wave-manager.js    #   Wave lifecycle, spawning, notifications
+│       ├── rendering/         # Canvas rendering (extracted from game-engine)
+│       │   ├── hud-renderer.js    #   32 HUD draw methods (health, minimap, cursor, etc.)
+│       │   └── shop-renderer.js   #   Shop window, tabs, items, scrollbar
 │       ├── entities/          # Player, enemy, asteroid, bullet, powerup, etc.
-│       └── performance/       # Depth-batch-renderer, color-cache, frame-clock
+│       └── performance/       # Spatial grid, depth-batch-renderer, nebula renderer
 ├── css/
 │   └── styles.css             # Game styling and mobile layout
 ├── music/                     # 58 MP3 tracks (~336MB)
 ├── tests/
 │   ├── unit/                  # Jest unit tests
-│   ├── qa/                    # Playwright smoke tests (92 tests)
+│   ├── qa/                    # Playwright smoke tests (95 tests)
 │   ├── e2e/                   # Playwright E2E suite
 │   ├── performance/           # FPS benchmark tests
 │   └── helpers/               # Game helpers and AI playtester

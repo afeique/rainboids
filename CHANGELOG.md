@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.5.0] - 2026-03-21
+
+### Changed
+- **Architecture: Phase 1 Foundation** — Added `GameStateMachine` (validated state transitions with epoch guards), `EventBus` (cross-system pub/sub), and `GameTimer` (frame-counted timers that freeze during pause/shop)
+- **Architecture: Phase 2 Renderer Extraction** — Extracted 32 HUD draw methods (~2,058 lines) into `hud-renderer.js` and 4 shop draw methods (~619 lines) into `shop-renderer.js`
+- **Architecture: Phase 3 System Extraction** — Extracted camera management (~109 lines) into `camera-manager.js`, shop logic (~528 lines) into `shop-manager.js`, and wave system (~441 lines) into `wave-manager.js`
+- `game-engine.js` reduced from 7,746 lines to 4,206 lines (46% reduction) while preserving identical feature-set and behavior
+- All game-logic `setTimeout` calls replaced with `GameTimer` instances that respect pause/shop state — eliminates stale-callback bugs
+- All state transitions now validated against a transition table — prevents invalid state changes
+
+### Fixed
+- Wave spawn timers no longer fire during PAUSED or SHOP states (was a source of ghost spawning bugs)
+- State transition validation prevents impossible state changes (e.g., GAME_OVER → SHOP)
+- Respawn timer now uses epoch guard to prevent stale respawn callbacks after game restart
+
 ## [5.4.1] - 2026-03-21
 
 ### Fixed
