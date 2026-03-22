@@ -125,29 +125,15 @@ export class GameEngine {
         this.ghostAsteroidPosition = this.generateGhostPosition();
     }
     
-    // Performance monitoring
+    // Performance monitoring — call from console: gameEngine.showPerformanceStats()
     showPerformanceStats() {
-        console.log('📊 Performance Stats:');
-        console.log(`  Particles: ${this.particlePool.activeObjects.length}/${GAME_CONFIG.MAX_PARTICLES}`);
-        console.log(`  Bullets: ${this.bulletPool.activeObjects.length}`);
-        console.log(`  Enemies: ${this.enemyPool.activeObjects.length}`);
-        console.log(`  Asteroids: ${this.asteroidPool.activeObjects.length}`);
-        console.log(`  Enemy Bullets: ${this.enemyBulletPool.activeObjects.length}`);
-        console.log(`  Color Stars: ${this.colorStarPool.activeObjects.length}`);
-        console.log(`  Background Stars: ${this.backgroundStarPool.activeObjects.length}`);
-        console.log(`  Line Debris: ${this.lineDebrisPool.activeObjects.length}`);
-        console.log(`  Powerups: ${this.powerupPool.activeObjects.length}`);
-        
-        const totalObjects = this.particlePool.activeObjects.length + 
-                           this.bulletPool.activeObjects.length + 
-                           this.enemyPool.activeObjects.length + 
-                           this.asteroidPool.activeObjects.length + 
-                           this.enemyBulletPool.activeObjects.length + 
-                           this.colorStarPool.activeObjects.length + 
-                           this.backgroundStarPool.activeObjects.length + 
-                           this.lineDebrisPool.activeObjects.length + 
-                           this.powerupPool.activeObjects.length;
-        console.log(`  Total Objects: ${totalObjects}`);
+        const pools = [
+            this.particlePool, this.bulletPool, this.enemyPool, this.asteroidPool,
+            this.enemyBulletPool, this.colorStarPool, this.backgroundStarPool,
+            this.lineDebrisPool, this.powerupPool
+        ];
+        console.log('📊 Pool Stats:');
+        console.table(pools.map(p => p.getStats()));
     }
     
     // Helper method to initialize/reset game state
@@ -299,6 +285,7 @@ export class GameEngine {
     
     initializePools() {
         this.player = new Player();
+        this.player.gameEngine = this; // Inject ref so player doesn't need window.gameEngine
         // Position player at center of game field
         this.player.x = this.gameField.width / 2;
         this.player.y = this.gameField.height / 2;
@@ -347,6 +334,7 @@ export class GameEngine {
         this.game.gameStartTime = Date.now(); // Start survival timer
         // Reset player
         this.player = new Player();
+        this.player.gameEngine = this; // Inject ref so player doesn't need window.gameEngine
         // Position player at center of game field
         this.player.x = this.gameField.width / 2;
         this.player.y = this.gameField.height / 2;
@@ -691,10 +679,14 @@ export class GameEngine {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.powerupPool.activeObjects.forEach(p => p.update(this.player));
+            // Inject gameEngine ref for asteroids (needed for targeting highlight in draw)
+            for (const a of this.asteroidPool.activeObjects) a.gameEngine = this;
             this.asteroidPool.updateActive(this.gameField);
             
             // Update enemies and enemy bullets (only during active gameplay)
             this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this, this.gameField));
+            // Inject gameEngine ref for enemy bullets (needed for particle effects on death)
+            for (const eb of this.enemyBulletPool.activeObjects) eb.gameEngine = this;
             this.enemyBulletPool.updateActive();
             this.enemyBulletPool.cleanupInactive();
             

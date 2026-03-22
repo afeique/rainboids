@@ -5,10 +5,14 @@ export class PoolManager {
         this.ObjectClass = ObjectClass;
         this.pool = [];
         this.activeObjects = [];
-        
+        this.initialSize = initialSize;
+        this.highWaterMark = 0; // Peak active object count (for pool sizing audit)
+        this.totalAllocations = 0; // Total objects ever created (initial + overflow)
+
         for (let i = 0; i < initialSize; i++) {
             this.pool.push(new ObjectClass());
         }
+        this.totalAllocations = initialSize;
     }
     
     get(...args) {
@@ -26,11 +30,16 @@ export class PoolManager {
             obj = this.pool.pop();
         } else {
             obj = new this.ObjectClass();
+            this.totalAllocations++;
         }
         obj.reset(...args);
         // OPT-3: track position in activeObjects for O(1) release
         obj._poolIndex = this.activeObjects.length;
         this.activeObjects.push(obj);
+        // Track peak usage for pool sizing audit
+        if (this.activeObjects.length > this.highWaterMark) {
+            this.highWaterMark = this.activeObjects.length;
+        }
         return obj;
     }
 
@@ -86,6 +95,18 @@ export class PoolManager {
                 obj.y + r < viewTop  || obj.y - r > viewBottom) continue;
             obj.draw(ctx, extra);
         }
+    }
+
+    getStats() {
+        return {
+            type: this.ObjectClass.name,
+            initialSize: this.initialSize,
+            active: this.activeObjects.length,
+            pooled: this.pool.length,
+            highWaterMark: this.highWaterMark,
+            totalAllocations: this.totalAllocations,
+            overflowAllocations: this.totalAllocations - this.initialSize
+        };
     }
 
     cleanupInactive() {

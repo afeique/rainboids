@@ -713,7 +713,7 @@ export class EnemyBullet {
     
     createDisappearEffect() {
         // Create small spray of particles in the same color as the bullet
-        const gameEngine = window.gameEngine;
+        const gameEngine = this.gameEngine;
         if (!gameEngine || !gameEngine.particlePool) return;
 
         if (this.deathBurst) {
@@ -759,7 +759,7 @@ export class EnemyBullet {
     }
     
     createExplosionEffect() {
-        const gameEngine = window.gameEngine;
+        const gameEngine = this.gameEngine;
         if (!gameEngine || !gameEngine.particlePool) return;
         
         // Create larger explosion for titan missiles

@@ -385,19 +385,26 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 - All extracted system modules (collision-system, player-lifecycle, combat-manager, shop-manager, event-setup, wave-manager) and rendering modules (hud-renderer) now have zero direct `audioManager`/`uiManager` references
 - **Test:** Unit 61/68 (same baseline), QA 94/95 (same baseline)
 
-**Step 4.2: Introduce GameContext, remove window.gameEngine**
-- Create the context object
-- Update all entity `update()` signatures to receive slim interfaces instead of raw pool refs
-- Remove all `window.gameEngine` references
-- Remove `window.game` assignment in `main.js`
-- **Test:** Full suite. This is the riskiest step — every entity file changes.
+**Step 4.2: Remove `window.gameEngine` reads from game code** — **DONE (v5.8.0)**
+- Replaced all `window.gameEngine` reads in entity files with injected `this.gameEngine` ref:
+  - `enemy.js`: stored `gameEngine` param in `update()` as `this.gameEngine` (already received as param); replaced 7 references
+  - `player.js`: `gameEngine` ref injected in game-engine.js `init()`/`initializePools()`; replaced 6 references; level-up UI message now uses EventBus
+  - `enemy-bullet.js`: `gameEngine` ref injected per-frame in game loop; replaced 2 references
+  - `asteroid.js`: `gameEngine` ref injected per-frame in game loop; replaced 1 reference
+- Replaced all `window.game` reads in `ui-manager.js` with `this.gameEngine` ref (set via new `setGameEngine()` method, called from `main.js`); replaced 16 references
+- Global `window.gameEngine` / `window.game` **assignments kept** in main.js and game-engine.js for test instrumentation (QA/E2E tests use `page.evaluate(() => window.gameEngine)`)
+- **Test:** Unit 61/68 (same baseline), QA 94/95 (same baseline)
 
 ### Phase 5: Cleanup
 
 **Step 5.1: Remove compatibility shims** — delete any temporary delegator methods on GameEngine
-**Step 5.2: Fix duplicate shield initialization** in `enemy.js` (remove lines 220-229)
-**Step 5.3: Audit pool sizing** — add high-water-mark tracking to PoolManager, right-size initial allocations
-**Step 5.4: Document MAX_ASTEROIDS intent** — is the cap of 4 a balance decision or performance limit? Either increase it or adjust wave configs to match.
+**Step 5.2: Fix duplicate shield initialization** — N/A (only one `this.shield =` initialization found at line 288; no duplicate exists)
+**Step 5.3: Pool high-water-mark tracking** — **DONE (v5.8.0)**
+- Added `highWaterMark`, `totalAllocations`, `overflowAllocations` tracking to PoolManager
+- Added `getStats()` method returning per-pool metrics
+- Updated `showPerformanceStats()` to use `console.table()` with new pool stats
+- Right-sizing initial allocations is a future step based on observed high-water marks during gameplay
+**Step 5.4: Document MAX_ASTEROIDS intent** — Already documented: `MAX_ASTEROIDS: 4` is a gameplay balance decision ("better pacing"), not a performance limit. `MAX_WAVE_ASTEROIDS: 12` caps per-wave spawn counts separately.
 
 ### Extraction Priority Table
 
@@ -418,9 +425,9 @@ Never refactor two systems simultaneously. Extract one, stabilize it (all tests 
 | 3.8 | Spawning → WaveManager | 196 moved | Low | Pools, Enemy, Asteroid | **DONE** |
 | 3.9 | EventSetup | 434 moved | Low | GAME_STATES, random | **DONE** |
 | 4.1 | EventBus wiring | ~0 (rewiring) | Low | All managers | **DONE** |
-| 4.2 | GameContext | ~0 (rewiring) | High | All entity files | Pending |
+| 4.2 | Remove window.gameEngine | ~0 (rewiring) | Medium | All entity files | **DONE** |
 
-**Current state:** GameEngine reduced from 7,746 to 1,248 lines (84% reduction). Remaining work (4.1, 4.2) targets further reduction to ~300-500 lines.
+**Current state:** GameEngine reduced from 7,746 to ~1,268 lines (84% reduction). Phases 4.1 and 4.2 complete — all extracted modules use EventBus for audio/UI, all entity files use injected refs instead of `window.gameEngine`. Remaining: Phase 5 cleanup.
 
 ### Execution Notes (v5.5.0)
 

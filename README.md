@@ -290,11 +290,15 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │       ├── systems/           # Stateful game systems (extracted from game-engine)
 │       │   ├── camera-manager.js    #   Camera follow, screen shake, kick, flash
 │       │   ├── collision-system.js  #   All collision detection and response (~1,142 lines)
+│       │   ├── combat-manager.js    #   Debris, orbs, powerups, kill streaks, damage numbers
+│       │   ├── event-setup.js       #   All event listeners: input, shop, cheats, resize
+│       │   ├── player-lifecycle.js  #   Damage, death, respawn, shield tanks
 │       │   ├── shop-manager.js      #   Shop logic, purchases, tab builders
 │       │   └── wave-manager.js      #   Wave lifecycle, spawning, notifications
 │       ├── rendering/         # Canvas rendering (extracted from game-engine)
 │       │   ├── hud-renderer.js    #   32 HUD draw methods (health, minimap, cursor, etc.)
-│       │   └── shop-renderer.js   #   Shop window, tabs, items, scrollbar
+│       │   ├── shop-renderer.js   #   Shop window, tabs, items, scrollbar
+│       │   └── weapon-effects-renderer.js  #   Weapon/skill visual effects
 │       ├── entities/          # Player, enemy, asteroid, bullet, powerup, etc.
 │       └── performance/       # Spatial grid, depth-batch-renderer, nebula renderer
 ├── css/

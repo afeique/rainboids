@@ -255,7 +255,7 @@ export class Asteroid {
         }
 
         // Draw targeting effect if this asteroid is currently targeted (clicked)
-        if (window.gameEngine && window.gameEngine.targetedEntity === this) {
+        if (this.gameEngine && this.gameEngine.targetedEntity === this) {
             this.drawTargetingEffect(ctx);
         }
 

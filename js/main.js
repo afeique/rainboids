@@ -141,6 +141,7 @@ class RainboidsGame {
             this.audioManager,
             this.inputHandler
         );
+        this.uiManager.setGameEngine(this.gameEngine);
         window.gameEngine = this.gameEngine;
         window.game = this.gameEngine; // Expose for UI access
     }

@@ -257,7 +257,7 @@ export class Player {
 
         for (const pickId of picks) {
             // Add 1 temporary stack
-            const config = window.gameEngine?.getPowerupConfig(pickId);
+            const config = this.gameEngine?.getPowerupConfig(pickId);
             if (config) {
                 this.addPowerup(pickId, { ...config, duration }, false);
                 this.tempBonuses.push({
@@ -302,7 +302,7 @@ export class Player {
         // Build subtitle with bonus info
         let subtitle = '+1 Skill Point';
         if (this.lastLevelUpBonus && this.lastLevelUpBonus.length === 2) {
-            const ge = window.gameEngine;
+            const ge = this.gameEngine;
             const name1 = ge?.getPowerupConfig(this.lastLevelUpBonus[0])?.name || this.lastLevelUpBonus[0];
             const name2 = ge?.getPowerupConfig(this.lastLevelUpBonus[1])?.name || this.lastLevelUpBonus[1];
             subtitle += `\nBonus: ${name1} + ${name2} (45s)`;
@@ -311,18 +311,18 @@ export class Player {
             subtitle += '\n+5 Max Health';
         }
 
-        if (window.gameEngine && window.gameEngine.uiManager) {
-            window.gameEngine.uiManager.showMessage(`LEVEL ${this.level}!`, subtitle, 4000, 'top');
+        if (this.gameEngine?.events) {
+            this.gameEngine.events.emit('ui:show-message', { title: `LEVEL ${this.level}!`, subtitle, duration: 4000, position: 'top' });
         }
         
         // Create level up particles via game engine
-        if (window.gameEngine && window.gameEngine.particlePool) {
+        if (this.gameEngine && this.gameEngine.particlePool) {
             this.createLevelUpParticles();
         }
     }
     
     createLevelUpParticles() {
-        const gameEngine = window.gameEngine;
+        const gameEngine = this.gameEngine;
         if (!gameEngine || !gameEngine.particlePool) return;
         
         // Create golden burst particles around player

@@ -422,6 +422,7 @@ export class Enemy {
 
     update(playerRef, gameEngine, gameField = null) {
         if (!this.active) return;
+        this.gameEngine = gameEngine; // Cache ref for draw/takeDamage (removes window.gameEngine dependency)
 
         // Handle warp-in — skip normal AI during warp
         if (this.warping) {
@@ -4310,7 +4311,7 @@ export class Enemy {
         this.drawLightTrail(ctx);
         
         // Draw targeting effect if this enemy is currently targeted (clicked)
-        if (window.gameEngine && window.gameEngine.targetedEntity === this) {
+        if (this.gameEngine && this.gameEngine.targetedEntity === this) {
             this.drawTargetingEffect(ctx);
         }
         
@@ -4394,7 +4395,7 @@ export class Enemy {
         }
         
         // Draw pulsating circle only when targeted (outside of transform)
-        if (window.gameEngine && window.gameEngine.targetedEntity === this) {
+        if (this.gameEngine && this.gameEngine.targetedEntity === this) {
             this.drawPulsatingCircle(ctx);
         }
         
@@ -4453,10 +4454,9 @@ export class Enemy {
 
         ctx.save();
 
-        const gameEngine = window.gameEngine;
-        if (!gameEngine) return;
+        if (!this.gameEngine) return;
 
-        const screenDiagonal = Math.hypot(gameEngine.canvas.width, gameEngine.canvas.height);
+        const screenDiagonal = Math.hypot(this.gameEngine.canvas.width, this.gameEngine.canvas.height);
         const lineLength = screenDiagonal * 1.2;
 
         const endX = this.x + Math.cos(this.laserTargetAngle) * lineLength;
@@ -6100,8 +6100,8 @@ export class Enemy {
         this.health -= damage;
         
         // Create damage number
-        if (window.gameEngine) {
-            window.gameEngine.createDamageNumber(this.x, this.y - this.radius, damage);
+        if (this.gameEngine) {
+            this.gameEngine.createDamageNumber(this.x, this.y - this.radius, damage);
         }
         
         // Safeguard: clamp health between 0 and maxHealth
@@ -6145,7 +6145,7 @@ export class Enemy {
                 this.faceAngle += this.weaverSpinRate;
 
                 // Spark particles intensify as spin builds
-                const ge = gameEngine || window.gameEngine;
+                const ge = gameEngine;
                 if (ge?.particlePool && Math.random() < 0.25 * easedProgress) {
                     const sparkAngle = Math.random() * Math.PI * 2;
                     const sparkDist = this.radius * (0.8 + Math.random() * 0.5);
@@ -6224,14 +6224,14 @@ export class Enemy {
                     // Weaver: fire spiral lasers — each shot fires in the CURRENT faceAngle direction,
                     // creating the spiral pattern as faceAngle rotates at weaverMaxSpinRate
                     if (now - this.weaverLastShot > this.weaverFireInterval) {
-                        this.shootSpiralLaser(gameEngine || window.gameEngine);
+                        this.shootSpiralLaser(gameEngine);
                         this.weaverLastShot = now;
                     }
                 }
                 // Sentinel firing is handled by updateSentinelSweep() via updateShooting()
 
                 // Trailing sparks during arc
-                const ge = gameEngine || window.gameEngine;
+                const ge = gameEngine;
                 if (ge?.particlePool && Math.random() < 0.35) {
                     const p = ge.particlePool.get(this.x, this.y, 'starSparkle');
                     if (p) {

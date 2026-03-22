@@ -375,9 +375,9 @@ export class UIManager {
     }
     
     updatePowerupsList() {
-        if (!this.elements.powerupsList || !window.game?.player) return;
+        if (!this.elements.powerupsList || !this.gameEngine?.player) return;
         
-        const player = window.game.player;
+        const player = this.gameEngine.player;
         const powerups = Array.from(player.powerups.entries());
         
         if (powerups.length === 0) {
@@ -464,6 +464,10 @@ export class UIManager {
         });
     }
     
+    setGameEngine(gameEngine) {
+        this.gameEngine = gameEngine;
+    }
+
     setAudioManager(audioManager) {
         this.audioManager = audioManager;
         this.setupSfxControls();
@@ -662,10 +666,10 @@ export class UIManager {
         
         if (this.elements.shopButton) {
             this.elements.shopButton.addEventListener('click', () => {
-                if (window.game) {
+                if (this.gameEngine) {
                     // Pause game and open shop
-                    window.game.game.state = window.game.GAME_STATES?.PAUSED || 'PAUSED';
-                    window.game.openShop();
+                    this.gameEngine.togglePause();
+                    this.gameEngine.openShop();
                 }
             });
         }
@@ -674,7 +678,7 @@ export class UIManager {
         if (this.elements.pauseOverlay) {
             const dismissOnBackdrop = (e) => {
                 if (!e.target.closest('#pause-menu')) {
-                    if (window.game) window.game.togglePause();
+                    if (this.gameEngine) this.gameEngine.togglePause();
                 }
             };
             this.elements.pauseOverlay.addEventListener('click', dismissOnBackdrop);
@@ -684,18 +688,18 @@ export class UIManager {
         // Pause menu action buttons
         if (this.elements.pauseShopButton) {
             this.elements.pauseShopButton.addEventListener('click', () => {
-                if (window.game) {
+                if (this.gameEngine) {
                     this.elements.pauseOverlay.style.display = 'none';
-                    window.game.openShop();
+                    this.gameEngine.openShop();
                 } else {
-                    console.error('❌ window.game not available for shop button');
+                    console.error('❌ this.gameEngine not available for shop button');
                 }
             });
             this.elements.pauseShopButton.addEventListener('touchstart', (e) => {
                 e.stopPropagation();
-                if (window.game) {
+                if (this.gameEngine) {
                     this.elements.pauseOverlay.style.display = 'none';
-                    window.game.openShop();
+                    this.gameEngine.openShop();
                 }
             }, { passive: true });
         } else {
@@ -704,20 +708,20 @@ export class UIManager {
 
         if (this.elements.pauseResumeButton) {
             this.elements.pauseResumeButton.addEventListener('click', () => {
-                if (window.game) {
-                    window.game.togglePause();
+                if (this.gameEngine) {
+                    this.gameEngine.togglePause();
                 }
             });
             this.elements.pauseResumeButton.addEventListener('touchstart', (e) => {
                 e.stopPropagation();
-                if (window.game) window.game.togglePause();
+                if (this.gameEngine) this.gameEngine.togglePause();
             }, { passive: true });
         }
 
         if (this.elements.hudPauseBtn) {
             this.elements.hudPauseBtn.addEventListener('click', () => {
-                if (window.game) {
-                    window.game.togglePause();
+                if (this.gameEngine) {
+                    this.gameEngine.togglePause();
                 }
             });
             // On mobile the document-level touchstart calls e.preventDefault() on every
@@ -727,8 +731,8 @@ export class UIManager {
             this.elements.hudPauseBtn.addEventListener('touchstart', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                if (window.game) {
-                    window.game.togglePause();
+                if (this.gameEngine) {
+                    this.gameEngine.togglePause();
                 }
             }, { passive: false });
         }
@@ -932,8 +936,8 @@ export class UIManager {
     
     showMusicTab() {
         // Pause the game
-        if (window.game) {
-            window.game.togglePause();
+        if (this.gameEngine) {
+            this.gameEngine.togglePause();
         }
         
         // Switch to music tab
@@ -1186,7 +1190,7 @@ export class UIManager {
     }
 
     populateSkillSlots() {
-        const ge = window.gameEngine;
+        const ge = this.gameEngine;
         if (!ge || !ge.player) return;
 
         const player = ge.player;
