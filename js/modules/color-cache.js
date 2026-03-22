@@ -3,7 +3,7 @@
 // for O(1) access instead of per-frame template literal construction.
 //
 // Benchmark: ~10× faster for a full frame of ~100 color strings.
-// See benchmark/scripts/color-cache.bench.js
+// See tools/benchmark/scripts/color-cache.bench.js
 
 const tables = new Map();
 

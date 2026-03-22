@@ -32,7 +32,7 @@ const jsonMode = hasFlag('--json');
 const outputFile = getArg('--output');
 
 const BENCH_DIR = new URL('./scripts/', import.meta.url).pathname;
-const RESULTS_DIR = resolve(process.cwd(), 'benchmark', 'results');
+const RESULTS_DIR = resolve(process.cwd(), 'tools', 'benchmark', 'results');
 
 async function main() {
   const available = detectEngines();

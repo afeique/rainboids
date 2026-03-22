@@ -37,7 +37,7 @@ const headed = getArg('headed', false);
 const sessionsCount = parseInt(getArg('sessions', '1'), 10);
 const bugsOnly = getArg('bugs-only', false);
 const reportOnly = getArg('report', false);
-const reportsDir = resolve(getArg('reports-dir', 'ai-qa-bot/reports'));
+const reportsDir = resolve(getArg('reports-dir', 'tools/ai-qa-bot/reports'));
 
 // ── Report-only mode ─────────────────────────────────────────────
 

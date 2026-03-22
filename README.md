@@ -43,7 +43,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Movement**: Touch and drag (dynamic joystick appears at touch point)
 - **Pause**: Touch pause button (top-right)
 
-> Mobile touch controls currently support movement only. Aiming, firing, abilities, and weapon switching are not yet available on touch devices. A full dual-stick control system is planned — see [SKU_deployment.md](SKU_deployment.md#mobile-touch-controls) for details.
+> Mobile touch controls currently support movement only. Aiming, firing, abilities, and weapon switching are not yet available on touch devices. A full dual-stick control system is planned — see [SKU_deployment.md](docs/SKU_deployment.md#mobile-touch-controls) for details.
 
 ### Cheat Codes
 - **SHIFT+1-8**: Spawn individual enemy types
@@ -270,7 +270,7 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 ├── package.json               # Dependencies and scripts
 ├── VERSION                    # Current semantic version
 ├── CHANGELOG.md               # Full version history
-├── REFACTOR.md                # Architecture plan, coding rules, extraction status
+├── CLAUDE.md                  # Claude Code project instructions
 ├── js/
 │   ├── main.js                # Game initialization
 │   ├── playlist-data.js       # Music playlist configuration
@@ -299,13 +299,23 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 ├── css/
 │   └── styles.css             # Game styling and mobile layout
 ├── music/                     # 58 MP3 tracks (~336MB)
+├── docs/                      # Planning docs, analysis, and research
+│   ├── REFACTOR.md            #   Architecture plan, coding rules, extraction status
+│   ├── SKU_deployment.md      #   Multi-platform deployment plan
+│   ├── WEAPONS_PLANNING_2026-03-10.md
+│   ├── ai-qa-bot-plan.md
+│   └── ... (performance analyses, enemy permutations, etc.)
+├── tools/                     # Development tools and automation
+│   ├── benchmark/             #   Mitata microbenchmark suite
+│   ├── ai-qa-bot/             #   AI QA bot for automated playtesting
+│   ├── scripts/               #   Playlist generation and utilities
+│   └── juice-capture.mjs      #   Juice tuning screen capture
 ├── tests/
 │   ├── unit/                  # Jest unit tests
 │   ├── qa/                    # Playwright smoke tests (95 tests)
 │   ├── e2e/                   # Playwright E2E suite
 │   ├── performance/           # FPS benchmark tests
 │   └── helpers/               # Game helpers and AI playtester
-├── perf/                      # Microbenchmark suite (mitata)
 └── dist/                      # Production build output
 ```
 

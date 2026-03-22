@@ -52,7 +52,7 @@ export const DEFAULT_CONFIG = {
     ],
 
     // Reporting
-    reportsDir: 'ai-qa-bot/reports',
+    reportsDir: 'tools/ai-qa-bot/reports',
     screenshotOnBug: true,
     screenshotIntervalMs: 10_000,  // Periodic screenshots every 10s
 

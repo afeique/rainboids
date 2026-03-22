@@ -5,13 +5,13 @@ js/dist/
 npm-debug.log*
 
 # Benchmark output
-benchmark/results/*
-benchmark/comparisons/*
+tools/benchmark/results/*
+tools/benchmark/comparisons/*
 .bench-worktree-*
 allure-results/*
 
 # AI QA Bot session data
-ai-qa-bot/reports/*
+tools/ai-qa-bot/reports/*
 
 # Juice tuning clips and screenshots
-juice-clips/
+tools/juice-clips/

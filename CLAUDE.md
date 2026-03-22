@@ -46,3 +46,25 @@ After completing code changes, you MUST check whether `README.md` needs updating
 **Key clarification:** A refactor that creates new directories or files (e.g., extracting modules into `core/`, `systems/`, `rendering/`) IS a structural change and MUST be reflected in README.md's project structure section — even if the player-facing feature set is unchanged.
 
 Keep README.md concise and accurate. When in doubt, update it — stale documentation is worse than a small extra edit.
+
+## Directory Hygiene (MANDATORY)
+
+The project root must stay clean. Only core game files and standard config files belong at the root level. Everything else has a designated home:
+
+| Directory | Purpose | Examples |
+|-----------|---------|---------|
+| `js/` | Game source code | modules, entities, rendering, systems |
+| `css/` | Stylesheets | styles.css |
+| `docs/` | Planning docs, analysis, research | REFACTOR.md, SKU_deployment.md, performance analyses |
+| `tools/` | Development tools and automation | benchmark/, ai-qa-bot/, scripts/, juice-capture.mjs |
+| `tests/` | All test suites | unit/, qa/, e2e/, performance/, helpers/ |
+| `music/` | Audio assets | MP3 tracks |
+| `archive/` | Deprecated/superseded code | old benchmark runner |
+
+**Rules:**
+- **New planning/analysis documents** → `docs/`, never the project root
+- **New development tools, scripts, or automation** → `tools/`, never the project root
+- **New test files** → appropriate subdirectory under `tests/`
+- **Do NOT create new top-level directories** without explicit user approval — use the existing structure
+- **Do NOT leave generated artifacts, scratch files, or analysis outputs** in the project root
+- When creating new files, always check if an existing directory is the right home before defaulting to the root

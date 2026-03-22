@@ -77,7 +77,7 @@ const failOnRegress   = args.includes('--fail-on-regression');
 const THRESHOLD = thresholdArg ? parseFloat(thresholdArg) / 100 : 0.15;
 
 const ROOT        = process.cwd();
-const COMPARE_DIR = resolve(ROOT, 'benchmark', 'comparisons');
+const COMPARE_DIR = resolve(ROOT, 'tools', 'benchmark', 'comparisons');
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
@@ -113,8 +113,8 @@ async function main() {
   await writeFile(jsonPath, JSON.stringify(comparison, null, 2));
   await writeFile(htmlPath, generateCompareReport(comparison, THRESHOLD));
 
-  console.error(`\n  Saved: benchmark/comparisons/compare-${ts}.json`);
-  console.error(`         benchmark/comparisons/compare-${ts}.html`);
+  console.error(`\n  Saved: tools/benchmark/comparisons/compare-${ts}.json`);
+  console.error(`         tools/benchmark/comparisons/compare-${ts}.html`);
 
   // Optionally exit non-zero when regressions exceed threshold (useful in CI)
   const regressions = rows.filter(r => r.delta !== null && r.delta > THRESHOLD);
@@ -135,8 +135,8 @@ async function runOnRef(ref) {
   try {
     execSync(`git worktree add --detach "${wtDir}" "${ref}"`, { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' });
 
-    // Copy benchmark/ scripts and symlink node_modules
-    execSync(`cp -r "${resolve(ROOT, 'benchmark')}" "${wtDir}/benchmark"`, { cwd: ROOT });
+    // Copy tools/benchmark/ scripts and symlink node_modules
+    execSync(`mkdir -p "${wtDir}/tools" && cp -r "${resolve(ROOT, 'tools', 'benchmark')}" "${wtDir}/tools/benchmark"`, { cwd: ROOT });
     execSync(`ln -sf "${resolve(ROOT, 'node_modules')}" "${wtDir}/node_modules"`, { cwd: ROOT });
 
     return runBenchmarks(wtDir);
@@ -147,7 +147,7 @@ async function runOnRef(ref) {
 }
 
 function runBenchmarks(dir) {
-  const runArgs = ['benchmark/run.js', '--json', '--engine', enginesArg];
+  const runArgs = ['tools/benchmark/run.js', '--json', '--engine', enginesArg];
   if (suiteArg) runArgs.push('--suite', suiteArg);
 
   const result = spawnSync('node', runArgs, {
