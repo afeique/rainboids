@@ -242,9 +242,9 @@ function avg(arr) {
 }
 
 function ratingLabel(score) {
-    if (score >= 85) return 'Excellent';
-    if (score >= 70) return 'Good';
-    if (score >= 55) return 'Fair';
-    if (score >= 40) return 'Poor';
+    if (score >= 80) return 'Excellent';
+    if (score >= 60) return 'Good';
+    if (score >= 45) return 'Fair';
+    if (score >= 30) return 'Poor';
     return 'Critical';
 }

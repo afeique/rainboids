@@ -30,11 +30,11 @@ const SKILL_HEALTH_THRESHOLD = 0.5;
 
 // Weapon engagement profiles
 const WEAPON_ENGAGEMENT = {
-    PULSE_CANNON:   { min: 200, max: 380, style: 'tracking' },
-    STORM_NEEDLES:  { min: 100, max: 280, style: 'tracking' },
-    SCATTER_GUN:    { min: 50,  max: 200, style: 'snapshot' },
-    RAIL_DRIVER:    { min: 350, max: 650, style: 'snapshot' },
-    LANCE_BEAM:     { min: 150, max: 320, style: 'tracking' },
+    PULSE_CANNON:   { min: 250, max: 420, style: 'tracking' },
+    STORM_NEEDLES:  { min: 180, max: 350, style: 'tracking' },
+    SCATTER_GUN:    { min: 80,  max: 220, style: 'snapshot' },
+    RAIL_DRIVER:    { min: 400, max: 700, style: 'snapshot' },
+    LANCE_BEAM:     { min: 200, max: 380, style: 'tracking' },
 };
 
 // Default engagement range when weapon is unknown or adaptation is off
@@ -75,6 +75,10 @@ export class CombatAI {
         this._blindToEntities = new Set(); // Set of "type:x:y" keys
         this._lastBlindUpdate = 0;
 
+        // Respawn protection state
+        this._respawnTime = 0;
+        this._prevHealth = null;
+
         // Interest/danger maps (reused each tick to avoid allocation)
         this._interest = new Float32Array(STEERING_DIRS);
         this._danger = new Float32Array(STEERING_DIRS);
@@ -91,6 +95,33 @@ export class CombatAI {
         const player = state.player;
         const field = state.field;
         const entities = state.entities;
+
+        // Detect respawn: health jumped up from 0 or near-0
+        if (this._prevHealth !== null && this._prevHealth <= 0 && player.health > 0) {
+            this._respawnTime = now;
+        }
+        this._prevHealth = player.health;
+
+        // Respawn protection: flee toward center for 2.5 seconds after respawn
+        const respawnGracePeriod = 2500;
+        if (now - this._respawnTime < respawnGracePeriod && this._respawnTime > 0) {
+            const cx = field.width / 2;
+            const cy = field.height / 2;
+            const fleeAngle = Math.atan2(cy - player.y, cx - player.x);
+            const inputs = {
+                up: Math.sin(fleeAngle) < -0.3,
+                down: Math.sin(fleeAngle) > 0.3,
+                left: Math.cos(fleeAngle) < -0.3,
+                right: Math.cos(fleeAngle) > 0.3,
+                fire: true,
+                fireSecondary: false,
+                skill1: false, skill2: false, skill3: false, skill4: false,
+                aimX: player.x + Math.cos(player.angle || 0) * 200,
+                aimY: player.y + Math.sin(player.angle || 0) * 200,
+            };
+            this._pendingInputs = inputs;
+            return inputs;
+        }
 
         // Reaction delay simulation with jitter
         const jitter = this.combat.reactionJitter || 0;
@@ -228,6 +259,14 @@ export class CombatAI {
         interest.fill(0);
         danger.fill(0);
 
+        // Health-aware retreat: when hurt, increase desire to keep distance
+        const healthPct = player.health / Math.max(1, player.maxHealth);
+        const retreatUrgency = healthPct < 0.4 ? (0.4 - healthPct) * 2.0 : 0; // 0-0.8 urgency
+
+        // Threat count modifier: more enemies = more cautious approach
+        const visibleEnemies = entities.enemies.filter(e => !this._isBlind(e)).length;
+        const crowdCaution = Math.min(0.4, visibleEnemies * 0.1); // 0.1 per enemy, max 0.4
+
         // Interest: move toward target at weapon-ideal range
         if (target) {
             const dx = target.x - player.x;
@@ -235,22 +274,25 @@ export class CombatAI {
             const dist = target.dist;
             const idealCenter = (engagement.min + engagement.max) / 2;
 
+            // Effective pursuit reduced by health pressure and crowd
+            const effectivePursuit = Math.max(0.1, this.combat.pursuitAggression - retreatUrgency - crowdCaution);
+
             if (dist > engagement.max) {
-                // Too far — pursue
+                // Too far — pursue (but cautiously when hurt or surrounded)
                 const toTargetAngle = Math.atan2(dy, dx);
-                this._addInterest(interest, toTargetAngle, this.combat.pursuitAggression);
-            } else if (dist < engagement.min) {
-                // Too close — retreat
+                this._addInterest(interest, toTargetAngle, effectivePursuit);
+            } else if (dist < engagement.min || retreatUrgency > 0.3) {
+                // Too close OR health-critical — retreat
                 const awayAngle = Math.atan2(-dy, -dx);
-                this._addInterest(interest, awayAngle, 0.6);
+                this._addInterest(interest, awayAngle, 0.6 + retreatUrgency);
             } else {
                 // In sweet spot — circle strafe
                 if (this.combat.circleStrafePreference > 0) {
                     const perpAngle = Math.atan2(dy, dx) + Math.PI / 2;
                     this._addInterest(interest, perpAngle, this.combat.circleStrafePreference);
                 }
-                // Slight interest toward ideal center
-                if (dist > idealCenter) {
+                // Slight interest toward ideal center (reduced when hurt)
+                if (dist > idealCenter && retreatUrgency < 0.1) {
                     const toAngle = Math.atan2(dy, dx);
                     this._addInterest(interest, toAngle, 0.15);
                 }
@@ -281,6 +323,8 @@ export class CombatAI {
 
         // Danger: enemy bullets (velocity obstacle)
         if (this.combat.bulletAwareness > 0) {
+            const reactionS = (this.preset.reactionMs || 200) / 1000;
+
             for (const b of entities.enemyBullets) {
                 // Skip bullets based on awareness (random cull)
                 if (Math.random() > this.combat.bulletAwareness) continue;
@@ -297,31 +341,36 @@ export class CombatAI {
                 // Time to closest approach
                 const bSpeed2 = b.vx * b.vx + b.vy * b.vy;
                 if (bSpeed2 < 0.01) continue;
+                const bSpeed = Math.sqrt(bSpeed2);
                 const t = -dot / bSpeed2;
                 const closestX = dx + b.vx * t;
                 const closestY = dy + b.vy * t;
                 const closestDist = Math.hypot(closestX, closestY);
 
-                if (closestDist < 60) { // Will pass close
+                // Dynamic threshold: bullet speed * reaction time, clamped 60-150px
+                const dodgeThreshold = Math.min(150, Math.max(60, bSpeed * reactionS * 1.5));
+
+                if (closestDist < dodgeThreshold) {
                     const bulletAngle = Math.atan2(dy, dx);
-                    const intensity = (1 - closestDist / 60) * this.combat.dangerSensitivity;
+                    const intensity = (1 - closestDist / dodgeThreshold) * this.combat.dangerSensitivity;
                     this._addDanger(danger, bulletAngle, intensity * 0.8);
                 }
             }
         }
 
-        // Danger: arena boundaries
+        // Danger: arena boundaries (scales with proximity — closer = more danger)
+        const wallProximity = (margin, pos) => Math.max(0, 1 - pos / margin);
         if (player.x < WALL_MARGIN) {
-            this._addDanger(danger, Math.PI, 0.7); // left wall
+            this._addDanger(danger, Math.PI, 0.5 * wallProximity(WALL_MARGIN, player.x));
         }
         if (player.x > field.width - WALL_MARGIN) {
-            this._addDanger(danger, 0, 0.7); // right wall
+            this._addDanger(danger, 0, 0.5 * wallProximity(WALL_MARGIN, field.width - player.x));
         }
         if (player.y < WALL_MARGIN) {
-            this._addDanger(danger, -Math.PI / 2, 0.7); // top wall
+            this._addDanger(danger, -Math.PI / 2, 0.5 * wallProximity(WALL_MARGIN, player.y));
         }
         if (player.y > field.height - WALL_MARGIN) {
-            this._addDanger(danger, Math.PI / 2, 0.7); // bottom wall
+            this._addDanger(danger, Math.PI / 2, 0.5 * wallProximity(WALL_MARGIN, field.height - player.y));
         }
 
         // Danger: asteroids nearby (scale danger radius with asteroid size)
@@ -334,6 +383,14 @@ export class CombatAI {
                 const intensity = (1 - dist / dangerDist) * 0.7 * this.combat.dangerSensitivity;
                 this._addDanger(danger, angle, intensity);
             }
+        }
+
+        // Cap danger so flee fallback has meaningful differentiation
+        // and interest can compete with multiple simultaneous threats
+        const maxDanger = Math.max(...danger);
+        if (maxDanger > 1.5) {
+            const scale = 1.5 / maxDanger;
+            for (let i = 0; i < STEERING_DIRS; i++) danger[i] *= scale;
         }
     }
 
@@ -373,7 +430,18 @@ export class CombatAI {
         }
 
         if (bestDir < 0 || bestScore < 0.01) {
-            return { x: 0, y: 0 };
+            // All directions blocked — flee the LEAST dangerous direction
+            let minDanger = Infinity;
+            let fleeDir = 0;
+            for (let i = 0; i < STEERING_DIRS; i++) {
+                if (danger[i] < minDanger) {
+                    minDanger = danger[i];
+                    fleeDir = i;
+                }
+            }
+            // Only freeze if there's truly no danger at all (no enemies)
+            if (minDanger <= 0) return { x: 0, y: 0 };
+            return { x: DIR_VECTORS[fleeDir].x * 0.5, y: DIR_VECTORS[fleeDir].y * 0.5 };
         }
 
         // Blend the best direction with its neighbors for smooth steering
@@ -438,8 +506,10 @@ export class CombatAI {
     _degradeMovement(move, player, now) {
         const skillFactor = this.preset.movementSkill || this.preset.aimAccuracy; // 0.1 (novice) to 0.97 (expert)
         const commitMs = this.combat.movementCommitment || (500 + (1 - skillFactor) * 1500);
-        const driftChance = Math.max(0, 0.6 - skillFactor * 0.6); // novice: 0.54, expert: 0.018
-        const hesitationChance = Math.max(0, 0.35 - skillFactor * 0.35); // novice: 0.315, expert: 0.01
+        // Quadratic curve: high-skill players get much less degradation
+        // novice(0.08): 51%/30%, beginner(0.25): 34%/20%, intermediate(0.55): 12%/7%, advanced(0.88): 0.9%/0.5%, expert(0.97): 0.05%/0.03%
+        const driftChance = Math.max(0, 0.6 * (1 - skillFactor) ** 2);
+        const hesitationChance = Math.max(0, 0.35 * (1 - skillFactor) ** 2);
 
         // Panic mode — when health is low, low-skill players move erratically
         const healthPct = player.health / Math.max(1, player.maxHealth);

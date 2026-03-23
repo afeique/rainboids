@@ -43,9 +43,13 @@ export class FunAnalyzer {
         const pacing = this.scorePacing();
         const excitement = this.scoreExcitement();
 
-        // Composite (choiceDepth excluded — requires cross-session data)
+        // Composite with weakest-link penalty
         const dimensionScores = { engagement, challengeBalance, competenceGrowth, pacing, excitement };
-        const overall = Math.round(
+        const allScores = [
+            engagement.score, challengeBalance.score, competenceGrowth.score,
+            pacing.score, excitement.score,
+        ];
+        let overall = Math.round(
             WEIGHTS.engagement * engagement.score +
             WEIGHTS.challengeBalance * challengeBalance.score +
             WEIGHTS.excitement * excitement.score +
@@ -54,6 +58,12 @@ export class FunAnalyzer {
             // Choice depth gets neutral 50 when not available
             WEIGHTS.choiceDepth * 50
         );
+
+        // Weakest-link: if any dimension < 35, apply multiplicative drag (floor at 0.3×)
+        const minScore = Math.min(...allScores);
+        if (minScore < 35) {
+            overall = Math.round(overall * Math.max(0.3, minScore / 35));
+        }
 
         // Per-wave scores
         const perWave = this.waves.map(w => ({
@@ -97,36 +107,50 @@ export class FunAnalyzer {
     // ── Dimension Scorers ───────────────────────────────────────
 
     scoreEngagement() {
-        let score = 100;
+        let score = 60; // Start at mediocre — must earn points
         const issues = [];
 
+        let lowActionWaves = 0;
         for (const w of this.waves) {
-            // Low action density = boredom
-            // Calibrated for 2-4 enemies per wave: 0.3 events/s is reasonable
+            // Good action density earns points
+            if (w.actionDensity >= 0.5 && w.actionDensity <= 2.5) {
+                score += 4;
+            }
+            // Low action density = boredom (harsh)
             if (w.actionDensity < 0.3) {
-                score -= 5 * (0.3 - w.actionDensity) / 0.3;
+                score -= 8;
+                lowActionWaves++;
                 issues.push(`Wave ${w.wave}: low action density (${w.actionDensity.toFixed(2)} events/s)`);
+            } else if (w.actionDensity < 0.5) {
+                score -= 4;
+                lowActionWaves++;
             }
             // Excessive action density = chaos
             if (w.actionDensity > 3.0) {
-                score -= 2 * (w.actionDensity - 3.0);
+                score -= 3 * (w.actionDensity - 3.0);
                 issues.push(`Wave ${w.wave}: chaotic action density (${w.actionDensity.toFixed(1)} events/s)`);
             }
-            // Idle time quality: only penalize when rest quality is poor
+            // Idle time with poor rest quality
             if (w.idleRatio > 0.30 && (w.restQuality || 0.5) < 0.4) {
-                score -= 4 * (w.idleRatio - 0.30);
-                issues.push(`Wave ${w.wave}: unproductive idle time (${(w.idleRatio * 100).toFixed(0)}% idle, rest quality ${((w.restQuality || 0.5) * 100).toFixed(0)}%)`);
+                score -= 6;
+                issues.push(`Wave ${w.wave}: unproductive idle time (${(w.idleRatio * 100).toFixed(0)}% idle)`);
             }
             // Low threat saturation
             if (w.threatSaturation < 0.001) {
-                score -= 2;
+                score -= 3;
             }
+        }
+
+        // Compounding penalty for multiple low-action waves
+        if (lowActionWaves >= 3) {
+            score -= (lowActionWaves - 2) * 5;
+            issues.push(`${lowActionWaves} waves with low action density — persistent boredom`);
         }
 
         // Engagement dips: waves with essentially zero action
         const dips = this.waves.filter(w => w.actionDensity < 0.1);
         if (dips.length > 0) {
-            score -= dips.length * 5;
+            score -= dips.length * 7;
             issues.push(`${dips.length} wave(s) with < 0.1 action density (engagement dips)`);
         }
 
@@ -134,34 +158,44 @@ export class FunAnalyzer {
     }
 
     scoreChallengeBalance() {
-        let score = 100;
+        let score = 65; // Start slightly above mediocre — earn points for balance
         const issues = [];
 
+        let wellBalancedWaves = 0;
         for (const w of this.waves) {
-            // Multiple deaths in one wave = spike
-            if (w.deaths > 1) {
-                score -= 8 * (w.deaths - 1);
-                issues.push(`Wave ${w.wave}: ${w.deaths} deaths (difficulty spike)`);
+            // Sweet spot: damage ratio 2:1 to 6:1
+            if (w.damageRatio >= 2 && w.damageRatio <= 6 && w.kills > 0) {
+                wellBalancedWaves++;
+                score += 3;
             }
 
-            // Extreme damage ratios
-            if (w.damageRatio > 12 && w.kills > 0) {
-                score -= 2;
+            // Deaths
+            if (w.deaths > 1) {
+                score -= 10 * (w.deaths - 1);
+                issues.push(`Wave ${w.wave}: ${w.deaths} deaths (difficulty spike)`);
+            } else if (w.deaths === 1) {
+                score -= 3;
+            }
+
+            // Too easy (tightened from 12:1 to 8:1)
+            if (w.damageRatio > 8 && w.kills > 0) {
+                score -= 4;
                 issues.push(`Wave ${w.wave}: damage ratio ${w.damageRatio.toFixed(1)}:1 (too easy)`);
             }
+            // Too hard
             if (w.damageRatio < 1.5 && w.damageEventsTaken > 0) {
-                score -= 4;
+                score -= 6;
                 issues.push(`Wave ${w.wave}: damage ratio ${w.damageRatio.toFixed(1)}:1 (too hard)`);
             }
 
             // Wave too fast (trivial)
             if (w.durationS < 8 && w.kills > 0) {
-                score -= 3;
+                score -= 4;
                 issues.push(`Wave ${w.wave}: cleared in ${w.durationS.toFixed(1)}s (trivially fast)`);
             }
             // Wave too slow (grindy)
             if (w.durationS > 60) {
-                score -= 4;
+                score -= 5;
                 issues.push(`Wave ${w.wave}: took ${w.durationS.toFixed(1)}s (too slow)`);
             }
         }
@@ -171,7 +205,7 @@ export class FunAnalyzer {
             const prev = this.waves[i - 1].totalDamageTaken || 1;
             const cur = this.waves[i].totalDamageTaken || 0;
             if (cur > prev * 3 && cur > 5) {
-                score -= 6;
+                score -= 8;
                 issues.push(`Difficulty spike at wave ${this.waves[i].wave}: damage taken jumped ${prev.toFixed(0)} → ${cur.toFixed(0)}`);
             }
         }
@@ -185,30 +219,33 @@ export class FunAnalyzer {
         let score = 50; // Neutral baseline
         const issues = [];
 
-        // Combat effectiveness trend (geometric mean of offense and defense)
+        // Combat effectiveness trend — gated by R² for statistical significance
         const effectiveness = this.waves.map(w => w.combatEffectiveness || w.healthFloor);
         const ceSlope = linearRegressionSlope(effectiveness);
-        if (ceSlope > 0.005) score += Math.min(20, ceSlope * 2000);
+        const ceR2 = linearRegressionR2(effectiveness);
+        if (ceSlope > 0.005 && ceR2 > 0.15) score += Math.min(20, ceSlope * 2000 * ceR2);
         else if (ceSlope < -0.005) {
-            score -= Math.min(15, -ceSlope * 1500);
-            issues.push(`Combat effectiveness declining (slope: ${ceSlope.toFixed(4)})`);
+            score -= Math.min(20, -ceSlope * 2000);
+            issues.push(`Combat effectiveness declining (slope: ${ceSlope.toFixed(4)}, R²: ${ceR2.toFixed(2)})`);
         }
 
-        // Kill efficiency trend (kills per action-density-second)
+        // Kill efficiency trend
         const efficiencies = this.waves.map(w => w.kills / Math.max(1, w.durationS));
         const effSlope = linearRegressionSlope(efficiencies);
-        if (effSlope > 0.005) score += Math.min(15, effSlope * 1000);
+        const effR2 = linearRegressionR2(efficiencies);
+        if (effSlope > 0.005 && effR2 > 0.15) score += Math.min(15, effSlope * 1000 * effR2);
         else if (effSlope < -0.005) {
-            score -= Math.min(10, -effSlope * 1000);
+            score -= Math.min(15, -effSlope * 1500);
             issues.push(`Kill efficiency declining`);
         }
 
-        // Damage ratio trend (should stay stable or improve)
+        // Damage ratio trend
         const dmgRatios = this.waves.map(w => w.damageRatio);
         const dmgSlope = linearRegressionSlope(dmgRatios);
-        if (dmgSlope > 0) score += Math.min(15, dmgSlope * 100);
+        const dmgR2 = linearRegressionR2(dmgRatios);
+        if (dmgSlope > 0 && dmgR2 > 0.15) score += Math.min(15, dmgSlope * 100 * dmgR2);
         else if (dmgSlope < -0.1) {
-            score -= Math.min(10, -dmgSlope * 50);
+            score -= Math.min(15, -dmgSlope * 80);
             issues.push(`Damage ratio worsening over time`);
         }
 
@@ -218,60 +255,66 @@ export class FunAnalyzer {
     scorePacing() {
         if (this.waves.length < 3) return { score: 50, issues: ['Not enough waves for pacing analysis'] };
 
-        let score = 100;
+        let score = 50; // Neutral baseline — must earn points
         const issues = [];
 
-        // 1. Tension arc quality — waves should have build-release patterns
+        // 1. Tension arc quality: EARN points for arcs
         let wavesWithArcs = 0;
         for (const w of this.waves) {
             if ((w.tensionArcs || 0) > 0) wavesWithArcs++;
         }
         const arcCoverage = wavesWithArcs / this.waves.length;
-        if (arcCoverage < 0.3) {
-            score -= 12;
+        if (arcCoverage >= 0.6) {
+            score += 20;
+        } else if (arcCoverage >= 0.4) {
+            score += 10;
+        } else if (arcCoverage < 0.2) {
+            score -= 15;
             issues.push(`Only ${(arcCoverage * 100).toFixed(0)}% of waves have tension arcs (target > 50%)`);
-        } else if (arcCoverage > 0.5) {
-            score += 5;
         }
 
-        // 2. Tension variety across waves — should not be monotone
+        // 2. Tension variety: EARN points for varied intensity
         const tensionMeans = this.waves.map(w => w.tensionMean || 0);
         const tensionSpread = this._stddev(tensionMeans);
-        if (tensionSpread < 0.03) {
-            score -= 8;
+        if (tensionSpread > 0.08) {
+            score += 12;
+        } else if (tensionSpread > 0.04) {
+            score += 5;
+        } else {
+            score -= 10;
             issues.push(`Low tension variety across waves (spread: ${tensionSpread.toFixed(3)})`);
         }
 
-        // 3. Rest quality across session
+        // 3. Rest quality: good rests earn points, bad rests lose
         const avgRestQuality = this.waves.reduce((s, w) => s + (w.restQuality || 0.5), 0) / this.waves.length;
-        if (avgRestQuality < 0.3) {
-            score -= 8;
+        if (avgRestQuality > 0.7) {
+            score += 8;
+        } else if (avgRestQuality < 0.3) {
+            score -= 10;
             issues.push(`Poor rest quality (${(avgRestQuality * 100).toFixed(0)}%) — dead time without purpose`);
-        } else if (avgRestQuality > 0.7) {
-            score += 5;
         }
 
-        // 4. Intensity escalation — peak tension should generally rise across session
+        // 4. Intensity escalation
         const peakTensions = this.waves.map(w => {
             if (!w.tensionSamples || w.tensionSamples.length === 0) return 0;
             return Math.max(...w.tensionSamples);
         });
         const peakSlope = linearRegressionSlope(peakTensions);
-        if (peakSlope < -0.01 && this.waves.length > 5) {
-            score -= 6;
+        if (peakSlope > 0.01) {
+            score += 8;
+        } else if (peakSlope < -0.01 && this.waves.length > 5) {
+            score -= 8;
             issues.push(`Peak tension declining over session (slope: ${peakSlope.toFixed(3)})`);
-        } else if (peakSlope > 0.005) {
-            score += 3;
         }
 
-        // 5. Monotony detection based on tension means
+        // 5. Monotony detection — harsher penalties
         let monotoneStreak = 0;
         for (let i = 1; i < tensionMeans.length; i++) {
             const change = Math.abs(tensionMeans[i] - tensionMeans[i - 1]) / Math.max(0.01, tensionMeans[i - 1]);
             if (change < 0.15) {
                 monotoneStreak++;
                 if (monotoneStreak >= 2) {
-                    score -= 5;
+                    score -= 8;
                     issues.push(`Monotone tension: waves ${this.waves[i - monotoneStreak].wave}-${this.waves[i].wave}`);
                 }
             } else {
@@ -283,11 +326,11 @@ export class FunAnalyzer {
         const durations = this.waves.map(w => w.durationS);
         const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
         if (avgDuration < 10) {
-            score -= 5;
+            score -= 8;
             issues.push(`Average wave duration too short (${avgDuration.toFixed(1)}s)`);
         }
         if (avgDuration > 50) {
-            score -= 5;
+            score -= 8;
             issues.push(`Average wave duration too long (${avgDuration.toFixed(1)}s)`);
         }
 
@@ -338,10 +381,10 @@ export class FunAnalyzer {
             score += 8; // Outside ideal but acceptable
         }
 
-        // Health crises: some tension is good
+        // Health crises: some tension is good (capped lower)
         const hcPerWave = totalHealthCrises / waveCount;
         if (hcPerWave >= 1 && hcPerWave <= 15) {
-            score += 8;
+            score += 5;
         } else if (hcPerWave === 0) {
             score -= 5;
             issues.push('No health crises — no tension');
@@ -360,9 +403,9 @@ export class FunAnalyzer {
             score += Math.min(8, totalMultiKills * 2);
         }
 
-        // Survival recoveries: dramatic comebacks
+        // Survival recoveries: dramatic comebacks (capped lower)
         if (totalRecoveries > 0) {
-            score += Math.min(10, totalRecoveries * 4);
+            score += Math.min(6, totalRecoveries * 2);
         } else if (waveCount > 5) {
             issues.push('No survival recoveries — missing dramatic comeback moments');
         }
@@ -373,6 +416,16 @@ export class FunAnalyzer {
         else if (avgVelocityVar < 0.5) {
             score -= 3;
             issues.push('Low movement dynamism — player barely dodging');
+        }
+
+        // Death penalty: deaths are frustrating, not exciting
+        const totalDeaths = this.waves.reduce((sum, w) => sum + w.deaths, 0);
+        const deathsPerWave = totalDeaths / waveCount;
+        if (deathsPerWave > 0.5) {
+            score -= Math.min(20, (deathsPerWave - 0.5) * 15);
+            issues.push(`High death rate (${deathsPerWave.toFixed(1)}/wave) — frustrating, not exciting`);
+        } else if (deathsPerWave > 0.2) {
+            score -= Math.min(8, (deathsPerWave - 0.2) * 10);
         }
 
         return { score: clamp(score), issues: dedup(issues, 5) };
@@ -546,10 +599,10 @@ export class FunAnalyzer {
     }
 
     _rating(score) {
-        if (score >= 85) return 'Excellent';
-        if (score >= 70) return 'Good';
-        if (score >= 55) return 'Fair';
-        if (score >= 40) return 'Poor';
+        if (score >= 80) return 'Excellent';
+        if (score >= 60) return 'Good';
+        if (score >= 45) return 'Fair';
+        if (score >= 30) return 'Poor';
         return 'Critical';
     }
 }
@@ -577,6 +630,21 @@ export function linearRegressionSlope(values) {
     const denom = n * sumX2 - sumX * sumX;
     if (denom === 0) return 0;
     return (n * sumXY - sumX * sumY) / denom;
+}
+
+export function linearRegressionR2(values) {
+    const n = values.length;
+    if (n < 3) return 0;
+    const slope = linearRegressionSlope(values);
+    const meanY = values.reduce((a, b) => a + b, 0) / n;
+    let ssTot = 0, ssRes = 0;
+    for (let i = 0; i < n; i++) {
+        const predicted = meanY + slope * (i - (n - 1) / 2);
+        ssTot += (values[i] - meanY) ** 2;
+        ssRes += (values[i] - predicted) ** 2;
+    }
+    if (ssTot < 0.0001) return 0;
+    return 1 - ssRes / ssTot;
 }
 
 export function shannonEntropy(counts) {
