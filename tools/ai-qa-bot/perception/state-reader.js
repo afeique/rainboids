@@ -193,7 +193,7 @@ export class StateReader {
             return result;
         });
         for (const kill of kills) {
-            events.push({ type: 'enemy_killed', enemyType: kill.type });
+            events.push({ type: 'enemy_killed', enemyType: kill.type, maxHealth: kill.maxHealth || 1 });
         }
 
         this._prev = state;

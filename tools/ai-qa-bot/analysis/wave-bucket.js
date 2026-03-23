@@ -49,6 +49,10 @@ export class WaveBucket {
         // Competence tracking
         this.bulletsFired = 0;
         this.bulletsHit = 0;  // approximated from kill count + damage events
+        this.combatEffectiveness = 0;  // geometric mean of offense and defense
+
+        // Tension tracking (per tick)
+        this.tensionSamples = [];
 
         // Derived (computed on finalize)
         this.actionDensity = 0;
@@ -59,6 +63,13 @@ export class WaveBucket {
         this.damageRatio = 0;
         this.accuracy = 0;
         this.intensityCurve = [];
+
+        // Tension-derived (computed on finalize)
+        this.tensionMean = 0;
+        this.tensionVariance = 0;
+        this.tensionPeaks = 0;
+        this.tensionArcs = 0;
+        this.restQuality = 0.5;
     }
 
     /**
@@ -149,6 +160,32 @@ export class WaveBucket {
 
         // Bullet tracking (approximate from player bullet count delta)
         this.bulletsFired += state.entities.playerBulletCount || 0;
+
+        // Tension signal (0-1 composite)
+        let tension = 0;
+
+        // Enemy proximity threat (0-0.4)
+        let enemyThreat = 0;
+        for (const e of state.entities.enemies) {
+            const dist = Math.hypot(e.x - player.x, e.y - player.y);
+            enemyThreat += Math.max(0, 1 - dist / 500);
+        }
+        tension += Math.min(0.4, enemyThreat * 0.15);
+
+        // Bullet density pressure (0-0.3)
+        tension += Math.min(0.3, state.entities.enemyBullets.length * 0.03);
+
+        // Health pressure (0-0.2)
+        tension += (1 - healthRatio) * 0.2;
+
+        // Recent damage spike (0-0.1)
+        if (this.healthSamples.length > 1) {
+            const prevHealth = this.healthSamples[this.healthSamples.length - 2];
+            const healthDrop = Math.max(0, prevHealth - healthRatio);
+            tension += Math.min(0.1, healthDrop * 2);
+        }
+
+        this.tensionSamples.push(Math.min(1, tension));
     }
 
     /**
@@ -186,12 +223,106 @@ export class WaveBucket {
         // Damage ratio
         this.damageRatio = this.totalDamageDealt / Math.max(1, this.totalDamageTaken);
 
-        // Approximate accuracy (kills / bullets-fired-deltas is hard to track precisely,
-        // so we approximate from damage events / action events as a rough proxy)
-        this.accuracy = this.kills / Math.max(1, this.kills + this.damageEventsTaken);
+        // Accuracy: use health floor as survival quality metric (0 = nearly died, 1 = untouched)
+        this.accuracy = this.healthFloor;
+
+        // Combat effectiveness: geometric mean of offense and defense
+        const offenseScore = Math.min(1, this.damageRatio / 10);
+        this.combatEffectiveness = Math.sqrt(offenseScore * Math.max(0.01, this.healthFloor));
 
         // Intensity curve (split wave into 4 quarters)
         this.intensityCurve = this._computeIntensityCurve();
+
+        // Tension analysis
+        this._analyzeTension();
+    }
+
+    _analyzeTension() {
+        if (this.tensionSamples.length < 3) return;
+
+        // Mean and variance
+        const tSum = this.tensionSamples.reduce((a, b) => a + b, 0);
+        this.tensionMean = tSum / this.tensionSamples.length;
+        this.tensionVariance = stddev(this.tensionSamples);
+
+        // Smoothed envelope (moving average, window = 10 ticks = ~1 second)
+        const windowSize = Math.min(10, this.tensionSamples.length);
+        const envelope = [];
+        for (let i = 0; i < this.tensionSamples.length; i++) {
+            const start = Math.max(0, i - windowSize + 1);
+            let sum = 0;
+            for (let j = start; j <= i; j++) sum += this.tensionSamples[j];
+            envelope.push(sum / (i - start + 1));
+        }
+
+        // Peak detection (local maxima in envelope above mean*1.2)
+        this.tensionPeaks = 0;
+        const peakThreshold = this.tensionMean * 1.2;
+        for (let i = 1; i < envelope.length - 1; i++) {
+            if (envelope[i] > envelope[i - 1] &&
+                envelope[i] > envelope[i + 1] &&
+                envelope[i] > peakThreshold) {
+                this.tensionPeaks++;
+            }
+        }
+
+        // Arc detection: build-to-peak-to-release cycles
+        // An arc = tension crosses above mean, peaks, then falls below mean
+        this.tensionArcs = 0;
+        let aboveMean = false;
+        let hitPeak = false;
+        for (let i = 1; i < envelope.length; i++) {
+            if (envelope[i] > this.tensionMean) {
+                aboveMean = true;
+                if (envelope[i] < envelope[i - 1]) {
+                    hitPeak = true;
+                }
+            } else if (aboveMean && hitPeak) {
+                this.tensionArcs++;
+                aboveMean = false;
+                hitPeak = false;
+            }
+        }
+
+        // Rest quality scoring
+        const restPeriods = [];
+        let restStart = -1;
+        for (let i = 0; i < this.tensionSamples.length; i++) {
+            if (this.tensionSamples[i] < 0.1) {
+                if (restStart < 0) restStart = i;
+            } else {
+                if (restStart >= 0 && i - restStart >= 5) {
+                    restPeriods.push({ start: restStart, end: i, length: i - restStart });
+                }
+                restStart = -1;
+            }
+        }
+
+        if (restPeriods.length === 0) {
+            this.restQuality = 0.5; // No rest — neutral (constant action)
+        } else {
+            let qualitySum = 0;
+            for (const rest of restPeriods) {
+                const lengthS = rest.length * 0.1; // 100ms per tick
+                // Check tension before rest
+                const preRestStart = Math.max(0, rest.start - 5);
+                const preSlice = this.tensionSamples.slice(preRestStart, rest.start);
+                const preRestTension = preSlice.length > 0
+                    ? preSlice.reduce((a, b) => a + b, 0) / preSlice.length
+                    : 0;
+
+                if (lengthS <= 3 && preRestTension > 0.3) {
+                    qualitySum += 1.0;  // Short rest after intense action
+                } else if (lengthS <= 5 && preRestTension > 0.2) {
+                    qualitySum += 0.7;  // Moderate rest after some action
+                } else if (lengthS > 8) {
+                    qualitySum += 0.1;  // Long dead time
+                } else {
+                    qualitySum += 0.4;  // Medium rest, low prior tension
+                }
+            }
+            this.restQuality = qualitySum / restPeriods.length;
+        }
     }
 
     _computeIntensityCurve() {
@@ -227,6 +358,12 @@ export class WaveBucket {
             survivalRecoveries: this.survivalRecoveries,
             velocityVariance: round2(this.velocityVariance),
             accuracy: round2(this.accuracy),
+            combatEffectiveness: round2(this.combatEffectiveness),
+            tensionMean: round2(this.tensionMean),
+            tensionVariance: round2(this.tensionVariance),
+            tensionPeaks: this.tensionPeaks,
+            tensionArcs: this.tensionArcs,
+            restQuality: round2(this.restQuality),
             intensityCurve: this.intensityCurve.map(round2),
         };
     }

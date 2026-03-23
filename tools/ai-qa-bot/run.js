@@ -7,7 +7,7 @@
  *   node ai-qa-bot/run.js                           # Default 10-min session
  *   node ai-qa-bot/run.js --duration 5              # 5-minute session
  *   node ai-qa-bot/run.js --build dps               # DPS build archetype
- *   node ai-qa-bot/run.js --skill novice            # Novice skill simulation
+ *   node ai-qa-bot/run.js --skill novice            # Novice skill simulation (novice|beginner|intermediate|advanced|expert)
  *   node ai-qa-bot/run.js --headed                  # Show browser window
  *   node ai-qa-bot/run.js --sessions 5 --build all  # 5 sessions, one per build
  *   node ai-qa-bot/run.js --bugs-only               # Short session focused on bugs

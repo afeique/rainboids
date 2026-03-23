@@ -405,7 +405,7 @@ export function handleCollisions() {
 
                 if (destroyed) {
                     // QA bot kill tracking — authoritative kill buffer
-                    if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now() });
+                    if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
                     // Award money + XP for kill
                     const reward = enemy.getDestructionReward();
                     this.game.money += reward.points;
@@ -719,7 +719,7 @@ export function damageEnemy(enemy, damage) {
     if (enemy.health <= 0) {
         enemy.active = false;
         // QA bot kill tracking — authoritative kill buffer (drained by state-reader)
-        if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now() });
+        if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         const reward = enemy.getDestructionReward();
         this.game.money += reward.points;
         this.player.gainExperience(Math.ceil(reward.points / 5));
@@ -812,7 +812,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
 
     if (destroyed) {
         // QA bot kill tracking — authoritative kill buffer
-        if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now() });
+        if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         const reward = enemy.getDestructionReward();
         this.game.money += reward.points;
         this.player.gainExperience(Math.ceil(reward.points / 5));

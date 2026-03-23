@@ -71,6 +71,10 @@ export class CombatAI {
         this._panicMode = false;
         this._aimWanderAngle = 0;
 
+        // Threat blindness — enemies the AI ignores entirely
+        this._blindToEntities = new Set(); // Set of "type:x:y" keys
+        this._lastBlindUpdate = 0;
+
         // Interest/danger maps (reused each tick to avoid allocation)
         this._interest = new Float32Array(STEERING_DIRS);
         this._danger = new Float32Array(STEERING_DIRS);
@@ -88,11 +92,16 @@ export class CombatAI {
         const field = state.field;
         const entities = state.entities;
 
-        // Reaction delay simulation
-        if (now - this._lastReaction < this.preset.reactionMs) {
+        // Reaction delay simulation with jitter
+        const jitter = this.combat.reactionJitter || 0;
+        const effectiveReaction = this.preset.reactionMs * (1 + (Math.random() - 0.5) * jitter);
+        if (now - this._lastReaction < effectiveReaction) {
             return this._pendingInputs;
         }
         this._lastReaction = now;
+
+        // Update threat blindness (re-evaluate every 2s)
+        this._updateBlindness(entities.enemies, now);
 
         // Select target using weighted scoring
         const target = this._selectTarget(player, entities, now);
@@ -121,12 +130,6 @@ export class CombatAI {
             fireSecondary: false,
             skill1: false, skill2: false, skill3: false, skill4: false,
         };
-
-        // Fire hesitation — lower-skill players sometimes stop firing
-        const fireReliability = 0.3 + this.preset.aimAccuracy * 0.7; // novice: 0.51, advanced: 0.965
-        if (Math.random() > fireReliability) {
-            inputs.fire = false;
-        }
 
         // Compute aim with lead prediction
         if (target) {
@@ -158,8 +161,9 @@ export class CombatAI {
     _selectTarget(player, entities, now) {
         const allTargets = [];
 
-        // Score enemies
+        // Score enemies (skip blind enemies)
         for (const e of entities.enemies) {
+            if (this._isBlind(e)) continue;
             const dist = Math.hypot(e.x - player.x, e.y - player.y);
             const threat = ENEMY_THREAT[e.type] || 0.5;
             const healthRatio = e.health / Math.max(1, e.maxHealth);
@@ -262,8 +266,9 @@ export class CombatAI {
             }
         }
 
-        // Danger: enemies within close range
+        // Danger: enemies within close range (skip blind enemies)
         for (const e of entities.enemies) {
+            if (this._isBlind(e)) continue;
             const dist = Math.hypot(e.x - player.x, e.y - player.y);
             const threatLevel = ENEMY_THREAT[e.type] || 0.5;
             const dangerRadius = 200 * threatLevel;
@@ -393,6 +398,36 @@ export class CombatAI {
         return { x: x / mag * 0.5, y: y / mag * 0.5 };
     }
 
+    // ── Threat Blindness ──────────────────────────────────────────
+
+    /**
+     * Update which enemies the AI is blind to.
+     * Re-evaluated every 2 seconds. Each enemy has a chance
+     * of being ignored based on threatBlindness.
+     */
+    _updateBlindness(enemies, now) {
+        const blindness = this.combat.threatBlindness || 0;
+        if (blindness <= 0) {
+            this._blindToEntities.clear();
+            return;
+        }
+        // Re-evaluate every 2 seconds
+        if (now - this._lastBlindUpdate < 2000) return;
+        this._lastBlindUpdate = now;
+
+        this._blindToEntities.clear();
+        for (const e of enemies) {
+            if (Math.random() < blindness) {
+                this._blindToEntities.add(`${e.type}:${Math.round(e.x)}:${Math.round(e.y)}`);
+            }
+        }
+    }
+
+    _isBlind(enemy) {
+        if (this._blindToEntities.size === 0) return false;
+        return this._blindToEntities.has(`${enemy.type}:${Math.round(enemy.x)}:${Math.round(enemy.y)}`);
+    }
+
     // ── Skill Degradation ──────────────────────────────────────────
 
     /**
@@ -401,15 +436,16 @@ export class CombatAI {
      * Advanced: clean, optimal movement (passes through unchanged).
      */
     _degradeMovement(move, player, now) {
-        const skillFactor = this.preset.aimAccuracy; // 0.3 (novice) to 0.95 (advanced)
-        const driftChance = Math.max(0, 0.5 - skillFactor * 0.5); // novice: 0.35, advanced: 0.025
-        const hesitationChance = Math.max(0, 0.3 - skillFactor * 0.3); // novice: 0.21, advanced: 0.015
+        const skillFactor = this.preset.movementSkill || this.preset.aimAccuracy; // 0.1 (novice) to 0.97 (expert)
+        const commitMs = this.combat.movementCommitment || (500 + (1 - skillFactor) * 1500);
+        const driftChance = Math.max(0, 0.6 - skillFactor * 0.6); // novice: 0.54, expert: 0.018
+        const hesitationChance = Math.max(0, 0.35 - skillFactor * 0.35); // novice: 0.315, expert: 0.01
 
-        // Panic mode — when health is low, novice moves erratically
+        // Panic mode — when health is low, low-skill players move erratically
         const healthPct = player.health / Math.max(1, player.maxHealth);
-        if (healthPct < 0.4 && skillFactor < 0.6) {
+        if (healthPct < 0.4 && skillFactor < 0.5) {
             this._panicMode = true;
-        } else if (healthPct > 0.6 || skillFactor >= 0.6) {
+        } else if (healthPct > 0.6 || skillFactor >= 0.5) {
             this._panicMode = false;
         }
 
@@ -425,10 +461,9 @@ export class CombatAI {
             };
         }
 
-        // Random drift — novice wanders off course
+        // Random drift — novice wanders off course, committed for movementCommitment ms
         if (Math.random() < driftChance) {
-            // Change drift direction every 0.5-2s
-            if (now - this._driftChangeTime > 500 + Math.random() * 1500) {
+            if (now - this._driftChangeTime > commitMs) {
                 this._driftAngle = Math.random() * TWO_PI;
                 this._driftChangeTime = now;
             }

@@ -64,8 +64,8 @@ export class FunMetricsCollector {
             switch (event.type) {
                 case 'enemy_killed':
                     bucket.recordKill(now, state.player.health / Math.max(1, state.player.maxHealth));
-                    // Approximate damage dealt from the kill (enemy maxHealth serves as proxy)
-                    bucket.recordDamageDealt(1, now);
+                    // Use enemy maxHealth as damage dealt (total damage to destroy it)
+                    bucket.recordDamageDealt(event.maxHealth || 1, now);
                     break;
                 case 'damage_taken':
                     bucket.recordDamageTaken(event.amount || 1, now);

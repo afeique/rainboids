@@ -212,10 +212,13 @@ export class FunReportGenerator {
         // Per-wave data table
         if (waveBuckets && waveBuckets.length > 0) {
             lines.push('## Per-Wave Metrics');
-            lines.push('| Wave | Duration | Action Density | Damage Ratio | Health Floor | Near Misses | Kills | Deaths | Idle% |');
-            lines.push('|------|----------|---------------|-------------|-------------|-------------|-------|--------|-------|');
+            lines.push('| Wave | Duration | Action Density | Damage Ratio | Health Floor | Near Misses | Kills | Deaths | Tension | Arcs | Rest Q |');
+            lines.push('|------|----------|---------------|-------------|-------------|-------------|-------|--------|---------|------|--------|');
             for (const w of waveBuckets) {
-                lines.push(`| ${w.wave} | ${w.durationS.toFixed(1)}s | ${w.actionDensity.toFixed(2)} | ${w.damageRatio.toFixed(1)} | ${(w.healthFloor * 100).toFixed(0)}% | ${w.nearMisses} | ${w.kills} | ${w.deaths} | ${(w.idleRatio * 100).toFixed(0)}% |`);
+                const tm = (w.tensionMean != null ? w.tensionMean.toFixed(2) : '—');
+                const ta = (w.tensionArcs != null ? w.tensionArcs : '—');
+                const rq = (w.restQuality != null ? (w.restQuality * 100).toFixed(0) + '%' : '—');
+                lines.push(`| ${w.wave} | ${w.durationS.toFixed(1)}s | ${w.actionDensity.toFixed(2)} | ${w.damageRatio.toFixed(1)} | ${(w.healthFloor * 100).toFixed(0)}% | ${w.nearMisses} | ${w.kills} | ${w.deaths} | ${tm} | ${ta} | ${rq} |`);
             }
             lines.push('');
         }

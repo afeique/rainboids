@@ -66,6 +66,9 @@ export class FunAnalyzer {
             deaths: w.deaths,
             idleRatio: w.idleRatio,
             durationS: w.durationS,
+            tensionMean: w.tensionMean,
+            tensionArcs: w.tensionArcs,
+            restQuality: w.restQuality,
         }));
 
         // Identify hotspots (worst-scoring waves per dimension)
@@ -109,10 +112,10 @@ export class FunAnalyzer {
                 score -= 2 * (w.actionDensity - 3.0);
                 issues.push(`Wave ${w.wave}: chaotic action density (${w.actionDensity.toFixed(1)} events/s)`);
             }
-            // High idle ratio (no enemies or bullets on screen)
-            if (w.idleRatio > 0.30) {
-                score -= 6 * (w.idleRatio - 0.30);
-                issues.push(`Wave ${w.wave}: high idle ratio (${(w.idleRatio * 100).toFixed(0)}%)`);
+            // Idle time quality: only penalize when rest quality is poor
+            if (w.idleRatio > 0.30 && (w.restQuality || 0.5) < 0.4) {
+                score -= 4 * (w.idleRatio - 0.30);
+                issues.push(`Wave ${w.wave}: unproductive idle time (${(w.idleRatio * 100).toFixed(0)}% idle, rest quality ${((w.restQuality || 0.5) * 100).toFixed(0)}%)`);
             }
             // Low threat saturation
             if (w.threatSaturation < 0.001) {
@@ -182,13 +185,13 @@ export class FunAnalyzer {
         let score = 50; // Neutral baseline
         const issues = [];
 
-        // Accuracy trend
-        const accuracies = this.waves.map(w => w.accuracy);
-        const accSlope = linearRegressionSlope(accuracies);
-        if (accSlope > 0.005) score += Math.min(20, accSlope * 2000);
-        else if (accSlope < -0.005) {
-            score -= Math.min(15, -accSlope * 1500);
-            issues.push(`Accuracy declining (slope: ${accSlope.toFixed(4)})`);
+        // Combat effectiveness trend (geometric mean of offense and defense)
+        const effectiveness = this.waves.map(w => w.combatEffectiveness || w.healthFloor);
+        const ceSlope = linearRegressionSlope(effectiveness);
+        if (ceSlope > 0.005) score += Math.min(20, ceSlope * 2000);
+        else if (ceSlope < -0.005) {
+            score -= Math.min(15, -ceSlope * 1500);
+            issues.push(`Combat effectiveness declining (slope: ${ceSlope.toFixed(4)})`);
         }
 
         // Kill efficiency trend (kills per action-density-second)
@@ -217,44 +220,66 @@ export class FunAnalyzer {
 
         let score = 100;
         const issues = [];
-        const densities = this.waves.map(w => w.actionDensity);
 
-        // Monotony: 3+ consecutive waves with < 15% density change
+        // 1. Tension arc quality — waves should have build-release patterns
+        let wavesWithArcs = 0;
+        for (const w of this.waves) {
+            if ((w.tensionArcs || 0) > 0) wavesWithArcs++;
+        }
+        const arcCoverage = wavesWithArcs / this.waves.length;
+        if (arcCoverage < 0.3) {
+            score -= 12;
+            issues.push(`Only ${(arcCoverage * 100).toFixed(0)}% of waves have tension arcs (target > 50%)`);
+        } else if (arcCoverage > 0.5) {
+            score += 5;
+        }
+
+        // 2. Tension variety across waves — should not be monotone
+        const tensionMeans = this.waves.map(w => w.tensionMean || 0);
+        const tensionSpread = this._stddev(tensionMeans);
+        if (tensionSpread < 0.03) {
+            score -= 8;
+            issues.push(`Low tension variety across waves (spread: ${tensionSpread.toFixed(3)})`);
+        }
+
+        // 3. Rest quality across session
+        const avgRestQuality = this.waves.reduce((s, w) => s + (w.restQuality || 0.5), 0) / this.waves.length;
+        if (avgRestQuality < 0.3) {
+            score -= 8;
+            issues.push(`Poor rest quality (${(avgRestQuality * 100).toFixed(0)}%) — dead time without purpose`);
+        } else if (avgRestQuality > 0.7) {
+            score += 5;
+        }
+
+        // 4. Intensity escalation — peak tension should generally rise across session
+        const peakTensions = this.waves.map(w => {
+            if (!w.tensionSamples || w.tensionSamples.length === 0) return 0;
+            return Math.max(...w.tensionSamples);
+        });
+        const peakSlope = linearRegressionSlope(peakTensions);
+        if (peakSlope < -0.01 && this.waves.length > 5) {
+            score -= 6;
+            issues.push(`Peak tension declining over session (slope: ${peakSlope.toFixed(3)})`);
+        } else if (peakSlope > 0.005) {
+            score += 3;
+        }
+
+        // 5. Monotony detection based on tension means
         let monotoneStreak = 0;
-        for (let i = 1; i < densities.length; i++) {
-            const change = Math.abs(densities[i] - densities[i - 1]) / Math.max(0.1, densities[i - 1]);
+        for (let i = 1; i < tensionMeans.length; i++) {
+            const change = Math.abs(tensionMeans[i] - tensionMeans[i - 1]) / Math.max(0.01, tensionMeans[i - 1]);
             if (change < 0.15) {
                 monotoneStreak++;
                 if (monotoneStreak >= 2) {
-                    score -= 6;
-                    issues.push(`Monotone stretch: waves ${this.waves[i - monotoneStreak].wave}-${this.waves[i].wave} (< 15% intensity variation)`);
+                    score -= 5;
+                    issues.push(`Monotone tension: waves ${this.waves[i - monotoneStreak].wave}-${this.waves[i].wave}`);
                 }
             } else {
                 monotoneStreak = 0;
             }
         }
 
-        // Oscillation: density should alternate up/down
-        let oscillations = 0;
-        for (let i = 2; i < densities.length; i++) {
-            const d1 = densities[i - 1] - densities[i - 2];
-            const d2 = densities[i] - densities[i - 1];
-            if ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) oscillations++;
-        }
-        const oscillationRatio = oscillations / Math.max(1, densities.length - 2);
-        if (oscillationRatio < 0.25) {
-            score -= 10;
-            issues.push(`Low pacing oscillation (${(oscillationRatio * 100).toFixed(0)}% — target > 30%)`);
-        }
-
-        // Overall density trend should generally escalate
-        const slope = linearRegressionSlope(densities);
-        if (slope < 0 && densities.length > 5) {
-            score -= 8;
-            issues.push(`Action density trending downward (slope: ${slope.toFixed(3)})`);
-        }
-
-        // Wave durations: penalize very long or very short transitions
+        // 6. Wave duration checks
         const durations = this.waves.map(w => w.durationS);
         const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
         if (avgDuration < 10) {
@@ -267,6 +292,13 @@ export class FunAnalyzer {
         }
 
         return { score: clamp(score), issues: dedup(issues, 5) };
+    }
+
+    _stddev(arr) {
+        if (arr.length < 2) return 0;
+        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+        const variance = arr.reduce((sum, v) => sum + (v - mean) ** 2, 0) / arr.length;
+        return Math.sqrt(variance);
     }
 
     scoreExcitement() {

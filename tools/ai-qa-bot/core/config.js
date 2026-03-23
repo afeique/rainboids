@@ -83,95 +83,123 @@ export function buildConfig(overrides = {}) {
  */
 export const SKILL_PRESETS = {
     novice: {
-        reactionMs: 500, aimAccuracy: 0.3, dodgeProb: 0.2,
+        reactionMs: 600, aimAccuracy: 0.15, movementSkill: 0.1, dodgeProb: 0.1,
         shopStrategy: 'utility', useSkills: false,
         combat: {
-            pursuitAggression: 0.2,       // 0-1, how aggressively to close distance
-            circleStrafePreference: 0.0,  // 0-1, orbiting vs direct approach
-            dangerSensitivity: 0.3,       // 0-1, how much danger affects decisions
-            leadFactor: 0.0,              // 0-1, aim prediction quality (0 = current pos)
-            predictionNoise: 0.5,         // noise on velocity estimation
-            threatAwareness: 0.2,         // 0-1, weight of threat in target scoring
-            opportunism: 0.2,             // 0-1, preference for low-health targets
-            targetSwitchCooldown: 2000,   // ms between target switches
-            bulletAwareness: 0.2,         // 0-1, fraction of bullets AI "sees"
-            dodgeReactionMs: 500,         // ms before dodge starts
-            dodgeCommitment: 0.3,         // 0-1, dodge intensity
-            weaponAdaptation: false,      // adjust engagement by weapon
+            pursuitAggression: 0.1,
+            circleStrafePreference: 0.0,
+            dangerSensitivity: 0.15,
+            leadFactor: 0.0,
+            predictionNoise: 0.7,
+            threatAwareness: 0.1,
+            opportunism: 0.1,
+            targetSwitchCooldown: 3000,
+            bulletAwareness: 0.1,
+            weaponAdaptation: false,
+            reactionJitter: 0.8,          // 0-1, inconsistency in reaction time
+            threatBlindness: 0.5,         // 0-1, fraction of enemies AI ignores entirely
+            movementCommitment: 2000,     // ms stuck in a bad movement direction
         },
         shop: {
-            decisionQuality: 0.2,         // 0-1, how optimal purchases are
-            savingAwareness: 0.0,         // 0-1, ability to save for expensive items
-            adaptability: 0.1,            // 0-1, how fast build shifts on performance
+            decisionQuality: 0.1,
+            savingAwareness: 0.0,
+            adaptability: 0.05,
         },
     },
     beginner: {
-        reactionMs: 300, aimAccuracy: 0.5, dodgeProb: 0.5,
+        reactionMs: 400, aimAccuracy: 0.4, movementSkill: 0.35, dodgeProb: 0.35,
         shopStrategy: 'utility', useSkills: false,
         combat: {
-            pursuitAggression: 0.4,
+            pursuitAggression: 0.3,
             circleStrafePreference: 0.1,
-            dangerSensitivity: 0.5,
-            leadFactor: 0.3,
-            predictionNoise: 0.3,
-            threatAwareness: 0.4,
-            opportunism: 0.3,
-            targetSwitchCooldown: 1200,
-            bulletAwareness: 0.4,
-            dodgeReactionMs: 400,
-            dodgeCommitment: 0.4,
+            dangerSensitivity: 0.4,
+            leadFactor: 0.2,
+            predictionNoise: 0.4,
+            threatAwareness: 0.3,
+            opportunism: 0.25,
+            targetSwitchCooldown: 1500,
+            bulletAwareness: 0.3,
             weaponAdaptation: false,
+            reactionJitter: 0.5,
+            threatBlindness: 0.3,
+            movementCommitment: 1200,
         },
         shop: {
-            decisionQuality: 0.4,
-            savingAwareness: 0.2,
-            adaptability: 0.3,
+            decisionQuality: 0.3,
+            savingAwareness: 0.15,
+            adaptability: 0.2,
         },
     },
     intermediate: {
-        reactionMs: 200, aimAccuracy: 0.7, dodgeProb: 0.7,
+        reactionMs: 250, aimAccuracy: 0.65, movementSkill: 0.6, dodgeProb: 0.6,
         shopStrategy: 'utility', useSkills: true,
         combat: {
-            pursuitAggression: 0.6,
-            circleStrafePreference: 0.4,
-            dangerSensitivity: 0.7,
-            leadFactor: 0.7,
-            predictionNoise: 0.15,
-            threatAwareness: 0.7,
+            pursuitAggression: 0.55,
+            circleStrafePreference: 0.35,
+            dangerSensitivity: 0.65,
+            leadFactor: 0.6,
+            predictionNoise: 0.2,
+            threatAwareness: 0.6,
             opportunism: 0.5,
-            targetSwitchCooldown: 600,
-            bulletAwareness: 0.7,
-            dodgeReactionMs: 250,
-            dodgeCommitment: 0.6,
+            targetSwitchCooldown: 800,
+            bulletAwareness: 0.6,
             weaponAdaptation: true,
+            reactionJitter: 0.25,
+            threatBlindness: 0.15,
+            movementCommitment: 600,
         },
         shop: {
-            decisionQuality: 0.7,
-            savingAwareness: 0.5,
-            adaptability: 0.6,
+            decisionQuality: 0.6,
+            savingAwareness: 0.4,
+            adaptability: 0.5,
         },
     },
     advanced: {
-        reactionMs: 100, aimAccuracy: 0.95, dodgeProb: 0.95,
+        reactionMs: 120, aimAccuracy: 0.9, movementSkill: 0.85, dodgeProb: 0.9,
         shopStrategy: 'utility', useSkills: true,
         combat: {
             pursuitAggression: 0.8,
             circleStrafePreference: 0.7,
-            dangerSensitivity: 0.95,
-            leadFactor: 0.95,
+            dangerSensitivity: 0.9,
+            leadFactor: 0.9,
             predictionNoise: 0.05,
-            threatAwareness: 0.9,
+            threatAwareness: 0.85,
             opportunism: 0.7,
             targetSwitchCooldown: 300,
-            bulletAwareness: 0.95,
-            dodgeReactionMs: 100,
-            dodgeCommitment: 0.8,
+            bulletAwareness: 0.9,
             weaponAdaptation: true,
+            reactionJitter: 0.1,
+            threatBlindness: 0.05,
+            movementCommitment: 200,
         },
         shop: {
-            decisionQuality: 0.95,
-            savingAwareness: 0.8,
+            decisionQuality: 0.9,
+            savingAwareness: 0.75,
             adaptability: 0.8,
+        },
+    },
+    expert: {
+        reactionMs: 50, aimAccuracy: 0.98, movementSkill: 0.97, dodgeProb: 0.98,
+        shopStrategy: 'utility', useSkills: true,
+        combat: {
+            pursuitAggression: 0.95,
+            circleStrafePreference: 0.9,
+            dangerSensitivity: 0.98,
+            leadFactor: 0.99,
+            predictionNoise: 0.01,
+            threatAwareness: 0.98,
+            opportunism: 0.9,
+            targetSwitchCooldown: 100,
+            bulletAwareness: 1.0,
+            weaponAdaptation: true,
+            reactionJitter: 0.02,
+            threatBlindness: 0.0,
+            movementCommitment: 50,
+        },
+        shop: {
+            decisionQuality: 0.98,
+            savingAwareness: 0.95,
+            adaptability: 0.95,
         },
     },
 };
