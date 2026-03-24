@@ -83,14 +83,14 @@ export function buildConfig(overrides = {}) {
  */
 export const SKILL_PRESETS = {
     novice: {
-        reactionMs: 700, aimAccuracy: 0.10, movementSkill: 0.08, dodgeProb: 0.08,
+        reactionMs: 700, aimAccuracy: 0.25, movementSkill: 0.08, dodgeProb: 0.08,
         shopStrategy: 'utility', useSkills: false,
         combat: {
             pursuitAggression: 0.08,
             circleStrafePreference: 0.0,
             dangerSensitivity: 0.10,
-            leadFactor: 0.0,
-            predictionNoise: 0.7,
+            leadFactor: 0.05,
+            predictionNoise: 0.5,
             threatAwareness: 0.1,
             opportunism: 0.1,
             targetSwitchCooldown: 3000,
