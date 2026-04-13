@@ -197,6 +197,15 @@ export class Asteroid {
     update(gameField = null) {
         if (!this.active) return;
 
+        // Death flash countdown
+        if (this._deathFlash > 0) {
+            this._deathFlash--;
+            if (this._deathFlash <= 0) {
+                this.active = false;
+            }
+            return;
+        }
+
         // Cap asteroid speed to keep them manageable to hit
         const maxSpeed = 2.0; // Maximum speed for asteroids
         const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
@@ -248,6 +257,55 @@ export class Asteroid {
     draw(ctx) {
         if (!this.active) return;
 
+        // Death flash — BIG white silhouette that starts scaled up and fades
+        if (this._deathFlash > 0) {
+            const maxT = this._deathFlashMax || 6;
+            const t = this._deathFlash;
+            const progress = 1 - t / maxT;
+
+            // Start at 1.4x scale, shrink to 0.3x while fading
+            const scale = 1.4 - progress * 1.1;
+            const alpha = Math.max(0, 1.0 - progress * 1.1);
+
+            // Bright additive glow
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const glowR = this.radius * scale * 2.5;
+            const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowR);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.6})`);
+            grad.addColorStop(0.3, `rgba(200, 220, 255, ${alpha * 0.3})`);
+            grad.addColorStop(1, 'rgba(150, 200, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, glowR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Draw asteroid shape as white silhouette
+            if (this._projectionDirty) {
+                this.project();
+                this._projectionDirty = false;
+            }
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.scale(scale, scale);
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            for (let i = 0; i < this.projectedVertices.length; i++) {
+                const v = this.projectedVertices[i];
+                if (i === 0) ctx.moveTo(v.x, v.y);
+                else ctx.lineTo(v.x, v.y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
         // Lazy projection — only compute when we actually draw
         if (this._projectionDirty) {
             this.project();
@@ -265,55 +323,89 @@ export class Asteroid {
 
         this.drawAsteroidShape(ctx);
 
+        // Damage flash — redraw hull as bright white silhouette overlay on hit
+        if (this._hitFlashTimer > 0 && this.projectedVertices && this.projectedVertices.length > 0) {
+            const flashAlpha = Math.min(1, (this._hitFlashTimer / 10) * 0.9);
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = flashAlpha;
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            for (let i = 0; i < this.projectedVertices.length; i++) {
+                const v = this.projectedVertices[i];
+                if (i === 0) ctx.moveTo(v.x, v.y);
+                else ctx.lineTo(v.x, v.y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
         ctx.restore();
 
-        // Hit flash — non-rotating square burst with debris (world-space)
+        // Hit flash — localized at bullet impact point (world-space)
         if (this._hitFlashTimer > 0) {
-            const maxT = 6;
+            const maxT = 10;
             const t = this._hitFlashTimer;
             const alpha = t / maxT;
             const progress = 1 - alpha;
-            const fr = this.radius * 1.05;
-            const hfT = frameClock.now * 0.001;
+            const fr = this.radius * 0.65; // localized flash
 
-            // Slight jitter on the main flash
-            const jx = Math.sin(hfT * 153) * 2;
-            const jy = Math.cos(hfT * 191) * 2;
-            const cx = this.x + jx;
-            const cy = this.y + jy;
+            // Use stored impact point, or fall back to center
+            const hp = this._hitPoint || { x: this.x, y: this.y };
+            const dx0 = hp.x - this.x;
+            const dy0 = hp.y - this.y;
+            const d0 = Math.hypot(dx0, dy0);
+            const maxDist = this.radius * 0.85;
+            const cx = d0 > maxDist ? this.x + (dx0 / d0) * maxDist : hp.x;
+            const cy = d0 > maxDist ? this.y + (dy0 / d0) * maxDist : hp.y;
 
             ctx.save();
             ctx.globalCompositeOperation = 'lighter';
 
-            // Main flash square — bright, non-rotating
-            const flashAlpha = alpha * alpha * 0.8;
-            ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
-            ctx.fillRect(cx - fr, cy - fr, fr * 2, fr * 2);
+            // Localized flash
+            const flashAlpha = alpha * 0.7;
+            const flashRadius = fr * (1 + progress * 0.4);
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, flashRadius);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${flashAlpha})`);
+            grad.addColorStop(0.5, `rgba(200, 220, 255, ${flashAlpha * 0.35})`);
+            grad.addColorStop(1, 'rgba(150, 200, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, flashRadius, 0, Math.PI * 2);
+            ctx.fill();
 
-            // Debris squares bursting outward
-            const seed = ((this.x * 11.3 + this.y * 7.7) | 0) & 0xffff;
-            const debrisCount = 6;
-            const colors = [
-                '255,255,255',
-                '120,235,255',
-                '255,90,210',
-                '255,255,150',
-                '190,150,255',
-                '255,255,255',
-            ];
-            for (let i = 0; i < debrisCount; i++) {
-                const angle = (i / debrisCount) * Math.PI * 2 + (seed + i * 137) % 100 * 0.063;
-                const speed = 0.7 + ((seed + i * 31) % 10) * 0.06;
-                const dist = progress * fr * 2.8 * speed;
-                const dx = Math.cos(angle) * dist;
-                const dy = Math.sin(angle) * dist;
+            // Small expanding ring
+            if (progress > 0.1) {
+                const ringProgress = (progress - 0.1) / 0.9;
+                const ringRadius = fr * (0.3 + ringProgress * 1.8);
+                const ringAlpha = (1 - ringProgress) * 0.3;
+                ctx.strokeStyle = `rgba(180, 220, 255, ${ringAlpha})`;
+                ctx.lineWidth = Math.max(1, fr * 0.08 * (1 - ringProgress));
+                ctx.beginPath();
+                ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
 
-                const sz = fr * (0.25 - progress * 0.16);
+            // Directional debris from impact
+            const hitAngle = this._hitAngle || 0;
+            const colors = ['255,255,255', '120,235,255', '255,255,150', '190,150,255'];
+            for (let i = 0; i < 4; i++) {
+                const angle = hitAngle + (i / 4 - 0.375) * 1.5;
+                const speed = 0.5 + (i * 31 % 10) * 0.06;
+                const dist = progress * fr * 2.5 * speed;
+                const ddx = Math.cos(angle) * dist;
+                const ddy = Math.sin(angle) * dist;
+
+                const sz = fr * (0.18 - progress * 0.09);
                 if (sz <= 0) continue;
 
-                const debrisAlpha = alpha * 0.5 * (1 - progress * 0.5);
-                ctx.fillStyle = `rgba(${colors[i]}, ${debrisAlpha})`;
-                ctx.fillRect(cx + dx - sz, cy + dy - sz, sz * 2, sz * 2);
+                ctx.fillStyle = `rgba(${colors[i]}, ${alpha * 0.5})`;
+                ctx.beginPath();
+                ctx.arc(cx + ddx, cy + ddy, sz, 0, Math.PI * 2);
+                ctx.fill();
             }
 
             ctx.restore();

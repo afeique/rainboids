@@ -334,7 +334,8 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button, lives)
 │       │   ├── input-handler.js # Keyboard, mouse, and touch input
 │       │   └── event-setup.js #   All event listeners: input, shop, cheats, resize
-│       └── performance/       # Spatial grid, depth-batch-renderer, nebula renderer
+│       ├── performance/       # Spatial grid, depth-batch-renderer, nebula renderer
+│       └── debug/             # VFX telemetry (per-frame effect state recording)
 ├── css/
 │   └── styles.css             # Game styling and mobile layout
 ├── music/                     # 58 MP3 tracks (~336MB)

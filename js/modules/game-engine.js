@@ -28,6 +28,7 @@ import * as hudOverlays from './hud/overlays.js';
 import * as hudCursor from './hud/cursor.js';
 import * as shopRenderer from './shop/shop-renderer.js';
 import * as cam from './world/camera-manager.js';
+import { recordVFXFrame } from './debug/vfx-telemetry.js';
 import * as shop from './shop/shop-manager.js';
 import * as wave from './wave/wave-manager.js';
 import * as col from './combat/collision-system.js';
@@ -693,9 +694,11 @@ export class GameEngine {
             // Inject gameEngine ref for asteroids (needed for targeting highlight in draw)
             for (const a of this.asteroidPool.activeObjects) a.gameEngine = this;
             this.asteroidPool.updateActive(this.gameField);
-            
+            this.asteroidPool.cleanupInactive();
+
             // Update enemies and enemy bullets (only during active gameplay)
             this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this, this.gameField));
+            this.enemyPool.cleanupInactive();
             // Inject gameEngine ref for enemy bullets (needed for particle effects on death)
             for (const eb of this.enemyBulletPool.activeObjects) eb.gameEngine = this;
             this.enemyBulletPool.updateActive();
@@ -890,14 +893,53 @@ export class GameEngine {
     triggerScreenFlash(alpha, duration) { return cam.triggerScreenFlash.call(this, alpha, duration); }
 
     gameLoop() {
+      try {
         frameClock.tick();
         const frameStart = performance.now();
 
-        // ── Hitstop: skip logic updates, keep rendering ──
+        // ── Hitstop: selective freeze — entities stop, VFX/player keep going ──
         if (this._hitstopFrames > 0) {
             this._hitstopFrames--;
-            // Still render (frozen frame) — but skip logic
+            // Keep lastFrameTime current so temporal upsampling doesn't burst-update after hitstop
+            this.lastFrameTime = frameStart;
+
+            // Keep VFX alive during hitstop — particles and debris continue expanding
+            // while gameplay entities are frozen. This contrast sells "impact" not "lag".
+            this.particlePool.updateActive();
+            this.lineDebrisPool.updateActive();
+
+            // Player keeps moving during offensive hitstop (movement is survival)
+            if (this.player && this.player.active &&
+                (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION)) {
+                const input = this.inputHandler.getInput();
+                input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
+                // Update player movement only (firing is suppressed by not running collisions)
+                this.player.update(input, this.particlePool, this.bulletPool, this.audioManager,
+                    this.colorStarPool, !this.player.isCharging, this.gameField);
+                this.updateCamera();
+            }
+
+            // Damage numbers and money pickups keep animating
+            this.updateDamageNumbers(GAME_CONFIG.LOGIC_TICK_MS);
+            this.updateMoneyPickupDisplay(GAME_CONFIG.LOGIC_TICK_MS);
+
+            // Render full frame
+            this.ctx.save();
+            const kickX = this._cameraKickX || 0;
+            const kickY = this._cameraKickY || 0;
+            if (kickX || kickY) this.ctx.translate(kickX, kickY);
             this.draw();
+            this.ctx.restore();
+            this.drawHUD();
+            this.drawMoneyPickupDisplay();
+            this.drawDamageNumbers();
+            // Screen flash overlay
+            if (this._screenFlashAlpha > 0) {
+                this.ctx.fillStyle = `rgba(255,255,255,${this._screenFlashAlpha})`;
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                this._screenFlashAlpha -= this._screenFlashAlpha / (this._screenFlashDuration || 1);
+            }
+            recordVFXFrame(this);
             requestAnimationFrame(() => this.gameLoop());
             return;
         }
@@ -1016,6 +1058,9 @@ export class GameEngine {
         // Draw custom cursor (always on top, after all UI elements)
         this.drawCustomCursor();
         
+        // VFX telemetry — record effect state for automated analysis
+        recordVFXFrame(this);
+
         // Performance monitoring - warn if frame takes too long
         const frameTime = performance.now() - frameStart;
         if (frameTime > GAME_CONFIG.LOGIC_TICK_MS) { // Over budget for target tick rate
@@ -1026,8 +1071,13 @@ export class GameEngine {
         }
         
         requestAnimationFrame(() => this.gameLoop());
+      } catch (err) {
+        console.error('Game loop error:', err);
+        // Keep the loop alive even if a frame throws
+        requestAnimationFrame(() => this.gameLoop());
+      }
     }
-    
+
     togglePause() {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
             // Playing → Paused

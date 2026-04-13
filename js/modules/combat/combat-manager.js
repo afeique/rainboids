@@ -19,66 +19,92 @@ export function createDebris(ast) {
 
     // ── Kill juice: hitstop + camera kick + screen flash ──
     if (onScreen) {
-        this.triggerHitstop(isLarge ? 6 : 4);
-        this.triggerScreenFlash(isLarge ? 0.1 : 0.06, 2);
+        this.triggerHitstop(isLarge ? 5 : 3);
+        this.triggerScreenFlash(isLarge ? 0.12 : 0.07, 3);
         const kdx = this.player.x - ast.x;
         const kdy = this.player.y - ast.y;
         this.triggerCameraKick(kdx, kdy, isLarge ? 12 : 7);
     }
 
-    // 1. Bright white core flash — bigger pop
-    this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 1.8 * sizeScale);
+    // 1. Bright white core flash — starts visible during hitstop
+    this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 2.2 * sizeScale);
 
-    // 2. Expanding colored rings
+    // 2. Expanding colored rings — staggered wavefronts
     this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 2.5 * sizeScale, baseColor);
     setTimeout(() => {
         this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 3.2 * sizeScale, dimColor);
-    }, 60);
+    }, 70);
+    setTimeout(() => {
+        this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 2.0 * sizeScale, brightColor);
+    }, 150);
 
     // 3. Directional shrapnel streaks in asteroid color
-    const shrapnelCount = Math.floor(12 + 8 * sizeScale);
+    const shrapnelCount = Math.floor(14 + 10 * sizeScale);
     for (let i = 0; i < shrapnelCount; i++) {
         const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.3, 0.3);
-        const speed = random(5, 12) * sizeScale;
+        const speed = random(4, 14) * sizeScale;
         const color = i % 3 === 0 ? brightColor : i % 3 === 1 ? baseColor : dimColor;
         this.particlePool.get(ast.x, ast.y, 'explosionShrapnel', angle, speed, color);
     }
 
-    // 4. Lingering embers in asteroid's hue range
-    const emberCount = Math.floor(8 + 5 * sizeScale);
+    // 4. Core glow — slow embers at center that linger
+    for (let i = 0; i < 4; i++) {
+        const p = this.particlePool.get(
+            ast.x + random(-3, 3), ast.y + random(-3, 3),
+            'explosionEmber', i < 1 ? '#ffffff' : brightColor
+        );
+        if (p) {
+            p.vel.x *= 0.15;
+            p.vel.y *= 0.15;
+            p.life = random(1.3, 2.0);
+            p.radius = random(2, 4.5);
+        }
+    }
+
+    // 5. Lingering embers in asteroid's hue range
+    const emberCount = Math.floor(10 + 7 * sizeScale);
     for (let i = 0; i < emberCount; i++) {
         const eHue = hue + random(-30, 30);
         const eColor = `hsl(${(eHue + 360) % 360}, ${sat}%, ${random(55, 80)}%)`;
         this.particlePool.get(ast.x, ast.y, 'explosionEmber', eColor);
     }
 
-    // 5. Classic small particles for density
-    for (let i = 0; i < 16; i++) {
+    // 6. Classic small particles for density
+    for (let i = 0; i < 20; i++) {
         const p = this.particlePool.get(ast.x, ast.y, 'explosion');
         if (p) {
-            p.color = i < 5 ? '#ffffff' : i < 10 ? baseColor : brightColor;
+            p.color = i < 6 ? '#ffffff' : i < 12 ? baseColor : brightColor;
             const a = random(0, Math.PI * 2);
-            const s = random(2, 7);
+            const s = random(2, 8);
             p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
             p.radius = random(1.5, 4.5);
         }
     }
 
-    // 6. Line debris from wireframe edges
+    // 7. Line debris from wireframe edges
     ast.edges.forEach(edge => {
         const p1 = ast.vertices3D[edge[0]];
         const p2 = ast.vertices3D[edge[1]];
         this.lineDebrisPool.get(ast.x, ast.y, p1, p2, baseColor);
     });
 
-    // 7. Delayed secondary burst (matches enemy death pattern)
+    // 8. Delayed secondary burst — cascade
     setTimeout(() => {
         for (let i = 0; i < 6; i++) {
             const ox = ast.x + random(-18, 18);
             const oy = ast.y + random(-18, 18);
             this.particlePool.get(ox, oy, 'explosionEmber', baseColor);
         }
-    }, 70);
+    }, 80);
+
+    // 9. Second delayed burst — final pop
+    setTimeout(() => {
+        for (let i = 0; i < 4; i++) {
+            const ox = ast.x + random(-25, 25);
+            const oy = ast.y + random(-25, 25);
+            this.particlePool.get(ox, oy, 'explosionEmber', brightColor);
+        }
+    }, 180);
 }
 
 export function createColorStarBurst(x, y) {
@@ -103,69 +129,94 @@ export function createEnemyDebris(enemy) {
 
     // ── Kill juice: hitstop + camera kick + screen flash ──
     if (onScreen) {
-        this.triggerHitstop(8);
-        this.triggerScreenFlash(0.12, 3);
+        this.triggerHitstop(5);
+        this.triggerScreenFlash(0.15, 4);
         const kdx = this.player.x - enemy.x;
         const kdy = this.player.y - enemy.y;
         this.triggerCameraKick(kdx, kdy, 14);
     }
 
-    // 1. Bright white core flash — the "pop"
-    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 2.5 * sizeScale);
+    // 1. Bright white core flash — the "pop" (starts visible during hitstop)
+    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 3.0 * sizeScale);
 
-    // 2. Staggered colored rings in enemy color
-    for (let ring = 0; ring < 3; ring++) {
+    // 2. Staggered colored rings — expanding wavefronts
+    for (let ring = 0; ring < 4; ring++) {
         setTimeout(() => {
-            const ringColor = ring === 0 ? '#ffffff' : color;
+            const ringColor = ring === 0 ? '#ffffff' : ring === 1 ? color : '#ffcc66';
             this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored',
-                (35 + ring * 30) * sizeScale, ringColor);
-        }, ring * 50);
+                (30 + ring * 25) * sizeScale, ringColor);
+        }, ring * 60);
     }
 
     // 3. Directional shrapnel in enemy color — fast streaks flying outward
-    const shrapnelCount = Math.floor(16 + 8 * sizeScale);
+    const shrapnelCount = Math.floor(20 + 10 * sizeScale);
     for (let i = 0; i < shrapnelCount; i++) {
         const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
-        const speed = random(6, 14) * sizeScale;
-        const sColor = i % 3 === 0 ? '#ffffff' : color;
+        const speed = random(5, 16) * sizeScale;
+        const sColor = i % 4 === 0 ? '#ffffff' : i % 4 === 1 ? '#ffcc66' : color;
         this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', angle, speed, sColor);
     }
 
-    // 4. Lingering embers in enemy color
-    const emberCount = Math.floor(10 + 6 * sizeScale);
-    for (let i = 0; i < emberCount; i++) {
-        this.particlePool.get(enemy.x, enemy.y, 'explosionEmber',
-            i % 2 === 0 ? color : '#ffcc66');
+    // 4. Core glow cluster — slow embers at center that linger where the enemy was
+    for (let i = 0; i < 5; i++) {
+        const p = this.particlePool.get(
+            enemy.x + random(-4, 4), enemy.y + random(-4, 4),
+            'explosionEmber', i < 2 ? '#ffffff' : color
+        );
+        if (p) {
+            p.vel.x *= 0.2;
+            p.vel.y *= 0.2;
+            p.life = random(1.4, 2.2);
+            p.radius = random(2.5, 5);
+        }
     }
 
-    // 5. Classic small particles for density (mix of white + enemy color)
-    for (let i = 0; i < 20; i++) {
+    // 5. Lingering embers in enemy color
+    const emberCount = Math.floor(12 + 8 * sizeScale);
+    for (let i = 0; i < emberCount; i++) {
+        this.particlePool.get(enemy.x, enemy.y, 'explosionEmber',
+            i % 3 === 0 ? '#ffcc66' : color);
+    }
+
+    // 6. Classic small particles for density (mix of white + enemy color)
+    for (let i = 0; i < 24; i++) {
         const p = this.particlePool.get(enemy.x, enemy.y, 'explosion');
         if (p) {
-            p.color = i < 6 ? '#ffffff' : color;
+            p.color = i < 7 ? '#ffffff' : i < 14 ? color : '#ffcc66';
             const a = random(0, Math.PI * 2);
-            const s = random(2, 8);
+            const s = random(2, 9);
             p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
             p.radius = random(1.5, 5);
         }
     }
 
-    // 6. Create colored line debris based on enemy shape
+    // 7. Create colored line debris based on enemy shape
     this.createShapeDebris(enemy);
 
-    // 7. Screen shake (only if on screen)
+    // 8. Screen shake (only if on screen)
     if (onScreen) {
         this.triggerScreenShake(30, 18, enemy.radius * 2.5);
     }
 
-    // 8. Delayed secondary burst — scattered sparks
+    // 9. Delayed secondary burst — scattered sparks (cascade feel)
     setTimeout(() => {
-        for (let i = 0; i < 10; i++) {
-            const ox = enemy.x + random(-25, 25);
-            const oy = enemy.y + random(-25, 25);
+        for (let i = 0; i < 8; i++) {
+            const ox = enemy.x + random(-20, 20);
+            const oy = enemy.y + random(-20, 20);
             this.particlePool.get(ox, oy, 'explosionEmber', color);
         }
-    }, 80);
+        this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored',
+            enemy.radius * 1.8 * sizeScale, color);
+    }, 90);
+
+    // 10. Second delayed burst — final pop
+    setTimeout(() => {
+        for (let i = 0; i < 5; i++) {
+            const ox = enemy.x + random(-30, 30);
+            const oy = enemy.y + random(-30, 30);
+            this.particlePool.get(ox, oy, 'explosionEmber', '#ffcc66');
+        }
+    }, 200);
 }
 
 export function createShapeDebris(enemy) {

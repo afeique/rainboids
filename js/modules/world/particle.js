@@ -162,10 +162,10 @@ export class Particle {
 
             // ── Enhanced explosion types ──────────────────────────────
             case 'explosionFlash': {
-                // Bright white core flash that expands and fades fast
+                // Bright white core flash that expands and fades
                 const [flashRadius] = args;
-                this.life = 1;
-                this.radius = 0;
+                this.life = 1.2;
+                this.radius = (flashRadius || 40) * 0.3; // start visible (shows during hitstop)
                 this.maxRadius = flashRadius || 40;
                 this.color = '#ffffff';
                 break;
@@ -189,16 +189,16 @@ export class Particle {
                 const eAngle = random(0, Math.PI * 2);
                 const eSpeed = random(0.3, 1.8);
                 this.vel = { x: Math.cos(eAngle) * eSpeed, y: Math.sin(eAngle) * eSpeed };
-                this.radius = random(1, 3);
-                this.life = random(0.8, 1.5);
+                this.radius = random(1.2, 3.5);
+                this.life = random(1.0, 1.8);
                 this.color = emberColor || '#ffaa44';
                 break;
             }
             case 'explosionRingColored': {
                 // Expanding ring in a specific color
                 const [ringRadius, ringColor] = args;
-                this.life = 0.8;
-                this.radius = 0;
+                this.life = 0.9;
+                this.radius = (ringRadius || 50) * 0.15; // start partially visible
                 this.maxRadius = ringRadius || 50;
                 this.color = ringColor || '#ff8800';
                 this.lineWidth = random(3, 8);
@@ -308,8 +308,8 @@ export class Particle {
                 break;
 
             case 'explosionFlash':
-                this.life -= 0.08 * TS;
-                this.radius = (1 - this.life ** 2) * this.maxRadius;
+                this.life -= 0.06 * TS;
+                this.radius = (1 - (this.life / 1.2) ** 2) * this.maxRadius;
                 break;
             case 'explosionShrapnel':
                 this.x += this.vel.x * TS;
@@ -327,8 +327,8 @@ export class Particle {
                 this.life -= 0.015 * TS;
                 break;
             case 'explosionRingColored':
-                this.life -= 0.04 * TS;
-                this.radius = (1 - this.life / 0.8) * this.maxRadius;
+                this.life -= 0.035 * TS;
+                this.radius = (1 - this.life / 0.9) * this.maxRadius;
                 break;
         }
         
@@ -471,16 +471,23 @@ export class Particle {
                 ctx.fillText(`${this.damage}`, this.x, this.y);
                 break;
 
-            case 'explosionFlash':
-                // Additive white flash — bright core
+            case 'explosionFlash': {
+                // Additive radial flash — bright core fading to soft edge
                 ctx.globalCompositeOperation = 'screen';
                 changedComposite = true;
-                ctx.globalAlpha = Math.max(0, this.life * this.life); // quadratic fade
-                ctx.fillStyle = this.color;
+                const flashLife = Math.max(0, this.life / 1.2);
+                ctx.globalAlpha = Math.max(0, flashLife * 0.9);
+                const fGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                fGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                fGrad.addColorStop(0.3, 'rgba(220, 240, 255, 0.7)');
+                fGrad.addColorStop(0.7, 'rgba(180, 210, 255, 0.2)');
+                fGrad.addColorStop(1, 'rgba(150, 190, 255, 0)');
+                ctx.fillStyle = fGrad;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
                 break;
+            }
 
             case 'explosionShrapnel': {
                 // Directional streak — line from position in movement direction

@@ -104,6 +104,30 @@ export function triggerScreenShake(duration, magnitude, asteroidSize = 0) {
 }
 
 export function triggerHitstop(frames) {
-    // Only apply if stronger than current hitstop
-    this._hitstopFrames = Math.max(this._hitstopFrames || 0, frames);
+    const now = performance.now();
+
+    // ── Global budget: max 10 hitstop frames per second ──
+    if (!this._hitstopBudget) {
+        this._hitstopBudget = { frames: 0, windowStart: now };
+    }
+    if (now - this._hitstopBudget.windowStart > 1000) {
+        this._hitstopBudget.frames = 0;
+        this._hitstopBudget.windowStart = now;
+    }
+    const remaining = 10 - this._hitstopBudget.frames;
+    if (remaining <= 0) return; // budget exhausted — skip
+    frames = Math.min(frames, remaining);
+
+    // Cooldown: light hits (< 4 frames) rate-limited to once per 200ms
+    // Kill/death hitstop (4+ frames) always punches through
+    if (frames < 4 && this._lastHitstopTime && (now - this._lastHitstopTime) < 200) {
+        return;
+    }
+    this._lastHitstopTime = now;
+
+    // Only apply if stronger than current hitstop (coalesce simultaneous hits via max)
+    const applied = Math.max(this._hitstopFrames || 0, frames);
+    const added = applied - (this._hitstopFrames || 0);
+    this._hitstopFrames = applied;
+    this._hitstopBudget.frames += added;
 }

@@ -1,0 +1,48 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - button "Pause" [ref=e2] [cursor=pointer]
+  - text: ♪
+  - generic:
+    - generic:
+      - generic: 21s
+      - generic: 🏥
+      - generic: DOCTOR
+    - generic:
+      - generic: 37s
+      - generic: 🎯
+      - generic: HOMING
+    - generic:
+      - generic: 37s
+      - generic: 🔵
+      - generic: BIG BULLETS
+    - generic:
+      - generic: 37s
+      - generic: ✳️
+      - generic: MULTI SHOT
+    - generic:
+      - generic: 38s
+      - generic:
+        - text: ⚡
+        - generic: 2x
+      - generic: RAPID FIRE
+    - generic:
+      - generic: 38s
+      - generic: 🗡️
+      - generic: CRITICAL DAMAGE
+    - generic:
+      - generic: 38s
+      - generic:
+        - text: 🏹
+        - generic: 2x
+      - generic: LONG RANGE
+    - generic:
+      - generic: 39s
+      - generic: 🏹
+      - generic: PIERCING
+    - generic:
+      - generic: 39s
+      - generic: 💣
+      - generic: EXPLOSIVE
+```

@@ -191,6 +191,62 @@ export function draw(ctx) {
     ctx.arc(0, -r, r * 0.075, 0, Math.PI * 2);
     ctx.fill();
 
+    // ── Muzzle flash ────────────────────────────────────────────────────
+    if (this._muzzleFlashTimer > 0) {
+        const mfMax = this._muzzleFlashMax || 6;
+        const mfAlpha = this._muzzleFlashTimer / mfMax;
+        const mfProgress = 1 - mfAlpha;
+        const mfIntensity = this._muzzleFlashIntensity || 1.0;
+        const mfColor = this._muzzleFlashColor || '255, 220, 140';
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Large core flash at nose tip — bright burst visible from distance
+        const coreR = r * (0.8 + mfIntensity * 0.6) * (1 - mfProgress * 0.4);
+        const mfGrad = ctx.createRadialGradient(0, -r, 0, 0, -r, coreR);
+        mfGrad.addColorStop(0, `rgba(255, 255, 255, ${mfAlpha * 1.0})`);
+        mfGrad.addColorStop(0.3, `rgba(${mfColor}, ${mfAlpha * 0.8})`);
+        mfGrad.addColorStop(0.7, `rgba(${mfColor}, ${mfAlpha * 0.3})`);
+        mfGrad.addColorStop(1, `rgba(${mfColor}, 0)`);
+        ctx.fillStyle = mfGrad;
+        ctx.beginPath();
+        ctx.arc(0, -r, coreR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Forward flash streak — prominent cone in fire direction
+        if (mfIntensity > 0.3) {
+            const streakLen = r * (0.8 + mfIntensity * 0.8) * mfAlpha;
+            const streakW = r * (0.15 + mfIntensity * 0.15) * mfAlpha;
+            const streakGrad = ctx.createRadialGradient(0, -r - streakLen * 0.3, 0, 0, -r - streakLen * 0.3, streakLen * 0.6);
+            streakGrad.addColorStop(0, `rgba(255, 255, 255, ${mfAlpha * 0.7})`);
+            streakGrad.addColorStop(0.5, `rgba(${mfColor}, ${mfAlpha * 0.4})`);
+            streakGrad.addColorStop(1, `rgba(${mfColor}, 0)`);
+            ctx.fillStyle = streakGrad;
+            ctx.beginPath();
+            ctx.ellipse(0, -r - streakLen * 0.3, streakW, streakLen, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Side flare spikes for heavy weapons
+        if (mfIntensity > 0.8) {
+            const spikeLen = r * 0.5 * mfAlpha;
+            const spikeW = r * 0.06;
+            ctx.fillStyle = `rgba(${mfColor}, ${mfAlpha * 0.5})`;
+            // Left spike
+            ctx.beginPath();
+            ctx.ellipse(-spikeLen * 0.5, -r, spikeLen, spikeW, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Right spike
+            ctx.beginPath();
+            ctx.ellipse(spikeLen * 0.5, -r, spikeLen, spikeW, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+        this._muzzleFlashTimer--;
+    }
+
     // ── Hull outline glow ────────────────────────────────────────────────
     // Full ship silhouette stroke for visibility against dark backgrounds.
     // Dims with idle engines but stays visible; brightens with thrust.
@@ -218,12 +274,34 @@ export function draw(ctx) {
     ctx.closePath();
     ctx.stroke();
 
-    // ── Hit flash overlay ─────────────────────────────────────────────
+    // ── Hit flash overlay — redraw hull as white silhouette ─────────────
     if (this._hitFlashTimer > 0) {
-        ctx.globalCompositeOperation = 'source-atop';
-        ctx.fillStyle = `rgba(255, 255, 255, ${this._hitFlashTimer / 8})`;
-        ctx.fillRect(-r * 1.5, -r * 1.2, r * 3, r * 2.4);
-        ctx.globalCompositeOperation = 'lighter';
+        const hfAlpha = Math.min(1, this._hitFlashTimer / 8);
+        ctx.globalAlpha = hfAlpha;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -r);
+        ctx.lineTo( r * 0.32, -r * 0.18);
+        ctx.lineTo( r * 1.12,  r * 0.28);
+        ctx.lineTo( r * 1.42,  r * 0.08);
+        ctx.lineTo( r * 1.18,  r * 0.56);
+        ctx.lineTo( r * 0.82,  r * 0.68);
+        ctx.lineTo( r * 0.42,  r * 0.78);
+        ctx.lineTo( r * 0.28,  r * 0.58);
+        ctx.lineTo(0,           r * 0.38);
+        ctx.lineTo(-r * 0.28,  r * 0.58);
+        ctx.lineTo(-r * 0.42,  r * 0.78);
+        ctx.lineTo(-r * 0.82,  r * 0.68);
+        ctx.lineTo(-r * 1.18,  r * 0.56);
+        ctx.lineTo(-r * 1.42,  r * 0.08);
+        ctx.lineTo(-r * 1.12,  r * 0.28);
+        ctx.lineTo(-r * 0.32, -r * 0.18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
     }
 
     // Draw charging effects whenever charge is building (independent of primary fire cooldown)

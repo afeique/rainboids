@@ -9,7 +9,7 @@ export const COLLISION_CONFIG = {
     // Bullet-to-asteroid knockback impulse multiplier
     BULLET_KNOCKBACK: 0.05,
     // Frames for hit-flash on asteroids and enemies
-    HIT_FLASH_FRAMES: 6,
+    HIT_FLASH_FRAMES: 10,
     // Damage dealt to enemy when player collides with it
     PLAYER_ENEMY_COLLISION_DAMAGE: 50,
     // Damage dealt to asteroid when player collides with it
@@ -62,7 +62,7 @@ export function handleCollisions() {
         const nearby = this.spatialGrid.retrieve(bullet);
         for (let j = nearby.length - 1; j >= 0; j--) {
             const ast = nearby[j];
-            if (!ast.active || ast.constructor.name !== 'Asteroid') continue;
+            if (!ast.active || ast._deathFlash > 0 || ast.constructor.name !== 'Asteroid') continue;
 
             // Skip if this piercing bullet has already hit this asteroid
             if (bullet.piercing > 0 && bullet.hasHitEnemy(ast)) {
@@ -87,8 +87,16 @@ export function handleCollisions() {
                 const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
                 ast.health = Math.max(0, ast.health - damage);
 
-                // Hit flash — asteroid briefly turns white when struck
+                // Hit flash — localized at bullet impact point
                 ast._hitFlashTimer = COLLISION_CONFIG.HIT_FLASH_FRAMES;
+                ast._hitPoint = { x: bullet.x, y: bullet.y };
+                ast._hitAngle = Math.atan2(bullet.y - ast.y, bullet.x - ast.x);
+
+                // Brief hitstop on hit — heavy weapons get more
+                if (this.isEntityOnScreen(ast)) {
+                    const dmg = bullet.damage || 1;
+                    this.triggerHitstop(dmg >= 2 ? 3 : 2);
+                }
 
                 // Show damage number (same as enemy ships)
                 if (this.isEntityOnScreen(ast)) {
@@ -102,22 +110,23 @@ export function handleCollisions() {
                 ast.vel.x += bullet.vel.x * COLLISION_CONFIG.BULLET_KNOCKBACK;
                 ast.vel.y += bullet.vel.y * COLLISION_CONFIG.BULLET_KNOCKBACK;
 
-                // Hit spark — colored shrapnel streaks + small flash at impact
+                // Localized hit sparks at bullet impact point
                 {
                     const hitHue = ast.baseHue || 30;
                     const hitColor = `hsl(${hitHue}, 90%, 70%)`;
                     const hitBright = `hsl(${hitHue}, 90%, 85%)`;
+                    const impactAngle = Math.atan2(bullet.vel.y, bullet.vel.x);
                     // Small flash at impact point
-                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', ast.baseRadius * 0.5);
-                    // 4-6 shrapnel streaks in asteroid color
-                    for (let p = 0; p < 5; p++) {
-                        const angle = random(0, Math.PI * 2);
-                        const speed = random(3, 7);
+                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', ast.baseRadius * 0.3);
+                    // Directional shrapnel — away from bullet direction
+                    for (let p = 0; p < 4; p++) {
+                        const angle = impactAngle + Math.PI + random(-0.7, 0.7);
+                        const speed = random(3, 6);
                         this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel',
-                            angle, speed, p < 2 ? hitBright : hitColor);
+                            angle, speed, p < 1 ? hitBright : hitColor);
                     }
-                    // A few embers
-                    for (let p = 0; p < 3; p++) {
+                    // A couple embers
+                    for (let p = 0; p < 2; p++) {
                         this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', hitColor);
                     }
                 }
@@ -130,9 +139,12 @@ export function handleCollisions() {
                 // Use small tolerance for floating-point precision issues
                 if (ast.health <= 0.001) {
                     if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
-                        // Small asteroid destroyed
+                        // Small asteroid destroyed — death flash then cleanup
+                        ast._deathFlash = 6;
+                        ast._deathFlashMax = 6;
                         if (this.isEntityOnScreen(ast)) {
                             this.events.emit('audio:explosion');
+                            this.triggerHitstop(4);
                         }
                         this.createDebris(ast);
                         this.createColorStarBurst(ast.x, ast.y);
@@ -143,11 +155,13 @@ export function handleCollisions() {
                         if (this.isEntityOnScreen(ast)) {
                             this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
                         }
-                        this.asteroidPool.release(ast);
                     } else {
-                        // Large asteroid splits — bigger explosion
+                        // Large asteroid splits — death flash + bigger explosion
+                        ast._deathFlash = 6;
+                        ast._deathFlashMax = 6;
                         if (this.isEntityOnScreen(ast)) {
                             this.events.emit('audio:explosion');
+                            this.triggerHitstop(5);
                         }
                         this.createDebris(ast);
                         this.createColorStarBurst(ast.x, ast.y);
@@ -185,7 +199,6 @@ export function handleCollisions() {
                                 newAst.vel.y = ast.vel.y * 0.3 + Math.sin(angle) * speed;
                             }
                         }
-                        this.asteroidPool.release(ast);
                     }
                 }
                 // Handle bullet hit with powerup effects
@@ -354,7 +367,7 @@ export function handleCollisions() {
         const nearbyEn = this.spatialGrid.retrieve(bullet);
         for (let j = nearbyEn.length - 1; j >= 0; j--) {
             const enemy = nearbyEn[j];
-            if (!enemy.active || enemy.warping || enemy.constructor.name !== 'Enemy') continue;
+            if (!enemy.active || enemy._deathFlash > 0 || enemy.warping || enemy.constructor.name !== 'Enemy') continue;
 
             // Skip if this piercing bullet has already hit this enemy
             if (bullet.piercing > 0 && bullet.hasHitEnemy(enemy)) {
@@ -379,26 +392,39 @@ export function handleCollisions() {
                 const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
                 const destroyed = enemy.takeDamage(damage);
 
-                // Hit flash on enemy when struck
+                // Hit flash on enemy — localized at impact point
                 enemy._hitFlashTimer = COLLISION_CONFIG.HIT_FLASH_FRAMES;
+                enemy._hitPoint = { x: bullet.x, y: bullet.y };
+                enemy._hitAngle = Math.atan2(bullet.y - enemy.y, bullet.x - enemy.x);
+
+                // Per-weapon hitstop: heavy single hits get more freeze, light rapid-fire gets less
+                // damage >= 2 → heavy (rail driver, charge shot): 3f hit / 5f crit
+                // damage < 2  → light (pulse, needles, scatter): 2f hit / 3f crit
+                if (this.isEntityOnScreen(enemy)) {
+                    const dmg = bullet.damage || 1;
+                    const isCrit = bullet.isCrit || bullet.isCritical;
+                    const hitFrames = dmg >= 2 ? (isCrit ? 5 : 3) : (isCrit ? 3 : 2);
+                    this.triggerHitstop(hitFrames);
+                }
 
                 // Award XP for hitting enemy
                 this.player.gainExperience(3);
 
-                // Hit spark — colored shrapnel + flash in enemy color
+                // Localized hit sparks at bullet impact point
                 {
                     const eColor = enemy.color || '#ff4444';
+                    const impactAngle = Math.atan2(bullet.vel.y, bullet.vel.x);
                     // Small flash at impact
-                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', enemy.radius * 0.5);
-                    // Shrapnel streaks in enemy color
-                    for (let p = 0; p < 6; p++) {
-                        const angle = random(0, Math.PI * 2);
-                        const speed = random(3, 8);
+                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', enemy.radius * 0.35);
+                    // Directional shrapnel — sparks fly AWAY from bullet direction
+                    for (let p = 0; p < 5; p++) {
+                        const spreadAngle = impactAngle + Math.PI + random(-0.8, 0.8);
+                        const speed = random(3, 7);
                         this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel',
-                            angle, speed, p < 2 ? '#ffffff' : eColor);
+                            spreadAngle, speed, p < 2 ? '#ffffff' : eColor);
                     }
-                    // A few embers
-                    for (let p = 0; p < 3; p++) {
+                    // A couple embers at impact
+                    for (let p = 0; p < 2; p++) {
                         this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', eColor);
                     }
                 }
@@ -419,6 +445,16 @@ export function handleCollisions() {
                         this.events.emit('audio:explosion');
                     }
 
+                    // Death flash — enemy renders as bright silhouette before cleanup
+                    enemy._deathFlash = 8;
+                    enemy._deathFlashMax = 8;
+
+                    // Kill hitstop — heavy weapons get more satisfying freeze
+                    if (this.isEntityOnScreen(enemy)) {
+                        const dmg = bullet.damage || 1;
+                        this.triggerHitstop(dmg >= 2 ? 7 : 5);
+                    }
+
                     // Create colored explosion effects (includes screen shake)
                     this.createEnemyDebris(enemy);
 
@@ -434,7 +470,7 @@ export function handleCollisions() {
                         this.dropPowerup(enemy.x, enemy.y);
                     }
 
-                    this.enemyPool.release(enemy);
+                    // Don't release here — cleanupInactive() handles it after death flash completes
                 }
 
                 // Handle bullet hit with powerup effects
@@ -506,7 +542,7 @@ export function handleCollisions() {
 
     // Enemy-asteroid collisions
     this.enemyPool.activeObjects.forEach(enemy => {
-        if (!enemy.active) return;
+        if (!enemy.active || enemy._deathFlash > 0) return;
 
         this.asteroidPool.activeObjects.forEach(ast => {
             if (!ast.active) return;
@@ -544,7 +580,7 @@ export function checkLanceBeamCollisions() {
         const dmg = config.damage * (1 + p.getPowerupStacks('OVERLOAD_BEAM') * 2);
 
         this.enemyPool.activeObjects.forEach(enemy => {
-            if (!enemy.active) return;
+            if (!enemy.active || enemy._deathFlash > 0) return;
             // Point-to-line distance check
             const ex = enemy.x - p.x;
             const ey = enemy.y - p.y;
@@ -713,11 +749,17 @@ export function checkTractorShieldCollisions() {
 }
 
 export function damageEnemy(enemy, damage) {
-    if (!enemy || !enemy.active) return;
+    if (!enemy || !enemy.active || enemy._deathFlash > 0) return;
     enemy.health -= damage;
     this.createDamageNumber(enemy.x, enemy.y - 15, damage);
     if (enemy.health <= 0) {
-        enemy.active = false;
+        // Start death flash — enemy renders as bright dissolving silhouette for 5 frames
+        enemy._deathFlash = 8;
+        enemy._deathFlashMax = 8;
+        // Kill hitstop for weapon-effect kills (mines, lightning, nova, etc.)
+        if (this.isEntityOnScreen(enemy)) {
+            this.triggerHitstop(4);
+        }
         // QA bot kill tracking — authoritative kill buffer (drained by state-reader)
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         const reward = enemy.getDestructionReward();
@@ -735,7 +777,6 @@ export function damageEnemy(enemy, damage) {
         if (Math.random() < powerupChance) {
             this.dropPowerup(enemy.x, enemy.y);
         }
-        this.enemyPool.release(enemy);
     }
 }
 
@@ -778,7 +819,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         }
 
         // ── JUICE: hitstop + camera kick + screen shake ──
-        this.triggerHitstop(5); // ~83ms — enemies hit harder than asteroids
+        this.triggerHitstop(6); // ~100ms — enemies hit harder than asteroids
         const kickDx = player.x - enemy.x;
         const kickDy = player.y - enemy.y;
         this.triggerCameraKick(kickDx, kickDy, 10);
@@ -811,6 +852,9 @@ export function handlePlayerEnemyCollision(player, enemy) {
     const destroyed = enemy.takeDamage(COLLISION_CONFIG.PLAYER_ENEMY_COLLISION_DAMAGE);
 
     if (destroyed) {
+        // Start death flash — enemy renders as bright dissolving silhouette
+        enemy._deathFlash = 8;
+        enemy._deathFlashMax = 8;
         // QA bot kill tracking — authoritative kill buffer
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         const reward = enemy.getDestructionReward();
@@ -822,7 +866,6 @@ export function handlePlayerEnemyCollision(player, enemy) {
         this.createEnemyDebris(enemy);
         // Drop health and money orbs
         this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
-        this.enemyPool.release(enemy);
     }
 
     // Physics-based bounce with conservation of momentum
@@ -930,7 +973,7 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     }
 
     // ── JUICE: hitstop + screen shake (no camera kick for bullets — too small) ──
-    this.triggerHitstop(3); // ~50ms — quick jolt
+    this.triggerHitstop(4); // ~67ms — quick jolt
     this.triggerScreenShake(12, 6, bullet.radius);
     this.events.emit('audio:hit');
 
@@ -1086,7 +1129,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         this.player._hitFlashTimer = 6;
 
         // ── JUICE: hitstop + camera kick + screen shake ──
-        this.triggerHitstop(4); // ~67ms freeze — satisfying impact weight
+        this.triggerHitstop(6); // ~100ms freeze — satisfying impact weight
         const kickDx = this.player.x - asteroid.x;
         const kickDy = this.player.y - asteroid.y;
         this.triggerCameraKick(kickDx, kickDy, 8); // directional camera lurch
@@ -1110,10 +1153,11 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
             this.triggerScreenShake(20, asteroid.baseRadius * 0.7, asteroid.baseRadius);
         }
 
-        // Create destruction effects
+        // Create destruction effects with death flash
+        asteroid._deathFlash = 6;
+        asteroid._deathFlashMax = 6;
         this.createDebris(asteroid);
         this.dropOrbsFromEntity(asteroid.x, asteroid.y, asteroid);
-        this.asteroidPool.release(asteroid);
         return; // Exit early if asteroid is destroyed
     }
 

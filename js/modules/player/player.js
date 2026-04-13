@@ -237,8 +237,8 @@ export class Player {
         return weapons.updateChargingSystem.call(this, input, bulletPool, audioManager, particlePool);
     }
 
-    firePrimary(bulletPool, audioManager) {
-        return weapons.firePrimary.call(this, bulletPool, audioManager);
+    firePrimary(bulletPool, audioManager, particlePool) {
+        return weapons.firePrimary.call(this, bulletPool, audioManager, particlePool);
     }
 
     firePulseCannon(bulletPool, audioManager, config) {

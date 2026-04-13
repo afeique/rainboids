@@ -288,47 +288,71 @@ export function drawTargetingEffect(ctx) {
     ctx.restore();
 }
 
+// Lightweight proxy that forces all fill/stroke colors to white.
+// Avoids modifying 10 shape functions (126 color assignments).
+let _whiteProxy = null;
+function getWhiteProxy(ctx) {
+    if (_whiteProxy && _whiteProxy._target === ctx) return _whiteProxy;
+    _whiteProxy = new Proxy(ctx, {
+        set(target, prop, value) {
+            if (prop === 'fillStyle') { target.fillStyle = 'rgba(255, 255, 255, 0.8)'; return true; }
+            if (prop === 'strokeStyle') { target.strokeStyle = '#ffffff'; return true; }
+            target[prop] = value;
+            return true;
+        },
+        get(target, prop) {
+            const val = target[prop];
+            return typeof val === 'function' ? val.bind(target) : val;
+        }
+    });
+    _whiteProxy._target = ctx;
+    return _whiteProxy;
+}
+
 export function drawEnemyShape(ctx) {
-    ctx.strokeStyle = this.color;
-    ctx.fillStyle = this.color + '40'; // Semi-transparent fill
-    ctx.lineWidth = 2;
+    // When flash-rendering, use a proxy that intercepts all color assignments → white
+    const drawCtx = this._deathFlashRendering ? getWhiteProxy(ctx) : ctx;
+
+    if (!this._deathFlashRendering) {
+        ctx.strokeStyle = this.color;
+        ctx.fillStyle = this.color + '40'; // Semi-transparent fill
+    }
+    drawCtx.lineWidth = 2;
 
     switch (this.type) {
         case 'HUNTER':
-            this.drawTriangle(ctx);
+            this.drawTriangle(drawCtx);
             break;
         case 'GUARDIAN':
-            this.drawEmeraldGuardian(ctx);
+            this.drawEmeraldGuardian(drawCtx);
             break;
         case 'WASP':
-            this.drawWaspShip(ctx);
+            this.drawWaspShip(drawCtx);
             break;
         case 'TITAN':
-            this.drawTitanTank(ctx);
+            this.drawTitanTank(drawCtx);
             break;
         case 'STALKER':
-            this.drawStalkerSword(ctx);
+            this.drawStalkerSword(drawCtx);
             break;
         case 'TANGERINE':
-            this.drawSpikedCircle(ctx);
+            this.drawSpikedCircle(drawCtx);
             break;
         case 'DRIFTER':
-            this.drawLaserTurret(ctx);
+            this.drawLaserTurret(drawCtx);
             break;
         case 'PROWLER':
-            this.drawMissileTurret(ctx);
+            this.drawMissileTurret(drawCtx);
             break;
         case 'WEAVER':
-            this.drawPulseTurret(ctx);
+            this.drawPulseTurret(drawCtx);
             break;
         case 'SENTINEL':
-            this.drawShieldTurret(ctx);
+            this.drawShieldTurret(drawCtx);
             break;
         default:
-            this.drawTriangle(ctx);
+            this.drawTriangle(drawCtx);
     }
-
-    // Aiming triangles removed - not working as intended
 }
 
 export function drawTriangle(ctx) {

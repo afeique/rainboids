@@ -28,7 +28,8 @@ export function updateWaveSystem() {
     this.asteroidPool.cleanupInactive();
 
     // Check if current wave is complete (only enemies count — asteroids are obstacles/loot)
-    const totalEnemies = this.enemyPool.activeObjects.length;
+    // Exclude enemies in death flash — they're visually dying but haven't been cleaned up yet
+    const totalEnemies = this.enemyPool.activeObjects.filter(e => !e._deathFlash).length;
 
     if (totalEnemies === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
         // Wave completed!

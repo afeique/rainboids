@@ -253,6 +253,15 @@ export class Enemy {
         if (!this.active) return;
         this.gameEngine = gameEngine; // Cache ref for draw/takeDamage (removes window.gameEngine dependency)
 
+        // Death flash countdown — enemy renders as bright silhouette then deactivates
+        if (this._deathFlash > 0) {
+            this._deathFlash--;
+            if (this._deathFlash <= 0) {
+                this.active = false;
+            }
+            return;
+        }
+
         // Handle warp-in — skip normal AI during warp
         if (this.warping) {
             this.updateWarpIn();
@@ -759,6 +768,45 @@ export class Enemy {
     draw(ctx) {
         if (!this.active) return;
 
+        // Death flash — BIG white silhouette that starts scaled up and fades/shrinks
+        if (this._deathFlash > 0) {
+            const maxT = this._deathFlashMax || 8;
+            const t = this._deathFlash;
+            const progress = 1 - t / maxT; // 0→1 over lifetime
+
+            // Start at 1.5x scale, shrink to 0.3x while fading out
+            // The initial large scale is immediately visible during hitstop
+            const scale = 1.5 - progress * 1.2;
+            const alpha = Math.max(0, 1.0 - progress * 1.1);
+
+            // Draw bright additive glow behind the silhouette
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const glowR = this.radius * scale * 3.0;
+            const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowR);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.7})`);
+            grad.addColorStop(0.3, `rgba(200, 230, 255, ${alpha * 0.35})`);
+            grad.addColorStop(1, 'rgba(150, 200, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, glowR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Draw enemy shape as solid white silhouette at scaled size
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.faceAngle);
+            ctx.scale(scale, scale);
+            ctx.globalAlpha = alpha;
+            this._deathFlashRendering = true;
+            this.drawEnemyShape(ctx);
+            this._deathFlashRendering = false;
+            ctx.restore();
+
+            return;
+        }
+
         // Draw warp streak effect (behind everything)
         if (this.warping) {
             this.drawWarpEffect(ctx);
@@ -789,63 +837,91 @@ export class Enemy {
         
         // Health-based transparency
         const healthRatio = this.health / this.maxHealth;
-        const alpha = 0.7 + (healthRatio * 0.3);
-        ctx.globalAlpha = alpha;
-        
+        const baseAlpha = 0.7 + (healthRatio * 0.3);
+        ctx.globalAlpha = baseAlpha;
+
         // Draw distinct geometric shape based on enemy type
         this.drawEnemyShape(ctx);
 
+        // Damage flash — redraw hull as white silhouette overlay on hit
+        // Single additive pass to match asteroid flash intensity
+        if (this._hitFlashTimer > 0) {
+            const flashAlpha = Math.min(1, (this._hitFlashTimer / 10) * 0.9);
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = flashAlpha;
+            this._deathFlashRendering = true;
+            this.drawEnemyShape(ctx);
+            this._deathFlashRendering = false;
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
         ctx.restore();
 
-        // Hit flash — non-rotating square burst with debris (world-space)
+        // Hit flash — localized at bullet impact point (world-space)
         if (this._hitFlashTimer > 0) {
-            const maxT = 6;
+            const maxT = 10;
             const t = this._hitFlashTimer;
             const alpha = t / maxT;
             const progress = 1 - alpha;
-            const fr = this.radius * 1.15;
-            const hfT = frameClock.now * 0.001;
+            const fr = this.radius * 0.75; // localized flash
 
-            // Slight jitter on the main flash
-            const jx = Math.sin(hfT * 141) * 2;
-            const jy = Math.cos(hfT * 179) * 2;
-            const cx = this.x + jx;
-            const cy = this.y + jy;
+            // Use stored impact point, or fall back to entity center
+            const hp = this._hitPoint || { x: this.x, y: this.y };
+            // Clamp impact point to within entity radius (bullet may be slightly outside)
+            const dx0 = hp.x - this.x;
+            const dy0 = hp.y - this.y;
+            const d0 = Math.hypot(dx0, dy0);
+            const maxDist = this.radius * 0.9;
+            const cx = d0 > maxDist ? this.x + (dx0 / d0) * maxDist : hp.x;
+            const cy = d0 > maxDist ? this.y + (dy0 / d0) * maxDist : hp.y;
 
             ctx.save();
             ctx.globalCompositeOperation = 'lighter';
 
-            // Main flash square — bright, non-rotating
-            const flashAlpha = alpha * alpha * 0.85; // quadratic falloff, starts very bright
-            ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
-            ctx.fillRect(cx - fr, cy - fr, fr * 2, fr * 2);
+            // Localized flash — radial gradient at impact point
+            const flashAlpha = alpha * 0.8;
+            const flashRadius = fr * (1 + progress * 0.5);
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, flashRadius);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${flashAlpha})`);
+            grad.addColorStop(0.5, `rgba(200, 230, 255, ${flashAlpha * 0.4})`);
+            grad.addColorStop(1, 'rgba(150, 200, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, flashRadius, 0, Math.PI * 2);
+            ctx.fill();
 
-            // Debris squares bursting outward
-            const seed = ((this.x * 7.3 + this.y * 13.7) | 0) & 0xffff;
-            const debrisCount = 7;
-            const colors = [
-                '255,255,255',
-                '120,235,255',
-                '255,90,210',
-                '255,255,150',
-                '190,150,255',
-                '255,255,255',
-                '120,235,255',
-            ];
+            // Small expanding ring from impact point
+            if (progress > 0.1) {
+                const ringProgress = (progress - 0.1) / 0.9;
+                const ringRadius = fr * (0.4 + ringProgress * 2.0);
+                const ringAlpha = (1 - ringProgress) * 0.35;
+                ctx.strokeStyle = `rgba(180, 220, 255, ${ringAlpha})`;
+                ctx.lineWidth = Math.max(1, fr * 0.10 * (1 - ringProgress));
+                ctx.beginPath();
+                ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Directional debris sparks from impact point
+            const hitAngle = this._hitAngle || 0;
+            const debrisCount = 5;
+            const colors = ['255,255,255', '120,235,255', '255,255,150', '190,150,255', '255,200,100'];
             for (let i = 0; i < debrisCount; i++) {
-                const angle = (i / debrisCount) * Math.PI * 2 + (seed + i * 137) % 100 * 0.063;
-                const speed = 0.7 + ((seed + i * 31) % 10) * 0.06;
+                // Sparks spread in a cone away from the impact direction
+                const angle = hitAngle + (i / debrisCount - 0.5) * 1.8;
+                const speed = 0.5 + ((i * 31) % 10) * 0.07;
                 const dist = progress * fr * 3.0 * speed;
-                const dx = Math.cos(angle) * dist;
-                const dy = Math.sin(angle) * dist;
+                const ddx = Math.cos(angle) * dist;
+                const ddy = Math.sin(angle) * dist;
 
-                // Size: starts visible, shrinks as it flies out
-                const sz = fr * (0.28 - progress * 0.18);
+                const sz = fr * (0.20 - progress * 0.10);
                 if (sz <= 0) continue;
 
-                const debrisAlpha = alpha * 0.55 * (1 - progress * 0.5);
+                const debrisAlpha = alpha * 0.55;
                 ctx.fillStyle = `rgba(${colors[i]}, ${debrisAlpha})`;
-                ctx.fillRect(cx + dx - sz, cy + dy - sz, sz * 2, sz * 2);
+                ctx.beginPath();
+                ctx.arc(cx + ddx, cy + ddy, sz, 0, Math.PI * 2);
+                ctx.fill();
             }
 
             ctx.restore();
@@ -967,8 +1043,8 @@ export class Enemy {
     hasLineOfSight(target, gameEngine) { return ai.hasLineOfSight.call(this, target, gameEngine); }
     
     takeDamage(damage) {
-        // Invulnerable during warp-in
-        if (this.warping) return false;
+        // Invulnerable during warp-in or death flash
+        if (this.warping || this._deathFlash > 0) return false;
 
         this.health -= damage;
         

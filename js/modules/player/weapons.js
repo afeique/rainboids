@@ -27,7 +27,7 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         this.lastShotTime = now;
         this.lastPrimaryFireTime = now;
         try {
-            this.firePrimary(bulletPool, audioManager);
+            this.firePrimary(bulletPool, audioManager, particlePool);
             bulletCreated = bulletPool.activeObjects.length > poolBefore;
         } catch (e) {
             console.error('[AUTO-FIRE] firePrimary threw:', e.message, e.stack);
@@ -103,7 +103,7 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
 
 // ── Primary weapon dispatch ────────────────────────────────────────────────
 
-export function firePrimary(bulletPool, audioManager) {
+export function firePrimary(bulletPool, audioManager, particlePool) {
     // Hard cap on player bullets to prevent pool explosion with RAPID_FIRE + MULTI_SHOT stacking
     if (bulletPool.activeObjects.length >= 300) return false;
 
@@ -112,15 +112,19 @@ export function firePrimary(bulletPool, audioManager) {
     switch (this.activePrimary) {
         case 'PULSE_CANNON':
             this.firePulseCannon(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'medium', '#ffdd88');
             break;
         case 'STORM_NEEDLES':
             this.fireStormNeedles(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'light', '#88ccff');
             break;
         case 'SCATTER_GUN':
             this.fireScatterGun(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'heavy', '#ffaa44');
             break;
         case 'RAIL_DRIVER':
             this.fireRailDriver(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'heavy', '#44ffaa');
             break;
         case 'LANCE_BEAM':
             // Beam handled in update loop, not individual shots
@@ -128,6 +132,43 @@ export function firePrimary(bulletPool, audioManager) {
             break;
         default:
             this.firePulseCannon(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'medium', '#ffdd88');
+    }
+}
+
+/**
+ * Trigger muzzle flash on the player sprite + optional spark particles.
+ * @param {object} particlePool
+ * @param {'light'|'medium'|'heavy'} intensity
+ * @param {string} color - CSS color for the sparks
+ */
+function spawnMuzzleFlare(particlePool, intensity, color) {
+    // Set muzzle flash timer on the player (rendered in renderer.js)
+    const dur = intensity === 'heavy' ? 8 : intensity === 'medium' ? 5 : 3;
+    const intVal = intensity === 'heavy' ? 1.5 : intensity === 'medium' ? 1.0 : 0.6;
+    // RGB components for the flash color
+    const colorMap = { '#ffdd88': '255, 220, 140', '#88ccff': '140, 200, 255', '#ffaa44': '255, 170, 70', '#ffcc44': '255, 200, 70', '#44ffaa': '70, 255, 170' };
+    this._muzzleFlashTimer = dur;
+    this._muzzleFlashMax = dur;
+    this._muzzleFlashIntensity = intVal;
+    this._muzzleFlashColor = colorMap[color] || '255, 220, 140';
+
+    // Spawn directional spark particles for medium/heavy
+    if (!particlePool || intensity === 'light') return;
+    const scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
+    const muzzleDist = GAME_CONFIG.SHIP_SIZE * scale / 1.5;
+    const mx = this.x + Math.cos(this.angle) * muzzleDist;
+    const my = this.y + Math.sin(this.angle) * muzzleDist;
+
+    const sparkCount = intensity === 'heavy' ? 3 : 1;
+    for (let i = 0; i < sparkCount; i++) {
+        const sparkAngle = this.angle + (Math.random() - 0.5) * (intensity === 'heavy' ? 1.0 : 0.4);
+        const speed = (intensity === 'heavy' ? 5 : 3) * (0.7 + Math.random() * 0.6);
+        const spark = particlePool.get(mx, my, 'explosionShrapnel', sparkAngle, speed, color);
+        if (spark) {
+            spark.life = 0.2 + Math.random() * 0.1;
+            spark.length = 3 + Math.random() * 3;
+        }
     }
 }
 
@@ -354,6 +395,9 @@ export function firePower(bulletPool, audioManager, particlePool) {
 
     this.powerCooldown = config.cooldown;
     audioManager.playShoot();
+
+    // Heavy muzzle flare for power weapons
+    spawnMuzzleFlare.call(this, particlePool, 'heavy', '#ffcc44');
 }
 
 export function layMine(config) {
@@ -666,6 +710,9 @@ export function fireChargedShot(bulletPool, audioManager) {
 
     // Play shoot sound
     audioManager.playShoot();
+
+    // Heavy muzzle flare for charged shot
+    spawnMuzzleFlare.call(this, null, 'heavy', '#ffcc44');
 }
 
 // ── Bullet creation ────────────────────────────────────────────────────────
