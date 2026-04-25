@@ -324,20 +324,26 @@ export class UIManager {
         const controlsTab = document.getElementById('controls-tab');
         if (!controlsTab) return;
         const isMob = (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) || window.innerWidth <= 768;
+        // Rows go inside .control-list so the list centers as a block under
+        // the heading while each row stays left-justified (CSS in styles.css).
         if (isMob) {
             controlsTab.innerHTML = `
                 <h2>CONTROLS</h2>
-                <div><span class="control-symbol">LEFT THUMB</span> Move</div>
-                <div><span class="control-symbol">RIGHT THUMB</span> Aim + Shoot</div>
-                <div><span class="control-symbol">|| BTN</span> Pause / Resume</div>
-                <div>Tap outside menu to unpause</div>
+                <div class="control-list">
+                    <div><span class="control-symbol">LEFT THUMB</span> Move</div>
+                    <div><span class="control-symbol">RIGHT THUMB</span> Aim + Shoot</div>
+                    <div><span class="control-symbol">|| BTN</span> Pause / Resume</div>
+                    <div>Tap outside menu to unpause</div>
+                </div>
             `;
         } else {
             controlsTab.innerHTML = `
                 <h2>CONTROLS</h2>
-                <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
-                <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
-                <div>ESC or P to Pause / Resume</div>
+                <div class="control-list">
+                    <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
+                    <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
+                    <div>ESC or P to Pause / Resume</div>
+                </div>
             `;
         }
     }

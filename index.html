@@ -58,6 +58,11 @@
 
     <div id="pause-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%;">
         <div id="pause-menu">
+            <div class="pause-menu-actions">
+                <button id="pause-shop-button" class="pause-action-btn"><span class="pause-btn-icon">🛒</span><span class="pause-btn-label">SHOP</span></button>
+                <button id="pause-resume-button" class="pause-action-btn"><span class="pause-btn-icon">►</span><span class="pause-btn-label">RESUME</span></button>
+            </div>
+
             <div class="pause-tabs">
                 <button class="pause-tab active" data-tab="controls">CONTROLS</button>
                 <button class="pause-tab" data-tab="powerups">POWERUPS</button>
@@ -65,17 +70,14 @@
                 <button class="pause-tab" data-tab="sfx">SFX</button>
                 <button class="pause-tab" data-tab="skills">SKILLS</button>
             </div>
-            
-            <div class="pause-menu-actions">
-                <button id="pause-shop-button" class="pause-action-btn"><span class="pause-btn-icon">🛒</span><span class="pause-btn-label">SHOP</span></button>
-                <button id="pause-resume-button" class="pause-action-btn"><span class="pause-btn-icon">►</span><span class="pause-btn-label">RESUME</span></button>
-            </div>
-            
+
             <div id="controls-tab" class="pause-tab-content active">
                 <h2>CONTROLS</h2>
-                <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
-                <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
-                <div>ESC to Pause / Resume</div>
+                <div class="control-list">
+                    <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
+                    <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
+                    <div>ESC to Pause / Resume</div>
+                </div>
             </div>
             
             <div id="powerups-tab" class="pause-tab-content">

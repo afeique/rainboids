@@ -105,39 +105,118 @@ body.shop-open .ui-element {
 }
 
 #pause-overlay {
-    background-color: rgba(0, 0, 0, 0.7);
+    /* Backdrop is the see-through layer behind the menu so the player can
+       still read the game state through it. Menu itself is fully opaque. */
+    background-color: rgba(0, 0, 0, 0.25);
     display: none;
     pointer-events: all;
     z-index: 100;
 }
 
 #pause-menu {
-    background-color: rgba(0, 0, 0, 0.9);
-    padding: 30px;
-    border-radius: 10px;
+    /* Fullscreen pause panel — fills the entire viewport with a 75%-opaque
+       backdrop so the underlying game world is faintly visible. */
+    background-color: rgba(0, 0, 0, 0.78);
+    padding: 40px;
+    border-radius: 0;
     text-align: center;
-    max-width: 500px;
-    width: 90%;
-    border: 2px solid white;
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border: none;
+    box-shadow: none;
+    box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 18px;
+}
+
+/* Center the tab content vertically inside the fullscreen menu. */
+#pause-menu .pause-tab-content.active {
+    width: min(900px, 100%);
+    margin: 0 auto;
+}
+
+/* Kill the inherited .ui-element text-shadow inside the pause menu — it
+   makes body text look blurred (visible on the SKILLS tab instructions in
+   particular). Empty skill slots opt back into a faint dim look via their
+   own classes; they don't need this glow. */
+#pause-menu,
+#pause-menu * {
+    text-shadow: none;
+}
+
+/* Center the controls list as a block while keeping each row left-justified. */
+#controls-tab {
+    text-align: center;
+}
+#controls-tab .control-list {
+    display: inline-block;
+    text-align: left;
+    margin-top: 14px;
+}
+#controls-tab .control-list > div {
+    margin: 6px 0;
+}
+
+/* Goldenrod scrollbars throughout the pause menu.
+   Dark yellow-goldenrod track + bright goldenrod thumb.
+   Two notes on why this is split between Firefox and WebKit and uses no
+   `scrollbar-width: thin`:
+     - Firefox only honors `scrollbar-color` (no ::-webkit-scrollbar support).
+     - Chromium / Safari respect ::-webkit-scrollbar pseudo-elements ONLY
+       when the legacy scrollbar is in use; setting `scrollbar-width: thin`
+       opts into the native thin scrollbar which ignores those pseudos and
+       leaves the bar gray. So we omit `scrollbar-width`. */
+#pause-menu,
+#pause-menu * {
+    scrollbar-color: #FFC107 #5a4509; /* thumb, track — Firefox */
+}
+#pause-menu::-webkit-scrollbar,
+#pause-menu *::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+#pause-menu::-webkit-scrollbar-track,
+#pause-menu *::-webkit-scrollbar-track {
+    background: #5a4509; /* dark yellow-goldenrod */
+    border-radius: 6px;
+}
+#pause-menu::-webkit-scrollbar-thumb,
+#pause-menu *::-webkit-scrollbar-thumb {
+    background: #FFC107; /* bright goldenrod */
+    border-radius: 6px;
+    border: 2px solid #5a4509; /* keeps thumb visually inset against the track */
+}
+#pause-menu::-webkit-scrollbar-thumb:hover,
+#pause-menu *::-webkit-scrollbar-thumb:hover {
+    background: #FFD740; /* even brighter on hover */
+}
+#pause-menu::-webkit-scrollbar-corner,
+#pause-menu *::-webkit-scrollbar-corner {
+    background: #5a4509;
 }
 
 .pause-tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
     margin-bottom: 20px;
     justify-content: center;
 }
 
 .pause-tab {
-    padding: 7px 12px;
+    padding: 9px 14px;
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid rgba(255, 255, 255, 0.3);
     color: white;
     cursor: pointer;
     font-family: 'Press Start 2P', monospace;
-    font-size: 11px;
+    font-size: 14px;
     border-radius: 5px;
     transition: all 0.2s;
 }
@@ -173,12 +252,16 @@ body.shop-open .ui-element {
 }
 
 .pause-menu-actions {
+    /* SHOP/RESUME row sits at the very top of the pause menu. The divider
+       lives BELOW the row, separating the action buttons from the tabs. */
     display: flex;
     gap: 20px;
     justify-content: center;
-    margin: 20px 0 10px 0;
-    padding-top: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    margin: 20px 0;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    border-top: none;
+    padding-top: 0;
 }
 
 .pause-action-btn {
@@ -240,9 +323,10 @@ body.shop-open .ui-element {
 @media (max-width: 768px), (hover: none) and (pointer: coarse) {
     #pause-menu {
         padding: 14px 10px;
-        max-width: 96vw;
-        width: 96%;
-        max-height: 80vh;
+        width: 100vw;
+        height: 100vh;
+        max-width: none;
+        max-height: none;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
     }
@@ -254,8 +338,8 @@ body.shop-open .ui-element {
     }
 
     .pause-tab {
-        padding: 7px 9px;
-        font-size: 9px;
+        padding: 8px 11px;
+        font-size: 11px;
     }
 
     .pause-tab-content {
@@ -270,8 +354,9 @@ body.shop-open .ui-element {
 
     .pause-menu-actions {
         gap: 8px;
-        margin: 10px 0 4px 0;
-        padding-top: 10px;
+        margin: 10px 0;
+        padding-top: 0;
+        padding-bottom: 10px;
     }
 
     .pause-action-btn {

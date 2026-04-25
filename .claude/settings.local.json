@@ -55,7 +55,10 @@
       "Read(//System/Library/Frameworks/JavaScriptCore.framework/Helpers/**)",
       "Bash(brew list)",
       "Bash(npm list:*)",
-      "Bash(MITATA_JSON=1 node:*)"
+      "Bash(MITATA_JSON=1 node:*)",
+      "Bash(timeout 8 npx vite --port 8091)",
+      "Bash(curl -sI http://localhost:8091/js/playlist-data.js)",
+      "Bash(curl -s http://localhost:8091/index.html)"
     ],
     "deny": []
   }
