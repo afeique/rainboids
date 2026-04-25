@@ -1,0 +1,189 @@
+{
+  "main": {
+    "id": "7c6f35ff4599c31e",
+    "type": "split",
+    "children": [
+      {
+        "id": "56ec65da1b9730de",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d0016efdb880f49f",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Engine Writeup 2026-04-25.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Engine Writeup 2026-04-25"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "9b2f4a75963a4735",
+    "type": "split",
+    "children": [
+      {
+        "id": "0807506a6d6d3a5e",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "bfbc8b83b0546d78",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "7f8ff4268e271b26",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "d05e54e43d03f590",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "42d30a0e2957a5af",
+    "type": "split",
+    "children": [
+      {
+        "id": "8c5b35824766595d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f595a96c9343a110",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Engine Writeup 2026-04-25.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Engine Writeup 2026-04-25"
+            }
+          },
+          {
+            "id": "491e84e69404927f",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Engine Writeup 2026-04-25.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Engine Writeup 2026-04-25"
+            }
+          },
+          {
+            "id": "525c6eac413d1194",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "9e359d8b1330083c",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Engine Writeup 2026-04-25.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Engine Writeup 2026-04-25"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false
+    }
+  },
+  "active": "d0016efdb880f49f",
+  "lastOpenFiles": [
+    "Performance Analysis – 2026-03-04.md",
+    "Performance Analysis – 2026-03-08.md",
+    "QA Bot Planning – 2026-03-15.md",
+    "Starfield Rendering – 2026-03-08.md",
+    "Engine Writeup 2026-04-25.md",
+    "Performance Optimizations Implemented – 2025-07-15.md",
+    "Primary Weapons Update – 2026-03-21.md",
+    "QA Bot – Human Sim – 2026-03-22.md",
+    "QA Bot – Quantify Fun – 2026-03-22.md",
+    "SKU Deployment Planning – 2026-03-21.md",
+    "Weapons Planning – 2026-03-10.md",
+    "Enemy Asteroid Permutations – 2026-03-07.md",
+    "Refactor Plan – 2026-03-21.md",
+    "Gameplay Enhancement Plan – 2026-03-22.md",
+    "Hitstop Research 2026-04-12.md"
+  ]
+}

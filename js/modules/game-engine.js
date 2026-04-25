@@ -118,6 +118,7 @@ export class GameEngine {
         // Bulletproof continuous spawning system
         this.spawnInterval = 5000; // Spawn something every 5 seconds
         this.lastSpawnTime = 0; // Track last spawn
+        this.lastHealthOrbDropAt = 0; // Throttle health orb drops (cooldown gate in dropOrbsFromEntity)
         this.gameStartTime = Date.now();
         this.forceSpawnEnabled = false; // Disabled - wave-based spawning only
         
@@ -358,6 +359,7 @@ export class GameEngine {
         this.gameStartTime = Date.now();
         this.lastSpawnTime = 0; // Reset spawn timer
         this.lastEmergencySpawn = 0; // Reset emergency timer
+        this.lastHealthOrbDropAt = 0; // Reset health orb drop cooldown
         this.nextShopTime = Date.now() + this.shopInterval;
         this.forceSpawnEnabled = false; // Keep disabled for wave-based spawning
         
@@ -479,7 +481,7 @@ export class GameEngine {
     
     // Method to draw wavy rainbow text for wave messages
     // Mobile-aware: scales font to fit within screen width with padding.
-    drawWavyText(text, x, y, fontSize = 48) { return hudOverlays.drawWavyText.call(this, text, x, y, fontSize); }
+    drawWavyText(text, x, y, options) { return hudOverlays.drawWavyText.call(this, text, x, y, options); }
     
     drawTitleScreen() { return hudOverlays.drawTitleScreen.call(this); }
     
@@ -690,7 +692,7 @@ export class GameEngine {
             this.bulletPool.cleanupInactive();
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
-            this.powerupPool.activeObjects.forEach(p => p.update(this.player));
+            this.powerupPool.activeObjects.forEach(p => p.update(this.player, tractorEngaged));
             // Inject gameEngine ref for asteroids (needed for targeting highlight in draw)
             for (const a of this.asteroidPool.activeObjects) a.gameEngine = this;
             this.asteroidPool.updateActive(this.gameField);

@@ -4,6 +4,7 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { rgba } from '../core/color-cache.js';
+import { pulsePalette } from './overlays.js';
 
 export function drawDamageNumbers() {
         const ctx = this.ctx;
@@ -132,26 +133,21 @@ export function drawPowerupDisplay() {
 
         // Position at top center, below HUD elements to avoid overlap
         const centerX = this.width / 2;
-        const topY = 120; // Moved down to clear HUD elements (health bar + level/coins + margin)
+        const topY = 120; // Clears health bar + level/coins + margin
 
-        // Set font to Press Start 2P for consistency (avoid font loading flash)
-        ctx.font = "32px 'Press Start 2P', monospace";
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        // Apply fade opacity
+        // Apply fade opacity (drawWavyText respects outer globalAlpha).
         ctx.globalAlpha = this.powerupDisplay.opacity;
 
-        // Glow effect removed for performance
-
-        // Draw text with outline
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 3;
-        ctx.strokeText(this.powerupDisplay.text, centerX, topY);
-
-        // Draw main text
-        ctx.fillStyle = this.powerupDisplay.color;
-        ctx.fillText(this.powerupDisplay.text, centerX, topY);
+        // Wavy text with a gradient pulse around the powerup's identifying
+        // color — preserves the "this is the X powerup" visual while adding
+        // shimmer. pulsePalette is cached per base color.
+        this.drawWavyText(this.powerupDisplay.text, centerX, topY, {
+            fontSize: 32,
+            colors: pulsePalette(this.powerupDisplay.color),
+            amplitude: 8,
+            speed: 0.55,
+            colorSpeed: 0.4,
+        });
 
         ctx.restore();
 }
@@ -194,15 +190,27 @@ export function drawPowerupIndicators() {
             ctx.arc(x + iconSize/2, y + iconSize/2, iconSize/2, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Draw powerup icon with enhanced visibility
+            // Draw powerup icon, vertically centered by actual glyph bounds.
+            // textBaseline:'middle' isn't reliable for emoji — the glyph's
+            // visual center isn't the em-box midpoint, so icons like ⭐ ride
+            // low in the circle. Measure the glyph and offset by its real
+            // (ascent − descent) / 2 from the alphabetic baseline.
             ctx.fillStyle = '#ffffff';
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 1;
             ctx.font = `bold ${iconSize * 0.5}px Arial`;
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.strokeText(powerupData.config.icon, x + iconSize/2, y + iconSize/2);
-            ctx.fillText(powerupData.config.icon, x + iconSize/2, y + iconSize/2);
+            ctx.textBaseline = 'alphabetic';
+            const cx = x + iconSize / 2;
+            const cy = y + iconSize / 2;
+            const m = ctx.measureText(powerupData.config.icon);
+            // Fallback fudge factors if a browser doesn't report bounding box
+            // metrics for emoji (older Safari).
+            const ascent = m.actualBoundingBoxAscent || iconSize * 0.4;
+            const descent = m.actualBoundingBoxDescent || iconSize * 0.05;
+            const iconY = cy + (ascent - descent) / 2;
+            ctx.strokeText(powerupData.config.icon, cx, iconY);
+            ctx.fillText(powerupData.config.icon, cx, iconY);
 
             // Draw stack count if > 1
             if (powerupData.stacks > 1) {

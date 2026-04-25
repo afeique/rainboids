@@ -6,71 +6,130 @@ import { rgba } from '../core/color-cache.js';
 
 export const _charWidthCache = new Map();
 
-// Method to draw wavy rainbow text for wave messages
-// Mobile-aware: scales font to fit within screen width with padding.
-export function drawWavyText(text, x, y, fontSize = 48) {
+// Default rainbow palette. Stops wrap automatically (last → first), so callers
+// do NOT need to repeat the first entry to close the loop.
+const DEFAULT_WAVY_COLORS = ['#FF0000', '#FF8000', '#FFFF00', '#00FF00', '#0080FF', '#8000FF'];
+
+// Build a 4-stop palette around a single base color (tint → base → shade → base).
+// Used to give per-instance wavy text — like the powerup pickup label — a
+// shimmering pulse around its own identifying color.
+const _pulsePaletteCache = new Map();
+export function pulsePalette(hex) {
+    let p = _pulsePaletteCache.get(hex);
+    if (p) return p;
+    const h = hex.charAt(0) === '#' ? hex.slice(1) : hex;
+    let r, g, b;
+    if (h.length === 3) {
+        r = parseInt(h[0] + h[0], 16);
+        g = parseInt(h[1] + h[1], 16);
+        b = parseInt(h[2] + h[2], 16);
+    } else {
+        r = parseInt(h.slice(0, 2), 16);
+        g = parseInt(h.slice(2, 4), 16);
+        b = parseInt(h.slice(4, 6), 16);
+    }
+    const tint = (t) => `rgb(${Math.round(r + (255 - r) * t)},${Math.round(g + (255 - g) * t)},${Math.round(b + (255 - b) * t)})`;
+    const shade = (t) => `rgb(${Math.round(r * (1 - t))},${Math.round(g * (1 - t))},${Math.round(b * (1 - t))})`;
+    p = [hex, tint(0.55), hex, shade(0.4)];
+    _pulsePaletteCache.set(hex, p);
+    return p;
+}
+
+// Method to draw wavy rainbow text. Options:
+//   fontSize    — base font size in px (mobile auto-shrinks to fit). Default 48.
+//   colors      — array of hex stops. Color is linearly interpolated between
+//                 adjacent stops AND wraps from last→first, so the loop is seamless
+//                 without duplicating the first entry.
+//   amplitude   — peak-to-peak vertical motion in px. Defaults to ~0.55 × fontSize.
+//                 Pass 0 to disable vertical motion entirely.
+//   speed       — wave cycles per second (Hz). Lower = slower peak-to-peak motion.
+//                 Default 0.48.
+//   colorSpeed  — palette cycles per second. Default 0.15.
+export function drawWavyText(text, x, y, options = {}) {
         if (!text) return;
+
+        const {
+            fontSize = 48,
+            colors = DEFAULT_WAVY_COLORS,
+            amplitude,
+            speed = 0.48,
+            colorSpeed = 0.15,
+        } = options;
+
+        const palette = (colors && colors.length > 0) ? colors : DEFAULT_WAVY_COLORS;
 
         const time = Date.now() * 0.001;
         const chars = text.split('');
         const isMobile = this.inputHandler.isMobile();
 
-        // ── Mobile-responsive font sizing ────────────────────────────────────
-        // On mobile, clamp fontSize so the full string fits within the viewport
-        // with 20px padding on each side.
+        // Mobile-responsive font sizing: clamp so the string fits with 20px side padding.
         let effectiveFontSize = fontSize;
         if (isMobile) {
-            const pad = 40; // 20px each side
+            const pad = 40;
             const availableWidth = this.width - pad;
-            // 'Press Start 2P' is monospace — measured ratio ≈ 0.63 per char
             const estimatedWidth = text.length * fontSize * 0.63;
             if (estimatedWidth > availableWidth) {
                 effectiveFontSize = Math.floor(availableWidth / (text.length * 0.63));
             }
             effectiveFontSize = Math.min(effectiveFontSize, fontSize);
-            effectiveFontSize = Math.max(effectiveFontSize, 8); // floor
+            effectiveFontSize = Math.max(effectiveFontSize, 8);
         }
+
+        // Capture caller's outer alpha so fade animations (powerup pickup,
+        // level-up text, etc.) survive our internal globalAlpha changes for
+        // the glow pass.
+        const baseAlpha = this.ctx.globalAlpha;
 
         this.ctx.save();
         this.ctx.font = `${effectiveFontSize}px 'Press Start 2P', monospace`;
-
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
 
-        // Calculate total text width for centering
-        const totalWidth = this.ctx.measureText(text).width;
-        let currentX = x - totalWidth / 2;
+        const totalWidth = Math.max(1, this.ctx.measureText(text).width);
+        const startX = x - totalWidth / 2;
+        let currentX = startX;
 
-        // Wave amplitude scales with font size
-        const waveAmp = effectiveFontSize * 20 / 72;
+        const ptp = amplitude !== undefined ? amplitude : (effectiveFontSize * 40 / 72);
+        const halfAmp = ptp / 2;
+        const waveOmega = 2 * Math.PI * speed;
+        const n = palette.length;
 
+        // ── Painted gradient ────────────────────────────────────────────────
+        // Build a single horizontal CanvasGradient that spans the whole text.
+        // We lay TWO full palette cycles end-to-end inside a gradient that's
+        // 2× the text width, then slide it left over time by `phase × textWidth`.
+        // Because the visible text region [startX, startX+totalWidth] always
+        // sits inside the gradient as it scrolls, colors flow smoothly across
+        // every glyph and wrap seamlessly when phase rolls over.
+        const phase = ((time * colorSpeed) % 1 + 1) % 1;
+        const slide = phase * totalWidth;
+        const gx0 = startX - slide;
+        const gx1 = gx0 + 2 * totalWidth;
+        const grad = this.ctx.createLinearGradient(gx0, y, gx1, y);
+        for (let cycle = 0; cycle < 2; cycle++) {
+            for (let i = 0; i < n; i++) {
+                grad.addColorStop((cycle * n + i) / (2 * n), palette[i]);
+            }
+        }
+        grad.addColorStop(1, palette[0]);
+
+        // Same gradient instance is used for every glyph — sampling happens by
+        // canvas-space x, so each letter blends continuously into its neighbors.
         chars.forEach((char, index) => {
             if (char === ' ') {
                 currentX += effectiveFontSize * 0.5;
                 return;
             }
 
-            const waveOffset = Math.sin(time * 3 + index * 0.8) * waveAmp;
+            const waveOffset = halfAmp === 0 ? 0 : Math.sin(time * waveOmega + index * 0.8) * halfAmp;
 
-            // Rainbow color cycling
-            const colorTime = (time * 0.15 + index * 0.1) % 1;
-            let color;
-
-	    if      (colorTime < 0.16) color = '#FF0000';
-            else if (colorTime < 0.32) color = '#FF8000';
-            else if (colorTime < 0.48) color = '#FFFF00';
-            else if (colorTime < 0.64) color = '#00FF00';
-            else if (colorTime < 0.80) color = '#0080FF';
-            else                       color = '#8000FF';
-
-            // Glow via double-draw: slightly larger translucent pass + crisp pass.
-            // Cheaper than shadowBlur (1 extra fillText vs GPU blur kernel per char).
-            this.ctx.globalAlpha = 0.35;
-            this.ctx.fillStyle = color;
+            // Glow via double-draw: larger translucent pass + crisp pass.
+            this.ctx.fillStyle = grad;
+            this.ctx.globalAlpha = baseAlpha * 0.35;
             this.ctx.font = `${effectiveFontSize + 2}px 'Press Start 2P', monospace`;
             this.ctx.fillText(char, currentX, y + waveOffset);
 
-            this.ctx.globalAlpha = 1;
+            this.ctx.globalAlpha = baseAlpha;
             this.ctx.font = `${effectiveFontSize}px 'Press Start 2P', monospace`;
             this.ctx.fillText(char, currentX, y + waveOffset);
 
@@ -79,6 +138,23 @@ export function drawWavyText(text, x, y, fontSize = 48) {
 
         this.ctx.restore();
 }
+
+// Distinct gradients per call site. Wrapping is automatic — do not duplicate
+// the first stop at the end. Each palette is hand-tuned around the base color
+// the corresponding text was originally rendered in.
+export const WAVY_PALETTES = {
+    // Big screen-overlay text — full vivid rainbow.
+    title:         ['#FF1744', '#FF9100', '#FFEA00', '#00E676', '#00B0FF', '#D500F9'],
+    waveTitle:     ['#00E5FF', '#18FFFF', '#69F0AE', '#B2FF59', '#FFEA00'],
+    waveSubtext:   ['#FFD180', '#FF8A80', '#FF80AB', '#EA80FC', '#B388FF'],
+
+    // Single-color pulses around a base hue. Use these for text that
+    // originally rendered in one solid color so the identity is preserved.
+    gold:          ['#FFD700', '#FFF8B0', '#FFB300', '#FFD700'],   // base #FFD700 (level-up "LEVEL X!", survival record)
+    orange:        ['#FFA500', '#FFD180', '#FF6F00', '#FFA500'],   // base #FFA500 (level-up subtitle)
+    combo:         ['#FFD700', '#FFFF8D', '#FF6F00', '#FFAB00'],   // base #FFD700, hotter — combo counter
+    whiteShimmer:  ['#FFFFFF', '#E1F5FE', '#B3E5FC', '#FFFFFF'],   // base #FFFFFF (subtitles, prompts)
+};
 
 export function drawTitleScreen() {
         const centerX = this.width / 2;
@@ -98,44 +174,52 @@ export function drawTitleScreen() {
             return Math.max(10, Math.min(fs, baseFontSize));
         };
 
-        // Main title - RAINBOIDS
-        this.drawWavyText('RAINBOIDS', centerX, centerY - 100, 72);
+        // Main title - RAINBOIDS. Nudged +10px right to optically align with
+        // the subtitle below (the wavy "R" leading edge sits left of where the
+        // monospace baseline-centering would suggest).
+        this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
+            fontSize: 72,
+            colors: WAVY_PALETTES.title,
+            speed: 0.45,
+            colorSpeed: 0.18,
+        });
 
-        // Subtitle
+        // Subtitle — white shimmer, no vertical motion, just a sliding gradient.
         const subFS = fitFont(24, 'SUPERCHARGED ASTEROIDS');
-        this.ctx.save();
-        this.ctx.font = `${subFS}px "Press Start 2P", monospace`;
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20);
-        this.ctx.restore();
+        this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
+            fontSize: subFS,
+            colors: WAVY_PALETTES.whiteShimmer,
+            amplitude: 0,
+            colorSpeed: 0.1,
+        });
 
-        // Animated "Press Any Key" text
+        // Animated "Press Any Key" text — preserve the original alpha pulse via
+        // outer globalAlpha; drawWavyText respects it. No bob — gradient only.
         const time = Date.now() * 0.001;
         const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3;
         const startText = isMobile ? 'TAP TO START' : 'PRESS ANY KEY TO START';
         const startFS = fitFont(18, startText);
 
         this.ctx.save();
-        this.ctx.font = `${startFS}px "Press Start 2P", monospace`;
-        this.ctx.fillStyle = rgba(255, 255, 255, pulseAlpha);
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(startText, centerX, centerY + 80);
+        this.ctx.globalAlpha = pulseAlpha;
+        this.drawWavyText(startText, centerX, centerY + 80, {
+            fontSize: startFS,
+            colors: WAVY_PALETTES.whiteShimmer,
+            amplitude: 0,
+            colorSpeed: 0.12,
+        });
         this.ctx.restore();
 
-        // Survival record display (if available)
+        // Survival record — gold gradient slide, no bob.
         if (this.game.survivalRecord > 0) {
             const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
             const recFS = fitFont(16, recText);
-            this.ctx.save();
-            this.ctx.font = `${recFS}px "Press Start 2P", monospace`;
-            this.ctx.fillStyle = '#FFD700';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(recText, centerX, centerY + 120);
-            this.ctx.restore();
+            this.drawWavyText(recText, centerX, centerY + 120, {
+                fontSize: recFS,
+                colors: WAVY_PALETTES.gold,
+                amplitude: 0,
+                colorSpeed: 0.14,
+            });
         }
 }
 

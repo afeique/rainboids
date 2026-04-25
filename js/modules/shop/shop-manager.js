@@ -100,6 +100,7 @@ export function openShop() {
             { id: 'HEALTH_BOOST',   name: 'Health Boost',     description: '+25 max health',                           cost: 1, icon: '❤️', maxStacks: 10, category: 'DEFENSE', currency: 'SP' },
             { id: 'SHIELD_BOOST',   name: 'Shielding',        description: '-5% damage taken per stack',               cost: 1, icon: '🛡️', maxStacks: 8,  category: 'DEFENSE', currency: 'SP' },
             { id: 'SPEED_BOOST',    name: 'Afterburner',      description: '+50% thrust & +35% top speed per stack',   cost: 2, icon: '💨', maxStacks: 4,  category: 'DEFENSE', currency: 'SP' },
+            { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',     description: '-5s cooldown between health drops (60s → 30s floor)', cost: 2, icon: '⏳', maxStacks: 6, category: 'DEFENSE', currency: 'SP' },
 
             // ── DROPS (SP) — loot economy, ordered: health group → money group → quantity ──
             { id: 'DOCTOR',                 name: 'Doctor',            description: 'Increases the max amount of health per orb', cost: 1, icon: '🏥', maxStacks: 99, category: 'DROPS', currency: 'SP' },

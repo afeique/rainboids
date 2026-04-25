@@ -1,0 +1,42 @@
+{
+  "changes_this_session": [],
+  "cwd": "/Users/silvr/projects/rainboids",
+  "duration_minutes": 0,
+  "ended_at": "2026-04-25T14:12:01Z",
+  "event_seq": 0,
+  "fork_count": 0,
+  "git": {
+    "branch": "ai-dev-adeeb",
+    "last_commit": "c54c44a",
+    "uncommitted_changes": 0
+  },
+  "harness_mem": {
+    "healthy": true,
+    "last_checked": "2026-04-25T14:11:59Z",
+    "last_error": ""
+  },
+  "intent": "literal",
+  "last_event_id": "",
+  "memory_logged": true,
+  "orchestration": {
+    "max_state_retries": 3,
+    "retry_backoff_seconds": 10
+  },
+  "parent_session_id": null,
+  "plans": {
+    "completed_tasks": 0,
+    "exists": false,
+    "last_modified": 0,
+    "pending_tasks": 0,
+    "todo_tasks": 0,
+    "wip_tasks": 0
+  },
+  "project_name": "rainboids",
+  "prompt_seq": 2,
+  "resume_token": "resume-1777126319082777000",
+  "session_id": "session-1777126319082745000",
+  "started_at": "2026-04-25T14:11:59Z",
+  "state": "stopped",
+  "state_version": 1,
+  "updated_at": "2026-04-25T14:11:59Z"
+}

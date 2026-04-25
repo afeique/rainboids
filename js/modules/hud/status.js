@@ -5,6 +5,7 @@
 import { GAME_STATES } from '../core/constants.js';
 import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
 import { DEFENSE_SKILLS } from '../combat/weapon-data.js';
+import { WAVY_PALETTES } from './overlays.js';
 
 export function drawHUD() {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
@@ -49,14 +50,24 @@ export function drawHUD() {
                 // On mobile, push below HUD (health bar + level + coins ≈ 130px)
                 // and use smaller base font sizes to avoid overlap
                 const titleFS = isMob ? 28 : 48;
-                const subFS2 = isMob ? 16 : 24;
+                const subtitleFS = isMob ? 16 : 24;
                 const topY = isMob ? 140 : 80;
                 const gap = isMob ? 36 : 60;
-                this.drawWavyText(this.waveMessage.title, centerX, topY, titleFS);
+                this.drawWavyText(this.waveMessage.title, centerX, topY, {
+                    fontSize: titleFS,
+                    colors: WAVY_PALETTES.waveTitle,
+                    speed: 0.55,
+                    colorSpeed: 0.22,
+                });
 
-                // Draw subtitle (smaller, below title)
+                // Draw subtitle (smaller, below title) — softer palette and gentler motion
                 if (this.waveMessage.subtitle) {
-                    this.drawWavyText(this.waveMessage.subtitle, centerX, topY + gap, subFS2);
+                    this.drawWavyText(this.waveMessage.subtitle, centerX, topY + gap, {
+                        fontSize: subtitleFS,
+                        colors: WAVY_PALETTES.waveSubtext,
+                        amplitude: 0,
+                        colorSpeed: 0.12,
+                    });
                 }
 
                 this.ctx.restore();
@@ -383,27 +394,23 @@ export function drawLevelUpText() {
         this.ctx.translate(centerX, textY);
         this.ctx.scale(scale, scale);
 
-        // Draw level up text with outline
-        this.ctx.font = 'bold 32px "Press Start 2P", monospace';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
+        // Wavy gold "LEVEL X!" — palette pulses around the original #FFD700.
+        this.drawWavyText(`LEVEL ${level}!`, 0, -15, {
+            fontSize: 32,
+            colors: WAVY_PALETTES.gold,
+            amplitude: 6,
+            speed: 0.6,
+            colorSpeed: 0.45,
+        });
 
-        // Text outline (black)
-        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        this.ctx.lineWidth = 4;
-        this.ctx.strokeText(`LEVEL ${level}!`, 0, -15);
-
-        // Main text (gold)
-        this.ctx.fillStyle = '#FFD700';
-        this.ctx.fillText(`LEVEL ${level}!`, 0, -15);
-
-        // Subtitle text
-        this.ctx.font = '16px "Press Start 2P", monospace';
-        this.ctx.fillStyle = '#FFA500';
-        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeText('Skill Point Gained!', 0, 15);
-        this.ctx.fillText('Skill Point Gained!', 0, 15);
+        // Wavy orange subtitle around the original #FFA500.
+        this.drawWavyText('Skill Point Gained!', 0, 15, {
+            fontSize: 16,
+            colors: WAVY_PALETTES.orange,
+            amplitude: 3,
+            speed: 0.45,
+            colorSpeed: 0.3,
+        });
 
         this.ctx.restore();
 }

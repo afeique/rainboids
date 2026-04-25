@@ -1,4 +1,5 @@
-# AI QA Bot — Research & Implementation Plan
+The QA Bot is an Ai that helps with testing.
+# QA Bot — Research & Implementation Plan
 
 ## 1. Vision & Goals
 

@@ -25,7 +25,8 @@ export const GAME_CONFIG = {
     HEALTH_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum health orbs dropped (upgrade to get more)
     HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
     HEALTH_ORB_SIZE_MIN: 0.8, // Minimum size multiplier for health orbs
-    HEALTH_ORB_SIZE_MAX: 2.5, // Maximum size multiplier for health orbs
+    HEALTH_ORB_SIZE_MAX: 1.4, // Maximum size multiplier for health orbs (capped — split into more orbs instead of one big one)
+    HEALTH_ORB_MAX_HEAL_PER_ORB: 2, // Per-orb heal cap. Excess budget → more orbs at this cap.
     
     // Money Orb Configuration (renamed from money stars)
     MONEY_ORB_MONEY_AMOUNT_MIN: 10, // Minimum money gained per money orb
@@ -34,7 +35,8 @@ export const GAME_CONFIG = {
     MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum money orbs dropped (upgrade to get more)
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
     MONEY_ORB_SIZE_MIN: 1.0, // Minimum size multiplier for money orbs
-    MONEY_ORB_SIZE_MAX: 3.5, // Maximum size multiplier for money orbs
+    MONEY_ORB_SIZE_MAX: 1.6, // Maximum size multiplier for money orbs (capped — split into more orbs instead of one big one)
+    MONEY_ORB_MAX_MONEY_PER_ORB: 20, // Per-orb money cap. Excess budget → more orbs at this cap.
     
     // Orb Drop Upgrade Configuration
     HEALTH_ORB_DROP_CHANCE_UPGRADE: 0.05, // +5% drop chance per upgrade stack
@@ -45,6 +47,12 @@ export const GAME_CONFIG = {
     PAYDAY_MONEY_MIN_UPGRADE: 5, // +5 min money per Payday stack
     DOCTOR_HEAL_MAX_UPGRADE: 1, // +1 max heal per Doctor stack
     HIGH_ROLLER_MONEY_MAX_UPGRADE: 10, // +10 max money per High Roller stack
+
+    // Health Orb Drop Cooldown (global throttle so health drops don't trivialize the game)
+    HEALTH_DROP_COOLDOWN_BASE: 60000, // 60s default between health orb drop events
+    HEALTH_DROP_COOLDOWN_REDUCTION_PER_STACK: 5000, // -5s per Triage stack
+    HEALTH_DROP_COOLDOWN_MIN: 30000, // 30s floor (reached at 6 stacks)
+
     ENEMY_BULLET_ASTEROID_DAMAGE: 1, // Damage enemy bullets deal to asteroids
     MIN_AST_RAD: 15,
     MOBILE_SCALE: 0.65,

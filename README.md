@@ -16,7 +16,7 @@ A modern space combat game with deep weapon systems, 10 enemy types, wave-based 
 Rainboids is a supercharged asteroids game featuring:
 - **5 primary weapons**, **5 power weapons**, and **6 defense skills** with upgrade trees
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs
-- **19 powerup types** with stacking mechanics and visual indicators
+- **20 powerup types** with stacking mechanics and visual indicators
 - **100 hand-designed waves** across 5 acts, plus procedural scaling beyond wave 100
 - **Full shop and upgrade economy** with coins and skill points
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
@@ -137,11 +137,12 @@ Powerups drop from destroyed enemies and provide temporary or permanent enhancem
 | Long Range | +40% bullet range |
 | Crit Chance | +5% critical hit chance |
 
-### Defensive / Utility (10)
+### Defensive / Utility (11)
 | Powerup | Effect per stack |
 |---------|-----------------|
 | Crit Damage | +10% critical hit damage |
 | Shield Boost | Temporary damage reduction |
+| Triage | -5s on the global health-orb drop cooldown (60s base → 30s floor at 6 stacks) |
 | Medpack | More health per orb pickup |
 | Doctor | Increases max health per orb |
 | Payday | More money per orb pickup |
@@ -151,6 +152,12 @@ Powerups drop from destroyed enemies and provide temporary or permanent enhancem
 | Money Orb Drop Chance | +5% money orb drop rate |
 | Money Orb Drop Quantity | +1 money orbs per drop |
 
+### Pickup Magnetism
+All collectibles — money orbs, green health orbs, **and powerup pickups** — are magnetically pulled to the player. Pull strength ramps in three layers (always-on long-range homing, stronger at 100px, magnetic snap inside 40px). Holding the tractor-beam key adds an extra long-range pull. Health-orb drops are globally throttled (default 60s between drop events) — see the Triage upgrade above to shrink that cooldown.
+
+### Drop Sizes
+Money and green orbs are size-capped (`HEALTH_ORB_SIZE_MAX = 1.4`, `MONEY_ORB_SIZE_MAX = 1.6`). When a drop's reward budget exceeds the per-orb cap (`HEALTH_ORB_MAX_HEAL_PER_ORB = 2`, `MONEY_ORB_MAX_MONEY_PER_ORB = 20`), the drop is split into many small orbs that sum to the same total — preventing a single huge orb from dominating the screen.
+
 ---
 
 ## Shop & Upgrade System
@@ -159,7 +166,7 @@ The shop offers permanent upgrades using two currencies:
 - **Coins**: Earned by destroying enemies and collecting money orbs
 - **Skill Points (SP)**: Gained by leveling up through experience
 
-The shop has six tabs: **Offense**, **Defense**, **Drops**, **Primary Weapons**, **Power Weapons**, and **Defense Skills**, each with their own upgrade trees (54+ upgrades total). Primary weapons unlock for free at wave milestones — spend your coins on upgrades that deepen your build instead.
+The shop has six tabs: **Offense**, **Defense**, **Drops**, **Primary Weapons**, **Power Weapons**, and **Defense Skills**, each with their own upgrade trees (55+ upgrades total). Primary weapons unlock for free at wave milestones — spend your coins on upgrades that deepen your build instead.
 
 ---
 
@@ -339,6 +346,8 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 ├── css/
 │   └── styles.css             # Game styling and mobile layout
 ├── music/                     # 58 MP3 tracks (~336MB)
+├── deprecated/                # Orphan modules retained for reference (no importers)
+│   └── js/modules/performance/  # Pre-spatial-grid perf experiments
 ├── docs/                      # Planning docs, analysis, and research
 │   ├── REFACTOR.md            #   Architecture plan, coding rules, extraction status
 │   ├── SKU_deployment.md      #   Multi-platform deployment plan

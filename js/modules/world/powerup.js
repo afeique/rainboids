@@ -253,9 +253,6 @@ export class Powerup {
             y: random(-0.5, 0.5) * ts
         };
 
-        // Enhanced attraction to player when close
-        this.attractionRadius = 120;
-        this.attractionStrength = 0.03 * ts;
     }
     
     weightedRandomChoice(items, weights) {
@@ -272,36 +269,64 @@ export class Powerup {
         return items[items.length - 1]; // Fallback
     }
     
-    update(playerRef) {
+    update(playerRef, tractorEngaged = false) {
         if (!this.active) return;
-        
-        // Powerups never despawn — they stay until collected
-        
-        // Pulse effect
+
+        // Powerups never despawn — they stay until collected.
+
         this.pulsePhase += 0.1;
-        
-        // Gentle floating movement
+
         this.x += this.vel.x;
         this.y += this.vel.y;
-        
-        // Attraction to player when close
+
+        // Magnetism — mirrors the layered pull used by money/health orbs in
+        // color-star.js so powerups feel just as collectable. Powerups are
+        // bigger/heavier than orbs visually, so all forces are scaled down by
+        // POWERUP_MAGNET_SCALE to keep them from rocketing into the player.
         if (playerRef && playerRef.active) {
             const dx = playerRef.x - this.x;
             const dy = playerRef.y - this.y;
-            const distance = Math.hypot(dx, dy);
-            
-            if (distance < this.attractionRadius && distance > 0) {
-                const attractionForce = this.attractionStrength * (1 - distance / this.attractionRadius);
-                this.vel.x += (dx / distance) * attractionForce;
-                this.vel.y += (dy / distance) * attractionForce;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist > 1) {
+                const k = 0.55; // POWERUP_MAGNET_SCALE — softer than orb pull
+
+                // Constant base homing — always pulls, even at long range.
+                const baseAttraction = 0.8;
+                this.vel.x += (dx / dist) * baseAttraction * 0.15 * k;
+                this.vel.y += (dy / dist) * baseAttraction * 0.15 * k;
+
+                // Medium range (≤100px) — stronger as it gets closer.
+                if (dist < 100) {
+                    const proximity = (100 - dist) / 100;
+                    this.vel.x += (dx / dist) * 15 * proximity * k;
+                    this.vel.y += (dy / dist) * 15 * proximity * k;
+                }
+
+                // Close range (≤40px) — magnetic snap.
+                if (dist < 40) {
+                    const closeProximity = (40 - dist) / 40;
+                    this.vel.x += (dx / dist) * 25 * closeProximity * k;
+                    this.vel.y += (dy / dist) * 25 * closeProximity * k;
+                }
+
+                // Tractor beam — long-range pull when not charging.
+                if (tractorEngaged) {
+                    const tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
+                    const tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
+                    if (dist < tractorDist) {
+                        const tractorForce = tractorAttraction * (1 - dist / tractorDist);
+                        this.vel.x += (dx / dist) * tractorForce * k;
+                        this.vel.y += (dy / dist) * tractorForce * k;
+                    }
+                }
             }
         }
-        
-        // Gentle friction
-        this.vel.x *= 0.98;
-        this.vel.y *= 0.98;
-        
-        // Screen wrapping
+
+        // Match orb friction so the magnet feels the same.
+        this.vel.x *= GAME_CONFIG.ORB_FRIC;
+        this.vel.y *= GAME_CONFIG.ORB_FRIC;
+
         wrap(this, this.width, this.height);
     }
     

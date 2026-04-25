@@ -1,4 +1,5 @@
-# Rainboids — SKU Deployment Plan
+These are plans for how to assign a unique SKU to every "build" (commit) of Rainboids. SKU stands for "Stock Keeping Unit."
+# Rainboids — SKU Deployment Plan 
 
 ## Current Architecture
 

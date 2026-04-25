@@ -1,5 +1,4 @@
 // Main entry point for the Rainboids game
-import { AssetLoader } from './modules/asset-loader.js';
 import { AudioManager } from './modules/audio/audio-manager.js';
 import { InputHandler } from './modules/ui/input-handler.js';
 import { UIManager } from './modules/ui/ui-manager.js';
@@ -13,95 +12,38 @@ class RainboidsGame {
         this.inputHandler = null;
         this.uiManager = null;
         this.gameEngine = null;
-        this.assetLoader = null;
-        this.loadingScreen = null;
     }
-    
+
     async init() {
-        
-        // Wait for DOM to be ready
         if (document.readyState === 'loading') {
             await new Promise(resolve => {
                 document.addEventListener('DOMContentLoaded', resolve);
             });
         }
-        
-        this.setupLoadingScreen();
-        
-        await this.loadAssets();
-        
-        this.hideLoadingScreen();
-        
+
         this.setupCanvas();
-        
         await this.setupAudio();
-        
         this.setupManagers();
-        
         this.setupGameEngine();
-        
         this.setupStartHandlers();
-        
         this.start();
     }
-    
-    setupLoadingScreen() {
-        // Loading screen is now commented out to prevent flash
-        this.loadingScreen = null; // document.getElementById('loading-screen');
-        this.assetLoader = new AssetLoader();
-        
-        // Set up progress callback (elements are commented out)
-        this.assetLoader.setProgressCallback((progress) => {
-            // Progress elements are commented out to prevent flash
-            // const progressBar = document.getElementById('loading-progress');
-            // const loadingText = document.getElementById('loading-text');
-            
-            // if (progressBar) {
-            //     progressBar.style.width = `${progress}%`;
-            // }
-            
-            // if (loadingText) {
-            //     loadingText.textContent = `Loading... ${Math.round(progress)}%`;
-            // }
-        });
-    }
-    
-    async loadAssets() {
-        const success = await this.assetLoader.loadAllAssets();
-        
-        if (!success) {
-        }
-        
-        // Debug: Check if canvas exists and is visible
-        const canvas = document.getElementById('gameCanvas');
-        if (canvas) {
-        } else {
-        }
-    }
-    
-    hideLoadingScreen() {
-        // Loading screen is commented out to prevent flash
-        // if (this.loadingScreen) {
-        //     this.loadingScreen.style.display = 'none';
-        // }
-    }
-    
+
     setupCanvas() {
         this.canvas = document.getElementById('gameCanvas');
         if (!this.canvas) {
             throw new Error('Canvas element not found');
         }
     }
-    
+
     async setupAudio() {
         this.audioManager = new AudioManager();
 
-        
         // Wait for sfxr to be ready with a timeout
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('sfxr library timeout')), 5000);
         });
-        
+
         const sfxrPromise = new Promise(resolve => {
             const checkSfxr = () => {
                 if (typeof sfxr !== 'undefined' && sfxr && (sfxr.generate || Object.keys(sfxr).length > 0)) {
@@ -118,7 +60,6 @@ class RainboidsGame {
             this.audioManager.init();
         } catch (error) {
             console.warn('⚠️ Audio setup failed, continuing without sound:', error);
-            // Continue without audio rather than blocking the game
         }
 
         const backgroundMusic = document.getElementById('background-music');
@@ -126,14 +67,13 @@ class RainboidsGame {
             this.audioManager.setBackgroundMusic(backgroundMusic);
         }
     }
-    
+
     setupManagers() {
         this.inputHandler = new InputHandler();
         this.uiManager = new UIManager();
-        // Pass audio manager to UI manager for SFX controls
         this.uiManager.setAudioManager(this.audioManager);
     }
-    
+
     setupGameEngine() {
         this.gameEngine = new GameEngine(
             this.canvas,
@@ -143,11 +83,10 @@ class RainboidsGame {
         );
         this.uiManager.setGameEngine(this.gameEngine);
         window.gameEngine = this.gameEngine;
-        window.game = this.gameEngine; // Expose for UI access
+        window.game = this.gameEngine;
     }
-    
-    setupStartHandlers() {
 
+    setupStartHandlers() {
         let _gameStarted = false;
         const startGame = () => {
             if (_gameStarted) return;
@@ -156,37 +95,32 @@ class RainboidsGame {
             if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) {
                 return;
             }
-            
-            // Remove start event listeners immediately to prevent multiple triggers
+
             window.removeEventListener('keydown', startGame);
             window.removeEventListener('click', startGame);
             window.removeEventListener('touchstart', startGame);
-            
-            // this.uiManager.hideTitleScreen();
+
             this.audioManager.initializeAudio();
             this.uiManager.startMusic();
             this.gameEngine.init();
         };
-        
+
         window.addEventListener('keydown', startGame);
         window.addEventListener('click', startGame);
         window.addEventListener('touchstart', startGame);
     }
-    
+
     start() {
         this.gameEngine.start();
-        
-        // Make gameEngine accessible for debugging
         window.gameEngine = this.gameEngine;
     }
 }
 
-// Initialize the game when the script loads
 const game = new RainboidsGame();
 (async () => {
     try {
         await game.init();
     } catch (error) {
-    console.error('Failed to initialize game:', error);
+        console.error('Failed to initialize game:', error);
     }
-})(); 
+})();

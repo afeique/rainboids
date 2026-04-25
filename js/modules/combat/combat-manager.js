@@ -285,52 +285,81 @@ export function createShapeDebris(enemy) {
 
 // ── Orb Creation & Drops ──
 
-export function createHealthOrb(x, y) {
+// Spawn one health orb. If `healAmountOverride` is provided, that exact heal
+// value is used (the splitter in dropOrbsFromEntity uses this to spread a heal
+// budget across many small, capped orbs). Otherwise the historical random
+// min..max formula applies. Size scales with heal-relative-to-cap so capped
+// orbs always look modest, never enormous.
+export function createHealthOrb(x, y, healAmountOverride = null) {
     const healthOrb = this.colorStarPool.get(x, y, 'health');
-    if (healthOrb) {
+    if (!healthOrb) return;
+
+    let healAmount;
+    if (healAmountOverride !== null) {
+        healAmount = Math.max(1, healAmountOverride);
+    } else {
         const medpackStacks = this.player.getPowerupStacks('MEDPACK');
         const doctorStacks = this.player.getPowerupStacks('DOCTOR');
         const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE);
         const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE) + (doctorStacks * GAME_CONFIG.DOCTOR_HEAL_MAX_UPGRADE));
-        healthOrb.healAmount = Math.floor(Math.random() * (maxHeal - minHeal + 1)) + minHeal;
-
-        const healRatio = maxHeal > minHeal ? (healthOrb.healAmount - minHeal) / (maxHeal - minHeal) : 0;
-        const minSize = GAME_CONFIG.HEALTH_ORB_SIZE_MIN;
-        const maxSize = GAME_CONFIG.HEALTH_ORB_SIZE_MAX;
-        healthOrb.sizeMultiplier = minSize + (healRatio * (maxSize - minSize));
-
-        const baseRadius = healthOrb.baseRadius || healthOrb.radius;
-        healthOrb.radius = baseRadius * healthOrb.sizeMultiplier;
-
-        const angle = random(0, Math.PI * 2);
-        const speed = random(1, 3);
-        healthOrb.vel.x = Math.cos(angle) * speed;
-        healthOrb.vel.y = Math.sin(angle) * speed;
+        healAmount = Math.floor(Math.random() * (maxHeal - minHeal + 1)) + minHeal;
     }
+    healthOrb.healAmount = healAmount;
+
+    const cap = GAME_CONFIG.HEALTH_ORB_MAX_HEAL_PER_ORB;
+    const ratio = Math.min(1, healAmount / cap);
+    const minSize = GAME_CONFIG.HEALTH_ORB_SIZE_MIN;
+    const maxSize = GAME_CONFIG.HEALTH_ORB_SIZE_MAX;
+    healthOrb.sizeMultiplier = minSize + (ratio * (maxSize - minSize));
+    const baseRadius = healthOrb.baseRadius || healthOrb.radius;
+    healthOrb.radius = baseRadius * healthOrb.sizeMultiplier;
+
+    const angle = random(0, Math.PI * 2);
+    const speed = random(1, 3);
+    healthOrb.vel.x = Math.cos(angle) * speed;
+    healthOrb.vel.y = Math.sin(angle) * speed;
 }
 
-export function createMoneyOrb(x, y) {
+export function createMoneyOrb(x, y, moneyAmountOverride = null) {
     const moneyOrb = this.colorStarPool.get(x, y, 'money');
-    if (moneyOrb) {
+    if (!moneyOrb) return;
+
+    let moneyAmount;
+    if (moneyAmountOverride !== null) {
+        moneyAmount = Math.max(1, moneyAmountOverride);
+    } else {
         const paydayStacks = this.player.getPowerupStacks('PAYDAY');
         const highRollerStacks = this.player.getPowerupStacks('HIGH_ROLLER');
         const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE);
         const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE) + (highRollerStacks * GAME_CONFIG.HIGH_ROLLER_MONEY_MAX_UPGRADE));
-        moneyOrb.moneyAmount = Math.floor(Math.random() * (maxMoney - minMoney + 1)) + minMoney;
-
-        const moneyRatio = maxMoney > minMoney ? (moneyOrb.moneyAmount - minMoney) / (maxMoney - minMoney) : 0;
-        const minSize = GAME_CONFIG.MONEY_ORB_SIZE_MIN;
-        const maxSize = GAME_CONFIG.MONEY_ORB_SIZE_MAX;
-        moneyOrb.sizeMultiplier = minSize + (moneyRatio * (maxSize - minSize));
-
-        const baseRadius = moneyOrb.baseRadius || moneyOrb.radius;
-        moneyOrb.radius = baseRadius * moneyOrb.sizeMultiplier;
-
-        const angle = random(0, Math.PI * 2);
-        const speed = random(1, 3);
-        moneyOrb.vel.x = Math.cos(angle) * speed;
-        moneyOrb.vel.y = Math.sin(angle) * speed;
+        moneyAmount = Math.floor(Math.random() * (maxMoney - minMoney + 1)) + minMoney;
     }
+    moneyOrb.moneyAmount = moneyAmount;
+
+    const cap = GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB;
+    const ratio = Math.min(1, moneyAmount / cap);
+    const minSize = GAME_CONFIG.MONEY_ORB_SIZE_MIN;
+    const maxSize = GAME_CONFIG.MONEY_ORB_SIZE_MAX;
+    moneyOrb.sizeMultiplier = minSize + (ratio * (maxSize - minSize));
+    const baseRadius = moneyOrb.baseRadius || moneyOrb.radius;
+    moneyOrb.radius = baseRadius * moneyOrb.sizeMultiplier;
+
+    const angle = random(0, Math.PI * 2);
+    const speed = random(1, 3);
+    moneyOrb.vel.x = Math.cos(angle) * speed;
+    moneyOrb.vel.y = Math.sin(angle) * speed;
+}
+
+// Split an integer total budget into N equal-ish orb values, each ≤ cap.
+// Returns an array of orb values whose sum === total.
+function _splitBudgetIntoOrbs(total, cap) {
+    if (total <= 0) return [];
+    const count = Math.max(1, Math.ceil(total / cap));
+    const base = Math.floor(total / count);
+    const remainder = total - base * count;
+    const out = new Array(count);
+    for (let i = 0; i < count; i++) out[i] = base + (i < remainder ? 1 : 0);
+    return out;
 }
 
 export function dropStarsFromEntity(x, y) {
@@ -360,30 +389,54 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const healthDropRate = Math.min(1.0, baseHealthDropRate);
     const moneyDropRate = Math.min(1.0, baseMoneyDropRate);
 
-    // Drop health orbs
-    if (Math.random() < healthDropRate) {
-        const maxHealthOrbs = GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
-        const baseHealthOrbCount = Math.floor(Math.random() * maxHealthOrbs) + 1;
-        const levelScaledHealthOrbCount = Math.floor(baseHealthOrbCount * levelQuantityMultiplier);
-        const enemyScaledHealthOrbCount = Math.floor(levelScaledHealthOrbCount * enemyQuantityMultiplier);
-        const totalHealthOrbCount = Math.max(1, Math.floor(enemyScaledHealthOrbCount * hitStreakMultiplier));
+    // ── Health orbs ──
+    // Gated by a global cooldown. Default is once every 60s; the Triage
+    // upgrade reduces this by 5s per stack down to a 30s floor. Without this
+    // throttle the player gets healed back up almost continuously and the
+    // game becomes trivial.
+    const now = Date.now();
+    const triageStacks = this.player.getPowerupStacks('HEALTH_DROP_FREQUENCY');
+    const healthCooldown = Math.max(
+        GAME_CONFIG.HEALTH_DROP_COOLDOWN_MIN,
+        GAME_CONFIG.HEALTH_DROP_COOLDOWN_BASE - triageStacks * GAME_CONFIG.HEALTH_DROP_COOLDOWN_REDUCTION_PER_STACK
+    );
+    const healthCooldownReady = (now - (this.lastHealthOrbDropAt || 0)) >= healthCooldown;
 
-        for (let i = 0; i < totalHealthOrbCount; i++) {
-            this.createHealthOrb(x, y);
-        }
+    if (healthCooldownReady && Math.random() < healthDropRate) {
+        // Compute the heal "budget" the legacy formula would have produced,
+        // then split it into many small capped orbs.
+        const maxHealthOrbs = GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
+        const baseCount = Math.floor(Math.random() * maxHealthOrbs) + 1;
+        const totalLegacyCount = Math.max(1, Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
+
+        const medpackStacks = this.player.getPowerupStacks('MEDPACK');
+        const doctorStacks = this.player.getPowerupStacks('DOCTOR');
+        const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE);
+        const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE) + (doctorStacks * GAME_CONFIG.DOCTOR_HEAL_MAX_UPGRADE));
+        const avgHeal = (minHeal + maxHeal) / 2;
+        const healBudget = Math.max(1, Math.round(totalLegacyCount * avgHeal));
+
+        const orbValues = _splitBudgetIntoOrbs(healBudget, GAME_CONFIG.HEALTH_ORB_MAX_HEAL_PER_ORB);
+        for (const v of orbValues) this.createHealthOrb(x, y, v);
+
+        this.lastHealthOrbDropAt = now;
     }
 
-    // Drop money orbs
+    // ── Money orbs ── no cooldown, just budget-and-split.
     if (Math.random() < moneyDropRate) {
         const maxMoneyOrbs = GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX + (moneyDropQuantityStacks * GAME_CONFIG.MONEY_ORB_DROP_QUANTITY_UPGRADE);
-        const baseMoneyOrbCount = Math.floor(Math.random() * maxMoneyOrbs) + 1;
-        const levelScaledMoneyOrbCount = Math.floor(baseMoneyOrbCount * levelQuantityMultiplier);
-        const enemyScaledMoneyOrbCount = Math.floor(levelScaledMoneyOrbCount * enemyQuantityMultiplier);
-        const totalMoneyOrbCount = Math.max(1, Math.floor(enemyScaledMoneyOrbCount * hitStreakMultiplier));
+        const baseCount = Math.floor(Math.random() * maxMoneyOrbs) + 1;
+        const totalLegacyCount = Math.max(1, Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
 
-        for (let i = 0; i < totalMoneyOrbCount; i++) {
-            this.createMoneyOrb(x, y);
-        }
+        const paydayStacks = this.player.getPowerupStacks('PAYDAY');
+        const highRollerStacks = this.player.getPowerupStacks('HIGH_ROLLER');
+        const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE);
+        const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE) + (highRollerStacks * GAME_CONFIG.HIGH_ROLLER_MONEY_MAX_UPGRADE));
+        const avgMoney = (minMoney + maxMoney) / 2;
+        const moneyBudget = Math.max(1, Math.round(totalLegacyCount * avgMoney));
+
+        const orbValues = _splitBudgetIntoOrbs(moneyBudget, GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB);
+        for (const v of orbValues) this.createMoneyOrb(x, y, v);
     }
 }
 
@@ -441,6 +494,7 @@ export function getPowerupConfig(type) {
         'HOMING':                   { name: 'Homing',              duration: Infinity, icon: '🎯', gradientColors: ['#ff66cc', '#cc0066'] },
         'MEDPACK':                  { name: 'Medpack',             duration: Infinity, icon: '💊', gradientColors: ['#ff99cc', '#cc3366'] },
         'HEALTH_BOOST':             { name: 'Health Boost',        duration: Infinity, icon: '❤️', gradientColors: ['#ff6666', '#cc0000'] },
+        'HEALTH_DROP_FREQUENCY':    { name: 'Triage',              duration: Infinity, icon: '⏳', gradientColors: ['#66ffaa', '#229966'] },
         'CRIT_CHANCE':              { name: 'Critical Chance',     duration: Infinity, icon: '⭐', gradientColors: ['#ffff66', '#cc9900'] },
         'CRIT_DAMAGE':              { name: 'Critical Damage',     duration: Infinity, icon: '🗡️', gradientColors: ['#ff3399', '#cc0033'] },
         'LONG_RANGE':               { name: 'Long Range',          duration: Infinity, icon: '🏹', gradientColors: ['#bbff66', '#448800'] },

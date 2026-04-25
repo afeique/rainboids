@@ -1,0 +1,25 @@
+{
+  "lsp": {
+    "available": false,
+    "available_by_ext": {},
+    "last_used_prompt_seq": 0,
+    "last_used_tool_name": "",
+    "plugins": "",
+    "used_since_last_prompt": false
+  },
+  "mcp": {
+    "configured": null,
+    "disabled": null,
+    "enabled_estimate": null,
+    "sources": []
+  },
+  "plugins": {
+    "enabled_estimate": null,
+    "installed": null,
+    "source": ""
+  },
+  "skills": {
+    "decision_required": false,
+    "index": []
+  }
+}
