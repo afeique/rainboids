@@ -253,15 +253,18 @@ body.shop-open .ui-element {
 
 .pause-menu-actions {
     /* SHOP/RESUME row sits at the very top of the pause menu. The divider
-       lives BELOW the row, separating the action buttons from the tabs. */
+       (border-bottom) sits inside this container, so the button→divider gap
+       is `padding-bottom`. The divider→tabs gap below is the flex `gap` of
+       #pause-menu (18px). Match `padding-bottom` to that gap so the divider
+       is visually equidistant from the buttons and the tab row beneath it. */
     display: flex;
     gap: 20px;
     justify-content: center;
-    margin: 20px 0;
-    padding-bottom: 20px;
+    margin: 0;
+    padding-top: 0;
+    padding-bottom: 18px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.3);
     border-top: none;
-    padding-top: 0;
 }
 
 .pause-action-btn {
@@ -354,9 +357,12 @@ body.shop-open .ui-element {
 
     .pause-menu-actions {
         gap: 8px;
-        margin: 10px 0;
+        margin: 0;
         padding-top: 0;
-        padding-bottom: 10px;
+        /* Match #pause-menu's flex gap (~18px on desktop, but mobile uses
+           the same default since we don't override it) so the divider sits
+           equidistant from the buttons above and the tabs below. */
+        padding-bottom: 18px;
     }
 
     .pause-action-btn {
