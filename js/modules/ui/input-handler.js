@@ -62,15 +62,30 @@ export class InputHandler {
         });
 
         document.addEventListener('mousedown', e => {
+            // Left mouse button — primary fire.
+            if (e.button === 0) {
+                this.input.fire = true;
+            }
+            // Right mouse button — power weapon (also accepts Space, see
+            // handleKeyDown / handleKeyUp).
             if (e.button === 2) {
                 this.input.fireSecondary = true;
             }
         });
 
         document.addEventListener('mouseup', e => {
+            if (e.button === 0) {
+                this.input.fire = false;
+            }
             if (e.button === 2) {
                 this.input.fireSecondary = false;
             }
+        });
+
+        // Ensure fire stops if the cursor leaves the window mid-click.
+        window.addEventListener('blur', () => {
+            this.input.fire = false;
+            this.input.fireSecondary = false;
         });
     }
 
@@ -96,6 +111,12 @@ export class InputHandler {
             case 'ArrowRight':
             case 'KeyD':
                 this.input.right = true;
+                break;
+            // Spacebar — alternate power-weapon trigger (mirrors right-click).
+            // preventDefault stops the page from scrolling.
+            case 'Space':
+                this.input.fireSecondary = true;
+                e.preventDefault();
                 break;
             // Defense skill activation (number keys 1-4, only without Shift)
             case 'Digit1':
@@ -130,6 +151,9 @@ export class InputHandler {
             case 'ArrowRight':
             case 'KeyD':
                 this.input.right = false;
+                break;
+            case 'Space':
+                this.input.fireSecondary = false;
                 break;
         }
     }

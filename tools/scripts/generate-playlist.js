@@ -6,8 +6,9 @@ import jsmediatags from 'jsmediatags';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const musicDir = path.join(__dirname, '..', 'music');
-const outputFile = path.join(__dirname, '..', 'js', 'playlist-data.js');
+// Script lives in tools/scripts/ — project root is two levels up.
+const musicDir = path.join(__dirname, '..', '..', 'music');
+const outputFile = path.join(__dirname, '..', '..', 'js', 'playlist-data.js');
 
 async function readMusicMetadata(filePath) {
     return new Promise((resolve, reject) => {

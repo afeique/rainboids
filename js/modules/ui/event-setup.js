@@ -22,6 +22,8 @@ export function setupEventListeners() {
         if (e.code === 'Escape') {
             this.togglePause();
         }
+        // R-key reload was removed — auto-reload kicks in when the clip empties.
+        // (Shift+R is still a cheat handled in the Shift block below.)
         // Test powerup spawn (for debugging)
         if (e.code === 'KeyP' && this.game.state === GAME_STATES.PLAYING) {
             const offsetX = random(-50, 50);
@@ -91,10 +93,10 @@ export function setupEventListeners() {
         if (e.code === 'Enter' && this.game.state === GAME_STATES.GAME_OVER) {
             this.init();
         }
-        if (e.code === 'Space' && this.game.state === GAME_STATES.SHOP) {
-            e.preventDefault();
-            this.closeShop();
-        }
+        // ESC closing the shop is handled by the global Escape handler at
+        // the top of this file — it calls togglePause(), which routes
+        // GAME_STATES.SHOP → closeShopToPause(). The old SPACE → closeShop
+        // shortcut is gone (along with click-outside-to-close).
     });
 
     // Auto-pause when window loses focus
@@ -132,18 +134,9 @@ export function setupEventListeners() {
             const clickX = e.clientX - rect.left;
             const clickY = e.clientY - rect.top;
 
-            // Check if click is outside shop window
-            if (this.shopWindowBounds) {
-                const isOutsideShop = clickX < this.shopWindowBounds.x ||
-                                    clickX > this.shopWindowBounds.x + this.shopWindowBounds.width ||
-                                    clickY < this.shopWindowBounds.y ||
-                                    clickY > this.shopWindowBounds.y + this.shopWindowBounds.height;
-
-                if (isOutsideShop) {
-                    this.closeShop();
-                    return;
-                }
-            }
+            // (Click-outside-to-close removed — easy to misclick. The shop
+            // closes only via the X button or the ESC key, both routed to
+            // closeShopToPause so the player goes back to the pause menu.)
 
             // Check for close button click
             if (this.shopCloseBounds &&

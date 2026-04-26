@@ -12,25 +12,49 @@ export function drawDamageNumbers() {
         this.damageNumbers.forEach(dmgNum => {
             ctx.save();
 
-            // Calculate alpha based on life remaining
             const alpha = Math.max(0, dmgNum.life);
-
-            // Convert world coordinates to screen coordinates
             const screenX = dmgNum.x - this.camera.x;
             const screenY = dmgNum.y - this.camera.y;
 
-            // Only draw if on screen
-            if (screenX >= -50 && screenX <= this.width + 50 &&
-                screenY >= -50 && screenY <= this.height + 50) {
+            if (screenX < -50 || screenX > this.width + 50 ||
+                screenY < -50 || screenY > this.height + 50) {
+                ctx.restore();
+                return;
+            }
 
-                // Golden damage number without stroke
-                ctx.font = "16px 'Press Start 2P', monospace";
-                ctx.fillStyle = rgba(255, 215, 0, alpha); // Golden
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
 
+            if (dmgNum.isCrit) {
+                // CRITs: bigger font, hot orange-red, white outline, with a
+                // tiny "CRIT!" tag above so they're impossible to miss.
+                const fontSize = 26;
+                ctx.font = `bold ${fontSize}px 'Press Start 2P', monospace`;
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = rgba(0, 0, 0, alpha);
+                ctx.fillStyle = rgba(255, 80, 30, alpha);
                 const text = dmgNum.damage.toString();
+                ctx.strokeText(text, screenX, screenY);
                 ctx.fillText(text, screenX, screenY);
+
+                ctx.font = "10px 'Press Start 2P', monospace";
+                ctx.fillStyle = rgba(255, 220, 80, alpha);
+                ctx.fillText('CRIT!', screenX, screenY - fontSize * 0.85);
+            } else if (dmgNum.isEmpowered) {
+                // Empowered (perfect-reload buff active): cyan tint, slightly
+                // bigger than normal, no CRIT tag.
+                ctx.font = "20px 'Press Start 2P', monospace";
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = rgba(0, 0, 0, alpha);
+                ctx.fillStyle = rgba(120, 240, 255, alpha);
+                const text = dmgNum.damage.toString();
+                ctx.strokeText(text, screenX, screenY);
+                ctx.fillText(text, screenX, screenY);
+            } else {
+                // Standard hit: gold, 16px (unchanged from before).
+                ctx.font = "16px 'Press Start 2P', monospace";
+                ctx.fillStyle = rgba(255, 215, 0, alpha);
+                ctx.fillText(dmgNum.damage.toString(), screenX, screenY);
             }
 
             ctx.restore();
@@ -38,44 +62,98 @@ export function drawDamageNumbers() {
 }
 
 export function drawTargetInfo() {
-        // Show info for currently targeted entity (clicked entity)
-        if (!this.targetedEntity) return;
+        // Layout (top → bottom):
+        //   row 1:  "LV.N  ENEMYNAME"   — LV. blue, N maroon, name gold
+        //   row 2:  health bar
+        //   row 3:  "X / Y" health numbers
+        //
+        // Reads health LIVE from the entity ref when it's still alive (no
+        // 1-frame staleness, which used to read as bar/number jitter on
+        // every Storm-Needles tick). Falls back to the snapshot health
+        // during the grace period after death. No alpha fade — hide hard
+        // when the snapshot expires; partial alpha caused per-frame
+        // anti-aliasing differences that looked like flicker.
+        const info = this.lastHitInfo;
+        if (!info) return;
+        if (Date.now() > info.expireAt) return;
 
-        const target = this.targetedEntity;
+        const refAlive = info.ref && info.ref.active;
+        const liveHealth = refAlive ? info.ref.health : info.health;
+        const liveMax = refAlive ? info.ref.maxHealth : info.maxHealth;
+        if (typeof liveHealth !== 'number' || typeof liveMax !== 'number') return;
+
         const ctx = this.ctx;
+        const centerX = this.width / 2;
 
-        // Position flush with right border with padding
-        const paddingRight = 15; // Padding from right edge
-        const paddingTop = 25;   // Padding from top edge
-        const x = this.width - paddingRight; // Flush with right border minus padding
-        const y = paddingTop;  // Top padding
+        // Font sizes — name larger than LV, both smaller than the old 28px.
+        const nameFontSize = 22;
+        const lvFontSize = 14;
+
+        const headerY = 24;
+        const barY = headerY + nameFontSize + 8;     // ~54
+        const numberY = barY + 16;                    // ~70
+        const barWidth = 240;
+        const barHeight = 7;
 
         ctx.save();
-
-        // Draw target name (all caps) - GOLD STYLING TO MATCH ENEMY NAMES
-        ctx.font = "16px 'Press Start 2P', monospace"; // Increased from 14px to 16px
-        ctx.letterSpacing = '1px'; // Added letter spacing
-        ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'; // Same gold color as enemy names
-        ctx.textAlign = 'right'; // Align right since positioned at top right
         ctx.textBaseline = 'top';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
 
-        const targetName = target.config ? target.config.name.toUpperCase() : 'ASTEROID';
-        ctx.fillText(targetName, x, y);
+        // ── Row 1: NAME centered, LV.N hanging off to its LEFT ───────────
+        // The enemy NAME stays centered on screen regardless of level digit
+        // count. The "LV.N" indicator sits flush against the name's left
+        // edge with a small gap — so the eye reads NAME first, then notices
+        // the level tag attached on the side.
+        const lvLabel = 'LV.';
+        const lvNum = String(info.level || 1);
+        const name = info.name;
 
-        // Draw health bar
-        const barWidth = 100;
-        const barHeight = 4;
-        const barY = y + 25;
-        const barX = x - barWidth; // Align right edge with text (flush with right border)
+        // Measure name first so we know where its left edge sits.
+        ctx.font = `bold ${nameFontSize}px 'Press Start 2P', monospace`;
+        const nameW = ctx.measureText(name).width;
+        const nameLeft = Math.round(centerX - nameW / 2);
 
-        const healthPercentage = target.health / target.maxHealth;
+        // Bottom-align LV. row with name baseline so the smaller text sits
+        // at the bottom of the larger glyph height, not at its top.
+        const nameBottom = headerY + nameFontSize;
+        const lvY = nameBottom - lvFontSize;
 
-        // Background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        // Measure the LV.N block at LV font size.
+        ctx.font = `bold ${lvFontSize}px 'Press Start 2P', monospace`;
+        const lvLabelW = ctx.measureText(lvLabel).width;
+        const lvNumW = ctx.measureText(lvNum).width;
+        const lvBlockW = lvLabelW + lvNumW;
+        const lvGap = 14;
+        const lvBlockRight = nameLeft - lvGap;
+        const lvBlockLeft = lvBlockRight - lvBlockW;
+
+        // "LV." in blue (left half of the block)
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#5DA9FF';
+        ctx.strokeText(lvLabel, lvBlockLeft, lvY);
+        ctx.fillText(lvLabel, lvBlockLeft, lvY);
+
+        // Level number in lighter maroon — was #7A1F2A (too dark), now a
+        // brighter rose-red that still reads as "warning" but isn't muddy.
+        ctx.fillStyle = '#E74057';
+        ctx.strokeText(lvNum, lvBlockLeft + lvLabelW, lvY);
+        ctx.fillText(lvNum, lvBlockLeft + lvLabelW, lvY);
+
+        // Name in gold (centered on screen)
+        ctx.font = `bold ${nameFontSize}px 'Press Start 2P', monospace`;
+        ctx.fillStyle = '#FFD700';
+        ctx.strokeText(name, nameLeft, headerY);
+        ctx.fillText(name, nameLeft, headerY);
+
+        // ── Row 2: health bar ────────────────────────────────────────────
+        const barX = Math.round(centerX - barWidth / 2);
+        const healthPercentage = Math.max(0, Math.min(1, liveHealth / liveMax));
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(barX, barY, barWidth, barHeight);
 
-        // Health bar gradient
-        let healthGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+        const healthGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
         if (healthPercentage > 0.5) {
             healthGradient.addColorStop(0, '#66ff66');
             healthGradient.addColorStop(1, '#00cc00');
@@ -86,41 +164,23 @@ export function drawTargetInfo() {
             healthGradient.addColorStop(0, '#ff6666');
             healthGradient.addColorStop(1, '#cc0000');
         }
-
         ctx.fillStyle = healthGradient;
-        ctx.fillRect(barX, barY, barWidth * healthPercentage, barHeight);
+        ctx.fillRect(barX, barY, Math.round(barWidth * healthPercentage), barHeight);
 
-        // Draw LV and HP numbers below health bar with proper spacing
-        const displayHealth = target.health > 0 && target.health < 1 ? 1 : Math.round(target.health);
-        const healthNumber = `${displayHealth}/${Math.round(target.maxHealth)}`;
-        const levelText = `LV${target.level || 1}`;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX + 0.5, barY + 0.5, barWidth - 1, barHeight - 1);
 
-        ctx.font = "12px 'Press Start 2P', monospace"; // Increased from 10px to 12px
-        ctx.letterSpacing = '0.5px'; // Added letter spacing
-
-        // Measure text widths for proper spacing
-        const levelWidth = ctx.measureText(levelText).width;
-        const healthWidth = ctx.measureText(healthNumber).width;
-        const spacing = 20; // Minimum space between LV and HP text
-        const totalWidth = levelWidth + spacing + healthWidth;
-
-        // Calculate positions to align right with the text and health bar
-        const startX = x - totalWidth;
-        const levelX = startX;
-        const healthX = startX + levelWidth + spacing;
-        const numberY = barY + 18;
-
-        // Level text in light blue
-        ctx.fillStyle = '#88ccff';
-        ctx.textAlign = 'left';
-        ctx.strokeText(levelText, levelX, numberY);
-        ctx.fillText(levelText, levelX, numberY);
-
-        // Health number in gold
+        // ── Row 3: HP numbers ────────────────────────────────────────────
+        const displayHealth = liveHealth > 0 && liveHealth < 1 ? 1 : Math.round(liveHealth);
+        const healthNumber = `${displayHealth} / ${Math.round(liveMax)}`;
+        ctx.font = "12px 'Press Start 2P', monospace";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
         ctx.fillStyle = '#FFD700';
-        ctx.textAlign = 'left'; // Changed to left align for consistent positioning
-        ctx.strokeText(healthNumber, healthX, numberY);
-        ctx.fillText(healthNumber, healthX, numberY);
+        ctx.textAlign = 'center';
+        ctx.strokeText(healthNumber, centerX, numberY);
+        ctx.fillText(healthNumber, centerX, numberY);
 
         ctx.restore();
 }
@@ -131,9 +191,13 @@ export function drawPowerupDisplay() {
         const ctx = this.ctx;
         ctx.save();
 
-        // Position at top center, below HUD elements to avoid overlap
+        // Stack order top-to-bottom:
+        //   enemy info  (y≈24-84)
+        //   wave title  (y≈176-224)
+        //   wave subtitle (y≈248-272)
+        //   powerup pickup label (this — y≈300)
         const centerX = this.width / 2;
-        const topY = 120; // Clears health bar + level/coins + margin
+        const topY = 300;
 
         // Apply fade opacity (drawWavyText respects outer globalAlpha).
         ctx.globalAlpha = this.powerupDisplay.opacity;

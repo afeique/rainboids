@@ -3,6 +3,7 @@
 // so all `this.*` references work exactly as they did as class methods.
 
 import { rgba } from '../core/color-cache.js';
+import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS } from '../combat/weapon-data.js';
 
 export const _charWidthCache = new Map();
 
@@ -408,6 +409,137 @@ export function drawSpawnTimer() {
         }
 
         ctx.restore();
+}
+
+// Streak indicator — top-right corner, clear of the pause button (top:16, h:56),
+// minimap (bottom-right), enemy info (top-center), and wave message
+// (top-center y=200). Two display modes:
+//
+//   ACTIVE (buff timer running): tier-colored pulse, glow halo, full info
+//      "N KILLS / TIER_LABEL / +X% DMG / [progress bar to next tier]"
+//
+//   SAVED (streak ≥ 3 but buff faded — waiting on next kill to re-arm):
+//      Dimmed grey-white, no glow, "N KILLS / SAVED" — reminds the player
+//      that the streak is preserved (only damage breaks it now).
+//
+//   HIDDEN: streak below 3 OR streak is 0 (just took damage / fresh game).
+export function drawStreakIndicator() {
+    if (!this.player) return;
+    const k = this.killStreakCount || 0;
+    if (k < WEAPON_DATA_STREAK_TIERS[0].kills) return; // need at least the first tier's threshold
+
+    const ctx = this.ctx;
+    const player = this.player;
+    const tiers = WEAPON_DATA_STREAK_TIERS;
+    let currentTier = null;
+    let currentIdx = -1;
+    for (let i = 0; i < tiers.length; i++) {
+        if (k >= tiers[i].kills) {
+            currentTier = tiers[i];
+            currentIdx = i;
+        }
+    }
+    if (!currentTier) return;
+    const nextTier = tiers[currentIdx + 1] || null;
+
+    const buffActive = player.streakDamageMult > 1;
+    // Fade-out only applies to the active-buff display, not the SAVED state.
+    const remaining = Math.max(0, player.streakBuffEndTime - Date.now());
+    const fadeAlpha = buffActive ? Math.min(1, remaining / 600) : 0.55;
+
+    // Color: tier color when active, dim grey-white when SAVED.
+    const tierColor = buffActive ? currentTier.color : '#BBBBBB';
+
+    const x = this.width - 20;
+    const y = 110;
+    const pulse = buffActive ? 0.85 + Math.sin(Date.now() * 0.015) * 0.15 : 0;
+
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+
+    // Streak count (big number)
+    if (buffActive) {
+        ctx.shadowColor = tierColor;
+        ctx.shadowBlur = 12 * pulse;
+    }
+    ctx.font = "bold 22px 'Press Start 2P', monospace";
+    ctx.fillStyle = tierColor;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    const streakText = `${k} KILL${k === 1 ? '' : 'S'}`;
+    ctx.strokeText(streakText, x, y);
+    ctx.fillText(streakText, x, y);
+
+    // Tier label OR "SAVED" when buff faded
+    ctx.font = "bold 12px 'Press Start 2P', monospace";
+    ctx.shadowBlur = buffActive ? 6 : 0;
+    ctx.fillStyle = tierColor;
+    const labelText = buffActive ? currentTier.label : 'SAVED';
+    ctx.strokeText(labelText, x, y + 26);
+    ctx.fillText(labelText, x, y + 26);
+
+    if (buffActive) {
+        // Damage bonus
+        ctx.font = '10px "Press Start 2P", monospace';
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#FFFFFF';
+        const bonusText = `+${Math.round((currentTier.mult - 1) * 100)}% DMG`;
+        ctx.strokeText(bonusText, x, y + 42);
+        ctx.fillText(bonusText, x, y + 42);
+
+        // Progress bar toward next tier (or "MAX" pip if at top tier)
+        const barW = 140, barH = 6;
+        const barX = x - barW;
+        const barY = y + 62;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fillRect(barX, barY, barW, barH);
+
+        if (nextTier) {
+            const span = nextTier.kills - currentTier.kills;
+            const progress = Math.max(0, Math.min(1, (k - currentTier.kills) / span));
+            ctx.fillStyle = tierColor;
+            ctx.fillRect(barX, barY, Math.round(barW * progress), barH);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX + 0.5, barY + 0.5, barW - 1, barH - 1);
+            ctx.font = "8px 'Press Start 2P', monospace";
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.lineWidth = 2;
+            const nextLabel = `→ ${nextTier.label} @ ${nextTier.kills}`;
+            ctx.strokeText(nextLabel, x, barY + 12);
+            ctx.fillText(nextLabel, x, barY + 12);
+        } else {
+            ctx.fillStyle = tierColor;
+            ctx.fillRect(barX, barY, barW, barH);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX + 0.5, barY + 0.5, barW - 1, barH - 1);
+            ctx.font = "8px 'Press Start 2P', monospace";
+            ctx.fillStyle = tierColor;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.lineWidth = 2;
+            ctx.strokeText('▲ MAX TIER', x, barY + 12);
+            ctx.fillText('▲ MAX TIER', x, barY + 12);
+        }
+    } else {
+        // SAVED state — show small note that next kill re-arms buff at the
+        // appropriate tier, no progress bar (the streak number IS the
+        // progress).
+        ctx.font = '8px "Press Start 2P", monospace';
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.lineWidth = 2;
+        const reArmText = `▶ KILL TO RE-ARM`;
+        ctx.strokeText(reArmText, x, y + 44);
+        ctx.fillText(reArmText, x, y + 44);
+    }
+
+    ctx.restore();
 }
 
 export function drawRespawnCountdown() {

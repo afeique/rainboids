@@ -17,7 +17,7 @@ import { ColorStar } from './world/color-star.js';
 import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
 import { Powerup } from './world/powerup.js';
-import { DEFENSE_SKILLS } from './combat/weapon-data.js';
+import { DEFENSE_SKILLS, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
@@ -47,6 +47,9 @@ export class GameEngine {
         this.ctx = canvas.getContext('2d');
         this.uiManager = uiManager;
         this.audioManager = audioManager;
+        // Expose weapon catalogs to ui-manager for the pause-menu PRIMARY/POWER tabs.
+        this.PRIMARY_WEAPONS_LIST = PRIMARY_WEAPONS;
+        this.POWER_WEAPONS_LIST = POWER_WEAPONS;
         this.inputHandler = inputHandler;
         
         // Set game engine reference in input handler for coordinate transformation
@@ -74,6 +77,27 @@ export class GameEngine {
         this.events.on('audio:health-regen', () => this.audioManager.playHealthRegen());
         this.events.on('audio:powerup', () => this.audioManager.playPowerup());
         this.events.on('audio:player-explosion', () => this.audioManager.playPlayerExplosion());
+
+        // Granular hit SFX — fall back to generic 'hit' if the named sound
+        // isn't registered (so adding new patterns degrades gracefully).
+        this.events.on('audio:player-hit-asteroid', () => this.audioManager.playSound('playerHitAsteroid'));
+        this.events.on('audio:player-hit-enemy', () => this.audioManager.playSound('playerHitEnemy'));
+        this.events.on('audio:player-hit-bullet', (pattern) => {
+            const name = `enemyHit_${pattern || ''}`;
+            if (this.audioManager.sounds && this.audioManager.sounds[name]) {
+                this.audioManager.playSound(name);
+            } else {
+                this.audioManager.playHit();
+            }
+        });
+        this.events.on('audio:enemy-hit-by-bullet', (weaponId) => {
+            const name = `playerHit_${weaponId || ''}`;
+            if (this.audioManager.sounds && this.audioManager.sounds[name]) {
+                this.audioManager.playSound(name);
+            } else {
+                this.audioManager.playHit();
+            }
+        });
 
         // Wire UI events — systems emit events, UIManager handles display
         this.events.on('ui:show-message', (d) => this.uiManager.showMessage(d.title, d.subtitle, d.duration, d.position));
@@ -185,8 +209,19 @@ export class GameEngine {
             hoveredEntity: null
         };
         
-        // Targeted entity system (click-based targeting)
+        // Targeted entity system (click-based targeting). Drives the cursor
+        // crosshair and asteroid/enemy outlines.
         this.targetedEntity = null;
+
+        // Last target the player damaged (enemy ship OR asteroid). Drives
+        // the top-center info panel. While the entity is alive, the panel
+        // reads its live HP via `lastHitEnemy`. When it dies (or the pool
+        // recycles it), `lastHitInfo` keeps the snapshot visible for a
+        // short grace period so the panel doesn't flicker between rapid
+        // kills (e.g. Storm Needles cycling 7+ enemies/sec).
+        this.lastHitEnemy = null;
+        this.lastHitInfo = null;          // { name, level, health, maxHealth, expireAt, ref }
+        this.LAST_HIT_GRACE_MS = 900;     // how long the snapshot lingers after death
         
         // Target info display system
         this.targetInfo = {
@@ -589,12 +624,46 @@ export class GameEngine {
     
     drawMoneyPickupDisplay() { return hudCombat.drawMoneyPickupDisplay.call(this); }
     
-    createDamageNumber(x, y, damage) { return combat.createDamageNumber.call(this, x, y, damage); }
+    createDamageNumber(x, y, damage, opts) { return combat.createDamageNumber.call(this, x, y, damage, opts); }
     updateDamageNumbers(deltaTime) { return combat.updateDamageNumbers.call(this, deltaTime); }
-    
+
     drawDamageNumbers() { return hudCombat.drawDamageNumbers.call(this); }
-    
+
     drawTargetInfo() { return hudCombat.drawTargetInfo.call(this); }
+
+    // Reset the kill streak + clear any active damage buff. Called from the
+    // three player-damage paths (lifecycle.takeDamage, player↔enemy
+    // collision, player↔enemy-bullet collision) whenever HP actually drops
+    // — Phase Dash invuln zeros damage at the source so this never fires
+    // during a successful dash.
+    _breakKillStreak() {
+        this.killStreakCount = 0;
+        if (this.player) {
+            this.player.streakDamageMult = 1;
+            this.player.streakTierLabel = null;
+            this.player.streakBuffEndTime = 0;
+        }
+    }
+
+    // Snapshot the most recently hit target so the top-center info panel
+    // can keep rendering for a grace period after the entity dies / the
+    // pool recycles it. Same target re-hits just refresh the snapshot
+    // (no flicker). A new target replaces it.
+    _setLastHit(target) {
+        if (!target || !target.active) return;
+        this.lastHitEnemy = target;
+        const name = (target.config && target.config.name)
+            ? target.config.name.toUpperCase()
+            : 'ASTEROID';
+        this.lastHitInfo = {
+            ref: target,
+            name,
+            level: target.level || 1,
+            health: target.health,
+            maxHealth: target.maxHealth,
+            expireAt: Date.now() + this.LAST_HIT_GRACE_MS,
+        };
+    }
     
     handleCollisions() { return col.handleCollisions.call(this); }
     handleWeaponEffectCollisions() { return col.handleWeaponEffectCollisions.call(this); }
@@ -665,6 +734,24 @@ export class GameEngine {
             // Clean up targeted entity if it's no longer active
             if (this.targetedEntity && !this.targetedEntity.active) {
                 this.targetedEntity = null;
+            }
+
+            // Last-hit panel: while the entity is alive, mirror its current
+            // HP into the snapshot. When it dies (or the pool recycles it
+            // for a different entity), keep the last snapshot for the grace
+            // period so the panel doesn't disappear-then-reappear between
+            // rapid kills.
+            const now = Date.now();
+            if (this.lastHitEnemy && this.lastHitEnemy.active &&
+                this.lastHitInfo && this.lastHitInfo.ref === this.lastHitEnemy) {
+                this.lastHitInfo.health = this.lastHitEnemy.health;
+                this.lastHitInfo.expireAt = now + this.LAST_HIT_GRACE_MS;
+            }
+            if (this.lastHitEnemy && !this.lastHitEnemy.active) {
+                this.lastHitEnemy = null;
+            }
+            if (this.lastHitInfo && now > this.lastHitInfo.expireAt) {
+                this.lastHitInfo = null;
             }
             
             this.bulletPool.activeObjects.forEach(bullet =>
@@ -913,6 +1000,11 @@ export class GameEngine {
             this.draw();
             this.ctx.restore();
             this.drawHUD();
+            // FLICKER FIX: hitstop fires on every hit (3-5 frames), and used
+            // to skip drawTargetInfo — making the top-center enemy panel
+            // pop out for the duration of the freeze, then back in. Now we
+            // draw it during hitstop too, so the panel stays solid.
+            this.drawTargetInfo();
             this.drawMoneyPickupDisplay();
             this.drawDamageNumbers();
             // Screen flash overlay
@@ -989,8 +1081,8 @@ export class GameEngine {
         // Draw HUD elements outside of screen shake transform
         this.drawHUD();
         
-        // Target info display removed for cleaner UI
-        // this.drawTargetInfo();
+        // Top-center panel for the most recently hit enemy.
+        this.drawTargetInfo();
         
         // Draw money pickup display
         this.drawMoneyPickupDisplay();
@@ -1261,6 +1353,7 @@ export class GameEngine {
     handlePlayerAsteroidCollision(player, asteroid) { return col.handlePlayerAsteroidCollision.call(this, player, asteroid); }
     
     drawSpawnTimer() { return hudOverlays.drawSpawnTimer.call(this); }
+    drawStreakIndicator() { return hudOverlays.drawStreakIndicator.call(this); }
     drawXPBar(ctx, barX, barY, barWidth, barHeight) { return hudStatus.drawXPBar.call(this, ctx, barX, barY, barWidth, barHeight); }
     drawCircularTimer(ctx, x, y, radius, progress, color, icon, timeRemaining) { return hudOverlays.drawCircularTimer.call(this, ctx, x, y, radius, progress, color, icon, timeRemaining); }
     drawRespawnCountdown() { return hudOverlays.drawRespawnCountdown.call(this); }

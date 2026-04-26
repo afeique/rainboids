@@ -10,18 +10,18 @@ export const PRIMARY_WEAPONS = {
         description: 'Steady stream of reliable shots',
         icon: '🔫',
         color: '#00ccff',
-        fireRate: 400,        // ms between shots
+        fireRate: 400,
         damage: 0.8,
-        bulletSpeed: 1.0,     // multiplier on BULLET_SPEED
-        bulletSize: 1.0,      // multiplier on base radius
+        bulletSpeed: 1.0,
+        bulletSize: 1.0,
         bulletCount: 1,
-        spreadAngle: 0,       // radians total spread
+        spreadAngle: 0,
         piercing: 0,
-        range: 0.85,          // multiplier on base maxLife
-        cost: 0,              // free — default weapon
+        range: 0.85,
+        cost: 0,
         spCost: 0,
         unlockWave: 0,
-        upgrades: ['STEADY_AIM', 'OVERCHARGE', 'ECHO_ROUND'],
+        upgrades: ['STEADY_AIM', 'OVERCHARGE', 'ECHO_ROUND', 'PULSE_VELOCITY'],
     },
     STORM_NEEDLES: {
         id: 'STORM_NEEDLES',
@@ -34,13 +34,13 @@ export const PRIMARY_WEAPONS = {
         bulletSpeed: 1.1,
         bulletSize: 0.5,
         bulletCount: 1,
-        spreadAngle: 0.15,    // slight random spread
+        spreadAngle: 0.15,
         piercing: 0,
-        range: 0.7,           // shorter range
+        range: 0.7,
         cost: 0,
         spCost: 0,
         unlockWave: 3,
-        upgrades: ['NEEDLE_STORM', 'POISON_TIP', 'STATIC_CHARGE', 'SUPPRESSION'],
+        upgrades: ['NEEDLE_STORM', 'POISON_TIP', 'STATIC_CHARGE', 'SUPPRESSION', 'NEEDLE_VELOCITY'],
     },
     SCATTER_GUN: {
         id: 'SCATTER_GUN',
@@ -53,13 +53,13 @@ export const PRIMARY_WEAPONS = {
         bulletSpeed: 0.9,
         bulletSize: 0.6,
         bulletCount: 5,
-        spreadAngle: 0.6,     // wide cone
+        spreadAngle: 0.6,
         piercing: 0,
-        range: 0.5,           // short range
+        range: 0.5,
         cost: 0,
         spCost: 0,
         unlockWave: 5,
-        upgrades: ['TIGHT_CHOKE', 'BUCKSHOT', 'SHRAPNEL', 'SLUG_ROUND'],
+        upgrades: ['TIGHT_CHOKE', 'BUCKSHOT', 'SHRAPNEL', 'SLUG_ROUND', 'SCATTER_VELOCITY'],
     },
     RAIL_DRIVER: {
         id: 'RAIL_DRIVER',
@@ -73,12 +73,12 @@ export const PRIMARY_WEAPONS = {
         bulletSize: 1.2,
         bulletCount: 1,
         spreadAngle: 0,
-        piercing: 99,         // built-in full pierce
-        range: 1.5,           // long range
+        piercing: 99,
+        range: 1.5,
         cost: 0,
         spCost: 0,
         unlockWave: 8,
-        upgrades: ['PENETRATOR', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH'],
+        upgrades: ['PENETRATOR', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH', 'RAIL_VELOCITY'],
     },
     LANCE_BEAM: {
         id: 'LANCE_BEAM',
@@ -86,22 +86,39 @@ export const PRIMARY_WEAPONS = {
         description: 'Precision sweep laser beam',
         icon: '🔦',
         color: '#44ff44',
-        fireRate: 1200,       // full cycle time (beam + cooldown)
-        damage: 0.15,         // damage per tick during beam
-        bulletSpeed: 0,       // not projectile-based
+        fireRate: 1200,
+        damage: 0.15,
+        bulletSpeed: 0,
         bulletSize: 0,
         bulletCount: 0,
         spreadAngle: 0,
         piercing: 0,
         range: 1.2,
-        beamDuration: 400,    // ms the beam is active
-        beamWidth: 6,         // px beam thickness
+        beamDuration: 400,
+        beamWidth: 6,
         cost: 0,
         spCost: 0,
         unlockWave: 12,
-        upgrades: ['BEAM_WIDTH', 'LINGER', 'REFRACTION', 'OVERLOAD'],
+        upgrades: ['BEAM_WIDTH', 'LINGER', 'REFRACTION', 'OVERLOAD_BEAM', 'LANCE_VELOCITY'],
     },
 };
+
+// Streak damage tiers. Each tier adds +0.25× damage. Capped at LEGENDARY
+// (15 kills, +100%) so high streaks don't break the difficulty curve.
+// Higher streaks beyond the cap just refresh the buff timer.
+//   - 3  kills → 1.25× (EMPOWERED)
+//   - 6  kills → 1.50× (UNSTOPPABLE)
+//   - 10 kills → 1.75× (GODLIKE)
+//   - 15 kills → 2.00× (LEGENDARY — cap)
+export const STREAK_TIERS = [
+    { kills: 3,  mult: 1.25, label: 'EMPOWERED',  color: '#7FE7FF' }, // cyan
+    { kills: 6,  mult: 1.50, label: 'UNSTOPPABLE', color: '#FFA844' }, // orange
+    { kills: 10, mult: 1.75, label: 'GODLIKE',     color: '#FF6688' }, // pink-red
+    { kills: 15, mult: 2.00, label: 'LEGENDARY',   color: '#FFD700' }, // gold
+];
+export const STREAK_BUFF_DURATION = 4000; // ms — buff lasts 4s, refreshes on each new kill while active.
+// NOTE: there is NO time-based streak reset. The streak only resets when the
+// player TAKES DAMAGE (see lifecycle.js takeDamage + collision-system.js).
 
 // ─── PRIMARY WEAPON UPGRADES ────────────────────────────────────────────────
 
@@ -134,6 +151,18 @@ export const PRIMARY_UPGRADES = {
     LINGER:          { id: 'LINGER',          name: 'Linger',         description: '+0.1s beam duration per stack',           cost: 700,  maxStacks: 3,  weapon: 'LANCE_BEAM', icon: '⏱️' },
     REFRACTION:      { id: 'REFRACTION',      name: 'Refraction',     description: 'Beam splits on hitting enemy',           cost: 1250, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: '🔀' },
     OVERLOAD_BEAM:   { id: 'OVERLOAD_BEAM',   name: 'Overload',       description: 'Final 0.1s deals 3x damage',             cost: 1050, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: '🔥' },
+
+    // Velocity-and-damage upgrades — kinetic-energy flavor: faster bullets
+    // hit harder. Each stack is +12% bullet velocity AND +12% damage (additive,
+    // so 3 stacks = +36% / +36%, ~+36% sustained DPS). Read via
+    // getBulletVelocityDamageMult() in player/weapons.js. For LANCE_BEAM the
+    // "velocity" portion becomes range (it has no projectiles), keeping the
+    // damage scaling identical to the projectile weapons.
+    PULSE_VELOCITY:  { id: 'PULSE_VELOCITY',  name: 'High-Velocity Rounds', description: '+12% bullet speed & damage per stack (Pulse Cannon)',  cost: 700,  maxStacks: 3, weapon: 'PULSE_CANNON',  icon: '🚄', velocityBonus: 0.12 },
+    NEEDLE_VELOCITY: { id: 'NEEDLE_VELOCITY', name: 'Hypersonic Needles',   description: '+12% needle speed & damage per stack (Storm Needles)', cost: 700,  maxStacks: 3, weapon: 'STORM_NEEDLES', icon: '🚄', velocityBonus: 0.12 },
+    SCATTER_VELOCITY:{ id: 'SCATTER_VELOCITY',name: 'Powder Charge',         description: '+12% pellet speed & damage per stack (Scatter Gun)',  cost: 700,  maxStacks: 3, weapon: 'SCATTER_GUN',   icon: '🚄', velocityBonus: 0.12 },
+    RAIL_VELOCITY:   { id: 'RAIL_VELOCITY',   name: 'Tungsten Slug',         description: '+12% rail speed & damage per stack (Rail Driver)',    cost: 900,  maxStacks: 3, weapon: 'RAIL_DRIVER',   icon: '🚄', velocityBonus: 0.12 },
+    LANCE_VELOCITY:  { id: 'LANCE_VELOCITY',  name: 'Focused Lens',          description: '+12% beam range & damage per stack (Lance Beam)',     cost: 800,  maxStacks: 3, weapon: 'LANCE_BEAM',    icon: '🚄', velocityBonus: 0.12 },
 };
 
 // ─── POWER WEAPONS (Right Click) ────────────────────────────────────────────
@@ -163,11 +192,11 @@ export const POWER_WEAPONS = {
         maxMines: 3,
         mineRadius: 60,       // trigger radius
         blastRadius: 80,
-        mineDamage: 5,
+        mineDamage: 3,        // was 5 — power weapons scaled down for balance
         cost: 1500,
         spCost: 1,
         unlockWave: 2,
-        upgrades: ['EXTRA_PAYLOAD', 'BLAST_RADIUS', 'MAGNETIC_MINE', 'DAISY_CHAIN'],
+        upgrades: ['EXTRA_PAYLOAD', 'BLAST_RADIUS', 'MAGNETIC_MINE', 'DAISY_CHAIN', 'RAPID_DEPLOY'],
     },
     NOVA_BLAST: {
         id: 'NOVA_BLAST',
@@ -178,7 +207,7 @@ export const POWER_WEAPONS = {
         cooldown: 8000,
         isChargeBased: false,
         ringRadius: 200,
-        ringDamage: 4,
+        ringDamage: 2.5,      // was 4 — power weapons scaled down for balance
         ringDuration: 500,    // ms for ring to expand
         cost: 2000,
         spCost: 2,
@@ -194,7 +223,7 @@ export const POWER_WEAPONS = {
         cooldown: 6000,
         isChargeBased: false,
         chainCount: 3,
-        chainDamage: 3,
+        chainDamage: 2,       // was 3 — power weapons scaled down for balance
         chainFalloff: 0.6,    // 60% damage each jump
         chainRange: 200,      // px between targets
         cost: 2500,
@@ -211,7 +240,7 @@ export const POWER_WEAPONS = {
         cooldown: 10000,
         isChargeBased: false,
         missileCount: 3,
-        missileDamage: 2,
+        missileDamage: 1.5,   // was 2 — power weapons scaled down for balance
         missileSpeed: 4,
         missileHomingStrength: 0.08,
         cost: 3000,
@@ -225,7 +254,7 @@ export const POWER_WEAPONS = {
 
 export const POWER_UPGRADES = {
     // Charge Shot (existing upgrades moved here)
-    CHARGE_POWER:     { id: 'CHARGE_POWER',     name: 'Charge Power',     description: '+1 charge shot base damage',          cost: 750,  maxStacks: 6,  weapon: 'CHARGE_SHOT', icon: '🔋' },
+    CHARGE_POWER:     { id: 'CHARGE_POWER',     name: 'Charge Power',     description: '+0.5 charge shot base damage per stack', cost: 750,  maxStacks: 6,  weapon: 'CHARGE_SHOT', icon: '🔋' },
     CHARGE_SPEED:     { id: 'CHARGE_SPEED',     name: 'Charge Speed',     description: '-1 second charge time',               cost: 1500, maxStacks: 3,  weapon: 'CHARGE_SHOT', icon: '⏱️',
                         costOverrides: [1500, 3000, 5000] },
     CHARGE_OVERCHARGE:{ id: 'CHARGE_OVERCHARGE', name: 'Overcharge',      description: 'Full charge explodes on impact',      cost: 2000, maxStacks: 1,  weapon: 'CHARGE_SHOT', icon: '💥' },
@@ -235,6 +264,7 @@ export const POWER_UPGRADES = {
     BLAST_RADIUS:     { id: 'BLAST_RADIUS',     name: 'Blast Radius',     description: '+30px blast radius per stack',         cost: 800,  maxStacks: 3,  weapon: 'MINE_LAYER', icon: '💥' },
     MAGNETIC_MINE:    { id: 'MAGNETIC_MINE',    name: 'Magnetic Mine',    description: 'Mines pull nearby enemies',            cost: 1500, maxStacks: 1,  weapon: 'MINE_LAYER', icon: '🧲' },
     DAISY_CHAIN:      { id: 'DAISY_CHAIN',      name: 'Daisy Chain',      description: 'Nearby mines detonate together',      cost: 2000, maxStacks: 1,  weapon: 'MINE_LAYER', icon: '🔗' },
+    RAPID_DEPLOY:     { id: 'RAPID_DEPLOY',     name: 'Rapid Deploy',     description: '-25% mine cooldown per stack (4s → 3s → 2.25s)', cost: 1100, maxStacks: 2, weapon: 'MINE_LAYER', icon: '⚡' },
 
     // Nova Blast
     SHOCKWAVE:        { id: 'SHOCKWAVE',        name: 'Shockwave',        description: '+40px ring radius per stack',          cost: 800,  maxStacks: 3,  weapon: 'NOVA_BLAST', icon: '🌊' },

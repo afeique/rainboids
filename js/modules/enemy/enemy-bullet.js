@@ -21,6 +21,11 @@ export class EnemyBullet {
         this.life = 1.0;
         this.creationTime = frameClock.now;
 
+        // Tag with the firing pattern that's currently dispatching (set by
+        // firing.js shoot() before invoking each pattern function). Used by
+        // collision-system to play per-pattern hit SFX on the player.
+        this.firingPattern = (typeof window !== 'undefined' && window.gameEngine && window.gameEngine._activeShotPattern) || null;
+
         // Visual properties
         this.radius = explosive ? 6 : 3;
         this.glowRadius = explosive ? 12 : 6;

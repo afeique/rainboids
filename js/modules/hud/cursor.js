@@ -1,6 +1,8 @@
-// HUD cursor rendering — crosshairs, targeting cursor, jitter circle, charge timer.
+// HUD cursor rendering — crosshairs, targeting cursor, jitter circle, ammo ring.
 // Each function is called with `.call(this)` where `this` is the GameEngine instance,
 // so all `this.*` references work exactly as they did as class methods.
+
+import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 
 export function drawCustomCursor() {
         if (!this.cursor.x && !this.cursor.y) return; // Don't draw if no mouse position
@@ -160,58 +162,76 @@ export function drawJitterCircle() {
         }
 }
 
+// Cursor ring NOW shows primary-weapon AMMO state. Power-weapon charge has
+// its own ship-tip indicator (player/renderer.js drawCooldownTimer) plus
+// the ship-glow effect (drawChargingEffects), so we don't double up here.
+//
+// The original power-weapon charge cursor ring is preserved verbatim below
+// in case we want to restore it. To re-enable, swap this function body
+// with the commented block.
+//
+// /* ── ORIGINAL POWER-WEAPON CHARGE RING (disabled 2026-04-26) ──
+// export function drawCursorCooldownTimer() {
+//         if (!this.player || !this.cursor || !this.player.isCharging) return;
+//         if (!this.cursor.x && !this.cursor.y) return;
+//
+//         const charge = this.player.chargeLevel; // 0-1
+//         if (charge <= 0) return;
+//
+//         const cursorX = this.cursor.x;
+//         const cursorY = this.cursor.y;
+//         const timerRadius = 20;
+//
+//         this.ctx.save();
+//
+//         // Background ring
+//         this.ctx.strokeStyle = 'rgba(100, 180, 255, 0.25)';
+//         this.ctx.lineWidth = 3;
+//         this.ctx.beginPath();
+//         this.ctx.arc(cursorX, cursorY, timerRadius, 0, Math.PI * 2);
+//         this.ctx.stroke();
+//
+//         // Charge arc — fills as charge builds
+//         const startAngle = -Math.PI / 2;
+//         const endAngle = startAngle + (charge * Math.PI * 2);
+//
+//         if (this.player.isFullyCharged) {
+//             // Pulsing bright when ready to fire
+//             const pulse = 0.7 + Math.sin(Date.now() * 0.01) * 0.3;
+//             this.ctx.strokeStyle = `rgba(200, 255, 255, ${pulse})`;
+//             this.ctx.lineWidth = 5;
+//         } else {
+//             // Blue → cyan as charge builds
+//             const r = Math.floor(80 + charge * 175);
+//             const g = Math.floor(160 + charge * 95);
+//             this.ctx.strokeStyle = `rgb(${r}, ${g}, 255)`;
+//             this.ctx.lineWidth = 4;
+//         }
+//         this.ctx.lineCap = 'round';
+//
+//         this.ctx.beginPath();
+//         this.ctx.arc(cursorX, cursorY, timerRadius, startAngle, endAngle);
+//         this.ctx.stroke();
+//
+//         // Inner fill wedge for visibility
+//         if (charge > 0.1) {
+//             this.ctx.globalAlpha = this.player.isFullyCharged ? 0.15 : 0.1;
+//             this.ctx.fillStyle = this.player.isFullyCharged ? '#ccffff' : '#6688ff';
+//             this.ctx.beginPath();
+//             this.ctx.moveTo(cursorX, cursorY);
+//             this.ctx.arc(cursorX, cursorY, timerRadius - 1, startAngle, endAngle);
+//             this.ctx.closePath();
+//             this.ctx.fill();
+//         }
+//
+//         this.ctx.restore();
+// }
+// ── END DISABLED BLOCK ── */
+//
+// Cursor ring removed when the clip / reload system was removed (Option C).
+// Function kept as a no-op so the callsite in game-engine.js stays valid.
+// The original ammo-ring code is preserved in the commented block above
+// drawCursorCooldownTimer's prior history if a future feature wants it back.
 export function drawCursorCooldownTimer() {
-        if (!this.player || !this.cursor || !this.player.isCharging) return;
-        if (!this.cursor.x && !this.cursor.y) return;
-
-        const charge = this.player.chargeLevel; // 0-1
-        if (charge <= 0) return;
-
-        const cursorX = this.cursor.x;
-        const cursorY = this.cursor.y;
-        const timerRadius = 20;
-
-        this.ctx.save();
-
-        // Background ring
-        this.ctx.strokeStyle = 'rgba(100, 180, 255, 0.25)';
-        this.ctx.lineWidth = 3;
-        this.ctx.beginPath();
-        this.ctx.arc(cursorX, cursorY, timerRadius, 0, Math.PI * 2);
-        this.ctx.stroke();
-
-        // Charge arc — fills as charge builds
-        const startAngle = -Math.PI / 2;
-        const endAngle = startAngle + (charge * Math.PI * 2);
-
-        if (this.player.isFullyCharged) {
-            // Pulsing bright when ready to fire
-            const pulse = 0.7 + Math.sin(Date.now() * 0.01) * 0.3;
-            this.ctx.strokeStyle = `rgba(200, 255, 255, ${pulse})`;
-            this.ctx.lineWidth = 5;
-        } else {
-            // Blue → cyan as charge builds
-            const r = Math.floor(80 + charge * 175);
-            const g = Math.floor(160 + charge * 95);
-            this.ctx.strokeStyle = `rgb(${r}, ${g}, 255)`;
-            this.ctx.lineWidth = 4;
-        }
-        this.ctx.lineCap = 'round';
-
-        this.ctx.beginPath();
-        this.ctx.arc(cursorX, cursorY, timerRadius, startAngle, endAngle);
-        this.ctx.stroke();
-
-        // Inner fill wedge for visibility
-        if (charge > 0.1) {
-            this.ctx.globalAlpha = this.player.isFullyCharged ? 0.15 : 0.1;
-            this.ctx.fillStyle = this.player.isFullyCharged ? '#ccffff' : '#6688ff';
-            this.ctx.beginPath();
-            this.ctx.moveTo(cursorX, cursorY);
-            this.ctx.arc(cursorX, cursorY, timerRadius - 1, startAngle, endAngle);
-            this.ctx.closePath();
-            this.ctx.fill();
-        }
-
-        this.ctx.restore();
+        return;
 }

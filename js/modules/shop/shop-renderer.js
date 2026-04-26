@@ -13,30 +13,26 @@ export function drawShop() {
         this.shopItemBounds = [];
         this.shopSellButtonBounds = [];
 
-        // Draw semi-transparent overlay
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        // Fullscreen layout matching the pause menu — shop fills the entire
+        // viewport with the same 78% backdrop, edge margins for breathing room,
+        // and the goldenrod-styled scrollbar on the right edge.
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
         this.ctx.fillRect(0, 0, this.width, this.height);
 
-        // Calculate shop window dimensions - make it shorter
-        const shopWindowWidth = Math.min(600, this.width - 40);
-        const shopWindowHeight = Math.min(this.height - 160, 500); // Reduced height from 650 to 500
-        const shopWindowX = (this.width - shopWindowWidth) / 2;
-        const shopWindowY = 100; // Moved down slightly for better spacing
+        // shopWindowBounds is the CONTENT region (used for hit-testing tabs,
+        // items, scrollbar). Now spans the full viewport with side padding.
+        const sidePad = 40;
+        const shopWindowWidth = this.width - sidePad * 2;
+        const shopWindowHeight = this.height - 100; // leave room for footer instructions
+        const shopWindowX = sidePad;
+        const shopWindowY = 60;
 
-        // Store shop window bounds for click detection
         this.shopWindowBounds = {
             x: shopWindowX,
             y: shopWindowY,
             width: shopWindowWidth,
             height: shopWindowHeight
         };
-
-        // Draw shop window background
-        this.ctx.fillStyle = 'rgba(20, 20, 30, 0.95)';
-        this.ctx.strokeStyle = '#00ccff';
-        this.ctx.lineWidth = 3;
-        this.ctx.fillRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
-        this.ctx.strokeRect(shopWindowX, shopWindowY, shopWindowWidth, shopWindowHeight);
 
         // Close (X) button — square, margin from border, opacity + glow on hover
         const closeBtnSize = 28;
@@ -140,12 +136,16 @@ export function drawShop() {
         this.ctx.rect(shopWindowX + 10, contentStartY, shopWindowWidth - 20, shopWindowHeight - (contentStartY - shopWindowY) - 20);
         this.ctx.clip();
 
-        // Calculate scrollable list layout
-        const scrollBarWidth = 25; // Reserve space for scrollbar
-        const itemWidth = shopWindowWidth - 40 - scrollBarWidth; // Leave space for scrollbar
-        const itemHeight = 100; // Increased from 80 to accommodate larger fonts
-        const padding = 12; // Slightly increased padding
-        const startX = shopWindowX + 20;
+        // Items live in a centered 900px-max column to match the
+        // pause-menu's `min(900px, 100%)` content rule. Scrollbar still
+        // anchors to the right edge of the viewport content area.
+        const SCROLLBAR_RESERVE = 24;
+        const maxColumn = 900;
+        const columnWidth = Math.min(maxColumn, shopWindowWidth - SCROLLBAR_RESERVE);
+        const itemWidth = columnWidth - 20; // small inner padding
+        const itemHeight = 100;
+        const padding = 12;
+        const startX = (this.width - columnWidth) / 2;
 
         // Filter items by current category
         const filteredItems = this.shopFilteredItems;
@@ -168,13 +168,11 @@ export function drawShop() {
 
             // Only draw items that are visible in the scroll area
             if (y + itemHeight >= shopWindowY + 20 && y <= shopWindowY + shopWindowHeight - 60) {
-                // Check for hover if mouse position is available
                 let isHovered = false;
                 if (this.mouseX !== undefined && this.mouseY !== undefined) {
                     isHovered = this.mouseX >= x && this.mouseX <= x + itemWidth &&
                                this.mouseY >= y && this.mouseY <= y + itemHeight &&
-                               this.mouseX >= shopWindowX + 10 && this.mouseX <= shopWindowX + shopWindowWidth - 35 && // Account for scrollbar space
-                               this.mouseY >= shopWindowY + 20 && this.mouseY <= shopWindowY + shopWindowHeight - 60;
+                               this.mouseY >= contentStartY && this.mouseY <= shopWindowY + shopWindowHeight;
                 }
 
                 this.drawShopItem(item, x, y, itemWidth, itemHeight, index, isHovered);
@@ -183,72 +181,59 @@ export function drawShop() {
 
         this.ctx.restore(); // Remove clipping
 
-        // Draw scroll indicators if needed
+        // ─── Goldenrod scrollbar — matches the pause-menu CSS scrollbar ───
+        // No arrow buttons (CSS scrollbars don't have them either), thinner
+        // 12px profile, anchored to the CONTENT area (was misaligned to the
+        // shop window — sat above the tabs and overlapped them). Track and
+        // thumb colors match the music player's scrollbar exactly.
         if (maxScroll > 0) {
-            const scrollBarWidth = 25; // Wider scrollbar to match reserved space
-            const scrollBarX = shopWindowX + shopWindowWidth - scrollBarWidth - 5;
-            const arrowButtonHeight = 20;
-            const scrollBarY = shopWindowY + 20 + arrowButtonHeight;
-            const scrollBarHeight = shopWindowHeight - 80 - (arrowButtonHeight * 2);
-            const scrollThumbHeight = Math.max(20, scrollBarHeight * (shopWindowHeight - 80) / totalContentHeight);
+            const SB_WIDTH = 12;
+            const TRACK_BG = '#5a4509';
+            const THUMB = (this.shopScrollThumbDrag || this.shopScrollUpHover || this.shopScrollDownHover) ? '#FFD740' : '#FFC107';
+            const corner = 6;
+
+            // Anchor scrollbar to the right edge of the centered column
+            // (not the viewport) — same visual relationship as the
+            // pause-menu's scrollbar relative to its content column.
+            const scrollBarX = startX + columnWidth + 6;
+            const scrollBarY = contentStartY;
+            const scrollBarHeight = availableHeight;
+            const scrollThumbHeight = Math.max(24, scrollBarHeight * (scrollBarHeight / totalContentHeight));
             const scrollThumbY = scrollBarY + (this.shopScrollOffset / maxScroll) * (scrollBarHeight - scrollThumbHeight);
 
-            // Store scrollbar bounds for interaction
+            // Bounds for interaction. upArrow / downArrow kept as zero-area
+            // rects so the existing click handler can still reference them
+            // safely without firing.
             this.shopScrollbarBounds = {
                 x: scrollBarX,
-                y: scrollBarY - arrowButtonHeight,
-                width: scrollBarWidth,
-                height: scrollBarHeight + (arrowButtonHeight * 2),
+                y: scrollBarY,
+                width: SB_WIDTH,
+                height: scrollBarHeight,
                 thumbY: scrollThumbY,
                 thumbHeight: scrollThumbHeight,
                 trackY: scrollBarY,
                 trackHeight: scrollBarHeight,
-                upArrow: { x: scrollBarX, y: scrollBarY - arrowButtonHeight, width: scrollBarWidth, height: arrowButtonHeight },
-                downArrow: { x: scrollBarX, y: scrollBarY + scrollBarHeight, width: scrollBarWidth, height: arrowButtonHeight }
+                upArrow:   { x: 0, y: 0, width: 0, height: 0 },
+                downArrow: { x: 0, y: 0, width: 0, height: 0 }
             };
 
-            // Up arrow button
-            this.ctx.fillStyle = this.shopScrollUpHover ? 'rgba(0, 204, 255, 0.8)' : 'rgba(150, 150, 150, 0.8)';
-            this.ctx.fillRect(scrollBarX, scrollBarY - arrowButtonHeight, scrollBarWidth, arrowButtonHeight);
-            this.ctx.strokeStyle = '#00ccff';
-            this.ctx.lineWidth = 1;
-            this.ctx.strokeRect(scrollBarX, scrollBarY - arrowButtonHeight, scrollBarWidth, arrowButtonHeight);
-
-            // Up arrow
-            this.ctx.fillStyle = '#000';
+            // Track (rounded, dark goldenrod)
+            this.ctx.fillStyle = TRACK_BG;
             this.ctx.beginPath();
-            this.ctx.moveTo(scrollBarX + scrollBarWidth/2, scrollBarY - arrowButtonHeight + 4);
-            this.ctx.lineTo(scrollBarX + 4, scrollBarY - 4);
-            this.ctx.lineTo(scrollBarX + scrollBarWidth - 4, scrollBarY - 4);
-            this.ctx.closePath();
+            this.ctx.roundRect(scrollBarX, scrollBarY, SB_WIDTH, scrollBarHeight, corner);
             this.ctx.fill();
 
-            // Scroll track
-            this.ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
-            this.ctx.fillRect(scrollBarX, scrollBarY, scrollBarWidth, scrollBarHeight);
-
-            // Scroll thumb
-            this.ctx.fillStyle = this.shopScrollThumbDrag ? '#44ddff' : '#00ccff';
-            this.ctx.fillRect(scrollBarX, scrollThumbY, scrollBarWidth, scrollThumbHeight);
-            this.ctx.strokeStyle = '#0088aa';
-            this.ctx.lineWidth = 1;
-            this.ctx.strokeRect(scrollBarX, scrollThumbY, scrollBarWidth, scrollThumbHeight);
-
-            // Down arrow button
-            this.ctx.fillStyle = this.shopScrollDownHover ? 'rgba(0, 204, 255, 0.8)' : 'rgba(150, 150, 150, 0.8)';
-            this.ctx.fillRect(scrollBarX, scrollBarY + scrollBarHeight, scrollBarWidth, arrowButtonHeight);
-            this.ctx.strokeStyle = '#00ccff';
-            this.ctx.lineWidth = 1;
-            this.ctx.strokeRect(scrollBarX, scrollBarY + scrollBarHeight, scrollBarWidth, arrowButtonHeight);
-
-            // Down arrow
-            this.ctx.fillStyle = '#000';
+            // Thumb (rounded, bright goldenrod, with 2px inset border = the
+            // CSS thumb's `border: 2px solid var(--track-color)` look).
+            this.ctx.fillStyle = THUMB;
             this.ctx.beginPath();
-            this.ctx.moveTo(scrollBarX + scrollBarWidth/2, scrollBarY + scrollBarHeight + arrowButtonHeight - 4);
-            this.ctx.lineTo(scrollBarX + 4, scrollBarY + scrollBarHeight + 4);
-            this.ctx.lineTo(scrollBarX + scrollBarWidth - 4, scrollBarY + scrollBarHeight + 4);
-            this.ctx.closePath();
+            this.ctx.roundRect(scrollBarX, scrollThumbY, SB_WIDTH, scrollThumbHeight, corner);
             this.ctx.fill();
+            this.ctx.strokeStyle = TRACK_BG;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.roundRect(scrollBarX + 1, scrollThumbY + 1, SB_WIDTH - 2, scrollThumbHeight - 2, corner - 1);
+            this.ctx.stroke();
         }
 
         // Purchase flash overlay
@@ -271,7 +256,7 @@ export function drawShop() {
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '14px "Press Start 2P", monospace';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('Click items to purchase • Press SPACE or click outside to continue', this.width / 2, this.height - 30);
+        this.ctx.fillText('Click items to purchase  •  Press X or ESC to return to the pause menu', this.width / 2, this.height - 30);
     }
 
 export function drawShopTabs(shopX, tabY, shopWidth) {

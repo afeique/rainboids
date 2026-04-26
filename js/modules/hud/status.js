@@ -38,11 +38,12 @@ export function drawHUD() {
                 this.ctx.save();
                 this.ctx.globalAlpha = alpha;
 
-                // Draw title (larger, centered horizontally, below HUD)
+                // Draw title (larger, centered horizontally, well below the
+                // top-center enemy-info band which now occupies y≈24-84).
                 const centerX = this.width / 2;
                 const titleFS = 48;
                 const subtitleFS = 24;
-                const topY = 80;
+                const topY = 200;  // pushed further down to clear enemy info comfortably
                 const gap = 60;
                 this.drawWavyText(this.waveMessage.title, centerX, topY, {
                     fontSize: titleFS,
@@ -68,9 +69,10 @@ export function drawHUD() {
             }
         }
 
-        // Draw skill cooldown HUD
+        // Draw skill cooldown HUD + streak buff indicator
         if (this.player && this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
             this.drawSkillCooldownHUD();
+            this.drawStreakIndicator();
         }
 
         // Draw title screen with wavy text
@@ -595,3 +597,6 @@ export function updateHUD() {
         // Draw survival timer at bottom left
         this.drawSurvivalTimer(ctx);
 }
+
+// Ammo gauge was removed — the cursor ring (hud/cursor.js) is now the sole
+// ammo indicator. Fewer HUD elements, all attention stays on the action.

@@ -72,12 +72,15 @@ export function handleCollisions() {
             if (collision(bullet, ast)) {
                 triggerHapticFeedback(60);
 
-                // Set targeting for hit asteroid (target info display removed)
+                // Set targeting for hit asteroid (drives cursor outline) AND
+                // surface it in the top-center info panel via the snapshot.
                 this.targetedEntity = ast;
+                this._setLastHit(ast);
 
-                // Only play hit sound if asteroid is on screen
+                // Per-weapon hit SFX (falls back to generic if weaponId
+                // missing — same bullet sound for asteroid + enemy hits).
                 if (this.isEntityOnScreen(ast)) {
-                    this.events.emit('audio:hit');
+                    this.events.emit('audio:enemy-hit-by-bullet', bullet.weaponId);
                 }
 
                 // Register hit for combo system
@@ -100,7 +103,10 @@ export function handleCollisions() {
 
                 // Show damage number (same as enemy ships)
                 if (this.isEntityOnScreen(ast)) {
-                    this.createDamageNumber(ast.x, ast.y - ast.baseRadius, damage);
+                    this.createDamageNumber(ast.x, ast.y - ast.baseRadius, damage, {
+                        isCrit: !!(bullet.isCrit || bullet.isCritical),
+                        isEmpowered: !!bullet.isEmpowered,
+                    });
                 }
 
                 // Award XP for hitting asteroid
@@ -377,12 +383,15 @@ export function handleCollisions() {
             if (collision(bullet, enemy)) {
                 triggerHapticFeedback(40);
 
-                // Set targeting for hit enemy (target info display removed)
+                // Set targeting for hit enemy (drives cursor outline) AND
+                // record this as the most recently damaged target for the
+                // top-center info panel via the snapshot.
                 this.targetedEntity = enemy;
+                this._setLastHit(enemy);
 
-                // Only play hit sound if enemy is on screen
+                // Per-weapon hit SFX (Pulse / Storm / Scatter / Rail / Lance).
                 if (this.isEntityOnScreen(enemy)) {
-                    this.events.emit('audio:hit');
+                    this.events.emit('audio:enemy-hit-by-bullet', bullet.weaponId);
                 }
 
                 // Register hit for combo system
@@ -390,7 +399,10 @@ export function handleCollisions() {
 
                 // Damage the enemy (One Punch Man cheat: instant kill)
                 const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
-                const destroyed = enemy.takeDamage(damage);
+                const destroyed = enemy.takeDamage(damage, {
+                    isCrit: !!(bullet.isCrit || bullet.isCritical),
+                    isEmpowered: !!bullet.isEmpowered,
+                });
 
                 // Hit flash on enemy — localized at impact point
                 enemy._hitFlashTimer = COLLISION_CONFIG.HIT_FLASH_FRAMES;
@@ -751,6 +763,9 @@ export function checkTractorShieldCollisions() {
 export function damageEnemy(enemy, damage) {
     if (!enemy || !enemy.active || enemy._deathFlash > 0) return;
     enemy.health -= damage;
+    // Surface this enemy in the top-center info panel — covers AOE hits
+    // (mines, lightning, nova, missiles) that don't go through the bullet path.
+    this._setLastHit(enemy);
     this.createDamageNumber(enemy.x, enemy.y - 15, damage);
     if (enemy.health <= 0) {
         // Start death flash — enemy renders as bright dissolving silhouette for 5 frames
@@ -799,6 +814,10 @@ export function handlePlayerEnemyCollision(player, enemy) {
         const finalDamage = Math.round(reducedDamage);
         player.health = Math.max(0, player.health - finalDamage);
 
+        // Break the kill streak on actual HP loss (Phase Dash zeroes
+        // reducedDamage above, so dashing through enemies preserves it).
+        if (finalDamage > 0) this._breakKillStreak();
+
         // Award XP for surviving enemy collision
         this.player.gainExperience(5);
 
@@ -824,6 +843,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         const kickDy = player.y - enemy.y;
         this.triggerCameraKick(kickDx, kickDy, 10);
         this.triggerScreenShake(18, 10, enemy.radius);
+        this.events.emit('audio:player-hit-enemy');
 
         // Show red damage number
         this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
@@ -953,6 +973,10 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     const finalDamage = Math.round(reducedDamage);
     player.health = Math.max(0, player.health - finalDamage);
 
+    // Break the kill streak on actual HP loss (see also player↔enemy
+    // collision above and lifecycle.takeDamage).
+    if (finalDamage > 0) this._breakKillStreak();
+
     // Award XP for surviving enemy bullet hit
     this.player.gainExperience(3);
 
@@ -975,7 +999,8 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     // ── JUICE: hitstop + screen shake (no camera kick for bullets — too small) ──
     this.triggerHitstop(4); // ~67ms — quick jolt
     this.triggerScreenShake(12, 6, bullet.radius);
-    this.events.emit('audio:hit');
+    // Per-pattern enemy-bullet hit SFX (falls back to generic if untagged).
+    this.events.emit('audio:player-hit-bullet', bullet.firingPattern);
 
     // Show red damage number
     this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
@@ -1106,7 +1131,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
 
         // Visual and audio feedback
         this.player.makeInvincible(3000); // 3 seconds of invincibility
-        this.events.emit('audio:hit');
+        this.events.emit('audio:player-hit-asteroid');
         this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
         this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
         this.events.emit('audio:shield');

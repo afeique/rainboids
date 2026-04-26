@@ -67,6 +67,12 @@ export function shoot(gameEngine) {
     const targetX = this.targetPlayer.x;
     const targetY = this.targetPlayer.y;
 
+    // Stamp the active shootPattern on the engine so EnemyBullet.reset()
+    // can tag spawned bullets with it. Cleared in the finally so subsequent
+    // non-shoot bullet spawns don't inherit a stale tag.
+    gameEngine._activeShotPattern = this.config.shootPattern;
+    try {
+
     switch (this.config.shootPattern) {
         case 'hunter_single':
             this.shootBurst3(gameEngine, targetX, targetY);
@@ -132,6 +138,10 @@ export function shoot(gameEngine) {
         default:
             this.shootAimed(gameEngine, targetX, targetY);
             break;
+    }
+
+    } finally {
+        gameEngine._activeShotPattern = null;
     }
 }
 

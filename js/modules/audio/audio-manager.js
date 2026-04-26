@@ -17,7 +17,9 @@ export class AudioManager {
         this.soundThrottles = new Map(); // Track last play time for each sound
         this.minSoundInterval = 50; // Minimum 50ms between same sound effects
         
-        // Track which sounds are enabled
+        // Track which sounds are enabled. The original 9 are listed
+        // explicitly so the SFX-tab toggle UI shows their stable order;
+        // the rest get auto-enabled when init() runs (see below).
         this.soundEnabled = {
             shoot: true,
             hit: true,
@@ -27,7 +29,7 @@ export class AudioManager {
             playerExplosion: true,
             tractorBeam: true,
             shield: true,
-            healthRegen: true // Added health regeneration sound
+            healthRegen: true,
         };
     }
     
@@ -93,6 +95,127 @@ export class AudioManager {
                 sample_size: 8
             },
 
+            // ── Player damage SFX ─────────────────────────────────────────
+            // playerHitAsteroid: low rocky thud (noise wave, fast decay)
+            playerHitAsteroid: {
+                wave_type: 3, // Noise
+                p_base_freq: 0.18,
+                p_freq_ramp: -0.25,
+                p_env_attack: 0,
+                p_env_sustain: 0.08,
+                p_env_decay: 0.22,
+                p_lpf_freq: 0.4,
+                sound_vol: 0.32,
+                sample_rate: 44100,
+                sample_size: 8
+            },
+            // playerHitEnemy: sharper metallic clang (square + arp)
+            playerHitEnemy: {
+                wave_type: 0, // Square
+                p_base_freq: 0.42,
+                p_freq_ramp: -0.18,
+                p_env_attack: 0,
+                p_env_sustain: 0.05,
+                p_env_decay: 0.18,
+                p_arp_mod: -0.4,
+                p_arp_speed: 0.7,
+                p_hpf_freq: 0.1,
+                sound_vol: 0.28,
+                sample_rate: 44100,
+                sample_size: 8
+            },
+
+            // ── Enemy bullet HIT-PLAYER SFX (one per shootPattern) ────────
+            // Triggered when a bullet of that pattern actually damages player.
+            enemyHit_hunter_single: {
+                wave_type: 0, p_base_freq: 0.52, p_freq_ramp: -0.2,
+                p_env_attack: 0, p_env_sustain: 0.04, p_env_decay: 0.12,
+                sound_vol: 0.22, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_guardian_spread: {
+                wave_type: 1, p_base_freq: 0.38, p_freq_ramp: -0.15,
+                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.16,
+                p_arp_mod: 0.3, p_arp_speed: 0.6,
+                sound_vol: 0.24, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_wasp_machinegun: {
+                wave_type: 0, p_base_freq: 0.65, p_freq_ramp: -0.3,
+                p_env_attack: 0, p_env_sustain: 0.02, p_env_decay: 0.08,
+                sound_vol: 0.18, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_charged_laser: {
+                wave_type: 1, p_base_freq: 0.32, p_freq_ramp: 0.2,
+                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.28,
+                p_vib_strength: 0.3, p_vib_speed: 0.8,
+                sound_vol: 0.32, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_arc_lightning: {
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: 0,
+                p_env_attack: 0, p_env_sustain: 0.1, p_env_decay: 0.22,
+                p_hpf_freq: 0.3, p_vib_strength: 0.5, p_vib_speed: 0.9,
+                sound_vol: 0.3, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_missile: {
+                wave_type: 3, p_base_freq: 0.12, p_freq_ramp: -0.1,
+                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.42,
+                p_lpf_freq: 0.3, p_lpf_ramp: -0.2,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_spiral_laser: {
+                wave_type: 1, p_base_freq: 0.48, p_freq_ramp: 0.15,
+                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.18,
+                p_vib_strength: 0.25, p_vib_speed: 0.7,
+                sound_vol: 0.24, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_sentinel_sweep: {
+                wave_type: 0, p_base_freq: 0.44, p_freq_ramp: -0.12,
+                p_env_attack: 0, p_env_sustain: 0.05, p_env_decay: 0.14,
+                p_arp_mod: -0.2, p_arp_speed: 0.5,
+                sound_vol: 0.22, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_lay_mine: {
+                wave_type: 3, p_base_freq: 0.15, p_freq_ramp: -0.05,
+                p_env_attack: 0, p_env_sustain: 0.22, p_env_decay: 0.5,
+                p_lpf_freq: 0.25,
+                sound_vol: 0.4, sample_rate: 44100, sample_size: 8
+            },
+            enemyHit_sweep_laser: {
+                wave_type: 1, p_base_freq: 0.28, p_freq_ramp: 0.1,
+                p_env_attack: 0.05, p_env_sustain: 0.22, p_env_decay: 0.32,
+                p_vib_strength: 0.4, p_vib_speed: 0.5,
+                sound_vol: 0.32, sample_rate: 44100, sample_size: 8
+            },
+
+            // ── Player bullet HIT-ENEMY SFX (one per primary weapon) ──────
+            // Triggered when a bullet of that weapon hits an enemy.
+            playerHit_PULSE_CANNON: {
+                wave_type: 0, p_base_freq: 0.55, p_freq_ramp: -0.25,
+                p_env_attack: 0, p_env_sustain: 0.03, p_env_decay: 0.12,
+                sound_vol: 0.22, sample_rate: 44100, sample_size: 8
+            },
+            playerHit_STORM_NEEDLES: {
+                wave_type: 0, p_base_freq: 0.72, p_freq_ramp: -0.35,
+                p_env_attack: 0, p_env_sustain: 0.015, p_env_decay: 0.06,
+                sound_vol: 0.13, sample_rate: 44100, sample_size: 8
+            },
+            playerHit_SCATTER_GUN: {
+                wave_type: 3, p_base_freq: 0.35, p_freq_ramp: -0.18,
+                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.18,
+                p_lpf_freq: 0.5,
+                sound_vol: 0.3, sample_rate: 44100, sample_size: 8
+            },
+            playerHit_RAIL_DRIVER: {
+                wave_type: 0, p_base_freq: 0.22, p_freq_ramp: -0.15,
+                p_env_attack: 0, p_env_sustain: 0.1, p_env_decay: 0.3,
+                p_arp_mod: -0.3, p_arp_speed: 0.55,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8
+            },
+            playerHit_LANCE_BEAM: {
+                wave_type: 1, p_base_freq: 0.5, p_freq_ramp: 0.05,
+                p_env_attack: 0.02, p_env_sustain: 0.06, p_env_decay: 0.14,
+                p_vib_strength: 0.2, p_vib_speed: 0.8, p_hpf_freq: 0.15,
+                sound_vol: 0.18, sample_rate: 44100, sample_size: 8
+            },
         };
         
         // Customize specific sounds further
@@ -103,6 +226,13 @@ export class AudioManager {
         this.audioCache = {};
         for (const [name, params] of Object.entries(this.sounds)) {
             this.audioCache[name] = params;
+            // Auto-enable any sound not already in soundEnabled. Lets new
+            // SFX (player-hit-asteroid, enemyHit_*, playerHit_*, etc.) play
+            // immediately without manual roster updates. Original sounds
+            // keep their explicit ordering for the SFX-toggle UI.
+            if (!(name in this.soundEnabled)) {
+                this.soundEnabled[name] = true;
+            }
         }
     }
     

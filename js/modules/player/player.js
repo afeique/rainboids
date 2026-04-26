@@ -24,7 +24,7 @@ export class Player {
         this.lastBlinkTime = 0;
         
         // Critical hit system
-        this.baseCritChance = 5; // 5% base critical hit chance
+        this.baseCritChance = 8; // 8% base critical hit chance (visibly noticeable on Storm Needles spam)
         this.baseCritDamage = 200; // 200% base critical hit damage (2x)
         
         // WASD + Mouse controls
@@ -79,6 +79,13 @@ export class Player {
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
         this.ownedSkills = new Set();
+
+        // Streak buff — set by combat-manager.onEnemyKill when the kill
+        // streak crosses a tier threshold. Drives damage multiplier and the
+        // streak indicator HUD. 1.0 = no buff, 1.5 = EMPOWERED, 2.0 = UNSTOPPABLE.
+        this.streakDamageMult = 1;
+        this.streakBuffEndTime = 0;
+        this.streakTierLabel = null;
 
         // Defense skill slots (number keys 1-4)
         this.skillSlots = [null, null, null, null];
@@ -260,6 +267,9 @@ export class Player {
     applyGlobalBulletUpgrades(bullet) {
         return weapons.applyGlobalBulletUpgrades.call(this, bullet);
     }
+
+    // ── Weapon bindings ──
+    getBulletVelocityDamageMult(id)     { return weapons.getBulletVelocityDamageMult.call(this, id); }
 
     firePower(bulletPool, audioManager, particlePool) {
         return weapons.firePower.call(this, bulletPool, audioManager, particlePool);

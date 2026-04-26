@@ -1592,27 +1592,10 @@ export function drawHealthBar(ctx) {
     ctx.fillText(healthNumber, numberX, numberY);
     */
 
-    // Center the health bar under the ship name
+    // Center the raw health bar under the enemy. HP numbers / name / level
+    // are now shown only at the top-center of the screen for the most
+    // recently hit enemy (see hud/combat.js drawTargetInfo).
     const barX = this.x - barWidth / 2;
-
-    // Health text above the bar: "6/9"
-    const displayHealth = this.health > 0 && this.health < 1 ? 1 : Math.round(this.health);
-    const healthText = `${displayHealth}/${Math.round(this.maxHealth)}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-
-    // OPT: double-draw glow instead of shadowBlur
-    // First pass: slightly larger font at low alpha for glow
-    ctx.globalAlpha = 0.4;
-    ctx.font = '9px "Press Start 2P", monospace';
-    ctx.fillStyle = 'goldenrod';
-    ctx.fillText(healthText, this.x, barY - 6);
-
-    // Second pass: crisp text on top at full alpha
-    ctx.globalAlpha = 1.0;
-    ctx.font = '8px "Press Start 2P", monospace';
-    ctx.fillStyle = 'goldenrod';
-    ctx.fillText(healthText, this.x, barY - 6);
 
     // Health calculation
     const healthPercentage = this.health / this.maxHealth;

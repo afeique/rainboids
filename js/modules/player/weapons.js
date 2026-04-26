@@ -2,21 +2,42 @@
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
 import { GAME_CONFIG } from '../core/constants.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES } from '../combat/weapon-data.js';
 import { autofireDiag } from '../autofire-diag.js';
 
-// ── Charging / auto-fire loop ──────────────────────────────────────────────
+// ── Velocity-and-damage upgrade helper ────────────────────────────────────
+// Per-weapon "high-velocity rounds"-style upgrade: each stack adds the same
+// percentage to bullet speed AND damage. Weapons declare their bonus per
+// stack in PRIMARY_UPGRADES via `velocityBonus` on the upgrade entry.
+// Returns 1.0 with no stacks. Additive across stacks (3 stacks @ 0.12 = 1.36).
+export function getBulletVelocityDamageMult(weaponId) {
+    const cfg = PRIMARY_WEAPONS[weaponId || this.activePrimary];
+    if (!cfg || !cfg.upgrades) return 1.0;
+    let bonus = 0;
+    for (const upgId of cfg.upgrades) {
+        const upg = PRIMARY_UPGRADES[upgId];
+        if (upg && upg.velocityBonus) {
+            bonus += upg.velocityBonus * this.getPowerupStacks(upgId);
+        }
+    }
+    return 1 + bonus;
+}
+
+// ── Charging / fire loop ───────────────────────────────────────────────────
 
 export function updateChargingSystem(input, bulletPool, audioManager, particlePool) {
     const now = Date.now();
     const dt = 1000 / GAME_CONFIG.LOGIC_HZ; // ms per tick
     this.updateSkillCooldowns(dt);
 
-    // ── Primary weapon: auto-fire on cooldown ──
-    // Uses Date.now() — immune to tick-rate variation.
+    // ── Primary weapon: fires while LEFT-CLICK is held, gated only by
+    //    fire-rate now. Clips were removed — unlimited continuous fire,
+    //    weapon distinction comes from fire rate / damage / spread alone.
     const effectiveFireRate = this.getEffectivePrimaryFireRate();
     const timeSinceLastShot = now - this.lastShotTime;
-    this.canShoot = timeSinceLastShot >= effectiveFireRate;
+    const cooldownReady = timeSinceLastShot >= effectiveFireRate;
+    const fireHeld = !!(input && input.fire);
+    this.canShoot = cooldownReady && fireHeld;
     const poolBefore = bulletPool.activeObjects.length;
     let bulletCreated = false;
     if (this.canShoot) {
@@ -26,7 +47,7 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
             this.firePrimary(bulletPool, audioManager, particlePool);
             bulletCreated = bulletPool.activeObjects.length > poolBefore;
         } catch (e) {
-            console.error('[AUTO-FIRE] firePrimary threw:', e.message, e.stack);
+            console.error('[FIRE] firePrimary threw:', e.message, e.stack);
         }
     }
 
@@ -333,6 +354,26 @@ export function applyGlobalBulletUpgrades(bullet) {
     // Range
     bullet.rangeMultiplier = (bullet.rangeMultiplier || 1) * this.getRangeMultiplier();
 
+    // Velocity-and-damage upgrade — applies to BOTH bullet velocity and
+    // damage by the same factor. Velocity adjustment scales the existing
+    // vel components in place; weapons that don't have linear velocity
+    // (LANCE_BEAM) just see the damage multiplier.
+    const velMult = this.getBulletVelocityDamageMult();
+    if (velMult !== 1) {
+        bullet.damage *= velMult;
+        if (typeof bullet.vel?.x === 'number') bullet.vel.x *= velMult;
+        if (typeof bullet.vel?.y === 'number') bullet.vel.y *= velMult;
+    }
+
+    // Streak buff — granted by 3+ consecutive enemy kills. Multiplier
+    // tier is set in player.streakDamageMult (combat-manager.js manages it).
+    // Apply BEFORE crit so multipliers compound and the popup can tag both.
+    const streakMult = this.streakDamageMult || 1;
+    if (streakMult > 1) {
+        bullet.damage *= streakMult;
+        bullet.isEmpowered = true;
+    }
+
     // Crit
     const critChance = this.getEffectiveCritChance();
     if (Math.random() * 100 < critChance) {
@@ -386,7 +427,9 @@ export function firePower(bulletPool, audioManager, particlePool) {
             break;
     }
 
-    this.powerCooldown = config.cooldown;
+    // Each weapon's fire fn sets its own cooldown with discount applied
+    // (see fireNova / fireLightning / fireMissiles / layMine). We do NOT
+    // overwrite here — that would cancel the upgrade.
     audioManager.playShoot();
 
     // Heavy muzzle flare for power weapons
@@ -414,6 +457,12 @@ export function layMine(config) {
         daisyChain: this.getPowerupStacks('DAISY_CHAIN') > 0,
         active: true,
     });
+
+    // RAPID_DEPLOY: -25% cooldown per stack, floor at 1.5s so it can't be
+    // spammed every frame (4s base → 3s @1 stack → 2.25s @2 stacks).
+    const rapidDeployStacks = this.getPowerupStacks('RAPID_DEPLOY');
+    const reduction = Math.pow(0.75, rapidDeployStacks);
+    this.powerCooldown = Math.max(1500, config.cooldown * reduction);
 }
 
 export function fireNova(config) {
@@ -684,16 +733,15 @@ export function fireChargedShot(bulletPool, audioManager) {
     // Get charge damage upgrade stacks
     const chargeDamageStacks = this.getPowerupStacks('CHARGE_POWER');
 
-    // Calculate base charge damage (1 base + upgrades)
-    const baseDamage = 1 + chargeDamageStacks;
-
-    // Direct proportional scaling based on milliseconds
-    const sizeMultiplier = 1 + (chargeTime / 1000) * 0.4; // +0.4x per second, max 3x at 5s
-    const speedMultiplier = 1 + (chargeTime / 1000) * 0.2; // +0.2x per second, max 2x at 5s
-    const damageBonus = (chargeTime / 1000) * 1.2; // +1.2 per second, so 1+6=7 at 5s
-    const totalDamage = baseDamage + damageBonus; // Base damage + charge bonus
-
-    const critChanceBonus = (chargeTime / 1000) * 0.08; // +8% crit per second, max 40% at 5s
+    // Power-weapon balance pass: charge shot was the worst offender at ~7
+    // base + 6 from upgrades = one-shotting most enemies. Halved the damage
+    // scaling, kept the visual scaling for game-feel.
+    const baseDamage = 1 + chargeDamageStacks * 0.5;          // +0.5/stack (was +1)
+    const sizeMultiplier = 1 + (chargeTime / 1000) * 0.4;     // unchanged — visual feel
+    const speedMultiplier = 1 + (chargeTime / 1000) * 0.2;    // unchanged
+    const damageBonus = (chargeTime / 1000) * 0.6;            // +0.6/sec (was +1.2) → ~3 at 5s
+    const totalDamage = baseDamage + damageBonus;
+    const critChanceBonus = (chargeTime / 1000) * 0.04;       // +4%/sec (was +8%), max 20% at 5s
 
     // Calculate charge-based homing strength (base homing from charge time)
     const baseHomingStrength = Math.min(0.15, (chargeTime / 1000) * 0.03); // +0.03 per second, max 0.15 at 5s
@@ -810,6 +858,10 @@ export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultip
 
         const bullet = bulletPool.get(this.x, this.y, angle);
         if (bullet) {
+            // Tag with the active weapon ID so the collision handler can
+            // play the per-weapon hit SFX (audio-manager.js).
+            bullet.weaponId = this.activePrimary;
+
             // Apply range multiplier (charged shots get modest bonus range)
             bullet.rangeMultiplier = this.getRangeMultiplier() * Math.max(1, speedMultiplier * 0.5);
 

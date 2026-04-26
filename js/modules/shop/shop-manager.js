@@ -130,31 +130,12 @@ export function _rebuildShopCache() {
 }
 
 export function _buildPrimaryTabItems() {
-        // Build items list: primary weapons (buy/equip) + currently equipped weapon's upgrades
+        // PRIMARY tab now shows ONLY upgrades for the currently equipped
+        // primary weapon. Weapon SELECTION moved to the pause-menu PRIMARY
+        // tab (see ui-manager.updatePrimaryTab). Switching the equipped
+        // weapon there causes _rebuildShopCache to repopulate this list
+        // with the new weapon's upgrades.
         const items = [];
-        for (const weapon of Object.values(PRIMARY_WEAPONS)) {
-            const owned = this.player && this.player.ownedPrimaries && this.player.ownedPrimaries.has(weapon.id);
-            const equipped = this.player && this.player.activePrimary === weapon.id;
-            // Hide weapons that haven't reached their unlock wave yet (and aren't owned)
-            const locked = !owned && weapon.unlockWave > 0 && this.game.currentWave < weapon.unlockWave;
-            if (locked) continue;
-            items.push({
-                id: weapon.id,
-                name: weapon.name,
-                description: weapon.description,
-                icon: weapon.icon,
-                cost: weapon.cost,
-                spCost: weapon.spCost,
-                maxStacks: 1,
-                category: 'PRIMARY',
-                currency: weapon.cost > 0 ? 'COINS' : 'FREE',
-                isWeapon: true,
-                weaponType: 'primary',
-                owned,
-                equipped,
-            });
-        }
-        // Add upgrades for currently equipped primary
         if (this.player && this.player.activePrimary) {
             const upgrades = getPrimaryUpgrades(this.player.activePrimary);
             for (const upg of upgrades) {
@@ -176,27 +157,12 @@ export function _buildPrimaryTabItems() {
 }
 
 export function _buildPowerTabItems() {
+        // POWER tab now shows ONLY upgrades for the currently equipped
+        // power weapon. Weapon SELECTION moved to the pause-menu POWER tab
+        // (see ui-manager.updatePowerTab). Switching the equipped weapon
+        // there causes _rebuildShopCache to repopulate this list with the
+        // new weapon's upgrades.
         const items = [];
-        for (const weapon of Object.values(POWER_WEAPONS)) {
-            const owned = this.player && this.player.ownedPowers && this.player.ownedPowers.has(weapon.id);
-            const equipped = this.player && this.player.activePower === weapon.id;
-            items.push({
-                id: weapon.id,
-                name: weapon.name,
-                description: weapon.description,
-                icon: weapon.icon,
-                cost: weapon.cost,
-                spCost: weapon.spCost,
-                maxStacks: 1,
-                category: 'POWER',
-                currency: weapon.cost > 0 ? 'COINS' : 'FREE',
-                isWeapon: true,
-                weaponType: 'power',
-                owned,
-                equipped,
-            });
-        }
-        // Add upgrades for currently equipped power weapon
         if (this.player && this.player.activePower) {
             const upgrades = getPowerUpgrades(this.player.activePower);
             for (const upg of upgrades) {
@@ -377,30 +343,18 @@ export function buyShopItem(itemId) {
 }
 
 export function _handleWeaponBuyOrEquip(item) {
-        // Block purchase of wave-locked weapons
-        if (item.weaponType === 'primary') {
-            const weaponDef = PRIMARY_WEAPONS[item.id];
-            if (weaponDef && weaponDef.unlockWave > 0 &&
-                this.game.currentWave < weaponDef.unlockWave &&
-                !this.player.ownedPrimaries.has(item.id)) {
-                return false;
-            }
-        }
-
+        // Wave-gating removed — every weapon is purchasable from wave 1.
+        // Equip happens in the PAUSE MENU now (PRIMARY / POWER tabs), not in
+        // the shop. Shop is buy-only for power weapons; primary weapons no
+        // longer appear in the shop at all (they're free in the pause menu).
         const isOwned = item.weaponType === 'primary'
             ? this.player.ownedPrimaries.has(item.id)
             : this.player.ownedPowers.has(item.id);
 
         if (isOwned) {
-            // Equip the weapon
-            if (item.weaponType === 'primary') {
-                this.player.equipPrimary(item.id);
-            } else {
-                this.player.equipPower(item.id);
-            }
-            this._rebuildShopCache();
-            this.events.emit('audio:coin');
-            return true;
+            // Already owned — clicking does nothing in the shop. The player
+            // switches active weapons in the pause menu.
+            return false;
         }
 
         // Purchase: check dual cost (coins + SP)

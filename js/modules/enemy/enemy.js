@@ -946,7 +946,11 @@ export class Enemy {
         // Draw health bar (outside of transform)
         this.drawHealthBar(ctx);
 
-        // Draw level + name label BENEATH the enemy (only after first hit)
+        // Level + name label BENEATH the enemy is intentionally disabled —
+        // this info now lives only in the top-center info panel (see
+        // hud/combat.js drawTargetInfo). Keeping the block as a comment for
+        // reference rather than deleting outright.
+        /*
         if (showEnemyNames() && this.health < this.maxHealth) {
             ctx.save();
             ctx.textBaseline = 'top';
@@ -963,11 +967,8 @@ export class Enemy {
             const startX = this.x - (lvWidth + numWidth + nameWidth) / 2;
             const textY  = this.y + this.radius + 10;
 
-            // OPT: double-draw glow instead of shadowBlur
-            // First pass: slightly larger font at low alpha for glow
             ctx.globalAlpha = 0.4;
             ctx.font = '14px "Silkscreen", monospace';
-
             ctx.fillStyle = '#ffffff';
             ctx.fillText(lvText, startX, textY);
             ctx.fillStyle = '#88ccff';
@@ -975,21 +976,18 @@ export class Enemy {
             ctx.fillStyle = 'goldenrod';
             ctx.fillText(nameText, startX + lvWidth + numWidth, textY);
 
-            // Second pass: crisp text on top at full alpha
             ctx.globalAlpha = 1.0;
             ctx.font = '13px "Silkscreen", monospace';
-
-            ctx.fillStyle = '#ffffff';   // "LV" — white
+            ctx.fillStyle = '#ffffff';
             ctx.fillText(lvText, startX, textY);
-
-            ctx.fillStyle = '#88ccff';   // level number — light blue
+            ctx.fillStyle = '#88ccff';
             ctx.fillText(numText, startX + lvWidth, textY);
-
-            ctx.fillStyle = 'goldenrod'; // enemy name — goldenrod
+            ctx.fillStyle = 'goldenrod';
             ctx.fillText(nameText, startX + lvWidth + numWidth, textY);
 
             ctx.restore();
         }
+        */
     }
     
     drawLaserTargetingLine(ctx) { return shapes.drawLaserTargetingLine.call(this, ctx); }
@@ -1042,15 +1040,17 @@ export class Enemy {
     
     hasLineOfSight(target, gameEngine) { return ai.hasLineOfSight.call(this, target, gameEngine); }
     
-    takeDamage(damage) {
+    takeDamage(damage, opts = {}) {
+        // opts: { isCrit?: bool, isEmpowered?: bool }
         // Invulnerable during warp-in or death flash
         if (this.warping || this._deathFlash > 0) return false;
 
         this.health -= damage;
-        
-        // Create damage number
+
+        // Create damage number — pass through crit/empowered flags so the
+        // popup renders distinctly (bigger font, hot color, "CRIT!" label).
         if (this.gameEngine) {
-            this.gameEngine.createDamageNumber(this.x, this.y - this.radius, damage);
+            this.gameEngine.createDamageNumber(this.x, this.y - this.radius, damage, opts);
         }
         
         // Safeguard: clamp health between 0 and maxHealth

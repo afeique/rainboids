@@ -69,10 +69,12 @@
 
             <div class="pause-tabs">
                 <button class="pause-tab active" data-tab="controls">CONTROLS</button>
+                <button class="pause-tab" data-tab="primary">PRIMARY</button>
+                <button class="pause-tab" data-tab="power">POWER</button>
+                <button class="pause-tab" data-tab="skills">SKILLS</button>
                 <button class="pause-tab" data-tab="powerups">POWERUPS</button>
                 <button class="pause-tab" data-tab="music">MUSIC</button>
                 <button class="pause-tab" data-tab="sfx">SFX</button>
-                <button class="pause-tab" data-tab="skills">SKILLS</button>
             </div>
 
             <div id="controls-tab" class="pause-tab-content active">
@@ -84,6 +86,22 @@
                 </div>
             </div>
             
+            <div id="primary-tab" class="pause-tab-content">
+                <h2>PRIMARY WEAPON</h2>
+                <div style="margin-bottom: 15px; color: #aaa; font-size: 12px;">Click a weapon to equip it</div>
+                <div id="primary-weapon-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                    <!-- Populated dynamically by ui-manager.updatePrimaryTab() -->
+                </div>
+            </div>
+
+            <div id="power-tab" class="pause-tab-content">
+                <h2>POWER WEAPON</h2>
+                <div style="margin-bottom: 15px; color: #aaa; font-size: 12px;">Click a weapon to equip it</div>
+                <div id="power-weapon-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                    <!-- Populated dynamically by ui-manager.updatePowerTab() -->
+                </div>
+            </div>
+
             <div id="powerups-tab" class="pause-tab-content">
                 <h2>ACTIVE POWERUPS</h2>
                 <div id="powerups-list" style="max-height: 300px; overflow-y: auto; margin-top: 20px;">

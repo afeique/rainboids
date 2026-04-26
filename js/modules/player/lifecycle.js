@@ -9,6 +9,11 @@ export function takeDamage(damageAmount = this.baseDamage) {
     const reducedDamage = damageAmount * (1 - effectiveShield / 100);
     this.player.health = Math.max(0, this.player.health - reducedDamage);
 
+    // Any actual HP loss breaks the kill streak. Bulwark-reduced hits still
+    // count (they still hit HP). Phase Dash never reaches here because the
+    // invincible check above blocks the call entirely.
+    if (reducedDamage > 0) this._breakKillStreak();
+
     if (this.player.health <= 0) {
         if (this.shieldTanks > 0) {
             this.shieldTanks--;

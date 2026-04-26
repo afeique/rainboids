@@ -1,5 +1,5 @@
 // Auto-generated playlist data
-// Generated on 2025-09-18T04:05:24.625Z
+// Generated on 2026-04-26T13:03:28.744Z
 
 export const PLAYLIST_DATA = [
   {
@@ -35,6 +35,11 @@ export const PLAYLIST_DATA = [
   {
     "path": "music/bat-caves-icy-glades.mp3",
     "name": "bat caves, icy glades",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/between-four-seasons.mp3",
+    "name": "between four seasons",
     "artist": "afeique"
   },
   {
@@ -133,6 +138,11 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/epsilon-vector.mp3",
+    "name": "epsilon vector",
+    "artist": "afeique"
+  },
+  {
     "path": "music/etude-of-madness.mp3",
     "name": "etude of madness",
     "artist": "afeique"
@@ -214,7 +224,7 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/people-are-not-scary.mp3",
-    "name": "People Aren't Scary",
+    "name": "people aren't scary",
     "artist": "afeique"
   },
   {
@@ -231,6 +241,21 @@ export const PLAYLIST_DATA = [
     "path": "music/salvation.mp3",
     "name": "Salvation",
     "artist": "Karl Casey"
+  },
+  {
+    "path": "music/sigma-tau.mp3",
+    "name": "sigma tau",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/sonata-of-a-season.mp3",
+    "name": "sonata of a season",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/sonata-of-reason.mp3",
+    "name": "sonata of reason",
+    "artist": "afeique"
   },
   {
     "path": "music/sparkly-glass-cannon.mp3",
@@ -258,6 +283,16 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/the-time-is-now.mp3",
+    "name": "the time is now",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/ultima-negato.mp3",
+    "name": "ultima negato",
+    "artist": "afeique"
+  },
+  {
     "path": "music/violencia.mp3",
     "name": "Violencia",
     "artist": "afeique"
@@ -271,6 +306,11 @@ export const PLAYLIST_DATA = [
     "path": "music/world-eater.mp3",
     "name": "World Eater",
     "artist": "Karl Casey"
+  },
+  {
+    "path": "music/zeta-nine.mp3",
+    "name": "zeta nine",
+    "artist": "afeique"
   },
   {
     "path": "music/zypher.mp3",

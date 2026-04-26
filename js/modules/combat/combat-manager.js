@@ -1,7 +1,7 @@
 // Combat effects, debris, orb drops, powerup collection, damage numbers, kill streaks
 import { GAME_CONFIG, GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
-import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES } from './weapon-data.js';
+import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION } from './weapon-data.js';
 
 // ── Asteroid Debris ──
 
@@ -530,18 +530,32 @@ export function onEnemyKill(enemy) {
     this.killStreakCount++;
     this.killStreakTimer = Date.now();
 
-    const streakMessages = {
-        3: 'TRIPLE KILL',
-        5: 'RAMPAGE',
-        8: 'UNSTOPPABLE',
-        12: 'GODLIKE',
-        20: 'LEGENDARY'
-    };
-
-    if (streakMessages[this.killStreakCount]) {
-        this.queueNotification(streakMessages[this.killStreakCount],
-            `+${this.killStreakCount * 10} bonus coins`, 2000);
+    // Coin bonuses on streak milestones (separate from damage tiers).
+    const coinMilestones = { 3: true, 5: true, 8: true, 12: true, 20: true };
+    if (coinMilestones[this.killStreakCount]) {
         this.game.money += this.killStreakCount * 10;
+    }
+
+    // Streak damage buff — pick the highest tier the player has reached and
+    // (re)apply its multiplier + duration. Each new kill while a buff is
+    // active refreshes the timer so sustained streaks stay buffed.
+    if (this.player) {
+        let tier = null;
+        for (const t of STREAK_TIERS) {
+            if (this.killStreakCount >= t.kills) tier = t;
+        }
+        if (tier) {
+            const wasNewTier = this.player.streakTierLabel !== tier.label;
+            this.player.streakDamageMult = tier.mult;
+            this.player.streakBuffEndTime = Date.now() + STREAK_BUFF_DURATION;
+            this.player.streakTierLabel = tier.label;
+            // Notification fires only when crossing INTO a higher tier so
+            // we don't spam every kill.
+            if (wasNewTier) {
+                this.queueNotification(tier.label,
+                    `+${Math.round((tier.mult - 1) * 100)}% damage`, 1800);
+            }
+        }
     }
 
     const milestones = { 1: 'FIRST BLOOD', 25: '25 KILLS', 50: 'HALF CENTURY',
@@ -553,20 +567,33 @@ export function onEnemyKill(enemy) {
 }
 
 export function updateKillStreak() {
-    if (this.killStreakTimer && Date.now() - this.killStreakTimer > 3000) {
-        this.killStreakCount = 0;
+    const now = Date.now();
+    // Streak buff decays after STREAK_BUFF_DURATION ms with no fresh kill.
+    // The streak COUNT itself does NOT decay — it only resets on damage
+    // (see _breakKillStreak in game-engine.js, hooked from the player damage
+    // paths in lifecycle.js + collision-system.js).
+    if (this.player && this.player.streakDamageMult > 1 &&
+        now > this.player.streakBuffEndTime) {
+        this.player.streakDamageMult = 1;
+        this.player.streakTierLabel = null;
     }
 }
 
 // ── Damage Numbers ──
 
-export function createDamageNumber(x, y, damage) {
+export function createDamageNumber(x, y, damage, opts = {}) {
+    // opts: { isCrit?: bool, isEmpowered?: bool }
+    // Crit numbers render with a bigger font, hot color, and a "CRIT!" tag in
+    // hud/combat.js drawDamageNumbers. Empowered (perfect-reload buff) uses a
+    // different highlight on top of the base/crit treatment.
     const damageNumber = {
         x: x,
         y: y,
         damage: Math.round(damage),
         life: 1.0,
         maxLife: 1.5,
+        isCrit: !!opts.isCrit,
+        isEmpowered: !!opts.isEmpowered,
         vel: {
             x: (Math.random() - 0.5) * 2,
             y: -2 - Math.random() * 2

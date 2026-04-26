@@ -314,6 +314,10 @@ export class UIManager {
 
             // Update controls tab for platform (mobile vs desktop)
             this.updateControlsTab();
+
+            // Refresh weapon-equip tabs so the EQUIPPED badge stays current.
+            this.updatePrimaryTab();
+            this.updatePowerTab();
         }
         return !isPaused;
     }
@@ -326,10 +330,140 @@ export class UIManager {
             <h2>CONTROLS</h2>
             <div class="control-list">
                 <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
-                <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
+                <div><span class="control-symbol">MOUSE</span> Aim</div>
+                <div><span class="control-symbol">LEFT-CLICK</span> Fire primary weapon (hold to keep firing)</div>
+                <div><span class="control-symbol">RIGHT-CLICK</span> or <span class="control-symbol">SPACE</span> Fire / charge power weapon</div>
+                <div><span class="control-symbol">1</span> &ndash; <span class="control-symbol">4</span> Activate equipped defense skill</div>
                 <div>ESC or P to Pause / Resume</div>
             </div>
         `;
+    }
+
+    // ── Pause-menu PRIMARY tab ─────────────────────────────────────────────
+    // Lists every primary weapon. Click a row to equip it. Primaries are
+    // free and always available — no `ownedPrimaries` gating.
+    //
+    // All DOM is built with createElement / textContent (no innerHTML) to
+    // keep XSS risk impossible even if a future weapon-data entry contains
+    // markup-flavored characters.
+    updatePrimaryTab() {
+        const list = document.getElementById('primary-weapon-list');
+        if (!list) return;
+        const player = this.gameEngine && this.gameEngine.player;
+        if (!player) return;
+        const PRIMARY = this.gameEngine.PRIMARY_WEAPONS_LIST;
+        if (!PRIMARY) {
+            list.replaceChildren();
+            const placeholder = document.createElement('div');
+            placeholder.style.color = '#888';
+            placeholder.textContent = 'Weapon list unavailable.';
+            list.appendChild(placeholder);
+            return;
+        }
+        list.replaceChildren();
+        for (const id of Object.keys(PRIMARY)) {
+            const equipped = player.activePrimary === id;
+            list.appendChild(this._buildWeaponRow(PRIMARY[id], id, equipped, '#00ccff', () => {
+                if (player.ownedPrimaries && !player.ownedPrimaries.has(id)) {
+                    player.ownedPrimaries.add(id);
+                }
+                player.equipPrimary(id);
+                this.updatePrimaryTab();
+            }));
+        }
+    }
+
+    // ── Pause-menu POWER tab ───────────────────────────────────────────────
+    // Lists every power weapon. Click a row to equip it. Powers are now
+    // free and always available — same model as primaries. Upgrades are
+    // still purchased in the shop's POWER tab (which surfaces the upgrades
+    // for whichever power is currently equipped).
+    updatePowerTab() {
+        const list = document.getElementById('power-weapon-list');
+        if (!list) return;
+        const player = this.gameEngine && this.gameEngine.player;
+        if (!player) return;
+        const POWER = this.gameEngine.POWER_WEAPONS_LIST;
+        if (!POWER) {
+            list.replaceChildren();
+            return;
+        }
+        list.replaceChildren();
+        for (const id of Object.keys(POWER)) {
+            const equipped = player.activePower === id;
+            list.appendChild(this._buildWeaponRow(POWER[id], id, equipped, '#ffaa00', () => {
+                // Auto-add to ownedPowers (set still gates equipPower).
+                if (player.ownedPowers && !player.ownedPowers.has(id)) {
+                    player.ownedPowers.add(id);
+                }
+                player.equipPower(id);
+                this.updatePowerTab();
+            }));
+        }
+    }
+
+    // Shared row builder for both PRIMARY and POWER tabs.
+    // No innerHTML anywhere — every text node is set via textContent.
+    // The click listener wraps `onClick` with stopPropagation BEFORE calling
+    // it, because `onClick` typically re-renders the tab via replaceChildren
+    // — which detaches the clicked row. The bubbling click then reaches the
+    // pause-overlay's dismissOnBackdrop handler, which calls
+    // `e.target.closest('#pause-menu')`. On a detached node closest() walks
+    // a null parent chain and returns null, so the backdrop misclassifies
+    // the click as "outside menu" and toggles pause off. stopPropagation
+    // prevents the bubble entirely.
+    _buildWeaponRow(weaponDef, weaponId, equipped, defaultBorder, onClick) {
+        const accent = (equipped && weaponDef.color) ? weaponDef.color : defaultBorder;
+        const row = document.createElement('div');
+        row.className = 'weapon-row';
+        row.dataset.weaponId = weaponId;
+        row.style.cssText = `
+            display: flex; align-items: center; gap: 14px;
+            padding: 12px 14px; border-radius: 8px; cursor: pointer;
+            background: ${equipped ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.05)'};
+            border: 2px solid ${equipped ? accent : 'rgba(255, 255, 255, 0.15)'};
+            transition: background 0.15s, border-color 0.15s, transform 0.1s;
+        `;
+
+        const iconEl = document.createElement('span');
+        iconEl.style.cssText = 'font-size: 28px; min-width: 36px; text-align: center;';
+        iconEl.textContent = weaponDef.icon || '🔫';
+        row.appendChild(iconEl);
+
+        const body = document.createElement('div');
+        body.style.cssText = 'flex: 1; text-align: left;';
+
+        const nameRow = document.createElement('div');
+        nameRow.style.cssText = `font-size: 14px; color: ${equipped ? accent : '#FFF'}; font-weight: bold;`;
+        nameRow.textContent = weaponDef.name || weaponId;
+        if (equipped) {
+            const badge = document.createElement('span');
+            badge.style.cssText = 'font-size: 10px; color: #00ff88; margin-left: 8px;';
+            badge.textContent = 'EQUIPPED';
+            nameRow.appendChild(badge);
+        }
+        body.appendChild(nameRow);
+
+        const descEl = document.createElement('div');
+        descEl.style.cssText = 'font-size: 11px; color: #aaa; margin-top: 4px; line-height: 1.4;';
+        descEl.textContent = weaponDef.description || '';
+        body.appendChild(descEl);
+
+        row.appendChild(body);
+
+        row.addEventListener('mouseenter', () => {
+            if (!equipped) row.style.background = 'rgba(255, 255, 255, 0.12)';
+            row.style.transform = 'translateY(-1px)';
+        });
+        row.addEventListener('mouseleave', () => {
+            if (!equipped) row.style.background = 'rgba(255, 255, 255, 0.05)';
+            row.style.transform = 'none';
+        });
+        row.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onClick();
+        });
+        return row;
     }
     
     // showTitleScreen() {
@@ -923,6 +1057,10 @@ export class UIManager {
         if (tabName === 'skills') {
             this.populateSkillSlots();
         }
+
+        // Refresh weapon-equip lists when their tabs are opened.
+        if (tabName === 'primary') this.updatePrimaryTab();
+        if (tabName === 'power') this.updatePowerTab();
     }
     
     startMusic() {
