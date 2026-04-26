@@ -55,7 +55,6 @@ export const GAME_CONFIG = {
 
     ENEMY_BULLET_ASTEROID_DAMAGE: 1, // Damage enemy bullets deal to asteroids
     MIN_AST_RAD: 15,
-    MOBILE_SCALE: 0.65,
     
     // Entity limits adjusted for gameplay balance
     MAX_ASTEROIDS: 4, // Allow up to 4 concurrent asteroids for better pacing

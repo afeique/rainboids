@@ -4,10 +4,6 @@ import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES } from '../core/constants.
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 
-function isMobile() {
-    return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
-}
-
 export class ColorStar {
     constructor() {
         this.width = window.innerWidth;
@@ -25,7 +21,7 @@ export class ColorStar {
         this.starType = starType;
         this.isCollectible = (starType === 'health' || starType === 'money');
         
-        let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
+        let scale = 1;
         
         // Radius and twinkle speed are now affected by density
         const densityFactor = 0.7 + (this.density || 0.5) * 0.6;

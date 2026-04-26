@@ -2,10 +2,6 @@
 import { GAME_CONFIG } from '../core/constants.js';
 import { random, wrap } from '../core/utils.js';
 
-function isMobile() {
-    return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
-}
-
 export class BackgroundStar {
     constructor() {
         this.width = window.innerWidth;
@@ -19,7 +15,7 @@ export class BackgroundStar {
         this.z = z;
         this.density = density;
         
-        let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
+        let scale = 1;
         
         // Simple white point stars - larger and more visible
         const densityFactor = 0.5 + (this.density || 0.5) * 0.5;

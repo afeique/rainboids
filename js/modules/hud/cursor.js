@@ -3,8 +3,6 @@
 // so all `this.*` references work exactly as they did as class methods.
 
 export function drawCustomCursor() {
-        // Never show cursor on mobile — touch devices don't have a visible pointer
-        if (this.inputHandler.isMobile()) return;
         if (!this.cursor.x && !this.cursor.y) return; // Don't draw if no mouse position
 
         const ctx = this.ctx;

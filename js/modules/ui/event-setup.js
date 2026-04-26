@@ -87,12 +87,6 @@ export function setupEventListeners() {
         }
     });
 
-    window.addEventListener('touchstart', () => {
-        if (this.game.state === GAME_STATES.GAME_OVER) {
-            this.init();
-        }
-    }, { passive: true });
-
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Enter' && this.game.state === GAME_STATES.GAME_OVER) {
             this.init();
@@ -259,11 +253,8 @@ export function setupEventListeners() {
         }
     });
 
-    // Mouse move tracking for hover effects and cursor (desktop only)
+    // Mouse move tracking for hover effects and cursor.
     this.canvas.addEventListener('mousemove', (e) => {
-            // Skip on mobile — synthetic mouse events from touch must not set cursor
-            if (this.inputHandler && this.inputHandler.isMobile()) return;
-
             const rect = this.canvas.getBoundingClientRect();
             this.mouseX = e.clientX - rect.left;
             this.mouseY = e.clientY - rect.top;
@@ -330,88 +321,4 @@ export function setupEventListeners() {
         }
     }, { passive: false });
 
-    // Mobile touch support for shop
-    let touchStartY = 0;
-    let touchStartScrollOffset = 0;
-
-    this.canvas.addEventListener('touchstart', (e) => {
-        if (this.game.state === GAME_STATES.SHOP) {
-            const rect = this.canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            const touchX = touch.clientX - rect.left;
-            const touchY = touch.clientY - rect.top;
-
-            if (this.shopWindowBounds) {
-                const isOutsideShop = touchX < this.shopWindowBounds.x ||
-                                    touchX > this.shopWindowBounds.x + this.shopWindowBounds.width ||
-                                    touchY < this.shopWindowBounds.y ||
-                                    touchY > this.shopWindowBounds.y + this.shopWindowBounds.height;
-
-                if (isOutsideShop) {
-                    e.preventDefault();
-                    this.closeShop();
-                    return;
-                }
-            }
-
-            touchStartY = touchY;
-            touchStartScrollOffset = this.shopScrollOffset || 0;
-        }
-    }, { passive: false });
-
-    this.canvas.addEventListener('touchmove', (e) => {
-        if (this.game.state === GAME_STATES.SHOP) {
-            e.preventDefault();
-
-            const rect = this.canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            const touchY = touch.clientY - rect.top;
-
-            const deltaY = touchStartY - touchY;
-            if (this.shopScrollOffset === undefined) {
-                this.shopScrollOffset = 0;
-            }
-            this.shopScrollOffset = touchStartScrollOffset + deltaY;
-        }
-    }, { passive: false });
-
-    this.canvas.addEventListener('touchend', (e) => {
-        if (this.game.state === GAME_STATES.SHOP) {
-            e.preventDefault();
-
-            const rect = this.canvas.getBoundingClientRect();
-            const touch = e.changedTouches[0];
-            const touchX = touch.clientX - rect.left;
-            const touchY = touch.clientY - rect.top;
-
-            const scrollDelta = Math.abs((this.shopScrollOffset || 0) - touchStartScrollOffset);
-            if (scrollDelta < 20) {
-                let tappedSell = false;
-                if (this.shopSellButtonBounds) {
-                    for (const sb of this.shopSellButtonBounds) {
-                        if (touchX >= sb.x && touchX <= sb.x + sb.w &&
-                            touchY >= sb.y && touchY <= sb.y + sb.h) {
-                            this.sellShopItem(sb.itemId);
-                            tappedSell = true;
-                            break;
-                        }
-                    }
-                }
-                if (!tappedSell && this.shopItemBounds) {
-                    for (const bound of this.shopItemBounds) {
-                        if (touchX >= bound.x && touchX <= bound.x + bound.width &&
-                            touchY >= bound.y && touchY <= bound.y + bound.height) {
-                            const success = this.buyShopItem(bound.item.id);
-                            if (success) {
-                                this._shopFlash = { time: performance.now(), color: 'rgba(0, 255, 128, 0.15)' };
-                            } else {
-                                this._shopFlash = { time: performance.now(), color: 'rgba(255, 60, 60, 0.2)' };
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    });
 }

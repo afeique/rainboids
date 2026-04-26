@@ -28,8 +28,9 @@ Rainboids is a supercharged asteroids game featuring:
 
 ## Controls
 
-### Desktop
-- **Movement**: WASD
+Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones and tablets see a "desktop only" splash and the game does not initialize.
+
+- **Movement**: WASD or arrow keys
 - **Aim**: Mouse cursor (ship faces cursor)
 - **Fire**: Auto-fire while mouse button held
 - **Power weapon**: Right-click
@@ -38,12 +39,6 @@ Rainboids is a supercharged asteroids game featuring:
 - **Weapon cycling**: Q/E or scroll wheel
 - **Pause**: Escape
 - **Shop**: Click shop button or use pause menu
-
-### Mobile (partial — movement only)
-- **Movement**: Touch and drag (dynamic joystick appears at touch point)
-- **Pause**: Touch pause button (top-right)
-
-> Mobile touch controls currently support movement only. Aiming, firing, abilities, and weapon switching are not yet available on touch devices. A full dual-stick control system is planned — see [SKU_deployment.md](docs/SKU_deployment.md#mobile-touch-controls) for details.
 
 ### Cheat Codes
 - **SHIFT+1-8**: Spawn individual enemy types
@@ -339,12 +334,12 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │       │   └── music-player.js #  Background music player with playlist
 │       ├── ui/                # DOM UI and input
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button, lives)
-│       │   ├── input-handler.js # Keyboard, mouse, and touch input
+│       │   ├── input-handler.js # Keyboard + mouse input (desktop-only build)
 │       │   └── event-setup.js #   All event listeners: input, shop, cheats, resize
 │       ├── performance/       # Spatial grid, depth-batch-renderer, nebula renderer
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
 ├── css/
-│   └── styles.css             # Game styling and mobile layout
+│   └── styles.css             # Game styling
 ├── music/                     # 58 MP3 tracks (~336MB)
 ├── deprecated/                # Orphan modules retained for reference (no importers)
 │   └── js/modules/performance/  # Pre-spatial-grid perf experiments

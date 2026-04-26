@@ -36,9 +36,13 @@
         <p id="start-prompt">Press Any Key To Start</p>
     </div> -->
     
-    <div id="orientation-overlay">
-        <div class="rotate-icon">📱</div>
-        <p>For the best experience,<br>please rotate your device to landscape mode.</p>
+    <!-- Mobile / tablet block — shown only when isMobileOrTabletDevice() in main.js
+         returns true. Game initialization is skipped entirely when this is visible. -->
+    <div id="desktop-only-block">
+        <div class="desktop-only-icon">🖥️</div>
+        <h1>Desktop only</h1>
+        <p>Rainboids is designed to be played on a desktop or laptop with a mouse and keyboard.</p>
+        <p class="desktop-only-sub">Please open this page on a computer to play.</p>
     </div>
 
     <!-- <div id="shield-tanks"></div> -->
@@ -184,10 +188,6 @@
     <div id="powerup-hud" class="ui-element"></div>
 
     <canvas id="gameCanvas"></canvas>
-
-    <div id="mobile-controls">
-        <!-- Mobile controls now use dynamic two-finger system -->
-    </div>
 
     <!-- Load the modular JavaScript after external libraries -->
     <script type="module" src="js/main.js"></script>

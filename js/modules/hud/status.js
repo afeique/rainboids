@@ -13,13 +13,7 @@ export function drawHUD() {
             this.updateHUD();
             // Show shop button during gameplay (but not when shop is open)
             this.events.emit('ui:show-shop-button');
-            // Show DOM pause button on desktop; use canvas button on mobile
-            if (this.inputHandler.isMobile()) {
-                this.events.emit('ui:hide-pause-btn');
-                this.drawPauseButton();
-            } else {
-                this.events.emit('ui:show-pause-btn');
-            }
+            this.events.emit('ui:show-pause-btn');
         } else {
             // Hide shop button on title screen and when shop is open
             this.events.emit('ui:hide-shop-button');
@@ -46,13 +40,10 @@ export function drawHUD() {
 
                 // Draw title (larger, centered horizontally, below HUD)
                 const centerX = this.width / 2;
-                const isMob = this.inputHandler.isMobile();
-                // On mobile, push below HUD (health bar + level + coins ≈ 130px)
-                // and use smaller base font sizes to avoid overlap
-                const titleFS = isMob ? 28 : 48;
-                const subtitleFS = isMob ? 16 : 24;
-                const topY = isMob ? 140 : 80;
-                const gap = isMob ? 36 : 60;
+                const titleFS = 48;
+                const subtitleFS = 24;
+                const topY = 80;
+                const gap = 60;
                 this.drawWavyText(this.waveMessage.title, centerX, topY, {
                     fontSize: titleFS,
                     colors: WAVY_PALETTES.waveTitle,

@@ -11,6 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.29.0] - 2026-04-25
+
+### Added
+- **Desktop-only gate at boot.** A new `isMobileOrTabletDevice()` check at the top of `js/main.js` runs before any game code initializes. If the browser reports a coarse pointer with no hover (`(hover: none) and (pointer: coarse)`) OR a viewport narrower than 1024 px, the game is **not** initialized — no audio download, no canvas loop, no input handlers — and a fullscreen "Desktop only" panel is shown instead.
+- **`#desktop-only-block` overlay** in `index.html` + CSS — fullscreen `Press Start 2P` panel with a 🖥️ icon, "Desktop only" headline, and a body explaining the game requires mouse and keyboard. `body.desktop-only-blocked > *:not(#desktop-only-block) { display: none !important }` ensures no leftover DOM peeks through behind it.
+
+### Removed
+- **All mobile / touch support** — Rainboids is now keyboard + mouse only. This is a behavior change for any users who were previously playing on a phone or tablet (movement-only mode); they will now hit the desktop-only block.
+- **Touch input system in `InputHandler`** — `setupTouchControls`, dynamic two-finger joystick (`showDynamicJoystick`, `updateDynamicJoystick`, `hideDynamicJoystick`, `resetDynamicJoystick`), `testMultiTouch`, all `touchstart` / `touchmove` / `touchend` listeners, the `activeTouches`/`joystickTouchId`/`aimTouchId`/`joystickCenter` state, and the entire `isMobile()` method. Replaced with a clean keyboard + mouse only implementation.
+- **Mobile auto-aim** in `game-engine.js update()` — the branch that locked the player's aim onto the nearest enemy when no mouse was present is gone.
+- **Mobile branch in `updateControlsTab`** — the "LEFT THUMB / RIGHT THUMB / || BTN" instructions are removed; only the keyboard + mouse layout remains.
+- **All canvas touch listeners in `event-setup.js`** — including the shop scroll/tap touch handlers.
+- **Pause-menu touch listeners in `ui-manager.js`** — backdrop dismissal, shop button, resume button, HUD pause button, and tab switching all relied on `touchstart` to defeat synthetic-click suppression on mobile. Removed.
+- **Window `touchstart` startGame listener** in `js/main.js`.
+- **Mobile font-scaling** — the `fitFont` helper in `drawTitleScreen`, the `isMobile`-conditional font branches in `drawWavyText` (`hud/overlays.js`) and the wave message HUD (`hud/status.js`), and the "TAP TO START" alternate prompt are all gone. Title-screen text uses fixed sizes.
+- **Mobile cursor early-return** in `hud/cursor.js`.
+- **Mobile portrait restart prompt** in `player.js` — the "Tap Screen to Restart" alternate text was removed; game-over now always says "Press Enter to Restart".
+- **`MOBILE_SCALE` constant** in `core/constants.js`, plus the 7 local `isMobile()` functions in `world/asteroid.js`, `world/color-star.js`, `world/background-star.js`, `player/player.js`, `player/bullet.js`, `player/weapons.js` that scaled entities by 0.65 on mobile. Replaced with always-1.
+- **`<div id="orientation-overlay">`** (rotate-to-landscape message) and its CSS (`#orientation-overlay`, `.rotate-icon`).
+- **`<div id="mobile-controls">`** container and its CSS (`#mobile-controls`, `.control-button`).
+- **All mobile CSS media queries** — both `@media (max-width: 768px), (hover: none) and (pointer: coarse)` blocks (pause-menu scaling and `#mobile-controls` / `#score` / `#music-info` overrides).
+- **`checkOrientation()` and `isPortrait()`** from `core/utils.js`. `triggerHapticFeedback()` is reduced to a no-op so existing call sites in `collision-system.js` keep linking but vibration code is gone.
+- **Stub fall-through `inputHandler.setupTouchControls()`** call in `game-engine.start()`.
+- Net code removal: ~500+ lines across `js/`, `css/`, `index.html`.
+
+### Changed
+- **Controls section in README** rewritten to a single keyboard + mouse list with a one-line note that the game is desktop / laptop only.
+- **`InputHandler` rewritten from scratch** as a focused keyboard + mouse handler. Mouse-move no longer needs to skip synthetic touch events.
+- **`updateControlsTab()`** simplified to a single layout (no platform branching).
+- **`drawHUD()`** in `hud/status.js` no longer toggles between DOM and canvas pause buttons — always uses the DOM `#hud-pause-btn`.
+
+### Verified
+- Chromium @ 1280×720: desktop-only block hidden, `gameEngine` boots, state = `TITLE_SCREEN`, no console errors.
+- Chromium emulating iPhone 13 (390×844, `hasTouch`, `isMobile`): desktop-only block visible, `body.desktop-only-blocked` set, `window.gameEngine` is `undefined` (game never initialized), no console errors.
+
+---
+
 ## [5.28.2] - 2026-04-25
 
 ### Removed

@@ -60,20 +60,7 @@ export function drawWavyText(text, x, y, options = {}) {
 
         const time = Date.now() * 0.001;
         const chars = text.split('');
-        const isMobile = this.inputHandler.isMobile();
-
-        // Mobile-responsive font sizing: clamp so the string fits with 20px side padding.
-        let effectiveFontSize = fontSize;
-        if (isMobile) {
-            const pad = 40;
-            const availableWidth = this.width - pad;
-            const estimatedWidth = text.length * fontSize * 0.63;
-            if (estimatedWidth > availableWidth) {
-                effectiveFontSize = Math.floor(availableWidth / (text.length * 0.63));
-            }
-            effectiveFontSize = Math.min(effectiveFontSize, fontSize);
-            effectiveFontSize = Math.max(effectiveFontSize, 8);
-        }
+        const effectiveFontSize = fontSize;
 
         // Capture caller's outer alpha so fade animations (powerup pickup,
         // level-up text, etc.) survive our internal globalAlpha changes for
@@ -159,20 +146,6 @@ export const WAVY_PALETTES = {
 export function drawTitleScreen() {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
-        const isMobile = this.inputHandler.isMobile();
-
-        // Mobile-responsive helper: scale font to fit within screen width
-        // 'Press Start 2P' is monospace — measured ratio ≈ 0.63 per char
-        const CHAR_W = 0.63;
-        const fitFont = (baseFontSize, text) => {
-            if (!isMobile) return baseFontSize;
-            const pad = 40;
-            const availW = this.width - pad;
-            const estimated = text.length * baseFontSize * CHAR_W;
-            let fs = baseFontSize;
-            if (estimated > availW) fs = Math.floor(availW / (text.length * CHAR_W));
-            return Math.max(10, Math.min(fs, baseFontSize));
-        };
 
         // Main title - RAINBOIDS. Nudged +10px right to optically align with
         // the subtitle below (the wavy "R" leading edge sits left of where the
@@ -185,25 +158,22 @@ export function drawTitleScreen() {
         });
 
         // Subtitle — white shimmer, no vertical motion, just a sliding gradient.
-        const subFS = fitFont(24, 'SUPERCHARGED ASTEROIDS');
         this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
-            fontSize: subFS,
+            fontSize: 24,
             colors: WAVY_PALETTES.whiteShimmer,
             amplitude: 0,
             colorSpeed: 0.1,
         });
 
-        // Animated "Press Any Key" text — preserve the original alpha pulse via
-        // outer globalAlpha; drawWavyText respects it. No bob — gradient only.
+        // Animated "Press Any Key" text — outer globalAlpha pulse preserved by
+        // drawWavyText. No bob — gradient only.
         const time = Date.now() * 0.001;
         const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3;
-        const startText = isMobile ? 'TAP TO START' : 'PRESS ANY KEY TO START';
-        const startFS = fitFont(18, startText);
 
         this.ctx.save();
         this.ctx.globalAlpha = pulseAlpha;
-        this.drawWavyText(startText, centerX, centerY + 80, {
-            fontSize: startFS,
+        this.drawWavyText('PRESS ANY KEY TO START', centerX, centerY + 80, {
+            fontSize: 18,
             colors: WAVY_PALETTES.whiteShimmer,
             amplitude: 0,
             colorSpeed: 0.12,
@@ -213,9 +183,8 @@ export function drawTitleScreen() {
         // Survival record — gold gradient slide, no bob.
         if (this.game.survivalRecord > 0) {
             const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
-            const recFS = fitFont(16, recText);
             this.drawWavyText(recText, centerX, centerY + 120, {
-                fontSize: recFS,
+                fontSize: 16,
                 colors: WAVY_PALETTES.gold,
                 amplitude: 0,
                 colorSpeed: 0.14,

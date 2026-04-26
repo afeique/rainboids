@@ -13,3 +13,25 @@
 {"file":"css/styles.css","action":"Edit","timestamp":"2026-04-25T18:52:39Z","important":false}
 {"file":"index.html","action":"Edit","timestamp":"2026-04-25T19:09:46Z","important":false}
 {"file":"js/modules/ui/ui-manager.js","action":"Edit","timestamp":"2026-04-25T19:14:59Z","important":false}
+{"file":"docs/Engine 2026-04-25.md","action":"Edit","timestamp":"2026-04-26T02:05:40Z","important":false}
+{"file":"js/main.js","action":"Edit","timestamp":"2026-04-26T02:47:27Z","important":false}
+{"file":"index.html","action":"Edit","timestamp":"2026-04-26T02:47:53Z","important":false}
+{"file":"css/styles.css","action":"Edit","timestamp":"2026-04-26T02:48:17Z","important":false}
+{"file":"js/modules/core/constants.js","action":"Edit","timestamp":"2026-04-26T02:49:06Z","important":false}
+{"file":"js/modules/world/color-star.js","action":"Edit","timestamp":"2026-04-26T02:49:21Z","important":false}
+{"file":"js/modules/world/background-star.js","action":"Edit","timestamp":"2026-04-26T02:49:39Z","important":false}
+{"file":"js/modules/world/asteroid.js","action":"Edit","timestamp":"2026-04-26T02:49:51Z","important":false}
+{"file":"js/modules/player/bullet.js","action":"Edit","timestamp":"2026-04-26T02:50:05Z","important":false}
+{"file":"js/modules/player/player.js","action":"Edit","timestamp":"2026-04-26T02:50:28Z","important":false}
+{"file":"js/modules/player/weapons.js","action":"Edit","timestamp":"2026-04-26T02:51:01Z","important":false}
+{"file":"js/modules/core/utils.js","action":"Edit","timestamp":"2026-04-26T02:51:49Z","important":false}
+{"file":"js/modules/ui/ui-manager.js","action":"Edit","timestamp":"2026-04-26T02:51:55Z","important":false}
+{"file":"js/modules/ui/input-handler.js","action":"Write","timestamp":"2026-04-26T02:52:42Z","important":false}
+{"file":"js/modules/game-engine.js","action":"Edit","timestamp":"2026-04-26T02:52:59Z","important":false}
+{"file":"js/modules/ui/event-setup.js","action":"Edit","timestamp":"2026-04-26T02:53:07Z","important":false}
+{"file":"js/modules/hud/cursor.js","action":"Edit","timestamp":"2026-04-26T02:54:33Z","important":false}
+{"file":"js/modules/hud/status.js","action":"Edit","timestamp":"2026-04-26T02:54:42Z","important":false}
+{"file":"js/modules/hud/overlays.js","action":"Edit","timestamp":"2026-04-26T02:55:07Z","important":false}
+{"file":"README.md","action":"Edit","timestamp":"2026-04-26T03:02:14Z","important":false}
+{"file":"VERSION","action":"Write","timestamp":"2026-04-26T03:02:31Z","important":false}
+{"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-26T03:03:08Z","important":false}

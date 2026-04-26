@@ -5,6 +5,22 @@ import { UIManager } from './modules/ui/ui-manager.js';
 import { GameEngine } from './modules/game-engine.js';
 import { GAME_STATES } from './modules/core/constants.js';
 
+// Rainboids is mouse-and-keyboard only. If the browser is a phone or tablet
+// (coarse pointer, no hover, OR small viewport), we show a "desktop only"
+// message and never initialize the game — so no audio download, no canvas
+// loop, no input handlers.
+function isMobileOrTabletDevice() {
+    if (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) return true;
+    if (window.innerWidth < 1024) return true;
+    return false;
+}
+
+function showDesktopOnlyMessage() {
+    const block = document.getElementById('desktop-only-block');
+    if (block) block.style.display = 'flex';
+    document.body.classList.add('desktop-only-blocked');
+}
+
 class RainboidsGame {
     constructor() {
         this.canvas = null;
@@ -19,6 +35,11 @@ class RainboidsGame {
             await new Promise(resolve => {
                 document.addEventListener('DOMContentLoaded', resolve);
             });
+        }
+
+        if (isMobileOrTabletDevice()) {
+            showDesktopOnlyMessage();
+            return;
         }
 
         this.setupCanvas();
@@ -98,7 +119,6 @@ class RainboidsGame {
 
             window.removeEventListener('keydown', startGame);
             window.removeEventListener('click', startGame);
-            window.removeEventListener('touchstart', startGame);
 
             this.audioManager.initializeAudio();
             this.uiManager.startMusic();
@@ -107,7 +127,6 @@ class RainboidsGame {
 
         window.addEventListener('keydown', startGame);
         window.addEventListener('click', startGame);
-        window.addEventListener('touchstart', startGame);
     }
 
     start() {

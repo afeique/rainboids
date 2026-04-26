@@ -479,8 +479,7 @@ export class GameEngine {
 
     showWaveComplete() { return wave.showWaveComplete.call(this); }
     
-    // Method to draw wavy rainbow text for wave messages
-    // Mobile-aware: scales font to fit within screen width with padding.
+    // Wavy rainbow text used for wave-message overlays and the title screen.
     drawWavyText(text, x, y, options) { return hudOverlays.drawWavyText.call(this, text, x, y, options); }
     
     drawTitleScreen() { return hudOverlays.drawTitleScreen.call(this); }
@@ -629,25 +628,6 @@ export class GameEngine {
             const input = this.inputHandler.getInput();
             // Add the update method to the input object so player can call it
             input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
-
-            // Mobile auto-aim: point at nearest enemy, fall back to movement direction
-            if (this.inputHandler.isMobile() && this.player && this.player.active) {
-                const target = this.findNearestEnemy();
-                if (target) {
-                    input.aimX = target.x;
-                    input.aimY = target.y;
-                } else if (input.up || input.down || input.left || input.right) {
-                    let mx = 0, my = 0;
-                    if (input.left)  mx -= 1;
-                    if (input.right) mx += 1;
-                    if (input.up)    my -= 1;
-                    if (input.down)  my += 1;
-                    const len = Math.hypot(mx, my) || 1;
-                    input.aimX = this.player.x + (mx / len) * 500;
-                    input.aimY = this.player.y + (my / len) * 500;
-                }
-                // No enemy and no movement → keep current angle unchanged
-            }
 
             // Respawn is now instant - no animation needed
 
@@ -1136,11 +1116,6 @@ export class GameEngine {
     
     start() {
         this.loadSurvivalRecord();
-        this.uiManager.checkOrientation();
-        // this.uiManager.setupTitleScreen();
-        // this.uiManager.showTitleScreen();
-        // this.uiManager.updateHighScore(this.game.highScore);
-        this.inputHandler.setupTouchControls();
         this.gameLoop();
     }
     

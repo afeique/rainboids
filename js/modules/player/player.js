@@ -6,10 +6,6 @@ import * as skills from './skills.js';
 import * as progression from './progression.js';
 import * as playerRenderer from './renderer.js';
 
-function isMobile() {
-    return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
-}
-
 export class Player {
     constructor() {
         // One-time setup properties
@@ -194,7 +190,7 @@ export class Player {
         this.empActive = false;
         this.tractorShieldActive = false;
 
-        let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
+        let scale = 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
         // Player mass (smaller than most asteroids)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.5;
@@ -693,11 +689,9 @@ export class Player {
         }
         
         // Show game over message
-        const isMobile = window.matchMedia("(any-pointer: coarse)").matches;
-        const restartPrompt = isMobile ? "Tap Screen to Restart" : "Press Enter to Restart";
         const roundedScore = Math.round(game.score);
         const roundedHighScore = Math.round(game.highScore);
-        const subtitle = `YOUR SCORE: ${roundedScore}\nHIGH SCORE: ${roundedHighScore}\n\n${restartPrompt}`;
+        const subtitle = `YOUR SCORE: ${roundedScore}\nHIGH SCORE: ${roundedHighScore}\n\nPress Enter to Restart`;
         uiManager.showMessage('GAME OVER', subtitle);
     }
 } 

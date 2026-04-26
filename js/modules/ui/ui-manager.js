@@ -1,5 +1,4 @@
 // UI management for overlays, messages, and interface elements
-import { checkOrientation } from '../core/utils.js';
 import { MusicPlayer } from '../audio/music-player.js';
 
 export class UIManager {
@@ -20,10 +19,8 @@ export class UIManager {
             pauseOverlay: document.getElementById('pause-overlay'),
             messageTitle: document.getElementById('message-title'), // Commented out in HTML
             messageSubtitle: document.getElementById('message-subtitle'), // Commented out in HTML
-            mobileControls: document.getElementById('mobile-controls'),
             // titleScreen: document.getElementById('title-screen'),
             // gameTitle: document.getElementById('game-title'),
-            orientationOverlay: document.getElementById('orientation-overlay'),
             // highScoreDisplay: document.getElementById('high-score-display'),
             // Music elements (removed from main UI, only in pause menu)
             musicInfo: null, // Removed from main display
@@ -66,7 +63,8 @@ export class UIManager {
     }
     
     setupEventListeners() {
-        // Mobile event listeners removed - using unified pause system
+        // Reserved — currently no UIManager-owned listeners. Pause / shop /
+        // music inputs are wired in setupMusicPlayer().
     }
     
     updateScore(money) {
@@ -323,29 +321,15 @@ export class UIManager {
     updateControlsTab() {
         const controlsTab = document.getElementById('controls-tab');
         if (!controlsTab) return;
-        const isMob = (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) || window.innerWidth <= 768;
-        // Rows go inside .control-list so the list centers as a block under
-        // the heading while each row stays left-justified (CSS in styles.css).
-        if (isMob) {
-            controlsTab.innerHTML = `
-                <h2>CONTROLS</h2>
-                <div class="control-list">
-                    <div><span class="control-symbol">LEFT THUMB</span> Move</div>
-                    <div><span class="control-symbol">RIGHT THUMB</span> Aim + Shoot</div>
-                    <div><span class="control-symbol">|| BTN</span> Pause / Resume</div>
-                    <div>Tap outside menu to unpause</div>
-                </div>
-            `;
-        } else {
-            controlsTab.innerHTML = `
-                <h2>CONTROLS</h2>
-                <div class="control-list">
-                    <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
-                    <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
-                    <div>ESC or P to Pause / Resume</div>
-                </div>
-            `;
-        }
+        // Desktop-only build — single keyboard / mouse layout.
+        controlsTab.innerHTML = `
+            <h2>CONTROLS</h2>
+            <div class="control-list">
+                <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
+                <div><span class="control-symbol">MOUSE</span> Aim + Shoot</div>
+                <div>ESC or P to Pause / Resume</div>
+            </div>
+        `;
     }
     
     // showTitleScreen() {
@@ -373,10 +357,8 @@ export class UIManager {
     // }
     
     checkOrientation() {
-        // Portrait mode now supported
-        if (this.elements.orientationOverlay) {
-            this.elements.orientationOverlay.style.display = 'none';
-        }
+        // Desktop-only build: no orientation handling. Kept as a no-op so the
+        // ui:check-orientation event bus subscription stays valid.
         return false;
     }
     
@@ -688,7 +670,6 @@ export class UIManager {
                 }
             };
             this.elements.pauseOverlay.addEventListener('click', dismissOnBackdrop);
-            this.elements.pauseOverlay.addEventListener('touchstart', dismissOnBackdrop, { passive: true });
         }
 
         // Pause menu action buttons
@@ -701,13 +682,6 @@ export class UIManager {
                     console.error('❌ this.gameEngine not available for shop button');
                 }
             });
-            this.elements.pauseShopButton.addEventListener('touchstart', (e) => {
-                e.stopPropagation();
-                if (this.gameEngine) {
-                    this.elements.pauseOverlay.style.display = 'none';
-                    this.gameEngine.openShop();
-                }
-            }, { passive: true });
         } else {
             console.error('❌ pauseShopButton element not found!');
         }
@@ -718,10 +692,6 @@ export class UIManager {
                     this.gameEngine.togglePause();
                 }
             });
-            this.elements.pauseResumeButton.addEventListener('touchstart', (e) => {
-                e.stopPropagation();
-                if (this.gameEngine) this.gameEngine.togglePause();
-            }, { passive: true });
         }
 
         if (this.elements.hudPauseBtn) {
@@ -730,30 +700,14 @@ export class UIManager {
                     this.gameEngine.togglePause();
                 }
             });
-            // On mobile the document-level touchstart calls e.preventDefault() on every
-            // touch, which kills the synthetic click.  Intercept touchstart on the button
-            // itself, stop it from bubbling to the document handler, and fire the action
-            // directly so the document handler never gets a chance to suppress it.
-            this.elements.hudPauseBtn.addEventListener('touchstart', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                if (this.gameEngine) {
-                    this.gameEngine.togglePause();
-                }
-            }, { passive: false });
         }
-        
+
         // Tab switching
         this.elements.pauseTabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const tabName = tab.dataset.tab;
                 this.switchTab(tabName);
             });
-            tab.addEventListener('touchstart', (e) => {
-                e.stopPropagation();
-                const tabName = tab.dataset.tab;
-                this.switchTab(tabName);
-            }, { passive: true });
         });
         
         // Music controls

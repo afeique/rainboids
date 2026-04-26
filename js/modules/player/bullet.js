@@ -2,10 +2,6 @@
 import { GAME_CONFIG } from '../core/constants.js';
 import { wrap, random } from '../core/utils.js';
 
-function isMobile() {
-    return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
-}
-
 export class Bullet {
     constructor() {
         this.width = window.innerWidth;
@@ -19,7 +15,7 @@ export class Bullet {
     }
     
     reset(x, y, angle) {
-        let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
+        let scale = 1;
 
         // Use original angle without any jitter
         this.x = x + Math.cos(angle) * (GAME_CONFIG.SHIP_SIZE * scale / 1.5);

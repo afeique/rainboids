@@ -21,9 +21,6 @@ function lutIndex(rad) {
     return ((rad * TRIG_SCALE) % TRIG_N + TRIG_N) & (TRIG_N - 1);
 }
 
-function isMobile() {
-    return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
-}
 
 export class Asteroid {
     constructor(x, y, radius, level = 1) {
@@ -118,7 +115,7 @@ export class Asteroid {
     }
 
     rescale(newBaseRadius) {
-        let scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
+        let scale = 1;
         this.baseRadius = newBaseRadius * scale;
         
         // Create dodecahedron vertices

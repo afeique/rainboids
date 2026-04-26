@@ -95,32 +95,17 @@ let userHasInteracted = false;
 if (typeof window !== 'undefined') {
     const markUserInteraction = () => {
         userHasInteracted = true;
-        // Remove listeners after first interaction
         document.removeEventListener('click', markUserInteraction);
-        document.removeEventListener('touchstart', markUserInteraction);
         document.removeEventListener('keydown', markUserInteraction);
     };
-    
+
     document.addEventListener('click', markUserInteraction, { once: true });
-    document.addEventListener('touchstart', markUserInteraction, { once: true });
     document.addEventListener('keydown', markUserInteraction, { once: true });
 }
 
-export function triggerHapticFeedback(duration = 10) {
-    // Only vibrate if user has interacted with the page
-    if (navigator.vibrate && userHasInteracted) {
-        navigator.vibrate(duration);
-    }
-}
-
-export function checkOrientation() {
-    const isMobile = window.matchMedia("(any-pointer: coarse)").matches;
-    return isMobile && window.innerHeight > window.innerWidth;
-}
-
-export function isPortrait() {
-    const isMobile = window.matchMedia("(any-pointer: coarse)").matches;
-    return isMobile && window.innerHeight > window.innerWidth;
+export function triggerHapticFeedback(_duration = 10) {
+    // Desktop-only build: no haptic feedback. Kept as a no-op so existing
+    // call sites in collision-system.js / input-handler.js don't need edits.
 }
 
 // --- NOISE GENERATION AND STAR DISTRIBUTION ---

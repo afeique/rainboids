@@ -5,10 +5,6 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS } from '../combat/weapon-data.js';
 import { autofireDiag } from '../autofire-diag.js';
 
-function isMobile() {
-    return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 768px)').matches;
-}
-
 // ── Charging / auto-fire loop ──────────────────────────────────────────────
 
 export function updateChargingSystem(input, bulletPool, audioManager, particlePool) {
@@ -76,9 +72,7 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         this.tractorBeamActive = this.isCharging && !isFullyCharged;
         this.isFullyCharged = isFullyCharged;
 
-        const shouldFire = isMobile()
-            ? isFullyCharged
-            : (input.fireSecondary && currentChargeTime >= this.minChargeTime);
+        const shouldFire = input.fireSecondary && currentChargeTime >= this.minChargeTime;
 
         if (shouldFire) {
             this.fireChargedShot(bulletPool, audioManager);
@@ -155,8 +149,7 @@ function spawnMuzzleFlare(particlePool, intensity, color) {
 
     // Spawn directional spark particles for medium/heavy
     if (!particlePool || intensity === 'light') return;
-    const scale = isMobile() ? GAME_CONFIG.MOBILE_SCALE : 1;
-    const muzzleDist = GAME_CONFIG.SHIP_SIZE * scale / 1.5;
+    const muzzleDist = GAME_CONFIG.SHIP_SIZE / 1.5;
     const mx = this.x + Math.cos(this.angle) * muzzleDist;
     const my = this.y + Math.sin(this.angle) * muzzleDist;
 
