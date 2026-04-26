@@ -100,3 +100,15 @@
 {"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/shop/shop-renderer.js"},"id":"event-000600","state":"stopped","ts":"2026-04-26T15:01:26Z","type":"tool.edit"}
 {"data":{"command":"node --check js/modules/shop/shop-renderer.js \u0026\u0026 echo OK\necho \"---\"\nnpx vite --port 8135 \u003e /tmp/v.log 2\u003e\u00261 \u0026\nsleep 4\ncat \u003e /Users/silvr/projects/rainboids/_probe.mjs \u003c\u003c'EOF'\nimport { chromium } from '"},"id":"event-000601","state":"stopped","ts":"2026-04-26T15:06:35Z","type":"tool.bash"}
 {"data":{"command":"git log --oneline -1\necho \"---\"\ngit diff HEAD --stat 2\u003e/dev/null | grep -v \"^\\.\" | tail -30"},"id":"event-000602","state":"stopped","ts":"2026-04-26T15:08:31Z","type":"tool.bash"}
+{"data":{"command":"cat VERSION\necho \"---\"\nhead -20 CHANGELOG.md"},"id":"event-000603","state":"stopped","ts":"2026-04-26T16:16:26Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"powerup types\\|Defensive / Utility\\|Shop has six tabs\\|Triage\\|primary weapons\" README.md | head -10"},"id":"event-000604","state":"stopped","ts":"2026-04-26T16:16:34Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000605","state":"stopped","ts":"2026-04-26T16:18:52Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000606","state":"stopped","ts":"2026-04-26T16:19:21Z","type":"tool.write"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/README.md"},"id":"event-000607","state":"stopped","ts":"2026-04-26T16:19:48Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"## Shop\\|six tabs\\|55+ upgrades\\|Shop \u0026 Upgrade\" README.md | head"},"id":"event-000608","state":"stopped","ts":"2026-04-26T16:19:54Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/README.md"},"id":"event-000609","state":"stopped","ts":"2026-04-26T16:20:13Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"primary weapons\\|power weapons\\|kill streak\\|combat streak\" README.md | head"},"id":"event-000610","state":"stopped","ts":"2026-04-26T16:20:19Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/README.md"},"id":"event-000611","state":"stopped","ts":"2026-04-26T16:20:37Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"## Powerup System\\|## Shop \u0026 Upgrade\" README.md"},"id":"event-000612","state":"stopped","ts":"2026-04-26T16:20:48Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/README.md"},"id":"event-000613","state":"stopped","ts":"2026-04-26T16:21:09Z","type":"tool.edit"}
+{"data":{"command":"cat VERSION\necho \"---\"\nhead -2 CHANGELOG.md\necho \"...\"\nsed -n '14p' CHANGELOG.md"},"id":"event-000614","state":"stopped","ts":"2026-04-26T16:21:19Z","type":"tool.bash"}

@@ -14,14 +14,15 @@ A modern space combat game with deep weapon systems, 10 enemy types, wave-based 
 ## Game Overview
 
 Rainboids is a supercharged asteroids game featuring:
-- **5 primary weapons**, **5 power weapons**, and **6 defense skills** with upgrade trees
+- **5 primary weapons**, **5 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs
 - **20 powerup types** with stacking mechanics and visual indicators
+- **Kill-streak damage tiers** (EMPOWERED → UNSTOPPABLE → GODLIKE → LEGENDARY) — sustained kills without taking damage build up to +100% damage
 - **100 hand-designed waves** across 5 acts, plus procedural scaling beyond wave 100
-- **Full shop and upgrade economy** with coins and skill points
+- **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
-- **58 background music tracks** by Karl Casey @ White Bat Audio
-- **Procedural SFX** via SFXR
+- **63 background music tracks** by Karl Casey @ White Bat Audio
+- **Procedural SFX** via SFXR — granular hit sounds per enemy bullet pattern and per player primary weapon
 - **Modular ES6 architecture** — domain managers, extracted renderers, state machine, event bus, and frame-counted timers, built with Vite
 
 ---
@@ -32,13 +33,13 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 
 - **Movement**: WASD or arrow keys
 - **Aim**: Mouse cursor (ship faces cursor)
-- **Fire**: Auto-fire while mouse button held
-- **Power weapon**: Right-click
-- **Skills**: Number keys (1-6) for equipped defense skills
-- **Tractor Beam**: Spacebar (attracts collectibles)
-- **Weapon cycling**: Q/E or scroll wheel
-- **Pause**: Escape
-- **Shop**: Click shop button or use pause menu
+- **Fire primary**: Hold left-click (no auto-fire — release to stop)
+- **Fire / charge power weapon**: Right-click OR Spacebar
+- **Defense skills**: Number keys 1-4 (assign in pause menu's SKILLS tab)
+- **Pause**: Escape or P
+- **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
+- **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
+- **Shop**: Click 🛒 button in pause menu — buy upgrades for the currently-equipped weapons
 
 ### Cheat Codes
 - **SHIFT+1-8**: Spawn individual enemy types
@@ -155,13 +156,30 @@ Money and green orbs are size-capped (`HEALTH_ORB_SIZE_MAX = 1.4`, `MONEY_ORB_SI
 
 ---
 
+## Kill Streak System
+
+Stack consecutive enemy kills without taking damage to climb a four-tier damage buff. The buff timer (4 s) refreshes on every new kill while alive; the streak count itself **only resets when the player takes damage**. Phase Dash invincibility frames preserve the streak; Bulwark damage reduction does not.
+
+| Streak | Tier         | Damage  |
+|--------|--------------|---------|
+| 3+     | EMPOWERED    | +25%    |
+| 6+     | UNSTOPPABLE  | +50%    |
+| 10+    | GODLIKE      | +75%    |
+| 15+    | LEGENDARY    | +100%   |
+
+LEGENDARY is capped — extra kills beyond 15 just refresh the buff timer. The HUD shows a top-right indicator with the kill count, tier label, current bonus, and a progress bar to the next tier (or `▲ MAX TIER` once at LEGENDARY). After the buff timer expires but before damage is taken, the indicator dims to `N KILLS / SAVED / ▶ KILL TO RE-ARM`.
+
+---
+
 ## Shop & Upgrade System
 
 The shop offers permanent upgrades using two currencies:
 - **Coins**: Earned by destroying enemies and collecting money orbs
 - **Skill Points (SP)**: Gained by leveling up through experience
 
-The shop has six tabs: **Offense**, **Defense**, **Drops**, **Primary Weapons**, **Power Weapons**, and **Defense Skills**, each with their own upgrade trees (55+ upgrades total). Primary weapons unlock for free at wave milestones — spend your coins on upgrades that deepen your build instead.
+The shop has six tabs: **Offense**, **Defense**, **Drops**, **Primary**, **Power**, and **Skills**. The **Primary** and **Power** tabs show only the upgrades for whichever weapon is currently equipped (selection happens in the pause menu — see Controls above). Switching weapons in the pause menu instantly repopulates the shop with that weapon's upgrades. ~55 upgrades total across all tabs.
+
+The shop is fullscreen with a transparent backdrop matching the pause menu — game world stays faintly visible behind. Goldenrod scrollbar mirrors the music-player CSS scrollbar. Close with the X button or ESC; both return to the pause menu.
 
 ---
 

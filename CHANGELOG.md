@@ -11,6 +11,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.32.1] - 2026-04-26
+
+### Added
+- **17 new procedural SFX** generated via SFXR for granular combat audio:
+  - **Player damage**: `playerHitAsteroid` (low rocky thud), `playerHitEnemy` (sharp metallic clang).
+  - **Enemy bullet hits player** — one per `shootPattern` (10 sounds): `hunter_single`, `guardian_spread`, `wasp_machinegun`, `charged_laser`, `arc_lightning`, `missile`, `spiral_laser`, `sentinel_sweep`, `lay_mine`, `sweep_laser`.
+  - **Player bullet hits enemy/asteroid** — one per primary weapon (5 sounds): `PULSE_CANNON`, `STORM_NEEDLES`, `SCATTER_GUN`, `RAIL_DRIVER`, `LANCE_BEAM`.
+- Player bullets now stamped with `bullet.weaponId = activePrimary` in `createChargedBullets`. Enemy bullets stamped with `firingPattern` via a thread-local `gameEngine._activeShotPattern` set by the `shoot()` dispatch wrapper and read in `EnemyBullet.reset()`.
+- 5 new audio events on the engine bus (`audio:player-hit-asteroid`, `audio:player-hit-enemy`, `audio:player-hit-bullet`, `audio:enemy-hit-by-bullet`) with graceful fallback to generic `playHit` when a sound name isn't registered.
+
+### Changed
+- **Music playlist regenerated** — picked up 8 new tracks (55 → 63). Fixed stale `tools/music` relative path in `tools/scripts/generate-playlist.js` (was `../music`, needed to be `../../music` to resolve from `tools/scripts/`).
+
+### Fixed
+- **New SFX were silently dropped at runtime.** `playSound()` gates on `this.soundEnabled[soundName]`, but the new sounds weren't in the explicit 9-entry whitelist set in the constructor. Now `init()` auto-enables any sound registered in `audioCache` after the explicit list is built — original 9 keep their stable ordering for the SFX-toggle UI, all new SFX work without manual roster updates.
+
+---
+
+## [5.32.0] - 2026-04-26
+
+### Added
+- **Pause-menu PRIMARY tab** — lists every primary weapon (Pulse Cannon, Storm Needles, Scatter Gun, Rail Driver, Lance Beam). Click a row to equip. Primaries are free and always available. Active weapon shows an `EQUIPPED` badge in its signature color.
+- **Pause-menu POWER tab** — same model as PRIMARY: lists all 5 power weapons (Charge Shot, Mine Layer, Nova Blast, Lightning Arc, Missile Salvo), free + click-to-equip. Adds to `ownedPowers` automatically on click for back-compat with `equipPower`'s gate.
+- New `ui-manager._buildWeaponRow()` shared row builder using `createElement` + `textContent` (zero `innerHTML` — no XSS surface). Click handler wraps `onClick` with `e.stopPropagation()` so the click never reaches the pause-overlay's `dismissOnBackdrop`.
+- Engine exposes `PRIMARY_WEAPONS_LIST` / `POWER_WEAPONS_LIST` so `ui-manager` can render the catalogs without importing `weapon-data` directly.
+
+### Changed
+- **Shop fullscreen redesign** matching the pause menu — drops the centered 600×500 windowed look. Now spans full viewport with 78% backdrop, edge margins, and a centered 900px-max content column for readability (mirrors the pause-menu's `min(900px, 100%)` rule).
+- **Goldenrod scrollbar** — thin (12px) track + thumb, no arrow buttons, anchored to the right edge of the centered column. Track `#5a4509`, thumb `#FFC107`, hover/drag `#FFD740` — exactly matches the music-player CSS scrollbar.
+- **Shop PRIMARY tab** now shows ONLY upgrades for the currently-equipped primary. Weapon SELECTION moved to the pause menu. Switching primaries in the pause menu causes the shop tab to repopulate with the new weapon's upgrades.
+- **Shop POWER tab** mirrors PRIMARY — only shows upgrades for the currently-equipped power weapon, no buy items. (Power weapons are now free, granted on first click in the pause menu.)
+- **Tab order** in pause menu: CONTROLS / PRIMARY / POWER / SKILLS / POWERUPS / MUSIC / SFX.
+- **ESC inside the shop** routes to `closeShopToPause` via the existing `togglePause` SHOP→PAUSED branch, returning to the pause menu instead of gameplay.
+- Updated shop footer instructions: `Click items to purchase  •  Press X or ESC to return to the pause menu`.
+
+### Removed
+- **Wave-gating** removed from both weapon catalog display (`_buildPrimaryTabItems`) and purchase logic (`_handleWeaponBuyOrEquip`). Every weapon was already free (cost: 0); they now appear and are equippable from wave 1. Bug: previously the `unlockWave` check silently returned `false` when clicking a wave-locked weapon, looking like the click did nothing.
+- **Click-outside-shop-to-close** removed — easy to misclick. Shop only closes via the X button or ESC, both routed to `closeShopToPause`.
+
+### Fixed
+- **Pause menu closed on weapon-row click.** Sequence was: click row → row's listener calls `replaceChildren()` (re-render) → row is detached from DOM → click bubbles up to `dismissOnBackdrop` → `e.target.closest('#pause-menu')` returns null on the detached node → backdrop misclassifies as "click outside menu" → calls `togglePause()`. Fix: `e.stopPropagation()` in the row click wrapper before re-render. Applies to both PRIMARY and POWER tabs since they share `_buildWeaponRow`.
+
+---
+
+## [5.31.0] - 2026-04-26
+
+### Added
+- **Streak tier damage buff system** — kill streaks now grant tiered damage multipliers, replacing the previous one-tier "empowered" concept:
+  | Kills | Tier         | Damage  | Color      |
+  |-------|--------------|---------|------------|
+  | 3+    | EMPOWERED    | +25%    | cyan       |
+  | 6+    | UNSTOPPABLE  | +50%    | orange     |
+  | 10+   | GODLIKE      | +75%    | pink-red   |
+  | 15+   | LEGENDARY    | +100%   | gold (cap) |
+- **Streak indicator HUD** (top-right corner, clear of pause button + minimap + enemy info + wave message). Three render modes:
+  - **ACTIVE**: tier-colored count + label + `+X% DMG` + progress bar to the next tier (or `▲ MAX TIER` at LEGENDARY); pulses with shadow glow.
+  - **SAVED**: dim grey-white when streak ≥ 3 but buff timer expired — `N KILLS / SAVED / ▶ KILL TO RE-ARM`.
+  - **HIDDEN**: streak < 3 or 0.
+- New constants in `weapon-data.js`: `STREAK_TIERS` (array of tier objects), `STREAK_BUFF_DURATION` (4000ms — buff timer refreshes on each new kill).
+
+### Changed
+- **No time-based streak reset.** Streak count persists indefinitely as long as the player avoids damage. Removed the old `STREAK_RESET_TIMEOUT = 3000ms` window and the corresponding decay in `updateKillStreak`.
+- **Damage resets the streak.** New `_breakKillStreak()` engine helper hooked from all three player-damage paths: `lifecycle.takeDamage`, the direct `player.health -=` in `collision-system.js` for player↔enemy collision, and the same in player↔enemy-bullet collision. Phase Dash's `reducedDamage = 0` short-circuit means dashing through enemies preserves the streak. Bulwark's reduction still triggers (any HP loss counts).
+- **`damageEnemy()`** now passes the bullet's `isCrit` / `isEmpowered` opts through to `enemy.takeDamage(damage, opts)` for AOE hits (mines, lightning, nova, missiles).
+
+---
+
+## [5.30.1] - 2026-04-26
+
+### Changed
+- **Power weapon damage scale-down** — Charge Shot was the worst offender (one-shotting most enemies):
+  - **Charge Shot**: `baseDamage` per stack +1 → +0.5; per-second damage +1.2 → +0.6; per-second crit chance +8% → +4%
+  - **Mine Layer**: 5 → 3
+  - **Nova Blast**: 4 → 2.5
+  - **Lightning Arc**: 3 → 2
+  - **Missile Salvo**: 2 → 1.5
+- **Enemy stats overhaul** — all 10 enemies tuned for "starts off more intensely":
+  - **Speed +25%** (HUNTER 1.6→2.0, GUARDIAN 1.0→1.25, WASP 2.8→3.5, etc.)
+  - **Turn speed +50%** (`movement.turnSpeed: 0.08 → 0.12`, Titan 0.04→0.06)
+  - **Evasion +50%** (`ai.evasion`, capped at 0.7 for Wasp)
+  - **Burst delay −30%**, **fire cooldown floor −25%** (more aggressive firing)
+  - **Health −25%** (e.g., HUNTER 16→12, TITAN 60→45)
+  - **Size −15%** (smaller silhouettes are harder to land hits on)
+
+### Fixed
+- **`firePower` was overwriting `powerCooldown`** AFTER each weapon's discount-aware setter ran — silently cancelling Resonance / Tesla Coil / Quick Reload / new Rapid Deploy upgrades. Now `firePower` no longer touches `powerCooldown` and each weapon's fire fn owns its own cooldown.
+
+---
+
+## [5.30.0] - 2026-04-26
+
+### Added
+- **Mine Layer cooldown reducer** — new `RAPID_DEPLOY` upgrade (-25% cooldown per stack, max 2 stacks: 4s → 3s → 2.25s). Mine Layer was the only power weapon without a cooldown upgrade.
+- **Per-primary velocity-and-damage upgrades** — 5 new shop entries (one per primary weapon), +12% bullet velocity AND +12% damage per stack, max 3 stacks (~+36% sustained DPS at max):
+  - PULSE_CANNON → `PULSE_VELOCITY` (High-Velocity Rounds 🚄)
+  - STORM_NEEDLES → `NEEDLE_VELOCITY` (Hypersonic Needles 🚄)
+  - SCATTER_GUN → `SCATTER_VELOCITY` (Powder Charge 🚄)
+  - RAIL_DRIVER → `RAIL_VELOCITY` (Tungsten Slug 🚄)
+  - LANCE_BEAM → `LANCE_VELOCITY` (Focused Lens 🚄, range/damage variant since beam has no projectile speed)
+- **Crit visualization** — damage-number popups now render distinctly:
+  - **CRIT**: 26px bold orange-red with white outline + `CRIT!` tag above (was indistinguishable from normal hits — that's why "I am not seeing any crits" was the user's perception)
+  - **EMPOWERED**: 20px cyan
+  - **Standard**: 16px gold (unchanged)
+- **`isCrit` / `isEmpowered` propagation** — `createDamageNumber(x, y, damage, opts)` accepts the flags, `enemy.takeDamage(damage, opts)` forwards them, all collision-system call sites updated.
+- **Top-center enemy info panel** — large gold name + 280px health bar + LV / HP/Max numbers, driven by `lastHitEnemy` (most recently damaged target, not click-targeted). Asteroids show too with synthesized "ASTEROID" name. Snapshot system with 900ms grace prevents flicker between rapid kills.
+
+### Changed
+- **Auto-fire removed.** Left-click is now press-and-hold to fire primary; releasing stops fire. `InputHandler` tracks left mouse button as `input.fire`.
+- **Power weapon trigger** is now right-click OR Spacebar (mirrored via `input.fireSecondary`). Spacebar `e.preventDefault()` stops page scroll.
+- **Page-blur** clears both fire flags so a tab-switch mid-click doesn't strand the input.
+- **Base crit chance** bumped 5% → 8% so crits show up more reliably during play.
+- **Around-enemy nameplate stripped** — only the raw HP bar floats above each enemy now (no level / name / HP numbers there). All that info lives in the top-center panel.
+- **Wave message + powerup pickup label pushed down** to clear the new top-center enemy panel (wave title y=80 → 200; powerup pickup y=120 → 250).
+- **Orb minimum sizes bumped** — `HEALTH_ORB_SIZE_MIN` 0.8 → 1.3, `MONEY_ORB_SIZE_MIN` 1.0 → 1.3. Smallest drops were unreadable.
+- **Controls panel** in pause menu rewritten: LEFT-CLICK fires primary (held), RIGHT-CLICK or SPACE fires power weapon, 1-4 activate skills.
+
+### Fixed
+- **Top-center enemy info panel flickered on every player hit.** Hitstop fires on every hit (3-5 frames), and the hitstop-branch render path called `drawHUD()` and `drawDamageNumbers()` but **not** `drawTargetInfo()`. The panel popped out for the duration of the freeze, then back in. Adding `this.drawTargetInfo()` to the hitstop branch keeps it solid.
+- **One-frame staleness** in the panel — `_setLastHit` captured pre-damage HP, then snapshot-mirror updated post-damage HP next tick. Caused per-tick bar/numbers jitter on every Storm-Needles tick. Now the panel reads `info.ref.health` LIVE at draw time when the entity is alive, falls back to snapshot during the grace period after death.
+- **Latent bug** in `combat-manager.getPowerupConfig` dynamic fallback path now correctly handles the new upgrade IDs (PULSE_VELOCITY etc.) without manual registration in the explicit configs map.
+
+---
+
 ## [5.29.0] - 2026-04-25
 
 ### Added
