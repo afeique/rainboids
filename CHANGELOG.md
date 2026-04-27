@@ -11,6 +11,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.34.0] - 2026-04-26
+
+### Changed
+- **SFX library redesigned with multi-layer SFXR compositions.** sfxr is monophonic — one wave, one envelope per voice — so the previous library felt thin. The generator now supports a `{ layers: [...] }` def shape: each layer is a separate sfxr render summed sample-wise into one WAV, then peak-normalized to 0.95. The result is a single playable WAV that carries body + impact + sparkle. Highlights:
+  - **`powerup`**: 3-layer ascending chime — sine bell with rising arpeggio + square shimmer with vibrato + high HPF'd twinkle tail. Reads as a chord, not a synth voice.
+  - **`playerHitAsteroid`** (player ship rams asteroid): noise punch + sub-bass sine rumble.
+  - **`playerHitEnemy`** (player ship rams enemy): square clang with downward arp + bright HPF'd alarm pip.
+  - **`playerHit_*`** (per-weapon bullet→enemy/asteroid): each weapon now has weight appropriate to its damage profile — PULSE_CANNON gets a punchy plasma blast over a low warm body; STORM_NEEDLES stays a thin tick (one voice — it's a fast SFX); SCATTER_GUN gets a noise-crunch over low body; RAIL_DRIVER gets a heavy arp'd clang with sub-bass; LANCE_BEAM gets a saw fizz with a high zap.
+  - **`enemyHit_*`** (per-pattern bullet→player): hunter gets a clean kinetic ping; guardian a warm chord; missile a deep boom + ringing tail; arc_lightning a noise crackle + zap pip; lay_mine a bassy thud + ring; etc. Each pattern is sonically distinct so the player learns to read incoming threats by ear.
+- **Generator output simplified to one WAV per sound.** No more 10-variant directories. `sfx/<name>.wav` lives at the manifest root; manifest is `{ sounds: { name: 'sfx/name.wav' } }`. Library shrank from 260 files / 2.7 MB to 26 files / 620 KB.
+- **Generator emits 16-bit PCM at 44.1 kHz.** Previous output rode jsfxr's 8-bit WAV encoder; layered mixing needs floating-point intermediate samples and 16-bit gives the headroom to encode the mix without quantization audible on the bass layers.
+
+### Removed
+- **Re-roll feature.** With one curated WAV per sound, the per-sound 🎲 button and the "REROLL ALL" button serve no purpose. Removed:
+  - `audioManager.rerollSound(name)` and `audioManager.rerollAllSounds()`
+  - The per-sound reroll button in `createSfxToggles()`
+  - `setupRerollAllButton()` and the `#reroll-all-sfx` element reference
+  - The "🎲 REROLL ALL" button div in `index.html`
+  - `.sfx-reroll-button` styles in `styles.css`
+- **Variant tracking** in `AudioManager` (`activeVariant` map, `_loadRandomVariant`) — replaced with a single decode pass over the manifest URLs.
+
+---
+
+## [5.33.0] - 2026-04-26
+
+### Changed
+- **SFX pipeline replaced with pre-rendered WAV library.** Sounds were previously synthesized live via the SFXR CDN bundle (`sfxr.toWebAudio(params, ctx)` rendering an AudioBuffer at init from a JS params object). Now `tools/scripts/generate-sfx.js` runs offline, generating 10 distinct variants per sound (260 WAVs total under `sfx/<name>/<NN>.wav`) plus a `sfx/manifest.json` that maps sound name → variant URLs. At game load, `AudioManager.init()` fetches the manifest, picks one random variant per sound, and decodes it into an `AudioBuffer` via `decodeAudioData`. `playSound()` is back to its simplest form — `createBufferSource` + `GainNode` + `start(0)` — with no scheduling cursor, no per-sound throttle, no decode-on-the-fly. Removes the runtime dependency on the sfxr CDN scripts (`https://sfxr.me/{riffwave,sfxr}.js` no longer loaded).
+
+### Added
+- **`sfx/` directory** holding 260 pre-rendered SFX variants (~2.7 MB). Regenerable any time via `npm run generate-sfx` (`--clean` to wipe first, `--variants=N` to change the count).
+- **`js/modules/audio/sound-defs.js`** — single source of truth for SFX. Each entry is either `{ preset: 'laserShoot', overrides? }` (re-rolled per variant via `sfxr.generate`) or `{ params: {...}, jitter? }` (mutated per variant via `jitterParams`). Both the offline generator and the runtime import this module.
+- **Per-sound re-roll wired through to swap variants live.** The pause menu's SFX tab `🎲` button calls `audioManager.rerollSound(name)`, which picks a different variant from the manifest, fetches+decodes it, and replaces the cached buffer. Subsequent `playSound(name)` calls use the new variant.
+- **`npm run generate-sfx`** script.
+
+### Removed
+- Inline `sfxr.generate(...)` and custom params object inside `audio-manager.js` constructor — moved to `sound-defs.js`.
+- Sfxr-readiness wait + 5s timeout in `main.js` `setupAudio()` — no longer needed (no global `sfxr` dependency at runtime).
+- `audioCursor` / `beginLogicTick` cross-tick spreading and per-sound `nextPlayTime` throttle (introduced in 5.32.4–5.32.5, neutralized in 5.32.6) — fully removed; `beginLogicTick` retained as a no-op for engine call-site compatibility.
+- The complex `rerollSound` switch statement that had per-sound regeneration logic in code — replaced with a one-liner that picks a different variant URL from the manifest.
+
+---
+
+## [5.32.6] - 2026-04-25
+
+### Fixed
+- **Collision SFX silently dropped after the v5.32.5 per-sound throttle.** The throttle was scheduled to drop repeats of the same sound name when `nextPlayTime` queued more than 0.5s ahead of `currentTime` — but in real continuous combat (rapid-fire onto multiple enemies, asteroid impacts, sustained beam contact) `nextPlayTime` accumulated faster than I modeled and the cap kicked in within seconds, silencing player-bullet hits, asteroid bumps, and enemy-bullet hits. A 2-second probe only saw mild drops; longer sustained gameplay hit the cap hard.
+
+### Reverted
+- Removed the `audioCursor` / `beginLogicTick` cross-tick spreading mechanism (v5.32.4) and the `nextPlayTime` per-sound repeat throttle (v5.32.5). `playSound()` is back to plain `src.start(0)` — same as v5.32.3. The "delayed then all at once" burst the cursor and throttle were trying to fix is a real but lower-priority phenomenon than dropped collision SFX; better to live with occasional same-tick stacking than have entire categories of sound silently disappear. `beginLogicTick(dtMs)` is kept as a no-op so the engine call site stays compatible if we revisit scheduling.
+
+---
+
+## [5.32.5] - 2026-04-25
+
+### Fixed
+- **SFX still bursting "all at once after a delay" despite the v5.32.4 cursor fix.** The cursor only spread sounds across logic *ticks* — but multi-pellet weapons (SCATTER_GUN's 5 pellets), hitstop releases (a frame's worth of bullets all landing in the catch-up tick), and rapid-fire onto clusters all generate multiple plays of the *same* sound name *within one tick*. Same-tick plays share an audio timestamp by design, so Web Audio fired them simultaneously and the user heard one loud blast instead of distinct hits. Added a per-sound rolling cursor `nextPlayTime[soundName]` enforcing a 30ms minimum gap between repeats of the same name; different names coexist freely (a `playerHit_PULSE_CANNON` and an `explosion` in the same tick still play together — they're meant to). Repeats queued more than 500ms ahead of `currentTime` drop, so a sustained spray of one sound doesn't accumulate seconds of trailing audio that play after the action stopped.
+
+---
+
+## [5.32.4] - 2026-04-25
+
+### Fixed
+- **SFX bursting after a perceived delay.** The game loop uses a fixed-step accumulator (`game-engine.js:1037`) that runs multiple `update()` ticks inside one `requestAnimationFrame` whenever the renderer hitches (long frame, hitstop release, post-pause catch-up). Every collision in those bunched-up ticks called `playSound()` synchronously, and each `src.start(0)` resolved to the same `AudioContext.currentTime` — Web Audio honored that and played them all at one instant instead of across the logical 16.67ms gaps the ticks actually represented. Now `AudioManager` carries an `audioCursor` that the engine advances via `beginLogicTick(dtMs)` before each fixed-step tick; `playSound()` schedules at the cursor (clamped to `currentTime`). Sounds inside one tick still share a stamp (correct — they happened "together" in game time), but sounds across bunched ticks march out by the tick interval. Clamping to `currentTime` keeps a stale cursor (e.g., long background-tab pause) from scheduling deep in the past.
+
+---
+
+## [5.32.3] - 2026-04-25
+
+### Fixed
+- **Per-weapon hit SFX (`playerHit_<weaponId>`) were silent for every primary weapon.** Only `createChargedBullets` (the charge-shot power) was stamping `bullet.weaponId`; the bullet pools spun up by `firePulseCannon`, `fireStormNeedles`, `fireScatterGun`, and `fireRailDriver` left `weaponId` undefined, so `audio:enemy-hit-by-bullet` resolved to the generic fallback `playHit`. Stamping moved into `applyGlobalBulletUpgrades` (the one chokepoint every primary fire path runs through) and unconditionally overwrites — bullets are pooled, so a stale weaponId from a previous use must be replaced, not preserved.
+- **LANCE_BEAM hit-SFX never played.** The beam doesn't go through the bullet pool, so it bypassed the `audio:enemy-hit-by-bullet` emit in the bullet-vs-enemy collision branch. `checkLanceBeamCollisions` now emits the same event with `'LANCE_BEAM'` once per beam-tick, throttled to ~6/sec via `player._lastBeamHitSfx` so the short sustained tone doesn't smear into a buzz at 60fps.
+
+---
+
+## [5.32.2] - 2026-04-25
+
+### Changed
+- **SFX engine swapped to WebAudio.** Each `playSound()` now spins up a fresh `AudioBufferSourceNode` + `GainNode` per call, so concurrent voices are unbounded — no pool, no throttle, no rewinding of in-flight playback. The old HTMLAudioElement pool capped each sound at 2 simultaneous instances and rewound the oldest on overflow, which silenced rapid-fire SFX (player shoot, swarm bullet hits, multi-enemy explosions). Buffers are rendered once at init via `sfxr.toWebAudio(params, ctx)` (`AudioBufferSourceNode.buffer` extracted directly — no WAV byte round-trip). AudioContext is created lazily and resumed on the first user gesture (`initializeAudio()`) to satisfy autoplay policy. `rerollSound()` re-renders the buffer when params change. Background music stays on `HTMLAudioElement` (single long track, no concurrency need).
+
+---
+
 ## [5.32.1] - 2026-04-26
 
 ### Added

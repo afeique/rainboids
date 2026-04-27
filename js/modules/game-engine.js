@@ -1035,6 +1035,13 @@ export class GameEngine {
             this.logicAccumulator += dt;
             let steps = 0;
             while (this.logicAccumulator >= this.logicTickRate && steps < this.maxLogicStepsPerFrame) {
+                // Advance the audio scheduling cursor before running the
+                // tick so any sounds emitted by this update() get stamped
+                // at this tick's logical time, not the wall-clock instant
+                // we happen to be running it on. Without this, multi-step
+                // catch-up frames pile every sound onto the same audio
+                // currentTime → audible "burst after delay" pattern.
+                this.audioManager.beginLogicTick(this.logicTickRate);
                 this.update();
                 this.logicAccumulator -= this.logicTickRate;
                 steps++;
@@ -1042,6 +1049,7 @@ export class GameEngine {
             // Spiral-of-death guard: drop accumulated time if we fell too far behind
             if (steps >= this.maxLogicStepsPerFrame) this.logicAccumulator = 0;
         } else {
+            this.audioManager.beginLogicTick(GAME_CONFIG.LOGIC_TICK_MS || 16.6667);
             this.update();
         }
 

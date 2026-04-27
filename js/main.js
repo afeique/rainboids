@@ -59,26 +59,8 @@ class RainboidsGame {
 
     async setupAudio() {
         this.audioManager = new AudioManager();
-
-        // Wait for sfxr to be ready with a timeout
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('sfxr library timeout')), 5000);
-        });
-
-        const sfxrPromise = new Promise(resolve => {
-            const checkSfxr = () => {
-                if (typeof sfxr !== 'undefined' && sfxr && (sfxr.generate || Object.keys(sfxr).length > 0)) {
-                    resolve();
-                } else {
-                    setTimeout(checkSfxr, 100);
-                }
-            };
-            checkSfxr();
-        });
-
         try {
-            await Promise.race([sfxrPromise, timeoutPromise]);
-            this.audioManager.init();
+            await this.audioManager.init();
         } catch (error) {
             console.warn('⚠️ Audio setup failed, continuing without sound:', error);
         }

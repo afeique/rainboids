@@ -1,538 +1,125 @@
-// Audio management for sound effects and music
+// Audio management for SFX and background music.
+//
+// SFX pipeline:
+//   1. Offline: tools/scripts/generate-sfx.js renders one .wav per sound
+//      under /sfx/<name>.wav, plus /sfx/manifest.json mapping name → URL.
+//   2. init() fetches the manifest and decodes every WAV into an
+//      AudioBuffer (one per sound — no variants).
+//   3. playSound(name) creates a fresh AudioBufferSourceNode + GainNode
+//      and starts it immediately. Polyphony is unbounded.
+//
+// Background music stays on HTMLAudioElement (single long track).
+
+const MANIFEST_URL = 'sfx/manifest.json';
 
 export class AudioManager {
     constructor() {
         this.audioReady = false;
-        this.sfxMasterVol = 0.1; // Start at 10% volume
-        this.maxSfxVolume = 0.2; // Maximum 20% volume
-        this.sounds = {};
-        this.audioCache = {};
+        this.sfxMasterVol = 0.1;
+        this.maxSfxVolume = 0.2;
         this.backgroundMusic = null;
-        
-        // Audio pool system for simultaneous playback
-        this.audioPool = new Map(); // Map of soundName -> Array of audio elements
-        this.poolSize = 2; // Reduced from 3 to 2 for better performance
-        
-        // Audio throttling to prevent overload
-        this.soundThrottles = new Map(); // Track last play time for each sound
-        this.minSoundInterval = 50; // Minimum 50ms between same sound effects
-        
-        // Track which sounds are enabled. The original 9 are listed
-        // explicitly so the SFX-tab toggle UI shows their stable order;
-        // the rest get auto-enabled when init() runs (see below).
-        this.soundEnabled = {
-            shoot: true,
-            hit: true,
-            coin: true,
-            powerup: true,
-            explosion: true,
-            playerExplosion: true,
-            tractorBeam: true,
-            shield: true,
-            healthRegen: true,
-        };
+
+        this.audioContext = null;
+        this.audioBuffers = new Map();   // name → AudioBuffer
+        this.soundEnabled = {};          // name → bool, populated when manifest loads
     }
-    
-    init() {
-        // Initialize sound effects using sfxr CDN API
-        this.sounds = {
-            shoot: sfxr.generate("laserShoot"),
-            hit: sfxr.generate("hitHurt"),
-            coin: sfxr.generate("pickupCoin"),
-            powerup: {
-                wave_type: 0, // Square wave for bright, magical sound
-                p_base_freq: 0.6, // Higher pitch for bright magical feel
-                p_freq_ramp: 0.3, // Rising pitch sweep
-                p_freq_dramp: -0.1, // Slight dip
-                p_env_attack: 0.0, // Instant attack
-                p_env_sustain: 0.15, // Short sustain
-                p_env_decay: 0.4, // Medium decay for sparkle effect
-                p_vib_strength: 0.3, // Vibrato for magical shimmer
-                p_vib_speed: 0.5, // Fast vibrato
-                p_arp_mod: 0.4, // Arpeggio for chord effect
-                p_arp_speed: 0.7, // Fast arpeggio
-                sound_vol: 0.25, // Moderate volume
-                sample_rate: 44100,
-                sample_size: 8
-            },
-            explosion: sfxr.generate("explosion"),
-            playerExplosion: sfxr.generate("explosion"),
-            tractorBeam: {
-                wave_type: 0,
-                p_base_freq: 0.15,
-                p_env_attack: 0,
-                p_env_sustain: 0.3,
-                p_env_decay: 0.1,
-                sound_vol: 0.18,
-                sample_rate: 44100,
-                sample_size: 8
-            },
-            shield: {
-                wave_type: 3, // Noise
-                p_base_freq: 0.3,
-                p_env_attack: 0.01,
-                p_env_sustain: 0.1,
-                p_env_decay: 0.2,
-                p_freq_ramp: -0.2,
-                p_hpf_freq: 0.2,
-                sound_vol: 0.3,
-                sample_rate: 44100,
-                sample_size: 8
-            },
-            healthRegen: {
-                wave_type: 1, // Sawtooth for warm tone
-                p_base_freq: 0.8, // Higher frequency for bright, healing sound
-                p_env_attack: 0.3, // Gentle fade in
-                p_env_sustain: 0.4, // Medium sustain
-                p_env_decay: 0.6, // Long, gentle fade out
-                p_freq_ramp: 0.1, // Slight upward frequency sweep
-                p_vib_speed: 6, // Gentle vibrato
-                p_vib_strength: 0.1, // Light vibrato
-                p_lpf_freq: 0.7, // Low pass filter for warmth
-                p_lpf_ramp: 0.2, // Gentle filter sweep
-                sound_vol: 0.15, // Quiet and soothing
-                sample_rate: 44100,
-                sample_size: 8
-            },
 
-            // ── Player damage SFX ─────────────────────────────────────────
-            // playerHitAsteroid: low rocky thud (noise wave, fast decay)
-            playerHitAsteroid: {
-                wave_type: 3, // Noise
-                p_base_freq: 0.18,
-                p_freq_ramp: -0.25,
-                p_env_attack: 0,
-                p_env_sustain: 0.08,
-                p_env_decay: 0.22,
-                p_lpf_freq: 0.4,
-                sound_vol: 0.32,
-                sample_rate: 44100,
-                sample_size: 8
-            },
-            // playerHitEnemy: sharper metallic clang (square + arp)
-            playerHitEnemy: {
-                wave_type: 0, // Square
-                p_base_freq: 0.42,
-                p_freq_ramp: -0.18,
-                p_env_attack: 0,
-                p_env_sustain: 0.05,
-                p_env_decay: 0.18,
-                p_arp_mod: -0.4,
-                p_arp_speed: 0.7,
-                p_hpf_freq: 0.1,
-                sound_vol: 0.28,
-                sample_rate: 44100,
-                sample_size: 8
-            },
+    async init() {
+        this._ensureAudioContext();
 
-            // ── Enemy bullet HIT-PLAYER SFX (one per shootPattern) ────────
-            // Triggered when a bullet of that pattern actually damages player.
-            enemyHit_hunter_single: {
-                wave_type: 0, p_base_freq: 0.52, p_freq_ramp: -0.2,
-                p_env_attack: 0, p_env_sustain: 0.04, p_env_decay: 0.12,
-                sound_vol: 0.22, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_guardian_spread: {
-                wave_type: 1, p_base_freq: 0.38, p_freq_ramp: -0.15,
-                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.16,
-                p_arp_mod: 0.3, p_arp_speed: 0.6,
-                sound_vol: 0.24, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_wasp_machinegun: {
-                wave_type: 0, p_base_freq: 0.65, p_freq_ramp: -0.3,
-                p_env_attack: 0, p_env_sustain: 0.02, p_env_decay: 0.08,
-                sound_vol: 0.18, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_charged_laser: {
-                wave_type: 1, p_base_freq: 0.32, p_freq_ramp: 0.2,
-                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.28,
-                p_vib_strength: 0.3, p_vib_speed: 0.8,
-                sound_vol: 0.32, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_arc_lightning: {
-                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: 0,
-                p_env_attack: 0, p_env_sustain: 0.1, p_env_decay: 0.22,
-                p_hpf_freq: 0.3, p_vib_strength: 0.5, p_vib_speed: 0.9,
-                sound_vol: 0.3, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_missile: {
-                wave_type: 3, p_base_freq: 0.12, p_freq_ramp: -0.1,
-                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.42,
-                p_lpf_freq: 0.3, p_lpf_ramp: -0.2,
-                sound_vol: 0.42, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_spiral_laser: {
-                wave_type: 1, p_base_freq: 0.48, p_freq_ramp: 0.15,
-                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.18,
-                p_vib_strength: 0.25, p_vib_speed: 0.7,
-                sound_vol: 0.24, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_sentinel_sweep: {
-                wave_type: 0, p_base_freq: 0.44, p_freq_ramp: -0.12,
-                p_env_attack: 0, p_env_sustain: 0.05, p_env_decay: 0.14,
-                p_arp_mod: -0.2, p_arp_speed: 0.5,
-                sound_vol: 0.22, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_lay_mine: {
-                wave_type: 3, p_base_freq: 0.15, p_freq_ramp: -0.05,
-                p_env_attack: 0, p_env_sustain: 0.22, p_env_decay: 0.5,
-                p_lpf_freq: 0.25,
-                sound_vol: 0.4, sample_rate: 44100, sample_size: 8
-            },
-            enemyHit_sweep_laser: {
-                wave_type: 1, p_base_freq: 0.28, p_freq_ramp: 0.1,
-                p_env_attack: 0.05, p_env_sustain: 0.22, p_env_decay: 0.32,
-                p_vib_strength: 0.4, p_vib_speed: 0.5,
-                sound_vol: 0.32, sample_rate: 44100, sample_size: 8
-            },
+        let manifest;
+        try {
+            const res = await fetch(MANIFEST_URL);
+            manifest = await res.json();
+        } catch (e) {
+            console.warn('Failed to load SFX manifest — sounds will be silent:', e);
+            return;
+        }
 
-            // ── Player bullet HIT-ENEMY SFX (one per primary weapon) ──────
-            // Triggered when a bullet of that weapon hits an enemy.
-            playerHit_PULSE_CANNON: {
-                wave_type: 0, p_base_freq: 0.55, p_freq_ramp: -0.25,
-                p_env_attack: 0, p_env_sustain: 0.03, p_env_decay: 0.12,
-                sound_vol: 0.22, sample_rate: 44100, sample_size: 8
-            },
-            playerHit_STORM_NEEDLES: {
-                wave_type: 0, p_base_freq: 0.72, p_freq_ramp: -0.35,
-                p_env_attack: 0, p_env_sustain: 0.015, p_env_decay: 0.06,
-                sound_vol: 0.13, sample_rate: 44100, sample_size: 8
-            },
-            playerHit_SCATTER_GUN: {
-                wave_type: 3, p_base_freq: 0.35, p_freq_ramp: -0.18,
-                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.18,
-                p_lpf_freq: 0.5,
-                sound_vol: 0.3, sample_rate: 44100, sample_size: 8
-            },
-            playerHit_RAIL_DRIVER: {
-                wave_type: 0, p_base_freq: 0.22, p_freq_ramp: -0.15,
-                p_env_attack: 0, p_env_sustain: 0.1, p_env_decay: 0.3,
-                p_arp_mod: -0.3, p_arp_speed: 0.55,
-                sound_vol: 0.42, sample_rate: 44100, sample_size: 8
-            },
-            playerHit_LANCE_BEAM: {
-                wave_type: 1, p_base_freq: 0.5, p_freq_ramp: 0.05,
-                p_env_attack: 0.02, p_env_sustain: 0.06, p_env_decay: 0.14,
-                p_vib_strength: 0.2, p_vib_speed: 0.8, p_hpf_freq: 0.15,
-                sound_vol: 0.18, sample_rate: 44100, sample_size: 8
-            },
-        };
-        
-        // Customize specific sounds further
-        this.sounds.playerExplosion.p_env_sustain = 0.4;
-        this.sounds.playerExplosion.p_base_freq = 0.2;
-        
-        // Pre-generate audio elements for all sounds
-        this.audioCache = {};
-        for (const [name, params] of Object.entries(this.sounds)) {
-            this.audioCache[name] = params;
-            // Auto-enable any sound not already in soundEnabled. Lets new
-            // SFX (player-hit-asteroid, enemyHit_*, playerHit_*, etc.) play
-            // immediately without manual roster updates. Original sounds
-            // keep their explicit ordering for the SFX-toggle UI.
-            if (!(name in this.soundEnabled)) {
-                this.soundEnabled[name] = true;
+        const ctx = this.audioContext;
+        if (!ctx) return;
+
+        for (const [name, url] of Object.entries(manifest.sounds || {})) {
+            this.soundEnabled[name] = true;
+            try {
+                const res = await fetch(url);
+                const bytes = await res.arrayBuffer();
+                const buf = await ctx.decodeAudioData(bytes);
+                this.audioBuffers.set(name, buf);
+            } catch (e) {
+                console.warn(`Failed to load SFX ${url}:`, e);
             }
         }
     }
-    
+
+    _ensureAudioContext() {
+        if (this.audioContext) return this.audioContext;
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return null;
+        try {
+            this.audioContext = new Ctor();
+        } catch (e) {
+            console.warn('AudioContext unavailable:', e);
+        }
+        return this.audioContext;
+    }
+
     setBackgroundMusic(audioElement) {
         this.backgroundMusic = audioElement;
     }
-    
+
     initializeAudio() {
         if (this.audioReady) return;
         this.audioReady = true;
+        // Browser autoplay policy: AudioContext starts suspended; resume()
+        // must run inside a user-gesture stack (main.js startGame).
+        const ctx = this._ensureAudioContext();
+        if (ctx && ctx.state === 'suspended') {
+            ctx.resume().catch(e => console.warn('AudioContext resume failed:', e));
+        }
         if (this.backgroundMusic) {
-            this.backgroundMusic.play().catch(e => console.error("Music playback failed:", e));
+            this.backgroundMusic.play().catch(e => console.error('Music playback failed:', e));
         }
     }
-    
-    playSound(soundName) {
-        if (!this.audioReady || !this.audioCache[soundName] || !this.soundEnabled[soundName]) return;
-        
-        // Throttle sounds to prevent audio overload
-        const now = Date.now();
-        const lastPlayTime = this.soundThrottles.get(soundName) || 0;
-        if (now - lastPlayTime < this.minSoundInterval) {
-            return; // Skip this sound to prevent spam
-        }
-        this.soundThrottles.set(soundName, now);
-        
-        try {
-            // Get or create audio pool for this sound
-            if (!this.audioPool.has(soundName)) {
-                this.audioPool.set(soundName, []);
-            }
-            
-            const pool = this.audioPool.get(soundName);
-            let snd = null;
-            
-            // Find an available audio element in the pool
-            for (let audio of pool) {
-                if (audio.paused || audio.ended || audio.currentTime === 0) {
-                    snd = audio;
-                    break;
-                }
-            }
-            
-            // If no available audio element, create a new one (if pool not full)
-            if (!snd && pool.length < this.poolSize) {
-                const params = this.audioCache[soundName];
-                
-                if (typeof params === 'object' && params.wave_type !== undefined) {
-                    // This is a parameter object, use sfxr.toAudio
-                    const soundParams = Object.assign({}, params);
-                    // Apply the master volume to the sound_vol parameter
-                    soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
-                    snd = sfxr.toAudio(soundParams);
-                } else {
-                    // This is a generated sound object, use it directly
-                    snd = sfxr.toAudio(params);
-                }
-                
-                if (snd) {
-                    pool.push(snd);
-                }
-            }
-            
-            // If still no sound available, use the oldest one in the pool
-            if (!snd && pool.length > 0) {
-                snd = pool[0];
-                snd.currentTime = 0; // Reset to beginning
-            }
-            
-            // Play the sound
-            if (snd && snd.play) {
-                try {
-                    const playResult = snd.play();
-                    // Check if play() returns a Promise (has .catch method)
-                    if (playResult && typeof playResult.catch === 'function') {
-                        playResult.catch(e => {
-                            // Ignore autoplay policy errors - they're expected
-                        });
-                    }
-                } catch (e) {
-                    console.warn(`Failed to play sound ${soundName}:`, e);
-                }
-            }
-        } catch (error) {
-            console.warn(`Failed to create sound ${soundName}:`, error);
-        }
-    }
-    
-    playShoot() { this.playSound('shoot'); }
-    playHit() { this.playSound('hit'); }
-    playCoin() { this.playPickupSound('coin'); }
-    playPowerup() { this.playSound('powerup'); }
-    playExplosion() { this.playSound('explosion'); }
-    playPlayerExplosion() { this.playSound('playerExplosion'); }
-    playTractorBeam() { this.playSound('tractorBeam'); }
-    playShield() { this.playSound('shield'); }
-    playHealthRegen() { this.playSound('healthRegen'); }
-    
-    // Special method for pickup sounds that bypasses throttling and timing restrictions
-    playPickupSound(soundName) {
-        if (!this.audioReady || !this.audioCache[soundName] || !this.soundEnabled[soundName]) return;
-        
-        // NO throttling for pickup sounds - they should always play immediately
-        
-        try {
-            // Get or create audio pool for this sound
-            if (!this.audioPool.has(soundName)) {
-                this.audioPool.set(soundName, []);
-            }
-            
-            const pool = this.audioPool.get(soundName);
-            let snd = null;
-            
-            // Find an available audio element in the pool
-            for (let audio of pool) {
-                if (audio.paused || audio.ended || audio.currentTime === 0) {
-                    snd = audio;
-                    break;
-                }
-            }
-            
-            // If no available audio element, create a new one (if pool not full)
-            if (!snd && pool.length < this.poolSize) {
-                const params = this.audioCache[soundName];
-                
-                if (typeof params === 'object' && params.wave_type !== undefined) {
-                    // This is a parameter object, use sfxr.toAudio
-                    const soundParams = Object.assign({}, params);
-                    // Apply the master volume to the sound_vol parameter
-                    soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
-                    snd = sfxr.toAudio(soundParams);
-                } else {
-                    // This is a generated sound object, use it directly
-                    snd = sfxr.toAudio(params);
-                }
-                
-                if (snd) {
-                    pool.push(snd);
-                }
-            }
-            
-            // If still no sound available, create a temporary one (no pool limit for pickups)
-            if (!snd) {
-                const params = this.audioCache[soundName];
-                
-                if (typeof params === 'object' && params.wave_type !== undefined) {
-                    const soundParams = Object.assign({}, params);
-                    soundParams.sound_vol = (params.sound_vol || 0.5) * this.sfxMasterVol;
-                    snd = sfxr.toAudio(soundParams);
-                } else {
-                    snd = sfxr.toAudio(params);
-                }
-            }
-            
-            // Play the sound immediately
-            if (snd && snd.play) {
-                try {
-                    snd.currentTime = 0; // Always start from beginning
-                    const playResult = snd.play();
-                    // Check if play() returns a Promise (has .catch method)
-                    if (playResult && typeof playResult.catch === 'function') {
-                        playResult.catch(e => {
-                            // Ignore autoplay policy errors - they're expected
-                        });
-                    }
-                } catch (e) {
-                    console.warn(`Failed to play pickup sound ${soundName}:`, e);
-                }
-            }
-        } catch (error) {
-            console.warn(`Failed to create pickup sound ${soundName}:`, error);
-        }
-    }
-    
-    setSfxVolume(normalizedVolume) {
-        // normalizedVolume is 0-1 from the slider, map it to 0-maxSfxVolume
-        this.sfxMasterVol = normalizedVolume * this.maxSfxVolume;
-    }
-    
-    getSfxVolume() {
-        // Return the normalized value (0-1) for the slider
-        return this.sfxMasterVol / this.maxSfxVolume;
-    }
-    
-    setSoundEnabled(soundName, enabled) {
-        if (this.soundEnabled.hasOwnProperty(soundName)) {
-            this.soundEnabled[soundName] = enabled;
-        }
-    }
-    
-    isSoundEnabled(soundName) {
-        return this.soundEnabled[soundName] ?? true;
-    }
-    
-    getSoundNames() {
-        return Object.keys(this.soundEnabled);
-    }
-    
-    rerollSound(soundName) {
-        if (!this.sounds.hasOwnProperty(soundName)) {
-            console.warn(`Unknown sound: ${soundName}`);
-            return;
-        }
-        
-        // Generate new sound effect based on the sound type
-        let newSound;
-        switch (soundName) {
-            case 'shoot':
-                newSound = sfxr.generate("laserShoot");
-                break;
-            case 'hit':
-                newSound = sfxr.generate("hitHurt");
-                break;
-            case 'coin':
-                newSound = sfxr.generate("pickupCoin");
-                break;
-            case 'explosion':
-            case 'playerExplosion':
-                newSound = sfxr.generate("explosion");
-                break;
-            case 'tractorBeam':
-                // Generate a custom tractor beam sound with some randomization
-                newSound = {
-                    wave_type: 0,
-                    p_base_freq: 0.1 + Math.random() * 0.1, // 0.1-0.2
-                    p_env_attack: 0,
-                    p_env_sustain: 0.2 + Math.random() * 0.2, // 0.2-0.4
-                    p_env_decay: 0.05 + Math.random() * 0.1, // 0.05-0.15
-                    sound_vol: 0.15 + Math.random() * 0.1, // 0.15-0.25
-                    sample_rate: 44100,
-                    sample_size: 8
-                };
-                break;
-            case 'shield':
-                // Generate a custom shield sound with some randomization
-                newSound = {
-                    wave_type: 3, // Noise
-                    p_base_freq: 0.2 + Math.random() * 0.2, // 0.2-0.4
-                    p_env_attack: 0.01,
-                    p_env_sustain: 0.05 + Math.random() * 0.1, // 0.05-0.15
-                    p_env_decay: 0.1 + Math.random() * 0.2, // 0.1-0.3
-                    p_freq_ramp: -0.3 + Math.random() * 0.2, // -0.3 to -0.1
-                    p_hpf_freq: 0.1 + Math.random() * 0.2, // 0.1-0.3
-                    sound_vol: 0.2 + Math.random() * 0.2, // 0.2-0.4
-                    sample_rate: 44100,
-                    sample_size: 8
-                };
-                break;
-            case 'healthRegen':
-                // Generate a custom healing sound with some randomization
-                newSound = {
-                    wave_type: 1, // Sawtooth for warm tone
-                    p_base_freq: 0.7 + Math.random() * 0.3, // 0.7-1.0 for bright healing sound
-                    p_env_attack: 0.2 + Math.random() * 0.2, // 0.2-0.4 gentle fade in
-                    p_env_sustain: 0.3 + Math.random() * 0.2, // 0.3-0.5 medium sustain
-                    p_env_decay: 0.4 + Math.random() * 0.4, // 0.4-0.8 gentle fade out
-                    p_freq_ramp: Math.random() * 0.2, // 0-0.2 slight upward sweep
-                    p_vib_speed: 4 + Math.random() * 4, // 4-8 gentle vibrato
-                    p_vib_strength: 0.05 + Math.random() * 0.1, // 0.05-0.15 light vibrato
-                    p_lpf_freq: 0.6 + Math.random() * 0.2, // 0.6-0.8 low pass for warmth
-                    p_lpf_ramp: 0.1 + Math.random() * 0.2, // 0.1-0.3 gentle filter sweep
-                    sound_vol: 0.1 + Math.random() * 0.1, // 0.1-0.2 quiet and soothing
-                    sample_rate: 44100,
-                    sample_size: 8
-                };
-                break;
-            default:
-                console.warn(`No reroll logic for sound: ${soundName}`);
-                return;
-        }
-        
-        // Update the sound
-        this.sounds[soundName] = newSound;
-        
-        // Apply specific customizations based on sound type
-        if (soundName === 'playerExplosion') {
-            this.sounds.playerExplosion.p_env_sustain = 0.3 + Math.random() * 0.2; // 0.3-0.5
-            this.sounds.playerExplosion.p_base_freq = 0.15 + Math.random() * 0.1; // 0.15-0.25
-        }
-        
-        if (soundName === 'powerup') {
-            // Randomize powerup sound for magical variety each pickup
-            this.sounds.powerup.p_base_freq = 0.55 + Math.random() * 0.15; // 0.55-0.7 for pitch variety
-            this.sounds.powerup.p_freq_ramp = 0.25 + Math.random() * 0.15; // 0.25-0.4 for sweep variety
-            this.sounds.powerup.p_vib_strength = 0.2 + Math.random() * 0.2; // 0.2-0.4 for shimmer variety
-        }
-        
-        // Update audio cache
-        this.audioCache[soundName] = newSound;
-        
-    }
-    
-    rerollAllSounds() {
-        const soundNames = Object.keys(this.sounds);
-        
-        soundNames.forEach(soundName => {
-            this.rerollSound(soundName);
-        });
-        
-    }
-} 
 
-export const audioManager = new AudioManager(); 
+    // No-op kept for engine compatibility — see game-engine.js update loop.
+    beginLogicTick(_dtMs) {}
+
+    playSound(soundName) {
+        if (!this.audioReady || !this.soundEnabled[soundName]) return;
+        const ctx = this.audioContext;
+        if (!ctx) return;
+        const buffer = this.audioBuffers.get(soundName);
+        if (!buffer) return;
+
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        const gain = ctx.createGain();
+        gain.gain.value = this.sfxMasterVol;
+        src.connect(gain).connect(ctx.destination);
+        src.start(0);
+    }
+
+    // Convenience aliases used throughout the codebase.
+    playShoot()           { this.playSound('shoot'); }
+    playHit()             { this.playSound('hit'); }
+    playCoin()            { this.playSound('coin'); }
+    playPowerup()         { this.playSound('powerup'); }
+    playExplosion()       { this.playSound('explosion'); }
+    playPlayerExplosion() { this.playSound('playerExplosion'); }
+    playTractorBeam()     { this.playSound('tractorBeam'); }
+    playShield()          { this.playSound('shield'); }
+    playHealthRegen()     { this.playSound('healthRegen'); }
+    playPickupSound(name) { this.playSound(name); }
+
+    setSfxVolume(normalized) { this.sfxMasterVol = normalized * this.maxSfxVolume; }
+    getSfxVolume()           { return this.sfxMasterVol / this.maxSfxVolume; }
+
+    setSoundEnabled(name, enabled) {
+        if (name in this.soundEnabled) this.soundEnabled[name] = !!enabled;
+    }
+    isSoundEnabled(name) { return this.soundEnabled[name] ?? true; }
+    getSoundNames()      { return Object.keys(this.soundEnabled); }
+}
+
+export const audioManager = new AudioManager();

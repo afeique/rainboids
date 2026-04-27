@@ -591,6 +591,7 @@ export function checkLanceBeamCollisions() {
         const dy = Math.sin(p.angle);
         const dmg = config.damage * (1 + p.getPowerupStacks('OVERLOAD_BEAM') * 2);
 
+        let connected = false;
         this.enemyPool.activeObjects.forEach(enemy => {
             if (!enemy.active || enemy._deathFlash > 0) return;
             // Point-to-line distance check
@@ -601,8 +602,20 @@ export function checkLanceBeamCollisions() {
             const perpDist = Math.abs(ex * dy - ey * dx);
             if (perpDist < beamW / 2 + (enemy.radius || 15)) {
                 this.damageEnemy(enemy, dmg);
+                connected = true;
             }
         });
+        // Beam hit-SFX throttled to ~6/sec so it doesn't machine-gun every
+        // frame the beam is touching something. WebAudio handles polyphony,
+        // but the LANCE_BEAM hit is a short sustained tone — replaying at
+        // 60fps just smears it.
+        if (connected) {
+            const now = performance.now();
+            if (!p._lastBeamHitSfx || now - p._lastBeamHitSfx > 160) {
+                p._lastBeamHitSfx = now;
+                this.events.emit('audio:enemy-hit-by-bullet', 'LANCE_BEAM');
+            }
+        }
     }
 }
 

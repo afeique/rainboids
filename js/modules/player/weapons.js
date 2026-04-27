@@ -346,6 +346,12 @@ export function startLanceBeam(audioManager, config) {
 // ── Global bullet upgrades ─────────────────────────────────────────────────
 
 export function applyGlobalBulletUpgrades(bullet) {
+    // Stamp the firing primary so collision-system can pick the per-weapon
+    // hit SFX (audio:enemy-hit-by-bullet → playerHit_<weaponId>). Every
+    // primary fire path runs through this helper, so this is the one
+    // chokepoint to set it. Charge-shot stamps its own weaponId separately.
+    bullet.weaponId = this.activePrimary;
+
     const homingStacks = this.getPowerupStacks('HOMING');
     const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
     const piercingStacks = this.getPowerupStacks('PIERCING');

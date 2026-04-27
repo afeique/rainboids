@@ -53,7 +53,6 @@ export class UIManager {
             sfxVolumeSlider: document.getElementById('sfx-volume-slider'),
             sfxVolumeValue: document.getElementById('sfx-volume-value'),
             sfxTogglesContainer: document.getElementById('sfx-toggles'),
-            rerollAllSfxButton: document.getElementById('reroll-all-sfx'),
             // Powerups tab elements
             powerupsList: document.getElementById('powerups-list'),
             noPowerups: document.getElementById('no-powerups'),
@@ -636,9 +635,6 @@ export class UIManager {
         
         // Create sound effect toggles
         this.createSfxToggles();
-        
-        // Setup reroll all button
-        this.setupRerollAllButton();
     }
     
     createSfxToggles() {
@@ -677,36 +673,6 @@ export class UIManager {
                 }
             });
             
-            // Re-roll button
-            const rerollButton = document.createElement('button');
-            rerollButton.className = 'sfx-reroll-button';
-            rerollButton.textContent = '🎲';
-            rerollButton.title = 'Generate new sound';
-            rerollButton.addEventListener('click', () => {
-                this.audioManager.rerollSound(soundName);
-                
-                // Visual feedback - brief animation
-                const originalText = rerollButton.textContent;
-                rerollButton.textContent = '✨';
-                rerollButton.style.background = 'rgba(0, 255, 0, 0.3)';
-                rerollButton.style.borderColor = 'rgba(0, 255, 0, 0.7)';
-                rerollButton.style.transform = 'scale(1.1)';
-                
-                setTimeout(() => {
-                    rerollButton.textContent = originalText;
-                    rerollButton.style.background = 'rgba(255, 165, 0, 0.2)';
-                    rerollButton.style.borderColor = 'rgba(255, 165, 0, 0.5)';
-                    rerollButton.style.transform = 'scale(1)';
-                }, 300);
-                
-                // Optionally play the new sound for immediate feedback
-                if (this.audioManager.isSoundEnabled(soundName)) {
-                    setTimeout(() => {
-                        this.audioManager.playSound(soundName);
-                    }, 100);
-                }
-            });
-            
             // Toggle switch
             const switchDiv = document.createElement('div');
             switchDiv.className = 'sfx-toggle-switch active';
@@ -720,45 +686,11 @@ export class UIManager {
             });
             
             controlsDiv.appendChild(testButton);
-            controlsDiv.appendChild(rerollButton);
             controlsDiv.appendChild(switchDiv);
             
             toggleDiv.appendChild(label);
             toggleDiv.appendChild(controlsDiv);
             this.elements.sfxTogglesContainer.appendChild(toggleDiv);
-        });
-    }
-    
-    setupRerollAllButton() {
-        if (!this.elements.rerollAllSfxButton || !this.audioManager) return;
-        
-        this.elements.rerollAllSfxButton.addEventListener('click', () => {
-            this.audioManager.rerollAllSounds();
-            
-            // Visual feedback - brief flash effect
-            const originalText = this.elements.rerollAllSfxButton.textContent;
-            this.elements.rerollAllSfxButton.textContent = '✨ REROLLED!';
-            this.elements.rerollAllSfxButton.style.background = 'rgba(0, 255, 0, 0.3)';
-            this.elements.rerollAllSfxButton.style.borderColor = 'rgba(0, 255, 0, 0.7)';
-            
-            setTimeout(() => {
-                this.elements.rerollAllSfxButton.textContent = originalText;
-                this.elements.rerollAllSfxButton.style.background = 'rgba(255, 165, 0, 0.2)';
-                this.elements.rerollAllSfxButton.style.borderColor = 'rgba(255, 165, 0, 0.5)';
-            }, 1000);
-        });
-        
-        // Add hover effect
-        this.elements.rerollAllSfxButton.addEventListener('mouseenter', () => {
-            this.elements.rerollAllSfxButton.style.background = 'rgba(255, 165, 0, 0.3)';
-            this.elements.rerollAllSfxButton.style.borderColor = 'rgba(255, 165, 0, 0.7)';
-            this.elements.rerollAllSfxButton.style.transform = 'scale(1.05)';
-        });
-        
-        this.elements.rerollAllSfxButton.addEventListener('mouseleave', () => {
-            this.elements.rerollAllSfxButton.style.background = 'rgba(255, 165, 0, 0.2)';
-            this.elements.rerollAllSfxButton.style.borderColor = 'rgba(255, 165, 0, 0.5)';
-            this.elements.rerollAllSfxButton.style.transform = 'scale(1)';
         });
     }
     

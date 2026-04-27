@@ -2,7 +2,7 @@
 
 > Comprehensive technical documentation of the Rainboids game engine architecture, main loop, rendering pipeline, and all game objects.
 >
-> Generated 2026-04-25 against version 5.25.2.
+> Generated 2026-04-25 against version 5.25.2. Audio section last reviewed 2026-04-26 against version 5.34.0.
 
 ---
 
@@ -66,7 +66,7 @@ The browser loads `index.html`, which includes `js/main.js` as a module. A `Rain
 1. DOM ready
 2. Load assets (images, audio samples) via AssetLoader
 3. Setup canvas (full viewport)
-4. Initialize AudioManager (sfxr sound generation, 5s timeout)
+4. Initialize AudioManager (fetch /sfx/manifest.json, decode 26 WAVs)
 5. Create InputHandler, UIManager
 6. Create GameEngine (all dependencies injected)
 7. Register start handlers (keydown, click, touchstart)
@@ -735,15 +735,28 @@ Unified input state object consumed by Player.update():
 
 ### 9.5 Audio System
 
-**Files**: `js/modules/audio/audio-manager.js`, `js/modules/audio/music-player.js`
+**Files**: `js/modules/audio/audio-manager.js`, `js/modules/audio/sound-defs.js`, `js/modules/audio/music-player.js`. Generator: `tools/scripts/generate-sfx.js`. Pre-rendered library: `sfx/<name>.wav` + `sfx/manifest.json` (26 sounds, ~620 KB).
 
-**Sound effects** (generated via sfxr): shoot, hit, coin, powerup, explosion, playerExplosion, tractorBeam, shield, healthRegen
+**SFX pipeline** (rewritten 5.34.0):
+1. **Offline render** — `npm run generate-sfx` reads `sound-defs.js` and writes one WAV per sound to `/sfx/`. Defs are one of:
+   - `{ preset }` — `sfxr.generate(preset)` once (laserShoot, hitHurt, pickupCoin, explosion).
+   - `{ params }` — explicit single-voice render.
+   - `{ layers: [{ params, gain }, ...] }` — each layer rendered separately, sum-mixed sample-wise, peak-normalized to 0.95. Used for the chord-y/multi-component sounds (powerup chime, weapon impacts, ship-collision thud-plus-zap) since sfxr is monophonic per voice.
+   Output is mono 16-bit PCM at 44.1 kHz.
+2. **Load** — `AudioManager.init()` fetches `sfx/manifest.json`, then for each entry `fetch → arrayBuffer → audioContext.decodeAudioData → audioBuffers.set(name, buf)`.
+3. **Play** — `playSound(name)` creates a fresh `AudioBufferSourceNode` + `GainNode` per call and `start(0)`s it. No pool, no throttle, no rewind. Polyphony is unbounded; nodes are auto-GC'd after the buffer ends. Master volume is per-call so the slider takes effect on the next play without re-decoding.
 
-**Audio pooling**: Max 2 concurrent instances per sound, 50ms throttle between same-type plays.
+**Sound categories**:
+- Core: `shoot`, `hit`, `coin`, `powerup`, `explosion`, `playerExplosion`, `tractorBeam`, `shield`, `healthRegen`
+- Player ship collisions: `playerHitAsteroid`, `playerHitEnemy`
+- Per-pattern enemy bullet → player (10): `enemyHit_hunter_single`, `enemyHit_guardian_spread`, `enemyHit_wasp_machinegun`, `enemyHit_charged_laser`, `enemyHit_arc_lightning`, `enemyHit_missile`, `enemyHit_spiral_laser`, `enemyHit_sentinel_sweep`, `enemyHit_lay_mine`, `enemyHit_sweep_laser`
+- Per-weapon player bullet → enemy/asteroid (5): `playerHit_PULSE_CANNON`, `playerHit_STORM_NEEDLES`, `playerHit_SCATTER_GUN`, `playerHit_RAIL_DRIVER`, `playerHit_LANCE_BEAM`
 
-**Music**: Playlist loaded from pre-generated track list, Fisher-Yates shuffled, with adjacent track preloading for gapless playback.
+**Triggering**: Via event bus, e.g. `events.emit('audio:explosion')`. Per-weapon hits go via `events.emit('audio:enemy-hit-by-bullet', bullet.weaponId)` → game-engine resolves to `playSound('playerHit_<weaponId>')` (or `playHit()` fallback). Enemy-bullet hits use `events.emit('audio:player-hit-bullet', bullet.firingPattern)` symmetrically. `bullet.weaponId` is stamped in `applyGlobalBulletUpgrades`; `bullet.firingPattern` is stamped via thread-local `gameEngine._activeShotPattern` in the enemy `shoot()` dispatch.
 
-**Triggering**: Via event bus -- `gameEngine.events.emit('audio:explosion')` from collision handlers.
+**Music**: Playlist loaded from pre-generated track list, Fisher-Yates shuffled, with adjacent track preloading for gapless playback. Stays on `HTMLAudioElement` (single long track, no concurrency need).
+
+**No SFX runtime synthesis**: The sfxr CDN scripts are not loaded at runtime; only the offline generator depends on the `jsfxr` npm package.
 
 ### 9.6 HUD System
 
@@ -884,7 +897,8 @@ Per-frame ring buffer (3600 frames, ~60s) recording all visual effect state. Ena
 
 **`js/modules/audio/`**
 
-- `audio-manager.js` — SFX generation, pooling, throttling.
+- `audio-manager.js` — Loads pre-rendered WAVs from `/sfx/manifest.json`, plays via WebAudio (one source+gain per call). See §9.5.
+- `sound-defs.js` — Source-of-truth SFX registry (preset / params / layers shapes). Imported by both runtime and the offline generator.
 - `music-player.js` — Background music playlist.
 
 **`js/modules/performance/`**

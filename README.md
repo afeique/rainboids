@@ -22,7 +22,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **63 background music tracks** by Karl Casey @ White Bat Audio
-- **Procedural SFX** via SFXR — granular hit sounds per enemy bullet pattern and per player primary weapon
+- **Curated SFX library** — multi-layer SFXR compositions (powerup chime, weapon impacts, ship collisions) pre-rendered to 26 WAVs; granular hit sounds per enemy bullet pattern and per player primary weapon
 - **Modular ES6 architecture** — domain managers, extracted renderers, state machine, event bus, and frame-counted timers, built with Vite
 
 ---
@@ -231,7 +231,7 @@ Enemy health and damage scale with wave number. Enemy levels increase with wave 
 
 ### Audio
 - **58 background music tracks** by Karl Casey @ White Bat Audio
-- **Procedural SFX** generated via SFXR
+- **Curated SFX library** — 26 hand-tuned multi-layer WAVs (~620 KB), pre-rendered offline from layered SFXR voices and decoded once via WebAudio
 - Built-in music player with playlist support
 - Individual sound effect toggles and volume control
 
@@ -348,7 +348,8 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │       │   ├── shop-manager.js #  Shop logic, purchases, tab builders
 │       │   └── shop-renderer.js # Shop window, tabs, items, scrollbar
 │       ├── audio/             # Audio pipeline
-│       │   ├── audio-manager.js # SFX playback (procedural SFXR)
+│       │   ├── audio-manager.js # WebAudio playback of pre-rendered WAV variants
+│       │   ├── sound-defs.js   #   Source-of-truth SFX registry (presets + custom params)
 │       │   └── music-player.js #  Background music player with playlist
 │       ├── ui/                # DOM UI and input
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button, lives)
@@ -359,6 +360,9 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 ├── css/
 │   └── styles.css             # Game styling
 ├── music/                     # 58 MP3 tracks (~336MB)
+├── sfx/                       # Pre-rendered SFX library (one .wav per sound)
+│   ├── manifest.json          #   Sound name → file URL
+│   └── <sound-name>.wav       #   Layered SFXR renders (regenerate via npm run generate-sfx)
 ├── deprecated/                # Orphan modules retained for reference (no importers)
 │   └── js/modules/performance/  # Pre-spatial-grid perf experiments
 ├── docs/                      # Planning docs, analysis, and research
@@ -370,7 +374,7 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 ├── tools/                     # Development tools and automation
 │   ├── benchmark/             #   Mitata microbenchmark suite
 │   ├── ai-qa-bot/             #   AI QA bot for automated playtesting
-│   ├── scripts/               #   Playlist generation and utilities
+│   ├── scripts/               #   Playlist generation, SFX generation, utilities
 │   └── juice-capture.mjs      #   Juice tuning screen capture
 ├── tests/
 │   ├── unit/                  # Jest unit tests
