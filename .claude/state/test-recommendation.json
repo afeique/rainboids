@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-04-27T03:26:01Z",
-  "changed_file": "js/modules/ui/ui-manager.js",
+  "timestamp": "2026-04-29T22:21:56Z",
+  "changed_file": "js/modules/player/weapons.js",
   "test_command": "npx jest --verbose",
   "related_test": "",
   "recommendation": "テストの実行を推奨します"

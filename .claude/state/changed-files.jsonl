@@ -99,3 +99,15 @@
 {"file":"js/modules/ui/ui-manager.js","action":"Edit","timestamp":"2026-04-27T03:25:19Z","important":false}
 {"file":"css/styles.css","action":"Edit","timestamp":"2026-04-27T03:26:23Z","important":false}
 {"file":"ENGINE.md","action":"Edit","timestamp":"2026-04-27T03:31:29Z","important":false}
+{"file":"js/modules/audio/sound-defs.js","action":"Write","timestamp":"2026-04-27T13:28:12Z","important":false}
+{"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-27T14:09:29Z","important":false}
+{"file":"VERSION","action":"Write","timestamp":"2026-04-27T14:09:32Z","important":false}
+{"file":"README.md","action":"Edit","timestamp":"2026-04-27T14:09:40Z","important":false}
+{"file":"ENGINE.md","action":"Edit","timestamp":"2026-04-27T14:10:01Z","important":false}
+{"file":"js/modules/combat/collision-system.js","action":"Edit","timestamp":"2026-04-27T14:59:16Z","important":false}
+{"file":"tools/scripts/probe-split.mjs","action":"Write","timestamp":"2026-04-27T14:59:54Z","important":false}
+{"file":"js/modules/world/asteroid.js","action":"Edit","timestamp":"2026-04-29T21:40:13Z","important":false}
+{"file":"js/modules/combat/collision-system.js","action":"Edit","timestamp":"2026-04-29T21:40:54Z","important":false}
+{"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-29T21:42:45Z","important":false}
+{"file":"VERSION","action":"Write","timestamp":"2026-04-29T21:42:50Z","important":false}
+{"file":"js/modules/player/weapons.js","action":"Edit","timestamp":"2026-04-29T22:21:56Z","important":false}

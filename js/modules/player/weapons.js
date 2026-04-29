@@ -726,11 +726,15 @@ export function getHitStreakMultiplier() {
 // ── Charged shot firing ────────────────────────────────────────────────────
 
 export function fireChargedShot(bulletPool, audioManager) {
-    const chargeTime = (Date.now() - this.chargeStartTime) + this.pausedChargeTime;
+    const rawChargeTime = (Date.now() - this.chargeStartTime) + this.pausedChargeTime;
 
     // Apply charge speed upgrades
     const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
-    const reducedMaxChargeTime = this.maxChargeTime - (chargeSpeedStacks * 1000);
+    const reducedMaxChargeTime = Math.max(1000, this.maxChargeTime - (chargeSpeedStacks * 1000));
+
+    // Clamp charge time to the configured maximum so holding past full charge
+    // does not keep amplifying size/speed/damage/crit.
+    const chargeTime = Math.min(rawChargeTime, reducedMaxChargeTime);
 
     // Calculate multipliers directly proportional to milliseconds charged
     // Scale from 0ms to maxChargeTime (5000ms default, reduced by upgrades)

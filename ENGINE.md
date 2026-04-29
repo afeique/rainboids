@@ -2,7 +2,7 @@
 
 > Comprehensive technical documentation of the Rainboids game engine architecture, main loop, rendering pipeline, and all game objects.
 >
-> Generated 2026-04-25 against version 5.25.2. Audio section last reviewed 2026-04-26 against version 5.34.0.
+> Generated 2026-04-25 against version 5.25.2. Audio section last reviewed 2026-04-27 against version 5.35.0.
 
 ---
 
@@ -735,7 +735,9 @@ Unified input state object consumed by Player.update():
 
 ### 9.5 Audio System
 
-**Files**: `js/modules/audio/audio-manager.js`, `js/modules/audio/sound-defs.js`, `js/modules/audio/music-player.js`. Generator: `tools/scripts/generate-sfx.js`. Pre-rendered library: `sfx/<name>.wav` + `sfx/manifest.json` (26 sounds, ~620 KB).
+**Files**: `js/modules/audio/audio-manager.js`, `js/modules/audio/sound-defs.js`, `js/modules/audio/music-player.js`. Generator: `tools/scripts/generate-sfx.js`. Pre-rendered library: `sfx/<name>.wav` + `sfx/manifest.json` (26 sounds, ~900 KB).
+
+**Sound design vocabulary (5.35.0)**: every SFX is a 2–3 layer composition. The common stack: a low body (sine or low square — sub-bass thump for impact weight), a mid carrier (square, often duty-modulated — the recognizable note), and a high HPF'd transient or arpeggiated tail (brightness, sparkle, tech sheen). Most layers move in pitch via `p_freq_ramp` (descending energy bursts, rising chimes), `p_arp_mod` (chord intervals from one voice), or `p_vib_strength`/`p_vib_speed` (warbling beams, sustained hums) so nothing sits static.
 
 **SFX pipeline** (rewritten 5.34.0):
 1. **Offline render** — `npm run generate-sfx` reads `sound-defs.js` and writes one WAV per sound to `/sfx/`. Defs are one of:

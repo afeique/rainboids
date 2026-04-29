@@ -11,6 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.35.2] - 2026-04-29
+
+### Fixed
+- **Charge Shot kept charging past full.** `updateChargingSystem` clamped the visual `chargeLevel` to 1.0 and toggled `isFullyCharged` once the configured max was reached, but `fireChargedShot` then read the *raw* unclamped elapsed-time value when computing size, speed, damage bonus, and crit-chance bonus — so holding the fire button past the max charge window kept making the shot bigger and stronger forever, despite the HUD showing "fully charged." Fixed by clamping `chargeTime` to `reducedMaxChargeTime` before the multiplier math in `fireChargedShot`, so all derived values cap at the intended ceiling (~3 damage / +20% crit / 3× size at 5s default).
+
+---
+
+## [5.35.1] - 2026-04-27
+
+### Fixed
+- **Asteroid fragments visibly "jumped" apart on split.** Three things conspired: (1) fragment trajectories were assigned random angles, so two siblings could end up flying nearly the same direction and stay overlapping; (2) spawn used a `±20% of radius` positional jitter that pre-scattered fragments in an artificial-feeling way; (3) the 750ms collision-immunity window sometimes expired while fragments were still overlapping, at which point the asteroid-vs-asteroid collision system applied its positional `overlap` displacement and teleported them apart in one frame. Fixed by distributing fragment angles evenly around 360° (with ±25% slice-width jitter for organic feel — guarantees every pair diverges), spawning at the parent's exact center (velocity does all the separation, no artificial scatter), and bumping the immunity window to 2500ms so even the slowest-separating pair has cleared overlap before collisions kick in. Verified with a probe: fragments now separate monotonically (~85px/sec gap growth) and are 90px clear of overlap by the time immunity expires.
+
+---
+
+## [5.35.0] - 2026-04-27
+
+### Changed
+- **Every SFX redesigned for richness and futuristic character.** All 26 sounds in `sound-defs.js` are now multi-layer (most 3 layers, a few 2) — including the basic `shoot` / `hit` / `coin` / `explosion` / `playerExplosion` ones that previously rode bare sfxr presets. Common sonic vocabulary across the library:
+  - **Sub-bass body** (sine / low square): adds weight and "felt" impact under every hit.
+  - **Mid-impact carrier** (square, often duty-modulated): the recognizable note of the sound.
+  - **High HPF'd transient or arpeggiated tail**: brightness, sparkle, tech sheen.
+  - **Sweeps + arp_mod + vibrato**: most layers move in pitch (descending energy bursts, rising chimes, warbling beams) instead of staying static.
+- **Specific upgrades**:
+  - `shoot`: square pew with downward sweep + sub-bass thump + HPF brightness flash. Replaces the bare `laserShoot` preset.
+  - `hit`: synthetic kinetic slap with arp + HPF noise transient (was bare `hitHurt` preset).
+  - `coin`: 3-tone crystalline tinkle — sine root with rising sweep + square harmonic with vibrato + HPF arpeggio sparkle (was bare `pickupCoin`).
+  - `explosion` / `playerExplosion`: sub-bass boom + LPF noise body + HPF crackle. `playerExplosion` adds a sawtooth power-down whine for the cataclysmic feel.
+  - `tractorBeam`: square hum + sine harmonic, both with vibrato — sustained energy field instead of a static drone.
+  - `shield`: noise wash + crystal sine ping with rising sweep — force-field bloom.
+  - `healthRegen`: warm LPF'd sawtooth + healing sine harmonic with arp.
+  - `playerHitAsteroid`: noise punch + sub-bass rumble + metallic ring layer.
+  - `playerHitEnemy`: square clang + sub-impact + bright HPF alarm pip.
+  - All `enemyHit_*` and `playerHit_*` sounds gained a 3rd layer (where appropriate) — high HPF transients on small hits, sub-bass impacts on heavy hits, arpeggiated tails on energy weapons.
+- **Library size**: 26 files / 620 KB → 26 files / 904 KB (still tiny). File counts unchanged — same 26 sounds, just denser per file.
+
+---
+
 ## [5.34.0] - 2026-04-26
 
 ### Changed

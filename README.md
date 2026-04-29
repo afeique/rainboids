@@ -22,7 +22,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **63 background music tracks** by Karl Casey @ White Bat Audio
-- **Curated SFX library** — multi-layer SFXR compositions (powerup chime, weapon impacts, ship collisions) pre-rendered to 26 WAVs; granular hit sounds per enemy bullet pattern and per player primary weapon
+- **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 26 WAVs; granular hit sounds per enemy bullet pattern and per player primary weapon
 - **Modular ES6 architecture** — domain managers, extracted renderers, state machine, event bus, and frame-counted timers, built with Vite
 
 ---
@@ -231,7 +231,7 @@ Enemy health and damage scale with wave number. Enemy levels increase with wave 
 
 ### Audio
 - **58 background music tracks** by Karl Casey @ White Bat Audio
-- **Curated SFX library** — 26 hand-tuned multi-layer WAVs (~620 KB), pre-rendered offline from layered SFXR voices and decoded once via WebAudio
+- **Curated futuristic SFX library** — 26 hand-tuned multi-layer WAVs (~900 KB), pre-rendered offline from stacked SFXR voices (sub-bass body + mid carrier + HPF brightness layer) and decoded once via WebAudio
 - Built-in music player with playlist support
 - Individual sound effect toggles and volume control
 

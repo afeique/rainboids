@@ -181,26 +181,31 @@ export function handleCollisions() {
                             this.triggerScreenShake(25, ast.baseRadius * 0.8, ast.baseRadius);
                         }
 
-                        const count = (Math.random() < 0.5 ? 2 : 3) + 1; // Now 3 or 4
+                        const count = (Math.random() < 0.5 ? 2 : 3) + 1; // 3 or 4
                         const newR = ast.baseRadius / Math.sqrt(count);
 
-                            for (let k = 0; k < count; k++) {
-                            // Spawn fragments around the parent's center with jitter
-                            const spawnX = ast.x + random(-ast.radius * 0.2, ast.radius * 0.2);
-                            const spawnY = ast.y + random(-ast.radius * 0.2, ast.radius * 0.2);
-
-                            const newAst = this.asteroidPool.get(spawnX, spawnY, newR, ast.level);
-
+                        // Distribute fragment trajectories evenly around 360° with
+                        // small angular jitter — guarantees every pair diverges
+                        // (random-angle assignment can give two fragments nearly
+                        // the same direction, leaving them stuck overlapping until
+                        // the immunity timer expires and the collision system
+                        // teleports them apart). Fragments spawn at the parent's
+                        // exact center; velocity does all the separating work
+                        // (no artificial positional jitter at spawn).
+                        const baseAngle = random(0, Math.PI * 2);
+                        const sliceWidth = (Math.PI * 2) / count;
+                        for (let k = 0; k < count; k++) {
+                            const newAst = this.asteroidPool.get(ast.x, ast.y, newR, ast.level);
                             if (newAst) {
-                                // Fragments are slightly weaker than parent, with some randomness (70-90%)
+                                // Slightly weaker than parent, with some randomness (70-90%)
                                 const fragHP = Math.max(5, Math.round(ast.maxHealth * random(0.7, 0.9)));
                                 newAst.maxHealth = fragHP;
                                 newAst.health = fragHP;
 
-                                // Explosive outward velocity — fast and chaotic
-                                const angle = random(0, Math.PI * 2);
-                                const speed = random(3.5, 8.0);
-
+                                // Symmetric burst direction + jitter (≤25% of slice
+                                // width so adjacent fragments can't overlap angles)
+                                const angle = baseAngle + k * sliceWidth + random(-sliceWidth * 0.25, sliceWidth * 0.25);
+                                const speed = random(4.5, 7.5);
                                 newAst.vel.x = ast.vel.x * 0.3 + Math.cos(angle) * speed;
                                 newAst.vel.y = ast.vel.y * 0.3 + Math.sin(angle) * speed;
                             }
@@ -228,9 +233,15 @@ export function handleCollisions() {
             let a1 = activeAsteroids[i], a2 = activeAsteroids[j];
             if (!a1.active || !a2.active) continue;
 
-            // Grant temporary immunity to newly spawned asteroids
+            // Grant temporary immunity to newly spawned asteroids so that
+            // freshly split fragments can naturally fly apart on their own
+            // velocity instead of being teleported apart by the positional
+            // overlap-displacement below. 2.5s is generous — even a slow
+            // pair (~3 px/frame divergence) clears a parent-radius overlap
+            // in well under a second; the wider window keeps the visible
+            // jump-apart from ever showing up.
             const now = Date.now();
-            if (now - a1.creationTime < 750 || now - a2.creationTime < 750) {
+            if (now - a1.creationTime < 2500 || now - a2.creationTime < 2500) {
                 continue;
             }
 
