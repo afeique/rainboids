@@ -320,23 +320,50 @@ export class Asteroid {
 
         this.drawAsteroidShape(ctx);
 
-        // Damage flash — redraw hull as bright white silhouette overlay on hit
-        if (this._hitFlashTimer > 0 && this.projectedVertices && this.projectedVertices.length > 0) {
-            const flashAlpha = Math.min(1, (this._hitFlashTimer / 10) * 0.9);
+        // Damage flash — propagating wave that radiates outward from the
+        // impact point, lighting up each edge as the wavefront sweeps past.
+        // We're back in entity-local coords here (post-translate), so we
+        // convert the world-space hit point to local coords as well.
+        if (this._hitFlashTimer > 0 && this.projectedVertices && this.edges && this.edges.length > 0) {
+            const maxT = 10;
+            const progress = 1 - (this._hitFlashTimer / maxT); // 0 → 1
+            const hp = this._hitPoint || { x: this.x, y: this.y };
+            const hx = hp.x - this.x;
+            const hy = hp.y - this.y;
+            // Diameter is the worst-case distance from any impact to any edge.
+            const maxDist = Math.max(1, this.radius * 2);
+            // Wavefront sweeps from 0 → ~1.1 in normalized distance over the flash.
+            const wave = progress * 1.1;
+            const waveWidth = 0.32; // bell-curve half-width in normalized units
+
             ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = flashAlpha;
-            ctx.strokeStyle = '#ffffff';
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.lineWidth = 2.5;
-            ctx.beginPath();
-            for (let i = 0; i < this.projectedVertices.length; i++) {
-                const v = this.projectedVertices[i];
-                if (i === 0) ctx.moveTo(v.x, v.y);
-                else ctx.lineTo(v.x, v.y);
+            ctx.lineCap = 'round';
+
+            for (let i = 0; i < this.edges.length; i++) {
+                const e = this.edges[i];
+                const v1 = this.projectedVertices[e[0]];
+                const v2 = this.projectedVertices[e[1]];
+                if (!v1 || !v2) continue;
+
+                const mx = (v1.x + v2.x) * 0.5;
+                const my = (v1.y + v2.y) * 0.5;
+                const dNorm = Math.hypot(mx - hx, my - hy) / maxDist;
+
+                // Gaussian centered on the wavefront — edge peaks as it passes.
+                const u = (wave - dNorm) / waveWidth;
+                const intensity = Math.exp(-u * u);
+                if (intensity < 0.02) continue;
+
+                ctx.globalAlpha = Math.min(1, intensity);
+                ctx.strokeStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(v1.x, v1.y);
+                ctx.lineTo(v2.x, v2.y);
+                ctx.stroke();
             }
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+
+            ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
         }
 

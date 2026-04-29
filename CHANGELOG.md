@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.36.3] - 2026-04-29
+
+### Changed
+- **Target HP header now uses three distinct font sizes.** Previously `LV.` and the level number shared one font size (22px) and the name was 16px. Split into three independent sizes, each bottom-aligned with the name baseline so the row reads cleanly: `LV.` label at 12px (blue `#5DA9FF`, smallest), level number at 18px (red `#E74057`, middle), enemy name at 22px (gold `#FFD700`, largest). Each piece is measured at its own font size before layout so the LV block stays flush to the name's left edge regardless of digit count.
+
+---
+
+## [5.36.2] - 2026-04-29
+
+### Changed
+- **Top-of-screen target HP display rebalanced.** The `LV.N` indicator and the enemy name swapped visual weight: level font bumped from 14px → 22px so it reads at a glance, enemy name dropped from 22px → 16px so it no longer dominates the row. Existing bottom-alignment math keeps the (now larger) LV block flush with the (now smaller) name's baseline, and the health bar slides up the few pixels naturally — no manual layout tweaks needed.
+
+---
+
+## [5.36.1] - 2026-04-29
+
+### Changed
+- **Pause-menu controls list font enlarged.** Each control row in the CONTROLS tab now uses 1.25rem with 1.4 line-height (was inheriting the smaller default), and the boxed `.control-symbol` chips bumped from 1.5rem to 1.75rem so labels like `WASD` / `LEFT-CLICK` read clearly. Row spacing nudged from 6px to 10px to keep the list breathing at the larger size.
+
+---
+
+## [5.36.0] - 2026-04-29
+
+### Changed
+- **Asteroid hit flash now propagates as a wave across every edge.** Previously the damage flash filled the entire dodecahedron silhouette uniformly white for the duration of the timer — every face lit at once, no spatial cue from where the bullet struck. Replaced with a per-edge propagation: each edge's brightness follows a Gaussian centered on a wavefront that expands outward from the world-space impact point, so the lattice lights up in a ring that sweeps across all 30 edges of the dodecahedron over the 10-frame window. Edge midpoint distance is normalized by the asteroid's diameter, the wave moves 0→1.1 over the flash duration, and intensity below 2% is culled. The localized hit-point glow, expanding ring, and directional debris remain unchanged.
+
+---
+
 ## [5.35.2] - 2026-04-29
 
 ### Fixed

@@ -160,7 +160,9 @@ body.shop-open .ui-element {
     margin-top: 14px;
 }
 #controls-tab .control-list > div {
-    margin: 6px 0;
+    margin: 10px 0;
+    font-size: 1.25rem;
+    line-height: 1.4;
 }
 
 /* Goldenrod scrollbars throughout the pause menu.
@@ -390,7 +392,7 @@ body.shop-open #hud-pause-btn {
 }
 
 .control-symbol {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
 }
 
 #touch-fire {

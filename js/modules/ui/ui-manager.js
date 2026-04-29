@@ -330,10 +330,12 @@ export class UIManager {
             <div class="control-list">
                 <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
                 <div><span class="control-symbol">MOUSE</span> Aim</div>
-                <div><span class="control-symbol">LEFT-CLICK</span> Fire primary weapon (hold to keep firing)</div>
-                <div><span class="control-symbol">RIGHT-CLICK</span> or <span class="control-symbol">SPACE</span> Fire / charge power weapon</div>
-                <div><span class="control-symbol">1</span> &ndash; <span class="control-symbol">4</span> Activate equipped defense skill</div>
-                <div>ESC or P to Pause / Resume</div>
+                <div><span class="control-symbol">LEFT-CLICK</span><br>
+                Fire primary weapon (keep holding)</div>
+                <div><span class="control-symbol">RIGHT-CLICK</span> or <span class="control-symbol">SPACE</span><br>
+                Fire power weapon (auto charges)</div>
+                <div><span class="control-symbol">1</span> &ndash; <span class="control-symbol">4</span> Defense skills</div>
+                <div><span class="control-symbol">ESC</span> Pause / Resume</div>
             </div>
         `;
     }

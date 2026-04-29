@@ -85,9 +85,11 @@ export function drawTargetInfo() {
         const ctx = this.ctx;
         const centerX = this.width / 2;
 
-        // Font sizes — name larger than LV, both smaller than the old 28px.
-        const nameFontSize = 22;
-        const lvFontSize = 14;
+        // Three distinct font sizes, ordered: name (largest) > level number
+        // > "LV." label (smallest). Each colored separately.
+        const nameFontSize = 20;
+        const lvNumFontSize = 18;
+        const lvLabelFontSize = 14;
 
         const headerY = 24;
         const barY = headerY + nameFontSize + 8;     // ~54
@@ -101,46 +103,49 @@ export function drawTargetInfo() {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
 
         // ── Row 1: NAME centered, LV.N hanging off to its LEFT ───────────
-        // The enemy NAME stays centered on screen regardless of level digit
-        // count. The "LV.N" indicator sits flush against the name's left
-        // edge with a small gap — so the eye reads NAME first, then notices
-        // the level tag attached on the side.
+        // Enemy NAME stays centered on screen regardless of level digit
+        // count. The LV indicator sits flush against the name's left edge
+        // with a small gap. All three glyphs are bottom-aligned with the
+        // name's baseline so smaller text sits at the bottom of the row.
         const lvLabel = 'LV.';
         const lvNum = String(info.level || 1);
         const name = info.name;
 
-        // Measure name first so we know where its left edge sits.
+        // Measure name (largest glyph) so we know where its left edge sits.
         ctx.font = `bold ${nameFontSize}px 'Press Start 2P', monospace`;
         const nameW = ctx.measureText(name).width;
         const nameLeft = Math.round(centerX - nameW / 2);
 
-        // Bottom-align LV. row with name baseline so the smaller text sits
-        // at the bottom of the larger glyph height, not at its top.
+        // Common bottom baseline for the row.
         const nameBottom = headerY + nameFontSize;
-        const lvY = nameBottom - lvFontSize;
 
-        // Measure the LV.N block at LV font size.
-        ctx.font = `bold ${lvFontSize}px 'Press Start 2P', monospace`;
+        // Measure each LV piece at its own font size.
+        ctx.font = `bold ${lvLabelFontSize}px 'Press Start 2P', monospace`;
         const lvLabelW = ctx.measureText(lvLabel).width;
+        ctx.font = `bold ${lvNumFontSize}px 'Press Start 2P', monospace`;
         const lvNumW = ctx.measureText(lvNum).width;
+
         const lvBlockW = lvLabelW + lvNumW;
         const lvGap = 14;
         const lvBlockRight = nameLeft - lvGap;
         const lvBlockLeft = lvBlockRight - lvBlockW;
 
-        // "LV." in blue (left half of the block)
+        // "LV." in blue, smallest font, bottom-aligned with name.
+        ctx.font = `bold ${lvLabelFontSize}px 'Press Start 2P', monospace`;
         ctx.textAlign = 'left';
         ctx.fillStyle = '#5DA9FF';
-        ctx.strokeText(lvLabel, lvBlockLeft, lvY);
-        ctx.fillText(lvLabel, lvBlockLeft, lvY);
+        const lvLabelY = nameBottom - lvLabelFontSize;
+        ctx.strokeText(lvLabel, lvBlockLeft, lvLabelY);
+        ctx.fillText(lvLabel, lvBlockLeft, lvLabelY);
 
-        // Level number in lighter maroon — was #7A1F2A (too dark), now a
-        // brighter rose-red that still reads as "warning" but isn't muddy.
+        // Level number in red, mid font, bottom-aligned with name.
+        ctx.font = `bold ${lvNumFontSize}px 'Press Start 2P', monospace`;
         ctx.fillStyle = '#E74057';
-        ctx.strokeText(lvNum, lvBlockLeft + lvLabelW, lvY);
-        ctx.fillText(lvNum, lvBlockLeft + lvLabelW, lvY);
+        const lvNumY = nameBottom - lvNumFontSize;
+        ctx.strokeText(lvNum, lvBlockLeft + lvLabelW, lvNumY);
+        ctx.fillText(lvNum, lvBlockLeft + lvLabelW, lvNumY);
 
-        // Name in gold (centered on screen)
+        // Name in gold, largest font, centered on screen.
         ctx.font = `bold ${nameFontSize}px 'Press Start 2P', monospace`;
         ctx.fillStyle = '#FFD700';
         ctx.strokeText(name, nameLeft, headerY);

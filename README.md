@@ -36,7 +36,7 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 - **Fire primary**: Hold left-click (no auto-fire — release to stop)
 - **Fire / charge power weapon**: Right-click OR Spacebar
 - **Defense skills**: Number keys 1-4 (assign in pause menu's SKILLS tab)
-- **Pause**: Escape or P
+- **Pause**: Escape
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
 - **Shop**: Click 🛒 button in pause menu — buy upgrades for the currently-equipped weapons

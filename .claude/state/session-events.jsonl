@@ -344,3 +344,30 @@
 {"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/player/weapons.js"},"id":"event-000005","state":"stopped","ts":"2026-04-29T22:21:56Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000006","state":"stopped","ts":"2026-04-29T22:22:13Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000007","state":"stopped","ts":"2026-04-29T22:22:52Z","type":"tool.edit"}
+{"data":{"command":"grep -rn \"flash\\|hitFlash\\|hitEffect\" js/modules/entities/asteroid* js/modules/rendering/*asteroid* 2\u003e/dev/null | head -30"},"id":"event-000008","state":"stopped","ts":"2026-04-29T23:22:12Z","type":"tool.bash"}
+{"data":{"command":"find js -iname \"*asteroid*\" -type f"},"id":"event-000009","state":"stopped","ts":"2026-04-29T23:22:14Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"flash\\|hit\\|damage\\|takeDamage\" js/modules/world/asteroid.js | head -40"},"id":"event-000010","state":"stopped","ts":"2026-04-29T23:22:33Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"projectedVertices\\|drawAsteroidShape\\|project()\\|vertices\" js/modules/world/asteroid.js | head -30"},"id":"event-000011","state":"stopped","ts":"2026-04-29T23:22:42Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"_hitFlashTimer\\|_hitPoint\\|_hitAngle\" js/modules/world/asteroid.js js/modules/combat/collision-system.js | head -30"},"id":"event-000012","state":"stopped","ts":"2026-04-29T23:22:53Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"HIT_FLASH_FRAMES\" js/modules/combat/collision-system.js js/modules/core/constants.js | head -5"},"id":"event-000013","state":"stopped","ts":"2026-04-29T23:22:56Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/asteroid.js"},"id":"event-000014","state":"stopped","ts":"2026-04-29T23:23:21Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000015","state":"stopped","ts":"2026-04-29T23:23:26Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000016","state":"stopped","ts":"2026-04-29T23:23:35Z","type":"tool.edit"}
+{"data":{"command":"grep -rn \"pause\" js/modules/ui/ css/ index.html 2\u003e/dev/null | grep -i \"menu\\|control\" | head -20"},"id":"event-000017","state":"stopped","ts":"2026-04-29T23:29:17Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"control-list\\|control-symbol\\|controls-tab\" css/styles.css | head -20"},"id":"event-000018","state":"stopped","ts":"2026-04-29T23:29:23Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/css/styles.css"},"id":"event-000019","state":"stopped","ts":"2026-04-29T23:29:42Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/css/styles.css"},"id":"event-000020","state":"stopped","ts":"2026-04-29T23:29:47Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000021","state":"stopped","ts":"2026-04-29T23:29:52Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000022","state":"stopped","ts":"2026-04-29T23:30:00Z","type":"tool.edit"}
+{"data":{"command":"grep -rn \"enemy.*name\\|enemyName\\|boss.*name\\|target.*name\" js/modules/hud/ js/modules/ui/ css/ index.html 2\u003e/dev/null | head -20"},"id":"event-000023","state":"stopped","ts":"2026-04-29T23:30:52Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"level\\|Level\\|LEVEL\" js/modules/hud/ index.html css/styles.css 2\u003e/dev/null | grep -iE \"hp|health|name|target\" | head -20"},"id":"event-000024","state":"stopped","ts":"2026-04-29T23:30:56Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/hud/combat.js"},"id":"event-000025","state":"stopped","ts":"2026-04-29T23:31:13Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000026","state":"stopped","ts":"2026-04-29T23:31:23Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000027","state":"stopped","ts":"2026-04-29T23:31:32Z","type":"tool.edit"}
+{"data":{"command":"grep -rn \"KeyP\\|'p'\\|\\\"p\\\"\\|case 'p'\" js/modules/ index.html 2\u003e/dev/null | grep -iE \"pause|key\" | head -20"},"id":"event-000028","state":"stopped","ts":"2026-04-29T23:36:23Z","type":"tool.bash"}
+{"data":{"command":"grep -rn -iE \"esc.*p\\b|\\bp\\b.*pause|togglePause\" js/modules/ index.html 2\u003e/dev/null | head -20"},"id":"event-000029","state":"stopped","ts":"2026-04-29T23:36:32Z","type":"tool.bash"}
+{"data":{"command":"grep -rn -iE \"\\bp\\b.*pause|pause.*\\bp\\b|esc.*p\\b\" README.md docs/ index.html js/ css/ 2\u003e/dev/null | head -20"},"id":"event-000030","state":"stopped","ts":"2026-04-29T23:36:49Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/README.md"},"id":"event-000031","state":"stopped","ts":"2026-04-29T23:37:02Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/hud/combat.js"},"id":"event-000032","state":"stopped","ts":"2026-04-29T23:41:06Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000033","state":"stopped","ts":"2026-04-29T23:41:12Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000034","state":"stopped","ts":"2026-04-29T23:41:21Z","type":"tool.edit"}
