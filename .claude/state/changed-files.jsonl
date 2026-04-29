@@ -114,3 +114,8 @@
 {"file":"css/styles.css","action":"Edit","timestamp":"2026-04-29T23:29:42Z","important":false}
 {"file":"js/modules/hud/combat.js","action":"Edit","timestamp":"2026-04-29T23:31:13Z","important":false}
 {"file":"README.md","action":"Edit","timestamp":"2026-04-29T23:37:02Z","important":false}
+{"file":"js/modules/world/line-debris.js","action":"Edit","timestamp":"2026-04-29T23:50:22Z","important":false}
+{"file":"js/modules/combat/collision-system.js","action":"Edit","timestamp":"2026-04-29T23:50:38Z","important":false}
+{"file":"VERSION","action":"Edit","timestamp":"2026-04-29T23:50:50Z","important":false}
+{"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-29T23:51:08Z","important":false}
+{"file":"js/modules/world/particle.js","action":"Edit","timestamp":"2026-04-29T23:55:06Z","important":false}

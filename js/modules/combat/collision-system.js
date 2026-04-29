@@ -10,22 +10,29 @@ export const COLLISION_CONFIG = {
     BULLET_KNOCKBACK: 0.05,
     // Frames for hit-flash on asteroids and enemies
     HIT_FLASH_FRAMES: 10,
-    // Damage dealt to enemy when player collides with it
-    PLAYER_ENEMY_COLLISION_DAMAGE: 50,
-    // Damage dealt to asteroid when player collides with it
-    PLAYER_ASTEROID_COLLISION_DAMAGE: 25,
+    // Damage dealt to enemy when player collides with it. Kept low so
+    // ramming enemy ships is NOT a viable strategy — the player gets
+    // strongly deflected and barely scratches the enemy.
+    PLAYER_ENEMY_COLLISION_DAMAGE: 5,
+    // Damage dealt to asteroid when player collides with it. Same idea:
+    // a tiny scrape, not a kill stroke. Asteroids have 10–18 HP at full
+    // size, so this requires many rams (each costing the player health)
+    // to break — far worse than just shooting.
+    PLAYER_ASTEROID_COLLISION_DAMAGE: 2,
     // Bounce energy retention (0-1)
-    BOUNCE_RESTITUTION: 0.8,
-    // Multiplier for bounce impulse force
-    BOUNCE_FORCE_MULTIPLIER: 6.0,
+    BOUNCE_RESTITUTION: 0.9,
+    // Multiplier for bounce impulse force — bumped so the player gets
+    // launched off enemy ships rather than sliding through them.
+    BOUNCE_FORCE_MULTIPLIER: 12.0,
     // Ratio of overlap used for separation push
     OVERLAP_SEPARATION_RATIO: 0.6,
-    // Knockback multiplier for player-asteroid collisions
-    ASTEROID_KNOCKBACK_MULTIPLIER: 12.0,
+    // Knockback multiplier for player-asteroid collisions — bumped so the
+    // player is shoved away hard, killing the ramming exploit.
+    ASTEROID_KNOCKBACK_MULTIPLIER: 22.0,
     // Extra pixels buffer when separating overlapping entities
-    SEPARATION_BUFFER: 5,
+    SEPARATION_BUFFER: 6,
     // Additional velocity push when separating overlapping player/asteroid
-    OVERLAP_PUSH_FORCE: 2.0,
+    OVERLAP_PUSH_FORCE: 5.0,
     // Push force applied to enemy in enemy-asteroid collision
     ENEMY_ASTEROID_PUSH: 4,
     // Push force applied to asteroid in enemy-asteroid collision

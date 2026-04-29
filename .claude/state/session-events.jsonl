@@ -371,3 +371,21 @@
 {"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/hud/combat.js"},"id":"event-000032","state":"stopped","ts":"2026-04-29T23:41:06Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000033","state":"stopped","ts":"2026-04-29T23:41:12Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000034","state":"stopped","ts":"2026-04-29T23:41:21Z","type":"tool.edit"}
+{"data":{"command":"grep -rn \"lineDebris\\|asteroidDebris\\|debris\" js/modules/world/asteroid.js js/modules/combat/collision-system.js js/modules/effects/ 2\u003e/dev/null | head -30"},"id":"event-000035","state":"stopped","ts":"2026-04-29T23:48:32Z","type":"tool.bash"}
+{"data":{"command":"grep -rln \"lineDebris\\|LineDebris\\|asteroid.*break\\|asteroidBreak\" js/modules/ 2\u003e/dev/null | head -10"},"id":"event-000036","state":"stopped","ts":"2026-04-29T23:48:36Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"playerHitAsteroid\\|player.*asteroid\\|asteroid.*player\\|playerVsAsteroid\\|knockback\\|deflect\\|ram\" js/modules/combat/collision-system.js js/modules/player/*.js 2\u003e/dev/null | head -40"},"id":"event-000037","state":"stopped","ts":"2026-04-29T23:48:44Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"this.health\\|maxHealth\\|getLevelScaledCollisionDamage\" js/modules/world/asteroid.js | head -20"},"id":"event-000038","state":"stopped","ts":"2026-04-29T23:49:00Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"handlePlayerEnemyCollision\\|playerEnemyCollision\\|PLAYER_ENEMY_COLLISION_DAMAGE\" js/modules/combat/collision-system.js | head -10"},"id":"event-000039","state":"stopped","ts":"2026-04-29T23:49:09Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"createDebris\\|lineDebris\" js/modules/combat/collision-system.js js/modules/combat/combat-manager.js js/modules/game-engine.js 2\u003e/dev/null | head -20"},"id":"event-000040","state":"stopped","ts":"2026-04-29T23:49:32Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"BOUNCE_FORCE_MULTIPLIER\\|BOUNCE_RESTITUTION\\|ASTEROID_KNOCKBACK_MULTIPLIER\" js/modules/combat/collision-system.js | head -10"},"id":"event-000041","state":"stopped","ts":"2026-04-29T23:49:54Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/line-debris.js"},"id":"event-000042","state":"stopped","ts":"2026-04-29T23:50:22Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/combat/collision-system.js"},"id":"event-000043","state":"stopped","ts":"2026-04-29T23:50:38Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000044","state":"stopped","ts":"2026-04-29T23:50:50Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000045","state":"stopped","ts":"2026-04-29T23:51:08Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/line-debris.js"},"id":"event-000046","state":"stopped","ts":"2026-04-29T23:54:05Z","type":"tool.write"}
+{"data":{"command":"grep -rn \"explosionEmber\\|'explosionEmber'\\|\\\"explosionEmber\\\"\" js/modules/ --include=\"*.js\" | head -10"},"id":"event-000047","state":"stopped","ts":"2026-04-29T23:54:17Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"case 'explosionEmber'\\|explosionEmber:\" js/modules/ --include=\"*.js\" | head -5"},"id":"event-000048","state":"stopped","ts":"2026-04-29T23:54:20Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"baseAlpha\\|globalAlpha = \" js/modules/world/particle.js | head -20"},"id":"event-000049","state":"stopped","ts":"2026-04-29T23:54:44Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/particle.js"},"id":"event-000050","state":"stopped","ts":"2026-04-29T23:55:06Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/particle.js"},"id":"event-000051","state":"stopped","ts":"2026-04-29T23:55:16Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000052","state":"stopped","ts":"2026-04-29T23:55:32Z","type":"tool.edit"}

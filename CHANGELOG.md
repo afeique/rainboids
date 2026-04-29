@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.37.0] - 2026-04-29
+
+### Changed
+- **Ramming is no longer a viable strategy against asteroids or enemy ships.** Previously the player dealt 25 damage to asteroids (10–18 HP → instant kill) and 50 damage to enemies on contact, so flying head-first into things was a faster, safer "weapon" than actually shooting. Now contact does only a 2-damage scrape to asteroids and 5 damage to enemies — enough to finish a near-dead target but never enough to make ramming the optimal play.
+- **Stronger collision deflection.** To match, the player now gets launched off whatever it hits. `ASTEROID_KNOCKBACK_MULTIPLIER` 12.0 → 22.0, `BOUNCE_FORCE_MULTIPLIER` 6.0 → 12.0, `BOUNCE_RESTITUTION` 0.8 → 0.9, `OVERLAP_PUSH_FORCE` 2.0 → 5.0, `SEPARATION_BUFFER` 5 → 6. Combined with the lower contact damage, the player is now shoved decisively away from the surface instead of being able to sit inside the hitbox grinding it down.
+- **Asteroid hit-spark embers fade more gracefully.** The soft circular glowing dots that linger when a bullet strikes an asteroid (`explosionEmber`) now fade with a `pow(life, 0.55)` curve so they hold their brightness through most of the lifetime and ease out gently at the tail instead of dimming linearly. Lifetime stretched ~67% (decay 0.015 → 0.009/frame, roughly 1.1–1.8s → 1.8–3.0s) so they feel like cooling embers rather than flickering out. Both the inner dot and the additive `screen`-composited halo follow the same curve. (The line-debris segments from destroyed asteroids are unchanged — an earlier experiment with shadowBlur there hurt perf and was reverted.)
+
+---
+
 ## [5.36.3] - 2026-04-29
 
 ### Changed

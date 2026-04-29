@@ -324,7 +324,9 @@ export class Particle {
                 this.y += this.vel.y * TS;
                 this.vel.x *= Math.pow(0.97, TS);
                 this.vel.y *= Math.pow(0.97, TS);
-                this.life -= 0.015 * TS;
+                // Slower decay so embers linger longer and feel like they
+                // are cooling rather than just flickering out.
+                this.life -= 0.009 * TS;
                 break;
             case 'explosionRingColored':
                 this.life -= 0.035 * TS;
@@ -512,8 +514,14 @@ export class Particle {
                 break;
             }
 
-            case 'explosionEmber':
-                // Soft glowing dot
+            case 'explosionEmber': {
+                // Soft alpha curve — pow(life, 0.55) holds the brightness
+                // through most of the lifetime and eases out gently at the
+                // tail instead of dimming linearly. (No shadowBlur here —
+                // additive 'screen' composite is the only blend cost.)
+                const aLife = Math.max(0, this.life);
+                const softA = Math.pow(aLife, 0.55);
+                ctx.globalAlpha = softA;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
@@ -521,12 +529,13 @@ export class Particle {
                 // Additive glow halo
                 ctx.globalCompositeOperation = 'screen';
                 changedComposite = true;
-                ctx.globalAlpha = Math.max(0, this.life * 0.4);
+                ctx.globalAlpha = softA * 0.4;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius * 3, 0, Math.PI * 2);
                 ctx.fill();
                 break;
+            }
 
             case 'explosionRingColored':
                 ctx.globalAlpha = Math.max(0, this.life * 1.5);
