@@ -170,6 +170,8 @@
   },
   "active": "d0016efdb880f49f",
   "lastOpenFiles": [
+    "GALAXIAN_PLAN.md",
+    "GALAGA_CONVERSION.md",
     "Engine Writeup 2026-04-25.md",
     "Engine 2026-04-25.md",
     "Weapons Planning – 2026-03-10.md",
@@ -193,8 +195,6 @@
     "SKU_deployment.md",
     "REFACTOR.md",
     "QA_BOT_QUANTIFY_FUN.md",
-    "QA_BOT_HUMAN_SIM.md",
-    "PRIMARYWEAPON_update.md",
-    "PERFORMANCE_OPTIMIZATIONS_IMPLEMENTED.md"
+    "QA_BOT_HUMAN_SIM.md"
   ]
 }
