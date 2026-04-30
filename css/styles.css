@@ -349,13 +349,15 @@ body.shop-open .ui-element:not(#shop-overlay) {
 .shop-currency-label  { color: #4a90e2; font-size: 14px; }
 
 .shop-tabs {
-    /* 3-column grid: row 1 = gold-priced (OFFENSE / PRIMARY / POWER),
-       row 2 = SP-priced (DEFENSE / DROPS / SKILLS). Currency-grouped. */
+    /* 7 tabs: HELP + 6 category tabs. 4-column grid lays them out as
+       4 + 3 (HELP / OFFENSE / PRIMARY / POWER on row 1; DEFENSE /
+       DROPS / SKILLS on row 2). Width capped to keep tab cells from
+       getting too wide on ultrawide screens. */
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin: 8px 0 12px 0;
-    width: min(900px, 100%);
+    width: min(960px, 100%);
     margin-left: auto;
     margin-right: auto;
 }
@@ -388,6 +390,7 @@ body.shop-open .ui-element:not(#shop-overlay) {
 }
 
 /* Per-tab category colors — matches the canvas palette. */
+.shop-tab[data-tab="HELP"]    { --tab-color: #cccccc; --tab-glow: rgba(204, 204, 204, 0.35); }
 .shop-tab[data-tab="OFFENSE"] { --tab-color: #ffd700; --tab-glow: rgba(255, 215,   0, 0.40); }
 .shop-tab[data-tab="DEFENSE"] { --tab-color: #4a90e2; --tab-glow: rgba( 74, 144, 226, 0.40); }
 .shop-tab[data-tab="DROPS"]   { --tab-color: #44dd88; --tab-glow: rgba( 68, 221, 136, 0.40); }
@@ -470,6 +473,56 @@ body.shop-open .ui-element:not(#shop-overlay) {
 }
 .shop-item-sell:hover { background: rgba(220, 80, 80, 0.9); border-color: #ff9999; }
 
+/* HELP panel — instructional content shown on the HELP shop tab. */
+.shop-help {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 18px 22px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+    color: #e6e6e6;
+    font-family: 'Press Start 2P', monospace;
+}
+.shop-help-intro,
+.shop-help-footer {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #cccccc;
+}
+.shop-help-footer { color: #aaaaaa; font-style: normal; }
+.shop-help-entry {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 18px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 2px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+}
+.shop-help-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    font-size: 22px;
+    font-weight: bold;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+.shop-help-icon--sp { color: #6ab7ff; border-color: rgba(74, 144, 226, 0.7); }
+.shop-help-icon--xp { color: #ff6e6e; border-color: rgba(220, 60, 60, 0.7); }
+.shop-help-text { display: flex; flex-direction: column; gap: 6px; }
+.shop-help-title { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
+.shop-help-title--gold { color: #ffd700; }
+.shop-help-title--sp   { color: #6ab7ff; }
+.shop-help-title--xp   { color: #ff6e6e; }
+.shop-help-body { font-size: 12px; color: #d8d8d8; line-height: 1.7; }
+
 .pause-menu-actions {
     /* SHOP/RESUME row sits at the very top of the pause menu. The divider
        (border-bottom) sits inside this container, so the button→divider gap
@@ -539,6 +592,40 @@ body.shop-open .ui-element:not(#shop-overlay) {
 /* No-powerups placeholder text — suppress inherited text-shadow from .ui-element parent */
 #no-powerups {
     text-shadow: none;
+}
+
+/* HUD shop button — top-right, sits to the LEFT of the pause button so
+   the player can pop into the shop at any time without first pausing.
+   Same visual language as the pause button (goldenrod, dim until hover). */
+#hud-shop-btn {
+    position: fixed;
+    top: 16px;
+    right: 70px; /* width of pause btn (~38px) + 16px gap */
+    z-index: 90;
+    display: none; /* shown via showHudShopBtn() */
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    background: rgba(218, 165, 32, 0.08);
+    border: 2px solid rgba(218, 165, 32, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    opacity: 0.4;
+    font-size: 22px;
+    line-height: 1;
+    transition: opacity 0.25s, background 0.25s, border-color 0.25s, box-shadow 0.25s;
+}
+#hud-shop-btn:hover {
+    opacity: 1;
+    background: rgba(218, 165, 32, 0.28);
+    border-color: goldenrod;
+    box-shadow: 0 0 14px rgba(218, 165, 32, 0.8), 0 0 28px rgba(218, 165, 32, 0.35);
+}
+body.shop-open #hud-shop-btn {
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* Mobile pause menu — smaller, scrollable */

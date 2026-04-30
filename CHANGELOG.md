@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.0] - 2026-04-30
+
+### Added
+- **HELP tab in shop, now the landing tab.** Explains the three resources and the upgrade flow before the player browses items. Three entries:
+  - **GOLD** — dropped by destroyed enemies and asteroids, picks up automatically; spend on OFFENSE / PRIMARY / POWER (gold-priced).
+  - **SKILL POINTS (SP)** — awarded on level-up; spend on DEFENSE / DROPS / SKILLS (SP-priced).
+  - **EXPERIENCE (XP)** — awarded for every hit you land; tracked by the red bar under the health bar; filling it grants a level + 1 SP.
+  Lives in `shop-dom.js` `buildHelpPanel()`; styled by `.shop-help-*` rules. New `data-tab="HELP"` button uses neutral silver tab color matching the controls tab convention.
+- **HUD SHOP button (top-right, next to pause).** New `#hud-shop-btn` element matches the goldenrod styling/dim-until-hover pattern of `#hud-pause-btn`. Click opens the shop overlay directly during play — `gameEngine.openShop()` on click. Hidden during title screen and while shop is already open. New `ui:show-hud-shop-btn` / `ui:hide-hud-shop-btn` events route through `uiManager.showHudShopBtn()` / `hideHudShopBtn()`.
+
+### Changed
+- **Shop auto-opens after every wave clears.** Previously the wave-complete countdown counted to zero and started the next wave automatically. Now the countdown is removed: 700ms after the "WAVE COMPLETE!" toast registers, the shop pops up. The player browses for as long as they want and the next wave only starts when they close the shop (`closeShop()` already calls `startNextWave()`). Combined with the HELP tab as the landing page, this turns each between-wave moment into a roguelite progression beat — earn loot during the wave, spend it before the next.
+- **Shop tab grid widened to 4 columns** (`repeat(3, …)` → `repeat(4, …)`) to fit the new HELP tab. Layout: row 1 = HELP / OFFENSE / PRIMARY / POWER; row 2 = DEFENSE / DROPS / SKILLS. Strip width capped at `min(960px, 100%)` so cells don't stretch on ultrawide screens.
+
+---
+
 ## [5.38.7] - 2026-04-29
 
 ### Changed

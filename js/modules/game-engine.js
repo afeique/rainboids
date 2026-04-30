@@ -110,6 +110,8 @@ export class GameEngine {
         this.events.on('ui:hide-shop-button', () => this.uiManager.hideShopButton());
         this.events.on('ui:show-pause-btn', () => this.uiManager.showHudPauseBtn());
         this.events.on('ui:hide-pause-btn', () => this.uiManager.hideHudPauseBtn());
+        this.events.on('ui:show-hud-shop-btn', () => this.uiManager.showHudShopBtn());
+        this.events.on('ui:hide-hud-shop-btn', () => this.uiManager.hideHudShopBtn());
 
         // Frame-counted timers — only advance during PLAYING/WAVE_TRANSITION
         this._gameTimers = [];

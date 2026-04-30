@@ -135,3 +135,14 @@
 {"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-30T01:58:18Z","important":false}
 {"file":"js/modules/combat/weapon-data.js","action":"Edit","timestamp":"2026-04-30T02:35:42Z","important":false}
 {"file":"js/modules/player/weapons.js","action":"Edit","timestamp":"2026-04-30T02:45:38Z","important":false}
+{"file":"js/modules/shop/shop-manager.js","action":"Edit","timestamp":"2026-04-30T16:09:06Z","important":false}
+{"file":"index.html","action":"Edit","timestamp":"2026-04-30T16:09:24Z","important":false}
+{"file":"js/modules/shop/shop-dom.js","action":"Edit","timestamp":"2026-04-30T16:09:48Z","important":false}
+{"file":"css/styles.css","action":"Edit","timestamp":"2026-04-30T16:09:58Z","important":false}
+{"file":"js/modules/ui/ui-manager.js","action":"Edit","timestamp":"2026-04-30T16:12:11Z","important":false}
+{"file":"js/modules/hud/status.js","action":"Edit","timestamp":"2026-04-30T16:13:16Z","important":false}
+{"file":"js/modules/game-engine.js","action":"Edit","timestamp":"2026-04-30T16:13:23Z","important":false}
+{"file":"js/modules/wave/wave-manager.js","action":"Edit","timestamp":"2026-04-30T16:14:44Z","important":false}
+{"file":"VERSION","action":"Edit","timestamp":"2026-04-30T16:15:14Z","important":false}
+{"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-30T16:15:34Z","important":false}
+{"file":"README.md","action":"Edit","timestamp":"2026-04-30T16:15:48Z","important":false}

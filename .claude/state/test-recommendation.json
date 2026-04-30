@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-04-30T02:46:12Z",
-  "changed_file": "js/modules/combat/weapon-data.js",
+  "timestamp": "2026-04-30T16:14:44Z",
+  "changed_file": "js/modules/wave/wave-manager.js",
   "test_command": "npx jest --verbose",
   "related_test": "",
   "recommendation": "テストの実行を推奨します"

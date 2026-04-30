@@ -177,7 +177,9 @@ The shop offers permanent upgrades using two currencies:
 - **Coins**: Earned by destroying enemies and collecting money orbs
 - **Skill Points (SP)**: Gained by leveling up through experience
 
-The shop has six tabs: **Offense**, **Defense**, **Drops**, **Primary**, **Power**, and **Skills**. The **Primary** and **Power** tabs show only the upgrades for whichever weapon is currently equipped (selection happens in the pause menu — see Controls above). Switching weapons in the pause menu instantly repopulates the shop with that weapon's upgrades. ~55 upgrades total across all tabs.
+The shop has seven tabs: **Help**, **Offense**, **Primary**, **Power**, **Defense**, **Drops**, and **Skills**. **Help** is the landing tab and explains how Gold, SP, and XP are earned. Gold-priced tabs (Offense / Primary / Power) sit on row 1; SP-priced tabs (Defense / Drops / Skills) on row 2. The **Primary** and **Power** tabs show only the upgrades for whichever weapon is currently equipped (selection happens in the pause menu — see Controls above). Switching weapons in the pause menu instantly repopulates the shop with that weapon's upgrades. ~55 upgrades total across all tabs.
+
+**The shop auto-opens between waves.** When a wave clears, a brief "WAVE COMPLETE!" toast plays, then the shop pops up. The next wave only starts when the player closes the shop — there is no countdown. A SHOP button in the top-right HUD (next to the pause button) lets the player jump in mid-wave at any time.
 
 The shop is fullscreen with a transparent backdrop matching the pause menu — game world stays faintly visible behind. The whole UI is HTML (`#shop-overlay`) — tabs, items, sell buttons, and the scroll list are real DOM elements sharing CSS conventions with the pause menu. Close with the X button or ESC; both return to the pause menu.
 

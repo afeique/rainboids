@@ -53,6 +53,8 @@
         <p id="message-subtitle" class="message-subtitle" style="display: none;"></p>
     </div> -->
 
+    <button id="hud-shop-btn" aria-label="Shop">🛒</button>
+
     <button id="hud-pause-btn" aria-label="Pause">
         <span class="hud-pause-bar"></span>
         <span class="hud-pause-bar"></span>
@@ -197,8 +199,11 @@
                 </span>
             </div>
             <div class="shop-tabs">
-                <!-- Row 1: gold-priced tabs. Row 2: SP-priced tabs. -->
-                <button class="shop-tab active" data-tab="OFFENSE">OFFENSE</button>
+                <!-- Row 1: HELP + 2 gold tabs. Row 2: SP-priced tabs.
+                     HELP is the landing tab — explains how Gold / SP /
+                     XP work before the player browses upgrades. -->
+                <button class="shop-tab active" data-tab="HELP">HELP</button>
+                <button class="shop-tab" data-tab="OFFENSE">OFFENSE</button>
                 <button class="shop-tab" data-tab="PRIMARY">PRIMARY</button>
                 <button class="shop-tab" data-tab="POWER">POWER</button>
                 <button class="shop-tab" data-tab="DEFENSE">DEFENSE</button>

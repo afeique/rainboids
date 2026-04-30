@@ -152,6 +152,13 @@ export function renderShopDom() {
 
     const list = _elements.list;
     list.replaceChildren();
+
+    // HELP tab — instructional panel, not a buyable list.
+    if (_engine.shopCategory === 'HELP') {
+        list.appendChild(buildHelpPanel());
+        return;
+    }
+
     const items = _engine.shopFilteredItems || [];
 
     if (items.length === 0) {
@@ -167,6 +174,74 @@ export function renderShopDom() {
     for (const item of items) {
         list.appendChild(buildItemRow(item, player, game));
     }
+}
+
+// HELP panel — explains the three resources (Gold / SP / XP) and the
+// general flow of upgrading between waves. Pure DOM, styled by
+// `.shop-help-*` rules in styles.css.
+function buildHelpPanel() {
+    const wrap = document.createElement('div');
+    wrap.className = 'shop-help';
+
+    const intro = document.createElement('p');
+    intro.className = 'shop-help-intro';
+    intro.textContent = 'Earn resources during waves, then spend them between waves on permanent upgrades. The shop opens automatically after each wave clears — or hit the SHOP button at any time.';
+    wrap.appendChild(intro);
+
+    wrap.appendChild(buildHelpEntry({
+        iconNode: makeCoinIconSvg(28),
+        title: 'GOLD',
+        titleClass: 'shop-help-title--gold',
+        body: 'Dropped by destroyed enemies and asteroids. Picks up automatically when you fly near. Spend on the OFFENSE / PRIMARY / POWER tabs (gold-priced).',
+    }));
+
+    wrap.appendChild(buildHelpEntry({
+        iconText: 'SP',
+        iconClass: 'shop-help-icon--sp',
+        title: 'SKILL POINTS',
+        titleClass: 'shop-help-title--sp',
+        body: 'Awarded each time you level up. Level by gaining XP. Spend on the DEFENSE / DROPS / SKILLS tabs (SP-priced) — these give you survivability, drop bonuses, and active defensive skills.',
+    }));
+
+    wrap.appendChild(buildHelpEntry({
+        iconText: 'XP',
+        iconClass: 'shop-help-icon--xp',
+        title: 'EXPERIENCE',
+        titleClass: 'shop-help-title--xp',
+        body: 'Awarded for every hit you land — keep firing. Tracked by the red bar under your health. Filling the bar levels you up and grants a Skill Point.',
+    }));
+
+    const footer = document.createElement('p');
+    footer.className = 'shop-help-footer';
+    footer.textContent = 'Tip: defense skills (1–4 keys) and survivability are SP-priced — invest there early. Weapon damage and per-weapon upgrades are gold-priced. Visit each tab to see what is available.';
+    wrap.appendChild(footer);
+
+    return wrap;
+}
+
+function buildHelpEntry({ iconNode, iconText, iconClass, title, titleClass, body }) {
+    const entry = document.createElement('div');
+    entry.className = 'shop-help-entry';
+
+    const icon = document.createElement('div');
+    icon.className = 'shop-help-icon' + (iconClass ? ' ' + iconClass : '');
+    if (iconNode) icon.appendChild(iconNode);
+    else if (iconText) icon.textContent = iconText;
+    entry.appendChild(icon);
+
+    const text = document.createElement('div');
+    text.className = 'shop-help-text';
+    const h = document.createElement('div');
+    h.className = 'shop-help-title' + (titleClass ? ' ' + titleClass : '');
+    h.textContent = title;
+    text.appendChild(h);
+    const p = document.createElement('div');
+    p.className = 'shop-help-body';
+    p.textContent = body;
+    text.appendChild(p);
+    entry.appendChild(text);
+
+    return entry;
 }
 
 function buildItemRow(item, player, game) {

@@ -32,23 +32,26 @@ export function updateWaveSystem() {
     const totalEnemies = this.enemyPool.activeObjects.filter(e => !e._deathFlash).length;
 
     if (totalEnemies === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
-        // Wave completed!
+        // Wave completed! Roguelite flow: brief "WAVE COMPLETE!" toast,
+        // then auto-pop the shop. closeShop() routes back through
+        // startNextWave() so the player decides when the next wave kicks
+        // off — they can browse upgrades for as long as they want.
         this.game.waveComplete = true;
         this.game.waveCountdownTime = Date.now() + this.game.waveCountdownDuration;
         this.game.state = GAME_STATES.WAVE_TRANSITION;
 
         this.showWaveComplete();
+
+        // Short delay so the WAVE COMPLETE! toast registers, then shop
+        // takes over. No fallback countdown to startNextWave anymore —
+        // the shop is the gate between waves.
+        setTimeout(() => {
+            if (this.game.state === GAME_STATES.WAVE_TRANSITION) this.openShop();
+        }, 700);
     }
 
-    // Handle wave countdown
-    if (this.game.waveComplete && this.game.state === GAME_STATES.WAVE_TRANSITION) {
-        const timeLeft = this.game.waveCountdownTime - Date.now();
-
-        if (timeLeft <= 0) {
-            // Start next wave
-            this.startNextWave();
-        }
-    }
+    // (Removed) Auto-advance countdown — the shop now gates the next
+    // wave. closeShop() calls startNextWave() when the player is ready.
 }
 
 export function getWaveSubtitle(waveNumber) {

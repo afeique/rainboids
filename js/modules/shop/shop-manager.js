@@ -86,8 +86,9 @@ export function openShop() {
         }
 
 
-        // Initialize shop state
-        this.shopCategory = 'OFFENSE'; // Current tab: 'OFFENSE', 'DEFENSE', or 'DROPS'
+        // Initialize shop state. HELP is the landing tab so new players
+        // immediately see how Gold / SP / XP work.
+        this.shopCategory = 'HELP';
 
         // Define shop items with categories and currency types
         this.shopItems = [
@@ -127,7 +128,12 @@ export function openShop() {
 }
 
 export function _rebuildShopCache() {
-        if (this.shopCategory === 'PRIMARY') {
+        if (this.shopCategory === 'HELP') {
+            // HELP tab has no purchasable items — the renderer paints
+            // an instructions panel instead.
+            this.shopFilteredItems = [];
+            return;
+        } else if (this.shopCategory === 'PRIMARY') {
             this._buildPrimaryTabItems();
         } else if (this.shopCategory === 'POWER') {
             this._buildPowerTabItems();

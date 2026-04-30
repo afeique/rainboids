@@ -57,7 +57,8 @@ export class UIManager {
             powerupsList: document.getElementById('powerups-list'),
             noPowerups: document.getElementById('no-powerups'),
             // HUD pause button (top-left)
-            hudPauseBtn: document.getElementById('hud-pause-btn')
+            hudPauseBtn: document.getElementById('hud-pause-btn'),
+            hudShopBtn: document.getElementById('hud-shop-btn')
         };
     }
     
@@ -174,6 +175,18 @@ export class UIManager {
     hideHudPauseBtn() {
         if (this.elements.hudPauseBtn) {
             this.elements.hudPauseBtn.style.display = 'none';
+        }
+    }
+
+    showHudShopBtn() {
+        if (this.elements.hudShopBtn) {
+            this.elements.hudShopBtn.style.display = 'flex';
+        }
+    }
+
+    hideHudShopBtn() {
+        if (this.elements.hudShopBtn) {
+            this.elements.hudShopBtn.style.display = 'none';
         }
     }
     
@@ -767,6 +780,15 @@ export class UIManager {
                 if (this.gameEngine) {
                     this.gameEngine.togglePause();
                 }
+            });
+        }
+
+        // HUD shop button — top-right, sits next to the pause button.
+        // Lets the player jump into the shop at any time during play
+        // (also auto-opens between waves; see wave-manager.js).
+        if (this.elements.hudShopBtn) {
+            this.elements.hudShopBtn.addEventListener('click', () => {
+                if (this.gameEngine) this.gameEngine.openShop();
             });
         }
 
