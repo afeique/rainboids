@@ -5,6 +5,10 @@ import { hsl } from '../core/color-cache.js';
 
 const TS = GAME_CONFIG.TICK_SCALE; // Temporal scale factor for frame-based timers
 
+// Pre-built font strings for hot text-rendering paths — avoids reallocating
+// the same template-literal once per particle per frame.
+const DAMAGE_NUMBER_FONT = "16px 'Press Start 2P', monospace";
+
 export class Particle {
     constructor() {
         this.active = false;
@@ -460,7 +464,7 @@ export class Particle {
                 break;
 
             case 'damageNumber':
-                ctx.font = `${this.fontSize}px 'Press Start 2P', monospace`;
+                ctx.font = DAMAGE_NUMBER_FONT;
                 ctx.fillStyle = '#ff0000';
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = 3;

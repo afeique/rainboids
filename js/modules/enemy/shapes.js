@@ -264,25 +264,35 @@ export function drawTargetingEffect(ctx) {
         centerY += Math.sin(this.faceAngle) * (this.radius * 0.3);
     }
 
-    // Outer glow — shadowBlur on stroked arcs (ring outline, not fillable)
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = 15 * pulseIntensity;
-    ctx.globalAlpha = 0.4 * pulseIntensity;
-
-    // Draw subtle ring around entity
+    // Fake glow without shadowBlur: wide faint ring + sharp ring on top.
+    // Stroked-ring shadowBlur is one of the slowest canvas patterns.
+    const r = this.radius + 8;
     ctx.strokeStyle = this.color;
+    ctx.globalAlpha = 0.18 * pulseIntensity;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.4 * pulseIntensity;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, this.radius + 8, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
     ctx.stroke();
 
     // Inner highlight ring
-    ctx.shadowBlur = 8 * pulseIntensity;
-    ctx.globalAlpha = 0.6 * pulseIntensity;
+    const r2 = this.radius + 5;
     ctx.strokeStyle = '#FFFFFF';
+    ctx.globalAlpha = 0.25 * pulseIntensity;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, r2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.6 * pulseIntensity;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, this.radius + 5, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, r2, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.restore();

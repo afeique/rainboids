@@ -1,0 +1,1 @@
+{"event":"task_completed","teammate":"","task_id":"1","subject":"Quick wins: shadowBlur removal + frameClock.now","description":"Remove redundant shadowBlur calls (powerup icon, bomb labels, asteroid/enemy targeting rings), repla","timestamp":"2026-04-30T00:45:01Z"}

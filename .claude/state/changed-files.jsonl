@@ -120,3 +120,6 @@
 {"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-29T23:51:08Z","important":false}
 {"file":"js/modules/world/particle.js","action":"Edit","timestamp":"2026-04-29T23:55:06Z","important":false}
 {"file":"js/modules/world/powerup.js","action":"Edit","timestamp":"2026-04-30T00:22:36Z","important":false}
+{"file":"js/modules/world/asteroid.js","action":"Edit","timestamp":"2026-04-30T00:43:49Z","important":false}
+{"file":"js/modules/enemy/shapes.js","action":"Edit","timestamp":"2026-04-30T00:44:03Z","important":false}
+{"file":"js/modules/enemy/enemy-bullet.js","action":"Edit","timestamp":"2026-04-30T00:44:19Z","important":false}

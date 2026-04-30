@@ -567,13 +567,16 @@ export class EnemyBullet {
             ctx.fill();
         }
 
-        // "BOMB" label above bar
+        // "BOMB" label above bar — strokeText gives a black outline cheaper
+        // than shadowBlur (which runs a Gaussian pass per glyph).
         ctx.font = '13px "Silkscreen", monospace';
-        ctx.fillStyle = 'goldenrod';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.shadowColor = 'rgba(0,0,0,0.95)';
-        ctx.shadowBlur = 4;
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)';
+        ctx.strokeText('BOMB', this.x, barY - 7);
+        ctx.fillStyle = 'goldenrod';
         ctx.fillText('BOMB', this.x, barY - 7);
 
         ctx.restore();

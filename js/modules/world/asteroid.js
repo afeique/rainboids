@@ -605,32 +605,43 @@ export class Asteroid {
     
     drawTargetingEffect(ctx) {
         ctx.save();
-        
+
         // Pulsing glow effect
         const time = frameClock.now * 0.003;
         const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
-        
-        // Outer glow — shadowBlur on stroked arcs (ring outline, not fillable)
-        ctx.shadowColor = '#888888';
-        ctx.shadowBlur = 15 * pulseIntensity;
-        ctx.globalAlpha = 0.4 * pulseIntensity;
 
-        // Draw subtle ring around entity
+        // Fake glow without shadowBlur: a wide, faint ring underneath +
+        // a sharp ring on top. Stroked-ring shadowBlur is one of the
+        // slowest canvas patterns; this approach is visually equivalent.
+        const r = this.radius + 8;
         ctx.strokeStyle = '#888888';
+        ctx.globalAlpha = 0.18 * pulseIntensity;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.4 * pulseIntensity;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Inner highlight ring
-        ctx.shadowBlur = 8 * pulseIntensity;
-        ctx.globalAlpha = 0.6 * pulseIntensity;
+        // Inner highlight ring (same fake-glow trick, white).
+        const r2 = this.radius + 5;
         ctx.strokeStyle = '#FFFFFF';
+        ctx.globalAlpha = 0.25 * pulseIntensity;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, r2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.6 * pulseIntensity;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, r2, 0, Math.PI * 2);
         ctx.stroke();
-        
+
         ctx.restore();
     }
 }

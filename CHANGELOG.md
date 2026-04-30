@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.37.2] - 2026-04-29
+
+### Changed
+- **Render perf quick wins.** Six low-risk hot-path edits surfaced by a rendering audit:
+  - `powerup.js`: `Date.now()` → `frameClock.now` (the cached per-frame timestamp), and dropped `shadowBlur=3/shadowColor='#000000'` on the icon — the existing stroked-black outline already provides legibility, and `shadowBlur` runs a Gaussian pass per glyph.
+  - `asteroid.js` `drawTargetingEffect` and `enemy/shapes.js` targeting effect: replaced live `shadowBlur` on stroked rings (one of the slowest canvas patterns) with a fake-glow trick — a wider, fainter ring underneath plus a sharp ring on top. Visually equivalent, no Gaussian pass.
+  - `enemy-bullet.js`: dropped `shadowBlur=4` on the BOMB label; replaced with `strokeText` (a black outline pass), which is far cheaper.
+  - `world/particle.js`: hoisted the damage-number font string into a module-level `DAMAGE_NUMBER_FONT` constant so the template literal isn't reallocated once per particle per frame.
+
+These don't change visuals meaningfully but eliminate repeated Gaussian-blur work on every frame for any active targeting reticle, every onscreen powerup, and every onscreen bomb projectile.
+
+---
+
 ## [5.37.1] - 2026-04-29
 
 ### Fixed

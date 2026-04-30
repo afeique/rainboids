@@ -1,6 +1,7 @@
 // Powerup system for enhanced combat capabilities
 import { GAME_CONFIG } from '../core/constants.js';
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
+import { frameClock } from '../core/frame-clock.js';
 
 export const POWERUP_TYPES = {
     RAPID_FIRE: {
@@ -364,8 +365,9 @@ export class Powerup {
         const pulse = 0.85 + Math.sin(this.pulsePhase) * 0.15;
         const currentRadius = this.radius * pulse;
         
-        // Rotation for visual appeal
-        const rotation = Date.now() * 0.003;
+        // Rotation for visual appeal — frameClock.now is the cached
+        // per-frame timestamp; avoids a Date.now() syscall per powerup.
+        const rotation = frameClock.now * 0.003;
         ctx.rotate(rotation);
         
         // Always fully visible (powerups never despawn)
@@ -475,22 +477,20 @@ export class Powerup {
         ctx.fill();
         ctx.stroke();
         
-        // Icon with enhanced visibility
-        ctx.shadowBlur = 3;
-        ctx.shadowColor = '#000000';
+        // Icon — the stroked black outline already provides legibility,
+        // so the live shadowBlur (one of the slowest canvas ops) is dropped.
         ctx.fillStyle = '#ffffff';
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1;
         ctx.font = `bold ${currentRadius * 0.8}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        
+
         // Draw icon with outline for better visibility
         ctx.strokeText(this.icon, 0, 0);
         ctx.fillText(this.icon, 0, 0);
-        
+
         // Sparkling edge effect
-        ctx.shadowBlur = 0;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.8 * fadeAlpha;
