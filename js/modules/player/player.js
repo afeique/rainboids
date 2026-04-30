@@ -28,7 +28,7 @@ export class Player {
         this.baseCritDamage = 200; // 200% base critical hit damage (2x)
         
         // WASD + Mouse controls
-        this.thrustPower = 0.18 * GAME_CONFIG.TICK_SCALE; // Scaled for tick rate
+        this.thrustPower = 2.0 * GAME_CONFIG.TICK_SCALE; // Scaled for tick rate
 
         // ── Thrust juice state ──
         this.thrustLevel = 0;         // 0 = idle, ramps to 1 when thrusting
@@ -458,12 +458,19 @@ export class Player {
             }
         }
 
-        // Apply friction — scaled for tick rate (equivalent to 0.988 at 30Hz)
-        const friction = Math.pow(0.988, GAME_CONFIG.TICK_SCALE);
+        // Apply friction — scaled for tick rate (equivalent to 0.50 at 30Hz).
+        // Even heavier drag than 5.39.5 (0.70) — coasting halflife @60Hz is
+        // now ~33ms, so the ship is essentially stopped within ~3 frames of
+        // release. Top speed is unaffected: with thrustPower 2.0 the velocity
+        // asymptote is ~3.41, almost touching the 3.5 MAX_V cap.
+        const friction = Math.pow(0.50, GAME_CONFIG.TICK_SCALE);
         this.vel.x *= friction;
         this.vel.y *= friction;
 
-        // Snap to zero once velocity is negligible — prevents endless star drift
+        // Snap to zero once velocity is negligible — prevents endless drift.
+        // Kept at 0.05 because TICK_SCALE (0.5 @60Hz) shrinks the per-frame
+        // thrust delta to ~0.19; a higher threshold would clamp acceleration
+        // back to zero each tick and the ship couldn't move at all.
         if (Math.abs(this.vel.x) < 0.05) this.vel.x = 0;
         if (Math.abs(this.vel.y) < 0.05) this.vel.y = 0;
 

@@ -11,6 +11,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.6] - 2026-04-30
+
+### Changed
+- **Player friction increased again — even faster stop.** Friction baseline `0.70 → 0.50` (per-frame @60Hz: `0.837 → 0.707`). Coasting halflife drops from `~65ms → ~33ms`; full decay to the 0.05 snap-threshold goes from ~24 frames (~400ms) to ~13 frames (~217ms). Top speed is preserved — with `thrustPower 2.0`, velocity now asymptotes at ~3.41 (still 97% of the 3.5 `MAX_V` cap), so peak feel is unchanged but stops are noticeably crisper.
+
+---
+
+## [5.39.5] - 2026-04-30
+
+### Changed
+- **Player movement: momentum minimized further — now near-instant.** Pushed both knobs harder so the ship stops the frame after release and reaches top speed in a few frames:
+  - `thrustPower`: `0.38 → 2.0` (per-frame delta @60Hz: `0.19 → 1.0`).
+  - Friction at 30Hz baseline: `0.97 → 0.70` (per-frame @60Hz: `0.985 → 0.837`).
+  - Coasting halflife @60Hz: `~450ms → ~65ms` (~7× tighter than before this version, ~30× tighter than the original `0.988` floaty feel).
+  - Time to reach `MAX_V` cap: `~14 frames (235ms) → ~5 frames (80ms)`.
+  - Direction reversal time at full speed: roughly `30+ frames → 4–5 frames`.
+  - Top-speed cap (`MAX_V`) and snap-to-zero threshold (`0.05`) unchanged. Net feel: arrow key in = move; arrow key out = stop. Almost no glide.
+
+---
+
+## [5.39.4] - 2026-04-30
+
+### Removed
+- **Music player marquee effect removed.** The scrolling marquee on the now-playing track name and on overflowing playlist entries (both the auto-scroll for the active row and the hover-scroll for the others) is gone. Track titles now render as static text. Playback, progress bar, time display, playlist selection, and the ♪ indicator on the active row are all preserved. Removed code paths: `ensureMarquee`, `applyPlaylistMarquee`, `checkPlaylistMarquees`, `addPlaylistTrackHoverEffects`, the `.marquee-text` / `.marquee-container` markup, the `.has-marquee` CSS, and all `_marqueeRAF` / `_marqueeChecked` bookkeeping.
+
+## [5.39.3] - 2026-04-30
+
+### Changed
+- **Player controls tightened — less floaty, more instant.** Two coordinated tweaks so the ship stops and turns where the player tells it to, without losing the top-speed feel:
+  - `thrustPower`: `0.18 → 0.38` (more acceleration → reaches top speed faster on key-press, so taps register immediately instead of as a slow ramp).
+  - Friction at 30Hz baseline: `0.988 → 0.97` (much more drag → velocity decays in ~0.77s halflife instead of ~1.9s, so coasting is roughly 2.5× shorter when keys release).
+  - Net effect: controls feel one-to-one — press a direction, the ship moves; release, the ship stops quickly. Top speed (`MAX_V` cap) and direction-change behavior are unchanged. The snap-to-zero threshold was deliberately left at `0.05`: at 60Hz the `TICK_SCALE` factor shrinks the per-frame thrust delta to ~0.19, so a larger threshold would clamp acceleration to zero every frame and freeze the ship.
+
+---
+
 ## [5.39.2] - 2026-04-30
 
 ### Removed

@@ -321,9 +321,6 @@ export class UIManager {
             // Sync music player button state when pause menu is shown
             this.syncMusicPlayerState();
 
-            // Check marquee for playing track when pause menu is shown
-            this.checkPlaylistMarquees();
-
             // Update controls tab for platform (mobile vs desktop)
             this.updateControlsTab();
 
@@ -865,89 +862,35 @@ export class UIManager {
             
             trackElement.appendChild(contentSpan);
             trackElement.dataset.index = index;
-            
+
             // Mark current track as playing
             if (index === this.musicPlayer.currentTrackIndex) {
                 trackElement.classList.add('playing');
-                // Store references for later marquee check
-                trackElement._contentSpan = contentSpan;
-                trackElement._marqueeChecked = false;
             }
-            
+
             // Add click handler
             trackElement.addEventListener('click', () => {
                 this.musicPlayer.loadTrack(index);
                 this.musicPlayer.play();
                 this.updatePlaylistDisplay();
             });
-            
-            // Add hover handlers for marquee effect (only for non-playing tracks)
-            this.addPlaylistTrackHoverEffects(trackElement, contentSpan);
-            
+
             this.elements.playlistTracks.appendChild(trackElement);
         });
     }
-    
-    addPlaylistTrackHoverEffects(trackElement, contentSpan) {
-        trackElement.addEventListener('mouseenter', () => {
-            // Don't apply hover marquee if this is the playing track (already has marquee)
-            if (trackElement.classList.contains('playing')) return;
-            
-            // Check if content overflows
-            const trackWidth = trackElement.offsetWidth - 30; // Subtract padding
-            const contentWidth = contentSpan.scrollWidth;
-            
-            if (contentWidth > trackWidth) {
-                // Apply marquee using the same logic as ensureMarquee
-                this.applyPlaylistMarquee(contentSpan, trackElement);
-            }
-        });
-        
-        trackElement.addEventListener('mouseleave', () => {
-            // Don't stop marquee if this is the playing track
-            if (trackElement.classList.contains('playing')) return;
-            
-            // Stop marquee and reset
-            if (contentSpan._marqueeRAF) {
-                cancelAnimationFrame(contentSpan._marqueeRAF);
-                contentSpan._marqueeRAF = null;
-            }
-            
-            trackElement.classList.remove('has-marquee');
-            contentSpan.style.transform = 'translateX(0)';
-        });
-    }
-    
+
     updateTrackDisplay(track) {
         // Format track display
         const trackDisplay = `<span style="color: #00ff00;">${track.name}</span>&nbsp;<span style="color: #666;">·</span>&nbsp;<span style="color: #00ccff;">${track.artist || 'unknown'}</span>`;
-        
+
         // Update music info box (skip since removed from main UI)
         if (this.elements.trackNameText) {
             this.elements.trackNameText.innerHTML = trackDisplay;
-            // Start marquee after a delay
-            setTimeout(() => {
-                this.ensureMarquee(this.elements.trackNameText, this.elements.trackName);
-            }, 200);
         }
-        
+
         // Update pause menu current track
         if (this.elements.currentTrackName) {
-            const marqueeText = this.elements.currentTrackName.querySelector('.marquee-text');
-            if (marqueeText) {
-                marqueeText.innerHTML = trackDisplay;
-                // Store for deferred marquee check
-                this.elements.currentTrackName._marqueeText = marqueeText;
-                this.elements.currentTrackName._marqueeChecked = false;
-                
-                // Only check marquee if pause menu is visible
-                if (this.elements.pauseOverlay.style.display === 'flex') {
-                    this.elements.currentTrackName._marqueeChecked = true;
-                    setTimeout(() => {
-                        this.ensureMarquee(marqueeText, this.elements.currentTrackName);
-                    }, 100);
-                }
-            }
+            this.elements.currentTrackName.innerHTML = trackDisplay;
         }
     }
 
@@ -1003,10 +946,8 @@ export class UIManager {
             content.classList.toggle('active', content.id === `${tabName}-tab`);
         });
         
-        // Check marquees when switching to music tab
         if (tabName === 'music') {
             this.syncMusicPlayerState();
-            this.checkPlaylistMarquees();
         }
 
         // Populate skill slots when switching to skills tab
@@ -1032,213 +973,14 @@ export class UIManager {
         this.updatePlaylistDisplay();
     }
     
-    checkPlaylistMarquees() {
-        // Check marquee for all playing tracks that haven't been checked yet
-        const playingTracks = this.elements.playlistTracks.querySelectorAll('.playlist-track.playing');
-        playingTracks.forEach(track => {
-            if (!track._marqueeChecked && track._contentSpan) {
-                track._marqueeChecked = true;
-                // Small delay to ensure layout is complete
-                setTimeout(() => {
-                    // Only apply marquee if text actually overflows
-                    const padding = 30;
-                    const containerWidth = track.offsetWidth - padding;
-                    const textWidth = track._contentSpan.scrollWidth;
-                    
-                    if (textWidth > containerWidth) {
-                        this.applyPlaylistMarquee(track._contentSpan, track);
-                    }
-                }, 50);
-            }
-        });
-        
-        // Also check the current track name marquee
-        if (this.elements.currentTrackName && 
-            !this.elements.currentTrackName._marqueeChecked && 
-            this.elements.currentTrackName._marqueeText) {
-            this.elements.currentTrackName._marqueeChecked = true;
-            setTimeout(() => {
-                this.ensureMarquee(
-                    this.elements.currentTrackName._marqueeText, 
-                    this.elements.currentTrackName
-                );
-            }, 50);
-        }
-    }
-
-    ensureMarquee(textEl, containerEl) {
-        if (!textEl || !containerEl) return;
-        
-        // Stop any existing animation
-        if (textEl._marqueeRAF) {
-            cancelAnimationFrame(textEl._marqueeRAF);
-            textEl._marqueeRAF = null;
-        }
-        
-        // Reset position
-        textEl.style.transform = 'translateX(0)';
-        
-        // Force a reflow to ensure styles are applied
-        containerEl.offsetHeight;
-        
-        // Wait a bit for render
-        setTimeout(() => {
-            // Get computed styles to account for padding
-            const containerStyle = window.getComputedStyle(containerEl);
-            const paddingLeft = parseFloat(containerStyle.paddingLeft) || 0;
-            const paddingRight = parseFloat(containerStyle.paddingRight) || 0;
-            
-            // Get fresh measurements
-            const containerWidth = containerEl.clientWidth - paddingLeft - paddingRight;
-            const textWidth = textEl.scrollWidth;
-            
-            
-            // Only start marquee if text overflows
-            if (textWidth > containerWidth) {
-                let position = 0;
-                let direction = -1;
-                const speed = 0.5;
-                const pauseTime = 1000;
-                let pauseTimer = 0;
-                const maxScroll = textWidth - containerWidth + 20; // Add some padding
-                
-                const animate = () => {
-                    // Handle pause
-                    if (pauseTimer > 0) {
-                        pauseTimer -= 16;
-                        textEl._marqueeRAF = requestAnimationFrame(animate);
-                        return;
-                    }
-                    
-                    // Move
-                    position += speed * direction;
-                    
-                    // Bounce at edges
-                    if (position <= -maxScroll) {
-                        position = -maxScroll;
-                        direction = 1;
-                        pauseTimer = pauseTime;
-                    } else if (position >= 0) {
-                        position = 0;
-                        direction = -1;
-                        pauseTimer = pauseTime;
-                    }
-                    
-                    textEl.style.transform = `translateX(${position}px)`;
-                    textEl._marqueeRAF = requestAnimationFrame(animate);
-                };
-                
-                animate();
-            }
-        }, 300); // Increased delay
-    }
-
-    applyPlaylistMarquee(textEl, containerEl) {
-        if (!textEl || !containerEl) return;
-        
-        // Stop any existing animation
-        if (textEl._marqueeRAF) {
-            cancelAnimationFrame(textEl._marqueeRAF);
-            textEl._marqueeRAF = null;
-        }
-        
-        // Reset position
-        textEl.style.transform = 'translateX(0)';
-        
-        // Remove marquee class initially
-        containerEl.classList.remove('has-marquee');
-        
-        // Wait for render
-        setTimeout(() => {
-            const padding = 30; // Account for padding
-            const containerWidth = containerEl.offsetWidth - padding;
-            const textWidth = textEl.scrollWidth;
-            
-            
-            // Only start marquee if text overflows
-            if (textWidth > containerWidth) {
-                // Add marquee class only when we know we need it
-                containerEl.classList.add('has-marquee');
-                let position = 0;
-                let direction = -1;
-                const speed = 0.5;
-                const pauseTime = 1000;
-                let pauseTimer = 0;
-                const maxScroll = textWidth - containerWidth + 10;
-                
-                const animate = () => {
-                    // Handle pause
-                    if (pauseTimer > 0) {
-                        pauseTimer -= 16;
-                        textEl._marqueeRAF = requestAnimationFrame(animate);
-                        return;
-                    }
-                    
-                    // Move
-                    position += speed * direction;
-                    
-                    // Bounce at edges
-                    if (position <= -maxScroll) {
-                        position = -maxScroll;
-                        direction = 1;
-                        pauseTimer = pauseTime;
-                    } else if (position >= 0) {
-                        position = 0;
-                        direction = -1;
-                        pauseTimer = pauseTime;
-                    }
-                    
-                    textEl.style.transform = `translateX(${position}px)`;
-                    textEl._marqueeRAF = requestAnimationFrame(animate);
-                };
-                
-                animate();
-            }
-        }, 100);
-    }
-    
     updatePlaylistDisplay() {
         // Update playing status in playlist
         const tracks = this.elements.playlistTracks.querySelectorAll('.playlist-track');
         tracks.forEach((track, index) => {
-            const contentSpan = track.querySelector('.playlist-track-content');
             if (index === this.musicPlayer.currentTrackIndex) {
                 track.classList.add('playing');
-                // Store references for deferred marquee check
-                track._contentSpan = contentSpan;
-                track._marqueeChecked = false;
-                
-                // Reset any existing marquee state first
-                track.classList.remove('has-marquee');
-                if (contentSpan._marqueeRAF) {
-                    cancelAnimationFrame(contentSpan._marqueeRAF);
-                    contentSpan._marqueeRAF = null;
-                }
-                contentSpan.style.transform = 'translateX(0)';
-                
-                // Only check marquee if pause menu is visible AND text actually overflows
-                if (this.elements.pauseOverlay.style.display === 'flex') {
-                    track._marqueeChecked = true;
-                    setTimeout(() => {
-                        // Only apply marquee if text is too long
-                        const padding = 30;
-                        const containerWidth = track.offsetWidth - padding;
-                        const textWidth = contentSpan.scrollWidth;
-                        
-                        if (textWidth > containerWidth) {
-                            this.applyPlaylistMarquee(contentSpan, track);
-                        }
-                    }, 100);
-                }
             } else {
                 track.classList.remove('playing');
-                track.classList.remove('has-marquee');
-                // Remove marquee from non-playing tracks
-                if (contentSpan._marqueeRAF) {
-                    cancelAnimationFrame(contentSpan._marqueeRAF);
-                    contentSpan._marqueeRAF = null;
-                }
-                contentSpan.style.transform = 'translateX(0)';
             }
         });
     }

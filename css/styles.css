@@ -1029,17 +1029,14 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     line-height: 30px;
 }
 
-#current-track-name .marquee-text {
-    display: inline-block;
-    white-space: nowrap;
+#current-track-name {
     font-family: 'Press Start 2P', 'Courier New', monospace;
     font-size: 18px;
     color: #00ff00;
     line-height: 30px;
-    position: relative;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
-
-
 
 #music-info-progress-container {
     display: flex;
@@ -1244,14 +1241,9 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     position: relative;
 }
 
-.playlist-track.has-marquee {
-    text-overflow: clip; /* Remove ellipsis when marquee is active */
-}
-
 .playlist-track-content {
     display: inline-block;
     white-space: nowrap;
-    transition: none; /* No transition for smooth marquee */
 }
 
 .playlist-track:nth-child(odd) {
@@ -1273,7 +1265,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     font-weight: bold;
 }
 
-.playlist-track.playing:not(.has-marquee)::before {
+.playlist-track.playing::before {
     content: "♪ ";
     margin-right: 5px;
 }
@@ -1295,8 +1287,6 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     background: rgba(0,255,0,0.8);
     transition: background 0.2s;
 }
-
-/* Remove duplicate marquee styles */
 
 @keyframes pulse {
     0% { transform: scale(1); opacity: 1; }
