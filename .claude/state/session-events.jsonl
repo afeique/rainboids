@@ -389,3 +389,17 @@
 {"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/particle.js"},"id":"event-000050","state":"stopped","ts":"2026-04-29T23:55:06Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/particle.js"},"id":"event-000051","state":"stopped","ts":"2026-04-29T23:55:16Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000052","state":"stopped","ts":"2026-04-29T23:55:32Z","type":"tool.edit"}
+{"data":{"command":"find js -iname \"powerup*\" -type f"},"id":"event-000053","state":"stopped","ts":"2026-04-30T00:21:08Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"powerup.*life\\|powerupPool\\|powerup\\.active\\|powerup.*cleanup\" js/modules/ --include=\"*.js\" | grep -v \"powerup\\.\" | head -20"},"id":"event-000054","state":"stopped","ts":"2026-04-30T00:21:17Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"class PoolManager\\|get(.*)\\|expand\\|new this\" js/modules/world/pool-manager.js js/modules/core/*.js 2\u003e/dev/null | head -20"},"id":"event-000055","state":"stopped","ts":"2026-04-30T00:21:26Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"powerupPool.release\\|powerup\\.active = false\\|powerupPool\\.activeObjects = \\[\\]\" js/modules/ --include=\"*.js\" | head -10"},"id":"event-000056","state":"stopped","ts":"2026-04-30T00:21:37Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"powerup\\.life\\|p\\.life\\|\\.life\" js/modules/world/powerup.js js/modules/combat/combat-manager.js | head -20"},"id":"event-000057","state":"stopped","ts":"2026-04-30T00:21:49Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"dropPowerup\\|createPowerup\\|powerupPool.get\\b\" js/modules/ --include=\"*.js\" | head -15"},"id":"event-000058","state":"stopped","ts":"2026-04-30T00:21:57Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"powerupPool\" js/modules/ --include=\"*.js\" | head -30"},"id":"event-000059","state":"stopped","ts":"2026-04-30T00:22:11Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/powerup.js"},"id":"event-000060","state":"stopped","ts":"2026-04-30T00:22:36Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/powerup.js"},"id":"event-000061","state":"stopped","ts":"2026-04-30T00:22:44Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/powerup.js"},"id":"event-000062","state":"stopped","ts":"2026-04-30T00:23:45Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/powerup.js"},"id":"event-000063","state":"stopped","ts":"2026-04-30T00:23:51Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/powerup.js"},"id":"event-000064","state":"stopped","ts":"2026-04-30T00:23:56Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000065","state":"stopped","ts":"2026-04-30T00:24:02Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000066","state":"stopped","ts":"2026-04-30T00:24:42Z","type":"tool.edit"}

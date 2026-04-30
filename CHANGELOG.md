@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.37.1] - 2026-04-29
+
+### Fixed
+- **Powerups dropped by enemies now last a long time and fade out gracefully.** The Powerup class set `this.life = 20s` in `reset()` but `update()` never decremented it, so the surrounding code claimed "powerups never despawn." In practice players reported them disappearing — most likely from off-screen wraps making them hard to find. Replaced the dead `life` field with a real explicit lifetime: 90s of full visibility, then a smooth `sqrt`-eased fade over the final 8s, then released by the pool's normal `cleanupInactive` sweep. The fade alpha is multiplied into every existing `globalAlpha` override (body, sparkle ring, label) so all visuals dim together rather than the body vanishing while the label hangs in the air.
+
+---
+
 ## [5.37.0] - 2026-04-29
 
 ### Changed

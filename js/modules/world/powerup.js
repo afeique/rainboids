@@ -242,8 +242,12 @@ export class Powerup {
         
         this.radius = 18; // Slightly larger for better visibility
         this.active = true;
-        this.life = 20 * GAME_CONFIG.LOGIC_HZ; // 20 seconds at logic tick rate
+        // Long lifetime — players should rarely (if ever) see one disappear
+        // before they get to it. Fades out smoothly over the final stretch
+        // (see FADE_DURATION below) so it doesn't pop off-screen.
+        this.life = 90 * GAME_CONFIG.LOGIC_HZ;     // 90 seconds at logic tick rate
         this.maxLife = this.life;
+        this.fadeDuration = 8 * GAME_CONFIG.LOGIC_HZ; // last 8s fade to alpha 0
         this.pulsePhase = random(0, Math.PI * 2);
         
         // Floating movement (scaled for tick rate)
@@ -272,7 +276,13 @@ export class Powerup {
     update(playerRef, tractorEngaged = false) {
         if (!this.active) return;
 
-        // Powerups never despawn — they stay until collected.
+        // Lifetime tick — when life runs out the powerup is released by
+        // PoolManager.cleanupInactive() on the next sweep.
+        this.life -= GAME_CONFIG.TICK_SCALE;
+        if (this.life <= 0) {
+            this.active = false;
+            return;
+        }
 
         this.pulsePhase += 0.1;
 
@@ -339,9 +349,17 @@ export class Powerup {
             return;
         }
         
+        // Fade alpha — fully visible until the final fadeDuration ticks of
+        // life, then linearly eases to 0. Smoothed via sqrt so the tail
+        // lingers a bit longer (perceptually gentler than linear).
+        const fadeAlpha = this.life >= this.fadeDuration
+            ? 1
+            : Math.sqrt(Math.max(0, this.life / this.fadeDuration));
+
         ctx.save();
         ctx.translate(this.x, this.y);
-        
+        ctx.globalAlpha = fadeAlpha;
+
         // Enhanced pulsing effect for visibility
         const pulse = 0.85 + Math.sin(this.pulsePhase) * 0.15;
         const currentRadius = this.radius * pulse;
@@ -475,7 +493,7 @@ export class Powerup {
         ctx.shadowBlur = 0;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.8;
+        ctx.globalAlpha = 0.8 * fadeAlpha;
         
         const sparkleCount = 6;
         for (let i = 0; i < sparkleCount; i++) {
@@ -497,7 +515,7 @@ export class Powerup {
         // Powerup name label above the icon (not rotated)
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = 0.9 * fadeAlpha;
         ctx.font = '13px "Silkscreen", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';

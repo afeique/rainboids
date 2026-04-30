@@ -119,3 +119,4 @@
 {"file":"VERSION","action":"Edit","timestamp":"2026-04-29T23:50:50Z","important":false}
 {"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-29T23:51:08Z","important":false}
 {"file":"js/modules/world/particle.js","action":"Edit","timestamp":"2026-04-29T23:55:06Z","important":false}
+{"file":"js/modules/world/powerup.js","action":"Edit","timestamp":"2026-04-30T00:22:36Z","important":false}
