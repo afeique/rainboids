@@ -133,3 +133,5 @@
 {"file":"README.md","action":"Edit","timestamp":"2026-04-30T01:40:12Z","important":false}
 {"file":"VERSION","action":"Edit","timestamp":"2026-04-30T01:58:07Z","important":false}
 {"file":"CHANGELOG.md","action":"Edit","timestamp":"2026-04-30T01:58:18Z","important":false}
+{"file":"js/modules/combat/weapon-data.js","action":"Edit","timestamp":"2026-04-30T02:35:42Z","important":false}
+{"file":"js/modules/player/weapons.js","action":"Edit","timestamp":"2026-04-30T02:45:38Z","important":false}

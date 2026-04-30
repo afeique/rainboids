@@ -11,6 +11,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.38.7] - 2026-04-29
+
+### Changed
+- **Pulse Cannon now respects `config.range` like every other primary.** `createChargedBullets` (the path used by Pulse Cannon and the Charge Shot power weapon) was hard-coding range from `Math.max(1, speedMultiplier * 0.5)` and never reading the weapon's `config.range`. Added an optional `rangeOverride` parameter (default `1`, so Charge Shot is unchanged) that gets multiplied into both `bullet.rangeMultiplier` and `bullet.maxLife` — same formula the other weapons use. `firePulseCannon` now passes `config.range`. The range pipeline is finally consistent across all 5 primaries: change one number in `weapon-data.js` to retune any weapon's reach.
+- **Re-tuned ranges to keep ~240px on-screen travel** now that Pulse Cannon respects R:
+  - PULSE_CANNON: `1.5 → 1.0` (was unused before; effective travel unchanged at ~240px)
+  - STORM_NEEDLES: `1.0` (unchanged)
+  - SCATTER_GUN: `1.0` (unchanged)
+  - RAIL_DRIVER: `0.7 → 0.85` (5.38.6 over-shortened this; the math is quadratic in R, so 0.7 → 165px not 240px. 0.85² × 11.2 × 30 ≈ 240px ✓)
+  - LANCE_BEAM: `0.6` (unchanged — raycast `R × 400 = 240px`)
+
+---
+
+## [5.38.6] - 2026-04-29
+
+### Fixed
+- **Non-Pulse-Cannon primaries traveled past the screen edge.** 5.38.5 set every primary to `range: 1.5`, but `firePulseCannon` calls `createChargedBullets` which **does not read `config.range`** (line 876 in `player/weapons.js`) — it uses the bullet's default `maxLife` (~30 frames × default speed ≈ 240px). The other weapons (Storm Needles, Scatter Gun, Rail Driver, Lance Beam) DO multiply `bullet.maxLife * config.range`, so they were flying ~360–600px while Pulse Cannon stayed at ~240px. Re-tuned each weapon's `config.range` so its effective on-screen travel matches Pulse Cannon:
+  - STORM_NEEDLES: `1.5 → 1.0` (45 → 30 frames × 8 px ≈ 240px)
+  - SCATTER_GUN: `1.5 → 1.0` (~240px)
+  - RAIL_DRIVER: `1.5 → 0.7` — compensates for its `bulletSpeed: 1.4` velocity boost (`8 × 1.4 × 21 ≈ 240px`)
+  - LANCE_BEAM: `1.5 → 0.6` (raycast distance `0.6 × 400 = 240px`)
+  - PULSE_CANNON: `1.5` (unchanged — value is unused but kept as documentation)
+- Range upgrades (LONG_RANGE / PENETRATOR / VELOCITY) still multiply on top, so investing in them remains the path to longer reach.
+
+---
+
+## [5.38.5] - 2026-04-29
+
+### Changed
+- **All primary weapons now share the same base range (1.5).** Followed up the 5.38.4 range bump by flattening Storm Needles (1.4 → 1.5), Scatter Gun (1.2 → 1.5), Lance Beam (1.6 → 1.5), and Rail Driver (1.8 → 1.5) to match Pulse Cannon. No primary out-ranges another at base; differentiation now comes from fire rate, damage, spread, piercing, and per-weapon range upgrades (LONG_RANGE / PENETRATOR / VELOCITY) rather than baseline reach.
+
+---
+
+## [5.38.4] - 2026-04-29
+
+### Changed
+- **Base range increased on all 5 primary weapons** so every weapon can engage threats at roughly half-screen to three-quarter-screen distance before bullets expire. `config.range = 1.0` ≈ 460px ≈ ~43% of typical screen height (1080px), so the new band ≈ 0.5–0.75 of screen height. Relative ordering preserved (Scatter shortest, Rail longest); LONG_RANGE / PENETRATOR / VELOCITY upgrades still multiply on top.
+  - PULSE_CANNON: `0.85 → 1.5` (~65% of screen height)
+  - STORM_NEEDLES: `0.7 → 1.4` (~60%)
+  - SCATTER_GUN: `0.5 → 1.2` (~52%)
+  - LANCE_BEAM: `1.2 → 1.6` (~69%)
+  - RAIL_DRIVER: `1.5 → 1.8` (~77%)
+
+---
+
 ## [5.38.3] - 2026-04-29
 
 ### Changed

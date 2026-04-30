@@ -189,12 +189,14 @@ function spawnMuzzleFlare(particlePool, intensity, color) {
 export function firePulseCannon(bulletPool, audioManager, config) {
     const damage = this.getEffectivePrimaryDamage();
     const echoStacks = this.getPowerupStacks('ECHO_ROUND');
-    this.createChargedBullets(bulletPool, 1, 1, damage, 0, 0);
+    // Pass config.range so Pulse Cannon's reach is governed by
+    // weapon-data.js like every other primary.
+    this.createChargedBullets(bulletPool, 1, 1, damage, 0, 0, config.range);
     audioManager.playShoot();
 
     // Echo Round: chance to fire a bonus bullet
     if (echoStacks > 0 && Math.random() < echoStacks * 0.1) {
-        this.createChargedBullets(bulletPool, 0.8, 1, damage * 0.7, 0, 0);
+        this.createChargedBullets(bulletPool, 0.8, 1, damage * 0.7, 0, 0, config.range);
     }
 }
 
@@ -840,7 +842,7 @@ export function createBullets(bulletPool) {
     }
 }
 
-export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultiplier = 1, totalDamage = 20, critChanceBonus = 0, baseHomingStrength = 0) {
+export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultiplier = 1, totalDamage = 20, critChanceBonus = 0, baseHomingStrength = 0, rangeOverride = 1) {
     const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
     const homingStacks = this.getPowerupStacks('HOMING');
     const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
@@ -872,8 +874,14 @@ export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultip
             // play the per-weapon hit SFX (audio-manager.js).
             bullet.weaponId = this.activePrimary;
 
-            // Apply range multiplier (charged shots get modest bonus range)
-            bullet.rangeMultiplier = this.getRangeMultiplier() * Math.max(1, speedMultiplier * 0.5);
+            // Apply range multiplier (charged shots get modest bonus range).
+            // `rangeOverride` lets the caller bake in the active weapon's
+            // `config.range` so Pulse Cannon now behaves like the other
+            // primaries (Storm Needles, Scatter Gun, etc.) — it used to
+            // ignore config.range entirely. Charge Shot still defaults
+            // rangeOverride = 1 so its existing behavior is preserved.
+            bullet.rangeMultiplier = this.getRangeMultiplier() * rangeOverride * Math.max(1, speedMultiplier * 0.5);
+            bullet.maxLife = Math.round(bullet.maxLife * rangeOverride);
 
             // Set up callback for when bullet is destroyed (for combo tracking)
             bullet.onOffScreen = () => this.onBulletDestroyed();
