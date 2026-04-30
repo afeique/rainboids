@@ -424,3 +424,13 @@
 {"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/particle.js"},"id":"event-000085","state":"stopped","ts":"2026-04-30T00:44:51Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000086","state":"stopped","ts":"2026-04-30T00:45:25Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000087","state":"stopped","ts":"2026-04-30T00:45:40Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/powerup.js"},"id":"event-000088","state":"stopped","ts":"2026-04-30T00:49:40Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/powerup.js"},"id":"event-000089","state":"stopped","ts":"2026-04-30T00:50:28Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"export\\|frameClock\\|now\" js/modules/core/frame-clock.js | head -10"},"id":"event-000090","state":"stopped","ts":"2026-04-30T00:50:43Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000091","state":"stopped","ts":"2026-04-30T00:51:05Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000092","state":"stopped","ts":"2026-04-30T00:51:17Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"createEnemyDebris\\|enemy.*debris\" js/modules/combat/combat-manager.js | head -10"},"id":"event-000093","state":"stopped","ts":"2026-04-30T00:57:58Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/combat/combat-manager.js"},"id":"event-000094","state":"stopped","ts":"2026-04-30T00:58:48Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"DRIFTER\\|PROWLER\\|WEAVER\\|SENTINEL\" js/modules/combat/combat-manager.js js/modules/enemy/shapes.js | head -10"},"id":"event-000095","state":"stopped","ts":"2026-04-30T00:58:57Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000096","state":"stopped","ts":"2026-04-30T00:59:05Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000097","state":"stopped","ts":"2026-04-30T00:59:19Z","type":"tool.edit"}

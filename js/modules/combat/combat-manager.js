@@ -220,66 +220,115 @@ export function createEnemyDebris(enemy) {
 }
 
 export function createShapeDebris(enemy) {
-    const debrisCount = 6;
-    const size = enemy.radius * 0.8;
+    // Full-silhouette scatter — same model as asteroid debris. Build a
+    // list of vertices that traces the enemy's outer outline at its
+    // actual radius, then emit one debris segment per consecutive pair.
+    // A few internal struts and broken-off chunks give the wreckage
+    // mass instead of leaving a hollow ring.
+    const r = enemy.radius;
+    const color = enemy.color;
+    const verts = [];           // outline vertices (closed loop)
+    const struts = [];          // extra internal segments [p1, p2]
 
-    for (let i = 0; i < debrisCount; i++) {
-        let p1, p2;
-
-        switch (enemy.type) {
-            case 'HUNTER': { // Triangle debris
-                const triangleAngle = (i / 3) * Math.PI * 2 / 3;
-                p1 = { x: Math.cos(triangleAngle) * size * 0.5, y: Math.sin(triangleAngle) * size * 0.5 };
-                p2 = { x: Math.cos(triangleAngle + Math.PI * 2/3) * size * 0.5, y: Math.sin(triangleAngle + Math.PI * 2/3) * size * 0.5 };
-                break;
-            }
-
-            case 'GUARDIAN': { // Square debris
-                const squareAngle = (i / 4) * Math.PI * 2;
-                p1 = { x: Math.cos(squareAngle) * size * 0.5, y: Math.sin(squareAngle) * size * 0.5 };
-                p2 = { x: Math.cos(squareAngle + Math.PI/2) * size * 0.5, y: Math.sin(squareAngle + Math.PI/2) * size * 0.5 };
-                break;
-            }
-
-            case 'WASP': { // Diamond debris
-                const diamondAngle = (i / 4) * Math.PI * 2 + Math.PI/4;
-                p1 = { x: Math.cos(diamondAngle) * size * 0.4, y: Math.sin(diamondAngle) * size * 0.4 };
-                p2 = { x: Math.cos(diamondAngle + Math.PI/2) * size * 0.4, y: Math.sin(diamondAngle + Math.PI/2) * size * 0.4 };
-                break;
-            }
-
-            case 'TITAN': { // Hexagon debris
-                const hexAngle = (i / 6) * Math.PI * 2;
-                p1 = { x: Math.cos(hexAngle) * size * 0.6, y: Math.sin(hexAngle) * size * 0.6 };
-                p2 = { x: Math.cos(hexAngle + Math.PI/3) * size * 0.6, y: Math.sin(hexAngle + Math.PI/3) * size * 0.6 };
-                break;
-            }
-
-            case 'STALKER': // Cross debris
-                if (i < 2) {
-                    p1 = { x: -size * 0.5, y: 0 };
-                    p2 = { x: size * 0.5, y: 0 };
-                } else {
-                    p1 = { x: 0, y: -size * 0.5 };
-                    p2 = { x: 0, y: size * 0.5 };
-                }
-                break;
-
-            case 'TANGERINE': { // Spiked circle debris
-                const spikeAngle = (i / 8) * Math.PI * 2;
-                p1 = { x: Math.cos(spikeAngle) * size * 0.3, y: Math.sin(spikeAngle) * size * 0.3 };
-                p2 = { x: Math.cos(spikeAngle) * size * 0.6, y: Math.sin(spikeAngle) * size * 0.6 };
-                break;
-            }
-
-            default: { // Default random debris
-                const angle = (i / debrisCount) * Math.PI * 2;
-                p1 = { x: Math.cos(angle) * size * 0.3, y: Math.sin(angle) * size * 0.3 };
-                p2 = { x: Math.cos(angle) * size * 0.6, y: Math.sin(angle) * size * 0.6 };
-            }
+    switch (enemy.type) {
+        case 'HUNTER': { // Triangle ship — point forward
+            const tip = r * 1.1;
+            const back = r * 0.7;
+            verts.push({ x: tip, y: 0 });
+            verts.push({ x: -back, y: -back * 0.9 });
+            verts.push({ x: -back * 0.45, y: 0 });
+            verts.push({ x: -back, y: back * 0.9 });
+            // internal hull bracing
+            struts.push([{ x: tip * 0.5, y: 0 }, { x: -back * 0.45, y: 0 }]);
+            struts.push([{ x: -back * 0.7, y: -back * 0.4 }, { x: -back * 0.7, y: back * 0.4 }]);
+            break;
         }
+        case 'GUARDIAN': { // Square hull
+            const s = r * 0.85;
+            verts.push({ x: -s, y: -s }, { x: s, y: -s }, { x: s, y: s }, { x: -s, y: s });
+            // diagonals
+            struts.push([{ x: -s, y: -s }, { x: s, y: s }]);
+            struts.push([{ x: s, y: -s }, { x: -s, y: s }]);
+            break;
+        }
+        case 'WASP': { // Diamond
+            const s = r * 1.0;
+            verts.push({ x: 0, y: -s }, { x: s * 0.7, y: 0 }, { x: 0, y: s }, { x: -s * 0.7, y: 0 });
+            // cross brace
+            struts.push([{ x: -s * 0.4, y: -s * 0.4 }, { x: s * 0.4, y: s * 0.4 }]);
+            struts.push([{ x: s * 0.4, y: -s * 0.4 }, { x: -s * 0.4, y: s * 0.4 }]);
+            break;
+        }
+        case 'TITAN':
+        case 'TANGERINE': { // 8-sided big enemies
+            const sides = 8;
+            for (let i = 0; i < sides; i++) {
+                const a = (i / sides) * Math.PI * 2;
+                verts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+            }
+            // inner ring at half radius — second shell of wreckage
+            const inner = r * 0.55;
+            for (let i = 0; i < sides; i++) {
+                const a = (i / sides) * Math.PI * 2 + Math.PI / sides;
+                const a2 = a + Math.PI * 2 / sides;
+                struts.push([
+                    { x: Math.cos(a) * inner, y: Math.sin(a) * inner },
+                    { x: Math.cos(a2) * inner, y: Math.sin(a2) * inner },
+                ]);
+            }
+            // a couple of radial spokes
+            struts.push([{ x: 0, y: 0 }, { x: r * 0.7, y: 0 }]);
+            struts.push([{ x: 0, y: 0 }, { x: -r * 0.7, y: 0 }]);
+            struts.push([{ x: 0, y: 0 }, { x: 0, y: r * 0.7 }]);
+            struts.push([{ x: 0, y: 0 }, { x: 0, y: -r * 0.7 }]);
+            break;
+        }
+        case 'STALKER': { // Cross/plus
+            const armLen = r * 1.05;
+            const armW = r * 0.3;
+            // outline of a plus shape (12 verts)
+            verts.push(
+                { x: -armW, y: -armLen }, { x: armW, y: -armLen },
+                { x: armW, y: -armW },    { x: armLen, y: -armW },
+                { x: armLen, y: armW },   { x: armW, y: armW },
+                { x: armW, y: armLen },   { x: -armW, y: armLen },
+                { x: -armW, y: armW },    { x: -armLen, y: armW },
+                { x: -armLen, y: -armW }, { x: -armW, y: -armW },
+            );
+            // cross-brace through center
+            struts.push([{ x: -armLen, y: 0 }, { x: armLen, y: 0 }]);
+            struts.push([{ x: 0, y: -armLen }, { x: 0, y: armLen }]);
+            break;
+        }
+        default: { // Generic 6-sided hull
+            const sides = 6;
+            for (let i = 0; i < sides; i++) {
+                const a = (i / sides) * Math.PI * 2;
+                verts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+            }
+            const inner = r * 0.5;
+            for (let i = 0; i < sides; i++) {
+                const a = (i / sides) * Math.PI * 2 + Math.PI / sides;
+                const a2 = a + Math.PI * 2 / sides;
+                struts.push([
+                    { x: Math.cos(a) * inner, y: Math.sin(a) * inner },
+                    { x: Math.cos(a2) * inner, y: Math.sin(a2) * inner },
+                ]);
+            }
+            break;
+        }
+    }
 
-        this.lineDebrisPool.get(enemy.x, enemy.y, p1, p2, enemy.color);
+    // Emit outline edges (closed loop).
+    for (let i = 0; i < verts.length; i++) {
+        const p1 = verts[i];
+        const p2 = verts[(i + 1) % verts.length];
+        this.lineDebrisPool.get(enemy.x, enemy.y, p1, p2, color);
+    }
+    // Emit internal struts.
+    for (let i = 0; i < struts.length; i++) {
+        const [p1, p2] = struts[i];
+        this.lineDebrisPool.get(enemy.x, enemy.y, p1, p2, color);
     }
 }
 

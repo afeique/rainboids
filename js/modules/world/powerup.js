@@ -3,6 +3,41 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 
+// ── Cached body gradients ──────────────────────────────────────────────────
+// `createRadialGradient` allocates a fresh GPU-uploaded gradient on every
+// call. The two gradients each powerup needs (outer aura + body fill) are
+// purely a function of (gradientColors[0], gradientColors[1]) — they do
+// not depend on screen position or rotation. Build them once per unique
+// color pair and cache. The pulse-scaling effect is applied via
+// `ctx.scale(pulse, pulse)` instead of rebuilding the gradient at the new
+// radius every frame, so the cached gradient and the path stay in sync.
+const _powerupGradientCache = new Map();
+const POWERUP_BASE_RADIUS = 18; // matches `this.radius` set in reset()
+const POWERUP_GLOW_RADIUS = POWERUP_BASE_RADIUS * 2.5;
+const POWERUP_ICON_FONT = `bold ${POWERUP_BASE_RADIUS * 0.8}px Arial`;
+
+function getPowerupGradients(ctx, gradientColors) {
+    const key = gradientColors[0] + '|' + gradientColors[1];
+    let entry = _powerupGradientCache.get(key);
+    if (entry) return entry;
+
+    // Outer aura — translucent, expanding falloff.
+    const outer = ctx.createRadialGradient(0, 0, POWERUP_BASE_RADIUS * 0.3, 0, 0, POWERUP_GLOW_RADIUS);
+    outer.addColorStop(0, gradientColors[0] + '88');
+    outer.addColorStop(0.4, gradientColors[1] + '44');
+    outer.addColorStop(1, gradientColors[1] + '00');
+
+    // Body — bright center to slightly translucent edge.
+    const body = ctx.createRadialGradient(0, 0, 0, 0, 0, POWERUP_BASE_RADIUS);
+    body.addColorStop(0, gradientColors[0]);
+    body.addColorStop(0.7, gradientColors[1]);
+    body.addColorStop(1, gradientColors[1] + 'CC');
+
+    entry = { outer, body };
+    _powerupGradientCache.set(key, entry);
+    return entry;
+}
+
 export const POWERUP_TYPES = {
     RAPID_FIRE: {
         name: 'Rapid',
@@ -357,61 +392,47 @@ export class Powerup {
             ? 1
             : Math.sqrt(Math.max(0, this.life / this.fadeDuration));
 
+        // Enhanced pulsing effect for visibility — applied via ctx.scale()
+        // below so that the cached gradients and the body path stay in sync
+        // without rebuilding the gradient every frame.
+        const pulse = 0.85 + Math.sin(this.pulsePhase) * 0.15;
+        const rotation = frameClock.now * 0.003;
+        const grads = getPowerupGradients(ctx, this.gradientColors);
+        const R = POWERUP_BASE_RADIUS; // unscaled reference; ctx.scale handles the pulse
+
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.globalAlpha = fadeAlpha;
-
-        // Enhanced pulsing effect for visibility
-        const pulse = 0.85 + Math.sin(this.pulsePhase) * 0.15;
-        const currentRadius = this.radius * pulse;
-        
-        // Rotation for visual appeal — frameClock.now is the cached
-        // per-frame timestamp; avoids a Date.now() syscall per powerup.
-        const rotation = frameClock.now * 0.003;
         ctx.rotate(rotation);
-        
-        // Always fully visible (powerups never despawn)
-        
+        ctx.scale(pulse, pulse);
+
         // Spectacular outer aura/glow
-        const glowRadius = currentRadius * 2.5;
-        const gradient = ctx.createRadialGradient(0, 0, currentRadius * 0.3, 0, 0, glowRadius);
-        gradient.addColorStop(0, this.gradientColors[0] + '88'); // Semi-transparent inner
-        gradient.addColorStop(0.4, this.gradientColors[1] + '44'); // More transparent mid
-        gradient.addColorStop(1, this.gradientColors[1] + '00'); // Fully transparent outer
-        
-        ctx.fillStyle = gradient;
+        ctx.fillStyle = grads.outer;
         ctx.beginPath();
-        ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+        ctx.arc(0, 0, POWERUP_GLOW_RADIUS, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Main powerup body with gradient fill
-        const bodyGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, currentRadius);
-        bodyGradient.addColorStop(0, this.gradientColors[0]); // Bright center
-        bodyGradient.addColorStop(0.7, this.gradientColors[1]); // Darker edge
-        bodyGradient.addColorStop(1, this.gradientColors[1] + 'CC'); // Slightly transparent edge
-        
-        // Draw distinctive shape based on powerup type
-        ctx.fillStyle = bodyGradient;
+
+        // Main powerup body with cached gradient fill
+        ctx.fillStyle = grads.body;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
         // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, this.color, currentRadius, 8, 0.6);
-        ctx.shadowBlur = 0;
+        glowSpriteCache.draw(ctx, 0, 0, this.color, R, 8, 0.6);
 
         if (this.type === 'HOMING') {
             // Diamond shape for homing
             ctx.beginPath();
-            ctx.moveTo(0, -currentRadius);
-            ctx.lineTo(currentRadius * 0.8, 0);
-            ctx.lineTo(0, currentRadius);
-            ctx.lineTo(-currentRadius * 0.8, 0);
+            ctx.moveTo(0, -R);
+            ctx.lineTo(R * 0.8, 0);
+            ctx.lineTo(0, R);
+            ctx.lineTo(-R * 0.8, 0);
             ctx.closePath();
         } else if (this.type === 'EXPLOSIVE') {
             // Star shape for explosive
             ctx.beginPath();
             for (let i = 0; i < 8; i++) {
                 const angle = (i / 8) * Math.PI * 2;
-                const radius = i % 2 === 0 ? currentRadius : currentRadius * 0.5;
+                const radius = i % 2 === 0 ? R : R * 0.5;
                 const x = Math.cos(angle) * radius;
                 const y = Math.sin(angle) * radius;
                 if (i === 0) ctx.moveTo(x, y);
@@ -421,19 +442,19 @@ export class Powerup {
         } else if (this.type === 'CRIT_CHANCE') {
             // Target/crosshair shape for critical chance
             ctx.beginPath();
-            ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
+            ctx.arc(0, 0, R, 0, Math.PI * 2);
             ctx.closePath();
             // Add crosshair
-            ctx.moveTo(-currentRadius * 0.6, 0);
-            ctx.lineTo(currentRadius * 0.6, 0);
-            ctx.moveTo(0, -currentRadius * 0.6);
-            ctx.lineTo(0, currentRadius * 0.6);
+            ctx.moveTo(-R * 0.6, 0);
+            ctx.lineTo(R * 0.6, 0);
+            ctx.moveTo(0, -R * 0.6);
+            ctx.lineTo(0, R * 0.6);
         } else if (this.type === 'CRIT_DAMAGE') {
             // Spiky star for critical damage
             ctx.beginPath();
             for (let i = 0; i < 12; i++) {
                 const angle = (i / 12) * Math.PI * 2;
-                const radius = i % 2 === 0 ? currentRadius : currentRadius * 0.3;
+                const radius = i % 2 === 0 ? R : R * 0.3;
                 const x = Math.cos(angle) * radius;
                 const y = Math.sin(angle) * radius;
                 if (i === 0) ctx.moveTo(x, y);
@@ -445,8 +466,8 @@ export class Powerup {
             ctx.beginPath();
             for (let i = 0; i < 8; i++) {
                 const angle = (i / 8) * Math.PI * 2;
-                const x = Math.cos(angle) * currentRadius;
-                const y = Math.sin(angle) * currentRadius;
+                const x = Math.cos(angle) * R;
+                const y = Math.sin(angle) * R;
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
@@ -454,11 +475,9 @@ export class Powerup {
         } else if (this.type === 'MEDPACK') {
             // Cross/plus shape for medpack
             ctx.beginPath();
-            const armWidth = currentRadius * 0.3;
-            const armLength = currentRadius * 0.8;
-            // Horizontal arm
+            const armWidth = R * 0.3;
+            const armLength = R * 0.8;
             ctx.rect(-armLength, -armWidth, armLength * 2, armWidth * 2);
-            // Vertical arm  
             ctx.rect(-armWidth, -armLength, armWidth * 2, armLength * 2);
             ctx.closePath();
         } else {
@@ -466,27 +485,26 @@ export class Powerup {
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
                 const angle = (i / 6) * Math.PI * 2;
-                const x = Math.cos(angle) * currentRadius;
-                const y = Math.sin(angle) * currentRadius;
+                const x = Math.cos(angle) * R;
+                const y = Math.sin(angle) * R;
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
             ctx.closePath();
         }
-        
+
         ctx.fill();
         ctx.stroke();
-        
-        // Icon — the stroked black outline already provides legibility,
-        // so the live shadowBlur (one of the slowest canvas ops) is dropped.
+
+        // Icon — pre-built font string (radius is constant, so the size
+        // never changes in unscaled coords; pulse scaling is handled by
+        // the ctx.scale above).
         ctx.fillStyle = '#ffffff';
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1;
-        ctx.font = `bold ${currentRadius * 0.8}px Arial`;
+        ctx.font = POWERUP_ICON_FONT;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-
-        // Draw icon with outline for better visibility
         ctx.strokeText(this.icon, 0, 0);
         ctx.fillText(this.icon, 0, 0);
 
@@ -494,14 +512,14 @@ export class Powerup {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.8 * fadeAlpha;
-        
+
+        const sparkleRadius = R + 8;
         const sparkleCount = 6;
         for (let i = 0; i < sparkleCount; i++) {
             const angle = (i / sparkleCount) * Math.PI * 2 + rotation * 2;
-            const sparkleRadius = currentRadius + 8;
             const x = Math.cos(angle) * sparkleRadius;
             const y = Math.sin(angle) * sparkleRadius;
-            
+
             ctx.beginPath();
             ctx.moveTo(x - 3, y);
             ctx.lineTo(x + 3, y);
@@ -509,7 +527,7 @@ export class Powerup {
             ctx.lineTo(x, y + 3);
             ctx.stroke();
         }
-        
+
         ctx.restore();
 
         // Powerup name label above the icon (not rotated)

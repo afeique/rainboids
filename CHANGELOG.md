@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.37.4] - 2026-04-29
+
+### Changed
+- **Destroyed enemies now scatter full-silhouette debris like asteroids do.** `createShapeDebris` previously emitted only 6 short stubs (each ≤ `radius * 0.5` long), so enemy explosions felt visually empty next to asteroid kills which throw 30 wireframe edge segments outward. Replaced with a per-type vertex list that traces the actual hull outline at full radius plus a few internal struts/spokes, then emits one debris segment per consecutive outline pair plus all struts via the existing `lineDebrisPool`. Counts by type:
+  - HUNTER (triangle-ish ship): 4 outline + 2 hull braces = 6 segments
+  - GUARDIAN (square): 4 outline + 2 diagonals = 6
+  - WASP (diamond): 4 outline + 2 cross braces = 6
+  - TITAN / TANGERINE (8-sided): 8 outline + 8 inner ring + 4 spokes = 20
+  - STALKER (plus/cross): 12 outline + 2 cross braces = 14
+  - All others (DRIFTER / PROWLER / WEAVER / SENTINEL): 6 outline + 6 inner-ring struts = 12
+- Each segment uses the enemy's color and inherits the existing `LineDebris` physics/fade. The existing per-frame asteroid debris debris-vs-fade behavior is unchanged.
+
+---
+
+## [5.37.3] - 2026-04-29
+
+### Changed
+- **Powerup body gradients now cached per color pair.** The previous draw built **two fresh `createRadialGradient` objects every frame for every onscreen powerup** (outer aura + body fill). Each call allocates a CanvasGradient and uploads its color stops to the GPU, so with 3–6 powerups onscreen this was 6–12 gradient allocations per frame just for pickups. Replaced with a module-level `Map` keyed on `gradientColors[0]+'|'+gradientColors[1]` — there are 19 powerup types, so the cache fills once and stays small. The pulse-scaling effect (`pulse` oscillates 0.7→1.0) is now applied via `ctx.scale(pulse, pulse)` so the cached gradient and the body path stay in sync without rebuilding the gradient at the new radius. Side benefit: the icon font string (`bold ${currentRadius * 0.8}px Arial`) is no longer reallocated per frame either — `POWERUP_ICON_FONT` is a module constant since the unscaled radius is fixed at 18. Net: zero per-frame gradient/string allocations in the powerup draw path.
+
+---
+
 ## [5.37.2] - 2026-04-29
 
 ### Changed

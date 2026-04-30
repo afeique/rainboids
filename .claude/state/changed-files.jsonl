@@ -123,3 +123,4 @@
 {"file":"js/modules/world/asteroid.js","action":"Edit","timestamp":"2026-04-30T00:43:49Z","important":false}
 {"file":"js/modules/enemy/shapes.js","action":"Edit","timestamp":"2026-04-30T00:44:03Z","important":false}
 {"file":"js/modules/enemy/enemy-bullet.js","action":"Edit","timestamp":"2026-04-30T00:44:19Z","important":false}
+{"file":"js/modules/combat/combat-manager.js","action":"Edit","timestamp":"2026-04-30T00:58:48Z","important":false}
