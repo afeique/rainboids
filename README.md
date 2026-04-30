@@ -1,6 +1,8 @@
-# Rainboids — Supercharged Asteroids
+# Rainboids — Galaga-Mode Arcade Shooter
 
-A modern space combat game with deep weapon systems, 10 enemy types, wave-based progression across 100 hand-designed waves, and a full upgrade economy. Built on Canvas 2D.
+A fast-paced formation shooter with synchronized enemy sorties, dive-bomb attacks, and combo-driven build progression. The 10-enemy roster acts as roles in a coordinated squadron; stages flow into each other with no shop interruption. Built on Canvas 2D.
+
+> **6.0.0** is a fundamental gameplay overhaul of the original free-flight roguelite. See `docs/GALAGA_CONVERSION.md` for the design rationale and `CHANGELOG.md` for the full diff. The legacy free-spawn shop loop is preserved behind `galagaMode = false` on `GameEngine` for A/B comparison.
 
 **Play now at: https://rainboids.cat.computer**
 
@@ -13,13 +15,14 @@ A modern space combat game with deep weapon systems, 10 enemy types, wave-based 
 
 ## Game Overview
 
-Rainboids is a supercharged asteroids game featuring:
-- **5 primary weapons**, **5 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
-- **10 unique enemy types** with distinct movement, attack patterns, and visual designs
-- **20 powerup types** with stacking mechanics and visual indicators
-- **Kill-streak damage tiers** (EMPOWERED → UNSTOPPABLE → GODLIKE → LEGENDARY) — sustained kills without taking damage build up to +100% damage
-- **100 hand-designed waves** across 5 acts, plus procedural scaling beyond wave 100
-- **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
+Rainboids is a Galaga-style arcade shooter featuring:
+- **Synchronized enemy sorties** — squadrons fly in along scripted Bezier paths, lock into formation slots at the top, and dive on a timed schedule
+- **6 hand-authored stages**, with stage 7+ procedurally scaled (+difficulty modifier loops the 6)
+- **Combo meter** — kills within 1.5s extend; ×10 grants 5s overdrive (1.5× damage, 2× fire rate); drop & score multipliers scale with combo
+- **Archetype-flavored pickup drops** — every enemy type drops a distinct pickup pool; drop rate amplified by combo
+- **Milestone perks** every 10k score — non-blocking 3-card pick (1/2/3 keys); game keeps running underneath
+- **10 unique enemy types** repurposed as formation roles + dive behaviors
+- **5 primary weapons**, **5 power weapons**, **6 defense skills**
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **63 background music tracks** by Karl Casey @ White Bat Audio
 - **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 26 WAVs; granular hit sounds per enemy bullet pattern and per player primary weapon
@@ -39,7 +42,7 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 - **Pause**: Escape
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
-- **Shop**: Click 🛒 button in pause menu — buy upgrades for the currently-equipped weapons
+- **Pick milestone perk**: Press `1` / `2` / `3` when the perk overlay appears (every 10k score) — non-blocking, game keeps running
 
 ### Cheat Codes
 - **SHIFT+1-8**: Spawn individual enemy types

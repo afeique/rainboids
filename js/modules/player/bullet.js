@@ -77,13 +77,32 @@ export class Bullet {
 
         this.life++;
 
-        // Lifetime expiry — shrink + puff when range is exhausted
-        const effectiveMaxLife = Math.round(this.maxLife * this.rangeMultiplier);
-        if (this.life >= effectiveMaxLife) {
-            this.createDisappearPuff(gameEngine);
-            this.active = false;
-            if (this.onOffScreen) this.onOffScreen();
-            return;
+        // Galaxian mode: every primary bullet has full-screen range. Expire
+        // only when the bullet actually leaves the playfield, ignoring the
+        // life-based range cap entirely. Legacy free-flight uses lifetime.
+        const galaxian = gameEngine && gameEngine.galagaMode && gameField;
+        let effectiveMaxLife;
+        if (galaxian) {
+            const margin = 40;
+            if (this.x < -margin || this.x > gameField.width + margin ||
+                this.y < -margin || this.y > gameField.height + margin) {
+                this.createDisappearPuff(gameEngine);
+                this.active = false;
+                if (this.onOffScreen) this.onOffScreen();
+                return;
+            }
+            // Bullets travel <= one screen height before going off-edge, so a
+            // generous max-life guarantees no premature fade. Fade is only
+            // visible if the bullet stays on-screen longer than this.
+            effectiveMaxLife = Math.max(180, Math.round(this.maxLife * this.rangeMultiplier));
+        } else {
+            effectiveMaxLife = Math.round(this.maxLife * this.rangeMultiplier);
+            if (this.life >= effectiveMaxLife) {
+                this.createDisappearPuff(gameEngine);
+                this.active = false;
+                if (this.onOffScreen) this.onOffScreen();
+                return;
+            }
         }
 
         // Compute fade factor for final 35% of life (used by draw)

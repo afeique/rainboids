@@ -8,6 +8,7 @@ import * as movement from './movement.js';
 import * as firing from './firing.js';
 import * as shapes from './shapes.js';
 import * as ai from './ai.js';
+import { applyPath as applyGalaxianPath } from '../wave/spawn-paths.js';
 
 // Re-export for consumers that import from enemy.js
 export { ENEMY_TYPES };
@@ -30,6 +31,15 @@ export class Enemy {
         this.config = ENEMY_TYPES[type];
         this.level = level;
         this.firingCooldown = getEnemyFiringCooldown(type, level);
+        // Galaxian state — cleared on reset so pooled enemies don't carry it.
+        this.diveSouth = false;
+        this.inFormation = false;
+        this.formationSlot = null;
+        this._formationNextFireAt = null;
+        this.galaxianPath = null;
+        this.pathStartTime = 0;
+        this.pathStartX = 0;
+        this.pathStartY = 0;
         this.initializeEnemy(x, y, gameEngine);
     }
     
@@ -43,7 +53,10 @@ export class Enemy {
         
         // Scale health based on level (15% increase per level — gentle curve)
         const levelMultiplier = 1 + (this.level - 1) * 0.15;
-        this.maxHealth = Math.round(this.config.health * levelMultiplier);
+        // Galaxian mode: enemies are traveling fast across screen, so HP is
+        // halved to keep kills snappy and combos building.
+        const galaxianScale = (gameEngine && gameEngine.galagaMode) ? 0.5 : 1;
+        this.maxHealth = Math.max(1, Math.round(this.config.health * levelMultiplier * galaxianScale));
         this.health = this.maxHealth;
         
         // Safeguard: ensure health never exceeds maxHealth
@@ -269,15 +282,21 @@ export class Enemy {
         }
 
         this.targetPlayer = playerRef;
-        
+
         // Calculate distance to player
         const playerDistance = Math.hypot(this.x - playerRef.x, this.y - playerRef.y);
-        
+
         // Distance-based behavior
         this.updateTargetPriority(playerDistance, gameEngine);
-        
+
         // Update face direction to look at current target
         this.updateFaceDirection();
+
+        // Galaxian: ships face strictly downward. Locks the sprite + aim so
+        // enemies never visually pivot up or fire at upward angles.
+        if (this.galaxianPath || this.diveSouth || this.inFormation) {
+            this.faceAngle = Math.PI / 2;
+        }
         
         // Update movement based on pattern
         this.updateMovement(gameEngine);
@@ -350,6 +369,13 @@ export class Enemy {
         // Add fish-like swimming motion
         this.addFishLikeMovement();
         
+        // Galaxian: enemies travel only south + horizontal (180° downward
+        // semicircle). Any upward velocity component is zeroed.
+        if (this.galaxianPath || this.diveSouth) {
+            if (this.vel.y < 0) this.vel.y = 0;
+            if (this.diveSouth && this.vel.y < 0.6) this.vel.y = 0.6;
+        }
+
         // Update position (scaled for tick rate)
         this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
         this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
@@ -362,22 +388,32 @@ export class Enemy {
         
         // Boundary bouncing instead of wrapping
         if (gameField) {
-            // Bounce off left/right boundaries
-            if (this.x - this.radius < 0) {
-                this.x = this.radius;
-                this.vel.x = Math.abs(this.vel.x) * 0.8; // Bounce with energy loss
-            } else if (this.x + this.radius > gameField.width) {
-                this.x = gameField.width - this.radius;
-                this.vel.x = -Math.abs(this.vel.x) * 0.8;
-            }
-            
-            // Bounce off top/bottom boundaries
-            if (this.y - this.radius < 0) {
-                this.y = this.radius;
-                this.vel.y = Math.abs(this.vel.y) * 0.8;
-            } else if (this.y + this.radius > gameField.height) {
-                this.y = gameField.height - this.radius;
-                this.vel.y = -Math.abs(this.vel.y) * 0.8;
+            // Galaxian path/dive: any side exit releases the enemy back to
+            // the pool — no bounce, no wrap. Off-screen = gone.
+            if (this.galaxianPath || this.diveSouth) {
+                const margin = this.radius + 80;
+                if (this.x < -margin || this.x > gameField.width + margin ||
+                    this.y > gameField.height + margin) {
+                    this.active = false;
+                    return;
+                }
+                // Don't bounce on top — newly-spawned enemies are above 0
+            } else {
+                // Legacy: bounce off all four walls
+                if (this.x - this.radius < 0) {
+                    this.x = this.radius;
+                    this.vel.x = Math.abs(this.vel.x) * 0.8;
+                } else if (this.x + this.radius > gameField.width) {
+                    this.x = gameField.width - this.radius;
+                    this.vel.x = -Math.abs(this.vel.x) * 0.8;
+                }
+                if (this.y - this.radius < 0) {
+                    this.y = this.radius;
+                    this.vel.y = Math.abs(this.vel.y) * 0.8;
+                } else if (this.y + this.radius > gameField.height) {
+                    this.y = gameField.height - this.radius;
+                    this.vel.y = -Math.abs(this.vel.y) * 0.8;
+                }
             }
         } else {
             // Fallback to wrapping using gameField dimensions if available
@@ -402,7 +438,16 @@ export class Enemy {
     
     updateMovement(gameEngine) {
         const now = frameClock.now;
-        
+
+        // ── Galaxian-mode path override ──────────────────────────────────
+        // Path enemies follow a fixed top-down trajectory; their native
+        // movePattern is ignored. Paths always advance south toward the
+        // bottom edge, where Enemy.update() releases the pooled instance.
+        if (this.galaxianPath) {
+            applyGalaxianPath(this, now, gameEngine.gameField);
+            return;
+        }
+
         switch (this.config.movePattern) {
             case 'chase':
                 this.chasePlayer();
@@ -615,11 +660,20 @@ export class Enemy {
     updateShooting(gameEngine) {
         if (!gameEngine.enemyBulletPool) return;
         if (!this.targetPlayer) return;
-        
-        
+
+        // ── Galaxian path-fire ─────────────────────────────────────────
+        // Every galaxian-mode enemy fires on a fixed cadence regardless
+        // of facing or line-of-sight. Global token bucket caps simultaneous
+        // bullets so combined squadron density stays dodgeable.
+        if (gameEngine.galagaMode && (this.galaxianPath || this.inFormation)) {
+            this.updateFormationFire(gameEngine);
+            return;
+        }
+
+
         // Arc movement enemies can only shoot when stopped
         if (this.config.movePattern === 'arc' && !this.canShoot) return;
-        
+
         // Tank movement enemies can only shoot when in firing state
         if (this.config.movePattern === 'tank' && this.tankState !== 'firing') return;
         
@@ -1065,6 +1119,39 @@ export class Enemy {
     waspZigzagMovement() { return movement.waspZigzagMovement.call(this); }
 
     boulderMovement() { return movement.boulderMovement.call(this); }
+    formationHoldMovement() { return movement.formationHoldMovement.call(this); }
+
+    // Galaxian formation fire — independent cadence, no aim/LOS gating,
+    // throttled by the engine's global shooter-token bucket.
+    updateFormationFire(gameEngine) {
+        const now = frameClock.now;
+        if (this._formationNextFireAt == null) {
+            // Stagger initial cooldowns by slot phase so the squadron
+            // doesn't all-fire simultaneously when first spawning.
+            const phase = this.formationSlot ? (this.formationSlot.phase || 0) : 0;
+            this._formationNextFireAt = now + 1000 + phase * 350 + Math.random() * 1500;
+            return;
+        }
+        if (now < this._formationNextFireAt) return;
+        // Token gate — caps simultaneous formation bullets
+        if (gameEngine.formationShooterTokens != null && gameEngine.formationShooterTokens <= 0) return;
+        if (gameEngine.formationShooterTokens != null) gameEngine.formationShooterTokens--;
+        // Aim at the player but clamp the bullet trajectory to the
+        // downward semicircle — galaxian enemies cannot fire upward, even
+        // if the player slipped above them.
+        const tx = this.targetPlayer ? this.targetPlayer.x : this.x;
+        let ty = this.targetPlayer ? this.targetPlayer.y : this.y + 400;
+        if (ty < this.y + 8) ty = this.y + 8; // floor the aim Y just below the muzzle
+        gameEngine._activeShotPattern = 'formation_aimed';
+        try {
+            this.shootAimed(gameEngine, tx, ty);
+        } finally {
+            gameEngine._activeShotPattern = null;
+        }
+        // Next shot 2.2–4.5s later, randomized
+        this._formationNextFireAt = now + 2200 + Math.random() * 2300;
+        this.lastShot = now;
+    }
 
     updateSweepLaserSystem(gameEngine) { return firing.updateSweepLaserSystem.call(this, gameEngine); }
 

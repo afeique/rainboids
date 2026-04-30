@@ -955,6 +955,10 @@ export function getEffectivePrimaryFireRate() {
     const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
     rate *= Math.pow(0.85, rapidFireStacks);
 
+    // Galaga-mode combo overdrive: 2× fire rate while active
+    const ge = this.gameEngine || window.gameEngine;
+    if (ge && ge.combo && ge.combo.isOverdrive()) rate *= 0.5;
+
     return Math.round(rate);
 }
 
@@ -966,6 +970,10 @@ export function getEffectivePrimaryDamage() {
         const stacks = this.getPowerupStacks('OVERCHARGE');
         damage *= (1 + stacks * 0.15);
     }
+
+    // Galaga-mode combo overdrive: 1.5× damage while active
+    const ge = this.gameEngine || window.gameEngine;
+    if (ge && ge.combo && ge.combo.isOverdrive()) damage *= 1.5;
 
     return damage;
 }

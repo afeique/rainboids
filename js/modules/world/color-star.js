@@ -141,7 +141,14 @@ export class ColorStar {
             this.x += this.vel.x;
             this.y += this.vel.y;
             
-            this.opacity = Math.min(1, this.life / 120);
+            // Gradual fade over the final ~6s (360 frames @60Hz) of the orb's
+            // life rather than the previous 2-second hard ramp. sqrt eases the
+            // curve so the tail lingers — visually it stops looking like the
+            // orb pops out and instead clearly dims away.
+            const fadeFrames = 360;
+            this.opacity = this.life >= fadeFrames
+                ? 1
+                : Math.sqrt(Math.max(0, this.life / fadeFrames));
             
             // Home directly toward player
             const dx = playerPos.x - this.x;
@@ -200,11 +207,17 @@ export class ColorStar {
             // Distant stars move much slower, close stars move faster
             // But orbs don't have parallax - they're gameplay elements
             if (!this.isBurst) {
-                const parallaxFactor = Math.pow(this.z, 1.8) * 0.12; // Reduced exponent and multiplier for gentler parallax
-                this.x -= shipVel.x * parallaxFactor;
-                this.y -= shipVel.y * parallaxFactor;
-                
-                // Use game field dimensions if available, otherwise fall back to screen dimensions
+                const ge = (typeof window !== 'undefined') ? window.gameEngine : null;
+                if (ge && ge.galagaMode) {
+                    // Galaxian: constant downward scroll, depth-scaled.
+                    this.y += Math.pow(this.z, 1.5) * 0.45;
+                } else {
+                    // Reduced parallax effect for less distraction
+                    const parallaxFactor = Math.pow(this.z, 1.8) * 0.12;
+                    this.x -= shipVel.x * parallaxFactor;
+                    this.y -= shipVel.y * parallaxFactor;
+                }
+
                 const wrapWidth = gameField ? gameField.width : this.width;
                 const wrapHeight = gameField ? gameField.height : this.height;
                 wrap(this, wrapWidth, wrapHeight);

@@ -491,13 +491,17 @@ export function handleCollisions() {
                     // Drop health and money orbs
                     this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
 
-                    // Enemies often drop powerups — stronger enemies drop more often
-                    const powerupChance = enemy.type === 'WASP' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_WASP :
-                                        enemy.type === 'TITAN' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TITAN :
-                                        enemy.type === 'TANGERINE' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TANGERINE : COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_DEFAULT;
-                    const roll = Math.random();
-                    if (roll < powerupChance) {
-                        this.dropPowerup(enemy.x, enemy.y);
+                    // Galaga mode: archetype-flavored drops scaled by combo.
+                    // Legacy: original drop-chance table.
+                    if (this.galagaMode) {
+                        this.dropArchetypePickup(enemy);
+                    } else {
+                        const powerupChance = enemy.type === 'WASP' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_WASP :
+                                            enemy.type === 'TITAN' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TITAN :
+                                            enemy.type === 'TANGERINE' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TANGERINE : COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_DEFAULT;
+                        if (Math.random() < powerupChance) {
+                            this.dropPowerup(enemy.x, enemy.y);
+                        }
                     }
 
                     // Don't release here — cleanupInactive() handles it after death flash completes
@@ -817,11 +821,15 @@ export function damageEnemy(enemy, damage) {
         }
         this.createEnemyDebris(enemy);
         this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
-        const powerupChance = enemy.type === 'WASP' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_WASP :
-                            enemy.type === 'TITAN' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TITAN :
-                            enemy.type === 'TANGERINE' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TANGERINE : COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_DEFAULT;
-        if (Math.random() < powerupChance) {
-            this.dropPowerup(enemy.x, enemy.y);
+        if (this.galagaMode) {
+            this.dropArchetypePickup(enemy);
+        } else {
+            const powerupChance = enemy.type === 'WASP' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_WASP :
+                                enemy.type === 'TITAN' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TITAN :
+                                enemy.type === 'TANGERINE' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TANGERINE : COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_DEFAULT;
+            if (Math.random() < powerupChance) {
+                this.dropPowerup(enemy.x, enemy.y);
+            }
         }
     }
 }

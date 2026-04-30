@@ -488,19 +488,28 @@ export class Player {
         
         // Boundary bouncing instead of wrapping
         if (gameField) {
+            // Galaxian mode: player is locked to the lower half. The
+            // upper bound becomes height/2 instead of 0; vel.y is zeroed
+            // (not bounced) to prevent jitter at the seam.
+            const ge = (typeof window !== 'undefined') ? window.gameEngine : null;
+            const galaxian = ge && ge.galagaMode;
+            const minY = galaxian
+                ? gameField.height / 2 + this.radius
+                : this.radius;
+
             // Bounce off left/right boundaries
             if (this.x - this.radius < 0) {
                 this.x = this.radius;
-                this.vel.x = Math.abs(this.vel.x) * 0.8; // Bounce with some energy loss
+                this.vel.x = Math.abs(this.vel.x) * 0.8;
             } else if (this.x + this.radius > gameField.width) {
                 this.x = gameField.width - this.radius;
                 this.vel.x = -Math.abs(this.vel.x) * 0.8;
             }
-            
-            // Bounce off top/bottom boundaries
-            if (this.y - this.radius < 0) {
-                this.y = this.radius;
-                this.vel.y = Math.abs(this.vel.y) * 0.8;
+
+            // Top clamp (lower-half lock in galaxian mode)
+            if (this.y < minY) {
+                this.y = minY;
+                if (this.vel.y < 0) this.vel.y = 0;
             } else if (this.y + this.radius > gameField.height) {
                 this.y = gameField.height - this.radius;
                 this.vel.y = -Math.abs(this.vel.y) * 0.8;

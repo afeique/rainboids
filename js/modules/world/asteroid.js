@@ -47,6 +47,7 @@ export class Asteroid {
     // Helper method to initialize/reset asteroid properties
     initializeAsteroid(x, y, radius, level = 1, gameEngine = null) {
         this.level = level;
+        this.fallingAsteroid = false;
         // Use gameField dimensions if available, otherwise fall back to screen dimensions
         const fieldWidth = GameDimensions.width;
         const fieldHeight = GameDimensions.height;
@@ -99,7 +100,11 @@ export class Asteroid {
         // Level scaling: +25% per level beyond 1
         const levelMultiplier = 1 + (this.level - 1) * 0.25;
         health = Math.round(baseHealth * levelMultiplier);
-        
+        // Galaxian mode: asteroids stream past quickly, so HP is halved to
+        // keep them satisfying-to-pop instead of bullet-sponges.
+        const ge = gameEngine || (typeof window !== 'undefined' ? window.gameEngine : null);
+        if (ge && ge.galagaMode) health = Math.max(1, Math.round(health * 0.5));
+
         this.maxHealth = Math.max(1, health); // Ensure minimum 1 health
         this.health = this.maxHealth;
     }
@@ -216,22 +221,31 @@ export class Asteroid {
 
         // Boundary bouncing instead of wrapping
         if (gameField) {
-            // Bounce off left/right boundaries
-            if (this.x - this.radius < 0) {
-                this.x = this.radius;
-                this.vel.x = Math.abs(this.vel.x) * 0.9; // Bounce with slight energy loss
-            } else if (this.x + this.radius > gameField.width) {
-                this.x = gameField.width - this.radius;
-                this.vel.x = -Math.abs(this.vel.x) * 0.9;
-            }
-
-            // Bounce off top/bottom boundaries
-            if (this.y - this.radius < 0) {
-                this.y = this.radius;
-                this.vel.y = Math.abs(this.vel.y) * 0.9;
-            } else if (this.y + this.radius > gameField.height) {
-                this.y = gameField.height - this.radius;
-                this.vel.y = -Math.abs(this.vel.y) * 0.9;
+            // Galaxian falling-asteroid: any side exit releases. No bounce.
+            if (this.fallingAsteroid) {
+                const margin = this.radius + 60;
+                if (this.x < -margin || this.x > gameField.width + margin ||
+                    this.y > gameField.height + margin) {
+                    this.active = false;
+                    return;
+                }
+                // Top is open (newly-spawned asteroids start above 0)
+            } else {
+                // Legacy bounce off all four walls
+                if (this.x - this.radius < 0) {
+                    this.x = this.radius;
+                    this.vel.x = Math.abs(this.vel.x) * 0.9;
+                } else if (this.x + this.radius > gameField.width) {
+                    this.x = gameField.width - this.radius;
+                    this.vel.x = -Math.abs(this.vel.x) * 0.9;
+                }
+                if (this.y - this.radius < 0) {
+                    this.y = this.radius;
+                    this.vel.y = Math.abs(this.vel.y) * 0.9;
+                } else if (this.y + this.radius > gameField.height) {
+                    this.y = gameField.height - this.radius;
+                    this.vel.y = -Math.abs(this.vel.y) * 0.9;
+                }
             }
         } else {
             // Fallback to old wrapping if no game field provided

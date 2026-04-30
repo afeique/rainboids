@@ -11,6 +11,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.3.4] - 2026-04-30
+
+### Changed
+- **Galaxian-mode enemy bullets are now charged-shot sized.** Standard aimed/spread/burst bullets bumped to `radius 11` (explosive 14) with `glowRadius 24/30` (was 3/6 and 6/12). Velocity doubled at the end of `createEnemyBullet`. Bespoke patterns — laser, mines, titan rockets, prowler missiles, homing — skip the override so their existing sizing is preserved.
+
+---
+
+## [6.3.3] - 2026-04-30
+
+### Changed
+- **Player primary bullets now have full-screen range in galaxian mode.** `Bullet.update` replaces life-based range expiry with a screen-bounds check — bullets travel until they actually leave the playfield, regardless of the weapon's `config.range` (Lance Beam 0.6, Rail Driver 0.85, etc.) or `LONG_RANGE` stack count. Legacy free-flight mode keeps the lifetime cap (necessary because that mode wraps).
+
+---
+
+## [6.3.2] - 2026-04-30
+
+### Changed
+- **Background stars stream downward in galaxian mode.** Previously parallaxed against player velocity (built for free-flight); now they scroll straight south at a depth-scaled constant speed (`pow(z, 1.5) * 0.35` for background, `0.45` for color stars). Reinforces the top-down flow — the world reads as moving with the enemy stream, not against the player. Legacy free-flight parallax preserved when `galagaMode = false`.
+
+---
+
+## [6.3.1] - 2026-04-30
+
+### Changed
+- **Enemy face angle locked to downward.** After `updateFaceDirection` runs each frame, galaxian-mode enemies (path, dive, or formation) have `faceAngle` snapped to `π/2`. Sprites no longer pivot up; the squadron always faces the player below.
+- **Enemy fire clamped to the downward semicircle.** Formation-fire's aim target is floored to `this.y + 8` so the computed bullet trajectory never has a negative y-component, even if the player slipped above the enemy. No more upward shots.
+- **Title screen now reads `RAINAXIAN`** (`js/modules/hud/overlays.js`).
+
+---
+
+## [6.3.0] - 2026-04-30
+
+### Changed
+- **Enemies cannot travel north.** Galaxian-mode enemies have `vel.y` clamped to ≥ 0 in the integration step. Movement is restricted to the downward 180° semicircle (south + east + west). Native dive patterns that previously had upward components no longer do; horizontal motion is unrestricted.
+- **Enemy + asteroid HP halved in galaxian mode.** Applied at `Enemy.initializeEnemy` and `Asteroid.initializeAsteroid` (also at `applyEnemyLevelScaling` since it overwrites health). Stream-paced shooters punish bullet-sponge enemies; halving keeps kills snappy and combos building.
+- **Player hard-locked to the lower half.** Replaces the previous soft 45%-thrust damp with a hard clamp at `gameField.height / 2 + radius`. Player spawn position moved to 82% Y. Top boundary zeroes (rather than bounces) `vel.y` to prevent jitter at the seam.
+
+---
+
+## [6.2.0] - 2026-04-30
+
+### Changed
+- **True top-down shooter.** Galaxian mode pivots from formation-hold to a continuous top-to-bottom path stream. Every spawned enemy is in motion southward from the moment it appears; nothing sits still. No formation grid, no scripted dive triggers — the whole stage is a flowing river of enemies on fixed trajectories.
+- **Game board locked to one screen** (`GAME_CONFIG.FIELD_WIDTH/HEIGHT` set to `window.innerWidth/innerHeight` at engine init and on `resize` in galaxian mode). Camera no longer scrolls — the playfield is exactly the viewport. Asteroids and enemies that exit any side disappear permanently.
+- **Off-screen = gone.** Path enemies and falling asteroids that exit any side (left/right/bottom) release back to their pools immediately. No bounce, no wrap. Top is the only open edge (where new spawns enter).
+
+### Added
+- **`js/modules/wave/spawn-paths.js`** — six fixed top-down paths: `straight`, `sine`, `zigzag`, `diagonal`, `swoop`, `drift`. `pickPathForType` maps each enemy archetype to a flavored path pool (Wasps zigzag, Guardians drift, Hunters swoop, etc.). `applyPath` is called from `Enemy.updateMovement` per frame when `enemy.galaxianPath` is set.
+- **Path-fire on every galaxian enemy.** The formation-fire path (consistent 2.2–4.5s cadence, no aim-cone gate, global token-bucket throttle) now applies to all path enemies, not just formation-held ones. Squadrons fire reliably from the moment they enter screen.
+
+### Removed
+- **Formation hold model** is no longer used in galaxian mode. `formation.js` and `formationHoldMovement` remain in the codebase but are dormant — no spawn path uses them. Stage data's `formation` field is ignored. (Keep for potential future modes.)
+
+---
+
+## [6.1.0] - 2026-04-30
+
+### Fixed
+- **Formation enemies stopped firing after settling.** The aim-cone gate in `enemy.js:670–681` (`if (Math.abs(aimDiff) > Math.PI/6) return`) requires the enemy's `faceAngle` to be within 30° of the angle to the player. `formationHoldMovement` lerps `faceAngle` at 0.04/frame — too slow when the player moves laterally below the formation. The enemy's facing oscillates around the gate and rarely satisfies it, so the squadron sits silent. Galaxian-mode now bypasses the aim/LOS gates entirely (new `Enemy.updateFormationFire`) and fires aimed straight at the player on its own cadence.
+
+### Added
+- **Formation-fire path** (`Enemy.updateFormationFire`). Per-enemy 2.2–4.5s randomized cooldown, no aim-cone gate, no line-of-sight gate. Initial cooldown staggered by slot phase so the squadron doesn't volley simultaneously on spawn.
+- **Global formation-fire token bucket** (`gameEngine.formationShooterTokens`, default 2). Refills every frame; an enemy must claim a token to fire. Caps simultaneous formation bullets at 2 per frame regardless of squadron size — dodgeable density even with 12+ enemies.
+- **Continuous-flow stage runner.** Stages run for `duration` ms with continuous formation refill (`refillEvery`), periodic dive waves (`diveEvery` + `diveCount`), and a steady asteroid stream (`asteroidEvery` + `asteroidCount`). No more dead air between scripted spawns.
+- **Vertical asteroid stream.** New `SortieRunner.spawnFallingAsteroid` spawns asteroids above the top edge with downward velocity and slight horizontal drift. Asteroids tagged `fallingAsteroid` skip top/bottom bounce and release on bottom-edge exit.
+- **Top-down dive enforcement.** Diving enemies set `diveSouth = true`; their `vel.y` is clamped to ≥ 0.6 so dives never crawl back upward, and they release to the pool when they exit below the playfield.
+- **Player Y soft-damp.** Upward thrust force is reduced to 55% in the upper 45% of the playfield. Soft, not a hard clamp — the player can still go up briefly to dodge but is discouraged from camping the formation row.
+
+### Changed
+- **Stage data v2** — replaced the hand-authored event-list schema with continuous-flow parameters (`duration`, `pool`, `refillEvery`, `diveEvery`, `diveCount`, `asteroidEvery`, `asteroidCount`). One-shot events (`banner`, `spawn`, `asteroid`) still supported via optional `events` array.
+- **Stage 7+ procedural scaling** rebalanced to scale cadence ranges and dive/asteroid counts (vs. the previous spawn-count + speedup model).
+
+---
+
+## [6.0.0] - 2026-04-30
+
+### Changed
+- **Galaga-mode conversion — fundamental gameplay overhaul.** The free-flight roguelite is replaced with a fast, formation-driven arcade shooter. Stages flow into each other; the between-wave shop is bypassed. Existing 10-enemy roster, weapons, and skills are reused — the conversion is rewiring, not re-art.
+
+### Added
+- **Sortie script + formation slot system** (`js/modules/wave/formation.js`, `wave/sortie-script.js`, `wave/stage-data.js`). Stages spawn enemies into a slot grid (or chevron), where they hold position with breathing sway. Scheduled timeline events trigger dives — slot occupants release back to their native movement pattern. Runner ticks once per frame.
+- **6 hand-authored stages** (Stage 1–6) with stage 7+ procedurally scaled (loops the 6 with +difficulty modifier). Replaces the 100-wave flat enemy-list system.
+- **`formationHoldMovement`** in `enemy/movement.js` — soft-attract steering toward the assigned slot with sine-wave breath; AI evasion suppressed while in formation.
+- **Combo meter** (`js/modules/combat/combo.js`) — kills within 1.5s extend; combo×10 grants 5s overdrive (1.5× damage, 2× fire rate); drop multiplier scales 1.0/1.4/2.0/2.5; score multiplier scales 1×/1.5×/2×/3×.
+- **Archetype-flavored pickup drops** (`combat-manager.dropArchetypePickup`). Each enemy type drops a flavored pickup pool (HUNTER → RAPID/BIG, WASP → RAPID/MULTI, TITAN → all). Drop rate amplified by combo multiplier.
+- **Milestone perk overlay** (`js/modules/ui/milestone-perk.js`) — every 10k score, non-blocking 3-card pick (1/2/3 keys or click). Game keeps running underneath. 6s auto-default.
+- **Score + Combo HUD** (`js/modules/ui/score-combo-hud.js`) — top-right DOM panel showing unified score, combo count, overdrive flash.
+- **`game.score`** unified score field (Galaga-mode primary number).
+
+### Removed
+- **Between-wave shop popup.** In Galaga mode (`galagaMode = true`, default) the shop never opens between waves; stages chain directly. Shop module remains in the codebase as fallback for legacy mode (toggleable for A/B comparison).
+- **HUD shop buttons** are hidden in Galaga mode.
+
+---
+
+## [5.39.9] - 2026-04-30
+
+### Fixed
+- **Powerup body alpha-leak bug — fade-out actually works now.** The expiry fade in `Powerup.draw` set `ctx.globalAlpha = fadeAlpha` before drawing the body, but `glowSpriteCache.draw()` (which is called between the alpha set and the body `fill()`/`stroke()`) ends with `ctx.globalAlpha = alpha` and never restores it. The hard-coded glow alpha was `0.6`, so the powerup body and stroke rendered at a fixed `0.6` regardless of `fadeAlpha`, while only the icon/sparkle/label faded. Net effect: the bulk of the powerup stayed at full visibility right up until despawn, then "popped" out. Fix is two lines in `powerup.js:420-421`: pass `0.6 * fadeAlpha` to the glow sprite, then re-set `ctx.globalAlpha = fadeAlpha` so the body fill/stroke fades with the rest. (Color-star orbs already wrap their `glowSpriteCache.draw` calls in `ctx.save()/ctx.restore()`, so they were unaffected.)
+
+---
+
+## [5.39.8] - 2026-04-30
+
+### Changed
+- **`P` debug key now spawns a powerup somewhere on the map.** Previously the test-spawn placed the powerup at a ±50 px offset from the player, which made it auto-collected the next frame and useless for actually testing pickup behavior. Spawn position is now a random angle around the player at distance `400–800 px`, clamped to stay 80 px inside the `gameField` bounds, so the player has to fly to it to pick it up.
+
+---
+
+## [5.39.7] - 2026-04-30
+
+### Changed
+- **Health / money orbs fade out gradually instead of popping.** The dropped pickup orbs (called powerups colloquially) used to be fully opaque for ~28s of their 30s lifetime and then ramp linearly to zero only across the final 2s — with the 60Hz tick this read as a sudden disappearance, especially when the orb was off to one side of the screen. Fade window extended `120 → 360` frames (~2s → ~6s) and the curve is now `sqrt`-eased so the tail lingers, matching the easing used by the larger Powerup entities.
+
+---
+
 ## [5.39.6] - 2026-04-30
 
 ### Changed

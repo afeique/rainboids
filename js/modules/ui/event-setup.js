@@ -1,5 +1,5 @@
 // Event listener setup — keyboard, mouse, touch, shop interaction, cheats
-import { GAME_STATES } from '../core/constants.js';
+import { GAME_STATES, GAME_CONFIG } from '../core/constants.js';
 import { random } from '../core/utils.js';
 
 export function setupEventListeners() {
@@ -9,6 +9,13 @@ export function setupEventListeners() {
         this.height = window.innerHeight;
         this.canvas.width = this.width;
         this.canvas.height = this.height;
+        // Galaxian mode: gameField follows the viewport so play stays one-screen.
+        if (this.galagaMode) {
+            this.gameField.width = this.width;
+            this.gameField.height = this.height;
+            GAME_CONFIG.FIELD_WIDTH = this.width;
+            GAME_CONFIG.FIELD_HEIGHT = this.height;
+        }
         this.events.emit('ui:check-orientation');
     });
 
@@ -24,11 +31,19 @@ export function setupEventListeners() {
         }
         // R-key reload was removed — auto-reload kicks in when the clip empties.
         // (Shift+R is still a cheat handled in the Shift block below.)
-        // Test powerup spawn (for debugging)
+        // P-key — spawn a powerup somewhere on the map so the player has to
+        // fly to it. Random angle from the player, distance 400–800 px, then
+        // clamped well inside the gameField so it never lands at/past the
+        // boundary where it would be hard to reach.
         if (e.code === 'KeyP' && this.game.state === GAME_STATES.PLAYING) {
-            const offsetX = random(-50, 50);
-            const offsetY = random(-50, 50);
-            this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY);
+            const margin = 80;
+            const angle = random(0, Math.PI * 2);
+            const dist = random(400, 800);
+            let x = this.player.x + Math.cos(angle) * dist;
+            let y = this.player.y + Math.sin(angle) * dist;
+            x = Math.max(margin, Math.min(this.gameField.width - margin, x));
+            y = Math.max(margin, Math.min(this.gameField.height - margin, y));
+            this.dropPowerup(x, y);
         }
         // Debug cheat codes (Shift+key, gameplay only)
         if (e.shiftKey && this.game.state === GAME_STATES.PLAYING) {

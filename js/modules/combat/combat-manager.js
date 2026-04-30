@@ -505,6 +505,30 @@ export function dropPowerup(x, y, type = null) {
     return powerup;
 }
 
+// Galaga mode — each enemy archetype drops a flavored pickup. Drop chance
+// scales with the combo meter so high streaks rain pickups (the "powerful"
+// feel from the design report).
+const ARCHETYPE_DROP_TABLE = {
+    HUNTER:    { base: 0.18, types: ['RAPID_FIRE', 'BIG_BULLETS'] },
+    WASP:      { base: 0.22, types: ['RAPID_FIRE', 'MULTI_SHOT'] },
+    GUARDIAN:  { base: 0.16, types: ['BIG_BULLETS', 'MULTI_SHOT'] },
+    SENTINEL:  { base: 0.18, types: ['BIG_BULLETS', 'HOMING'] },
+    STALKER:   { base: 0.20, types: ['HOMING', 'RAPID_FIRE'] },
+    DRIFTER:   { base: 0.22, types: ['MULTI_SHOT', 'HOMING'] },
+    WEAVER:    { base: 0.22, types: ['HOMING', 'MULTI_SHOT'] },
+    PROWLER:   { base: 0.22, types: ['BIG_BULLETS', 'HOMING'] },
+    TANGERINE: { base: 0.28, types: ['MULTI_SHOT', 'BIG_BULLETS', 'RAPID_FIRE'] },
+    TITAN:     { base: 0.85, types: ['RAPID_FIRE', 'MULTI_SHOT', 'HOMING', 'BIG_BULLETS'] },
+};
+
+export function dropArchetypePickup(enemy) {
+    const entry = ARCHETYPE_DROP_TABLE[enemy.type] || ARCHETYPE_DROP_TABLE.HUNTER;
+    const mult = this.combo ? this.combo.dropMultiplier() : 1;
+    if (Math.random() > entry.base * mult) return null;
+    const type = entry.types[Math.floor(Math.random() * entry.types.length)];
+    return this.dropPowerup(enemy.x, enemy.y, type);
+}
+
 export function collectPowerup(powerup) {
     if (!this.player || !this.player.active) return;
 
@@ -581,6 +605,21 @@ export function onEnemyKill(enemy) {
     this.killCount++;
     this.killStreakCount++;
     this.killStreakTimer = Date.now();
+
+    // ── Galaga-mode: combo + unified score + sortie slot release ──────
+    if (this.combo) this.combo.onKill();
+    if (this.sortieRunner) this.sortieRunner.onEnemyKilled(enemy);
+    if (this.galagaMode) {
+        const reward = enemy.getDestructionReward();
+        const mult = this.combo ? this.combo.scoreMultiplier() : 1;
+        const award = Math.round((reward.points || 50) * mult);
+        this.game.score = (this.game.score || 0) + award;
+        // Milestone perk every 10k score (handled by milestone-perk overlay)
+        if (this.game.score >= (this.game.nextPerkAt || 10000)) {
+            this.events.emit('milestone:perk', { score: this.game.score });
+            this.game.nextPerkAt = (this.game.nextPerkAt || 10000) + 10000;
+        }
+    }
 
     // Coin bonuses on streak milestones (separate from damage tiers).
     const coinMilestones = { 3: true, 5: true, 8: true, 12: true, 20: true };

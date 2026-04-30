@@ -65,10 +65,19 @@ export class BackgroundStar {
         const twinkle = (Math.sin(this.opacityOffset) + 1) / 2; // 0–1
         this.opacity = (1 - this.twinkleAmplitude) + twinkle * this.twinkleAmplitude; // varies by star
         
-        // Reduced parallax effect for less distraction
-        const parallaxFactor = Math.pow(this.z, 1.8) * 0.12;
-        this.x -= shipVel.x * parallaxFactor;
-        this.y -= shipVel.y * parallaxFactor;
+        // Galaxian mode: stars stream straight down at a constant speed
+        // (depth-scaled). Player movement does not parallax — the world is
+        // locked to the viewport, only the enemy/asteroid stream moves.
+        const ge = (typeof window !== 'undefined') ? window.gameEngine : null;
+        if (ge && ge.galagaMode) {
+            const downSpeed = Math.pow(this.z, 1.5) * 0.35;
+            this.y += downSpeed;
+        } else {
+            // Reduced parallax effect for less distraction
+            const parallaxFactor = Math.pow(this.z, 1.8) * 0.12;
+            this.x -= shipVel.x * parallaxFactor;
+            this.y -= shipVel.y * parallaxFactor;
+        }
         
         // Use game field dimensions if available, otherwise fall back to screen dimensions
         const wrapWidth = gameField ? gameField.width : this.width;

@@ -1040,6 +1040,28 @@ export function createEnemyBullet(gameEngine, angle, speed, color, explosive = f
 
         // Titan accelerating missiles don't need target reference (they fly straight)
 
+        // ── Galaxian-mode bullet styling ──────────────────────────────
+        // Charged-shot look applied to *every* bullet: large body, heavy
+        // glow. Velocity boost is selective — bespoke physics (titan
+        // rocket, prowler missile, homing) rely on their preset speed, so
+        // those skip the velocity multiplier but still get the size bump.
+        if (gameEngine.galagaMode) {
+            // Size bump is universal. Don't shrink anything — only enlarge.
+            const targetR = explosive ? 14 : 11;
+            const targetG = explosive ? 30 : 24;
+            if (bullet.radius < targetR) bullet.radius = targetR;
+            if (bullet.glowRadius < targetG) bullet.glowRadius = targetG;
+            // Velocity 2× boost — skipped for bespoke-physics patterns
+            // whose speed/distance is preset and tuned.
+            const skipVelBoost = ['titan_rocket','missile_decelerate','missile_fast_slow','homing','missile','lay_mine'];
+            if (!skipVelBoost.includes(movementPattern)) {
+                bullet.vel.x *= 2.0;
+                bullet.vel.y *= 2.0;
+                bullet.baseVel.x *= 2.0;
+                bullet.baseVel.y *= 2.0;
+            }
+        }
+
         // Enemy shooting sounds removed to reduce audio confusion
         return bullet;
     }

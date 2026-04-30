@@ -27,31 +27,41 @@ export function updateWaveSystem() {
     this.enemyPool.cleanupInactive();
     this.asteroidPool.cleanupInactive();
 
-    // Check if current wave is complete (only enemies count — asteroids are obstacles/loot)
-    // Exclude enemies in death flash — they're visually dying but haven't been cleaned up yet
+    // ── Galaga mode: tick the sortie runner; stage completes when its
+    // timeline is done AND every enemy is dead. We then flow straight
+    // into the next stage with a short banner — no shop interruption.
+    if (this.galagaMode) {
+        if (this.combo) this.combo.tick();
+        if (this.sortieRunner && this.game.state === GAME_STATES.PLAYING) {
+            this.sortieRunner.tick();
+            if (this.sortieRunner.complete && !this.game.waveComplete) {
+                this.game.waveComplete = true;
+                this.game.state = GAME_STATES.WAVE_TRANSITION;
+                this.showWaveComplete();
+                // No shop, no countdown overlay — straight into the next stage.
+                setTimeout(() => {
+                    if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+                        this.startNextWave();
+                    }
+                }, 1400);
+            }
+        }
+        return;
+    }
+
+    // Legacy free-spawn wave system (galagaMode=false fallback). Kept
+    // intact so we can A/B test or revert without re-deleting code.
     const totalEnemies = this.enemyPool.activeObjects.filter(e => !e._deathFlash).length;
 
     if (totalEnemies === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
-        // Wave completed! Roguelite flow: brief "WAVE COMPLETE!" toast,
-        // then auto-pop the shop. closeShop() routes back through
-        // startNextWave() so the player decides when the next wave kicks
-        // off — they can browse upgrades for as long as they want.
         this.game.waveComplete = true;
         this.game.waveCountdownTime = Date.now() + this.game.waveCountdownDuration;
         this.game.state = GAME_STATES.WAVE_TRANSITION;
-
         this.showWaveComplete();
-
-        // Short delay so the WAVE COMPLETE! toast registers, then shop
-        // takes over. No fallback countdown to startNextWave anymore —
-        // the shop is the gate between waves.
         setTimeout(() => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) this.openShop();
         }, 700);
     }
-
-    // (Removed) Auto-advance countdown — the shop now gates the next
-    // wave. closeShop() calls startNextWave() when the player is ready.
 }
 
 export function getWaveSubtitle(waveNumber) {
@@ -116,17 +126,19 @@ export function startNextWave() {
 }
 
 export function spawnWaveEntities() {
-    // Get wave configuration from wave data
-    const waveConfig = getWaveConfig(this.game.currentWave);
-
     // Calculate levels for this wave
     this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
 
-    // Spawn asteroids with level scaling
-    this.spawnLeveledAsteroids(waveConfig.asteroids);
+    // ── Galaga mode: stage script runs the spawn timeline ──
+    if (this.galagaMode && this.sortieRunner) {
+        this.sortieRunner.start(this.game.currentWave);
+        return;
+    }
 
-    // Spawn enemies by type with level scaling
+    // Legacy: free-spawn from wave-data.js
+    const waveConfig = getWaveConfig(this.game.currentWave);
+    this.spawnLeveledAsteroids(waveConfig.asteroids);
     for (const enemyGroup of waveConfig.enemies) {
         this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count);
     }
@@ -195,9 +207,10 @@ export function applyEnemyLevelScaling(enemy) {
     // Apply level scaling
     const scaledStats = getLevelScaledEnemyStats(baseStats, this.game.enemyLevel);
 
-    // Update enemy properties
-    enemy.health = scaledStats.health;
-    enemy.maxHealth = scaledStats.health;
+    // Update enemy properties (galaxian mode halves HP to keep kills snappy)
+    const galaxianScale = this.galagaMode ? 0.5 : 1;
+    enemy.health = Math.max(1, Math.round(scaledStats.health * galaxianScale));
+    enemy.maxHealth = enemy.health;
     enemy.config.speed = scaledStats.speed;
 
     // Set level-based firing cooldown

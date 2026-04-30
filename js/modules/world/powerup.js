@@ -416,8 +416,12 @@ export class Powerup {
         ctx.fillStyle = grads.body;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, 0, 0, this.color, R, 8, 0.6);
+        // OPT-2: pre-rendered glow sprite replaces live GPU blur.
+        // glowSpriteCache.draw() *overwrites* ctx.globalAlpha — multiply by
+        // fadeAlpha so the glow dims with the rest of the powerup, then
+        // restore globalAlpha to fadeAlpha for the body fill/stroke below.
+        glowSpriteCache.draw(ctx, 0, 0, this.color, R, 8, 0.6 * fadeAlpha);
+        ctx.globalAlpha = fadeAlpha;
 
         if (this.type === 'HOMING') {
             // Diamond shape for homing

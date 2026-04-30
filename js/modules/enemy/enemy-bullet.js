@@ -74,7 +74,19 @@ export class EnemyBullet {
     
     update() {
         if (!this.active) return;
-        
+
+        // Galaxian-mode floor: every enemy bullet must read as charged-shot
+        // size, no matter which firing path created it. Some patterns
+        // (sweep laser, mine, sentinel sweep) set radius directly after
+        // pool.get(), bypassing the createEnemyBullet override — this floor
+        // catches them. Mines stay distinct (much larger via this floor's
+        // bullet.shape === 'mine' bypass).
+        const ge = (typeof window !== 'undefined') ? window.gameEngine : null;
+        if (ge && ge.galagaMode && this.shape !== 'mine') {
+            if (this.radius < 11) this.radius = 11;
+            if (this.glowRadius < 24) this.glowRadius = 24;
+        }
+
         // OPT: ring buffer trail insert — O(1)
         this.trail[this.trailHead] = { x: this.x, y: this.y };
         this.trailHead = (this.trailHead + 1) % this.trailLength;

@@ -11,12 +11,17 @@ export function drawHUD() {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
             // Draw health bar and UI elements
             this.updateHUD();
-            // Show shop / pause / hud-shop buttons during gameplay
-            this.events.emit('ui:show-shop-button');
             this.events.emit('ui:show-pause-btn');
-            this.events.emit('ui:show-hud-shop-btn');
+            // Galaga mode: shop is bypassed; hide its buttons. The legacy
+            // free-spawn mode still shows them.
+            if (this.galagaMode) {
+                this.events.emit('ui:hide-shop-button');
+                this.events.emit('ui:hide-hud-shop-btn');
+            } else {
+                this.events.emit('ui:show-shop-button');
+                this.events.emit('ui:show-hud-shop-btn');
+            }
         } else {
-            // Hide them on title screen and while shop is open
             this.events.emit('ui:hide-shop-button');
             this.events.emit('ui:hide-pause-btn');
             this.events.emit('ui:hide-hud-shop-btn');

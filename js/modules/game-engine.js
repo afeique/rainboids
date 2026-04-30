@@ -32,6 +32,8 @@ import * as cam from './world/camera-manager.js';
 import { recordVFXFrame } from './debug/vfx-telemetry.js';
 import * as shop from './shop/shop-manager.js';
 import * as wave from './wave/wave-manager.js';
+import { SortieRunner } from './wave/sortie-script.js';
+import { Combo } from './combat/combo.js';
 import * as col from './combat/collision-system.js';
 import * as combat from './combat/combat-manager.js';
 import * as lifecycle from './player/lifecycle.js';
@@ -131,6 +133,10 @@ export class GameEngine {
         // Wire HTML shop overlay (#shop-overlay) — replaces the old canvas
         // shop. Tabs, items, sell buttons, close button all go through DOM.
         shopDom.initShopDom(this);
+
+        // Galaga-mode UI: milestone perks + score/combo readout.
+        import('./ui/milestone-perk.js').then(m => m.initMilestonePerk(this));
+        import('./ui/score-combo-hud.js').then(m => m.initScoreComboHud(this));
         this.playerCanFire = true;
         this.previousFire = false;
         this.baseDamage = 2; // Base damage per hit
@@ -268,7 +274,14 @@ export class GameEngine {
             h: btnSize + hitPad * 2
         };
         
-        // Camera and game field system
+        // Camera and game field system.
+        // Galaxian mode: the playfield is exactly one screen — no scrolling.
+        // FIELD_WIDTH/HEIGHT are overwritten so all references (GameDimensions,
+        // sortie spawning, etc.) compute against the viewport.
+        if (this.galagaMode !== false) {
+            GAME_CONFIG.FIELD_WIDTH = window.innerWidth;
+            GAME_CONFIG.FIELD_HEIGHT = window.innerHeight;
+        }
         this.gameField = {
             width: GAME_CONFIG.FIELD_WIDTH,
             height: GAME_CONFIG.FIELD_HEIGHT
@@ -292,6 +305,22 @@ export class GameEngine {
 
         // Shop filtered items cache
         this.shopFilteredItems = [];
+
+        // ── Galaga-mode systems ──────────────────────────────────────────
+        // SortieRunner: per-stage timeline (formation entry + dives).
+        // Combo: kill-chain meter, drives drop & score multipliers.
+        // game.score: unified score (replaces XP+coins as primary number).
+        // game.metaSP: meta SP banked across runs (persisted to localStorage).
+        this.sortieRunner = new SortieRunner(this);
+        this.combo = new Combo(this.events);
+        this.galagaMode = true; // default ON; flips to false to fall back to old free-spawn waves
+        // Galaxian formation-fire token bucket (capped per frame).
+        // Combined formation bullet rate stays at most this many per frame —
+        // dodgeable density even with 12+ enemies on screen.
+        this.formationShooterTokens = 2;
+        this.formationShooterTokensMax = 2;
+        this.game.score = 0;
+        this.game.nextPerkAt = 10000;
 
         // Expose cheat functions globally (case insensitive)
         this.setupCheatCodes();
@@ -335,7 +364,7 @@ export class GameEngine {
         this.player.gameEngine = this; // Inject ref so player doesn't need window.gameEngine
         // Position player at center of game field
         this.player.x = this.gameField.width / 2;
-        this.player.y = this.gameField.height / 2;
+        this.player.y = this.galagaMode ? this.gameField.height * 0.82 : this.gameField.height / 2;
         
         this.bulletPool = new PoolManager(Bullet, 10);     // Reduced from 20  
         this.particlePool = new PoolManager(Particle, 50); // Cap is MAX_PARTICLES=50
@@ -384,7 +413,7 @@ export class GameEngine {
         this.player.gameEngine = this; // Inject ref so player doesn't need window.gameEngine
         // Position player at center of game field
         this.player.x = this.gameField.width / 2;
-        this.player.y = this.gameField.height / 2;
+        this.player.y = this.galagaMode ? this.gameField.height * 0.82 : this.gameField.height / 2;
         // Initialize lives display
         this.uiManager.updateLives(this.game.lives);
         // Wave bonus shield system removed
@@ -611,6 +640,7 @@ export class GameEngine {
     dropOrbsFromEntity(x, y, entity = null) { return combat.dropOrbsFromEntity.call(this, x, y, entity); }
     
     dropPowerup(x, y, type = null) { return combat.dropPowerup.call(this, x, y, type); }
+    dropArchetypePickup(enemy) { return combat.dropArchetypePickup.call(this, enemy); }
     collectPowerup(powerup) { return combat.collectPowerup.call(this, powerup); }
     showPowerupDisplay(name, color) { return combat.showPowerupDisplay.call(this, name, color); }
     
@@ -771,6 +801,9 @@ export class GameEngine {
             this.asteroidPool.updateActive(this.gameField);
             this.asteroidPool.cleanupInactive();
 
+            // Refill formation-fire tokens for this frame so the squadron's
+            // combined bullet rate stays capped at this many per-frame.
+            this.formationShooterTokens = this.formationShooterTokensMax;
             // Update enemies and enemy bullets (only during active gameplay)
             this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this, this.gameField));
             this.enemyPool.cleanupInactive();

@@ -148,10 +148,10 @@ export function drawTitleScreen() {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
 
-        // Main title - RAINBOIDS. Nudged +10px right to optically align with
+        // Main title - RAINAXIAN. Nudged +10px right to optically align with
         // the subtitle below (the wavy "R" leading edge sits left of where the
         // monospace baseline-centering would suggest).
-        this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
+        this.drawWavyText('RAINAXIAN', centerX + 10, centerY - 100, {
             fontSize: 72,
             colors: WAVY_PALETTES.title,
             speed: 0.45,

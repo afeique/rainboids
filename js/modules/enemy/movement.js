@@ -2172,3 +2172,42 @@ export function boulderMovement() {
             break;
     }
 }
+
+// ── Formation Hold (Galaga-mode squadron rest position) ──────────────────
+// Steers softly toward the assigned formation slot with a sine-wave breath.
+// AI evasion/dodge is suppressed while in formation so the squadron looks
+// coordinated. When the sortie runner triggers a dive, `inFormation` flips
+// off and the enemy reverts to its native movePattern.
+export function formationHoldMovement() {
+    if (!this.formationSlot) return;
+    const now = frameClock.now;
+    const breathe = Math.sin(now * 0.0015 + (this.formationSlot.phase || 0)) * 6;
+    const swayX = Math.cos(now * 0.0009 + (this.formationSlot.phase || 0)) * 4;
+    const targetX = this.formationSlot.x + swayX;
+    const targetY = this.formationSlot.y + breathe;
+
+    const dx = targetX - this.x;
+    const dy = targetY - this.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > 0.5) {
+        const pull = Math.min(dist, 8) * 0.18;
+        const a = Math.atan2(dy, dx);
+        this.vel.x = this.vel.x * 0.78 + Math.cos(a) * pull * 0.22;
+        this.vel.y = this.vel.y * 0.78 + Math.sin(a) * pull * 0.22;
+    } else {
+        this.vel.x *= 0.85;
+        this.vel.y *= 0.85;
+    }
+
+    // Face downward toward player by default; small wobble keeps it alive.
+    if (this.targetPlayer) {
+        const desired = Math.atan2(this.targetPlayer.y - this.y, this.targetPlayer.x - this.x);
+        // Lerp face angle toward player
+        const cur = this.faceAngle || desired;
+        let diff = desired - cur;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        this.faceAngle = cur + diff * 0.04;
+    }
+}
