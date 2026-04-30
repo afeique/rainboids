@@ -349,9 +349,10 @@ body.shop-open .ui-element:not(#shop-overlay) {
 .shop-currency-label  { color: #4a90e2; font-size: 14px; }
 
 .shop-tabs {
-    /* 4-column grid (matches pause-menu strip), 6 tabs → 4 + 2 layout. */
+    /* 3-column grid: row 1 = gold-priced (OFFENSE / PRIMARY / POWER),
+       row 2 = SP-priced (DEFENSE / DROPS / SKILLS). Currency-grouped. */
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     margin: 8px 0 12px 0;
     width: min(900px, 100%);
@@ -444,7 +445,8 @@ body.shop-open .ui-element:not(#shop-overlay) {
     gap: 4px;
     min-width: 110px;
 }
-.shop-item-price { font-size: 16px; font-weight: bold; color: #ffd700; }
+.shop-item-price { font-size: 16px; font-weight: bold; color: #ffd700; display: inline-flex; align-items: center; gap: 6px; }
+.shop-item-price--coin .shop-coin-icon { vertical-align: middle; }
 .shop-item-price--sp { color: #4a90e2; }
 .shop-item-price--cant { color: #ff6666; }
 .shop-item-price--equipped { color: #44ddff; }

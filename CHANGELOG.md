@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.38.3] - 2026-04-29
+
+### Changed
+- **Shop tabs grouped by currency.** Reorganized into two rows: row 1 holds the three gold-priced tabs (OFFENSE / PRIMARY / POWER), row 2 holds the three SP-priced tabs (DEFENSE / DROPS / SKILLS). Switched `.shop-tabs` grid from `repeat(4, …)` (4 + 2 layout) to `repeat(3, …)` so each currency group fills its own row, making "what does this cost" obvious at a glance from the tab strip alone.
+
+---
+
+## [5.38.2] - 2026-04-29
+
+### Changed
+- **Shop now uses the HUD's coin-stack icon instead of the 💰 emoji.** The HUD renders a stylized coin-stack icon via `drawCachedMoneyIcon` (path data in `core/utils.js`); the shop was using the generic Unicode money-bag emoji, so the two read as different currencies at a glance. Inlined the same SVG path in `shop-dom.js` as `COIN_SVG_PATH` and added a `makeCoinIconSvg(size)` helper. The currency header now swaps in a 20px SVG, and every item-row coin price uses `makeCoinPrice(amount)` (16px SVG + cost number) instead of `'💰 ${cost}'` text. Visually consistent across HUD and shop with no canvas hop — pure SVG scales crisply at any size.
+
+---
+
 ## [5.38.1] - 2026-04-29
 
 ### Fixed
