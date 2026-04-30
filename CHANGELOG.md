@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.2] - 2026-04-30
+
+### Removed
+- **CRT scanline overlay.** The `#scanline-overlay` div + its `linear-gradient` 4px stripe + 10s scanline animation are gone. Borrowed from the pixel-art arcade aesthetic, the overlay didn't suit Rainboids' glow-heavy vector visuals — it muted the brightness on every other row (25%-dark stripe at 4px pitch), reduced HUD legibility for the small enemy-header and damage-number text, and ran at z-index 500 over the whole viewport every frame. Removed the div from `index.html`, the `#scanline-overlay` rule and `@keyframes scanline` from `styles.css`. May reintroduce as an optional Controls/SFX toggle later if desired.
+
+---
+
+## [5.39.1] - 2026-04-30
+
+### Changed
+- **Top-of-screen target HP readout enlarged.** The "X / Y" HP numbers under the enemy health bar bumped from 12px → 16px so they read at a glance. `numberY` recomputed as `barY + barHeight + 14` so the larger glyphs sit ~14px below the bar bottom.
+- **Whole `LV.N  ENEMY` row now centered as a single block.** Previously the name was centered on screen and the LV.N tag hung off its left edge, which pushed the visual mass off-center to the right. Now the renderer measures the full `LV. + level number + gap + name` width once and places the entire row so the block (not just the name) is centered. All three glyphs still bottom-align to the name's baseline.
+
+---
+
 ## [5.39.0] - 2026-04-30
 
 ### Added

@@ -93,42 +93,47 @@ export function drawTargetInfo() {
 
         const headerY = 24;
         const barY = headerY + nameFontSize + 8;     // ~54
-        const numberY = barY + 16;                    // ~70
         const barWidth = 240;
         const barHeight = 7;
+        // HP readout enlarged for legibility; numberY computed so the
+        // text sits ~12px below the health bar bottom.
+        const hpFontSize = 16;
+        const numberY = barY + barHeight + 14;
 
         ctx.save();
         ctx.textBaseline = 'top';
         ctx.lineWidth = 3;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
 
-        // ── Row 1: NAME centered, LV.N hanging off to its LEFT ───────────
-        // Enemy NAME stays centered on screen regardless of level digit
-        // count. The LV indicator sits flush against the name's left edge
-        // with a small gap. All three glyphs are bottom-aligned with the
-        // name's baseline so smaller text sits at the bottom of the row.
+        // ── Row 1: whole "LV.N  NAME" block centered as one unit ────────
+        // Compute the total width of LV. label + level number + gap +
+        // name, then place the block so the entire row is centered on
+        // the screen (rather than the name being centered with LV.N
+        // hanging off to its left, which made the block visually
+        // off-center toward the right).
         const lvLabel = 'LV.';
         const lvNum = String(info.level || 1);
         const name = info.name;
 
-        // Measure name (largest glyph) so we know where its left edge sits.
-        ctx.font = `bold ${nameFontSize}px 'Press Start 2P', monospace`;
-        const nameW = ctx.measureText(name).width;
-        const nameLeft = Math.round(centerX - nameW / 2);
-
-        // Common bottom baseline for the row.
-        const nameBottom = headerY + nameFontSize;
-
-        // Measure each LV piece at its own font size.
+        // Measure each piece at its own font size.
         ctx.font = `bold ${lvLabelFontSize}px 'Press Start 2P', monospace`;
         const lvLabelW = ctx.measureText(lvLabel).width;
         ctx.font = `bold ${lvNumFontSize}px 'Press Start 2P', monospace`;
         const lvNumW = ctx.measureText(lvNum).width;
+        ctx.font = `bold ${nameFontSize}px 'Press Start 2P', monospace`;
+        const nameW = ctx.measureText(name).width;
 
-        const lvBlockW = lvLabelW + lvNumW;
-        const lvGap = 14;
-        const lvBlockRight = nameLeft - lvGap;
-        const lvBlockLeft = lvBlockRight - lvBlockW;
+        const lvGap = 14; // gap between LV.N and name
+        const totalBlockW = lvLabelW + lvNumW + lvGap + nameW;
+        const blockLeft = Math.round(centerX - totalBlockW / 2);
+
+        // Common bottom baseline for the row (matches the name's bottom).
+        const nameBottom = headerY + nameFontSize;
+
+        // LV. label sits at the leftmost edge of the centered block.
+        const lvBlockLeft = blockLeft;
+        // Name starts after LV.N + gap.
+        const nameLeft = blockLeft + lvLabelW + lvNumW + lvGap;
 
         // "LV." in blue, smallest font, bottom-aligned with name.
         ctx.font = `bold ${lvLabelFontSize}px 'Press Start 2P', monospace`;
@@ -179,7 +184,7 @@ export function drawTargetInfo() {
         // ── Row 3: HP numbers ────────────────────────────────────────────
         const displayHealth = liveHealth > 0 && liveHealth < 1 ? 1 : Math.round(liveHealth);
         const healthNumber = `${displayHealth} / ${Math.round(liveMax)}`;
-        ctx.font = "12px 'Press Start 2P', monospace";
+        ctx.font = `${hpFontSize}px 'Press Start 2P', monospace`;
         ctx.lineWidth = 3;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
         ctx.fillStyle = '#FFD700';
