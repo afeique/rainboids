@@ -20,14 +20,15 @@ export function createDebris(ast) {
     // ── Kill juice: hitstop + camera kick + screen flash ──
     if (onScreen) {
         this.triggerHitstop(isLarge ? 5 : 3);
-        this.triggerScreenFlash(isLarge ? 0.12 : 0.07, 3);
+        // Refined screen flash — present but not in-your-face.
+        this.triggerScreenFlash(isLarge ? 0.06 : 0.035, 3);
         const kdx = this.player.x - ast.x;
         const kdy = this.player.y - ast.y;
         this.triggerCameraKick(kdx, kdy, isLarge ? 12 : 7);
     }
 
-    // 1. Bright white core flash — starts visible during hitstop
-    this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 2.2 * sizeScale);
+    // 1. Soft white core flash — visible during hitstop, refined radius.
+    this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 1.5 * sizeScale);
 
     // 2. Expanding colored rings — staggered wavefronts
     this.particlePool.get(ast.x, ast.y, 'explosionRingColored', ast.baseRadius * 2.5 * sizeScale, baseColor);
@@ -130,14 +131,16 @@ export function createEnemyDebris(enemy) {
     // ── Kill juice: hitstop + camera kick + screen flash ──
     if (onScreen) {
         this.triggerHitstop(5);
-        this.triggerScreenFlash(0.15, 4);
+        // Refined screen flash — enemies hit harder than asteroids but
+        // still well below the old 0.15 that washed the screen.
+        this.triggerScreenFlash(0.07, 4);
         const kdx = this.player.x - enemy.x;
         const kdy = this.player.y - enemy.y;
         this.triggerCameraKick(kdx, kdy, 14);
     }
 
-    // 1. Bright white core flash — the "pop" (starts visible during hitstop)
-    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 3.0 * sizeScale);
+    // 1. Soft white core flash — the "pop" (starts visible during hitstop)
+    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 2.0 * sizeScale);
 
     // 2. Staggered colored rings — expanding wavefronts
     for (let ring = 0; ring < 4; ring++) {

@@ -126,11 +126,12 @@ export function drawShop() {
         this.ctx.fillText(spLabel, spStartX + spNumW + spLabelGap, currencyRowY);
 
         // Draw category tabs below currency display
-        const tabsY = currencyRowY + 34; // keeps tabs at same absolute position as before
-        this.drawShopTabs(shopWindowX, tabsY, shopWindowWidth);
+        const tabsY = currencyRowY + 34;
+        const tabsHeight = this.drawShopTabs(shopWindowX, tabsY, shopWindowWidth);
 
-        // Setup clipping for scrollable area (adjusted for tabs)
-        const contentStartY = tabsY + 40; // Start content below tabs
+        // Setup clipping for scrollable area — content starts directly
+        // below the tab strip, no matter how many rows of tabs there are.
+        const contentStartY = tabsY + tabsHeight + 12;
         this.ctx.save();
         this.ctx.beginPath();
         this.ctx.rect(shopWindowX + 10, contentStartY, shopWindowWidth - 20, shopWindowHeight - (contentStartY - shopWindowY) - 20);
@@ -269,12 +270,17 @@ export function drawShopTabs(shopX, tabY, shopWidth) {
             { key: 'SKILLS',  label: 'SKILLS',  color: [140, 80, 200], stroke: '#AA66FF', glow: 'rgba(170, 102, 255, 0.3)' },
         ];
 
-        const tabCount = tabs.length;
-        const tabSpacing = 5;
-        const totalAvailable = shopWidth - (tabSpacing * (tabCount - 1));
-        const tabWidth = Math.floor(totalAvailable / tabCount);
-        const tabHeight = 28;
-        const totalTabsWidth = (tabWidth * tabCount) + (tabSpacing * (tabCount - 1));
+        // 4-column grid (matches pause-menu tab strip). 6 tabs reflow to a
+        // 4 + 2 layout; bigger tap targets + larger label font so the
+        // strip reads cleanly above the item list.
+        const tabsPerRow = 4;
+        const rowCount = Math.ceil(tabs.length / tabsPerRow);
+        const tabSpacing = 6;
+        const rowGap = 6;
+        const tabHeight = 44;
+        const totalAvailable = shopWidth - (tabSpacing * (tabsPerRow - 1));
+        const tabWidth = Math.floor(totalAvailable / tabsPerRow);
+        const totalTabsWidth = (tabWidth * tabsPerRow) + (tabSpacing * (tabsPerRow - 1));
         const tabStartX = shopX + (shopWidth - totalTabsWidth) / 2;
         const tabCorner = 5;
 
@@ -282,10 +288,13 @@ export function drawShopTabs(shopX, tabY, shopWidth) {
 
         for (let i = 0; i < tabs.length; i++) {
             const tab = tabs[i];
-            const tx = tabStartX + i * (tabWidth + tabSpacing);
+            const row = Math.floor(i / tabsPerRow);
+            const col = i % tabsPerRow;
+            const tx = tabStartX + col * (tabWidth + tabSpacing);
+            const ty = tabY + row * (tabHeight + rowGap);
             const isActive = this.shopCategory === tab.key;
             const isHovered = this.mouseX >= tx && this.mouseX <= tx + tabWidth &&
-                              this.mouseY >= tabY && this.mouseY <= tabY + tabHeight;
+                              this.mouseY >= ty && this.mouseY <= ty + tabHeight;
 
             const [r, g, b] = tab.color;
             let fillStyle;
@@ -302,19 +311,23 @@ export function drawShopTabs(shopX, tabY, shopWidth) {
             this.ctx.strokeStyle = tab.stroke;
             this.ctx.lineWidth = 2;
             this.ctx.beginPath();
-            this.ctx.roundRect(tx, tabY, tabWidth, tabHeight, tabCorner);
+            this.ctx.roundRect(tx, ty, tabWidth, tabHeight, tabCorner);
             this.ctx.fill();
             this.ctx.stroke();
             this.ctx.restore();
 
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 10px "Press Start 2P", monospace';
+            this.ctx.font = 'bold 18px "Press Start 2P", monospace';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(tab.label, tx + tabWidth / 2, tabY + tabHeight / 2);
+            this.ctx.fillText(tab.label, tx + tabWidth / 2, ty + tabHeight / 2);
 
-            this.shopTabBounds[tab.key.toLowerCase()] = { x: tx, y: tabY, width: tabWidth, height: tabHeight };
+            this.shopTabBounds[tab.key.toLowerCase()] = { x: tx, y: ty, width: tabWidth, height: tabHeight };
         }
+
+        // Total vertical space the tab strip consumes — caller uses this to
+        // place the scrollable content region directly below.
+        return rowCount * tabHeight + (rowCount - 1) * rowGap;
     }
 
 export function drawShopItem(item, x, y, width, height, index, isHovered = false) {
@@ -464,6 +477,14 @@ export function drawShopItem(item, x, y, width, height, index, isHovered = false
             } else if (isFree) {
                 this.ctx.fillStyle = '#FFFFFF';
                 this.ctx.fillText('FREE', costX, y + 35);
+            } else if (item.currency === 'SP') {
+                // SP-only items (skills) — show one blue "X SP" line, no
+                // gold-coin icon. The dual-cost branch below is for
+                // weapons that mix coins and SP.
+                this.ctx.fillStyle = (this.player.skillPoints >= actualCost) ? '#4A90E2' : '#FF6666';
+                this.ctx.textAlign = 'right';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText(`${actualCost} SP`, costX, y + 35);
             } else {
                 // Show dual cost: coins + SP
                 const costCenterY = y + 28;

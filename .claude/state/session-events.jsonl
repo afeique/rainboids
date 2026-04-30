@@ -434,3 +434,37 @@
 {"data":{"command":"grep -n \"DRIFTER\\|PROWLER\\|WEAVER\\|SENTINEL\" js/modules/combat/combat-manager.js js/modules/enemy/shapes.js | head -10"},"id":"event-000095","state":"stopped","ts":"2026-04-30T00:58:57Z","type":"tool.bash"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000096","state":"stopped","ts":"2026-04-30T00:59:05Z","type":"tool.edit"}
 {"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000097","state":"stopped","ts":"2026-04-30T00:59:19Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"explosionFlash\\|case 'explosionFlash'\" js/modules/world/particle.js | head -5"},"id":"event-000098","state":"stopped","ts":"2026-04-30T01:01:11Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/world/particle.js"},"id":"event-000099","state":"stopped","ts":"2026-04-30T01:01:41Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/combat/combat-manager.js"},"id":"event-000100","state":"stopped","ts":"2026-04-30T01:17:50Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/combat/combat-manager.js"},"id":"event-000101","state":"stopped","ts":"2026-04-30T01:18:01Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000102","state":"stopped","ts":"2026-04-30T01:18:07Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000103","state":"stopped","ts":"2026-04-30T01:18:19Z","type":"tool.edit"}
+{"data":{"command":"grep -rn \"SKILL\\|skills\\|skillPoints\\|currency\" js/modules/shop/ js/modules/ui/ 2\u003e/dev/null | grep -iE \"icon|gold|coin|sp\\b|currency\" | head -20"},"id":"event-000104","state":"stopped","ts":"2026-04-30T01:19:12Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"cost\\|currency\\|icon.*SP\\|🪙\\|coin\\|💰\" js/modules/shop/ js/modules/ui/shop* 2\u003e/dev/null | grep -iE \"cost|currency|render|render\" | head -30"},"id":"event-000105","state":"stopped","ts":"2026-04-30T01:19:19Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"currency\\|item\\.cost\\|cost.*icon\\|🪙\\|💰\" js/modules/shop/ js/modules/ui/ --include=\"*.js\" | grep -v \"cost: \" | head -30"},"id":"event-000106","state":"stopped","ts":"2026-04-30T01:19:23Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"SKILL\\|skill_\\|defense.*skill\\|category.*SKILL\" js/modules/shop/shop-manager.js | head -20"},"id":"event-000107","state":"stopped","ts":"2026-04-30T01:19:34Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"isWeaponOrSkill\\|isSkill\\b\\|isPrimary\\|isPower\" js/modules/shop/shop-renderer.js | head -15"},"id":"event-000108","state":"stopped","ts":"2026-04-30T01:19:53Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/shop/shop-renderer.js"},"id":"event-000109","state":"stopped","ts":"2026-04-30T01:20:14Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000110","state":"stopped","ts":"2026-04-30T01:20:19Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000111","state":"stopped","ts":"2026-04-30T01:20:28Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"tab\\|category\\|drawTab\\|tabsY\\|categories\" js/modules/shop/shop-renderer.js | head -30"},"id":"event-000112","state":"stopped","ts":"2026-04-30T01:21:16Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"shopTabBounds\" js/modules/ --include=\"*.js\" | head -10"},"id":"event-000113","state":"stopped","ts":"2026-04-30T01:21:33Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/shop/shop-renderer.js"},"id":"event-000114","state":"stopped","ts":"2026-04-30T01:22:00Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/shop/shop-renderer.js"},"id":"event-000115","state":"stopped","ts":"2026-04-30T01:22:12Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000116","state":"stopped","ts":"2026-04-30T01:22:17Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000117","state":"stopped","ts":"2026-04-30T01:22:27Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"pause-tab\\|pauseTab\\|pause-menu\" css/styles.css index.html | head -30"},"id":"event-000118","state":"stopped","ts":"2026-04-30T01:23:58Z","type":"tool.bash"}
+{"data":{"command":"grep -n \"\\.pause-tab\\b\\|\\.pause-tabs\\b\\|pause-tab[^-]\" css/styles.css | head -20"},"id":"event-000119","state":"stopped","ts":"2026-04-30T01:24:03Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/css/styles.css"},"id":"event-000120","state":"stopped","ts":"2026-04-30T01:24:23Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000121","state":"stopped","ts":"2026-04-30T01:24:29Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000122","state":"stopped","ts":"2026-04-30T01:24:39Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/shop/shop-renderer.js"},"id":"event-000123","state":"stopped","ts":"2026-04-30T01:25:30Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"bold 14px\" js/modules/shop/shop-renderer.js"},"id":"event-000124","state":"stopped","ts":"2026-04-30T01:25:39Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/shop/shop-renderer.js"},"id":"event-000125","state":"stopped","ts":"2026-04-30T01:25:49Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000126","state":"stopped","ts":"2026-04-30T01:25:55Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000127","state":"stopped","ts":"2026-04-30T01:26:05Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/shop/shop-renderer.js"},"id":"event-000128","state":"stopped","ts":"2026-04-30T01:28:32Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/css/styles.css"},"id":"event-000129","state":"stopped","ts":"2026-04-30T01:28:55Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000130","state":"stopped","ts":"2026-04-30T01:29:01Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000131","state":"stopped","ts":"2026-04-30T01:29:12Z","type":"tool.edit"}

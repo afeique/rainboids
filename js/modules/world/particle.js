@@ -478,15 +478,18 @@ export class Particle {
                 break;
 
             case 'explosionFlash': {
-                // Additive radial flash — bright core fading to soft edge
+                // Additive radial flash — refined: present and obvious but
+                // not blinding. Lower alpha cap, softer center, and a
+                // pow(life, 1.5) ease-out so it doesn't sit at peak.
                 ctx.globalCompositeOperation = 'screen';
                 changedComposite = true;
                 const flashLife = Math.max(0, this.life / 1.2);
-                ctx.globalAlpha = Math.max(0, flashLife * 0.9);
+                const eased = flashLife * flashLife * Math.sqrt(flashLife); // ~life^1.5
+                ctx.globalAlpha = eased * 0.55;
                 const fGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
-                fGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-                fGrad.addColorStop(0.3, 'rgba(220, 240, 255, 0.7)');
-                fGrad.addColorStop(0.7, 'rgba(180, 210, 255, 0.2)');
+                fGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+                fGrad.addColorStop(0.35, 'rgba(220, 235, 255, 0.45)');
+                fGrad.addColorStop(0.75, 'rgba(180, 210, 255, 0.12)');
                 fGrad.addColorStop(1, 'rgba(150, 190, 255, 0)');
                 ctx.fillStyle = fGrad;
                 ctx.beginPath();

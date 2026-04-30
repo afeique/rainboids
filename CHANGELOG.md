@@ -11,6 +11,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.37.10] - 2026-04-29
+
+### Changed
+- **Shop tabs reflowed to 4-per-row to match pause-menu width.** `tabsPerRow` 3 → 4, so the 6 shop tabs lay out as **4 + 2** rows instead of **3 + 3**, giving each tab a narrower cell that matches the pause-menu strip. Tab colors / fonts / heights unchanged.
+- **Pause-menu tabs gained per-category colors mirroring the shop palette.** The 7 pause tabs no longer share a single white border. Each tab now uses a CSS custom property `--tab-color` driven by its `data-tab` attribute, with hover/active states tinting the background and border via `color-mix`. Width stays the 4-column grid from 5.37.8. Color assignments:
+  - `controls` — neutral silver `#cccccc`
+  - `primary` — shop cyan `#00ccff`
+  - `power` — shop red `#ff4444`
+  - `skills` — shop purple `#aa66ff`
+  - `powerups` — shop gold `#ffd700`
+  - `music` — shop green `#44dd88`
+  - `sfx` — orange `#ffa500`
+
+---
+
+## [5.37.9] - 2026-04-29
+
+### Changed
+- **Shop tab labels enlarged.** Tab font bumped from 14px → 18px (matching the pause-menu tab size set in 5.37.8); tab cell height grew 36 → 44 to keep proportional padding around the bigger glyphs. The 3 × 2 grid layout from 5.37.7 is unchanged — `drawShopTabs` still returns the strip's full height so the scrollable item region below adjusts automatically.
+
+---
+
+## [5.37.8] - 2026-04-29
+
+### Changed
+- **Pause-menu tab strip enlarged and reflowed to a 4×2 grid.** The 7 pause-menu tabs (CONTROLS / PRIMARY / POWER / SKILLS / POWERUPS / MUSIC / SFX) used to ride a single flex row with 14px labels, which crammed them into a thin strip on wide screens. Switched `.pause-tabs` from `flex` to `grid-template-columns: repeat(4, minmax(0, 1fr))` so the tabs always wrap to two rows (4 + 3 layout), capped the strip at `min(720px, 100%)` and centered it. `.pause-tab` font bumped 14px → 18px, padding 9px/14px → 14px/18px, with `white-space: nowrap` and `text-align: center` so the labels stay tidy in their grid cells.
+
+---
+
+## [5.37.7] - 2026-04-29
+
+### Changed
+- **Shop category tabs reflowed to 3 × 2 grid with bigger labels.** The 6 shop tabs (OFFENSE, DEFENSE, DROPS, PRIMARY, POWER, SKILLS) used to be crammed into a single row at 28px tall with 10px font, which left each tab narrow and the labels small. Now: two rows × three columns, 36px tall per row, 14px label font (was 10px), 6px row gap. `drawShopTabs` returns the full tab-strip height so the scrollable item region below adjusts automatically — no more hard-coded `tabsY + 40`. Click hit-testing tracks each tab's per-row Y, so all 6 tabs remain clickable in their new positions.
+
+---
+
+## [5.37.6] - 2026-04-29
+
+### Fixed
+- **Shop SKILLS tab showed a gold-coin icon for items priced in SP.** Skills set `isSkill: true` and `currency: 'SP'`, but the row renderer in `shop-renderer.js` lumped them into the same `isWeaponOrSkill` branch as primary/power weapons. That branch always slapped a gold-coin icon next to `actualCost`, treating the SP cost as if it were coins. Added an explicit `item.currency === 'SP'` sub-branch ahead of the dual-cost path: for SP-only items it now renders a single blue "X SP" line (color matches the existing canAfford logic), no gold-coin icon. The dual-cost rendering is preserved for weapons that genuinely mix coins + SP.
+
+---
+
+## [5.37.5] - 2026-04-29
+
+### Changed
+- **Destruction flash refined — present and obvious, no longer in-your-face.** Three coordinated changes so kills still feel weighty without washing the screen white:
+  - **Particle alpha cap** (`world/particle.js` `explosionFlash` draw): peak `globalAlpha` reduced from 0.9 → 0.55, life curve switched from linear to `pow(life, 1.5)` so the flash eases out instead of sitting at peak. Inner gradient stops softened (center 1.0 → 0.85, mid 0.7 → 0.45, fringe 0.2 → 0.12).
+  - **Spawn radius** scaled back: asteroid `baseRadius * 2.2` → `baseRadius * 1.5`; enemy `radius * 3.0` → `radius * 2.0`. The flash still reaches well past the silhouette but no longer dominates the screen.
+  - **Screen flash overlay** (`triggerScreenFlash` strength): asteroid small `0.07 → 0.035`, asteroid large `0.12 → 0.06`, enemy `0.15 → 0.07`. Roughly halved across the board.
+
+---
+
 ## [5.37.4] - 2026-04-29
 
 ### Changed
