@@ -179,7 +179,7 @@ The shop offers permanent upgrades using two currencies:
 
 The shop has six tabs: **Offense**, **Defense**, **Drops**, **Primary**, **Power**, and **Skills**. The **Primary** and **Power** tabs show only the upgrades for whichever weapon is currently equipped (selection happens in the pause menu — see Controls above). Switching weapons in the pause menu instantly repopulates the shop with that weapon's upgrades. ~55 upgrades total across all tabs.
 
-The shop is fullscreen with a transparent backdrop matching the pause menu — game world stays faintly visible behind. Goldenrod scrollbar mirrors the music-player CSS scrollbar. Close with the X button or ESC; both return to the pause menu.
+The shop is fullscreen with a transparent backdrop matching the pause menu — game world stays faintly visible behind. The whole UI is HTML (`#shop-overlay`) — tabs, items, sell buttons, and the scroll list are real DOM elements sharing CSS conventions with the pause menu. Close with the X button or ESC; both return to the pause menu.
 
 ---
 
@@ -346,7 +346,8 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │       │   └── wave-data.js   #   100 wave definitions across 5 acts
 │       ├── shop/              # Shop system
 │       │   ├── shop-manager.js #  Shop logic, purchases, tab builders
-│       │   └── shop-renderer.js # Shop window, tabs, items, scrollbar
+│       │   ├── shop-dom.js     #  HTML overlay renderer (active)
+│       │   └── shop-renderer.js # (Legacy canvas renderer — unused)
 │       ├── audio/             # Audio pipeline
 │       │   ├── audio-manager.js # WebAudio playback of pre-rendered WAV variants
 │       │   ├── sound-defs.js   #   Source-of-truth SFX registry (presets + custom params)

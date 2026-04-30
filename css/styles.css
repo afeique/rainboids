@@ -61,8 +61,10 @@ canvas.asteroid-hover {
     display: none; /* Lives are rendered on the game canvas */
 }
 
-/* Dim all HUD elements when the shop overlay is active */
-body.shop-open .ui-element {
+/* Dim all HUD elements when the shop overlay is active. The shop overlay
+   itself carries `.ui-element` (so it inherits the same z-index/font setup),
+   so exclude it from the dimming via :not(#shop-overlay). */
+body.shop-open .ui-element:not(#shop-overlay) {
     opacity: 0.25;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -270,6 +272,201 @@ body.shop-open .ui-element {
     font-size: 28px;
     text-align: center;
 }
+
+/* ── SHOP OVERLAY ──────────────────────────────────────────────────────────
+   Mirrors the pause-menu layout: full-viewport backdrop, centered column,
+   header (title + currency), tab strip, scrollable item list. Reuses
+   pause-tab styling patterns where possible. */
+#shop-overlay {
+    background-color: rgba(0, 0, 0, 0.25);
+    display: none;
+    pointer-events: all;
+    z-index: 100;
+}
+
+#shop-menu {
+    position: relative;
+    background-color: rgba(0, 0, 0, 0.78);
+    padding: 40px;
+    text-align: center;
+    width: 100vw;
+    height: 100vh;
+    box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 16px;
+}
+
+#shop-menu, #shop-menu * { text-shadow: none; }
+
+.shop-close {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    width: 40px;
+    height: 40px;
+    background: rgba(150, 25, 25, 0.9);
+    border: 2px solid #993333;
+    color: white;
+    cursor: pointer;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 20px;
+    line-height: 1;
+    border-radius: 5px;
+    transition: all 0.2s;
+    z-index: 1;
+}
+.shop-close:hover {
+    background: rgba(220, 50, 50, 1.0);
+    border-color: #ff9999;
+    box-shadow: 0 0 14px rgba(255, 80, 80, 0.6);
+}
+
+.shop-title {
+    color: #00ccff;
+    font-size: 32px;
+    margin: 0;
+    font-family: 'Press Start 2P', monospace;
+}
+
+.shop-currency-row {
+    display: flex;
+    gap: 36px;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    line-height: 1;
+}
+.shop-currency { display: inline-flex; align-items: center; gap: 8px; }
+.shop-currency--coins { color: #ffd700; }
+.shop-currency--sp    { color: #6ab7ff; }
+.shop-currency-icon   { font-size: 18px; }
+.shop-currency-label  { color: #4a90e2; font-size: 14px; }
+
+.shop-tabs {
+    /* 4-column grid (matches pause-menu strip), 6 tabs → 4 + 2 layout. */
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 8px 0 12px 0;
+    width: min(900px, 100%);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.shop-tab {
+    --tab-color: #cccccc;
+    --tab-glow: rgba(204, 204, 204, 0.35);
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid color-mix(in srgb, var(--tab-color) 55%, transparent);
+    color: white;
+    cursor: pointer;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 18px;
+    border-radius: 5px;
+    transition: all 0.2s;
+    text-align: center;
+    white-space: nowrap;
+}
+.shop-tab:hover:not(.active) {
+    background: color-mix(in srgb, var(--tab-color) 18%, transparent);
+    border-color: var(--tab-color);
+    box-shadow: 0 0 15px var(--tab-glow);
+    transform: translateY(-2px);
+}
+.shop-tab.active {
+    background: color-mix(in srgb, var(--tab-color) 32%, transparent);
+    border-color: var(--tab-color);
+    box-shadow: 0 0 12px var(--tab-glow);
+}
+
+/* Per-tab category colors — matches the canvas palette. */
+.shop-tab[data-tab="OFFENSE"] { --tab-color: #ffd700; --tab-glow: rgba(255, 215,   0, 0.40); }
+.shop-tab[data-tab="DEFENSE"] { --tab-color: #4a90e2; --tab-glow: rgba( 74, 144, 226, 0.40); }
+.shop-tab[data-tab="DROPS"]   { --tab-color: #44dd88; --tab-glow: rgba( 68, 221, 136, 0.40); }
+.shop-tab[data-tab="PRIMARY"] { --tab-color: #00ccff; --tab-glow: rgba(  0, 204, 255, 0.40); }
+.shop-tab[data-tab="POWER"]   { --tab-color: #ff4444; --tab-glow: rgba(255,  68,  68, 0.40); }
+.shop-tab[data-tab="SKILLS"]  { --tab-color: #aa66ff; --tab-glow: rgba(170, 102, 255, 0.40); }
+
+.shop-content {
+    width: min(900px, 100%);
+    flex: 1;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+}
+
+.shop-item {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: rgba(0, 255, 0, 0.10);
+    border: 2px solid #00ff00;
+    border-radius: 8px;
+    color: white;
+    font-family: 'Press Start 2P', monospace;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    text-align: left;
+}
+.shop-item:hover:not(.shop-item--maxed) {
+    background: rgba(0, 255, 0, 0.20);
+    box-shadow: 0 0 14px rgba(0, 255, 136, 0.45);
+    transform: translateY(-2px);
+}
+.shop-item--cant-afford { background: rgba(255, 0, 0, 0.10); border-color: #ff4444; }
+.shop-item--cant-afford:hover { background: rgba(255, 0, 0, 0.18); box-shadow: 0 0 14px rgba(255, 68, 68, 0.45); }
+.shop-item--maxed { background: rgba(100, 100, 100, 0.20); border-color: #666; cursor: not-allowed; opacity: 0.7; }
+.shop-item--owned { background: rgba(0, 150, 80, 0.20); border-color: #44ff88; }
+.shop-item--owned:hover { background: rgba(0, 200, 100, 0.30); box-shadow: 0 0 14px rgba(68, 255, 136, 0.45); }
+.shop-item--equipped { background: rgba(0, 140, 200, 0.30); border-color: #44ddff; }
+.shop-item--equipped:hover { background: rgba(0, 180, 255, 0.40); box-shadow: 0 0 14px rgba(68, 221, 255, 0.50); }
+
+.shop-item-icon { font-size: 32px; text-align: center; }
+.shop-item-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.shop-item-name { font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shop-item-desc { font-size: 12px; color: #cccccc; line-height: 1.4; }
+
+.shop-item-cost {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    min-width: 110px;
+}
+.shop-item-price { font-size: 16px; font-weight: bold; color: #ffd700; }
+.shop-item-price--sp { color: #4a90e2; }
+.shop-item-price--cant { color: #ff6666; }
+.shop-item-price--equipped { color: #44ddff; }
+.shop-item-price--owned { color: #44ff88; }
+.shop-item-status { font-size: 10px; color: #00ffff; }
+.shop-item-status--maxed { color: #666; }
+.shop-item-status--owned { color: #44ff88; }
+
+.shop-item-sell {
+    margin-left: 8px;
+    padding: 6px 10px;
+    background: rgba(160, 40, 40, 0.7);
+    border: 1px solid #993333;
+    color: white;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    border-radius: 4px;
+    cursor: pointer;
+    align-self: stretch;
+    transition: all 0.15s;
+}
+.shop-item-sell:hover { background: rgba(220, 80, 80, 0.9); border-color: #ff9999; }
 
 .pause-menu-actions {
     /* SHOP/RESUME row sits at the very top of the pause menu. The divider

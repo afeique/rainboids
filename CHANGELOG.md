@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.38.1] - 2026-04-29
+
+### Fixed
+- **Shop overlay was being dimmed to 25% by its own HUD-dimming rule.** The new `#shop-overlay` carries class `ui-element` (so it inherits the shared HUD z-index / font setup), but `body.shop-open .ui-element { opacity: 0.25 }` — which is meant to dim the score, lives, and other HUD chrome behind the shop — also matched the shop overlay itself, making the whole panel translucent. Narrowed the selector to `body.shop-open .ui-element:not(#shop-overlay)` so the shop renders at full opacity.
+
+---
+
+## [5.38.0] - 2026-04-29
+
+### Changed
+- **Shop UI converted from canvas rendering to HTML overlay.** The shop now mirrors the pause-menu pattern: a fullscreen `#shop-overlay` containing `#shop-menu` with a header (close X, title, currency display), a 4-column tab strip, and a scrollable item list — all DOM, all styled via CSS. Tabs are real `<button class="shop-tab" data-tab="…">` elements; items are `<button class="shop-item">` elements with nested icon/body/cost/sell sub-elements. Per-tab category colors mirror the canvas palette via `data-tab[…]` selectors with `--tab-color` custom properties. Clicks, hover effects, and scrolling are now native DOM behaviors instead of canvas hit-testing — no more `shopTabBounds` / `shopItemBounds` / `shopScrollbarBounds` / `shopScrollThumbDrag` ad-hoc state. Item state classes (`--equipped`, `--owned`, `--maxed`, `--cant-afford`) drive all visual styling. Files added: `js/modules/shop/shop-dom.js` (renderer + event delegation). The legacy `js/modules/shop/shop-renderer.js` is no longer called from the draw loop — `drawShop()` is replaced with a comment pointing at the DOM module.
+- **Shop tabs now use the same boilerplate as pause-menu tabs.** Both menus share the 4-column grid, 18px font, color-mix hover/active patterns, and `data-tab[…]` per-tab color hooks, just under separate selectors (`.pause-tab` vs `.shop-tab`). Items reuse the same row-card visual language as the pause menu's primary/power weapon lists.
+
+### Fixed
+- **`drawShop` no longer runs once per frame while the shop is open.** Frees up the canvas frame budget — every gradient, hit-test array, and scroll-thumb computation that used to render every tick is now zero. The shop is fully responsive HTML.
+
+---
+
 ## [5.37.10] - 2026-04-29
 
 ### Changed

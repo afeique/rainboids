@@ -27,6 +27,7 @@ import * as hudNav from './hud/navigation.js';
 import * as hudOverlays from './hud/overlays.js';
 import * as hudCursor from './hud/cursor.js';
 import * as shopRenderer from './shop/shop-renderer.js';
+import * as shopDom from './shop/shop-dom.js';
 import * as cam from './world/camera-manager.js';
 import { recordVFXFrame } from './debug/vfx-telemetry.js';
 import * as shop from './shop/shop-manager.js';
@@ -125,6 +126,9 @@ export class GameEngine {
         
         this.initializePools();
         this.setupEventListeners();
+        // Wire HTML shop overlay (#shop-overlay) — replaces the old canvas
+        // shop. Tabs, items, sell buttons, close button all go through DOM.
+        shopDom.initShopDom(this);
         this.playerCanFire = true;
         this.previousFire = false;
         this.baseDamage = 2; // Base damage per hit
@@ -1108,9 +1112,9 @@ export class GameEngine {
             this.ctx.fillRect(0, 0, this.width, this.height);
         }
         
-        if (this.game.state === GAME_STATES.SHOP) {
-            this.drawShop();
-        }
+        // Shop UI is rendered as an HTML overlay (#shop-overlay) — no canvas
+        // drawing needed. See js/modules/shop/shop-dom.js for the renderer
+        // and the open/close lifecycle in shop-manager.js.
         
         // Screen flash overlay (kill feedback — drawn over everything except cursor)
         if (this._screenFlashTimer > 0) {

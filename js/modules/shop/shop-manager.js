@@ -7,6 +7,7 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS, getPrimaryUpgrades, getPowerUpgrades, getSkillUpgrades } from '../combat/weapon-data.js';
+import { showShopDom, hideShopDom, renderShopDom, updateShopCurrencyDom } from './shop-dom.js';
 
 
 export function sellShopItem(itemId) {
@@ -74,6 +75,11 @@ export function openShop() {
         this.game.state = GAME_STATES.SHOP;
         document.body.classList.add('shop-open'); // Dim HUD DOM elements behind canvas overlay
 
+        // If the pause overlay is up (user clicked SHOP from pause menu),
+        // hide it so the shop has a clean stage.
+        const pauseOverlay = document.getElementById('pause-overlay');
+        if (pauseOverlay) pauseOverlay.style.display = 'none';
+
         // Pause the charge shot system when opening shop
         if (this.player) {
             this.player.pauseChargeShot();
@@ -114,6 +120,9 @@ export function openShop() {
         ];
 
         this._rebuildShopCache();
+
+        // Show the HTML shop overlay (replaces the old canvas drawShop).
+        showShopDom();
 
 }
 
@@ -244,6 +253,7 @@ export function closeShop() {
 
             this.game.state = GAME_STATES.WAVE_TRANSITION;
             document.body.classList.remove('shop-open'); // Restore HUD DOM element visibility
+            hideShopDom();
 
             // Resume the charge shot system when closing shop
             if (this.player) {
@@ -456,6 +466,7 @@ export function closeShopToPause() {
             // Set state to paused instead of wave transition
             this.game.state = GAME_STATES.PAUSED;
             document.body.classList.remove('shop-open'); // Restore HUD DOM element visibility
+            hideShopDom();
             this.events.emit('ui:toggle-pause'); // Show pause menu
 
             // Resume charge shot so it's not stuck paused when the user unpauses

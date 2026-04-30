@@ -182,6 +182,34 @@
         </div>
     </div>
     
+    <div id="shop-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%;">
+        <div id="shop-menu">
+            <button id="shop-close-button" class="shop-close" aria-label="Close shop">×</button>
+            <h2 class="shop-title">SHOP</h2>
+            <div class="shop-currency-row">
+                <span class="shop-currency shop-currency--coins">
+                    <span class="shop-currency-icon">💰</span>
+                    <span id="shop-coins-amount">0</span>
+                </span>
+                <span class="shop-currency shop-currency--sp">
+                    <span id="shop-sp-amount">0</span>
+                    <span class="shop-currency-label">SP</span>
+                </span>
+            </div>
+            <div class="shop-tabs">
+                <button class="shop-tab active" data-tab="OFFENSE">OFFENSE</button>
+                <button class="shop-tab" data-tab="DEFENSE">DEFENSE</button>
+                <button class="shop-tab" data-tab="DROPS">DROPS</button>
+                <button class="shop-tab" data-tab="PRIMARY">PRIMARY</button>
+                <button class="shop-tab" data-tab="POWER">POWER</button>
+                <button class="shop-tab" data-tab="SKILLS">SKILLS</button>
+            </div>
+            <div id="shop-items-list" class="shop-content">
+                <!-- Populated dynamically by shop-dom.renderShopDom() -->
+            </div>
+        </div>
+    </div>
+
     <div id="customization-overlay">
         <h2>Control Layout</h2>
         <p>Drag the controls to your desired positions, then press Save.</p>
