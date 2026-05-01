@@ -148,44 +148,56 @@ export function drawTitleScreen() {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
 
-        // Main title - RAINAXIAN. Nudged +10px right to optically align with
-        // the subtitle below (the wavy "R" leading edge sits left of where the
-        // monospace baseline-centering would suggest).
-        this.drawWavyText('RAINAXIAN', centerX + 10, centerY - 100, {
-            fontSize: 72,
+        // Responsive sizing — RAINAXIAN at 72px overflows narrow portrait
+        // viewports (~360px wide). Scale every text element by the same
+        // factor so the layout stays proportional. 72px title fits a
+        // ~590px-wide screen; below that we scale down.
+        const titleFitWidth = 590;
+        const scale = Math.min(1, this.width / titleFitWidth);
+        const titleSize    = Math.round(72 * scale);
+        const subtitleSize = Math.round(24 * scale);
+        const promptSize   = Math.round(18 * scale);
+        const recordSize   = Math.round(16 * scale);
+        const titleOffsetY = Math.round(100 * scale);
+        const subtitleOffY = Math.round(20 * scale);
+        const promptOffY   = Math.round(80 * scale);
+        const recordOffY   = Math.round(120 * scale);
+
+        this.drawWavyText('RAINAXIAN', centerX + 10 * scale, centerY - titleOffsetY, {
+            fontSize: titleSize,
             colors: WAVY_PALETTES.title,
             speed: 0.45,
             colorSpeed: 0.18,
         });
 
-        // Subtitle — white shimmer, no vertical motion, just a sliding gradient.
-        this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
-            fontSize: 24,
+        this.drawWavyText('GALAXIAN ARCADE', centerX, centerY - subtitleOffY, {
+            fontSize: subtitleSize,
             colors: WAVY_PALETTES.whiteShimmer,
             amplitude: 0,
             colorSpeed: 0.1,
         });
 
-        // Animated "Press Any Key" text — outer globalAlpha pulse preserved by
-        // drawWavyText. No bob — gradient only.
         const time = Date.now() * 0.001;
         const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3;
 
         this.ctx.save();
         this.ctx.globalAlpha = pulseAlpha;
-        this.drawWavyText('PRESS ANY KEY TO START', centerX, centerY + 80, {
-            fontSize: 18,
+        // Mobile-aware prompt: tap if touch device, otherwise key.
+        const isTouch = (typeof window !== 'undefined') &&
+            window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        const startPrompt = isTouch ? 'TAP TO START' : 'PRESS ANY KEY TO START';
+        this.drawWavyText(startPrompt, centerX, centerY + promptOffY, {
+            fontSize: promptSize,
             colors: WAVY_PALETTES.whiteShimmer,
             amplitude: 0,
             colorSpeed: 0.12,
         });
         this.ctx.restore();
 
-        // Survival record — gold gradient slide, no bob.
         if (this.game.survivalRecord > 0) {
             const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
-            this.drawWavyText(recText, centerX, centerY + 120, {
-                fontSize: 16,
+            this.drawWavyText(recText, centerX, centerY + recordOffY, {
+                fontSize: recordSize,
                 colors: WAVY_PALETTES.gold,
                 amplitude: 0,
                 colorSpeed: 0.14,

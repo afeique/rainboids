@@ -33,13 +33,13 @@
         <p id="start-prompt">Press Any Key To Start</p>
     </div> -->
     
-    <!-- Mobile / tablet block — shown only when isMobileOrTabletDevice() in main.js
-         returns true. Game initialization is skipped entirely when this is visible. -->
-    <div id="desktop-only-block">
-        <div class="desktop-only-icon">🖥️</div>
-        <h1>Desktop only</h1>
-        <p>Rainboids is designed to be played on a desktop or laptop with a mouse and keyboard.</p>
-        <p class="desktop-only-sub">Please open this page on a computer to play.</p>
+    <!-- Portrait-only gate. Shown via CSS media query when the viewport
+         is landscape on a small screen. Game stays visible behind it but
+         touches go to this overlay until the player rotates. -->
+    <div id="rotate-prompt">
+        <div class="rotate-prompt-icon">📱</div>
+        <h1>Rotate to portrait</h1>
+        <p>Rainaxian plays in portrait orientation on mobile.</p>
     </div>
 
     <!-- <div id="shield-tanks"></div> -->

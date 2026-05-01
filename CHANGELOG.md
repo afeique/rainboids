@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.5.0] - 2026-04-30
+
+### Added
+- **Portrait-only gate on mobile.** New `#rotate-prompt` overlay (replacing the dormant desktop-only block). Visible only when all three apply: `(orientation: landscape)`, `(max-height: 520px)`, and `(hover: none) and (pointer: coarse)` — avoids triggering on desktop windows that happen to be wider than tall. Animated icon prompts the player to rotate.
+- **Responsive title screen.** `drawTitleScreen` scales every text element (title, subtitle, prompt, record) by `Math.min(1, viewportWidth / 590)`. RAINAXIAN at 72px no longer overflows narrow phones. Subtitle changed to "GALAXIAN ARCADE".
+- **Touch-aware start prompt.** Title screen now reads `TAP TO START` on coarse-pointer devices, `PRESS ANY KEY TO START` elsewhere — detected via `matchMedia('(pointer: coarse)')`.
+
+### Fixed
+- **Orientation change resizes canvas + gameField.** Previously only the `resize` listener did this; `orientationchange` only fired a UI event. Now it defers 50ms (iOS reports new metrics on the next tick) and reapplies viewport dimensions to canvas, gameField, and `GAME_CONFIG.FIELD_WIDTH/HEIGHT`. Rotating on mobile now reflows the playfield cleanly.
+
+---
+
 ## [6.4.4] - 2026-04-30
 
 ### Fixed

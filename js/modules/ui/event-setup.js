@@ -19,9 +19,23 @@ export function setupEventListeners() {
         this.events.emit('ui:check-orientation');
     });
 
-    // Handle orientation change
+    // Handle orientation change — also resize the canvas + gameField so
+    // mobile-portrait → landscape (or vice versa) keeps play coherent.
+    // iOS reports new viewport metrics on the next tick, so defer.
     window.addEventListener('orientationchange', () => {
-        this.events.emit('ui:check-orientation');
+        setTimeout(() => {
+            this.width = window.innerWidth;
+            this.height = window.innerHeight;
+            this.canvas.width = this.width;
+            this.canvas.height = this.height;
+            if (this.galagaMode) {
+                this.gameField.width = this.width;
+                this.gameField.height = this.height;
+                GAME_CONFIG.FIELD_WIDTH = this.width;
+                GAME_CONFIG.FIELD_HEIGHT = this.height;
+            }
+            this.events.emit('ui:check-orientation');
+        }, 50);
     });
 
     // Handle pause and test keys

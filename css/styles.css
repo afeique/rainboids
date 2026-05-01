@@ -905,17 +905,18 @@ body.shop-open #hud-pause-btn {
     text-shadow: 0 0 8px #ffd700;
 }
 
-/* Mobile / tablet block — replaces the old orientation overlay. Shown via
-   inline style by main.js when isMobileOrTabletDevice() is true. When this
-   is visible, no game code runs at all. */
-#desktop-only-block {
+/* Portrait-only gate. Visible only on small landscape viewports —
+   typical phone-in-landscape. Display becomes flex via the media query
+   below; game canvas stays mounted underneath but is non-interactive
+   while the overlay is shown. */
+#rotate-prompt {
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
     background: #000;
     color: #fff;
     z-index: 9999;
-    display: none; /* flipped to flex by main.js when blocking */
+    display: none;
     flex-direction: column;
     justify-content: center;
     align-items: center;
@@ -925,34 +926,41 @@ body.shop-open #hud-pause-btn {
     box-sizing: border-box;
 }
 
-#desktop-only-block .desktop-only-icon {
-    font-size: 96px;
+#rotate-prompt .rotate-prompt-icon {
+    font-size: 80px;
     margin-bottom: 24px;
+    animation: rotate-prompt-shake 1.6s ease-in-out infinite;
 }
 
-#desktop-only-block h1 {
-    font-size: 28px;
-    margin: 0 0 24px 0;
+#rotate-prompt h1 {
+    font-size: 22px;
+    margin: 0 0 18px 0;
     color: goldenrod;
     letter-spacing: 2px;
+    line-height: 1.4;
 }
 
-#desktop-only-block p {
-    max-width: 520px;
-    line-height: 1.7;
-    font-size: 14px;
-    margin: 0 0 16px 0;
+#rotate-prompt p {
+    max-width: 360px;
+    line-height: 1.6;
+    font-size: 12px;
+    margin: 0;
+    color: #ccc;
 }
 
-#desktop-only-block .desktop-only-sub {
-    font-size: 11px;
-    color: #aaa;
+@keyframes rotate-prompt-shake {
+    0%, 100% { transform: rotate(-15deg); }
+    50%      { transform: rotate(75deg); }
 }
 
-/* When the desktop-only block is up, hide everything else so leftover DOM
-   never peeks through. */
-body.desktop-only-blocked > *:not(#desktop-only-block) {
-    display: none !important;
+/* Show only when the device is touch-capable AND in landscape AND short.
+   Combining all three avoids triggering on desktop browsers that happen
+   to be wider-than-tall. */
+@media (orientation: landscape)
+       and (max-height: 520px)
+       and (hover: none)
+       and (pointer: coarse) {
+    #rotate-prompt { display: flex; }
 }
 
 #energy-bar-row {
