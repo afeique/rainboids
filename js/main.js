@@ -74,7 +74,7 @@ class RainboidsGame {
 
     setupStartHandlers() {
         let _gameStarted = false;
-        const startGame = () => {
+        const startGame = (e) => {
             if (_gameStarted) return;
             _gameStarted = true;
 
@@ -84,6 +84,7 @@ class RainboidsGame {
 
             window.removeEventListener('keydown', startGame);
             window.removeEventListener('click', startGame);
+            window.removeEventListener('touchstart', startGame);
 
             this.audioManager.initializeAudio();
             this.uiManager.startMusic();
@@ -92,6 +93,9 @@ class RainboidsGame {
 
         window.addEventListener('keydown', startGame);
         window.addEventListener('click', startGame);
+        // Mobile: any touch on the title screen starts the game. Bound on
+        // window so the canvas's own touchstart handler doesn't block it.
+        window.addEventListener('touchstart', startGame, { passive: true });
     }
 
     start() {

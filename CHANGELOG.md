@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.4.4] - 2026-04-30
+
+### Fixed
+- **Title screen now starts on mobile tap.** `setupStartHandlers` adds a `touchstart` listener on `window` (passive) alongside the existing `click`/`keydown` triggers. Bound at window level so the canvas's own touchstart handler can't swallow it. First touch on a phone or tablet kicks off audio init and `gameEngine.init()`.
+
+---
+
 ## [6.4.3] - 2026-04-30
 
 ### Changed
