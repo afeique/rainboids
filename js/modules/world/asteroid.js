@@ -208,8 +208,19 @@ export class Asteroid {
             return;
         }
 
+        // Galaxian falling-asteroid: constant downward gravity so every
+        // asteroid eventually exits the bottom edge no matter what speed
+        // it spawned with. vel.y is also floored to a positive minimum
+        // every frame so collisions, bullet hits, or any other impulse
+        // can never bounce an asteroid upward — it always flies south.
+        if (this.fallingAsteroid) {
+            this.vel.y += 0.025;
+            const minDown = 0.4;
+            if (this.vel.y < minDown) this.vel.y = minDown;
+        }
+
         // Cap asteroid speed to keep them manageable to hit
-        const maxSpeed = 2.0; // Maximum speed for asteroids
+        const maxSpeed = 2.5;
         const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
         if (currentSpeed > maxSpeed) {
             this.vel.x = (this.vel.x / currentSpeed) * maxSpeed;
@@ -221,12 +232,29 @@ export class Asteroid {
 
         // Boundary bouncing instead of wrapping
         if (gameField) {
-            // Galaxian falling-asteroid: any side exit releases. No bounce.
+            // Galaxian falling-asteroid: bottom exit recycles to top (cheap
+            // reuse — keeps the scrolling field populated without pool
+            // churn). Side exits also recycle so the pool stays full.
             if (this.fallingAsteroid) {
                 const margin = this.radius + 60;
-                if (this.x < -margin || this.x > gameField.width + margin ||
-                    this.y > gameField.height + margin) {
-                    this.active = false;
+                if (this.y > gameField.height + margin) {
+                    // Recycle: snap above the top edge with a fresh x.
+                    this.y = -this.radius - 40 - Math.random() * 80;
+                    this.x = gameField.width * 0.08 +
+                             Math.random() * gameField.width * 0.84;
+                    this.vel.x = (Math.random() - 0.5) * 1.0;
+                    this.vel.y = 1.0 + Math.random() * 1.4;
+                    this.health = this.maxHealth; // restore HP for the new pass
+                    return;
+                }
+                if (this.x < -margin || this.x > gameField.width + margin) {
+                    // Same recycle behavior for side exits.
+                    this.y = -this.radius - 40 - Math.random() * 80;
+                    this.x = gameField.width * 0.08 +
+                             Math.random() * gameField.width * 0.84;
+                    this.vel.x = (Math.random() - 0.5) * 1.0;
+                    this.vel.y = 1.0 + Math.random() * 1.4;
+                    this.health = this.maxHealth;
                     return;
                 }
                 // Top is open (newly-spawned asteroids start above 0)

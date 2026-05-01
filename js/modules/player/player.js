@@ -372,16 +372,23 @@ export class Player {
         // Update powerups
         this.updatePowerups();
 
-        // Mouse aiming
-        const dx = input.aimX - this.x;
-        const dy = input.aimY - this.y;
-        this.angle = Math.atan2(dy, dx);
+        // Galaxian: ship locked facing straight up; bullets fly vertical.
+        // Free-flight legacy mode keeps mouse aim.
+        const ge = this.gameEngine || (typeof window !== 'undefined' ? window.gameEngine : null);
+        if (ge && ge.galagaMode) {
+            this.angle = -Math.PI / 2;
+        } else {
+            const dx = input.aimX - this.x;
+            const dy = input.aimY - this.y;
+            this.angle = Math.atan2(dy, dx);
+        }
         
         // Debug player aiming occasionally
         if (Math.random() < 0.01) { // 1% chance
         }
 
-        this.isMoving = input.up || input.down || input.left || input.right;
+        this.isMoving = input.up || input.down || input.left || input.right ||
+            (input.touchActive && (Math.abs(input.touchVecX) + Math.abs(input.touchVecY)) > 0.05);
 
         // ── Thrust juice: ramp thrustLevel and detect startup ──
         const now = Date.now();
@@ -402,17 +409,24 @@ export class Player {
             this.engineStartup = Math.max(0, this.engineStartup - 0.06); // ~17 frames ≈ 0.28s
         }
 
-        // WASD movement with tight controls
+        // WASD movement with tight controls (touch press-drag overrides
+        // when active — uses analog magnitude from input.touchVecX/Y).
         if (this.isMoving && !this.thrustersDisabled) {
             let moveX = 0, moveY = 0;
-            if (input.left) moveX -= 1;
-            if (input.right) moveX += 1;
-            if (input.up) moveY -= 1;
-            if (input.down) moveY += 1;
+            if (input.touchActive && (Math.abs(input.touchVecX) + Math.abs(input.touchVecY)) > 0.05) {
+                moveX = input.touchVecX;
+                moveY = input.touchVecY;
+            } else {
+                if (input.left) moveX -= 1;
+                if (input.right) moveX += 1;
+                if (input.up) moveY -= 1;
+                if (input.down) moveY += 1;
+            }
 
+            const mag = Math.min(1, Math.hypot(moveX, moveY));
             const moveAngle = Math.atan2(moveY, moveX);
             const speedMultiplier = this.getMovementSpeedMultiplier();
-            const thrustForce = this.thrustPower * speedMultiplier;
+            const thrustForce = this.thrustPower * speedMultiplier * mag;
             this.vel.x += Math.cos(moveAngle) * thrustForce;
             this.vel.y += Math.sin(moveAngle) * thrustForce;
 

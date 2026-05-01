@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.4.3] - 2026-04-30
+
+### Changed
+- **Falling asteroids cannot travel upward, ever.** Each frame in `Asteroid.update`, `vel.y` is floored to `0.4` (after applying the gravity tick). Collisions, bullet impacts, asteroid-asteroid bumps, and any other impulse that would push an asteroid northward are corrected on the next frame — asteroids always make southward progress and recycle from the bottom edge.
+
+---
+
+## [6.4.2] - 2026-04-30
+
+### Changed
+- **Asteroids drift downward + recycle to top.** Galaxian falling-asteroid update applies a constant `vel.y += 0.025` per frame so every asteroid eventually exits the bottom edge regardless of its initial speed. On bottom-exit (or side-exit) the asteroid is **recycled** in place — `x` reset to a random top-band position, `y` snapped above the top edge, velocity reseeded, HP restored — instead of being released to the pool and replaced by a fresh allocation. Keeps the field populated with zero pool churn. Asteroid max speed bumped from 2.0 to 2.5 to accommodate the gravity buildup.
+
+---
+
+## [6.4.1] - 2026-04-30
+
+### Fixed
+- **Score HUD no longer overlaps the pause button.** Score-combo overlay moved from top-right to top-center (via `transform: translateX(-50%)`); pause button (top-right) and HP/lives stack (top-left) are now both clear.
+- **Pause button now responds to mobile taps.** Added an explicit `touchend` listener on `#hud-pause-btn` (with `preventDefault`) — the prior `click`-only binding could be swallowed by the canvas touchstart's `preventDefault` on some Android browsers.
+
+---
+
+## [6.4.0] - 2026-04-30
+
+### Changed
+- **Player aim locked straight up.** Mouse aiming is bypassed in galaxian mode — `player.angle = -π/2` every frame. The ship sprite faces north and bullets fly vertical only. WASD/arrows still drive movement (no aim coupling).
+- **Auto-fire while playing.** Galaxian mode sets `input.fire = true` each frame in the engine update loop so the player only focuses on dodging + positioning. Holding left-click is no longer required.
+- **Mobile re-enabled.** The `isMobileOrTabletDevice` desktop-only gate in `main.js` is removed. Phones and tablets now load the game directly.
+
+### Added
+- **Touch press-drag analog controls** in `InputHandler.setupTouchControls`. Touchstart anchors a drag origin; touchmove computes a normalized vector (8 px deadzone, 90 px saturation radius). Player movement consumes `input.touchVecX/Y` with magnitude scaling thrust force, so light drags = slow, full-radius drags = full speed. Touchstart also pulls the fire trigger.
+
+---
+
 ## [6.3.4] - 2026-04-30
 
 ### Changed

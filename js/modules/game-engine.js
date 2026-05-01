@@ -746,6 +746,10 @@ export class GameEngine {
             // Calculate tractor beam state - active when not charging
             const tractorEngaged = !this.player.isCharging;
 
+            // Galaxian mode: auto-fire — primary trigger always held during
+            // gameplay so player only has to focus on dodging + moving.
+            if (this.galagaMode) input.fire = true;
+
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged, this.gameField);
             

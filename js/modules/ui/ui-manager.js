@@ -773,11 +773,15 @@ export class UIManager {
         }
 
         if (this.elements.hudPauseBtn) {
-            this.elements.hudPauseBtn.addEventListener('click', () => {
-                if (this.gameEngine) {
-                    this.gameEngine.togglePause();
-                }
-            });
+            const trigger = (e) => {
+                if (e) { e.preventDefault(); e.stopPropagation(); }
+                if (this.gameEngine) this.gameEngine.togglePause();
+            };
+            this.elements.hudPauseBtn.addEventListener('click', trigger);
+            // Mobile: bind touchend explicitly because the canvas touchstart
+            // listener calls preventDefault, which can swallow the synthetic
+            // click on some Android browsers.
+            this.elements.hudPauseBtn.addEventListener('touchend', trigger, { passive: false });
         }
 
         // HUD shop button — top-right, sits next to the pause button.

@@ -16,10 +16,13 @@ function build() {
     host = document.createElement('div');
     host.id = 'score-combo-hud';
     Object.assign(host.style, {
-        position: 'fixed', top: '12px', right: '14px',
+        // Top-center keeps the HUD clear of the pause button (top-right)
+        // and the HP/lives stack (top-left).
+        position: 'fixed', top: '12px', left: '50%',
+        transform: 'translateX(-50%)',
         zIndex: '40', pointerEvents: 'none',
         fontFamily: "'Press Start 2P', monospace",
-        textAlign: 'right',
+        textAlign: 'center',
         textShadow: '0 0 6px #000, 0 0 2px #000',
         display: 'none',
     });

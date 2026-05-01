@@ -1,6 +1,7 @@
-// Input handling — keyboard + mouse only. Mobile / touch was removed; the
-// desktop-only gate in main.js stops the game from initializing on touch
-// devices, so this file does not need to handle them at all.
+// Input handling — keyboard + mouse + touch (Rainaxian 6.4+).
+// Touch press-drag provides analog 2D movement on mobile. The drag origin
+// is the initial touch point; the current finger position relative to that
+// origin gives a normalized vector consumed in player.update.
 
 export class InputHandler {
     constructor() {
@@ -19,13 +20,22 @@ export class InputHandler {
             skill2: false,
             skill3: false,
             skill4: false,
+            // Touch analog drag — set by setupTouchControls below.
+            // touchActive: finger currently down on the playfield.
+            // touchVecX/Y: normalized [-1..1] vector from drag origin.
+            touchActive: false,
+            touchVecX: 0,
+            touchVecY: 0,
         };
 
         this.gameEngine = null; // Set by GameEngine after construction.
         this.lastMouseMoveTime = 0;
+        this._touchOrigin = null;
+        this._touchId = null;
 
         this.setupKeyboardControls();
         this.setupMouseControls();
+        this.setupTouchControls();
     }
 
     setupKeyboardControls() {
@@ -156,6 +166,69 @@ export class InputHandler {
                 this.input.fireSecondary = false;
                 break;
         }
+    }
+
+    setupTouchControls() {
+        // Drag-radius (px) at which touchVec saturates at ±1.
+        const MAX_RADIUS = 90;
+        // Dead zone — taps within this radius produce 0 vector to avoid jitter.
+        const DEADZONE = 8;
+
+        const canvas = document.getElementById('gameCanvas') || document;
+
+        const onStart = (e) => {
+            // Only accept the first finger so multitouch doesn't fight.
+            if (this._touchId !== null) return;
+            const t = e.changedTouches[0];
+            this._touchId = t.identifier;
+            this._touchOrigin = { x: t.clientX, y: t.clientY };
+            this.input.touchActive = true;
+            this.input.touchVecX = 0;
+            this.input.touchVecY = 0;
+            // Tap also pulls fire trigger so charge-shot patterns still work.
+            this.input.fire = true;
+            e.preventDefault();
+        };
+
+        const onMove = (e) => {
+            if (this._touchId === null || !this._touchOrigin) return;
+            for (const t of e.changedTouches) {
+                if (t.identifier !== this._touchId) continue;
+                const dx = t.clientX - this._touchOrigin.x;
+                const dy = t.clientY - this._touchOrigin.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < DEADZONE) {
+                    this.input.touchVecX = 0;
+                    this.input.touchVecY = 0;
+                } else {
+                    const k = Math.min(1, dist / MAX_RADIUS);
+                    const ang = Math.atan2(dy, dx);
+                    this.input.touchVecX = Math.cos(ang) * k;
+                    this.input.touchVecY = Math.sin(ang) * k;
+                }
+                e.preventDefault();
+                break;
+            }
+        };
+
+        const onEnd = (e) => {
+            for (const t of e.changedTouches) {
+                if (t.identifier !== this._touchId) continue;
+                this._touchId = null;
+                this._touchOrigin = null;
+                this.input.touchActive = false;
+                this.input.touchVecX = 0;
+                this.input.touchVecY = 0;
+                this.input.fire = false;
+                e.preventDefault();
+                break;
+            }
+        };
+
+        canvas.addEventListener('touchstart', onStart, { passive: false });
+        canvas.addEventListener('touchmove',  onMove,  { passive: false });
+        canvas.addEventListener('touchend',   onEnd,   { passive: false });
+        canvas.addEventListener('touchcancel',onEnd,   { passive: false });
     }
 
     // Update aim coordinates when player moves to maintain relative aiming direction.
