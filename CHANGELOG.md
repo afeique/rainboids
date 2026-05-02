@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.45.0] - 2026-05-02
+
+### Changed
+- **All player mines are now magnetic by default** — they pull nearby enemies and asteroids toward themselves. Pull radius is `1.8 ×` the trigger radius (so BLAST_RADIUS investments grow magnetism too); pull force scales with `(1 - dist/pullR)`. Asteroids feel a gentler tug than enemies (heavier mass).
+  - Removed the `MAGNETIC_MINE` upgrade from `POWER_UPGRADES` and `MINE_LAYER.upgrades` since it's now baseline.
+  - Added a faint dashed blue magnetic-field ring outside the trigger ring on the mine renderer so the pull radius is visible. The dash offset shifts over time for a "field rotating" feel.
+  - Mine description updated: "Drop magnetic proximity mines".
+- **Nova Blast is now a real shockwave**: ringRadius bumped 200 → 320, ringDamage 2.5 → 4, duration 500 → 600ms. Casting now spawns an immediate explosive burst at the player (flash + ring + 24 shrapnel streaks + 14 embers) plus 4-frame hitstop, screen flash, and screen shake.
+- **Nova damages and pushes asteroids too**, not only enemies. Both enemies and asteroids get an outward velocity shove on first ring contact (`KNOCK_ENEMY=16`, `KNOCK_AST=9`). Lethal damage flips `_deathFlash` and deactivates asteroids.
+- **Lightning Arc chains through asteroids too.** Chain-target search now considers both `enemyPool` and `asteroidPool`; collision applies falloff damage to whichever kind of target each link is. Asteroids get hit-flash + death-flash on lethal damage.
+- **Missiles also impact and damage asteroids.** Homing target acquisition prefers enemies, falls back to nearest asteroid if none in sight. Collision check iterates both pools; impact spawns a flash + shrapnel + embers burst.
+
+---
+
 ## [5.44.0] - 2026-05-02
 
 ### Fixed

@@ -491,7 +491,6 @@ export function layMine(config) {
         triggerRadius: config.mineRadius + blastRadiusStacks * 20,
         blastRadius: config.blastRadius + blastRadiusStacks * 30,
         damage: config.mineDamage,
-        magnetic: this.getPowerupStacks('MAGNETIC_MINE') > 0,
         daisyChain: this.getPowerupStacks('DAISY_CHAIN') > 0,
         active: true,
         // Birth time used by the renderer for arming-pulse animation.
@@ -518,18 +517,44 @@ export function fireNova(config) {
     this.powerCooldownMax = this.powerCooldown;
 
     this.novaActive = true; // collision/renderer gate
+    const ringMax = config.ringRadius + shockwaveStacks * 40;
     this.novaRings.push({
         x: this.x,
         y: this.y,
         currentRadius: 0,    // renderer + collision read this
-        maxRadius: config.ringRadius + shockwaveStacks * 40,
+        maxRadius: ringMax,
         damage: config.ringDamage,
         duration: config.ringDuration,
         elapsed: 0,
         hitEnemies: new Set(),
+        hitAsteroids: new Set(),
         aftershock: this.getPowerupStacks('AFTERSHOCK') > 0,
         active: true,
     });
+
+    // Immediate explosive burst at the player position so the cast
+    // actually feels detonative — flash, multiple wavefront rings,
+    // shrapnel fan, classic particles, lingering embers, and a delayed
+    // cookoff. Modeled on createDebris (asteroid-death recipe).
+    if (this.gameEngine && this.gameEngine.particlePool) {
+        const pp = this.gameEngine.particlePool;
+        const ORANGE = '#ffaa00';
+        const ORANGE_BRIGHT = '#ffe080';
+        const ORANGE_DIM = '#cc6600';
+        pp.get(this.x, this.y, 'explosionFlash', ringMax * 0.4);
+        pp.get(this.x, this.y, 'explosionRingColored', ringMax * 0.5, ORANGE);
+        for (let i = 0; i < 24; i++) {
+            const ang = (i / 24) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+            pp.get(this.x, this.y, 'explosionShrapnel', ang, 5 + Math.random() * 5,
+                i % 3 === 0 ? ORANGE_BRIGHT : i % 3 === 1 ? ORANGE : ORANGE_DIM);
+        }
+        for (let i = 0; i < 14; i++) {
+            pp.get(this.x, this.y, 'explosionEmber', i % 2 ? ORANGE : ORANGE_BRIGHT);
+        }
+        if (typeof this.gameEngine.triggerHitstop === 'function') this.gameEngine.triggerHitstop(4);
+        if (typeof this.gameEngine.triggerScreenFlash === 'function') this.gameEngine.triggerScreenFlash(0.08, 4);
+        if (typeof this.gameEngine.triggerScreenShake === 'function') this.gameEngine.triggerScreenShake(10, 6);
+    }
 
     // Double Pulse
     if (this.getPowerupStacks('DOUBLE_PULSE') > 0) {
@@ -543,6 +568,7 @@ export function fireNova(config) {
                 duration: config.ringDuration,
                 elapsed: 0,
                 hitEnemies: new Set(),
+                hitAsteroids: new Set(),
                 aftershock: false,
                 active: true,
             });
@@ -564,24 +590,35 @@ export function fireLightning(config) {
 
     // Build the chain-target list eagerly so the renderer + collision
     // both have something concrete to iterate. targets[0] is the player
-    // (origin), then up to `maxChains` enemies hopping between each
-    // other within `range` of the previous link.
-    const targets = [{ x: this.x, y: this.y, enemy: null }];
+    // (origin), then up to `maxChains` hops between enemies AND
+    // asteroids — both are fair game and lightning can chain through
+    // either. Each link picks the nearest unvisited target within
+    // `range` of the previous link.
+    const targets = [{ x: this.x, y: this.y, enemy: null, asteroid: null }];
     const visited = new Set();
-    const enemies = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects)
-        || (window.gameEngine && window.gameEngine.enemyPool && window.gameEngine.enemyPool.activeObjects)
-        || [];
+    const ge = this.gameEngine || window.gameEngine;
+    const enemies = (ge && ge.enemyPool && ge.enemyPool.activeObjects) || [];
+    const asteroids = (ge && ge.asteroidPool && ge.asteroidPool.activeObjects) || [];
     let cursorX = this.x, cursorY = this.y;
     for (let hop = 0; hop < maxChains; hop++) {
-        let best = null, bestDist = range;
+        let best = null, bestKind = null, bestDist = range;
         for (const e of enemies) {
             if (!e.active || visited.has(e)) continue;
             const d = Math.hypot(e.x - cursorX, e.y - cursorY);
-            if (d < bestDist) { bestDist = d; best = e; }
+            if (d < bestDist) { bestDist = d; best = e; bestKind = 'enemy'; }
+        }
+        for (const ast of asteroids) {
+            if (!ast.active || visited.has(ast)) continue;
+            const d = Math.hypot(ast.x - cursorX, ast.y - cursorY);
+            if (d < bestDist) { bestDist = d; best = ast; bestKind = 'asteroid'; }
         }
         if (!best) break;
         visited.add(best);
-        targets.push({ x: best.x, y: best.y, enemy: best });
+        targets.push({
+            x: best.x, y: best.y,
+            enemy: bestKind === 'enemy' ? best : null,
+            asteroid: bestKind === 'asteroid' ? best : null,
+        });
         cursorX = best.x; cursorY = best.y;
     }
 

@@ -124,6 +124,21 @@ export function drawWeaponEffects() {
                 ctx.beginPath();
                 ctx.arc(0, 0, mine.triggerRadius || 60, 0, Math.PI * 2);
                 ctx.stroke();
+
+                // ── Magnetic field ring (outer, dashed, slowly rotating) ──
+                // Visualizes the pull radius (1.8 × trigger). Shifting the
+                // dash offset gives a "field rotating" feel without
+                // expensive transforms.
+                const pullR = (mine.triggerRadius || 60) * 1.8;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(120, 180, 255, 0.28)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([6, 8]);
+                ctx.lineDashOffset = -now * 0.04;
+                ctx.beginPath();
+                ctx.arc(0, 0, pullR, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
             }
 
             ctx.restore();

@@ -56,10 +56,12 @@ export function updateActiveSkills(dt) {
         }
     }
 
-    // Update missiles — always-on homing seeks the nearest active enemy.
-    // Each missile re-acquires when its target dies. Steering uses a
-    // smooth angular interpolation so the rotation reads naturally.
+    // Update missiles — always-on homing seeks the nearest active
+    // target (enemies preferred, asteroids as fallback). Each missile
+    // re-acquires when its target dies/inactivates. Steering uses
+    // smooth angular interpolation so rotation reads naturally.
     const enemies = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
+    const asteroidsForMissiles = (this.gameEngine && this.gameEngine.asteroidPool && this.gameEngine.asteroidPool.activeObjects) || [];
     for (let i = this.activeMissiles.length - 1; i >= 0; i--) {
         const m = this.activeMissiles[i];
         m.life -= dt;
@@ -68,13 +70,23 @@ export function updateActiveSkills(dt) {
             continue;
         }
 
-        // (Re-)acquire target if needed.
+        // (Re-)acquire target if needed. Prefer enemies; if none in
+        // sight, fall back to nearest asteroid so missiles still do
+        // something useful.
         if (!m.target || !m.target.active) {
             let bestDist = Infinity, best = null;
             for (const e of enemies) {
                 if (!e.active) continue;
                 const d = Math.hypot(e.x - m.x, e.y - m.y);
                 if (d < bestDist) { bestDist = d; best = e; }
+            }
+            if (!best) {
+                bestDist = Infinity;
+                for (const ast of asteroidsForMissiles) {
+                    if (!ast.active) continue;
+                    const d = Math.hypot(ast.x - m.x, ast.y - m.y);
+                    if (d < bestDist) { bestDist = d; best = ast; }
+                }
             }
             m.target = best;
         }
@@ -85,7 +97,6 @@ export function updateActiveSkills(dt) {
             const dy = m.target.y - m.y;
             const targetAng = Math.atan2(dy, dx);
             const currentAng = Math.atan2(m.vel.y, m.vel.x);
-            // Shortest signed angular delta.
             let diff = ((targetAng - currentAng + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
             const turn = m.homingStrength || 0.18;
             const newAng = currentAng + diff * turn;
@@ -101,13 +112,49 @@ export function updateActiveSkills(dt) {
         m.y += m.vel.y;
     }
 
-    // Update mine arm timers — flip mine.armed once the fuse runs out so
-    // collision-system / renderer can switch into the "live" visual and
-    // proximity-trigger behavior.
+    // Update mines: arm timer + magnetism. All mines are magnetic by
+    // default — once armed they pull nearby enemies and asteroids
+    // toward themselves so things actually walk into the trigger ring.
+    const enemiesForMines = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
+    const asteroidsForMines = (this.gameEngine && this.gameEngine.asteroidPool && this.gameEngine.asteroidPool.activeObjects) || [];
     for (const mine of this.activeMines) {
+        if (!mine.active) continue;
+
+        // Arming
         if (mine.armTimer > 0) {
             mine.armTimer -= dt;
             if (mine.armTimer <= 0) mine.armed = true;
+        }
+        if (!mine.armed) continue;
+
+        // Magnetic pull radius scales with the mine's trigger radius so
+        // BLAST_RADIUS investments pull from further out too. Force is
+        // proportional to (1 - dist/pullR), so close-by entities feel a
+        // strong tug while edge-of-range ones drift in slowly.
+        const triggerR = mine.triggerRadius || 60;
+        const pullR = triggerR * 1.8;
+
+        for (const e of enemiesForMines) {
+            if (!e.active || !e.vel) continue;
+            const dx = mine.x - e.x;
+            const dy = mine.y - e.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist >= pullR || dist < 0.01) continue;
+            const force = 0.45 * (1 - dist / pullR);
+            e.vel.x += (dx / dist) * force;
+            e.vel.y += (dy / dist) * force;
+        }
+        for (const ast of asteroidsForMines) {
+            if (!ast.active || !ast.vel) continue;
+            const dx = mine.x - ast.x;
+            const dy = mine.y - ast.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist >= pullR || dist < 0.01) continue;
+            // Asteroids are heavier — gentler pull so they don't snap
+            // into the mine instantly.
+            const force = 0.18 * (1 - dist / pullR);
+            ast.vel.x += (dx / dist) * force;
+            ast.vel.y += (dy / dist) * force;
         }
     }
 

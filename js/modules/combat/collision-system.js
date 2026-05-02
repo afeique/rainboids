@@ -775,66 +775,149 @@ export function checkMineCollisions() {
 }
 
 // ─── Nova Rings ─────────────────────────────────────────────────
+// Sweeps an expanding shockwave: each enemy/asteroid is hit at most
+// once when the ring's radius first reaches them, and gets pushed
+// outward so the blast feels physical.
 export function checkNovaCollisions() {
     const p = this.player;
-    if (p.novaActive && p.novaRings) {
-        for (const ring of p.novaRings) {
-            if (!ring.active) continue;
-            this.enemyPool.activeObjects.forEach(enemy => {
-                if (!enemy.active) return;
-                const dist = Math.hypot(enemy.x - ring.x, enemy.y - ring.y);
-                const ringWidth = 20;
-                if (Math.abs(dist - ring.currentRadius) < ringWidth) {
-                    if (!ring.hitEnemies) ring.hitEnemies = new Set();
-                    if (!ring.hitEnemies.has(enemy)) {
-                        ring.hitEnemies.add(enemy);
-                        this.damageEnemy(enemy, POWER_WEAPONS.NOVA_BLAST.ringDamage);
-                    }
-                }
-            });
-        }
-    }
-}
+    if (!(p.novaActive && p.novaRings)) return;
+    const RING_WIDTH = 30;
+    const KNOCK_ENEMY = 16;
+    const KNOCK_AST = 9;
+    for (const ring of p.novaRings) {
+        if (!ring.active) continue;
+        if (!ring.hitEnemies) ring.hitEnemies = new Set();
+        if (!ring.hitAsteroids) ring.hitAsteroids = new Set();
 
-// ─── Lightning Chains ───────────────────────────────────────────
-export function checkLightningCollisions() {
-    const p = this.player;
-    if (p.lightningChains) {
-        for (const chain of p.lightningChains) {
-            if (!chain.active || chain.damageApplied) continue;
-            chain.damageApplied = true;
-            let dmg = POWER_WEAPONS.LIGHTNING_ARC.chainDamage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
-            const falloff = POWER_WEAPONS.LIGHTNING_ARC.chainFalloff;
-            for (let i = 1; i < chain.targets.length; i++) {
-                const target = chain.targets[i];
-                if (target.enemy && target.enemy.active) {
-                    this.damageEnemy(target.enemy, dmg);
+        // Enemies — damage + outward shove on first contact with ring.
+        for (const enemy of this.enemyPool.activeObjects) {
+            if (!enemy.active || ring.hitEnemies.has(enemy)) continue;
+            const dx = enemy.x - ring.x;
+            const dy = enemy.y - ring.y;
+            const dist = Math.hypot(dx, dy);
+            if (Math.abs(dist - ring.currentRadius) < RING_WIDTH) {
+                ring.hitEnemies.add(enemy);
+                this.damageEnemy(enemy, ring.damage || POWER_WEAPONS.NOVA_BLAST.ringDamage);
+                if (dist > 0.001 && enemy.vel) {
+                    enemy.vel.x += (dx / dist) * KNOCK_ENEMY;
+                    enemy.vel.y += (dy / dist) * KNOCK_ENEMY;
                 }
-                dmg *= falloff;
+            }
+        }
+
+        // Asteroids — damage + outward shove on first contact with ring.
+        // (Doesn't run the full bullet-death path; sets _hitFlashTimer
+        // and handles lethal damage with a death flash.)
+        for (const ast of this.asteroidPool.activeObjects) {
+            if (!ast.active || ring.hitAsteroids.has(ast)) continue;
+            const dx = ast.x - ring.x;
+            const dy = ast.y - ring.y;
+            const dist = Math.hypot(dx, dy);
+            if (Math.abs(dist - ring.currentRadius) < RING_WIDTH) {
+                ring.hitAsteroids.add(ast);
+                const dmg = ring.damage || POWER_WEAPONS.NOVA_BLAST.ringDamage;
+                ast.health = Math.max(0, (ast.health || 0) - dmg);
+                ast._hitFlashTimer = 4;
+                if (dist > 0.001 && ast.vel) {
+                    ast.vel.x += (dx / dist) * KNOCK_AST;
+                    ast.vel.y += (dy / dist) * KNOCK_AST;
+                }
+                if (ast.health <= 0.001) {
+                    ast._deathFlash = 6;
+                    ast._deathFlashMax = 6;
+                    ast.active = false;
+                }
             }
         }
     }
 }
 
+// ─── Lightning Chains ───────────────────────────────────────────
+// Applies damage along the chain once when the chain first appears.
+// Targets can be either enemies OR asteroids — both take the same
+// falloff-decayed damage. Asteroids get a hit-flash + death-flash on
+// lethal damage (no fragmentation, see mine collision for rationale).
+export function checkLightningCollisions() {
+    const p = this.player;
+    if (!p.lightningChains) return;
+    for (const chain of p.lightningChains) {
+        if (!chain.active || chain.damageApplied) continue;
+        chain.damageApplied = true;
+        let dmg = POWER_WEAPONS.LIGHTNING_ARC.chainDamage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+        const falloff = POWER_WEAPONS.LIGHTNING_ARC.chainFalloff;
+        for (let i = 1; i < chain.targets.length; i++) {
+            const t = chain.targets[i];
+            if (t.enemy && t.enemy.active) {
+                this.damageEnemy(t.enemy, dmg);
+            } else if (t.asteroid && t.asteroid.active) {
+                const ast = t.asteroid;
+                ast.health = Math.max(0, (ast.health || 0) - dmg);
+                ast._hitFlashTimer = 4;
+                if (ast.health <= 0.001) {
+                    ast._deathFlash = 6;
+                    ast._deathFlashMax = 6;
+                    ast.active = false;
+                }
+            }
+            dmg *= falloff;
+        }
+    }
+}
+
 // ─── Missiles ──────────────────────────────────────────────────
+// Missiles impact enemies AND asteroids — both are valid targets.
+// On hit: apply damage, spawn an explosion flash + shrapnel + embers
+// so the impact reads, then mark the missile inactive.
 export function checkMissileCollisions() {
     const p = this.player;
-    if (p.activeMissiles) {
-        for (const missile of p.activeMissiles) {
-            if (!missile.active) continue;
-            this.enemyPool.activeObjects.forEach(enemy => {
-                if (!enemy.active) return;
-                const dist = Math.hypot(enemy.x - missile.x, enemy.y - missile.y);
-                if (dist < (enemy.radius || 15) + 6) {
-                    this.damageEnemy(enemy, POWER_WEAPONS.MISSILE_SALVO.missileDamage);
-                    missile.active = false;
-                    // Impact particles
-                    for (let i = 0; i < 4; i++) {
-                        const angle = Math.random() * Math.PI * 2;
-                        this.particlePool.get(missile.x, missile.y, Math.cos(angle) * 2, Math.sin(angle) * 2, 2, '#ff4444', 20);
-                    }
+    if (!p.activeMissiles) return;
+
+    const explode = (mx, my) => {
+        if (!this.particlePool) return;
+        this.particlePool.get(mx, my, 'explosionFlash', 24);
+        for (let i = 0; i < 8; i++) {
+            const ang = (i / 8) * Math.PI * 2;
+            this.particlePool.get(mx, my, 'explosionShrapnel', ang, 4, '#ff8866');
+        }
+        for (let i = 0; i < 4; i++) {
+            this.particlePool.get(mx, my, 'explosionEmber', '#ffaa44');
+        }
+    };
+
+    for (const missile of p.activeMissiles) {
+        if (!missile.active) continue;
+
+        // Enemy hit
+        let hit = false;
+        for (const enemy of this.enemyPool.activeObjects) {
+            if (!enemy.active) continue;
+            const dist = Math.hypot(enemy.x - missile.x, enemy.y - missile.y);
+            if (dist < (enemy.radius || 15) + 6) {
+                this.damageEnemy(enemy, POWER_WEAPONS.MISSILE_SALVO.missileDamage);
+                missile.active = false;
+                explode(missile.x, missile.y);
+                hit = true;
+                break;
+            }
+        }
+        if (hit) continue;
+
+        // Asteroid hit
+        for (const ast of this.asteroidPool.activeObjects) {
+            if (!ast.active) continue;
+            const dist = Math.hypot(ast.x - missile.x, ast.y - missile.y);
+            if (dist < (ast.baseRadius || ast.radius || 20) + 6) {
+                ast.health = Math.max(0, (ast.health || 0) - POWER_WEAPONS.MISSILE_SALVO.missileDamage);
+                ast._hitFlashTimer = 4;
+                if (ast.health <= 0.001) {
+                    ast._deathFlash = 6;
+                    ast._deathFlashMax = 6;
+                    ast.active = false;
                 }
-            });
+                missile.active = false;
+                explode(missile.x, missile.y);
+                break;
+            }
         }
     }
 }

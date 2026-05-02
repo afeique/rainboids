@@ -184,7 +184,7 @@ export const POWER_WEAPONS = {
     MINE_LAYER: {
         id: 'MINE_LAYER',
         name: 'Mine Layer',
-        description: 'Drop proximity mines',
+        description: 'Drop magnetic proximity mines',
         icon: '💣',
         color: '#ff6600',
         cooldown: 4000,
@@ -196,19 +196,19 @@ export const POWER_WEAPONS = {
         cost: 1500,
         spCost: 1,
         unlockWave: 2,
-        upgrades: ['EXTRA_PAYLOAD', 'BLAST_RADIUS', 'MAGNETIC_MINE', 'DAISY_CHAIN', 'RAPID_DEPLOY'],
+        upgrades: ['EXTRA_PAYLOAD', 'BLAST_RADIUS', 'DAISY_CHAIN', 'RAPID_DEPLOY'],
     },
     NOVA_BLAST: {
         id: 'NOVA_BLAST',
         name: 'Nova Blast',
-        description: 'Expanding damage ring',
+        description: 'Explosive shockwave that pushes everything out',
         icon: '💫',
         color: '#ffaa00',
         cooldown: 8000,
         isChargeBased: false,
-        ringRadius: 200,
-        ringDamage: 2.5,      // was 4 — power weapons scaled down for balance
-        ringDuration: 500,    // ms for ring to expand
+        ringRadius: 320,      // was 200 — bigger, more powerful
+        ringDamage: 4,        // was 2.5 — heavier hit
+        ringDuration: 600,    // ms for ring to expand
         cost: 2000,
         spCost: 2,
         unlockWave: 3,
@@ -262,7 +262,6 @@ export const POWER_UPGRADES = {
     // Mine Layer
     EXTRA_PAYLOAD:    { id: 'EXTRA_PAYLOAD',    name: 'Extra Payload',    description: '+1 max active mine per stack',         cost: 700,  maxStacks: 2,  weapon: 'MINE_LAYER', icon: '💣' },
     BLAST_RADIUS:     { id: 'BLAST_RADIUS',     name: 'Blast Radius',     description: '+30px blast & +20px trigger range per stack', cost: 800,  maxStacks: 3,  weapon: 'MINE_LAYER', icon: '💥' },
-    MAGNETIC_MINE:    { id: 'MAGNETIC_MINE',    name: 'Magnetic Mine',    description: 'Mines pull nearby enemies',            cost: 1500, maxStacks: 1,  weapon: 'MINE_LAYER', icon: '🧲' },
     DAISY_CHAIN:      { id: 'DAISY_CHAIN',      name: 'Daisy Chain',      description: 'Nearby mines detonate together',      cost: 2000, maxStacks: 1,  weapon: 'MINE_LAYER', icon: '🔗' },
     RAPID_DEPLOY:     { id: 'RAPID_DEPLOY',     name: 'Rapid Deploy',     description: '-25% mine cooldown per stack (4s → 3s → 2.25s)', cost: 1100, maxStacks: 2, weapon: 'MINE_LAYER', icon: '⚡' },
 
