@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.2] - 2026-05-02
+
+### Changed
+- **Tab now cycles primary weapons; R cycles power weapons.** R was previously the only cycle key (primary-only). Tab needs `e.preventDefault()` so the browser doesn't shift focus to the next page element.
+- HUD cycle animation extended: `_weaponCycleAnim` now carries a `slot` field (`'primary'` or `'power'`) and `drawEquippedWeaponSquares` pulses whichever square just changed.
+- Wave-1 onboarding hint updated to: "Press **Tab** to cycle primary weapons, **R** to cycle power weapons." Hint id bumped to `wave1-cycle-weapons-v2` so players who already saw the old "Press R" hint see the new dual-key version once.
+- README controls updated for both keys.
+
+---
+
 ## [5.41.1] - 2026-05-02
 
 ### Added

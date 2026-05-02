@@ -26,15 +26,30 @@ export function setupEventListeners() {
         // R-key reload was removed — auto-reload kicks in when the clip empties.
         // R now cycles through owned primary weapons (during gameplay only —
         // ignored if Shift is held so it doesn't conflict with Shift+R cheats).
-        if (e.code === 'KeyR' && !e.shiftKey && this.game.state === GAME_STATES.PLAYING) {
+        // Tab cycles owned PRIMARY weapons; R cycles owned POWER weapons.
+        // Tab needs preventDefault so the browser doesn't shift focus to
+        // the next page element. R is plain (Shift+R is reserved for cheats).
+        if (e.code === 'Tab' && !e.shiftKey && this.game.state === GAME_STATES.PLAYING) {
+            e.preventDefault();
             const owned = Array.from(this.player.ownedPrimaries || []);
             if (owned.length > 1) {
                 const i = owned.indexOf(this.player.activePrimary);
                 const next = owned[(i + 1) % owned.length];
                 this.player.equipPrimary(next);
-                this.triggerWeaponCycleAnim(); // pulse the Primary HUD square
-                hideHint(); // dismiss the "press R" hint once the player tries it
-                this.events.emit('audio:coin'); // small audio confirmation
+                this.triggerWeaponCycleAnim('primary');
+                hideHint();
+                this.events.emit('audio:coin');
+            }
+        }
+        if (e.code === 'KeyR' && !e.shiftKey && this.game.state === GAME_STATES.PLAYING) {
+            const owned = Array.from(this.player.ownedPowers || []);
+            if (owned.length > 1) {
+                const i = owned.indexOf(this.player.activePower);
+                const next = owned[(i + 1) % owned.length];
+                this.player.equipPower(next);
+                this.triggerWeaponCycleAnim('power');
+                hideHint();
+                this.events.emit('audio:coin');
             }
         }
         // (Shift+R is still a cheat handled in the Shift block below.)

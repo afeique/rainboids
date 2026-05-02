@@ -626,20 +626,22 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};
 
-    // Animation: brief scale + glow pulse on the Primary square when
-    // the player cycles via R. State lives on the game engine so any
-    // input source can trigger it.
-    let primaryScale = 1;
-    let primaryGlow = 0;
+    // Animation: brief scale + glow pulse on whichever square just
+    // cycled. State lives on the game engine so any input source can
+    // trigger it. anim.slot is 'primary' or 'power'.
+    let primaryScale = 1, primaryGlow = 0;
+    let powerScale = 1, powerGlow = 0;
     const anim = this._weaponCycleAnim;
     if (anim && Date.now() - anim.start < anim.duration) {
         const t = (Date.now() - anim.start) / anim.duration; // 0..1
-        // Pulse: scale up to 1.18x at t=0.3, then ease back.
         const pulse = Math.sin(t * Math.PI); // 0 → 1 → 0
-        primaryScale = 1 + 0.18 * pulse;
-        primaryGlow = pulse;
+        const scale = 1 + 0.18 * pulse;
+        if (anim.slot === 'power') {
+            powerScale = scale; powerGlow = pulse;
+        } else {
+            primaryScale = scale; primaryGlow = pulse;
+        }
     } else if (anim) {
-        // expired — drop the reference so the old timestamp doesn't matter
         this._weaponCycleAnim = null;
     }
 
@@ -663,7 +665,8 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         powerCfg.icon || '?',
         powerCfg.color || '#ffcc44',
         'PWR',
-        1, 0,
+        powerScale,
+        powerGlow,
     );
 }
 

@@ -456,8 +456,8 @@ export class GameEngine {
         this._gameTimers.push(new GameTimer(5000, () => {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
-                'wave1-cycle-weapons',
-                'Press <strong>R</strong> to cycle through your primary weapons.',
+                'wave1-cycle-weapons-v2',
+                'Press <strong>Tab</strong> to cycle primary weapons, <strong>R</strong> to cycle power weapons.',
                 7000,
             );
         }));
@@ -1385,7 +1385,9 @@ export class GameEngine {
     drawCanvasTriforce(ctx, lives, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }
     drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) { return hudStatus.drawLevelAndCoinsDisplay.call(this, ctx, barX, barY, barHeight); }
     drawEquippedWeaponSquares(ctx, barX, barY, barHeight) { return hudStatus.drawEquippedWeaponSquares.call(this, ctx, barX, barY, barHeight); }
-    triggerWeaponCycleAnim() { this._weaponCycleAnim = { start: Date.now(), duration: 350 }; }
+    triggerWeaponCycleAnim(slot = 'primary') {
+        this._weaponCycleAnim = { start: Date.now(), duration: 350, slot };
+    }
     drawLevelUpText() { return hudStatus.drawLevelUpText.call(this); }
     
     explodeTank(tankIndex) { return lifecycle.explodeTank.call(this, tankIndex); }
