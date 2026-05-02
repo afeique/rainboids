@@ -523,12 +523,13 @@ export function collectPowerup(powerup) {
     }
 
     this.events.emit('audio:powerup');
-    this.showPowerupDisplay(powerup.config.name, powerup.powerupColor);
+    this.showPowerupDisplay(powerup.config.name, powerup.powerupColor, powerup.config.description);
 }
 
-export function showPowerupDisplay(name, color) {
+export function showPowerupDisplay(name, color, description = '') {
     this.powerupDisplay.active = true;
     this.powerupDisplay.text = name.toUpperCase();
+    this.powerupDisplay.description = description || '';
     this.powerupDisplay.color = color;
     this.powerupDisplay.opacity = 1.0;
     this.powerupDisplay.fadeTimer = this.powerupDisplay.maxFadeTime;

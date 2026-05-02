@@ -223,6 +223,25 @@ export function drawPowerupDisplay() {
             colorSpeed: 0.4,
         });
 
+        // One-line effect blurb below the name so the player can tell
+        // exactly what the powerup does. Sourced from
+        // POWERUP_TYPES[type].description (powerup.js).
+        const desc = this.powerupDisplay.description;
+        if (desc) {
+            ctx.font = "13px 'Silkscreen', monospace";
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.lineWidth = 3;
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillStyle = '#ffffff';
+            // Sit below the wavy name (topY is the baseline of the wavy
+            // text; ~28px gives room for its amplitude wobble).
+            const descY = topY + 28;
+            ctx.strokeText(desc, centerX, descY);
+            ctx.fillText(desc, centerX, descY);
+        }
+
         ctx.restore();
 }
 

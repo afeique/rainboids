@@ -362,6 +362,7 @@ export class GameEngine {
         this.powerupDisplay = {
             active: false,
             text: '',
+            description: '',
             color: '#ffffff',
             opacity: 1.0,
             fadeTimer: 0,

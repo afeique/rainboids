@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.8] - 2026-05-02
+
+### Added
+- **Powerup pickup display now shows what the powerup does**, not just its name. A one-line effect blurb (e.g. "Increases the max amount of health per orb" for Doctor) renders directly below the wavy powerup name. Description is pulled from `POWERUP_TYPES[type].description` in `powerup.js`. Threaded through `collectPowerup` → `showPowerupDisplay(name, color, description)` → `powerupDisplay.description` → `drawPowerupDisplay` (renders white Silkscreen text with a black outline). Removes the "what does Doctor do?" mystery on every pickup.
+
+---
+
 ## [5.41.7] - 2026-05-02
 
 ### Changed
