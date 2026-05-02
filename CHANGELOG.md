@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.3] - 2026-05-02
+
+### Fixed
+- **PRM weapon square no longer clips off the left edge of the screen.** Was centered under the 60px triforce width with a 84px-wide group → `groupX = -2`. Switched to left-anchored at `livesX = 10` so both squares share the same left margin as the rest of the top-left HUD column.
+- **Tab / R weapon cycling now also works during WAVE_TRANSITION** (between-wave usability), not just `PLAYING`.
+- **Tab / R always pulse the HUD square** even when the player owns only one weapon of that type. Previously the keys were silent no-ops in that case, making it look like the binding was broken. Now the player always gets visual confirmation the key was received; the actual weapon swap only happens when 2+ weapons are owned.
+
+---
+
 ## [5.41.2] - 2026-05-02
 
 ### Changed

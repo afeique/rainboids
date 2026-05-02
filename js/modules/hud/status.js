@@ -611,16 +611,17 @@ export function updateHUD() {
 export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     if (!this.player) return;
     const livesX = 10;
-    const triforceWidth = 60;
-    const triforceCenterX = livesX + triforceWidth / 2; // matches drawLevelAndCoinsDisplay
 
     const levelY = barY + barHeight + 26;
     const coinsY = levelY + 40;
 
     const squareSize = 38;
     const gap = 8;
-    const totalW = squareSize * 2 + gap;
-    const groupX = triforceCenterX - totalW / 2; // center under triforce/level/coins
+    // Anchor the squares to the same left margin (livesX = 10px) as the
+    // triforce/lives display above. Centering on the 60px triforce width
+    // pushed the left square off-screen; left-aligning keeps both squares
+    // fully on-screen and visually flush with the rest of the HUD column.
+    const groupX = livesX;
     const groupY = coinsY + 22; // below coins
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};

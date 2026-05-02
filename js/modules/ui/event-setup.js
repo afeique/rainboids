@@ -27,27 +27,34 @@ export function setupEventListeners() {
         // R now cycles through owned primary weapons (during gameplay only —
         // ignored if Shift is held so it doesn't conflict with Shift+R cheats).
         // Tab cycles owned PRIMARY weapons; R cycles owned POWER weapons.
-        // Tab needs preventDefault so the browser doesn't shift focus to
-        // the next page element. R is plain (Shift+R is reserved for cheats).
-        if (e.code === 'Tab' && !e.shiftKey && this.game.state === GAME_STATES.PLAYING) {
+        // Allowed during PLAYING and WAVE_TRANSITION so the player can
+        // re-equip between waves too. Tab needs preventDefault so the
+        // browser doesn't shift focus to the next page element.
+        const cycleAllowed =
+            this.game.state === GAME_STATES.PLAYING ||
+            this.game.state === GAME_STATES.WAVE_TRANSITION;
+        if (e.code === 'Tab' && !e.shiftKey && cycleAllowed) {
             e.preventDefault();
+            // Always pulse the HUD square so the player gets feedback
+            // that the key was received, even if they only own one
+            // primary (in which case there's nothing to cycle to).
+            this.triggerWeaponCycleAnim('primary');
             const owned = Array.from(this.player.ownedPrimaries || []);
             if (owned.length > 1) {
                 const i = owned.indexOf(this.player.activePrimary);
                 const next = owned[(i + 1) % owned.length];
                 this.player.equipPrimary(next);
-                this.triggerWeaponCycleAnim('primary');
                 hideHint();
                 this.events.emit('audio:coin');
             }
         }
-        if (e.code === 'KeyR' && !e.shiftKey && this.game.state === GAME_STATES.PLAYING) {
+        if (e.code === 'KeyR' && !e.shiftKey && cycleAllowed) {
+            this.triggerWeaponCycleAnim('power');
             const owned = Array.from(this.player.ownedPowers || []);
             if (owned.length > 1) {
                 const i = owned.indexOf(this.player.activePower);
                 const next = owned[(i + 1) % owned.length];
                 this.player.equipPower(next);
-                this.triggerWeaponCycleAnim('power');
                 hideHint();
                 this.events.emit('audio:coin');
             }
