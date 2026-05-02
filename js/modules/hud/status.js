@@ -209,7 +209,7 @@ export function drawCanvasTriforce(ctx, lives, baseX, baseY) {
 }
 
 export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
-        const livesX = 24; // Same as lives display position (left HUD margin)
+        const livesX = 36; // Same as lives display position (left HUD margin)
         const triforceWidth = 60; // Triforce canvas width from ui-manager.js
         const triforceCenterX = livesX + triforceWidth / 2; // Center of triforce at x=40
 
@@ -412,7 +412,7 @@ export function drawLevelUpText() {
 
 export function updateHUD() {
         const ctx = this.ctx;
-        const barX = 74; // Close to triforce (triforce rightmost pixel ≈ x=67 with livesX=24)
+        const barX = 86; // Close to triforce (triforce rightmost pixel ≈ x=79 with livesX=36)
         const barY = 20;
         const barHeight = 30;
         const barWidth = 220;
@@ -422,7 +422,7 @@ export function updateHUD() {
         ctx.save();
 
         // Draw triforce (lives indicator) on canvas — same layer as HP bar, coins, level
-        this.drawCanvasTriforce(ctx, this.game.lives, 24, barY);
+        this.drawCanvasTriforce(ctx, this.game.lives, 36, barY);
 
         // Create futuristic angled health bar geometry
         const createHealthBarPath = (width) => {
@@ -610,19 +610,23 @@ export function updateHUD() {
 // `gameEngine._weaponCycleAnim` set in event-setup.js).
 export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     if (!this.player) return;
-    const livesX = 24;
+    const livesX = 36;
+    const triforceCenterX = livesX + 30;     // matches drawLevelAndCoinsDisplay
+    const coinIconSize = 30;
+    const coinIconX = triforceCenterX - coinIconSize / 2; // left edge of the coin icon
 
     const levelY = barY + barHeight + 26;
     const coinsY = levelY + 40;
 
     const squareSize = 38;
     const gap = 8;
-    // Anchor the squares to the same left margin (livesX = 10px) as the
-    // triforce/lives display above. Centering on the 60px triforce width
-    // pushed the left square off-screen; left-aligning keeps both squares
-    // fully on-screen and visually flush with the rest of the HUD column.
-    const groupX = livesX;
-    const groupY = coinsY + 22; // below coins
+    // Align the Primary square's LEFT EDGE with the coin icon's LEFT EDGE
+    // — visually anchors the weapon row to the gold display directly above.
+    const groupX = coinIconX;
+    // Vertical gap from coin icon → squares matches the icon-to-icon
+    // spacing of the column above (level → coin = 40px). The squares now
+    // breathe a little instead of crowding the coin number.
+    const groupY = coinsY + 40;
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};

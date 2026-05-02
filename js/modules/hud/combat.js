@@ -461,7 +461,7 @@ export function drawMoneyPickupDisplay() {
         const barX = 80; // From updateHUD
         const barY = 20; // From updateHUD
         const barHeight = 30; // From updateHUD
-        const livesX = 24;
+        const livesX = 36;
         const triforceWidth = 60;
         const triforceCenterX = livesX + triforceWidth / 2;
         const levelY = barY + barHeight + 26;

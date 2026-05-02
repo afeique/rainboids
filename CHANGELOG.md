@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.6] - 2026-05-02
+
+### Changed
+- **Top-left HUD has more screen-edge breathing room and the weapon squares now align with the gold icon.**
+  - Bumped the shared `livesX` anchor from 24 → 36 (across `drawCanvasTriforce`, `drawLevelAndCoinsDisplay`, `drawEquippedWeaponSquares`, `drawMoneyPickupDisplay`); health-bar `barX` shifted 74 → 86 to keep the gap to the triforce.
+  - Primary weapon square's **left edge now aligns with the gold-coin icon's left edge** instead of the HUD column's left margin. Computed via the same `triforceCenterX - coinIconSize/2` formula the gold display uses.
+  - Both weapon squares moved further down: vertical gap from coin icon → squares is now 40px (matching the level→coin icon-to-icon spacing of the column above), so the weapon row breathes instead of crowding the gold number.
+
+---
+
 ## [5.41.5] - 2026-05-02
 
 ### Changed
