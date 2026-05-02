@@ -11,6 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.11] - 2026-05-02
+
+### Added
+- **Powerups burst into particles when their lifetime expires.** Previously they just vanished. Now `Powerup.update()` calls a new `emitExpiryBurst()` on life ≤ 0 that spawns a central `explosionFlash` (scaled to 2× radius), a colored `explosionRingColored` ring in the powerup's primary gradient color, 12 evenly-spaced `explosionShrapnel` streaks, and 8 `explosionEmber` lingerers in the secondary gradient color. `game-engine.js` now passes `particlePool` through the powerup update call so the entity can spawn its own expiry FX.
+
+### Changed
+- **Powerup lifetime drastically shortened (90s → 8s) and blink window widened (50% → 75% of lifetime) for testing visibility.** Restore via `this.life = 90 * GAME_CONFIG.LOGIC_HZ` and `this.fadeDuration = this.life / 2` once the new burst+blink combo is dialed in.
+
+---
+
+## [5.39.10] - 2026-05-02
+
+### Changed
+- **Powerup wind-down switched from opacity fade to ramping blink.** Removed all `fadeAlpha` multipliers from the draw — body, glow sprite, sparkles, and label all render at full opacity. During the fade window (last half of lifetime) the entire `draw()` early-returns on "off" frames driven by `Math.sin((frameClock.now / 1000) * hz * 2π) < 0`. Blink rate ramps from ~1.5Hz at the start of the window to ~14Hz right before expiry, so the powerup blinks lazily at first then strobes urgently — communicating "running out" without depending on globalAlpha at all.
+
+---
+
+## [5.39.9] - 2026-05-02
+
+### Changed
+- **Powerup fade is now actually gradual.** `fadeDuration` was 8s of LOGIC_HZ ticks (~16s real), about 9% of a powerup's ~180s lifetime — so they sat at full opacity for the vast majority of life and only faded in a brief tail. Now `fadeDuration = maxLife / 2`: the last half of the lifetime is a smooth linear fade from full to zero. Sprite caching (`glowSpriteCache`) was suspected as the cause — it isn't; `ctx.globalAlpha` multiplies through `drawImage` of cached canvases correctly. The visible "snap" was simply the fade window being too small relative to lifetime.
+
+---
+
+## [5.39.8] - 2026-05-02
+
+### Fixed
+- **Powerups now actually fade out instead of popping off.** The pre-rendered glow sprite (`glowSpriteCache.draw`) sets `ctx.globalAlpha` internally, which clobbered the `fadeAlpha` set just before it — so the body, hexagon/star/etc. shape, and icon all rendered at constant `0.6` alpha for the entire lifetime, then disappeared instantly when `life ≤ 0`. Only the sparkle ring and name label faded (they re-set `globalAlpha` later in the draw). Now the glow's alpha is multiplied by `fadeAlpha`, and `globalAlpha` is re-applied as `fadeAlpha` afterward so the entire pickup participates in the fade.
+- **Fade curve switched from sqrt to linear.** The previous `sqrt(life/fadeDuration)` curve held alpha high for most of the fade window then dropped sharply in the last ~1s — perceptually still a "snap." Linear gives an even, gradual decay across the full 16s fade tail.
+
+---
+
+## [5.39.7] - 2026-05-02
+
+### Changed
+- **Debug `P` powerup spawn now drops just beyond the viewport.** Previously dropped within ±50px of the player (visible pop-in). Now spawns at a random angle at `viewport-diagonal/2 + 40–120px` from the player so the pickup drifts in from off-screen.
+
+---
+
 ## [5.39.6] - 2026-04-30
 
 ### Changed

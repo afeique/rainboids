@@ -765,7 +765,7 @@ export class GameEngine {
             this.bulletPool.cleanupInactive();
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
-            this.powerupPool.activeObjects.forEach(p => p.update(this.player, tractorEngaged));
+            this.powerupPool.activeObjects.forEach(p => p.update(this.player, tractorEngaged, this.particlePool));
             // Inject gameEngine ref for asteroids (needed for targeting highlight in draw)
             for (const a of this.asteroidPool.activeObjects) a.gameEngine = this;
             this.asteroidPool.updateActive(this.gameField);

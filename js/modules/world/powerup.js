@@ -278,12 +278,13 @@ export class Powerup {
         
         this.radius = 18; // Slightly larger for better visibility
         this.active = true;
-        // Long lifetime — players should rarely (if ever) see one disappear
-        // before they get to it. Fades out smoothly over the final stretch
-        // (see FADE_DURATION below) so it doesn't pop off-screen.
-        this.life = 90 * GAME_CONFIG.LOGIC_HZ;     // 90 seconds at logic tick rate
+        // TESTING: drastically shortened lifetime to verify blink behavior.
+        // Restore to 90 * LOGIC_HZ for production.
+        this.life = 8 * GAME_CONFIG.LOGIC_HZ;
         this.maxLife = this.life;
-        this.fadeDuration = 8 * GAME_CONFIG.LOGIC_HZ; // last 8s fade to alpha 0
+        // Blink across the last 75% of the lifetime so the wind-down is
+        // unmistakably visible during testing.
+        this.fadeDuration = this.life * 0.75;
         this.pulsePhase = random(0, Math.PI * 2);
         
         // Floating movement (scaled for tick rate)
@@ -295,6 +296,29 @@ export class Powerup {
 
     }
     
+    emitExpiryBurst(particlePool) {
+        if (!particlePool) return;
+        const color = this.gradientColors?.[0] || this.color || '#ffffff';
+        const edgeColor = this.gradientColors?.[1] || color;
+
+        // Bright central flash
+        particlePool.get(this.x, this.y, 'explosionFlash', this.radius * 2);
+        // Expanding colored ring
+        particlePool.get(this.x, this.y, 'explosionRingColored', this.radius * 3, color);
+
+        // Shrapnel streaks radiating outward in the powerup's color
+        const shrapnelCount = 12;
+        for (let i = 0; i < shrapnelCount; i++) {
+            const angle = (i / shrapnelCount) * Math.PI * 2;
+            particlePool.get(this.x, this.y, 'explosionShrapnel', angle, 4.5, color);
+        }
+
+        // Lingering embers in the secondary gradient color
+        for (let i = 0; i < 8; i++) {
+            particlePool.get(this.x, this.y, 'explosionEmber', edgeColor);
+        }
+    }
+
     weightedRandomChoice(items, weights) {
         const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
         let randomValue = Math.random() * totalWeight;
@@ -309,7 +333,7 @@ export class Powerup {
         return items[items.length - 1]; // Fallback
     }
     
-    update(playerRef, tractorEngaged = false) {
+    update(playerRef, tractorEngaged = false, particlePool = null) {
         if (!this.active) return;
 
         // Lifetime tick — when life runs out the powerup is released by
@@ -317,6 +341,7 @@ export class Powerup {
         this.life -= GAME_CONFIG.TICK_SCALE;
         if (this.life <= 0) {
             this.active = false;
+            this.emitExpiryBurst(particlePool);
             return;
         }
 
@@ -385,12 +410,18 @@ export class Powerup {
             return;
         }
         
-        // Fade alpha — fully visible until the final fadeDuration ticks of
-        // life, then linearly eases to 0. Smoothed via sqrt so the tail
-        // lingers a bit longer (perceptually gentler than linear).
-        const fadeAlpha = this.life >= this.fadeDuration
-            ? 1
-            : Math.sqrt(Math.max(0, this.life / this.fadeDuration));
+        // No opacity fade — sprite-cached gradients/glows resist a smooth
+        // alpha ramp in practice, so the wind-down is communicated via
+        // BLINKING instead. During the fade window, skip draw on "off"
+        // frames; the blink rate ramps from slow at the start of the
+        // window to fast right before expiry.
+        if (this.life < this.fadeDuration) {
+            const t = Math.max(0, this.life / this.fadeDuration); // 1 → 0
+            // Hz ramps ~1.5Hz at fade start to ~14Hz at expiry.
+            const hz = 1.5 + (1 - t) * 12.5;
+            const phase = (frameClock.now / 1000) * hz * Math.PI * 2;
+            if (Math.sin(phase) < 0) return;
+        }
 
         // Enhanced pulsing effect for visibility — applied via ctx.scale()
         // below so that the cached gradients and the body path stay in sync
@@ -402,7 +433,6 @@ export class Powerup {
 
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.globalAlpha = fadeAlpha;
         ctx.rotate(rotation);
         ctx.scale(pulse, pulse);
 
@@ -416,8 +446,10 @@ export class Powerup {
         ctx.fillStyle = grads.body;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
+        // OPT-2: pre-rendered glow sprite replaces live GPU blur.
+        // glowSpriteCache.draw mutates ctx.globalAlpha — restore to 1 after.
         glowSpriteCache.draw(ctx, 0, 0, this.color, R, 8, 0.6);
+        ctx.globalAlpha = 1;
 
         if (this.type === 'HOMING') {
             // Diamond shape for homing
@@ -511,7 +543,7 @@ export class Powerup {
         // Sparkling edge effect
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.8 * fadeAlpha;
+        ctx.globalAlpha = 0.8;
 
         const sparkleRadius = R + 8;
         const sparkleCount = 6;
@@ -533,7 +565,7 @@ export class Powerup {
         // Powerup name label above the icon (not rotated)
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.globalAlpha = 0.9 * fadeAlpha;
+        ctx.globalAlpha = 0.9;
         ctx.font = '13px "Silkscreen", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
