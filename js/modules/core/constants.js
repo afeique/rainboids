@@ -81,9 +81,9 @@ export const GAME_CONFIG = {
 // Enemy Bullet Configuration
 export const ENEMY_BULLET_CONFIG = {
     // Global bullet speed scaling
-    BASE_SPEED_MULTIPLIER: 0.85, // Slightly slower than player bullets
-    LEVEL_SPEED_BONUS_PER_LEVEL: 0.08, // 8% speed increase per level
-    MAX_LEVEL_SPEED_BONUS: 0.4, // Maximum 40% speed increase (reached at level 6+)
+    BASE_SPEED_MULTIPLIER: 1.05, // Level-1 bullets already feel snappy (was 0.85)
+    LEVEL_SPEED_BONUS_PER_LEVEL: 0.10, // 10% per level (was 8%)
+    MAX_LEVEL_SPEED_BONUS: 0.6, // Caps at +60% at level 7+ (was 40%)
     
     // Global bullet range/lifetime scaling
     BASE_LIFE_MULTIPLIER: 1.0, // Base bullet lifetime multiplier

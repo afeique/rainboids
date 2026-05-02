@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.2] - 2026-05-02
+
+### Changed
+- **Enemy bullets travel faster, especially in early waves.** `ENEMY_BULLET_CONFIG.BASE_SPEED_MULTIPLIER` raised from `0.85` → `1.05` so level-1 bullets fire at full declared speed rather than 85% of it. Per-level scaling already existed; bumped `LEVEL_SPEED_BONUS_PER_LEVEL` `0.08` → `0.10` and `MAX_LEVEL_SPEED_BONUS` `0.4` → `0.6` so the curve is steeper and tops out at +60% at level 7+ (was +40% at level 6+). Net effect: level-1 bullets are ~24% faster than before, late-game bullets ~41% faster. Existing per-pattern `SPEED_LIMITS` clamps remain unchanged and still accommodate the new range.
+
+---
+
 ## [5.40.1] - 2026-05-02
 
 ### Changed
