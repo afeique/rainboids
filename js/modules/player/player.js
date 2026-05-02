@@ -621,6 +621,10 @@ export class Player {
         return progression.getEffectiveCritDamage.call(this);
     }
 
+    getKnockbackMultiplier() {
+        return progression.getKnockbackMultiplier.call(this);
+    }
+
     getEffectiveHealthOrbHealing(baseHealing = 1) {
         return progression.getEffectiveHealthOrbHealing.call(this, baseHealing);
     }

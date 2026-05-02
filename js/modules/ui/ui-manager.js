@@ -1,5 +1,6 @@
 // UI management for overlays, messages, and interface elements
 import { MusicPlayer } from '../audio/music-player.js';
+import { POWERUP_TYPES } from '../world/powerup.js';
 
 export class UIManager {
     constructor() {
@@ -56,8 +57,13 @@ export class UIManager {
             sfxVolumeValue: document.getElementById('sfx-volume-value'),
             sfxTogglesContainer: document.getElementById('sfx-toggles'),
             // Powerups tab elements
-            powerupsList: document.getElementById('powerups-list'),
-            noPowerups: document.getElementById('no-powerups'),
+            // Powerups overlay (Shop-like page for permanent powerups)
+            powerupsOverlay: document.getElementById('powerups-overlay'),
+            powerupsMenu: document.getElementById('powerups-menu'),
+            powerupsCloseBtn: document.getElementById('powerups-close-button'),
+            powerupsItemsList: document.getElementById('powerups-items-list'),
+            powerupsSubtabs: document.querySelectorAll('.powerups-subtab'),
+            pausePowerupsButton: document.getElementById('pause-powerups-button'),
             // HUD pause button (top-left)
             hudPauseBtn: document.getElementById('hud-pause-btn'),
             hudShopBtn: document.getElementById('hud-shop-btn')
@@ -509,95 +515,95 @@ export class UIManager {
         return false;
     }
     
-    updatePowerupsList() {
-        if (!this.elements.powerupsList || !this.gameEngine?.player) return;
-        
+    // Currently-active sub-tab in the Powerups overlay.
+    // Persisted on the instance so subsequent renders remember it.
+    _powerupsSubTab = 'OFFENSE';
+
+    showPowerupsOverlay() {
+        if (!this.elements.powerupsOverlay) return;
+        this.elements.powerupsOverlay.style.display = 'flex';
+        this.renderPowerupsOverlay();
+    }
+
+    hidePowerupsOverlay() {
+        if (!this.elements.powerupsOverlay) return;
+        this.elements.powerupsOverlay.style.display = 'none';
+    }
+
+    setPowerupsSubTab(sub) {
+        this._powerupsSubTab = sub;
+        if (this.elements.powerupsSubtabs) {
+            this.elements.powerupsSubtabs.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.subtab === sub);
+            });
+        }
+        this.renderPowerupsOverlay();
+    }
+
+    // Render the Powerups overlay — shows EVERY known powerup in the
+    // selected category with its current stack count (0 for ones the
+    // player hasn't picked up yet). Mirrors the shop-card visual so
+    // the screen reads as a "collection" page.
+    renderPowerupsOverlay() {
+        if (!this.elements.powerupsItemsList || !this.gameEngine?.player) return;
+        const list = this.elements.powerupsItemsList;
+        list.replaceChildren();
+
         const player = this.gameEngine.player;
-        const powerups = Array.from(player.powerups.entries());
-        
-        if (powerups.length === 0) {
-            this.elements.noPowerups.style.display = 'block';
-            // Clear any existing powerup items
-            const existingItems = this.elements.powerupsList.querySelectorAll('.powerup-item');
-            existingItems.forEach(item => item.remove());
+        const sub = this._powerupsSubTab;
+
+        const entries = Object.entries(POWERUP_TYPES).filter(
+            ([, cfg]) => (cfg.category || 'OFFENSE') === sub,
+        );
+
+        if (entries.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'text-align: center; color: #888; padding: 40px; font-family: monospace;';
+            empty.textContent = 'No powerups in this category.';
+            list.appendChild(empty);
             return;
         }
-        
-        this.elements.noPowerups.style.display = 'none';
-        
-        // Clear existing items
-        const existingItems = this.elements.powerupsList.querySelectorAll('.powerup-item');
-        existingItems.forEach(item => item.remove());
-        
-        // Add each powerup
-        powerups.forEach(([type, powerupData]) => {
-            const item = document.createElement('div');
-            item.className = 'powerup-item';
-            item.style.cssText = `
-                display: flex;
-                align-items: center;
-                margin-bottom: 15px;
-                padding: 12px;
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 8px;
-                font-family: 'Silkscreen', monospace;
-            `;
-            
-            const icon = document.createElement('div');
-            icon.style.cssText = `
-                font-size: 24px;
-                margin-right: 15px;
-                min-width: 30px;
-                text-align: center;
-            `;
-            icon.textContent = powerupData.config.icon || '⭐';
-            
-            const info = document.createElement('div');
-            info.style.cssText = `
-                flex: 1;
-                font-size: 12px;
-                line-height: 1.4;
-            `;
-            
+
+        for (const [type, cfg] of entries) {
+            const stacks = player.getPowerupStacks ? player.getPowerupStacks(type) : 0;
+            const owned = stacks > 0;
+
+            const card = document.createElement('div');
+            card.className = 'powerup-card' + (owned ? ' powerup-card--owned' : ' powerup-card--locked');
+
+            const iconWrap = document.createElement('div');
+            iconWrap.className = 'powerup-card-icon';
+            iconWrap.textContent = cfg.icon || '⭐';
+            iconWrap.style.color = cfg.color || '#cccccc';
+            card.appendChild(iconWrap);
+
+            const body = document.createElement('div');
+            body.className = 'powerup-card-body';
+
             const name = document.createElement('div');
-            name.style.cssText = `
-                color: #00ccff;
-                font-weight: bold;
-                margin-bottom: 4px;
-                font-size: 14px;
-            `;
-            name.textContent = powerupData.config.name || type;
-            
-            const details = document.createElement('div');
-            details.style.cssText = `
-                color: #cccccc;
-                font-size: 11px;
-            `;
-            
-            if (powerupData.isPermanent) {
-                if (powerupData.stacks > 1) {
-                    details.innerHTML = `Level ${powerupData.stacks}<br>🔒 Permanent`;
-                } else {
-                    details.innerHTML = '🔒 Permanent';
-                }
-            } else {
-                const timeLeft = Math.ceil(powerupData.timeRemaining / 1000);
-                if (powerupData.stacks > 1) {
-                    details.innerHTML = `Level ${powerupData.stacks}<br>⏰ ${timeLeft}s remaining`;
-                } else {
-                    details.innerHTML = `⏰ ${timeLeft}s remaining`;
-                }
-            }
-            
-            info.appendChild(name);
-            info.appendChild(details);
-            item.appendChild(icon);
-            item.appendChild(info);
-            
-            this.elements.powerupsList.appendChild(item);
-        });
+            name.className = 'powerup-card-name';
+            name.textContent = cfg.name || type;
+            name.style.color = cfg.color || '#ffffff';
+            body.appendChild(name);
+
+            const desc = document.createElement('div');
+            desc.className = 'powerup-card-desc';
+            desc.textContent = cfg.description || '';
+            body.appendChild(desc);
+
+            card.appendChild(body);
+
+            const right = document.createElement('div');
+            right.className = 'powerup-card-stacks';
+            right.textContent = owned ? `×${stacks}` : '—';
+            card.appendChild(right);
+
+            list.appendChild(card);
+        }
     }
+
+    // Back-compat shim — older event subscriptions still call this.
+    updatePowerupsList() { this.renderPowerupsOverlay(); }
     
     setGameEngine(gameEngine) {
         this.gameEngine = gameEngine;
@@ -779,6 +785,31 @@ export class UIManager {
             });
         } else {
             console.error('❌ pauseShopButton element not found!');
+        }
+
+        // Powerups action button — opens the Powerups overlay (Shop-like).
+        if (this.elements.pausePowerupsButton) {
+            this.elements.pausePowerupsButton.addEventListener('click', () => {
+                this.elements.pauseOverlay.style.display = 'none';
+                this.showPowerupsOverlay();
+            });
+        }
+        if (this.elements.powerupsCloseBtn) {
+            this.elements.powerupsCloseBtn.addEventListener('click', () => {
+                this.hidePowerupsOverlay();
+                // Return to whichever state we came from. Easiest: reopen
+                // pause menu since that's the only entry point for now.
+                if (this.elements.pauseOverlay) {
+                    this.elements.pauseOverlay.style.display = 'flex';
+                }
+            });
+        }
+        if (this.elements.powerupsSubtabs) {
+            this.elements.powerupsSubtabs.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    this.setPowerupsSubTab(btn.dataset.subtab);
+                });
+            });
         }
 
         if (this.elements.pauseResumeButton) {

@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.46.0] - 2026-05-02
+
+### Added
+- **`KNOCKBACK` powerup** — new offense pickup. +30% knockback per stack on **all** power weapons (Mine, Nova, Lightning, Missile), capped at 3×. Drives a new `Player.getKnockbackMultiplier()` method consulted by every collision handler that applies impulse.
+- **All power weapons now apply knockback to enemies AND asteroids**:
+  - Mine (already pushed) — multiplier-aware now.
+  - Nova (already pushed) — multiplier-aware now.
+  - **Lightning Arc**: each chain link nudges its target along the bolt direction (`6 × knockMul` for enemies, `0.6×` of that for asteroids). Visibly drags targets along the chain.
+  - **Missiles**: hits push the target along the missile's heading (`9 × knockMul` for enemies, `0.6×` for asteroids).
+- **Powerups overlay** — Shop-like page (`#powerups-overlay`) with **OFFENSE** and **DROPS** sub-tabs that lists every powerup type, owned or not, with stack counts. Cards show name, color-coded icon, description, and `×N` stack badge (or `—` for unowned). Driven by `UIManager.renderPowerupsOverlay()`.
+- **Pause menu Powerups action button** — `pause-powerups-button` sits at the top of the pause menu alongside SHOP and RESUME. Clicking it opens the Powerups overlay. ESC closes overlay back to pause.
+
+### Changed
+- **All powerup pickups are now permanent and stacking** — no temporary timers. `Player.addPowerup` ignores the `duration` field on the config and treats every pickup as `isPermanent: true` with infinite `timeRemaining`. Drop powerups now persist for the rest of the run instead of expiring after 30s.
+- **POWERUP_TYPES gained a `category` field** (`OFFENSE` or `DROPS`) on every entry. Drop-rarity values lowered across the board (rare permanent stacking — economy needed re-tuning to avoid runaway scaling).
+- **Removed OFFENSE and DROPS shop categories.** The shop now only sells PRIMARY/POWER weapons, DEFENSE upgrades, and SKILLS. The corresponding offense/drops upgrades are picked up as permanent powerups in-game. SPARE_SHIP moved from OFFENSE to DEFENSE (still gold-priced). Updated both the DOM shop tabs (`index.html`) and the legacy canvas-renderer tabs list (`shop-renderer.js`).
+- **POWERUPS pause-tab removed** from the tab strip — that view was promoted to a top-level overlay accessed via the new action button. The old `#powerups-tab` panel was deleted from HTML; `UIManager.updatePowerupsList()` is kept as a back-compat shim that calls `renderPowerupsOverlay()`.
+- BIG_BULLETS description updated to reflect the additive `+1.5px per stack` behavior introduced in 5.40.15.
+
+---
+
 ## [5.45.1] - 2026-05-02
 
 ### Fixed

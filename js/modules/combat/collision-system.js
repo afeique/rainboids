@@ -662,8 +662,11 @@ export function checkMineCollisions() {
 
         // Damage + knock back every enemy inside the blast ring with
         // linear falloff. Knockback magnitude inverses with distance so
-        // close-range enemies get really blown back.
-        const KNOCK_BASE = 12; // stronger than asteroids — ships are lighter
+        // close-range enemies get really blown back. Scaled by the
+        // player's KNOCKBACK powerup stacks via getKnockbackMultiplier().
+        const knockMul = (typeof p.getKnockbackMultiplier === 'function')
+            ? p.getKnockbackMultiplier() : 1;
+        const KNOCK_BASE = 12 * knockMul;
         for (const enemy of this.enemyPool.activeObjects) {
             if (!enemy.active) continue;
             const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
@@ -683,7 +686,7 @@ export function checkMineCollisions() {
         // destroyAsteroid for the full destruction sequence (debris,
         // drops, fragments). Snapshot the array first so fragments
         // spawned mid-kill don't re-trigger the same blast frame.
-        const AST_KNOCK_BASE = 6;
+        const AST_KNOCK_BASE = 6 * knockMul;
         const astSnapshot = this.asteroidPool.activeObjects.slice();
         for (const ast of astSnapshot) {
             if (!ast.active) continue;
@@ -782,8 +785,9 @@ export function checkNovaCollisions() {
     const p = this.player;
     if (!(p.novaActive && p.novaRings)) return;
     const RING_WIDTH = 30;
-    const KNOCK_ENEMY = 16;
-    const KNOCK_AST = 9;
+    const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
+    const KNOCK_ENEMY = 16 * knockMul;
+    const KNOCK_AST = 9 * knockMul;
     for (const ring of p.novaRings) {
         if (!ring.active) continue;
         if (!ring.hitEnemies) ring.hitEnemies = new Set();
@@ -835,11 +839,15 @@ export function checkNovaCollisions() {
 // ─── Lightning Chains ───────────────────────────────────────────
 // Applies damage along the chain once when the chain first appears.
 // Targets can be either enemies OR asteroids — both take the same
-// falloff-decayed damage. Asteroids get a hit-flash + death-flash on
+// falloff-decayed damage. Each hit also gets a perpendicular-to-chain
+// kick scaled by KNOCKBACK powerup stacks so lightning visibly shoves
+// targets along the bolt. Asteroids get a hit-flash + death-flash on
 // lethal damage (no fragmentation, see mine collision for rationale).
 export function checkLightningCollisions() {
     const p = this.player;
     if (!p.lightningChains) return;
+    const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
+    const LIGHTNING_KNOCK = 6 * knockMul;
     for (const chain of p.lightningChains) {
         if (!chain.active || chain.damageApplied) continue;
         chain.damageApplied = true;
@@ -847,12 +855,30 @@ export function checkLightningCollisions() {
         const falloff = POWER_WEAPONS.LIGHTNING_ARC.chainFalloff;
         for (let i = 1; i < chain.targets.length; i++) {
             const t = chain.targets[i];
+            const prev = chain.targets[i - 1];
+            // Knockback direction: away from the previous link, so the
+            // bolt visibly drags each target forward along the chain.
+            let kx = 0, ky = 0;
+            if (prev) {
+                const dx = t.x - prev.x;
+                const dy = t.y - prev.y;
+                const d = Math.hypot(dx, dy) || 1;
+                kx = dx / d; ky = dy / d;
+            }
             if (t.enemy && t.enemy.active) {
                 this.damageEnemy(t.enemy, dmg);
+                if (t.enemy.vel) {
+                    t.enemy.vel.x += kx * LIGHTNING_KNOCK;
+                    t.enemy.vel.y += ky * LIGHTNING_KNOCK;
+                }
             } else if (t.asteroid && t.asteroid.active) {
                 const ast = t.asteroid;
                 ast.health = Math.max(0, (ast.health || 0) - dmg);
                 ast._hitFlashTimer = 4;
+                if (ast.vel) {
+                    ast.vel.x += kx * LIGHTNING_KNOCK * 0.6;
+                    ast.vel.y += ky * LIGHTNING_KNOCK * 0.6;
+                }
                 if (ast.health <= 0.001) {
                     this.destroyAsteroid(ast);
                 }
@@ -869,6 +895,8 @@ export function checkLightningCollisions() {
 export function checkMissileCollisions() {
     const p = this.player;
     if (!p.activeMissiles) return;
+    const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
+    const MISSILE_KNOCK = 9 * knockMul;
 
     const explode = (mx, my) => {
         if (!this.particlePool) return;
@@ -885,13 +913,22 @@ export function checkMissileCollisions() {
     for (const missile of p.activeMissiles) {
         if (!missile.active) continue;
 
-        // Enemy hit
+        // Enemy hit — apply knockback in the missile's direction of travel.
         let hit = false;
+        const mvx = missile.vel?.x || 0;
+        const mvy = missile.vel?.y || 0;
+        const mvLen = Math.hypot(mvx, mvy) || 1;
+        const kx = mvx / mvLen;
+        const ky = mvy / mvLen;
         for (const enemy of this.enemyPool.activeObjects) {
             if (!enemy.active) continue;
             const dist = Math.hypot(enemy.x - missile.x, enemy.y - missile.y);
             if (dist < (enemy.radius || 15) + 6) {
                 this.damageEnemy(enemy, POWER_WEAPONS.MISSILE_SALVO.missileDamage);
+                if (enemy.vel) {
+                    enemy.vel.x += kx * MISSILE_KNOCK;
+                    enemy.vel.y += ky * MISSILE_KNOCK;
+                }
                 missile.active = false;
                 explode(missile.x, missile.y);
                 hit = true;
@@ -907,6 +944,10 @@ export function checkMissileCollisions() {
             if (dist < (ast.baseRadius || ast.radius || 20) + 6) {
                 ast.health = Math.max(0, (ast.health || 0) - POWER_WEAPONS.MISSILE_SALVO.missileDamage);
                 ast._hitFlashTimer = 4;
+                if (ast.vel) {
+                    ast.vel.x += kx * MISSILE_KNOCK * 0.6;
+                    ast.vel.y += ky * MISSILE_KNOCK * 0.6;
+                }
                 if (ast.health <= 0.001) {
                     this.destroyAsteroid(ast);
                 }

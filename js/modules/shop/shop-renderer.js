@@ -261,10 +261,10 @@ export function drawShop() {
     }
 
 export function drawShopTabs(shopX, tabY, shopWidth) {
+        // OFFENSE and DROPS removed — those upgrades are now permanent
+        // stacking powerup pickups (see Powerups overlay).
         const tabs = [
-            { key: 'OFFENSE', label: 'OFFENSE', color: [180, 130, 0], stroke: '#FFD700', glow: 'rgba(255, 215, 0, 0.3)' },
             { key: 'DEFENSE', label: 'DEFENSE', color: [50, 100, 200], stroke: '#4A90E2', glow: 'rgba(74, 144, 226, 0.3)' },
-            { key: 'DROPS',   label: 'DROPS',   color: [40, 160, 80], stroke: '#44DD88', glow: 'rgba(68, 221, 136, 0.3)' },
             { key: 'PRIMARY', label: 'PRIMARY', color: [0, 160, 200], stroke: '#00CCFF', glow: 'rgba(0, 204, 255, 0.3)' },
             { key: 'POWER',   label: 'POWER',   color: [200, 60, 60], stroke: '#FF4444', glow: 'rgba(255, 68, 68, 0.3)' },
             { key: 'SKILLS',  label: 'SKILLS',  color: [140, 80, 200], stroke: '#AA66FF', glow: 'rgba(170, 102, 255, 0.3)' },

@@ -38,46 +38,55 @@ function getPowerupGradients(ctx, gradientColors) {
     return entry;
 }
 
+// Powerups are now PERMANENT and STACKING. The `duration` field is
+// preserved for back-compat but `addPowerup` ignores it and treats
+// every drop as `isPermanent: true`. Each entry now declares a
+// `category` so the Powerups overlay can group them under
+// Offense / Drops sub-tabs.
 export const POWERUP_TYPES = {
     RAPID_FIRE: {
         name: 'Rapid',
         color: '#ff3300',
         gradientColors: ['#ff6600', '#ff0000'],
         icon: '⚡',
-        duration: 30000, // 30 seconds
+        duration: 30000,
         effect: 'rapidFire',
         rarity: 0.3,
-        description: '25% faster shooting per stack'
+        category: 'OFFENSE',
+        description: '15% faster shooting per stack'
     },
     MULTI_SHOT: {
         name: 'Multi',
         color: '#3366ff',
         gradientColors: ['#66aaff', '#0033cc'],
         icon: '✳️',
-        duration: 30000, // 30 seconds
+        duration: 30000,
         effect: 'multiShot',
-        rarity: 0.25,
-        description: 'Fire +1 bullet per stack'
+        rarity: 0.18,
+        category: 'OFFENSE',
+        description: '+1 bullet in a spread per stack'
     },
     HOMING: {
         name: 'Homing',
         color: '#ff3399',
         gradientColors: ['#ff66cc', '#cc0066'],
         icon: '🎯',
-        duration: 30000, // 30 seconds
+        duration: 30000,
         effect: 'homing',
-        rarity: 0.2,
-        description: 'Bullets track enemies'
+        rarity: 0.15,
+        category: 'OFFENSE',
+        description: 'Bullets track nearest enemy per stack'
     },
     BIG_BULLETS: {
         name: 'Big',
         color: '#33cc33',
         gradientColors: ['#66ff66', '#009900'],
         icon: '🔵',
-        duration: 30000, // 30 seconds
+        duration: 30000,
         effect: 'bigBullets',
-        rarity: 0.25,
-        description: '+30% bullet size per stack'
+        rarity: 0.2,
+        category: 'OFFENSE',
+        description: '+1.5px bullet radius per stack'
     },
     SPEED_BOOST: {
         name: 'Afterburner',
@@ -86,58 +95,86 @@ export const POWERUP_TYPES = {
         icon: '💨',
         duration: 30000,
         effect: 'speedBoost',
-        rarity: 0.25,
-        description: '+50% thrust & top speed'
+        rarity: 0.22,
+        category: 'OFFENSE',
+        description: '+50% thrust & +35% top speed per stack'
     },
     PIERCING: {
         name: 'Pierce',
         color: '#ff9933',
         gradientColors: ['#ffcc66', '#cc6600'],
         icon: '🏹',
-        duration: 30000, // 30 seconds
+        duration: 30000,
         effect: 'piercing',
-        rarity: 0.15,
-        description: 'Pierce through multiple enemies'
+        rarity: 0.12,
+        category: 'OFFENSE',
+        description: 'Bullets pass through +1 enemy per stack'
     },
     EXPLOSIVE: {
         name: 'Explode',
         color: '#ff6600',
         gradientColors: ['#ff9933', '#cc3300'],
         icon: '💣',
-        duration: 30000, // 30 seconds
+        duration: 30000,
         effect: 'explosive',
-        rarity: 0.1,
-        description: 'Area damage on impact'
+        rarity: 0.08,
+        category: 'OFFENSE',
+        description: 'AoE blast on bullet impact (+10px radius per stack)'
     },
     CRIT_CHANCE: {
         name: 'Crit %',
         color: '#ffcc00',
         gradientColors: ['#ffff66', '#cc9900'],
         icon: '⭐',
-        duration: 30000, // 30 seconds for drops
+        duration: 30000,
         effect: 'critChance',
-        rarity: 0.2,
-        description: '+5% critical hit chance'
+        rarity: 0.18,
+        category: 'OFFENSE',
+        description: '+5% critical hit chance per stack'
     },
     CRIT_DAMAGE: {
         name: 'Crit Dmg',
         color: '#ff0066',
         gradientColors: ['#ff3399', '#cc0033'],
         icon: '🗡️',
-        duration: 30000, // 30 seconds for drops
+        duration: 30000,
         effect: 'critDamage',
-        rarity: 0.15,
-        description: '+10% critical hit damage (2-3x base)'
+        rarity: 0.13,
+        category: 'OFFENSE',
+        description: '+10% critical hit damage per stack'
     },
     SHIELD_BOOST: {
         name: 'Shield',
         color: '#00cc88',
         gradientColors: ['#33ff99', '#006644'],
         icon: '🛡',
-        duration: 30000, // 30 seconds
+        duration: 30000,
         effect: 'shieldBoost',
-        rarity: 0.2,
-        description: 'Temporary damage reduction'
+        rarity: 0.18,
+        category: 'OFFENSE',
+        description: '-5% damage taken per stack'
+    },
+    LONG_RANGE: {
+        name: 'Range',
+        color: '#88cc44',
+        gradientColors: ['#bbff66', '#448800'],
+        icon: '🏹',
+        duration: 30000,
+        effect: 'longRange',
+        rarity: 0.22,
+        category: 'OFFENSE',
+        description: '+40% bullet range per stack'
+    },
+    KNOCKBACK: {
+        name: 'Knockback',
+        color: '#ffaa44',
+        gradientColors: ['#ffd58a', '#cc6611'],
+        icon: '💢',
+        duration: 30000,
+        effect: 'knockback',
+        rarity: 0.18,
+        category: 'OFFENSE',
+        description: '+30% knockback on all power weapons per stack'
     },
     MEDPACK: {
         name: 'Medic',
@@ -146,7 +183,8 @@ export const POWERUP_TYPES = {
         icon: '💊',
         duration: 30000,
         effect: 'medpack',
-        rarity: 0.2,
+        rarity: 0.18,
+        category: 'DROPS',
         description: 'More health per orb'
     },
     DOCTOR: {
@@ -156,7 +194,8 @@ export const POWERUP_TYPES = {
         icon: '🏥',
         duration: 30000,
         effect: 'doctor',
-        rarity: 0.1,
+        rarity: 0.09,
+        category: 'DROPS',
         description: 'Increases the max amount of health per orb'
     },
     PAYDAY: {
@@ -166,7 +205,8 @@ export const POWERUP_TYPES = {
         icon: '💵',
         duration: 30000,
         effect: 'payday',
-        rarity: 0.15,
+        rarity: 0.13,
+        category: 'DROPS',
         description: 'More money per orb'
     },
     HIGH_ROLLER: {
@@ -176,18 +216,9 @@ export const POWERUP_TYPES = {
         icon: '🎰',
         duration: 30000,
         effect: 'highRoller',
-        rarity: 0.1,
+        rarity: 0.09,
+        category: 'DROPS',
         description: 'Increases the max amount of money per orb'
-    },
-    LONG_RANGE: {
-        name: 'Range',
-        color: '#88cc44',
-        gradientColors: ['#bbff66', '#448800'],
-        icon: '🏹',
-        duration: 30000,
-        effect: 'longRange',
-        rarity: 0.25,
-        description: '+40% bullet range per stack'
     },
     HEALTH_ORB_DROP_CHANCE: {
         name: 'Health Luck',
@@ -196,8 +227,9 @@ export const POWERUP_TYPES = {
         icon: '🍀',
         duration: 45000,
         effect: 'healthOrbDropChance',
-        rarity: 0.15,
-        description: '+5% health orb drop chance'
+        rarity: 0.13,
+        category: 'DROPS',
+        description: '+5% health orb drop chance per stack'
     },
     MONEY_ORB_DROP_CHANCE: {
         name: 'Gold Luck',
@@ -206,8 +238,9 @@ export const POWERUP_TYPES = {
         icon: '💰',
         duration: 45000,
         effect: 'moneyOrbDropChance',
-        rarity: 0.15,
-        description: '+5% money orb drop chance'
+        rarity: 0.13,
+        category: 'DROPS',
+        description: '+5% money orb drop chance per stack'
     },
     HEALTH_ORB_DROP_QUANTITY: {
         name: 'Health Bounty',
@@ -216,8 +249,9 @@ export const POWERUP_TYPES = {
         icon: '💚',
         duration: 45000,
         effect: 'healthOrbDropQuantity',
-        rarity: 0.1,
-        description: '+1 health orbs per drop'
+        rarity: 0.08,
+        category: 'DROPS',
+        description: '+1 max health orbs per drop'
     },
     MONEY_ORB_DROP_QUANTITY: {
         name: 'Gold Bounty',
@@ -226,8 +260,9 @@ export const POWERUP_TYPES = {
         icon: '🪙',
         duration: 45000,
         effect: 'moneyOrbDropQuantity',
-        rarity: 0.1,
-        description: '+1 money orbs per drop'
+        rarity: 0.08,
+        category: 'DROPS',
+        description: '+1 max money orbs per drop'
     }
 };
 

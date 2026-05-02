@@ -97,34 +97,18 @@ export function openShop() {
         // immediately see how Gold / SP / XP work.
         this.shopCategory = 'HELP';
 
-        // Define shop items with categories and currency types
+        // Shop now sells PRIMARY/POWER weapons, DEFENSE upgrades, and
+        // SKILLS. The OFFENSE and DROPS categories were removed —
+        // those upgrades are now permanent stacking powerup pickups
+        // (see POWERUP_TYPES in powerup.js + the Powerups overlay).
+        // SPARE_SHIP moved from OFFENSE to DEFENSE.
         this.shopItems = [
-            // ── OFFENSE (Coins) — weapon & damage upgrades, ordered by cost ──
-            { id: 'LONG_RANGE',     name: 'Long Range',       description: '+40% bullet range per stack',    cost: 150,  icon: '🏹', maxStacks: 6, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'RAPID_FIRE',     name: 'Rapid Fire',       description: '15% faster shooting per stack',  cost: 300,  icon: '⚡', maxStacks: 5, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'CRIT_CHANCE',    name: 'Critical Chance',  description: '+5% chance for critical hits',   cost: 250,  icon: '⭐', maxStacks: 8, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'CRIT_DAMAGE',    name: 'Critical Damage',  description: '+10% critical hit damage',       cost: 250,  icon: '🗡️', maxStacks: 8, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'HOMING',         name: 'Homing',           description: 'Bullets track nearest enemy',    cost: 750,  icon: '🎯', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'PIERCING',       name: 'Piercing',         description: 'Bullets pass through +1 enemy',  cost: 1200, icon: '🏹', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'MULTI_SHOT',     name: 'Multi Shot',       description: '+1 bullet in a spread per stack',cost: 1500, icon: '✳️', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'EXPLOSIVE',      name: 'Explosive',        description: 'AoE blast on bullet impact',     cost: 2000, icon: '💣', maxStacks: 3, category: 'OFFENSE', currency: 'COINS' },
-            { id: 'SPARE_SHIP',     name: 'Spare Ship',       description: '+1 extra life (max 3)',           cost: 5000, icon: '🚀', maxStacks: 1, flatCost: true, category: 'OFFENSE', currency: 'COINS' },
-
-            // ── DEFENSE (SP) — survivability, ordered: health → armor → mobility ──
-            { id: 'HEALTH_BOOST',   name: 'Health Boost',     description: '+25 max health',                           cost: 1, icon: '❤️', maxStacks: 10, category: 'DEFENSE', currency: 'SP' },
-            { id: 'SHIELD_BOOST',   name: 'Shielding',        description: '-5% damage taken per stack',               cost: 1, icon: '🛡️', maxStacks: 8,  category: 'DEFENSE', currency: 'SP' },
-            { id: 'SPEED_BOOST',    name: 'Afterburner',      description: '+50% thrust & +35% top speed per stack',   cost: 2, icon: '💨', maxStacks: 4,  category: 'DEFENSE', currency: 'SP' },
-            { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',     description: '-5s cooldown between health drops (60s → 30s floor)', cost: 2, icon: '⏳', maxStacks: 6, category: 'DEFENSE', currency: 'SP' },
-
-            // ── DROPS (SP) — loot economy, ordered: health group → money group → quantity ──
-            { id: 'DOCTOR',                 name: 'Doctor',            description: 'Increases the max amount of health per orb', cost: 1, icon: '🏥', maxStacks: 99, category: 'DROPS', currency: 'SP' },
-            { id: 'HIGH_ROLLER',            name: 'High Roller',       description: 'Increases the max amount of money per orb', cost: 1, icon: '🎰', maxStacks: 99, category: 'DROPS', currency: 'SP' },
-            { id: 'MEDPACK',               name: 'Medpack',            description: 'More health per orb',                       cost: 2, icon: '💊', maxStacks: 99, category: 'DROPS', currency: 'SP' },
-            { id: 'PAYDAY',                name: 'Payday',             description: 'More money per orb',                        cost: 2, icon: '💵', maxStacks: 99, category: 'DROPS', currency: 'SP' },
-            { id: 'HEALTH_ORB_DROP_CHANCE', name: 'Health Orb Luck',   description: '+5% health orb drop chance',                cost: 2, icon: '🍀', maxStacks: 6,  category: 'DROPS', currency: 'SP' },
-            { id: 'MONEY_ORB_DROP_CHANCE',  name: 'Money Orb Luck',    description: '+5% money orb drop chance',                 cost: 2, icon: '💰', maxStacks: 6,  category: 'DROPS', currency: 'SP' },
-            { id: 'HEALTH_ORB_DROP_QUANTITY',name: 'Health Orb Bounty', description: '+1 max health orbs per drop',              cost: 3, icon: '💚', maxStacks: 3,  category: 'DROPS', currency: 'SP' },
-            { id: 'MONEY_ORB_DROP_QUANTITY', name: 'Money Orb Bounty',  description: '+1 max money orbs per drop',              cost: 3, icon: '🪙', maxStacks: 3,  category: 'DROPS', currency: 'SP' },
+            // ── DEFENSE (SP unless noted) ──
+            { id: 'HEALTH_BOOST',          name: 'Health Boost', description: '+25 max health',                                        cost: 1,    icon: '❤️', maxStacks: 10, category: 'DEFENSE', currency: 'SP'    },
+            { id: 'SHIELD_BOOST',          name: 'Shielding',    description: '-5% damage taken per stack',                            cost: 1,    icon: '🛡️', maxStacks: 8,  category: 'DEFENSE', currency: 'SP'    },
+            { id: 'SPEED_BOOST',           name: 'Afterburner',  description: '+50% thrust & +35% top speed per stack',                cost: 2,    icon: '💨', maxStacks: 4,  category: 'DEFENSE', currency: 'SP'    },
+            { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',       description: '-5s cooldown between health drops (60s → 30s floor)',  cost: 2,    icon: '⏳', maxStacks: 6,  category: 'DEFENSE', currency: 'SP'    },
+            { id: 'SPARE_SHIP',            name: 'Spare Ship',   description: '+1 extra life (max 3)',                                cost: 5000, icon: '🚀', maxStacks: 1,  flatCost: true, category: 'DEFENSE', currency: 'COINS' },
         ];
 
         this._rebuildShopCache();

@@ -159,32 +159,20 @@ export function getExperienceProgress() {
 // ── Powerup management ────────────────────────────────────────────────────
 
 export function addPowerup(type, config, isShopItem = false) {
-    // Determine duration based on source
-    const duration = isShopItem ? Infinity : (config.duration || 30000); // 30 seconds for dropped powerups
-
+    // ALL powerups are now permanent and stacking — drops included.
+    // The `isShopItem` param is kept for back-compat with any caller
+    // that still passes it; it no longer controls duration.
     if (this.powerups.has(type)) {
         const existing = this.powerups.get(type);
-
-        if (isShopItem) {
-            // Shop items stack and remain permanent
-            existing.stacks += 1;
-            existing.timeRemaining = Infinity;
-            existing.isPermanent = true;
-        } else {
-            // Dropped powerups always add a stack
-            existing.stacks += 1;
-            if (!existing.isPermanent) {
-                // Also refresh the timer for temporary powerups
-                existing.timeRemaining = duration;
-            }
-        }
+        existing.stacks += 1;
+        existing.timeRemaining = Infinity;
+        existing.isPermanent = true;
     } else {
-        // New powerup
         this.powerups.set(type, {
             stacks: 1,
-            timeRemaining: duration,
+            timeRemaining: Infinity,
             config: config,
-            isPermanent: isShopItem
+            isPermanent: true,
         });
     }
 
@@ -267,6 +255,15 @@ export function getEffectiveCritDamage() {
     const maxCrit = 300 + critDamageBonus; // 300% + stacks
     const totalCritDamage = minCrit + Math.random() * (maxCrit - minCrit);
     return Math.min(500, totalCritDamage); // Cap at 500% (5x)
+}
+
+// Knockback multiplier applied to all power-weapon impulses (Mine,
+// Nova, Lightning, Missile). +30% per stack of KNOCKBACK powerup,
+// capped at +200% (~3x) so it doesn't yeet enemies into other
+// galaxies. Returns 1.0 with zero stacks.
+export function getKnockbackMultiplier() {
+    const stacks = this.getPowerupStacks('KNOCKBACK');
+    return Math.min(3.0, 1 + stacks * 0.3);
 }
 
 export function getEffectiveHealthOrbHealing(baseHealing = 1) {
