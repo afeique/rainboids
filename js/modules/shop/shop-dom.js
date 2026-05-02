@@ -57,9 +57,11 @@ export function initShopDom(gameEngine) {
         });
     });
 
-    // Close button — closeShopToPause routes back to pause menu.
+    // Close button — route back to whichever state the shop was opened
+    // from. Mid-play HUD shop closes back to gameplay; pause-menu shop
+    // closes back to pause; between-wave shop starts the next wave.
     _elements.closeBtn.addEventListener('click', () => {
-        _engine.closeShopToPause();
+        _engine.closeShopAndReturn();
     });
 
     // Replace the header 💰 emoji placeholder with the same coin-stack

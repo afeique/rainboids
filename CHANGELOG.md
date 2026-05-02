@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.1] - 2026-05-02
+
+### Changed
+- **Closing the shop now returns the player to whichever state they came from.** Previously the X button (and ESC) always routed `SHOP → PAUSED`, even if the player opened the shop mid-fight via the HUD shop button — which was disorienting (game suddenly paused with menu showing). Now `openShop()` captures `shopReturnState` before transitioning, and a new dispatcher `closeShopAndReturn()` routes:
+  - opened from `PLAYING` (HUD shop button mid-fight) → resume gameplay via new `closeShopToPlaying()`
+  - opened from `WAVE_TRANSITION` (auto-shop on wave complete) → `closeShop()` starts next wave (unchanged)
+  - opened from `PAUSED` (pause-menu shop button) → `closeShopToPause()` returns to pause menu (unchanged)
+- Wired through the DOM close button (`shop-dom.js`), the canvas-overlay close hit-region (`event-setup.js`), and the ESC handler (`game-engine.togglePause`).
+
+---
+
 ## [5.39.16] - 2026-05-02
 
 ### Changed

@@ -148,7 +148,10 @@ export function setupEventListeners() {
                 clickX <= this.shopCloseBounds.x + this.shopCloseBounds.width &&
                 clickY >= this.shopCloseBounds.y &&
                 clickY <= this.shopCloseBounds.y + this.shopCloseBounds.height) {
-                this.closeShopToPause();
+                // Route to whichever state the shop was opened from
+                // (mid-play → PLAYING, between waves → start next wave,
+                // from pause menu → back to pause).
+                this.closeShopAndReturn();
                 return;
             }
 

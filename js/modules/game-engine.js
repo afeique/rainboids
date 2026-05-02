@@ -556,7 +556,9 @@ export class GameEngine {
     _buildSkillsTabItems() { return shop._buildSkillsTabItems.call(this); }
 
     closeShop() { return shop.closeShop.call(this); }
-    
+    closeShopToPlaying() { return shop.closeShopToPlaying.call(this); }
+    closeShopAndReturn() { return shop.closeShopAndReturn.call(this); }
+
     buyShopItem(itemId) { return shop.buyShopItem.call(this, itemId); }
 
     _handleWeaponBuyOrEquip(item) { return shop._handleWeaponBuyOrEquip.call(this, item); }
@@ -1185,8 +1187,9 @@ export class GameEngine {
                 this.player.resumeChargeShot();
             }
         } else if (this.game.state === GAME_STATES.SHOP) {
-            // Shop → Paused (close shop and show pause menu)
-            this.closeShopToPause();
+            // Shop → return to whichever state the shop was opened from
+            // (PLAYING / WAVE_TRANSITION / PAUSED).
+            this.closeShopAndReturn();
         }
     }
     

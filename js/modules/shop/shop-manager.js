@@ -71,6 +71,13 @@ export function openShop() {
         // Store the time when shop opened to adjust spawn timers later
         this.shopOpenTime = Date.now();
 
+        // Remember which state to return to when the shop closes. Captured
+        // BEFORE we transition to SHOP so closeShopAndReturn() can route:
+        //   PAUSED          → closeShopToPause   (back to pause menu)
+        //   WAVE_TRANSITION → closeShop          (start next wave)
+        //   PLAYING         → closeShopToPlaying (resume gameplay)
+        this.shopReturnState = this.game.state;
+
         // Transition to shop state from any valid state
         this.game.state = GAME_STATES.SHOP;
         document.body.classList.add('shop-open'); // Dim HUD DOM elements behind canvas overlay
@@ -449,6 +456,45 @@ export function _handleUpgradeBuy(item) {
         this._rebuildShopCache();
         this.events.emit('audio:coin');
         return true;
+}
+
+export function closeShopToPlaying() {
+        try {
+            if (!this.game) {
+                console.error('❌ Game object is undefined in closeShopToPlaying!');
+                return;
+            }
+
+            // Adjust spawn timers for the time spent in shop (same as the
+            // other close paths — keep spawn cadence consistent).
+            if (this.shopOpenTime) {
+                const timeInShop = Date.now() - this.shopOpenTime;
+                this.lastSpawnTime += timeInShop;
+                this.lastEmergencySpawn += timeInShop;
+                this.nextShopTime += timeInShop;
+            }
+
+            // Resume gameplay directly — no pause menu, no next-wave trigger.
+            this.game.state = GAME_STATES.PLAYING;
+            document.body.classList.remove('shop-open');
+            hideShopDom();
+
+            if (this.player) this.player.resumeChargeShot();
+
+            this.shopItemBounds = null;
+        } catch (error) {
+            console.error('❌ Error in closeShopToPlaying:', error);
+            this.game.state = GAME_STATES.PLAYING;
+        }
+}
+
+// Dispatcher: route close based on the state we were in when the shop
+// opened. Lets the X button / ESC do the right thing in all three cases.
+export function closeShopAndReturn() {
+        const target = this.shopReturnState;
+        if (target === GAME_STATES.PAUSED) return this.closeShopToPause();
+        if (target === GAME_STATES.WAVE_TRANSITION) return this.closeShop();
+        return this.closeShopToPlaying();
 }
 
 export function closeShopToPause() {
