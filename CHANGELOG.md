@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.1] - 2026-05-02
+
+### Added
+- **Shop PRIMARY / POWER tabs now show which weapon you're upgrading.** A banner at the top of each tab displays "Upgrading Primary Weapon" / "Upgrading Power Weapon" with the equipped weapon's icon, name, and color (`buildEquippedBanner` in `shop-dom.js`). Removes ambiguity about which upgrade tree the listed items will modify.
+- **Equipped-weapons HUD: two squares below the gold display** showing the equipped Primary and Power weapons. Each square has the weapon's icon centered in its weapon color, with **PRM** / **PWR** labels below. New `drawEquippedWeaponSquares` exported from `hud/status.js` and called after `drawLevelAndCoinsDisplay`.
+- **R-cycle animation**: pressing R now triggers a 350ms scale-pulse + glow halo on the Primary HUD square via a new `triggerWeaponCycleAnim()` on the game engine and a `_weaponCycleAnim` state object read by the HUD renderer. The animation auto-clears when its duration elapses.
+
+---
+
 ## [5.41.0] - 2026-05-02
 
 ### Added

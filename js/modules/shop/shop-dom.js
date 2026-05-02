@@ -163,6 +163,18 @@ export function renderShopDom() {
 
     const items = _engine.shopFilteredItems || [];
 
+    // Header banner for the PRIMARY / POWER tabs that shows the player which
+    // weapon's upgrade tree they're looking at. Updated whenever the tab
+    // is rebuilt (so equipping a different weapon and reopening the shop
+    // — or rebuilding via switchTab — reflects the new equip immediately).
+    const player = _engine.player;
+    const game = _engine.game;
+    const cat = _engine.shopCategory;
+    if (cat === 'PRIMARY' || cat === 'POWER') {
+        const banner = buildEquippedBanner(cat, player);
+        if (banner) list.appendChild(banner);
+    }
+
     if (items.length === 0) {
         const empty = document.createElement('div');
         empty.style.cssText = 'text-align: center; color: #888; padding: 40px; font-family: monospace;';
@@ -171,11 +183,53 @@ export function renderShopDom() {
         return;
     }
 
-    const player = _engine.player;
-    const game = _engine.game;
     for (const item of items) {
         list.appendChild(buildItemRow(item, player, game));
     }
+}
+
+// Banner shown above the upgrade list on the PRIMARY / POWER tabs. Tells
+// the player exactly which weapon these upgrades will apply to.
+function buildEquippedBanner(category, player) {
+    if (!player) return null;
+    let label, weaponName, weaponIcon, weaponColor;
+    if (category === 'PRIMARY') {
+        const cfg = player.getActivePrimaryConfig();
+        label = 'Upgrading Primary Weapon';
+        weaponName = cfg?.name || 'Primary';
+        weaponIcon = cfg?.icon || '🔫';
+        weaponColor = cfg?.color || '#00ccff';
+    } else {
+        const cfg = player.getActivePowerConfig();
+        label = 'Upgrading Power Weapon';
+        weaponName = cfg?.name || 'Power';
+        weaponIcon = cfg?.icon || '⚡';
+        weaponColor = cfg?.color || '#ffcc44';
+    }
+
+    const banner = document.createElement('div');
+    banner.className = 'shop-equipped-banner';
+    banner.style.borderColor = weaponColor;
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'shop-equipped-label';
+    labelEl.textContent = label;
+
+    const weaponEl = document.createElement('div');
+    weaponEl.className = 'shop-equipped-weapon';
+    weaponEl.style.color = weaponColor;
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'shop-equipped-icon';
+    iconSpan.textContent = weaponIcon;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'shop-equipped-name';
+    nameSpan.textContent = weaponName;
+    weaponEl.appendChild(iconSpan);
+    weaponEl.appendChild(nameSpan);
+
+    banner.appendChild(labelEl);
+    banner.appendChild(weaponEl);
+    return banner;
 }
 
 // HELP panel — explains the three resources (Gold / SP / XP) and the

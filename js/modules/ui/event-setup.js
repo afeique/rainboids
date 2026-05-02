@@ -32,6 +32,7 @@ export function setupEventListeners() {
                 const i = owned.indexOf(this.player.activePrimary);
                 const next = owned[(i + 1) % owned.length];
                 this.player.equipPrimary(next);
+                this.triggerWeaponCycleAnim(); // pulse the Primary HUD square
                 hideHint(); // dismiss the "press R" hint once the player tries it
                 this.events.emit('audio:coin'); // small audio confirmation
             }

@@ -1384,6 +1384,8 @@ export class GameEngine {
     drawStopwatchIcon(ctx, x, y, size) { return hudOverlays.drawStopwatchIcon.call(this, ctx, x, y, size); }
     drawCanvasTriforce(ctx, lives, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }
     drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) { return hudStatus.drawLevelAndCoinsDisplay.call(this, ctx, barX, barY, barHeight); }
+    drawEquippedWeaponSquares(ctx, barX, barY, barHeight) { return hudStatus.drawEquippedWeaponSquares.call(this, ctx, barX, barY, barHeight); }
+    triggerWeaponCycleAnim() { this._weaponCycleAnim = { start: Date.now(), duration: 350 }; }
     drawLevelUpText() { return hudStatus.drawLevelUpText.call(this); }
     
     explodeTank(tankIndex) { return lifecycle.explodeTank.call(this, tankIndex); }

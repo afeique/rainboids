@@ -1709,3 +1709,37 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border-radius: 3px;
     margin: 0 2px;
 }
+
+/* Shop banner that names the equipped weapon when on PRIMARY / POWER tabs.
+   Sits at the top of the items list, makes it unambiguous which weapon
+   the upgrades you're browsing apply to. */
+.shop-equipped-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 20px;
+    margin: 0 0 18px 0;
+    border: 2px solid rgba(0, 204, 255, 0.6);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.45);
+    text-align: center;
+}
+.shop-equipped-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: rgba(255, 255, 255, 0.65);
+    text-transform: uppercase;
+}
+.shop-equipped-weapon {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 20px;
+    font-weight: bold;
+}
+.shop-equipped-icon {
+    font-size: 24px;
+}

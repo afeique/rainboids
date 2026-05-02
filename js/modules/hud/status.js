@@ -596,8 +596,124 @@ export function updateHUD() {
         // Draw level and coins beneath lives and health bar
         this.drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight);
 
+        // Equipped weapon squares (PRM / PWR) beneath the coins display.
+        this.drawEquippedWeaponSquares(ctx, barX, barY, barHeight);
+
         // Draw survival timer at bottom left
         this.drawSurvivalTimer(ctx);
+}
+
+// Two small squares — Primary and Power — below the coins display in
+// the top-left HUD. Show the equipped weapon's icon in its weapon
+// color, with PRM / PWR labels underneath. The Primary square pulses
+// briefly when the player cycles weapons via R (driven by
+// `gameEngine._weaponCycleAnim` set in event-setup.js).
+export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
+    if (!this.player) return;
+    const livesX = 10;
+    const triforceWidth = 60;
+    const triforceCenterX = livesX + triforceWidth / 2; // matches drawLevelAndCoinsDisplay
+
+    const levelY = barY + barHeight + 26;
+    const coinsY = levelY + 40;
+
+    const squareSize = 38;
+    const gap = 8;
+    const totalW = squareSize * 2 + gap;
+    const groupX = triforceCenterX - totalW / 2; // center under triforce/level/coins
+    const groupY = coinsY + 22; // below coins
+
+    const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
+    const powerCfg = this.player.getActivePowerConfig?.() || {};
+
+    // Animation: brief scale + glow pulse on the Primary square when
+    // the player cycles via R. State lives on the game engine so any
+    // input source can trigger it.
+    let primaryScale = 1;
+    let primaryGlow = 0;
+    const anim = this._weaponCycleAnim;
+    if (anim && Date.now() - anim.start < anim.duration) {
+        const t = (Date.now() - anim.start) / anim.duration; // 0..1
+        // Pulse: scale up to 1.18x at t=0.3, then ease back.
+        const pulse = Math.sin(t * Math.PI); // 0 → 1 → 0
+        primaryScale = 1 + 0.18 * pulse;
+        primaryGlow = pulse;
+    } else if (anim) {
+        // expired — drop the reference so the old timestamp doesn't matter
+        this._weaponCycleAnim = null;
+    }
+
+    // ── Primary square ──────────────────────────────────────────────
+    drawWeaponSquare.call(
+        this, ctx,
+        groupX + squareSize / 2, groupY + squareSize / 2,
+        squareSize,
+        primaryCfg.icon || '?',
+        primaryCfg.color || '#00ccff',
+        'PRM',
+        primaryScale,
+        primaryGlow,
+    );
+
+    // ── Power square ────────────────────────────────────────────────
+    drawWeaponSquare.call(
+        this, ctx,
+        groupX + squareSize + gap + squareSize / 2, groupY + squareSize / 2,
+        squareSize,
+        powerCfg.icon || '?',
+        powerCfg.color || '#ffcc44',
+        'PWR',
+        1, 0,
+    );
+}
+
+function drawWeaponSquare(ctx, cx, cy, size, icon, color, label, scale = 1, glow = 0) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (scale !== 1) ctx.scale(scale, scale);
+
+    const half = size / 2;
+    // Background fill
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(-half, -half, size, size);
+
+    // Glow halo during cycle animation
+    if (glow > 0) {
+        ctx.save();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 16 * glow;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(-half, -half, size, size);
+        ctx.restore();
+    }
+
+    // Border
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-half, -half, size, size);
+
+    // Icon
+    ctx.font = `${Math.round(size * 0.55)}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(icon, 0, 1);
+
+    // Label below the square (un-scaled so text size doesn't pulse)
+    ctx.restore();
+    ctx.save();
+    ctx.translate(cx, cy + half + 12);
+    ctx.font = "9px 'Press Start 2P', monospace";
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.strokeText(label, 0, 0);
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
 }
 
 // Ammo gauge was removed — the cursor ring (hud/cursor.js) is now the sole
