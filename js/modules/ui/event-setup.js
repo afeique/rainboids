@@ -26,9 +26,13 @@ export function setupEventListeners() {
         // (Shift+R is still a cheat handled in the Shift block below.)
         // Test powerup spawn (for debugging)
         if (e.code === 'KeyP' && this.game.state === GAME_STATES.PLAYING) {
-            const offsetX = random(-50, 50);
-            const offsetY = random(-50, 50);
-            this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY);
+            // Spawn just beyond the visible viewport so the player doesn't see it pop in.
+            const angle = random(0, Math.PI * 2);
+            const dist = Math.hypot(this.width, this.height) / 2 + random(40, 120);
+            this.dropPowerup(
+                this.player.x + Math.cos(angle) * dist,
+                this.player.y + Math.sin(angle) * dist,
+            );
         }
         // Debug cheat codes (Shift+key, gameplay only)
         if (e.shiftKey && this.game.state === GAME_STATES.PLAYING) {

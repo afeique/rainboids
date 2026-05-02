@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.15] - 2026-05-02
+
+### Changed
+- **KeyP debug powerup cheat now spawns just beyond the viewport** instead of within ±50px of the player. Picks a random angle, places the powerup at half-diagonal + 40–120px so it drifts in from off-screen — better mimics organic spawn behavior for testing magnetism, blink, and the new expiry burst.
+
+---
+
 ## [5.39.14] - 2026-05-02
 
 ### Changed
