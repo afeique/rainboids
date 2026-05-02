@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.8] - 2026-05-02
+
+### Fixed
+- **Music player no longer auto-skips through every track after pressing Next/Prev/Random/Shuffle.** Regression introduced in 5.40.7: `_disposeAudio()` set `src=''` and called `load()` to cancel in-flight fetches, which fires an `error` event on the abandoned `<audio>`. The `error` listener installed earlier called `setTimeout(() => this.next(), 1000)` — so every track change scheduled a phantom `next()` from the disposed audio, fired 1s later, disposed that audio, scheduled another `next()`, and so on in a runaway loop. `_attachAudioListeners()` now stashes bound handlers on the element, `_disposeAudio()` removes them before clearing `src`, and the error handler short-circuits on a `_disposing` flag for belt-and-suspenders.
+
+---
+
 ## [5.40.7] - 2026-05-02
 
 ### Changed

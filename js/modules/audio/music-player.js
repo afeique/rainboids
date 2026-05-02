@@ -84,12 +84,22 @@ export class MusicPlayer {
 
     // Actively cancel any in-flight load for an Audio element. Setting
     // src='' + load() is the canonical browser-supported way to free
-    // the underlying network slot. Without this, abandoned Audio
-    // elements continue buffering until garbage collection.
+    // the underlying network slot. We MUST detach our listeners first
+    // — `src=''` fires an `error` event, which would otherwise trip
+    // our auto-skip-on-error handler and fire next() in a runaway loop
+    // every time we change tracks.
     _disposeAudio(audio) {
         if (!audio) return;
+        audio._disposing = true; // Belt-and-suspenders guard inside the error handler
         try {
             audio.pause();
+            if (audio._handlers) {
+                audio.removeEventListener('timeupdate', audio._handlers.timeupdate);
+                audio.removeEventListener('ended', audio._handlers.ended);
+                audio.removeEventListener('loadedmetadata', audio._handlers.loadedmetadata);
+                audio.removeEventListener('error', audio._handlers.error);
+                audio._handlers = null;
+            }
             audio.src = '';
             audio.load();
         } catch (_) { /* Some browsers throw on load() after empty src — safe to ignore */ }
@@ -97,16 +107,25 @@ export class MusicPlayer {
 
     _attachAudioListeners(audio, track) {
         audio.volume = this.volume;
-        audio.addEventListener('timeupdate', this.handleTimeUpdate.bind(this));
-        audio.addEventListener('ended', this.handleTrackEnd.bind(this));
-        audio.addEventListener('loadedmetadata', () => {
-            track.duration = audio.duration;
-        });
-        audio.addEventListener('error', (e) => {
-            console.error('Failed to load track:', track.path, e);
-            // Try next track if loading fails
-            setTimeout(() => this.next(), 1000);
-        });
+        // Bind handlers once and stash on the element so _disposeAudio
+        // can remove them later. Without this, we leaked the original
+        // `error` listener and the disposed Audio kept calling next()
+        // a second after it was abandoned.
+        const handlers = {
+            timeupdate: this.handleTimeUpdate.bind(this),
+            ended: this.handleTrackEnd.bind(this),
+            loadedmetadata: () => { track.duration = audio.duration; },
+            error: (e) => {
+                if (audio._disposing) return; // Ignore errors caused by our own teardown
+                console.error('Failed to load track:', track.path, e);
+                setTimeout(() => this.next(), 1000);
+            },
+        };
+        audio._handlers = handlers;
+        audio.addEventListener('timeupdate', handlers.timeupdate);
+        audio.addEventListener('ended', handlers.ended);
+        audio.addEventListener('loadedmetadata', handlers.loadedmetadata);
+        audio.addEventListener('error', handlers.error);
     }
 
     // Speculative load of the next sequential track. Skipped on random/
