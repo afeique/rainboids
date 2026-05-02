@@ -40,12 +40,35 @@ export class MusicPlayer {
     
     
     shufflePlaylist() {
-        // Fisher-Yates shuffle
+        // Fisher-Yates shuffle. Reorders the playlist in place. Does NOT
+        // touch isShuffled — that flag is purely about the user-facing
+        // toggle state (kept around for back-compat; not used by the
+        // current UI which treats shuffle as an action button).
         for (let i = this.playlist.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [this.playlist[i], this.playlist[j]] = [this.playlist[j], this.playlist[i]];
         }
-        this.isShuffled = true;
+    }
+
+    // Action: re-shuffle the playlist and immediately play the new track 0.
+    // The "shuffle button" calls this — visible side effect is a track
+    // change + audio start, so the user actually sees something happen.
+    shuffleAndPlay() {
+        this.shufflePlaylist();
+        this.isPlaying = true; // Signal loadTrack to auto-play
+        this.loadTrack(0);
+    }
+
+    // Action: jump to a uniformly random track in the (current) playlist
+    // and play it. Avoids re-picking the current track when possible.
+    playRandomTrack() {
+        if (this.playlist.length === 0) return;
+        let idx = Math.floor(Math.random() * this.playlist.length);
+        if (this.playlist.length > 1 && idx === this.currentTrackIndex) {
+            idx = (idx + 1) % this.playlist.length;
+        }
+        this.isPlaying = true; // Signal loadTrack to auto-play
+        this.loadTrack(idx);
     }
     
     loadTrack(index) {

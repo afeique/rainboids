@@ -44,6 +44,7 @@ export class UIManager {
             musicPrev: document.getElementById('music-prev'),
             musicNext: document.getElementById('music-next'),
             musicShuffle: document.getElementById('music-shuffle'),
+            musicRandom: document.getElementById('music-random'),
             musicRepeat: document.getElementById('music-repeat'),
             playlistTracks: document.getElementById('playlist-tracks'),
             // Music volume elements
@@ -810,10 +811,24 @@ export class UIManager {
             this.musicPlayer.next();
         });
         
+        // Shuffle button: re-orders the playlist and starts the new track 0.
+        // Brief 'active' flash gives visual confirmation that something
+        // happened (in addition to the track name changing).
         this.elements.musicShuffle.addEventListener('click', () => {
-            const isShuffled = this.musicPlayer.toggleShuffle();
-            this.elements.musicShuffle.classList.toggle('active', isShuffled);
+            this.musicPlayer.shuffleAndPlay();
+            this.elements.musicShuffle.classList.add('active');
+            setTimeout(() => this.elements.musicShuffle.classList.remove('active'), 250);
         });
+
+        // Random button: jump straight to a random track without
+        // touching playlist order. Same brief flash for feedback.
+        if (this.elements.musicRandom) {
+            this.elements.musicRandom.addEventListener('click', () => {
+                this.musicPlayer.playRandomTrack();
+                this.elements.musicRandom.classList.add('active');
+                setTimeout(() => this.elements.musicRandom.classList.remove('active'), 250);
+            });
+        }
         
         this.elements.musicRepeat.addEventListener('click', () => {
             // Toggle repeat-one mode only

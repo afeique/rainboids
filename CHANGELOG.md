@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.3] - 2026-05-02
+
+### Fixed
+- **Music player shuffle button now works on the first click.** The bug: `MusicPlayer.shufflePlaylist()` always set `isShuffled = true`, and the constructor calls it on init. So `isShuffled` was already `true` when the user first clicked, and `toggleShuffle()` flipped it to `false` — skipping the reshuffle entirely. Removed the flag mutation from `shufflePlaylist()`.
+
+### Changed
+- **Shuffle button is now an action, not a toggle.** Clicking it re-shuffles the playlist *and* loads + plays new track 0 — visible side effect (track changes, audio plays) confirms the action. New helper: `MusicPlayer.shuffleAndPlay()`.
+
+### Added
+- **Random-track button (🎲) in the music player.** Jumps to a uniformly random track and plays it without reordering the playlist (so prev/next still walks the existing order). New helper: `MusicPlayer.playRandomTrack()`. Bound to a new `#music-random` button placed next to the shuffle button. Both buttons briefly flash the `.active` class for visual feedback.
+
+---
+
 ## [5.40.2] - 2026-05-02
 
 ### Changed
