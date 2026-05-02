@@ -314,3 +314,22 @@
 {"data":{"command":"git status -s | grep \"^A\\|^M\" | head -50"},"id":"event-000173","state":"stopped","ts":"2026-04-30T23:38:08Z","type":"tool.bash"}
 {"data":{"command":"git commit -m \"$(cat \u003c\u003c'EOF'\nConvert Rainboids → Rainaxian top-down shooter (6.0.0 → 6.3.4)\n\nPivots the free-flight roguelite into a Galaxian-style vertical shooter.\nGame board locked to one screen. E"},"id":"event-000174","state":"stopped","ts":"2026-04-30T23:38:22Z","type":"tool.bash"}
 {"data":{"command":"git status -s | head -5 \u0026\u0026 echo \"---\" \u0026\u0026 git log --oneline -3"},"id":"event-000175","state":"stopped","ts":"2026-04-30T23:38:27Z","type":"tool.bash"}
+{"data":{"command":"grep -rn \"TITLE_SCREEN\\|setupStartHandlers\\|startGame\\|state === GAME_STATES.TITLE\\|titleClick\" js/ 2\u003e/dev/null | head -15"},"id":"event-000176","state":"stopped","ts":"2026-05-01T00:40:09Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/main.js"},"id":"event-000177","state":"stopped","ts":"2026-05-01T00:40:21Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000178","state":"stopped","ts":"2026-05-01T00:40:29Z","type":"tool.write"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000179","state":"stopped","ts":"2026-05-01T00:40:39Z","type":"tool.edit"}
+{"data":{"command":"git status -s | head -40"},"id":"event-000180","state":"stopped","ts":"2026-05-01T00:45:59Z","type":"tool.bash"}
+{"data":{"command":"git log --oneline -5 \u0026\u0026 echo \"---\" \u0026\u0026 git status"},"id":"event-000181","state":"stopped","ts":"2026-05-01T00:46:05Z","type":"tool.bash"}
+{"data":{"command":"ls tools/ai-qa-bot/adapters/ tools/ai-qa-bot/motor/ \u0026\u0026 echo \"---\" \u0026\u0026 grep -l \"Rainboids\\|RAINBOIDS\" js/main.js js/modules/game-engine.js README.md 2\u003e\u00261 | head"},"id":"event-000182","state":"stopped","ts":"2026-05-01T00:46:12Z","type":"tool.bash"}
+{"data":{"command":"git diff js/main.js | head -30"},"id":"event-000183","state":"stopped","ts":"2026-05-01T00:46:19Z","type":"tool.bash"}
+{"data":{"command":"git add CHANGELOG.md VERSION js/main.js \u0026\u0026 git commit -m \"$(cat \u003c\u003c'EOF'\nTitle screen starts on mobile tap (6.4.4)\n\nsetupStartHandlers binds a window-level touchstart listener (passive)\nalongside click"},"id":"event-000184","state":"stopped","ts":"2026-05-01T00:46:26Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/index.html"},"id":"event-000185","state":"stopped","ts":"2026-05-01T00:48:35Z","type":"tool.edit"}
+{"data":{"command":"grep -n \"desktop-only\" css/styles.css | head -10"},"id":"event-000186","state":"stopped","ts":"2026-05-01T00:51:48Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/css/styles.css"},"id":"event-000187","state":"stopped","ts":"2026-05-01T00:52:10Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/hud/overlays.js"},"id":"event-000188","state":"stopped","ts":"2026-05-01T00:52:36Z","type":"tool.edit"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/js/modules/ui/event-setup.js"},"id":"event-000189","state":"stopped","ts":"2026-05-01T00:52:55Z","type":"tool.edit"}
+{"data":{"command":"node -e \"Promise.all(['./js/modules/ui/event-setup.js','./js/modules/hud/overlays.js','./js/modules/game-engine.js'].map(p=\u003eimport(p))).then(()=\u003econsole.log('OK')).catch(e=\u003econsole.error('FAIL:',e.mes"},"id":"event-000190","state":"stopped","ts":"2026-05-01T00:53:03Z","type":"tool.bash"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/VERSION"},"id":"event-000191","state":"stopped","ts":"2026-05-01T00:59:51Z","type":"tool.write"}
+{"data":{"file_path":"/Users/silvr/projects/rainboids/CHANGELOG.md"},"id":"event-000192","state":"stopped","ts":"2026-05-01T01:00:06Z","type":"tool.edit"}
+{"data":{"command":"git status -s"},"id":"event-000193","state":"stopped","ts":"2026-05-01T01:01:39Z","type":"tool.bash"}
+{"data":{"command":"git add CHANGELOG.md VERSION css/styles.css index.html js/modules/hud/overlays.js js/modules/ui/event-setup.js \u0026\u0026 git commit -m \"$(cat \u003c\u003c'EOF'\nMobile portrait gate + responsive title (6.5.0)\n\n- Replac"},"id":"event-000194","state":"stopped","ts":"2026-05-01T01:01:46Z","type":"tool.bash"}
