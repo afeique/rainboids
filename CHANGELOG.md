@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.45.1] - 2026-05-02
+
+### Fixed
+- **Power weapons now produce full asteroid destruction (debris, color stars, orb drops, powerup chance, screen shake, fragmentation)** when they kill an asteroid, instead of the asteroid silently disappearing with just a death flash. Mine, Nova, Lightning, and Missile kill paths all routed through a new shared `destroyAsteroid()` helper that mirrors the bullet-hit kill sequence — including spawning 3-4 fragments for large asteroids. Each AOE loop snapshots `asteroidPool.activeObjects` before iterating so newly-spawned fragments don't re-trigger the same blast frame.
+
+---
+
 ## [5.45.0] - 2026-05-02
 
 ### Changed

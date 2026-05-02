@@ -705,6 +705,7 @@ export class GameEngine {
     checkDeflectorOrbCollisions() { return col.checkDeflectorOrbCollisions.call(this); }
     checkTractorShieldCollisions() { return col.checkTractorShieldCollisions.call(this); }
     damageEnemy(enemy, damage) { return col.damageEnemy.call(this, enemy, damage); }
+    destroyAsteroid(ast) { return col.destroyAsteroid.call(this, ast); }
     handlePlayerEnemyCollision(player, enemy) { return col.handlePlayerEnemyCollision.call(this, player, enemy); }
     handlePlayerEnemyBulletCollision(player, bullet) { return col.handlePlayerEnemyBulletCollision.call(this, player, bullet); }
     handleEnemyAsteroidCollision(enemy, asteroid) { return col.handleEnemyAsteroidCollision.call(this, enemy, asteroid); }

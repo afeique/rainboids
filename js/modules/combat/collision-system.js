@@ -678,12 +678,14 @@ export function checkMineCollisions() {
                 enemy.vel.y += ky * force;
             }
         }
-        // Damage + knock asteroids too — same falloff so the explosion
-        // physically pushes them. We don't replicate the full bullet
-        // death path (fragmentation, drops) but do apply hit-flash,
-        // strong outward velocity, and a death flash on lethal damage.
+        // Damage + knock asteroids — same falloff so the explosion
+        // physically pushes them. Lethal damage routes through
+        // destroyAsteroid for the full destruction sequence (debris,
+        // drops, fragments). Snapshot the array first so fragments
+        // spawned mid-kill don't re-trigger the same blast frame.
         const AST_KNOCK_BASE = 6;
-        for (const ast of this.asteroidPool.activeObjects) {
+        const astSnapshot = this.asteroidPool.activeObjects.slice();
+        for (const ast of astSnapshot) {
             if (!ast.active) continue;
             const dist = Math.hypot(ast.x - mine.x, ast.y - mine.y);
             if (dist >= blastR) continue;
@@ -698,9 +700,7 @@ export function checkMineCollisions() {
                 ast.vel.y += ky * force;
             }
             if (ast.health <= 0.001) {
-                ast._deathFlash = 6;
-                ast._deathFlashMax = 6;
-                ast.active = false;
+                this.destroyAsteroid(ast);
             }
         }
 
@@ -805,10 +805,12 @@ export function checkNovaCollisions() {
             }
         }
 
-        // Asteroids — damage + outward shove on first contact with ring.
-        // (Doesn't run the full bullet-death path; sets _hitFlashTimer
-        // and handles lethal damage with a death flash.)
-        for (const ast of this.asteroidPool.activeObjects) {
+        // Asteroids — damage + outward shove on first contact with
+        // the ring. Lethal damage routes through destroyAsteroid for
+        // the full destruction sequence (debris, drops, fragments).
+        // Snapshot first so fragments don't re-enter this loop.
+        const novaAstSnapshot = this.asteroidPool.activeObjects.slice();
+        for (const ast of novaAstSnapshot) {
             if (!ast.active || ring.hitAsteroids.has(ast)) continue;
             const dx = ast.x - ring.x;
             const dy = ast.y - ring.y;
@@ -823,9 +825,7 @@ export function checkNovaCollisions() {
                     ast.vel.y += (dy / dist) * KNOCK_AST;
                 }
                 if (ast.health <= 0.001) {
-                    ast._deathFlash = 6;
-                    ast._deathFlashMax = 6;
-                    ast.active = false;
+                    this.destroyAsteroid(ast);
                 }
             }
         }
@@ -854,9 +854,7 @@ export function checkLightningCollisions() {
                 ast.health = Math.max(0, (ast.health || 0) - dmg);
                 ast._hitFlashTimer = 4;
                 if (ast.health <= 0.001) {
-                    ast._deathFlash = 6;
-                    ast._deathFlashMax = 6;
-                    ast.active = false;
+                    this.destroyAsteroid(ast);
                 }
             }
             dmg *= falloff;
@@ -910,9 +908,7 @@ export function checkMissileCollisions() {
                 ast.health = Math.max(0, (ast.health || 0) - POWER_WEAPONS.MISSILE_SALVO.missileDamage);
                 ast._hitFlashTimer = 4;
                 if (ast.health <= 0.001) {
-                    ast._deathFlash = 6;
-                    ast._deathFlashMax = 6;
-                    ast.active = false;
+                    this.destroyAsteroid(ast);
                 }
                 missile.active = false;
                 explode(missile.x, missile.y);
@@ -974,6 +970,64 @@ export function checkTractorShieldCollisions() {
         });
     }
     // ─── Bulwark damage reduction is handled in handlePlayerEnemyBulletCollision ──
+}
+
+// Full asteroid destruction sequence — death flash, audio, debris,
+// color stars, orb drops, powerup chance, screen shake, and fragments
+// for big asteroids. Mirrors the bullet-hit kill path so power-weapon
+// AOE kills produce the same satisfying destruction (instead of
+// silently disappearing). Marks the asteroid inactive at the end.
+export function destroyAsteroid(ast) {
+    if (!ast || !ast.active) return;
+    const onScreen = this.isEntityOnScreen(ast);
+    const isLarge = ast.baseRadius > (GAME_CONFIG.MIN_AST_RAD + 5);
+
+    ast._deathFlash = 6;
+    ast._deathFlashMax = 6;
+    if (onScreen) {
+        this.events.emit('audio:explosion');
+        this.triggerHitstop(isLarge ? 5 : 4);
+    }
+    this.createDebris(ast);
+    this.createColorStarBurst(ast.x, ast.y);
+    this.dropOrbsFromEntity(ast.x, ast.y, ast);
+
+    const dropChance = isLarge
+        ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.LARGE_ASTEROID
+        : COLLISION_CONFIG.POWERUP_DROP_CHANCE.SMALL_ASTEROID;
+    if (Math.random() < dropChance) {
+        this.dropPowerup(ast.x, ast.y);
+    }
+    if (onScreen) {
+        this.triggerScreenShake(
+            isLarge ? 25 : 12,
+            ast.baseRadius * (isLarge ? 0.8 : 0.5),
+            ast.baseRadius,
+        );
+    }
+
+    // Fragmentation — large asteroids spawn 3-4 smaller pieces flying
+    // outward from the center, distributed evenly around 360°.
+    if (isLarge) {
+        const count = (Math.random() < 0.5 ? 2 : 3) + 1; // 3 or 4
+        const newR = ast.baseRadius / Math.sqrt(count);
+        const baseAngle = random(0, Math.PI * 2);
+        const sliceWidth = (Math.PI * 2) / count;
+        for (let k = 0; k < count; k++) {
+            const newAst = this.asteroidPool.get(ast.x, ast.y, newR, ast.level);
+            if (newAst) {
+                const fragHP = Math.max(5, Math.round((ast.maxHealth || 1) * random(0.7, 0.9)));
+                newAst.maxHealth = fragHP;
+                newAst.health = fragHP;
+                const angle = baseAngle + k * sliceWidth + random(-sliceWidth * 0.25, sliceWidth * 0.25);
+                const speed = random(4.5, 7.5);
+                newAst.vel.x = (ast.vel?.x || 0) * 0.3 + Math.cos(angle) * speed;
+                newAst.vel.y = (ast.vel?.y || 0) * 0.3 + Math.sin(angle) * speed;
+            }
+        }
+    }
+
+    ast.active = false;
 }
 
 export function damageEnemy(enemy, damage) {
