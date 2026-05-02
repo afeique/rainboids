@@ -484,12 +484,18 @@ export function layMine(config) {
         x: this.x,
         y: this.y,
         armTimer: 1000,  // 1s to arm
-        triggerRadius: config.mineRadius,
+        armed: false,
+        // BLAST_RADIUS now boosts BOTH the trigger radius (+20px/stack)
+        // and the blast/damage radius (+30px/stack) — investment in the
+        // upgrade increases the mine's effective range overall.
+        triggerRadius: config.mineRadius + blastRadiusStacks * 20,
         blastRadius: config.blastRadius + blastRadiusStacks * 30,
         damage: config.mineDamage,
         magnetic: this.getPowerupStacks('MAGNETIC_MINE') > 0,
         daisyChain: this.getPowerupStacks('DAISY_CHAIN') > 0,
         active: true,
+        // Birth time used by the renderer for arming-pulse animation.
+        spawnTime: Date.now(),
     });
 
     // RAPID_DEPLOY: -25% cooldown per stack, floor at 1.5s so it can't be

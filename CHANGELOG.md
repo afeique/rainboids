@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.42.0] - 2026-05-02
+
+### Fixed
+- **Mines actually arm and explode now.** `mine.armed` was never set anywhere in the codebase — `collision-system.checkMineCollisions` short-circuited with `if (!mine.armed) continue;` so the explosion path never fired. `skills.js` now flips `mine.armed = true` once `armTimer <= 0`. Latent bug since the mine system landed.
+
+### Changed
+- **Mines now explode near asteroids too**, not only enemies. Trigger detection iterates `asteroidPool` in addition to `enemyPool`; the blast also damages asteroids with the same falloff (and applies a hit-flash + outward knockback for impact feel). Lethal damage flips `_deathFlash` and deactivates the asteroid.
+- **`BLAST_RADIUS` upgrade now boosts trigger range too** (+20px per stack alongside the existing +30px blast radius). Description updated to reflect both effects. Investing in the upgrade now genuinely extends the mine's *effective range* — the spirit the user asked about.
+- **Mines redesigned to look physical and tangible.** Replaced the 8px circle with a chunky 12px casing: 4 spike protrusions, dark filled body with colored outline, a pulsing inner core, a 6-LED rotating ring with chase-pattern blink, a status blinker on top, and a flashing trigger-radius ring while armed. Pre-arm visuals are dimmer with a faster telegraph blink.
+- **Mine explosion VFX upgraded** — was 8 generic particles, now uses the same flash + colored ring + 14 shrapnel streaks + 6 embers that powerup-expiry uses, scaled to blast radius.
+
+---
+
 ## [5.41.8] - 2026-05-02
 
 ### Added

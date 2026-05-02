@@ -640,35 +640,76 @@ export function checkLanceBeamCollisions() {
 // ─── Mines ──────────────────────────────────────────────────────
 export function checkMineCollisions() {
     const p = this.player;
-    if (p.activeMines) {
-        for (const mine of p.activeMines) {
-            if (!mine.active || !mine.armed) continue;
-            const blastR = (POWER_WEAPONS.MINE_LAYER.blastRadius || 80) + p.getPowerupStacks('BLAST_RADIUS') * 30;
-            let triggered = false;
-            this.enemyPool.activeObjects.forEach(enemy => {
-                if (!enemy.active) return;
-                const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
-                if (dist < (mine.triggerRadius || 60)) triggered = true;
-            });
-            if (triggered) {
-                // Explode
-                this.enemyPool.activeObjects.forEach(enemy => {
-                    if (!enemy.active) return;
-                    const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
-                    if (dist < blastR) {
-                        const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
-                        this.damageEnemy(enemy, dmg);
-                    }
-                });
-                // Explosion particles
-                for (let i = 0; i < 8; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const speed = 2 + Math.random() * 3;
-                    this.particlePool.get(mine.x, mine.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 3, '#ff6600', 30);
-                }
-                mine.active = false;
+    if (!p.activeMines) return;
+    for (const mine of p.activeMines) {
+        if (!mine.active || !mine.armed) continue;
+        const triggerR = mine.triggerRadius || 60;
+        const blastR = (POWER_WEAPONS.MINE_LAYER.blastRadius || 80) + p.getPowerupStacks('BLAST_RADIUS') * 30;
+
+        // Trigger on enemies OR asteroids passing through the trigger ring.
+        let triggered = false;
+        for (const enemy of this.enemyPool.activeObjects) {
+            if (!enemy.active) continue;
+            if (Math.hypot(enemy.x - mine.x, enemy.y - mine.y) < triggerR) { triggered = true; break; }
+        }
+        if (!triggered) {
+            for (const ast of this.asteroidPool.activeObjects) {
+                if (!ast.active) continue;
+                if (Math.hypot(ast.x - mine.x, ast.y - mine.y) < triggerR) { triggered = true; break; }
             }
         }
+        if (!triggered) continue;
+
+        // Damage every enemy inside the blast ring with linear falloff.
+        for (const enemy of this.enemyPool.activeObjects) {
+            if (!enemy.active) continue;
+            const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
+            if (dist < blastR) {
+                const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
+                this.damageEnemy(enemy, dmg);
+            }
+        }
+        // Damage asteroids too — same falloff so the explosion feels real.
+        // We don't fully replicate the bullet death path (fragmentation,
+        // drop spawn, etc.) — too invasive — but we do kill outright on
+        // lethal damage with a death flash, and apply hit-flash + outward
+        // knockback so the mine clearly affected them.
+        for (const ast of this.asteroidPool.activeObjects) {
+            if (!ast.active) continue;
+            const dist = Math.hypot(ast.x - mine.x, ast.y - mine.y);
+            if (dist >= blastR) continue;
+            const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
+            ast.health = Math.max(0, (ast.health || 0) - dmg);
+            ast._hitFlashTimer = 4;
+            // Knockback away from the mine
+            if (dist > 0.001) {
+                const kx = (ast.x - mine.x) / dist;
+                const ky = (ast.y - mine.y) / dist;
+                ast.vel.x += kx * 1.2;
+                ast.vel.y += ky * 1.2;
+            }
+            if (ast.health <= 0.001) {
+                ast._deathFlash = 6;
+                ast._deathFlashMax = 6;
+                ast.active = false;
+            }
+        }
+
+        // Explosion VFX — flash + ring + shrapnel + lingering embers
+        // (matches the powerup-expiry burst flavor for consistency).
+        if (this.particlePool) {
+            this.particlePool.get(mine.x, mine.y, 'explosionFlash', blastR * 0.7);
+            this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR, '#ff6600');
+            for (let i = 0; i < 14; i++) {
+                const ang = (i / 14) * Math.PI * 2;
+                this.particlePool.get(mine.x, mine.y, 'explosionShrapnel', ang, 5, '#ff8800');
+            }
+            for (let i = 0; i < 6; i++) {
+                this.particlePool.get(mine.x, mine.y, 'explosionEmber', '#ffaa44');
+            }
+        }
+
+        mine.active = false;
     }
 }
 

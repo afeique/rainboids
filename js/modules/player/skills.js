@@ -66,9 +66,14 @@ export function updateActiveSkills(dt) {
         m.y += m.vel.y;
     }
 
-    // Update mine arm timers
+    // Update mine arm timers — flip mine.armed once the fuse runs out so
+    // collision-system / renderer can switch into the "live" visual and
+    // proximity-trigger behavior.
     for (const mine of this.activeMines) {
-        if (mine.armTimer > 0) mine.armTimer -= dt;
+        if (mine.armTimer > 0) {
+            mine.armTimer -= dt;
+            if (mine.armTimer <= 0) mine.armed = true;
+        }
     }
 
     // Update deflector orbs positions

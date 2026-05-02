@@ -261,7 +261,7 @@ export const POWER_UPGRADES = {
 
     // Mine Layer
     EXTRA_PAYLOAD:    { id: 'EXTRA_PAYLOAD',    name: 'Extra Payload',    description: '+1 max active mine per stack',         cost: 700,  maxStacks: 2,  weapon: 'MINE_LAYER', icon: '💣' },
-    BLAST_RADIUS:     { id: 'BLAST_RADIUS',     name: 'Blast Radius',     description: '+30px blast radius per stack',         cost: 800,  maxStacks: 3,  weapon: 'MINE_LAYER', icon: '💥' },
+    BLAST_RADIUS:     { id: 'BLAST_RADIUS',     name: 'Blast Radius',     description: '+30px blast & +20px trigger range per stack', cost: 800,  maxStacks: 3,  weapon: 'MINE_LAYER', icon: '💥' },
     MAGNETIC_MINE:    { id: 'MAGNETIC_MINE',    name: 'Magnetic Mine',    description: 'Mines pull nearby enemies',            cost: 1500, maxStacks: 1,  weapon: 'MINE_LAYER', icon: '🧲' },
     DAISY_CHAIN:      { id: 'DAISY_CHAIN',      name: 'Daisy Chain',      description: 'Nearby mines detonate together',      cost: 2000, maxStacks: 1,  weapon: 'MINE_LAYER', icon: '🔗' },
     RAPID_DEPLOY:     { id: 'RAPID_DEPLOY',     name: 'Rapid Deploy',     description: '-25% mine cooldown per stack (4s → 3s → 2.25s)', cost: 1100, maxStacks: 2, weapon: 'MINE_LAYER', icon: '⚡' },

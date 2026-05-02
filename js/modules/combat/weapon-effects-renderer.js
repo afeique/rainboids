@@ -38,23 +38,94 @@ export function drawWeaponEffects() {
     }
 
     // ─── Mines ──────────────────────────────────────────────────────
+    // Drawn as a chunky physical object: dark casing with 4 protruding
+    // spikes, an inner core, a rotating LED ring when armed, and a
+    // blinking red status light. Disarmed (still arming) mines are
+    // dimmer and don't blink — once `armTimer <= 0` flips `armed` true,
+    // the LEDs come on and the trigger-radius ring flashes.
     if (p.activeMines) {
+        const now = Date.now();
         for (const mine of p.activeMines) {
             if (!mine.active) continue;
             ctx.save();
-            const pulse = 0.7 + 0.3 * Math.sin(Date.now() * 0.005);
-            ctx.globalAlpha = pulse;
-            ctx.fillStyle = mine.armed ? '#ff6600' : '#884400';
-            ctx.beginPath();
-            ctx.arc(mine.x, mine.y, 8, 0, Math.PI * 2);
-            ctx.fill();
-            if (mine.armed) {
-                ctx.strokeStyle = 'rgba(255, 100, 0, 0.25)';
-                ctx.lineWidth = 1;
+            ctx.translate(mine.x, mine.y);
+
+            const radius = 12;
+            const armed = !!mine.armed;
+            // Slow blink when armed, fast pre-arm telegraph while still arming.
+            const blinkPhase = armed ? Math.sin(now * 0.008) : Math.sin(now * 0.018);
+            const blinkOn = blinkPhase > 0;
+
+            // ── Spikes (4 cardinal protrusions) ──
+            ctx.strokeStyle = armed ? '#552200' : '#3a1a00';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            for (let i = 0; i < 4; i++) {
+                const a = (i / 4) * Math.PI * 2 + Math.PI / 4; // diagonals
+                const x1 = Math.cos(a) * (radius - 1);
+                const y1 = Math.sin(a) * (radius - 1);
+                const x2 = Math.cos(a) * (radius + 5);
+                const y2 = Math.sin(a) * (radius + 5);
                 ctx.beginPath();
-                ctx.arc(mine.x, mine.y, mine.triggerRadius || 60, 0, Math.PI * 2);
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
                 ctx.stroke();
             }
+
+            // ── Casing (filled body with outline) ──
+            ctx.fillStyle = '#2a1100';
+            ctx.strokeStyle = armed ? '#ff6600' : '#884400';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // ── Inner core (pulses) ──
+            const corePulse = 0.7 + 0.3 * Math.sin(now * 0.005);
+            ctx.fillStyle = armed
+                ? (blinkOn ? '#ffdd44' : '#aa4400')
+                : '#552200';
+            ctx.globalAlpha = corePulse;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.42, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // ── LED ring (rotating dots — only when armed) ──
+            if (armed) {
+                const ledCount = 6;
+                const rotate = now * 0.0015;
+                for (let i = 0; i < ledCount; i++) {
+                    const a = (i / ledCount) * Math.PI * 2 + rotate;
+                    const lx = Math.cos(a) * (radius * 0.72);
+                    const ly = Math.sin(a) * (radius * 0.72);
+                    // Each LED individually phases so the ring "chases"
+                    const ledOn = Math.sin(now * 0.012 + i * 0.9) > 0;
+                    ctx.fillStyle = ledOn ? '#ff2200' : '#440000';
+                    ctx.beginPath();
+                    ctx.arc(lx, ly, 1.6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // ── Status blinker on top ──
+            if (armed) {
+                ctx.fillStyle = blinkOn ? '#ff0000' : '#330000';
+                ctx.beginPath();
+                ctx.arc(0, -radius - 2, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // ── Trigger-radius ring (faint, brighter when blink-on) ──
+            if (armed) {
+                ctx.strokeStyle = blinkOn ? 'rgba(255, 80, 0, 0.45)' : 'rgba(255, 100, 0, 0.18)';
+                ctx.lineWidth = blinkOn ? 1.5 : 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, mine.triggerRadius || 60, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
             ctx.restore();
         }
     }
