@@ -1,6 +1,7 @@
 // Event listener setup — keyboard, mouse, touch, shop interaction, cheats
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
+import { hideHint } from './hint-system.js';
 
 export function setupEventListeners() {
     // Handle window resize
@@ -23,6 +24,18 @@ export function setupEventListeners() {
             this.togglePause();
         }
         // R-key reload was removed — auto-reload kicks in when the clip empties.
+        // R now cycles through owned primary weapons (during gameplay only —
+        // ignored if Shift is held so it doesn't conflict with Shift+R cheats).
+        if (e.code === 'KeyR' && !e.shiftKey && this.game.state === GAME_STATES.PLAYING) {
+            const owned = Array.from(this.player.ownedPrimaries || []);
+            if (owned.length > 1) {
+                const i = owned.indexOf(this.player.activePrimary);
+                const next = owned[(i + 1) % owned.length];
+                this.player.equipPrimary(next);
+                hideHint(); // dismiss the "press R" hint once the player tries it
+                this.events.emit('audio:coin'); // small audio confirmation
+            }
+        }
         // (Shift+R is still a cheat handled in the Shift block below.)
         // Test powerup spawn (for debugging) — pick a uniformly random
         // point inside the visible viewport (with a small margin from

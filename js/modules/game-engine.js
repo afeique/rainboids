@@ -37,6 +37,7 @@ import * as combat from './combat/combat-manager.js';
 import * as lifecycle from './player/lifecycle.js';
 import * as weaponFx from './combat/weapon-effects-renderer.js';
 import * as events from './ui/event-setup.js';
+import { showHint } from './ui/hint-system.js';
 
 export const PLAYER_STATES = {
     NORMAL: 'normal'
@@ -447,6 +448,26 @@ export class GameEngine {
                 this.game.state = GAME_STATES.PLAYING;
                 this.spawnWaveEntities();
             }
+        }));
+
+        // Wave-1 onboarding hints (each shown at most once per browser via
+        // localStorage in hint-system.js). Staggered so they don't overlap.
+        // GameTimer ensures they pause with the game.
+        this._gameTimers.push(new GameTimer(5000, () => {
+            if (this.game.state !== GAME_STATES.PLAYING) return;
+            showHint(
+                'wave1-cycle-weapons',
+                'Press <strong>R</strong> to cycle through your primary weapons.',
+                7000,
+            );
+        }));
+        this._gameTimers.push(new GameTimer(13000, () => {
+            if (this.game.state !== GAME_STATES.PLAYING) return;
+            showHint(
+                'wave1-open-shop',
+                'Open the <strong>shop</strong> any time — pause menu (<strong>ESC</strong>) or the <strong>🛒</strong> button in the top-right.',
+                8000,
+            );
         }));
     }
 

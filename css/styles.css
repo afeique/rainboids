@@ -1671,3 +1671,41 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border: 2px solid #00ccff;
     pointer-events: none;
 } 
+/* ── Contextual hint overlay ─────────────────────────────────────────── */
+/* Driven by js/modules/ui/hint-system.js. One-at-a-time tooltip pinned
+   above the HUD, fades in/out for soft entry/exit. */
+#hint-overlay {
+    position: fixed;
+    bottom: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.88);
+    border: 1px solid rgba(0, 204, 255, 0.7);
+    border-radius: 8px;
+    padding: 14px 26px;
+    color: #ffffff;
+    font-size: 14px;
+    font-family: 'Silkscreen', monospace;
+    line-height: 1.5;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    max-width: min(520px, 80vw);
+    text-align: center;
+    box-shadow: 0 0 24px rgba(0, 204, 255, 0.18);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+#hint-overlay.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-6px);
+}
+#hint-overlay .hint-text strong {
+    color: #00ccff;
+    background: rgba(0, 204, 255, 0.12);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin: 0 2px;
+}

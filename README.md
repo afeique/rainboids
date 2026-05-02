@@ -37,9 +37,10 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 - **Fire / charge power weapon**: Right-click OR Spacebar
 - **Defense skills**: Number keys 1-4 (assign in pause menu's SKILLS tab)
 - **Pause**: Escape
+- **Cycle primary weapon**: R (rotates through owned primaries during gameplay)
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
-- **Shop**: Click 🛒 button in pause menu — buy upgrades for the currently-equipped weapons
+- **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 
 ### Cheat Codes
 - **SHIFT+1-8**: Spawn individual enemy types

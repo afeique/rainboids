@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.0] - 2026-05-02
+
+### Added
+- **R cycles through primary weapons during gameplay.** Rotates through the player's owned primaries (`activePrimary` → next entry in `ownedPrimaries`). No-op when only one weapon is owned. Ignored while Shift is held to avoid colliding with Shift+R cheat patterns.
+- **Contextual hint overlay system** (`js/modules/ui/hint-system.js`). One-at-a-time tooltip pinned above the HUD, fades in/out, auto-dismisses after a configurable duration. Each hint id is shown at most once per browser via `localStorage` (key `rainboids:hints-shown:v1`). Authors can pass `<strong>` to highlight key glyphs in hint text. Exports `showHint(id, text, durationMs)`, `hideHint()`, and `resetHints()` (for dev/testing). New `#hint-overlay` element in `index.html` plus styling in `css/styles.css`.
+- **Two onboarding hints during wave 1** (queued via `GameTimer` so they pause with the game):
+  - At ~5s: "Press **R** to cycle through your primary weapons." Auto-dismisses after 7s, or instantly when the player actually presses R.
+  - At ~13s: "Open the **shop** any time — pause menu (**ESC**) or the **🛒** button in the top-right." Auto-dismisses after 8s.
+
+### Changed
+- README.md `Controls` section updated: documents R-cycle, and corrects the shop entry-point note (top-right HUD button + pause menu, not "pause menu only").
+
+---
+
 ## [5.40.15] - 2026-05-02
 
 ### Changed
