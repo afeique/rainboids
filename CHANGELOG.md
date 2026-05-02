@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.0] - 2026-05-02
+
+### Added
+- **15 new music tracks** picked up by `tools/scripts/generate-playlist.js`: chiplight, chipper-to-meet-you, chipstrike, comet-coma, commander-chipknight, dark-lightning, deep-in-battle, jewel-of-light, lightning-step, lightning-strikes-twice, longia, not-here-nor-there, sip-of-life, target-found, tetrapyramid.
+
+### Removed
+- **10 Karl Casey @ White Bat Audio tracks removed** (aura, beyond-shadows, dangerous, inferno, iridium, legends, midnight, out-for-blood, salvation, world-eater) along with all README credits and the Music Credits section. Net library is now 68 tracks.
+
+---
+
 ## [5.39.11] - 2026-05-02
 
 ### Added

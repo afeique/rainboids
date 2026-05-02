@@ -1,5 +1,5 @@
 // Auto-generated playlist data
-// Generated on 2026-04-26T13:03:28.744Z
+// Generated on 2026-05-02T17:39:31.983Z
 
 export const PLAYLIST_DATA = [
   {
@@ -28,11 +28,6 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/aura.mp3",
-    "name": "Aura",
-    "artist": "Karl Casey"
-  },
-  {
     "path": "music/bat-caves-icy-glades.mp3",
     "name": "bat caves, icy glades",
     "artist": "afeique"
@@ -41,11 +36,6 @@ export const PLAYLIST_DATA = [
     "path": "music/between-four-seasons.mp3",
     "name": "between four seasons",
     "artist": "afeique"
-  },
-  {
-    "path": "music/beyond-shadows.mp3",
-    "name": "Beyond the Shadows",
-    "artist": "Karl Casey"
   },
   {
     "path": "music/blood-ties.mp3",
@@ -68,8 +58,33 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/chiplight.mp3",
+    "name": "Chiplight",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/chipper-to-meet-you.mp3",
+    "name": "Chipper To Meet You",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/chipstrike.mp3",
+    "name": "Chipstrike",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/comet-coma.mp3",
+    "name": "Comet Coma",
+    "artist": "afeique"
+  },
+  {
     "path": "music/command-console.mp3",
     "name": "command console",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/commander-chipknight.mp3",
+    "name": "Commander Chipknight",
     "artist": "afeique"
   },
   {
@@ -83,9 +98,9 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/dangerous.mp3",
-    "name": "Dangerous",
-    "artist": "Karl Casey"
+    "path": "music/dark-lightning.mp3",
+    "name": "Dark Lightning",
+    "artist": "afeique"
   },
   {
     "path": "music/darkest-knight.mp3",
@@ -100,6 +115,11 @@ export const PLAYLIST_DATA = [
   {
     "path": "music/death-star-valley.mp3",
     "name": "death star valley",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/deep-in-battle.mp3",
+    "name": "Deep In Battle",
     "artist": "afeique"
   },
   {
@@ -163,19 +183,19 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/inferno.mp3",
-    "name": "Inferno",
-    "artist": "Karl Casey"
+    "path": "music/jewel-of-light.mp3",
+    "name": "Jewel of Light",
+    "artist": "afeique"
   },
   {
-    "path": "music/iridium.mp3",
-    "name": "Iridium",
-    "artist": "Karl Casey"
+    "path": "music/lightning-step.mp3",
+    "name": "Lightning Step",
+    "artist": "afeique"
   },
   {
-    "path": "music/legends.mp3",
-    "name": "Legend",
-    "artist": "Karl Casey"
+    "path": "music/lightning-strikes-twice.mp3",
+    "name": "Lightning Strikes Twice",
+    "artist": "afeique"
   },
   {
     "path": "music/lightsabre-raptor.mp3",
@@ -185,6 +205,11 @@ export const PLAYLIST_DATA = [
   {
     "path": "music/lightspeed-eye.mp3",
     "name": "lightspeed eye",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/longia.mp3",
+    "name": "Longia",
     "artist": "afeique"
   },
   {
@@ -198,11 +223,6 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/midnight.mp3",
-    "name": "Midnight",
-    "artist": "Karl Casey"
-  },
-  {
     "path": "music/never-enough.mp3",
     "name": "never enough",
     "artist": "afeique"
@@ -213,9 +233,9 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/out-for-blood.mp3",
-    "name": "Out for Blood",
-    "artist": "Karl Casey"
+    "path": "music/not-here-nor-there.mp3",
+    "name": "Not Here Nor There",
+    "artist": "afeique"
   },
   {
     "path": "music/over-the-horizon.mp3",
@@ -238,13 +258,13 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/salvation.mp3",
-    "name": "Salvation",
-    "artist": "Karl Casey"
-  },
-  {
     "path": "music/sigma-tau.mp3",
     "name": "sigma tau",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/sip-of-life.mp3",
+    "name": "Sip of Life",
     "artist": "afeique"
   },
   {
@@ -273,8 +293,18 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/target-found.mp3",
+    "name": "Target Found",
+    "artist": "afeique"
+  },
+  {
     "path": "music/tension-in-resonance.mp3",
     "name": "tension in resonance",
+    "artist": "afeique"
+  },
+  {
+    "path": "music/tetrapyramid.mp3",
+    "name": "Tetrapyramid",
     "artist": "afeique"
   },
   {
@@ -301,11 +331,6 @@ export const PLAYLIST_DATA = [
     "path": "music/voices-in-my-head.mp3",
     "name": "voices in my head",
     "artist": "afeique"
-  },
-  {
-    "path": "music/world-eater.mp3",
-    "name": "World Eater",
-    "artist": "Karl Casey"
   },
   {
     "path": "music/zeta-nine.mp3",

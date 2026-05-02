@@ -21,7 +21,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **100 hand-designed waves** across 5 acts, plus procedural scaling beyond wave 100
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
-- **63 background music tracks** by Karl Casey @ White Bat Audio
+- **68 background music tracks** spanning chiptune, synthwave, and electronic
 - **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 26 WAVs; granular hit sounds per enemy bullet pattern and per player primary weapon
 - **Modular ES6 architecture** — domain managers, extracted renderers, state machine, event bus, and frame-counted timers, built with Vite
 
@@ -232,7 +232,7 @@ Enemy health and damage scale with wave number. Enemy levels increase with wave 
 - Powerup indicators with remaining time, stack count, and name
 
 ### Audio
-- **58 background music tracks** by Karl Casey @ White Bat Audio
+- **68 background music tracks** spanning chiptune, synthwave, and electronic
 - **Curated futuristic SFX library** — 26 hand-tuned multi-layer WAVs (~900 KB), pre-rendered offline from stacked SFXR voices (sub-bass body + mid carrier + HPF brightness layer) and decoded once via WebAudio
 - Built-in music player with playlist support
 - Individual sound effect toggles and volume control
@@ -390,16 +390,6 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 
 ---
 
-## Music Credits
-
-Royalty-free background music graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).
-
-Support White Bat Audio:
-- [Bandcamp](https://karlcasey.bandcamp.com/)
-- [YouTube](https://www.youtube.com/@WhiteBatAudio)
-
----
-
 ## Changelog
 
 The full version history is maintained in [CHANGELOG.md](CHANGELOG.md).
@@ -419,5 +409,3 @@ For a quick summary of recent changes, see the latest entries in [CHANGELOG.md](
 ## License
 
 This project builds upon the original [Monolithic Rainboids](https://github.com/afeique/rainboids-monolithic) with extensive enhancements and modularization.
-
-Music provided by Karl Casey @ White Bat Audio under royalty-free license.
