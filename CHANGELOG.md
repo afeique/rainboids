@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.16] - 2026-05-02
+
+### Changed
+- **Asteroids hit harder by the early-wave easing pass — now 4–7 / 2–4 / 1–2 HP** (was 5–9 / 2–5 / 1–3). Big asteroids drop from 3.5–4.5s TTK to 2.0–3.5s with the starter Pulse Cannon. Small fragments now die in one or two hits, keeping wave clears snappy.
+- **Enemy HP dialed back another ~15%** so players can build momentum and reach later waves faster: Hunter 6→5, Wasp 5→4, Weaver 6→5, Stalker 7→6, Drifter 8→7, Bomber 9→8, Sentinel 10→8, Guardian 12→10, Prowler 13→11, Titan 22→18. Trash mobs now die in 2.0–2.5s with starter weapon; mid-tier in 3.5–4.0s; Titan in 9s.
+
+---
+
 ## [5.39.15] - 2026-05-02
 
 ### Changed

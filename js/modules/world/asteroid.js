@@ -88,13 +88,13 @@ export class Asteroid {
         const sizeRef = this.baseRadius || this.radius;
         
         // Health scales with size — fragments are weaker so waves clear faster.
-        // Roughly halved from previous values so early waves don't slog.
+        // Tuned aggressively low so early waves are about momentum, not grind.
         if (sizeRef >= 40) {
-            baseHealth = Math.floor(5 + (sizeRef - 40) / 20 * 4);  // 5-9   (was 10-18)
+            baseHealth = Math.floor(4 + (sizeRef - 40) / 20 * 3);  // 4-7  (was 5-9)
         } else if (sizeRef >= 20) {
-            baseHealth = Math.floor(2 + (sizeRef - 20) / 20 * 3);  // 2-5   (was 4-10)
+            baseHealth = Math.floor(2 + (sizeRef - 20) / 20 * 2);  // 2-4  (was 2-5)
         } else {
-            baseHealth = Math.floor(1 + (sizeRef - 5) / 15 * 2);   // 1-3   (was 2-5)
+            baseHealth = Math.floor(1 + (sizeRef - 5) / 15 * 1);   // 1-2  (was 1-3)
         }
 
         // Level scaling: +25% per level beyond 1
