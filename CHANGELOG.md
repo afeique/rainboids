@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.4] - 2026-05-02
+
+### Changed
+- **Music player layout: shuffle + random grouped on the left, prev/play/next truly centered, repeat on the right.** Wrapped each side in a `.music-side-controls` div and switched `#music-controls` from `flex space-between` to `grid 1fr auto 1fr` so the center column stays centered regardless of how many buttons live in the side groups. Removed dead `.music-control-btn.left/.right` rules.
+
+---
+
 ## [5.40.3] - 2026-05-02
 
 ### Fixed

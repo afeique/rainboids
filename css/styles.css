@@ -1139,11 +1139,24 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 }
 
 #music-controls {
-    display: flex;
-    justify-content: space-between;
+    /* 3-column grid: side groups expand into the side fr units while the
+       center column stays auto-width — this guarantees the play/prev/next
+       cluster is centered regardless of how many buttons each side has. */
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     margin-top: 20px;
+    gap: 15px;
 }
+
+.music-side-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.music-side-left  { justify-self: start; }
+.music-side-right { justify-self: end; }
 
 .music-main-controls {
     display: flex;
@@ -1181,14 +1194,6 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 .music-control-btn.active {
     background: rgba(0, 255, 0, 0.2);
     border-color: #00ff00;
-}
-
-.music-control-btn.left {
-    margin-right: auto;
-}
-
-.music-control-btn.right {
-    margin-left: auto;
 }
 
 /* Playlist Styles */
