@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.12] - 2026-05-02
+
+### Changed
+- **Powerup lifetime tuned to 25s** (from the 8s testing value). Anchored to the 30s effect duration of most powerups — pickup window slightly shorter than the buff window so late pickups never waste effect time. Blink window narrowed to the last ~35% of life (~8.75s), enough warning to react without dominating the powerup's on-screen presence.
+
+---
+
 ## [5.40.0] - 2026-05-02
 
 ### Added

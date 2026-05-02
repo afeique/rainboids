@@ -278,13 +278,15 @@ export class Powerup {
         
         this.radius = 18; // Slightly larger for better visibility
         this.active = true;
-        // TESTING: drastically shortened lifetime to verify blink behavior.
-        // Restore to 90 * LOGIC_HZ for production.
-        this.life = 8 * GAME_CONFIG.LOGIC_HZ;
+        // 25s lifetime — slightly shorter than the 30s effect duration of
+        // most powerups, long enough to span a typical engagement, short
+        // enough that ignored pickups actually expire (so the blink+burst
+        // feedback is meaningful rather than theoretical).
+        this.life = 25 * GAME_CONFIG.LOGIC_HZ;
         this.maxLife = this.life;
-        // Blink across the last 75% of the lifetime so the wind-down is
-        // unmistakably visible during testing.
-        this.fadeDuration = this.life * 0.75;
+        // Blink across the last ~35% of the lifetime — visible warning
+        // window without dominating the powerup's on-screen life.
+        this.fadeDuration = this.life * 0.35;
         this.pulsePhase = random(0, Math.PI * 2);
         
         // Floating movement (scaled for tick rate)
