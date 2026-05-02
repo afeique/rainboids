@@ -503,16 +503,19 @@ export function layMine(config) {
     const rapidDeployStacks = this.getPowerupStacks('RAPID_DEPLOY');
     const reduction = Math.pow(0.75, rapidDeployStacks);
     this.powerCooldown = Math.max(1500, config.cooldown * reduction);
+    // Stash the max so the HUD ring can display fill progress.
+    this.powerCooldownMax = this.powerCooldown;
 }
 
 export function fireNova(config) {
     const shockwaveStacks = this.getPowerupStacks('SHOCKWAVE');
     const resonanceStacks = this.getPowerupStacks('RESONANCE');
 
-    // Reduce cooldown for resonance
-    if (resonanceStacks > 0) {
-        this.powerCooldown = Math.max(2000, config.cooldown - resonanceStacks * 1500);
-    }
+    // Always set the cooldown — RESONANCE just shortens it. Previously
+    // the cooldown was only set when resonanceStacks > 0, leaving Nova
+    // spammable without the upgrade.
+    this.powerCooldown = Math.max(2000, config.cooldown - resonanceStacks * 1500);
+    this.powerCooldownMax = this.powerCooldown;
 
     this.novaRings.push({
         x: this.x,
@@ -548,9 +551,9 @@ export function fireLightning(config) {
     const conductorStacks = this.getPowerupStacks('CONDUCTOR');
     const teslaCoilStacks = this.getPowerupStacks('TESLA_COIL');
 
-    if (teslaCoilStacks > 0) {
-        this.powerCooldown = Math.max(2000, config.cooldown - teslaCoilStacks * 1500);
-    }
+    // Always set the cooldown — TESLA_COIL just shortens it.
+    this.powerCooldown = Math.max(2000, config.cooldown - teslaCoilStacks * 1500);
+    this.powerCooldownMax = this.powerCooldown;
 
     this.lightningChains.push({
         originX: this.x,
@@ -593,9 +596,9 @@ export function fireMissiles(bulletPool, config) {
     }
 
     const quickReloadStacks = this.getPowerupStacks('QUICK_RELOAD');
-    if (quickReloadStacks > 0) {
-        this.powerCooldown = Math.max(3000, config.cooldown - quickReloadStacks * 2000);
-    }
+    // Always set the cooldown — QUICK_RELOAD just shortens it.
+    this.powerCooldown = Math.max(3000, config.cooldown - quickReloadStacks * 2000);
+    this.powerCooldownMax = this.powerCooldown;
 }
 
 // ── Charge pause / resume ──────────────────────────────────────────────────

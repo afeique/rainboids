@@ -660,20 +660,29 @@ export function checkMineCollisions() {
         }
         if (!triggered) continue;
 
-        // Damage every enemy inside the blast ring with linear falloff.
+        // Damage + knock back every enemy inside the blast ring with
+        // linear falloff. Knockback magnitude inverses with distance so
+        // close-range enemies get really blown back.
+        const KNOCK_BASE = 12; // stronger than asteroids — ships are lighter
         for (const enemy of this.enemyPool.activeObjects) {
             if (!enemy.active) continue;
             const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
-            if (dist < blastR) {
-                const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
-                this.damageEnemy(enemy, dmg);
+            if (dist >= blastR) continue;
+            const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
+            this.damageEnemy(enemy, dmg);
+            if (dist > 0.001 && enemy.vel) {
+                const kx = (enemy.x - mine.x) / dist;
+                const ky = (enemy.y - mine.y) / dist;
+                const force = KNOCK_BASE * (1 - dist / blastR);
+                enemy.vel.x += kx * force;
+                enemy.vel.y += ky * force;
             }
         }
-        // Damage asteroids too — same falloff so the explosion feels real.
-        // We don't fully replicate the bullet death path (fragmentation,
-        // drop spawn, etc.) — too invasive — but we do kill outright on
-        // lethal damage with a death flash, and apply hit-flash + outward
-        // knockback so the mine clearly affected them.
+        // Damage + knock asteroids too — same falloff so the explosion
+        // physically pushes them. We don't replicate the full bullet
+        // death path (fragmentation, drops) but do apply hit-flash,
+        // strong outward velocity, and a death flash on lethal damage.
+        const AST_KNOCK_BASE = 6;
         for (const ast of this.asteroidPool.activeObjects) {
             if (!ast.active) continue;
             const dist = Math.hypot(ast.x - mine.x, ast.y - mine.y);
@@ -681,12 +690,12 @@ export function checkMineCollisions() {
             const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
             ast.health = Math.max(0, (ast.health || 0) - dmg);
             ast._hitFlashTimer = 4;
-            // Knockback away from the mine
             if (dist > 0.001) {
                 const kx = (ast.x - mine.x) / dist;
                 const ky = (ast.y - mine.y) / dist;
-                ast.vel.x += kx * 1.2;
-                ast.vel.y += ky * 1.2;
+                const force = AST_KNOCK_BASE * (1 - dist / blastR);
+                ast.vel.x += kx * force;
+                ast.vel.y += ky * force;
             }
             if (ast.health <= 0.001) {
                 ast._deathFlash = 6;
@@ -695,19 +704,71 @@ export function checkMineCollisions() {
             }
         }
 
-        // Explosion VFX — flash + ring + shrapnel + lingering embers
-        // (matches the powerup-expiry burst flavor for consistency).
+        // Fantastic explosion VFX — modeled on createDebris (asteroid
+        // death burst): flash core, three staggered colored rings,
+        // dense shrapnel fan, classic small particles, lingering embers,
+        // plus a delayed secondary burst that mimics a fuel tank
+        // cooking off after the initial detonation.
+        const ORANGE = '#ff6600';
+        const ORANGE_BRIGHT = '#ffcc66';
+        const ORANGE_DIM = '#cc4400';
         if (this.particlePool) {
-            this.particlePool.get(mine.x, mine.y, 'explosionFlash', blastR * 0.7);
-            this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR, '#ff6600');
-            for (let i = 0; i < 14; i++) {
-                const ang = (i / 14) * Math.PI * 2;
-                this.particlePool.get(mine.x, mine.y, 'explosionShrapnel', ang, 5, '#ff8800');
+            // 1. Bright core flash
+            this.particlePool.get(mine.x, mine.y, 'explosionFlash', blastR * 1.2);
+            // 2. Three staggered colored rings — wavefronts
+            this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR, ORANGE);
+            setTimeout(() => {
+                if (this.particlePool) this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR * 1.3, ORANGE_DIM);
+            }, 70);
+            setTimeout(() => {
+                if (this.particlePool) this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR * 0.85, ORANGE_BRIGHT);
+            }, 150);
+            // 3. Dense directional shrapnel fan
+            const shrapnelCount = 22;
+            for (let i = 0; i < shrapnelCount; i++) {
+                const ang = (i / shrapnelCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+                const speed = 5 + Math.random() * 6;
+                const color = i % 3 === 0 ? ORANGE_BRIGHT : i % 3 === 1 ? ORANGE : ORANGE_DIM;
+                this.particlePool.get(mine.x, mine.y, 'explosionShrapnel', ang, speed, color);
             }
-            for (let i = 0; i < 6; i++) {
-                this.particlePool.get(mine.x, mine.y, 'explosionEmber', '#ffaa44');
+            // 4. Classic small particles for density
+            for (let i = 0; i < 18; i++) {
+                const p = this.particlePool.get(mine.x, mine.y, 'explosion');
+                if (p) {
+                    p.color = i < 4 ? '#ffffff' : i < 10 ? ORANGE : ORANGE_BRIGHT;
+                    const a = Math.random() * Math.PI * 2;
+                    const s = 2 + Math.random() * 6;
+                    p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
+                    p.radius = 1.5 + Math.random() * 3;
+                }
             }
+            // 5. Lingering embers
+            for (let i = 0; i < 12; i++) {
+                this.particlePool.get(mine.x, mine.y, 'explosionEmber', i % 2 ? ORANGE : ORANGE_BRIGHT);
+            }
+            // 6. Delayed secondary cookoff
+            setTimeout(() => {
+                if (!this.particlePool) return;
+                for (let i = 0; i < 6; i++) {
+                    const ox = mine.x + (Math.random() - 0.5) * 30;
+                    const oy = mine.y + (Math.random() - 0.5) * 30;
+                    this.particlePool.get(ox, oy, 'explosionEmber', ORANGE);
+                }
+            }, 120);
         }
+
+        // Game-feel: hitstop + camera kick + screen flash for impact.
+        if (typeof this.triggerHitstop === 'function') this.triggerHitstop(4);
+        if (typeof this.triggerScreenFlash === 'function') this.triggerScreenFlash(0.06, 4);
+        if (typeof this.triggerCameraKick === 'function' && this.player) {
+            const kdx = this.player.x - mine.x;
+            const kdy = this.player.y - mine.y;
+            this.triggerCameraKick(kdx, kdy, 9);
+        }
+        if (typeof this.triggerScreenShake === 'function') {
+            this.triggerScreenShake(8, 4);
+        }
+        if (this.events) this.events.emit('audio:explosion');
 
         mine.active = false;
     }

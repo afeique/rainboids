@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.43.0] - 2026-05-02
+
+### Fixed
+- **Nova / Lightning / Missile power weapons had no cooldown without their per-weapon upgrade.** `fireNova` / `fireLightning` / `fireMissiles` only set `powerCooldown` when their respective upgrade (`RESONANCE` / `TESLA_COIL` / `QUICK_RELOAD`) had at least 1 stack — without the upgrade, the weapon was spammable. Now each weapon always sets its base cooldown; the upgrade just shortens it.
+
+### Added
+- **Universal power-weapon readiness ring on the player ship.** The cooldown timer (formerly only drawn for `CHARGE_SHOT` while charging) now fires for every power weapon. For cooldown-based weapons (Mine Layer, Nova, Lightning, Missiles) the ring fills as `1 - powerCooldown/powerCooldownMax`, then pulses fully-charged white/cyan when ready to fire — same visual language across all power weapons. Each weapon's fire path now stashes `this.powerCooldownMax` so the renderer can draw progress.
+- **Mines now produce a fantastic explosion**: bright core flash (1.2× blast radius), three staggered colored rings (orange / dim / bright wavefronts), 22 directional shrapnel streaks, 18 dense classic particles, 12 lingering embers, and a delayed cookoff burst at +120ms. Plus 4-frame hitstop, screen flash, camera kick, screen shake, and an explosion audio cue. Modeled on the asteroid-death debris recipe in `combat-manager.createDebris`.
+- **Mines push enemies and asteroids around with momentum**: outward velocity push scales linearly with proximity to the mine. `KNOCK_BASE = 12` for enemies (lighter, fly farther), `KNOCK_BASE = 6` for asteroids (heavier). Close-range targets get nearly the full impulse; targets at the edge of the blast barely move.
+
+---
+
 ## [5.42.0] - 2026-05-02
 
 ### Fixed

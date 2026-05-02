@@ -496,12 +496,37 @@ export function drawLevelUpEffects(ctx) {
 // ── Cooldown timer ────────────────────────────────────────────────────────
 
 export function drawCooldownTimer(ctx) {
-    if (!this.isCharging) return;
+    // Universal power-weapon readiness ring — used for both:
+    //   • Charge-based weapons (CHARGE_SHOT) — `charge` from chargeLevel
+    //     while the player is holding right-click / Space.
+    //   • Cooldown-based weapons (Mine Layer, Nova, Lightning, Missiles)
+    //     — `charge` is `1 - powerCooldown/powerCooldownMax`. The ring
+    //     fills as the cooldown elapses, then pulses fully-charged when
+    //     the weapon is ready to fire again.
+    const cfg = this.getActivePowerConfig?.();
+    const isChargeBased = !!(cfg && cfg.isChargeBased);
+
+    let charge = 0;
+    let isFullyCharged = false;
+    let visible = false;
+
+    if (isChargeBased) {
+        if (!this.isCharging) return;
+        charge = this.chargeLevel;
+        isFullyCharged = !!this.isFullyCharged;
+        visible = true;
+    } else {
+        const max = this.powerCooldownMax || (cfg && cfg.cooldown) || 1;
+        const remaining = Math.max(0, this.powerCooldown || 0);
+        charge = 1 - Math.min(1, remaining / max);
+        isFullyCharged = remaining <= 0;
+        visible = true; // always show readiness for cooldown-based powers
+    }
+    if (!visible) return;
 
     const tipX = 0;
     const tipY = -this.radius - 14;
     const timerRadius = 8;
-    const charge = this.chargeLevel; // 0-1
 
     ctx.save();
 
@@ -513,12 +538,14 @@ export function drawCooldownTimer(ctx) {
     ctx.stroke();
 
     // Charge arc — blue to cyan to white as it fills
-    if (charge > 0) {
+    if (charge > 0 || isFullyCharged) {
         const startAngle = -Math.PI / 2;
-        const endAngle = startAngle + (charge * Math.PI * 2);
+        const endAngle = isFullyCharged
+            ? startAngle + Math.PI * 2 // full ring when ready
+            : startAngle + (charge * Math.PI * 2);
 
-        if (this.isFullyCharged) {
-            // Pulsing white/cyan when fully charged
+        if (isFullyCharged) {
+            // Pulsing white/cyan when fully charged / ready
             const pulse = 0.7 + Math.sin(Date.now() * 0.01) * 0.3;
             ctx.strokeStyle = `rgba(200, 255, 255, ${pulse})`;
             ctx.lineWidth = 4;
@@ -536,7 +563,7 @@ export function drawCooldownTimer(ctx) {
         ctx.stroke();
 
         // Center dot when fully charged
-        if (this.isFullyCharged) {
+        if (isFullyCharged) {
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
             ctx.arc(tipX, tipY, 3, 0, Math.PI * 2);
