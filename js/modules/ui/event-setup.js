@@ -24,31 +24,30 @@ export function setupEventListeners() {
         }
         // R-key reload was removed — auto-reload kicks in when the clip empties.
         // (Shift+R is still a cheat handled in the Shift block below.)
-        // Test powerup spawn (for debugging) — pick a random screen edge
-        // and place the powerup well inside it so it's clearly visible
-        // (the powerup's glow halo extends far beyond its 18px radius,
-        // and HUD elements occupy the outer ~80px on each edge). The
-        // perpendicular inset (toward center) is therefore generous;
-        // along the chosen edge we stay further from the corners so
-        // powerups don't pile up there. Convert screen → world via camera.
+        // Test powerup spawn (for debugging) — pick a uniformly random
+        // point inside the visible viewport (with a small margin from
+        // the very edges so the powerup is fully visible), but reject
+        // any point too close to the player so they actually have to
+        // fly to it. Rejection sampling — simple, no edge logic.
         if (e.code === 'KeyP' && this.game.state === GAME_STATES.PLAYING) {
-            const perpInset = random(140, 220); // distance from the chosen edge into the screen
-            const edgePad = 200;                // distance from the corners along the chosen edge
-            const edge = Math.floor(random(0, 4)); // 0=top 1=right 2=bottom 3=left
+            const MARGIN = 80;       // keep the spawn at least this far from the screen edges
+            const MIN_DIST = 250;    // and at least this far from the player
+
+            const playerScreenX = this.player.x - this.camera.x;
+            const playerScreenY = this.player.y - this.camera.y;
+
             let screenX, screenY;
-            if (edge === 0) {           // top edge
-                screenX = random(edgePad, this.width - edgePad);
-                screenY = perpInset;
-            } else if (edge === 1) {    // right edge
-                screenX = this.width - perpInset;
-                screenY = random(edgePad, this.height - edgePad);
-            } else if (edge === 2) {    // bottom edge
-                screenX = random(edgePad, this.width - edgePad);
-                screenY = this.height - perpInset;
-            } else {                    // left edge
-                screenX = perpInset;
-                screenY = random(edgePad, this.height - edgePad);
+            for (let attempt = 0; attempt < 20; attempt++) {
+                screenX = random(MARGIN, this.width - MARGIN);
+                screenY = random(MARGIN, this.height - MARGIN);
+                const dx = screenX - playerScreenX;
+                const dy = screenY - playerScreenY;
+                if (Math.hypot(dx, dy) >= MIN_DIST) break; // good candidate
+                // else: too close to player, try again
             }
+            // If 20 attempts all failed (tiny viewport), fall through with
+            // the last sample — still on-screen, just less ideal.
+
             this.dropPowerup(
                 screenX + this.camera.x,
                 screenY + this.camera.y,

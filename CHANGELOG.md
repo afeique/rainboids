@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.13] - 2026-05-02
+
+### Changed
+- **KeyP debug powerup cheat: rewrote spawn logic to be uniform-random within the viewport** with two simple constraints — at least `MARGIN=80px` from the screen edges (so the powerup is fully visible) and at least `MIN_DIST=250px` from the player (so they actually have to fly to it). Rejection sampling: tries up to 20 random points and falls through with the last one if none satisfies the player-distance constraint. Replaces the previous edge-based selection logic.
+
+---
+
 ## [5.40.12] - 2026-05-02
 
 ### Changed
