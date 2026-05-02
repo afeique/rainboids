@@ -623,10 +623,12 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     // Align the Primary square's LEFT EDGE with the coin icon's LEFT EDGE
     // — visually anchors the weapon row to the gold display directly above.
     const groupX = coinIconX;
-    // Vertical gap from coin icon → squares matches the icon-to-icon
-    // spacing of the column above (level → coin = 40px). The squares now
-    // breathe a little instead of crowding the coin number.
-    const groupY = coinsY + 40;
+    // Match the visual edge-to-edge gap of the column above. The shield
+    // icon (level) and coin icon are both 30px tall and their centers
+    // sit 40px apart, so the gap between shield-bottom and coin-top is
+    // 40 - 15 - 15 = 10px. We use the same 10px gap from coin-bottom to
+    // square-top: groupY = (coinsY + coinIconSize/2) + 10.
+    const groupY = coinsY + coinIconSize / 2 + 10;
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};

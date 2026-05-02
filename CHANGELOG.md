@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.7] - 2026-05-02
+
+### Changed
+- **Weapon squares' vertical gap to the coin icon now matches the shield→coin gap exactly.** The 30px shield and 30px coin icons sit 40px center-to-center, giving a 10px edge-to-edge gap. The squares previously sat 40px below the coin *center* (25px edge-to-edge gap) — visually inconsistent with the column above. Now `groupY = coinsY + coinIconSize/2 + 10` so all three vertical gaps (shield↔coin, coin↔squares) are an even 10px.
+
+---
+
 ## [5.41.6] - 2026-05-02
 
 ### Changed
