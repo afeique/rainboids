@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.12] - 2026-05-02
+
+### Changed
+- **KeyP debug powerup cheat: bumped inset from 40–80px to 140–220px** so powerups land solidly inside the play area instead of sliding behind HUD overlays / clipping at the visible boundary. The powerup's glow halo extends well beyond its 18px center radius, so a near-edge spawn looked off-screen even when technically inside. Also added a 200px corner padding along the chosen edge so powerups don't pile up in screen corners.
+
+---
+
 ## [5.40.11] - 2026-05-02
 
 ### Changed

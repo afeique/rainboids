@@ -25,25 +25,29 @@ export function setupEventListeners() {
         // R-key reload was removed — auto-reload kicks in when the clip empties.
         // (Shift+R is still a cheat handled in the Shift block below.)
         // Test powerup spawn (for debugging) — pick a random screen edge
-        // and place the powerup just inside it (~40-80px inset) so it's
-        // clearly visible but still "incoming from the edge". Convert
-        // screen coords to world via the camera offset.
+        // and place the powerup well inside it so it's clearly visible
+        // (the powerup's glow halo extends far beyond its 18px radius,
+        // and HUD elements occupy the outer ~80px on each edge). The
+        // perpendicular inset (toward center) is therefore generous;
+        // along the chosen edge we stay further from the corners so
+        // powerups don't pile up there. Convert screen → world via camera.
         if (e.code === 'KeyP' && this.game.state === GAME_STATES.PLAYING) {
-            const inset = random(40, 80); // distance from the chosen edge
+            const perpInset = random(140, 220); // distance from the chosen edge into the screen
+            const edgePad = 200;                // distance from the corners along the chosen edge
             const edge = Math.floor(random(0, 4)); // 0=top 1=right 2=bottom 3=left
             let screenX, screenY;
             if (edge === 0) {           // top edge
-                screenX = random(inset, this.width - inset);
-                screenY = inset;
+                screenX = random(edgePad, this.width - edgePad);
+                screenY = perpInset;
             } else if (edge === 1) {    // right edge
-                screenX = this.width - inset;
-                screenY = random(inset, this.height - inset);
+                screenX = this.width - perpInset;
+                screenY = random(edgePad, this.height - edgePad);
             } else if (edge === 2) {    // bottom edge
-                screenX = random(inset, this.width - inset);
-                screenY = this.height - inset;
+                screenX = random(edgePad, this.width - edgePad);
+                screenY = this.height - perpInset;
             } else {                    // left edge
-                screenX = inset;
-                screenY = random(inset, this.height - inset);
+                screenX = perpInset;
+                screenY = random(edgePad, this.height - edgePad);
             }
             this.dropPowerup(
                 screenX + this.camera.x,
