@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.14] - 2026-05-02
+
+### Changed
+- **Normalized ID3 title tags across all 68 music tracks to consistent Title Case.** Mix of all-lowercase and Title Case titles caused inconsistent display in the in-game playlist. Applies AP-style rules: capitalize first/last word and all major words; small English words (a/the/and/or/in/of/to/etc.) and Romance-language particles (de/la/el/du/le/etc.) stay lowercase mid-title. Apostrophes preserved (`don't` → `Don't`). Playlist regenerated from updated tags. Notable fixes: leading-space stripped from `" Solace de violencia"` → `Solace de Violencia`, `Not Here Nor There` → `Not Here nor There`.
+
+### Added
+- `tools/scripts/normalize-id3-tags.js` — idempotent script that reads, Title-Cases, and rewrites ID3 title tags. Re-run any time new tracks land with sloppy casing.
+
+---
+
 ## [5.39.13] - 2026-05-02
 
 ### Changed

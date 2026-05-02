@@ -1,15 +1,10 @@
 // Auto-generated playlist data
-// Generated on 2026-05-02T17:39:31.983Z
+// Generated on 2026-05-02T17:54:11.549Z
 
 export const PLAYLIST_DATA = [
   {
-    "path": "music/solacia.mp3",
-    "name": " Solace de violencia",
-    "artist": "afeique"
-  },
-  {
     "path": "music/acrylic-formaledehyde.mp3",
-    "name": "acrylic formaledehyde",
+    "name": "Acrylic Formaledehyde",
     "artist": "afeique"
   },
   {
@@ -19,42 +14,42 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/angels-fall.mp3",
-    "name": "angel's fall",
+    "name": "Angel's Fall",
     "artist": "afeique"
   },
   {
     "path": "music/arabian-nights.mp3",
-    "name": "arabian nights",
+    "name": "Arabian Nights",
     "artist": "afeique"
   },
   {
     "path": "music/bat-caves-icy-glades.mp3",
-    "name": "bat caves, icy glades",
+    "name": "Bat Caves, Icy Glades",
     "artist": "afeique"
   },
   {
     "path": "music/between-four-seasons.mp3",
-    "name": "between four seasons",
+    "name": "Between Four Seasons",
     "artist": "afeique"
   },
   {
     "path": "music/blood-ties.mp3",
-    "name": "blood ties",
+    "name": "Blood Ties",
     "artist": "afeique"
   },
   {
     "path": "music/car-crusher.mp3",
-    "name": "car crusher",
+    "name": "Car Crusher",
     "artist": "afeique"
   },
   {
     "path": "music/caustic-acrylic-cyanide.mp3",
-    "name": "caustic acrylic cyanide",
+    "name": "Caustic Acrylic Cyanide",
     "artist": "afeique"
   },
   {
     "path": "music/china-doll.mp3",
-    "name": "china doll",
+    "name": "China Doll",
     "artist": "afeique"
   },
   {
@@ -64,7 +59,7 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/chipper-to-meet-you.mp3",
-    "name": "Chipper To Meet You",
+    "name": "Chipper to Meet You",
     "artist": "afeique"
   },
   {
@@ -79,7 +74,7 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/command-console.mp3",
-    "name": "command console",
+    "name": "Command Console",
     "artist": "afeique"
   },
   {
@@ -89,12 +84,12 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/cosmic-wander.mp3",
-    "name": "cosmic wander",
+    "name": "Cosmic Wander",
     "artist": "afeique"
   },
   {
     "path": "music/cyber-fox.mp3",
-    "name": "cyber fox",
+    "name": "Cyber Fox",
     "artist": "afeique"
   },
   {
@@ -104,47 +99,47 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/darkest-knight.mp3",
-    "name": "darkest knight",
+    "name": "Darkest Knight",
     "artist": "afeique"
   },
   {
     "path": "music/darkness-in-disguise.mp3",
-    "name": "darkness in disguise",
+    "name": "Darkness in Disguise",
     "artist": "afeique"
   },
   {
     "path": "music/death-star-valley.mp3",
-    "name": "death star valley",
+    "name": "Death Star Valley",
     "artist": "afeique"
   },
   {
     "path": "music/deep-in-battle.mp3",
-    "name": "Deep In Battle",
+    "name": "Deep in Battle",
     "artist": "afeique"
   },
   {
     "path": "music/desert-storm-rose.mp3",
-    "name": "desert storm rose",
+    "name": "Desert Storm Rose",
     "artist": "afeique"
   },
   {
     "path": "music/devils-dont-cry.mp3",
-    "name": "devils don't cry",
+    "name": "Devils Don't Cry",
     "artist": "afeique"
   },
   {
     "path": "music/do-you-wonder.mp3",
-    "name": "do you wonder",
+    "name": "Do You Wonder",
     "artist": "afeique"
   },
   {
     "path": "music/eastern-sinusoidia.mp3",
-    "name": "eastern sinusoidia",
+    "name": "Eastern Sinusoidia",
     "artist": "afeique"
   },
   {
     "path": "music/electrachu.mp3",
-    "name": "electrachu",
+    "name": "Electrachu",
     "artist": "afeique"
   },
   {
@@ -154,32 +149,32 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/electrobit.mp3",
-    "name": "electrobit",
+    "name": "Electrobit",
     "artist": "afeique"
   },
   {
     "path": "music/epsilon-vector.mp3",
-    "name": "epsilon vector",
+    "name": "Epsilon Vector",
     "artist": "afeique"
   },
   {
     "path": "music/etude-of-madness.mp3",
-    "name": "etude of madness",
+    "name": "Etude of Madness",
     "artist": "afeique"
   },
   {
     "path": "music/exodus-de-novo.mp3",
-    "name": "exodus de novo",
+    "name": "Exodus de Novo",
     "artist": "afeique"
   },
   {
     "path": "music/gonna-catch-ya.mp3",
-    "name": "gonna catch ya",
+    "name": "Gonna Catch Ya",
     "artist": "afeique"
   },
   {
     "path": "music/incandescence.mp3",
-    "name": "incandescence",
+    "name": "Incandescence",
     "artist": "afeique"
   },
   {
@@ -199,12 +194,12 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/lightsabre-raptor.mp3",
-    "name": "lightsabre raptor",
+    "name": "Lightsabre Raptor",
     "artist": "afeique"
   },
   {
     "path": "music/lightspeed-eye.mp3",
-    "name": "lightspeed eye",
+    "name": "Lightspeed Eye",
     "artist": "afeique"
   },
   {
@@ -214,52 +209,52 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/make-it-be.mp3",
-    "name": "make it be",
+    "name": "Make It Be",
     "artist": "afeique"
   },
   {
     "path": "music/melodia-nostalgíque.mp3",
-    "name": "melodia nostalgíque",
+    "name": "Melodia Nostalgíque",
     "artist": "afeique"
   },
   {
     "path": "music/never-enough.mp3",
-    "name": "never enough",
+    "name": "Never Enough",
     "artist": "afeique"
   },
   {
     "path": "music/nightride-2029.mp3",
-    "name": "nightride 2029",
+    "name": "Nightride 2029",
     "artist": "afeique"
   },
   {
     "path": "music/not-here-nor-there.mp3",
-    "name": "Not Here Nor There",
+    "name": "Not Here nor There",
     "artist": "afeique"
   },
   {
     "path": "music/over-the-horizon.mp3",
-    "name": "over the horizon",
+    "name": "Over the Horizon",
     "artist": "afeique"
   },
   {
     "path": "music/people-are-not-scary.mp3",
-    "name": "people aren't scary",
+    "name": "People Aren't Scary",
     "artist": "afeique"
   },
   {
     "path": "music/polished-jewel.mp3",
-    "name": "polished jewel",
+    "name": "Polished Jewel",
     "artist": "afeique"
   },
   {
     "path": "music/rainbow-vision.mp3",
-    "name": "rainbow vision",
+    "name": "Rainbow Vision",
     "artist": "afeique"
   },
   {
     "path": "music/sigma-tau.mp3",
-    "name": "sigma tau",
+    "name": "Sigma Tau",
     "artist": "afeique"
   },
   {
@@ -268,28 +263,33 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/solacia.mp3",
+    "name": "Solace de Violencia",
+    "artist": "afeique"
+  },
+  {
     "path": "music/sonata-of-a-season.mp3",
-    "name": "sonata of a season",
+    "name": "Sonata of a Season",
     "artist": "afeique"
   },
   {
     "path": "music/sonata-of-reason.mp3",
-    "name": "sonata of reason",
+    "name": "Sonata of Reason",
     "artist": "afeique"
   },
   {
     "path": "music/sparkly-glass-cannon.mp3",
-    "name": "sparkly glass cannon",
+    "name": "Sparkly Glass Cannon",
     "artist": "afeique"
   },
   {
     "path": "music/steel-heart.mp3",
-    "name": "steel heart",
+    "name": "Steel Heart",
     "artist": "afeique"
   },
   {
     "path": "music/superhero-rodeo.mp3",
-    "name": "superhero rodeo",
+    "name": "Superhero Rodeo",
     "artist": "afeique"
   },
   {
@@ -299,7 +299,7 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/tension-in-resonance.mp3",
-    "name": "tension in resonance",
+    "name": "Tension in Resonance",
     "artist": "afeique"
   },
   {
@@ -309,17 +309,17 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/thats-not-samus.mp3",
-    "name": "that's not samus",
+    "name": "That's Not Samus",
     "artist": "afeique"
   },
   {
     "path": "music/the-time-is-now.mp3",
-    "name": "the time is now",
+    "name": "The Time Is Now",
     "artist": "afeique"
   },
   {
     "path": "music/ultima-negato.mp3",
-    "name": "ultima negato",
+    "name": "Ultima Negato",
     "artist": "afeique"
   },
   {
@@ -329,17 +329,17 @@ export const PLAYLIST_DATA = [
   },
   {
     "path": "music/voices-in-my-head.mp3",
-    "name": "voices in my head",
+    "name": "Voices in My Head",
     "artist": "afeique"
   },
   {
     "path": "music/zeta-nine.mp3",
-    "name": "zeta nine",
+    "name": "Zeta Nine",
     "artist": "afeique"
   },
   {
     "path": "music/zypher.mp3",
-    "name": "zypher",
+    "name": "Zypher",
     "artist": "afeique"
   }
 ];
