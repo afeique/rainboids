@@ -1122,9 +1122,24 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border-radius: 4px;
     cursor: pointer;
     overflow: hidden;
+    position: relative; /* Anchor for layered fills */
+}
+
+/* Buffered (downloaded) range — sits behind the playback fill so the
+   user sees a "ghost" indicator of how much is loaded ahead. */
+#music-player-buffered {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: rgba(255, 255, 255, 0.28);
+    transition: width 0.2s ease-out;
+    pointer-events: none;
 }
 
 #music-player-progress {
+    position: relative; /* Sits above the buffered fill */
     height: 100%;
     background: #0088ff;
     width: 0%;

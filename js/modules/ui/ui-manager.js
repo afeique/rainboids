@@ -39,6 +39,7 @@ export class UIManager {
             musicCurrentTime: document.getElementById('music-current-time'),
             musicDuration: document.getElementById('music-duration'),
             musicPlayerProgress: document.getElementById('music-player-progress'),
+            musicPlayerBuffered: document.getElementById('music-player-buffered'),
             musicPlayerProgressBar: document.getElementById('music-player-progress-bar'),
             musicPlayPause: document.getElementById('music-play-pause'),
             musicPrev: document.getElementById('music-prev'),
@@ -729,6 +730,14 @@ export class UIManager {
         
         this.musicPlayer.onProgressUpdate = (progress, currentTime, duration) => {
             this.updateProgress(progress, currentTime, duration);
+        };
+
+        // Buffered (downloaded) fraction — drives the ghost fill behind
+        // the playback bar so the user can see how much is loaded.
+        this.musicPlayer.onBufferedUpdate = (fraction) => {
+            if (this.elements.musicPlayerBuffered) {
+                this.elements.musicPlayerBuffered.style.width = `${Math.max(0, Math.min(1, fraction)) * 100}%`;
+            }
         };
         
         // Set up event listeners (skip music info since it's removed)

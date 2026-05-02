@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.9] - 2026-05-02
+
+### Added
+- **Buffered-load indicator on the music player progress bar.** A translucent ghost fill behind the playback fill shows how much of the current track has been downloaded. Driven by the audio element's `progress` event (fires while the browser fetches more data) reading `audio.buffered.end(last)` / `audio.duration`. New `MusicPlayer.onBufferedUpdate(fraction)` callback bound to a new `#music-player-buffered` div layered behind `#music-player-progress` via absolute positioning. Resets at track-change and re-emits a fresh reading immediately so a promoted-from-preload track that already has data shows it right away.
+
+---
+
 ## [5.40.8] - 2026-05-02
 
 ### Fixed

@@ -21,6 +21,7 @@ export class MusicPlayer {
         this.onPlayStateChange = null;
         this.onProgressUpdate = null;
         this.onPlaylistChange = null; // Fires whenever playlist order mutates
+        this.onBufferedUpdate = null; // Fires when more audio data is buffered (fraction 0..1)
 
         // Initialize playlist
         this.initializePlaylist();
@@ -97,6 +98,7 @@ export class MusicPlayer {
                 audio.removeEventListener('timeupdate', audio._handlers.timeupdate);
                 audio.removeEventListener('ended', audio._handlers.ended);
                 audio.removeEventListener('loadedmetadata', audio._handlers.loadedmetadata);
+                audio.removeEventListener('progress', audio._handlers.progress);
                 audio.removeEventListener('error', audio._handlers.error);
                 audio._handlers = null;
             }
@@ -115,6 +117,9 @@ export class MusicPlayer {
             timeupdate: this.handleTimeUpdate.bind(this),
             ended: this.handleTrackEnd.bind(this),
             loadedmetadata: () => { track.duration = audio.duration; },
+            // 'progress' fires repeatedly while the browser fetches more
+            // audio data — perfect for updating the "buffered" fill.
+            progress: () => this._emitBufferedUpdate(audio),
             error: (e) => {
                 if (audio._disposing) return; // Ignore errors caused by our own teardown
                 console.error('Failed to load track:', track.path, e);
@@ -125,7 +130,24 @@ export class MusicPlayer {
         audio.addEventListener('timeupdate', handlers.timeupdate);
         audio.addEventListener('ended', handlers.ended);
         audio.addEventListener('loadedmetadata', handlers.loadedmetadata);
+        audio.addEventListener('progress', handlers.progress);
         audio.addEventListener('error', handlers.error);
+    }
+
+    _emitBufferedUpdate(audio) {
+        if (!this.onBufferedUpdate) return;
+        if (!audio || !audio.duration || isNaN(audio.duration)) return;
+        const ranges = audio.buffered;
+        if (!ranges || ranges.length === 0) {
+            this.onBufferedUpdate(0);
+            return;
+        }
+        // End of the last buffered range — represents how far ahead the
+        // browser is comfortable playing without rebuffering. After a
+        // seek there can be multiple disjoint ranges; using the last
+        // one is a reasonable proxy for "play-ahead progress".
+        const end = ranges.end(ranges.length - 1);
+        this.onBufferedUpdate(Math.min(1, end / audio.duration));
     }
 
     // Speculative load of the next sequential track. Skipped on random/
@@ -186,6 +208,11 @@ export class MusicPlayer {
         if (this.onTrackChange) {
             this.onTrackChange(track);
         }
+        // Reset the buffered fill at track-change. If the new audio was
+        // promoted from a preload it may already have data — emit a
+        // fresh reading so the bar reflects reality.
+        if (this.onBufferedUpdate) this.onBufferedUpdate(0);
+        this._emitBufferedUpdate(this.currentAudio);
 
         // Start playing if we were playing before
         if (this.isPlaying) {
