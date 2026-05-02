@@ -24,14 +24,30 @@ export function setupEventListeners() {
         }
         // R-key reload was removed — auto-reload kicks in when the clip empties.
         // (Shift+R is still a cheat handled in the Shift block below.)
-        // Test powerup spawn (for debugging)
+        // Test powerup spawn (for debugging) — pick a random screen edge
+        // and place the powerup just inside it (~40-80px inset) so it's
+        // clearly visible but still "incoming from the edge". Convert
+        // screen coords to world via the camera offset.
         if (e.code === 'KeyP' && this.game.state === GAME_STATES.PLAYING) {
-            // Spawn just beyond the visible viewport so the player doesn't see it pop in.
-            const angle = random(0, Math.PI * 2);
-            const dist = Math.hypot(this.width, this.height) / 2 + random(40, 120);
+            const inset = random(40, 80); // distance from the chosen edge
+            const edge = Math.floor(random(0, 4)); // 0=top 1=right 2=bottom 3=left
+            let screenX, screenY;
+            if (edge === 0) {           // top edge
+                screenX = random(inset, this.width - inset);
+                screenY = inset;
+            } else if (edge === 1) {    // right edge
+                screenX = this.width - inset;
+                screenY = random(inset, this.height - inset);
+            } else if (edge === 2) {    // bottom edge
+                screenX = random(inset, this.width - inset);
+                screenY = this.height - inset;
+            } else {                    // left edge
+                screenX = inset;
+                screenY = random(inset, this.height - inset);
+            }
             this.dropPowerup(
-                this.player.x + Math.cos(angle) * dist,
-                this.player.y + Math.sin(angle) * dist,
+                screenX + this.camera.x,
+                screenY + this.camera.y,
             );
         }
         // Debug cheat codes (Shift+key, gameplay only)

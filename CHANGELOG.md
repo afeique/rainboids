@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.11] - 2026-05-02
+
+### Changed
+- **KeyP debug powerup cheat now spawns on-screen near a random edge** instead of off-screen. Picks a random edge (top/right/bottom/left), inset 40–80px so the powerup is fully visible, and converts to world coords via the camera offset. The previous off-screen behavior made it hard to verify quick-test scenarios because the powerup had to drift in before it became visible.
+
+---
+
 ## [5.40.10] - 2026-05-02
 
 ### Changed
