@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.46.2] - 2026-05-02
+
+### Changed
+- **Centered the "Click a weapon to equip it" hint** in the PRIMARY and POWER pause-menu tabs (added `text-align: center` to both `<div>` instances).
+
+---
+
 ## [5.46.1] - 2026-05-02
 
 ### Fixed
