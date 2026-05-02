@@ -1118,7 +1118,9 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 #music-player-progress-bar {
     flex: 1;
     height: 8px;
-    background: rgba(255, 255, 255, 0.2);
+    /* Unbuffered (not-yet-downloaded) region — near-black so it reads
+       as "empty" against the buffered ghost fill on top. */
+    background: rgba(0, 0, 0, 0.75);
     border-radius: 4px;
     cursor: pointer;
     overflow: hidden;
@@ -1126,14 +1128,14 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 }
 
 /* Buffered (downloaded) range — sits behind the playback fill so the
-   user sees a "ghost" indicator of how much is loaded ahead. */
+   user sees a darker indicator of how much is loaded ahead. */
 #music-player-buffered {
     position: absolute;
     top: 0;
     left: 0;
     height: 100%;
     width: 0%;
-    background: rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.15);
     transition: width 0.2s ease-out;
     pointer-events: none;
 }

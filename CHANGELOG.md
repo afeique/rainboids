@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.10] - 2026-05-02
+
+### Changed
+- **Music player progress bar contrast tuned.** Unbuffered track background went from `rgba(255,255,255,0.2)` (moderately bright tint) to `rgba(0,0,0,0.75)` so the empty region reads as truly empty. Buffered ghost fill went from `rgba(255,255,255,0.28)` to `rgba(255,255,255,0.15)` so it sits clearly between the dark unbuffered region and the bright cyan playback fill.
+
+---
+
 ## [5.40.9] - 2026-05-02
 
 ### Added
