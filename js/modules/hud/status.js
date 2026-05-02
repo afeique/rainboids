@@ -209,7 +209,7 @@ export function drawCanvasTriforce(ctx, lives, baseX, baseY) {
 }
 
 export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
-        const livesX = 10; // Same as lives display position
+        const livesX = 24; // Same as lives display position (left HUD margin)
         const triforceWidth = 60; // Triforce canvas width from ui-manager.js
         const triforceCenterX = livesX + triforceWidth / 2; // Center of triforce at x=40
 
@@ -412,7 +412,7 @@ export function drawLevelUpText() {
 
 export function updateHUD() {
         const ctx = this.ctx;
-        const barX = 60; // Close to triforce (triforce rightmost pixel ≈ x=53)
+        const barX = 74; // Close to triforce (triforce rightmost pixel ≈ x=67 with livesX=24)
         const barY = 20;
         const barHeight = 30;
         const barWidth = 220;
@@ -422,7 +422,7 @@ export function updateHUD() {
         ctx.save();
 
         // Draw triforce (lives indicator) on canvas — same layer as HP bar, coins, level
-        this.drawCanvasTriforce(ctx, this.game.lives, 10, barY);
+        this.drawCanvasTriforce(ctx, this.game.lives, 24, barY);
 
         // Create futuristic angled health bar geometry
         const createHealthBarPath = (width) => {
@@ -610,7 +610,7 @@ export function updateHUD() {
 // `gameEngine._weaponCycleAnim` set in event-setup.js).
 export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     if (!this.player) return;
-    const livesX = 10;
+    const livesX = 24;
 
     const levelY = barY + barHeight + 26;
     const coinsY = levelY + 40;

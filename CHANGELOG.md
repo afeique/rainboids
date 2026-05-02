@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.4] - 2026-05-02
+
+### Fixed
+- **Top-left HUD column now has a clear left margin.** Bumped the shared anchor from `livesX = 10` → `livesX = 24` in all four sites that anchor to it: `drawCanvasTriforce`, `drawLevelAndCoinsDisplay`, `drawEquippedWeaponSquares`, `drawMoneyPickupDisplay`. Health-bar `barX` shifted from 60 → 74 to preserve the gap to the triforce.
+- **Tab/R cycle: clearer feedback when only one weapon is owned.** Previously the HUD square pulsed but nothing else happened, leaving the player wondering whether the binding was broken or whether they simply lacked a second weapon. Now in that case a non-persistent hint fires: "Equip another primary in the **pause menu (ESC → PRIMARY)** to cycle weapons with **Tab**" (and the analogous message for R / power weapons). Each instance is freshly shown (the hint uses `{ once: false }`) so the prompt isn't suppressed by the once-per-browser persistence layer that gates the wave-1 onboarding hints.
+
+---
+
 ## [5.41.3] - 2026-05-02
 
 ### Fixed

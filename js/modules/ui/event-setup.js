@@ -1,7 +1,7 @@
 // Event listener setup — keyboard, mouse, touch, shop interaction, cheats
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
-import { hideHint } from './hint-system.js';
+import { hideHint, showHint } from './hint-system.js';
 
 export function setupEventListeners() {
     // Handle window resize
@@ -35,9 +35,6 @@ export function setupEventListeners() {
             this.game.state === GAME_STATES.WAVE_TRANSITION;
         if (e.code === 'Tab' && !e.shiftKey && cycleAllowed) {
             e.preventDefault();
-            // Always pulse the HUD square so the player gets feedback
-            // that the key was received, even if they only own one
-            // primary (in which case there's nothing to cycle to).
             this.triggerWeaponCycleAnim('primary');
             const owned = Array.from(this.player.ownedPrimaries || []);
             if (owned.length > 1) {
@@ -46,6 +43,16 @@ export function setupEventListeners() {
                 this.player.equipPrimary(next);
                 hideHint();
                 this.events.emit('audio:coin');
+            } else {
+                // Single-weapon hint — fires fresh each time (not gated by
+                // localStorage) so the player can see it any time they
+                // press Tab without owning a second primary.
+                showHint(
+                    'cycle-need-more-primary',
+                    'Equip another primary in the <strong>pause menu (ESC → PRIMARY)</strong> to cycle weapons with <strong>Tab</strong>.',
+                    4000,
+                    { once: false },
+                );
             }
         }
         if (e.code === 'KeyR' && !e.shiftKey && cycleAllowed) {
@@ -57,6 +64,13 @@ export function setupEventListeners() {
                 this.player.equipPower(next);
                 hideHint();
                 this.events.emit('audio:coin');
+            } else {
+                showHint(
+                    'cycle-need-more-power',
+                    'Equip another power weapon in the <strong>pause menu (ESC → POWER)</strong> to cycle with <strong>R</strong>.',
+                    4000,
+                    { once: false },
+                );
             }
         }
         // (Shift+R is still a cheat handled in the Shift block below.)
