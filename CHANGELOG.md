@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.41.5] - 2026-05-02
+
+### Changed
+- **Tab and R now cycle through every weapon in the game one-by-one**, not just the player's currently-owned set. Pressing Tab walks through all 5 primaries (Pulse Cannon → Storm Needles → Scatter Gun → Rail Driver → Lance Beam → back); R walks through all 5 power weapons (Charge Shot → Mine Layer → Nova Blast → Lightning Arc → Missile Salvo → back). The newly-equipped weapon is auto-added to `ownedPrimaries` / `ownedPowers` so the rest of the game (shop upgrade trees, sell paths) treats it as owned — mirrors the existing pause-menu PRIMARY/POWER tab behavior. Removed the no-op hints that fired when only one weapon was owned (no longer reachable).
+
+---
+
 ## [5.41.4] - 2026-05-02
 
 ### Fixed

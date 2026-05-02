@@ -1,7 +1,7 @@
 // Event listener setup — keyboard, mouse, touch, shop interaction, cheats
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
-import { hideHint, showHint } from './hint-system.js';
+import { hideHint } from './hint-system.js';
 
 export function setupEventListeners() {
     // Handle window resize
@@ -33,44 +33,39 @@ export function setupEventListeners() {
         const cycleAllowed =
             this.game.state === GAME_STATES.PLAYING ||
             this.game.state === GAME_STATES.WAVE_TRANSITION;
+        // Tab/R cycle through ALL primary/power weapons in the game (not
+        // just the ones currently in the player's `ownedPrimaries` /
+        // `ownedPowers` set). Mirrors the pause-menu behavior where every
+        // weapon is selectable for free — pressing Tab/R auto-adds the
+        // newly-equipped weapon to the owned set so the rest of the game
+        // (shop upgrade trees, sell paths, etc.) treats it as owned.
         if (e.code === 'Tab' && !e.shiftKey && cycleAllowed) {
             e.preventDefault();
             this.triggerWeaponCycleAnim('primary');
-            const owned = Array.from(this.player.ownedPrimaries || []);
-            if (owned.length > 1) {
-                const i = owned.indexOf(this.player.activePrimary);
-                const next = owned[(i + 1) % owned.length];
+            const all = Object.keys(this.PRIMARY_WEAPONS_LIST || {});
+            if (all.length > 1) {
+                const i = all.indexOf(this.player.activePrimary);
+                const next = all[(i + 1) % all.length];
+                if (this.player.ownedPrimaries && !this.player.ownedPrimaries.has(next)) {
+                    this.player.ownedPrimaries.add(next);
+                }
                 this.player.equipPrimary(next);
                 hideHint();
                 this.events.emit('audio:coin');
-            } else {
-                // Single-weapon hint — fires fresh each time (not gated by
-                // localStorage) so the player can see it any time they
-                // press Tab without owning a second primary.
-                showHint(
-                    'cycle-need-more-primary',
-                    'Equip another primary in the <strong>pause menu (ESC → PRIMARY)</strong> to cycle weapons with <strong>Tab</strong>.',
-                    4000,
-                    { once: false },
-                );
             }
         }
         if (e.code === 'KeyR' && !e.shiftKey && cycleAllowed) {
             this.triggerWeaponCycleAnim('power');
-            const owned = Array.from(this.player.ownedPowers || []);
-            if (owned.length > 1) {
-                const i = owned.indexOf(this.player.activePower);
-                const next = owned[(i + 1) % owned.length];
+            const all = Object.keys(this.POWER_WEAPONS_LIST || {});
+            if (all.length > 1) {
+                const i = all.indexOf(this.player.activePower);
+                const next = all[(i + 1) % all.length];
+                if (this.player.ownedPowers && !this.player.ownedPowers.has(next)) {
+                    this.player.ownedPowers.add(next);
+                }
                 this.player.equipPower(next);
                 hideHint();
                 this.events.emit('audio:coin');
-            } else {
-                showHint(
-                    'cycle-need-more-power',
-                    'Equip another power weapon in the <strong>pause menu (ESC → POWER)</strong> to cycle with <strong>R</strong>.',
-                    4000,
-                    { once: false },
-                );
             }
         }
         // (Shift+R is still a cheat handled in the Shift block below.)
