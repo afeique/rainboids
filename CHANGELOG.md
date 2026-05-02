@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.39.13] - 2026-05-02
+
+### Changed
+- **Base enemy and asteroid HP cut by ~50% across the board** to fix early-wave slog. Per-level scaling unchanged (+20%/level enemies, +30%/level asteroids), so the early game eases dramatically while late waves stay ~half today's values — the player's DPS scales faster than the easing once weapons unlock and upgrades stack.
+- **Enemies (was → new):** Hunter 12→6, Guardian 24→12, Wasp 11→5, Stalker 15→7, Drifter 17→8, Prowler 27→13, Weaver 12→6, Sentinel 21→10, Bomber 18→9, Titan 45→22.
+- **Asteroids:** Big tier (40+r) 10–18→5–9, Medium (20–40r) 4–10→2–5, Small (5–20r) 2–5→1–3.
+- TTK reference at level 1 with starter Pulse Cannon (2.0 DPS): Wasp 2.5s, Hunter 3.0s, Drifter 4.0s, Guardian 6.0s, Titan 11.0s, big asteroid 4.5s.
+
+---
+
 ## [5.39.12] - 2026-05-02
 
 ### Changed

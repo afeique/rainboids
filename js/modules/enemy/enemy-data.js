@@ -8,7 +8,7 @@ export const ENEMY_TYPES = {
     HUNTER: {
         name: 'Hunter',
         color: '#ff4444',
-        health: 12,                // was 16  (-25%)
+        health: 6,                 // was 12 (-50%)
         speed: 2.0,                // was 1.6 (+25%)
         size: 32,                  // was 38  (-15%, harder to hit)
         shootPattern: 'hunter_single',
@@ -43,7 +43,7 @@ export const ENEMY_TYPES = {
     GUARDIAN: {
         name: 'Guardian',
         color: '#44ff44',
-        health: 24,                // was 32 (-25%)
+        health: 12,                // was 24 (-50%)
         speed: 1.25,               // was 1.0 (+25%)
         size: 48,                  // was 57 (-15%)
         shootPattern: 'guardian_spread',
@@ -78,7 +78,7 @@ export const ENEMY_TYPES = {
     WASP: {
         name: 'Wasp',
         color: '#ffff44',
-        health: 11,                // was 14
+        health: 5,                 // was 11 (-55%)
         speed: 3.5,                // was 2.8
         size: 36,                  // was 42
         shootPattern: 'wasp_machinegun',
@@ -113,7 +113,7 @@ export const ENEMY_TYPES = {
     STALKER: {
         name: 'Stalker',
         color: '#44ffff',
-        health: 15,                // was 20
+        health: 7,                 // was 15 (-53%)
         speed: 3.1,                // was 2.5
         size: 38,                  // was 45
         shootPattern: 'charged_laser',
@@ -148,7 +148,7 @@ export const ENEMY_TYPES = {
     DRIFTER: {
         name: 'Drifter',
         color: '#00ffff',
-        health: 17,                // was 22
+        health: 8,                 // was 17 (-53%)
         speed: 3.1,                // was 2.5
         size: 38,                  // was 45
         shootPattern: 'arc_lightning',
@@ -183,7 +183,7 @@ export const ENEMY_TYPES = {
     PROWLER: {
         name: 'Prowler',
         color: '#ff00ff',
-        health: 27,                // was 36
+        health: 13,                // was 27 (-52%)
         speed: 0.75,               // was 0.6
         size: 45,                  // was 53
         shootPattern: 'missile',
@@ -219,7 +219,7 @@ export const ENEMY_TYPES = {
     WEAVER: {
         name: 'Weaver',
         color: '#ffff00',
-        health: 12,                // was 16
+        health: 6,                 // was 12 (-50%)
         speed: 2.75,               // was 2.2
         size: 32,                  // was 38
         shootPattern: 'spiral_laser',
@@ -257,7 +257,7 @@ export const ENEMY_TYPES = {
     SENTINEL: {
         name: 'Sentinel',
         color: '#00ff00',
-        health: 21,                // was 28
+        health: 10,                // was 21 (-52%)
         speed: 2.5,                // was 2.0
         size: 41,                  // was 48
         shootPattern: 'sentinel_sweep',
@@ -295,7 +295,7 @@ export const ENEMY_TYPES = {
     TANGERINE: {
         name: 'Bomber',
         color: '#ff8844',
-        health: 18,                // was 24
+        health: 9,                 // was 18 (-50%)
         speed: 2.0,                // was 1.6
         size: 45,                  // was 53
         shootPattern: 'lay_mine',
@@ -331,7 +331,7 @@ export const ENEMY_TYPES = {
     TITAN: {
         name: 'Titan',
         color: '#ff44ff',
-        health: 45,                // was 60
+        health: 22,                // was 45 (-51%)
         speed: 1.5,                // was 1.2
         size: 64,                  // was 75 — still the biggest, but smaller
         shootPattern: 'sweep_laser',
