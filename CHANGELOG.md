@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.7] - 2026-05-02
+
+### Changed
+- **Music player loading is now smarter about bandwidth.** Three concrete improvements to `MusicPlayer`:
+  - **Dropped `prevAudio` entirely.** Backward navigation is rare; keeping a third Audio element alive cost ~1/3 of speculative bandwidth for almost no benefit. Pressing Previous now triggers a fresh fetch (acceptable tradeoff).
+  - **Reuse the preloaded `nextAudio` instead of refetching.** `loadTrack()` now tracks `nextAudioIndex` and promotes the speculative preload to `currentAudio` when its index matches the requested one. Eliminates the redundant fetch that fired on every linear advance (Next button, auto-advance on track end).
+  - **Skip preload after random jumps.** `playRandomTrack()` passes `{ skipPreload: true }` to `loadTrack()` so the player doesn't eagerly buffer `currentTrackIndex+1` after a non-linear jump — that buffer would just be discarded the next time the user hits random anyway. After shuffle, preload resumes normally (shuffled playback typically continues linearly through the new order).
+  - Added `_disposeAudio(audio)` helper that actively cancels in-flight loads via `src=''; load()` rather than waiting for garbage collection. Also removed a duplicate `setVolume` definition.
+
+---
+
 ## [5.40.6] - 2026-05-02
 
 ### Changed

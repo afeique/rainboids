@@ -9,37 +9,40 @@ export class MusicPlayer {
         this.isShuffled = false;
         this.isRepeatOne = false;
         this.currentAudio = null;
+        // Single forward preload. The previous-track preload was dropped:
+        // hitting Previous is rare, and keeping a third Audio element
+        // alive cost ~1/3 of speculative bandwidth for almost no benefit.
         this.nextAudio = null;
-        this.prevAudio = null;
+        this.nextAudioIndex = -1; // Which playlist index nextAudio points at, or -1 if none
         this.volume = 0.5;
-        
+
         // UI update callbacks
         this.onTrackChange = null;
         this.onPlayStateChange = null;
         this.onProgressUpdate = null;
         this.onPlaylistChange = null; // Fires whenever playlist order mutates
-        
+
         // Initialize playlist
         this.initializePlaylist();
     }
-    
+
     async initializePlaylist() {
         // Use the pre-generated playlist data
         this.playlist = [...PLAYLIST_DATA];
-        
+
         // Add duration property to each track
         this.playlist.forEach(track => {
             track.duration = 0;
         });
-        
+
         // Shuffle playlist on initialization
         this.shufflePlaylist();
-        
+
         // Load first track
         this.loadTrack(0);
     }
-    
-    
+
+
     shufflePlaylist() {
         // Fisher-Yates shuffle. Reorders the playlist in place. Does NOT
         // touch isShuffled — that flag is purely about the user-facing
@@ -52,16 +55,12 @@ export class MusicPlayer {
     }
 
     // Action: re-shuffle the playlist and immediately play the new track 0.
-    // Order of operations matters:
-    //   1. Reorder the array.
-    //   2. Set currentTrackIndex = 0 BEFORE notifying the UI, so the
-    //      playlist DOM rebuild highlights the right row.
-    //   3. Fire onPlaylistChange so the UI rebuilds the rendered list to
-    //      match the new order.
-    //   4. loadTrack(0) — which fires onTrackChange and starts audio.
+    // After shuffle, indices change meaning, so any speculative preload
+    // is now stale. Discard before loading the new current track.
     shuffleAndPlay() {
         this.shufflePlaylist();
         this.currentTrackIndex = 0;
+        this._clearNextPreload();
         if (this.onPlaylistChange) this.onPlaylistChange();
         this.isPlaying = true; // Signal loadTrack to auto-play
         this.loadTrack(0);
@@ -69,78 +68,115 @@ export class MusicPlayer {
 
     // Action: jump to a uniformly random track in the (current) playlist
     // and play it. Avoids re-picking the current track when possible.
+    // Skips the post-load preload — the user signaled "non-linear
+    // browsing", so eagerly buffering currentTrackIndex+1 is likely waste.
     playRandomTrack() {
         if (this.playlist.length === 0) return;
         let idx = Math.floor(Math.random() * this.playlist.length);
         if (this.playlist.length > 1 && idx === this.currentTrackIndex) {
             idx = (idx + 1) % this.playlist.length;
         }
-        this.isPlaying = true; // Signal loadTrack to auto-play
-        this.loadTrack(idx);
+        this.isPlaying = true;
+        this.loadTrack(idx, { skipPreload: true });
     }
-    
-    loadTrack(index) {
-        if (index < 0 || index >= this.playlist.length) return;
-        
-        this.currentTrackIndex = index;
-        const track = this.playlist[index];
-        
-        // Create new audio element
-        if (this.currentAudio) {
-            this.currentAudio.pause();
-            this.currentAudio.removeEventListener('timeupdate', this.handleTimeUpdate);
-            this.currentAudio.removeEventListener('ended', this.handleTrackEnd);
-        }
-        
-        this.currentAudio = new Audio(track.path);
-        this.currentAudio.volume = this.volume;
-        this.currentAudio.addEventListener('timeupdate', this.handleTimeUpdate.bind(this));
-        this.currentAudio.addEventListener('ended', this.handleTrackEnd.bind(this));
-        this.currentAudio.addEventListener('loadedmetadata', () => {
-            track.duration = this.currentAudio.duration;
+
+    // ── Audio lifecycle helpers ────────────────────────────────────────
+
+    // Actively cancel any in-flight load for an Audio element. Setting
+    // src='' + load() is the canonical browser-supported way to free
+    // the underlying network slot. Without this, abandoned Audio
+    // elements continue buffering until garbage collection.
+    _disposeAudio(audio) {
+        if (!audio) return;
+        try {
+            audio.pause();
+            audio.src = '';
+            audio.load();
+        } catch (_) { /* Some browsers throw on load() after empty src — safe to ignore */ }
+    }
+
+    _attachAudioListeners(audio, track) {
+        audio.volume = this.volume;
+        audio.addEventListener('timeupdate', this.handleTimeUpdate.bind(this));
+        audio.addEventListener('ended', this.handleTrackEnd.bind(this));
+        audio.addEventListener('loadedmetadata', () => {
+            track.duration = audio.duration;
         });
-        
-        // Handle loading errors
-        this.currentAudio.addEventListener('error', (e) => {
+        audio.addEventListener('error', (e) => {
             console.error('Failed to load track:', track.path, e);
             // Try next track if loading fails
             setTimeout(() => this.next(), 1000);
         });
-        
-        // Preload next and previous tracks
-        this.preloadAdjacentTracks();
-        
-        // Notify UI of track change
+    }
+
+    // Speculative load of the next sequential track. Skipped on random/
+    // shuffle paths via the skipPreload option to loadTrack().
+    _preloadNext() {
+        const nextIndex = (this.currentTrackIndex + 1) % this.playlist.length;
+        // Already preloaded the right one — no-op.
+        if (this.nextAudio && this.nextAudioIndex === nextIndex) return;
+        this._disposeAudio(this.nextAudio);
+        this.nextAudio = new Audio(this.playlist[nextIndex].path);
+        this.nextAudio.volume = this.volume;
+        this.nextAudioIndex = nextIndex;
+    }
+
+    // Discard any speculative preload (used on random/shuffle jumps so
+    // the browser doesn't keep buffering an index we've moved away from).
+    _clearNextPreload() {
+        this._disposeAudio(this.nextAudio);
+        this.nextAudio = null;
+        this.nextAudioIndex = -1;
+    }
+
+    // ── Track loading ──────────────────────────────────────────────────
+
+    loadTrack(index, opts = {}) {
+        if (index < 0 || index >= this.playlist.length) return;
+
+        this.currentTrackIndex = index;
+        const track = this.playlist[index];
+
+        // Cancel the outgoing track's load — frees network/memory.
+        this._disposeAudio(this.currentAudio);
+
+        // Reuse a matching speculative preload if we have one. Saves a
+        // redundant fetch when the user advances linearly (next or
+        // auto-advance on track end).
+        if (this.nextAudio && this.nextAudioIndex === index) {
+            this.currentAudio = this.nextAudio;
+            this.nextAudio = null;
+            this.nextAudioIndex = -1;
+        } else {
+            // Otherwise, the speculative preload (if any) is stale —
+            // dispose it and fetch fresh.
+            this._disposeAudio(this.nextAudio);
+            this.nextAudio = null;
+            this.nextAudioIndex = -1;
+            this.currentAudio = new Audio(track.path);
+        }
+
+        this._attachAudioListeners(this.currentAudio, track);
+
+        // Speculatively warm up the next track unless the caller asked
+        // us not to (random jumps).
+        if (!opts.skipPreload) {
+            this._preloadNext();
+        }
+
         if (this.onTrackChange) {
             this.onTrackChange(track);
         }
-        
-        
+
         // Start playing if we were playing before
         if (this.isPlaying) {
             // Delay play slightly to ensure audio element is ready
             setTimeout(() => this.play(), 100);
         }
     }
-    
-    preloadAdjacentTracks() {
-        // Preload next track
-        const nextIndex = (this.currentTrackIndex + 1) % this.playlist.length;
-        if (this.nextAudio) {
-            this.nextAudio.src = '';
-        }
-        this.nextAudio = new Audio(this.playlist[nextIndex].path);
-        this.nextAudio.volume = this.volume;
-        
-        // Preload previous track
-        const prevIndex = (this.currentTrackIndex - 1 + this.playlist.length) % this.playlist.length;
-        if (this.prevAudio) {
-            this.prevAudio.src = '';
-        }
-        this.prevAudio = new Audio(this.playlist[prevIndex].path);
-        this.prevAudio.volume = this.volume;
-    }
-    
+
+    // ── Playback controls ──────────────────────────────────────────────
+
     play() {
         if (this.currentAudio) {
             this.currentAudio.play().then(() => {
@@ -157,7 +193,7 @@ export class MusicPlayer {
             });
         }
     }
-    
+
     pause() {
         if (this.currentAudio) {
             this.currentAudio.pause();
@@ -167,7 +203,7 @@ export class MusicPlayer {
             }
         }
     }
-    
+
     togglePlayPause() {
         if (this.isPlaying) {
             this.pause();
@@ -176,29 +212,32 @@ export class MusicPlayer {
         }
         return this.isPlaying;
     }
-    
+
     next() {
         const nextIndex = (this.currentTrackIndex + 1) % this.playlist.length;
+        // loadTrack auto-promotes a matching preload — no special path here.
         this.loadTrack(nextIndex);
     }
-    
+
     previous() {
         // If more than 3 seconds into the track, restart it
         if (this.currentAudio && this.currentAudio.currentTime > 3) {
             this.currentAudio.currentTime = 0;
         } else {
-            // Otherwise go to previous track
+            // Otherwise go to previous track. No preload exists for the
+            // backward direction (intentionally — see constructor) so
+            // this triggers a fresh fetch. Acceptable: backward play is rare.
             const prevIndex = (this.currentTrackIndex - 1 + this.playlist.length) % this.playlist.length;
             this.loadTrack(prevIndex);
         }
     }
-    
+
     seek(percentage) {
         if (this.currentAudio && this.currentAudio.duration) {
             this.currentAudio.currentTime = this.currentAudio.duration * percentage;
         }
     }
-    
+
     toggleShuffle() {
         this.isShuffled = !this.isShuffled;
         if (this.isShuffled) {
@@ -211,12 +250,12 @@ export class MusicPlayer {
         }
         return this.isShuffled;
     }
-    
+
     toggleRepeat() {
         this.isRepeatOne = !this.isRepeatOne;
         return this.isRepeatOne;
     }
-    
+
     setVolume(volume) {
         this.volume = Math.max(0, Math.min(1, volume));
         if (this.currentAudio) {
@@ -225,18 +264,15 @@ export class MusicPlayer {
         if (this.nextAudio) {
             this.nextAudio.volume = this.volume;
         }
-        if (this.prevAudio) {
-            this.prevAudio.volume = this.volume;
-        }
     }
-    
+
     handleTimeUpdate() {
         if (this.currentAudio && this.onProgressUpdate) {
             const progress = this.currentAudio.currentTime / this.currentAudio.duration;
             this.onProgressUpdate(progress, this.currentAudio.currentTime, this.currentAudio.duration);
         }
     }
-    
+
     handleTrackEnd() {
         if (this.isRepeatOne) {
             // Replay current track
@@ -247,32 +283,19 @@ export class MusicPlayer {
             this.next();
         }
     }
-    
+
     getCurrentTrack() {
         return this.playlist[this.currentTrackIndex];
     }
-    
+
     getCurrentTime() {
         return this.currentAudio ? this.currentAudio.currentTime : 0;
     }
-    
+
     getDuration() {
         return this.currentAudio ? this.currentAudio.duration : 0;
     }
-    
-    setVolume(volume) {
-        this.volume = Math.max(0, Math.min(1, volume));
-        if (this.currentAudio) {
-            this.currentAudio.volume = this.volume;
-        }
-        if (this.nextAudio) {
-            this.nextAudio.volume = this.volume;
-        }
-        if (this.prevAudio) {
-            this.prevAudio.volume = this.volume;
-        }
-    }
-    
+
     getVolume() {
         return this.volume;
     }
