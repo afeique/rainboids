@@ -1,5 +1,5 @@
 // Auto-generated playlist data
-// Generated on 2026-05-02T17:54:11.549Z
+// Generated on 2026-05-02T22:51:54.584Z
 
 export const PLAYLIST_DATA = [
   {
@@ -50,11 +50,6 @@ export const PLAYLIST_DATA = [
   {
     "path": "music/china-doll.mp3",
     "name": "China Doll",
-    "artist": "afeique"
-  },
-  {
-    "path": "music/chiplight.mp3",
-    "name": "Chiplight",
     "artist": "afeique"
   },
   {

@@ -48,10 +48,18 @@ export function updateActiveSkills(dt) {
     }
     if (this.novaRings.length === 0) this.novaActive = false;
 
-    // Update lightning chains visual timer
+    // Update lightning chains visual timer. Also re-anchor the chain
+    // origin (targets[0]) to the player's CURRENT position so the
+    // first arc visibly tracks the ship as it moves during the 500ms
+    // visual window.
     for (let i = this.lightningChains.length - 1; i >= 0; i--) {
-        this.lightningChains[i].timer -= dt;
-        if (this.lightningChains[i].timer <= 0) {
+        const chain = this.lightningChains[i];
+        chain.timer -= dt;
+        if (chain.targets && chain.targets[0]) {
+            chain.targets[0].x = this.x;
+            chain.targets[0].y = this.y;
+        }
+        if (chain.timer <= 0) {
             this.lightningChains.splice(i, 1);
         }
     }

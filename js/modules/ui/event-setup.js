@@ -21,16 +21,6 @@ export function setupEventListeners() {
     // Handle pause and test keys
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Escape') {
-            // If the Powerups overlay is open, ESC closes it back to the
-            // pause menu first instead of toggling pause directly.
-            const pwOverlay = document.getElementById('powerups-overlay');
-            if (pwOverlay && pwOverlay.style.display === 'flex') {
-                this.uiManager.hidePowerupsOverlay();
-                if (this.uiManager.elements.pauseOverlay) {
-                    this.uiManager.elements.pauseOverlay.style.display = 'flex';
-                }
-                return;
-            }
             this.togglePause();
         }
         // R-key reload was removed — auto-reload kicks in when the clip empties.

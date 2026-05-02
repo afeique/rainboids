@@ -63,7 +63,6 @@
         <div id="pause-menu">
             <div class="pause-menu-actions">
                 <button id="pause-shop-button" class="pause-action-btn"><span class="pause-btn-icon">🛒</span><span class="pause-btn-label">SHOP</span></button>
-                <button id="pause-powerups-button" class="pause-action-btn"><span class="pause-btn-icon">⭐</span><span class="pause-btn-label">POWERUPS</span></button>
                 <button id="pause-resume-button" class="pause-action-btn"><span class="pause-btn-icon">►</span><span class="pause-btn-label">RESUME</span></button>
             </div>
 
@@ -72,6 +71,7 @@
                 <button class="pause-tab" data-tab="primary">PRIMARY</button>
                 <button class="pause-tab" data-tab="power">POWER</button>
                 <button class="pause-tab" data-tab="skills">SKILLS</button>
+                <button class="pause-tab" data-tab="powerups">POWERUPS</button>
                 <button class="pause-tab" data-tab="music">MUSIC</button>
                 <button class="pause-tab" data-tab="sfx">SFX</button>
             </div>
@@ -98,6 +98,17 @@
                 <div style="margin-bottom: 15px; color: #aaa; font-size: 12px;">Click a weapon to equip it</div>
                 <div id="power-weapon-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
                     <!-- Populated dynamically by ui-manager.updatePowerTab() -->
+                </div>
+            </div>
+
+            <div id="powerups-tab" class="pause-tab-content">
+                <h2 style="text-align: center;">POWERUPS</h2>
+                <div class="powerups-subtab-row">
+                    <button class="powerups-subtab active" data-subtab="OFFENSE">OFFENSE</button>
+                    <button class="powerups-subtab" data-subtab="DROPS">DROPS</button>
+                </div>
+                <div id="powerups-items-list" style="overflow-y: auto; margin-top: 16px; display: flex; flex-direction: column; gap: 8px; max-height: 60vh;">
+                    <!-- Populated by ui-manager.renderPowerupsOverlay() -->
                 </div>
             </div>
 
@@ -210,24 +221,7 @@
         </div>
     </div>
 
-    <!-- Powerups overlay — Shop-like page for permanent stacking powerups.
-         All offense and drop upgrades now drop in-game and accumulate here.
-         Sub-tabs separate Offense (combat buffs) from Drops (loot economy). -->
-    <div id="powerups-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%;">
-        <div id="powerups-menu">
-            <button id="powerups-close-button" class="shop-close" aria-label="Close powerups">×</button>
-            <h2 class="shop-title">POWERUPS</h2>
-            <div class="shop-tabs">
-                <button class="powerups-subtab active" data-subtab="OFFENSE">OFFENSE</button>
-                <button class="powerups-subtab" data-subtab="DROPS">DROPS</button>
-            </div>
-            <div id="powerups-items-list" class="shop-content">
-                <!-- Populated dynamically by ui-manager.renderPowerupsOverlay() -->
-            </div>
-        </div>
-    </div>
-
-    <div id="customization-overlay">
+<div id="customization-overlay">
         <h2>Control Layout</h2>
         <p>Drag the controls to your desired positions, then press Save.</p>
         <button id="save-layout-button">Save & Close</button>

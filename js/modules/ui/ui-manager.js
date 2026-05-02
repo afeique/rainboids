@@ -57,13 +57,11 @@ export class UIManager {
             sfxVolumeValue: document.getElementById('sfx-volume-value'),
             sfxTogglesContainer: document.getElementById('sfx-toggles'),
             // Powerups tab elements
-            // Powerups overlay (Shop-like page for permanent powerups)
-            powerupsOverlay: document.getElementById('powerups-overlay'),
-            powerupsMenu: document.getElementById('powerups-menu'),
-            powerupsCloseBtn: document.getElementById('powerups-close-button'),
+            // Powerups pause-tab (lives in the tab strip alongside Music
+            // / SFX / Skills). Renders the same Offense/Drops sub-tabs +
+            // card list that the standalone overlay used to show.
             powerupsItemsList: document.getElementById('powerups-items-list'),
             powerupsSubtabs: document.querySelectorAll('.powerups-subtab'),
-            pausePowerupsButton: document.getElementById('pause-powerups-button'),
             // HUD pause button (top-left)
             hudPauseBtn: document.getElementById('hud-pause-btn'),
             hudShopBtn: document.getElementById('hud-shop-btn')
@@ -515,20 +513,9 @@ export class UIManager {
         return false;
     }
     
-    // Currently-active sub-tab in the Powerups overlay.
+    // Currently-active sub-tab in the Powerups pause-tab.
     // Persisted on the instance so subsequent renders remember it.
     _powerupsSubTab = 'OFFENSE';
-
-    showPowerupsOverlay() {
-        if (!this.elements.powerupsOverlay) return;
-        this.elements.powerupsOverlay.style.display = 'flex';
-        this.renderPowerupsOverlay();
-    }
-
-    hidePowerupsOverlay() {
-        if (!this.elements.powerupsOverlay) return;
-        this.elements.powerupsOverlay.style.display = 'none';
-    }
 
     setPowerupsSubTab(sub) {
         this._powerupsSubTab = sub;
@@ -787,23 +774,8 @@ export class UIManager {
             console.error('❌ pauseShopButton element not found!');
         }
 
-        // Powerups action button — opens the Powerups overlay (Shop-like).
-        if (this.elements.pausePowerupsButton) {
-            this.elements.pausePowerupsButton.addEventListener('click', () => {
-                this.elements.pauseOverlay.style.display = 'none';
-                this.showPowerupsOverlay();
-            });
-        }
-        if (this.elements.powerupsCloseBtn) {
-            this.elements.powerupsCloseBtn.addEventListener('click', () => {
-                this.hidePowerupsOverlay();
-                // Return to whichever state we came from. Easiest: reopen
-                // pause menu since that's the only entry point for now.
-                if (this.elements.pauseOverlay) {
-                    this.elements.pauseOverlay.style.display = 'flex';
-                }
-            });
-        }
+        // Powerups sub-tab buttons (Offense / Drops) inside the
+        // Powerups pause-tab. Re-rendering hits the live cards.
         if (this.elements.powerupsSubtabs) {
             this.elements.powerupsSubtabs.forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -1027,6 +999,10 @@ export class UIManager {
         // Refresh weapon-equip lists when their tabs are opened.
         if (tabName === 'primary') this.updatePrimaryTab();
         if (tabName === 'power') this.updatePowerTab();
+
+        // Re-render the Powerups card list whenever the tab is opened
+        // so stack counts reflect current state.
+        if (tabName === 'powerups') this.renderPowerupsOverlay();
     }
     
     startMusic() {

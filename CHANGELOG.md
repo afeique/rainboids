@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.46.1] - 2026-05-02
+
+### Fixed
+- **Lightning Arc origin tracks the player ship.** The first chain link's `targets[0]` is now refreshed every frame from `player.x/y` during the 500ms visual window, so the arc visibly follows the ship as it moves instead of frozen at the cast position.
+
+### Changed
+- **Powerups menu moved back into the normal pause-menu tab strip** alongside Music / SFX / Skills. Removed the standalone `#powerups-overlay`, the `pause-powerups-button` action button, and the ESC-overlay handling. The Powerups pause-tab itself contains the OFFENSE / DROPS sub-tab row + card list and renders via `switchTab('powerups')`. Title centered.
+
+### Removed
+- **"Chiplight" track removed** from the music library (`music/chiplight.mp3` deleted, playlist regenerated → 67 tracks).
+
+---
+
 ## [5.46.0] - 2026-05-02
 
 ### Added

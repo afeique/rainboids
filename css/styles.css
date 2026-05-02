@@ -1744,33 +1744,14 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     font-size: 24px;
 }
 
-/* ── Powerups overlay (Shop-like page for permanent powerups) ─────── */
-/* Override the default 4-col .shop-tabs grid for the 2-button sub-tab
-   strip so OFFENSE / DROPS each take half the width. */
-#powerups-overlay .shop-tabs {
+/* ── Powerups pause-tab — Offense / Drops sub-tabs + card list ───── */
+/* Two-button sub-tab strip inside the Powerups pause-tab. */
+.powerups-subtab-row {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-}
-#powerups-menu {
-    background: rgba(10, 10, 20, 0.96);
-    border: 2px solid #00ccff;
-    box-shadow: 0 0 30px rgba(0, 204, 255, 0.4);
-    border-radius: 8px;
-    padding: 30px 40px 40px;
-    width: min(720px, 92vw);
-    max-height: 86vh;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    box-sizing: border-box;
-}
-#powerups-overlay #powerups-items-list {
-    overflow-y: auto;
-    margin-top: 18px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    width: min(720px, 100%);
+    margin: 8px auto 12px auto;
 }
 .powerups-subtab {
     padding: 12px 20px;
