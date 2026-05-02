@@ -17,6 +17,7 @@ export class MusicPlayer {
         this.onTrackChange = null;
         this.onPlayStateChange = null;
         this.onProgressUpdate = null;
+        this.onPlaylistChange = null; // Fires whenever playlist order mutates
         
         // Initialize playlist
         this.initializePlaylist();
@@ -51,10 +52,17 @@ export class MusicPlayer {
     }
 
     // Action: re-shuffle the playlist and immediately play the new track 0.
-    // The "shuffle button" calls this — visible side effect is a track
-    // change + audio start, so the user actually sees something happen.
+    // Order of operations matters:
+    //   1. Reorder the array.
+    //   2. Set currentTrackIndex = 0 BEFORE notifying the UI, so the
+    //      playlist DOM rebuild highlights the right row.
+    //   3. Fire onPlaylistChange so the UI rebuilds the rendered list to
+    //      match the new order.
+    //   4. loadTrack(0) — which fires onTrackChange and starts audio.
     shuffleAndPlay() {
         this.shufflePlaylist();
+        this.currentTrackIndex = 0;
+        if (this.onPlaylistChange) this.onPlaylistChange();
         this.isPlaying = true; // Signal loadTrack to auto-play
         this.loadTrack(0);
     }

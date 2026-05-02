@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.5] - 2026-05-02
+
+### Fixed
+- **Shuffle button: highlighted playlist row now matches the actually-playing track.** The bug: `shuffleAndPlay()` reordered `musicPlayer.playlist` but only `populatePlaylist()` rebuilds the rendered DOM list. After shuffle the DOM still showed the *old* order, so toggling `.playing` on index 0 highlighted whatever happened to live there in the stale list while the audio played the new track 0. Result: highlighted track and playing track diverged.
+- Added an `onPlaylistChange` callback on `MusicPlayer`; `shuffleAndPlay()` fires it after reordering. The UI binds it to `populatePlaylist()` so the rendered list is rebuilt before `loadTrack(0)` triggers `onTrackChange`. Highlight and audio are now always in consensus.
+
+### Changed
+- **Random button now scrolls the playlist to the picked track** via a new `scrollToCurrentTrack()` helper (`scrollIntoView({ block: 'center', behavior: 'smooth' })`). Without this, the player would silently start a track buried far down in the list with no visible indication of which one.
+
+---
+
 ## [5.40.4] - 2026-05-02
 
 ### Changed

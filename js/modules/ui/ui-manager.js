@@ -713,6 +713,13 @@ export class UIManager {
             this.updateTrackDisplay(track);
             this.updatePlaylistDisplay();
         };
+
+        // Fires when the playlist array itself is reordered (e.g. shuffle).
+        // We rebuild the rendered DOM list so the highlighted row and the
+        // playing audio are always pointing at the same track.
+        this.musicPlayer.onPlaylistChange = () => {
+            this.populatePlaylist();
+        };
         
         this.musicPlayer.onPlayStateChange = (isPlaying) => {
             if (this.elements.musicPlayPause) {
@@ -821,10 +828,12 @@ export class UIManager {
         });
 
         // Random button: jump straight to a random track without
-        // touching playlist order. Same brief flash for feedback.
+        // touching playlist order. Scroll the playlist so the user can
+        // see which track was picked. Same brief flash for feedback.
         if (this.elements.musicRandom) {
             this.elements.musicRandom.addEventListener('click', () => {
                 this.musicPlayer.playRandomTrack();
+                this.scrollToCurrentTrack();
                 this.elements.musicRandom.classList.add('active');
                 setTimeout(() => this.elements.musicRandom.classList.remove('active'), 250);
             });
@@ -998,6 +1007,18 @@ export class UIManager {
                 track.classList.remove('playing');
             }
         });
+    }
+
+    // Scroll the playlist container so the currently playing track is
+    // visible (and roughly centered). Used when the user jumps via the
+    // random button — without this, the player would silently start a
+    // track buried far down in the list.
+    scrollToCurrentTrack() {
+        if (!this.elements.playlistTracks) return;
+        const active = this.elements.playlistTracks.querySelector('.playlist-track.playing');
+        if (active && typeof active.scrollIntoView === 'function') {
+            active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
     }
 
     populateSkillSlots() {
