@@ -190,68 +190,113 @@ export function drawWeaponEffects() {
         ctx.restore();
     }
 
-    // ─── Missiles — vector-style body with thruster flame + lights ──
+    // ─── Missiles — vector-style rocket with fins + thruster + lights ──
     if (p.activeMissiles) {
         const now = Date.now();
+        const BLINK_MS = 800; // last 800ms of life: blink-out telegraph
         for (const missile of p.activeMissiles) {
             if (!missile.active) continue;
+
+            // Blink-out near end of range — same pattern as the
+            // powerup-expiry blink. Frequency ramps up as life shrinks.
+            if (missile.life < BLINK_MS) {
+                const t = Math.max(0, missile.life / BLINK_MS); // 1 → 0
+                const hz = 2 + (1 - t) * 12; // ~2Hz at start of blink → ~14Hz at end
+                const phase = (now / 1000) * hz * Math.PI * 2;
+                if (Math.sin(phase) < 0) continue; // skip draw on "off" frames
+            }
+
             const angle = missile.angle ?? Math.atan2(missile.vel?.y || 0, missile.vel?.x || 0);
             ctx.save();
             ctx.translate(missile.x, missile.y);
             ctx.rotate(angle);
 
             // Thruster flame trail — gradient fading orange→transparent.
-            const thrusterLen = 14 + Math.random() * 5;
-            const thrusterGrad = ctx.createLinearGradient(-6, 0, -6 - thrusterLen, 0);
+            const thrusterLen = 16 + Math.random() * 6;
+            const thrusterGrad = ctx.createLinearGradient(-8, 0, -8 - thrusterLen, 0);
             thrusterGrad.addColorStop(0, 'rgba(255, 220, 80, 0.95)');
             thrusterGrad.addColorStop(0.45, 'rgba(255, 120, 40, 0.7)');
             thrusterGrad.addColorStop(1, 'rgba(80, 0, 0, 0)');
             ctx.fillStyle = thrusterGrad;
             ctx.beginPath();
-            ctx.moveTo(-6, -3);
-            ctx.lineTo(-6 - thrusterLen, 0);
-            ctx.lineTo(-6, 3);
+            ctx.moveTo(-8, -3);
+            ctx.lineTo(-8 - thrusterLen, 0);
+            ctx.lineTo(-8, 3);
             ctx.closePath();
             ctx.fill();
 
-            // Body — vector-style elongated dart.
+            // ── Body — proper rocket silhouette ──
+            // Nose cone (sharper, longer) + cylindrical body + tapered tail.
             ctx.fillStyle = '#cc2222';
             ctx.strokeStyle = '#ff8866';
             ctx.lineWidth = 1.5;
+            ctx.lineJoin = 'round';
             ctx.beginPath();
-            ctx.moveTo(9, 0);     // nose
-            ctx.lineTo(2, -3);
-            ctx.lineTo(-5, -3);   // tail-left
-            ctx.lineTo(-7, 0);    // tail-mid
-            ctx.lineTo(-5, 3);
-            ctx.lineTo(2, 3);     // tail-right
+            ctx.moveTo(13, 0);       // sharp nose
+            ctx.lineTo(7, -2.6);     // shoulder
+            ctx.lineTo(-5, -2.6);    // body
+            ctx.lineTo(-8, -1.4);    // tail taper
+            ctx.lineTo(-8, 1.4);
+            ctx.lineTo(-5, 2.6);
+            ctx.lineTo(7, 2.6);
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
 
-            // Fins
-            ctx.strokeStyle = '#aa3333';
-            ctx.lineWidth = 1.5;
-            ctx.lineCap = 'round';
+            // Body banding — single dark line across the cylindrical
+            // section sells the rocket look without much cost.
+            ctx.strokeStyle = 'rgba(60, 0, 0, 0.6)';
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(-2, -3);
-            ctx.lineTo(-6, -6);
-            ctx.moveTo(-2, 3);
-            ctx.lineTo(-6, 6);
+            ctx.moveTo(2, -2.6);
+            ctx.lineTo(2, 2.6);
+            ctx.stroke();
+
+            // ── Aft fins (wide swept-back wings) ──
+            ctx.fillStyle = '#aa3333';
+            ctx.strokeStyle = '#ff7755';
+            ctx.lineWidth = 1.2;
+            // Top fin
+            ctx.beginPath();
+            ctx.moveTo(-2, -2.6);
+            ctx.lineTo(-1, -7);     // tip
+            ctx.lineTo(-7, -7);
+            ctx.lineTo(-7, -2.6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            // Bottom fin
+            ctx.beginPath();
+            ctx.moveTo(-2, 2.6);
+            ctx.lineTo(-1, 7);
+            ctx.lineTo(-7, 7);
+            ctx.lineTo(-7, 2.6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // ── Tail vertical fin (small, centered) ──
+            ctx.beginPath();
+            ctx.moveTo(-5, 0);
+            ctx.lineTo(-9, -2.5);
+            ctx.lineTo(-10, 0);
+            ctx.lineTo(-9, 2.5);
+            ctx.closePath();
+            ctx.fill();
             ctx.stroke();
 
             // Pulsing nose-cone light
             const pulse = 0.55 + Math.sin(now * 0.022) * 0.45;
             ctx.fillStyle = `rgba(255, 255, 200, ${pulse})`;
             ctx.beginPath();
-            ctx.arc(8, 0, 1.8, 0, Math.PI * 2);
+            ctx.arc(11, 0, 1.6, 0, Math.PI * 2);
             ctx.fill();
 
             // Side LEDs (steady amber)
             ctx.fillStyle = '#ffaa00';
             ctx.beginPath();
-            ctx.arc(-1, -2, 0.9, 0, Math.PI * 2);
-            ctx.arc(-1, 2, 0.9, 0, Math.PI * 2);
+            ctx.arc(0, -1.6, 0.8, 0, Math.PI * 2);
+            ctx.arc(0, 1.6, 0.8, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.restore();

@@ -643,11 +643,21 @@ export function fireMissiles(bulletPool, config) {
     const extraOrdnanceStacks = this.getPowerupStacks('EXTRA_ORDNANCE');
     const count = config.missileCount + extraOrdnanceStacks;
 
+    // Per-slot offset along the ship's perpendicular axis so the
+    // missiles visibly launch from positions across the ship's wings
+    // (not all from the same center point) and fan outward in a wider
+    // arc. Spread bumped 0.3 → 0.5 rad/slot for a more dramatic fan.
+    const perpX = -Math.sin(this.angle); // ship-relative right
+    const perpY = Math.cos(this.angle);
     for (let i = 0; i < count; i++) {
-        const spreadAngle = this.angle + (i - (count - 1) / 2) * 0.3;
+        const slot = i - (count - 1) / 2;     // -1..0..+1 etc., centered
+        const spreadAngle = this.angle + slot * 0.5;
+        const wingOffset = slot * 9;          // px along the ship's perp axis
+        const launchX = this.x + perpX * wingOffset;
+        const launchY = this.y + perpY * wingOffset;
         this.activeMissiles.push({
-            x: this.x,
-            y: this.y,
+            x: launchX,
+            y: launchY,
             vel: {
                 x: Math.cos(spreadAngle) * config.missileSpeed,
                 y: Math.sin(spreadAngle) * config.missileSpeed,
@@ -659,6 +669,7 @@ export function fireMissiles(bulletPool, config) {
             homingStrength: config.missileHomingStrength,
             cluster: this.getPowerupStacks('CLUSTER_WARHEAD') > 0,
             life: 3000,
+            maxLife: 3000,
             radius: 5,
             target: null,
             active: true,

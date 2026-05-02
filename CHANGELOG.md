@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.46.3] - 2026-05-02
+
+### Changed
+- **Missiles fan out from the ship's wings.** Per-slot launch position now offsets along the ship's perpendicular axis (`±9px × slot`), so each missile visibly leaves a different point across the wings instead of all spawning at the ship's center. Per-slot fan angle bumped 0.3 → 0.5 rad for a more dramatic spread.
+- **Missile silhouette rebuilt as a proper rocket** with sharper nose cone, cylindrical body with a band, two swept-back aft fins (top + bottom, filled), and a small centered tail fin. Pulsing nose light + amber side LEDs preserved.
+- **Missiles blink out as their range expires.** Mirrors the powerup-expiry blink — frequency ramps from ~2Hz at 800ms remaining up to ~14Hz right before the missile times out. `fireMissiles` stashes `maxLife: 3000` for any future range tuning.
+
+---
+
 ## [5.46.2] - 2026-05-02
 
 ### Changed
