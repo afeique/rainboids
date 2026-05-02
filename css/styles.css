@@ -1196,6 +1196,42 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border-color: #00ff00;
 }
 
+/* Instant custom tooltip via data-tooltip attribute. The native `title`
+   attribute has a ~700ms browser delay; a CSS :hover pseudo-element
+   fires the moment the cursor enters the button. */
+.music-control-btn[data-tooltip] {
+    position: relative;
+}
+.music-control-btn[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.92);
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 204, 255, 0.6);
+    font-size: 12px;
+    font-family: inherit;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10000;
+}
+/* Little arrow under the tooltip pointing at the button */
+.music-control-btn[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba(0, 204, 255, 0.6);
+    pointer-events: none;
+    z-index: 10000;
+}
+
 /* Playlist Styles */
 #playlist-container {
     margin-top: 20px;

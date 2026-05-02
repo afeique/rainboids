@@ -819,10 +819,15 @@ export class UIManager {
         });
         
         // Shuffle button: re-orders the playlist and starts the new track 0.
-        // Brief 'active' flash gives visual confirmation that something
-        // happened (in addition to the track name changing).
+        // Snap the scroll position back to the top so the user sees the
+        // freshly-shuffled order from the start, with the now-playing
+        // track 0 sitting at the top. Brief 'active' flash gives visual
+        // confirmation that something happened.
         this.elements.musicShuffle.addEventListener('click', () => {
             this.musicPlayer.shuffleAndPlay();
+            if (this.elements.playlistTracks) {
+                this.elements.playlistTracks.scrollTop = 0;
+            }
             this.elements.musicShuffle.classList.add('active');
             setTimeout(() => this.elements.musicShuffle.classList.remove('active'), 250);
         });

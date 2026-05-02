@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.6] - 2026-05-02
+
+### Changed
+- **Shuffle button now scrolls the playlist back to the top** so the user sees the freshly-shuffled order from track 0 (the one that just started playing) instead of remaining wherever the previous scroll position was.
+
+### Added
+- **Instant custom tooltips on all six music player buttons** (shuffle / random / prev / play-pause / next / repeat). Replaced native `title` (which has a ~700ms browser-imposed delay) with `data-tooltip` + a CSS `:hover::after` pseudo-element that fires the moment the cursor enters the button. Includes a small arrow pointer pointing at the button for clear association.
+
+---
+
 ## [5.40.5] - 2026-05-02
 
 ### Fixed
