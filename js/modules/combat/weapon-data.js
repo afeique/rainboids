@@ -242,11 +242,11 @@ export const POWER_WEAPONS = {
         missileCount: 3,
         missileDamage: 1.5,   // was 2 — power weapons scaled down for balance
         missileSpeed: 4,
-        missileHomingStrength: 0.08,
+        missileHomingStrength: 0.18, // Always-on homing (LOCK_ON upgrade removed)
         cost: 3000,
         spCost: 3,
         unlockWave: 7,
-        upgrades: ['EXTRA_ORDNANCE', 'CLUSTER_WARHEAD', 'LOCK_ON', 'QUICK_RELOAD'],
+        upgrades: ['EXTRA_ORDNANCE', 'CLUSTER_WARHEAD', 'QUICK_RELOAD'],
     },
 };
 
@@ -281,7 +281,6 @@ export const POWER_UPGRADES = {
     // Missile Salvo
     EXTRA_ORDNANCE:   { id: 'EXTRA_ORDNANCE',   name: 'Extra Ordnance',   description: '+1 missile per stack',                cost: 1000, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: '🚀' },
     CLUSTER_WARHEAD:  { id: 'CLUSTER_WARHEAD',  name: 'Cluster Warhead',  description: 'Missiles split into 3 on impact',     cost: 1800, maxStacks: 1,  weapon: 'MISSILE_SALVO', icon: '💥' },
-    LOCK_ON:          { id: 'LOCK_ON',          name: 'Lock-On',          description: 'Missiles track faster',                cost: 800,  maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: '🎯' },
     QUICK_RELOAD:     { id: 'QUICK_RELOAD',     name: 'Quick Reload',     description: '-2s cooldown per stack',               cost: 1500, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: '⏩' },
 };
 

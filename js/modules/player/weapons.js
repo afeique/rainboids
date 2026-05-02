@@ -517,16 +517,18 @@ export function fireNova(config) {
     this.powerCooldown = Math.max(2000, config.cooldown - resonanceStacks * 1500);
     this.powerCooldownMax = this.powerCooldown;
 
+    this.novaActive = true; // collision/renderer gate
     this.novaRings.push({
         x: this.x,
         y: this.y,
-        radius: 0,
+        currentRadius: 0,    // renderer + collision read this
         maxRadius: config.ringRadius + shockwaveStacks * 40,
         damage: config.ringDamage,
         duration: config.ringDuration,
         elapsed: 0,
         hitEnemies: new Set(),
         aftershock: this.getPowerupStacks('AFTERSHOCK') > 0,
+        active: true,
     });
 
     // Double Pulse
@@ -535,14 +537,16 @@ export function fireNova(config) {
             this.novaRings.push({
                 x: this.x,
                 y: this.y,
-                radius: 0,
+                currentRadius: 0,
                 maxRadius: (config.ringRadius + shockwaveStacks * 40) * 0.7,
                 damage: config.ringDamage * 0.6,
                 duration: config.ringDuration,
                 elapsed: 0,
                 hitEnemies: new Set(),
                 aftershock: false,
+                active: true,
             });
+            this.novaActive = true;
         }, 300);
     }
 }
@@ -555,25 +559,51 @@ export function fireLightning(config) {
     this.powerCooldown = Math.max(2000, config.cooldown - teslaCoilStacks * 1500);
     this.powerCooldownMax = this.powerCooldown;
 
+    const maxChains = config.chainCount + conductorStacks;
+    const range = config.chainRange;
+
+    // Build the chain-target list eagerly so the renderer + collision
+    // both have something concrete to iterate. targets[0] is the player
+    // (origin), then up to `maxChains` enemies hopping between each
+    // other within `range` of the previous link.
+    const targets = [{ x: this.x, y: this.y, enemy: null }];
+    const visited = new Set();
+    const enemies = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects)
+        || (window.gameEngine && window.gameEngine.enemyPool && window.gameEngine.enemyPool.activeObjects)
+        || [];
+    let cursorX = this.x, cursorY = this.y;
+    for (let hop = 0; hop < maxChains; hop++) {
+        let best = null, bestDist = range;
+        for (const e of enemies) {
+            if (!e.active || visited.has(e)) continue;
+            const d = Math.hypot(e.x - cursorX, e.y - cursorY);
+            if (d < bestDist) { bestDist = d; best = e; }
+        }
+        if (!best) break;
+        visited.add(best);
+        targets.push({ x: best.x, y: best.y, enemy: best });
+        cursorX = best.x; cursorY = best.y;
+    }
+
     this.lightningChains.push({
         originX: this.x,
         originY: this.y,
         angle: this.angle,
-        maxChains: config.chainCount + conductorStacks,
+        maxChains,
         damage: config.chainDamage,
         falloff: config.chainFalloff,
-        range: config.chainRange,
+        range,
         amplifierStacks: this.getPowerupStacks('AMPLIFIER'),
         staticField: this.getPowerupStacks('STATIC_FIELD') > 0,
         timer: 500, // visual duration
-        hitEnemies: [],
-        resolved: false,
+        targets,
+        damageApplied: false,
+        active: true,
     });
 }
 
 export function fireMissiles(bulletPool, config) {
     const extraOrdnanceStacks = this.getPowerupStacks('EXTRA_ORDNANCE');
-    const lockOnStacks = this.getPowerupStacks('LOCK_ON');
     const count = config.missileCount + extraOrdnanceStacks;
 
     for (let i = 0; i < count; i++) {
@@ -585,13 +615,17 @@ export function fireMissiles(bulletPool, config) {
                 x: Math.cos(spreadAngle) * config.missileSpeed,
                 y: Math.sin(spreadAngle) * config.missileSpeed,
             },
+            angle: spreadAngle,
             damage: config.missileDamage,
-            homingStrength: config.missileHomingStrength + lockOnStacks * 0.03,
+            // Homing is always on (LOCK_ON upgrade was removed). The
+            // base config value tunes how aggressively missiles steer.
+            homingStrength: config.missileHomingStrength,
             cluster: this.getPowerupStacks('CLUSTER_WARHEAD') > 0,
             life: 3000,
             radius: 5,
             target: null,
             active: true,
+            speed: config.missileSpeed,
         });
     }
 

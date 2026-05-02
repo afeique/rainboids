@@ -175,20 +175,70 @@ export function drawWeaponEffects() {
         ctx.restore();
     }
 
-    // ─── Missiles ──────────────────────────────────────────────────
+    // ─── Missiles — vector-style body with thruster flame + lights ──
     if (p.activeMissiles) {
+        const now = Date.now();
         for (const missile of p.activeMissiles) {
             if (!missile.active) continue;
+            const angle = missile.angle ?? Math.atan2(missile.vel?.y || 0, missile.vel?.x || 0);
             ctx.save();
-            ctx.fillStyle = POWER_WEAPONS.MISSILE_SALVO.color;
+            ctx.translate(missile.x, missile.y);
+            ctx.rotate(angle);
+
+            // Thruster flame trail — gradient fading orange→transparent.
+            const thrusterLen = 14 + Math.random() * 5;
+            const thrusterGrad = ctx.createLinearGradient(-6, 0, -6 - thrusterLen, 0);
+            thrusterGrad.addColorStop(0, 'rgba(255, 220, 80, 0.95)');
+            thrusterGrad.addColorStop(0.45, 'rgba(255, 120, 40, 0.7)');
+            thrusterGrad.addColorStop(1, 'rgba(80, 0, 0, 0)');
+            ctx.fillStyle = thrusterGrad;
             ctx.beginPath();
-            ctx.arc(missile.x, missile.y, 4, 0, Math.PI * 2);
+            ctx.moveTo(-6, -3);
+            ctx.lineTo(-6 - thrusterLen, 0);
+            ctx.lineTo(-6, 3);
+            ctx.closePath();
             ctx.fill();
-            ctx.fillStyle = 'rgba(255, 200, 100, 0.5)';
-            const trail = 8;
+
+            // Body — vector-style elongated dart.
+            ctx.fillStyle = '#cc2222';
+            ctx.strokeStyle = '#ff8866';
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.arc(missile.x - missile.vx * trail, missile.y - missile.vy * trail, 2, 0, Math.PI * 2);
+            ctx.moveTo(9, 0);     // nose
+            ctx.lineTo(2, -3);
+            ctx.lineTo(-5, -3);   // tail-left
+            ctx.lineTo(-7, 0);    // tail-mid
+            ctx.lineTo(-5, 3);
+            ctx.lineTo(2, 3);     // tail-right
+            ctx.closePath();
             ctx.fill();
+            ctx.stroke();
+
+            // Fins
+            ctx.strokeStyle = '#aa3333';
+            ctx.lineWidth = 1.5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(-2, -3);
+            ctx.lineTo(-6, -6);
+            ctx.moveTo(-2, 3);
+            ctx.lineTo(-6, 6);
+            ctx.stroke();
+
+            // Pulsing nose-cone light
+            const pulse = 0.55 + Math.sin(now * 0.022) * 0.45;
+            ctx.fillStyle = `rgba(255, 255, 200, ${pulse})`;
+            ctx.beginPath();
+            ctx.arc(8, 0, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Side LEDs (steady amber)
+            ctx.fillStyle = '#ffaa00';
+            ctx.beginPath();
+            ctx.arc(-1, -2, 0.9, 0, Math.PI * 2);
+            ctx.arc(-1, 2, 0.9, 0, Math.PI * 2);
+            ctx.fill();
+
             ctx.restore();
         }
     }

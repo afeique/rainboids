@@ -36,15 +36,17 @@ export function updateActiveSkills(dt) {
         }
     }
 
-    // Update nova rings
+    // Update nova rings — render+collision both use `currentRadius`,
+    // so we set that here. Clear `novaActive` once all rings have died.
     for (let i = this.novaRings.length - 1; i >= 0; i--) {
         const ring = this.novaRings[i];
         ring.elapsed += dt;
-        ring.radius = (ring.elapsed / ring.duration) * ring.maxRadius;
+        ring.currentRadius = (ring.elapsed / ring.duration) * ring.maxRadius;
         if (ring.elapsed >= ring.duration) {
             this.novaRings.splice(i, 1);
         }
     }
+    if (this.novaRings.length === 0) this.novaActive = false;
 
     // Update lightning chains visual timer
     for (let i = this.lightningChains.length - 1; i >= 0; i--) {
@@ -54,7 +56,10 @@ export function updateActiveSkills(dt) {
         }
     }
 
-    // Update missiles
+    // Update missiles — always-on homing seeks the nearest active enemy.
+    // Each missile re-acquires when its target dies. Steering uses a
+    // smooth angular interpolation so the rotation reads naturally.
+    const enemies = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
     for (let i = this.activeMissiles.length - 1; i >= 0; i--) {
         const m = this.activeMissiles[i];
         m.life -= dt;
@@ -62,6 +67,36 @@ export function updateActiveSkills(dt) {
             this.activeMissiles.splice(i, 1);
             continue;
         }
+
+        // (Re-)acquire target if needed.
+        if (!m.target || !m.target.active) {
+            let bestDist = Infinity, best = null;
+            for (const e of enemies) {
+                if (!e.active) continue;
+                const d = Math.hypot(e.x - m.x, e.y - m.y);
+                if (d < bestDist) { bestDist = d; best = e; }
+            }
+            m.target = best;
+        }
+
+        // Steer toward the target via smooth angle interpolation.
+        if (m.target && m.target.active) {
+            const dx = m.target.x - m.x;
+            const dy = m.target.y - m.y;
+            const targetAng = Math.atan2(dy, dx);
+            const currentAng = Math.atan2(m.vel.y, m.vel.x);
+            // Shortest signed angular delta.
+            let diff = ((targetAng - currentAng + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+            const turn = m.homingStrength || 0.18;
+            const newAng = currentAng + diff * turn;
+            const speed = m.speed || Math.hypot(m.vel.x, m.vel.y);
+            m.vel.x = Math.cos(newAng) * speed;
+            m.vel.y = Math.sin(newAng) * speed;
+            m.angle = newAng;
+        } else {
+            m.angle = Math.atan2(m.vel.y, m.vel.x);
+        }
+
         m.x += m.vel.x;
         m.y += m.vel.y;
     }

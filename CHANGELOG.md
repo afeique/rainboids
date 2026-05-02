@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.44.0] - 2026-05-02
+
+### Fixed
+- **Nova Blast actually does damage now.** Three latent bugs: `p.novaActive` was never set so collision/render gated out entirely; `ring.active` was never set; skills.js wrote `ring.radius` while collision/render read `ring.currentRadius`. Fixed all three: `fireNova` flips `novaActive=true` and `active=true` on each ring, skills.js writes `currentRadius`, and `novaActive` is cleared when the rings array drains.
+- **Lightning Arc actually damages enemies now.** `chain.targets` was never populated and `chain.active` was never set, so the renderer drew nothing and collision iterated an empty list. `fireLightning` now eagerly builds the chain: pulls `enemyPool` from `this.gameEngine`, repeatedly picks the nearest unvisited enemy within `chainRange` of the previous link, up to `maxChains` hops. Targets render as zig-zag arcs and collision applies falloff damage along the chain.
+- **Missile Salvo actually homes and connects now.** Skills update never applied homing — missiles flew straight ignoring `homingStrength`. Renderer also accessed non-existent `missile.vx` / `missile.vy` (data has `missile.vel.x` / `missile.vel.y`). Now missiles re-acquire the nearest active enemy and steer toward it via smooth angular interpolation.
+
+### Changed
+- **Missiles redrawn vector-style** with a dart-shaped body, fins, gradient thruster flame trail, pulsing nose-cone light, and steady amber side LEDs. Rotates to face its current heading.
+- **Homing is always on for missiles**; `LOCK_ON` upgrade removed. Base `missileHomingStrength` bumped from 0.08 → 0.18 so the always-on homing actually grabs targets. `MISSILE_SALVO.upgrades` array no longer references `LOCK_ON`.
+
+---
+
 ## [5.43.0] - 2026-05-02
 
 ### Fixed
