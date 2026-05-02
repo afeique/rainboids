@@ -5,6 +5,14 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES } from '../combat/weapon-data.js';
 import { autofireDiag } from '../autofire-diag.js';
 
+// BIG_BULLETS uses an ADDITIVE pixel boost rather than a multiplicative
+// scalar. With multiplication, weapons whose base bullets are tiny
+// (Storm Needles at 0.5× base radius) barely showed any growth at low
+// stacks, breaking the "this powerup makes bullets bigger" promise.
+// Additive guarantees every weapon's bullet grows by the same Δpx per
+// stack, so the visual feel is consistent across the roster.
+const BIG_BULLETS_PX_PER_STACK = 1.5;
+
 // ── Velocity-and-damage upgrade helper ────────────────────────────────────
 // Per-weapon "high-velocity rounds"-style upgrade: each stack adds the same
 // percentage to bullet speed AND damage. Weapons declare their bonus per
@@ -406,15 +414,18 @@ export function applyGlobalBulletUpgrades(bullet) {
         bullet.color = '#FFFF00';
     }
 
-    // Homing
+    // Homing — unified formula across all weapons (see HOMING block in
+    // createChargedBullets). Per-stack strength + cap chosen to feel
+    // similar at low stacks and not run away at high stacks.
     if (homingStacks > 0) {
         bullet.homing = true;
-        bullet.homingStrength = Math.min(0.4, homingStacks * 0.05);
+        bullet.homingStrength = Math.min(0.4, homingStacks * 0.06);
     }
 
-    // Big bullets
+    // Big bullets — additive Δpx per stack (see BIG_BULLETS_PX_PER_STACK
+    // comment at top of file for rationale on additive vs multiplicative).
     if (bigBulletStacks > 0) {
-        bullet.radius *= (1 + bigBulletStacks * 0.3);
+        bullet.radius += BIG_BULLETS_PX_PER_STACK * bigBulletStacks;
         bullet.baseRadius = bullet.radius;
     }
 
@@ -843,7 +854,7 @@ export function createBullets(bulletPool) {
                 bullet.homingStrength = upgradeHomingStrength;
             }
             if (bigBulletStacks > 0) {
-                bullet.radius *= (1 + bigBulletStacks * 0.3);
+                bullet.radius += BIG_BULLETS_PX_PER_STACK * bigBulletStacks;
                 bullet.baseRadius = bullet.radius; // Update base for shrink calc
             }
             if (piercingStacks > 0) {
@@ -924,20 +935,27 @@ export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultip
                 bullet.isCritical = false;
             }
 
-            // Apply homing effects to bullet - combine base homing from charge with upgrade homing
-            const upgradeHomingStrength = homingStacks > 0 ? Math.min(0.25, homingStacks * 0.08) : 0; // Stronger upgrade homing
+            // Apply homing effects — unified formula matches
+            // applyGlobalBulletUpgrades so charged shots and the
+            // primary's own bullets feel the same per stack of HOMING.
+            // Charge-base homing (baseHomingStrength) is still added
+            // because it's a separate "charge level" mechanic.
+            const upgradeHomingStrength = homingStacks > 0 ? Math.min(0.4, homingStacks * 0.06) : 0;
             const totalHomingStrength = baseHomingStrength + upgradeHomingStrength;
 
             if (totalHomingStrength > 0) {
                 bullet.homing = true;
-                bullet.homingStrength = Math.min(0.4, totalHomingStrength); // Cap at 0.4 for balance
+                bullet.homingStrength = Math.min(0.4, totalHomingStrength);
             }
             if (bigBulletStacks > 0) {
-                bullet.radius *= (1 + bigBulletStacks * 0.3);
+                bullet.radius += BIG_BULLETS_PX_PER_STACK * bigBulletStacks;
                 bullet.baseRadius = bullet.radius;
             }
             if (piercingStacks > 0) {
-                bullet.piercing = piercingStacks; // Number of enemies it can pierce
+                // Additive with weapon's built-in piercing — matches
+                // applyGlobalBulletUpgrades. Charged Pulse Cannon shots
+                // pick up PIERCING stacks the same way as Rail Driver does.
+                bullet.piercing = (bullet.piercing || 0) + piercingStacks;
             }
             if (explosiveStacks > 0) {
                 bullet.explosive = true;

@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.15] - 2026-05-02
+
+### Changed
+- **Temporary powerups now apply consistently across every primary weapon.** Three previously-divergent powerups harmonized:
+  - **BIG_BULLETS** — switched from multiplicative (`radius *= 1 + stacks * 0.3`) to **additive** (`radius += 1.5px * stacks`). Old behavior under-served small-bullet weapons: at 1 stack, Pulse Cannon grew from r=4 to r=5.2 (+1.2px) but Storm Needles only grew from r=2 to r=2.6 (+0.6px) — barely visible. New behavior gives every weapon the same Δpx per stack regardless of base bullet size, so the "bullets are bigger now" promise reads visually on every primary.
+  - **HOMING** — unified the per-stack formula. Was `min(0.4, stacks * 0.05)` in `applyGlobalBulletUpgrades` (Storm Needles, Scatter Gun, Rail Driver) but `min(0.25, stacks * 0.08)` in `createChargedBullets` (Pulse Cannon). Now `min(0.4, stacks * 0.06)` everywhere — slightly weaker per stack on Pulse Cannon at low stack counts, but the cap is now identical (0.4) and the per-stack rate matches across the roster.
+  - **PIERCING** — `createChargedBullets` was overwriting `bullet.piercing = stacks`, while `applyGlobalBulletUpgrades` added to the existing piercing (`= (bullet.piercing||0) + stacks`). Now both are additive — consistent semantics.
+
+---
+
 ## [5.40.14] - 2026-05-02
 
 ### Fixed
