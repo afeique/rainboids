@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.40.14] - 2026-05-02
+
+### Fixed
+- **MULTI_SHOT now carries over to every primary weapon, not just Pulse Cannon.** Previously only `firePulseCannon` (via `createChargedBullets`) consulted `MULTI_SHOT`; `fireStormNeedles`, `fireScatterGun`, and `fireRailDriver` ignored it entirely, firing exactly 1 bullet/pellet-spread/rail per shot regardless of stacks.
+  - Storm Needles: now fires `1 + multiShotStacks` needles fanned across a small spread (≤0.5 rad).
+  - Scatter Gun (pellet path): adds `multiShotStacks` to `pelletCount` on top of `BUCKSHOT`.
+  - Scatter Gun (slug path): fires `1 + multiShotStacks` slugs in a tight fan (≤0.4 rad).
+  - Rail Driver: fires `1 + multiShotStacks` rails in a narrow fan (≤0.3 rad — wider would feel chaotic at rail range).
+  - Lance Beam: unchanged; multi-shot is a no-op for continuous-beam weapons.
+
+### Note
+- BIG_BULLETS already applies to all primary weapons via `applyGlobalBulletUpgrades`. Its effect on Storm Needles looks subtle because needles have a 0.5× base bullet size — at 1 stack you get `0.5 × 1.3 = 0.65×` of the base bullet radius. Stack BIG_BULLETS more times to see the visible growth.
+
+---
+
 ## [5.40.13] - 2026-05-02
 
 ### Changed

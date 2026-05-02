@@ -201,39 +201,42 @@ export function firePulseCannon(bulletPool, audioManager, config) {
 }
 
 export function fireStormNeedles(bulletPool, audioManager, config) {
-    this.needleCount++;
     const damage = this.getEffectivePrimaryDamage();
     const spreadAngle = config.spreadAngle;
+    // MULTI_SHOT carry-over: +1 needle per stack, fanned across a small
+    // additional spread so they don't overlap visually.
+    const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
+    const bulletCount = 1 + multiShotStacks;
+    const fanSpread = bulletCount > 1 ? Math.min(0.5, 0.10 * (bulletCount - 1)) : 0;
 
-    // Fire a single small needle with random spread
-    const angleOffset = (Math.random() - 0.5) * spreadAngle;
-    const bullet = bulletPool.get(this.x, this.y, this.angle + angleOffset);
-    if (bullet) {
-        bullet.damage = damage;
-        bullet.radius *= config.bulletSize;
-        bullet.baseRadius = bullet.radius;
-        bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
-        bullet.maxLife = Math.round(bullet.maxLife * config.range);
-        bullet.color = config.color;
+    for (let i = 0; i < bulletCount; i++) {
+        this.needleCount++;
+        const fanOffset = bulletCount > 1
+            ? (i - (bulletCount - 1) / 2) * (fanSpread / Math.max(1, bulletCount - 1))
+            : 0;
+        const jitter = (Math.random() - 0.5) * spreadAngle;
+        const bullet = bulletPool.get(this.x, this.y, this.angle + fanOffset + jitter);
+        if (bullet) {
+            bullet.damage = damage;
+            bullet.radius *= config.bulletSize;
+            bullet.baseRadius = bullet.radius;
+            bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+            bullet.maxLife = Math.round(bullet.maxLife * config.range);
+            bullet.color = config.color;
 
-        // Apply global upgrades
-        this.applyGlobalBulletUpgrades(bullet);
+            this.applyGlobalBulletUpgrades(bullet);
 
-        // Poison Tip
-        if (this.getPowerupStacks('POISON_TIP') > 0) {
-            bullet.poisonDamage = 1;
-            bullet.poisonDuration = 2000;
-        }
-
-        // Suppression
-        if (this.getPowerupStacks('SUPPRESSION') > 0) {
-            bullet.suppressionDuration = 1500;
-        }
-
-        // Static Charge: every 10th needle
-        const staticStacks = this.getPowerupStacks('STATIC_CHARGE');
-        if (staticStacks > 0 && this.needleCount % 10 === 0) {
-            bullet.chainLightning = staticStacks;
+            if (this.getPowerupStacks('POISON_TIP') > 0) {
+                bullet.poisonDamage = 1;
+                bullet.poisonDuration = 2000;
+            }
+            if (this.getPowerupStacks('SUPPRESSION') > 0) {
+                bullet.suppressionDuration = 1500;
+            }
+            const staticStacks = this.getPowerupStacks('STATIC_CHARGE');
+            if (staticStacks > 0 && this.needleCount % 10 === 0) {
+                bullet.chainLightning = staticStacks;
+            }
         }
     }
     audioManager.playShoot();
@@ -244,23 +247,33 @@ export function fireScatterGun(bulletPool, audioManager, config) {
     const damage = this.getEffectivePrimaryDamage();
     const buckshotStacks = this.getPowerupStacks('BUCKSHOT');
     const tightChokeStacks = this.getPowerupStacks('TIGHT_CHOKE');
+    // MULTI_SHOT carry-over: +1 pellet per stack on top of BUCKSHOT.
+    const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
     const slugRound = this.getPowerupStacks('SLUG_ROUND') > 0 && this.scatterShotCount % 4 === 0;
 
     if (slugRound) {
-        // Single powerful slug
-        const bullet = bulletPool.get(this.x, this.y, this.angle);
-        if (bullet) {
-            bullet.damage = damage * 4;
-            bullet.radius *= 1.8;
-            bullet.baseRadius = bullet.radius;
-            bullet.rangeMultiplier = this.getRangeMultiplier() * config.range * 1.5;
-            bullet.maxLife = Math.round(bullet.maxLife * config.range * 1.5);
-            bullet.color = '#ffaa00';
-            this.applyGlobalBulletUpgrades(bullet);
+        // Slug round — fire (1 + multiShotStacks) slugs in a tight fan
+        // so MULTI_SHOT carries over to the slug variant too.
+        const slugCount = 1 + multiShotStacks;
+        const slugFan = slugCount > 1 ? Math.min(0.4, 0.08 * (slugCount - 1)) : 0;
+        for (let i = 0; i < slugCount; i++) {
+            const offset = slugCount > 1
+                ? (i - (slugCount - 1) / 2) * (slugFan / Math.max(1, slugCount - 1))
+                : 0;
+            const bullet = bulletPool.get(this.x, this.y, this.angle + offset);
+            if (bullet) {
+                bullet.damage = damage * 4;
+                bullet.radius *= 1.8;
+                bullet.baseRadius = bullet.radius;
+                bullet.rangeMultiplier = this.getRangeMultiplier() * config.range * 1.5;
+                bullet.maxLife = Math.round(bullet.maxLife * config.range * 1.5);
+                bullet.color = '#ffaa00';
+                this.applyGlobalBulletUpgrades(bullet);
+            }
         }
     } else {
-        // Pellet spread
-        const pelletCount = config.bulletCount + buckshotStacks;
+        // Pellet spread — multiShot adds extra pellets to the fan.
+        const pelletCount = config.bulletCount + buckshotStacks + multiShotStacks;
         const spread = config.spreadAngle * Math.pow(0.85, tightChokeStacks);
         const startAngle = this.angle - spread / 2;
 
@@ -290,9 +303,13 @@ export function fireRailDriver(bulletPool, audioManager, config) {
     const penetratorStacks = this.getPowerupStacks('PENETRATOR');
     const rangeBonus = 1 + penetratorStacks * 0.5;
     const capacitorStacks = this.getPowerupStacks('RAILGUN_CAPACITOR');
+    // MULTI_SHOT carry-over: +1 rail per stack, narrowly fanned because
+    // rails travel far and a wide fan would feel chaotic.
+    const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
+    const railCount = 1 + multiShotStacks;
+    const railFan = railCount > 1 ? Math.min(0.3, 0.06 * (railCount - 1)) : 0;
 
     let finalDamage = damage;
-    // Capacitor: 2x damage if idle for 2s
     if (capacitorStacks > 0) {
         const idleTime = Date.now() - this.lastPrimaryFireTime;
         if (idleTime > 2000) {
@@ -300,32 +317,30 @@ export function fireRailDriver(bulletPool, audioManager, config) {
         }
     }
 
-    const bullet = bulletPool.get(this.x, this.y, this.angle);
-    if (bullet) {
-        bullet.damage = finalDamage;
-        bullet.radius *= config.bulletSize;
-        bullet.baseRadius = bullet.radius;
-        bullet.piercing = config.piercing;
-        bullet.rangeMultiplier = this.getRangeMultiplier() * config.range * rangeBonus;
-        bullet.maxLife = Math.round(bullet.maxLife * config.range * rangeBonus);
-        bullet.color = config.color;
+    for (let i = 0; i < railCount; i++) {
+        const offset = railCount > 1
+            ? (i - (railCount - 1) / 2) * (railFan / Math.max(1, railCount - 1))
+            : 0;
+        const bullet = bulletPool.get(this.x, this.y, this.angle + offset);
+        if (bullet) {
+            bullet.damage = finalDamage;
+            bullet.radius *= config.bulletSize;
+            bullet.baseRadius = bullet.radius;
+            bullet.piercing = config.piercing;
+            bullet.rangeMultiplier = this.getRangeMultiplier() * config.range * rangeBonus;
+            bullet.maxLife = Math.round(bullet.maxLife * config.range * rangeBonus);
+            bullet.color = config.color;
 
-        // Kinetic Impact
-        if (this.getPowerupStacks('KINETIC_IMPACT') > 0) {
-            bullet.knockback = 8;
+            if (this.getPowerupStacks('KINETIC_IMPACT') > 0) bullet.knockback = 8;
+            if (this.getPowerupStacks('THROUGH_AND_THROUGH') > 0) bullet.damageTrail = true;
+
+            // Speed boost for rail (apply after bulletPool initialized vel)
+            const speed = Math.hypot(bullet.vel.x, bullet.vel.y);
+            bullet.vel.x = (bullet.vel.x / speed) * speed * config.bulletSpeed;
+            bullet.vel.y = (bullet.vel.y / speed) * speed * config.bulletSpeed;
+
+            this.applyGlobalBulletUpgrades(bullet);
         }
-
-        // Through-and-Through
-        if (this.getPowerupStacks('THROUGH_AND_THROUGH') > 0) {
-            bullet.damageTrail = true;
-        }
-
-        // Speed boost for rail
-        const speed = Math.hypot(bullet.vel.x, bullet.vel.y);
-        bullet.vel.x = (bullet.vel.x / speed) * speed * config.bulletSpeed;
-        bullet.vel.y = (bullet.vel.y / speed) * speed * config.bulletSpeed;
-
-        this.applyGlobalBulletUpgrades(bullet);
     }
     audioManager.playShoot();
 }
