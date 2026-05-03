@@ -86,6 +86,115 @@ export function drawHUD() {
         }
 }
 
+// ── Game Complete screen ──────────────────────────────────────────────────
+// Full-screen statistics readout shown when the player clears the final
+// wave. The campaign meta is "finish as fast as possible," so total time is
+// the headline stat — accuracy / damage / favored weapon back it up.
+export function drawGameComplete() {
+    if (this.game.state !== GAME_STATES.GAME_COMPLETE) return;
+    const stats = this.game.stats || {};
+    const ctx = this.ctx;
+
+    // Solid dark backdrop so the world fades out behind the readout.
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 6, 18, 0.94)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const cx = this.width / 2;
+    const titleY = Math.max(120, this.height * 0.18);
+    const subtitleY = titleY + 64;
+    const statsTop = subtitleY + 70;
+
+    // Title — wavy multicolor "GAME COMPLETE!"
+    this.drawWavyText('GAME COMPLETE!', cx, titleY, {
+        fontSize: Math.min(110, Math.max(64, Math.floor(this.width / 14))),
+        colors: WAVY_PALETTES.waveTitle,
+        speed: 0.45,
+        colorSpeed: 0.18,
+    });
+
+    // Subtitle — final time front and center (the speedrun stat).
+    const totalMs = stats.finalTimeMs || (Date.now() - (stats.gameStartTime || Date.now()));
+    const timeStr = formatDuration(totalMs);
+    ctx.fillStyle = '#cfeaff';
+    ctx.font = `bold ${Math.max(28, Math.floor(this.width / 36))}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`TIME  ${timeStr}`, cx, subtitleY);
+
+    // Stat lines — two-column layout, left-justified labels and right-aligned values.
+    const accuracy = stats.shotsFired > 0
+        ? Math.round((stats.shotsHit / stats.shotsFired) * 1000) / 10
+        : 0;
+    const preferredWeaponId = pickPreferredWeapon(stats.weaponShots || {});
+    const lines = [
+        ['Accuracy',           `${accuracy.toFixed(1)}%`],
+        ['Total Shots Fired',  String(stats.shotsFired || 0)],
+        ['Shots On Target',    String(stats.shotsHit || 0)],
+        ['Damage Dealt',       formatNumber(stats.totalDamageDealt || 0)],
+        ['Damage Taken',       formatNumber(stats.totalDamageTaken || 0)],
+        ['Enemies Killed',     String(stats.enemiesKilled || 0)],
+        ['Asteroids Destroyed',String(stats.asteroidsDestroyed || 0)],
+        ['Bosses Defeated',    String(stats.bossesKilled || 0)],
+        ['Coins Earned',       String(stats.coinsEarned || 0)],
+        ['Preferred Weapon',   preferredWeaponId || '—'],
+    ];
+
+    const lineFS = Math.max(18, Math.floor(this.width / 60));
+    const lineH = lineFS + 12;
+    const colWidth = Math.min(560, this.width * 0.62);
+    const labelX = cx - colWidth / 2;
+    const valueX = cx + colWidth / 2;
+    ctx.font = `${lineFS}px monospace`;
+    ctx.textBaseline = 'top';
+    for (let i = 0; i < lines.length; i++) {
+        const y = statsTop + i * lineH;
+        ctx.fillStyle = '#a9c5e8';
+        ctx.textAlign = 'left';
+        ctx.fillText(lines[i][0], labelX, y);
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'right';
+        ctx.fillText(lines[i][1], valueX, y);
+    }
+
+    // Footer — speedrun framing.
+    const footerY = statsTop + lines.length * lineH + 30;
+    ctx.fillStyle = '#88a8d4';
+    ctx.font = `${Math.max(14, Math.floor(lineFS * 0.85))}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Refresh to start a new run.', cx, footerY);
+
+    ctx.restore();
+}
+
+function formatDuration(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const hh = Math.floor(totalSec / 3600);
+    const mm = Math.floor((totalSec % 3600) / 60);
+    const ss = totalSec % 60;
+    const tenths = Math.floor((ms % 1000) / 100);
+    const pad = (n, w = 2) => String(n).padStart(w, '0');
+    return hh > 0
+        ? `${hh}:${pad(mm)}:${pad(ss)}.${tenths}`
+        : `${pad(mm)}:${pad(ss)}.${tenths}`;
+}
+
+function formatNumber(n) {
+    return Math.floor(n).toLocaleString();
+}
+
+function pickPreferredWeapon(weaponShots) {
+    let best = null;
+    let bestCount = -1;
+    for (const id in weaponShots) {
+        if (weaponShots[id] > bestCount) {
+            bestCount = weaponShots[id];
+            best = id;
+        }
+    }
+    return best;
+}
+
 // ── Wave intro overlay ────────────────────────────────────────────────────
 // Full-screen darken with WAVE N text shown while wave entities warp in.
 // Drawn AFTER all other HUD elements so it covers the world cleanly.

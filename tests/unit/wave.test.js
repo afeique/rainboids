@@ -1,8 +1,8 @@
 /**
- * tests/unit/wave.test.js — unit tests for wave-data.js
+ * tests/unit/wave.test.js — unit tests for wave-data.js (20-wave campaign).
  *
  * Tests getWaveConfig, getEnemyLevel, getAsteroidLevel,
- * getLevelScaledEnemyStats, getLevelScaledAsteroidStats.
+ * getLevelScaledEnemyStats, getLevelScaledAsteroidStats, isBossWave.
  */
 
 import {
@@ -11,30 +11,28 @@ import {
   getAsteroidLevel,
   getLevelScaledEnemyStats,
   getLevelScaledAsteroidStats,
+  getEnemySpeedMultiplier,
+  isBossWave,
+  BOSS_TIER_STATS,
   WAVE_DATA,
 } from '../../js/modules/wave/wave-data.js';
+import { MAX_WAVES, BOSS_WAVES } from '../../js/modules/core/constants.js';
 
 // ---------------------------------------------------------------------------
 // getWaveConfig()
 // ---------------------------------------------------------------------------
 
-describe('getWaveConfig() – static waves', () => {
-  test('wave 1 has asteroids and a single enemy', () => {
+describe('getWaveConfig() – 20-wave campaign', () => {
+  test('wave 1 has asteroids and at least one enemy', () => {
     const cfg = getWaveConfig(1);
     expect(cfg).toBeDefined();
     expect(cfg.asteroids).toBeGreaterThan(0);
-    expect(cfg.enemies.length).toBe(1);
-    expect(cfg.enemies[0].type).toBe('HUNTER');
-  });
-
-  test('wave 2 introduces HUNTER enemy', () => {
-    const cfg = getWaveConfig(2);
     expect(cfg.enemies.length).toBeGreaterThanOrEqual(1);
     expect(cfg.enemies[0].type).toBe('HUNTER');
   });
 
-  test('all static waves (1-80) return a valid config', () => {
-    for (let w = 1; w <= 80; w++) {
+  test('every wave 1-20 returns a valid config', () => {
+    for (let w = 1; w <= MAX_WAVES; w++) {
       const cfg = getWaveConfig(w);
       expect(cfg).toBeDefined();
       expect(typeof cfg.asteroids).toBe('number');
@@ -47,148 +45,83 @@ describe('getWaveConfig() – static waves', () => {
     }
   });
 
-  // Wave-data shape evolved past the original strict phase rules — the
-  // current data mixes counts more organically (some "duo" waves in the
-  // 40s, asteroid-heavy interludes, etc.). These tests now assert the
-  // intent (more enemy types as waves get higher) rather than rigid
-  // count-per-phase contracts.
-  test('early waves (2-15) have 1 enemy type each', () => {
-    for (let w = 2; w <= 15; w++) {
+  test('boss waves are marked isBossWave + bossTier and contain a TITAN with isBoss', () => {
+    for (const w of BOSS_WAVES) {
       const cfg = getWaveConfig(w);
-      expect(cfg.enemies.length).toBe(1);
+      expect(cfg.isBossWave).toBe(true);
+      expect(cfg.bossTier).toBeGreaterThanOrEqual(1);
+      expect(cfg.bossTier).toBeLessThanOrEqual(4);
+      const titan = cfg.enemies.find(e => e.type === 'TITAN' && e.isBoss);
+      expect(titan).toBeDefined();
+      expect(titan.bossTier).toBe(cfg.bossTier);
     }
   });
 
-  // Mid/late phases mostly have multiple enemy types but some "solo
-  // boss" waves (e.g. wave 30: just TITANs) intentionally feature one
-  // type. We assert the AVERAGE trend instead of a per-wave floor.
-  test('mid waves (20-39) average ≥ 2 enemy types', () => {
-    let sum = 0, n = 0;
-    for (let w = 20; w <= 39; w++) {
-      sum += getWaveConfig(w).enemies.length;
-      n++;
-    }
-    expect(sum / n).toBeGreaterThanOrEqual(2);
-  });
-
-  test('late waves (40-79) average ≥ 2 enemy types', () => {
-    let sum = 0, n = 0;
-    for (let w = 40; w <= 79; w++) {
-      sum += getWaveConfig(w).enemies.length;
-      n++;
-    }
-    expect(sum / n).toBeGreaterThanOrEqual(2);
-  });
-
-  test('wave 80 has at least one type', () => {
-    const cfg = getWaveConfig(80);
-    expect(cfg.enemies.length).toBeGreaterThanOrEqual(1);
-  });
-});
-
-describe('getWaveConfig() – procedural generation (wave > 80)', () => {
-  test('wave 81 returns more enemies than wave 80', () => {
-    const base = getWaveConfig(80);
-    const next = getWaveConfig(81);
-    // Counts should be at least as large (scale factor >= 1.0)
-    const baseTotal = base.enemies.reduce((s, e) => s + e.count, 0);
-    const nextTotal = next.enemies.reduce((s, e) => s + e.count, 0);
-    expect(nextTotal).toBeGreaterThanOrEqual(baseTotal);
-  });
-
-  test('wave 100 has more asteroids than wave 80', () => {
-    const base = getWaveConfig(80);
-    const late = getWaveConfig(100);
-    expect(late.asteroids).toBeGreaterThan(base.asteroids);
-  });
-
-  test('procedural waves (>100) preserve the wave-100 enemy lineup', () => {
-    // Generation scales counts but preserves the wave-100 type lineup.
-    // Waves 81-100 are still authored static entries with their own
-    // types; only waves > 100 use the procedural generator.
-    const baseTypes = getWaveConfig(100).enemies.map(e => e.type);
-    for (const w of [101, 150, 200, 500]) {
+  test('non-boss waves do not set isBossWave', () => {
+    for (let w = 1; w <= MAX_WAVES; w++) {
+      if (BOSS_WAVES.includes(w)) continue;
       const cfg = getWaveConfig(w);
-      const types = cfg.enemies.map(e => e.type);
-      expect(types).toEqual(baseTypes);
+      expect(cfg.isBossWave).toBeFalsy();
     }
   });
 
-  test('procedural waves never exceed MAX_WAVE_ASTEROIDS cap', () => {
-    // Even at very high wave numbers the asteroid count is capped.
-    // Cap raised to 16 in the bullet-hell density pass.
-    for (const w of [100, 200, 500, 1000]) {
-      const cfg = getWaveConfig(w);
-      expect(cfg.asteroids).toBeLessThanOrEqual(16); // MAX_WAVE_ASTEROIDS
+  test('out-of-range waves clamp to wave 1 / wave 20 entries', () => {
+    expect(getWaveConfig(0)).toEqual(getWaveConfig(1));
+    expect(getWaveConfig(-5)).toEqual(getWaveConfig(1));
+    expect(getWaveConfig(MAX_WAVES + 1)).toEqual(getWaveConfig(MAX_WAVES));
+    expect(getWaveConfig(999)).toEqual(getWaveConfig(MAX_WAVES));
+  });
+
+  test('isBossWave matches BOSS_WAVES', () => {
+    for (const w of BOSS_WAVES) expect(isBossWave(w)).toBe(true);
+    for (let w = 1; w <= MAX_WAVES; w++) {
+      if (!BOSS_WAVES.includes(w)) expect(isBossWave(w)).toBe(false);
     }
-  });
-
-  test('procedural wave results are cached (same object reference)', () => {
-    const a = getWaveConfig(150);
-    const b = getWaveConfig(150);
-    expect(a).toBe(b);
-  });
-
-  test('unknown/missing wave falls back to wave 1', () => {
-    // Wave 0 and very large waves not yet procedurally covered
-    const cfg = getWaveConfig(0);
-    expect(cfg).toEqual(getWaveConfig(1));
   });
 });
 
 // ---------------------------------------------------------------------------
-// getEnemyLevel()
+// getEnemyLevel() / getAsteroidLevel()
 // ---------------------------------------------------------------------------
 
 describe('getEnemyLevel()', () => {
-  test('wave 1 returns level 1', () => {
-    expect(getEnemyLevel(1)).toBe(1);
+  test('level equals wave number across the campaign', () => {
+    for (let w = 1; w <= MAX_WAVES; w++) {
+      expect(getEnemyLevel(w)).toBe(w);
+    }
   });
 
-  test('level increases every 3 waves', () => {
-    expect(getEnemyLevel(3)).toBe(2);
-    expect(getEnemyLevel(6)).toBe(3);
-    expect(getEnemyLevel(9)).toBe(4);
-    expect(getEnemyLevel(30)).toBe(11);
+  test('clamps below 1 / above MAX_WAVES', () => {
+    expect(getEnemyLevel(0)).toBe(1);
+    expect(getEnemyLevel(-3)).toBe(1);
+    expect(getEnemyLevel(MAX_WAVES + 5)).toBe(MAX_WAVES);
   });
 
   test('returns integer values', () => {
-    for (let w = 1; w <= 50; w++) {
-      expect(Number.isInteger(getEnemyLevel(w))).toBe(true);
-    }
-  });
-
-  test('level is always >= 1', () => {
-    for (let w = 1; w <= 100; w++) {
-      expect(getEnemyLevel(w)).toBeGreaterThanOrEqual(1);
-    }
+    for (let w = 1; w <= 30; w++) expect(Number.isInteger(getEnemyLevel(w))).toBe(true);
   });
 });
-
-// ---------------------------------------------------------------------------
-// getAsteroidLevel()
-// ---------------------------------------------------------------------------
 
 describe('getAsteroidLevel()', () => {
-  test('wave 1 returns level 1', () => {
+  test('rises every other wave', () => {
     expect(getAsteroidLevel(1)).toBe(1);
+    expect(getAsteroidLevel(2)).toBe(1);
+    expect(getAsteroidLevel(3)).toBe(2);
+    expect(getAsteroidLevel(10)).toBe(5);
+    expect(getAsteroidLevel(MAX_WAVES)).toBe(10);
   });
 
-  test('level increases every 4 waves', () => {
-    expect(getAsteroidLevel(4)).toBe(2);
-    expect(getAsteroidLevel(8)).toBe(3);
-    expect(getAsteroidLevel(40)).toBe(11);
-  });
-
-  test('returns integer values', () => {
-    for (let w = 1; w <= 50; w++) {
-      expect(Number.isInteger(getAsteroidLevel(w))).toBe(true);
+  test('always >= 1, integer-valued', () => {
+    for (let w = 1; w <= 30; w++) {
+      const lvl = getAsteroidLevel(w);
+      expect(Number.isInteger(lvl)).toBe(true);
+      expect(lvl).toBeGreaterThanOrEqual(1);
     }
   });
 });
 
 // ---------------------------------------------------------------------------
-// getLevelScaledEnemyStats()
+// Level scaling
 // ---------------------------------------------------------------------------
 
 describe('getLevelScaledEnemyStats()', () => {
@@ -202,25 +135,24 @@ describe('getLevelScaledEnemyStats()', () => {
     expect(scaled.points).toBe(BASE.points);
   });
 
-  test('health increases 25% per level', () => {
-    const l2 = getLevelScaledEnemyStats(BASE, 2);
-    expect(l2.health).toBe(Math.floor(BASE.health * 1.25));
+  test('health rises 10% per level', () => {
+    expect(getLevelScaledEnemyStats(BASE, 2).health).toBe(Math.floor(BASE.health * 1.10));
+    expect(getLevelScaledEnemyStats(BASE, 5).health).toBe(Math.floor(BASE.health * 1.40));
   });
 
-  test('speed increases 15% per level', () => {
-    const l2 = getLevelScaledEnemyStats(BASE, 2);
-    expect(l2.speed).toBeCloseTo(BASE.speed * 1.15);
+  test('speed rises 4% per level (gentle on top of campaign mult)', () => {
+    expect(getLevelScaledEnemyStats(BASE, 2).speed).toBeCloseTo(BASE.speed * 1.04);
+    expect(getLevelScaledEnemyStats(BASE, 5).speed).toBeCloseTo(BASE.speed * 1.16);
   });
 
   test('size stays constant across levels', () => {
-    for (const lvl of [1, 5, 10, 50]) {
+    for (const lvl of [1, 5, 10, 20]) {
       expect(getLevelScaledEnemyStats(BASE, lvl).size).toBe(BASE.size);
     }
   });
 
-  test('points increase 20% per level', () => {
-    const l3 = getLevelScaledEnemyStats(BASE, 3);
-    expect(l3.points).toBe(Math.floor(BASE.points * 1.4));
+  test('points rise 15% per level', () => {
+    expect(getLevelScaledEnemyStats(BASE, 3).points).toBe(Math.floor(BASE.points * 1.30));
   });
 
   test('returns integer health and points', () => {
@@ -232,22 +164,49 @@ describe('getLevelScaledEnemyStats()', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getLevelScaledAsteroidStats()
-// ---------------------------------------------------------------------------
-
 describe('getLevelScaledAsteroidStats()', () => {
   test('level 1 returns base health unchanged', () => {
     expect(getLevelScaledAsteroidStats(10, 1)).toBe(10);
   });
 
-  test('health increases 30% per level', () => {
-    expect(getLevelScaledAsteroidStats(10, 2)).toBe(Math.floor(10 * 1.3));
+  test('health rises 18% per level', () => {
+    expect(getLevelScaledAsteroidStats(10, 2)).toBe(Math.floor(10 * 1.18));
+    expect(getLevelScaledAsteroidStats(10, 5)).toBe(Math.floor(10 * 1.72));
   });
 
   test('returns an integer', () => {
-    for (const lvl of [1, 3, 7, 20]) {
+    for (const lvl of [1, 3, 7, 10]) {
       expect(Number.isInteger(getLevelScaledAsteroidStats(10, lvl))).toBe(true);
     }
+  });
+});
+
+describe('getEnemySpeedMultiplier()', () => {
+  test('starts low at wave 1 and climbs aggressively', () => {
+    const w1 = getEnemySpeedMultiplier(1);
+    const w20 = getEnemySpeedMultiplier(20);
+    expect(w1).toBeLessThan(0.8);              // gentle intro
+    expect(w20).toBeGreaterThan(2.0);          // hits ~2.17× at the end
+    expect(w20).toBeGreaterThan(w1);
+  });
+
+  test('clamps below 1 / above MAX_WAVES', () => {
+    expect(getEnemySpeedMultiplier(0)).toBeCloseTo(getEnemySpeedMultiplier(1));
+    expect(getEnemySpeedMultiplier(99)).toBeCloseTo(getEnemySpeedMultiplier(MAX_WAVES));
+  });
+});
+
+describe('BOSS_TIER_STATS', () => {
+  test('all four tiers exist and HP/size/points scale upward', () => {
+    for (const tier of [1, 2, 3, 4]) {
+      const t = BOSS_TIER_STATS[tier];
+      expect(t).toBeDefined();
+      expect(t.hpMul).toBeGreaterThan(1);
+      expect(t.sizeMul).toBeGreaterThan(1);
+      expect(t.points).toBeGreaterThan(0);
+    }
+    expect(BOSS_TIER_STATS[4].hpMul).toBeGreaterThan(BOSS_TIER_STATS[1].hpMul);
+    expect(BOSS_TIER_STATS[4].sizeMul).toBeGreaterThan(BOSS_TIER_STATS[1].sizeMul);
+    expect(BOSS_TIER_STATS[4].points).toBeGreaterThan(BOSS_TIER_STATS[1].points);
   });
 });

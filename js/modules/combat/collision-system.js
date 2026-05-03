@@ -96,6 +96,10 @@ export function handleCollisions() {
 
                 // Damage the asteroid (One Punch Man cheat: instant kill)
                 const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
+                if (this.game.stats) {
+                    this.game.stats.shotsHit++;
+                    this.game.stats.totalDamageDealt += damage;
+                }
                 ast.health = Math.max(0, ast.health - damage);
 
                 // Hit flash — localized at bullet impact point
@@ -419,6 +423,7 @@ export function handleCollisions() {
 
                 // Damage the enemy (One Punch Man cheat: instant kill)
                 const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
+                if (this.game.stats) this.game.stats.shotsHit++;
                 const destroyed = enemy.takeDamage(damage, {
                     isCrit: !!(bullet.isCrit || bullet.isCritical),
                     isEmpowered: !!bullet.isEmpowered,
@@ -1067,6 +1072,7 @@ export function destroyAsteroid(ast) {
     const onScreen = this.isEntityOnScreen(ast);
     const isLarge = ast.baseRadius > (GAME_CONFIG.MIN_AST_RAD + 5);
 
+    if (this.game.stats) this.game.stats.asteroidsDestroyed++;
     ast._deathFlash = 6;
     ast._deathFlashMax = 6;
     if (onScreen) {
@@ -1122,6 +1128,7 @@ export function damageEnemy(enemy, damage) {
     // (mines, lightning, nova, missiles) that don't go through the bullet path.
     this._setLastHit(enemy);
     this.createDamageNumber(enemy.x, enemy.y - 15, damage);
+    if (this.game.stats) this.game.stats.totalDamageDealt += damage;
     if (enemy.health <= 0) {
         // Start death flash — enemy renders as bright dissolving silhouette for 5 frames
         enemy._deathFlash = 8;
@@ -1134,6 +1141,11 @@ export function damageEnemy(enemy, damage) {
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         const reward = enemy.getDestructionReward();
         this.game.money += reward.points;
+        if (this.game.stats) {
+            this.game.stats.enemiesKilled++;
+            this.game.stats.coinsEarned += reward.points;
+            if (enemy.isBoss) this.game.stats.bossesKilled++;
+        }
         this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {
@@ -1168,6 +1180,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         }
         const finalDamage = Math.round(reducedDamage);
         player.health = Math.max(0, player.health - finalDamage);
+        if (this.game.stats && finalDamage > 0) this.game.stats.totalDamageTaken += finalDamage;
 
         // Break the kill streak on actual HP loss (Phase Dash zeroes
         // reducedDamage above, so dashing through enemies preserves it).

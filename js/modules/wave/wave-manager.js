@@ -5,10 +5,10 @@
  * via `.call(gameEngine)`. This is Phase 3 strangler-fig extraction.
  */
 
-import { GAME_CONFIG, GAME_STATES, getEnemyFiringCooldown } from '../core/constants.js';
+import { GAME_CONFIG, GAME_STATES, MAX_WAVES, getEnemyFiringCooldown } from '../core/constants.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
-import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC } from './wave-data.js';
+import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats, getEnemySpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
@@ -32,13 +32,16 @@ export function updateWaveSystem() {
     const totalEnemies = this.enemyPool.activeObjects.filter(e => !e._deathFlash).length;
 
     if (totalEnemies === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
-        // Wave completed! Roguelite flow: brief "WAVE COMPLETE!" toast,
-        // then auto-pop the shop. closeShop() routes back through
-        // startNextWave() so the player decides when the next wave kicks
-        // off — they can browse upgrades for as long as they want.
+        // Wave completed! If this is the final wave, the run is over —
+        // route through GAME_COMPLETE instead of opening the shop.
         this.game.waveComplete = true;
         this.game.waveCountdownTime = Date.now() + this.game.waveCountdownDuration;
         this.game.state = GAME_STATES.WAVE_TRANSITION;
+
+        if (this.game.currentWave >= MAX_WAVES) {
+            this.completeRun();
+            return;
+        }
 
         this.showWaveComplete();
 
@@ -141,7 +144,9 @@ export function spawnWaveEntities() {
     this.spawnLeveledAsteroids(waveConfig.asteroids, { onScreen: true });
 
     for (const enemyGroup of waveConfig.enemies) {
-        this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count, { onScreen: true });
+        const opts = { onScreen: true };
+        if (enemyGroup.isBoss && enemyGroup.bossTier) opts.bossTier = enemyGroup.bossTier;
+        this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count, opts);
     }
 }
 
@@ -185,7 +190,7 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
         if (enemy) {
             const sp = this.getRandomSpawnPosition(opts);
             enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
-            this.applyEnemyLevelScaling(enemy);
+            this.applyEnemyLevelScaling(enemy, opts);
             enemy.startWarpIn(sp.targetX, sp.targetY);
         }
     }
@@ -201,23 +206,68 @@ export function initializeLeveledAsteroid(asteroid, opts = {}) {
     asteroid.maxHealth = asteroid.health;
 }
 
-export function applyEnemyLevelScaling(enemy) {
+export function applyEnemyLevelScaling(enemy, opts = {}) {
     // Get base stats from enemy type
     const baseStats = ENEMY_TYPES[enemy.type];
 
     // Apply level scaling
     const scaledStats = getLevelScaledEnemyStats(baseStats, this.game.enemyLevel);
 
-    // Update enemy properties
+    // Campaign-wide speed ramp on top of the level mult — wave 1 is gentle,
+    // late waves chase aggressively. Same multiplier feeds enemy-bullet
+    // speed so projectiles scale with their owners.
+    const campaignSpeedMul = getEnemySpeedMultiplier(this.game.currentWave);
+
     enemy.health = scaledStats.health;
     enemy.maxHealth = scaledStats.health;
-    enemy.config.speed = scaledStats.speed;
+    enemy.config.speed = scaledStats.speed * campaignSpeedMul;
+    enemy.bulletSpeedMul = campaignSpeedMul;
 
     // Set level-based firing cooldown
     enemy.firingCooldown = getEnemyFiringCooldown(enemy.type, this.game.enemyLevel);
 
     // Update points value for higher level enemies
     enemy.config.points = scaledStats.points;
+
+    // Boss-tier overlays: HP × hpMul, points override, larger size, faster
+    // speed multiplier on top of campaign scaling. Bosses also get a
+    // visible bossTier marker for the renderer.
+    if (opts.bossTier) {
+        const tier = BOSS_TIER_STATS[opts.bossTier] || BOSS_TIER_STATS[1];
+        enemy.isBoss = true;
+        enemy.bossTier = opts.bossTier;
+        enemy.health *= tier.hpMul;
+        enemy.maxHealth *= tier.hpMul;
+        enemy.config.speed *= tier.speedMul;
+        enemy.config.points = tier.points;
+        // Inflate radius/size for visual bossiness. The renderer reads
+        // either `radius` or whatever the type uses; we set both for safety.
+        if (typeof enemy.radius === 'number') enemy.radius *= tier.sizeMul;
+        if (typeof enemy.bossSizeMul === 'undefined') enemy.bossSizeMul = tier.sizeMul;
+    }
+}
+
+// Final-wave-cleared handler — finalize stats and transition to the
+// Game Complete screen. Called from updateWaveSystem when the player
+// clears the last wave of the campaign.
+export function completeRun() {
+    this.game.waveComplete = true;
+    if (this.game.stats) {
+        this.game.stats.finalTimeMs = Date.now() - (this.game.stats.gameStartTime || Date.now());
+        this.game.stats.completed = true;
+    }
+    // Brief toast for the moment of victory, then transition.
+    this.events.emit('ui:show-message', {
+        title: 'CAMPAIGN COMPLETE',
+        subtitle: 'The void is silent.',
+        duration: 1800,
+        position: 'top',
+    });
+    setTimeout(() => {
+        if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+            this.game.state = GAME_STATES.GAME_COMPLETE;
+        }
+    }, 1200);
 }
 
 export function completeWave() {

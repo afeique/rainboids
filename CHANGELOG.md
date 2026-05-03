@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.50.0] - 2026-05-03
+
+### Added
+- **20-wave speedrun campaign with four boss waves.** The run is now a single 20-wave arc — meta-goal is "finish as fast as possible." Bosses at waves 5 (Iron Giant — TITAN bossTier 1), 10 (Twin Iron — 2× bossTier 2), 15 (Triple Threat — 3× bossTier 3), and 20 (FINAL BOSS — The Last Stand — 4× bossTier 4 + escorts). Boss enemies receive HP/size/speed multipliers on top of normal level scaling (4×–8× HP, 1.35×–1.75× size, +0–15% speed). When the final wave clears the run transitions to the new GAME_COMPLETE state instead of opening the shop.
+- **Game Complete stats screen.** New `GAME_COMPLETE` state renders a dark-backdrop full-screen panel with: total run time (headline stat — speedrun framing), accuracy %, total shots fired, shots on target, damage dealt, damage taken, enemies killed, asteroids destroyed, bosses defeated, coins earned, and preferred weapon (most-fired primary).
+- **Run-wide stats tracking.** Every run now tracks: shots fired (per primary weapon), shots that hit, total damage dealt, total damage taken, enemies/asteroids/bosses killed, coins earned, and elapsed time. Stats reset at run start; consumed by the Game Complete screen.
+
+### Changed
+- **Wave roster compressed from 100 → 20 waves.** Replaced the multi-act 100-wave roster with a tight 20-wave campaign: Acts I (1-4), Boss 1 (5), II (6-9), Boss 2 (10), III (11-14), Boss 3 (15), IV (16-19), Final Boss (20). Each act has a clear identity, and the final act puts every enemy type on screen at once before the closing boss rush.
+- **Scaling re-tuned for a 20-wave arc.** Enemy level now equals wave number (1 → 20 directly, no plateaus). Asteroid level lifts every other wave (1 → 10). Per-level multipliers compressed so the cumulative end-state still feels meaningful at wave 20: enemy HP +10%/level (≈2.9× at wave 20), enemy points +15%/level, asteroid HP +18%/level. Campaign-wide enemy speed multiplier curves from 0.65× at wave 1 to 2.17× at wave 20 — gentle intro, fast late game. Enemy bullet speed scales with the same curve so projectiles match their owners.
+- **Enemies never stand still.** Idle states for WASP fish-dart, STALKER knight-move, DRIFTER laser-charge, and TITAN boulder no longer decay velocity to zero — each enemy maintains a slow orbital strafe around the player even between bursts of "real" movement, so the player has to track them every frame instead of ignoring them between actions.
+
+### Fixed
+- DRIFTER enemies used to lock to a dead-stop while charging or cooling down their laser, which made them feel asleep. They now slow-strafe around the player throughout charge/cooldown.
+- TITAN bosses no longer come to a complete halt between charges — the brake state seeds a fresh orbit sign and the idle state drives a slow tangential drift.
+
+---
+
 ## [5.49.9] - 2026-05-03
 
 ### Added

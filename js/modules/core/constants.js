@@ -235,10 +235,17 @@ export const GAME_STATES = {
     PLAYING: 'PLAYING',
     PAUSED: 'PAUSED',
     GAME_OVER: 'GAME_OVER',
+    GAME_COMPLETE: 'GAME_COMPLETE',
     WAVE_TRANSITION: 'WAVE_TRANSITION',
     ORIENTATION_LOCK: 'ORIENTATION_LOCK',
     SHOP: 'SHOP'
 };
+
+// Total waves required to win the run. Boss waves at every BOSS_WAVE_INTERVAL
+// produce four bosses across the campaign (waves 5 / 10 / 15 / 20).
+export const MAX_WAVES = 20;
+export const BOSS_WAVE_INTERVAL = 5;
+export const BOSS_WAVES = [5, 10, 15, 20];
 
 export const STAR_SHAPES = [
     'point', 'point', 'point', 'point',  // Most common - simple points

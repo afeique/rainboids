@@ -180,10 +180,22 @@ export function patrolMovement() {
 export function drifterWaveMovement() {
     if (!this.targetPlayer) return;
 
-    // Freeze in place while charging or in post-fire cooldown
+    // Maintain a slow orbital strafe while charging / cooling down — DRIFTERs
+    // used to lock to a dead-stop here, which read as "asleep" and let the
+    // player ignore them between laser pulses. They now keep drifting so
+    // the player has to track them every frame.
     if (this.laserCharging || (this.laserCooldown !== undefined && frameClock.now < this.laserCooldown)) {
-        this.vel.x = 0;
-        this.vel.y = 0;
+        const dx = this.targetPlayer.x - this.x;
+        const dy = this.targetPlayer.y - this.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        if (this.drifterChargeOrbitSign === undefined) {
+            this.drifterChargeOrbitSign = Math.random() < 0.5 ? 1 : -1;
+        }
+        const driftSpd = this.config.speed * 0.40;
+        const tangentX = -dy / dist * this.drifterChargeOrbitSign;
+        const tangentY =  dx / dist * this.drifterChargeOrbitSign;
+        this.vel.x += (tangentX * driftSpd - this.vel.x) * 0.10;
+        this.vel.y += (tangentY * driftSpd - this.vel.y) * 0.10;
         return;
     }
 
@@ -382,16 +394,32 @@ export function fishDartMovement() {
     this.dartCooldown -= 16;
 
     switch (this.dartState) {
-        case 'idle':
-            // Apply friction when idle
-            this.vel.x *= 0.95;
-            this.vel.y *= 0.95;
+        case 'idle': {
+            // Stay maneuvering even between darts — circle the player at
+            // a reasonable distance instead of decaying to a near-stop.
+            // Direction is locked to the wasp's chosen orbit sign.
+            if (this.waspOrbitSign === undefined) {
+                this.waspOrbitSign = Math.random() < 0.5 ? 1 : -1;
+            }
+            const dx = this.targetPlayer.x - this.x;
+            const dy = this.targetPlayer.y - this.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const tangentX = -dy / dist * this.waspOrbitSign;
+            const tangentY =  dx / dist * this.waspOrbitSign;
+            const driftSpd = this.config.speed * 0.55;
+            // Gentle pull toward player so the orbit doesn't drift outward
+            const pullCoef = dist > 320 ? 0.25 : -0.05;
+            const targetVx = tangentX * driftSpd + (dx / dist) * pullCoef;
+            const targetVy = tangentY * driftSpd + (dy / dist) * pullCoef;
+            // Smooth toward orbit velocity (avoid hard snap)
+            this.vel.x += (targetVx - this.vel.x) * 0.10;
+            this.vel.y += (targetVy - this.vel.y) * 0.10;
 
-            // Check if ready to dart (cooldown finished and random chance)
             if (this.dartCooldown <= 0 && Math.random() < 0.02) {
                 this.startFishDart();
             }
             break;
+        }
 
         case 'darting':
             // Move in the dart direction at full speed
@@ -419,18 +447,8 @@ export function fishDartMovement() {
             break;
     }
 
-    // Slight bias toward player when idle
-    if (this.dartState === 'idle') {
-        const dx = this.targetPlayer.x - this.x;
-        const dy = this.targetPlayer.y - this.y;
-        const distance = Math.hypot(dx, dy);
-
-        if (distance > 0) {
-            const bias = 0.008;
-            this.vel.x += (dx / distance) * bias;
-            this.vel.y += (dy / distance) * bias;
-        }
-    }
+    // (Idle state now drives motion directly via the orbit logic above —
+    // no extra bias needed.)
 }
 
 export function startFishDart() {
@@ -597,12 +615,20 @@ export function knightMovement() {
         const moveProgress = (now - this.knightMoveStartTime) / 300; // 300ms move duration
 
         if (moveProgress >= 1) {
-            // Move completed
+            // Move completed — drift in a tight orbit around the player while
+            // we wait for the next knight-move so we're never standing still.
             this.knightMoving = false;
             this.knightMoveTimer = 0;
             this.knightMoveDuration = 800 + Math.random() * 400; // Next move in 800-1200ms
-            this.vel.x = 0;
-            this.vel.y = 0;
+            const idx = this.targetPlayer ? this.targetPlayer.x - this.x : 0;
+            const idy = this.targetPlayer ? this.targetPlayer.y - this.y : 1;
+            const idist = Math.hypot(idx, idy) || 1;
+            if (this.knightOrbitSign === undefined) {
+                this.knightOrbitSign = Math.random() < 0.5 ? 1 : -1;
+            }
+            const driftSpd = this.config.speed * 0.45;
+            this.vel.x = (-idy / idist) * driftSpd * this.knightOrbitSign;
+            this.vel.y = ( idx / idist) * driftSpd * this.knightOrbitSign;
         } else {
             // Burst movement toward target with easing
             const easeProgress = 1 - Math.pow(1 - moveProgress, 3); // Ease out cubic
@@ -2129,16 +2155,25 @@ export function boulderMovement() {
     const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
 
     switch (this.boulderState) {
-        case 'idle':
-            // Friction to halt
-            this.vel.x *= 0.92;
-            this.vel.y *= 0.92;
+        case 'idle': {
+            // The boulder doesn't grind to a halt anymore — it slowly orbits
+            // the player while it winds up the next charge so it always
+            // looks like it's maneuvering.
+            if (this.boulderOrbitSign === undefined) {
+                this.boulderOrbitSign = Math.random() < 0.5 ? 1 : -1;
+            }
+            const tangentX = -dy / (distToPlayer || 1) * this.boulderOrbitSign;
+            const tangentY =  dx / (distToPlayer || 1) * this.boulderOrbitSign;
+            const driftSpd = this.config.speed * 0.45;
+            this.vel.x += (tangentX * driftSpd - this.vel.x) * 0.08;
+            this.vel.y += (tangentY * driftSpd - this.vel.y) * 0.08;
             if (now - this.boulderIdleTimer > this.boulderIdleDuration) {
                 this.boulderState = 'approaching';
                 this.boulderAngle = Math.atan2(dy, dx); // Lock direction now
                 this.boulderMaxSpeed = this.config.speed * 3.0;
             }
             break;
+        }
 
         case 'approaching': {
             // Accelerate in locked direction
@@ -2163,8 +2198,10 @@ export function boulderMovement() {
             this.vel.x *= 0.93;
             this.vel.y *= 0.93;
             if (currentSpeed < 0.18) {
-                this.vel.x = 0;
-                this.vel.y = 0;
+                // Don't snap to absolute zero — the idle orbit will pick up
+                // immediately next tick. Reseed orbit sign so direction
+                // changes feel organic between charges.
+                this.boulderOrbitSign = Math.random() < 0.5 ? 1 : -1;
                 this.boulderState = 'idle';
                 this.boulderIdleTimer = now;
                 this.boulderIdleDuration = 1200 + Math.random() * 1000;

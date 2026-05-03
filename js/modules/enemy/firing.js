@@ -963,7 +963,10 @@ export function createEnemyBullet(gameEngine, angle, speed, color, explosive = f
         ENEMY_BULLET_CONFIG.MAX_LEVEL_SPEED_BONUS,
         (this.level - 1) * ENEMY_BULLET_CONFIG.LEVEL_SPEED_BONUS_PER_LEVEL
     );
-    let scaledSpeed = speed * baseSpeedMultiplier * (1 + levelSpeedBonus);
+    // Campaign-wide speed mult (set by applyEnemyLevelScaling) so enemy
+    // bullets scale alongside their owners' movement speed.
+    const campaignMul = (this.bulletSpeedMul && !isTitanRocket) ? this.bulletSpeedMul : 1;
+    let scaledSpeed = speed * baseSpeedMultiplier * (1 + levelSpeedBonus) * campaignMul;
 
     // Apply speed limits based on bullet type
     const speedLimits = ENEMY_BULLET_CONFIG.SPEED_LIMITS[movementPattern.toUpperCase()];

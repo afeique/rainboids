@@ -902,6 +902,15 @@ export function fireWeapons(bulletPool, audioManager) {
     // Fire bullets based on powerups (no cooldown needed since auto-fire handles timing)
     this.createBullets(bulletPool);
 
+    // Speedrun-meta stats: count one shot per fireWeapons() call (multi-shot
+    // expansion isn't counted — that's an upgrade benefit, not "more shots").
+    const stats = this.gameEngine && this.gameEngine.game && this.gameEngine.game.stats;
+    if (stats) {
+        stats.shotsFired++;
+        const wid = this.activePrimary || 'PULSE_CANNON';
+        stats.weaponShots[wid] = (stats.weaponShots[wid] || 0) + 1;
+    }
+
     // Play shoot sound synchronized with every shot
     audioManager.playShoot();
 }

@@ -194,7 +194,23 @@ export class GameEngine {
             waveCountdownDuration: 5000, // 5 seconds between waves
             respawning: false,
             respawnStartTime: 0,
-            respawnDuration: 5000 // 5 seconds respawn sequence
+            respawnDuration: 5000, // 5 seconds respawn sequence
+            // Run-wide stats — drive the Game Complete screen + speedrun meta.
+            stats: {
+                gameStartTime: 0,        // set when run actually starts
+                finalTimeMs: 0,          // populated on run completion
+                completed: false,
+                shotsFired: 0,
+                shotsHit: 0,
+                totalDamageDealt: 0,
+                totalDamageTaken: 0,
+                enemiesKilled: 0,
+                asteroidsDestroyed: 0,
+                bossesKilled: 0,
+                deaths: 0,
+                coinsEarned: 0,
+                weaponShots: {},         // weaponId → shots fired
+            },
         };
 
         // Wire this.game.state as getter/setter to the state machine
@@ -439,6 +455,22 @@ export class GameEngine {
         this.game.waveComplete = false;
         this.uiManager.updateLives(this.game.lives);
         this.game.state = GAME_STATES.WAVE_TRANSITION;
+        // Reset stats for the new run — Game Complete pulls from this object.
+        this.game.stats = {
+            gameStartTime: Date.now(),
+            finalTimeMs: 0,
+            completed: false,
+            shotsFired: 0,
+            shotsHit: 0,
+            totalDamageDealt: 0,
+            totalDamageTaken: 0,
+            enemiesKilled: 0,
+            asteroidsDestroyed: 0,
+            bossesKilled: 0,
+            deaths: 0,
+            coinsEarned: 0,
+            weaponShots: {},
+        };
 
         // Wave 1 intro: full-screen dark overlay with "WAVE 1" — entities
         // warp in during the dark hold, settling as the overlay fades.
@@ -577,6 +609,7 @@ export class GameEngine {
     applyEnemyLevelScaling(enemy) { return wave.applyEnemyLevelScaling.call(this, enemy); }
 
     completeWave() { return wave.completeWave.call(this); }
+    completeRun() { return wave.completeRun.call(this); }
     
     sellShopItem(itemId) { return shop.sellShopItem.call(this, itemId); }
 
@@ -951,6 +984,8 @@ export class GameEngine {
 
     drawWaveIntroOverlay() { return hudStatus.drawWaveIntroOverlay.call(this); }
 
+    drawGameComplete() { return hudStatus.drawGameComplete.call(this); }
+
     drawWeaponEffects() { return weaponFx.drawWeaponEffects.call(this); }
 
     drawSkillCooldownHUD() { return hudStatus.drawSkillCooldownHUD.call(this); }
@@ -1189,6 +1224,9 @@ export class GameEngine {
         // Wave intro full-screen darken — covers world + HUD while entities
         // warp in, then fades out as the wave starts.
         this.drawWaveIntroOverlay();
+
+        // Final-victory screen — replaces all HUD chrome with the stats readout.
+        this.drawGameComplete();
 
         // Draw custom cursor (always on top, after all UI elements)
         this.drawCustomCursor();

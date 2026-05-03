@@ -1,6 +1,6 @@
 # Rainboids — Supercharged Asteroids
 
-A modern space combat game with deep weapon systems, 10 enemy types, wave-based progression across 100 hand-designed waves, and a full upgrade economy. Built on Canvas 2D.
+A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave speedrun campaign with four boss waves, and a full upgrade economy. Built on Canvas 2D.
 
 **Play now at: https://rainboids.cat.computer**
 
@@ -18,7 +18,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs
 - **20 powerup types** with stacking mechanics and visual indicators
 - **Kill-streak damage tiers** (EMPOWERED → UNSTOPPABLE → GODLIKE → LEGENDARY) — sustained kills without taking damage build up to +100% damage
-- **100 hand-designed waves** across 5 acts, plus procedural scaling beyond wave 100
+- **20-wave speedrun campaign** with four scripted boss waves (waves 5/10/15/20) and a Game Complete stats screen — finish the run as fast as possible
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **68 background music tracks** spanning chiptune, synthwave, and electronic
@@ -189,25 +189,27 @@ The shop is fullscreen with a transparent backdrop matching the pause menu — g
 
 ## Wave System
 
-### Structure
-100 hand-designed waves across 5 acts:
+### 20-wave speedrun campaign
+The campaign is a single 20-wave run with four scripted boss waves. The meta-goal is finishing as fast as possible — total time, accuracy, damage dealt, and preferred weapon are tallied on a Game Complete screen when wave 20 falls.
 
 | Act | Waves | Theme |
 |-----|-------|-------|
-| I — First Contact | 1-15 | Solo enemy introductions |
-| II — Escalation | 16-30 | Themed duo encounters |
-| III — The Gauntlet | 31-50 | Synergistic trios |
-| IV — War Zone | 51-75 | Quad+ combos, specialty waves |
-| V — Endgame | 76-100 | Full-spectrum chaos |
-| Beyond | 101+ | Procedurally scaled from wave 100 |
+| I — First Contact     | 1-4   | Gentle intro, low threat density |
+| **Boss — Iron Giant** | **5** | **TITAN bossTier 1 + escort** |
+| II — Escalation       | 6-9   | Combined arms, type variety |
+| **Boss — Twin Iron**  | **10** | **2× TITAN bossTier 2** |
+| III — The Gauntlet    | 11-14 | Full type roster, dense |
+| **Boss — Triple Threat** | **15** | **3× TITAN bossTier 3** |
+| IV — Endgame Approach | 16-19 | Everything at once |
+| **FINAL BOSS — The Last Stand** | **20** | **4× TITAN bossTier 4 + escort** |
 
 Each wave features:
-- Asteroid phase with fixed count (MAX_WAVE_ASTEROIDS = 12)
-- Enemy sub-waves with increasing variety and difficulty
-- Wave transition messages with pithy subtitles
-- Shop access between waves
+- Wave-start full-screen dark intro overlay with the wave title — entities warp in during the dark hold and settle as the overlay fades
+- Asteroids and enemies both warp in (with scale + streak animation)
+- Asteroid count capped at 12 (MAX_WAVE_ASTEROIDS)
+- Shop opens automatically after each non-final wave; the final wave routes directly to the Game Complete screen
 
-Enemy health and damage scale with wave number. Enemy levels increase with wave progression.
+Boss-tier TITANs at waves 5/10/15/20 receive an HP/size/speed multiplier on top of normal level scaling (4×–8× HP, 1.35×–1.75× size, +0–15% speed). Enemy speed and bullet speed scale across the campaign — wave 1 ≈ 0.65× base speed (gentle), wave 20 ≈ 2.17× base.
 
 ---
 
@@ -347,7 +349,7 @@ Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot th
 │       │   └── weapon-effects-renderer.js # Weapon/skill visual effects
 │       ├── wave/              # Wave system
 │       │   ├── wave-manager.js #  Wave lifecycle, spawning, notifications
-│       │   └── wave-data.js   #   100 wave definitions across 5 acts
+│       │   └── wave-data.js   #   20-wave campaign + boss tier scaling
 │       ├── shop/              # Shop system
 │       │   ├── shop-manager.js #  Shop logic, purchases, tab builders
 │       │   ├── shop-dom.js     #  HTML overlay renderer (active)
