@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.3] - 2026-05-03
+
+### Changed
+- **Nebula refinement pass — depth, asymmetry, and detail.**
+  - **Two new scene palettes**: `emerald-jade` (rare verdant accent) and `rose-petal` (gentle pink/magenta), bringing the total to 8.
+  - **Per-palette `accent` color** added to every scene palette; used for chromatic edge halos around blobs and 15% of speckles, so the gas has visible color complexity rather than a single hue ramp.
+  - **Sky tint per layer** — faint full-canvas radial wash in the layer's secondary color anchors each layer in the palette and prevents detached-patches feel. Strength scales with layer luminance.
+  - **Density profiles per blob** — each blob is randomly assigned `bright` (25%, vivid + halo + hot core), `normal` (55%, the workhorse), or `haze` (20%, oversized + dim + no core). Visual rhythm replaces the previous uniform brightness.
+  - **Elliptical sub-blobs** — sub-blobs now render as ellipses with random aspect (0.6× to 1.6×) and random rotation, not perfect circles. Overall nebula shape reads as gas/cloud rather than bubbles.
+  - **Edge halos** — thin chromatic ring at the outer 22% of bright/normal blobs in the accent color. Adds silhouette interest.
+  - **Stardust variety** — speckle colors mix 80% pure speckle / 15% accent / 5% highlight; sizes mix 70% small / 25% medium / 5% bright stars (with a tiny corona on the brightest).
+
+---
+
 ## [5.49.2] - 2026-05-03
 
 ### Changed

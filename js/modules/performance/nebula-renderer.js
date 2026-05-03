@@ -21,10 +21,9 @@
 
 import { random } from '../core/utils.js';
 
-// Scene palettes — each is a full color family (cool/blue, violet,
-// teal, warm-amber, etc.). One is picked per generate() call. All
-// layers and blobs draw from this same palette so the scene reads
-// as a single coherent nebula rather than a clash of different gases.
+// Scene palettes — each is a full color family. One is committed
+// per generate() call. Adds `accent` for the chromatic edge-halo
+// pass (slightly hue-shifted from primary for visual interest).
 const SCENE_PALETTES = [
     // Deep indigo + cobalt — classic space blue
     {
@@ -32,6 +31,7 @@ const SCENE_PALETTES = [
         primary:    [50, 80, 220],
         secondary:  [30, 50, 180],
         tertiary:   [80, 130, 255],
+        accent:     [120, 200, 255],
         shadow:     [10, 15, 50],
         highlight:  [180, 200, 255],
         speckle:    [220, 230, 255],
@@ -42,6 +42,7 @@ const SCENE_PALETTES = [
         primary:    [120, 60, 220],
         secondary:  [80, 30, 160],
         tertiary:   [200, 100, 255],
+        accent:     [255, 100, 200],
         shadow:     [25, 10, 50],
         highlight:  [240, 180, 255],
         speckle:    [255, 220, 255],
@@ -52,6 +53,7 @@ const SCENE_PALETTES = [
         primary:    [40, 160, 200],
         secondary:  [20, 100, 160],
         tertiary:   [80, 220, 240],
+        accent:     [120, 255, 220],
         shadow:     [5, 30, 60],
         highlight:  [180, 240, 255],
         speckle:    [220, 250, 255],
@@ -62,6 +64,7 @@ const SCENE_PALETTES = [
         primary:    [200, 140, 60],
         secondary:  [160, 90, 40],
         tertiary:   [240, 200, 100],
+        accent:     [255, 130, 80],
         shadow:     [50, 25, 10],
         highlight:  [255, 240, 180],
         speckle:    [255, 240, 200],
@@ -72,6 +75,7 @@ const SCENE_PALETTES = [
         primary:    [110, 110, 230],
         secondary:  [70, 70, 180],
         tertiary:   [160, 140, 240],
+        accent:     [200, 180, 255],
         shadow:     [25, 25, 70],
         highlight:  [220, 210, 255],
         speckle:    [240, 230, 255],
@@ -82,9 +86,32 @@ const SCENE_PALETTES = [
         primary:    [180, 60, 140],
         secondary:  [100, 30, 80],
         tertiary:   [220, 100, 180],
+        accent:     [180, 80, 220],
         shadow:     [40, 10, 30],
         highlight:  [255, 200, 230],
         speckle:    [255, 220, 240],
+    },
+    // Emerald + jade — rare verdant accent (think Eagle nebula)
+    {
+        name: 'emerald-jade',
+        primary:    [50, 180, 130],
+        secondary:  [30, 130, 90],
+        tertiary:   [120, 230, 180],
+        accent:     [200, 255, 180],
+        shadow:     [10, 40, 25],
+        highlight:  [220, 255, 230],
+        speckle:    [240, 255, 240],
+    },
+    // Rose pink + soft magenta — gentle / floral
+    {
+        name: 'rose-petal',
+        primary:    [220, 100, 160],
+        secondary:  [160, 60, 110],
+        tertiary:   [255, 160, 200],
+        accent:     [255, 200, 220],
+        shadow:     [50, 20, 35],
+        highlight:  [255, 230, 240],
+        speckle:    [255, 240, 250],
     },
 ];
 
@@ -190,11 +217,20 @@ class NebulaRenderer {
             // (cooler/dimmer) and near layers pop.
             const lp = this._derivedLayerPalette(cfg.lumMul);
 
-            // Body — main nebula blobs.
+            // Sky tint — faint full-canvas wash so the layer reads as
+            // a continuous gas field rather than detached patches.
+            this._drawSkyTint(ctx, w, h, cfg, lp);
+
+            // Body — main nebula blobs. Mix density profiles for
+            // visual rhythm: a few bright cores, a base of normal
+            // blobs, plus large background haze patches.
             const blobCount = Math.floor(random(cfg.blobCount[0], cfg.blobCount[1] + 1));
             const blobs = [];
             for (let i = 0; i < blobCount; i++) {
-                blobs.push(this._drawBlob(ctx, w, h, scale, cfg, lp));
+                // Density profile: 25% bright / 55% normal / 20% haze
+                const r = Math.random();
+                const profile = r < 0.25 ? 'bright' : r < 0.80 ? 'normal' : 'haze';
+                blobs.push(this._drawBlob(ctx, w, h, scale, cfg, lp, profile));
             }
 
             // Wisps — elongated streaks of gas connecting nearby blobs.
@@ -221,68 +257,149 @@ class NebulaRenderer {
             primary:   shade(sp.primary,   lumMul),
             secondary: shade(sp.secondary, lumMul),
             tertiary:  shade(sp.tertiary,  lumMul),
+            accent:    shade(sp.accent,    Math.min(1.1, lumMul + 0.05)),
             shadow:    shade(sp.shadow,    Math.max(0.3, lumMul - 0.2)),
             highlight: shade(sp.highlight, Math.min(1.2, lumMul + 0.2)),
             speckle:   sp.speckle, // speckle stays bright across all layers
         };
     }
 
+    // Faint full-canvas wash in the layer's secondary color. Anchors
+    // the layer in the palette and prevents the nebula from feeling
+    // like detached patches floating on pure black. Strength scales
+    // with layer luminance so far layers contribute less.
+    _drawSkyTint(ctx, w, h, layerCfg, lp) {
+        const grad = ctx.createRadialGradient(
+            w * (0.4 + Math.random() * 0.2),
+            h * (0.4 + Math.random() * 0.2),
+            0,
+            w / 2, h / 2,
+            Math.max(w, h) * 0.7,
+        );
+        const tintAlpha = 0.04 * layerCfg.lumMul;
+        grad.addColorStop(0,   rgba(lp.tertiary,  tintAlpha));
+        grad.addColorStop(0.5, rgba(lp.secondary, tintAlpha * 0.7));
+        grad.addColorStop(1,   rgba(lp.shadow,    tintAlpha * 0.4));
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+    }
+
     // Returns the placed blob's center + base radius so wisps + stardust
-    // can anchor near density peaks.
-    _drawBlob(ctx, canvasW, canvasH, scale, layerCfg, lp) {
+    // can anchor near density peaks. `profile` selects density variant:
+    //   'bright' — vivid, high opacity, definite hot core, edge halo
+    //   'normal' — middle ground, the workhorse blob
+    //   'haze'   — large, dim, no hot core; background gas
+    _drawBlob(ctx, canvasW, canvasH, scale, layerCfg, lp, profile = 'normal') {
         const cx = random(canvasW * 0.05, canvasW * 0.95);
         const cy = random(canvasH * 0.05, canvasH * 0.95);
-        const baseRadius = random(layerCfg.radiusRange[0], layerCfg.radiusRange[1]) * scale;
+        let baseRadius = random(layerCfg.radiusRange[0], layerCfg.radiusRange[1]) * scale;
 
-        // Sub-blobs — 4-6 overlapping clouds for organic shape, each
-        // rendered in 3 passes (shadow / body / highlight) so the
-        // result reads as a volumetric thing rather than a flat blob.
+        // Density-profile multipliers
+        let opacityMul = 1.0;
+        let radiusMul  = 1.0;
+        let drawCore   = true;
+        let drawHalo   = true;
+        if (profile === 'bright') {
+            opacityMul = 1.4;
+            radiusMul  = 0.85;
+        } else if (profile === 'haze') {
+            opacityMul = 0.55;
+            radiusMul  = 1.55;
+            drawCore   = false;
+            drawHalo   = Math.random() < 0.4; // mostly skip on haze
+        }
+        baseRadius *= radiusMul;
+
+        // Sub-blobs — 4-6 overlapping clouds for organic shape. Each
+        // sub-blob is rendered as an ELLIPSE (not a circle) so the
+        // overall nebula shape doesn't read as bubbles. Eccentricity
+        // and rotation vary per sub-blob.
         const subCount = Math.floor(random(4, 7));
         for (let s = 0; s < subCount; s++) {
             const ox = cx + random(-baseRadius * 0.55, baseRadius * 0.55);
             const oy = cy + random(-baseRadius * 0.55, baseRadius * 0.55);
-            const r = baseRadius * random(0.55, 1.2);
-            const opacity = random(layerCfg.opacityRange[0], layerCfg.opacityRange[1]);
+            const r  = baseRadius * random(0.55, 1.2);
+            const opacity = random(layerCfg.opacityRange[0], layerCfg.opacityRange[1]) * opacityMul;
+
+            // Ellipse params: aspect 0.6..1.6 with random rotation.
+            const aspect = random(0.6, 1.6);
+            const rx = r * Math.sqrt(aspect);
+            const ry = r / Math.sqrt(aspect);
+            const rot = Math.random() * Math.PI;
+
+            // Helper to fill an elliptical path centered at (px,py)
+            // rotated by `rot`, sized (erx, ery), with the given
+            // radial gradient. createRadialGradient takes scalar
+            // radii, so we draw the gradient on a circle of `R = max`
+            // and use ellipse path to clip the visual shape.
+            const drawEllipseGradient = (px, py, erx, ery, gradFactory) => {
+                const R = Math.max(erx, ery);
+                const grad = gradFactory(px, py, R);
+                ctx.fillStyle = grad;
+                ctx.save();
+                ctx.translate(px, py);
+                ctx.rotate(rot);
+                ctx.scale(erx / R, ery / R);
+                ctx.beginPath();
+                ctx.arc(0, 0, R, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            };
 
             // ── 1. Shadow pass — large, dark, slightly offset ──
             const shadowOffset = r * 0.18;
             const sax = ox + shadowOffset;
             const say = oy + shadowOffset;
-            const sgrad = ctx.createRadialGradient(sax, say, 0, sax, say, r * 1.15);
-            sgrad.addColorStop(0,   rgba(lp.shadow, opacity * 0.55));
-            sgrad.addColorStop(0.6, rgba(lp.shadow, opacity * 0.25));
-            sgrad.addColorStop(1,   rgba(lp.shadow, 0));
-            ctx.fillStyle = sgrad;
-            ctx.beginPath();
-            ctx.arc(sax, say, r * 1.15, 0, Math.PI * 2);
-            ctx.fill();
+            drawEllipseGradient(sax, say, rx * 1.15, ry * 1.15, (px, py, R) => {
+                const g = ctx.createRadialGradient(px, py, 0, px, py, R);
+                g.addColorStop(0,   rgba(lp.shadow, opacity * 0.55));
+                g.addColorStop(0.6, rgba(lp.shadow, opacity * 0.25));
+                g.addColorStop(1,   rgba(lp.shadow, 0));
+                return g;
+            });
 
             // ── 2. Main body — multi-stop gradient through the palette ──
-            const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
-            grad.addColorStop(0,    rgba(lp.tertiary,  opacity));
-            grad.addColorStop(0.25, rgba(lp.primary,   opacity * 0.85));
-            grad.addColorStop(0.55, rgba(lp.secondary, opacity * 0.55));
-            grad.addColorStop(0.85, rgba(lp.secondary, opacity * 0.18));
-            grad.addColorStop(1,    rgba(lp.secondary, 0));
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(ox, oy, r, 0, Math.PI * 2);
-            ctx.fill();
+            drawEllipseGradient(ox, oy, rx, ry, (px, py, R) => {
+                const g = ctx.createRadialGradient(px, py, 0, px, py, R);
+                g.addColorStop(0,    rgba(lp.tertiary,  opacity));
+                g.addColorStop(0.25, rgba(lp.primary,   opacity * 0.85));
+                g.addColorStop(0.55, rgba(lp.secondary, opacity * 0.55));
+                g.addColorStop(0.85, rgba(lp.secondary, opacity * 0.18));
+                g.addColorStop(1,    rgba(lp.secondary, 0));
+                return g;
+            });
 
-            // ── 3. Hot core — small bright spot off-center ──
-            // Using 'lighter' would over-saturate the underlying canvas;
-            // a plain alpha pass keeps the palette intact.
-            const coreOx = ox + random(-r * 0.18, r * 0.18);
-            const coreOy = oy + random(-r * 0.18, r * 0.18);
-            const coreR = r * random(0.18, 0.32);
-            const cgrad = ctx.createRadialGradient(coreOx, coreOy, 0, coreOx, coreOy, coreR);
-            cgrad.addColorStop(0,   rgba(lp.highlight, opacity * 1.4));
-            cgrad.addColorStop(0.5, rgba(lp.tertiary,  opacity * 0.8));
-            cgrad.addColorStop(1,   rgba(lp.tertiary,  0));
-            ctx.fillStyle = cgrad;
-            ctx.beginPath();
-            ctx.arc(coreOx, coreOy, coreR, 0, Math.PI * 2);
-            ctx.fill();
+            // ── 3. Edge halo — thin ring of accent color at the
+            //    outer edge. Adds chromatic complexity / makes the
+            //    blob's silhouette feel less uniform. Skipped on
+            //    haze blobs (would muddy the soft look).
+            if (drawHalo) {
+                drawEllipseGradient(ox, oy, rx * 1.05, ry * 1.05, (px, py, R) => {
+                    const g = ctx.createRadialGradient(px, py, R * 0.78, px, py, R);
+                    g.addColorStop(0,   rgba(lp.accent, 0));
+                    g.addColorStop(0.6, rgba(lp.accent, opacity * 0.35));
+                    g.addColorStop(1,   rgba(lp.accent, 0));
+                    return g;
+                });
+            }
+
+            // ── 4. Hot core — small bright spot, off-center,
+            //    ALWAYS round (not affected by ellipse aspect) so
+            //    the brightness reads as a star-like nucleus.
+            //    Skipped on haze blobs.
+            if (drawCore) {
+                const coreOx = ox + random(-r * 0.18, r * 0.18);
+                const coreOy = oy + random(-r * 0.18, r * 0.18);
+                const coreR = r * random(0.18, 0.32);
+                const cgrad = ctx.createRadialGradient(coreOx, coreOy, 0, coreOx, coreOy, coreR);
+                cgrad.addColorStop(0,   rgba(lp.highlight, opacity * 1.4));
+                cgrad.addColorStop(0.5, rgba(lp.tertiary,  opacity * 0.8));
+                cgrad.addColorStop(1,   rgba(lp.tertiary,  0));
+                ctx.fillStyle = cgrad;
+                ctx.beginPath();
+                ctx.arc(coreOx, coreOy, coreR, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
         return { cx, cy, baseRadius };
@@ -338,7 +455,6 @@ class NebulaRenderer {
     // blobs, sparse fall-off outside.
     _drawStardust(ctx, canvasW, canvasH, layerCfg, lp, blobs) {
         const total = layerCfg.speckles;
-        ctx.fillStyle = `rgba(${lp.speckle[0]},${lp.speckle[1]},${lp.speckle[2]},1)`;
         for (let i = 0; i < total; i++) {
             // Bias 70% of speckles to live inside blobs.
             let x, y;
@@ -353,14 +469,36 @@ class NebulaRenderer {
                 x = Math.random() * canvasW;
                 y = Math.random() * canvasH;
             }
+
+            // Color: 80% pure speckle white, 15% palette accent, 5% highlight
+            // (prevents the speckle field from looking monochromatic).
+            const r = Math.random();
+            const c = r < 0.80 ? lp.speckle
+                    : r < 0.95 ? lp.accent
+                    : lp.highlight;
             const a = random(layerCfg.speckleAlpha[0], layerCfg.speckleAlpha[1]);
-            ctx.globalAlpha = a;
-            const size = Math.random() < 0.85 ? 0.5 : 1.1;
+
+            // Size distribution: 70% small dust, 25% medium, 5% bright stars
+            const t = Math.random();
+            let size;
+            if (t < 0.70) size = 0.4;
+            else if (t < 0.95) size = 0.9;
+            else size = 1.5;
+
+            ctx.fillStyle = rgba(c, a);
             ctx.beginPath();
             ctx.arc(x, y, size, 0, Math.PI * 2);
             ctx.fill();
+
+            // The brightest speckles get a tiny corona — feels like a
+            // pinpoint star embedded in the gas.
+            if (size === 1.5) {
+                ctx.fillStyle = rgba(c, a * 0.35);
+                ctx.beginPath();
+                ctx.arc(x, y, size * 2.2, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
-        ctx.globalAlpha = 1;
     }
 
     /**
