@@ -57,6 +57,7 @@ export function handleCollisions() {
 
     // Player-asteroid collisions
     this.asteroidPool.activeObjects.forEach(ast => {
+        if (ast.warping || ast._deathFlash > 0) return;
         if (this.player.active && collision(this.player, ast)) {
             this.handlePlayerAsteroidCollision(this.player, ast);
         }
@@ -69,7 +70,7 @@ export function handleCollisions() {
         const nearby = this.spatialGrid.retrieve(bullet);
         for (let j = nearby.length - 1; j >= 0; j--) {
             const ast = nearby[j];
-            if (!ast.active || ast._deathFlash > 0 || ast.constructor.name !== 'Asteroid') continue;
+            if (!ast.active || ast._deathFlash > 0 || ast.warping || ast.constructor.name !== 'Asteroid') continue;
 
             // Skip if this piercing bullet has already hit this asteroid
             if (bullet.piercing > 0 && bullet.hasHitEnemy(ast)) {
@@ -239,6 +240,7 @@ export function handleCollisions() {
         for (let j = i + 1; j < activeAsteroids.length; j++) {
             let a1 = activeAsteroids[i], a2 = activeAsteroids[j];
             if (!a1.active || !a2.active) continue;
+            if (a1.warping || a2.warping) continue;
 
             // Grant temporary immunity to newly spawned asteroids so that
             // freshly split fragments can naturally fly apart on their own
@@ -572,10 +574,10 @@ export function handleCollisions() {
 
     // Enemy-asteroid collisions
     this.enemyPool.activeObjects.forEach(enemy => {
-        if (!enemy.active || enemy._deathFlash > 0) return;
+        if (!enemy.active || enemy._deathFlash > 0 || enemy.warping) return;
 
         this.asteroidPool.activeObjects.forEach(ast => {
-            if (!ast.active) return;
+            if (!ast.active || ast.warping || ast._deathFlash > 0) return;
 
             if (collision(enemy, ast)) {
                 this.handleEnemyAsteroidCollision(enemy, ast);
@@ -646,7 +648,7 @@ export function checkLanceBeamCollisions() {
     // don't enter the same scan frame.
     const astSnapshot = this.asteroidPool.activeObjects.slice();
     for (const ast of astSnapshot) {
-        if (!ast.active || ast._deathFlash > 0) continue;
+        if (!ast.active || ast._deathFlash > 0 || ast.warping) continue;
         const ax = ast.x - p.x;
         const ay = ast.y - p.y;
         const proj = ax * dx + ay * dy;
@@ -696,7 +698,7 @@ export function checkMineCollisions() {
         }
         if (!triggered) {
             for (const ast of this.asteroidPool.activeObjects) {
-                if (!ast.active) continue;
+                if (!ast.active || ast.warping) continue;
                 if (Math.hypot(ast.x - mine.x, ast.y - mine.y) < triggerR) { triggered = true; break; }
             }
         }
@@ -731,7 +733,7 @@ export function checkMineCollisions() {
         const AST_KNOCK_BASE = 6 * knockMul;
         const astSnapshot = this.asteroidPool.activeObjects.slice();
         for (const ast of astSnapshot) {
-            if (!ast.active) continue;
+            if (!ast.active || ast.warping) continue;
             const dist = Math.hypot(ast.x - mine.x, ast.y - mine.y);
             if (dist >= blastR) continue;
             const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
@@ -857,7 +859,7 @@ export function checkNovaCollisions() {
         // Snapshot first so fragments don't re-enter this loop.
         const novaAstSnapshot = this.asteroidPool.activeObjects.slice();
         for (const ast of novaAstSnapshot) {
-            if (!ast.active || ring.hitAsteroids.has(ast)) continue;
+            if (!ast.active || ast.warping || ring.hitAsteroids.has(ast)) continue;
             const dx = ast.x - ring.x;
             const dy = ast.y - ring.y;
             const dist = Math.hypot(dx, dy);
@@ -981,7 +983,7 @@ export function checkMissileCollisions() {
 
         // Asteroid hit
         for (const ast of this.asteroidPool.activeObjects) {
-            if (!ast.active) continue;
+            if (!ast.active || ast.warping) continue;
             const dist = Math.hypot(ast.x - missile.x, ast.y - missile.y);
             if (dist < (ast.baseRadius || ast.radius || 20) + 6) {
                 ast.health = Math.max(0, (ast.health || 0) - POWER_WEAPONS.MISSILE_SALVO.missileDamage);

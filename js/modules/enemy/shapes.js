@@ -20,35 +20,30 @@ export function drawWarpEffect(ctx) {
 
     ctx.save();
 
-    // Star Trek warp streak: elongated light trail behind the ship
-    // The trail stretches in the direction of travel
     const dx = Math.cos(this.warpAngle);
     const dy = Math.sin(this.warpAngle);
 
-    // Stretch factor: peaks during acceleration phase (t ~0.4-0.7)
-    const stretchIntensity = t < 0.3 ? t / 0.3
-        : t < 0.7 ? 1.0
-        : 1.0 - (t - 0.7) / 0.3;
-    const streakLength = this.radius * (3 + stretchIntensity * 12); // Up to 15x radius
+    // Stretch peaks at smoothstep's max velocity (t≈0.5) and tapers toward
+    // both ends — streak corresponds to actual motion, not a hard snap.
+    const stretchIntensity = Math.sin(t * Math.PI);
+    const baseR = (this.radius || 15) * (this.warpScale != null ? this.warpScale : 1);
+    const streakLength = baseR * (2 + stretchIntensity * 11);
 
-    // Draw the warp streak — bright core fading to transparent tail
     const gradient = ctx.createLinearGradient(
         this.x - dx * streakLength, this.y - dy * streakLength,
-        this.x + dx * this.radius, this.y + dy * this.radius
+        this.x + dx * baseR,        this.y + dy * baseR
     );
-
     const c = this.color;
-    gradient.addColorStop(0, 'rgba(255,255,255,0)');
-    gradient.addColorStop(0.3, c + '33');
-    gradient.addColorStop(0.7, c + '99');
-    gradient.addColorStop(0.9, '#ffffffcc');
-    gradient.addColorStop(1, '#ffffffff');
+    gradient.addColorStop(0,    'rgba(255,255,255,0)');
+    gradient.addColorStop(0.3,  c + '33');
+    gradient.addColorStop(0.7,  c + '99');
+    gradient.addColorStop(0.9,  '#ffffffcc');
+    gradient.addColorStop(1,    '#ffffffff');
 
-    // Draw tapered streak shape
     const perpX = -dy;
     const perpY = dx;
-    const headWidth = this.radius * (0.8 + stretchIntensity * 0.5);
-    const tailWidth = this.radius * 0.15;
+    const headWidth = baseR * (0.8 + stretchIntensity * 0.5);
+    const tailWidth = baseR * 0.15;
 
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -61,17 +56,19 @@ export function drawWarpEffect(ctx) {
     ctx.closePath();
     ctx.fill();
 
-    // Bright flash at arrival point when snapping in (final 20%)
-    if (t > 0.8) {
-        const flashAlpha = (1 - (t - 0.8) / 0.2) * 0.6;
-        const flashRadius = this.radius * (2 + (1 - flashAlpha) * 3);
-        const flash = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, flashRadius);
-        flash.addColorStop(0, `rgba(255,255,255,${flashAlpha})`);
-        flash.addColorStop(0.4, c + Math.round(flashAlpha * 99).toString(16).padStart(2, '0'));
-        flash.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = flash;
+    // Soft halo glow at the entity — emphasizes "materializing" feel rather
+    // than a pop-in flash. Fades with the stretch curve so it's strongest
+    // mid-warp and gentlest at arrival.
+    const haloAlpha = 0.4 * stretchIntensity;
+    if (haloAlpha > 0.01) {
+        const haloR = baseR * (2.6 + (1 - t) * 0.8);
+        const halo = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, haloR);
+        halo.addColorStop(0, `rgba(255,255,255,${haloAlpha * 0.7})`);
+        halo.addColorStop(0.5, c + Math.round(haloAlpha * 99).toString(16).padStart(2, '0'));
+        halo.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = halo;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, flashRadius, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, haloR, 0, Math.PI * 2);
         ctx.fill();
     }
 

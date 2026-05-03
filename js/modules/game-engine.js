@@ -440,23 +440,26 @@ export class GameEngine {
         this.uiManager.updateLives(this.game.lives);
         this.game.state = GAME_STATES.WAVE_TRANSITION;
 
-        // Show wave 1 intro with personality
+        // Wave 1 intro: full-screen dark overlay with "WAVE 1" — entities
+        // warp in during the dark hold, settling as the overlay fades.
         this.waveMessage = {
             active: true,
             startTime: Date.now(),
-            duration: 3000,
+            duration: 2800,
             title: 'WAVE 1',
             subtitle: this.getWaveSubtitle(1),
+            phase: 'intro',
         };
 
-        // Delay spawning until message has been read (GameTimer — pauses with game)
-        // Order matters: spawn first, THEN flip to PLAYING. Otherwise the
-        // checkWaveComplete loop can race-fire on a frame where state is
-        // PLAYING but no enemies have been added yet, instantly declaring
-        // the wave complete and jumping straight to wave 2.
-        this._gameTimers.push(new GameTimer(2000, () => {
+        // Spawn entities ~700ms in so the ~700-1500ms warp-in finishes
+        // during the fade-out window. Spawn FIRST, flip to PLAYING later.
+        this._gameTimers.push(new GameTimer(700, () => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.spawnWaveEntities();
+            }
+        }));
+        this._gameTimers.push(new GameTimer(2800, () => {
+            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.game.state = GAME_STATES.PLAYING;
             }
         }));
@@ -946,6 +949,8 @@ export class GameEngine {
     
     drawHUD() { return hudStatus.drawHUD.call(this); }
 
+    drawWaveIntroOverlay() { return hudStatus.drawWaveIntroOverlay.call(this); }
+
     drawWeaponEffects() { return weaponFx.drawWeaponEffects.call(this); }
 
     drawSkillCooldownHUD() { return hudStatus.drawSkillCooldownHUD.call(this); }
@@ -1055,6 +1060,8 @@ export class GameEngine {
                 this.ctx.fillRect(0, 0, this.width, this.height);
                 this._screenFlashAlpha -= this._screenFlashAlpha / (this._screenFlashDuration || 1);
             }
+            // Wave intro overlay (continues animating during hitstop too)
+            this.drawWaveIntroOverlay();
             recordVFXFrame(this);
             requestAnimationFrame(() => this.gameLoop());
             return;
@@ -1178,6 +1185,10 @@ export class GameEngine {
             this.ctx.fillRect(0, 0, this.width, this.height);
             this._deathOverlayTimer--;
         }
+
+        // Wave intro full-screen darken — covers world + HUD while entities
+        // warp in, then fades out as the wave starts.
+        this.drawWaveIntroOverlay();
 
         // Draw custom cursor (always on top, after all UI elements)
         this.drawCustomCursor();

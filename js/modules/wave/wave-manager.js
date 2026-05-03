@@ -97,23 +97,29 @@ export function startNextWave() {
     // Restore player health to full between waves
     this.player.health = this.player.getEffectiveMaxHealth();
 
-    // Show wave start message with pithy subtitle
+    // Wave intro: full-screen dark overlay with "WAVE N" — entities warp
+    // in during the dark hold, settling into place as the overlay fades.
     this.waveMessage = {
         active: true,
         startTime: Date.now(),
-        duration: 3000,
+        duration: 2800,
         title: `WAVE ${this.game.currentWave}`,
         subtitle: this.getWaveSubtitle(this.game.currentWave),
+        phase: 'intro',
     };
 
-    // Delay spawning until message has been read (GameTimer — pauses with game)
-    // Same ordering constraint as the wave-1 init: spawn FIRST, then flip
-    // to PLAYING, so checkWaveComplete can never see a "0 enemies +
-    // PLAYING + !waveComplete" tuple before the new wave's entities
-    // exist.
-    this._gameTimers.push(new GameTimer(2000, () => {
+    // Spawn entities ~700ms in (overlay is fully dark by then) so the
+    // ~700-1500ms warp-in animation finishes during the fade-out window.
+    // Order matters: spawn FIRST, then flip to PLAYING — otherwise
+    // checkWaveComplete can briefly see "0 enemies + PLAYING +
+    // !waveComplete" and instantly jump to the next wave.
+    this._gameTimers.push(new GameTimer(700, () => {
         if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
             this.spawnWaveEntities();
+        }
+    }));
+    this._gameTimers.push(new GameTimer(2800, () => {
+        if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
             this.game.state = GAME_STATES.PLAYING;
         }
     }));
@@ -299,33 +305,50 @@ export function startNewWave() {
 }
 
 export function initializeWaveAsteroid(asteroid, opts = {}) {
-    // Default behavior: spawn at random gameField edge so asteroids drift in
-    // from off-map. With opts.onScreen, spawn inside the current viewport at
-    // a safe minimum distance from the player so the wave's threats are
-    // already visible the instant it starts.
-    let x, y;
-    let attempts = 0;
+    // All asteroids now warp in — wave-start spawns warp into the visible
+    // viewport so the field is "ready" the instant the intro overlay lifts;
+    // continuous spawns warp in from outside the gameField edge to a point
+    // inside the play area.
     const r = random(30, 60);
     const spawnBuffer = r * 4;
 
+    let targetX, targetY, srcX, srcY;
+
     if (opts.onScreen) {
-        const pos = this.getOnScreenSpawnPosition({
+        // Target inside the current viewport. Source is just outside the
+        // closest viewport edge so the streak enters from the screen border.
+        const target = this.getOnScreenSpawnPosition({
             minDistFromPlayer: r + 220,
             edgePad: r + 12,
         });
-        x = pos.x;
-        y = pos.y;
+        targetX = target.x;
+        targetY = target.y;
+        const camX = this.camera.x, camY = this.camera.y;
+        const camR = camX + this.width, camB = camY + this.height;
+        const dL = targetX - camX, dR = camR - targetX;
+        const dT = targetY - camY, dB = camB - targetY;
+        const minDist = Math.min(dL, dR, dT, dB);
+        const sourceMargin = 220 + Math.random() * 160;
+        if (minDist === dT) { srcX = targetX + random(-120, 120); srcY = camY - sourceMargin; }
+        else if (minDist === dB) { srcX = targetX + random(-120, 120); srcY = camB + sourceMargin; }
+        else if (minDist === dL) { srcX = camX - sourceMargin; srcY = targetY + random(-120, 120); }
+        else { srcX = camR + sourceMargin; srcY = targetY + random(-120, 120); }
     } else {
+        // Continuous / cheat / wave-asteroid path: source on the gameField
+        // edge, target somewhere in the middle 60% of the field.
+        let attempts = 0;
         do {
             const edge = Math.floor(random(0, 4));
             switch (edge) {
-                case 0: x = random(0, this.gameField.width); y = -spawnBuffer; break;
-                case 1: x = this.gameField.width + spawnBuffer; y = random(0, this.gameField.height); break;
-                case 2: x = random(0, this.gameField.width); y = this.gameField.height + spawnBuffer; break;
-                case 3: x = -spawnBuffer; y = random(0, this.gameField.height); break;
+                case 0: srcX = random(0, this.gameField.width); srcY = -spawnBuffer; break;
+                case 1: srcX = this.gameField.width + spawnBuffer; srcY = random(0, this.gameField.height); break;
+                case 2: srcX = random(0, this.gameField.width); srcY = this.gameField.height + spawnBuffer; break;
+                case 3: srcX = -spawnBuffer; srcY = random(0, this.gameField.height); break;
             }
             attempts++;
-        } while (this.isInMinimapArea(x, y) && attempts < 10);
+        } while (this.isInMinimapArea(srcX, srcY) && attempts < 10);
+        targetX = random(this.gameField.width * 0.2, this.gameField.width * 0.8);
+        targetY = random(this.gameField.height * 0.2, this.gameField.height * 0.8);
     }
 
     const spd = Math.min(5.0, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.15);
@@ -334,8 +357,10 @@ export function initializeWaveAsteroid(asteroid, opts = {}) {
         y: random(-spd, spd) || 0.2
     };
 
-    asteroid.initializeAsteroid(x, y, r, this.game.asteroidLevel, this);
+    // Place asteroid at warp source so it streaks in toward the target.
+    asteroid.initializeAsteroid(srcX, srcY, r, this.game.asteroidLevel, this);
     asteroid.vel = vel;
+    asteroid.startWarpIn(targetX, targetY);
 }
 
 export function getRandomSpawnPosition(opts = {}) {
@@ -501,6 +526,7 @@ export function spawnAsteroidOffscreen() {
     const ang = Math.atan2(ty - y, tx - x);
     const spd = Math.min(5.0, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.15);
     newAst.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };
+    newAst.startWarpIn(tx, ty);
 }
 
 export function spawnWaveAsteroids() {

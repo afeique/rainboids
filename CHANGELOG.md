@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.9] - 2026-05-03
+
+### Added
+- **Wave-start dark intro overlay.** WAVE_TRANSITION now renders a full-screen near-opaque dark overlay with the wave title (and pithy subtitle) dead center. The overlay fades in over 500ms, holds for the wave's spawn-and-warp window, then fades out over 700ms (total intro = 2800ms). The existing top-of-screen wavy text is reserved for shorter notifications (WAVE COMPLETE, queued toasts) — wave starts get the cinematic centered treatment.
+- **Asteroid warp-in entry animation.** Asteroids now warp in like enemies — streak gradient, scale ramp, and brief soft halo at the materialization point. The streak color is sampled from the asteroid's own HSL palette so each rock's entry feels coherent with its body color. Warping asteroids skip player/bullet/enemy/asteroid/lance/mine/nova/missile collisions while warping (they're not "really there" until the warp finishes).
+
+### Changed
+- **Refined warp-in animation — smoother, with scale.** Replaced the cubic-ease-in-then-snap "Star Trek" curve with smoothstep position interpolation (no hard arrival snap) and an ease-out scale ramp from 0.15 → 1.0. Entities now grow visibly as they warp in instead of flashing into existence at full size. Warp duration baseline lifted to 700-1500ms (was 400-1200ms) so the scale-in reads clearly. The streak's stretch intensity follows `sin(πt)` so it peaks at the smoothstep's max-velocity midpoint and tapers smoothly at both ends, and the bright "snap" arrival flash is replaced with a soft halo that fades alongside the streak.
+- **All asteroid spawn paths now use warp-in.** Wave-start asteroids warp into the visible viewport from just outside the closest viewport edge (220-380px) so the pre-wave dark overlay fades to reveal them already on-camera. Continuous in-wave spawns and force-spawn / cheat asteroids warp from outside the gameField edge to a random target inside the play area's middle 60%. The previous "drift in slowly from off-map" behavior is gone — every asteroid arrival is now a deliberate warp event.
+- **Wave intro timing reordered.** Wave-start spawning now fires at t=700ms (overlay near peak darkness) instead of t=2000ms, so the 700-1500ms warp animation finishes during the overlay's fade-out window. State flips to PLAYING at t=2800ms.
+
+---
+
 ## [5.49.8] - 2026-05-03
 
 ### Changed

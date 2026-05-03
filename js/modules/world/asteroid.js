@@ -67,6 +67,9 @@ export class Asteroid {
         
         this.active = true;
         this.creationTime = Date.now();
+        this.warping = false;
+        this.warpScale = 1.0;
+        this.warpTrail = null;
 
         // Unique color palette per asteroid
         // Hue range: teal/cyan/blue-violet family (150-280°) with occasional gold (40-60°)
@@ -115,6 +118,109 @@ export class Asteroid {
 
     reset(x, y, radius, level = 1, gameEngine = null) {
         this.initializeAsteroid(x, y, radius, level, gameEngine);
+    }
+
+    startWarpIn(targetX, targetY) {
+        this.warping = true;
+        this.warpTargetX = targetX;
+        this.warpTargetY = targetY;
+        this.warpStartX = this.x;
+        this.warpStartY = this.y;
+        this.warpStartTime = frameClock.now;
+        const dist = Math.hypot(targetX - this.x, targetY - this.y);
+        this.warpDuration = Math.min(1500, 700 + dist * 0.35);
+        this.warpAngle = Math.atan2(targetY - this.y, targetX - this.x);
+        this.warpTrail = [];
+        this.warpScale = 0.15; // grows to 1.0 by warp end
+    }
+
+    updateWarpIn() {
+        const now = frameClock.now;
+        const elapsed = now - this.warpStartTime;
+        const t = Math.min(1, elapsed / this.warpDuration);
+
+        // Smoothstep position + ease-out scale, matching the enemy warp.
+        const tPos = t * t * (3 - 2 * t);
+        const tScale = 1 - Math.pow(1 - t, 2);
+        this.x = this.warpStartX + (this.warpTargetX - this.warpStartX) * tPos;
+        this.y = this.warpStartY + (this.warpTargetY - this.warpStartY) * tPos;
+        this.warpScale = 0.15 + 0.85 * tScale;
+
+        // Spin during warp for visual interest — feels like the rock is
+        // tumbling through hyperspace rather than gliding rigidly.
+        this.rot3D.x += this.rotVel3D.x * 1.5;
+        this.rot3D.y += this.rotVel3D.y * 1.5;
+        this.rot3D.z += this.rotVel3D.z * 1.5;
+        this._projectionDirty = true;
+
+        this.warpTrail.push({ x: this.x, y: this.y, time: now });
+        while (this.warpTrail.length > 0 && now - this.warpTrail[0].time > 500) {
+            this.warpTrail.shift();
+        }
+
+        if (t >= 1) {
+            this.warping = false;
+            this.x = this.warpTargetX;
+            this.y = this.warpTargetY;
+            this.warpTrail = [];
+            this.warpScale = 1.0;
+        }
+    }
+
+    drawWarpEffect(ctx) {
+        if (!this.warping || !this.warpTrail || this.warpTrail.length < 2) return;
+        const now = frameClock.now;
+        const elapsed = now - this.warpStartTime;
+        const t = Math.min(1, elapsed / this.warpDuration);
+
+        ctx.save();
+        const dx = Math.cos(this.warpAngle);
+        const dy = Math.sin(this.warpAngle);
+        const stretchIntensity = Math.sin(t * Math.PI);
+        const baseR = (this.radius || 30) * (this.warpScale != null ? this.warpScale : 1);
+        const streakLength = baseR * (2 + stretchIntensity * 9);
+
+        const c       = `hsl(${this.baseHue}, ${this.saturation}%, ${this.lightness}%)`;
+        const cBright = `hsl(${this.baseHue}, ${Math.min(100, this.saturation + 10)}%, ${Math.min(95, this.lightness + 18)}%)`;
+
+        const gradient = ctx.createLinearGradient(
+            this.x - dx * streakLength, this.y - dy * streakLength,
+            this.x + dx * baseR,        this.y + dy * baseR
+        );
+        gradient.addColorStop(0,   'rgba(255,255,255,0)');
+        gradient.addColorStop(0.4, c);
+        gradient.addColorStop(0.85, cBright);
+        gradient.addColorStop(1,   '#ffffffff');
+
+        const perpX = -dy;
+        const perpY = dx;
+        const headWidth = baseR * (0.7 + stretchIntensity * 0.5);
+        const tailWidth = baseR * 0.12;
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(this.x + perpX * headWidth, this.y + perpY * headWidth);
+        ctx.lineTo(this.x - perpX * headWidth, this.y - perpY * headWidth);
+        ctx.lineTo(this.x - dx * streakLength - perpX * tailWidth,
+                   this.y - dy * streakLength - perpY * tailWidth);
+        ctx.lineTo(this.x - dx * streakLength + perpX * tailWidth,
+                   this.y - dy * streakLength + perpY * tailWidth);
+        ctx.closePath();
+        ctx.fill();
+
+        const haloAlpha = 0.35 * stretchIntensity;
+        if (haloAlpha > 0.01) {
+            const haloR = baseR * 2.4;
+            const halo = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, haloR);
+            halo.addColorStop(0, `rgba(255,255,255,${haloAlpha * 0.7})`);
+            halo.addColorStop(0.55, c);
+            halo.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = halo;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, haloR, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
     }
 
     rescale(newBaseRadius) {
@@ -196,6 +302,12 @@ export class Asteroid {
     
     update(gameField = null) {
         if (!this.active) return;
+
+        // Warp-in entry — skip motion / boundary logic until warp completes.
+        if (this.warping) {
+            this.updateWarpIn();
+            return;
+        }
 
         // Death flash countdown
         if (this._deathFlash > 0) {
@@ -312,6 +424,11 @@ export class Asteroid {
             this._projectionDirty = false;
         }
 
+        // Warp streak (drawn in world space, behind the asteroid body)
+        if (this.warping) {
+            this.drawWarpEffect(ctx);
+        }
+
         // Draw targeting effect if this asteroid is currently targeted (clicked)
         if (this.gameEngine && this.gameEngine.targetedEntity === this) {
             this.drawTargetingEffect(ctx);
@@ -320,6 +437,9 @@ export class Asteroid {
         // Draw main asteroid
         ctx.save();
         ctx.translate(this.x, this.y);
+        if (this.warping && this.warpScale != null && this.warpScale < 1) {
+            ctx.scale(this.warpScale, this.warpScale);
+        }
 
         this.drawAsteroidShape(ctx);
 

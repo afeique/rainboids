@@ -27,8 +27,11 @@ export function drawHUD() {
             this.drawLevelUpText();
         }
 
-        // Draw wave message if active
-        if (this.waveMessage.active) {
+        // Draw wave message if active. Wave-start messages with phase
+        // 'intro' render as a full-screen dark overlay (see drawWaveIntro
+        // below); the inline top-of-screen variant is reserved for shorter
+        // notifications like WAVE COMPLETE and queued toasts.
+        if (this.waveMessage.active && this.waveMessage.phase !== 'intro') {
             const now = Date.now();
             const elapsed = now - this.waveMessage.startTime;
 
@@ -81,6 +84,64 @@ export function drawHUD() {
         if (this.game.state === GAME_STATES.TITLE_SCREEN) {
             this.drawTitleScreen();
         }
+}
+
+// ── Wave intro overlay ────────────────────────────────────────────────────
+// Full-screen darken with WAVE N text shown while wave entities warp in.
+// Drawn AFTER all other HUD elements so it covers the world cleanly.
+export function drawWaveIntroOverlay() {
+    const msg = this.waveMessage;
+    if (!msg || !msg.active || msg.phase !== 'intro') return;
+    const now = Date.now();
+    const elapsed = now - msg.startTime;
+    const total = msg.duration || 2800;
+    if (elapsed >= total) {
+        msg.active = false;
+        return;
+    }
+
+    // Three-phase fade: in (0-500ms), hold (500..total-700ms), out
+    const fadeIn = 500;
+    const fadeOut = 700;
+    let alpha;
+    if (elapsed < fadeIn) {
+        alpha = elapsed / fadeIn;
+    } else if (elapsed < total - fadeOut) {
+        alpha = 1;
+    } else {
+        alpha = 1 - (elapsed - (total - fadeOut)) / fadeOut;
+    }
+    if (alpha <= 0.001) return;
+
+    this.ctx.save();
+    // Dark overlay — near-opaque at peak so the playfield is hidden
+    // while entities warp into place.
+    this.ctx.fillStyle = `rgba(0, 0, 0, ${0.95 * alpha})`;
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    // WAVE N + subtitle, dead center.
+    this.ctx.globalAlpha = alpha;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+    const titleFS = Math.min(120, Math.max(64, Math.floor(this.width / 14)));
+    const subtitleFS = Math.max(20, Math.floor(titleFS / 4));
+    const gap = Math.floor(titleFS * 0.85);
+
+    this.drawWavyText(msg.title, centerX, centerY, {
+        fontSize: titleFS,
+        colors: WAVY_PALETTES.waveTitle,
+        speed: 0.55,
+        colorSpeed: 0.22,
+    });
+    if (msg.subtitle) {
+        this.drawWavyText(msg.subtitle, centerX, centerY + gap, {
+            fontSize: subtitleFS,
+            colors: WAVY_PALETTES.waveSubtext,
+            amplitude: 0,
+            colorSpeed: 0.12,
+        });
+    }
+    this.ctx.restore();
 }
 
 export function drawSkillCooldownHUD() {

@@ -203,12 +203,14 @@ export class Enemy {
         this.warpStartX = this.x;
         this.warpStartY = this.y;
         this.warpStartTime = frameClock.now;
-        // Star Trek style: fast stretch toward target, then snap into place
+        // Smoothstep position curve + ease-out scale; longer baseline so the
+        // entity grows in visibly instead of flashing into existence.
         const dist = Math.hypot(targetX - this.x, targetY - this.y);
-        this.warpDuration = Math.min(1200, 400 + dist * 0.4); // 400-1200ms based on distance
+        this.warpDuration = Math.min(1500, 700 + dist * 0.35);
         this.warpAngle = Math.atan2(targetY - this.y, targetX - this.x);
         this.faceAngle = this.warpAngle; // Face the warp direction
-        this.warpTrail = []; // Store trail positions for streak effect
+        this.warpTrail = [];
+        this.warpScale = 0.15;            // grows to 1.0 by warp end
     }
 
     updateWarpIn() {
@@ -216,26 +218,18 @@ export class Enemy {
         const elapsed = now - this.warpStartTime;
         const t = Math.min(1, elapsed / this.warpDuration);
 
-        // Star Trek warp curve: slow start, massive acceleration, snap to stop
-        // Ease-in-cubic for first 70%, then ease-out for final 30%
-        let progress;
-        if (t < 0.7) {
-            // Accelerating phase — cubic ease-in (slow then fast)
-            const p = t / 0.7;
-            progress = p * p * p * 0.7;
-        } else {
-            // Deceleration snap — ease-out (fast then stop)
-            const p = (t - 0.7) / 0.3;
-            progress = 0.7 + (1 - Math.pow(1 - p, 3)) * 0.3;
-        }
+        // Smoothstep for position — gentle accelerate, gentle decelerate, no
+        // snap at arrival. Scale uses ease-out quad so the entity becomes
+        // visible quickly then settles into final size.
+        const tPos = t * t * (3 - 2 * t);
+        const tScale = 1 - Math.pow(1 - t, 2);
 
-        this.x = this.warpStartX + (this.warpTargetX - this.warpStartX) * progress;
-        this.y = this.warpStartY + (this.warpTargetY - this.warpStartY) * progress;
+        this.x = this.warpStartX + (this.warpTargetX - this.warpStartX) * tPos;
+        this.y = this.warpStartY + (this.warpTargetY - this.warpStartY) * tPos;
+        this.warpScale = 0.15 + 0.85 * tScale;
 
-        // Store trail points for the streak effect
         this.warpTrail.push({ x: this.x, y: this.y, time: now });
-        // Keep trail to last 600ms
-        while (this.warpTrail.length > 0 && now - this.warpTrail[0].time > 600) {
+        while (this.warpTrail.length > 0 && now - this.warpTrail[0].time > 500) {
             this.warpTrail.shift();
         }
 
@@ -244,6 +238,7 @@ export class Enemy {
             this.x = this.warpTargetX;
             this.y = this.warpTargetY;
             this.warpTrail = [];
+            this.warpScale = 1.0;
         }
     }
 
@@ -834,7 +829,11 @@ export class Enemy {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.faceAngle); // Rotate to face direction
-        
+        if (this.warping && this.warpScale != null && this.warpScale < 1) {
+            // Entity grows from 15% → 100% during warp-in.
+            ctx.scale(this.warpScale, this.warpScale);
+        }
+
         // Health-based transparency
         const healthRatio = this.health / this.maxHealth;
         const baseAlpha = 0.7 + (healthRatio * 0.3);
