@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.53.0] - 2026-05-03
+
+### Added
+- **Post-init fade-in to the playfield.** When the title launch animation finishes (screen fully black), `init()` now arms a 700ms black-to-clear overlay that fades in to reveal the player on the empty playfield. After a brief orientation beat (≈400ms), the wave-1 entities warp in. Picks up exactly where the title fade-out left off so the screen never flashes between title and gameplay. Wave 1 timeline is now: 0-700ms fade in → 1100ms spawn entities + grant invincibility → 3400ms state → PLAYING.
+
+### Changed
+- **Title launch animation reuses the static title's letters.** Each launch animation now receives the per-letter screen positions of the idle "RAINBOIDS" title (measured from the same `drawWavyText` rendering geometry) and lerps every letter from its static position into the animation's pose over the first 250ms. The on-screen letters appear to BECOME the animation rather than disappearing as a new set of letters spawns elsewhere. Subtitle ("SUPERCHARGED ASTEROIDS"), "PRESS ANY KEY TO START", and the survival-record line stay rendered throughout the launch — they no longer vanish when the animation begins.
+- **Cascade animation reworked into a bounce-wave.** The old cascade (letters falling from above with staggered start) implied letters that didn't yet exist, which fought the "use existing letters" rule. The replacement is a bounce-wave ripple: each letter pops up ~78px and back down with a damped sine, staggered left-to-right at 70ms per letter, then the row zooms toward the camera.
+- **Title-screen starfield is now a sandstorm.** Replaced the slow ellipse-pattern drift with a multi-frequency chaotic vector — three sine/cosine waves at distinct frequencies sum into a fast, direction-shifting motion. Near-depth stars rip across the field while far ones drift more gently thanks to the existing parallax factor, giving the screen a swirling-sand feel.
+
+---
+
 ## [5.52.1] - 2026-05-03
 
 ### Changed

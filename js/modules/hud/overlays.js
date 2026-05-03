@@ -158,33 +158,43 @@ export function drawTitleScreen() {
         const elapsed = launching ? (Date.now() - anim.startTime) : 0;
         const total = launching ? anim.duration : 0;
 
-        let showSubtitle = !launching;
-        let showPressKey = !launching;
+        // Subtitle / press-any-key / record stay visible during the launch
+        // animation per user request — only the title letters themselves
+        // animate; the surrounding chrome remains.
+        const showSubtitle = true;
+        const showPressKey = true;
         let fadeAlpha = 0;
 
         if (launching) {
             const text = 'RAINBOIDS';
             const seeds = anim.letterSeeds || [];
             const style = anim.style || 'twister';
+            // Static letter origins — every animation begins each letter
+            // AT its idle title position, then transforms outward, so the
+            // existing on-screen letters appear to BECOME the animation
+            // rather than a new set of letters spawning.
+            const titleX = centerX + 10;
+            const titleY = centerY - 100;
+            const staticPositions = _measureLetterPositions(this.ctx, text, 72, titleX, titleY);
             switch (style) {
                 case 'explosion':
-                    fadeAlpha = drawExplosionAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    fadeAlpha = drawExplosionAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions);
                     break;
                 case 'wave':
-                    fadeAlpha = drawWaveAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    fadeAlpha = drawWaveAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions);
                     break;
                 case 'cascade':
-                    fadeAlpha = drawCascadeAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    fadeAlpha = drawCascadeAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions);
                     break;
                 case 'warpdrive':
-                    fadeAlpha = drawWarpdriveAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    fadeAlpha = drawWarpdriveAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions);
                     break;
                 case 'pinwheel':
-                    fadeAlpha = drawPinwheelAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    fadeAlpha = drawPinwheelAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions);
                     break;
                 case 'twister':
                 default:
-                    fadeAlpha = drawTwisterAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    fadeAlpha = drawTwisterAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions);
                     break;
             }
         } else {
@@ -197,7 +207,7 @@ export function drawTitleScreen() {
             });
         }
 
-        // ── Subtitle / Press Any Key / Record (idle only) ──
+        // ── Subtitle / Press Any Key / Record (visible during launch too) ──
         if (showSubtitle) {
             this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
                 fontSize: 24,
@@ -250,6 +260,40 @@ export function drawTitleScreen() {
 const TITLE_FONT_SIZE = 72;
 const TITLE_FOCAL     = 600;
 const TITLE_FADE_MS   = 400;
+// First N ms of every launch animation: the rendered position is a smooth
+// lerp from the letter's static title position to the animation's "live"
+// position. This way the on-screen RAINBOIDS letters appear to BECOME the
+// animation instead of jumping to a new pose.
+const TITLE_SETTLE_MS = 250;
+
+// Measure the letters of `text` rendered with drawWavyText at (baseX, baseY)
+// with the given font size. Returns an array of { x, y } centers — the same
+// per-letter centers that drawWavyText draws to, so animations can use them
+// as starting positions and stay perfectly aligned with the static title.
+function _measureLetterPositions(ctx, text, fontSize, baseX, baseY) {
+    ctx.save();
+    ctx.font = `${fontSize}px 'Press Start 2P', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const totalWidth = Math.max(1, ctx.measureText(text).width);
+    let currentX = baseX - totalWidth / 2;
+    const positions = [];
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        positions.push({ x: currentX, y: baseY });
+        currentX += ctx.measureText(ch).width;
+    }
+    ctx.restore();
+    return positions;
+}
+
+// Smooth ease-in-out blend over the settle window.
+function _settleBlend(elapsed) {
+    const t = Math.min(1, Math.max(0, elapsed / TITLE_SETTLE_MS));
+    // Smoothstep — gentle accelerate, gentle decelerate so the letters
+    // glide into the animation pose without a jolt.
+    return t * t * (3 - 2 * t);
+}
 
 function _titleLetterDraw(ctx, drawWavyText, ch, x, y, scale, alpha, opts = {}) {
     if (alpha <= 0.01 || scale <= 0.01) return;
@@ -267,10 +311,23 @@ function _titleLetterDraw(ctx, drawWavyText, ch, x, y, scale, alpha, opts = {}) 
     ctx.restore();
 }
 
+// Lerp the animation's intended pose against the letter's static title
+// origin during the settle window. Returns the rendered pose for this frame.
+function _settleLerp(elapsed, staticPos, animSx, animSy, animScale, animAlpha, animRotation) {
+    const blend = _settleBlend(elapsed);
+    return {
+        x: staticPos.x + (animSx - staticPos.x) * blend,
+        y: staticPos.y + (animSy - staticPos.y) * blend,
+        scale: 1 + (animScale - 1) * blend,
+        alpha: 1 + (animAlpha - 1) * blend,
+        rotation: (animRotation || 0) * blend,
+    };
+}
+
 // ── 1. Twister ────────────────────────────────────────────────────────────
 // Letters orbit a vertical screen-center axis at staggered heights with
 // proper 3D perspective; the column hurtles toward the camera over time.
-function drawTwisterAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+function drawTwisterAnim(ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions) {
     const TWISTER_END = 1100;
     const ZOOM_END    = 1500;
     const baseZ = 800;
@@ -316,7 +373,8 @@ function drawTwisterAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
         const drawScale = projScale * 1.6;
         const angleAlpha = (Math.cos(angle) * 0.5 + 0.5);
         const letterAlpha = Math.max(0.25, 0.45 + 0.55 * angleAlpha) * (1 - fadeAlpha * 0.85);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScale, letterAlpha);
+        const r = _settleLerp(elapsed, staticPositions[i], sx, sy, drawScale, letterAlpha, 0);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
     }
     ctx.restore();
     return fadeAlpha;
@@ -326,7 +384,7 @@ function drawTwisterAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
 // Letters cluster at center, then fly outward in random 3D directions.
 // All trajectories bias toward the camera (-z), so the debris zooms past
 // the viewer at the end. Each letter spins around its own axis as it goes.
-function drawExplosionAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+function drawExplosionAnim(ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions) {
     const FORM_END   = 220;
     const BURST_END  = 1500;
     const baseZ = 700;
@@ -376,7 +434,8 @@ function drawExplosionAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
         const rotation = seed.spinDir * burstT * (Math.PI * 2.3) + seed.phase * 0.4;
 
         const letterAlpha = (1 - fadeAlpha * 0.9);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScale, letterAlpha, { rotation });
+        const r = _settleLerp(elapsed, staticPositions[i], sx, sy, drawScale, letterAlpha, rotation);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
     }
     ctx.restore();
     return fadeAlpha;
@@ -386,7 +445,7 @@ function drawExplosionAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
 // Letters in a horizontal row oscillate vertically. Both wave amplitude
 // AND angular frequency rise over time, building from a calm shimmer to
 // a violent thrash. Final phase: row zooms toward camera + fade.
-function drawWaveAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+function drawWaveAnim(ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions) {
     const WAVE_END = 1450;
     const ZOOM_END = 1500;
     let zoomAmount = 0, fadeAlpha = 0;
@@ -423,68 +482,58 @@ function drawWaveAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
         const sy = y - zoomAmount * 60;
         const rotation = Math.cos(wavePhase) * 0.25 * eased;
         const letterAlpha = 1 - fadeAlpha * 0.9;
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScaleBase, letterAlpha, { rotation });
+        const r = _settleLerp(elapsed, staticPositions[i], sx, sy, drawScaleBase, letterAlpha, rotation);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
     }
     ctx.restore();
     return fadeAlpha;
 }
 
 // ── 4. Cascade ────────────────────────────────────────────────────────────
-// Letters drop from above with staggered start times, land in a row,
-// then the row zooms toward the viewer. Each letter rotates as it falls.
-function drawCascadeAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
-    const FALL_DURATION = 600;     // each letter takes ~600ms to fall
-    const STAGGER = 80;             // ms between letter starts
-    const LAND_END = 200 + (text.length - 1) * STAGGER + FALL_DURATION; // ≈ 1440ms
-    const ZOOM_END = LAND_END + 120;
+// A bounce-wave ripples through the letters — each letter pops up and back
+// down with a left-to-right stagger so the static row appears to ripple.
+// After the wave finishes, the whole row zooms toward the viewer.
+function drawCascadeAnim(ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions) {
+    const KICK_DURATION = 520;
+    const STAGGER = 70;
+    const N = text.length;
+    const RIPPLE_END = (N - 1) * STAGGER + KICK_DURATION + 120; // ≈ ~1200ms
+    const ZOOM_END = 1500;
 
     let zoomAmount = 0, fadeAlpha = 0;
     if (elapsed >= ZOOM_END) {
         const t = Math.min(1, (elapsed - ZOOM_END) / (total - ZOOM_END));
         zoomAmount = t;
         fadeAlpha = Math.pow(t, 1.2);
-    } else if (elapsed >= LAND_END) {
-        const t = Math.min(1, (elapsed - LAND_END) / (ZOOM_END - LAND_END));
-        zoomAmount = 0.15 * t; // small wind-up squash before zoom
+    } else if (elapsed >= RIPPLE_END) {
+        const t = Math.min(1, (elapsed - RIPPLE_END) / (ZOOM_END - RIPPLE_END));
+        zoomAmount = t * 0.3;
     }
-
-    const N = text.length;
-    const baseSpacing = 70;
-    const totalWidth = (N - 1) * baseSpacing;
-    const leftX = centerX - totalWidth / 2 + 6;
-    const groundY = centerY;
 
     ctx.save();
     for (let i = 0; i < N; i++) {
-        const seed = seeds[i] || { delay: 0, spinDir: 1 };
-        const startMs = 200 + i * STAGGER + seed.delay * 0.4;
+        const seed = seeds[i] || { spinDir: 1 };
+        const sp = staticPositions[i];
+        const startMs = i * STAGGER;
         const local = elapsed - startMs;
-        if (local < 0) continue; // not yet entered
 
-        const x = leftX + i * baseSpacing;
-        let y, rotation, alpha;
-        if (local < FALL_DURATION) {
-            // Fall: gravity ease-in, fade in
-            const t = local / FALL_DURATION;
-            const eased = t * t;
-            y = (groundY - 700) + 700 * eased;
-            rotation = seed.spinDir * (1 - eased) * Math.PI * 1.5;
-            alpha = Math.min(1, t * 2.2);
-        } else {
-            // Landed — small bounce settle for first 180ms, then steady
-            const settle = Math.min(1, (local - FALL_DURATION) / 180);
-            y = groundY + Math.sin((1 - settle) * Math.PI) * 14;
-            rotation = (1 - settle) * 0.18 * seed.spinDir;
-            alpha = 1;
+        // Bounce displacement: letter pops up ~70px then settles back via
+        // a damped sine so the kick reads as a sharp pop and a soft return.
+        let yOffset = 0;
+        let rotation = 0;
+        if (local > 0 && local < KICK_DURATION) {
+            const t = local / KICK_DURATION;
+            const damp = 1 - t;
+            yOffset = -78 * Math.sin(t * Math.PI) * damp;
+            rotation = seed.spinDir * Math.sin(t * Math.PI) * 0.18 * damp;
         }
 
-        // Apply zoom: letters scale + drift apart from center
-        const dxToCenter = x - centerX;
-        const sx = centerX + dxToCenter * (1 + zoomAmount * 1.2);
-        const sy = y - zoomAmount * 40;
+        const animSx = sp.x + (sp.x - centerX) * zoomAmount * 1.0;
+        const animSy = sp.y + yOffset - zoomAmount * 40;
         const drawScale = 1 + zoomAmount * 6;
-        const letterAlpha = alpha * (1 - fadeAlpha * 0.9);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScale, letterAlpha, { rotation });
+        const letterAlpha = 1 - fadeAlpha * 0.9;
+        const r = _settleLerp(elapsed, sp, animSx, animSy, drawScale, letterAlpha, rotation);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
     }
     ctx.restore();
     return fadeAlpha;
@@ -494,7 +543,7 @@ function drawCascadeAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
 // Letters streak inward from the screen edges along straight-line vectors,
 // converge at center, then the whole title zooms toward the viewer. Like
 // dropping out of hyperspace into the title.
-function drawWarpdriveAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+function drawWarpdriveAnim(ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions) {
     const STREAK_END = 1100;
     const HOLD_END   = 1500;
     let fadeAlpha = 0;
@@ -543,7 +592,8 @@ function drawWarpdriveAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
 
         // During streak phase, letters are stretched faintly along motion
         const alpha = Math.min(1, 0.2 + streakT * 0.95) * (1 - fadeAlpha * 0.9);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScale, alpha);
+        const r = _settleLerp(elapsed, staticPositions[i], sx, sy, drawScale, alpha, 0);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
     }
     ctx.restore();
     return fadeAlpha;
@@ -552,7 +602,7 @@ function drawWarpdriveAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
 // ── 6. Pinwheel ───────────────────────────────────────────────────────────
 // Letters arranged in a ring around screen center, ring spins fast, ring
 // radius pulses then collapses inward as the camera zooms in.
-function drawPinwheelAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+function drawPinwheelAnim(ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions) {
     const SPIN_END = 1100;
     const COLLAPSE_END = 1500;
     let fadeAlpha = 0;
@@ -588,7 +638,8 @@ function drawPinwheelAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
         const rotation = angle + Math.PI / 2;
         const drawScale = 1 + zoomAmount * 5.5;
         const alpha = 1 - fadeAlpha * 0.9;
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], x, y, drawScale, alpha, { rotation });
+        const r = _settleLerp(elapsed, staticPositions[i], x, y, drawScale, alpha, rotation);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
     }
     ctx.restore();
     return fadeAlpha;

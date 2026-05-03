@@ -472,31 +472,39 @@ export class GameEngine {
             weaponShots: {},
         };
 
-        // Wave 1 intro: full-screen dark overlay with "WAVE 1" — entities
-        // warp in during the dark hold, settling as the overlay fades.
+        // Wave 1 intro: title fade-out hands off to a 700ms fade-IN that
+        // reveals the player on the empty playfield, then a brief beat,
+        // then wave-1 entities warp in. The wave intro overlay text is
+        // disabled per the user request — fade transition only.
         this.waveMessage = {
             active: true,
             startTime: Date.now(),
-            duration: 2800,
+            duration: 3400,
             title: 'WAVE 1',
             subtitle: this.getWaveSubtitle(1),
             phase: 'intro',
         };
 
-        // Spawn entities ~700ms in so the ~700-1500ms warp-in finishes
-        // during the fade-out window. Spawn FIRST, flip to PLAYING later.
-        this._gameTimers.push(new GameTimer(700, () => {
+        // Black-to-clear fade over the first 700ms — picks up where the
+        // title launch animation's fade-to-black left off so the screen
+        // never flashes between the two.
+        this._postInitFade = { startTime: Date.now(), duration: 700 };
+
+        // Timeline:
+        //   0-700ms    fade in (black → clear, revealing player)
+        //   700-1100ms hold (player visible, empty field, orientation beat)
+        //   1100ms     spawn wave-1 entities + grant invincibility
+        //   3400ms     state → PLAYING
+        this._gameTimers.push(new GameTimer(1100, () => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.spawnWaveEntities();
-                // Brief grace window — same as startNextWave's so wave 1
-                // doesn't gank the player as enemies finish warping in.
                 if (this.player && this.player.active) {
                     this.player.makeInvincible(3000);
                     this.player.justRespawned = false;
                 }
             }
         }));
-        this._gameTimers.push(new GameTimer(2800, () => {
+        this._gameTimers.push(new GameTimer(3400, () => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.game.state = GAME_STATES.PLAYING;
             }
@@ -902,14 +910,19 @@ export class GameEngine {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
         } else if (this.game.state === GAME_STATES.TITLE_SCREEN) {
-            // Synthetic slow drift for parallax — vector traces a wide
-            // ellipse so the starfield gently wanders rather than scrolling
-            // in one direction. Far stars barely move, near stars drift
-            // visibly thanks to background-star.js's parallaxFactor.
-            const t = Date.now() * 0.00015;
+            // Sandstorm-grade chaotic drift — multiple sine waves at
+            // distinct frequencies sum into a fast, direction-shifting
+            // motion. Near-depth stars rip across the field while far
+            // ones drift more gently thanks to background-star.js's
+            // parallaxFactor.
+            const t = Date.now() * 0.001;
             const drift = {
-                x: Math.cos(t) * 1.8,
-                y: Math.sin(t * 0.7) * 1.2,
+                x: Math.cos(t * 1.7) * 7
+                 + Math.sin(t * 0.4) * 4.5
+                 + Math.cos(t * 3.1) * 2.5,
+                y: Math.sin(t * 1.3) * 5.5
+                 + Math.cos(t * 0.7) * 3
+                 + Math.sin(t * 2.9) * 2.5,
             };
             this.backgroundStarPool.activeObjects.forEach(s => s.update(drift, this.gameField));
 
@@ -1023,6 +1036,28 @@ export class GameEngine {
     drawHUD() { return hudStatus.drawHUD.call(this); }
 
     drawWaveIntroOverlay() { return hudStatus.drawWaveIntroOverlay.call(this); }
+
+    /**
+     * Black overlay that fades from opaque to clear over `duration` ms after
+     * the title launch animation hands off to init(). Picks up where the
+     * launch fade-to-black left off so the screen never flashes between
+     * the title sequence and the playfield reveal.
+     */
+    drawPostInitFadeIn() {
+        const f = this._postInitFade;
+        if (!f) return;
+        const elapsed = Date.now() - f.startTime;
+        if (elapsed >= f.duration) {
+            this._postInitFade = null;
+            return;
+        }
+        const alpha = 1 - elapsed / f.duration;
+        if (alpha <= 0.001) return;
+        this.ctx.save();
+        this.ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        this.ctx.restore();
+    }
 
     drawGameComplete() { return hudStatus.drawGameComplete.call(this); }
 
@@ -1138,6 +1173,7 @@ export class GameEngine {
             // Wave intro overlay — disabled for now so the warp-in visuals
             // stay visible. Re-enable by uncommenting the call below.
             // this.drawWaveIntroOverlay();
+            this.drawPostInitFadeIn();
             recordVFXFrame(this);
             requestAnimationFrame(() => this.gameLoop());
             return;
@@ -1265,6 +1301,8 @@ export class GameEngine {
         // Wave intro full-screen darken — disabled for now so the warp-in
         // visuals stay visible. Re-enable by uncommenting the call below.
         // this.drawWaveIntroOverlay();
+        // Post-init black-to-clear fade-in (wave 1 only, ~700ms).
+        this.drawPostInitFadeIn();
 
         // Final-victory screen — replaces all HUD chrome with the stats readout.
         this.drawGameComplete();
