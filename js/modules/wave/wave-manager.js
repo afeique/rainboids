@@ -119,6 +119,13 @@ export function startNextWave() {
     this._gameTimers.push(new GameTimer(700, () => {
         if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
             this.spawnWaveEntities();
+            // Brief grace window so the player isn't ganked by enemies as
+            // they finish warping in. ~3s covers the ~700-1500ms warp-in
+            // plus a beat to orient before the field is "live" again.
+            if (this.player && this.player.active) {
+                this.player.makeInvincible(3000);
+                this.player.justRespawned = false; // suppress respawn HUD ring
+            }
         }
     }));
     this._gameTimers.push(new GameTimer(2800, () => {

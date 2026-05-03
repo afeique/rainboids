@@ -488,6 +488,12 @@ export class GameEngine {
         this._gameTimers.push(new GameTimer(700, () => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.spawnWaveEntities();
+                // Brief grace window — same as startNextWave's so wave 1
+                // doesn't gank the player as enemies finish warping in.
+                if (this.player && this.player.active) {
+                    this.player.makeInvincible(3000);
+                    this.player.justRespawned = false;
+                }
             }
         }));
         this._gameTimers.push(new GameTimer(2800, () => {
@@ -1129,8 +1135,9 @@ export class GameEngine {
                 this.ctx.fillRect(0, 0, this.width, this.height);
                 this._screenFlashAlpha -= this._screenFlashAlpha / (this._screenFlashDuration || 1);
             }
-            // Wave intro overlay (continues animating during hitstop too)
-            this.drawWaveIntroOverlay();
+            // Wave intro overlay — disabled for now so the warp-in visuals
+            // stay visible. Re-enable by uncommenting the call below.
+            // this.drawWaveIntroOverlay();
             recordVFXFrame(this);
             requestAnimationFrame(() => this.gameLoop());
             return;
@@ -1255,9 +1262,9 @@ export class GameEngine {
             this._deathOverlayTimer--;
         }
 
-        // Wave intro full-screen darken — covers world + HUD while entities
-        // warp in, then fades out as the wave starts.
-        this.drawWaveIntroOverlay();
+        // Wave intro full-screen darken — disabled for now so the warp-in
+        // visuals stay visible. Re-enable by uncommenting the call below.
+        // this.drawWaveIntroOverlay();
 
         // Final-victory screen — replaces all HUD chrome with the stats readout.
         this.drawGameComplete();
@@ -1374,6 +1381,10 @@ export class GameEngine {
      * Trigger the title-start launch animation. Stored callback fires once
      * the animation completes; the caller wires init() into the callback so
      * the actual run starts immediately after the screen is fully black.
+     *
+     * Each press picks a random animation style and seeds per-letter random
+     * data — direction vectors, phase offsets, drop delays — so even if the
+     * same style is rolled twice it doesn't look identical.
      */
     triggerTitleStart(onComplete) {
         const a = this._titleAnimState();
@@ -1381,6 +1392,24 @@ export class GameEngine {
         a.phase = 'launch';
         a.startTime = Date.now();
         a.onComplete = onComplete || null;
+
+        const STYLES = ['twister', 'explosion', 'wave', 'cascade', 'warpdrive', 'pinwheel'];
+        a.style = STYLES[Math.floor(Math.random() * STYLES.length)];
+
+        // Per-letter random seeds — fixed for the lifetime of one launch.
+        const N = 9; // RAINBOIDS
+        const seeds = [];
+        for (let i = 0; i < N; i++) {
+            seeds.push({
+                angle:  Math.random() * Math.PI * 2,
+                pitch:  (Math.random() - 0.5) * 0.55,
+                speed:  0.85 + Math.random() * 0.35,
+                phase:  Math.random() * Math.PI * 2,
+                delay:  Math.random() * 280,
+                spinDir: Math.random() < 0.5 ? -1 : 1,
+            });
+        }
+        a.letterSeeds = seeds;
         return true;
     }
     

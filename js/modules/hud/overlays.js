@@ -148,18 +148,11 @@ export function drawTitleScreen() {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
 
-        // Title-launch animation: TWISTER.
-        // Each letter of RAINBOIDS orbits a vertical axis with proper
-        // 3D-style perspective projection, and the entire column approaches
-        // the camera as the animation progresses. Phases:
-        //   twister   (0     - 1100ms): letters spin around the vertical
-        //                                axis at staggered heights, the
-        //                                column slowly closes in
-        //   zoom      (1100  - 1500ms): orbit radius collapses, twister
-        //                                hurtles toward the viewer
-        //   fade      (1500  - 1900ms): scale grows further while a black
-        //                                wash takes over
-        // While 'idle', render the normal static title screen.
+        // Title-launch animation. triggerTitleStart picks a random style
+        // from {twister, explosion, wave, cascade, warpdrive, pinwheel} and
+        // seeds per-letter random data so each press feels fresh even if
+        // the same style rolls twice. While 'idle', render the normal
+        // static title screen below.
         const anim = (typeof this._titleAnimState === 'function') ? this._titleAnimState() : null;
         const launching = anim && anim.phase === 'launch';
         const elapsed = launching ? (Date.now() - anim.startTime) : 0;
@@ -170,84 +163,30 @@ export function drawTitleScreen() {
         let fadeAlpha = 0;
 
         if (launching) {
-            const TWISTER_END = 1100;
-            const ZOOM_END    = 1500;
-
-            // Camera depth: column starts ~800 units away and approaches 60.
-            const focal = 600;
-            const baseZ = 800;
-            let zoomAmount; // 0 → 1
-            let radius;     // orbit radius in world units
-
-            if (elapsed < TWISTER_END) {
-                const t = elapsed / TWISTER_END;
-                const eased = 1 - Math.pow(1 - t, 1.6); // ease-out approach
-                radius = 240 * (1 - eased * 0.45);      // 240 → ~132
-                zoomAmount = eased * 0.45;              // approach 45% in
-            } else if (elapsed < ZOOM_END) {
-                const t = (elapsed - TWISTER_END) / (ZOOM_END - TWISTER_END);
-                const eased = Math.pow(t, 1.4);
-                radius = 132 * (1 - eased);             // collapse to axis
-                zoomAmount = 0.45 + eased * 0.50;       // close to 95%
-            } else {
-                const t = Math.min(1, (elapsed - ZOOM_END) / (total - ZOOM_END));
-                radius = 0;
-                zoomAmount = 0.95 + t * 0.04;           // last sliver of zoom
-                fadeAlpha = Math.pow(t, 1.2);
-            }
-
-            const zCamera = baseZ * (1 - zoomAmount);
-            const angularVelocity = 5.5; // radians/second — twister is fast
-
             const text = 'RAINBOIDS';
-            const N = text.length;
-            // Vertical column: stagger letters along y. Top to bottom.
-            const verticalSpread = 380;
-            const yStep = N > 1 ? verticalSpread / (N - 1) : 0;
-            const time = elapsed / 1000;
-
-            this.ctx.save();
-            for (let i = 0; i < N; i++) {
-                // Stagger phase so letters don't all sit at the same angle
-                const angleOffset = (i / N) * Math.PI * 2 * 1.7;
-                const angle = angleOffset + time * angularVelocity;
-                const yBase = -verticalSpread / 2 + i * yStep;
-
-                // 3D position with twister axis on screen-center vertical
-                const x3d = Math.cos(angle) * radius;
-                const z3d = Math.sin(angle) * radius + zCamera;
-                if (z3d <= 30) continue; // skip if behind near plane
-
-                // Twister flattens (less vertical spread) as it approaches
-                const yScale = 1 - zoomAmount * 0.35;
-                const y3d = yBase * yScale;
-
-                // Perspective projection
-                const projScale = focal / z3d;
-                const sx = centerX + x3d * projScale;
-                const sy = centerY + y3d * projScale;
-                // Per-letter draw scale — distance + a small zoom kick at end
-                const drawScale = projScale * 1.6;
-
-                // Depth-based alpha: front letters bright, back letters fade
-                const angleAlpha = (Math.cos(angle) * 0.5 + 0.5); // back-front fade
-                const letterAlpha = Math.max(0.25, 0.45 + 0.55 * angleAlpha)
-                                  * (1 - fadeAlpha * 0.85);
-                if (letterAlpha < 0.02) continue;
-
-                this.ctx.save();
-                this.ctx.translate(sx, sy);
-                this.ctx.scale(drawScale, drawScale);
-                this.ctx.globalAlpha *= letterAlpha;
-                this.drawWavyText(text[i], 0, 0, {
-                    fontSize: 72,
-                    colors: WAVY_PALETTES.title,
-                    speed: 0.55,
-                    colorSpeed: 0.22,
-                });
-                this.ctx.restore();
+            const seeds = anim.letterSeeds || [];
+            const style = anim.style || 'twister';
+            switch (style) {
+                case 'explosion':
+                    fadeAlpha = drawExplosionAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    break;
+                case 'wave':
+                    fadeAlpha = drawWaveAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    break;
+                case 'cascade':
+                    fadeAlpha = drawCascadeAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    break;
+                case 'warpdrive':
+                    fadeAlpha = drawWarpdriveAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    break;
+                case 'pinwheel':
+                    fadeAlpha = drawPinwheelAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    break;
+                case 'twister':
+                default:
+                    fadeAlpha = drawTwisterAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY);
+                    break;
             }
-            this.ctx.restore();
         } else {
             // Static idle title — RAINBOIDS centered, subtitle below.
             this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
@@ -300,6 +239,359 @@ export function drawTitleScreen() {
             this.ctx.fillRect(0, 0, this.width, this.height);
             this.ctx.restore();
         }
+}
+
+// ─── Title-launch animation helpers ────────────────────────────────────────
+// Each helper returns the fade-to-black alpha for the current frame so the
+// outer drawTitleScreen can paint the universal black wash. Common timing:
+//   total = 1900ms, last 400ms is fade — animations should reach a clean
+//   "off-screen / faded out" state by then.
+
+const TITLE_FONT_SIZE = 72;
+const TITLE_FOCAL     = 600;
+const TITLE_FADE_MS   = 400;
+
+function _titleLetterDraw(ctx, drawWavyText, ch, x, y, scale, alpha, opts = {}) {
+    if (alpha <= 0.01 || scale <= 0.01) return;
+    ctx.save();
+    ctx.translate(x, y);
+    if (scale !== 1) ctx.scale(scale, scale);
+    if (opts.rotation) ctx.rotate(opts.rotation);
+    ctx.globalAlpha *= alpha;
+    drawWavyText(ch, 0, 0, {
+        fontSize: opts.fontSize || TITLE_FONT_SIZE,
+        colors: opts.colors || WAVY_PALETTES.title,
+        speed: opts.speed || 0.55,
+        colorSpeed: opts.colorSpeed || 0.22,
+    });
+    ctx.restore();
+}
+
+// ── 1. Twister ────────────────────────────────────────────────────────────
+// Letters orbit a vertical screen-center axis at staggered heights with
+// proper 3D perspective; the column hurtles toward the camera over time.
+function drawTwisterAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+    const TWISTER_END = 1100;
+    const ZOOM_END    = 1500;
+    const baseZ = 800;
+    let zoomAmount, radius, fadeAlpha = 0;
+
+    if (elapsed < TWISTER_END) {
+        const t = elapsed / TWISTER_END;
+        const eased = 1 - Math.pow(1 - t, 1.6);
+        radius = 240 * (1 - eased * 0.45);
+        zoomAmount = eased * 0.45;
+    } else if (elapsed < ZOOM_END) {
+        const t = (elapsed - TWISTER_END) / (ZOOM_END - TWISTER_END);
+        const eased = Math.pow(t, 1.4);
+        radius = 132 * (1 - eased);
+        zoomAmount = 0.45 + eased * 0.50;
+    } else {
+        const t = Math.min(1, (elapsed - ZOOM_END) / (total - ZOOM_END));
+        radius = 0;
+        zoomAmount = 0.95 + t * 0.04;
+        fadeAlpha = Math.pow(t, 1.2);
+    }
+
+    const zCamera = baseZ * (1 - zoomAmount);
+    const angularVelocity = 5.5;
+    const N = text.length;
+    const verticalSpread = 380;
+    const yStep = N > 1 ? verticalSpread / (N - 1) : 0;
+    const time = elapsed / 1000;
+
+    ctx.save();
+    for (let i = 0; i < N; i++) {
+        const angleOffset = (i / N) * Math.PI * 2 * 1.7;
+        const angle = angleOffset + time * angularVelocity;
+        const yBase = -verticalSpread / 2 + i * yStep;
+        const x3d = Math.cos(angle) * radius;
+        const z3d = Math.sin(angle) * radius + zCamera;
+        if (z3d <= 30) continue;
+        const yScale = 1 - zoomAmount * 0.35;
+        const y3d = yBase * yScale;
+        const projScale = TITLE_FOCAL / z3d;
+        const sx = centerX + x3d * projScale;
+        const sy = centerY + y3d * projScale;
+        const drawScale = projScale * 1.6;
+        const angleAlpha = (Math.cos(angle) * 0.5 + 0.5);
+        const letterAlpha = Math.max(0.25, 0.45 + 0.55 * angleAlpha) * (1 - fadeAlpha * 0.85);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScale, letterAlpha);
+    }
+    ctx.restore();
+    return fadeAlpha;
+}
+
+// ── 2. Explosion ──────────────────────────────────────────────────────────
+// Letters cluster at center, then fly outward in random 3D directions.
+// All trajectories bias toward the camera (-z), so the debris zooms past
+// the viewer at the end. Each letter spins around its own axis as it goes.
+function drawExplosionAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+    const FORM_END   = 220;
+    const BURST_END  = 1500;
+    const baseZ = 700;
+    let fadeAlpha = 0;
+    if (elapsed >= total - TITLE_FADE_MS) {
+        fadeAlpha = Math.pow((elapsed - (total - TITLE_FADE_MS)) / TITLE_FADE_MS, 1.2);
+    }
+
+    let burstT;
+    if (elapsed < FORM_END) {
+        // Letters fade in at the same point with scale 0 → 1
+        burstT = 0;
+    } else if (elapsed < BURST_END) {
+        burstT = (elapsed - FORM_END) / (BURST_END - FORM_END);
+    } else {
+        burstT = 1;
+    }
+    const formProgress = Math.min(1, elapsed / FORM_END);
+
+    ctx.save();
+    for (let i = 0; i < text.length; i++) {
+        const seed = seeds[i] || { angle: i, pitch: 0, speed: 1, phase: 0, spinDir: 1 };
+        // Direction vector — biased toward camera (-z)
+        const cosP = Math.cos(seed.pitch);
+        const sinP = Math.sin(seed.pitch);
+        const dirX = Math.cos(seed.angle) * cosP * 1.35;
+        const dirY = sinP * 0.85 - 0.05; // slight upward bias for drama
+        const dirZ = -Math.abs(Math.sin(seed.angle * 0.5)) * 0.45 - 0.95;
+
+        // Distance traveled — accelerates outward
+        const dist = Math.pow(burstT, 1.55) * 750 * seed.speed;
+        const x3d = dirX * dist;
+        const y3d = dirY * dist;
+        const z3d = baseZ + dirZ * dist;
+        if (z3d <= 30) continue;
+
+        const projScale = TITLE_FOCAL / z3d;
+        const sx = centerX + x3d * projScale;
+        const sy = centerY + y3d * projScale;
+
+        // Scale: starts at 0 (formation), grows with both perspective + a
+        // small intrinsic flare so the explosion feels energetic.
+        const intrinsic = formProgress * (1 + burstT * 0.6);
+        const drawScale = projScale * 1.4 * intrinsic;
+
+        // Spin around the letter's local axis as it tumbles outward
+        const rotation = seed.spinDir * burstT * (Math.PI * 2.3) + seed.phase * 0.4;
+
+        const letterAlpha = (1 - fadeAlpha * 0.9);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScale, letterAlpha, { rotation });
+    }
+    ctx.restore();
+    return fadeAlpha;
+}
+
+// ── 3. Wave ───────────────────────────────────────────────────────────────
+// Letters in a horizontal row oscillate vertically. Both wave amplitude
+// AND angular frequency rise over time, building from a calm shimmer to
+// a violent thrash. Final phase: row zooms toward camera + fade.
+function drawWaveAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+    const WAVE_END = 1450;
+    const ZOOM_END = 1500;
+    let zoomAmount = 0, fadeAlpha = 0;
+    if (elapsed >= ZOOM_END) {
+        const t = Math.min(1, (elapsed - ZOOM_END) / (total - ZOOM_END));
+        zoomAmount = t;
+        fadeAlpha = Math.pow(t, 1.2);
+    }
+
+    const N = text.length;
+    const baseSpacing = 70;     // letter horizontal spacing
+    const totalWidth = (N - 1) * baseSpacing;
+    const leftX = centerX - totalWidth / 2 + 6;
+
+    // Amplitude + frequency ramp
+    const t = Math.min(1, elapsed / WAVE_END);
+    const eased = Math.pow(t, 1.3);
+    const amplitude = 14 + eased * 130;        // 14 → ~144 px
+    const frequency = 0.55 + eased * 6.5;       // wider wavelength → tight
+    const phaseSpd  = 1.4 + eased * 6.5;        // wave moves faster too
+    const time = elapsed / 1000;
+
+    // Zoom: scale grows + small per-letter outward velocity to scatter
+    const drawScaleBase = 1 + zoomAmount * 5;
+
+    ctx.save();
+    for (let i = 0; i < N; i++) {
+        const x = leftX + i * baseSpacing;
+        const wavePhase = i * frequency * 0.55 + time * phaseSpd;
+        const y = centerY + Math.sin(wavePhase) * amplitude;
+        // During zoom, letters drift outward from center
+        const dxToCenter = x - centerX;
+        const sx = centerX + dxToCenter * (1 + zoomAmount * 0.6);
+        const sy = y - zoomAmount * 60;
+        const rotation = Math.cos(wavePhase) * 0.25 * eased;
+        const letterAlpha = 1 - fadeAlpha * 0.9;
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScaleBase, letterAlpha, { rotation });
+    }
+    ctx.restore();
+    return fadeAlpha;
+}
+
+// ── 4. Cascade ────────────────────────────────────────────────────────────
+// Letters drop from above with staggered start times, land in a row,
+// then the row zooms toward the viewer. Each letter rotates as it falls.
+function drawCascadeAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+    const FALL_DURATION = 600;     // each letter takes ~600ms to fall
+    const STAGGER = 80;             // ms between letter starts
+    const LAND_END = 200 + (text.length - 1) * STAGGER + FALL_DURATION; // ≈ 1440ms
+    const ZOOM_END = LAND_END + 120;
+
+    let zoomAmount = 0, fadeAlpha = 0;
+    if (elapsed >= ZOOM_END) {
+        const t = Math.min(1, (elapsed - ZOOM_END) / (total - ZOOM_END));
+        zoomAmount = t;
+        fadeAlpha = Math.pow(t, 1.2);
+    } else if (elapsed >= LAND_END) {
+        const t = Math.min(1, (elapsed - LAND_END) / (ZOOM_END - LAND_END));
+        zoomAmount = 0.15 * t; // small wind-up squash before zoom
+    }
+
+    const N = text.length;
+    const baseSpacing = 70;
+    const totalWidth = (N - 1) * baseSpacing;
+    const leftX = centerX - totalWidth / 2 + 6;
+    const groundY = centerY;
+
+    ctx.save();
+    for (let i = 0; i < N; i++) {
+        const seed = seeds[i] || { delay: 0, spinDir: 1 };
+        const startMs = 200 + i * STAGGER + seed.delay * 0.4;
+        const local = elapsed - startMs;
+        if (local < 0) continue; // not yet entered
+
+        const x = leftX + i * baseSpacing;
+        let y, rotation, alpha;
+        if (local < FALL_DURATION) {
+            // Fall: gravity ease-in, fade in
+            const t = local / FALL_DURATION;
+            const eased = t * t;
+            y = (groundY - 700) + 700 * eased;
+            rotation = seed.spinDir * (1 - eased) * Math.PI * 1.5;
+            alpha = Math.min(1, t * 2.2);
+        } else {
+            // Landed — small bounce settle for first 180ms, then steady
+            const settle = Math.min(1, (local - FALL_DURATION) / 180);
+            y = groundY + Math.sin((1 - settle) * Math.PI) * 14;
+            rotation = (1 - settle) * 0.18 * seed.spinDir;
+            alpha = 1;
+        }
+
+        // Apply zoom: letters scale + drift apart from center
+        const dxToCenter = x - centerX;
+        const sx = centerX + dxToCenter * (1 + zoomAmount * 1.2);
+        const sy = y - zoomAmount * 40;
+        const drawScale = 1 + zoomAmount * 6;
+        const letterAlpha = alpha * (1 - fadeAlpha * 0.9);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScale, letterAlpha, { rotation });
+    }
+    ctx.restore();
+    return fadeAlpha;
+}
+
+// ── 5. Warpdrive ──────────────────────────────────────────────────────────
+// Letters streak inward from the screen edges along straight-line vectors,
+// converge at center, then the whole title zooms toward the viewer. Like
+// dropping out of hyperspace into the title.
+function drawWarpdriveAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+    const STREAK_END = 1100;
+    const HOLD_END   = 1500;
+    let fadeAlpha = 0;
+
+    let streakT, zoomAmount;
+    if (elapsed < STREAK_END) {
+        const t = elapsed / STREAK_END;
+        streakT = 1 - Math.pow(1 - t, 2.4); // ease-out
+        zoomAmount = 0;
+    } else if (elapsed < HOLD_END) {
+        streakT = 1;
+        const t = (elapsed - STREAK_END) / (HOLD_END - STREAK_END);
+        zoomAmount = Math.pow(t, 1.5);
+    } else {
+        streakT = 1;
+        const t = Math.min(1, (elapsed - HOLD_END) / (total - HOLD_END));
+        zoomAmount = 1 + t * 0.6;
+        fadeAlpha = Math.pow(t, 1.2);
+    }
+
+    const N = text.length;
+    const baseSpacing = 70;
+    const totalWidth = (N - 1) * baseSpacing;
+    const leftX = centerX - totalWidth / 2 + 6;
+    const groundY = centerY;
+
+    ctx.save();
+    for (let i = 0; i < N; i++) {
+        const seed = seeds[i] || { angle: i, speed: 1 };
+        const finalX = leftX + i * baseSpacing;
+        const finalY = groundY;
+        // Source: far point along seed.angle direction, ~1500px out
+        const srcDist = 1500;
+        const srcX = centerX + Math.cos(seed.angle) * srcDist;
+        const srcY = centerY + Math.sin(seed.angle) * srcDist;
+
+        const x = srcX + (finalX - srcX) * streakT;
+        const y = srcY + (finalY - srcY) * streakT;
+
+        // Apply zoom — letters drift outward + scale
+        const dxToCenter = x - centerX;
+        const dyToCenter = y - centerY;
+        const sx = centerX + dxToCenter * (1 + zoomAmount * 0.7);
+        const sy = centerY + dyToCenter * (1 + zoomAmount * 0.5);
+        const drawScale = (0.4 + 0.6 * streakT) * (1 + zoomAmount * 4.5);
+
+        // During streak phase, letters are stretched faintly along motion
+        const alpha = Math.min(1, 0.2 + streakT * 0.95) * (1 - fadeAlpha * 0.9);
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], sx, sy, drawScale, alpha);
+    }
+    ctx.restore();
+    return fadeAlpha;
+}
+
+// ── 6. Pinwheel ───────────────────────────────────────────────────────────
+// Letters arranged in a ring around screen center, ring spins fast, ring
+// radius pulses then collapses inward as the camera zooms in.
+function drawPinwheelAnim(ctx, elapsed, total, text, seeds, centerX, centerY) {
+    const SPIN_END = 1100;
+    const COLLAPSE_END = 1500;
+    let fadeAlpha = 0;
+    let radius, zoomAmount;
+    if (elapsed < SPIN_END) {
+        const t = elapsed / SPIN_END;
+        // Pulse out twice then settle
+        radius = 230 + Math.sin(t * Math.PI * 2) * 40;
+        zoomAmount = 0;
+    } else if (elapsed < COLLAPSE_END) {
+        const t = (elapsed - SPIN_END) / (COLLAPSE_END - SPIN_END);
+        const eased = Math.pow(t, 1.3);
+        radius = 230 * (1 - eased);
+        zoomAmount = eased * 0.85;
+    } else {
+        const t = Math.min(1, (elapsed - COLLAPSE_END) / (total - COLLAPSE_END));
+        radius = 0;
+        zoomAmount = 0.85 + t * 0.6;
+        fadeAlpha = Math.pow(t, 1.2);
+    }
+
+    const N = text.length;
+    const angularVelocity = 6.0;
+    const time = elapsed / 1000;
+
+    ctx.save();
+    for (let i = 0; i < N; i++) {
+        const baseAngle = (i / N) * Math.PI * 2 - Math.PI / 2;
+        const angle = baseAngle + time * angularVelocity;
+        const x = centerX + Math.cos(angle) * radius;
+        const y = centerY + Math.sin(angle) * radius;
+        // Letters tangentially rotate along with the ring
+        const rotation = angle + Math.PI / 2;
+        const drawScale = 1 + zoomAmount * 5.5;
+        const alpha = 1 - fadeAlpha * 0.9;
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], x, y, drawScale, alpha, { rotation });
+    }
+    ctx.restore();
+    return fadeAlpha;
 }
 
 export function drawSurvivalTimer(ctx) {

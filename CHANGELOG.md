@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.52.0] - 2026-05-03
+
+### Added
+- **Wave-start invincibility grace window.** When wave entities spawn (700ms into the wave intro), the player is given 3000ms of invincibility — long enough for the 700-1500ms warp-in to complete plus a beat to orient. Stops the player from being ganked by enemies finishing their warp-in animation right on top of them. Applies to wave 1 and every subsequent wave start.
+- **Six title-launch animations, picked randomly.** triggerTitleStart now rolls one of `{twister, explosion, wave, cascade, warpdrive, pinwheel}` and seeds per-letter random data so each press feels fresh:
+  - **Twister** (existing) — letters orbit a vertical axis with 3D perspective; column hurtles toward the camera.
+  - **Explosion** — letters cluster at center, then fly outward in random 3D directions while spinning; trajectories bias toward the camera so the debris rushes the viewer.
+  - **Wave** — horizontal letter row oscillates vertically; both amplitude (14 → 144px) and frequency build as the wave thrashes harder, then the row zooms toward the camera.
+  - **Cascade** — letters drop from above the screen with staggered start times, rotating as they fall; once landed, the row zooms toward the viewer.
+  - **Warpdrive** — letters streak inward from the screen edges along straight-line vectors, converge in a row at center, then the title zooms in. Like dropping out of hyperspace.
+  - **Pinwheel** — letters arranged in a ring spin around screen center; the ring radius pulses, then collapses inward as the camera zooms.
+
+### Changed
+- **Wave intro dark overlay disabled.** Both call sites of `drawWaveIntroOverlay` are commented out so the warp-in animations stay visible during wave starts. Re-enable by uncommenting either call. (The `drawWaveIntroOverlay` function itself is preserved.)
+
+---
+
 ## [5.51.1] - 2026-05-03
 
 ### Changed
