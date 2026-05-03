@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.5] - 2026-05-03
+
+### Added
+- **Nebula realism pass — embedded stars, dust lanes, filament threads.** Three new render passes per layer that turn the gas fields from "smooth color blobs" into something that reads as a real space photograph.
+  - **Embedded stars** (6-12 per layer, biased to blob interiors) — bright pinpoint cores with soft halos and 4-arm diffraction spikes (cross pattern, random rotation per star). Star colors mix 70% hot blue-white / 20% palette accent / 10% highlight; the brightest stars get a hot white center pixel. THE iconic "this is a space photograph" cue.
+  - **Dust lanes** (0-3 per blob, denser on near layers) — dark elongated absorption silhouettes painted *over* the gas, mimicking the dust lanes that bisect Trifid / Eagle / Lagoon-type emission nebulae. Drawn as a long thin ellipse with a shadow-color radial gradient that fades at the ends.
+  - **Filament threads** (12-22 per layer) — short streaky bright gradients tangent to blob outer edges, where shock fronts produce thin filament structures in real nebulae. Sampled tone, ellipse-stretched, biased to the outer 0.55-1.05× radius.
+
+---
+
 ## [5.49.4] - 2026-05-03
 
 ### Changed
