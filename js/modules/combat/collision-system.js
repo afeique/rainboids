@@ -116,8 +116,8 @@ export function handleCollisions() {
                     });
                 }
 
-                // Award XP for hitting asteroid
-                this.player.gainExperience(2);
+                // Award XP for hitting asteroid (bullet-hell pass — 2x)
+                this.player.gainExperience(4);
 
                 // Impart momentum from bullet
                 ast.vel.x += bullet.vel.x * COLLISION_CONFIG.BULLET_KNOCKBACK;
@@ -437,8 +437,8 @@ export function handleCollisions() {
                     this.triggerHitstop(hitFrames);
                 }
 
-                // Award XP for hitting enemy
-                this.player.gainExperience(3);
+                // Award XP for hitting enemy (bullet-hell pass — 2x)
+                this.player.gainExperience(6);
 
                 // Localized hit sparks at bullet impact point
                 {
@@ -465,7 +465,7 @@ export function handleCollisions() {
                     // Award money + XP for kill
                     const reward = enemy.getDestructionReward();
                     this.game.money += reward.points;
-                    this.player.gainExperience(Math.ceil(reward.points / 5));
+                    this.player.gainExperience(Math.ceil(reward.points / 3));
 
                     // Track kill streak
                     this.onEnemyKill(enemy);
@@ -1093,7 +1093,7 @@ export function damageEnemy(enemy, damage) {
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         const reward = enemy.getDestructionReward();
         this.game.money += reward.points;
-        this.player.gainExperience(Math.ceil(reward.points / 5));
+        this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {
             this.events.emit('audio:explosion');
@@ -1193,7 +1193,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         const reward = enemy.getDestructionReward();
         this.game.money += reward.points;
-        this.player.gainExperience(Math.ceil(reward.points / 5));
+        this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
 
         // Create colored explosion effects (includes screen shake)

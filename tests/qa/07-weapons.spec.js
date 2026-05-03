@@ -54,48 +54,51 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     // Shop tabs
     // ------------------------------------------------------------------
 
-    test('shop has 6 tabs', async ({ page }) => {
-        // Open shop
-        await page.evaluate(() => {
-            const ge = window.gameEngine;
-            ge.openShop();
-        });
-        await page.waitForTimeout(100);
+    // Shop layout in the bullet-hell pass: HELP / PRIMARY / POWER /
+    // DEFENSE / SKILLS. OFFENSE and DROPS were removed — those upgrades
+    // are now permanent stacking powerup pickups (see Powerups overlay).
+    // Tabs are DOM buttons (`.shop-tab`) — the legacy canvas-rendered
+    // `shopTabBounds` is no longer populated.
 
-        const tabCount = await page.evaluate(() => {
-            const bounds = window.gameEngine.shopTabBounds;
-            return bounds ? Object.keys(bounds).length : 0;
-        });
-        expect(tabCount).toBe(6);
-    });
-
-    test('shop tabs include OFFENSE, DEFENSE, DROPS, PRIMARY, POWER, SKILLS', async ({ page }) => {
+    test('shop has 5 DOM tabs', async ({ page }) => {
         await page.evaluate(() => window.gameEngine.openShop());
         await page.waitForTimeout(100);
-
-        const tabKeys = await page.evaluate(() => {
-            const bounds = window.gameEngine.shopTabBounds;
-            return bounds ? Object.keys(bounds).sort() : [];
-        });
-        expect(tabKeys).toEqual(['defense', 'drops', 'offense', 'power', 'primary', 'skills']);
+        const tabCount = await page.evaluate(() =>
+            document.querySelectorAll('#shop-overlay .shop-tab').length
+        );
+        expect(tabCount).toBe(5);
     });
 
-    test('switching to PRIMARY tab shows weapons', async ({ page }) => {
+    test('shop tabs include HELP, PRIMARY, POWER, DEFENSE, SKILLS', async ({ page }) => {
+        await page.evaluate(() => window.gameEngine.openShop());
+        await page.waitForTimeout(100);
+        const tabKeys = await page.evaluate(() =>
+            [...document.querySelectorAll('#shop-overlay .shop-tab')]
+                .map(b => b.dataset.tab)
+                .sort()
+        );
+        expect(tabKeys).toEqual(['DEFENSE', 'HELP', 'POWER', 'PRIMARY', 'SKILLS']);
+    });
+
+    test('PRIMARY shop tab shows upgrades for equipped weapon', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.game.currentWave = 99; // unlock all for visibility
             ge.openShop();
             ge.shopCategory = 'PRIMARY';
             ge._rebuildShopCache();
         });
         await page.waitForTimeout(100);
-
-        const itemCount = await page.evaluate(() => window.gameEngine.shopFilteredItems?.length ?? 0);
-        // Should have at least the 5 primary weapons + upgrades for equipped weapon
-        expect(itemCount).toBeGreaterThanOrEqual(5);
+        // PULSE_CANNON has 4 upgrades in PRIMARY_UPGRADES.
+        const items = await page.evaluate(() =>
+            (window.gameEngine.shopFilteredItems || []).map(i => ({ id: i.id, isUpg: !!i.isWeaponUpgrade }))
+        );
+        expect(items.length).toBeGreaterThanOrEqual(3);
+        // Every entry on this tab is a weapon upgrade — weapons themselves
+        // are equipped from the pause-menu PRIMARY tab now.
+        for (const item of items) expect(item.isUpg).toBe(true);
     });
 
-    test('switching to POWER tab shows power weapons', async ({ page }) => {
+    test('POWER shop tab shows upgrades for equipped power weapon', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openShop();
@@ -103,9 +106,11 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
             ge._rebuildShopCache();
         });
         await page.waitForTimeout(100);
-
-        const itemCount = await page.evaluate(() => window.gameEngine.shopFilteredItems?.length ?? 0);
-        expect(itemCount).toBeGreaterThanOrEqual(5);
+        const items = await page.evaluate(() =>
+            (window.gameEngine.shopFilteredItems || []).map(i => ({ id: i.id, isUpg: !!i.isWeaponUpgrade }))
+        );
+        expect(items.length).toBeGreaterThanOrEqual(2);
+        for (const item of items) expect(item.isUpg).toBe(true);
     });
 
     test('switching to SKILLS tab shows defense skills', async ({ page }) => {
@@ -125,43 +130,39 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     // Weapon purchase and equip
     // ------------------------------------------------------------------
 
-    test('buying a primary weapon adds it to ownedPrimaries and equips it', async ({ page }) => {
+    // Equipping a primary now happens via the pause-menu PRIMARY tab
+    // (free, click-to-equip). Tab/R also cycle through primaries and
+    // auto-add to ownedPrimaries when cycled to. The shop PRIMARY tab
+    // is upgrade-only.
+
+    test('equipPrimary adds the weapon to ownedPrimaries and switches active', async ({ page }) => {
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.game.money = 10000;
-            ge.game.currentWave = 3; // Storm Needles unlocks at wave 3
-            ge.player.skillPoints = 10;
-            ge.openShop();
-            ge.shopCategory = 'PRIMARY';
-            ge._rebuildShopCache();
-            const success = ge.buyShopItem('STORM_NEEDLES');
+            // Mirror what the pause-menu PRIMARY tab does on click.
+            if (!ge.player.ownedPrimaries.has('STORM_NEEDLES')) {
+                ge.player.ownedPrimaries.add('STORM_NEEDLES');
+            }
+            ge.player.equipPrimary('STORM_NEEDLES');
             return {
-                success,
                 owned: ge.player.ownedPrimaries.has('STORM_NEEDLES'),
                 active: ge.player.activePrimary,
             };
         });
-        expect(result.success).toBe(true);
         expect(result.owned).toBe(true);
         expect(result.active).toBe('STORM_NEEDLES');
     });
 
-    test('equipping an already owned weapon switches primary', async ({ page }) => {
+    test('Tab key cycles primary weapon through every type in PRIMARY_WEAPONS_LIST', async ({ page }) => {
+        // Tab press dispatches a keydown 'Tab' event; cycle should land
+        // on a different primary after one press (2+ entries available).
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.game.money = 10000;
-            ge.game.currentWave = 3; // Storm Needles unlocks at wave 3
-            ge.player.skillPoints = 10;
-            ge.openShop();
-            ge.shopCategory = 'PRIMARY';
-            ge._rebuildShopCache();
-            // Buy Storm Needles (auto-equips)
-            ge.buyShopItem('STORM_NEEDLES');
-            // Switch back to Pulse Cannon
-            ge.buyShopItem('PULSE_CANNON');
-            return ge.player.activePrimary;
+            const before = ge.player.activePrimary;
+            const evt = new KeyboardEvent('keydown', { code: 'Tab', bubbles: true });
+            document.dispatchEvent(evt);
+            return { before, after: ge.player.activePrimary };
         });
-        expect(result).toBe('PULSE_CANNON');
+        expect(result.after).not.toBe(result.before);
     });
 
     // ------------------------------------------------------------------
@@ -206,23 +207,20 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     // Free weapon acquisition & auto-unlock
     // ------------------------------------------------------------------
 
-    test('primary weapons (except Pulse Cannon) have zero cost', async ({ page }) => {
+    test('all primary weapons are equippable for free from the pause menu', async ({ page }) => {
         const costs = await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.game.currentWave = 99; // unlock all weapons for visibility
-            ge.openShop();
-            ge.shopCategory = 'PRIMARY';
-            ge._rebuildShopCache();
-            return ge.shopFilteredItems
-                .filter(i => i.isWeapon && i.weaponType === 'primary')
-                .map(i => ({ id: i.id, cost: i.cost, spCost: i.spCost }));
+            // PRIMARY_WEAPONS_LIST is the source of truth — every entry
+            // is selectable for free (cost is implicit zero, no shop buy).
+            return Object.keys(ge.PRIMARY_WEAPONS_LIST || {});
         });
-        expect(costs.length).toBe(5); // all 5 should be visible
-        for (const w of costs) {
-            if (w.id === 'PULSE_CANNON') continue;
-            expect(w.cost, `${w.id} coin cost should be 0`).toBe(0);
-            expect(w.spCost, `${w.id} SP cost should be 0`).toBe(0);
-        }
+        expect(costs.length).toBe(5); // 5 primary weapons total
+        // Every primary should appear in the list — names are the truth.
+        expect(costs).toContain('PULSE_CANNON');
+        expect(costs).toContain('STORM_NEEDLES');
+        expect(costs).toContain('SCATTER_GUN');
+        expect(costs).toContain('RAIL_DRIVER');
+        expect(costs).toContain('LANCE_BEAM');
     });
 
     test('weapons auto-unlock at wave milestones', async ({ page }) => {

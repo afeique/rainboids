@@ -15,50 +15,50 @@ export const WAVE_DATA = {
     // Solo introductions. High asteroid count, few enemies. Learn each foe.
     // ═══════════════════════════════════════════════════════════════════════
 
-    // Wave 1: First Contact — single scout amid asteroids
-    1:  { asteroids: 2, enemies: [{ type: 'HUNTER', count: 1 }] },
+    // Wave 1: First Contact — frenetic intro (bullet-hell pass)
+    1:  { asteroids: 6, enemies: [{ type: 'HUNTER', count: 3 }] },
 
-    // Wave 2: Scout — single hunter amid asteroids
-    2:  { asteroids: 2, enemies: [{ type: 'HUNTER', count: 1 }] },
+    // Wave 2: Scout Pack — pressure the player into the shop early
+    2:  { asteroids: 8, enemies: [{ type: 'HUNTER', count: 4 }] },
 
     // Wave 3: Hunting Pack — learn to juggle threats
-    3:  { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }] },
+    3:  { asteroids: 8, enemies: [{ type: 'HUNTER', count: 5 }] },
 
     // Wave 4: Wall of Green — meet the tank
-    4:  { asteroids: 3, enemies: [{ type: 'GUARDIAN', count: 2 }] },
+    4:  { asteroids: 8, enemies: [{ type: 'GUARDIAN', count: 3 }] },
 
     // Wave 5: Fortress — spread shot pressure
-    5:  { asteroids: 3, enemies: [{ type: 'GUARDIAN', count: 3 }] },
+    5:  { asteroids: 9, enemies: [{ type: 'GUARDIAN', count: 4 }] },
 
     // Wave 6: Yellow Peril — fast and frantic
-    6:  { asteroids: 4, enemies: [{ type: 'WASP', count: 2 }] },
+    6:  { asteroids: 9, enemies: [{ type: 'WASP', count: 4 }] },
 
     // Wave 7: Swarm — bullet hell intro
-    7:  { asteroids: 3, enemies: [{ type: 'WASP', count: 4 }] },
+    7:  { asteroids: 9, enemies: [{ type: 'WASP', count: 5 }] },
 
     // Wave 8: Ambush — laser sniper
-    8:  { asteroids: 6, enemies: [{ type: 'STALKER', count: 2 }] },
+    8:  { asteroids: 10, enemies: [{ type: 'STALKER', count: 3 }] },
 
     // Wave 9: Crossfire — multiple laser angles
-    9:  { asteroids: 5, enemies: [{ type: 'STALKER', count: 3 }] },
+    9:  { asteroids: 10, enemies: [{ type: 'STALKER', count: 4 }] },
 
     // Wave 10: Lightning Storm — arc lightning intro
-    10: { asteroids: 6, enemies: [{ type: 'DRIFTER', count: 2 }] },
+    10: { asteroids: 10, enemies: [{ type: 'DRIFTER', count: 3 }] },
 
     // Wave 11: Drift Zone — unpredictable movement
-    11: { asteroids: 5, enemies: [{ type: 'DRIFTER', count: 3 }] },
+    11: { asteroids: 11, enemies: [{ type: 'DRIFTER', count: 4 }] },
 
     // Wave 12: Missile Lock — ranged missiles
-    12: { asteroids: 5, enemies: [{ type: 'PROWLER', count: 2 }] },
+    12: { asteroids: 10, enemies: [{ type: 'PROWLER', count: 3 }] },
 
     // Wave 13: Web Spinner — spiral laser patterns
-    13: { asteroids: 5, enemies: [{ type: 'WEAVER', count: 2 }] },
+    13: { asteroids: 11, enemies: [{ type: 'WEAVER', count: 3 }] },
 
     // Wave 14: Shield Wall — defensive enemies
-    14: { asteroids: 5, enemies: [{ type: 'SENTINEL', count: 2 }] },
+    14: { asteroids: 11, enemies: [{ type: 'SENTINEL', count: 3 }] },
 
     // Wave 15: Minefield — mine layer intro
-    15: { asteroids: 4, enemies: [{ type: 'TANGERINE', count: 2 }] },
+    15: { asteroids: 10, enemies: [{ type: 'TANGERINE', count: 3 }] },
 
     // ═══════════════════════════════════════════════════════════════════════
     // ACT II — ESCALATION  (waves 16–30)
@@ -379,9 +379,11 @@ export function getWaveConfig(waveNumber) {
     return WAVE_DATA[waveNumber] || WAVE_DATA[1]; // Fallback to wave 1 if not found
 }
 
-// Helper function to calculate enemy level based on wave
+// Helper function to calculate enemy level based on wave.
+// Bumped to every 3 waves for the bullet-hell pacing — difficulty
+// climbs faster so the player has to engage with the shop early.
 export function getEnemyLevel(waveNumber) {
-    return Math.floor(waveNumber / 5) + 1; // Level increases every 5 waves — gentle curve
+    return Math.floor(waveNumber / 3) + 1;
 }
 
 // Helper function to calculate asteroid level based on wave
@@ -463,14 +465,17 @@ export const WAVE_SUBTITLES_GENERIC = [
     "Insert coin to continue. Oh wait.",
 ];
 
-// Helper function to get level-scaled enemy stats
+// Helper function to get level-scaled enemy stats.
+// Steeper bullet-hell ramp: 25% HP and 15% speed per level so the
+// player can't coast on raw weapon stats — they have to invest in
+// upgrades to keep up.
 export function getLevelScaledEnemyStats(baseStats, level) {
     return {
-        health: Math.floor(baseStats.health * (1 + (level - 1) * 0.2)), // 20% more HP per level
-        speed: baseStats.speed * (1 + (level - 1) * 0.1), // 10% faster per level
-        size: baseStats.size, // Size stays the same
-        shootRate: baseStats.shootRate, // Shoot rate stays the same
-        points: Math.floor(baseStats.points * (1 + (level - 1) * 0.2)) // 20% more points per level
+        health: Math.floor(baseStats.health * (1 + (level - 1) * 0.25)),
+        speed: baseStats.speed * (1 + (level - 1) * 0.15),
+        size: baseStats.size,
+        shootRate: baseStats.shootRate,
+        points: Math.floor(baseStats.points * (1 + (level - 1) * 0.2)),
     };
 }
 

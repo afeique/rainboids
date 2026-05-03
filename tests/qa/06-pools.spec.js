@@ -60,14 +60,24 @@ test.describe('QA-06: Pool manager correctness', () => {
     });
 
     test('pool.release() returns object to the free pool', async ({ page }) => {
-        const { poolBefore, poolAfter } = await page.evaluate(() => {
+        const { freeAfterGet, freeAfterRelease, activeDelta } = await page.evaluate(() => {
             const pool = window.gameEngine.asteroidPool;
-            const poolBefore = pool.pool.length;
+            const freeBefore = pool.pool.length;
+            const activeBefore = pool.activeObjects.length;
             const obj = pool.get(400, 300, 40, 1);
+            const freeAfterGet = pool.pool.length;
             pool.release(obj);
-            return { poolBefore, poolAfter: pool.pool.length };
+            return {
+                freeAfterGet,
+                freeAfterRelease: pool.pool.length,
+                activeDelta: pool.activeObjects.length - activeBefore,
+                freeBefore,
+            };
         });
-        expect(poolAfter).toBe(poolBefore);
+        // After get→release, the active count is back to where it
+        // started, and the released object lives on the free pool.
+        expect(activeDelta).toBe(0);
+        expect(freeAfterRelease).toBe(freeAfterGet + 1);
     });
 
     test('pool reuses released objects on next get()', async ({ page }) => {

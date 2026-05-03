@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.48.0] - 2026-05-03
+
+### Changed
+- **Bullet-hell pass: frenetic intro, faster economy, faster scaling.**
+  - **Enemy HP slashed across the board** (~30-40% off the 5.45-era values): Hunter 5→3, Wasp 4→3, Weaver 5→3, Stalker 6→4, Drifter 7→5, Bomber 8→6, Sentinel 8→6, Guardian 10→7, Prowler 11→8, Titan 18→12.
+  - **Asteroid HP halved**: big tier 4-7 → 3-5, medium 2-4 → 1-3, small now one-shot (was 1-2).
+  - **Enemy reward points bumped ~60%** so kills feed the economy fast: Hunter 75→120, Wasp 60→100, Stalker 80→130, Weaver 100→160, Bomber 100→160, Drifter 120→180, Guardian 120→200, Sentinel 140→220, Prowler 150→240, Titan 200→320.
+  - **XP gain doubled per hit** (asteroid 2→4, enemy 3→6) and kill-XP ratio bumped (was `points/5`, now `points/3`) — the player levels up quickly enough to engage with skills/upgrades within the first few waves.
+- **Early waves are now dense.** Wave 1: 6 asteroids + 3 hunters (was 2+1). Waves 2-15 scaled accordingly — 8-11 asteroids, 3-5 enemies each. Steeper feel, more pressure, designed to push the player into the shop early for upgrades.
+- **Difficulty scaling is steeper**: enemy level now climbs every 3 waves (was every 5); per-level enemy stats grow 25% HP / 15% speed / 20% points (was 20/10/20).
+- **Concurrent caps raised** to support the density without choking: `MAX_ASTEROIDS` 4 → 16, `MAX_WAVE_ASTEROIDS` 12 → 16.
+
+### Tests
+- `tests/unit/wave.test.js` updated for the new wave-data shape — strict per-phase enemy-type counts replaced with average-of-phase assertions, MAX_WAVE_ASTEROIDS bumped to 16, procedural-types test scoped to `> 100` only.
+- `tests/qa/05-entities.spec.js` — explosion-particle test now drains the pool first so `MAX_PARTICLES` saturation can't make `before === after`.
+- `tests/qa/06-pools.spec.js` — release-back-to-pool test rewritten to compare `freeAfterGet` vs `freeAfterRelease` rather than relying on initial pool length being zero.
+- `tests/qa/07-weapons.spec.js` — shop-tab tests rewritten for the new layout (5 tabs: HELP/PRIMARY/POWER/DEFENSE/SKILLS, no OFFENSE/DROPS, DOM-based selectors), weapon-purchase tests removed (weapons equipped from pause menu, not bought from shop), Tab-cycle test added.
+
+### Test results
+- Unit suite: **68/68 passing**.
+- QA smoke suite: **95/95 passing** in ~2:20.
+
+---
+
 ## [5.47.1] - 2026-05-03
 
 ### Fixed

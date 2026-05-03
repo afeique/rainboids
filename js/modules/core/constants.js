@@ -11,7 +11,7 @@ export const GAME_CONFIG = {
     BULLET_SPEED: 16 * (30 / 60),    // Scaled from 16 px/tick @30Hz
     INITIAL_AST_COUNT: 1, // Minimal asteroid count for best performance
     AST_SPEED: 3.5 * (30 / 60),       // Scaled from 3.5 px/tick @30Hz
-    MAX_WAVE_ASTEROIDS: 12, // Hard cap: max asteroids per wave (Wave 1 uses 12 — the proven safe limit)
+    MAX_WAVE_ASTEROIDS: 16, // Hard cap raised for the bullet-hell density pass
     COLOR_STAR_COUNT: 25, // Increased for visual appeal while maintaining performance
     BACKGROUND_STAR_COUNT: 30, // Increased for richer starfield while maintaining performance
     ACTIVE_STAR_ATTR: 0.01,
@@ -57,7 +57,7 @@ export const GAME_CONFIG = {
     MIN_AST_RAD: 15,
     
     // Entity limits adjusted for gameplay balance
-    MAX_ASTEROIDS: 4, // Allow up to 4 concurrent asteroids for better pacing
+    MAX_ASTEROIDS: 16, // Concurrent cap raised for bullet-hell density
     
     // Wave system configuration - aggressive timing for continuous action
     WAVE_ASTEROID_DELAY: 0, // Time before spawning asteroids (ms)

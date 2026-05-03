@@ -137,6 +137,14 @@ test.describe('QA-05: Entity spawning and lifecycle', () => {
     // ------------------------------------------------------------------
 
     test('explosion particles can be spawned', async ({ page }) => {
+        // Drain the particle pool first — gameplay can leave it at
+        // MAX_PARTICLES, in which case pool.get evicts the oldest
+        // instead of growing the active count, so a strict
+        // `before < after` would fail despite the spawn succeeding.
+        await page.evaluate(() => {
+            const pool = window.gameEngine.particlePool;
+            for (const p of [...pool.activeObjects]) pool.release(p);
+        });
         const before = (await getPoolCounts(page)).particles;
         await page.evaluate(() => {
             const ge = window.gameEngine;

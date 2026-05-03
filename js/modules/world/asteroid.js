@@ -87,14 +87,16 @@ export class Asteroid {
         let health;
         const sizeRef = this.baseRadius || this.radius;
         
-        // Health scales with size — fragments are weaker so waves clear faster.
-        // Tuned aggressively low so early waves are about momentum, not grind.
+        // Health scales with size — even lower for the bullet-hell pass.
+        // Big asteroids drop in 1-2s, mediums die to a single decent
+        // burst, smalls pop in one shot. Wave compositions are now
+        // dense so the chew-rate has to keep up.
         if (sizeRef >= 40) {
-            baseHealth = Math.floor(4 + (sizeRef - 40) / 20 * 3);  // 4-7  (was 5-9)
+            baseHealth = Math.floor(3 + (sizeRef - 40) / 20 * 2);  // 3-5
         } else if (sizeRef >= 20) {
-            baseHealth = Math.floor(2 + (sizeRef - 20) / 20 * 2);  // 2-4  (was 2-5)
+            baseHealth = Math.floor(1 + (sizeRef - 20) / 20 * 2);  // 1-3
         } else {
-            baseHealth = Math.floor(1 + (sizeRef - 5) / 15 * 1);   // 1-2  (was 1-3)
+            baseHealth = 1;                                         // small = one-shot
         }
 
         // Level scaling: +25% per level beyond 1
