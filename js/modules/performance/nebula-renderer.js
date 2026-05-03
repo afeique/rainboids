@@ -214,10 +214,11 @@ const SCENE_PALETTES = [
 // distant/dim and near layers look close/bright (atmospheric
 // perspective).
 //
-// New realism fields:
-//   embeddedStars  — count of bright stars with halo+spikes
-//   dustLanesPerBlob — 0..N dark absorbing lanes drawn over body
-//   filamentCount  — short streaky threads scattered around blobs
+// Pared back: the dust speckles + filament threads + dust lanes +
+// wisps + sky-tint passes were removed because together they laid a
+// uniform haze over the entire canvas. Only the structured passes
+// remain: blobs (with their internal volumetric layering) and bright
+// embedded "lens-flare" stars with diffraction spikes.
 const LAYER_CONFIG = [
     {
         // Far back — dim, locked to camera, biggest blobs
@@ -226,12 +227,7 @@ const LAYER_CONFIG = [
         blobCount: [4, 6],
         radiusRange: [320, 700],
         opacityRange: [0.05, 0.10],
-        speckles: 90,
-        speckleAlpha: [0.10, 0.22],
-        wispCount: [2, 4],
         embeddedStars: 6,
-        dustLanesPerBlob: [0, 1],
-        filamentCount: 12,
     },
     {
         // Mid-far — slightly more parallax, slightly brighter
@@ -240,12 +236,7 @@ const LAYER_CONFIG = [
         blobCount: [3, 5],
         radiusRange: [220, 480],
         opacityRange: [0.06, 0.13],
-        speckles: 70,
-        speckleAlpha: [0.18, 0.35],
-        wispCount: [2, 3],
         embeddedStars: 8,
-        dustLanesPerBlob: [0, 2],
-        filamentCount: 18,
     },
     {
         // Mid-near — clear parallax kick
@@ -254,12 +245,7 @@ const LAYER_CONFIG = [
         blobCount: [3, 4],
         radiusRange: [140, 320],
         opacityRange: [0.07, 0.15],
-        speckles: 50,
-        speckleAlpha: [0.30, 0.55],
-        wispCount: [1, 3],
         embeddedStars: 10,
-        dustLanesPerBlob: [1, 2],
-        filamentCount: 22,
     },
     {
         // Closest — very strong parallax, brightest layer, smallest blobs
@@ -268,12 +254,7 @@ const LAYER_CONFIG = [
         blobCount: [2, 3],
         radiusRange: [80, 180],
         opacityRange: [0.08, 0.18],
-        speckles: 30,
-        speckleAlpha: [0.45, 0.75],
-        wispCount: [1, 2],
         embeddedStars: 12,
-        dustLanesPerBlob: [1, 3],
-        filamentCount: 18,
     },
 ];
 
@@ -384,10 +365,6 @@ class NebulaRenderer {
             // (cooler/dimmer) and near layers pop.
             const lp = this._derivedLayerPalette(cfg.lumMul);
 
-            // Sky tint — faint full-canvas wash so the layer reads as
-            // a continuous gas field rather than detached patches.
-            this._drawSkyTint(ctx, w, h, cfg, lp);
-
             // Body — main nebula blobs. Mix density profiles for
             // visual rhythm: a few bright cores, a base of normal
             // blobs, plus large background haze patches.
@@ -400,41 +377,10 @@ class NebulaRenderer {
                 blobs.push(this._drawBlob(ctx, w, h, scale, cfg, lp, profile));
             }
 
-            // Dust lanes — dark absorbing streaks drawn ON TOP of
-            // each blob. Real nebulae are full of these silhouettes
-            // where dense dust blocks the gas's emission.
-            for (const blob of blobs) {
-                const laneCount = Math.floor(random(
-                    cfg.dustLanesPerBlob[0], cfg.dustLanesPerBlob[1] + 1,
-                ));
-                for (let i = 0; i < laneCount; i++) {
-                    this._drawDustLane(ctx, scale, cfg, lp, blob);
-                }
-            }
-
-            // Filaments — short threaded streaks of gas, biased to
-            // blob outer edges where shock fronts and tendrils form.
-            // These give the nebula a "stranded" / fibrous texture
-            // rather than a smooth gradient field.
-            for (let i = 0; i < cfg.filamentCount; i++) {
-                this._drawFilament(ctx, w, h, scale, cfg, lp, blobs);
-            }
-
-            // Wisps — elongated streaks of gas connecting nearby blobs.
-            // Adds the "filament" detail that suggests 3D structure.
-            const wispCount = Math.floor(random(cfg.wispCount[0], cfg.wispCount[1] + 1));
-            for (let i = 0; i < wispCount; i++) {
-                this._drawWisp(ctx, w, h, scale, cfg, lp, blobs);
-            }
-
-            // Stardust speckle — tiny dots of high-alpha highlight
-            // color seeded inside denser regions.
-            this._drawStardust(ctx, w, h, cfg, lp, blobs);
-
-            // Embedded stars — bright pinpoints with halos and four
-            // diffraction spikes, biased toward blob centers where
-            // young stars form. THE iconic "this is a space photo"
-            // visual cue.
+            // Embedded "lens-flare" stars — bright pinpoints with
+            // halos and four-pointy-corner diffraction spikes,
+            // biased to blob interiors. Only structured pass that
+            // survived the dust-haze cull.
             this._drawEmbeddedStars(ctx, w, h, cfg, lp, blobs);
 
             this.layers.push({ canvas, depth: cfg.depth });
@@ -458,28 +404,8 @@ class NebulaRenderer {
         };
     }
 
-    // Faint full-canvas wash. Pick three random tones from the layer
-    // pool so the sky tint itself has color variation rather than
-    // always painting the canvas in the secondary color.
-    _drawSkyTint(ctx, w, h, layerCfg, lp) {
-        const [c0, c1] = pickRandom(lp.tones, 2);
-        const grad = ctx.createRadialGradient(
-            w * (0.4 + Math.random() * 0.2),
-            h * (0.4 + Math.random() * 0.2),
-            0,
-            w / 2, h / 2,
-            Math.max(w, h) * 0.7,
-        );
-        const tintAlpha = 0.04 * layerCfg.lumMul;
-        grad.addColorStop(0,   rgba(c0, tintAlpha));
-        grad.addColorStop(0.5, rgba(c1 || c0, tintAlpha * 0.7));
-        grad.addColorStop(1,   rgba(lp.shadow,  tintAlpha * 0.4));
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-    }
-
-    // Returns the placed blob's center + base radius so wisps + stardust
-    // can anchor near density peaks. `profile` selects density variant:
+    // Returns the placed blob's center + base radius. `profile` selects
+    // the density variant:
     //   'bright' — vivid, high opacity, definite hot core, edge halo
     //   'normal' — middle ground, the workhorse blob
     //   'haze'   — large, dim, no hot core; background gas
@@ -615,79 +541,6 @@ class NebulaRenderer {
         return { cx, cy, baseRadius };
     }
 
-    // ── Dust lane ────────────────────────────────────────────────
-    // A dark, elongated absorption silhouette painted ON TOP of an
-    // existing blob. Mimics the dust lanes that bisect real
-    // emission nebulae (Trifid, Eagle, Lagoon). Drawn as a long
-    // thin ellipse with a gradient that fades the dark color in
-    // along the lane and out at the ends.
-    _drawDustLane(ctx, scale, layerCfg, lp, blob) {
-        const { cx, cy, baseRadius } = blob;
-        // Position lane somewhat off-center across the blob.
-        const offset = random(-baseRadius * 0.4, baseRadius * 0.4);
-        const angle = Math.random() * Math.PI;
-        const lenAlong = baseRadius * random(1.0, 1.6);
-        const lenAcross = baseRadius * random(0.08, 0.18);
-        const px = -Math.sin(angle), py = Math.cos(angle);
-        const lcx = cx + px * offset;
-        const lcy = cy + py * offset;
-        const darkness = random(0.35, 0.7);
-
-        ctx.save();
-        ctx.translate(lcx, lcy);
-        ctx.rotate(angle);
-        ctx.scale(1, lenAcross / lenAlong);
-        // Gradient: dark in the middle, fade at the ends.
-        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, lenAlong);
-        grad.addColorStop(0,    rgba(lp.shadow, darkness));
-        grad.addColorStop(0.5,  rgba(lp.shadow, darkness * 0.7));
-        grad.addColorStop(0.85, rgba(lp.shadow, darkness * 0.18));
-        grad.addColorStop(1,    rgba(lp.shadow, 0));
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(0, 0, lenAlong, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    // ── Filament thread ──────────────────────────────────────────
-    // A short streaky line of bright gas. Biased to blob outer
-    // edges (where shock fronts produce thin filament structures).
-    // Drawn as a thin elongated radial gradient — readable detail
-    // without the cost of a stroke + jitter routine.
-    _drawFilament(ctx, canvasW, canvasH, scale, layerCfg, lp, blobs) {
-        if (blobs.length === 0) return;
-        const b = blobs[Math.floor(Math.random() * blobs.length)];
-        // Pick a point on a random blob's outer ring, then nudge.
-        const ang = Math.random() * Math.PI * 2;
-        const distFromCenter = b.baseRadius * random(0.55, 1.05);
-        const cx2 = b.cx + Math.cos(ang) * distFromCenter;
-        const cy2 = b.cy + Math.sin(ang) * distFromCenter;
-        // Filament orientation often runs ROUGHLY tangent to the
-        // blob edge — that's how shock-front filaments form. Take
-        // tangent direction and add some random rotation slop.
-        const tangent = ang + Math.PI / 2 + random(-0.6, 0.6);
-        const length = b.baseRadius * random(0.15, 0.45);
-        const thickness = length * random(0.06, 0.14);
-
-        const tone = pickRandom(lp.tones, 1)[0];
-        const opacity = random(layerCfg.opacityRange[0], layerCfg.opacityRange[1]) * 1.4;
-
-        ctx.save();
-        ctx.translate(cx2, cy2);
-        ctx.rotate(tangent);
-        ctx.scale(1, thickness / length);
-        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, length);
-        grad.addColorStop(0,   rgba(tone, opacity));
-        grad.addColorStop(0.5, rgba(tone, opacity * 0.5));
-        grad.addColorStop(1,   rgba(tone, 0));
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(0, 0, length, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
     // ── Embedded stars ───────────────────────────────────────────
     // Bright pinpoint stars with soft halos and a 4-arm diffraction
     // spike pattern, scattered through the layer with a bias to
@@ -764,107 +617,6 @@ class NebulaRenderer {
                 ctx.fillStyle = rgba([255, 255, 255], 0.95);
                 ctx.beginPath();
                 ctx.arc(x, y, coreSize * 0.4, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-    }
-
-    // Draw an elongated soft gradient between two blob centers (or
-    // between a blob and a random point) to suggest a gas filament.
-    // Implemented as a chain of small radial gradients along the line.
-    _drawWisp(ctx, canvasW, canvasH, scale, layerCfg, lp, blobs) {
-        if (blobs.length < 2) return;
-        const a = blobs[Math.floor(Math.random() * blobs.length)];
-        let b = blobs[Math.floor(Math.random() * blobs.length)];
-        if (b === a && blobs.length > 1) {
-            b = blobs[(blobs.indexOf(a) + 1) % blobs.length];
-        }
-
-        const dx = b.cx - a.cx;
-        const dy = b.cy - a.cy;
-        const dist = Math.hypot(dx, dy);
-        if (dist < 50) return; // nothing to thread
-
-        const steps = Math.max(6, Math.floor(dist / 60));
-        const wispOpacity = random(layerCfg.opacityRange[0], layerCfg.opacityRange[1]) * 0.5;
-        const baseSize = ((a.baseRadius + b.baseRadius) / 2) * 0.18;
-
-        // Light arc bow — perpendicular displacement so the wisp
-        // doesn't look like a straight ruler. Up to ±30% of dist.
-        const px = -dy / dist;
-        const py = dx / dist;
-        const bow = random(-dist * 0.3, dist * 0.3);
-
-        // Wisp uses two random tones from the pool for its color —
-        // that way wisps in the same scene aren't all the same hue.
-        const [wispTone0, wispTone1] = pickRandom(lp.tones, 2);
-
-        for (let i = 1; i < steps; i++) {
-            const t = i / steps;
-            // Quadratic bow: peaks at midpoint
-            const bowFactor = 4 * t * (1 - t);
-            const sx = a.cx + dx * t + px * bow * bowFactor;
-            const sy = a.cy + dy * t + py * bow * bowFactor;
-            const r = baseSize * random(0.7, 1.5);
-
-            const wgrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-            wgrad.addColorStop(0,   rgba(wispTone0, wispOpacity));
-            wgrad.addColorStop(0.5, rgba(wispTone1 || wispTone0, wispOpacity * 0.55));
-            wgrad.addColorStop(1,   rgba(wispTone1 || wispTone0, 0));
-            ctx.fillStyle = wgrad;
-            ctx.beginPath();
-            ctx.arc(sx, sy, r, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-
-    // Sprinkle tiny bright dots inside / near each blob to suggest the
-    // grainy stardust that fills a real nebula. Higher density inside
-    // blobs, sparse fall-off outside.
-    _drawStardust(ctx, canvasW, canvasH, layerCfg, lp, blobs) {
-        const total = layerCfg.speckles;
-        for (let i = 0; i < total; i++) {
-            // Bias 70% of speckles to live inside blobs.
-            let x, y;
-            if (Math.random() < 0.7 && blobs.length > 0) {
-                const b = blobs[Math.floor(Math.random() * blobs.length)];
-                const ang = Math.random() * Math.PI * 2;
-                // Pull toward center via sqrt for higher density at core
-                const dist = Math.sqrt(Math.random()) * b.baseRadius * 0.85;
-                x = b.cx + Math.cos(ang) * dist;
-                y = b.cy + Math.sin(ang) * dist;
-            } else {
-                x = Math.random() * canvasW;
-                y = Math.random() * canvasH;
-            }
-
-            // Color: 75% pure speckle white, 18% random accent from the
-            // pool, 7% highlight. Prevents monochrome speckle field
-            // and lets each layer have some accent diversity.
-            const r = Math.random();
-            const c = r < 0.75 ? lp.speckle
-                    : r < 0.93 ? lp.accents[Math.floor(Math.random() * lp.accents.length)]
-                    : lp.highlight;
-            const a = random(layerCfg.speckleAlpha[0], layerCfg.speckleAlpha[1]);
-
-            // Size distribution: 70% small dust, 25% medium, 5% bright stars
-            const t = Math.random();
-            let size;
-            if (t < 0.70) size = 0.4;
-            else if (t < 0.95) size = 0.9;
-            else size = 1.5;
-
-            ctx.fillStyle = rgba(c, a);
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.fill();
-
-            // The brightest speckles get a tiny corona — feels like a
-            // pinpoint star embedded in the gas.
-            if (size === 1.5) {
-                ctx.fillStyle = rgba(c, a * 0.35);
-                ctx.beginPath();
-                ctx.arc(x, y, size * 2.2, 0, Math.PI * 2);
                 ctx.fill();
             }
         }

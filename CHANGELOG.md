@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.6] - 2026-05-03
+
+### Removed
+- **All "haze" passes from the nebula renderer.** Cumulatively they were laying a uniform fog over the entire canvas. Gone:
+  - **Stardust speckles** — 30-90 tiny dots per layer biased to blob interiors. `_drawStardust` deleted.
+  - **Filament threads** — 12-22 short streaky bright gradients per layer. `_drawFilament` deleted.
+  - **Dust lanes** — 0-3 dark absorbing silhouettes per blob. `_drawDustLane` deleted.
+  - **Wisps** — bowed gradient chains connecting blob centers. `_drawWisp` deleted.
+  - **Sky tint** — faint full-canvas radial wash per layer. `_drawSkyTint` deleted.
+- LAYER_CONFIG fields removed: `speckles`, `speckleAlpha`, `wispCount`, `dustLanesPerBlob`, `filamentCount`.
+
+### Result
+- Each nebula layer now renders only **structured passes**: blob bodies (with shadow + body + edge halo + hot core, density-profile mix, ellipse asymmetry, palette-pool sampling, HSL jitter — all preserved) and the **lens-flare embedded stars** (bright pinpoints with halos and 4-pointy diffraction spikes). Blobs sit cleanly on the dark canvas instead of bleeding through a global haze.
+
+---
+
 ## [5.49.5] - 2026-05-03
 
 ### Added
