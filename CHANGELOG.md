@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.2] - 2026-05-03
+
+### Changed
+- **Nebula generation rebuilt for stronger parallax, depth, and palette consistency.**
+  - **Strong parallax**: layer depth range expanded from 0.02–0.12 (max ~12% relative motion) to **0.0–0.65** (5.4× stronger). Far layer is now fully locked to camera; near layer moves at 65% of camera speed. Player movement actually parallaxes the background.
+  - **One palette per scene**: `generate()` commits a single `SCENE_PALETTES` entry (cobalt-deep / violet-nursery / teal-aurora / ember-warmth / periwinkle-dream / crimson-ultraviolet) and every layer + blob + wisp + speckle pulls from it. No more per-sub-blob palette mixing that produced clashing color salads.
+  - **Per-layer atmospheric perspective**: each of the 4 layers gets a `lumMul` (0.45 / 0.65 / 0.85 / 1.00) that shades the scene palette darker for far layers, brighter for near layers — sells "this is depth, not just stacking."
+  - **Faux-3D blob structure**: each blob now renders in 3 passes — shadow body (offset, dark, oversized), main body (multi-stop palette gradient), and a small bright off-center hot core. Layered together they read as volumetric clouds rather than flat radial disks.
+  - **Filament wisps**: 1–4 elongated soft gradient chains per layer connect random pairs of blob centers along bowed paths, suggesting gas streams between density peaks.
+  - **Stardust speckle**: 30–90 tiny dots per layer biased toward blob centers (sqrt-distance distribution for higher density at the core), giving the gas a grainy texture.
+
+---
+
 ## [5.49.1] - 2026-05-03
 
 ### Changed
