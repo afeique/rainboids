@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.0] - 2026-05-03
+
+### Removed
+- **All jsfxr-generated SFX gone.** `js/modules/audio/sound-defs.js`, `tools/scripts/generate-sfx.js`, `tools/scripts/probe-audio-polyphony.mjs`, and the entire `sfx/` directory (manifest + 28 WAVs) deleted. They were causing audio glitches in flight. The `AudioManager` class is preserved as a no-op silent layer so every `playShoot()` / `playHit()` / `playSound(name)` call short-circuits without touching the audio context. Background music continues to play via `MusicPlayer` and `HTMLAudioElement`. External WAV assets will be wired into `playSound()` later.
+
+### Fixed
+- **Lance Beam now actually damages and pushes asteroids.** `checkLanceBeamCollisions` previously only hit enemies. It now sweeps the same point-to-line test against the asteroid pool, applies damage, sets a hit-flash, and shoves each hit asteroid forward by `0.4 px/frame × knockMul × 0.6` (gentler than enemies because asteroids are heavier). Lethal damage routes through `destroyAsteroid` for the proper destruction sequence. Snapshots `asteroidPool.activeObjects` before iterating so spawned fragments don't enter the same scan.
+- **Lance Beam grows in instead of popping on at full size.** `weapon-effects-renderer` now reads `beamMaxDuration - beamTimer` to derive a 0→1 ease-out cubic over the first 150ms, scaling both width and reach. Beam line is also broken into 6+ jagged zig-zag segments with perpendicular jitter — sustained sister of the lightning-arc visual.
+- **Stale benchmark suite paths fixed.** Imports under `tools/benchmark/scripts/*.bench.js` referenced `../../js/...` which resolved to `tools/js/...` (one level too shallow). Bumped to `../../../js/...`. All 7 microbenchmarks now run cleanly.
+
+### Changed
+- **Bottom-of-screen powerup HUD is compact** — full names replaced with 3-letter abbreviations (RPD, MUL, HOM, BIG, AFB, PRC, EXP, CRT, CDM, SHD, RNG, KBK, MED, DOC, PAY, HRL, HLK, GLK, HBT, GBT). New `abbr` field on each entry in `POWERUP_TYPES`; the HUD reads it (with a fallback to `name.slice(0, 3).toUpperCase()`).
+- **Hover tooltip on each HUD powerup badge.** `data-tooltip="Full Name — full description"` set in `syncPowerupHUD`; CSS `:hover::after` pops a 12px Silkscreen panel above the badge with an arrow pointer (zero delay, mirrors the music-player tooltip pattern).
+- **Powerups pause-menu cards now show "Name (ABV)"** so the player learns the codes that show up on the HUD.
+
+### Tests
+- Unit suite: 68/68 passing.
+- QA smoke suite: 95/95 passing.
+- All 7 microbenchmarks run cleanly.
+
+---
+
 ## [5.48.0] - 2026-05-03
 
 ### Changed

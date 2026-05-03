@@ -7,33 +7,66 @@ export function drawWeaponEffects() {
     const p = this.player;
 
     // ─── Lance Beam ──────────────────────────────────────────────────
+    // Width and range grow in over the first 150ms so the beam has
+    // weight to its strike — no instant-on full-power line. Drawn as
+    // jagged zig-zag segments (inspired by Lightning Arc) so the
+    // sustained beam reads as live energy rather than a static stroke.
     if (p.beamActive && p.beamTimer > 0) {
         const config = PRIMARY_WEAPONS.LANCE_BEAM;
-        const beamW = (config.beamWidth || 6) * (1 + this.player.getPowerupStacks('BEAM_WIDTH') * 0.3);
-        const range = config.range * 400;
+        const targetW = (config.beamWidth || 6) * (1 + this.player.getPowerupStacks('BEAM_WIDTH') * 0.3);
+        const targetRange = config.range * 400;
         const dx = Math.cos(p.angle);
         const dy = Math.sin(p.angle);
+
+        // Grow-in factor: 0 at strike, 1 after GROW_MS. Ease-out cubic
+        // so the ramp feels punchy at the start and settles smoothly.
+        const elapsed = Math.max(0, (p.beamMaxDuration || 1) - p.beamTimer);
+        const GROW_MS = 150;
+        const growT = Math.min(1, elapsed / GROW_MS);
+        const growEase = 1 - (1 - growT) * (1 - growT) * (1 - growT);
+        const beamW = Math.max(0.5, targetW * growEase);
+        const range = targetRange * growEase;
         const endX = p.x + dx * range;
         const endY = p.y + dy * range;
 
         ctx.save();
-        ctx.globalAlpha = 0.8;
+
+        // Lightning-style zig-zag — break the line into N segments and
+        // add small perpendicular jitter to each interior vertex.
+        const segs = Math.max(6, Math.floor(range / 28));
+        const perpX = -dy;
+        const perpY = dx;
+        const jitterMag = beamW * 0.7;
+
+        // Outer glow stroke
+        ctx.globalAlpha = 0.85 * (0.5 + 0.5 * growEase);
         ctx.strokeStyle = config.color;
         ctx.lineWidth = beamW;
         ctx.shadowColor = config.color;
         ctx.shadowBlur = beamW * 2;
+        ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
+        for (let i = 1; i < segs; i++) {
+            const t = i / segs;
+            const cx = p.x + (endX - p.x) * t;
+            const cy = p.y + (endY - p.y) * t;
+            const j = (Math.random() - 0.5) * jitterMag;
+            ctx.lineTo(cx + perpX * j, cy + perpY * j);
+        }
         ctx.lineTo(endX, endY);
         ctx.stroke();
-        // Inner bright core
+
+        // Inner bright core — straight line, no jitter, brighter.
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = Math.max(1, beamW * 0.3);
         ctx.shadowBlur = 0;
+        ctx.globalAlpha = growEase;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         ctx.lineTo(endX, endY);
         ctx.stroke();
+
         ctx.restore();
     }
 

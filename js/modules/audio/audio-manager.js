@@ -1,16 +1,14 @@
-// Audio management for SFX and background music.
+// Audio management — currently SILENT for all sound effects.
 //
-// SFX pipeline:
-//   1. Offline: tools/scripts/generate-sfx.js renders one .wav per sound
-//      under /sfx/<name>.wav, plus /sfx/manifest.json mapping name → URL.
-//   2. init() fetches the manifest and decodes every WAV into an
-//      AudioBuffer (one per sound — no variants).
-//   3. playSound(name) creates a fresh AudioBufferSourceNode + GainNode
-//      and starts it immediately. Polyphony is unbounded.
+// SFX history: the original implementation used jsfxr-generated WAV
+// files baked offline (tools/scripts/generate-sfx.js). Those caused
+// audio glitches and have been removed. The audio layer (this class)
+// is preserved so callers like `audioManager.playShoot()` still work
+// — they just no-op until external WAV assets are wired up.
 //
-// Background music stays on HTMLAudioElement (single long track).
-
-const MANIFEST_URL = 'sfx/manifest.json';
+// Background music continues to play through HTMLAudioElement (see
+// MusicPlayer / startBackgroundMusic in main.js). That path is
+// independent of the SFX system below.
 
 export class AudioManager {
     constructor() {
@@ -19,37 +17,18 @@ export class AudioManager {
         this.maxSfxVolume = 0.2;
         this.backgroundMusic = null;
 
+        // Kept for compatibility with the old WebAudio path. Both empty.
         this.audioContext = null;
-        this.audioBuffers = new Map();   // name → AudioBuffer
-        this.soundEnabled = {};          // name → bool, populated when manifest loads
+        this.audioBuffers = new Map();
+        this.soundEnabled = {};
     }
 
+    // No SFX assets to load right now — kept async so existing
+    // `await audioManager.init()` callers don't break.
     async init() {
+        // Pre-create an AudioContext so background music + future WAVs
+        // both share it once we re-introduce SFX.
         this._ensureAudioContext();
-
-        let manifest;
-        try {
-            const res = await fetch(MANIFEST_URL);
-            manifest = await res.json();
-        } catch (e) {
-            console.warn('Failed to load SFX manifest — sounds will be silent:', e);
-            return;
-        }
-
-        const ctx = this.audioContext;
-        if (!ctx) return;
-
-        for (const [name, url] of Object.entries(manifest.sounds || {})) {
-            this.soundEnabled[name] = true;
-            try {
-                const res = await fetch(url);
-                const bytes = await res.arrayBuffer();
-                const buf = await ctx.decodeAudioData(bytes);
-                this.audioBuffers.set(name, buf);
-            } catch (e) {
-                console.warn(`Failed to load SFX ${url}:`, e);
-            }
-        }
     }
 
     _ensureAudioContext() {
@@ -82,35 +61,25 @@ export class AudioManager {
         }
     }
 
-    // No-op kept for engine compatibility — see game-engine.js update loop.
+    // No-op kept for engine compatibility.
     beginLogicTick(_dtMs) {}
 
-    playSound(soundName) {
-        if (!this.audioReady || !this.soundEnabled[soundName]) return;
-        const ctx = this.audioContext;
-        if (!ctx) return;
-        const buffer = this.audioBuffers.get(soundName);
-        if (!buffer) return;
+    // SFX entry point — currently silent. When external WAV assets are
+    // added, decode them at init() time into `audioBuffers` and play
+    // here via createBufferSource(). Until then, do nothing.
+    playSound(_soundName) { /* SFX silent — see header */ }
 
-        const src = ctx.createBufferSource();
-        src.buffer = buffer;
-        const gain = ctx.createGain();
-        gain.gain.value = this.sfxMasterVol;
-        src.connect(gain).connect(ctx.destination);
-        src.start(0);
-    }
-
-    // Convenience aliases used throughout the codebase.
-    playShoot()           { this.playSound('shoot'); }
-    playHit()             { this.playSound('hit'); }
-    playCoin()            { this.playSound('coin'); }
-    playPowerup()         { this.playSound('powerup'); }
-    playExplosion()       { this.playSound('explosion'); }
-    playPlayerExplosion() { this.playSound('playerExplosion'); }
-    playTractorBeam()     { this.playSound('tractorBeam'); }
-    playShield()          { this.playSound('shield'); }
-    playHealthRegen()     { this.playSound('healthRegen'); }
-    playPickupSound(name) { this.playSound(name); }
+    // Convenience aliases used throughout the codebase. All silent.
+    playShoot()           {}
+    playHit()             {}
+    playCoin()            {}
+    playPowerup()         {}
+    playExplosion()       {}
+    playPlayerExplosion() {}
+    playTractorBeam()     {}
+    playShield()          {}
+    playHealthRegen()     {}
+    playPickupSound(_name) {}
 
     setSfxVolume(normalized) { this.sfxMasterVol = normalized * this.maxSfxVolume; }
     getSfxVolume()           { return this.sfxMasterVol / this.maxSfxVolume; }

@@ -599,40 +599,79 @@ export function handleWeaponEffectCollisions() {
 }
 
 // ─── Lance Beam ─────────────────────────────────────────────────
+// Sweeps a thin line forward from the player and damages every entity
+// (enemy + asteroid) intersecting it. Asteroids get a forward push
+// scaled by the player's KNOCKBACK powerup stacks so the beam reads
+// as a real physical force, not just a damage-applying line.
 export function checkLanceBeamCollisions() {
     const p = this.player;
-    if (p.beamActive && p.beamTimer > 0) {
-        const config = PRIMARY_WEAPONS.LANCE_BEAM;
-        const beamW = (config.beamWidth || 6) * (1 + p.getPowerupStacks('BEAM_WIDTH') * 0.3);
-        const range = config.range * 400;
-        const dx = Math.cos(p.angle);
-        const dy = Math.sin(p.angle);
-        const dmg = config.damage * (1 + p.getPowerupStacks('OVERLOAD_BEAM') * 2);
+    if (!(p.beamActive && p.beamTimer > 0)) return;
 
-        let connected = false;
-        this.enemyPool.activeObjects.forEach(enemy => {
-            if (!enemy.active || enemy._deathFlash > 0) return;
-            // Point-to-line distance check
-            const ex = enemy.x - p.x;
-            const ey = enemy.y - p.y;
-            const proj = ex * dx + ey * dy;
-            if (proj < 0 || proj > range) return;
-            const perpDist = Math.abs(ex * dy - ey * dx);
-            if (perpDist < beamW / 2 + (enemy.radius || 15)) {
-                this.damageEnemy(enemy, dmg);
-                connected = true;
+    const config = PRIMARY_WEAPONS.LANCE_BEAM;
+    const beamW = (config.beamWidth || 6) * (1 + p.getPowerupStacks('BEAM_WIDTH') * 0.3);
+    const range = config.range * 400;
+    const dx = Math.cos(p.angle);
+    const dy = Math.sin(p.angle);
+    const dmg = config.damage * (1 + p.getPowerupStacks('OVERLOAD_BEAM') * 2);
+    const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
+    // Beam push is gentle (the beam is a per-frame nibble, not a single
+    // hit) — applying full mine-style impulse every frame would yeet
+    // anything across the map. 0.4 px/frame at 1× knockback is enough
+    // to read visually without breaking pacing.
+    const BEAM_PUSH = 0.4 * knockMul;
+
+    // Enemies — point-to-line distance check inside the beam strip.
+    let connected = false;
+    for (const enemy of this.enemyPool.activeObjects) {
+        if (!enemy.active || enemy._deathFlash > 0) continue;
+        const ex = enemy.x - p.x;
+        const ey = enemy.y - p.y;
+        const proj = ex * dx + ey * dy;
+        if (proj < 0 || proj > range) continue;
+        const perpDist = Math.abs(ex * dy - ey * dx);
+        if (perpDist < beamW / 2 + (enemy.radius || 15)) {
+            this.damageEnemy(enemy, dmg);
+            if (enemy.vel) {
+                enemy.vel.x += dx * BEAM_PUSH;
+                enemy.vel.y += dy * BEAM_PUSH;
             }
-        });
-        // Beam hit-SFX throttled to ~6/sec so it doesn't machine-gun every
-        // frame the beam is touching something. WebAudio handles polyphony,
-        // but the LANCE_BEAM hit is a short sustained tone — replaying at
-        // 60fps just smears it.
-        if (connected) {
-            const now = performance.now();
-            if (!p._lastBeamHitSfx || now - p._lastBeamHitSfx > 160) {
-                p._lastBeamHitSfx = now;
-                this.events.emit('audio:enemy-hit-by-bullet', 'LANCE_BEAM');
+            connected = true;
+        }
+    }
+
+    // Asteroids — same line-distance test. Per-frame nibble damage and
+    // the same forward push. Lethal damage routes through
+    // destroyAsteroid for the proper death sequence (debris, drops,
+    // fragments). Snapshot the array first so spawned fragments
+    // don't enter the same scan frame.
+    const astSnapshot = this.asteroidPool.activeObjects.slice();
+    for (const ast of astSnapshot) {
+        if (!ast.active || ast._deathFlash > 0) continue;
+        const ax = ast.x - p.x;
+        const ay = ast.y - p.y;
+        const proj = ax * dx + ay * dy;
+        if (proj < 0 || proj > range) continue;
+        const perpDist = Math.abs(ax * dy - ay * dx);
+        if (perpDist < beamW / 2 + (ast.baseRadius || ast.radius || 15)) {
+            ast.health = Math.max(0, (ast.health || 0) - dmg);
+            ast._hitFlashTimer = 4;
+            if (ast.vel) {
+                ast.vel.x += dx * BEAM_PUSH * 0.6; // asteroids are heavier
+                ast.vel.y += dy * BEAM_PUSH * 0.6;
             }
+            if (ast.health <= 0.001) {
+                this.destroyAsteroid(ast);
+            }
+            connected = true;
+        }
+    }
+    // SFX throttling preserved — playSound is a no-op currently anyway,
+    // but keeping the event emit lets future SFX wire-ups land cleanly.
+    if (connected) {
+        const now = performance.now();
+        if (!p._lastBeamHitSfx || now - p._lastBeamHitSfx > 160) {
+            p._lastBeamHitSfx = now;
+            this.events.emit('audio:enemy-hit-by-bullet', 'LANCE_BEAM');
         }
     }
 }

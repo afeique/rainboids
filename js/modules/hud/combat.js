@@ -389,6 +389,13 @@ export function syncPowerupHUD() {
                 const item = document.createElement('div');
                 item.className = 'powerup-hud-item';
                 item.dataset.type = type;
+                // Hover-tooltip body — full name + description for the
+                // compacted abbreviation badges below. Driven by the
+                // `.powerup-hud-item[data-tooltip]:hover::after` rule
+                // in css/styles.css (zero delay).
+                const fullName = (powerupData.config.name || type);
+                const desc = powerupData.config.description || '';
+                item.dataset.tooltip = desc ? `${fullName} — ${desc}` : fullName;
 
                 // Countdown label above circle (temporary powerups only)
                 let countdown = null;
@@ -416,10 +423,15 @@ export function syncPowerupHUD() {
                     item.appendChild(timerWrap);
                 }
 
-                // Powerup name label beneath timer bar
+                // Compact 3-letter abbreviation under the icon. Falls
+                // back to the first 3 letters of the name if the
+                // POWERUP_TYPES entry doesn't define one. Saves
+                // horizontal real estate when many powerups stack.
                 const nameEl = document.createElement('div');
                 nameEl.className = 'powerup-hud-name';
-                nameEl.textContent = (powerupData.config.name || type).toUpperCase();
+                const abbr = powerupData.config.abbr
+                    || (powerupData.config.name || type).slice(0, 3).toUpperCase();
+                nameEl.textContent = abbr;
                 item.appendChild(nameEl);
 
                 hudEl.appendChild(item);

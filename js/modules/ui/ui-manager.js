@@ -569,7 +569,11 @@ export class UIManager {
 
             const name = document.createElement('div');
             name.className = 'powerup-card-name';
-            name.textContent = cfg.name || type;
+            // Show full name + abbreviation parenthetically, e.g.
+            // "Pierce (PRC)" — keeps the player learning the codes
+            // they see on the bottom-of-screen HUD badges.
+            const abbr = cfg.abbr || (cfg.name || type).slice(0, 3).toUpperCase();
+            name.textContent = `${cfg.name || type} (${abbr})`;
             name.style.color = cfg.color || '#ffffff';
             body.appendChild(name);
 

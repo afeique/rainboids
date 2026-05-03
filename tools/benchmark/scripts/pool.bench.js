@@ -10,7 +10,7 @@
  */
 import { bench, group, run } from 'mitata';
 import '../browser-mock.js';
-import { PoolManager } from '../../js/modules/core/pool-manager.js';
+import { PoolManager } from '../../../js/modules/core/pool-manager.js';
 
 // ---------------------------------------------------------------------------
 // Minimal game-like object that satisfies PoolManager's contract

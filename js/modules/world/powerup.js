@@ -46,6 +46,7 @@ function getPowerupGradients(ctx, gradientColors) {
 export const POWERUP_TYPES = {
     RAPID_FIRE: {
         name: 'Rapid',
+        abbr: 'RPD',
         color: '#ff3300',
         gradientColors: ['#ff6600', '#ff0000'],
         icon: '⚡',
@@ -57,6 +58,7 @@ export const POWERUP_TYPES = {
     },
     MULTI_SHOT: {
         name: 'Multi',
+        abbr: 'MUL',
         color: '#3366ff',
         gradientColors: ['#66aaff', '#0033cc'],
         icon: '✳️',
@@ -68,6 +70,7 @@ export const POWERUP_TYPES = {
     },
     HOMING: {
         name: 'Homing',
+        abbr: 'HOM',
         color: '#ff3399',
         gradientColors: ['#ff66cc', '#cc0066'],
         icon: '🎯',
@@ -79,6 +82,7 @@ export const POWERUP_TYPES = {
     },
     BIG_BULLETS: {
         name: 'Big',
+        abbr: 'BIG',
         color: '#33cc33',
         gradientColors: ['#66ff66', '#009900'],
         icon: '🔵',
@@ -90,6 +94,7 @@ export const POWERUP_TYPES = {
     },
     SPEED_BOOST: {
         name: 'Afterburner',
+        abbr: 'AFB',
         color: '#ffcc00',
         gradientColors: ['#ffff33', '#cc9900'],
         icon: '💨',
@@ -101,6 +106,7 @@ export const POWERUP_TYPES = {
     },
     PIERCING: {
         name: 'Pierce',
+        abbr: 'PRC',
         color: '#ff9933',
         gradientColors: ['#ffcc66', '#cc6600'],
         icon: '🏹',
@@ -112,6 +118,7 @@ export const POWERUP_TYPES = {
     },
     EXPLOSIVE: {
         name: 'Explode',
+        abbr: 'EXP',
         color: '#ff6600',
         gradientColors: ['#ff9933', '#cc3300'],
         icon: '💣',
@@ -123,6 +130,7 @@ export const POWERUP_TYPES = {
     },
     CRIT_CHANCE: {
         name: 'Crit %',
+        abbr: 'CRT',
         color: '#ffcc00',
         gradientColors: ['#ffff66', '#cc9900'],
         icon: '⭐',
@@ -134,6 +142,7 @@ export const POWERUP_TYPES = {
     },
     CRIT_DAMAGE: {
         name: 'Crit Dmg',
+        abbr: 'CDM',
         color: '#ff0066',
         gradientColors: ['#ff3399', '#cc0033'],
         icon: '🗡️',
@@ -145,6 +154,7 @@ export const POWERUP_TYPES = {
     },
     SHIELD_BOOST: {
         name: 'Shield',
+        abbr: 'SHD',
         color: '#00cc88',
         gradientColors: ['#33ff99', '#006644'],
         icon: '🛡',
@@ -156,6 +166,7 @@ export const POWERUP_TYPES = {
     },
     LONG_RANGE: {
         name: 'Range',
+        abbr: 'RNG',
         color: '#88cc44',
         gradientColors: ['#bbff66', '#448800'],
         icon: '🏹',
@@ -167,6 +178,7 @@ export const POWERUP_TYPES = {
     },
     KNOCKBACK: {
         name: 'Knockback',
+        abbr: 'KBK',
         color: '#ffaa44',
         gradientColors: ['#ffd58a', '#cc6611'],
         icon: '💢',
@@ -178,6 +190,7 @@ export const POWERUP_TYPES = {
     },
     MEDPACK: {
         name: 'Medic',
+        abbr: 'MED',
         color: '#ff6699',
         gradientColors: ['#ff99cc', '#cc3366'],
         icon: '💊',
@@ -189,6 +202,7 @@ export const POWERUP_TYPES = {
     },
     DOCTOR: {
         name: 'Doctor',
+        abbr: 'DOC',
         color: '#ff6688',
         gradientColors: ['#ff99aa', '#cc2244'],
         icon: '🏥',
@@ -200,6 +214,7 @@ export const POWERUP_TYPES = {
     },
     PAYDAY: {
         name: 'Payday',
+        abbr: 'PAY',
         color: '#66ff66',
         gradientColors: ['#88ff88', '#228822'],
         icon: '💵',
@@ -211,6 +226,7 @@ export const POWERUP_TYPES = {
     },
     HIGH_ROLLER: {
         name: 'High Roller',
+        abbr: 'HRL',
         color: '#ffdd44',
         gradientColors: ['#ffee66', '#cc8800'],
         icon: '🎰',
@@ -222,6 +238,7 @@ export const POWERUP_TYPES = {
     },
     HEALTH_ORB_DROP_CHANCE: {
         name: 'Health Luck',
+        abbr: 'HLK',
         color: '#33ff99',
         gradientColors: ['#66ffbb', '#009944'],
         icon: '🍀',
@@ -233,6 +250,7 @@ export const POWERUP_TYPES = {
     },
     MONEY_ORB_DROP_CHANCE: {
         name: 'Gold Luck',
+        abbr: 'GLK',
         color: '#ffdd00',
         gradientColors: ['#ffee66', '#cc8800'],
         icon: '💰',
@@ -244,6 +262,7 @@ export const POWERUP_TYPES = {
     },
     HEALTH_ORB_DROP_QUANTITY: {
         name: 'Health Bounty',
+        abbr: 'HBT',
         color: '#66ff66',
         gradientColors: ['#99ff99', '#009900'],
         icon: '💚',
@@ -255,6 +274,7 @@ export const POWERUP_TYPES = {
     },
     MONEY_ORB_DROP_QUANTITY: {
         name: 'Gold Bounty',
+        abbr: 'GBT',
         color: '#ffcc00',
         gradientColors: ['#ffdd66', '#996600'],
         icon: '🪙',

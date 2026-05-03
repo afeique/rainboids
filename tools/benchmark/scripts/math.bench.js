@@ -12,7 +12,7 @@
  */
 import { bench, group, run } from 'mitata';
 import '../browser-mock.js';
-import { wrap, wrapValue } from '../../js/modules/core/utils.js';
+import { wrap, wrapValue } from '../../../js/modules/core/utils.js';
 
 // ---------------------------------------------------------------------------
 // Lookup table for fast trig approximation

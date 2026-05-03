@@ -1821,3 +1821,42 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 .powerup-card--locked .powerup-card-stacks {
     color: #666;
 }
+
+/* Hover-tooltip on HUD powerup badges. Same instant-fire pattern as
+   the music-button tooltips: data-tooltip attribute + ::after
+   pseudo-element. Tooltip pops UP (above the badge) since the badges
+   sit at the bottom of the screen. */
+.powerup-hud-item[data-tooltip] {
+    position: relative;
+}
+.powerup-hud-item[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.92);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 204, 255, 0.6);
+    font-size: 12px;
+    font-family: 'Silkscreen', monospace;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10000;
+    max-width: 360px;
+    text-align: center;
+    line-height: 1.35;
+}
+.powerup-hud-item[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba(0, 204, 255, 0.6);
+    pointer-events: none;
+    z-index: 10000;
+}

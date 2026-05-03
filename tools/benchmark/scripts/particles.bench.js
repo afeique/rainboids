@@ -3,7 +3,7 @@
  */
 import { bench, group, run } from 'mitata';
 import '../browser-mock.js';
-import { TypedArrayParticleSystem } from '../../js/modules/performance/typed-array-particles.js';
+import { TypedArrayParticleSystem } from '../../../js/modules/performance/typed-array-particles.js';
 
 // ─── Traditional particle pool simulation ───────────────────────────────────
 
