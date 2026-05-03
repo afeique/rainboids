@@ -209,13 +209,13 @@ export function drawWaveIntroOverlay() {
         return;
     }
 
-    // Three-phase fade: in (0-500ms), hold (500..total-700ms), out
-    const fadeIn = 500;
+    // Snap to opaque on frame 1 — fading IN would briefly show the world
+    // (or shop) through a near-transparent layer, which read as a flash.
+    // Only the fade OUT is animated, so the player gets a clean cut to
+    // black followed by a smooth reveal of the warped-in entities.
     const fadeOut = 700;
     let alpha;
-    if (elapsed < fadeIn) {
-        alpha = elapsed / fadeIn;
-    } else if (elapsed < total - fadeOut) {
+    if (elapsed < total - fadeOut) {
         alpha = 1;
     } else {
         alpha = 1 - (elapsed - (total - fadeOut)) / fadeOut;

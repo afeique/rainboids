@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.50.1] - 2026-05-03
+
+### Fixed
+- **Flash of game world before the wave intro overlay.** The intro overlay was fading IN over 500ms from alpha 0, which meant the first ~30 frames of the wave transition rendered the world (or shop background) through a near-transparent layer — read as a flash. The overlay now snaps to full opacity on the very first frame of the wave intro; only the fade OUT at the end is animated, so the player gets a clean cut to black followed by a smooth reveal of the warped-in entities.
+
+---
+
 ## [5.50.0] - 2026-05-03
 
 ### Added
