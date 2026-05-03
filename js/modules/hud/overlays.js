@@ -148,86 +148,114 @@ export function drawTitleScreen() {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
 
-        // Title-launch animation phases (driven by triggerTitleStart):
-        //   spiral (0   -700ms): orbits + tightens around center
-        //   zoom   (700-1200ms): scale rockets toward viewer
-        //   fade   (1200-1700ms): full-screen black wash takes over
+        // Title-launch animation: TWISTER.
+        // Each letter of RAINBOIDS orbits a vertical axis with proper
+        // 3D-style perspective projection, and the entire column approaches
+        // the camera as the animation progresses. Phases:
+        //   twister   (0     - 1100ms): letters spin around the vertical
+        //                                axis at staggered heights, the
+        //                                column slowly closes in
+        //   zoom      (1100  - 1500ms): orbit radius collapses, twister
+        //                                hurtles toward the viewer
+        //   fade      (1500  - 1900ms): scale grows further while a black
+        //                                wash takes over
         // While 'idle', render the normal static title screen.
         const anim = (typeof this._titleAnimState === 'function') ? this._titleAnimState() : null;
         const launching = anim && anim.phase === 'launch';
         const elapsed = launching ? (Date.now() - anim.startTime) : 0;
         const total = launching ? anim.duration : 0;
 
-        const SPIRAL_END = 700;
-        const ZOOM_END   = 1200;
-
-        // Default title state — no transform.
-        let titleX = centerX + 10;
-        let titleY = centerY - 100;
-        let titleScale = 1;
-        let titleAlpha = 1;
-        let showSubtitle = true;
-        let showPressKey = true;
+        let showSubtitle = !launching;
+        let showPressKey = !launching;
         let fadeAlpha = 0;
 
         if (launching) {
-            showSubtitle = false;
-            showPressKey = false;
+            const TWISTER_END = 1100;
+            const ZOOM_END    = 1500;
 
-            if (elapsed < SPIRAL_END) {
-                // Spiral: 2 turns, radius 220px → 0, easing into a tight knot
-                const t = elapsed / SPIRAL_END;
-                const eased = 1 - Math.pow(1 - t, 2.5);
-                const turns = 2.0;
-                const angle = -Math.PI / 2 + turns * Math.PI * 2 * eased;
-                const radius = 220 * (1 - eased);
-                titleX = centerX + Math.cos(angle) * radius;
-                titleY = centerY + Math.sin(angle) * radius - 100 * (1 - eased);
-                // Slight scale wobble during spiral for energy
-                titleScale = 0.85 + 0.15 * (1 - eased);
+            // Camera depth: column starts ~800 units away and approaches 60.
+            const focal = 600;
+            const baseZ = 800;
+            let zoomAmount; // 0 → 1
+            let radius;     // orbit radius in world units
+
+            if (elapsed < TWISTER_END) {
+                const t = elapsed / TWISTER_END;
+                const eased = 1 - Math.pow(1 - t, 1.6); // ease-out approach
+                radius = 240 * (1 - eased * 0.45);      // 240 → ~132
+                zoomAmount = eased * 0.45;              // approach 45% in
             } else if (elapsed < ZOOM_END) {
-                // Zoom: scale rockets from 1.0 → 6.0 as the title hurtles
-                // toward the viewer. Position locked to center.
-                const t = (elapsed - SPIRAL_END) / (ZOOM_END - SPIRAL_END);
-                const eased = Math.pow(t, 1.6); // gentle accelerate
-                titleX = centerX + 10;
-                titleY = centerY;
-                titleScale = 1 + 5 * eased;
-                titleAlpha = 1 - eased * 0.35; // brighten core, edges fade
+                const t = (elapsed - TWISTER_END) / (ZOOM_END - TWISTER_END);
+                const eased = Math.pow(t, 1.4);
+                radius = 132 * (1 - eased);             // collapse to axis
+                zoomAmount = 0.45 + eased * 0.50;       // close to 95%
             } else {
-                // Fade: title is offscreen-huge; opacity dropped, black wash
-                // climbs to full to take over before init() fires.
                 const t = Math.min(1, (elapsed - ZOOM_END) / (total - ZOOM_END));
-                titleX = centerX + 10;
-                titleY = centerY;
-                titleScale = 6 + t * 4;
-                titleAlpha = Math.max(0, 0.65 * (1 - t));
-                fadeAlpha = t;
+                radius = 0;
+                zoomAmount = 0.95 + t * 0.04;           // last sliver of zoom
+                fadeAlpha = Math.pow(t, 1.2);
             }
-        }
 
-        // ── RAINBOIDS title ──
-        if (titleAlpha > 0.01) {
+            const zCamera = baseZ * (1 - zoomAmount);
+            const angularVelocity = 5.5; // radians/second — twister is fast
+
+            const text = 'RAINBOIDS';
+            const N = text.length;
+            // Vertical column: stagger letters along y. Top to bottom.
+            const verticalSpread = 380;
+            const yStep = N > 1 ? verticalSpread / (N - 1) : 0;
+            const time = elapsed / 1000;
+
             this.ctx.save();
-            this.ctx.globalAlpha *= titleAlpha;
-            if (titleScale !== 1) {
-                this.ctx.translate(titleX, titleY);
-                this.ctx.scale(titleScale, titleScale);
-                this.drawWavyText('RAINBOIDS', 0, 0, {
+            for (let i = 0; i < N; i++) {
+                // Stagger phase so letters don't all sit at the same angle
+                const angleOffset = (i / N) * Math.PI * 2 * 1.7;
+                const angle = angleOffset + time * angularVelocity;
+                const yBase = -verticalSpread / 2 + i * yStep;
+
+                // 3D position with twister axis on screen-center vertical
+                const x3d = Math.cos(angle) * radius;
+                const z3d = Math.sin(angle) * radius + zCamera;
+                if (z3d <= 30) continue; // skip if behind near plane
+
+                // Twister flattens (less vertical spread) as it approaches
+                const yScale = 1 - zoomAmount * 0.35;
+                const y3d = yBase * yScale;
+
+                // Perspective projection
+                const projScale = focal / z3d;
+                const sx = centerX + x3d * projScale;
+                const sy = centerY + y3d * projScale;
+                // Per-letter draw scale — distance + a small zoom kick at end
+                const drawScale = projScale * 1.6;
+
+                // Depth-based alpha: front letters bright, back letters fade
+                const angleAlpha = (Math.cos(angle) * 0.5 + 0.5); // back-front fade
+                const letterAlpha = Math.max(0.25, 0.45 + 0.55 * angleAlpha)
+                                  * (1 - fadeAlpha * 0.85);
+                if (letterAlpha < 0.02) continue;
+
+                this.ctx.save();
+                this.ctx.translate(sx, sy);
+                this.ctx.scale(drawScale, drawScale);
+                this.ctx.globalAlpha *= letterAlpha;
+                this.drawWavyText(text[i], 0, 0, {
                     fontSize: 72,
                     colors: WAVY_PALETTES.title,
-                    speed: 0.45,
-                    colorSpeed: 0.18,
+                    speed: 0.55,
+                    colorSpeed: 0.22,
                 });
-            } else {
-                this.drawWavyText('RAINBOIDS', titleX, titleY, {
-                    fontSize: 72,
-                    colors: WAVY_PALETTES.title,
-                    speed: 0.45,
-                    colorSpeed: 0.18,
-                });
+                this.ctx.restore();
             }
             this.ctx.restore();
+        } else {
+            // Static idle title — RAINBOIDS centered, subtitle below.
+            this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
+                fontSize: 72,
+                colors: WAVY_PALETTES.title,
+                speed: 0.45,
+                colorSpeed: 0.18,
+            });
         }
 
         // ── Subtitle / Press Any Key / Record (idle only) ──

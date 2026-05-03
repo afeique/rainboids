@@ -1363,7 +1363,7 @@ export class GameEngine {
             this._titleAnim = {
                 phase: 'idle',     // 'idle' → 'launch' → 'done'
                 startTime: 0,
-                duration: 1700,    // total animation time before init() fires
+                duration: 1900,    // total animation time before init() fires
                 onComplete: null,
             };
         }

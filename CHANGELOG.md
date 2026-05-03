@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.51.1] - 2026-05-03
+
+### Changed
+- **Title launch animation reworked into a twister.** Replaced the "spiral the whole title then zoom" treatment with a per-letter twister: each letter of RAINBOIDS orbits a vertical screen-center axis at staggered heights with proper 3D perspective projection (focal length 600), so front-facing letters appear large while back-facing letters fade and shrink. Phases:
+  - **0–1100ms — twister formation**: letters spin around the column at 5.5 rad/s; orbit radius eases from 240 → 132 as the column drifts 45% closer.
+  - **1100–1500ms — zoom collapse**: orbit radius collapses from 132 → 0 while the column hurtles 95% of the way to the camera; per-letter perspective scale rockets.
+  - **1500–1900ms — fade**: final approach + black wash overlays the screen, fading the last sliver of the twister out.
+  Total duration 1900ms (was 1700ms). Letter alpha is depth-driven so the back-arc letters dim naturally as they orbit away from the viewer, giving the column visible front/back rotation depth instead of a flat ring.
+
+---
+
 ## [5.51.0] - 2026-05-03
 
 ### Added
