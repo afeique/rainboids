@@ -379,7 +379,13 @@ export class GameEngine {
 
         // Reset core game state (money, wave, survival timer)
         this.initializeGameState();
-        this.game.state = GAME_STATES.PLAYING;
+        // Start in WAVE_TRANSITION (the "WAVE 1" intro screen). The
+        // wave-1 spawn timer below flips to PLAYING once entities are
+        // in the pool. Setting PLAYING here prematurely would let
+        // checkWaveComplete race-fire on a 0-enemies tuple before the
+        // wave-1 hunter actually spawns, skipping the player straight
+        // to the wave-2 shop popup.
+        this.game.state = GAME_STATES.WAVE_TRANSITION;
         this.game.gameStartTime = Date.now(); // Start survival timer
         // Reset player
         this.player = new Player();
@@ -444,10 +450,14 @@ export class GameEngine {
         };
 
         // Delay spawning until message has been read (GameTimer — pauses with game)
+        // Order matters: spawn first, THEN flip to PLAYING. Otherwise the
+        // checkWaveComplete loop can race-fire on a frame where state is
+        // PLAYING but no enemies have been added yet, instantly declaring
+        // the wave complete and jumping straight to wave 2.
         this._gameTimers.push(new GameTimer(2000, () => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
-                this.game.state = GAME_STATES.PLAYING;
                 this.spawnWaveEntities();
+                this.game.state = GAME_STATES.PLAYING;
             }
         }));
 

@@ -107,10 +107,14 @@ export function startNextWave() {
     };
 
     // Delay spawning until message has been read (GameTimer — pauses with game)
+    // Same ordering constraint as the wave-1 init: spawn FIRST, then flip
+    // to PLAYING, so checkWaveComplete can never see a "0 enemies +
+    // PLAYING + !waveComplete" tuple before the new wave's entities
+    // exist.
     this._gameTimers.push(new GameTimer(2000, () => {
         if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
-            this.game.state = GAME_STATES.PLAYING;
             this.spawnWaveEntities();
+            this.game.state = GAME_STATES.PLAYING;
         }
     }));
 }

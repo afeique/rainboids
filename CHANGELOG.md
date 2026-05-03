@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.47.1] - 2026-05-03
+
+### Fixed
+- **Game no longer skips straight to wave 2.** Two race conditions in the wave-start sequence were letting `checkWaveComplete` see `state === PLAYING && totalEnemies === 0 && !waveComplete` for a moment before the wave's enemies actually spawned, instantly declaring the wave complete and popping the shop for wave 2:
+  - `init()` set `state = PLAYING` early on line 382 before later flipping to `WAVE_TRANSITION` on line 435. Now `init()` lands in `WAVE_TRANSITION` directly.
+  - The wave-1 spawn timer (and the per-wave `startNextWave` timer) flipped state to `PLAYING` *before* calling `spawnWaveEntities()`. Order swapped — spawn first, then flip state — so the wave-complete check can never observe the empty-pool window.
+
+---
+
 ## [5.47.0] - 2026-05-03
 
 ### Changed
