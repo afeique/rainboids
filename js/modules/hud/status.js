@@ -788,16 +788,17 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     const levelY = barY + barHeight + 26;
     const coinsY = levelY + 40;
 
-    const squareSize = 38;
-    const gap = 8;
+    // Larger squares with rounded corners — easier-to-read icons + a bit
+    // more chunky and prominent. Gap widened to keep the visual breathing
+    // room between PRM and PWR proportional to the new size (~25% of size).
+    const squareSize = 50;
+    const gap = 12;
+    const cornerRadius = 12;
     // Align the Primary square's LEFT EDGE with the coin icon's LEFT EDGE
     // — visually anchors the weapon row to the gold display directly above.
     const groupX = coinIconX;
-    // Match the visual edge-to-edge gap of the column above. The shield
-    // icon (level) and coin icon are both 30px tall and their centers
-    // sit 40px apart, so the gap between shield-bottom and coin-top is
-    // 40 - 15 - 15 = 10px. We use the same 10px gap from coin-bottom to
-    // square-top: groupY = (coinsY + coinIconSize/2) + 10.
+    // 10px breathing room between the coin-icon bottom and the squares —
+    // matches the spacing between shield (level) and coin icons above.
     const groupY = coinsY + coinIconSize / 2 + 10;
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
@@ -826,7 +827,7 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     drawWeaponSquare.call(
         this, ctx,
         groupX + squareSize / 2, groupY + squareSize / 2,
-        squareSize,
+        squareSize, cornerRadius,
         primaryCfg.icon || '?',
         primaryCfg.color || '#00ccff',
         'PRM',
@@ -838,7 +839,7 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     drawWeaponSquare.call(
         this, ctx,
         groupX + squareSize + gap + squareSize / 2, groupY + squareSize / 2,
-        squareSize,
+        squareSize, cornerRadius,
         powerCfg.icon || '?',
         powerCfg.color || '#ffcc44',
         'PWR',
@@ -847,31 +848,49 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     );
 }
 
-function drawWeaponSquare(ctx, cx, cy, size, icon, color, label, scale = 1, glow = 0) {
+function _roundedRectPath(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+    ctx.closePath();
+}
+
+function drawWeaponSquare(ctx, cx, cy, size, radius, icon, color, label, scale = 1, glow = 0) {
     ctx.save();
     ctx.translate(cx, cy);
     if (scale !== 1) ctx.scale(scale, scale);
 
     const half = size / 2;
-    // Background fill
+    // Background fill — rounded rect.
+    _roundedRectPath(ctx, -half, -half, size, size, radius);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-    ctx.fillRect(-half, -half, size, size);
+    ctx.fill();
 
     // Glow halo during cycle animation
     if (glow > 0) {
         ctx.save();
         ctx.shadowColor = color;
-        ctx.shadowBlur = 16 * glow;
+        ctx.shadowBlur = 18 * glow;
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
-        ctx.strokeRect(-half, -half, size, size);
+        _roundedRectPath(ctx, -half, -half, size, size, radius);
+        ctx.stroke();
         ctx.restore();
     }
 
     // Border
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
-    ctx.strokeRect(-half, -half, size, size);
+    _roundedRectPath(ctx, -half, -half, size, size, radius);
+    ctx.stroke();
 
     // Icon
     ctx.font = `${Math.round(size * 0.55)}px Arial`;
@@ -880,10 +899,11 @@ function drawWeaponSquare(ctx, cx, cy, size, icon, color, label, scale = 1, glow
     ctx.fillStyle = '#ffffff';
     ctx.fillText(icon, 0, 1);
 
-    // Label below the square (un-scaled so text size doesn't pulse)
+    // Label below the square (un-scaled so text size doesn't pulse).
+    // Shifted slightly farther down to match the larger square.
     ctx.restore();
     ctx.save();
-    ctx.translate(cx, cy + half + 12);
+    ctx.translate(cx, cy + half + 14);
     ctx.font = "9px 'Press Start 2P', monospace";
     ctx.fillStyle = color;
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';

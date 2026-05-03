@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.52.1] - 2026-05-03
+
+### Changed
+- **Asteroid warp-in subtler and more nuanced.** Asteroids are passive rocks, not energy-projectile arrivals — the previous warp shared the enemy's bright streak with white-hot tip and saturated halo, which felt too "energy-y" for them. The trail now stays in the asteroid's own HSL hue family the entire way (no white tip), the streak is shorter (peak length ~4× the rock vs 11× before), the trail alpha caps at 0.28 (was full opacity), the halo alpha caps at 0.14 (was 0.35), and the scale ramp opens at 0.5 instead of 0.15 so it reads as a quiet phase-in rather than a hard zoom. Warp duration tightened from 700-1500ms to 600-1300ms so rocks don't linger.
+- **HUD primary/power weapon squares larger with rounded corners.** Square size 38 → 50 (≈31% larger), corner radius 12, gap between PRM and PWR widened from 8 → 12 to keep proportional breathing room. Label sits 14px below the square (was 12) to match the new size. The cycle-animation glow now strokes a rounded path so the highlight matches the square geometry. Group-X and group-Y anchors unchanged so the squares still align with the gold/coin display directly above.
+
+---
+
 ## [5.52.0] - 2026-05-03
 
 ### Added

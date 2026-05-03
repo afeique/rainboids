@@ -128,10 +128,14 @@ export class Asteroid {
         this.warpStartY = this.y;
         this.warpStartTime = frameClock.now;
         const dist = Math.hypot(targetX - this.x, targetY - this.y);
-        this.warpDuration = Math.min(1500, 700 + dist * 0.35);
+        // Slightly shorter than the enemy warp — asteroids are passive
+        // background threats, not energy-projectile arrivals.
+        this.warpDuration = Math.min(1300, 600 + dist * 0.30);
         this.warpAngle = Math.atan2(targetY - this.y, targetX - this.x);
         this.warpTrail = [];
-        this.warpScale = 0.15; // grows to 1.0 by warp end
+        // Asteroids "phase in" rather than zoom in — start at 50% scale so
+        // the size delta is gentle and feels more like a fade than a jump.
+        this.warpScale = 0.5;
     }
 
     updateWarpIn() {
@@ -144,7 +148,7 @@ export class Asteroid {
         const tScale = 1 - Math.pow(1 - t, 2);
         this.x = this.warpStartX + (this.warpTargetX - this.warpStartX) * tPos;
         this.y = this.warpStartY + (this.warpTargetY - this.warpStartY) * tPos;
-        this.warpScale = 0.15 + 0.85 * tScale;
+        this.warpScale = 0.5 + 0.5 * tScale;
 
         // Spin during warp for visual interest — feels like the rock is
         // tumbling through hyperspace rather than gliding rigidly.
@@ -176,44 +180,54 @@ export class Asteroid {
         ctx.save();
         const dx = Math.cos(this.warpAngle);
         const dy = Math.sin(this.warpAngle);
-        const stretchIntensity = Math.sin(t * Math.PI);
+        // Subtler streak: shorter peak, gentler stretch curve. The bright
+        // white tip is gone — the trail stays in the asteroid's own hue
+        // family the entire way so it reads as a quiet "phase-in" rather
+        // than a hot energy weapon arrival.
+        const stretchIntensity = Math.sin(t * Math.PI) * 0.8;
         const baseR = (this.radius || 30) * (this.warpScale != null ? this.warpScale : 1);
-        const streakLength = baseR * (2 + stretchIntensity * 9);
+        const streakLength = baseR * (1.2 + stretchIntensity * 3.0);
 
-        const c       = `hsl(${this.baseHue}, ${this.saturation}%, ${this.lightness}%)`;
-        const cBright = `hsl(${this.baseHue}, ${Math.min(100, this.saturation + 10)}%, ${Math.min(95, this.lightness + 18)}%)`;
+        const c    = `hsl(${this.baseHue}, ${this.saturation}%, ${this.lightness}%)`;
+        const cMid = `hsl(${this.baseHue}, ${Math.min(100, this.saturation + 6)}%, ${Math.min(85, this.lightness + 6)}%)`;
 
-        const gradient = ctx.createLinearGradient(
-            this.x - dx * streakLength, this.y - dy * streakLength,
-            this.x + dx * baseR,        this.y + dy * baseR
-        );
-        gradient.addColorStop(0,   'rgba(255,255,255,0)');
-        gradient.addColorStop(0.4, c);
-        gradient.addColorStop(0.85, cBright);
-        gradient.addColorStop(1,   '#ffffffff');
+        // Cap streak alpha well below 1 so the trail blends with the
+        // starfield instead of cutting through it.
+        const trailAlpha = 0.28 * stretchIntensity;
+        if (trailAlpha > 0.01) {
+            const gradient = ctx.createLinearGradient(
+                this.x - dx * streakLength, this.y - dy * streakLength,
+                this.x + dx * baseR,        this.y + dy * baseR
+            );
+            // Build rgba versions of the asteroid's HSL color so we can
+            // tint with controlled alpha.
+            gradient.addColorStop(0,    `hsla(${this.baseHue}, ${this.saturation}%, ${this.lightness}%, 0)`);
+            gradient.addColorStop(0.55, `hsla(${this.baseHue}, ${this.saturation}%, ${this.lightness}%, ${trailAlpha * 0.55})`);
+            gradient.addColorStop(1,    `hsla(${this.baseHue}, ${Math.min(100, this.saturation + 6)}%, ${Math.min(85, this.lightness + 6)}%, ${trailAlpha})`);
 
-        const perpX = -dy;
-        const perpY = dx;
-        const headWidth = baseR * (0.7 + stretchIntensity * 0.5);
-        const tailWidth = baseR * 0.12;
+            const perpX = -dy;
+            const perpY = dx;
+            const headWidth = baseR * (0.55 + stretchIntensity * 0.30);
+            const tailWidth = baseR * 0.08;
 
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.moveTo(this.x + perpX * headWidth, this.y + perpY * headWidth);
-        ctx.lineTo(this.x - perpX * headWidth, this.y - perpY * headWidth);
-        ctx.lineTo(this.x - dx * streakLength - perpX * tailWidth,
-                   this.y - dy * streakLength - perpY * tailWidth);
-        ctx.lineTo(this.x - dx * streakLength + perpX * tailWidth,
-                   this.y - dy * streakLength + perpY * tailWidth);
-        ctx.closePath();
-        ctx.fill();
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(this.x + perpX * headWidth, this.y + perpY * headWidth);
+            ctx.lineTo(this.x - perpX * headWidth, this.y - perpY * headWidth);
+            ctx.lineTo(this.x - dx * streakLength - perpX * tailWidth,
+                       this.y - dy * streakLength - perpY * tailWidth);
+            ctx.lineTo(this.x - dx * streakLength + perpX * tailWidth,
+                       this.y - dy * streakLength + perpY * tailWidth);
+            ctx.closePath();
+            ctx.fill();
+        }
 
-        const haloAlpha = 0.35 * stretchIntensity;
+        const haloAlpha = 0.14 * stretchIntensity;
         if (haloAlpha > 0.01) {
-            const haloR = baseR * 2.4;
+            const haloR = baseR * 1.7;
             const halo = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, haloR);
-            halo.addColorStop(0, `rgba(255,255,255,${haloAlpha * 0.7})`);
-            halo.addColorStop(0.55, c);
+            halo.addColorStop(0,    `hsla(${this.baseHue}, ${this.saturation}%, ${this.lightness}%, ${haloAlpha})`);
+            halo.addColorStop(0.55, `hsla(${this.baseHue}, ${this.saturation}%, ${this.lightness}%, ${haloAlpha * 0.4})`);
             halo.addColorStop(1, 'rgba(255,255,255,0)');
             ctx.fillStyle = halo;
             ctx.beginPath();
