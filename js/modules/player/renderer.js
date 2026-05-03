@@ -304,16 +304,21 @@ export function draw(ctx) {
         ctx.globalAlpha = 1;
     }
 
-    // Draw charging effects for any power weapon — charge-based weapons
-    // glow as the player holds the charge button; cooldown-based weapons
-    // glow as their cooldown elapses, so every power weapon has the same
-    // "building up" body-glow visual cue.
+    // Draw charging effects for any power weapon. Charge-based weapons
+    // glow only while the player is actively holding the charge button.
+    // Cooldown-based weapons (Mine Layer, Nova Blast, Lightning Arc,
+    // Missile Salvo) glow CONTINUOUSLY — building up as their cooldown
+    // elapses, then sustaining the bright fully-charged flash while the
+    // weapon is ready to fire (powerCooldown === 0). This matches the
+    // charge shot's "fully charged" visual: the bright pulsing ring
+    // never disappears — it just stays at peak intensity until the
+    // player fires, then the cycle restarts.
     {
         const cfg = this.getActivePowerConfig?.();
         const isChargeBased = !!(cfg && cfg.isChargeBased);
         if (isChargeBased) {
             if (this.isCharging) this.drawChargingEffects(ctx);
-        } else if ((this.powerCooldown || 0) > 0) {
+        } else if (cfg) {
             this.drawCooldownChargingEffects(ctx);
         }
     }

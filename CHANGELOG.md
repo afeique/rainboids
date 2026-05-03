@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.53.2] - 2026-05-03
+
+### Fixed
+- **Cooldown-based power weapons' charging glow now persists through the fully-charged state.** The dispatch site in `player/renderer.js` was guarded by `else if ((this.powerCooldown || 0) > 0)`, so the moment the cooldown reached zero (weapon ready to fire) the glow disappeared entirely — the exact opposite of the charge shot, whose bright ring sustains while fully charged. The gate is removed: cooldown-based weapons (Mine Layer, Nova Blast, Lightning Arc, Missile Salvo) now render the glow continuously — building up as the cooldown elapses, then sustaining the bright fully-charged pulse (powered by `drawChargingGlowCore`'s `isFull` branch) until the player fires, after which the cycle restarts. Now identical to the charge shot's behavior.
+
+---
+
 ## [5.53.1] - 2026-05-03
 
 ### Added
