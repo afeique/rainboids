@@ -646,11 +646,14 @@ export function checkMineCollisions() {
         const triggerR = mine.triggerRadius || 60;
         const blastR = (POWER_WEAPONS.MINE_LAYER.blastRadius || 80) + p.getPowerupStacks('BLAST_RADIUS') * 30;
 
-        // Trigger on enemies OR asteroids passing through the trigger ring.
-        let triggered = false;
-        for (const enemy of this.enemyPool.activeObjects) {
-            if (!enemy.active) continue;
-            if (Math.hypot(enemy.x - mine.x, enemy.y - mine.y) < triggerR) { triggered = true; break; }
+        // Trigger on enemies OR asteroids passing through the trigger
+        // ring, OR on lifetime expiry (seeker mine self-detonates).
+        let triggered = !!mine.expired;
+        if (!triggered) {
+            for (const enemy of this.enemyPool.activeObjects) {
+                if (!enemy.active) continue;
+                if (Math.hypot(enemy.x - mine.x, enemy.y - mine.y) < triggerR) { triggered = true; break; }
+            }
         }
         if (!triggered) {
             for (const ast of this.asteroidPool.activeObjects) {

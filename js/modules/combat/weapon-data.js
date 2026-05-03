@@ -183,8 +183,8 @@ export const POWER_WEAPONS = {
     },
     MINE_LAYER: {
         id: 'MINE_LAYER',
-        name: 'Mine Layer',
-        description: 'Drop magnetic proximity mines',
+        name: 'Seeker Mines',
+        description: 'Magnetic seekers that hunt and detonate',
         icon: '💣',
         color: '#ff6600',
         cooldown: 4000,

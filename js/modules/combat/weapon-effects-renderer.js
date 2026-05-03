@@ -52,8 +52,23 @@ export function drawWeaponEffects() {
 
             const radius = 12;
             const armed = !!mine.armed;
-            // Slow blink when armed, fast pre-arm telegraph while still arming.
-            const blinkPhase = armed ? Math.sin(now * 0.008) : Math.sin(now * 0.018);
+            // Three blink phases:
+            //   • Pre-arm: medium-fast telegraph while fuse is running.
+            //   • Armed (calm):     slow steady pulse.
+            //   • Armed (urgent):   last 2s of lifeTimer — fast strobe to
+            //                       warn the player the mine is about to
+            //                       self-detonate.
+            const lifeRemaining = (mine.lifeTimer ?? Infinity);
+            const URGENT_MS = 2000;
+            const isUrgent = armed && lifeRemaining < URGENT_MS;
+            let blinkRate;
+            if (!armed)         blinkRate = 0.018;        // pre-arm
+            else if (isUrgent) {
+                // Frequency ramps up as lifeTimer drops to 0.
+                const t = Math.max(0, lifeRemaining / URGENT_MS); // 1 → 0
+                blinkRate = 0.012 + (1 - t) * 0.04;       // 0.012 → 0.052
+            } else              blinkRate = 0.008;        // armed calm
+            const blinkPhase = Math.sin(now * blinkRate);
             const blinkOn = blinkPhase > 0;
 
             // ── Spikes (4 cardinal protrusions) ──
@@ -73,9 +88,13 @@ export function drawWeaponEffects() {
             }
 
             // ── Casing (filled body with outline) ──
-            ctx.fillStyle = '#2a1100';
-            ctx.strokeStyle = armed ? '#ff6600' : '#884400';
-            ctx.lineWidth = 2;
+            // Urgent state shifts colors toward red so the player reads
+            // "this thing is about to blow" at a glance.
+            ctx.fillStyle = isUrgent ? '#3a0000' : '#2a1100';
+            ctx.strokeStyle = isUrgent
+                ? (blinkOn ? '#ff2200' : '#aa1100')
+                : (armed ? '#ff6600' : '#884400');
+            ctx.lineWidth = isUrgent ? 2.5 : 2;
             ctx.beginPath();
             ctx.arc(0, 0, radius, 0, Math.PI * 2);
             ctx.fill();
@@ -83,9 +102,11 @@ export function drawWeaponEffects() {
 
             // ── Inner core (pulses) ──
             const corePulse = 0.7 + 0.3 * Math.sin(now * 0.005);
-            ctx.fillStyle = armed
-                ? (blinkOn ? '#ffdd44' : '#aa4400')
-                : '#552200';
+            ctx.fillStyle = isUrgent
+                ? (blinkOn ? '#ff5500' : '#660000')
+                : armed
+                    ? (blinkOn ? '#ffdd44' : '#aa4400')
+                    : '#552200';
             ctx.globalAlpha = corePulse;
             ctx.beginPath();
             ctx.arc(0, 0, radius * 0.42, 0, Math.PI * 2);

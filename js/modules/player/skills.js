@@ -120,9 +120,18 @@ export function updateActiveSkills(dt) {
         m.y += m.vel.y;
     }
 
-    // Update mines: arm timer + magnetism. All mines are magnetic by
-    // default — once armed they pull nearby enemies and asteroids
-    // toward themselves so things actually walk into the trigger ring.
+    // Update mines: arm → seek → magnetism → lifetime tick.
+    //  • Once armed, a mine steers toward its current target (nearest
+    //    enemy or asteroid), accelerating up to MINE_MAX_SPEED.
+    //  • Magnetic pull on nearby entities still applies, so mines and
+    //    their targets converge from both sides.
+    //  • A separate `lifeTimer` ticks down from 12s; when it hits 0
+    //    the mine auto-detonates (collision-system reads `mine.expired`
+    //    and runs the same explosion as a proximity trigger).
+    const MINE_MAX_SPEED = 1.4;
+    const MINE_ACCEL = 0.06;       // velocity gain per frame toward target
+    const MINE_TURN = 0.08;        // angular interpolation rate
+    const MINE_SIGHT = 360;        // px — only seek targets inside this
     const enemiesForMines = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
     const asteroidsForMines = (this.gameEngine && this.gameEngine.asteroidPool && this.gameEngine.asteroidPool.activeObjects) || [];
     for (const mine of this.activeMines) {
@@ -135,13 +144,59 @@ export function updateActiveSkills(dt) {
         }
         if (!mine.armed) continue;
 
-        // Magnetic pull radius scales with the mine's trigger radius so
-        // BLAST_RADIUS investments pull from further out too. Force is
-        // proportional to (1 - dist/pullR), so close-by entities feel a
-        // strong tug while edge-of-range ones drift in slowly.
+        // ── Self-detonation lifetime ──
+        mine.lifeTimer -= dt;
+        if (mine.lifeTimer <= 0) {
+            // Flag for collision-system to explode it next frame.
+            mine.expired = true;
+        }
+
+        // ── Acquire a target if we don't have one (or current died) ──
+        if (!mine.target || !mine.target.active) {
+            let bestDist = MINE_SIGHT, best = null;
+            for (const e of enemiesForMines) {
+                if (!e.active) continue;
+                const d = Math.hypot(e.x - mine.x, e.y - mine.y);
+                if (d < bestDist) { bestDist = d; best = e; }
+            }
+            for (const ast of asteroidsForMines) {
+                if (!ast.active) continue;
+                const d = Math.hypot(ast.x - mine.x, ast.y - mine.y);
+                if (d < bestDist) { bestDist = d; best = ast; }
+            }
+            mine.target = best;
+        }
+
+        // ── Steer toward the target via smooth angle interpolation ──
+        if (mine.target && mine.target.active) {
+            const dx = mine.target.x - mine.x;
+            const dy = mine.target.y - mine.y;
+            const targetAng = Math.atan2(dy, dx);
+            const currSpeed = Math.hypot(mine.vel.x, mine.vel.y);
+            if (currSpeed < 0.001) {
+                mine.vel.x = Math.cos(targetAng) * MINE_ACCEL;
+                mine.vel.y = Math.sin(targetAng) * MINE_ACCEL;
+            } else {
+                const currentAng = Math.atan2(mine.vel.y, mine.vel.x);
+                let diff = ((targetAng - currentAng + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+                const newAng = currentAng + diff * MINE_TURN;
+                const newSpeed = Math.min(MINE_MAX_SPEED, currSpeed + MINE_ACCEL);
+                mine.vel.x = Math.cos(newAng) * newSpeed;
+                mine.vel.y = Math.sin(newAng) * newSpeed;
+            }
+        } else {
+            // No target — drift, slow drag.
+            mine.vel.x *= 0.95;
+            mine.vel.y *= 0.95;
+        }
+
+        // Apply movement.
+        mine.x += mine.vel.x;
+        mine.y += mine.vel.y;
+
+        // ── Magnetic pull on nearby entities (compounds with seek) ──
         const triggerR = mine.triggerRadius || 60;
         const pullR = triggerR * 1.8;
-
         for (const e of enemiesForMines) {
             if (!e.active || !e.vel) continue;
             const dx = mine.x - e.x;
@@ -158,8 +213,6 @@ export function updateActiveSkills(dt) {
             const dy = mine.y - ast.y;
             const dist = Math.hypot(dx, dy);
             if (dist >= pullR || dist < 0.01) continue;
-            // Asteroids are heavier — gentler pull so they don't snap
-            // into the mine instantly.
             const force = 0.18 * (1 - dist / pullR);
             ast.vel.x += (dx / dist) * force;
             ast.vel.y += (dy / dist) * force;

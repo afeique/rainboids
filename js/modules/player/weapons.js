@@ -483,17 +483,28 @@ export function layMine(config) {
     this.activeMines.push({
         x: this.x,
         y: this.y,
+        // Velocity drives the seeker behavior — once armed, the mine
+        // steers toward the nearest enemy/asteroid each frame and
+        // accelerates up to MINE_MAX_SPEED. Capped low so mines feel
+        // like creeping seekers, not bullets.
+        vel: { x: 0, y: 0 },
+        target: null,
         armTimer: 1000,  // 1s to arm
         armed: false,
-        // BLAST_RADIUS now boosts BOTH the trigger radius (+20px/stack)
-        // and the blast/damage radius (+30px/stack) — investment in the
-        // upgrade increases the mine's effective range overall.
+        // Self-detonation timer — once armed, a 12s clock starts. When
+        // it expires the mine auto-explodes (same VFX as proximity).
+        // Last 2s of the clock the renderer flips into a fast urgent
+        // blink so the player sees the boom coming.
+        lifeTimer: 12000,
+        lifeTimerMax: 12000,
+        expired: false,
+        // BLAST_RADIUS boosts BOTH the trigger radius (+20px/stack)
+        // and the blast/damage radius (+30px/stack).
         triggerRadius: config.mineRadius + blastRadiusStacks * 20,
         blastRadius: config.blastRadius + blastRadiusStacks * 30,
         damage: config.mineDamage,
         daisyChain: this.getPowerupStacks('DAISY_CHAIN') > 0,
         active: true,
-        // Birth time used by the renderer for arming-pulse animation.
         spawnTime: Date.now(),
     });
 

@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.47.0] - 2026-05-03
+
+### Changed
+- **Mine Layer renamed to Seeker Mines.** Description: "Magnetic seekers that hunt and detonate". Mines now actively pursue enemies and asteroids and self-detonate if they fail to make contact.
+- **Seeker behavior**: once armed, each mine acquires the nearest enemy/asteroid within 360px and steers toward it via smooth angle interpolation. Slow creeper speed (`MINE_MAX_SPEED = 1.4 px/frame`, `MINE_ACCEL = 0.06`, `MINE_TURN = 0.08`). Re-acquires when its target dies; drifts with a gentle 0.95 drag if no target is in sight. Magnetic pull on nearby entities still applies — mines and targets converge from both sides.
+- **12s self-detonation lifetime** with a 2s urgent-blink telegraph at the end. `mine.lifeTimer` ticks down once armed; when it hits 0 the mine sets `mine.expired = true` and `collision-system.checkMineCollisions` fires the same explosion path as a proximity trigger.
+- **Renderer urgent state** in the last 2s of life: blink rate ramps from ~0.012 to ~0.052, casing tints toward red (`#3a0000` body, `#ff2200` stroke when blink-on), core pulses orange-red. Calm state and pre-arm visuals unchanged.
+
+---
+
 ## [5.46.3] - 2026-05-02
 
 ### Changed
