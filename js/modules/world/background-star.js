@@ -17,9 +17,10 @@ export class BackgroundStar {
         
         let scale = 1;
         
-        // Simple white point stars - larger and more visible
+        // Simple white point stars — bumped size + brightness for the
+        // brighter-stars pass.
         const densityFactor = 0.5 + (this.density || 0.5) * 0.5;
-        this.radius = (this.z * 0.8 + 0.3) * scale * densityFactor; // Larger and more visible
+        this.radius = (this.z * 1.0 + 0.5) * scale * densityFactor;
         
         // Background stars are always simple circles
         this.shape = 'circle';
@@ -28,11 +29,14 @@ export class BackgroundStar {
         this.opacity = 0;
         this.opacityOffset = Math.random() * Math.PI * 2;
         this.twinkleSpeed = random(0.004, 0.018) * (1 + this.z * 0.25) * densityFactor;
-        this.twinkleAmplitude = random(0.25, 0.45); // Vary how much each star twinkles
+        // Tighter twinkle range — the dim phase of a twinkle never falls
+        // below ~85% brightness, so stars remain consistently bright
+        // rather than fading to half-visible at the bottom of the cycle.
+        this.twinkleAmplitude = random(0.10, 0.20);
 
         // Star colors: cool tones that contrast well with red danger indicators
         const colorRoll = Math.random();
-        const brightness = 200 + Math.floor(Math.random() * 55); // 200-255
+        const brightness = 230 + Math.floor(Math.random() * 25); // 230-255 — always near max
         if (colorRoll < 0.45) {
             // Blue-white (hot stars) — most common
             const b = Math.min(255, brightness + 15);

@@ -560,6 +560,10 @@ export class Player {
         return playerRenderer.drawChargingEffects.call(this, ctx);
     }
 
+    drawCooldownChargingEffects(ctx) {
+        return playerRenderer.drawCooldownChargingEffects.call(this, ctx);
+    }
+
     drawLevelUpEffects(ctx) {
         return playerRenderer.drawLevelUpEffects.call(this, ctx);
     }

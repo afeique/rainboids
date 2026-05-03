@@ -304,9 +304,18 @@ export function draw(ctx) {
         ctx.globalAlpha = 1;
     }
 
-    // Draw charging effects whenever charge is building (independent of primary fire cooldown)
-    if (this.isCharging) {
-        this.drawChargingEffects(ctx);
+    // Draw charging effects for any power weapon — charge-based weapons
+    // glow as the player holds the charge button; cooldown-based weapons
+    // glow as their cooldown elapses, so every power weapon has the same
+    // "building up" body-glow visual cue.
+    {
+        const cfg = this.getActivePowerConfig?.();
+        const isChargeBased = !!(cfg && cfg.isChargeBased);
+        if (isChargeBased) {
+            if (this.isCharging) this.drawChargingEffects(ctx);
+        } else if ((this.powerCooldown || 0) > 0) {
+            this.drawCooldownChargingEffects(ctx);
+        }
     }
 
     // Draw level up animation effects
@@ -321,64 +330,80 @@ export function draw(ctx) {
 }
 
 // ── Charging effects ──────────────────────────────────────────────────────
+//
+// Two entry points share one rendering core so every power weapon shows a
+// matching "building up" body-glow:
+//   • drawChargingEffects        — charge-based weapons (CHARGE_SHOT). The
+//     glow tracks held-button charge time vs maxChargeTime.
+//   • drawCooldownChargingEffects — cooldown-based weapons (Mine Layer,
+//     Nova, Lightning, Missiles). The glow fills as powerCooldown elapses,
+//     reaching the fully-charged state when the weapon is ready to fire.
 
 export function drawChargingEffects(ctx) {
-    // Re-enabled charging effects - only called when player can shoot (cooldown complete)
     const now = Date.now();
     const chargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
 
-    // Apply charge speed upgrades
     const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
     const reducedMaxChargeTime = this.maxChargeTime - (chargeSpeedStacks * 1000);
     const reducedMinChargeTime = this.minChargeTime - (chargeSpeedStacks * 1000);
 
-    // Calculate charge progress
-    const chargeProgress = Math.min(1, chargeTime / reducedMaxChargeTime);
-    const isBasicCharged = chargeTime >= reducedMinChargeTime;
+    const progress = Math.min(1, chargeTime / reducedMaxChargeTime);
+    const isBasic = chargeTime >= reducedMinChargeTime;
+    const isFull = !!this.isFullyCharged;
 
-    // Pulsing glow effect - much more intense when fully charged
+    drawChargingGlowCore.call(this, ctx, progress, isBasic, isFull, now);
+}
+
+export function drawCooldownChargingEffects(ctx) {
+    const cfg = this.getActivePowerConfig?.();
+    const max = this.powerCooldownMax || (cfg && cfg.cooldown) || 1;
+    const remaining = Math.max(0, this.powerCooldown || 0);
+    const progress = 1 - Math.min(1, remaining / max);
+    // Match the cooldown-timer ring: "basic" once a meaningful chunk of
+    // cooldown has elapsed, "full" only when the weapon is actually ready.
+    const isBasic = progress >= 0.6;
+    const isFull = remaining <= 0;
+
+    drawChargingGlowCore.call(this, ctx, progress, isBasic, isFull, Date.now());
+}
+
+function drawChargingGlowCore(ctx, progress, isBasic, isFull, now) {
     let pulseSpeed, pulseIntensity;
-    if (this.isFullyCharged) {
-        // Bright, fast pulsing when fully charged
-        pulseSpeed = 0.08; // Very fast pulse
-        pulseIntensity = 0.6 + Math.sin(now * pulseSpeed) * 0.4; // 0.2 to 1.0 - very bright
-    } else if (isBasicCharged) {
-        pulseSpeed = 0.03; // Faster pulse when charged
-        pulseIntensity = 0.3 + Math.sin(now * pulseSpeed) * 0.2; // 0.1 to 0.5
+    if (isFull) {
+        pulseSpeed = 0.08;
+        pulseIntensity = 0.6 + Math.sin(now * pulseSpeed) * 0.4;
+    } else if (isBasic) {
+        pulseSpeed = 0.03;
+        pulseIntensity = 0.3 + Math.sin(now * pulseSpeed) * 0.2;
     } else {
-        pulseSpeed = 0.02; // Slow pulse when charging
-        pulseIntensity = 0.3 + Math.sin(now * pulseSpeed) * 0.2; // 0.1 to 0.5
+        pulseSpeed = 0.02;
+        pulseIntensity = 0.3 + Math.sin(now * pulseSpeed) * 0.2;
     }
 
-    // Outer charging glow
-    const glowRadius = this.radius * (2 + chargeProgress * 1.5); // Grows with charge
-    const glowAlpha = pulseIntensity * (0.3 + chargeProgress * 0.4); // More intense with charge
+    const glowRadius = this.radius * (2 + progress * 1.5);
+    const glowAlpha = pulseIntensity * (0.3 + progress * 0.4);
 
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
-    // Create radial gradient for glow
     const gradient = ctx.createRadialGradient(0, 0, this.radius * 0.5, 0, 0, glowRadius);
 
-    if (this.isFullyCharged) {
-        // Fully charged glow - brilliant white/cyan with intense brightness
-        gradient.addColorStop(0, rgba(255, 255, 255, glowAlpha * 1.0));
+    if (isFull) {
+        gradient.addColorStop(0,   rgba(255, 255, 255, glowAlpha * 1.0));
         gradient.addColorStop(0.2, rgba(0, 255, 255, glowAlpha * 0.9));
         gradient.addColorStop(0.5, rgba(100, 220, 255, glowAlpha * 0.7));
         gradient.addColorStop(0.8, rgba(150, 240, 255, glowAlpha * 0.4));
-        gradient.addColorStop(1, `rgba(200, 250, 255, 0)`);
-    } else if (isBasicCharged) {
-        // Charged glow - cyan to white
-        gradient.addColorStop(0, rgba(0, 255, 255, glowAlpha * 0.8));
+        gradient.addColorStop(1,   `rgba(200, 250, 255, 0)`);
+    } else if (isBasic) {
+        gradient.addColorStop(0,   rgba(0, 255, 255, glowAlpha * 0.8));
         gradient.addColorStop(0.3, rgba(100, 200, 255, glowAlpha * 0.6));
         gradient.addColorStop(0.7, rgba(150, 220, 255, glowAlpha * 0.3));
-        gradient.addColorStop(1, `rgba(200, 240, 255, 0)`);
+        gradient.addColorStop(1,   `rgba(200, 240, 255, 0)`);
     } else {
-        // Charging glow - blue
-        gradient.addColorStop(0, rgba(100, 150, 255, glowAlpha * 0.6));
+        gradient.addColorStop(0,   rgba(100, 150, 255, glowAlpha * 0.6));
         gradient.addColorStop(0.4, rgba(120, 180, 255, glowAlpha * 0.4));
         gradient.addColorStop(0.8, rgba(140, 200, 255, glowAlpha * 0.2));
-        gradient.addColorStop(1, `rgba(160, 220, 255, 0)`);
+        gradient.addColorStop(1,   `rgba(160, 220, 255, 0)`);
     }
 
     ctx.fillStyle = gradient;
@@ -386,28 +411,24 @@ export function drawChargingEffects(ctx) {
     ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Inner energy ring
-    if (isBasicCharged) {
-        const ringRadius = this.radius * (1.2 + chargeProgress * 0.5);
-        const ringAlpha = pulseIntensity * (0.5 + chargeProgress * 0.3);
+    if (isBasic) {
+        const ringRadius = this.radius * (1.2 + progress * 0.5);
+        const ringAlpha = pulseIntensity * (0.5 + progress * 0.3);
 
         ctx.strokeStyle = rgba(0, 255, 255, ringAlpha);
-        ctx.lineWidth = 2 + chargeProgress * 2;
+        ctx.lineWidth = 2 + progress * 2;
         ctx.beginPath();
         ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Fully charged effects
-        if (chargeProgress > 0.8) {
-            // Additional bright ring
+        if (progress > 0.8) {
             ctx.strokeStyle = rgba(255, 255, 255, pulseIntensity * 0.6);
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.arc(0, 0, ringRadius * 1.1, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Energy sparks
-            const sparkCount = Math.floor(chargeProgress * 8);
+            const sparkCount = Math.floor(progress * 8);
             for (let i = 0; i < sparkCount; i++) {
                 const angle = (i / sparkCount) * Math.PI * 2 + (now * 0.01);
                 const sparkRadius = ringRadius * (1.1 + Math.sin(now * 0.02 + i) * 0.1);

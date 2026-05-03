@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.7] - 2026-05-02
+
+### Changed
+- **Nebula renderer simplified to lens-flare stars only.** All blob, halo, and core gas-cloud rendering passes removed. Each parallax layer now bakes only bright pinpoint stars with soft halos and 4-arm diffraction spikes — the dark canvas shows through between them instead of being washed by a haze of overlapping gas fields. Star counts cut sharply (6 / 9 / 12 / 16 across the four parallax depths) so the lens-flare stars read as sparse accents sprinkled across the void rather than a dense field.
+- **Background and color star brightness raised.** `depth-batch-renderer` opacity floors bumped (background 0.4 → 0.7, color stars 0.5 → 0.8) so even far-depth stars are clearly visible. `background-star` radius scales increased and brightness baseline lifted to 230-255, with the twinkle amplitude tightened to 0.10-0.20 — stars stay consistently bright instead of fading to half-visible at the bottom of each twinkle cycle. No new draw calls; depth-bucket batching path unchanged.
+- **Charging body-glow now plays for every power weapon.** Previously only `CHARGE_SHOT` showed the building cyan-blue body glow while charging. Cooldown-based powers (Mine Layer, Nova Blast, Lightning Arc, Missile Salvo) now show the same animated glow as their cooldown elapses — progress derived from `1 - powerCooldown/powerCooldownMax`, transitioning through "charging → basic charged → fully charged" states with matching pulse speeds and ring/spark effects. The shared rendering body is factored into a single `drawChargingGlowCore` helper consumed by both `drawChargingEffects` (charge-based) and the new `drawCooldownChargingEffects` (cooldown-based); dispatch picks one or the other based on the active power weapon's `isChargeBased` flag.
+
+---
+
 ## [5.49.6] - 2026-05-03
 
 ### Removed

@@ -35,19 +35,24 @@ export class DepthBatchRenderer {
             this._colorBuckets[i].length = 0;
         }
 
-        // Group background stars by depth
+        // Group background stars by depth.
+        // Opacity floor raised 0.4 → 0.7 so even the dimmest far-depth
+        // background stars are clearly visible, not lost to the void.
         for (const star of backgroundStars) {
             if (!star.active) continue;
 
             // Calculate depth bucket (quantize opacity to reduce buckets)
-            const depthOpacity = Math.min(1, 0.4 + Math.pow(star.z / 4, 1.0));
+            const depthOpacity = Math.min(1, 0.7 + Math.pow(star.z / 4, 1.0));
             star.finalOpacity = star.opacity * depthOpacity;
             const idx = Math.round(star.finalOpacity * 10) | 0;  // |0 coerces NaN→0
 
             this._bgBuckets[idx < 0 ? 0 : idx > 10 ? 10 : idx].push(star);
         }
 
-        // Group simple color stars by depth (complex ones render separately)
+        // Group simple color stars by depth (complex ones render separately).
+        // Opacity floor raised 0.5 → 0.8 — the collectible/decorative
+        // color stars now read as proper bright pinpoints instead of
+        // faint blobs.
         for (const star of colorStars) {
             if (!star.active) continue;
 
@@ -57,7 +62,7 @@ export class DepthBatchRenderer {
             }
 
             // Calculate depth bucket
-            const depthOpacity = Math.min(1, 0.5 + Math.pow(star.z / 4, 1.2));
+            const depthOpacity = Math.min(1, 0.8 + Math.pow(star.z / 4, 1.2));
             star.finalOpacity = star.opacity * depthOpacity;
             const idx = Math.round(star.finalOpacity * 10) | 0;  // |0 coerces NaN→0
 
