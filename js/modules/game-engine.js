@@ -926,6 +926,22 @@ export class GameEngine {
             };
             this.backgroundStarPool.activeObjects.forEach(s => s.update(drift, this.gameField));
 
+            // Lens-flare nebula drift accumulator — multiplier kept low
+            // so the lens flare stars feel much further away than the
+            // foreground starfield. We negate so the nebula drifts in the
+            // same direction as the background stars (which move opposite
+            // to `drift`).
+            const NEB_DRIFT_MUL = 0.18;
+            const NEB_DRIFT_LIMIT = 8000;
+            let nx = (this._titleNebulaDriftX || 0) - drift.x * NEB_DRIFT_MUL;
+            let ny = (this._titleNebulaDriftY || 0) - drift.y * NEB_DRIFT_MUL;
+            if (nx >  NEB_DRIFT_LIMIT) nx =  NEB_DRIFT_LIMIT;
+            if (nx < -NEB_DRIFT_LIMIT) nx = -NEB_DRIFT_LIMIT;
+            if (ny >  NEB_DRIFT_LIMIT) ny =  NEB_DRIFT_LIMIT;
+            if (ny < -NEB_DRIFT_LIMIT) ny = -NEB_DRIFT_LIMIT;
+            this._titleNebulaDriftX = nx;
+            this._titleNebulaDriftY = ny;
+
             // Tick the title-launch animation if it's running. When it
             // completes, fire the stored callback (which kicks off init()).
             const a = this._titleAnimState();
@@ -955,7 +971,14 @@ export class GameEngine {
             this.ctx.translate(-this.camera.x, -this.camera.y);
             
             // Nebula layer — deepest background, before all stars
-            nebulaRenderer.draw(this.ctx, this.camera.x, this.camera.y);
+            // Title screen feeds an extra drift to the nebula so the lens
+            // flare layers wander even when the camera isn't moving — and
+            // applies it scaled by depth, so the closest layer drifts most
+            // (but the deepest barely moves, giving a "much-farther-away"
+            // parallax feel relative to the foreground starfield).
+            const nebDriftX = (this.game.state === GAME_STATES.TITLE_SCREEN) ? (this._titleNebulaDriftX || 0) : 0;
+            const nebDriftY = (this.game.state === GAME_STATES.TITLE_SCREEN) ? (this._titleNebulaDriftY || 0) : 0;
+            nebulaRenderer.draw(this.ctx, this.camera.x, this.camera.y, nebDriftX, nebDriftY);
 
             // Viewport culling for performance - only render stars visible in camera
             const visibleBackgroundStars = this.getVisibleStars(this.backgroundStarPool.activeObjects);

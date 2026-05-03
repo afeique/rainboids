@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.53.1] - 2026-05-03
+
+### Added
+- **Lens-flare nebula parallax on the title screen.** The nebula renderer's `draw()` now accepts an optional `(driftX, driftY)` offset that's applied per-layer scaled by `layer.depth` — closer layers drift more, deepest barely moves — so the lens flare stars wander even when the camera is fixed. The title-screen update branch integrates the existing sandstorm drift vector into a low-multiplier (0.18×) accumulator and feeds it as that drift offset, so the lens flare layers parallax in the same direction as the foreground starfield but at a much slower rate. The accumulator is clamped to ±8000 px to keep numerics tidy across long title-screen visits.
+
+---
+
 ## [5.53.0] - 2026-05-03
 
 ### Added

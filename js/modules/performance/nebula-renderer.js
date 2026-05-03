@@ -150,17 +150,27 @@ class NebulaRenderer {
         }
     }
 
-    /** Draw all layers onto the game canvas with depth-based parallax. */
-    draw(ctx, cameraX, cameraY) {
+    /**
+     * Draw all layers onto the game canvas with depth-based parallax.
+     *
+     * `driftX/driftY` is an additive offset applied AFTER the camera-driven
+     * parallax — used by the title screen to wander the lens-flare layers
+     * regardless of camera movement. Closer layers (higher `depth`) drift
+     * more, deepest layer barely budges, giving the lens flare stars a
+     * "much further away" parallax feel relative to the foreground stars.
+     */
+    draw(ctx, cameraX, cameraY, driftX = 0, driftY = 0) {
         if (!this.generated) return;
         ctx.save();
         ctx.globalAlpha = 1;
         for (const layer of this.layers) {
-            const offsetX = cameraX * (1 - layer.depth);
-            const offsetY = cameraY * (1 - layer.depth);
+            const camOffX = cameraX * (1 - layer.depth);
+            const camOffY = cameraY * (1 - layer.depth);
+            const driftOffX = driftX * layer.depth;
+            const driftOffY = driftY * layer.depth;
             ctx.drawImage(
                 layer.canvas,
-                offsetX, offsetY,
+                camOffX + driftOffX, camOffY + driftOffY,
                 this.fieldWidth, this.fieldHeight,
             );
         }
