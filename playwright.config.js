@@ -99,6 +99,26 @@ export default defineConfig({
             },
         },
         {
+            // screenshots — captures stills for the blog article. Not part
+            // of the regular test suite; invoke explicitly:
+            //   npx playwright test --project screenshots
+            // Stills are written to /screenshots/ at project root.
+            name: 'screenshots',
+            testDir: './tests/screenshots',
+            timeout: 120_000,
+            workers: 1,
+            use: {
+                headless: true,
+                viewport: { width: 1280, height: 720 },
+                launchOptions: {
+                    args: [
+                        '--autoplay-policy=no-user-gesture-required',
+                        '--disable-web-security',
+                    ],
+                },
+            },
+        },
+        {
             // performance-gpu — headed, real GPU rendering, for local dev benchmarks.
             // Run with: npx playwright test --project=performance-gpu
             //           npm run benchmark:gpu

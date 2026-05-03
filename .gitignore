@@ -13,5 +13,5 @@ allure-results/*
 # AI QA Bot session data
 tools/ai-qa-bot/reports/*
 
-# Juice tuning clips and screenshots
+# Juice tuning clips
 tools/juice-clips/
