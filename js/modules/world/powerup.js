@@ -94,7 +94,7 @@ export const POWERUP_TYPES = {
     },
     SPEED_BOOST: {
         name: 'Afterburner',
-        abbr: 'AFB',
+        abbr: 'BURN',
         color: '#ffcc00',
         gradientColors: ['#ffff33', '#cc9900'],
         icon: '💨',
@@ -118,7 +118,7 @@ export const POWERUP_TYPES = {
     },
     EXPLOSIVE: {
         name: 'Explode',
-        abbr: 'EXP',
+        abbr: 'EXPL',
         color: '#ff6600',
         gradientColors: ['#ff9933', '#cc3300'],
         icon: '💣',
@@ -130,7 +130,7 @@ export const POWERUP_TYPES = {
     },
     CRIT_CHANCE: {
         name: 'Crit %',
-        abbr: 'CRT',
+        abbr: 'CRIT',
         color: '#ffcc00',
         gradientColors: ['#ffff66', '#cc9900'],
         icon: '⭐',
@@ -142,7 +142,7 @@ export const POWERUP_TYPES = {
     },
     CRIT_DAMAGE: {
         name: 'Crit Dmg',
-        abbr: 'CDM',
+        abbr: 'CDMG',
         color: '#ff0066',
         gradientColors: ['#ff3399', '#cc0033'],
         icon: '🗡️',
@@ -154,7 +154,7 @@ export const POWERUP_TYPES = {
     },
     SHIELD_BOOST: {
         name: 'Shield',
-        abbr: 'SHD',
+        abbr: 'SHLD',
         color: '#00cc88',
         gradientColors: ['#33ff99', '#006644'],
         icon: '🛡',
@@ -178,7 +178,7 @@ export const POWERUP_TYPES = {
     },
     KNOCKBACK: {
         name: 'Knockback',
-        abbr: 'KBK',
+        abbr: 'KNCK',
         color: '#ffaa44',
         gradientColors: ['#ffd58a', '#cc6611'],
         icon: '💢',

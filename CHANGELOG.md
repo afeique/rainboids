@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.1] - 2026-05-03
+
+### Changed
+- **Powerup acronym refinements** — bumped 6 to 4 letters where the 3-letter form was unclear or ambiguous: `SHD → SHLD`, `CRT → CRIT`, `CDM → CDMG`, `EXP → EXPL`, `KBK → KNCK`, `AFB → BURN`. The other 14 stay at 3 letters.
+- **Lance Beam tuned for "low DPS, long uptime."** Per-frame damage halved (0.15 → 0.06; 9 dps → 3.6 dps), beam duration 5× longer (400ms → 2000ms), cooldown bumped 1200ms → 2200ms. The beam stays on far longer per activation but chips at targets gently — feels sustained rather than burst-y. Description updated to "Sustained energy beam — low DPS, long uptime".
+
+---
+
 ## [5.49.0] - 2026-05-03
 
 ### Removed

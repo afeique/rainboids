@@ -83,18 +83,24 @@ export const PRIMARY_WEAPONS = {
     LANCE_BEAM: {
         id: 'LANCE_BEAM',
         name: 'Lance Beam',
-        description: 'Precision sweep laser beam',
+        description: 'Sustained energy beam — low DPS, long uptime',
         icon: '🔦',
         color: '#44ff44',
-        fireRate: 1200,
-        damage: 0.15,
+        // Tuned 2026-05-03 for "less DPS, much longer firing":
+        //   damage  0.15 → 0.06 per-frame nibble (60Hz × 0.06 = 3.6 dps,
+        //                  was 9 dps).
+        //   beamDuration 400 → 2000 ms (5× longer per activation).
+        //   fireRate 1200 → 2200 ms cooldown so the beam isn't almost
+        //                  always-on after upgrades.
+        fireRate: 2200,
+        damage: 0.06,
         bulletSpeed: 0,
         bulletSize: 0,
         bulletCount: 0,
         spreadAngle: 0,
         piercing: 0,
         range: 0.6,
-        beamDuration: 400,
+        beamDuration: 2000,
         beamWidth: 6,
         cost: 0,
         spCost: 0,
