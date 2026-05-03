@@ -102,9 +102,22 @@ class RainboidsGame {
             window.removeEventListener('keydown', startGame);
             window.removeEventListener('click', startGame);
 
+            // Audio + music initialization must run inside the user gesture
+            // stack (autoplay policy), so we kick those off NOW. The title
+            // launch animation then plays out — RAINBOIDS spirals in a
+            // circle, zooms toward the viewer, fades to black — and only
+            // when the screen is fully black does init() fire to start the
+            // run. The wave-1 intro overlay (already opaque from frame 1)
+            // takes over from the fade so the transition is seamless.
             this.audioManager.initializeAudio();
             this.uiManager.startMusic();
-            this.gameEngine.init();
+
+            const launched = this.gameEngine.triggerTitleStart(() => {
+                this.gameEngine.init();
+            });
+            if (!launched) {
+                this.gameEngine.init();
+            }
         };
 
         window.addEventListener('keydown', startGame);

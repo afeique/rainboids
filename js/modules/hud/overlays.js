@@ -148,48 +148,129 @@ export function drawTitleScreen() {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
 
-        // Main title - RAINBOIDS. Nudged +10px right to optically align with
-        // the subtitle below (the wavy "R" leading edge sits left of where the
-        // monospace baseline-centering would suggest).
-        this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
-            fontSize: 72,
-            colors: WAVY_PALETTES.title,
-            speed: 0.45,
-            colorSpeed: 0.18,
-        });
+        // Title-launch animation phases (driven by triggerTitleStart):
+        //   spiral (0   -700ms): orbits + tightens around center
+        //   zoom   (700-1200ms): scale rockets toward viewer
+        //   fade   (1200-1700ms): full-screen black wash takes over
+        // While 'idle', render the normal static title screen.
+        const anim = (typeof this._titleAnimState === 'function') ? this._titleAnimState() : null;
+        const launching = anim && anim.phase === 'launch';
+        const elapsed = launching ? (Date.now() - anim.startTime) : 0;
+        const total = launching ? anim.duration : 0;
 
-        // Subtitle — white shimmer, no vertical motion, just a sliding gradient.
-        this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
-            fontSize: 24,
-            colors: WAVY_PALETTES.whiteShimmer,
-            amplitude: 0,
-            colorSpeed: 0.1,
-        });
+        const SPIRAL_END = 700;
+        const ZOOM_END   = 1200;
 
-        // Animated "Press Any Key" text — outer globalAlpha pulse preserved by
-        // drawWavyText. No bob — gradient only.
-        const time = Date.now() * 0.001;
-        const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3;
+        // Default title state — no transform.
+        let titleX = centerX + 10;
+        let titleY = centerY - 100;
+        let titleScale = 1;
+        let titleAlpha = 1;
+        let showSubtitle = true;
+        let showPressKey = true;
+        let fadeAlpha = 0;
 
-        this.ctx.save();
-        this.ctx.globalAlpha = pulseAlpha;
-        this.drawWavyText('PRESS ANY KEY TO START', centerX, centerY + 80, {
-            fontSize: 18,
-            colors: WAVY_PALETTES.whiteShimmer,
-            amplitude: 0,
-            colorSpeed: 0.12,
-        });
-        this.ctx.restore();
+        if (launching) {
+            showSubtitle = false;
+            showPressKey = false;
 
-        // Survival record — gold gradient slide, no bob.
-        if (this.game.survivalRecord > 0) {
-            const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
-            this.drawWavyText(recText, centerX, centerY + 120, {
-                fontSize: 16,
-                colors: WAVY_PALETTES.gold,
+            if (elapsed < SPIRAL_END) {
+                // Spiral: 2 turns, radius 220px → 0, easing into a tight knot
+                const t = elapsed / SPIRAL_END;
+                const eased = 1 - Math.pow(1 - t, 2.5);
+                const turns = 2.0;
+                const angle = -Math.PI / 2 + turns * Math.PI * 2 * eased;
+                const radius = 220 * (1 - eased);
+                titleX = centerX + Math.cos(angle) * radius;
+                titleY = centerY + Math.sin(angle) * radius - 100 * (1 - eased);
+                // Slight scale wobble during spiral for energy
+                titleScale = 0.85 + 0.15 * (1 - eased);
+            } else if (elapsed < ZOOM_END) {
+                // Zoom: scale rockets from 1.0 → 6.0 as the title hurtles
+                // toward the viewer. Position locked to center.
+                const t = (elapsed - SPIRAL_END) / (ZOOM_END - SPIRAL_END);
+                const eased = Math.pow(t, 1.6); // gentle accelerate
+                titleX = centerX + 10;
+                titleY = centerY;
+                titleScale = 1 + 5 * eased;
+                titleAlpha = 1 - eased * 0.35; // brighten core, edges fade
+            } else {
+                // Fade: title is offscreen-huge; opacity dropped, black wash
+                // climbs to full to take over before init() fires.
+                const t = Math.min(1, (elapsed - ZOOM_END) / (total - ZOOM_END));
+                titleX = centerX + 10;
+                titleY = centerY;
+                titleScale = 6 + t * 4;
+                titleAlpha = Math.max(0, 0.65 * (1 - t));
+                fadeAlpha = t;
+            }
+        }
+
+        // ── RAINBOIDS title ──
+        if (titleAlpha > 0.01) {
+            this.ctx.save();
+            this.ctx.globalAlpha *= titleAlpha;
+            if (titleScale !== 1) {
+                this.ctx.translate(titleX, titleY);
+                this.ctx.scale(titleScale, titleScale);
+                this.drawWavyText('RAINBOIDS', 0, 0, {
+                    fontSize: 72,
+                    colors: WAVY_PALETTES.title,
+                    speed: 0.45,
+                    colorSpeed: 0.18,
+                });
+            } else {
+                this.drawWavyText('RAINBOIDS', titleX, titleY, {
+                    fontSize: 72,
+                    colors: WAVY_PALETTES.title,
+                    speed: 0.45,
+                    colorSpeed: 0.18,
+                });
+            }
+            this.ctx.restore();
+        }
+
+        // ── Subtitle / Press Any Key / Record (idle only) ──
+        if (showSubtitle) {
+            this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
+                fontSize: 24,
+                colors: WAVY_PALETTES.whiteShimmer,
                 amplitude: 0,
-                colorSpeed: 0.14,
+                colorSpeed: 0.1,
             });
+        }
+
+        if (showPressKey) {
+            const time = Date.now() * 0.001;
+            const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3;
+            this.ctx.save();
+            this.ctx.globalAlpha = pulseAlpha;
+            this.drawWavyText('PRESS ANY KEY TO START', centerX, centerY + 80, {
+                fontSize: 18,
+                colors: WAVY_PALETTES.whiteShimmer,
+                amplitude: 0,
+                colorSpeed: 0.12,
+            });
+            this.ctx.restore();
+
+            if (this.game.survivalRecord > 0) {
+                const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
+                this.drawWavyText(recText, centerX, centerY + 120, {
+                    fontSize: 16,
+                    colors: WAVY_PALETTES.gold,
+                    amplitude: 0,
+                    colorSpeed: 0.14,
+                });
+            }
+        }
+
+        // ── Fade-to-black overlay (final phase of launch animation) ──
+        // Drawn AFTER everything else so it covers the title + starfield.
+        if (fadeAlpha > 0) {
+            this.ctx.save();
+            this.ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, fadeAlpha)})`;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            this.ctx.restore();
         }
 }
 

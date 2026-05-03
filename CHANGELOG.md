@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.51.0] - 2026-05-03
+
+### Added
+- **Animated parallax starfield on the title screen.** The starfield + nebula now generate at engine `start()` (before the title screen renders) and the camera anchors at the gameField center. A synthetic ellipse-pattern drift driven from `update()`'s new TITLE_SCREEN branch keeps the field gently wandering, with each depth layer parallaxing at its own rate via the existing background-star parallax factor. The title text and "PRESS ANY KEY" pulse render on top of the live starfield instead of a black void.
+- **RAINBOIDS launch animation when the player presses a key.** The press fires a 1700ms cinematic intro before the actual run starts:
+  - **0–700ms — spiral**: the title sweeps two full turns around the screen center while the orbit radius eases from 220px → 0, knotting tighter with each frame.
+  - **700–1200ms — zoom**: scale rockets from 1.0 → 6.0 as the title hurtles toward the viewer.
+  - **1200–1700ms — fade**: scale grows further while a black wash climbs to full opacity, taking over the screen.
+  - When the fade reaches full at 1700ms, `init()` fires and the wave-1 intro overlay (already opaque from frame 1) hands off seamlessly. As the entities warp in and the wave-1 overlay fades out, the player gets a smooth reveal of the playfield.
+
+### Changed
+- `start()` now pre-builds the parallax starfield + nebula and centers the camera on the gameField so the title screen has a real animated backdrop.
+- Title-screen draw skips the entity / HUD passes (player ship, minimap, powerup HUD, etc.) since pools are empty pre-init and the player ship would otherwise sit at the center of the menu.
+- Press-to-start (keypress / click on the title screen) now triggers the launch animation via `gameEngine.triggerTitleStart(callback)`; `init()` runs from the animation's onComplete callback instead of synchronously, so the cinematic plays before gameplay begins.
+
+---
+
 ## [5.50.1] - 2026-05-03
 
 ### Fixed

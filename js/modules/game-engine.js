@@ -895,6 +895,29 @@ export class GameEngine {
             // Keep existing particles moving but don't create new ones
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
+        } else if (this.game.state === GAME_STATES.TITLE_SCREEN) {
+            // Synthetic slow drift for parallax — vector traces a wide
+            // ellipse so the starfield gently wanders rather than scrolling
+            // in one direction. Far stars barely move, near stars drift
+            // visibly thanks to background-star.js's parallaxFactor.
+            const t = Date.now() * 0.00015;
+            const drift = {
+                x: Math.cos(t) * 1.8,
+                y: Math.sin(t * 0.7) * 1.2,
+            };
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(drift, this.gameField));
+
+            // Tick the title-launch animation if it's running. When it
+            // completes, fire the stored callback (which kicks off init()).
+            const a = this._titleAnimState();
+            if (a.phase === 'launch' && Date.now() - a.startTime >= a.duration) {
+                a.phase = 'done';
+                if (a.onComplete) {
+                    const cb = a.onComplete;
+                    a.onComplete = null;
+                    cb();
+                }
+            }
         }
     }
     
@@ -902,8 +925,12 @@ export class GameEngine {
         // Clear canvas completely (motion blur disabled)
         this.ctx.fillStyle = 'rgba(0,0,0,1)';
         this.ctx.fillRect(0, 0, this.width, this.height);
-        
-        if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
+
+        // Render the parallax starfield + nebula on every state EXCEPT the
+        // pre-init splash. Title screen now uses the same world background
+        // (with a synthetic camera drift driven by update()) so the menu
+        // sits on top of an animated starfield instead of a black void.
+        {
             // Apply camera transformation for world objects
             this.ctx.save();
             this.ctx.translate(-this.camera.x, -this.camera.y);
@@ -937,45 +964,52 @@ export class GameEngine {
             const vR = this.camera.x + this.width + pad;
             const vB = this.camera.y + this.height + pad;
 
-            this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-            this.particlePool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-            this.powerupPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-            this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-            this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-            this.enemyBulletPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-            this.bulletPool.drawActiveVisible(this.ctx, vL, vT, vR, vB, this);
-            this.player.draw(this.ctx);
-            this.drawWeaponEffects();
+            // Entity / HUD rendering — skipped on the pre-init title screen
+            // since pools are empty and the player ship would otherwise
+            // appear at the center of the menu.
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
+                this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                this.particlePool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                this.powerupPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                this.enemyBulletPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                this.bulletPool.drawActiveVisible(this.ctx, vL, vT, vR, vB, this);
+                this.player.draw(this.ctx);
+                this.drawWeaponEffects();
 
-            // Draw game field boundaries
-            this.drawGameFieldBoundaries();
-            
+                // Draw game field boundaries
+                this.drawGameFieldBoundaries();
+            }
+
             this.ctx.restore();
-            
-            // Draw UI elements without camera transformation
-            // Sync DOM powerup HUD
-            this.syncPowerupHUD();
-            
-            // Draw powerup display at top
-            this.drawPowerupDisplay();
-            
-            // Draw off-screen entity indicators
-            this.drawOffScreenIndicators();
 
-            // Draw minimap
-            this.drawMinimap();
-            
-            // Draw spawn countdown timer (hidden per user request)
-            // this.drawSpawnTimer();
-            
-            // Draw jitter circle to show bullet spread area
-            this.drawJitterCircle();
-            
-            // Respawn is now instant - no countdown needed
-            
-            // Draw invincibility countdown timer only after respawn (not during hits)
-            if (this.player.active && this.player.invincible && this.player.justRespawned) {
-                this.drawInvincibilityCountdown();
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
+                // Draw UI elements without camera transformation
+                // Sync DOM powerup HUD
+                this.syncPowerupHUD();
+
+                // Draw powerup display at top
+                this.drawPowerupDisplay();
+
+                // Draw off-screen entity indicators
+                this.drawOffScreenIndicators();
+
+                // Draw minimap
+                this.drawMinimap();
+
+                // Draw spawn countdown timer (hidden per user request)
+                // this.drawSpawnTimer();
+
+                // Draw jitter circle to show bullet spread area
+                this.drawJitterCircle();
+
+                // Respawn is now instant - no countdown needed
+
+                // Draw invincibility countdown timer only after respawn (not during hits)
+                if (this.player.active && this.player.invincible && this.player.justRespawned) {
+                    this.drawInvincibilityCountdown();
+                }
             }
         }
     }
@@ -1308,7 +1342,46 @@ export class GameEngine {
     
     start() {
         this.loadSurvivalRecord();
+        // Pre-build the parallax starfield + nebula so the title screen has
+        // a real animated backdrop instead of an empty void. The full init()
+        // path runs again when the player presses a key — this just front-
+        // loads the visual pieces.
+        this.generateInitialColorStars();
+        this.generateBackgroundStars();
+        nebulaRenderer.generate(this.gameField.width, this.gameField.height);
+        // Center the camera in the gameField so the title screen view is
+        // anchored on the playable area's middle (no out-of-field artifacts).
+        this.camera.x = (this.gameField.width  - this.width)  / 2;
+        this.camera.y = (this.gameField.height - this.height) / 2;
         this.gameLoop();
+    }
+
+    // Title-start launch animation state. Driven by drawTitleScreen and
+    // gameLoop's title-screen update path.
+    _titleAnimState() {
+        if (!this._titleAnim) {
+            this._titleAnim = {
+                phase: 'idle',     // 'idle' → 'launch' → 'done'
+                startTime: 0,
+                duration: 1700,    // total animation time before init() fires
+                onComplete: null,
+            };
+        }
+        return this._titleAnim;
+    }
+
+    /**
+     * Trigger the title-start launch animation. Stored callback fires once
+     * the animation completes; the caller wires init() into the callback so
+     * the actual run starts immediately after the screen is fully black.
+     */
+    triggerTitleStart(onComplete) {
+        const a = this._titleAnimState();
+        if (a.phase === 'launch') return false;
+        a.phase = 'launch';
+        a.startTime = Date.now();
+        a.onComplete = onComplete || null;
+        return true;
     }
     
     // Get performance statistics for starfield rendering
