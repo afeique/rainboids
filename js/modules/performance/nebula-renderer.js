@@ -21,97 +21,190 @@
 
 import { random } from '../core/utils.js';
 
-// Scene palettes — each is a full color family. One is committed
-// per generate() call. Adds `accent` for the chromatic edge-halo
-// pass (slightly hue-shifted from primary for visual interest).
+// Scene palettes — each declares a RICH POOL of body tones (6-8
+// colors) that blobs draw from randomly per render. Each palette also
+// has cross-family accent hues (a complementary or analogous wash)
+// listed in `accents`, so individual blobs can occasionally lean on
+// a different but still palette-coherent tone. This gives the nebula
+// strong intra-scene color variety while keeping the family
+// recognisable.
+//
+// Schema:
+//   tones      — 6-8 RGB triplets, the main body color pool
+//   accents    — 2-3 RGB triplets, used for edge halos + speckles
+//   shadow     — single dark color for shadow pass
+//   highlight  — single bright color for hot cores
+//   speckle    — bright neutral for stardust
 const SCENE_PALETTES = [
-    // Deep indigo + cobalt — classic space blue
+    // ── Cobalt-deep — sapphire + indigo + steel
     {
         name: 'cobalt-deep',
-        primary:    [50, 80, 220],
-        secondary:  [30, 50, 180],
-        tertiary:   [80, 130, 255],
-        accent:     [120, 200, 255],
-        shadow:     [10, 15, 50],
-        highlight:  [180, 200, 255],
-        speckle:    [220, 230, 255],
+        tones: [
+            [40, 70, 220],   // royal cobalt
+            [25, 45, 170],   // indigo
+            [70, 110, 240],  // sky-leaning blue
+            [90, 150, 255],  // bright sapphire
+            [55, 90, 200],   // mid-cobalt
+            [30, 60, 130],   // muted navy
+            [110, 60, 200],  // violet shoulder
+        ],
+        accents: [[120, 200, 255], [180, 130, 255], [80, 220, 240]],
+        shadow:  [10, 15, 50],
+        highlight: [200, 220, 255],
+        speckle: [220, 230, 255],
     },
-    // Violet + magenta — stellar nursery
+    // ── Violet-nursery — stellar-nursery purples + magentas
     {
         name: 'violet-nursery',
-        primary:    [120, 60, 220],
-        secondary:  [80, 30, 160],
-        tertiary:   [200, 100, 255],
-        accent:     [255, 100, 200],
-        shadow:     [25, 10, 50],
-        highlight:  [240, 180, 255],
-        speckle:    [255, 220, 255],
+        tones: [
+            [120, 50, 220],   // royal violet
+            [80, 30, 160],    // deep purple
+            [180, 80, 230],   // amethyst
+            [220, 110, 240],  // bright magenta
+            [100, 40, 200],   // rich plum
+            [60, 20, 130],    // shadow purple
+            [240, 130, 200],  // rose violet
+        ],
+        accents: [[255, 100, 200], [180, 80, 255], [255, 200, 230]],
+        shadow:  [25, 10, 50],
+        highlight: [245, 200, 255],
+        speckle: [255, 220, 255],
     },
-    // Teal + cyan + sapphire — frozen aurora
+    // ── Teal-aurora — frozen aurora cyans + sapphires
     {
         name: 'teal-aurora',
-        primary:    [40, 160, 200],
-        secondary:  [20, 100, 160],
-        tertiary:   [80, 220, 240],
-        accent:     [120, 255, 220],
-        shadow:     [5, 30, 60],
-        highlight:  [180, 240, 255],
-        speckle:    [220, 250, 255],
+        tones: [
+            [30, 150, 200],   // cyan-teal
+            [15, 100, 160],   // deep teal
+            [80, 220, 240],   // bright cyan
+            [50, 180, 220],   // sky-cyan
+            [10, 70, 120],    // navy teal
+            [120, 240, 220],  // mint shoulder
+            [60, 200, 200],   // turquoise
+        ],
+        accents: [[120, 255, 220], [80, 200, 255], [180, 255, 240]],
+        shadow:  [5, 30, 60],
+        highlight: [200, 245, 255],
+        speckle: [220, 250, 255],
     },
-    // Amber + ember + warm gold — rare warm contrast
+    // ── Ember-warmth — amber + gold + rare red contrast
     {
         name: 'ember-warmth',
-        primary:    [200, 140, 60],
-        secondary:  [160, 90, 40],
-        tertiary:   [240, 200, 100],
-        accent:     [255, 130, 80],
-        shadow:     [50, 25, 10],
-        highlight:  [255, 240, 180],
-        speckle:    [255, 240, 200],
+        tones: [
+            [200, 130, 50],   // amber
+            [160, 80, 30],    // ember
+            [240, 200, 90],   // gold
+            [220, 160, 70],   // honey
+            [180, 100, 40],   // burnt
+            [255, 220, 130],  // light gold
+            [220, 80, 50],    // rare red flare
+        ],
+        accents: [[255, 140, 80], [255, 200, 100], [255, 100, 60]],
+        shadow:  [50, 25, 10],
+        highlight: [255, 240, 180],
+        speckle: [255, 240, 200],
     },
-    // Periwinkle lavender — soft and dreamy
+    // ── Periwinkle-dream — soft lavender + cornflower
     {
         name: 'periwinkle-dream',
-        primary:    [110, 110, 230],
-        secondary:  [70, 70, 180],
-        tertiary:   [160, 140, 240],
-        accent:     [200, 180, 255],
-        shadow:     [25, 25, 70],
-        highlight:  [220, 210, 255],
-        speckle:    [240, 230, 255],
+        tones: [
+            [110, 110, 230],  // periwinkle
+            [70, 70, 180],    // deeper periwinkle
+            [160, 140, 240],  // lavender
+            [130, 160, 230],  // cornflower
+            [180, 170, 250],  // light lilac
+            [90, 90, 200],    // muted indigo
+            [200, 200, 255],  // pale highlight
+        ],
+        accents: [[200, 180, 255], [220, 220, 255], [180, 160, 240]],
+        shadow:  [25, 25, 70],
+        highlight: [230, 220, 255],
+        speckle: [240, 230, 255],
     },
-    // Crimson rose + ultraviolet — ominous
+    // ── Crimson-ultraviolet — ominous magenta + UV purple
     {
         name: 'crimson-ultraviolet',
-        primary:    [180, 60, 140],
-        secondary:  [100, 30, 80],
-        tertiary:   [220, 100, 180],
-        accent:     [180, 80, 220],
-        shadow:     [40, 10, 30],
-        highlight:  [255, 200, 230],
-        speckle:    [255, 220, 240],
+        tones: [
+            [180, 60, 140],   // magenta
+            [100, 30, 80],    // dark crimson
+            [220, 100, 180],  // hot pink
+            [180, 80, 220],   // ultraviolet
+            [120, 40, 100],   // rich rose
+            [240, 130, 200],  // bright pink
+            [80, 20, 60],     // shadow rose
+        ],
+        accents: [[180, 80, 220], [255, 130, 200], [220, 100, 240]],
+        shadow:  [40, 10, 30],
+        highlight: [255, 200, 230],
+        speckle: [255, 220, 240],
     },
-    // Emerald + jade — rare verdant accent (think Eagle nebula)
+    // ── Emerald-jade — rare verdant accent (Eagle nebula vibe)
     {
         name: 'emerald-jade',
-        primary:    [50, 180, 130],
-        secondary:  [30, 130, 90],
-        tertiary:   [120, 230, 180],
-        accent:     [200, 255, 180],
-        shadow:     [10, 40, 25],
-        highlight:  [220, 255, 230],
-        speckle:    [240, 255, 240],
+        tones: [
+            [50, 180, 130],   // emerald
+            [30, 130, 90],    // forest jade
+            [120, 230, 180],  // light jade
+            [80, 200, 150],   // mint
+            [40, 150, 110],   // dark teal-green
+            [180, 240, 200],  // pale jade
+            [70, 220, 160],   // bright spring
+        ],
+        accents: [[200, 255, 180], [120, 255, 200], [180, 230, 100]],
+        shadow:  [10, 40, 25],
+        highlight: [220, 255, 230],
+        speckle: [240, 255, 240],
     },
-    // Rose pink + soft magenta — gentle / floral
+    // ── Rose-petal — gentle pink + magenta
     {
         name: 'rose-petal',
-        primary:    [220, 100, 160],
-        secondary:  [160, 60, 110],
-        tertiary:   [255, 160, 200],
-        accent:     [255, 200, 220],
-        shadow:     [50, 20, 35],
-        highlight:  [255, 230, 240],
-        speckle:    [255, 240, 250],
+        tones: [
+            [220, 100, 160],  // rose
+            [160, 60, 110],   // dark rose
+            [255, 160, 200],  // light pink
+            [240, 130, 180],  // mid-rose
+            [180, 80, 130],   // muted rose
+            [255, 200, 220],  // pale petal
+            [220, 110, 140],  // dusty rose
+        ],
+        accents: [[255, 200, 220], [255, 180, 240], [255, 150, 180]],
+        shadow:  [50, 20, 35],
+        highlight: [255, 230, 240],
+        speckle: [255, 240, 250],
+    },
+    // ── Twilight-spectrum — multi-hue twilight (blue→violet→pink)
+    {
+        name: 'twilight-spectrum',
+        tones: [
+            [70, 100, 220],   // sunset blue
+            [120, 80, 220],   // dusk violet
+            [200, 100, 200],  // twilight magenta
+            [160, 140, 240],  // pre-night lavender
+            [240, 130, 180],  // sunset pink
+            [80, 60, 180],    // late dusk
+            [220, 160, 220],  // soft mauve
+        ],
+        accents: [[255, 180, 200], [180, 220, 255], [220, 140, 255]],
+        shadow:  [20, 15, 60],
+        highlight: [255, 220, 240],
+        speckle: [240, 225, 255],
+    },
+    // ── Solar-corona — burning yellow + orange + white-hot
+    {
+        name: 'solar-corona',
+        tones: [
+            [255, 180, 60],   // gold
+            [240, 130, 50],   // orange
+            [255, 220, 120],  // pale gold
+            [220, 80, 30],    // burning red-orange
+            [255, 240, 180],  // hot white-yellow
+            [200, 100, 40],   // ember
+            [255, 160, 80],   // sunset
+        ],
+        accents: [[255, 100, 50], [255, 220, 100], [255, 180, 80]],
+        shadow:  [60, 20, 5],
+        highlight: [255, 250, 220],
+        speckle: [255, 240, 200],
     },
 ];
 
@@ -176,6 +269,63 @@ function shade(c, mul) {
     const g = Math.max(0, Math.min(255, Math.round(c[1] * mul)));
     const b = Math.max(0, Math.min(255, Math.round(c[2] * mul)));
     return [r, g, b];
+}
+// Pick `n` distinct random items from `arr`. Returns shallow refs.
+function pickRandom(arr, n) {
+    const pool = arr.slice();
+    const out = [];
+    for (let i = 0; i < n && pool.length > 0; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        out.push(pool[idx]);
+        pool.splice(idx, 1);
+    }
+    return out;
+}
+// HSL conversion for per-blob hue jitter. RGB→HSL→jitter→RGB.
+function rgbToHsl(c) {
+    const r = c[0] / 255, g = c[1] / 255, b = c[2] / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h *= 60;
+    }
+    return [h, s, l];
+}
+function hslToRgb(h, s, l) {
+    h = ((h % 360) + 360) % 360;
+    s = Math.max(0, Math.min(1, s));
+    l = Math.max(0, Math.min(1, l));
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const hp = h / 60;
+    const x = c * (1 - Math.abs((hp % 2) - 1));
+    let r1 = 0, g1 = 0, b1 = 0;
+    if (hp < 1)      { r1 = c; g1 = x; }
+    else if (hp < 2) { r1 = x; g1 = c; }
+    else if (hp < 3) { g1 = c; b1 = x; }
+    else if (hp < 4) { g1 = x; b1 = c; }
+    else if (hp < 5) { r1 = x; b1 = c; }
+    else             { r1 = c; b1 = x; }
+    const m = l - c / 2;
+    return [
+        Math.round((r1 + m) * 255),
+        Math.round((g1 + m) * 255),
+        Math.round((b1 + m) * 255),
+    ];
+}
+// Slightly rotate hue and tweak saturation/lightness — used to
+// give each blob its own color personality without leaving the
+// palette family. dH in degrees, dS/dL in [-1..1].
+function jitterHsl(c, dH, dS, dL) {
+    const [h, s, l] = rgbToHsl(c);
+    return hslToRgb(h + dH, s + dS, l + dL);
 }
 
 class NebulaRenderer {
@@ -254,21 +404,23 @@ class NebulaRenderer {
     _derivedLayerPalette(lumMul) {
         const sp = this.scenePalette;
         return {
-            primary:   shade(sp.primary,   lumMul),
-            secondary: shade(sp.secondary, lumMul),
-            tertiary:  shade(sp.tertiary,  lumMul),
-            accent:    shade(sp.accent,    Math.min(1.1, lumMul + 0.05)),
+            // Tones + accents are SHADED ARRAYS — blobs sample from
+            // these per-render to vary their color personality. The
+            // shading (lumMul) gives atmospheric perspective per
+            // layer.
+            tones:     sp.tones.map(c => shade(c, lumMul)),
+            accents:   sp.accents.map(c => shade(c, Math.min(1.1, lumMul + 0.05))),
             shadow:    shade(sp.shadow,    Math.max(0.3, lumMul - 0.2)),
             highlight: shade(sp.highlight, Math.min(1.2, lumMul + 0.2)),
             speckle:   sp.speckle, // speckle stays bright across all layers
         };
     }
 
-    // Faint full-canvas wash in the layer's secondary color. Anchors
-    // the layer in the palette and prevents the nebula from feeling
-    // like detached patches floating on pure black. Strength scales
-    // with layer luminance so far layers contribute less.
+    // Faint full-canvas wash. Pick three random tones from the layer
+    // pool so the sky tint itself has color variation rather than
+    // always painting the canvas in the secondary color.
     _drawSkyTint(ctx, w, h, layerCfg, lp) {
+        const [c0, c1] = pickRandom(lp.tones, 2);
         const grad = ctx.createRadialGradient(
             w * (0.4 + Math.random() * 0.2),
             h * (0.4 + Math.random() * 0.2),
@@ -277,9 +429,9 @@ class NebulaRenderer {
             Math.max(w, h) * 0.7,
         );
         const tintAlpha = 0.04 * layerCfg.lumMul;
-        grad.addColorStop(0,   rgba(lp.tertiary,  tintAlpha));
-        grad.addColorStop(0.5, rgba(lp.secondary, tintAlpha * 0.7));
-        grad.addColorStop(1,   rgba(lp.shadow,    tintAlpha * 0.4));
+        grad.addColorStop(0,   rgba(c0, tintAlpha));
+        grad.addColorStop(0.5, rgba(c1 || c0, tintAlpha * 0.7));
+        grad.addColorStop(1,   rgba(lp.shadow,  tintAlpha * 0.4));
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
     }
@@ -310,10 +462,26 @@ class NebulaRenderer {
         }
         baseRadius *= radiusMul;
 
-        // Sub-blobs — 4-6 overlapping clouds for organic shape. Each
-        // sub-blob is rendered as an ELLIPSE (not a circle) so the
-        // overall nebula shape doesn't read as bubbles. Eccentricity
-        // and rotation vary per sub-blob.
+        // Per-blob color identity:
+        //   • Pick 3 distinct tones from the layer pool for the body
+        //     gradient — different blobs get different combos so each
+        //     reads as its own cloud while staying in the family.
+        //   • Pick 1 accent for the edge halo.
+        //   • Apply a per-blob HSL hue jitter (±15°, ±0.08 sat, ±0.05
+        //     light) so even the same triplet doesn't look identical
+        //     across blobs.
+        const [tone0, tone1, tone2] = pickRandom(lp.tones, 3);
+        const haloAccent = pickRandom(lp.accents, 1)[0];
+        const hueShift = random(-15, 15);
+        const satShift = random(-0.08, 0.08);
+        const litShift = random(-0.05, 0.05);
+        const inner = jitterHsl(tone0, hueShift, satShift, litShift);
+        const mid   = jitterHsl(tone1 || tone0, hueShift * 0.7, satShift, litShift);
+        const outer = jitterHsl(tone2 || tone1 || tone0, hueShift * 0.4, satShift, litShift);
+        const halo  = jitterHsl(haloAccent, hueShift * 0.5, 0, 0);
+
+        // Sub-blobs — 4-6 overlapping clouds for organic shape, each
+        // an ellipse for asymmetric silhouette.
         const subCount = Math.floor(random(4, 7));
         for (let s = 0; s < subCount; s++) {
             const ox = cx + random(-baseRadius * 0.55, baseRadius * 0.55);
@@ -321,17 +489,17 @@ class NebulaRenderer {
             const r  = baseRadius * random(0.55, 1.2);
             const opacity = random(layerCfg.opacityRange[0], layerCfg.opacityRange[1]) * opacityMul;
 
-            // Ellipse params: aspect 0.6..1.6 with random rotation.
+            // Sub-blob can ALSO get a small additional jitter so
+            // sub-blobs within the same blob aren't identical clones.
+            const subInner = jitterHsl(inner, random(-6, 6), 0, random(-0.03, 0.03));
+            const subMid   = jitterHsl(mid,   random(-4, 4), 0, random(-0.02, 0.02));
+            const subOuter = jitterHsl(outer, random(-3, 3), 0, 0);
+
             const aspect = random(0.6, 1.6);
             const rx = r * Math.sqrt(aspect);
             const ry = r / Math.sqrt(aspect);
             const rot = Math.random() * Math.PI;
 
-            // Helper to fill an elliptical path centered at (px,py)
-            // rotated by `rot`, sized (erx, ery), with the given
-            // radial gradient. createRadialGradient takes scalar
-            // radii, so we draw the gradient on a circle of `R = max`
-            // and use ellipse path to clip the visual shape.
             const drawEllipseGradient = (px, py, erx, ery, gradFactory) => {
                 const R = Math.max(erx, ery);
                 const grad = gradFactory(px, py, R);
@@ -346,7 +514,7 @@ class NebulaRenderer {
                 ctx.restore();
             };
 
-            // ── 1. Shadow pass — large, dark, slightly offset ──
+            // ── 1. Shadow pass ──
             const shadowOffset = r * 0.18;
             const sax = ox + shadowOffset;
             const say = oy + shadowOffset;
@@ -358,43 +526,43 @@ class NebulaRenderer {
                 return g;
             });
 
-            // ── 2. Main body — multi-stop gradient through the palette ──
+            // ── 2. Main body — multi-stop gradient through 3 sampled
+            //    tones with per-stop alpha falloff. Five stops give a
+            //    richer transition than the previous flat 3-stop look.
             drawEllipseGradient(ox, oy, rx, ry, (px, py, R) => {
                 const g = ctx.createRadialGradient(px, py, 0, px, py, R);
-                g.addColorStop(0,    rgba(lp.tertiary,  opacity));
-                g.addColorStop(0.25, rgba(lp.primary,   opacity * 0.85));
-                g.addColorStop(0.55, rgba(lp.secondary, opacity * 0.55));
-                g.addColorStop(0.85, rgba(lp.secondary, opacity * 0.18));
-                g.addColorStop(1,    rgba(lp.secondary, 0));
+                g.addColorStop(0.00, rgba(subInner, opacity));
+                g.addColorStop(0.20, rgba(subInner, opacity * 0.92));
+                g.addColorStop(0.45, rgba(subMid,   opacity * 0.7));
+                g.addColorStop(0.70, rgba(subOuter, opacity * 0.45));
+                g.addColorStop(0.90, rgba(subOuter, opacity * 0.18));
+                g.addColorStop(1.00, rgba(subOuter, 0));
                 return g;
             });
 
-            // ── 3. Edge halo — thin ring of accent color at the
-            //    outer edge. Adds chromatic complexity / makes the
-            //    blob's silhouette feel less uniform. Skipped on
-            //    haze blobs (would muddy the soft look).
+            // ── 3. Edge halo (skipped on haze) ──
             if (drawHalo) {
                 drawEllipseGradient(ox, oy, rx * 1.05, ry * 1.05, (px, py, R) => {
                     const g = ctx.createRadialGradient(px, py, R * 0.78, px, py, R);
-                    g.addColorStop(0,   rgba(lp.accent, 0));
-                    g.addColorStop(0.6, rgba(lp.accent, opacity * 0.35));
-                    g.addColorStop(1,   rgba(lp.accent, 0));
+                    g.addColorStop(0,   rgba(halo, 0));
+                    g.addColorStop(0.6, rgba(halo, opacity * 0.35));
+                    g.addColorStop(1,   rgba(halo, 0));
                     return g;
                 });
             }
 
-            // ── 4. Hot core — small bright spot, off-center,
-            //    ALWAYS round (not affected by ellipse aspect) so
-            //    the brightness reads as a star-like nucleus.
-            //    Skipped on haze blobs.
+            // ── 4. Hot core — bright off-center spot. Core color
+            //    blends highlight + the inner tone so the nucleus
+            //    inherits some palette identity rather than always
+            //    being neutral white.
             if (drawCore) {
                 const coreOx = ox + random(-r * 0.18, r * 0.18);
                 const coreOy = oy + random(-r * 0.18, r * 0.18);
                 const coreR = r * random(0.18, 0.32);
                 const cgrad = ctx.createRadialGradient(coreOx, coreOy, 0, coreOx, coreOy, coreR);
                 cgrad.addColorStop(0,   rgba(lp.highlight, opacity * 1.4));
-                cgrad.addColorStop(0.5, rgba(lp.tertiary,  opacity * 0.8));
-                cgrad.addColorStop(1,   rgba(lp.tertiary,  0));
+                cgrad.addColorStop(0.5, rgba(subInner,     opacity * 0.8));
+                cgrad.addColorStop(1,   rgba(subInner,     0));
                 ctx.fillStyle = cgrad;
                 ctx.beginPath();
                 ctx.arc(coreOx, coreOy, coreR, 0, Math.PI * 2);
@@ -431,6 +599,10 @@ class NebulaRenderer {
         const py = dx / dist;
         const bow = random(-dist * 0.3, dist * 0.3);
 
+        // Wisp uses two random tones from the pool for its color —
+        // that way wisps in the same scene aren't all the same hue.
+        const [wispTone0, wispTone1] = pickRandom(lp.tones, 2);
+
         for (let i = 1; i < steps; i++) {
             const t = i / steps;
             // Quadratic bow: peaks at midpoint
@@ -440,9 +612,9 @@ class NebulaRenderer {
             const r = baseSize * random(0.7, 1.5);
 
             const wgrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-            wgrad.addColorStop(0,   rgba(lp.tertiary,  wispOpacity));
-            wgrad.addColorStop(0.5, rgba(lp.primary,   wispOpacity * 0.55));
-            wgrad.addColorStop(1,   rgba(lp.primary,   0));
+            wgrad.addColorStop(0,   rgba(wispTone0, wispOpacity));
+            wgrad.addColorStop(0.5, rgba(wispTone1 || wispTone0, wispOpacity * 0.55));
+            wgrad.addColorStop(1,   rgba(wispTone1 || wispTone0, 0));
             ctx.fillStyle = wgrad;
             ctx.beginPath();
             ctx.arc(sx, sy, r, 0, Math.PI * 2);
@@ -470,11 +642,12 @@ class NebulaRenderer {
                 y = Math.random() * canvasH;
             }
 
-            // Color: 80% pure speckle white, 15% palette accent, 5% highlight
-            // (prevents the speckle field from looking monochromatic).
+            // Color: 75% pure speckle white, 18% random accent from the
+            // pool, 7% highlight. Prevents monochrome speckle field
+            // and lets each layer have some accent diversity.
             const r = Math.random();
-            const c = r < 0.80 ? lp.speckle
-                    : r < 0.95 ? lp.accent
+            const c = r < 0.75 ? lp.speckle
+                    : r < 0.93 ? lp.accents[Math.floor(Math.random() * lp.accents.length)]
                     : lp.highlight;
             const a = random(layerCfg.speckleAlpha[0], layerCfg.speckleAlpha[1]);
 

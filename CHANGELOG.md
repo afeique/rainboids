@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.4] - 2026-05-03
+
+### Changed
+- **Nebula color richness pass — pool sampling + per-blob HSL jitter.**
+  - Each scene palette now declares **6-7 body tones + 2-3 accents** instead of fixed primary/secondary/tertiary/accent slots. Per-blob renders pick 3 distinct random tones for the gradient stops + 1 random accent for the halo, so different blobs in the same scene have visibly different color personalities while staying in the family.
+  - **Per-blob HSL hue/saturation/lightness jitter** (±15° hue, ±0.08 sat, ±0.05 light) shifts the picked colors before drawing — even the same triplet won't render identically twice. Sub-blobs within a blob get a small additional jitter on top so the volumetric layering reads as naturally varying gas, not flat repeats.
+  - **Two new scene palettes**: `twilight-spectrum` (multi-hue blue→violet→pink dusk) and `solar-corona` (burning yellow/orange/red-hot). 10 total palettes.
+  - **Body gradient widened to 6 stops** (was 4) — smoother transitions through the 3 sampled tones.
+  - **Hot core now blends `highlight + inner tone`** instead of always neutral white, so the nucleus inherits palette identity.
+  - **Wisps and sky tints sample tones randomly per render** rather than always using primary/secondary/tertiary, so connecting filaments and the layer wash also vary in color.
+  - **Speckles**: 75% pure white / 18% random accent (from the accents pool) / 7% highlight — colored stardust diversifies the field.
+
+---
+
 ## [5.49.3] - 2026-05-03
 
 ### Changed
