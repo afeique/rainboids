@@ -127,12 +127,15 @@ export function spawnWaveEntities() {
     this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
 
-    // Spawn asteroids with level scaling
-    this.spawnLeveledAsteroids(waveConfig.asteroids);
+    // Wave-start spawning places entities INSIDE the visible viewport so the
+    // player sees the threats before the wave begins instead of having them
+    // drift in from beyond the gameField edge — important when the player
+    // moves quickly during the WAVE-START message and would otherwise lose
+    // sight of newly spawned entities.
+    this.spawnLeveledAsteroids(waveConfig.asteroids, { onScreen: true });
 
-    // Spawn enemies by type with level scaling
     for (const enemyGroup of waveConfig.enemies) {
-        this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count);
+        this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count, { onScreen: true });
     }
 }
 
@@ -157,7 +160,7 @@ export function spawnEnemies(count) {
     }
 }
 
-export function spawnLeveledAsteroids(count) {
+export function spawnLeveledAsteroids(count, opts = {}) {
     // Respect MAX_ASTEROIDS limit for performance
     const activeAsteroids = this.asteroidPool.activeObjects.length;
     const maxToSpawn = Math.min(count, GAME_CONFIG.MAX_ASTEROIDS - activeAsteroids);
@@ -165,16 +168,16 @@ export function spawnLeveledAsteroids(count) {
     for (let i = 0; i < maxToSpawn; i++) {
         const asteroid = this.asteroidPool.get(undefined, undefined, undefined, 1, this);
         if (asteroid) {
-            this.initializeLeveledAsteroid(asteroid);
+            this.initializeLeveledAsteroid(asteroid, opts);
         }
     }
 }
 
-export function spawnLeveledEnemies(enemyType, count) {
+export function spawnLeveledEnemies(enemyType, count, opts = {}) {
     for (let i = 0; i < count; i++) {
         const enemy = this.enemyPool.get();
         if (enemy) {
-            const sp = this.getRandomSpawnPosition();
+            const sp = this.getRandomSpawnPosition(opts);
             enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
             this.applyEnemyLevelScaling(enemy);
             enemy.startWarpIn(sp.targetX, sp.targetY);
@@ -182,9 +185,9 @@ export function spawnLeveledEnemies(enemyType, count) {
     }
 }
 
-export function initializeLeveledAsteroid(asteroid) {
+export function initializeLeveledAsteroid(asteroid, opts = {}) {
     // Use existing initialization but with level scaling
-    this.initializeWaveAsteroid(asteroid);
+    this.initializeWaveAsteroid(asteroid, opts);
 
     // Apply level scaling to health
     const baseHealth = asteroid.health;
@@ -295,23 +298,35 @@ export function startNewWave() {
     }
 }
 
-export function initializeWaveAsteroid(asteroid) {
-    // Spawn asteroid at random edge position using gameField dimensions, avoiding minimap
+export function initializeWaveAsteroid(asteroid, opts = {}) {
+    // Default behavior: spawn at random gameField edge so asteroids drift in
+    // from off-map. With opts.onScreen, spawn inside the current viewport at
+    // a safe minimum distance from the player so the wave's threats are
+    // already visible the instant it starts.
     let x, y;
     let attempts = 0;
     const r = random(30, 60);
     const spawnBuffer = r * 4;
 
-    do {
-        const edge = Math.floor(random(0, 4));
-        switch (edge) {
-            case 0: x = random(0, this.gameField.width); y = -spawnBuffer; break;
-            case 1: x = this.gameField.width + spawnBuffer; y = random(0, this.gameField.height); break;
-            case 2: x = random(0, this.gameField.width); y = this.gameField.height + spawnBuffer; break;
-            case 3: x = -spawnBuffer; y = random(0, this.gameField.height); break;
-        }
-        attempts++;
-    } while (this.isInMinimapArea(x, y) && attempts < 10);
+    if (opts.onScreen) {
+        const pos = this.getOnScreenSpawnPosition({
+            minDistFromPlayer: r + 220,
+            edgePad: r + 12,
+        });
+        x = pos.x;
+        y = pos.y;
+    } else {
+        do {
+            const edge = Math.floor(random(0, 4));
+            switch (edge) {
+                case 0: x = random(0, this.gameField.width); y = -spawnBuffer; break;
+                case 1: x = this.gameField.width + spawnBuffer; y = random(0, this.gameField.height); break;
+                case 2: x = random(0, this.gameField.width); y = this.gameField.height + spawnBuffer; break;
+                case 3: x = -spawnBuffer; y = random(0, this.gameField.height); break;
+            }
+            attempts++;
+        } while (this.isInMinimapArea(x, y) && attempts < 10);
+    }
 
     const spd = Math.min(5.0, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.15);
     const vel = {
@@ -323,38 +338,76 @@ export function initializeWaveAsteroid(asteroid) {
     asteroid.vel = vel;
 }
 
-export function getRandomSpawnPosition() {
-    // Spawn enemies well beyond the map edge so they fly in visibly
-    const margin = 200 + Math.random() * 200; // 200-400px offscreen
+export function getRandomSpawnPosition(opts = {}) {
+    // Default behavior: spawn enemies well beyond the gameField edge so the
+    // warp-in animation streaks them in visibly. With opts.onScreen, anchor
+    // the warp TARGET inside the visible viewport (at safe distance from
+    // the player) and place the warp source just outside the corresponding
+    // viewport edge — the warp animation stays brief and the enemy is
+    // visible immediately when the wave starts.
     let x, y, targetX, targetY;
 
-    const edge = Math.floor(Math.random() * 4);
-    switch (edge) {
-        case 0: // Top
-            x = Math.random() * this.gameField.width;
-            y = -margin;
-            targetX = x + random(-100, 100);
-            targetY = 80 + Math.random() * (this.gameField.height * 0.3);
-            break;
-        case 1: // Right
-            x = this.gameField.width + margin;
-            y = Math.random() * this.gameField.height;
-            targetX = this.gameField.width - 80 - Math.random() * (this.gameField.width * 0.3);
-            targetY = y + random(-100, 100);
-            break;
-        case 2: // Bottom
-            x = Math.random() * this.gameField.width;
-            y = this.gameField.height + margin;
-            targetX = x + random(-100, 100);
-            targetY = this.gameField.height - 80 - Math.random() * (this.gameField.height * 0.3);
-            break;
-        case 3: // Left
-            x = -margin;
-            y = Math.random() * this.gameField.height;
-            targetX = 80 + Math.random() * (this.gameField.width * 0.3);
-            targetY = y + random(-100, 100);
-            break;
-        default: x = 0; y = 0; targetX = 200; targetY = 200; break;
+    if (opts.onScreen) {
+        const target = this.getOnScreenSpawnPosition({
+            minDistFromPlayer: 260,
+            edgePad: 90,
+        });
+        targetX = target.x;
+        targetY = target.y;
+
+        // Pick the closest viewport edge to start the warp from, so the
+        // streak enters from the side it would appear on visually.
+        const camX = this.camera.x, camY = this.camera.y;
+        const camR = camX + this.width, camB = camY + this.height;
+        const dL = targetX - camX, dR = camR - targetX;
+        const dT = targetY - camY, dB = camB - targetY;
+        const minDist = Math.min(dL, dR, dT, dB);
+        const sourceMargin = 220 + Math.random() * 160; // 220-380 px outside viewport edge
+
+        if (minDist === dT) {
+            x = targetX + random(-120, 120);
+            y = camY - sourceMargin;
+        } else if (minDist === dB) {
+            x = targetX + random(-120, 120);
+            y = camB + sourceMargin;
+        } else if (minDist === dL) {
+            x = camX - sourceMargin;
+            y = targetY + random(-120, 120);
+        } else {
+            x = camR + sourceMargin;
+            y = targetY + random(-120, 120);
+        }
+    } else {
+        // Original off-gameField behavior for continuous / cheat spawns.
+        const margin = 200 + Math.random() * 200; // 200-400px offscreen
+        const edge = Math.floor(Math.random() * 4);
+        switch (edge) {
+            case 0:
+                x = Math.random() * this.gameField.width;
+                y = -margin;
+                targetX = x + random(-100, 100);
+                targetY = 80 + Math.random() * (this.gameField.height * 0.3);
+                break;
+            case 1:
+                x = this.gameField.width + margin;
+                y = Math.random() * this.gameField.height;
+                targetX = this.gameField.width - 80 - Math.random() * (this.gameField.width * 0.3);
+                targetY = y + random(-100, 100);
+                break;
+            case 2:
+                x = Math.random() * this.gameField.width;
+                y = this.gameField.height + margin;
+                targetX = x + random(-100, 100);
+                targetY = this.gameField.height - 80 - Math.random() * (this.gameField.height * 0.3);
+                break;
+            case 3:
+                x = -margin;
+                y = Math.random() * this.gameField.height;
+                targetX = 80 + Math.random() * (this.gameField.width * 0.3);
+                targetY = y + random(-100, 100);
+                break;
+            default: x = 0; y = 0; targetX = 200; targetY = 200; break;
+        }
     }
 
     // Clamp target inside field
@@ -362,6 +415,57 @@ export function getRandomSpawnPosition() {
     targetY = Math.max(60, Math.min(this.gameField.height - 60, targetY));
 
     return { x, y, targetX, targetY };
+}
+
+/**
+ * Pick a world-space position inside the visible viewport, at least
+ * `minDistFromPlayer` away from the player ship, avoiding the minimap
+ * overlay region. Used for wave-start spawning so the player can see the
+ * entities that just appeared.
+ */
+export function getOnScreenSpawnPosition({ minDistFromPlayer = 240, edgePad = 80 } = {}) {
+    const camX = this.camera.x;
+    const camY = this.camera.y;
+    const fieldW = this.gameField.width;
+    const fieldH = this.gameField.height;
+    // Viewport bounds clamped within the gameField, with an inner edge pad
+    // so entities don't spawn flush against the screen edge.
+    const left   = Math.max(edgePad, camX + edgePad);
+    const right  = Math.min(fieldW - edgePad, camX + this.width - edgePad);
+    const top    = Math.max(edgePad, camY + edgePad);
+    const bottom = Math.min(fieldH - edgePad, camY + this.height - edgePad);
+
+    // Degenerate viewport (very small / mis-clamped): fall back to gameField
+    // center within bounds.
+    const safeLeft   = Math.min(left, right);
+    const safeRight  = Math.max(left, right);
+    const safeTop    = Math.min(top, bottom);
+    const safeBottom = Math.max(top, bottom);
+
+    const px = (this.player && this.player.active) ? this.player.x : (camX + this.width / 2);
+    const py = (this.player && this.player.active) ? this.player.y : (camY + this.height / 2);
+
+    let x = px, y = py;
+    for (let attempt = 0; attempt < 24; attempt++) {
+        x = random(safeLeft, safeRight);
+        y = random(safeTop, safeBottom);
+        if (this.isInMinimapArea(x, y)) continue;
+        const dx = x - px, dy = y - py;
+        if (dx * dx + dy * dy >= minDistFromPlayer * minDistFromPlayer) {
+            return { x, y };
+        }
+    }
+
+    // Fallback: project the last candidate outward from the player to satisfy
+    // the minimum-distance constraint, clamped to the safe viewport rect.
+    const dx = x - px, dy = y - py;
+    const len = Math.hypot(dx, dy) || 1;
+    const ox = (dx / len) * minDistFromPlayer;
+    const oy = (dy / len) * minDistFromPlayer;
+    return {
+        x: Math.max(safeLeft, Math.min(safeRight, px + ox)),
+        y: Math.max(safeTop, Math.min(safeBottom, py + oy)),
+    };
 }
 
 export function getRandomEnemyType() {

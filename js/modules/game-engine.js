@@ -565,11 +565,11 @@ export class GameEngine {
 
     spawnEnemies(count) { return wave.spawnEnemies.call(this, count); }
 
-    spawnLeveledAsteroids(count) { return wave.spawnLeveledAsteroids.call(this, count); }
+    spawnLeveledAsteroids(count, opts) { return wave.spawnLeveledAsteroids.call(this, count, opts); }
 
-    spawnLeveledEnemies(enemyType, count) { return wave.spawnLeveledEnemies.call(this, enemyType, count); }
+    spawnLeveledEnemies(enemyType, count, opts) { return wave.spawnLeveledEnemies.call(this, enemyType, count, opts); }
 
-    initializeLeveledAsteroid(asteroid) { return wave.initializeLeveledAsteroid.call(this, asteroid); }
+    initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy) { return wave.applyEnemyLevelScaling.call(this, enemy); }
 
@@ -620,16 +620,17 @@ export class GameEngine {
     spawnWaveAsteroids() { return wave.spawnWaveAsteroids.call(this); }
     startEnemySubWave() { return wave.startEnemySubWave.call(this); }
     
-    initializeWaveAsteroid(asteroid) { return wave.initializeWaveAsteroid.call(this, asteroid); }
-    
+    initializeWaveAsteroid(asteroid, opts) { return wave.initializeWaveAsteroid.call(this, asteroid, opts); }
+
     // Legacy method - replaced by startNewWave and sub-wave system
-    
+
     forceSpawnEntity() { return wave.forceSpawnEntity.call(this); }
     forceSpawnEnemy() { return wave.forceSpawnEnemy.call(this); }
     forceSpawnAsteroid() { return wave.forceSpawnAsteroid.call(this); }
     isInMinimapArea(worldX, worldY) { return wave.isInMinimapArea.call(this, worldX, worldY); }
-    
-    getRandomSpawnPosition() { return wave.getRandomSpawnPosition.call(this); }
+
+    getRandomSpawnPosition(opts) { return wave.getRandomSpawnPosition.call(this, opts); }
+    getOnScreenSpawnPosition(opts) { return wave.getOnScreenSpawnPosition.call(this, opts); }
 
     getRandomEnemyType() { return wave.getRandomEnemyType.call(this); }
     

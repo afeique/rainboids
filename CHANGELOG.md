@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.49.8] - 2026-05-03
+
+### Changed
+- **Wave-start asteroids and enemies now spawn inside the visible viewport.** Previously wave-start entities were placed at the gameField edges (asteroids 120–240px, enemies 200–400px outside the 1920×1080 world) and had to drift / warp in. If the player was moving at the moment the wave kicked off, those entities would pop onto the screen mid-warp or appear well behind the player. Wave-start spawning now picks positions inside the camera's current viewport at a safe minimum distance from the player (220px+ radius for asteroids, 260px for enemies), avoiding the minimap overlay, with an inner edge pad so nothing spawns flush against the screen edge. Enemies still warp in, but the warp source is now just outside the closest viewport edge (220–380px) so the streak is brief and visually anchored to the screen — they're already on-camera from frame one of the wave. Continuous in-wave spawns and cheat-key spawns keep the original off-gameField behavior so they still feel like they're entering from far away.
+
+---
+
 ## [5.49.7] - 2026-05-02
 
 ### Changed
