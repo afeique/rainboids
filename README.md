@@ -36,9 +36,9 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 - **Fire primary**: Hold left-click (no auto-fire — release to stop)
 - **Fire / charge power weapon**: Spacebar OR right-click
 - **Activate defense skill**: Tab
-- **Pick primary weapon (radial menu)**: Hold E — aim with mouse, click to equip, release to cancel
-- **Pick power weapon (radial menu)**: Hold R — same flow
-- **Pick defense skill (radial menu)**: Hold F — same flow
+- **Pick defense skill (radial menu)**: Hold E — aim with mouse, click to equip, release to cancel
+- **Pick primary weapon (radial menu)**: Hold R — same flow
+- **Pick power weapon (radial menu)**: Hold F — same flow
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
 - **Switch defense skill**: Pause menu → SKILLS tab (all 6 free, click to equip)

@@ -348,12 +348,43 @@ export class UIManager {
         controlsTab.innerHTML = `
             <h2>CONTROLS</h2>
             <div class="control-list">
-                <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
-                <div><span class="control-symbol">MOUSE</span> Aim</div>
-                <div><span class="control-symbol">LEFT-CLICK</span> Fire primary weapon (hold)</div>
-                <div><span class="control-symbol">RIGHT-CLICK</span> or <span class="control-symbol">SPACE</span> Fire power weapon</div>
-                <div><span class="control-symbol">TAB</span> Activate equipped skill</div>
-                <div><span class="control-symbol">E</span> &nbsp;<span class="control-symbol">R</span> &nbsp;<span class="control-symbol">F</span> Cycle primary / power / skill (hold to open radial menu)</div>
+                <div>
+                    <span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span><br>
+                    Movement
+                </div>
+                <div>
+                    <span class="control-symbol">MOUSE</span><br>
+                    Aiming
+                </div>
+                <div>
+                    <span class="control-symbol">LEFT-CLICK</span><br>
+                    Fire equipped primary weapon (hold)
+                </div>
+                <div>
+                    <span class="control-symbol">RIGHT-CLICK</span> 
+                    or 
+                    <span class="control-symbol">SPACE</span><br>
+                    Fire equipped power weapon
+                </div>
+                <div>
+                    <span class="control-symbol">TAB</span><br>
+                    Activate equipped defensive skill
+                </div>
+                <div>
+                    <span class="control-symbol">R</span><br>
+                    Cycle through primary weapons (PRM)<br>
+                    (hold to open radial menu)
+                </div>
+                <div>
+                    <span class="control-symbol">F</span><br>
+                    Cycle through power weapons (POW)<br>
+                    (hold to open radial menu)
+                </div>
+                <div>
+                    <span class="control-symbol">E</span><br>
+                    Cycle through defensive skills (SKILL)<br>
+                    (hold to open radial menu)
+                </div>
                 <div><span class="control-symbol">ESC</span> Pause / Resume</div>
             </div>
         `;

@@ -40,7 +40,7 @@ import * as combat from './combat/combat-manager.js';
 import * as lifecycle from './player/lifecycle.js';
 import * as weaponFx from './combat/weapon-effects-renderer.js';
 import * as events from './ui/event-setup.js';
-import { showHint } from './ui/hint-system.js';
+import { showHint, updateHintDimming } from './ui/hint-system.js';
 import { RadialMenu } from './ui/radial-menu.js';
 
 export const PLAYER_STATES = {
@@ -540,7 +540,7 @@ export class GameEngine {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
                 'wave1-cycle-weapons-v5',
-                'Press <strong>E</strong> to cycle primary weapons, <strong>R</strong> for power weapons, <strong>F</strong> for skills.',
+                'Press <strong>R</strong> to cycle primary weapons, <strong>F</strong> for power weapons, <strong>E</strong> for skills.',
                 7500,
                 { once: false },
             );
@@ -1040,6 +1040,23 @@ export class GameEngine {
             // and ColorStar do for their Canvas2D positions).
             if (this.starfieldRenderer.accumulateDrift && this.player && this.player.vel) {
                 this.starfieldRenderer.accumulateDrift(this.player.vel.x, this.player.vel.y);
+            }
+
+            // 5.68.2 — fade the contextual hint overlay if the player ship
+            // or mouse cursor is overlapping its bounding rect. Keeps
+            // tooltips out of the way during action without forcing them
+            // to dismiss.
+            if (this.player && this.player.active) {
+                const ph = this.player;
+                const screenX = ph.x - this.camera.x;
+                const screenY = ph.y - this.camera.y;
+                const mouseX = (this.inputHandler && this.inputHandler.input)
+                    ? this.inputHandler.input.screenAimX
+                    : -9999;
+                const mouseY = (this.inputHandler && this.inputHandler.input)
+                    ? this.inputHandler.input.screenAimY
+                    : -9999;
+                updateHintDimming(screenX, screenY, ph.radius || 14, mouseX, mouseY);
             }
             
             this.handleCollisions();

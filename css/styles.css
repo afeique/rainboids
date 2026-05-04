@@ -174,7 +174,7 @@ body.shop-open .ui-element:not(#shop-overlay) {
     margin-top: 14px;
 }
 #controls-tab .control-list > div {
-    margin: 10px 0;
+    margin: 1rem 0;
     font-size: 1.25rem;
     line-height: 1.4;
 }
@@ -1748,6 +1748,14 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 #hint-overlay.visible {
     opacity: 1;
     transform: translateX(-50%) translateY(-6px);
+}
+/* 5.68.2 — fade the overlay way down when the player ship is under it
+   or the mouse cursor is hovering over it. Driven by hint-system.js
+   updateHintDimming() each frame; the overlay still has
+   pointer-events: none so the cursor passes through, but the dimming
+   keeps the tooltip out of the player's way during action. */
+#hint-overlay.visible.dimmed {
+    opacity: 0.18;
 }
 #hint-overlay .hint-text strong {
     color: #00ccff;

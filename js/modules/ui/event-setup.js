@@ -42,10 +42,16 @@ export function setupEventListeners() {
             this.game.state === GAME_STATES.PLAYING ||
             this.game.state === GAME_STATES.WAVE_TRANSITION;
 
+        // 5.68.3 — keybind swap. New mapping:
+        //   E → defense skill cycle (was primary)
+        //   R → primary weapon cycle (was power)
+        //   F → power weapon cycle (was skill)
+        // The radial-menu types stay 'primary' / 'power' / 'skill';
+        // only the key that opens each is reshuffled.
         const radialKey =
-            e.code === 'KeyE' ? 'primary' :
-            e.code === 'KeyR' ? 'power' :
-            e.code === 'KeyF' ? 'skill' : null;
+            e.code === 'KeyE' ? 'skill'   :
+            e.code === 'KeyR' ? 'primary' :
+            e.code === 'KeyF' ? 'power'   : null;
         if (radialKey && !e.shiftKey && cycleAllowed && !e.repeat) {
             this.radialMenu.openFor(radialKey);
             hideHint();
@@ -108,13 +114,14 @@ export function setupEventListeners() {
 
     // Radial-menu keyup — releasing E/R/F closes the menu without changing
     // the equipped item. Tied to the specific key that opened it so other
-    // unrelated keyups don't dismiss it.
+    // unrelated keyups don't dismiss it. (5.68.3 keybind swap mirrors
+    // the keydown above.)
     document.addEventListener('keyup', (e) => {
         if (!this.radialMenu || !this.radialMenu.isOpen()) return;
         const t = this.radialMenu.type;
-        if ((e.code === 'KeyE' && t === 'primary') ||
-            (e.code === 'KeyR' && t === 'power')   ||
-            (e.code === 'KeyF' && t === 'skill')) {
+        if ((e.code === 'KeyE' && t === 'skill')   ||
+            (e.code === 'KeyR' && t === 'primary') ||
+            (e.code === 'KeyF' && t === 'power')) {
             this.radialMenu.cancel();
         }
     });

@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.68.3] - 2026-05-04
+
+### Changed
+- **Cycle keybinds rotated.** Mapping is now:
+  - **E** — cycle defense skill (was: cycle primary).
+  - **R** — cycle primary weapon (was: cycle power).
+  - **F** — cycle power weapon (was: cycle skill).
+  - All three keys still HOLD-to-open-radial as before; only the assignment to weapon/skill type changed. Updated in `event-setup.js` (keydown / keyup wiring), `index.html` controls list, the `wave1-cycle-weapons-v5` tutorial hint text, the `input-handler.js` comment block, and the README controls section.
+
+---
+
+## [5.68.2] - 2026-05-04
+
+### Added
+- **Hint overlay auto-dims when it overlaps gameplay.** If the player ship or the mouse cursor enters the tooltip's bounding rect (with a 24px buffer), the overlay drops to `opacity: 0.18` so it doesn't obscure action; lifts back to full when both leave. Driven by a new `updateHintDimming(playerScreenX, playerScreenY, playerRadius, mouseScreenX, mouseScreenY)` export from `hint-system.js`, called every frame from the engine update loop.
+
+---
+
 ## [5.68.1] - 2026-05-04
 
 ### Changed

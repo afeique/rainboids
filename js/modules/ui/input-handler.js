@@ -14,8 +14,8 @@ export class InputHandler {
             //   SPACE / right-click — POWER weapon (continuous; charge while
             //                                       held, fire on release).
             //   TAB                  — activate skill (one-shot pulse).
-            //   E / R / F            — cycle primary / power / skill (handled
-            //                          in event-setup.js).
+            //   E / R / F            — cycle skill / primary / power (handled
+            //                          in event-setup.js; 5.68.3 keybind swap).
             fireSecondary: false,
             activateSkill: false,
             aimX: window.innerWidth / 2,
