@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.60.0] - 2026-05-04
+
+### Changed
+- **Pre-baked glow sprites for the two hottest particle types — major particle render speedup.** This is item #1 from `docs/Performance Optimization Plan – 2026-05-03.md`.
+  - **`explosionFlash`**: was building a fresh 4-stop radial gradient on every draw call (`createRadialGradient` is one of the heaviest Canvas2D ops, ~0.05ms each), then `arc + fill`. New `radialGradientSpriteCache` bakes the 128×128 multi-stop sprite ONCE at module load and reuses it via `drawImage` — single GPU bitblt per particle. With ~30-50 concurrent flashes during a mine explosion or enemy death cluster, this saves multiple milliseconds per frame.
+  - **`explosionEmber`**: was doing two `arc + fill` passes (body + halo) with a `globalCompositeOperation` toggle in between. Now uses the existing `glowSpriteCache.draw()` (per-color cached sprite with shadowBlur baked in) — single `drawImage`. Eliminates the second arc/fill entirely. Embers are the most numerous particle in the game (~24 per enemy death + 6-12 per popcorn burst), so this scales well.
+- **Particle pool now has the headroom to actually USE 320 active particles** without the framerate caving — the bottleneck wasn't the count, it was the per-particle render cost. Should make late-wave dense scenes (boss + 5 enemies dying simultaneously) hold solid 60fps.
+
+### Notes
+- The flash sprite uses the same color stops as before — bakes pure white at 0.85α tapering through blue-white to transparent, so the on-screen look is preserved.
+- Ember sprite uses the existing `glowSpriteCache` shadowBlur recipe (blur=8). The visual is slightly softer than the old hand-drawn body+halo combo (one larger soft glow vs separate body+halo), but reads identically at gameplay scale.
+- Future wins from the perf plan still on the table: sort particles by composite mode (eliminates per-frame `globalCompositeOperation` toggles), throttle late-wave enemy AI to 30Hz, asteroid projection skip on small angle deltas. See `docs/Performance Optimization Plan – 2026-05-03.md` for the full priority list.
+
+---
+
 ## [5.59.4] - 2026-05-03
 
 ### Removed

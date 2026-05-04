@@ -1,6 +1,6 @@
 // Particle effects system
 import { GAME_CONFIG } from '../core/constants.js';
-import { random, glowSpriteCache } from '../core/utils.js';
+import { random, glowSpriteCache, radialGradientSpriteCache } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
 
 const TS = GAME_CONFIG.TICK_SCALE; // Temporal scale factor for frame-based timers
@@ -478,23 +478,21 @@ export class Particle {
                 break;
 
             case 'explosionFlash': {
-                // Additive radial flash — refined: present and obvious but
-                // not blinding. Lower alpha cap, softer center, and a
-                // pow(life, 1.5) ease-out so it doesn't sit at peak.
+                // Pre-baked radial gradient sprite — replaces the per-frame
+                // createRadialGradient + arc + fill (the heaviest path in
+                // the old hot loop) with a single drawImage. The sprite is
+                // baked once at module load and reused across all flash
+                // particles regardless of position or radius.
                 ctx.globalCompositeOperation = 'screen';
                 changedComposite = true;
                 const flashLife = Math.max(0, this.life / 1.2);
                 const eased = flashLife * flashLife * Math.sqrt(flashLife); // ~life^1.5
                 ctx.globalAlpha = eased * 0.55;
-                const fGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
-                fGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
-                fGrad.addColorStop(0.35, 'rgba(220, 235, 255, 0.45)');
-                fGrad.addColorStop(0.75, 'rgba(180, 210, 255, 0.12)');
-                fGrad.addColorStop(1, 'rgba(150, 190, 255, 0)');
-                ctx.fillStyle = fGrad;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fill();
+                const sprite = radialGradientSpriteCache.get('flash-default');
+                if (sprite) {
+                    const r = this.radius;
+                    ctx.drawImage(sprite, this.x - r, this.y - r, r * 2, r * 2);
+                }
                 break;
             }
 
@@ -522,25 +520,17 @@ export class Particle {
             }
 
             case 'explosionEmber': {
-                // Soft alpha curve — pow(life, 0.55) holds the brightness
-                // through most of the lifetime and eases out gently at the
-                // tail instead of dimming linearly. (No shadowBlur here —
-                // additive 'screen' composite is the only blend cost.)
-                const aLife = Math.max(0, this.life);
-                const softA = Math.pow(aLife, 0.55);
-                ctx.globalAlpha = softA;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fill();
-                // Additive glow halo
+                // Pre-baked glow sprite via glowSpriteCache — the cache
+                // bakes one sprite per (color, radius, blur) tuple at
+                // 0.5-px radius granularity, so per-frame cost collapses
+                // to a single drawImage. Replaces the original 2× arc+fill
+                // body+halo combo. Dramatically reduces fillStyle thrash
+                // and arc/fill calls when many embers are on screen.
                 ctx.globalCompositeOperation = 'screen';
                 changedComposite = true;
-                ctx.globalAlpha = softA * 0.4;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 3, 0, Math.PI * 2);
-                ctx.fill();
+                const aLife = Math.max(0, this.life);
+                const softA = Math.pow(aLife, 0.55);
+                glowSpriteCache.draw(ctx, this.x, this.y, this.color, this.radius, 8, softA);
                 break;
             }
 

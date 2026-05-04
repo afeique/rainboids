@@ -695,6 +695,58 @@ class GlowSpriteCache {
 
 export const glowSpriteCache = new GlowSpriteCache();
 
+// Pre-rendered RADIAL-GRADIENT sprite cache. Particle types like
+// `explosionFlash` build a multi-stop radial gradient on every draw —
+// `createRadialGradient` is one of the more expensive Canvas2D ops, so
+// caching the whole sprite into an offscreen canvas and using `drawImage`
+// instead is dramatically faster (the GPU does a single bitblt).
+//
+// Usage:
+//   const sprite = radialGradientSpriteCache.get('flash-default');
+//   ctx.drawImage(sprite, x - r, y - r, r * 2, r * 2);
+//
+// Sprite must be registered once at module load via `register(name, stops)`
+// — stops is an array of [offset, 'rgba(...)'] entries. The cache lazily
+// bakes a 128×128 sprite the first time `get()` is called for that name.
+class RadialGradientSpriteCache {
+    constructor() {
+        this.cache = new Map();
+        this.recipes = new Map();
+        this.SIZE = 128;
+    }
+
+    register(name, stops) {
+        this.recipes.set(name, stops);
+    }
+
+    get(name) {
+        if (this.cache.has(name)) return this.cache.get(name);
+        const stops = this.recipes.get(name);
+        if (!stops) return null;
+        const canvas = document.createElement('canvas');
+        canvas.width  = this.SIZE;
+        canvas.height = this.SIZE;
+        const octx = canvas.getContext('2d');
+        const c = this.SIZE / 2;
+        const grad = octx.createRadialGradient(c, c, 0, c, c, c);
+        for (const [off, col] of stops) grad.addColorStop(off, col);
+        octx.fillStyle = grad;
+        octx.fillRect(0, 0, this.SIZE, this.SIZE);
+        this.cache.set(name, canvas);
+        return canvas;
+    }
+}
+
+export const radialGradientSpriteCache = new RadialGradientSpriteCache();
+
+// Bake the explosionFlash sprite once at module load.
+radialGradientSpriteCache.register('flash-default', [
+    [0,    'rgba(255, 255, 255, 0.85)'],
+    [0.35, 'rgba(220, 235, 255, 0.45)'],
+    [0.75, 'rgba(180, 210, 255, 0.12)'],
+    [1,    'rgba(150, 190, 255, 0)'],
+]);
+
 /**
  * Optimized function to draw a cached shield icon sprite
  * @param {CanvasRenderingContext2D} ctx - The canvas context
