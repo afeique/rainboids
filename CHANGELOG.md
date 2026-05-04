@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.54.5] - 2026-05-03
+
+### Changed
+- **Powerup pickup description now uses Press Start 2P (matching the name).** Same pixel font as the wavy title above it. 14px is the largest size that keeps the longer blurbs (~40 chars) on one line while still being chunky-pixel legible. Stroke 4 + shadowBlur 6 halo preserved for contrast on any background.
+
+---
+
 ## [5.54.4] - 2026-05-03
 
 ### Changed

@@ -228,21 +228,18 @@ export function drawPowerupDisplay() {
         // POWERUP_TYPES[type].description (powerup.js).
         const desc = this.powerupDisplay.description;
         if (desc) {
-            // 22px sans-serif — the previous 13px Silkscreen was nearly
-            // invisible against busy backgrounds. Wider stroke + glow
-            // backdrop make it readable over any starfield/explosion.
-            ctx.font = "22px 'Arial', sans-serif";
+            // Press Start 2P matches the name above. 14px is the largest
+            // size that keeps long blurbs on one line while still being
+            // legibly chunky-pixel. Soft black halo + thick stroke keep
+            // it readable against busy backgrounds.
+            ctx.font = "14px 'Press Start 2P', monospace";
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
             ctx.lineJoin = 'round';
-            // Sit below the wavy name (topY is the baseline of the wavy
-            // text; ~38px gives room for its amplitude wobble at the new
-            // larger font size).
             const descY = topY + 38;
-            // Soft black glow halo for legibility on any background.
             ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
             ctx.shadowBlur = 6;
-            ctx.lineWidth = 5;
+            ctx.lineWidth = 4;
             ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
             ctx.strokeText(desc, centerX, descY);
             ctx.shadowBlur = 0;
