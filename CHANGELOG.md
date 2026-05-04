@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.13] - 2026-05-04
+
+### Changed
+- **SKILL HUD square moved into the same row as PRM and PWR.** Layout is now `[PRM][PWR][SKILL]` in a single horizontal strip, with the same 12px horizontal `gap` between each square. `skillRowY = groupY` (same Y as PRM/PWR), `skillCx = groupX + 2 × (squareSize + gap) + squareSize / 2`.
+
+---
+
 ## [5.64.12] - 2026-05-04
 
 ### Fixed

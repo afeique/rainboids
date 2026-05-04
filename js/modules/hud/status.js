@@ -739,7 +739,7 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     const groupX = coinIconX;
     // 10px breathing room between the coin-icon bottom and the squares —
     // matches the spacing between shield (level) and coin icons above.
-    const groupY = coinsY + coinIconSize / 2 + 10;
+    const groupY = coinsY + coinIconSize / 2 + 12;
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};
@@ -792,19 +792,11 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     );
 
     // ── Skill square ────────────────────────────────────────────────
-    // Left-aligned with PRM (same X center, same square size = same left
-    // edge). Vertical spacing above the SKILL square matches the gap
-    // above the PRM/PWR row (10px from the bottom of the row above).
-    // PRM's row above is the coins display; SKILL's row above is the
-    // PRM/PWR squares + their PRM/PWR labels. The label baseline sits
-    // 14px below each square's bottom edge and the 9px glyphs extend
-    // ~2px below baseline, so the visible label bottom is at
-    //   labelBottom = squareBottom + 14 + 2 = squareBottom + 16
-    // For a matching 10px gap above the SKILL square:
-    //   skillRowY = labelBottom + 10 = squareBottom + 26
-    //             = groupY + squareSize + 26
-    const skillRowY = groupY + squareSize + 26;
-    const skillCx = groupX + squareSize / 2; // align horizontally with PRM
+    // On the SAME row as PRM and PWR, sitting to the right of PWR with
+    // the same horizontal `gap`. Three squares in a single horizontal
+    // strip: [PRM][PWR][SKILL].
+    const skillRowY = groupY;
+    const skillCx = groupX + 2 * (squareSize + gap) + squareSize / 2;
     drawWeaponSquare.call(
         this, ctx,
         skillCx, skillRowY + squareSize / 2,
