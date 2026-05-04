@@ -65,8 +65,11 @@ export class InputHandler {
         });
 
         document.addEventListener('mousedown', e => {
+            // Suppress fire while a radial menu (E/R/F held) is open — that
+            // click is the user committing a radial selection, not a fire.
+            const radialOpen = this.gameEngine && this.gameEngine.radialMenu && this.gameEngine.radialMenu.isOpen();
             // Left mouse button — primary fire.
-            if (e.button === 0) {
+            if (e.button === 0 && !radialOpen) {
                 this.input.fire = true;
             }
             // Right mouse button — power weapon. (5.64.11 removed the

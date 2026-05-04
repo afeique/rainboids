@@ -11,6 +11,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.67.1] - 2026-05-04
+
+### Changed
+- **Missile Salvo missiles spread across distinct targets.** At launch each missile is pre-assigned its own target (nearest-first enemy assignment, asteroid fallback), so a 3-missile salvo never stacks on the closest enemy when two more are right there. Re-acquisition (when a missile's target dies mid-flight) also prefers targets no other live missile is currently locked onto, falling back to duplicates only if every threat is already claimed.
+
+---
+
+## [5.67.0] - 2026-05-04
+
+### Changed
+- **Rail Driver fires a double-helix pair.** Each shot is now two bullets that spiral around a shared rail axis with opposite phase, crossing over each other every half period. The pair shares the rail's damage / range / piercing — the lateral oscillation is purely a visual signature, but the bullets cover a wider effective hit corridor as they wind. MULTI_SHOT now adds extra helix pairs (still narrowly fanned).
+- **Rail Driver icon** swapped to 🧬 (DNA double helix) to match the new shot pattern.
+
+### Internal
+- Generic helix support added to the player `Bullet` entity (`helixActive`, `helixAmplitude`, `helixFreq`, `helixPhase`). The update step applies the *delta* of `sin(life·freq + phase)` perpendicular to `vel` each frame, so the underlying rail position still advances by `vel` exactly — collision math sees the displayed (helical) position. Reset to `false` in `Bullet.reset()` so non-helix shots from a recycled bullet aren't tainted.
+
+---
+
+## [5.66.1] - 2026-05-04
+
+### Changed
+- **Radial-menu type label abbreviated.** `PRIMARY WEAPON` → `PRM`, `POWER WEAPON` → `PWR`, `DEFENSE SKILL` → `SKILL`. Frees up the center-hub real-estate so the hovered option name is the dominant text.
+- **Rail Driver icon swapped** from ⚡ (which clashed with Lightning Arc, now also a primary) to 🛤️ — railway tracks read as "rail" at a glance.
+
+---
+
+## [5.66.0] - 2026-05-04
+
+### Changed
+- **Lightning Arc moved from power weapon to primary weapon.** It now fires from left-click as a continuous lightning tether (same behavior as Lance Beam) and lives in the E radial menu instead of the R radial menu. Power-weapon roster drops to 4 (Charge Shot / Mine Layer / Nova Blast / Missile Salvo); primary roster grows to 6.
+- **Lance Beam DPS dropped to match the projectile primaries.** Per-frame nibble damage 0.06 → 0.034 (60Hz × 0.034 ≈ 2.04 DPS), landing in the same bracket as Pulse Cannon (2.0), Storm Needles (2.31), and Rail Driver (2.5). Previously Lance Beam was the runaway DPS leader at 3.6.
+- **Lightning Arc DPS now matches Lance Beam** at the same 0.034 per-frame nibble (~2.04 DPS at 60Hz).
+
+### Removed
+- The CONDUCTOR / STATIC_FIELD / TESLA_COIL upgrades (chain-pipeline-only) — they were already no-ops after the 5.64.15 continuous-tether rewrite. AMPLIFIER (per-frame damage scaling) survives and moves to PRIMARY_UPGRADES alongside the move.
+
+---
+
+## [5.65.3] - 2026-05-04
+
+### Changed
+- **Radial menu slices show only the icon now.** The hovered option's name moved into the center hub and word-wraps onto multiple pixel-font lines if it doesn't fit on one. Slices stay readable at any number of options without competing with per-slice text.
+
+---
+
+## [5.65.2] - 2026-05-04
+
+### Changed
+- **Radial menu pixel font swapped to Silkscreen.** Same 14px size and black-outline stroke; the smaller Silkscreen face packs longer weapon names into a slice without truncation while keeping the pixel aesthetic.
+
+---
+
+## [5.65.1] - 2026-05-04
+
+### Changed
+- **Radial menu typography.** All radial-menu text (slice names, type label, hover label) now renders in 14px Press Start 2P with a 3px black outline stroke, matching the rest of the in-game pixel-font HUD. Improves legibility on top of the dim backdrop.
+
+---
+
+## [5.65.0] - 2026-05-04
+
+### Added
+- **Radial weapon/skill menus.** Holding **E**, **R**, or **F** opens a radial menu in the center of the screen and pauses gameplay. The menu shows every primary weapon (E), power weapon (R), or defense skill (F) as a pie slice with the option's icon and name. Aim with the mouse cursor to highlight a slice, left-click to equip, or release the key to dismiss without changing the equipped item. Replaces the old single-press cycle behavior on the same keys — you now see all options at once instead of stepping through them one at a time.
+
+### Internal
+- New module `js/modules/ui/radial-menu.js` owns the menu state, hover hit-testing, draw, and commit/cancel logic. Wired into `game-engine.js` (gates the update loop and renders the overlay), `event-setup.js` (E/R/F keydown opens, keyup cancels, mousedown commits), and `input-handler.js` (suppresses primary fire while a radial is open).
+
+---
+
 ## [5.64.15] - 2026-05-04
 
 ### Changed

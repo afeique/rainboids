@@ -14,7 +14,7 @@ A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave s
 ## Game Overview
 
 Rainboids is a supercharged asteroids game featuring:
-- **5 primary weapons**, **5 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
+- **6 primary weapons**, **4 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs
 - **20 powerup types** with stacking mechanics and visual indicators
 - **Kill-streak damage tiers** (EMPOWERED → UNSTOPPABLE → GODLIKE → LEGENDARY) — sustained kills without taking damage build up to +100% damage
@@ -36,9 +36,9 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 - **Fire primary**: Hold left-click (no auto-fire — release to stop)
 - **Fire / charge power weapon**: Spacebar OR right-click
 - **Activate defense skill**: Tab
-- **Cycle primary weapon**: E
-- **Cycle power weapon**: R
-- **Cycle defense skill**: F
+- **Pick primary weapon (radial menu)**: Hold E — aim with mouse, click to equip, release to cancel
+- **Pick power weapon (radial menu)**: Hold R — same flow
+- **Pick defense skill (radial menu)**: Hold F — same flow
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
 - **Switch defense skill**: Pause menu → SKILLS tab (all 6 free, click to equip)
@@ -54,7 +54,7 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 
 ## Weapons & Skills
 
-### Primary Weapons (5)
+### Primary Weapons (6)
 Primary weapons are free — they auto-unlock at wave milestones as you progress:
 
 | Weapon | Unlocks | Description |
@@ -62,16 +62,16 @@ Primary weapons are free — they auto-unlock at wave milestones as you progress
 | Pulse Cannon | Start | Reliable stream of energy shots |
 | Storm Needles | Wave 3 | Rapid tiny shots — saturation fire |
 | Scatter Gun | Wave 5 | Shotgun burst, devastating up close |
-| Rail Driver | Wave 8 | Slow, powerful piercing rail shot |
-| Lance Beam | Wave 12 | Precision sweep laser beam |
+| Lightning Arc | Wave 5 | Continuous lightning tether — short range, hits nearest target |
+| Rail Driver | Wave 8 | Slow, powerful piercing rail — fires a double-helix pair |
+| Lance Beam | Wave 12 | Continuous beam tether — stops at first hit |
 
-### Power Weapons (5)
+### Power Weapons (4)
 | Weapon | Description |
 |--------|-------------|
 | Charge Shot | Hold to charge, release for powerful blast |
 | Mine Layer | Drop proximity mines |
 | Nova Blast | Expanding damage ring |
-| Lightning Arc | Chain lightning between enemies |
 | Missile Salvo | Homing missiles seek targets |
 
 ### Defense Skills (6)
@@ -438,7 +438,8 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       ├── ui/                # DOM UI and input
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button, lives)
 │       │   ├── input-handler.js # Keyboard + mouse input (desktop-only build)
-│       │   └── event-setup.js #   All event listeners: input, shop, cheats, resize
+│       │   ├── event-setup.js #   All event listeners: input, shop, cheats, resize
+│       │   └── radial-menu.js #   Held E/R/F radial picker for primary/power/skill
 │       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle renderer + atlas
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
 ├── css/

@@ -39,6 +39,7 @@ import * as lifecycle from './player/lifecycle.js';
 import * as weaponFx from './combat/weapon-effects-renderer.js';
 import * as events from './ui/event-setup.js';
 import { showHint } from './ui/hint-system.js';
+import { RadialMenu } from './ui/radial-menu.js';
 
 export const PLAYER_STATES = {
     NORMAL: 'normal'
@@ -74,6 +75,9 @@ export class GameEngine {
         // Make game engine globally accessible for entities
         window.gameEngine = this;
         this._defenseSkillsRef = DEFENSE_SKILLS; // Expose for UI manager skill slots
+        // Hold-to-open radial menu for E (primary) / R (power) / F (skill).
+        // Pauses gameplay; mouse picks the slice, click commits, key release cancels.
+        this.radialMenu = new RadialMenu(this);
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         this.canvas.width = this.width;
@@ -787,6 +791,14 @@ export class GameEngine {
     handleEnemyAsteroidCollision(enemy, asteroid) { return col.handleEnemyAsteroidCollision.call(this, enemy, asteroid); }
     
     update() {
+        // Radial menu (E/R/F held) freezes gameplay just like the pause menu —
+        // particles still finish their lifetimes but no entity logic ticks.
+        const radialOpen = this.radialMenu && this.radialMenu.isOpen();
+        if (radialOpen) {
+            this.particlePool.updateActive();
+            this.lineDebrisPool.updateActive();
+            return;
+        }
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
             // Tick game timers (only during active gameplay — frozen during PAUSED/SHOP)
             const timerDt = GAME_CONFIG.LOGIC_TICK_MS;
@@ -1378,6 +1390,11 @@ export class GameEngine {
 
         // Final-victory screen — replaces all HUD chrome with the stats readout.
         this.drawGameComplete();
+
+        // Radial menu overlay — drawn over HUD/world but under the custom cursor.
+        if (this.radialMenu && this.radialMenu.isOpen()) {
+            this.radialMenu.draw(this.ctx);
+        }
 
         // Draw custom cursor (always on top, after all UI elements)
         this.drawCustomCursor();

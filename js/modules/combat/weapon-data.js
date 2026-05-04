@@ -64,8 +64,8 @@ export const PRIMARY_WEAPONS = {
     RAIL_DRIVER: {
         id: 'RAIL_DRIVER',
         name: 'Rail Driver',
-        description: 'Slow, powerful piercing rail shot',
-        icon: '⚡',
+        description: 'Slow, powerful piercing rail shot — fires a double-helix pair',
+        icon: '🧬',
         color: '#ff44ff',
         fireRate: 1200,
         damage: 3,
@@ -83,17 +83,17 @@ export const PRIMARY_WEAPONS = {
     LANCE_BEAM: {
         id: 'LANCE_BEAM',
         name: 'Lance Beam',
-        description: 'Sustained energy beam — low DPS, long uptime',
+        description: 'Sustained energy beam — modest DPS, long uptime',
         icon: '🔦',
         color: '#44ff44',
-        // Tuned 2026-05-03 for "less DPS, much longer firing":
-        //   damage  0.15 → 0.06 per-frame nibble (60Hz × 0.06 = 3.6 dps,
-        //                  was 9 dps).
-        //   beamDuration 400 → 2000 ms (5× longer per activation).
-        //   fireRate 1200 → 2200 ms cooldown so the beam isn't almost
-        //                  always-on after upgrades.
+        // 2026-05-04: damage rebalanced to land in the same DPS bracket as
+        // the projectile primaries.
+        //   damage 0.06 → 0.034 per-frame nibble (60Hz × 0.034 ≈ 2.04 dps),
+        //                 lining up with PULSE_CANNON (2.0), STORM_NEEDLES
+        //                 (2.31), and the lower end of RAIL_DRIVER (2.5).
+        // beamDuration / fireRate are vestigial since beam is now continuous-tether.
         fireRate: 2200,
-        damage: 0.06,
+        damage: 0.034,
         bulletSpeed: 0,
         bulletSize: 0,
         bulletCount: 0,
@@ -106,6 +106,28 @@ export const PRIMARY_WEAPONS = {
         spCost: 0,
         unlockWave: 12,
         upgrades: ['BEAM_WIDTH', 'LINGER', 'REFRACTION', 'OVERLOAD_BEAM', 'LANCE_VELOCITY'],
+    },
+    LIGHTNING_ARC: {
+        id: 'LIGHTNING_ARC',
+        name: 'Lightning Arc',
+        description: 'Continuous lightning tether — short range, hits nearest target',
+        icon: '⚡',
+        color: '#8888ff',
+        // Continuous-tether weapon — same per-frame damage as Lance Beam so
+        // they share a DPS bracket (~2.04 dps at 60Hz).
+        fireRate: 0,
+        damage: 0.034,
+        bulletSpeed: 0,
+        bulletSize: 0,
+        bulletCount: 0,
+        spreadAngle: 0,
+        piercing: 0,
+        range: 1.0,
+        chainRange: 200,    // tether snap range, in px
+        cost: 0,
+        spCost: 0,
+        unlockWave: 5,
+        upgrades: ['AMPLIFIER'],
     },
 };
 
@@ -169,6 +191,12 @@ export const PRIMARY_UPGRADES = {
     SCATTER_VELOCITY:{ id: 'SCATTER_VELOCITY',name: 'Powder Charge',         description: '+12% pellet speed & damage per stack (Scatter Gun)',  cost: 700,  maxStacks: 3, weapon: 'SCATTER_GUN',   icon: '🚄', velocityBonus: 0.12 },
     RAIL_VELOCITY:   { id: 'RAIL_VELOCITY',   name: 'Tungsten Slug',         description: '+12% rail speed & damage per stack (Rail Driver)',    cost: 900,  maxStacks: 3, weapon: 'RAIL_DRIVER',   icon: '🚄', velocityBonus: 0.12 },
     LANCE_VELOCITY:  { id: 'LANCE_VELOCITY',  name: 'Focused Lens',          description: '+12% beam range & damage per stack (Lance Beam)',     cost: 800,  maxStacks: 3, weapon: 'LANCE_BEAM',    icon: '🚄', velocityBonus: 0.12 },
+
+    // Lightning Arc — moved from power weapons (5.65.4). The chain-pipeline
+    // upgrades (CONDUCTOR / STATIC_FIELD / TESLA_COIL) were removed when
+    // the arc became a continuous tether; only AMPLIFIER (per-frame damage
+    // scaling) still applies.
+    AMPLIFIER:       { id: 'AMPLIFIER',       name: 'Amplifier',             description: '+20% arc damage per stack',                            cost: 700,  maxStacks: 3, weapon: 'LIGHTNING_ARC', icon: '📡' },
 };
 
 // ─── POWER WEAPONS (Right Click) ────────────────────────────────────────────
@@ -220,23 +248,6 @@ export const POWER_WEAPONS = {
         unlockWave: 3,
         upgrades: ['SHOCKWAVE', 'AFTERSHOCK', 'DOUBLE_PULSE', 'RESONANCE'],
     },
-    LIGHTNING_ARC: {
-        id: 'LIGHTNING_ARC',
-        name: 'Lightning Arc',
-        description: 'Chain lightning between enemies',
-        icon: '⚡',
-        color: '#8888ff',
-        cooldown: 6000,
-        isChargeBased: false,
-        chainCount: 3,
-        chainDamage: 2,       // was 3 — power weapons scaled down for balance
-        chainFalloff: 0.6,    // 60% damage each jump
-        chainRange: 200,      // px between targets
-        cost: 2500,
-        spCost: 2,
-        unlockWave: 5,
-        upgrades: ['CONDUCTOR', 'AMPLIFIER', 'STATIC_FIELD', 'TESLA_COIL'],
-    },
     MISSILE_SALVO: {
         id: 'MISSILE_SALVO',
         name: 'Missile Salvo',
@@ -276,12 +287,6 @@ export const POWER_UPGRADES = {
     AFTERSHOCK:       { id: 'AFTERSHOCK',       name: 'Aftershock',       description: 'Enemies hit are slowed 30% for 2s',   cost: 1200, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: '🐌' },
     DOUBLE_PULSE:     { id: 'DOUBLE_PULSE',     name: 'Double Pulse',     description: 'Fire a second ring 0.3s later',       cost: 2000, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: '🔁' },
     RESONANCE:        { id: 'RESONANCE',        name: 'Resonance',        description: '-1.5s cooldown per stack',             cost: 1500, maxStacks: 2,  weapon: 'NOVA_BLAST', icon: '🔊' },
-
-    // Lightning Arc
-    CONDUCTOR:        { id: 'CONDUCTOR',        name: 'Conductor',        description: '+1 chain jump per stack',              cost: 800,  maxStacks: 2,  weapon: 'LIGHTNING_ARC', icon: '🔌' },
-    AMPLIFIER:        { id: 'AMPLIFIER',        name: 'Amplifier',        description: '+20% chain damage per stack',          cost: 1000, maxStacks: 3,  weapon: 'LIGHTNING_ARC', icon: '📡' },
-    STATIC_FIELD:     { id: 'STATIC_FIELD',     name: 'Static Field',     description: 'Chained enemies stunned 0.5s',        cost: 1500, maxStacks: 1,  weapon: 'LIGHTNING_ARC', icon: '⚡' },
-    TESLA_COIL:       { id: 'TESLA_COIL',       name: 'Tesla Coil',       description: '-1.5s cooldown per stack',             cost: 1200, maxStacks: 2,  weapon: 'LIGHTNING_ARC', icon: '🗼' },
 
     // Missile Salvo
     EXTRA_ORDNANCE:   { id: 'EXTRA_ORDNANCE',   name: 'Extra Ordnance',   description: '+1 missile per stack',                cost: 1000, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: '🚀' },

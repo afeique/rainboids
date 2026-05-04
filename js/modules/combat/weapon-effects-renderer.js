@@ -233,7 +233,7 @@ export function drawWeaponEffects() {
     //   2. p.lightningChains (legacy): draw all chain segments.
     if ((p.lightningArcActive && p.lightningArcTarget) || (p.lightningChains && p.lightningChains.length > 0)) {
         ctx.save();
-        ctx.strokeStyle = POWER_WEAPONS.LIGHTNING_ARC.color;
+        ctx.strokeStyle = PRIMARY_WEAPONS.LIGHTNING_ARC.color;
         ctx.lineWidth = 3;
         ctx.shadowColor = '#aaaaff';
         ctx.shadowBlur = 8;
