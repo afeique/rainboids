@@ -70,6 +70,20 @@ export const GAME_CONFIG = {
     
     // Performance settings optimized
     MAX_PARTICLES: 2500, // 5.64.0 WebGL particle layer renders the migrated types (embers, flashes, sparkles, classic, shrapnel, rings) in ONE instanced draw call, so per-particle cost is ~50ns instead of 1-2µs. The 600 → 2500 bump gives us 8+ simultaneous big-bangs at peak before pool eviction kicks in, with no measurable frame-time cost.
+
+    // 5.64.16 — WebGL starfield. Background stars + simple-shape decorative
+    // color stars render via a single instanced draw call on the glCanvas.
+    // Twinkle / parallax / rotation all happen in the vertex shader, so
+    // per-star CPU cost drops to near-zero — letting us render orders of
+    // magnitude more stars than the Canvas2D path.
+    WEBGL_STAR_BUFFER_SIZE: 4000,         // hard cap on instances in the GL VBO
+    WEBGL_BACKGROUND_STAR_MULTIPLIER: 6,  // multiplier on BACKGROUND_STAR_COUNT when WebGL is active
+    WEBGL_COLOR_STAR_MULTIPLIER: 3,       // multiplier on COLOR_STAR_COUNT when WebGL is active
+    // Set to true to keep complex Canvas2D fallbacks (sparkle/burst stars,
+    // collectible orbs) on Canvas. Set to false to disable Canvas star
+    // drawing entirely — pure-WebGL pass for max perf, but loses the
+    // animated sparkle/burst silhouettes.
+    WEBGL_STARFIELD_KEEP_CANVAS_FALLBACKS: true,
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 
     // Temporal settings

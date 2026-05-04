@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.68.0] - 2026-05-04
+
+### Merged
+- **`webgl-starfield` branch landed** (5.64.16 → 5.64.18). Brings in the WebGL starfield layer and the brightness/dynamism passes. The branch had diverged from master at `dbf6026` (5.64.13) and the `radial-menus` work (5.65.0 → 5.67.1) landed on master in parallel; this merge unifies both feature lines. Resolved minor conflicts in `VERSION` and `CHANGELOG.md`; `game-engine.js` auto-merged cleanly.
+
+---
+
 ## [5.67.1] - 2026-05-04
 
 ### Changed
@@ -77,6 +84,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 - New module `js/modules/ui/radial-menu.js` owns the menu state, hover hit-testing, draw, and commit/cancel logic. Wired into `game-engine.js` (gates the update loop and renders the overlay), `event-setup.js` (E/R/F keydown opens, keyup cancels, mousedown commits), and `input-handler.js` (suppresses primary fire while a radial is open).
+
+---
+
+## [5.64.18] - 2026-05-04
+
+### Changed
+- **Inverse-size brightness rule for WebGL stars** (the "astronomical" rule). Previously every WebGL star ran at full base alpha (`1.0`); the big color-star shapes consequently dominated the field and read as game entities. New rule:
+  - **Tiny stars (≤ 2px)**: `alpha = 1.0` — punchy distant pinpoints.
+  - **Mid stars (~6px)**: `alpha ≈ 0.85`.
+  - **Big stars (~12px)**: `alpha ≈ 0.55`.
+  - **Largest shape stars (~20+ px)**: `alpha ≈ 0.30` (clamped floor).
+  - Curve: `1.0 - 0.8 × clamp((size - 2) / 28)`, floored at `0.20`.
+  - **Mental model**: small bright dots = far away (high apparent surface brightness); big stars = closer with light spread out, atmospheric backdrop.
+- **Color-star shape size bump tightened** `2.2× → 1.5×`. The largest shape silhouettes were dominating the field. Combined with the alpha-damp rule above they now feel atmospheric instead of game-relevant.
+- **Pre-blend brightness gain in fragment shaders.** Using `clamp(tex.rgb × color.rgb × GAIN, 0, 1)` before output saturates hot pixels (white core pegs to 1.0) while letting dim halo pixels read proportionally brighter — emulates a screen-blend over-exposure feel with the existing additive blend mode (no need for an HDR float framebuffer).
+  - Starfield: `BRIGHTNESS_GAIN = 1.6`.
+  - Particles: `BRIGHTNESS_GAIN = 1.3`.
+
+---
+
+## [5.64.17] - 2026-05-04
+
+### Changed
+- **WebGL stars are brighter and more dynamic.**
+  - Atlas dot widened (Gaussian coefficient `22 → 12`) and given a stronger halo (`0.5 × (1-r)^2.6 → 0.7 × (1-r)^2.0`); core occupies ~2× the pixel area.
+  - Background star base alpha `0.7..1.0 depth-scaled → 1.0 flat`. Twinkle drives variation; baseline is full bright.
+  - Background star quad size bumped `1.0× → 1.4×`.
+  - Color star shape silhouettes (diamond/triangle/hexagon/star4-8) bumped `1.0× → 2.2×` so the silhouette is actually readable at typical depths. Dot stars match background bump.
+  - Twinkle amplitude `0.15 → 0.35` (background) and `0.20 → 0.40` (color) — visible breathing.
+  - **Size pulse**: vertex shader scales the quad by `0.94 + 0.18 × wave` in lockstep with the twinkle alpha. Stars literally breathe in and out.
+  - **Hot-white peak shift**: vertex shader blends per-instance color toward white by 25% at the twinkle peak. Peak frames feel like a "hot flash" instead of just a brightness ramp.
+
+- **Particle effects brightened.**
+  - Particle atlas dot core widened (Gaussian coefficient `28 → 16`); halo amplitude `0.42 → 0.65` with shallower falloff (`(1-r)^3.0 → (1-r)^2.4`). Embers and small explosion fragments now read as proper hot motes.
+  - `explosionEmber` alpha curve `pow(life, 0.55) → pow(life, 0.45)` — stays punchier through the mid-life. Quad `1.55× → 1.8×`.
+  - `explosion` size `2.6× → 3.2×`, alpha multiplier `1.0 → 1.3`.
+  - `starSparkle` size `7× → 8×`, alpha multiplier `2.5 → 3.0`.
+  - `explosionFlash` alpha multiplier `0.6 → 0.95` — flash punch was being dampened unnecessarily. Quad `2.2× → 2.6×`.
+  - `explosionRingColored` alpha multiplier `1.5 → 2.0`.
+
+---
+
+## [5.64.16] - 2026-05-04
+
+### Added
+- **WebGL starfield layer.** New `WebGLStarfieldRenderer` + `webgl-starfield-atlas.js` render the bulk of the starfield (background stars + simple-shape decorative color stars) via a single instanced draw call on the existing `glCanvas`. Twinkle, parallax, and rotation all happen in the vertex shader — per-star CPU cost is essentially zero.
+  - **Atlas**: 1024×128 with 8 shape slots (dot, diamond, triangle, hexagon, star4, star5, star6, star8).
+  - **Per-instance attributes (14 floats)**: base position, parallax factor, size, RGBA color, twinkle phase / speed / amplitude, shape slot, base angle, rotation rate.
+  - **Vertex shader**: `pos = mod(basePos - drift × parallax, fieldSize)` for parallax+wrap; `angle = baseAngle + time × rotRate` for rotation; `alpha *= (1-amp) + amp × (0.5 + 0.5 sin(time × speed + phase))` for twinkle.
+  - **Single context**: shares the WebGL2 context with `WebGLParticleRenderer` (same `glCanvas`); starfield draws first each frame, particles draw on top.
+- **Star-count bumps when WebGL is active.** `BACKGROUND_STAR_COUNT × 6` and `COLOR_STAR_COUNT × 3` (configurable via `WEBGL_BACKGROUND_STAR_MULTIPLIER` / `WEBGL_COLOR_STAR_MULTIPLIER` in `core/constants.js`). Default total: ~435 stars on WebGL vs ~10 stars left on Canvas2D.
+- **`WEBGL_STARFIELD_KEEP_CANVAS_FALLBACKS`** toggle in `core/constants.js`. Default `true` — keeps Canvas2D drawing the complex shapes WebGL doesn't handle (sparkle/burst stars, collectible orbs). Flip to `false` to disable Canvas star drawing entirely for pure WebGL performance, at the cost of losing those animated silhouettes.
+
+### Changed
+- **Per-frame GL clear ownership moved to the engine.** `WebGLParticleRenderer.drawParticles` no longer clears the layer (would have wiped the starfield). Engine clears `glCanvas` once per frame before any GL renderer draws.
+- **Canvas2D depth-batch renderer now skips stars whose `_inWebGL` flag is set.** When a star is added to the WebGL renderer at population time, it's flagged so the Canvas pass doesn't double-draw it.
 
 ---
 
