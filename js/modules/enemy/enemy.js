@@ -86,6 +86,10 @@ export class Enemy {
         this.lastShot = 0;
         this.firingCooldown = 2000; // Will be set based on type and level
         this.targetPlayer = null;
+        // Death-sequence flags — reset on every spawn so a recycled
+        // pool slot doesn't start out destroyed.
+        this._deathFlash = 0;
+        this._shipDestroyed = false;
         
         // Burst firing properties
         this.burstState = {
@@ -248,45 +252,60 @@ export class Enemy {
         if (!this.active) return;
         this.gameEngine = gameEngine; // Cache ref for draw/takeDamage (removes window.gameEngine dependency)
 
-        // Death sequence — enemy DRIFTS while emitting small popcorn
-        // explosions, then a big final explosion fires when the timer hits
-        // zero. Multi-stage death feels more dramatic than a single burst.
-        //
-        //   _deathFlash counts DOWN from _deathFlashMax.
-        //   While > 0:  drift at gentle speed, emit small bursts every
-        //               few frames (rings, embers, sparkles).
-        //   At 0:       fire the big final explosion via the engine,
-        //               then deactivate.
+        // Death sequence — multi-phase:
+        //   tick 0           — impact (handled by createEnemyDebris before
+        //                      this branch starts running). Drift begins.
+        //   ticks 1-17       — wreck drifts, popcorn bursts every 2 frames.
+        //   tick 18 (midway) — BIG final explosion, ship VANISHES, lots
+        //                      of debris flies out. _shipDestroyed = true.
+        //   ticks 19-35      — only debris remains; no silhouette, no
+        //                      more popcorn. Debris drifts via its own
+        //                      particle physics.
+        //   tick 36          — recycle.
         if (this._deathFlash > 0) {
-            // Continue drifting under inertia, gradually decelerating.
+            // Drift under inertia (slows gradually). Continues even after
+            // the ship "vanishes" so the debris cloud keeps drifting at
+            // the same trajectory — but we use this.x/y only while the
+            // ship is intact.
             const drag = 0.97;
             this.vel.x *= drag;
             this.vel.y *= drag;
             this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
             this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
-            // Small wobble rotation so the wreck visibly tumbles.
             this.faceAngle = (this.faceAngle || 0) + 0.04;
 
-            // Periodic mini-bursts — every 3 frames so the wreck looks
-            // like it's continuously cooking off as it tumbles. More
-            // particles per burst, plus a small screen shake on each
-            // pop so the player FEELS every secondary explosion.
-            const tickIntoDeath = (this._deathFlashMax || 36) - this._deathFlash;
-            if (gameEngine && gameEngine.particlePool && tickIntoDeath % 3 === 0) {
+            const max = this._deathFlashMax || 36;
+            const tickIntoDeath = max - this._deathFlash;
+            const midPoint = Math.floor(max / 2);
+
+            // ── Big midway explosion: ship vanishes, lots of debris ──
+            // Fires exactly once when the wreck reaches the midpoint of
+            // its drift window. Sets _shipDestroyed so the renderer
+            // skips the silhouette and the popcorn loop stops.
+            if (!this._shipDestroyed && tickIntoDeath >= midPoint) {
+                this._shipDestroyed = true;
+                if (gameEngine && typeof gameEngine.triggerEnemyFinalExplosion === 'function') {
+                    try { gameEngine.triggerEnemyFinalExplosion(this); }
+                    catch (err) { console.error('triggerEnemyFinalExplosion failed', err); }
+                }
+            }
+
+            // ── Popcorn cookoffs (only while the ship is still there) ──
+            // Fires every 2 frames so the wreck is constantly bursting
+            // before the big midway pop. Each burst has 2 rings, 5 sparks,
+            // 2 embers, 2 sparkles, and a small screen shake.
+            if (!this._shipDestroyed && gameEngine && gameEngine.particlePool && tickIntoDeath % 2 === 0) {
                 const r = this.radius || 18;
                 const a = Math.random() * Math.PI * 2;
                 const dist = r * (0.3 + Math.random() * 0.8);
                 const sx = this.x + Math.cos(a) * dist;
                 const sy = this.y + Math.sin(a) * dist;
                 const c = (this.color || '#ff6644');
-                // Two flashes — bright core + colored halo — so each pop
-                // reads even on a busy screen.
                 gameEngine.particlePool.get(sx, sy, 'explosionFlash', r * 0.85);
                 gameEngine.particlePool.get(sx, sy, 'explosionRingColored', r * (0.8 + Math.random() * 0.8),
                     Math.random() < 0.5 ? '#ffffff' : c);
                 gameEngine.particlePool.get(sx, sy, 'explosionRingColored', r * (1.1 + Math.random() * 0.6),
                     Math.random() < 0.4 ? '#ffcc66' : c);
-                // 5 sparks (was 3) flying in random directions
                 for (let i = 0; i < 5; i++) {
                     const sa = Math.random() * Math.PI * 2;
                     const sp = 1.5 + Math.random() * 3.0;
@@ -295,35 +314,23 @@ export class Enemy {
                               : c;
                     gameEngine.particlePool.get(sx, sy, 'explosionShrapnel', sa, sp, col);
                 }
-                // Two embers + two sparkles — visible afterglow on each pop
                 const emberC = (tickIntoDeath % 2) ? c : '#ffcc66';
                 gameEngine.particlePool.get(sx, sy, 'explosionEmber', emberC);
                 gameEngine.particlePool.get(sx, sy, 'explosionEmber', '#ffffff');
                 gameEngine.particlePool.get(sx, sy, 'starSparkle');
                 gameEngine.particlePool.get(sx, sy, 'starSparkle');
-
-                // Tactile feedback — small shake on each secondary pop.
-                // Only on-screen so off-screen wrecks don't shake the
-                // camera for no visible reason. Magnitude tapers as the
-                // wreck winds down.
                 if (typeof gameEngine.isEntityOnScreen === 'function'
                     && gameEngine.isEntityOnScreen(this)
                     && typeof gameEngine.triggerScreenShake === 'function') {
-                    const fade = this._deathFlash / (this._deathFlashMax || 36);
+                    const fade = this._deathFlash / max;
                     gameEngine.triggerScreenShake(4, 2 + fade * 2.5);
                 }
             }
 
             this._deathFlash--;
             if (this._deathFlash <= 0) {
-                // Final big explosion before we recycle. Wrapped in a try
-                // so a missing engine ref can't ever silently swallow the
-                // explosion (the user's complaint: explosions sometimes
-                // missing). If something explodes here we want to know.
-                if (gameEngine && typeof gameEngine.triggerEnemyFinalExplosion === 'function') {
-                    try { gameEngine.triggerEnemyFinalExplosion(this); }
-                    catch (err) { console.error('triggerEnemyFinalExplosion failed', err); }
-                }
+                // No second big explosion here — the midway pop already
+                // fired. Just recycle once the debris-drift window ends.
                 this.active = false;
             }
             return;
@@ -838,6 +845,11 @@ export class Enemy {
     
     draw(ctx) {
         if (!this.active) return;
+
+        // Once the midway big explosion fires, the ship vanishes for the
+        // remainder of the death window — only its debris stays visible
+        // (debris particles render themselves via the particle pool).
+        if (this._shipDestroyed) return;
 
         // Death flash — BIG white silhouette that starts scaled up and fades/shrinks
         if (this._deathFlash > 0) {

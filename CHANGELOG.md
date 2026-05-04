@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.59.3] - 2026-05-03
+
+### Changed
+- **Enemy death sequence reorganized — big bang at the midpoint, ship vanishes, debris keeps flying.**
+  - **Popcorn now starts immediately**, every **2 frames** (was every 3, gated until after impact). The wreck is constantly cooking off from frame 1 onwards.
+  - **Big final explosion now fires at the midpoint** (frame 18 of a 36-frame death window) instead of at the end. Triggered exactly once via a new `_shipDestroyed` flag.
+  - **Ship suddenly disappears** the moment the big explosion fires — `enemy.draw` early-returns when `_shipDestroyed`, so the silhouette is gone and only the debris cloud remains.
+  - **Popcorn stops** once the ship vanishes (gated on `!_shipDestroyed`) — it was the ship cooking off, so once the ship's gone, no more cooking. Existing debris drifts under its own particle physics for the remaining ~18 frames before recycle.
+  - **Bumped final-explosion debris counts** so the midway pop reads as the ship physically breaking apart:
+    - Shrapnel `22-34 → 36-54` pieces, speed range `5-14 → 6-18`.
+    - Lingering embers `14-22 → 22-34`.
+    - Classic small particles `22 → 36`, speed range `2-9 → 2-11`.
+    - Sparkle dust `14 → 22`, spread `1.4× → 1.8×` radius.
+    - **Shape debris fires a second time** at the big bang (in addition to the impact-frame scatter) so a fresh batch of outline pieces flies out alongside the ship vanishing.
+  - `_deathFlash` and `_shipDestroyed` reset at every spawn so a recycled pool slot doesn't start out destroyed.
+
+---
+
 ## [5.59.2] - 2026-05-03
 
 ### Changed

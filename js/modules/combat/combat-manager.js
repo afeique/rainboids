@@ -238,11 +238,14 @@ export function triggerEnemyFinalExplosion(enemy) {
     setTimeout(() => ringPP && ringPP.get(ex, ey, 'explosionRingColored', r * 2.2 * sizeScale, '#ffcc66'), 130);
     setTimeout(() => ringPP && ringPP.get(ex, ey, 'explosionRingColored', r * 3.2 * sizeScale, color), 220);
 
-    // 3. Dense directional shrapnel — fast streaks in all directions.
-    const shrapnelCount = Math.floor(22 + 12 * sizeScale);
+    // 3. Dense directional shrapnel — DENSER for the new midway-big-bang
+    // moment where the ship visibly vanishes. Fast streaks in all
+    // directions, 4-color rotation. Bumped count + bumped speed range
+    // so the debris cloud reads as the ship physically blowing apart.
+    const shrapnelCount = Math.floor(36 + 18 * sizeScale);
     for (let i = 0; i < shrapnelCount; i++) {
         const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
-        const speed = random(5, 14) * sizeScale;
+        const speed = random(6, 18) * sizeScale;
         const sColor = i % 4 === 0 ? '#ffffff'
                      : i % 4 === 1 ? '#ffcc66'
                      : i % 4 === 2 ? color
@@ -264,30 +267,38 @@ export function triggerEnemyFinalExplosion(enemy) {
         }
     }
 
-    // 5. Lingering embers
-    const emberCount = Math.floor(14 + 8 * sizeScale);
+    // 5. Lingering embers — bumped for thicker afterglow.
+    const emberCount = Math.floor(22 + 12 * sizeScale);
     for (let i = 0; i < emberCount; i++) {
         this.particlePool.get(ex, ey, 'explosionEmber',
             i % 3 === 0 ? '#ffcc66' : color);
     }
 
-    // 6. Classic small particles
-    for (let i = 0; i < 22; i++) {
+    // 6. Classic small particles — denser cloud.
+    for (let i = 0; i < 36; i++) {
         const p = this.particlePool.get(ex, ey, 'explosion');
         if (p) {
-            p.color = i < 7 ? '#ffffff' : i < 14 ? color : '#ffcc66';
+            p.color = i < 10 ? '#ffffff' : i < 22 ? color : '#ffcc66';
             const a = random(0, Math.PI * 2);
-            const s = random(2, 9);
+            const s = random(2, 11);
             p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
             p.radius = random(1.5, 5);
         }
     }
 
-    // 7. Sparkle dust
-    for (let i = 0; i < 14; i++) {
+    // 7. Sparkle dust — wider spread, more motes.
+    for (let i = 0; i < 22; i++) {
         const a = Math.random() * Math.PI * 2;
-        const rr = Math.random() * r * 1.4;
+        const rr = Math.random() * r * 1.8;
         this.particlePool.get(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr, 'starSparkle');
+    }
+
+    // 7b. Outline scatter — emit the enemy's own shape debris a SECOND
+    // time at the midway big-bang. The first scatter at impact has
+    // already drifted; this fresh batch reads as the ship actively
+    // breaking apart, not just smoke from earlier.
+    if (typeof this.createShapeDebris === 'function') {
+        try { this.createShapeDebris(enemy); } catch (_) {}
     }
 
     // 8. Delayed secondary cookoff — scattered sparks + a small final
