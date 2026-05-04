@@ -29,8 +29,19 @@ export function takeDamage(damageAmount = this.baseDamage) {
 
     this.player.makeInvincible(3000);
     this.events.emit('audio:hit');
-    this.particlePool.get(this.player.x, this.player.y, 'damageNumber', Math.round(reducedDamage));
-    this.triggerScreenShake(15, 8);
+    if (reducedDamage > 0) {
+        if (typeof this.createDamageNumber === 'function') {
+            this.createDamageNumber(this.player.x, this.player.y - (this.player.radius || 14), reducedDamage, { isPlayerHit: true });
+        }
+        // Generic-source path: no impact point, just radial. Pass the
+        // player's own pos so the camera kick collapses to zero —
+        // triggerPlayerHitFX handles that gracefully.
+        if (typeof this.triggerPlayerHitFX === 'function') {
+            this.triggerPlayerHitFX(this.player.x, this.player.y, reducedDamage);
+        } else {
+            this.triggerScreenShake(15, 8);
+        }
+    }
 }
 
 export function handlePlayerDeath() {

@@ -640,13 +640,81 @@ export function updateKillStreak() {
     }
 }
 
+// ── Player-hit visual FX ──
+// Loud, unmistakable feedback when the player takes damage: red-tinted
+// flash + radial shrapnel + embers + screen shake + camera kick + screen
+// flash. Caller passes the impact point (where the damage came from) so
+// the camera kick and shrapnel angle correctly. Scaled by `damage` so a
+// big hit feels appropriately bigger than a graze.
+export function triggerPlayerHitFX(impactX, impactY, damage = 1) {
+    if (!this.player || !this.player.active) return;
+    const px = this.player.x;
+    const py = this.player.y;
+
+    // Severity 0..1 — caps so a one-shot kill doesn't render off-screen.
+    const sev = Math.min(1, Math.max(0.4, damage / 25));
+
+    // ── Screen + camera punch ──
+    if (typeof this.triggerScreenFlash === 'function') {
+        this.triggerScreenFlash(0.18 + sev * 0.18, 6 + Math.floor(sev * 6));
+    }
+    if (typeof this.triggerScreenShake === 'function') {
+        this.triggerScreenShake(16 + Math.floor(sev * 14), 6 + sev * 9);
+    }
+    if (typeof this.triggerHitstop === 'function') {
+        this.triggerHitstop(3 + Math.floor(sev * 4));
+    }
+    if (typeof this.triggerCameraKick === 'function') {
+        // Kick the camera away from the impact (so it feels like the
+        // hit shoved the world). Angle from impact → player.
+        const dx = px - impactX;
+        const dy = py - impactY;
+        const len = Math.hypot(dx, dy) || 1;
+        this.triggerCameraKick(dx / len, dy / len, 14 + sev * 14);
+    }
+
+    if (!this.particlePool) return;
+
+    // ── Bright impact flash at the player ──
+    this.particlePool.get(px, py, 'explosionFlash', 60 + sev * 60);
+    this.particlePool.get(px, py, 'explosionRingColored', 90 + sev * 60, '#ff5566');
+
+    // ── Radial shrapnel — red/white/orange mix, scaled count ──
+    const shrapCount = 12 + Math.floor(sev * 16);
+    for (let i = 0; i < shrapCount; i++) {
+        const a = (i / shrapCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        const sp = 3 + Math.random() * (4 + sev * 4);
+        const c = i % 4 === 0 ? '#ffffff'
+                : i % 4 === 1 ? '#ff5566'
+                : i % 4 === 2 ? '#ff9966'
+                : '#cc2244';
+        this.particlePool.get(px, py, 'explosionShrapnel', a, sp, c);
+    }
+
+    // ── Embers — slower lingering motes for the afterglow ──
+    const emberCount = 6 + Math.floor(sev * 8);
+    for (let i = 0; i < emberCount; i++) {
+        const c = i % 2 === 0 ? '#ff6677' : '#ffaa55';
+        this.particlePool.get(px, py, 'explosionEmber', c);
+    }
+
+    // ── Sparkle dust — tiny twinkling specks scattered around ──
+    const sparkCount = 8 + Math.floor(sev * 8);
+    for (let i = 0; i < sparkCount; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 50;
+        this.particlePool.get(px + Math.cos(a) * r, py + Math.sin(a) * r, 'starSparkle');
+    }
+}
+
 // ── Damage Numbers ──
 
 export function createDamageNumber(x, y, damage, opts = {}) {
-    // opts: { isCrit?: bool, isEmpowered?: bool }
-    // Crit numbers render with a bigger font, hot color, and a "CRIT!" tag in
-    // hud/combat.js drawDamageNumbers. Empowered (perfect-reload buff) uses a
-    // different highlight on top of the base/crit treatment.
+    // opts: { isCrit?: bool, isEmpowered?: bool, isPlayerHit?: bool }
+    // Crit numbers render with a bigger font, hot color, and a "CRIT!" tag.
+    // Empowered (perfect-reload buff) uses a cyan tint. isPlayerHit renders
+    // red with a leading "-" so the player can tell at a glance they were
+    // hurt vs they hurt something. See hud/combat.js drawDamageNumbers.
     const damageNumber = {
         x: x,
         y: y,
@@ -655,6 +723,7 @@ export function createDamageNumber(x, y, damage, opts = {}) {
         maxLife: 1.5,
         isCrit: !!opts.isCrit,
         isEmpowered: !!opts.isEmpowered,
+        isPlayerHit: !!opts.isPlayerHit,
         vel: {
             x: (Math.random() - 0.5) * 2,
             y: -2 - Math.random() * 2

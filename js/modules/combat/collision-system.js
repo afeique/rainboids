@@ -1400,6 +1400,10 @@ export function handlePlayerEnemyCollision(player, enemy) {
         const finalDamage = Math.round(reducedDamage);
         player.health = Math.max(0, player.health - finalDamage);
         if (this.game.stats && finalDamage > 0) this.game.stats.totalDamageTaken += finalDamage;
+        if (finalDamage > 0) {
+            this.createDamageNumber(player.x, player.y - (player.radius || 14), finalDamage, { isPlayerHit: true });
+            this.triggerPlayerHitFX(enemy.x, enemy.y, finalDamage);
+        }
 
         // Break the kill streak on actual HP loss (Phase Dash zeroes
         // reducedDamage above, so dashing through enemies preserves it).
@@ -1559,6 +1563,13 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     }
     const finalDamage = Math.round(reducedDamage);
     player.health = Math.max(0, player.health - finalDamage);
+    if (finalDamage > 0) {
+        this.createDamageNumber(player.x, player.y - (player.radius || 14), finalDamage, { isPlayerHit: true });
+        // Bullet impact point — bullet's most recent position is the hit
+        // location for the camera kick + shrapnel direction.
+        this.triggerPlayerHitFX(bullet.x, bullet.y, finalDamage);
+        if (this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
+    }
 
     // Break the kill streak on actual HP loss (see also player↔enemy
     // collision above and lifecycle.takeDamage).
@@ -1696,6 +1707,11 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
 
         // Apply the calculated damage
         this.player.health = Math.max(0, this.player.health - finalDamage);
+        if (finalDamage > 0) {
+            this.createDamageNumber(this.player.x, this.player.y - (this.player.radius || 14), finalDamage, { isPlayerHit: true });
+            this.triggerPlayerHitFX(asteroid.x, asteroid.y, finalDamage);
+            if (this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
+        }
 
         // Award XP for surviving asteroid collision
         this.player.gainExperience(4);

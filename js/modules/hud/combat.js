@@ -25,7 +25,19 @@ export function drawDamageNumbers() {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            if (dmgNum.isCrit) {
+            if (dmgNum.isPlayerHit) {
+                // Damage TO the player: red, bold, with a leading "-" so
+                // it's instantly distinguishable from enemy/asteroid hit
+                // numbers (which are gold). Slightly bigger than standard.
+                const fontSize = 18;
+                ctx.font = `bold ${fontSize}px 'Press Start 2P', monospace`;
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = rgba(0, 0, 0, alpha);
+                ctx.fillStyle = rgba(255, 70, 70, alpha);
+                const text = '-' + dmgNum.damage.toString();
+                ctx.strokeText(text, screenX, screenY);
+                ctx.fillText(text, screenX, screenY);
+            } else if (dmgNum.isCrit) {
                 // CRITs: bigger font, hot orange-red, white outline, with a
                 // tiny "CRIT!" tag above so they're impossible to miss.
                 const fontSize = 26;

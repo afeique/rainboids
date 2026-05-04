@@ -716,6 +716,7 @@ export class GameEngine {
     drawMoneyPickupDisplay() { return hudCombat.drawMoneyPickupDisplay.call(this); }
     
     createDamageNumber(x, y, damage, opts) { return combat.createDamageNumber.call(this, x, y, damage, opts); }
+    triggerPlayerHitFX(ix, iy, damage) { return combat.triggerPlayerHitFX.call(this, ix, iy, damage); }
     updateDamageNumbers(deltaTime) { return combat.updateDamageNumbers.call(this, deltaTime); }
 
     drawDamageNumbers() { return hudCombat.drawDamageNumbers.call(this); }

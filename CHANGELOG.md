@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.58.0] - 2026-05-03
+
+### Added
+- **Damage numbers when the player gets hit.** All four player-damage paths (player↔enemy collision, player↔asteroid collision, enemy bullet hit, generic `lifecycle.takeDamage`) now spawn a damage number above the player. Renders red and bold with a leading "−" prefix (e.g. `−12`) so it's instantly distinguishable from the gold enemy/asteroid hit numbers. New `isPlayerHit` opt on `createDamageNumber` drives the styling in `hud/combat.js drawDamageNumbers`.
+- **Epic player-hit FX** — every player damage event now fires a unified `triggerPlayerHitFX(impactX, impactY, damage)` helper:
+  - Bright red-tinted impact flash + 90-150 px shockwave ring at the player.
+  - 12-28 directional shrapnel pieces in a white/red/orange/crimson rotation.
+  - 6-14 lingering embers + 8-16 sparkle motes scattered around.
+  - Screen flash alpha 0.18 → 0.36 (scaled by damage), shake duration 16-30 frames at 6-15 magnitude, hitstop 3-7 frames.
+  - Camera kicks AWAY from the impact point — direction computed from impact vector — so the world feels like it just got shoved.
+  - All counts/intensities scale on a `severity = clamp(damage/25, 0.4, 1.0)` curve so a graze still reads while a 25-damage cataclysm shakes the screen apart.
+
+### Changed
+- `lifecycle.takeDamage` swapped its legacy `particlePool.get(..., 'damageNumber', ...)` call out for the proper `createDamageNumber` system — consistent rendering with all other damage numbers.
+
+---
+
 ## [5.57.2] - 2026-05-03
 
 ### Removed
