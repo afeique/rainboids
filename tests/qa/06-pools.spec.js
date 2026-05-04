@@ -119,13 +119,13 @@ test.describe('QA-06: Pool manager correctness', () => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             // Spawn well over the cap so eviction must kick in
-            for (let i = 0; i < 400; i++) {
+            for (let i = 0; i < 500; i++) {
                 ge.particlePool.get(300, 300, 'explosion');
             }
         });
         const count = await page.evaluate(() => window.gameEngine.particlePool.activeObjects.length);
-        // MAX_PARTICLES is 220 — allow a small tolerance for edge-of-cap behaviour
-        expect(count).toBeLessThanOrEqual(230);
+        // MAX_PARTICLES is 320 — allow a small tolerance for edge-of-cap behaviour
+        expect(count).toBeLessThanOrEqual(330);
     });
 
     // ------------------------------------------------------------------

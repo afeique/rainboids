@@ -134,13 +134,12 @@ export function createEnemyDebris(enemy) {
     const sizeScale = Math.min(2, enemy.radius / 15);
     const onScreen = this.isEntityOnScreen(enemy);
 
-    // ── Kill juice: hitstop + camera kick + screen flash + initial shake ──
-    // Enemies are a big deal — even the impact frame gets a meaningful
-    // shake so the player feels every kill before the drift sequence
-    // even starts. Final explosion gets the biggest shake.
+    // ── Kill juice: hitstop + camera kick + initial shake ──
+    // No fullscreen flash on hit — those were too washy when many
+    // enemies died in quick succession. Hitstop + kick + shake carry
+    // the impact, the localized particle flashes do the visual work.
     if (onScreen) {
         this.triggerHitstop(6);
-        this.triggerScreenFlash(0.10, 5);
         const kdx = this.player.x - enemy.x;
         const kdy = this.player.y - enemy.y;
         this.triggerCameraKick(kdx, kdy, 18);
@@ -213,12 +212,11 @@ export function triggerEnemyFinalExplosion(enemy) {
     const r  = enemy.radius || 18;
 
     // ── Punch ── Final-explosion shake is the biggest in the death
-    // sequence. The popcorn phase has dozens of small shakes leading
-    // into this — the finale should still hit noticeably harder than
-    // any of them. Enemies are a big deal.
+    // sequence. No fullscreen flash — the giant particle cloud does
+    // the visual work, and stacking flashes when multiple enemies die
+    // in the same window washes out the screen.
     if (onScreen) {
         this.triggerHitstop(7);
-        this.triggerScreenFlash(0.16, 7);
         if (this.player) {
             const kdx = this.player.x - ex;
             const kdy = this.player.y - ey;

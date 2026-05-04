@@ -24,8 +24,8 @@ export const GAME_CONFIG = {
     HEALTH_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop health orbs
     HEALTH_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum health orbs dropped (upgrade to get more)
     HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
-    HEALTH_ORB_SIZE_MIN: 2.28, // Smallest health orbs are now 75% larger (was 1.3) so they read clearly even when low-heal
-    HEALTH_ORB_SIZE_MAX: 2.45, // Bumped proportionally with the min so the size delta stays subtle (was 1.4)
+    HEALTH_ORB_SIZE_MIN: 2, // Smallest health orbs are now 75% larger (was 1.3) so they read clearly even when low-heal
+    HEALTH_ORB_SIZE_MAX: 2.3, // Bumped proportionally with the min so the size delta stays subtle (was 1.4)
     HEALTH_ORB_MAX_HEAL_PER_ORB: 2, // Per-orb heal cap. Excess budget → more orbs at this cap.
     
     // Money Orb Configuration (renamed from money stars)
@@ -34,8 +34,8 @@ export const GAME_CONFIG = {
     MONEY_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop money orbs
     MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum money orbs dropped (upgrade to get more)
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
-    MONEY_ORB_SIZE_MIN: 2.28, // Smallest money orbs are now 75% larger (was 1.3) so they read clearly even when low-value
-    MONEY_ORB_SIZE_MAX: 2.55, // Bumped proportionally with the min so big drops still feel meaningfully larger (was 1.6)
+    MONEY_ORB_SIZE_MIN: 2, // Smallest money orbs are now 75% larger (was 1.3) so they read clearly even when low-value
+    MONEY_ORB_SIZE_MAX: 2.3, // Bumped proportionally with the min so big drops still feel meaningfully larger (was 1.6)
     MONEY_ORB_MAX_MONEY_PER_ORB: 20, // Per-orb money cap. Excess budget → more orbs at this cap.
     
     // Orb Drop Upgrade Configuration
@@ -69,7 +69,7 @@ export const GAME_CONFIG = {
     WAVE_BREAK_TIME: 10000, // Time between waves (ms)
     
     // Performance settings optimized
-    MAX_PARTICLES: 220, // Bumped to fit the epic mine / lightning / lance bursts
+    MAX_PARTICLES: 320, // Headroom for the 36-frame multi-stage enemy death (impact + 9 popcorn bursts + midway big-bang) running concurrently with ambient bullets/asteroids without evicting its own particles
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 
     // Temporal settings

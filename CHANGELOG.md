@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.59.4] - 2026-05-03
+
+### Removed
+- **Fullscreen screen flash on enemy damage / death.** Both `triggerScreenFlash` calls in the enemy death pipeline are gone — the impact-frame `0.10` and the midway-explosion `0.16`. Stacked enemy kills used to wash the screen white. Hitstop, camera kick, and screen shake still carry the impact, and the localized particle flashes do the visual work without globally tinting the canvas.
+
+### Changed
+- **Particle pool cap raised 220 → 320** for consistency. The 36-frame multi-stage enemy death sequence (impact + 9 popcorn bursts + midway big-bang + lingering debris) emits ~230 particles concurrently. With the old 220 cap, ambient bullets/asteroid hits could evict the death sequence's own particles mid-flight, making enemy explosions look weak or missing parts. The 320 cap gives the full sequence room to breathe alongside ~90 particles of ambient activity. QA tests updated to spawn 500-600 and assert `≤ 330`.
+
+---
+
 ## [5.59.3] - 2026-05-03
 
 ### Changed
