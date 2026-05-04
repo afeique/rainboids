@@ -125,10 +125,20 @@ export function getEnemySpeedMultiplier(waveNumber) {
     return 0.55 + Math.pow(t, 1.5) * 2.0;
 }
 
-// Enemy bullet speed multiplier — same curve as enemy speed so projectiles
-// scale with their owners.
+// Enemy bullet speed multiplier — DECOUPLED from enemy movement so the
+// floor can be raised. Wave 1 enemies still MOVE gently (helps the
+// player learn) but their bullets fly at 1.15× base — considerably
+// faster than the old 0.55× wave-1 floor. Late waves climb to 3.05×.
+//
+//   formula: 1.15 + ((w-1)/19)^1.4 * 1.9
+//   w=1: 1.15   w=5: 1.37   w=10: 1.83   w=15: 2.40   w=20: 3.05
+//
+// (Was: same curve as enemy movement, 0.55..2.55. Wave 1 bullets now
+// roughly 2× faster, wave 20 ~20% faster.)
 export function getEnemyBulletSpeedMultiplier(waveNumber) {
-    return getEnemySpeedMultiplier(waveNumber);
+    const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
+    const t = (w - 1) / (MAX_WAVES - 1);
+    return 1.15 + Math.pow(t, 1.4) * 1.9;
 }
 
 // ── Wave Subtitles ──────────────────────────────────────────────────────

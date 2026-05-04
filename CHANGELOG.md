@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.68.1] - 2026-05-04
+
+### Changed
+- **Enemy bullet speed decoupled from enemy movement and bumped at the floor.** New curve `1.15 + ((w-1)/19)^1.4 × 1.9` (waves 1→20: `1.15, 1.37, 1.83, 2.40, 3.05`). Wave 1 bullets are now ~2× faster than before (was `0.55×`); wave 20 bullets ~20% faster (was `2.55×`). Enemy MOVEMENT keeps its gentler `0.55..2.55` ramp so wave 1 still teaches positioning while bullets actually feel threatening.
+- **Primary-weapon DPS rebalance.** All primaries now sit at ~3.0 DPS baseline (previously a 2.0–2.5 spread); Pulse Cannon got the biggest buff so the starter weapon doesn't feel anaemic.
+  - PULSE_CANNON: damage `0.8 → 1.2` (DPS `2.00 → 3.00`).
+  - STORM_NEEDLES: damage `0.30 → 0.40` (DPS `2.31 → 3.08`).
+  - SCATTER_GUN: per-pellet damage `0.40 → 0.42` (5-pellet point-blank DPS `2.86 → 3.00`).
+  - LANCE_BEAM: per-frame damage `0.034 → 0.05` (DPS `2.04 → 3.00`).
+  - LIGHTNING_ARC: per-frame damage `0.034 → 0.05` (DPS `2.04 → 3.00`).
+  - RAIL_DRIVER unchanged (`2.50` single / up to `5.00` with both helix bullets hitting).
+- **Pause-menu CONTROLS tab rewritten.** The dynamic `updateControlsTab()` in `ui-manager.js` was still using the pre-5.64.14 layout with a "1 – 4 Defense skills" line. Replaced with the current keybind layout (E/R/F on one line; "hold to open radial menu" hint).
+
+---
+
 ## [5.68.0] - 2026-05-04
 
 ### Merged

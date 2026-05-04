@@ -341,16 +341,19 @@ export class UIManager {
         const controlsTab = document.getElementById('controls-tab');
         if (!controlsTab) return;
         // Desktop-only build — single keyboard / mouse layout.
+        // 5.68.1 — refreshed for the 5.64.14 keybind layout (E/R/F/TAB/SPACE)
+        // and the 5.65.0 radial-menu wrinkle (cycle keys also open radial
+        // menus when held). The "1-4 defense skills" line is gone — skills
+        // are equipped from the SKILLS pause-menu tab and activated via TAB.
         controlsTab.innerHTML = `
             <h2>CONTROLS</h2>
             <div class="control-list">
                 <div><span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span> Move</div>
                 <div><span class="control-symbol">MOUSE</span> Aim</div>
-                <div><span class="control-symbol">LEFT-CLICK</span><br>
-                Fire primary weapon (keep holding)</div>
-                <div><span class="control-symbol">RIGHT-CLICK</span> or <span class="control-symbol">SPACE</span><br>
-                Fire power weapon (auto charges)</div>
-                <div><span class="control-symbol">1</span> &ndash; <span class="control-symbol">4</span> Defense skills</div>
+                <div><span class="control-symbol">LEFT-CLICK</span> Fire primary weapon (hold)</div>
+                <div><span class="control-symbol">RIGHT-CLICK</span> or <span class="control-symbol">SPACE</span> Fire power weapon</div>
+                <div><span class="control-symbol">TAB</span> Activate equipped skill</div>
+                <div><span class="control-symbol">E</span> &nbsp;<span class="control-symbol">R</span> &nbsp;<span class="control-symbol">F</span> Cycle primary / power / skill (hold to open radial menu)</div>
                 <div><span class="control-symbol">ESC</span> Pause / Resume</div>
             </div>
         `;

@@ -65,16 +65,16 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     // Tabs are DOM buttons (`.shop-tab`) — the legacy canvas-rendered
     // `shopTabBounds` is no longer populated.
 
-    test('shop has 5 DOM tabs', async ({ page }) => {
+    test('shop has 4 DOM tabs (SKILLS removed in 889a83a)', async ({ page }) => {
         await page.evaluate(() => window.gameEngine.openShop());
         await page.waitForTimeout(100);
         const tabCount = await page.evaluate(() =>
             document.querySelectorAll('#shop-overlay .shop-tab').length
         );
-        expect(tabCount).toBe(5);
+        expect(tabCount).toBe(4);
     });
 
-    test('shop tabs include HELP, PRIMARY, POWER, DEFENSE, SKILLS', async ({ page }) => {
+    test('shop tabs include HELP, PRIMARY, POWER, DEFENSE', async ({ page }) => {
         await page.evaluate(() => window.gameEngine.openShop());
         await page.waitForTimeout(100);
         const tabKeys = await page.evaluate(() =>
@@ -82,7 +82,7 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
                 .map(b => b.dataset.tab)
                 .sort()
         );
-        expect(tabKeys).toEqual(['DEFENSE', 'HELP', 'POWER', 'PRIMARY', 'SKILLS']);
+        expect(tabKeys).toEqual(['DEFENSE', 'HELP', 'POWER', 'PRIMARY']);
     });
 
     test('PRIMARY shop tab shows upgrades for equipped weapon', async ({ page }) => {
@@ -157,15 +157,23 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         expect(result.active).toBe('STORM_NEEDLES');
     });
 
-    test('E key cycles primary weapon through every type in PRIMARY_WEAPONS_LIST', async ({ page }) => {
-        // 5.64.14 — primary cycle is now E (was Tab).
+    test('player.equipPrimary swaps the active primary weapon', async ({ page }) => {
+        // 5.65.0 — the E keydown now opens a radial menu instead of
+        // cycling immediately. Equip is committed via mouse click on a
+        // slice. Verify the underlying data path (equipPrimary) works.
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
             const before = ge.player.activePrimary;
-            const evt = new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true });
-            document.dispatchEvent(evt);
-            return { before, after: ge.player.activePrimary };
+            const all = Object.keys(ge.PRIMARY_WEAPONS_LIST || {});
+            const next = all.find(k => k !== before);
+            // equipPrimary requires the weapon to be in ownedPrimaries.
+            // The radial menu adds it automatically when committing; we
+            // do that here too.
+            ge.player.ownedPrimaries.add(next);
+            ge.player.equipPrimary(next);
+            return { before, after: ge.player.activePrimary, expected: next };
         });
+        expect(result.after).toBe(result.expected);
         expect(result.after).not.toBe(result.before);
     });
 
@@ -217,13 +225,13 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
             // is selectable for free (cost is implicit zero, no shop buy).
             return Object.keys(ge.PRIMARY_WEAPONS_LIST || {});
         });
-        expect(costs.length).toBe(5); // 5 primary weapons total
-        // Every primary should appear in the list — names are the truth.
+        expect(costs.length).toBe(6); // 5.66.0 — Lightning Arc moved to primary
         expect(costs).toContain('PULSE_CANNON');
         expect(costs).toContain('STORM_NEEDLES');
         expect(costs).toContain('SCATTER_GUN');
         expect(costs).toContain('RAIL_DRIVER');
         expect(costs).toContain('LANCE_BEAM');
+        expect(costs).toContain('LIGHTNING_ARC');
     });
 
     test('weapons auto-unlock at wave milestones', async ({ page }) => {

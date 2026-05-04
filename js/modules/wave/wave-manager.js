@@ -8,7 +8,7 @@
 import { GAME_CONFIG, GAME_STATES, MAX_WAVES, getEnemyFiringCooldown } from '../core/constants.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
-import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats, getEnemySpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
+import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats, getEnemySpeedMultiplier, getEnemyBulletSpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
@@ -235,15 +235,17 @@ export function applyEnemyLevelScaling(enemy, opts = {}) {
     // Apply level scaling
     const scaledStats = getLevelScaledEnemyStats(baseStats, this.game.enemyLevel);
 
-    // Campaign-wide speed ramp on top of the level mult — wave 1 is gentle,
-    // late waves chase aggressively. Same multiplier feeds enemy-bullet
-    // speed so projectiles scale with their owners.
+    // Campaign-wide speed ramps. Enemy MOVEMENT stays gentle on wave 1
+    // (helps the player learn); enemy BULLET speed is decoupled and
+    // starts at 1.15× — considerably faster than the old shared 0.55×
+    // floor.
     const campaignSpeedMul = getEnemySpeedMultiplier(this.game.currentWave);
+    const bulletSpeedMul = getEnemyBulletSpeedMultiplier(this.game.currentWave);
 
     enemy.health = scaledStats.health;
     enemy.maxHealth = scaledStats.health;
     enemy.config.speed = scaledStats.speed * campaignSpeedMul;
-    enemy.bulletSpeedMul = campaignSpeedMul;
+    enemy.bulletSpeedMul = bulletSpeedMul;
 
     // Set level-based firing cooldown
     enemy.firingCooldown = getEnemyFiringCooldown(enemy.type, this.game.enemyLevel);

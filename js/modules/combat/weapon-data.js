@@ -10,8 +10,11 @@ export const PRIMARY_WEAPONS = {
         description: 'Steady stream of reliable shots',
         icon: '🔫',
         color: '#00ccff',
+        // 5.68.1 — bumped damage 0.8 → 1.2 (DPS 2.0 → 3.0). Brings
+        // Pulse Cannon up to par with Rail Driver's single-target
+        // baseline so the starter weapon doesn't feel anaemic.
         fireRate: 400,
-        damage: 0.8,
+        damage: 1.2,
         bulletSpeed: 1.0,
         bulletSize: 1.0,
         bulletCount: 1,
@@ -29,8 +32,9 @@ export const PRIMARY_WEAPONS = {
         description: 'Rapid tiny shots that saturate targets',
         icon: '🌧️',
         color: '#88ffff',
+        // 5.68.1 — bumped damage 0.3 → 0.4 (DPS 2.31 → 3.08).
         fireRate: 130,
-        damage: 0.3,
+        damage: 0.4,
         bulletSpeed: 1.1,
         bulletSize: 0.5,
         bulletCount: 1,
@@ -48,8 +52,13 @@ export const PRIMARY_WEAPONS = {
         description: 'Shotgun burst — devastating up close',
         icon: '💥',
         color: '#ff8844',
+        // 5.68.1 — damage tuned for 3.0 DPS at point-blank (5 pellets
+        // hitting). Single-pellet glancing hits naturally fall below
+        // the bracket since fewer pellets connect at range.
+        //   per-shot 0.4 × 5 / 0.7s = 2.86 DPS
+        //   per-shot 0.42 × 5 / 0.7s = 3.00 DPS
         fireRate: 700,
-        damage: 0.4,
+        damage: 0.42,
         bulletSpeed: 0.9,
         bulletSize: 0.6,
         bulletCount: 5,
@@ -83,17 +92,14 @@ export const PRIMARY_WEAPONS = {
     LANCE_BEAM: {
         id: 'LANCE_BEAM',
         name: 'Lance Beam',
-        description: 'Sustained energy beam — modest DPS, long uptime',
+        description: 'Sustained energy beam — steady DPS, long uptime',
         icon: '🔦',
         color: '#44ff44',
-        // 2026-05-04: damage rebalanced to land in the same DPS bracket as
-        // the projectile primaries.
-        //   damage 0.06 → 0.034 per-frame nibble (60Hz × 0.034 ≈ 2.04 dps),
-        //                 lining up with PULSE_CANNON (2.0), STORM_NEEDLES
-        //                 (2.31), and the lower end of RAIL_DRIVER (2.5).
-        // beamDuration / fireRate are vestigial since beam is now continuous-tether.
+        // 5.68.1 — damage 0.034 → 0.05 per-frame nibble.
+        //   60Hz × 0.05 = 3.0 DPS. On par with the bumped Pulse Cannon
+        //   and the rest of the rebalanced primary roster.
         fireRate: 2200,
-        damage: 0.034,
+        damage: 0.05,
         bulletSpeed: 0,
         bulletSize: 0,
         bulletCount: 0,
@@ -113,10 +119,10 @@ export const PRIMARY_WEAPONS = {
         description: 'Continuous lightning tether — short range, hits nearest target',
         icon: '⚡',
         color: '#8888ff',
-        // Continuous-tether weapon — same per-frame damage as Lance Beam so
-        // they share a DPS bracket (~2.04 dps at 60Hz).
+        // 5.68.1 — same per-frame damage as Lance Beam (3.0 DPS at 60Hz).
+        // The two beam-tether primaries stay locked-step in the bracket.
         fireRate: 0,
-        damage: 0.034,
+        damage: 0.05,
         bulletSpeed: 0,
         bulletSize: 0,
         bulletCount: 0,
