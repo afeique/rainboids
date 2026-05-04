@@ -229,6 +229,11 @@
 
     <div id="powerup-hud" class="ui-element"></div>
 
+    <!-- WebGL particle layer — sits underneath gameCanvas. Draws additive
+         particles (embers, flashes, shrapnel, rings, sparkles, classic
+         explosions). gameCanvas keeps a transparent background so this
+         layer shows through. -->
+    <canvas id="glCanvas"></canvas>
     <canvas id="gameCanvas"></canvas>
 
     <!-- Contextual hint overlay (driven by js/modules/ui/hint-system.js) -->

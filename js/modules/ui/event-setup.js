@@ -10,6 +10,7 @@ export function setupEventListeners() {
         this.height = window.innerHeight;
         this.canvas.width = this.width;
         this.canvas.height = this.height;
+        if (this.particleRenderer) this.particleRenderer.resize(this.width, this.height);
         this.events.emit('ui:check-orientation');
     });
 

@@ -13,6 +13,7 @@ import { Asteroid } from './world/asteroid.js';
 import { Enemy } from './enemy/enemy.js';
 import { EnemyBullet } from './enemy/enemy-bullet.js';
 import { Particle, drawParticlesBatched } from './world/particle.js';
+import { WebGLParticleRenderer } from './performance/webgl-particle-renderer.js';
 import { ColorStar } from './world/color-star.js';
 import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
@@ -47,6 +48,19 @@ export class GameEngine {
     constructor(canvas, uiManager, audioManager, inputHandler) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
+
+        // WebGL particle layer — bright/glowing particle types render on
+        // a separate canvas underneath gameCanvas via instanced quads.
+        // If WebGL2 isn't available, the renderer reports unsupported
+        // and every type falls back to the Canvas2D branches below.
+        this.glCanvas = document.getElementById('glCanvas');
+        this.particleRenderer = this.glCanvas
+            ? new WebGLParticleRenderer(this.glCanvas)
+            : { supported: false, handlesType: () => false, drawParticles: () => {}, resize: () => {} };
+        if (this.glCanvas) {
+            this.particleRenderer.init();
+        }
+
         this.uiManager = uiManager;
         this.audioManager = audioManager;
         // Expose weapon catalogs to ui-manager for the pause-menu PRIMARY/POWER tabs.
@@ -64,6 +78,7 @@ export class GameEngine {
         this.height = window.innerHeight;
         this.canvas.width = this.width;
         this.canvas.height = this.height;
+        this.particleRenderer.resize(this.width, this.height);
         
         // State machine — owns all game state transitions with validation + epoch guards
         this.stateMachine = new GameStateMachine(GAME_STATES.TITLE_SCREEN);
@@ -972,9 +987,12 @@ export class GameEngine {
     }
     
     draw() {
-        // Clear canvas completely (motion blur disabled)
-        this.ctx.fillStyle = 'rgba(0,0,0,1)';
-        this.ctx.fillRect(0, 0, this.width, this.height);
+        // Clear gameCanvas to TRANSPARENT each frame so the WebGL particle
+        // layer underneath (glCanvas) shows through. The black void of the
+        // game comes from glCanvas's CSS background + the page body bg.
+        // Stars, nebula, entities, weapon effects all draw on top of this
+        // transparent layer; particles render on the GL layer beneath.
+        this.ctx.clearRect(0, 0, this.width, this.height);
 
         // Render the parallax starfield + nebula on every state EXCEPT the
         // pre-init splash. Title screen now uses the same world background
@@ -1034,10 +1052,19 @@ export class GameEngine {
             // appear at the center of the menu.
             if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-                // Batched two-pass particle draw — composite mode flips
-                // at most once per frame instead of once per screen-blend
-                // particle. Major win in dense scenes.
-                drawParticlesBatched(this.particlePool, this.ctx, vL, vT, vR, vB);
+                // Two-layer particle render — every bright/glowing type
+                // (embers, flashes, sparkles, classic explosion fragments,
+                // shrapnel streaks, expanding rings) draws on the WebGL
+                // layer underneath gameCanvas via one instanced draw
+                // call. The Canvas2D pass below handles the remaining
+                // shape-only / text particle types that WebGL doesn't
+                // own (`particleRenderer.handlesType` decides).
+                this.particleRenderer.drawParticles(
+                    this.particlePool,
+                    this.camera.x, this.camera.y,
+                    vL, vT, vR, vB,
+                );
+                drawParticlesBatched(this.particlePool, this.ctx, vL, vT, vR, vB, this.particleRenderer);
                 this.powerupPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);

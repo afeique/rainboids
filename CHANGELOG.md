@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.0] - 2026-05-04
+
+### Added
+- **WebGL particle layer (`#glCanvas`) underneath the Canvas2D layer.** Bright/glowing particle types now render via a single instanced WebGL2 draw call per frame instead of one Canvas2D draw call per particle. Migrated types: `explosionEmber`, `explosionFlash`, `explosion`, `starSparkle`, `explosionShrapnel`, `explosionRingColored`. Architecture:
+  - `js/modules/performance/webgl-particle-renderer.js` — single instanced draw, per-particle attributes (position, size, color, atlas UV, rotation), additive blending replaces Canvas2D's per-particle `globalCompositeOperation = 'screen'`.
+  - `js/modules/performance/webgl-particle-atlas.js` — 1024×256 RGBA atlas with four 256×256 slots: dot (ember/sparkle/classic), flash gradient, hollow ring, horizontal streak. Baked once at module load.
+  - GLSL shaders inline (vertex + fragment) — vertex transforms a unit quad to world coordinates, applies camera offset and per-instance rotation; fragment samples the atlas and multiplies by per-instance color.
+  - `webglcontextlost` / `webglcontextrestored` listeners rebuild the program/atlas/VBOs on context loss.
+- **`#glCanvas` element in `index.html`**, sized to viewport via the engine's resize handler.
+
+### Changed
+- **`drawParticlesBatched` is now single-pass.** The old two-pass screen-blend path is gone — every particle that used `globalCompositeOperation = 'screen'` now renders through WebGL with native additive blending. `SCREEN_BLEND_TYPES` removed.
+- **`gameCanvas` clears to TRANSPARENT each frame** (was opaque-black). The black void of the game now comes from `#glCanvas`'s CSS background; the particle layer shows through wherever the Canvas2D layer hasn't drawn anything.
+- **CSS layering**: both canvases occupy the same fixed viewport position; `#glCanvas` at z-index 0 with `background: #000`, `#gameCanvas` at z-index 1 with `background: transparent`.
+
+### Removed
+- **`Particle.draw()` cases for the 6 migrated types.** The Canvas2D draw paths are replaced by the WebGL renderer.
+- **`radialGradientSpriteCache`** — no remaining consumers after `explosionFlash` migrated to the WebGL atlas.
+
+### Performance
+- One WebGL draw call replaces up to ~600 per-particle Canvas2D draws per frame. Frees ~0.5-1.2ms/frame in dense scenes and removes the `MAX_PARTICLES` cap pressure that drove the eviction issues fixed in 5.63.0.
+
+---
+
 ## [5.63.1] - 2026-05-04
 
 ### Removed
