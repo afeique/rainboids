@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.3] - 2026-05-04
+
+### Changed
+- **Sharper, more defined WebGL particle sprites.** Rebuilt `js/modules/performance/webgl-particle-atlas.js` so each slot is rendered procedurally pixel-by-pixel from a custom alpha curve instead of a CSS radial gradient. Visual upgrades:
+  - **Ember (`dot`)**: Gaussian hot-core (`exp(-r² × 18)`) plus a softer quadratic halo. The bright centre is concentrated in the inner ~15% rather than spread through the inner 70%, so embers read as discrete glowing points instead of soft fuzzy clouds. Per-instance quad size trimmed `(r+6)×1.8 → (r+4)×1.55` to match.
+  - **Flash**: kept the cool-blue radial body but overlaid a thin 4-point cross spike that fades with radius. Adds visible "punch" to the destruction flash without dominating it. Slight peak-alpha boost (0.55 → 0.6) so the spike reads cleanly.
+  - **Sparkle**: NEW dedicated `spark` atlas slot — a 4-point cross star (cardinal arms full intensity, diagonals at 35%) with a tight central glow. `starSparkle` now maps to this slot instead of sharing `dot`, so sparkles look like actual sparkles instead of small fuzzy dots.
+  - **Streak**: steeper head taper (`u^1.7 → u^2.4`) plus a Gaussian hot-tip at u≈1. Streaks now have a defined leading edge that reads as fast directional motion.
+  - **Ring**: tighter Gaussian annulus (σ=0.13) with a soft inner-edge cut at r<0.45 so the ring reads as a defined wavefront edge.
+- **Atlas dimensions**: 1024×256 → 1280×256 (added one 256×256 slot for spark). VRAM cost: +256KB. Shader and renderer changes are minimal — the per-instance UV attribute already carried slot offset/scale, so adding a slot needed only a UV-table entry and a `TYPE_TO_SLOT` remap.
+
+---
+
 ## [5.64.2] - 2026-05-04
 
 ### Changed
