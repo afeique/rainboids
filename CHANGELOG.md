@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.57.2] - 2026-05-03
+
+### Removed
+- **Reverted the asteroid wave-clear gate.** Wave now completes the moment all enemies are dead — the asteroid threshold + ENEMIES CLEARED pulse + asteroid-easy-mode HP halving all gone. The cleanup phase felt off in practice, and accumulating rocks across waves was tanking perf. Asteroids are back to "obstacles/loot you can ignore."
+
+### Changed
+- **Asteroid spawn counts trimmed across the roster** to compensate for asteroids bleeding forward into the next wave (no more clear-the-field gate to reset things):
+  - Waves 1-4: 5/6/6/5 → 3/3/3/3
+  - Waves 6-8: 4 each → 3 each
+  - Wave 9: 3 → 2
+  - Waves 11-13: 3 each → 2 each
+  - Boss + late waves unchanged (already low).
+  Wave 14+ counts were already at 2; carryover keeps the field meaningfully populated without overloading.
+
+---
+
 ## [5.57.1] - 2026-05-03
 
 ### Added

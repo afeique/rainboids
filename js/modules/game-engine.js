@@ -624,7 +624,6 @@ export class GameEngine {
 
     completeWave() { return wave.completeWave.call(this); }
     completeRun() { return wave.completeRun.call(this); }
-    triggerEnemiesClearedPulse() { return wave.triggerEnemiesClearedPulse.call(this); }
     
     sellShopItem(itemId) { return shop.sellShopItem.call(this, itemId); }
 

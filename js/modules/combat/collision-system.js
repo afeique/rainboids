@@ -1323,14 +1323,10 @@ export function destroyAsteroid(ast) {
         const newR = ast.baseRadius / Math.sqrt(count);
         const baseAngle = random(0, Math.PI * 2);
         const sliceWidth = (Math.PI * 2) / count;
-        // While "enemies cleared" mode is active for this wave, fragments
-        // inherit halved HP so cleanup stays breezy after the pulse fires.
-        const easyMul = this.game.asteroidEasyMode ? 0.5 : 1.0;
         for (let k = 0; k < count; k++) {
             const newAst = this.asteroidPool.get(ast.x, ast.y, newR, ast.level);
             if (newAst) {
-                const baseFragHP = Math.max(5, Math.round((ast.maxHealth || 1) * random(0.7, 0.9)));
-                const fragHP = Math.max(1, Math.floor(baseFragHP * easyMul));
+                const fragHP = Math.max(5, Math.round((ast.maxHealth || 1) * random(0.7, 0.9)));
                 newAst.maxHealth = fragHP;
                 newAst.health = fragHP;
                 const angle = baseAngle + k * sliceWidth + random(-sliceWidth * 0.25, sliceWidth * 0.25);

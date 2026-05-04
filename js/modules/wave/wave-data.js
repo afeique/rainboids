@@ -15,10 +15,12 @@ import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES } from '../core/constants.js';
 export const WAVE_DATA = {
 
     // ── Act I: First Contact ──
-    1: { asteroids: 5, enemies: [{ type: 'HUNTER', count: 2 }] },
-    2: { asteroids: 6, enemies: [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 1 }] },
-    3: { asteroids: 6, enemies: [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }] },
-    4: { asteroids: 5, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }] },
+    // Asteroid counts kept low across the run because rocks bleed
+    // forward into the next wave (no clear-the-field gate anymore).
+    1: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }] },
+    2: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 1 }] },
+    3: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }] },
+    4: { asteroids: 3, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }] },
 
     // ── Boss 1: Iron Giant ──
     5: {
@@ -27,10 +29,10 @@ export const WAVE_DATA = {
     },
 
     // ── Act II: Escalation ──
-    6: { asteroids: 4, enemies: [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }] },
-    7: { asteroids: 4, enemies: [{ type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }] },
-    8: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 1 }] },
-    9: { asteroids: 3, enemies: [{ type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 1 }] },
+    6: { asteroids: 3, enemies: [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }] },
+    7: { asteroids: 3, enemies: [{ type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }] },
+    8: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 1 }] },
+    9: { asteroids: 2, enemies: [{ type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 1 }] },
 
     // ── Boss 2: Twin Iron ──
     10: {
@@ -39,9 +41,9 @@ export const WAVE_DATA = {
     },
 
     // ── Act III: The Gauntlet ──
-    11: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 1 }] },
-    12: { asteroids: 3, enemies: [{ type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'DRIFTER', count: 1 }] },
-    13: { asteroids: 3, enemies: [{ type: 'WASP', count: 3 }, { type: 'HUNTER', count: 2 }, { type: 'WEAVER', count: 1 }] },
+    11: { asteroids: 2, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 1 }] },
+    12: { asteroids: 2, enemies: [{ type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'DRIFTER', count: 1 }] },
+    13: { asteroids: 2, enemies: [{ type: 'WASP', count: 3 }, { type: 'HUNTER', count: 2 }, { type: 'WEAVER', count: 1 }] },
     14: { asteroids: 2, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 1 }] },
 
     // ── Boss 3: Triple Threat ──
