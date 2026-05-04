@@ -27,11 +27,15 @@ export function updateWaveSystem() {
     this.enemyPool.cleanupInactive();
     this.asteroidPool.cleanupInactive();
 
-    // Wave-clear gate: simply "all enemies dead". Asteroids are
-    // obstacles/loot — they bleed into the next wave by design. Spawn
-    // counts are kept low (see wave-data.js) so the field doesn't
-    // pile up across waves and tank perf.
-    const totalEnemies = this.enemyPool.activeObjects.filter(e => !e._deathFlash).length;
+    // Wave-clear gate: every enemy must be FULLY dead — past the death
+    // animation, not just mid-flash. cleanupInactive at the top of this
+    // function releases enemies once `active` flips to false (which
+    // happens at the end of the death sequence, see enemy.update). So
+    // counting `activeObjects.length` directly is the correct test:
+    // mid-death enemies still have `active=true` and stay in the pool;
+    // only after the big-bang completes and the recycle frame fires do
+    // they leave. This keeps the shop from popping over the explosion.
+    const totalEnemies = this.enemyPool.activeObjects.length;
 
     if (totalEnemies === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
         // Wave completed! If this is the final wave, the run is over —
@@ -47,12 +51,13 @@ export function updateWaveSystem() {
 
         this.showWaveComplete();
 
-        // Short delay so the WAVE COMPLETE! toast registers, then shop
-        // takes over. No fallback countdown to startNextWave anymore —
-        // the shop is the gate between waves.
+        // Show "WAVE COMPLETE" for ~1.4s at full opacity, then ~0.6s
+        // fade-out (drives via showWaveComplete's duration). Open shop
+        // AFTER the fade so the player gets a clean visual pause
+        // between the action and the shop UI taking over.
         setTimeout(() => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) this.openShop();
-        }, 700);
+        }, 2000);
     }
 
     // (Removed) Auto-advance countdown — the shop now gates the next
@@ -65,16 +70,18 @@ export function getWaveSubtitle(waveNumber) {
 }
 
 export function showWaveComplete() {
-    // Show WAVE COMPLETE message with next wave number
+    // Show WAVE COMPLETE message with next wave number. Duration is
+    // 2000ms — matches the openShop delay in updateWaveSystem so the
+    // text finishes its fade-out (~last 30%) right before the shop UI
+    // takes over. Visual heads-up + temporal pause between action and
+    // shop interaction.
     const nextWave = this.game.currentWave + 1;
-
-    // Set up canvas-based wavy text animation
     this.waveMessage = {
         active: true,
         startTime: Date.now(),
-        duration: this.game.waveCountdownDuration,
+        duration: 2000,
         title: 'WAVE COMPLETE!',
-        subtitle: `WAVE ${nextWave} INCOMING...`
+        subtitle: `WAVE ${nextWave} INCOMING...`,
     };
 
     // Also show DOM message as backup

@@ -257,21 +257,22 @@ export class Enemy {
         if (!this.active) return;
         this.gameEngine = gameEngine; // Cache ref for draw/takeDamage (removes window.gameEngine dependency)
 
-        // Death sequence — multi-phase:
-        //   tick 0           — impact (handled by createEnemyDebris before
-        //                      this branch starts running). Drift begins.
-        //   ticks 1-17       — wreck drifts, popcorn bursts every 2 frames.
-        //   tick 18 (midway) — BIG final explosion, ship VANISHES, lots
-        //                      of debris flies out. _shipDestroyed = true.
-        //   ticks 19-35      — only debris remains; no silhouette, no
-        //                      more popcorn. Debris drifts via its own
-        //                      particle physics.
-        //   tick 36          — recycle.
+        // Death sequence — simplified to two beats:
+        //   ticks 0-11  — wreck drifts under inertia (silhouette visible,
+        //                  no popcorn). The drift gives the player a beat
+        //                  to register the kill before the big finale.
+        //   tick 12     — BIG final explosion, ship VANISHES, full debris
+        //                  cloud. _shipDestroyed = true.
+        //   ticks 13-23 — debris drifts via its own particle physics.
+        //                  No silhouette.
+        //   tick 24     — recycle (active=false).
+        //
+        // Removed the per-2-frame popcorn cookoffs — they were
+        // inconsistent (often clipped by pool eviction or hidden by the
+        // silhouette glow). Every enemy now gets a single guaranteed
+        // big explosion at the same beat.
         if (this._deathFlash > 0) {
-            // Drift under inertia (slows gradually). Continues even after
-            // the ship "vanishes" so the debris cloud keeps drifting at
-            // the same trajectory — but we use this.x/y only while the
-            // ship is intact.
+            // Drift under inertia (slows gradually).
             const drag = 0.97;
             this.vel.x *= drag;
             this.vel.y *= drag;
@@ -279,14 +280,14 @@ export class Enemy {
             this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
             this.faceAngle = (this.faceAngle || 0) + 0.04;
 
-            const max = this._deathFlashMax || 36;
+            const max = this._deathFlashMax || 24;
             const tickIntoDeath = max - this._deathFlash;
             const midPoint = Math.floor(max / 2);
 
-            // ── Big midway explosion: ship vanishes, lots of debris ──
+            // ── Big midway explosion: ship vanishes, full debris cloud ──
             // Fires exactly once when the wreck reaches the midpoint of
             // its drift window. Sets _shipDestroyed so the renderer
-            // skips the silhouette and the popcorn loop stops.
+            // skips the silhouette.
             if (!this._shipDestroyed && tickIntoDeath >= midPoint) {
                 this._shipDestroyed = true;
                 if (gameEngine && typeof gameEngine.triggerEnemyFinalExplosion === 'function') {
@@ -295,53 +296,8 @@ export class Enemy {
                 }
             }
 
-            // ── Popcorn cookoffs (only while the ship is still there) ──
-            // Spawns OUTSIDE the silhouette's halo so each pop is actually
-            // visible (the silhouette glow extends ~1.8× radius — popcorn
-            // sits at 1.4-2.2× from center). Fewer particles per burst
-            // than before but each one is bigger and brighter, so a small
-            // ship's red explosion reads the same as a wasp's yellow one.
-            if (!this._shipDestroyed && gameEngine && gameEngine.particlePool && tickIntoDeath % 2 === 0) {
-                const r = this.radius || 18;
-                const a = Math.random() * Math.PI * 2;
-                // Pop OUTSIDE the silhouette glow ring.
-                const dist = r * (1.4 + Math.random() * 0.8);
-                const sx = this.x + Math.cos(a) * dist;
-                const sy = this.y + Math.sin(a) * dist;
-                const c = (this.color || '#ff6644');
-                // Bigger flash — visible at offset, not lost in halo.
-                gameEngine.particlePool.get(sx, sy, 'explosionFlash', r * 1.3);
-                // One bigger ring instead of two small overlapping ones.
-                // Alternates white / enemy color so visibility isn't tied
-                // to how bright the enemy's hue happens to be.
-                gameEngine.particlePool.get(sx, sy, 'explosionRingColored',
-                    r * (1.6 + Math.random() * 0.8),
-                    (tickIntoDeath % 4 < 2) ? '#ffffff' : c);
-                // 3 sparks (was 5). White always first so even dark-color
-                // enemies have a visible streak.
-                for (let i = 0; i < 3; i++) {
-                    const sa = Math.random() * Math.PI * 2;
-                    const sp = 2.0 + Math.random() * 3.0;
-                    const col = i === 0 ? '#ffffff' : c;
-                    gameEngine.particlePool.get(sx, sy, 'explosionShrapnel', sa, sp, col);
-                }
-                // Single ember in white-or-color rotation. Sparkles dropped —
-                // they were too small to read at gameplay scale.
-                gameEngine.particlePool.get(sx, sy, 'explosionEmber',
-                    (tickIntoDeath % 2) ? c : '#ffffff');
-
-                if (typeof gameEngine.isEntityOnScreen === 'function'
-                    && gameEngine.isEntityOnScreen(this)
-                    && typeof gameEngine.triggerScreenShake === 'function') {
-                    const fade = this._deathFlash / max;
-                    gameEngine.triggerScreenShake(4, 2 + fade * 2.5);
-                }
-            }
-
             this._deathFlash--;
             if (this._deathFlash <= 0) {
-                // No second big explosion here — the midway pop already
-                // fired. Just recycle once the debris-drift window ends.
                 this.active = false;
             }
             return;

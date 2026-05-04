@@ -147,11 +147,12 @@ export function createEnemyDebris(enemy) {
         this.triggerScreenShake(14, 7, enemy.radius * 1.6);
     }
 
-    // Lengthen the death flash so the drift-and-popcorn phase reads.
-    // ~36 frames at 60Hz ≈ 600ms. The enemy update loop spawns small
-    // bursts every 5 frames during this window.
-    enemy._deathFlash = 36;
-    enemy._deathFlashMax = 36;
+    // Death window — 24 frames @ 60Hz ≈ 400ms. Halved from 36 along
+    // with the popcorn removal in 5.62.2; the drift phase only needs
+    // a beat for the wreck to register before the big-bang at the
+    // midpoint (tick 12). Keeps the wave-clear → shop transition snappy.
+    enemy._deathFlash = 24;
+    enemy._deathFlashMax = 24;
     // Slow the velocity right at impact so the drift starts more slowly,
     // but keep direction so the wreck still slumps along its trajectory.
     if (enemy.vel) {

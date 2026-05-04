@@ -36,9 +36,11 @@ export function drawHUD() {
             const elapsed = now - this.waveMessage.startTime;
 
             if (elapsed < this.waveMessage.duration) {
-                // Calculate fade effect
+                // Fade-out across the last 35% of the message duration so
+                // the WAVE COMPLETE text visibly drains BEFORE the shop UI
+                // takes over (gives the player a temporal/visual pause).
                 const fadeProgress = elapsed / this.waveMessage.duration;
-                const alpha = fadeProgress < 0.8 ? 1 : (1 - fadeProgress) / 0.2; // Fade out in last 20%
+                const alpha = fadeProgress < 0.65 ? 1 : (1 - fadeProgress) / 0.35;
 
                 this.ctx.save();
                 this.ctx.globalAlpha = alpha;

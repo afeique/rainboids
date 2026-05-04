@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.62.2] - 2026-05-04
+
+### Removed
+- **Per-frame popcorn cookoffs during enemy death drift.** The 9 small bursts during the 36-frame drift phase were inconsistent — sometimes clipped by particle pool eviction, sometimes hidden by the silhouette glow, sometimes interrupted by the wave-clear → shop transition. Every enemy now gets a single guaranteed big explosion at the death midpoint instead of trying to fire popcorn through a busy pool. Less chance for things to be cut off.
+
+### Changed
+- **Death sequence simplified to two beats.**
+  - Ticks 0-11: wreck drifts (silhouette visible, no popcorn). 200ms beat for the player to register the kill.
+  - Tick 12: BIG midway explosion (`triggerEnemyFinalExplosion`), ship vanishes, full debris cloud. Always fires.
+  - Ticks 13-23: debris drifts via its own particle physics.
+  - Tick 24: recycle.
+  Total death duration: 24 frames / 400ms (was 36 / 600ms). Snappier pacing, single guaranteed big explosion, perfectly consistent across HUNTER / WASP / GUARDIAN / etc.
+- **Wave-clear gate now waits for ALL death animations to fully complete.** Previously the gate filtered out enemies with `_deathFlash > 0`, so it fired the moment the last enemy STARTED dying — the shop could then pop over an in-progress explosion. Now uses `enemyPool.activeObjects.length` directly. Mid-death enemies still have `active = true`, so they keep the gate closed until their `_deathFlash` reaches 0 and they recycle. The big-bang always finishes before "WAVE COMPLETE" appears.
+- **WAVE COMPLETE message + fade window before the shop opens.** Was: 700ms after wave-clear → shop. Now: WAVE COMPLETE message at full opacity 0-1300ms, fade-out across last 35% (1300-2000ms), shop opens at 2000ms. Player gets a clear visual / temporal pause between gameplay and shop interaction. Message duration is hardcoded to 2000ms (was the 5000ms `waveCountdownDuration`) so the fade aligns with the shop trigger.
+
+---
+
 ## [5.62.1] - 2026-05-04
 
 ### Removed
