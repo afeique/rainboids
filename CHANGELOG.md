@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.55.0] - 2026-05-03
+
+### Changed
+- **Game-wide balance pass — rarer but more potent powerups, steeper enemy/asteroid scaling, smaller late-wave rosters.**
+  - **Powerup drop rates cut ~65–70%.** Small asteroid 15% → 5%, large asteroid 20% → 8%, WASP 65% → 22%, TITAN 80% → 50%, TANGERINE 70% → 28%, default enemy 55% → 18%.
+  - **Per-stack powerup effects bumped 25–50%** to compensate for the lower drop rate — every pickup now meaningfully changes the build:
+    - RAPID_FIRE: −15% → −22% fire delay per stack (compounding)
+    - BIG_BULLETS: +1.5px → +2.2px radius per stack
+    - HOMING: 0.06 → 0.09 strength per stack (caps at 0.4)
+    - SPEED_BOOST: +50% → +65% thrust per stack
+    - LONG_RANGE: +40% → +55% range per stack
+    - SHIELD_BOOST: +5% → +8% damage reduction per stack
+    - HEALTH_BOOST: +25 → +35 max HP per stack (cap raised 525 → 600)
+    - CRIT_CHANCE: +5% → +7% per stack (cap 50% → 60%)
+    - CRIT_DAMAGE: +10% → +15% per stack (cap 500% → 550%)
+    - KNOCKBACK: +30% → +40% per stack (cap 3.0× → 3.5×)
+  - **Enemy scaling steepened** for the 20-wave campaign:
+    - Per-level HP: +10% → +14% (wave 20 enemies have 3.66× base HP, was 2.9×)
+    - Per-level speed: +4% → +5% (gentle scaling on top of campaign mult)
+    - Per-level points: +15% → +20% (reward keeps up with risk)
+    - Campaign-wide speed multiplier: 0.65→2.17 → 0.60→2.50 across waves 1–20
+  - **Asteroid HP scaling steepened**: +18% → +23% per level (wave 20 rocks ~3.07× base HP, was 2.6×).
+  - **Late-wave roster trimmed** so the steeper HP/speed scaling — not raw entity count — is what makes endgame hard, keeping perf solid:
+    - Waves 6–9: asteroid count cut by 1, total enemy count down by ~1 per wave.
+    - Waves 11–14: asteroid count cut by 1, enemy count cut by 1–2 per wave.
+    - Waves 16–19: asteroid + enemy counts both cut. Wave 19 dropped from 9 enemies → 7.
+    - Final boss (Wave 20): 4× TITAN + 2× GUARDIAN + 2× SENTINEL → 3× TITAN + 1× GUARDIAN + 2× SENTINEL.
+
+---
+
 ## [5.54.7] - 2026-05-03
 
 ### Added

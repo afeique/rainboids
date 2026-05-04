@@ -54,7 +54,7 @@ export const POWERUP_TYPES = {
         effect: 'rapidFire',
         rarity: 0.3,
         category: 'OFFENSE',
-        description: '15% faster shooting per stack'
+        description: '22% faster shooting per stack'
     },
     MULTI_SHOT: {
         name: 'Multi',
@@ -90,7 +90,7 @@ export const POWERUP_TYPES = {
         effect: 'bigBullets',
         rarity: 0.2,
         category: 'OFFENSE',
-        description: '+1.5px bullet radius per stack'
+        description: '+2.2px bullet radius per stack'
     },
     SPEED_BOOST: {
         name: 'Afterburner',
@@ -102,7 +102,7 @@ export const POWERUP_TYPES = {
         effect: 'speedBoost',
         rarity: 0.22,
         category: 'OFFENSE',
-        description: '+50% thrust & +35% top speed per stack'
+        description: '+65% thrust & +45% top speed per stack'
     },
     PIERCING: {
         name: 'Pierce',
@@ -138,7 +138,7 @@ export const POWERUP_TYPES = {
         effect: 'critChance',
         rarity: 0.18,
         category: 'OFFENSE',
-        description: '+5% critical hit chance per stack'
+        description: '+7% critical hit chance per stack'
     },
     CRIT_DAMAGE: {
         name: 'Crit Dmg',
@@ -150,7 +150,7 @@ export const POWERUP_TYPES = {
         effect: 'critDamage',
         rarity: 0.13,
         category: 'OFFENSE',
-        description: '+10% critical hit damage per stack'
+        description: '+15% critical hit damage per stack'
     },
     SHIELD_BOOST: {
         name: 'Shield',
@@ -162,7 +162,7 @@ export const POWERUP_TYPES = {
         effect: 'shieldBoost',
         rarity: 0.18,
         category: 'OFFENSE',
-        description: '-5% damage taken per stack'
+        description: '-8% damage taken per stack'
     },
     LONG_RANGE: {
         name: 'Range',
@@ -174,7 +174,7 @@ export const POWERUP_TYPES = {
         effect: 'longRange',
         rarity: 0.22,
         category: 'OFFENSE',
-        description: '+40% bullet range per stack'
+        description: '+55% bullet range per stack'
     },
     KNOCKBACK: {
         name: 'Knockback',
@@ -186,7 +186,7 @@ export const POWERUP_TYPES = {
         effect: 'knockback',
         rarity: 0.18,
         category: 'OFFENSE',
-        description: '+30% knockback on all power weapons per stack'
+        description: '+40% knockback on all power weapons per stack'
     },
     MEDPACK: {
         name: 'Medic',

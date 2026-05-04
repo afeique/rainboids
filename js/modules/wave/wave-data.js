@@ -27,10 +27,10 @@ export const WAVE_DATA = {
     },
 
     // ── Act II: Escalation ──
-    6: { asteroids: 5, enemies: [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }] },
-    7: { asteroids: 5, enemies: [{ type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }] },
-    8: { asteroids: 5, enemies: [{ type: 'HUNTER', count: 3 }, { type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 1 }] },
-    9: { asteroids: 4, enemies: [{ type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 2 }] },
+    6: { asteroids: 4, enemies: [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }] },
+    7: { asteroids: 4, enemies: [{ type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }] },
+    8: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 1 }] },
+    9: { asteroids: 3, enemies: [{ type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 1 }] },
 
     // ── Boss 2: Twin Iron ──
     10: {
@@ -39,10 +39,10 @@ export const WAVE_DATA = {
     },
 
     // ── Act III: The Gauntlet ──
-    11: { asteroids: 4, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }] },
-    12: { asteroids: 4, enemies: [{ type: 'STALKER', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'DRIFTER', count: 1 }] },
-    13: { asteroids: 4, enemies: [{ type: 'WASP', count: 4 }, { type: 'HUNTER', count: 2 }, { type: 'WEAVER', count: 1 }] },
-    14: { asteroids: 3, enemies: [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 1 }] },
+    11: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 1 }] },
+    12: { asteroids: 3, enemies: [{ type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'DRIFTER', count: 1 }] },
+    13: { asteroids: 3, enemies: [{ type: 'WASP', count: 3 }, { type: 'HUNTER', count: 2 }, { type: 'WEAVER', count: 1 }] },
+    14: { asteroids: 2, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 1 }] },
 
     // ── Boss 3: Triple Threat ──
     15: {
@@ -51,33 +51,36 @@ export const WAVE_DATA = {
     },
 
     // ── Act IV: Endgame Approach ──
-    16: { asteroids: 3, enemies: [
+    // Counts intentionally low so the steeper HP/speed scaling — not raw
+    // entity count — is what makes these waves hard. Keeps perf solid.
+    16: { asteroids: 2, enemies: [
         { type: 'HUNTER',   count: 1 },
         { type: 'GUARDIAN', count: 1 },
         { type: 'WASP',     count: 1 },
         { type: 'STALKER',  count: 1 },
-        { type: 'DRIFTER',  count: 1 },
     ] },
-    17: { asteroids: 3, enemies: [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'STALKER', count: 1 }] },
-    18: { asteroids: 3, enemies: [{ type: 'TITAN', count: 1 }, { type: 'TANGERINE', count: 2 }, { type: 'SENTINEL', count: 1 }, { type: 'HUNTER', count: 2 }] },
+    17: { asteroids: 2, enemies: [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }] },
+    18: { asteroids: 2, enemies: [{ type: 'TITAN', count: 1 }, { type: 'TANGERINE', count: 1 }, { type: 'SENTINEL', count: 1 }, { type: 'HUNTER', count: 2 }] },
     19: { asteroids: 2, enemies: [
         { type: 'HUNTER',    count: 1 },
         { type: 'GUARDIAN',  count: 1 },
         { type: 'WASP',      count: 1 },
         { type: 'STALKER',   count: 1 },
         { type: 'DRIFTER',   count: 1 },
-        { type: 'PROWLER',   count: 1 },
         { type: 'WEAVER',    count: 1 },
-        { type: 'SENTINEL',  count: 1 },
         { type: 'TANGERINE', count: 1 },
     ] },
 
     // ── Final Boss: The Last Stand ──
+    // Three TITAN bosses (was four) plus a small escort. With bossTier-4
+    // stacking 8× HP / 1.75× size onto level-20 base stats, three is
+    // already a serious wall — and it keeps the late-wave perf budget
+    // from blowing up.
     20: {
         asteroids: 1, isBossWave: true, bossTier: 4, isFinalBoss: true,
         enemies: [
-            { type: 'TITAN',    count: 4, isBoss: true, bossTier: 4 },
-            { type: 'GUARDIAN', count: 2 },
+            { type: 'TITAN',    count: 3, isBoss: true, bossTier: 4 },
+            { type: 'GUARDIAN', count: 1 },
             { type: 'SENTINEL', count: 2 },
         ],
     },
@@ -109,12 +112,13 @@ export function getAsteroidLevel(waveNumber) {
     return Math.max(1, Math.ceil(w / 2));
 }
 
-// Enemy speed multiplier — starts low, climbs aggressively. Wave 1 ≈ 0.65×
-// base speed (gentle intro), wave 20 ≈ 2.17× (full chase pace). The user
-// asked for "start slow, scale fairly quickly" — this curve does that.
+// Enemy speed multiplier — wave 1 ≈ 0.60× (gentle intro), wave 20 ≈ 2.50×
+// (chase mode). Steeper than the previous curve to make the late game
+// genuinely demanding.
+//   w=1: 0.60     w=5: 1.00     w=10: 1.50     w=15: 2.00     w=20: 2.50
 export function getEnemySpeedMultiplier(waveNumber) {
     const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    return 0.65 + (w - 1) * 0.08;
+    return 0.60 + (w - 1) * 0.10;
 }
 
 // Enemy bullet speed multiplier — same curve as enemy speed so projectiles
@@ -158,24 +162,26 @@ export const WAVE_SUBTITLES_GENERIC = [
     "You're built different.",
 ];
 
-// Level-scaled enemy stats. Compressed for the 20-wave run — HP +10%/level
-// (≈2.9× at wave 20), points +15%/level. Speed scaling is handled
-// separately via getEnemySpeedMultiplier so the campaign-wide ramp is
-// applied uniformly to every enemy regardless of base speed.
+// Level-scaled enemy stats — STEEPER curves for the rebalance pass.
+//   HP   +14% / level  →  wave 20 enemies have 1 + 19·0.14 = 3.66× base HP
+//   pts  +20% / level  →  wave 20 worth 1 + 19·0.20 = 4.80× base points
+// Speed level multiplier is gentle (+5%/level) because the campaign-wide
+// getEnemySpeedMultiplier already drives the chase-pace ramp.
 export function getLevelScaledEnemyStats(baseStats, level) {
     return {
-        health: Math.floor(baseStats.health * (1 + (level - 1) * 0.10)),
-        speed: baseStats.speed * (1 + (level - 1) * 0.04), // gentle on top of campaign mult
+        health: Math.floor(baseStats.health * (1 + (level - 1) * 0.14)),
+        speed: baseStats.speed * (1 + (level - 1) * 0.05),
         size: baseStats.size,
         shootRate: baseStats.shootRate,
-        points: Math.floor(baseStats.points * (1 + (level - 1) * 0.15)),
+        points: Math.floor(baseStats.points * (1 + (level - 1) * 0.20)),
     };
 }
 
-// Asteroid HP scaling — 18%/level so wave 20 rocks (level 10) have ~2.6×
-// base HP, keeping them chewable but meaningful end-of-run.
+// Asteroid HP scaling — 23%/level (was 18%) so wave-20 rocks (level 10)
+// have ~3.07× base HP. Keeps them chewable for upgraded weapons but
+// finally requires real focus to break in the late acts.
 export function getLevelScaledAsteroidStats(baseHealth, level) {
-    return Math.floor(baseHealth * (1 + (level - 1) * 0.18));
+    return Math.floor(baseHealth * (1 + (level - 1) * 0.23));
 }
 
 // Boss HP / size multipliers per boss tier (1 → 4). Boss enemies are TITAN

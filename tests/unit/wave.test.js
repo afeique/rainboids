@@ -135,14 +135,14 @@ describe('getLevelScaledEnemyStats()', () => {
     expect(scaled.points).toBe(BASE.points);
   });
 
-  test('health rises 10% per level', () => {
-    expect(getLevelScaledEnemyStats(BASE, 2).health).toBe(Math.floor(BASE.health * 1.10));
-    expect(getLevelScaledEnemyStats(BASE, 5).health).toBe(Math.floor(BASE.health * 1.40));
+  test('health rises 14% per level', () => {
+    expect(getLevelScaledEnemyStats(BASE, 2).health).toBe(Math.floor(BASE.health * 1.14));
+    expect(getLevelScaledEnemyStats(BASE, 5).health).toBe(Math.floor(BASE.health * 1.56));
   });
 
-  test('speed rises 4% per level (gentle on top of campaign mult)', () => {
-    expect(getLevelScaledEnemyStats(BASE, 2).speed).toBeCloseTo(BASE.speed * 1.04);
-    expect(getLevelScaledEnemyStats(BASE, 5).speed).toBeCloseTo(BASE.speed * 1.16);
+  test('speed rises 5% per level (gentle on top of campaign mult)', () => {
+    expect(getLevelScaledEnemyStats(BASE, 2).speed).toBeCloseTo(BASE.speed * 1.05);
+    expect(getLevelScaledEnemyStats(BASE, 5).speed).toBeCloseTo(BASE.speed * 1.20);
   });
 
   test('size stays constant across levels', () => {
@@ -151,8 +151,8 @@ describe('getLevelScaledEnemyStats()', () => {
     }
   });
 
-  test('points rise 15% per level', () => {
-    expect(getLevelScaledEnemyStats(BASE, 3).points).toBe(Math.floor(BASE.points * 1.30));
+  test('points rise 20% per level', () => {
+    expect(getLevelScaledEnemyStats(BASE, 3).points).toBe(Math.floor(BASE.points * 1.40));
   });
 
   test('returns integer health and points', () => {
@@ -169,9 +169,9 @@ describe('getLevelScaledAsteroidStats()', () => {
     expect(getLevelScaledAsteroidStats(10, 1)).toBe(10);
   });
 
-  test('health rises 18% per level', () => {
-    expect(getLevelScaledAsteroidStats(10, 2)).toBe(Math.floor(10 * 1.18));
-    expect(getLevelScaledAsteroidStats(10, 5)).toBe(Math.floor(10 * 1.72));
+  test('health rises 23% per level', () => {
+    expect(getLevelScaledAsteroidStats(10, 2)).toBe(Math.floor(10 * 1.23));
+    expect(getLevelScaledAsteroidStats(10, 5)).toBe(Math.floor(10 * 1.92));
   });
 
   test('returns an integer', () => {
@@ -185,8 +185,8 @@ describe('getEnemySpeedMultiplier()', () => {
   test('starts low at wave 1 and climbs aggressively', () => {
     const w1 = getEnemySpeedMultiplier(1);
     const w20 = getEnemySpeedMultiplier(20);
-    expect(w1).toBeLessThan(0.8);              // gentle intro
-    expect(w20).toBeGreaterThan(2.0);          // hits ~2.17× at the end
+    expect(w1).toBeLessThan(0.7);              // gentle intro
+    expect(w20).toBeGreaterThan(2.4);          // hits ~2.5× at the end
     expect(w20).toBeGreaterThan(w1);
   });
 

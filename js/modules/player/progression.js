@@ -208,21 +208,22 @@ export function getPowerupStacks(type) {
 
 export function getMovementSpeedMultiplier() {
     const speedBoostStacks = this.getPowerupStacks('SPEED_BOOST');
-    // Each stack: +50% thrust, +35% max velocity (via velocity cap in update)
-    // At 6 stacks: 4x thrust, 3.1x max speed — you become a comet
-    return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.5) : 1;
+    // Each stack: +65% thrust (was +50%) — bumped to make a single
+    // pickup decisively change ship feel given the new lower drop rates.
+    return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.65) : 1;
 }
 
 export function getRangeMultiplier() {
     const rangeStacks = this.getPowerupStacks('LONG_RANGE');
-    return 1 + rangeStacks * 0.4; // +40% range per stack
+    return 1 + rangeStacks * 0.55; // +55% range per stack (was +40%)
 }
 
 export function getEffectiveShield() {
     const baseShield = this.shield;
     const shieldBoostStacks = this.getPowerupStacks('SHIELD_BOOST');
 
-    const shieldBoostAmount = shieldBoostStacks * 5; // +5% damage reduction per stack
+    // +8% damage reduction per stack (was +5%). Cap stays at 75%.
+    const shieldBoostAmount = shieldBoostStacks * 8;
 
     const totalShield = baseShield + shieldBoostAmount;
     return Math.min(75, totalShield); // Cap at 75%
@@ -231,39 +232,40 @@ export function getEffectiveShield() {
 export function getEffectiveMaxHealth() {
     const baseMaxHealth = this.maxHealth;
     const healthBoostStacks = this.getPowerupStacks('HEALTH_BOOST');
-    const healthBoostAmount = healthBoostStacks * 25; // +25 max health per stack
+    const healthBoostAmount = healthBoostStacks * 35; // +35 max health per stack (was +25)
 
     const totalMaxHealth = baseMaxHealth + healthBoostAmount;
-    return Math.min(525, totalMaxHealth); // Cap at 525 (25 base + 500 from upgrades)
+    // Cap raised to 600 to accommodate the higher per-stack value while
+    // still preventing infinite scaling.
+    return Math.min(600, totalMaxHealth);
 }
 
 export function getEffectiveCritChance() {
     const baseCritChance = this.baseCritChance;
     const critChanceStacks = this.getPowerupStacks('CRIT_CHANCE');
-    const critChanceBonus = critChanceStacks * 5; // +5% crit chance per stack
+    const critChanceBonus = critChanceStacks * 7; // +7% per stack (was +5%)
 
     const totalCritChance = baseCritChance + critChanceBonus;
-    return Math.min(50, totalCritChance); // Cap at 50%
+    return Math.min(60, totalCritChance); // Cap raised 50% → 60%
 }
 
 export function getEffectiveCritDamage() {
     const critDamageStacks = this.getPowerupStacks('CRIT_DAMAGE');
-    const critDamageBonus = critDamageStacks * 10; // +10% crit damage per stack
+    const critDamageBonus = critDamageStacks * 15; // +15% per stack (was +10%)
 
     // Randomize between 2x (200%) and 3x (300%) base, plus stacks
     const minCrit = this.baseCritDamage; // 200%
     const maxCrit = 300 + critDamageBonus; // 300% + stacks
     const totalCritDamage = minCrit + Math.random() * (maxCrit - minCrit);
-    return Math.min(500, totalCritDamage); // Cap at 500% (5x)
+    return Math.min(550, totalCritDamage); // Cap raised 500% → 550%
 }
 
 // Knockback multiplier applied to all power-weapon impulses (Mine,
-// Nova, Lightning, Missile). +30% per stack of KNOCKBACK powerup,
-// capped at +200% (~3x) so it doesn't yeet enemies into other
-// galaxies. Returns 1.0 with zero stacks.
+// Nova, Lightning, Missile). +40% per stack of KNOCKBACK powerup
+// (was +30%), capped at 3.5x (was 3.0x).
 export function getKnockbackMultiplier() {
     const stacks = this.getPowerupStacks('KNOCKBACK');
-    return Math.min(3.0, 1 + stacks * 0.3);
+    return Math.min(3.5, 1 + stacks * 0.4);
 }
 
 export function getEffectiveHealthOrbHealing(baseHealing = 1) {

@@ -37,14 +37,16 @@ export const COLLISION_CONFIG = {
     ENEMY_ASTEROID_PUSH: 4,
     // Push force applied to asteroid in enemy-asteroid collision
     ASTEROID_ENEMY_PUSH: 2,
-    // Powerup drop chances by context
+    // Powerup drop chances by context. Cut deeply so each pickup is a
+    // real "score" — paired with stronger per-stack effects (see
+    // progression.js / weapons.js) so finding one is genuinely valuable.
     POWERUP_DROP_CHANCE: {
-        SMALL_ASTEROID: 0.15,
-        LARGE_ASTEROID: 0.2,
-        ENEMY_WASP: 0.65,
-        ENEMY_TITAN: 0.80,
-        ENEMY_TANGERINE: 0.70,
-        ENEMY_DEFAULT: 0.55,
+        SMALL_ASTEROID: 0.05,   // was 0.15
+        LARGE_ASTEROID: 0.08,   // was 0.20
+        ENEMY_WASP:     0.22,   // was 0.65
+        ENEMY_TITAN:    0.50,   // was 0.80 (boss tier — still meaningful)
+        ENEMY_TANGERINE:0.28,   // was 0.70
+        ENEMY_DEFAULT:  0.18,   // was 0.55
     },
 };
 

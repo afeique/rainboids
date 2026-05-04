@@ -11,7 +11,7 @@ import { autofireDiag } from '../autofire-diag.js';
 // stacks, breaking the "this powerup makes bullets bigger" promise.
 // Additive guarantees every weapon's bullet grows by the same Δpx per
 // stack, so the visual feel is consistent across the roster.
-const BIG_BULLETS_PX_PER_STACK = 1.5;
+const BIG_BULLETS_PX_PER_STACK = 2.2; // was 1.5 — chunkier per stack to match new rarity
 
 // ── Velocity-and-damage upgrade helper ────────────────────────────────────
 // Per-weapon "high-velocity rounds"-style upgrade: each stack adds the same
@@ -419,7 +419,7 @@ export function applyGlobalBulletUpgrades(bullet) {
     // similar at low stacks and not run away at high stacks.
     if (homingStacks > 0) {
         bullet.homing = true;
-        bullet.homingStrength = Math.min(0.4, homingStacks * 0.06);
+        bullet.homingStrength = Math.min(0.4, homingStacks * 0.09);
     }
 
     // Big bullets — additive Δpx per stack (see BIG_BULLETS_PX_PER_STACK
@@ -958,7 +958,7 @@ export function createBullets(bulletPool) {
             }
 
             // Apply homing effects to bullet - for regular shots, only use upgrade homing (no charge-based homing)
-            const upgradeHomingStrength = homingStacks > 0 ? Math.min(0.25, homingStacks * 0.08) : 0;
+            const upgradeHomingStrength = homingStacks > 0 ? Math.min(0.35, homingStacks * 0.11) : 0;
 
             if (upgradeHomingStrength > 0) {
                 bullet.homing = true;
@@ -1051,7 +1051,7 @@ export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultip
             // primary's own bullets feel the same per stack of HOMING.
             // Charge-base homing (baseHomingStrength) is still added
             // because it's a separate "charge level" mechanic.
-            const upgradeHomingStrength = homingStacks > 0 ? Math.min(0.4, homingStacks * 0.06) : 0;
+            const upgradeHomingStrength = homingStacks > 0 ? Math.min(0.4, homingStacks * 0.09) : 0;
             const totalHomingStrength = baseHomingStrength + upgradeHomingStrength;
 
             if (totalHomingStrength > 0) {
@@ -1095,9 +1095,9 @@ export function getEffectivePrimaryFireRate() {
         rate *= Math.pow(0.85, stacks); // -15% per stack compounding
     }
 
-    // Apply global Rapid Fire
+    // Apply global Rapid Fire — -22% per stack compounding (was -15%)
     const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
-    rate *= Math.pow(0.85, rapidFireStacks);
+    rate *= Math.pow(0.78, rapidFireStacks);
 
     return Math.round(rate);
 }
