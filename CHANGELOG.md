@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.54.1] - 2026-05-03
+
+### Added
+- **Title-screen lens-flare nebula now also rotates with parallax.** `nebulaRenderer.draw()` takes an optional `rotation` (radians) plus `viewW/viewH` for the on-screen pivot, and rotates each layer about the viewport center scaled by `layer.depth` — so the closest layer (depth 0.65) rotates about 4.5× more than the deepest (depth 0.00), matching the parallax-drift depth feel rotationally as well as positionally. The title-screen update branch drives it with a slow combined-frequency oscillator (≈35s and ≈90s periods) summing to a ±0.19 rad swing, so the lens flare stars tumble gently without ever spinning fast enough to distract.
+
+---
+
 ## [5.54.0] - 2026-05-03
 
 ### Changed

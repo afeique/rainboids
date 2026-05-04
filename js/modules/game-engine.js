@@ -942,6 +942,17 @@ export class GameEngine {
             this._titleNebulaDriftX = nx;
             this._titleNebulaDriftY = ny;
 
+            // Slow combined-frequency rotation for the lens flare layers.
+            // Two slow sinusoids sum into a wandering angular offset of
+            // ≈ ±0.19 rad. Per-layer scaling by depth (inside
+            // nebula-renderer.js) keeps the deepest layer nearly still
+            // while the closest layer rotates noticeably — same depth feel
+            // as the drift parallax, just rotational instead of positional.
+            //   sin(t*0.18)·0.13  →  period ≈ 35s
+            //   cos(t*0.07)·0.06  →  period ≈ 90s
+            this._titleNebulaRotation =
+                Math.sin(t * 0.18) * 0.13 + Math.cos(t * 0.07) * 0.06;
+
             // Tick the title-launch animation if it's running. When it
             // completes, fire the stored callback (which kicks off init()).
             const a = this._titleAnimState();
@@ -975,10 +986,18 @@ export class GameEngine {
             // flare layers wander even when the camera isn't moving — and
             // applies it scaled by depth, so the closest layer drifts most
             // (but the deepest barely moves, giving a "much-farther-away"
-            // parallax feel relative to the foreground starfield).
-            const nebDriftX = (this.game.state === GAME_STATES.TITLE_SCREEN) ? (this._titleNebulaDriftX || 0) : 0;
-            const nebDriftY = (this.game.state === GAME_STATES.TITLE_SCREEN) ? (this._titleNebulaDriftY || 0) : 0;
-            nebulaRenderer.draw(this.ctx, this.camera.x, this.camera.y, nebDriftX, nebDriftY);
+            // parallax feel relative to the foreground starfield). Also
+            // pipes a slow rotation so the lens flare layers tumble.
+            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN;
+            const nebDriftX = onTitle ? (this._titleNebulaDriftX || 0) : 0;
+            const nebDriftY = onTitle ? (this._titleNebulaDriftY || 0) : 0;
+            const nebRot    = onTitle ? (this._titleNebulaRotation || 0) : 0;
+            nebulaRenderer.draw(
+                this.ctx,
+                this.camera.x, this.camera.y,
+                nebDriftX, nebDriftY,
+                nebRot, this.width, this.height,
+            );
 
             // Viewport culling for performance - only render stars visible in camera
             const visibleBackgroundStars = this.getVisibleStars(this.backgroundStarPool.activeObjects);

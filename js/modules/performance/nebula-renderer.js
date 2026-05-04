@@ -158,9 +158,17 @@ class NebulaRenderer {
      * regardless of camera movement. Closer layers (higher `depth`) drift
      * more, deepest layer barely budges, giving the lens flare stars a
      * "much further away" parallax feel relative to the foreground stars.
+     *
+     * `rotation` (radians) applies an additional rotation to each layer
+     * about the camera-viewport center, scaled by `layer.depth` so closer
+     * layers rotate visibly while the deepest layer stays nearly still.
+     * `viewW/viewH` set the rotation pivot — pass the canvas viewport
+     * dimensions so the pivot lands on the visible center.
      */
-    draw(ctx, cameraX, cameraY, driftX = 0, driftY = 0) {
+    draw(ctx, cameraX, cameraY, driftX = 0, driftY = 0, rotation = 0, viewW = 0, viewH = 0) {
         if (!this.generated) return;
+        const halfW = (viewW || this.fieldWidth) / 2;
+        const halfH = (viewH || this.fieldHeight) / 2;
         ctx.save();
         ctx.globalAlpha = 1;
         for (const layer of this.layers) {
@@ -168,11 +176,29 @@ class NebulaRenderer {
             const camOffY = cameraY * (1 - layer.depth);
             const driftOffX = driftX * layer.depth;
             const driftOffY = driftY * layer.depth;
-            ctx.drawImage(
-                layer.canvas,
-                camOffX + driftOffX, camOffY + driftOffY,
-                this.fieldWidth, this.fieldHeight,
-            );
+            const layerRot = rotation * layer.depth;
+            if (layerRot !== 0) {
+                ctx.save();
+                // Rotate each layer about the on-screen viewport center so
+                // the pivot stays in view rather than at the world origin.
+                const pivotX = cameraX + halfW;
+                const pivotY = cameraY + halfH;
+                ctx.translate(pivotX, pivotY);
+                ctx.rotate(layerRot);
+                ctx.translate(-pivotX, -pivotY);
+                ctx.drawImage(
+                    layer.canvas,
+                    camOffX + driftOffX, camOffY + driftOffY,
+                    this.fieldWidth, this.fieldHeight,
+                );
+                ctx.restore();
+            } else {
+                ctx.drawImage(
+                    layer.canvas,
+                    camOffX + driftOffX, camOffY + driftOffY,
+                    this.fieldWidth, this.fieldHeight,
+                );
+            }
         }
         ctx.restore();
     }
