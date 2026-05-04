@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.54.0] - 2026-05-03
+
+### Changed
+- **Weapon effects across the board are now significantly more epic.**
+  - **Seeker mine explosion**: 5 staggered shockwave rings (was 3) including a white-hot ring and a cyan energy-core ring; shrapnel doubled (22 → 44) with white/cyan/orange-bright color rotation; small particles 18 → 32; embers 12 → 24; new sparkle dust pass (22 specks); secondary cookoff doubled with its own mini flash; new late-game ember rain at +280ms for an afterglow tail. Camera kick 9 → 14, screen shake 8/4 → 14/7, hitstop 4 → 6, screen-flash alpha 0.06 → 0.12.
+  - **Lance Beam**: per-frame ionized-air glitter spawns along the beam path (~55% / frame); bright muzzle hotspot at the player's gun mouth; per-hit spark burst on every enemy contact (3 streaks + bright impact flash, throttled per-enemy); per-hit asteroid sparks colored from the rock's own HSL family.
+  - **Lightning Arc**: each chain target gets a bright impact flash + 8-spark cyan/white/purple burst + 4 trailing embers; 3 sparkle motes glitter along each segment between links so the bolt path itself shimmers.
+  - **Nova Blast**: wavefront crackle — 3-5 sparkles/embers spawn around the ring perimeter every frame; first-frame core flash (size 80) + 14 directional sparks at the origin so the nova has a real "bang" point; per-target impact flash + 6-spark burst as the wavefront crosses each enemy.
+  - **Missile impact**: flash size 24 → 36; new ring wavefront; shrapnel 8 → 16 with 4-color cycle; embers 4 → 10; sparkle dust pass; small camera kick + screen shake.
+  - **Primary bullet hits (asteroid + enemy)**: shrapnel pieces bumped (4 → 7 / 5 → 8); embers doubled; flash radius bumped 35-40%; sparkle motes added on most hits.
+- **MAX_PARTICLES raised 50 → 220** so the pool can hold the new burst sizes without auto-evicting the very particles that just spawned. QA tests updated to spawn 400 and assert ≤ 230.
+
+---
+
 ## [5.53.2] - 2026-05-03
 
 ### Fixed

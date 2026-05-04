@@ -69,7 +69,7 @@ export const GAME_CONFIG = {
     WAVE_BREAK_TIME: 10000, // Time between waves (ms)
     
     // Performance settings optimized
-    MAX_PARTICLES: 50, // Raised for dramatic death explosions
+    MAX_PARTICLES: 220, // Bumped to fit the epic mine / lightning / lance bursts
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 
     // Temporal settings

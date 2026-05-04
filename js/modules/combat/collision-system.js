@@ -134,18 +134,23 @@ export function handleCollisions() {
                     const hitColor = `hsl(${hitHue}, 90%, 70%)`;
                     const hitBright = `hsl(${hitHue}, 90%, 85%)`;
                     const impactAngle = Math.atan2(bullet.vel.y, bullet.vel.x);
-                    // Small flash at impact point
-                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', ast.baseRadius * 0.3);
-                    // Directional shrapnel — away from bullet direction
-                    for (let p = 0; p < 4; p++) {
+                    // Small flash at impact point — bumped slightly for punch
+                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', ast.baseRadius * 0.4);
+                    // Directional shrapnel — away from bullet direction (more pieces)
+                    for (let p = 0; p < 7; p++) {
                         const angle = impactAngle + Math.PI + random(-0.7, 0.7);
-                        const speed = random(3, 6);
+                        const speed = random(3, 7);
                         this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel',
-                            angle, speed, p < 1 ? hitBright : hitColor);
+                            angle, speed, p < 2 ? hitBright : hitColor);
                     }
-                    // A couple embers
-                    for (let p = 0; p < 2; p++) {
-                        this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', hitColor);
+                    // Embers — extra for visual density
+                    for (let p = 0; p < 4; p++) {
+                        this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', p % 2 ? hitColor : hitBright);
+                    }
+                    // A pair of sparkle motes for some twinkle
+                    if (Math.random() < 0.7) {
+                        this.particlePool.get(bullet.x, bullet.y, 'starSparkle');
+                        this.particlePool.get(bullet.x, bullet.y, 'starSparkle');
                     }
                 }
 
@@ -451,18 +456,23 @@ export function handleCollisions() {
                 {
                     const eColor = enemy.color || '#ff4444';
                     const impactAngle = Math.atan2(bullet.vel.y, bullet.vel.x);
-                    // Small flash at impact
-                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', enemy.radius * 0.35);
-                    // Directional shrapnel — sparks fly AWAY from bullet direction
-                    for (let p = 0; p < 5; p++) {
+                    // Small flash at impact (bumped for punch)
+                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', enemy.radius * 0.45);
+                    // Directional shrapnel — sparks fly AWAY from bullet direction (more pieces)
+                    for (let p = 0; p < 8; p++) {
                         const spreadAngle = impactAngle + Math.PI + random(-0.8, 0.8);
-                        const speed = random(3, 7);
+                        const speed = random(3, 8);
                         this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel',
-                            spreadAngle, speed, p < 2 ? '#ffffff' : eColor);
+                            spreadAngle, speed, p < 3 ? '#ffffff' : eColor);
                     }
-                    // A couple embers at impact
-                    for (let p = 0; p < 2; p++) {
-                        this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', eColor);
+                    // Extra embers at impact
+                    for (let p = 0; p < 4; p++) {
+                        this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', p % 2 ? eColor : '#ffffff');
+                    }
+                    // A pair of sparkle motes for twinkle
+                    if (Math.random() < 0.7) {
+                        this.particlePool.get(bullet.x, bullet.y, 'starSparkle');
+                        this.particlePool.get(bullet.x, bullet.y, 'starSparkle');
                     }
                 }
 
@@ -627,6 +637,30 @@ export function checkLanceBeamCollisions() {
     // to read visually without breaking pacing.
     const BEAM_PUSH = 0.4 * knockMul;
 
+    const BEAM_HIT_COLOR = '#88ddff';
+    const BEAM_BRIGHT    = '#ffffff';
+
+    // Per-frame beam glitter — bright flecks streaking along the beam
+    // path even when nothing is hit. Looks like the air is ionized
+    // along the strike. Throttled at ~55% per frame so the pool isn't
+    // slammed.
+    if (this.particlePool && Math.random() < 0.55) {
+        const t = Math.random();
+        const sx = p.x + dx * range * t;
+        const sy = p.y + dy * range * t;
+        const perpJitter = (Math.random() - 0.5) * (beamW * 1.6);
+        const perpX = -dy, perpY = dx;
+        const c = Math.random() < 0.4 ? BEAM_BRIGHT : BEAM_HIT_COLOR;
+        this.particlePool.get(sx + perpX * perpJitter, sy + perpY * perpJitter, 'explosionEmber', c);
+    }
+    // Bright muzzle hotspot at the player's gun mouth — small puff each
+    // frame so the beam reads as actively *firing* from the ship.
+    if (this.particlePool && Math.random() < 0.7) {
+        const muzzleX = p.x + dx * (p.radius || 14);
+        const muzzleY = p.y + dy * (p.radius || 14);
+        this.particlePool.get(muzzleX, muzzleY, 'explosionEmber', BEAM_BRIGHT);
+    }
+
     // Enemies — point-to-line distance check inside the beam strip.
     let connected = false;
     for (const enemy of this.enemyPool.activeObjects) {
@@ -641,6 +675,20 @@ export function checkLanceBeamCollisions() {
             if (enemy.vel) {
                 enemy.vel.x += dx * BEAM_PUSH;
                 enemy.vel.y += dy * BEAM_PUSH;
+            }
+            // Hit-point sparks — sparks fly off where the beam strikes,
+            // throttled per-enemy so sustained contact doesn't spawn
+            // thousands of particles.
+            if (this.particlePool && Math.random() < 0.55) {
+                for (let s = 0; s < 3; s++) {
+                    const a = Math.random() * Math.PI * 2;
+                    const sp = 2 + Math.random() * 4;
+                    const c = s === 0 ? BEAM_BRIGHT : BEAM_HIT_COLOR;
+                    this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', a, sp, c);
+                }
+                if (Math.random() < 0.35) {
+                    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius || 16);
+                }
             }
             connected = true;
         }
@@ -665,6 +713,16 @@ export function checkLanceBeamCollisions() {
             if (ast.vel) {
                 ast.vel.x += dx * BEAM_PUSH * 0.6; // asteroids are heavier
                 ast.vel.y += dy * BEAM_PUSH * 0.6;
+            }
+            // Asteroid spark burst — colored by the rock's own hue family
+            if (this.particlePool && Math.random() < 0.45) {
+                const hue = ast.baseHue || 200;
+                const astC = `hsl(${hue}, 80%, 75%)`;
+                for (let s = 0; s < 3; s++) {
+                    const a = Math.random() * Math.PI * 2;
+                    const sp = 2 + Math.random() * 4;
+                    this.particlePool.get(ast.x, ast.y, 'explosionShrapnel', a, sp, s === 0 ? BEAM_BRIGHT : astC);
+                }
             }
             if (ast.health <= 0.001) {
                 this.destroyAsteroid(ast);
@@ -764,10 +822,15 @@ export function checkMineCollisions() {
         const ORANGE = '#ff6600';
         const ORANGE_BRIGHT = '#ffcc66';
         const ORANGE_DIM = '#cc4400';
+        const WHITE_HOT = '#ffffff';
+        const CYAN_HOT = '#88ddff';   // energy-core spark color
         if (this.particlePool) {
-            // 1. Bright core flash
-            this.particlePool.get(mine.x, mine.y, 'explosionFlash', blastR * 1.2);
-            // 2. Three staggered colored rings — wavefronts
+            // 1. Bright core flash + secondary energy-core flash
+            this.particlePool.get(mine.x, mine.y, 'explosionFlash', blastR * 1.4);
+            setTimeout(() => {
+                if (this.particlePool) this.particlePool.get(mine.x, mine.y, 'explosionFlash', blastR * 0.8);
+            }, 60);
+            // 2. Five staggered colored rings — multiple shockwaves
             this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR, ORANGE);
             setTimeout(() => {
                 if (this.particlePool) this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR * 1.3, ORANGE_DIM);
@@ -775,50 +838,81 @@ export function checkMineCollisions() {
             setTimeout(() => {
                 if (this.particlePool) this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR * 0.85, ORANGE_BRIGHT);
             }, 150);
-            // 3. Dense directional shrapnel fan
-            const shrapnelCount = 22;
+            setTimeout(() => {
+                if (this.particlePool) this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR * 1.55, WHITE_HOT);
+            }, 220);
+            setTimeout(() => {
+                if (this.particlePool) this.particlePool.get(mine.x, mine.y, 'explosionRingColored', blastR * 1.1, CYAN_HOT);
+            }, 320);
+            // 3. Dense directional shrapnel fan — doubled count for wow factor
+            const shrapnelCount = 44;
             for (let i = 0; i < shrapnelCount; i++) {
                 const ang = (i / shrapnelCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
-                const speed = 5 + Math.random() * 6;
-                const color = i % 3 === 0 ? ORANGE_BRIGHT : i % 3 === 1 ? ORANGE : ORANGE_DIM;
+                const speed = 5 + Math.random() * 8;
+                let color;
+                if (i % 5 === 0) color = WHITE_HOT;
+                else if (i % 5 === 1) color = ORANGE_BRIGHT;
+                else if (i % 5 === 2) color = ORANGE;
+                else if (i % 5 === 3) color = CYAN_HOT;
+                else color = ORANGE_DIM;
                 this.particlePool.get(mine.x, mine.y, 'explosionShrapnel', ang, speed, color);
             }
-            // 4. Classic small particles for density
-            for (let i = 0; i < 18; i++) {
+            // 4. Classic small particles for density (32, was 18)
+            for (let i = 0; i < 32; i++) {
                 const p = this.particlePool.get(mine.x, mine.y, 'explosion');
                 if (p) {
-                    p.color = i < 4 ? '#ffffff' : i < 10 ? ORANGE : ORANGE_BRIGHT;
+                    p.color = i < 6 ? WHITE_HOT : i < 18 ? ORANGE : i < 26 ? ORANGE_BRIGHT : CYAN_HOT;
                     const a = Math.random() * Math.PI * 2;
-                    const s = 2 + Math.random() * 6;
+                    const s = 2 + Math.random() * 7;
                     p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
-                    p.radius = 1.5 + Math.random() * 3;
+                    p.radius = 1.5 + Math.random() * 3.5;
                 }
             }
-            // 5. Lingering embers
-            for (let i = 0; i < 12; i++) {
-                this.particlePool.get(mine.x, mine.y, 'explosionEmber', i % 2 ? ORANGE : ORANGE_BRIGHT);
+            // 5. Lingering embers (24, was 12)
+            for (let i = 0; i < 24; i++) {
+                const c = i % 3 === 0 ? ORANGE : i % 3 === 1 ? ORANGE_BRIGHT : WHITE_HOT;
+                this.particlePool.get(mine.x, mine.y, 'explosionEmber', c);
             }
-            // 6. Delayed secondary cookoff
+            // 6. Sparkle dust — tiny twinkling specks scattered around
+            for (let i = 0; i < 22; i++) {
+                const a = Math.random() * Math.PI * 2;
+                const r = Math.random() * blastR * 0.9;
+                const sx = mine.x + Math.cos(a) * r;
+                const sy = mine.y + Math.sin(a) * r;
+                this.particlePool.get(sx, sy, 'starSparkle');
+            }
+            // 7. Delayed secondary cookoff — embers + a small flash
             setTimeout(() => {
                 if (!this.particlePool) return;
-                for (let i = 0; i < 6; i++) {
-                    const ox = mine.x + (Math.random() - 0.5) * 30;
-                    const oy = mine.y + (Math.random() - 0.5) * 30;
-                    this.particlePool.get(ox, oy, 'explosionEmber', ORANGE);
+                for (let i = 0; i < 12; i++) {
+                    const ox = mine.x + (Math.random() - 0.5) * 36;
+                    const oy = mine.y + (Math.random() - 0.5) * 36;
+                    this.particlePool.get(ox, oy, 'explosionEmber', i % 2 ? ORANGE : WHITE_HOT);
                 }
+                this.particlePool.get(mine.x, mine.y, 'explosionFlash', blastR * 0.45);
             }, 120);
+            // 8. Late-game ember rain (long settle for dramatic afterglow)
+            setTimeout(() => {
+                if (!this.particlePool) return;
+                for (let i = 0; i < 10; i++) {
+                    const ox = mine.x + (Math.random() - 0.5) * 60;
+                    const oy = mine.y + (Math.random() - 0.5) * 60;
+                    this.particlePool.get(ox, oy, 'explosionEmber', ORANGE_DIM);
+                }
+            }, 280);
         }
 
         // Game-feel: hitstop + camera kick + screen flash for impact.
-        if (typeof this.triggerHitstop === 'function') this.triggerHitstop(4);
-        if (typeof this.triggerScreenFlash === 'function') this.triggerScreenFlash(0.06, 4);
+        // Beefier numbers for the bigger explosion.
+        if (typeof this.triggerHitstop === 'function') this.triggerHitstop(6);
+        if (typeof this.triggerScreenFlash === 'function') this.triggerScreenFlash(0.12, 6);
         if (typeof this.triggerCameraKick === 'function' && this.player) {
             const kdx = this.player.x - mine.x;
             const kdy = this.player.y - mine.y;
-            this.triggerCameraKick(kdx, kdy, 9);
+            this.triggerCameraKick(kdx, kdy, 14);
         }
         if (typeof this.triggerScreenShake === 'function') {
-            this.triggerScreenShake(8, 4);
+            this.triggerScreenShake(14, 7);
         }
         if (this.events) this.events.emit('audio:explosion');
 
@@ -837,10 +931,50 @@ export function checkNovaCollisions() {
     const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
     const KNOCK_ENEMY = 16 * knockMul;
     const KNOCK_AST = 9 * knockMul;
+    const NOVA_COL_HOT  = '#ffffff';
+    const NOVA_COL_MAIN = POWER_WEAPONS.NOVA_BLAST.color || '#ff6633';
+    const NOVA_COL_AMBER = '#ffaa66';
+
     for (const ring of p.novaRings) {
         if (!ring.active) continue;
         if (!ring.hitEnemies) ring.hitEnemies = new Set();
         if (!ring.hitAsteroids) ring.hitAsteroids = new Set();
+
+        // ── Wavefront sparkles ──
+        // Spawn a few sparkles each frame around the ring perimeter so
+        // the wavefront reads as crackling energy rather than a flat
+        // stroke. Frequency rises with ring growth.
+        if (this.particlePool) {
+            const sparkCount = 3 + Math.floor(Math.random() * 3);
+            for (let s = 0; s < sparkCount; s++) {
+                const a = Math.random() * Math.PI * 2;
+                const r = ring.currentRadius + (Math.random() - 0.5) * RING_WIDTH * 0.6;
+                const sx = ring.x + Math.cos(a) * r;
+                const sy = ring.y + Math.sin(a) * r;
+                if (Math.random() < 0.45) {
+                    this.particlePool.get(sx, sy, 'starSparkle');
+                } else {
+                    const c = s % 3 === 0 ? NOVA_COL_HOT : s % 3 === 1 ? NOVA_COL_MAIN : NOVA_COL_AMBER;
+                    this.particlePool.get(sx, sy, 'explosionEmber', c);
+                }
+            }
+        }
+
+        // ── First-frame core flash ──
+        // When the ring is born (currentRadius near 0), drop a bright
+        // core flash at the origin so the nova has a real "bang" point.
+        if (!ring._spawnFlashed && ring.currentRadius < RING_WIDTH * 1.2) {
+            ring._spawnFlashed = true;
+            if (this.particlePool) {
+                this.particlePool.get(ring.x, ring.y, 'explosionFlash', 80);
+                for (let s = 0; s < 14; s++) {
+                    const a = Math.random() * Math.PI * 2;
+                    const sp = 3 + Math.random() * 5;
+                    const c = s % 3 === 0 ? NOVA_COL_HOT : s % 3 === 1 ? NOVA_COL_MAIN : NOVA_COL_AMBER;
+                    this.particlePool.get(ring.x, ring.y, 'explosionShrapnel', a, sp, c);
+                }
+            }
+        }
 
         // Enemies — damage + outward shove on first contact with ring.
         for (const enemy of this.enemyPool.activeObjects) {
@@ -854,6 +988,16 @@ export function checkNovaCollisions() {
                 if (dist > 0.001 && enemy.vel) {
                     enemy.vel.x += (dx / dist) * KNOCK_ENEMY;
                     enemy.vel.y += (dy / dist) * KNOCK_ENEMY;
+                }
+                // Per-target impact burst on the wavefront crossing.
+                if (this.particlePool) {
+                    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', 22);
+                    for (let s = 0; s < 6; s++) {
+                        const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.8;
+                        const sp = 3 + Math.random() * 5;
+                        this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', a, sp,
+                            s % 2 ? NOVA_COL_MAIN : NOVA_COL_HOT);
+                    }
                 }
             }
         }
@@ -897,6 +1041,9 @@ export function checkLightningCollisions() {
     if (!p.lightningChains) return;
     const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
     const LIGHTNING_KNOCK = 6 * knockMul;
+    const ARC_BLUE   = '#88ddff';
+    const ARC_WHITE  = '#ffffff';
+    const ARC_PURPLE = '#cc99ff';
     for (const chain of p.lightningChains) {
         if (!chain.active || chain.damageApplied) continue;
         chain.damageApplied = true;
@@ -932,6 +1079,34 @@ export function checkLightningCollisions() {
                     this.destroyAsteroid(ast);
                 }
             }
+
+            // ── Per-target impact effect ──
+            // Bright flash + spark burst at the chain endpoint, plus a
+            // few sparkle particles along the segment from the previous
+            // link so the bolt path itself shimmers.
+            if (this.particlePool) {
+                this.particlePool.get(t.x, t.y, 'explosionFlash', 28);
+                const sparkCount = 8;
+                for (let s = 0; s < sparkCount; s++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const sp = 2 + Math.random() * 5;
+                    const col = s % 3 === 0 ? ARC_WHITE : s % 3 === 1 ? ARC_BLUE : ARC_PURPLE;
+                    this.particlePool.get(t.x, t.y, 'explosionShrapnel', ang, sp, col);
+                }
+                for (let s = 0; s < 4; s++) {
+                    this.particlePool.get(t.x, t.y, 'explosionEmber', s % 2 ? ARC_BLUE : ARC_WHITE);
+                }
+                // Path glitter — 3 small sparkles along the segment
+                if (prev) {
+                    for (let g = 0; g < 3; g++) {
+                        const u = (g + 1) / 4;
+                        const px = prev.x + (t.x - prev.x) * u + (Math.random() - 0.5) * 18;
+                        const py = prev.y + (t.y - prev.y) * u + (Math.random() - 0.5) * 18;
+                        this.particlePool.get(px, py, 'starSparkle');
+                    }
+                }
+            }
+
             dmg *= falloff;
         }
     }
@@ -949,13 +1124,33 @@ export function checkMissileCollisions() {
 
     const explode = (mx, my) => {
         if (!this.particlePool) return;
-        this.particlePool.get(mx, my, 'explosionFlash', 24);
-        for (let i = 0; i < 8; i++) {
-            const ang = (i / 8) * Math.PI * 2;
-            this.particlePool.get(mx, my, 'explosionShrapnel', ang, 4, '#ff8866');
+        const HOT  = '#ffffff';
+        const FIRE = '#ffaa44';
+        const RED  = '#ff5522';
+        const SMOKE = '#cc4422';
+        // Twin flashes — main + secondary core for a punchier strike.
+        this.particlePool.get(mx, my, 'explosionFlash', 36);
+        this.particlePool.get(mx, my, 'explosionRingColored', 38, FIRE);
+        // Dense shrapnel fan
+        for (let i = 0; i < 16; i++) {
+            const ang = (i / 16) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+            const sp = 3 + Math.random() * 4;
+            const c = i % 4 === 0 ? HOT : i % 4 === 1 ? FIRE : i % 4 === 2 ? RED : SMOKE;
+            this.particlePool.get(mx, my, 'explosionShrapnel', ang, sp, c);
         }
-        for (let i = 0; i < 4; i++) {
-            this.particlePool.get(mx, my, 'explosionEmber', '#ffaa44');
+        // Embers + sparkle dust
+        for (let i = 0; i < 10; i++) {
+            this.particlePool.get(mx, my, 'explosionEmber', i % 2 ? FIRE : HOT);
+        }
+        for (let i = 0; i < 8; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = Math.random() * 25;
+            this.particlePool.get(mx + Math.cos(a) * r, my + Math.sin(a) * r, 'starSparkle');
+        }
+        // Triggers — small kick for the missile detonation
+        if (typeof this.triggerScreenShake === 'function') this.triggerScreenShake(5, 3);
+        if (typeof this.triggerCameraKick === 'function' && this.player) {
+            this.triggerCameraKick(this.player.x - mx, this.player.y - my, 5);
         }
     };
 

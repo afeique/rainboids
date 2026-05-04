@@ -177,13 +177,13 @@ test.describe('QA-05: Entity spawning and lifecycle', () => {
         // Spawn way more than the cap
         await page.evaluate(() => {
             const ge = window.gameEngine;
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 400; i++) {
                 ge.particlePool.get(200, 200, 'explosion');
             }
         });
         const count = (await getPoolCounts(page)).particles;
-        // Should be at or near the cap (50 by default), not 100
-        expect(count).toBeLessThanOrEqual(55); // small tolerance for cap edge cases
+        // Should be at or near the cap (220 by default), not 400
+        expect(count).toBeLessThanOrEqual(230); // small tolerance for cap edge cases
     });
 
     // ------------------------------------------------------------------
