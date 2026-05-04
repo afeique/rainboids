@@ -1,6 +1,6 @@
 # Rainboids — Supercharged Asteroids
 
-A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave speedrun campaign with four boss waves, and a full upgrade economy. Built on Canvas 2D.
+A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave speedrun campaign with four boss waves, and a full upgrade economy. Built on Canvas 2D with a WebGL2 particle layer for bright/glowing effects.
 
 **Play now at: https://rainboids.cat.computer**
 
@@ -264,7 +264,8 @@ npm run preview    # Preview production build
 
 ### Browser Requirements
 - Modern browser with ES6 module support
-- Canvas 2D support (no WebGL required)
+- Canvas 2D support
+- WebGL2 (used for the particle layer; if unavailable the game still runs but explosion sprites are skipped)
 - Web Audio API for sound effects
 
 ---
@@ -436,7 +437,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button, lives)
 │       │   ├── input-handler.js # Keyboard + mouse input (desktop-only build)
 │       │   └── event-setup.js #   All event listeners: input, shop, cheats, resize
-│       ├── performance/       # Spatial grid, depth-batch-renderer, nebula renderer
+│       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle renderer + atlas
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
 ├── css/
 │   └── styles.css             # Game styling

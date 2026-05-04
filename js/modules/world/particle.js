@@ -1,6 +1,6 @@
 // Particle effects system
 import { GAME_CONFIG } from '../core/constants.js';
-import { random, glowSpriteCache, radialGradientSpriteCache } from '../core/utils.js';
+import { random } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
 
 const TS = GAME_CONFIG.TICK_SCALE; // Temporal scale factor for frame-based timers
@@ -354,17 +354,17 @@ export class Particle {
     draw(ctx) {
         if (!this.active) return;
 
-        // OPT: Instead of save/restore for every particle, we manually set and
-        // reset only the properties that change.  With 50+ active particles this
-        // eliminates 50-100 save/restore pairs per frame.
+        // Migrated to the WebGL particle renderer (see
+        // js/modules/performance/webgl-particle-renderer.js):
+        //   explosion, starSparkle, explosionFlash, explosionEmber,
+        //   explosionShrapnel, explosionRingColored
+        // drawParticlesBatched filters those out before calling draw(),
+        // so this switch only handles types that stay on Canvas2D.
+
         const baseAlpha = Math.max(0, this.life);
         ctx.globalAlpha = baseAlpha;
-        // Track what we need to reset after the switch
-        let changedComposite = false;
-        let changedLineCap = false;
 
         switch (this.type) {
-            case 'explosion':
             case 'thrust':
             case 'phantom':
                 ctx.fillStyle = this.color;
@@ -396,35 +396,24 @@ export class Particle {
                 break;
 
             case 'starBlip':
-                // Simplified rendering without expensive shadow effects
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
                 break;
 
-            case 'starSparkle':
-                // OPT-2: use pre-rendered glow sprites instead of live ctx.shadowBlur
-                if (this.radius > 0.05) {
-                    // glowSpriteCache.draw manages its own alpha internally
-                    glowSpriteCache.draw(ctx, this.x, this.y, this.color, this.radius, this.radius * 4, Math.max(0, this.life * 2.5));
-                    glowSpriteCache.draw(ctx, this.x, this.y, '#FFFFAA', this.radius * 0.6, this.radius * 2, Math.max(0, this.life * 3));
-                }
-                break;
             case 'asteroidCollisionDebris':
-                // globalAlpha already set to baseAlpha above
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.fill();
                 break;
             case 'fieryExplosionRing': {
-                // Animate hue from start to end
                 const t = 1 - this.life / 0.9;
                 const hue = this.startHue + (this.endHue - this.startHue) * t;
-                ctx.globalAlpha = Math.max(0, this.life * 1.7); // higher alpha
+                ctx.globalAlpha = Math.max(0, this.life * 1.7);
                 ctx.strokeStyle = hsl(hue, this.sat, this.light);
-                ctx.lineWidth = 12 * (this.life + 0.2); // thicker ring
+                ctx.lineWidth = 12 * (this.life + 0.2);
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
@@ -439,7 +428,6 @@ export class Particle {
                 ctx.stroke();
                 break;
             case 'spawnCircle': {
-                // Interpolate color from bright to dark green
                 const t = 1 - this.life;
                 const r1 = 80 + (0 - 80) * t;
                 const g1 = 255 + (80 - 255) * t;
@@ -453,7 +441,6 @@ export class Particle {
                 break;
             }
             case 'spawnParticle': {
-                // Draw main glowing particle only (no trail)
                 ctx.globalAlpha = Math.max(0, this.life);
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
@@ -463,7 +450,6 @@ export class Particle {
             }
 
             case 'shieldHit':
-                // Simplified rendering without expensive shadow effects
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = 3;
                 ctx.beginPath();
@@ -479,127 +465,42 @@ export class Particle {
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.globalAlpha = Math.max(0, this.life);
-                // Draw black outline
                 ctx.strokeText(`${this.damage}`, this.x, this.y);
-                // Draw red text
                 ctx.fillText(`${this.damage}`, this.x, this.y);
-                break;
-
-            case 'explosionFlash': {
-                // Composite handled by `drawParticlesBatched` (pass 2 sets
-                // 'screen' once for ALL screen-blend particles, instead of
-                // per-particle toggles). If draw() is called outside the
-                // batched path, screen blending is missing — caller must
-                // wrap. All in-game callers go through drawParticlesBatched.
-                const flashLife = Math.max(0, this.life / 1.2);
-                const eased = flashLife * flashLife * Math.sqrt(flashLife); // ~life^1.5
-                ctx.globalAlpha = eased * 0.55;
-                const sprite = radialGradientSpriteCache.get('flash-default');
-                if (sprite) {
-                    const r = this.radius;
-                    ctx.drawImage(sprite, this.x - r, this.y - r, r * 2, r * 2);
-                }
-                break;
-            }
-
-            case 'explosionShrapnel': {
-                // Directional streak — line from position in movement
-                // direction. Uses cached cos/sin/speed from init so we
-                // skip Math.hypot + 2× Math.cos/sin per particle per
-                // frame.
-                const streakLen = this.length < this._speed * 3 ? this.length : this._speed * 3;
-                const tailX = this.x - this._cosA * streakLen;
-                const tailY = this.y - this._sinA * streakLen;
-                ctx.strokeStyle = this.color;
-                ctx.lineWidth = this.radius;
-                ctx.lineCap = 'round';
-                changedLineCap = true;
-                ctx.beginPath();
-                ctx.moveTo(tailX, tailY);
-                ctx.lineTo(this.x, this.y);
-                ctx.stroke();
-                // Bright head dot
-                ctx.fillStyle = '#ffffff';
-                ctx.globalAlpha = Math.max(0, this.life * 0.8);
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 0.6, 0, Math.PI * 2);
-                ctx.fill();
-                break;
-            }
-
-            case 'explosionEmber': {
-                // Composite handled by `drawParticlesBatched` — see the
-                // explosionFlash note above. One drawImage per particle,
-                // sprite cached per (color, radius, blur) tuple via the
-                // existing glowSpriteCache.
-                const aLife = Math.max(0, this.life);
-                const softA = Math.pow(aLife, 0.55);
-                glowSpriteCache.draw(ctx, this.x, this.y, this.color, this.radius, 8, softA);
-                break;
-            }
-
-            case 'explosionRingColored':
-                ctx.globalAlpha = Math.max(0, this.life * 1.5);
-                ctx.strokeStyle = this.color;
-                ctx.lineWidth = this.lineWidth * this.life;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.stroke();
                 break;
         }
 
-        // Reset changed properties instead of full restore
         ctx.globalAlpha = 1;
-        if (changedComposite) ctx.globalCompositeOperation = 'source-over';
-        if (changedLineCap) ctx.lineCap = 'butt';
     }
 }
 
-// Particle types that render with `globalCompositeOperation = 'screen'`.
-// Used by drawParticlesBatched to bucket particles into two passes so
-// the composite mode flips at most once per frame rather than once per
-// particle. Both flash and ember are sprite-based now (5.60.0) so they
-// only need one composite toggle for the whole bucket.
-const SCREEN_BLEND_TYPES = new Set(['explosionFlash', 'explosionEmber']);
-
 /**
- * Two-pass batched draw for the particle pool.
- *   Pass 1: every non-screen-blend particle. Composite stays 'source-over'
- *           (the canvas default), so no per-particle toggling.
- *   Pass 2: every screen-blend particle. Composite is set to 'screen'
- *           ONCE before the loop and reset ONCE after.
+ * Single-pass Canvas2D draw for unmigrated particle types.
  *
- * Net effect: 2 composite-mode changes per frame instead of N (where N
- * is the active screen-blend particle count, currently 30-100 in late
- * waves). Each composite-mode change in Canvas2D forces a render-state
- * flush, so this saves real GPU time in dense scenes.
+ * Bright/glowing particles (embers, flashes, sparkles, classic explosion
+ * fragments, shrapnel streaks, expanding rings) render via the WebGL
+ * particle layer underneath gameCanvas — see WebGLParticleRenderer.
+ * When a renderer is provided, this function skips any type that
+ * `renderer.handlesType()` claims; the result is just shape-only and
+ * text particles (rings, debris, damage numbers, etc.) which all use
+ * the default `source-over` composite mode.
+ *
+ * If the renderer is null/undefined (Canvas2D-only fallback when WebGL
+ * isn't available), every particle type falls through to its draw()
+ * branch.
  */
-export function drawParticlesBatched(pool, ctx, viewLeft, viewTop, viewRight, viewBottom) {
+export function drawParticlesBatched(pool, ctx, viewLeft, viewTop, viewRight, viewBottom, renderer) {
     const list = pool.activeObjects;
-    // Pass 1 — opaque/source-over particles.
+    const skipFn = renderer && renderer.supported && !renderer._contextLost
+        ? renderer.handlesType.bind(renderer)
+        : null;
     for (let i = 0; i < list.length; i++) {
         const p = list[i];
         if (!p.active) continue;
-        if (SCREEN_BLEND_TYPES.has(p.type)) continue;
+        if (skipFn && skipFn(p.type)) continue;
         const r = p.radius || 10;
         if (p.x + r < viewLeft || p.x - r > viewRight ||
             p.y + r < viewTop  || p.y - r > viewBottom) continue;
         p.draw(ctx);
     }
-    // Pass 2 — additive (screen-blend) particles. Composite set once.
-    let pass2Started = false;
-    for (let i = 0; i < list.length; i++) {
-        const p = list[i];
-        if (!p.active) continue;
-        if (!SCREEN_BLEND_TYPES.has(p.type)) continue;
-        const r = p.radius || 10;
-        if (p.x + r < viewLeft || p.x - r > viewRight ||
-            p.y + r < viewTop  || p.y - r > viewBottom) continue;
-        if (!pass2Started) {
-            ctx.globalCompositeOperation = 'screen';
-            pass2Started = true;
-        }
-        p.draw(ctx);
-    }
-    if (pass2Started) ctx.globalCompositeOperation = 'source-over';
 }

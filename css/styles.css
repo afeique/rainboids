@@ -33,17 +33,29 @@ h2 {
     margin-bottom: 0;
 }
 
+/* Both canvases occupy the full viewport at the same coordinates. The
+   WebGL particle layer (glCanvas) renders behind the Canvas2D layer
+   (gameCanvas) — gameCanvas keeps a transparent background so the
+   WebGL particles show through. The black page background acts as the
+   final clear color when neither canvas has drawn anything. */
 canvas {
     display: block;
-    background-color: #000;
-    /* Debug: Ensure canvas is visible */
-    position: relative;
-    z-index: 1;
-    cursor: none; /* Hide default cursor - we'll draw our own */
-    
-    /* Multi-touch support for canvas */
+    position: fixed;
+    top: 0;
+    left: 0;
+    cursor: none;
     touch-action: none;
     -webkit-touch-callout: none;
+}
+
+#glCanvas {
+    background-color: #000;
+    z-index: 0;
+}
+
+#gameCanvas {
+    background-color: transparent;
+    z-index: 1;
 }
 
 canvas.asteroid-hover {
