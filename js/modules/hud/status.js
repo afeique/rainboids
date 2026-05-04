@@ -631,9 +631,25 @@ export function updateHUD() {
 
         // Shadow effects removed for performance
 
-        // Calculate health percentage using effective max health
+        // Calculate health percentage using effective max health.
+        // The bar animates: `_displayedHealth` is a smoothed value that
+        // eases toward the real health each frame. Damage spikes show a
+        // visible drain instead of an instant drop. Lazily initialized
+        // here so we don't have to thread it through engine init.
         const effectiveMaxHealth = this.player.getEffectiveMaxHealth();
-        const healthPercentage = this.player.health / effectiveMaxHealth;
+        if (this._displayedHealth === undefined) this._displayedHealth = this.player.health;
+        // Asymmetric ease — drain (damage) plays slightly slower than
+        // gain (heal/respawn) so hits read as a clear chunk leaving the
+        // bar.
+        const target = this.player.health;
+        const delta = target - this._displayedHealth;
+        const speed = delta < 0 ? 0.16 : 0.30; // drain 16%/frame, gain 30%/frame
+        this._displayedHealth += delta * speed;
+        // Snap when within 0.5 HP so the bar doesn't crawl forever.
+        if (Math.abs(target - this._displayedHealth) < 0.5) {
+            this._displayedHealth = target;
+        }
+        const healthPercentage = this._displayedHealth / effectiveMaxHealth;
         const filledWidth = barWidth * healthPercentage;
 
         // Add warning glow effect for low health

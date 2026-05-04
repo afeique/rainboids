@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.62.0] - 2026-05-04
+
+### Added
+- **Animated health bar.** The bar's fill smoothly eases toward the player's current HP each frame instead of snapping. Drain (taking damage) eases at 16% / frame and gain (heal/respawn) at 30% / frame — asymmetric curve makes hits read as a clear chunk leaving the bar while heals snap back faster. HP text below the bar still shows the live integer value, so the bar provides drama and the text provides truth. **XP bar is untouched** — it still uses live values exactly as before.
+- **Screen flash on enemy destruction (only) restored.** Re-added small `triggerScreenFlash(0.06, 4)` on the impact frame and a bigger `triggerScreenFlash(0.12, 6)` on the midway big-bang. Non-lethal hits still don't flash. Reserves the visual punch for actual destruction events.
+
+### Changed
+- **Popcorn cookoffs are now actually visible.** The death-flash silhouette's additive glow was 3.0× the enemy radius — popcorn bursts spawning at 0.3-1.1× radius were drowning under the halo. Two changes:
+  - Silhouette glow radius cut from 3.0× → 1.5× the enemy radius.
+  - Popcorn now spawns at 1.4-2.2× radius (outside the halo) with bigger flashes (`r × 1.3` instead of `r × 0.85`) and bigger rings (`r × 1.6-2.4` instead of `r × 0.8-1.7`).
+- **Popcorn particle count cut ~50% per burst, but each one is bigger and brighter.** From ~12 particles per burst down to 6: 1 flash + 1 ring + 3 sparks + 1 ember (was 1 flash + 2 rings + 5 sparks + 2 embers + 2 sparkles). Sparkles dropped — too small to read at gameplay scale. Total popcorn-phase particles drop from ~108 → ~54 across the 9 bursts before the midway big bang.
+- **Consistent visibility across enemy colors.** Popcorn rings now alternate white / enemy color (was random per-burst), and shrapnel always leads with a white spark. So a HUNTER's red explosion reads with the same intensity as a WASP's yellow one — no more "red ships have worse explosions" because the bright reference particles are always present.
+
+---
+
 ## [5.61.0] - 2026-05-04
 
 ### Changed

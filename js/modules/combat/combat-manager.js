@@ -134,12 +134,13 @@ export function createEnemyDebris(enemy) {
     const sizeScale = Math.min(2, enemy.radius / 15);
     const onScreen = this.isEntityOnScreen(enemy);
 
-    // ── Kill juice: hitstop + camera kick + initial shake ──
-    // No fullscreen flash on hit — those were too washy when many
-    // enemies died in quick succession. Hitstop + kick + shake carry
-    // the impact, the localized particle flashes do the visual work.
+    // ── Kill juice: hitstop + camera kick + screen shake + small flash ──
+    // Flash is gated behind isDeathFrame so non-lethal bullet hits don't
+    // wash the screen — only the actual destruction event flashes. Kept
+    // small (0.06α) since the midway big-bang adds a much bigger one.
     if (onScreen) {
         this.triggerHitstop(6);
+        this.triggerScreenFlash(0.06, 4);
         const kdx = this.player.x - enemy.x;
         const kdy = this.player.y - enemy.y;
         this.triggerCameraKick(kdx, kdy, 18);
@@ -211,12 +212,13 @@ export function triggerEnemyFinalExplosion(enemy) {
     const ey = enemy.y;
     const r  = enemy.radius || 18;
 
-    // ── Punch ── Final-explosion shake is the biggest in the death
-    // sequence. No fullscreen flash — the giant particle cloud does
-    // the visual work, and stacking flashes when multiple enemies die
-    // in the same window washes out the screen.
+    // ── Punch ── Final-explosion is the biggest moment in the death
+    // sequence. Reserved for actual destruction, not hits, so the flash
+    // can be a real beat. Stacks with the impact-frame flash of the
+    // initial pop for a 2-flash death cadence.
     if (onScreen) {
         this.triggerHitstop(7);
+        this.triggerScreenFlash(0.12, 6);
         if (this.player) {
             const kdx = this.player.x - ex;
             const kdy = this.player.y - ey;

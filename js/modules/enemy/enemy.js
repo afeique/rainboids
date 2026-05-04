@@ -296,34 +296,40 @@ export class Enemy {
             }
 
             // ── Popcorn cookoffs (only while the ship is still there) ──
-            // Fires every 2 frames so the wreck is constantly bursting
-            // before the big midway pop. Each burst has 2 rings, 5 sparks,
-            // 2 embers, 2 sparkles, and a small screen shake.
+            // Spawns OUTSIDE the silhouette's halo so each pop is actually
+            // visible (the silhouette glow extends ~1.8× radius — popcorn
+            // sits at 1.4-2.2× from center). Fewer particles per burst
+            // than before but each one is bigger and brighter, so a small
+            // ship's red explosion reads the same as a wasp's yellow one.
             if (!this._shipDestroyed && gameEngine && gameEngine.particlePool && tickIntoDeath % 2 === 0) {
                 const r = this.radius || 18;
                 const a = Math.random() * Math.PI * 2;
-                const dist = r * (0.3 + Math.random() * 0.8);
+                // Pop OUTSIDE the silhouette glow ring.
+                const dist = r * (1.4 + Math.random() * 0.8);
                 const sx = this.x + Math.cos(a) * dist;
                 const sy = this.y + Math.sin(a) * dist;
                 const c = (this.color || '#ff6644');
-                gameEngine.particlePool.get(sx, sy, 'explosionFlash', r * 0.85);
-                gameEngine.particlePool.get(sx, sy, 'explosionRingColored', r * (0.8 + Math.random() * 0.8),
-                    Math.random() < 0.5 ? '#ffffff' : c);
-                gameEngine.particlePool.get(sx, sy, 'explosionRingColored', r * (1.1 + Math.random() * 0.6),
-                    Math.random() < 0.4 ? '#ffcc66' : c);
-                for (let i = 0; i < 5; i++) {
+                // Bigger flash — visible at offset, not lost in halo.
+                gameEngine.particlePool.get(sx, sy, 'explosionFlash', r * 1.3);
+                // One bigger ring instead of two small overlapping ones.
+                // Alternates white / enemy color so visibility isn't tied
+                // to how bright the enemy's hue happens to be.
+                gameEngine.particlePool.get(sx, sy, 'explosionRingColored',
+                    r * (1.6 + Math.random() * 0.8),
+                    (tickIntoDeath % 4 < 2) ? '#ffffff' : c);
+                // 3 sparks (was 5). White always first so even dark-color
+                // enemies have a visible streak.
+                for (let i = 0; i < 3; i++) {
                     const sa = Math.random() * Math.PI * 2;
-                    const sp = 1.5 + Math.random() * 3.0;
-                    const col = i === 0 ? '#ffffff'
-                              : i === 1 ? '#ffcc66'
-                              : c;
+                    const sp = 2.0 + Math.random() * 3.0;
+                    const col = i === 0 ? '#ffffff' : c;
                     gameEngine.particlePool.get(sx, sy, 'explosionShrapnel', sa, sp, col);
                 }
-                const emberC = (tickIntoDeath % 2) ? c : '#ffcc66';
-                gameEngine.particlePool.get(sx, sy, 'explosionEmber', emberC);
-                gameEngine.particlePool.get(sx, sy, 'explosionEmber', '#ffffff');
-                gameEngine.particlePool.get(sx, sy, 'starSparkle');
-                gameEngine.particlePool.get(sx, sy, 'starSparkle');
+                // Single ember in white-or-color rotation. Sparkles dropped —
+                // they were too small to read at gameplay scale.
+                gameEngine.particlePool.get(sx, sy, 'explosionEmber',
+                    (tickIntoDeath % 2) ? c : '#ffffff');
+
                 if (typeof gameEngine.isEntityOnScreen === 'function'
                     && gameEngine.isEntityOnScreen(this)
                     && typeof gameEngine.triggerScreenShake === 'function') {
@@ -878,10 +884,13 @@ export class Enemy {
             const scale = 1.5 - progress * 1.2;
             const alpha = Math.max(0, 1.0 - progress * 1.1);
 
-            // Draw bright additive glow behind the silhouette
+            // Draw bright additive glow behind the silhouette. Glow
+            // radius reduced 3.0× → 1.5× so the popcorn cookoffs that
+            // spawn at 1.4-2.2× radius sit OUTSIDE the halo and stay
+            // visible during the drift phase.
             ctx.save();
             ctx.globalCompositeOperation = 'lighter';
-            const glowR = this.radius * scale * 3.0;
+            const glowR = this.radius * scale * 1.5;
             const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowR);
             grad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.7})`);
             grad.addColorStop(0.3, `rgba(200, 230, 255, ${alpha * 0.35})`);
