@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.6] - 2026-05-04
+
+### Changed
+- **Enemy big-bang rings cut hard.** The 5.64.5 reduction (2.0/2.7/2.2/3.2 → 1.2/1.6/1.3/1.9) wasn't enough — rings still washed out the ship-shred + shrapnel. New values:
+  - **Big-bang final explosion**: dropped from 4 rings to 3, multipliers `1.2/1.6/1.3/1.9 → 0.55/0.75/0.9`. The 1.9× ring (the worst offender) is gone entirely; the largest remaining ring is now slightly smaller than the enemy ship itself.
+  - **Initial impact**: `1.3/0.9 → 0.7/0.5`.
+  - **Secondary outward ring**: `1.0 → 0.5`.
+- Net effect: rings now read as tight wavefronts around the impact point rather than a halo larger than the wreckage. The shred + shrapnel carries the explosion mass.
+
+---
+
 ## [5.64.5] - 2026-05-04
 
 ### Changed

@@ -173,12 +173,13 @@ export function createEnemyDebris(enemy) {
     // explosions to render fully.
 
     // 1. Impact flash + 2 TIGHT expanding rings — the announce. Rings
-    // shrunk (radius mult 2.2/1.4 → 1.3/0.9) so they don't dominate the
-    // shape-debris and shrapnel signal. With the 5.64.3 tighter Gaussian
-    // annulus the smaller rings still read clearly as wavefronts.
+    // shrunk again (1.3/0.9 → 0.7/0.5) so the wavefronts read as small
+    // pulses around the impact point instead of a halo larger than the
+    // enemy ship itself. The shred + shrapnel signal carries the actual
+    // explosion mass; rings are now just edge announce.
     this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 1.4 * sizeScale);
-    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 1.3 * sizeScale, '#ffffff');
-    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 0.9 * sizeScale, color);
+    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 0.7 * sizeScale, '#ffffff');
+    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 0.5 * sizeScale, color);
 
     // 2. Directional shrapnel — fast streaks flying outward.
     const shrapnelCount = Math.floor(10 + 6 * sizeScale);
@@ -232,18 +233,16 @@ export function triggerEnemyFinalExplosion(enemy) {
     // 1. Bright core flash, slightly larger than initial.
     this.particlePool.get(ex, ey, 'explosionFlash', r * 2.4 * sizeScale);
 
-    // 2. Four TIGHTER wavefront rings — all spawned instantly (no
+    // 2. Three TIGHT wavefront rings — all spawned instantly (no
     // setTimeouts; see 5.63.0 for the eviction-bug history). Radius
-    // multipliers shrunk significantly (2.0/2.7/2.2/3.2 → 1.2/1.6/1.3/1.9)
-    // so the rings don't dominate the shrapnel + shape-debris signal.
-    // Each ring still expands from 15% of its own maxRadius to 100% over
-    // its 0.9s lifetime, so the cascade reads as concentric wavefronts —
-    // just at a more reasonable scale that lets the ship-shred read
-    // through the explosion.
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.2 * sizeScale, '#ffffff');
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.6 * sizeScale, color);
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.3 * sizeScale, '#ffcc66');
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.9 * sizeScale, color);
+    // multipliers cut hard (1.2/1.6/1.3/1.9 → 0.55/0.75/0.9). Largest
+    // ring is now slightly smaller than the enemy itself, so the rings
+    // read as a tight wavefront around the impact rather than a halo
+    // that washes out the ship-shred + shrapnel. The 4th ring at 1.9×
+    // was the worst offender — dropped entirely.
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.55 * sizeScale, '#ffffff');
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.75 * sizeScale, color);
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.9  * sizeScale, '#ffcc66');
 
     // 3. Dense directional shrapnel — DENSER for the new midway-big-bang
     // moment where the ship visibly vanishes. Fast streaks in all
@@ -293,9 +292,9 @@ export function triggerEnemyFinalExplosion(enemy) {
         try { this.createShapeDebris(enemy); } catch (_) {}
     }
 
-    // 6. Secondary tight ring — final outward wavefront. No cookoff embers
-    // anymore (they were lingering filler).
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.0 * sizeScale, color);
+    // 6. Secondary tight ring — final outward wavefront, kept small so
+    // it doesn't merge with the 3 earlier rings into a thick blob.
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.5 * sizeScale, color);
 }
 
 export function createShapeDebris(enemy) {
