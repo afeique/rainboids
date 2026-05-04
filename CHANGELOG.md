@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.63.1] - 2026-05-04
+
+### Removed
+- **All lingering particles from enemy explosions.** Enemy deaths now spawn motion-only particles — flash, expanding rings, outflying shrapnel, fast-velocity classic dust, and shape debris. Removed:
+  - Initial impact: embers (6-14) + sparkles (6).
+  - Midway big-bang: core glow ember cluster (6 slow embers at center), lingering embers (22-34), sparkle dust (22), cookoff embers (8).
+  - Net per-kill pool pressure: ~145 → ~70 particles. With the 600 cap, that's headroom for 8 simultaneous big-bangs to render fully alongside ambient activity, instead of 3-4.
+
+### Changed
+- Midway big-bang's classic small particles bumped speed range `2-11 → 3-12` so even the slow tail of the burst has visible outward motion. Count `36 → 24` since each remaining particle contributes more.
+- Initial-impact shrapnel count and shape-debris emission unchanged — those were already pure motion.
+
+---
+
 ## [5.63.0] - 2026-05-04
 
 ### Fixed

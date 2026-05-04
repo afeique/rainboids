@@ -162,12 +162,21 @@ export function createEnemyDebris(enemy) {
 
     if (!this.particlePool) return;
 
-    // 1. Initial impact flash + ring — the announce.
+    // Enemy death particles are now MOTION-ONLY: flash, expanding rings,
+    // and outflying shrapnel/debris. Lingering embers + sparkles are
+    // gone — they sat in place fading and ate up pool slots without
+    // contributing to the "stuff blowing apart" read. Pool pressure
+    // drops ~40% per kill, leaving more headroom for simultaneous big
+    // explosions to render fully.
+
+    // 1. Impact flash + 2 expanding rings — the announce. All three
+    // are short-lived and drop out fast as they expand.
     this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 1.4 * sizeScale);
     this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 2.2 * sizeScale, '#ffffff');
     this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 1.4 * sizeScale, color);
 
-    // 2. Initial directional shrapnel — short fan of streaks.
+    // 2. Directional shrapnel — fast streaks flying outward. THIS is
+    // the main motion-feel for the impact frame.
     const shrapnelCount = Math.floor(10 + 6 * sizeScale);
     for (let i = 0; i < shrapnelCount; i++) {
         const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
@@ -176,22 +185,9 @@ export function createEnemyDebris(enemy) {
         this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', angle, speed, sColor);
     }
 
-    // 3. Initial embers in enemy color
-    const emberCount = Math.floor(6 + 4 * sizeScale);
-    for (let i = 0; i < emberCount; i++) {
-        this.particlePool.get(enemy.x, enemy.y, 'explosionEmber',
-            i % 3 === 0 ? '#ffcc66' : color);
-    }
-
-    // 4. A handful of sparkle dust — tiny twinkles so the death has
-    // visible energy beyond the streaks.
-    for (let i = 0; i < 6; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = Math.random() * enemy.radius;
-        this.particlePool.get(enemy.x + Math.cos(a) * r, enemy.y + Math.sin(a) * r, 'starSparkle');
-    }
-
-    // 5. Shape debris — the wreck's actual outline scattered outward.
+    // 3. Shape debris — the wreck's actual outline pieces scattered
+    // outward. Always-moving, always reads as "the ship physically
+    // came apart."
     this.createShapeDebris(enemy);
 }
 
@@ -267,65 +263,41 @@ export function triggerEnemyFinalExplosion(enemy) {
         this.particlePool.get(ex, ey, 'explosionShrapnel', angle, speed, sColor);
     }
 
-    // 4. Core glow cluster — slow embers at center that linger.
-    for (let i = 0; i < 6; i++) {
-        const p = this.particlePool.get(
-            ex + random(-4, 4), ey + random(-4, 4),
-            'explosionEmber', i < 2 ? '#ffffff' : color
-        );
-        if (p) {
-            p.vel.x *= 0.2;
-            p.vel.y *= 0.2;
-            p.life = random(1.4, 2.2);
-            p.radius = random(2.5, 5);
-        }
-    }
+    // The midway big-bang is now MOTION-ONLY: flash + 4 expanding rings
+    // + dense fast shrapnel + fast classic burst + shape debris. Every
+    // particle has outward velocity. Lingering embers (slow center
+    // cluster, afterglow embers, sparkle dust, cookoff embers) all
+    // removed — they were eating ~80 pool slots per kill while sitting
+    // mostly still, contributing little to the "stuff blowing apart"
+    // read.
+    //
+    // Net pool pressure per big-bang: ~145 → ~70 particles. With the
+    // 600 cap, that's room for 8 simultaneous big-bangs to render fully
+    // alongside ambient activity, instead of 3-4.
 
-    // 5. Lingering embers — bumped for thicker afterglow.
-    const emberCount = Math.floor(22 + 12 * sizeScale);
-    for (let i = 0; i < emberCount; i++) {
-        this.particlePool.get(ex, ey, 'explosionEmber',
-            i % 3 === 0 ? '#ffcc66' : color);
-    }
-
-    // 6. Classic small particles — denser cloud.
-    for (let i = 0; i < 36; i++) {
+    // 4. Classic small particles — outward-velocity dust. Speed range
+    // bumped (3-12, was 2-11) so even the slow tail still has visible
+    // motion away from the explosion center.
+    for (let i = 0; i < 24; i++) {
         const p = this.particlePool.get(ex, ey, 'explosion');
         if (p) {
-            p.color = i < 10 ? '#ffffff' : i < 22 ? color : '#ffcc66';
+            p.color = i < 8 ? '#ffffff' : i < 16 ? color : '#ffcc66';
             const a = random(0, Math.PI * 2);
-            const s = random(2, 11);
+            const s = random(3, 12);
             p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
             p.radius = random(1.5, 5);
         }
     }
 
-    // 7. Sparkle dust — wider spread, more motes.
-    for (let i = 0; i < 22; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const rr = Math.random() * r * 1.8;
-        this.particlePool.get(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr, 'starSparkle');
-    }
-
-    // 7b. Outline scatter — emit the enemy's own shape debris a SECOND
-    // time at the midway big-bang. The first scatter at impact has
-    // already drifted; this fresh batch reads as the ship actively
-    // breaking apart, not just smoke from earlier.
+    // 5. Outline scatter — fresh batch of shape debris flies out at
+    // the moment the ship vanishes. (The impact-frame batch has
+    // drifted already; this reads as the ship actively coming apart.)
     if (typeof this.createShapeDebris === 'function') {
         try { this.createShapeDebris(enemy); } catch (_) {}
     }
 
-    // 8. Cookoff sparks + secondary ring — spawned INSTANTLY (no
-    // setTimeout). Same eviction concern as the staggered rings above
-    // — a 100ms-deferred .get() can be triggered after dozens of
-    // ambient particles have refilled the pool, evicting THIS
-    // explosion's earlier particles. Spawning instantly keeps the
-    // pool stable for the entire kill.
-    for (let i = 0; i < 8; i++) {
-        const ox = ex + random(-22, 22);
-        const oy = ey + random(-22, 22);
-        this.particlePool.get(ox, oy, 'explosionEmber', color);
-    }
+    // 6. Secondary ring — final outward wavefront. No cookoff embers
+    // anymore (they were lingering filler).
     this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.8 * sizeScale, color);
 }
 
