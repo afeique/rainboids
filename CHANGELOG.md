@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.8] - 2026-05-04
+
+### Fixed
+- **Damage number rendered twice on player hits.** Two parallel damage-number systems were both firing on every player hit:
+  1. `createDamageNumber(...)` (the modern path) — pushes onto `this.damageNumbers` and renders via `hud/combat.js drawDamageNumbers` with crit, isPlayerHit, and isEmpowered styling.
+  2. `particlePool.get(player.x, player.y, 'damageNumber', ...)` (the old path) — spawns a `Particle` of type `'damageNumber'` and renders via `Particle.draw()`'s switch case.
+  Removed the three particle-pool spawn sites in `collision-system.js` (player hit by enemy / enemy bullet / asteroid). The `'damageNumber'` reset/update/draw branches in `particle.js` and the `DAMAGE_NUMBER_FONT` constant are also gone — dead code.
+
+---
+
 ## [5.64.7] - 2026-05-04
 
 ### Changed

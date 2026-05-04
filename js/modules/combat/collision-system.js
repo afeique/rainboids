@@ -1443,8 +1443,11 @@ export function handlePlayerEnemyCollision(player, enemy) {
         this.triggerScreenShake(18, 10, enemy.radius);
         this.events.emit('audio:player-hit-enemy');
 
-        // Show red damage number
-        this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
+        // Damage number is created above via createDamageNumber — that
+        // path renders through hud/combat.js with isPlayerHit styling
+        // (red color, crit/empowered tags). The old particle-pool
+        // 'damageNumber' was a duplicate that double-rendered the
+        // number, removed in 5.64.8.
 
         // Create explosion particles at player position with enemy color
         for (let i = 0; i < 15; i++) {
@@ -1607,8 +1610,8 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     // Per-pattern enemy-bullet hit SFX (falls back to generic if untagged).
     this.events.emit('audio:player-hit-bullet', bullet.firingPattern);
 
-    // Show red damage number
-    this.particlePool.get(player.x, player.y, 'damageNumber', finalDamage);
+    // (Damage number already created above via createDamageNumber.
+    // Old particle-pool 'damageNumber' duplicate removed in 5.64.8.)
 
     // Create explosion particles at player position with bullet color
     for (let i = 0; i < 12; i++) {
@@ -1742,7 +1745,8 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         // Visual and audio feedback
         this.player.makeInvincible(3000); // 3 seconds of invincibility
         this.events.emit('audio:player-hit-asteroid');
-        this.particlePool.get(this.player.x, this.player.y, 'damageNumber', finalDamage);
+        // (Damage number already created above via createDamageNumber.
+        // Old particle-pool 'damageNumber' duplicate removed in 5.64.8.)
         this.particlePool.get(this.player.x, this.player.y, 'shieldHit', this.player.radius);
         this.events.emit('audio:shield');
 

@@ -5,10 +5,6 @@ import { hsl } from '../core/color-cache.js';
 
 const TS = GAME_CONFIG.TICK_SCALE; // Temporal scale factor for frame-based timers
 
-// Pre-built font strings for hot text-rendering paths — avoids reallocating
-// the same template-literal once per particle per frame.
-const DAMAGE_NUMBER_FONT = "16px 'Press Start 2P', monospace";
-
 export class Particle {
     constructor() {
         this.active = false;
@@ -156,13 +152,10 @@ export class Particle {
                 this.color = 'rgba(0, 150, 255, 0.7)';
                 break;
 
-            case 'damageNumber':
-                const [damage] = args;
-                this.damage = damage;
-                this.life = 1;
-                this.vel = { x: random(-0.5, 0.5), y: -2 }; // Float upward
-                this.fontSize = 16;
-                break;
+            // 'damageNumber' particle type removed in 5.64.8 — was a
+            // duplicate of the createDamageNumber path in combat-manager.js
+            // which renders through hud/combat.js with crit/isPlayerHit
+            // styling.
 
             // ── Enhanced explosion types ──────────────────────────────
             case 'explosionFlash': {
@@ -317,12 +310,7 @@ export class Particle {
                 this.radius += 2 * TS;
                 break;
 
-            case 'damageNumber':
-                this.x += this.vel.x * TS;
-                this.y += this.vel.y * TS;
-                this.vel.y += 0.1 * TS;
-                this.life -= 0.00625 * TS;
-                break;
+            // 'damageNumber' update path removed in 5.64.8 — see reset() above.
 
             case 'explosionFlash':
                 this.life -= 0.06 * TS;
@@ -463,17 +451,7 @@ export class Particle {
                 ctx.stroke();
                 break;
 
-            case 'damageNumber':
-                ctx.font = DAMAGE_NUMBER_FONT;
-                ctx.fillStyle = '#ff0000';
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 3;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.globalAlpha = Math.max(0, this.life);
-                ctx.strokeText(`${this.damage}`, this.x, this.y);
-                ctx.fillText(`${this.damage}`, this.x, this.y);
-                break;
+            // 'damageNumber' draw path removed in 5.64.8 — see reset() above.
         }
 
         ctx.globalAlpha = 1;
