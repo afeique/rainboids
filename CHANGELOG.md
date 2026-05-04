@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.68.4] - 2026-05-04
+
+### Changed
+- **Q activates the equipped defense skill** (was TAB in 5.64.14–5.68.3). Sits naturally under the left hand on WASD — no pinky stretch. TAB is no longer a game binding (still `preventDefault`'d so an accidental TAB doesn't shift browser focus off the canvas).
+- Updated `input-handler.js` (keydown), `event-setup.js` comment, `ui-manager.js` controls tab, `index.html` static controls list, the `wave1-fire-and-skill-v5` tutorial hint, and the README controls section.
+
+---
+
 ## [5.68.3] - 2026-05-04
 
 ### Changed

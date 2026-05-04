@@ -28,7 +28,7 @@ export function setupEventListeners() {
         //   E (hold)  — radial menu: PRIMARY weapon (mouse picks, click commits)
         //   R (hold)  — radial menu: POWER weapon
         //   F (hold)  — radial menu: SKILL
-        //   TAB       — activate equipped skill (handled in input-handler.js)
+        //   Q         — activate equipped skill (handled in input-handler.js)
         //   SPACE     — fire/charge POWER weapon (handled in input-handler.js)
         //   left-clk  — fire PRIMARY (or commit a radial selection while a
         //               radial menu is open)
@@ -56,9 +56,9 @@ export function setupEventListeners() {
             this.radialMenu.openFor(radialKey);
             hideHint();
         }
-        // Tab still needs preventDefault so the browser doesn't shift
-        // focus to the next page element when the player presses it
-        // (the input handler interprets Tab as "activate skill").
+        // Tab is no longer a game binding (Q took over skill-activate
+        // in 5.68.4) but we still preventDefault so an accidental TAB
+        // doesn't shift browser focus off the canvas.
         if (e.code === 'Tab') {
             e.preventDefault();
         }

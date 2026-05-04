@@ -341,10 +341,8 @@ export class UIManager {
         const controlsTab = document.getElementById('controls-tab');
         if (!controlsTab) return;
         // Desktop-only build — single keyboard / mouse layout.
-        // 5.68.1 — refreshed for the 5.64.14 keybind layout (E/R/F/TAB/SPACE)
-        // and the 5.65.0 radial-menu wrinkle (cycle keys also open radial
-        // menus when held). The "1-4 defense skills" line is gone — skills
-        // are equipped from the SKILLS pause-menu tab and activated via TAB.
+        // 5.68.4 — Q activates the equipped skill (was TAB in 5.64.14–5.68.3).
+        // E/R/F cycle skill/primary/power; held = open radial menu.
         controlsTab.innerHTML = `
             <h2>CONTROLS</h2>
             <div class="control-list">
@@ -367,7 +365,7 @@ export class UIManager {
                     Fire equipped power weapon
                 </div>
                 <div>
-                    <span class="control-symbol">TAB</span><br>
+                    <span class="control-symbol">Q</span><br>
                     Activate equipped defensive skill
                 </div>
                 <div>

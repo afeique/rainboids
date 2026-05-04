@@ -13,7 +13,7 @@ export class InputHandler {
             // 5.64.14 binding layout:
             //   SPACE / right-click — POWER weapon (continuous; charge while
             //                                       held, fire on release).
-            //   TAB                  — activate skill (one-shot pulse).
+            //   Q                    — activate skill (one-shot pulse).
             //   E / R / F            — cycle skill / primary / power (handled
             //                          in event-setup.js; 5.68.3 keybind swap).
             fireSecondary: false,
@@ -126,13 +126,14 @@ export class InputHandler {
                 this.input.fireSecondary = true;
                 e.preventDefault();
                 break;
-            // TAB (5.64.14) — activate the equipped defense skill. One-
-            // shot pulse consumed in the player update loop. Tab's
-            // browser-default focus advance is preventDefault'd in
-            // event-setup.js so the in-game focus stays put.
-            case 'Tab':
-                this.input.activateSkill = true;
-                e.preventDefault();
+            // Q (5.68.4) — activate the equipped defense skill. One-
+            // shot pulse consumed in the player update loop. Was TAB
+            // in 5.64.14–5.68.3; moved to Q so it sits naturally
+            // under the left hand on WASD (no pinky stretch).
+            case 'KeyQ':
+                if (!e.shiftKey) {
+                    this.input.activateSkill = true;
+                }
                 break;
         }
     }
@@ -158,7 +159,7 @@ export class InputHandler {
             case 'Space':
                 this.input.fireSecondary = false;
                 break;
-            // Tab is consumed as a one-shot activateSkill pulse by the
+            // Q is consumed as a one-shot activateSkill pulse by the
             // player update loop, so no keyup reset is needed.
         }
     }

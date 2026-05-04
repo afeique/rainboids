@@ -549,7 +549,7 @@ export class GameEngine {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
                 'wave1-fire-and-skill-v5',
-                'Hold <strong>Space</strong> (or right-click) to fire your power weapon. Press <strong>Tab</strong> to activate your skill.',
+                'Hold <strong>Space</strong> (or right-click) to fire your power weapon. Press <strong>Q</strong> to activate your skill.',
                 8000,
                 { once: false },
             );
