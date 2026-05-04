@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.4] - 2026-05-04
+
+### Changed
+- **Hit/destruction effects redelineated between enemies and asteroids.** Enemies now feel "alive", asteroids "inert":
+  - Enemy hit: small screen shake (was: nothing). Communicates contact through camera feel.
+  - Enemy destruction: screen flash + screen shake (unchanged).
+  - Asteroid hit: NO screen shake (was: light shake). Hit feedback through cursor flash + shrapnel/sparkles only.
+  - Asteroid destruction: screen shake only (was: shake + screen flash). Flash is now reserved for enemy kills.
+- **Ember lifespan halved.** Initial life `1.0-1.8s → 0.6-1.0s`; decay rate `0.009/tick → 0.020/tick`. With both adjustments, embers visibly cool from spawn to extinguish in ~1-1.5s instead of ~3-6s. Frees pool slots for the next burst and matches the "spark cooling" read better than "lingering glow."
+- **Particle sprites sharpened further.** Second pass on the WebGL atlas:
+  - **Ember (`dot`)**: hot-core Gaussian coefficient `18 → 28` (tighter); halo amplitude `0.55 → 0.42`, exponent `2.4 → 3.0` (smaller, steeper falloff). Embers now read as discrete pin-sharp glowing motes.
+  - **Flash**: hotter radial body (Gaussian coefficient `6 → 8`); 4-point cross spike amplitude `0.45 → 0.6` and sigma tightened (`0.0008 → 0.0005`) so the spike is pixel-sharp.
+  - **Sparkle (`spark`)**: pixel-thinner cardinal arms (`σ²=0.0006 → 0.00035`) and diagonals (`σ²=0.0009 → 0.0006`); diagonal amplitude `0.35 → 0.5`; central glow Gaussian `25 → 32`. True 8-point twinkling-star silhouette.
+  - **Streak**: head taper `u^2.4 → u^2.8`; hot-tip boost `0.35 → 0.55` (sharper leading pixel-line).
+
+---
+
 ## [5.64.3] - 2026-05-04
 
 ### Changed

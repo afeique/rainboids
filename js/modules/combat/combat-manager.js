@@ -17,11 +17,14 @@ export function createDebris(ast) {
     const onScreen = this.isEntityOnScreen(ast);
     const isLarge = ast.baseRadius > (GAME_CONFIG.MIN_AST_RAD + 5);
 
-    // ── Kill juice: hitstop + camera kick + screen flash ──
+    // ── Kill juice: hitstop + camera kick ──
+    // No screen flash on asteroid destruction — flash is reserved for
+    // enemy kills so the destruction-flash carries weight (rocks are
+    // inert; ships are alive). Asteroid death still gets screen shake
+    // (triggered in collision-system on the destroyAsteroid path) and
+    // a camera kick away from the impact.
     if (onScreen) {
         this.triggerHitstop(isLarge ? 5 : 3);
-        // Refined screen flash — present but not in-your-face.
-        this.triggerScreenFlash(isLarge ? 0.06 : 0.035, 3);
         const kdx = this.player.x - ast.x;
         const kdy = this.player.y - ast.y;
         this.triggerCameraKick(kdx, kdy, isLarge ? 12 : 7);

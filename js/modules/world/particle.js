@@ -196,13 +196,18 @@ export class Particle {
                 break;
             }
             case 'explosionEmber': {
-                // Slow-drifting glowing ember that lingers
+                // Short-lived glowing ember. Halved from the old 1.0-1.8s
+                // life so embers cool and recycle through the pool faster
+                // — keeps explosion afterglow brief and frees pool slots
+                // for the next burst. Decay rate also bumped (0.009 →
+                // 0.020) so the fade reads as "spark cooling" instead of
+                // "lingering glow."
                 const [emberColor] = args;
                 const eAngle = random(0, Math.PI * 2);
                 const eSpeed = random(0.3, 1.8);
                 this.vel = { x: Math.cos(eAngle) * eSpeed, y: Math.sin(eAngle) * eSpeed };
                 this.radius = random(1.2, 3.5);
-                this.life = random(1.0, 1.8);
+                this.life = random(0.6, 1.0);
                 this.color = emberColor || '#ffaa44';
                 break;
             }
@@ -336,9 +341,10 @@ export class Particle {
                 this.y += this.vel.y * TS;
                 this.vel.x *= Math.pow(0.97, TS);
                 this.vel.y *= Math.pow(0.97, TS);
-                // Slower decay so embers linger longer and feel like they
-                // are cooling rather than just flickering out.
-                this.life -= 0.009 * TS;
+                // Faster decay (0.009 → 0.020) so embers visibly cool
+                // and recycle through the pool quickly — pairs with the
+                // halved initial life in reset() above.
+                this.life -= 0.020 * TS;
                 break;
             case 'explosionRingColored':
                 this.life -= 0.035 * TS;

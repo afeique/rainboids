@@ -90,10 +90,10 @@ function paintSlot(ctx, i, alphaFn) {
 //
 
 /**
- * Hot ember: bright Gaussian core + tighter quadratic tail. The two-term
- * sum gives a punchy hot-white center with a controlled falloff that
- * still blends softly at the edge — sharp where you want it, smooth
- * where you don't.
+ * Hot ember: very bright pin-sharp Gaussian core + a smaller controlled
+ * halo. Inner ~10% of the slot reads as a saturated hot pixel; the
+ * halo trails off in a steeper power curve so embers feel like
+ * discrete glowing motes rather than soft fuzz.
  */
 function dotAlpha(u, v) {
     const dx = u - 0.5;
@@ -101,16 +101,17 @@ function dotAlpha(u, v) {
     const r2 = (dx * dx + dy * dy) * 4; // normalise so r=1 at slot edge
     if (r2 >= 1) return 0;
     const r = Math.sqrt(r2);
-    const core = Math.exp(-r2 * 18);                  // tight hot center
-    const halo = Math.pow(1 - r, 2.4) * 0.55;         // soft outer falloff
+    const core = Math.exp(-r2 * 28);                  // tighter hot center
+    const halo = Math.pow(1 - r, 3.0) * 0.42;         // steeper, smaller halo
     return Math.min(1, core + halo);
 }
 
 /**
- * Explosion flash: radial gradient with a 4-point cross spike overlaid.
- * The spike adds a bright cardinal cross that reads as a real "punch"
- * instead of a featureless blob. Subtle enough that rotated/colored
- * flashes still feel cohesive.
+ * Explosion flash: hot radial body + bright 4-point cardinal cross
+ * spike that extends nearly to the rim. The cross is the "punch" — it's
+ * what makes a destruction flash feel like a hard impact instead of a
+ * generic glow. Thin sigma keeps the spike pixel-sharp; the radial
+ * body gives it a hot center to spike out from.
  */
 function flashAlpha(u, v) {
     const dx = u - 0.5;
@@ -118,16 +119,17 @@ function flashAlpha(u, v) {
     const r2 = (dx * dx + dy * dy) * 4;
     if (r2 >= 1) return 0;
     const r = Math.sqrt(r2);
-    // Smooth radial body.
-    const body = Math.exp(-r2 * 6) * 0.95 + Math.pow(1 - r, 2.0) * 0.18;
-    // Cross spike: thin bright bands along the cardinal axes, fading
-    // with radius so it doesn't dominate at the rim.
+    // Tighter, hotter radial body — peaks at the centre and drops fast.
+    const body = Math.exp(-r2 * 8) * 0.95 + Math.pow(1 - r, 2.4) * 0.12;
+    // Cross spike: thin pixel-sharp bright bands along the cardinal
+    // axes. Stronger amplitude than before (0.45 → 0.6) so the spike
+    // reads cleanly even on small flashes.
     const ax = Math.abs(dx);
     const ay = Math.abs(dy);
-    const sigma2 = 0.0008;
+    const sigma2 = 0.0005;
     const horiz = Math.exp(-(ay * ay) / sigma2);
     const vert  = Math.exp(-(ax * ax) / sigma2);
-    const spike = Math.max(horiz, vert) * Math.pow(1 - r, 1.6) * 0.45;
+    const spike = Math.max(horiz, vert) * Math.pow(1 - r, 1.4) * 0.6;
     return Math.min(1, body + spike);
 }
 
@@ -152,31 +154,31 @@ function ringAlpha(u, v) {
 }
 
 /**
- * Shrapnel streak: bright tapered head on the right, fading tail to the
- * left. Vertical Gaussian gives soft top/bottom edges so the streak
- * blends with overlap. The head taper uses a steeper power curve than
- * before for a more defined, fast-moving look.
+ * Shrapnel streak: bright tapered head on the right, fast-fading tail
+ * to the left. Vertical Gaussian gives soft top/bottom edges. Head uses
+ * an even steeper power curve so the tail dims rapidly from the head,
+ * with a separate Gaussian "hot tip" at u≈1 that boosts the leading
+ * pixel-line for sharp directional motion.
  */
 function streakAlpha(u, v) {
     const cy = v - 0.5;
-    const sigma = 0.13;
+    const sigma = 0.11;
     const vert = Math.exp(-(cy * cy) / (2 * sigma * sigma));
     // Horizontal: u=1 is the head (bright), u=0 is tail (dim).
     // Steeper exponent → tighter head, more defined leading edge.
-    const head = Math.pow(u, 2.4);
-    // Add a thin hot tip at u≈1 so the head reads as a sharp leading
-    // pixel-line rather than a smooth ramp.
-    const tipDist = (1 - u) * 30;
-    const tipBoost = Math.exp(-(tipDist * tipDist)) * 0.35;
+    const head = Math.pow(u, 2.8);
+    // Hot pixel-line at the very leading edge (u ≈ 1).
+    const tipDist = (1 - u) * 28;
+    const tipBoost = Math.exp(-(tipDist * tipDist)) * 0.55;
     return Math.min(1, (head + tipBoost) * vert);
 }
 
 /**
- * Sparkle: 4-point cross star with a tight central glow. Same cardinal
- * cross idea as the flash spike but standalone — sparkle particles get
- * their own slot so they read as twinkling stars instead of just dots.
- * Diagonal arms (u==v, u+v==1) included at lower intensity so the star
- * doesn't look strictly axis-aligned.
+ * Sparkle: pin-sharp 8-point star with a saturated central glow. Cross
+ * arms (cardinal + diagonal) are pixel-thin Gaussians that fade with
+ * radius — gives sparkles a true twinkling-star silhouette instead of
+ * a soft glow blob. Cardinal arms are slightly hotter than diagonals
+ * so the overall shape still reads as a "+" with subtle "×" highlights.
  */
 function sparkAlpha(u, v) {
     const dx = u - 0.5;
@@ -184,21 +186,23 @@ function sparkAlpha(u, v) {
     const r2 = (dx * dx + dy * dy) * 4;
     if (r2 >= 1) return 0;
     const r = Math.sqrt(r2);
-    // Central bright dot.
-    const core = Math.exp(-r2 * 25);
-    // Cardinal cross arms (horizontal + vertical).
+    // Tight saturated central glow.
+    const core = Math.exp(-r2 * 32);
+    // Cardinal cross arms — sharper sigma than the old version.
     const ax = Math.abs(dx);
     const ay = Math.abs(dy);
-    const sigmaCross = 0.0006;
+    const sigmaCross = 0.00035;
     const horiz = Math.exp(-(ay * ay) / sigmaCross);
     const vert  = Math.exp(-(ax * ax) / sigmaCross);
-    const cross = Math.max(horiz, vert) * Math.pow(1 - r, 1.4) * 0.85;
-    // Diagonal arms at half intensity for a more star-like silhouette.
+    const cross = Math.max(horiz, vert) * Math.pow(1 - r, 1.2) * 0.95;
+    // Diagonal arms — thinner + brighter than before so they read as
+    // crisp star-spikes, not generic halo.
     const d1 = Math.abs(dx - dy);
     const d2 = Math.abs(dx + dy);
+    const sigmaDiag = 0.0006;
     const diag = Math.max(
-        Math.exp(-(d1 * d1) / 0.0009),
-        Math.exp(-(d2 * d2) / 0.0009),
-    ) * Math.pow(1 - r, 1.4) * 0.35;
+        Math.exp(-(d1 * d1) / sigmaDiag),
+        Math.exp(-(d2 * d2) / sigmaDiag),
+    ) * Math.pow(1 - r, 1.2) * 0.5;
     return Math.min(1, core + cross + diag);
 }
