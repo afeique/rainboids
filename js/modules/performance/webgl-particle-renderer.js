@@ -73,11 +73,17 @@ uniform sampler2D u_atlas;
 
 out vec4 fragColor;
 
+// 5.64.18 — pre-blend brightness gain. With the additive blend mode
+// (SRC_ALPHA, ONE) the source RGB drives the contribution added to the
+// framebuffer. A 1.3× multiply saturates hot pixels and lets dim halo
+// pixels read proportionally brighter — emulates a screen-blend over-
+// exposure feel without a float framebuffer.
+const float BRIGHTNESS_GAIN = 1.3;
+
 void main() {
     vec4 tex = texture(u_atlas, v_uv);
-    // Atlas pixels are grayscale-with-alpha (white shape, varying alpha).
-    // Multiply by per-instance color so one atlas slot covers any tint.
-    fragColor = tex * v_color;
+    vec3 rgb = clamp(tex.rgb * v_color.rgb * BRIGHTNESS_GAIN, 0.0, 1.0);
+    fragColor = vec4(rgb, tex.a * v_color.a);
 }
 `;
 
@@ -341,12 +347,12 @@ export class WebGLParticleRenderer {
         const gl = this.gl;
         const list = pool.activeObjects;
 
-        // Always clear our layer — we own the whole canvas behind
-        // gameCanvas. (Color stays at the GL default of 0,0,0,0 which is
-        // exactly what the page's black body shows through.)
+        // 5.64.16 — clear ownership moved to the engine (`clearGLFrame`)
+        // so the starfield renderer can draw BEFORE particles without
+        // having its output wiped. The engine clears glCanvas once per
+        // frame; both starfield and particles render onto that cleared
+        // surface in order.
         gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
 
         // Fill the instance scratch.
         const data = this.instanceData;
@@ -407,54 +413,51 @@ export class WebGLParticleRenderer {
 
         switch (p.type) {
             case 'explosionEmber': {
-                // The new dot atlas slot has a sharp Gaussian hot core
-                // plus a tighter falloff (vs the soft gradient previously
-                // used). Trim the quad slightly: the bright signature
-                // comes from the core now, not from a big mushy halo.
-                const softA = Math.pow(lifeAlpha, 0.55);
-                const drawR = (p.radius + 4) * 1.55;
+                // 5.64.17 — brighter & bigger so embers read clearly.
+                // Alpha curve was pow(life, 0.55) — now closer to linear
+                // with a small power so embers stay punchier into the
+                // mid-life range. Bump quad size 1.55× → 1.8×.
+                const softA = Math.pow(lifeAlpha, 0.45);
+                const drawR = (p.radius + 4) * 1.8;
                 w = drawR * 2;
                 h = drawR * 2;
                 alpha = softA;
                 break;
             }
             case 'explosion': {
-                // Classic small dust fragment. Quad slightly larger than
-                // 2×radius lets the dot's soft outer halo fade to invisible
-                // at the quad edge; the sharp Gaussian core gives each
-                // fragment a defined center.
-                w = p.radius * 2.6;
-                h = p.radius * 2.6;
-                alpha = lifeAlpha;
+                // Classic small dust fragment. Boosted size + alpha
+                // multiplier for visibility (5.64.17).
+                w = p.radius * 3.2;
+                h = p.radius * 3.2;
+                alpha = Math.min(1, lifeAlpha * 1.3);
                 break;
             }
             case 'starSparkle': {
                 if (p.radius < 0.05) return false;
-                // Spark slot is a 4-point cross star — bright cardinal
-                // arms + diagonals at half intensity. Tighten the quad
-                // since the spike arms extend close to the edge already.
-                w = p.radius * 7;
-                h = p.radius * 7;
-                alpha = Math.min(1, lifeAlpha * 2.5);
+                // Sparkle was already strong; bump size 7 → 8 so the
+                // 4-point cross arms extend a bit further into the void.
+                w = p.radius * 8;
+                h = p.radius * 8;
+                alpha = Math.min(1, lifeAlpha * 3.0);
                 break;
             }
             case 'explosionFlash': {
-                // Flash slot now has a subtle 4-point cross spike on top
-                // of the radial body — boost peak alpha slightly so the
-                // spike reads cleanly without washing out the radial.
+                // 5.64.17 — flash dampener removed. Was *0.6 which
+                // dimmed the punch unnecessarily; now full eased alpha.
+                // Bigger quad too so the flash visibly engulfs the area.
                 const flashLife = lifeAlpha / 1.2;
                 const eased = flashLife * flashLife * Math.sqrt(Math.max(0, flashLife));
-                w = p.radius * 2.2;
-                h = p.radius * 2.2;
-                alpha = eased * 0.6;
+                w = p.radius * 2.6;
+                h = p.radius * 2.6;
+                alpha = eased * 0.95;
                 break;
             }
             case 'explosionRingColored': {
-                // Ring slot is a tighter Gaussian annulus now. Same size
-                // as before — the atlas curve does the visual work.
+                // Boost ring alpha multiplier 1.5 → 2.0 so the wavefront
+                // edge reads as a hot pulse, not a faint halo.
                 w = p.radius * 2;
                 h = p.radius * 2;
-                alpha = Math.min(1, lifeAlpha * 1.5);
+                alpha = Math.min(1, lifeAlpha * 2.0);
                 break;
             }
             case 'explosionShrapnel': {

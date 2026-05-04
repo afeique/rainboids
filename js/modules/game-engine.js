@@ -14,6 +14,8 @@ import { Enemy } from './enemy/enemy.js';
 import { EnemyBullet } from './enemy/enemy-bullet.js';
 import { Particle, drawParticlesBatched } from './world/particle.js';
 import { WebGLParticleRenderer } from './performance/webgl-particle-renderer.js';
+import { WebGLStarfieldRenderer } from './performance/webgl-starfield-renderer.js';
+import { STAR_SLOT_INDEX, WEBGL_STAR_SHAPES } from './performance/webgl-starfield-atlas.js';
 import { ColorStar } from './world/color-star.js';
 import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
@@ -59,6 +61,20 @@ export class GameEngine {
             : { supported: false, handlesType: () => false, drawParticles: () => {}, resize: () => {} };
         if (this.glCanvas) {
             this.particleRenderer.init();
+        }
+
+        // WebGL starfield layer — shares the glCanvas (and GL context)
+        // with the particle renderer. Renders BEFORE particles each
+        // frame so particles draw on top. Stars are populated once at
+        // game start (see _populateWebGLStarfield) and the GPU handles
+        // parallax / twinkle / rotation per frame at near-zero CPU
+        // cost. Falls back to Canvas2D if the particle renderer is
+        // unsupported (same context).
+        this.starfieldRenderer = (this.particleRenderer && this.particleRenderer.supported)
+            ? new WebGLStarfieldRenderer(this.glCanvas, GAME_CONFIG.WEBGL_STAR_BUFFER_SIZE || 4000)
+            : { supported: false, draw: () => {}, addStar: () => false, clear: () => {}, accumulateDrift: () => {}, setFieldSize: () => {} };
+        if (this.starfieldRenderer.init && this.particleRenderer.gl) {
+            this.starfieldRenderer.init(this.particleRenderer.gl);
         }
 
         this.uiManager = uiManager;
@@ -438,7 +454,11 @@ export class GameEngine {
         this.colorStarPool.activeObjects = [];
         this.backgroundStarPool.activeObjects = [];
         this.powerupPool.activeObjects = [];
-        
+
+        // 5.64.16 — wipe the WebGL star buffer too so the new run's
+        // stars don't render on top of the previous run's leftovers.
+        if (this.starfieldRenderer.clear) this.starfieldRenderer.clear();
+
         // Generate all color stars at once using generative method
         this.generateInitialColorStars();
         this.generateBackgroundStars();
@@ -543,33 +563,150 @@ export class GameEngine {
 
     // Generate all initial color stars using purely generative method
     generateInitialColorStars() {
-        // Use game field dimensions for full coverage, same as background stars
         const spawnWidth = this.gameField.width;
         const spawnHeight = this.gameField.height;
-        
-        const starPositions = generateStarPositions(spawnWidth, spawnHeight, GAME_CONFIG.COLOR_STAR_COUNT);
-        
+        const webglOn = this.starfieldRenderer.supported;
+
+        // 5.64.16 — when WebGL is on, render *most* color stars via the
+        // GPU. Bump the count by WEBGL_COLOR_STAR_MULTIPLIER (default 3×)
+        // so the field is visibly richer; the GPU eats the cost.
+        const baseCount = GAME_CONFIG.COLOR_STAR_COUNT;
+        const count = webglOn
+            ? baseCount * (GAME_CONFIG.WEBGL_COLOR_STAR_MULTIPLIER || 3)
+            : baseCount;
+        const starPositions = generateStarPositions(spawnWidth, spawnHeight, count);
+
         starPositions.forEach(({ x, y, z, density }) => {
             const colorStar = this.colorStarPool.get(x, y, false, z, density);
+            if (colorStar && webglOn) this._tryAddColorStarToWebGL(colorStar);
         });
     }
-    
+
     // Generate background stars using same generative logic
     generateBackgroundStars() {
-        // Use game field dimensions for full coverage
         const spawnWidth = this.gameField.width;
         const spawnHeight = this.gameField.height;
-        
-        // Halved 4× → 2× for perf headroom. Parallax depth provides the
-        // visual richness, not raw count — the depth-bucket batched
-        // renderer makes 60 stars feel as full as 120 used to.
-        const scaledStarCount = GAME_CONFIG.BACKGROUND_STAR_COUNT * 2;
-        
-        const backgroundStarPositions = generateStarPositions(spawnWidth, spawnHeight, scaledStarCount);
-        
+        const webglOn = this.starfieldRenderer.supported;
+
+        // 5.64.16 — WebGL pipeline scales much further than Canvas2D's
+        // depth-batch path. Bump BACKGROUND_STAR_COUNT by
+        // WEBGL_BACKGROUND_STAR_MULTIPLIER (default 6×) when WebGL is
+        // active for a much richer parallax field.
+        const baseCount = GAME_CONFIG.BACKGROUND_STAR_COUNT * 2;
+        const count = webglOn
+            ? baseCount * (GAME_CONFIG.WEBGL_BACKGROUND_STAR_MULTIPLIER || 6)
+            : baseCount;
+        const backgroundStarPositions = generateStarPositions(spawnWidth, spawnHeight, count);
+
         backgroundStarPositions.forEach(({ x, y, z, density }) => {
-            const backgroundStar = this.backgroundStarPool.get(x, y, z, density);
+            const bgStar = this.backgroundStarPool.get(x, y, z, density);
+            if (bgStar && webglOn) this._tryAddBackgroundStarToWebGL(bgStar);
         });
+    }
+
+    // ── WebGL starfield population helpers (5.64.16) ────────────────
+    //
+    // The Canvas star pools (backgroundStarPool, colorStarPool) remain
+    // populated and updated as before so the existing
+    // collision/interaction logic still works. These helpers ALSO add
+    // a parallel GPU instance for rendering — when a star is in the
+    // WebGL buffer, its `_inWebGL` flag is set so the Canvas2D draw
+    // path skips it.
+
+    // 5.64.18 — astronomical brightness rule: tiny stars are BRIGHT
+    // (distant pinpoints with high apparent surface brightness), big
+    // stars are DIM (closer, light spread over more pixels). Returns
+    // an alpha multiplier in [0.20, 1.0] for a given quad size in px.
+    //
+    // Rationale: previous "make everything brightest" pass made the
+    // big color-star shapes feel like game entities. Inverse-size
+    // damping pushes them into the background where they belong, while
+    // tiny background stars can stay punchy.
+    _starBrightnessForSize(size) {
+        // Curve: max alpha at size <= 2px, fall off through size = 30px.
+        // sizeFalloff(2)≈1.0, sizeFalloff(6)≈0.85, sizeFalloff(12)≈0.55,
+        // sizeFalloff(20)≈0.30, sizeFalloff(30)≈0.20 (clamp floor).
+        const t = (size - 2) / 28; // 0 at 2px, 1 at 30px
+        const v = 1.0 - 0.8 * Math.max(0, Math.min(1, t));
+        return v < 0.20 ? 0.20 : v;
+    }
+
+    _tryAddBackgroundStarToWebGL(star) {
+        if (!this.starfieldRenderer.supported) return;
+        const rgba = this._parseStarColor(star.color);
+        const parallax = Math.pow(star.z, 1.8) * 0.12;
+        const drawSize = star.radius * 1.4;
+        // Size-inverse alpha: tiny background stars (sub-3px) get full
+        // brightness; rare big ones get damped so they don't compete
+        // with foreground entities.
+        const baseAlpha = this._starBrightnessForSize(drawSize);
+        const ok = this.starfieldRenderer.addStar(
+            star.x, star.y,
+            parallax,
+            drawSize,
+            rgba[0], rgba[1], rgba[2], baseAlpha,
+            star.opacityOffset || 0,
+            (star.twinkleSpeed || 0.01) * 60,
+            Math.max(star.twinkleAmplitude || 0, 0.35),
+            STAR_SLOT_INDEX.dot,
+            0,
+            0,
+        );
+        if (ok) star._inWebGL = true;
+    }
+
+    _tryAddColorStarToWebGL(star) {
+        if (!this.starfieldRenderer.supported) return;
+        if (star.isCollectible) return;          // health/money orbs stay on Canvas
+        const slotKey = (star.shape === 'circle' || star.shape === 'point') ? 'dot' : star.shape;
+        if (!WEBGL_STAR_SHAPES.has(slotKey)) return;  // sparkle/burst stay on Canvas
+        const rgba = this._parseStarColor(star.color);
+        const parallax = Math.pow(star.z, 1.8) * 0.12;
+        const sizeMul = star.sizeVariation || 1;
+        // 5.64.18 — shape bump tightened (was 2.2 for shapes; now 1.4
+        // matching the dot bump). Big silhouette stars were dominating
+        // the field and reading as game entities. The size-inverse
+        // alpha rule below additionally dampens any remaining big stars.
+        const shapeSizeBump = (slotKey === 'dot') ? 1.4 : 1.5;
+        const drawSize = star.radius * sizeMul * shapeSizeBump;
+        const baseAlpha = this._starBrightnessForSize(drawSize);
+        const ok = this.starfieldRenderer.addStar(
+            star.x, star.y,
+            parallax,
+            drawSize,
+            rgba[0], rgba[1], rgba[2], baseAlpha,
+            star.opacityOffset || 0,
+            (star.twinkleSpeed || 0.005) * 60,
+            0.40,
+            STAR_SLOT_INDEX[slotKey],
+            star.rotation || 0,
+            (star.rotationSpeed || 0) * 60,
+        );
+        if (ok) star._inWebGL = true;
+    }
+
+    /**
+     * Parse a CSS color string into [r, g, b] floats (0..1).
+     * Uses a 1×1 offscreen canvas; results cached.
+     */
+    _parseStarColor(str) {
+        if (!this._starColorCache) {
+            this._starColorCache = new Map();
+            this._starColorCanvas = document.createElement('canvas');
+            this._starColorCanvas.width = 1;
+            this._starColorCanvas.height = 1;
+            this._starColorCtx = this._starColorCanvas.getContext('2d', { willReadFrequently: true });
+        }
+        let v = this._starColorCache.get(str);
+        if (v) return v;
+        const ctx = this._starColorCtx;
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = str || '#ffffff';
+        ctx.fillRect(0, 0, 1, 1);
+        const px = ctx.getImageData(0, 0, 1, 1).data;
+        v = [px[0] / 255, px[1] / 255, px[2] / 255];
+        this._starColorCache.set(str, v);
+        return v;
     }
     
     // Spawn a single color star using simple random generation (for replacement color stars)
@@ -884,6 +1021,14 @@ export class GameEngine {
             this.colorStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.player, tractorEngaged, this.gameField));
             // Update background stars with just player velocity for parallax
             this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.gameField));
+
+            // 5.64.16 — feed cumulative ship drift to the WebGL star
+            // renderer so its vertex shader applies parallax (the GPU
+            // version replaces the per-star CPU mutation that BackgroundStar
+            // and ColorStar do for their Canvas2D positions).
+            if (this.starfieldRenderer.accumulateDrift && this.player && this.player.vel) {
+                this.starfieldRenderer.accumulateDrift(this.player.vel.x, this.player.vel.y);
+            }
             
             this.handleCollisions();
             
@@ -990,6 +1135,29 @@ export class GameEngine {
         // transparent layer; particles render on the GL layer beneath.
         this.ctx.clearRect(0, 0, this.width, this.height);
 
+        // 5.64.16 — clear the GL layer ONCE per frame (was previously
+        // done inside particleRenderer.drawParticles). Doing it here
+        // lets the starfield renderer draw BEFORE particles without
+        // having its output wiped.
+        if (this.particleRenderer.supported && !this.particleRenderer._contextLost) {
+            const gl = this.particleRenderer.gl;
+            gl.viewport(0, 0, this.glCanvas.width, this.glCanvas.height);
+            gl.clearColor(0, 0, 0, 0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            // WebGL starfield draws BEFORE everything else on the GL
+            // layer — particles will render on top via additive blend.
+            // Drift is integrated each frame from player.vel below.
+            const timeSec = (typeof performance !== 'undefined' && performance.now)
+                ? performance.now() * 0.001
+                : Date.now() * 0.001;
+            this.starfieldRenderer.setFieldSize(this.gameField.width, this.gameField.height);
+            this.starfieldRenderer.draw(
+                this.camera.x, this.camera.y,
+                this.glCanvas.width, this.glCanvas.height,
+                timeSec,
+            );
+        }
+
         // Render the parallax starfield + nebula on every state EXCEPT the
         // pre-init splash. Title screen now uses the same world background
         // (with a synthetic camera drift driven by update()) so the menu
@@ -1017,23 +1185,33 @@ export class GameEngine {
                 nebRot, this.width, this.height,
             );
 
-            // Viewport culling for performance - only render stars visible in camera
+            // 5.64.16 — split rendering: stars whose `_inWebGL` flag is
+            // set are drawn by the WebGL starfield (above, on glCanvas).
+            // The Canvas2D depth-batch path now handles ONLY:
+            //   • backgroundStars NOT in WebGL (none, by default)
+            //   • colorStars NOT in WebGL — i.e. sparkle / burst /
+            //     collectible orbs which the simple atlas can't render
+            // Toggle: GAME_CONFIG.WEBGL_STARFIELD_KEEP_CANVAS_FALLBACKS
+            // controls whether Canvas2D draws the fallbacks at all.
             const visibleBackgroundStars = this.getVisibleStars(this.backgroundStarPool.activeObjects);
             const visibleColorStars = this.getVisibleStars(this.colorStarPool.activeObjects);
-            
-            // Depth-based batched starfield rendering for optimal performance
-            depthBatchRenderer.groupStarsByDepth(
-                visibleBackgroundStars, 
-                visibleColorStars
-            );
-            depthBatchRenderer.renderDepthBatches(this.ctx);
-            
-            // Render complex color stars that need special effects (not batched)
-            visibleColorStars.forEach(star => {
-                if (star.active && (star.isBurst || star.shape === 'sparkle' || star.shape === 'burst')) {
-                    star.draw(this.ctx); // Complex stars use their full draw method
-                }
-            });
+
+            const keepCanvas = GAME_CONFIG.WEBGL_STARFIELD_KEEP_CANVAS_FALLBACKS !== false;
+            if (keepCanvas) {
+                // Strip stars already rendered on WebGL.
+                const canvasBg = visibleBackgroundStars.filter(s => !s._inWebGL);
+                const canvasColor = visibleColorStars.filter(s => !s._inWebGL);
+
+                depthBatchRenderer.groupStarsByDepth(canvasBg, canvasColor);
+                depthBatchRenderer.renderDepthBatches(this.ctx);
+
+                // Render complex color stars that need special effects (not batched).
+                canvasColor.forEach(star => {
+                    if (star.active && (star.isBurst || star.shape === 'sparkle' || star.shape === 'burst')) {
+                        star.draw(this.ctx);
+                    }
+                });
+            }
             
             // Viewport-culled rendering — off-screen objects skip draw() entirely.
             // Generous padding ensures particles/trails/glow don't pop in at edges.

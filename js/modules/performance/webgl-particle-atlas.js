@@ -90,10 +90,10 @@ function paintSlot(ctx, i, alphaFn) {
 //
 
 /**
- * Hot ember: very bright pin-sharp Gaussian core + a smaller controlled
- * halo. Inner ~10% of the slot reads as a saturated hot pixel; the
- * halo trails off in a steeper power curve so embers feel like
- * discrete glowing motes rather than soft fuzz.
+ * Hot ember: bright Gaussian core + larger halo so embers read clearly
+ * at gameplay scale (5.64.17 — was tighter & dimmer; bumping the halo
+ * area gives the embers more visual weight without losing the hot-core
+ * pin-sharp feel).
  */
 function dotAlpha(u, v) {
     const dx = u - 0.5;
@@ -101,8 +101,8 @@ function dotAlpha(u, v) {
     const r2 = (dx * dx + dy * dy) * 4; // normalise so r=1 at slot edge
     if (r2 >= 1) return 0;
     const r = Math.sqrt(r2);
-    const core = Math.exp(-r2 * 28);                  // tighter hot center
-    const halo = Math.pow(1 - r, 3.0) * 0.42;         // steeper, smaller halo
+    const core = Math.exp(-r2 * 16);                  // wider hot center (was 28)
+    const halo = Math.pow(1 - r, 2.4) * 0.65;         // larger halo amplitude (was 3.0/0.42)
     return Math.min(1, core + halo);
 }
 
