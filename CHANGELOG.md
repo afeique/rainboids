@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.54.6] - 2026-05-03
+
+### Removed
+- **Asteroid-vs-asteroid collision response.** The elastic-bounce + positional-overlap-displacement pass on every overlapping pair was producing visible shifts/jumps every frame two rocks touched (especially right after a split, where fragments would jam into each other). Asteroids now overlap freely. They still register all other collision paths intact: player, bullets, lance beam, mines, nova, lightning, missiles, enemies. Just no rock-on-rock pushing.
+
+---
+
 ## [5.54.5] - 2026-05-03
 
 ### Changed

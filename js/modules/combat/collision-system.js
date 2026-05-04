@@ -243,57 +243,13 @@ export function handleCollisions() {
         }
     }
 
-    // Asteroid vs Asteroid collisions
-    const activeAsteroids = this.asteroidPool.activeObjects;
-    for (let i = 0; i < activeAsteroids.length; i++) {
-        for (let j = i + 1; j < activeAsteroids.length; j++) {
-            let a1 = activeAsteroids[i], a2 = activeAsteroids[j];
-            if (!a1.active || !a2.active) continue;
-            if (a1.warping || a2.warping) continue;
-
-            // Grant temporary immunity to newly spawned asteroids so that
-            // freshly split fragments can naturally fly apart on their own
-            // velocity instead of being teleported apart by the positional
-            // overlap-displacement below. 2.5s is generous — even a slow
-            // pair (~3 px/frame divergence) clears a parent-radius overlap
-            // in well under a second; the wider window keeps the visible
-            // jump-apart from ever showing up.
-            const now = Date.now();
-            if (now - a1.creationTime < 2500 || now - a2.creationTime < 2500) {
-                continue;
-            }
-
-            if (collision(a1, a2)) {
-                let dx = a2.x - a1.x, dy = a2.y - a1.y, dist = Math.hypot(dx, dy);
-                if (dist === 0) continue;
-
-                // Play explosion sound only if collision is on screen
-                if (this.isEntityOnScreen(a1) || this.isEntityOnScreen(a2)) {
-                    this.events.emit('audio:explosion');
-                }
-                // Reduced debris particles for performance
-                const debrisCount = Math.floor(random(3, 6));
-                const cx = (a1.x + a2.x) / 2;
-                const cy = (a1.y + a2.y) / 2;
-                for (let d = 0; d < debrisCount; d++) {
-                    this.particlePool.get(cx, cy, 'asteroidCollisionDebris');
-                }
-
-                let nx = dx / dist, ny = dy / dist, tx = -ny, ty = nx;
-                let dpTan1 = a1.vel.x * tx + a1.vel.y * ty, dpTan2 = a2.vel.x * tx + a2.vel.y * ty;
-                let dpNorm1 = a1.vel.x * nx + a1.vel.y * ny, dpNorm2 = a2.vel.x * nx + a2.vel.y * ny;
-                let m1 = (dpNorm1 * (a1.mass - a2.mass) + 2 * a2.mass * dpNorm2) / (a1.mass + a2.mass);
-                let m2 = (dpNorm2 * (a2.mass - a1.mass) + 2 * a1.mass * dpNorm1) / (a1.mass + a2.mass);
-
-                a1.vel = { x: tx * dpTan1 + nx * m1, y: ty * dpTan1 + ny * m1 };
-                a2.vel = { x: tx * dpTan2 + nx * m2, y: ty * dpTan2 + ny * m2 };
-
-                let overlap = 0.5 * (a1.radius + a2.radius - dist + 1);
-                a1.x -= overlap * nx; a1.y -= overlap * ny;
-                a2.x += overlap * nx; a2.y += overlap * ny;
-            }
-        }
-    }
+    // Asteroid vs Asteroid: detection + response disabled.
+    // Asteroids now overlap freely. The previous code applied an elastic
+    // bounce + positional displacement to separate overlapping rocks,
+    // which produced visible shifts/jumps — especially when fragments
+    // from a single split were forced apart in mid-frame. Asteroids
+    // still collide with the player, bullets, beams, mines, etc. via
+    // their own collision paths above; they just don't push each other.
 
     // Player vs Collectible Orbs (health and money orbs from entity destruction are collectible)
     if (this.player && this.player.active) {
