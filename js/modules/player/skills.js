@@ -228,62 +228,62 @@ export function updateActiveSkills(dt) {
     }
 }
 
-// ── Skill purchase & assignment ───────────────────────────────────────────
+// ── Single equipped skill — equip / cycle / activate (5.64.11) ───────────
+//
+// All defense skills are FREE and selectable from the start (parallels
+// the primary/power weapon model). The player has ONE active skill at
+// any time; SHIFT (tap) cycles to the next skill in DEFENSE_SKILLS,
+// SPACE activates the equipped skill (subject to cooldown).
 
-export function buySkill(skillId) {
-    if (DEFENSE_SKILLS[skillId] && !this.ownedSkills.has(skillId)) {
-        this.ownedSkills.add(skillId);
-        // Auto-assign to first empty slot
-        for (let i = 0; i < 4; i++) {
-            if (!this.skillSlots[i]) {
-                this.skillSlots[i] = skillId;
-                break;
-            }
-        }
-        return true;
-    }
-    return false;
+export function getActiveSkillConfig() {
+    return DEFENSE_SKILLS[this.activeSkill] || null;
 }
 
-export function assignSkillToSlot(skillId, slotIndex) {
-    if (slotIndex < 0 || slotIndex > 3) return false;
-    if (!this.ownedSkills.has(skillId)) return false;
-    // Remove from any existing slot
-    for (let i = 0; i < 4; i++) {
-        if (this.skillSlots[i] === skillId) this.skillSlots[i] = null;
-    }
-    this.skillSlots[slotIndex] = skillId;
+export function equipSkill(skillId) {
+    if (!DEFENSE_SKILLS[skillId]) return false;
+    this.activeSkill = skillId;
+    this.ownedSkills.add(skillId);
     return true;
 }
 
-export function activateSkill(slotIndex) {
-    if (slotIndex < 0 || slotIndex > 3) return false;
-    const skillId = this.skillSlots[slotIndex];
+export function cycleSkill() {
+    const ids = Object.keys(DEFENSE_SKILLS);
+    if (ids.length === 0) return false;
+    const i = ids.indexOf(this.activeSkill);
+    const next = ids[(i + 1) % ids.length];
+    this.activeSkill = next;
+    this.ownedSkills.add(next);
+    // Mirror Tab/R weapon-cycle behaviour: trigger HUD pulse + audio
+    // ping so cycling skills feels the same as cycling weapons.
+    if (this.gameEngine) {
+        if (typeof this.gameEngine.triggerWeaponCycleAnim === 'function') {
+            this.gameEngine.triggerWeaponCycleAnim('skill');
+        }
+        if (this.gameEngine.events) this.gameEngine.events.emit('audio:coin');
+    }
+    return true;
+}
+
+export function activateSkill() {
+    const skillId = this.activeSkill;
     if (!skillId) return false;
-    if (this.skillCooldowns[slotIndex] > 0) return false;
+    if (this.activeSkillCooldown > 0) return false;
 
     const config = DEFENSE_SKILLS[skillId];
     if (!config) return false;
 
-    // Start cooldown
-    this.skillCooldowns[slotIndex] = config.cooldown;
-
-    // Activate effect
+    this.activeSkillCooldown = config.cooldown;
     this.activeSkillEffects.set(skillId, {
         timeRemaining: config.duration,
-        slotIndex,
     });
-
     return true;
 }
 
 // ── Skill cooldowns ───────────────────────────────────────────────────────
 
 export function updateSkillCooldowns(dt) {
-    for (let i = 0; i < 4; i++) {
-        if (this.skillCooldowns[i] > 0) {
-            this.skillCooldowns[i] = Math.max(0, this.skillCooldowns[i] - dt);
-        }
+    if (this.activeSkillCooldown > 0) {
+        this.activeSkillCooldown = Math.max(0, this.activeSkillCooldown - dt);
     }
 
     // Update power weapon cooldown
@@ -296,7 +296,6 @@ export function updateSkillCooldowns(dt) {
         effect.timeRemaining -= dt;
         if (effect.timeRemaining <= 0) {
             this.activeSkillEffects.delete(skillId);
-            // Clean up specific effects
             if (skillId === 'BULWARK') this.bulwarkActive = false;
             if (skillId === 'REPAIR_NANITES') this.regenActive = false;
             if (skillId === 'DEFLECTOR_ORBS') this.deflectorOrbs = [];

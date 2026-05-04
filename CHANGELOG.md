@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.11] - 2026-05-04
+
+### Added
+- **Single-equipped defense skill model.** Replaces the 4-slot system bound to keys 1-4. The player has ONE equipped skill at a time. **Tap SHIFT** to cycle through all skills (parallels Tab/R for primary/power); **press SPACE** to activate the equipped skill.
+- **Skill HUD square.** New square BELOW the PRM/PWR pair on the top-left HUD, labeled "SKILL". Shows the equipped skill's icon in its color, with cooldown overlay (proportional dark fill from bottom up + remaining seconds) and active-effect ring while the skill is firing.
+- **Pause-menu SKILLS tab restyled.** Same click-to-equip format as the PRIMARY and POWER tabs. All 6 skills are listed; click any row to equip it. Replaces the old slot-assignment UI.
+- **Quick cheat keys: `[` → +1000 Gold, `]` → +5 SP.** Solo-key shortcuts that don't require Shift. Show a brief CHEAT toast.
+- **Tutorial hints for cycling skills.** New `wave1-cycle-skills-v1` hint fires 11s into wave 1 explaining SHIFT (cycle) + SPACE (activate). The existing weapon-cycle hint id was bumped (`v2 → v3`) so it re-fires for players who already dismissed the previous version.
+
+### Changed
+- **All skills are FREE.** Same model as primaries / powers — every skill is selectable from the start via the pause-menu SKILLS tab. Shop SKILLS-tab purchases now equip-for-free instead of charging SP.
+- **SPACE no longer fires the power weapon.** Power weapon is right-click only. SPACE is reserved for skill activation.
+- **Cheat console banner reduced.** The SHIFT-letter cheat list is gone; banner now shows the bracket cheats and a pointer to console-driven dev cheats (`window.gameEngine.cheats.*`).
+
+### Removed
+- **All SHIFT+ cheat codes.** They didn't fire reliably (SHIFT is now the skill-cycle key, so shift+letter combos partially conflict with the input handler's tap-to-cycle bookkeeping). The bracket cheats above are the supported quick-test path.
+- **`Player.skillSlots[4]` and `Player.skillCooldowns[4]`.** Replaced by `Player.activeSkill` (string id) and `Player.activeSkillCooldown` (single number).
+- **`Player.buySkill` / `Player.assignSkillToSlot`.** Replaced by `Player.equipSkill(id)` and `Player.cycleSkill()`.
+- **Digit1-4 → skill1-4 input bindings.** Number keys 1-4 are now free for future use.
+- **Old 4-slot bottom-center skill bar** in the HUD.
+
+### Fixed
+- Tutorial hints now actually surface (bumped IDs forced re-show for players who dismissed earlier versions). Stagger adjusted: 4s / 11s / 19s into wave 1.
+
+---
+
 ## [5.64.10] - 2026-05-04
 
 ### Changed

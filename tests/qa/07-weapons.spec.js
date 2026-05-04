@@ -40,14 +40,19 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         expect(owned.powers).toContain('CHARGE_SHOT');
     });
 
-    test('player has 4 skill slots initialised to null', async ({ page }) => {
-        const slots = await page.evaluate(() => window.gameEngine?.player?.skillSlots);
-        expect(slots).toEqual([null, null, null, null]);
+    test('player has a single equipped skill (5.64.11 — was 4 slots)', async ({ page }) => {
+        const skill = await page.evaluate(() => window.gameEngine?.player?.activeSkill);
+        expect(typeof skill).toBe('string');
+        expect(skill.length).toBeGreaterThan(0);
     });
 
-    test('player starts with no owned skills', async ({ page }) => {
-        const size = await page.evaluate(() => window.gameEngine?.player?.ownedSkills?.size ?? -1);
-        expect(size).toBe(0);
+    test('player starts with default skill in ownedSkills', async ({ page }) => {
+        const data = await page.evaluate(() => ({
+            size: window.gameEngine?.player?.ownedSkills?.size ?? -1,
+            active: window.gameEngine?.player?.activeSkill,
+        }));
+        expect(data.size).toBeGreaterThanOrEqual(1);
+        expect(data.active).toBeTruthy();
     });
 
     // ------------------------------------------------------------------
@@ -186,21 +191,20 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         expect(result.owned).toBe(true);
     });
 
-    test('bought skill is auto-assigned to first empty slot', async ({ page }) => {
+    test('buying a skill equips it (5.64.11 — was slot 0 assignment)', async ({ page }) => {
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.player.skillPoints = 10;
             ge.openShop();
             ge.shopCategory = 'SKILLS';
             ge._rebuildShopCache();
-            ge.buyShopItem('BULWARK');
+            ge.buyShopItem('PHASE_DASH');
             return {
-                slots: [...ge.player.skillSlots],
+                active: ge.player.activeSkill,
                 owned: [...ge.player.ownedSkills],
             };
         });
-        expect(result.owned).toContain('BULWARK');
-        expect(result.slots[0]).toBe('BULWARK');
+        expect(result.owned).toContain('PHASE_DASH');
+        expect(result.active).toBe('PHASE_DASH');
     });
 
     // ------------------------------------------------------------------

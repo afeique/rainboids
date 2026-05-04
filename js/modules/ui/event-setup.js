@@ -99,56 +99,25 @@ export function setupEventListeners() {
                 screenY + this.camera.y,
             );
         }
-        // Debug cheat codes (Shift+key, gameplay only)
-        if (e.shiftKey && this.game.state === GAME_STATES.PLAYING) {
-            // Shift+1–8: spawn individual enemy ship types
-            const debugEnemyTypes = ['HUNTER','GUARDIAN','WASP','TITAN','STALKER','TANGERINE','DRIFTER','PROWLER'];
-            const shipKeyMap = {'Digit1':0,'Digit2':1,'Digit3':2,'Digit4':3,'Digit5':4,'Digit6':5,'Digit7':6,'Digit8':7};
-            if (shipKeyMap[e.code] !== undefined) {
-                const type = debugEnemyTypes[shipKeyMap[e.code]];
-                this.spawnLeveledEnemies(type, 1);
-                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: `Spawned ${type}`, duration: 1500 });
-            }
-            // Shift+9: toggle one-hit kill
-            if (e.code === 'Digit9') {
-                this.cheats.onePunchMan = !this.cheats.onePunchMan;
-                const status = this.cheats.onePunchMan ? 'ON' : 'OFF';
-                this.events.emit('ui:show-message', { title: 'ONE PUNCH MAN', subtitle: `One-hit kills ${status}`, duration: 2000 });
-            }
-            // Shift+-: add 100,000 coins
-            if (e.code === 'Minus') {
-                this.game.money += 100000;
-                this.events.emit('ui:show-message', { title: 'FREE WILLY', subtitle: '+100,000 Coins!', duration: 2000 });
-            }
-            // Shift+0: add 100 SP
-            if (e.code === 'Digit0') {
-                this.player.skillPoints += 100;
-                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+100 SP', duration: 1500 });
-            }
-            // Shift+letter: drop specific powerup near player
-            const powerupKeyMap = {
-                'KeyQ': 'RAPID_FIRE',
-                'KeyW': 'MULTI_SHOT',
-                'KeyE': 'HOMING',
-                'KeyR': 'BIG_BULLETS',
-                'KeyT': 'SPEED_BOOST',
-                'KeyY': 'PIERCING',
-                'KeyU': 'LONG_RANGE',
-                'KeyI': 'EXPLOSIVE',
-                'KeyO': 'CRIT_CHANCE',
-                'KeyP': 'CRIT_DAMAGE',
-                'KeyA': 'SHIELD_BOOST',
-                'KeyS': 'MEDPACK',
-                'KeyD': 'CHARGE_DAMAGE',
-            };
-            if (powerupKeyMap[e.code] && this.player) {
-                const type = powerupKeyMap[e.code];
-                const offsetX = random(-40, 40);
-                const offsetY = random(-40, 40);
-                this.dropPowerup(this.player.x + offsetX, this.player.y + offsetY, type);
-                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: `Dropped ${type.replace(/_/g, ' ')}`, duration: 1500 });
+        // Solo-key cheat codes (no shift required, gameplay only).
+        // [ → +1000 gold, ] → +5 SP. Quick mid-run boosts that don't
+        // step on Shift+letter combos used elsewhere.
+        if (this.game.state === GAME_STATES.PLAYING && !e.shiftKey) {
+            if (e.code === 'BracketLeft') {
+                this.game.money += 1000;
+                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+1000 Gold', duration: 1200 });
+            } else if (e.code === 'BracketRight') {
+                this.player.skillPoints += 5;
+                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+5 SP', duration: 1200 });
             }
         }
+
+        // 5.64.11 — SHIFT+ cheat codes removed. They didn't fire reliably
+        // (the SHIFT key is now the skill-cycle binding so shift+letter
+        // combos are partially intercepted by the input handler's
+        // shift-tap-to-cycle bookkeeping). The bracket cheats above are
+        // the supported quick-test path now; full cheats live behind
+        // dev-tools console (`window.gameEngine.cheats.*`).
     });
 
     // Handle game restart

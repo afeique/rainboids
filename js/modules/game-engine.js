@@ -334,32 +334,13 @@ export class GameEngine {
         // Display available keyboard cheats
         console.log(`
   CHEAT CODES (keyboard, during gameplay):
-  SHIFT+1  – spawn HUNTER
-  SHIFT+2  – spawn GUARDIAN
-  SHIFT+3  – spawn WASP
-  SHIFT+4  – spawn TITAN
-  SHIFT+5  – spawn STALKER
-  SHIFT+6  – spawn TANGERINE
-  SHIFT+7  – spawn DRIFTER
-  SHIFT+8  – spawn PROWLER
-  SHIFT+9  – toggle one-hit kill (ONE PUNCH MAN)
-  SHIFT+-  – add 100,000 coins (FREE WILLY)
-  SHIFT+0  – add 100 SP
-
-  DROP POWERUPS (Shift+letter):
-  SHIFT+Q  – Rapid Fire      ⚡
-  SHIFT+W  – Multi-Shot      ✳️
-  SHIFT+E  – Homing Bullets  🎯
-  SHIFT+R  – Big Bullets     🔵
-  SHIFT+T  – Speed Boost     💨
-  SHIFT+Y  – Piercing Shots  🏹
-  SHIFT+U  – Spread Shot     📐
-  SHIFT+I  – Explosive       💣
-  SHIFT+O  – Crit Chance     ⭐
-  SHIFT+P  – Crit Damage     🗡️
-  SHIFT+A  – Shield Boost    🛡
-  SHIFT+S  – Medpack         💊
-  SHIFT+D  – Charge Shot     🔮`);
+  [        – +1000 Gold
+  ]        – +5 SP
+  (SHIFT+ cheats removed in 5.64.11 — SHIFT is now the skill-cycle key.
+   For dev/testing, drive cheats from the console:
+       window.gameEngine.cheats.onePunchMan = true
+       window.gameEngine.game.money += N
+       window.gameEngine.player.skillPoints += N)`);
     }
     
     initializePools() {
@@ -526,20 +507,30 @@ export class GameEngine {
         }));
 
         // Wave-1 onboarding hints (each shown at most once per browser via
-        // localStorage in hint-system.js). Staggered so they don't overlap.
-        // GameTimer ensures they pause with the game.
-        this._gameTimers.push(new GameTimer(5000, () => {
+        // localStorage in hint-system.js). Hint IDs bumped to v3/v2 in
+        // 5.64.11 so the new SHIFT skill-cycle hint surfaces and the
+        // weapon-cycle hint re-shows for players who already dismissed
+        // the v2.
+        this._gameTimers.push(new GameTimer(4000, () => {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
-                'wave1-cycle-weapons-v2',
+                'wave1-cycle-weapons-v3',
                 'Press <strong>Tab</strong> to cycle primary weapons, <strong>R</strong> to cycle power weapons.',
                 7000,
             );
         }));
-        this._gameTimers.push(new GameTimer(13000, () => {
+        this._gameTimers.push(new GameTimer(11000, () => {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
-                'wave1-open-shop',
+                'wave1-cycle-skills-v1',
+                'Tap <strong>Shift</strong> to cycle defense skills. Press <strong>Space</strong> to activate the equipped skill.',
+                8000,
+            );
+        }));
+        this._gameTimers.push(new GameTimer(19000, () => {
+            if (this.game.state !== GAME_STATES.PLAYING) return;
+            showHint(
+                'wave1-open-shop-v2',
                 'Open the <strong>shop</strong> any time — pause menu (<strong>ESC</strong>) or the <strong>🛒</strong> button in the top-right.',
                 8000,
             );

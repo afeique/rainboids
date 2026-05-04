@@ -176,16 +176,10 @@
             </div>
 
             <div id="skills-tab" class="pause-tab-content">
-                <h2>SKILL SLOTS</h2>
-                <div style="margin-bottom: 15px; color: #aaa; font-size: 12px;">Assign defense skills to number keys 1-4</div>
-                <div id="skill-slots-container" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-                    <!-- Skill slots will be populated dynamically -->
-                </div>
-                <div id="owned-skills-list" style="margin-top: 20px;">
-                    <div style="margin-bottom: 10px; color: #aaa; font-size: 12px;">Owned Skills (click to assign)</div>
-                    <div id="owned-skills-grid" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        <!-- Owned skills will be populated dynamically -->
-                    </div>
+                <h2>DEFENSE SKILL</h2>
+                <div style="margin-bottom: 15px; color: #aaa; font-size: 12px; text-align: center;">Click a skill to equip it</div>
+                <div id="skill-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                    <!-- Populated dynamically by ui-manager.updateSkillsTab() -->
                 </div>
             </div>
         </div>

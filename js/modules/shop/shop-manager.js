@@ -209,10 +209,10 @@ export function _buildSkillsTabItems() {
                 name: skill.name,
                 description: skill.description,
                 icon: skill.icon,
-                cost: skill.cost,
+                cost: 0,             // free — see 5.64.11
                 maxStacks: 1,
                 category: 'SKILLS',
-                currency: 'SP',
+                currency: 'FREE',
                 isSkill: true,
                 owned,
             });
@@ -395,25 +395,11 @@ export function _handleWeaponBuyOrEquip(item) {
 }
 
 export function _handleSkillBuy(item) {
-        if (this.player.ownedSkills.has(item.id)) {
-            // Already owned — auto-assign to first empty slot
-            for (let i = 0; i < 4; i++) {
-                if (!this.player.skillSlots[i]) {
-                    this.player.assignSkillToSlot(item.id, i);
-                    this._rebuildShopCache();
-                    this.events.emit('audio:coin');
-                    return true;
-                }
-            }
-            return false; // all slots full
-        }
-
-        const spCost = item.cost || 0;
-        if (spCost > 0 && this.player.skillPoints < spCost) return false;
-        if (spCost > 0) this.player.skillPoints -= spCost;
-
-        this.player.buySkill(item.id); // Also auto-assigns to first empty slot
-
+        // 5.64.11 — skills are free and selectable from the pause menu's
+        // SKILLS tab. Shop "purchase" is now a free equip — keeps any
+        // legacy shop SKILLS tab functional, but the canonical UX is the
+        // pause menu.
+        this.player.equipSkill(item.id);
         this._rebuildShopCache();
         this.events.emit('audio:coin');
         return true;

@@ -255,89 +255,11 @@ export function drawWaveIntroOverlay() {
     this.ctx.restore();
 }
 
-export function drawSkillCooldownHUD() {
-        if (!this.player.skillSlots) return;
-
-        const hasAnySkill = this.player.skillSlots.some(s => s !== null);
-        if (!hasAnySkill) return;
-
-        const slotSize = 40;
-        const slotGap = 8;
-        const totalWidth = 4 * slotSize + 3 * slotGap;
-        const startX = this.width / 2 - totalWidth / 2;
-        const slotY = this.height - 60;
-
-        for (let i = 0; i < 4; i++) {
-            const sx = startX + i * (slotSize + slotGap);
-            const skillId = this.player.skillSlots[i];
-            const skill = skillId ? DEFENSE_SKILLS[skillId] : null;
-
-            // Background
-            this.ctx.fillStyle = skill ? 'rgba(20, 20, 40, 0.8)' : 'rgba(20, 20, 40, 0.4)';
-            this.ctx.beginPath();
-            this.ctx.roundRect(sx, slotY, slotSize, slotSize, 6);
-            this.ctx.fill();
-
-            // Border
-            this.ctx.strokeStyle = skill ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.2)';
-            this.ctx.lineWidth = 1.5;
-            this.ctx.beginPath();
-            this.ctx.roundRect(sx, slotY, slotSize, slotSize, 6);
-            this.ctx.stroke();
-
-            // Key number
-            this.ctx.font = '8px "Press Start 2P", monospace';
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'top';
-            this.ctx.fillText(`${i + 1}`, sx + 3, slotY + 3);
-
-            if (!skill) continue;
-
-            // Cooldown overlay
-            const cdRemaining = this.player.skillCooldowns[i] || 0;
-            const cdTotal = skill.cooldown;
-            const cdRatio = cdRemaining > 0 ? cdRemaining / cdTotal : 0;
-
-            if (cdRatio > 0) {
-                // Dark overlay proportional to cooldown
-                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                this.ctx.beginPath();
-                this.ctx.rect(sx, slotY + slotSize * (1 - cdRatio), slotSize, slotSize * cdRatio);
-                this.ctx.fill();
-            }
-
-            // Active effect glow
-            if (this.player.activeSkillEffects && this.player.activeSkillEffects.has(skillId)) {
-                this.ctx.save();
-                this.ctx.shadowColor = skill.color;
-                this.ctx.shadowBlur = 12;
-                this.ctx.strokeStyle = skill.color;
-                this.ctx.lineWidth = 2;
-                this.ctx.beginPath();
-                this.ctx.roundRect(sx, slotY, slotSize, slotSize, 6);
-                this.ctx.stroke();
-                this.ctx.restore();
-            }
-
-            // Skill icon
-            this.ctx.font = '18px "Press Start 2P", monospace';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillStyle = cdRatio > 0 ? 'rgba(255, 255, 255, 0.4)' : '#FFFFFF';
-            this.ctx.fillText(skill.icon, sx + slotSize / 2, slotY + slotSize / 2);
-
-            // Cooldown seconds remaining
-            if (cdRatio > 0) {
-                const secs = Math.ceil(cdRemaining / 1000);
-                this.ctx.font = 'bold 10px "Press Start 2P", monospace';
-                this.ctx.fillStyle = '#FF8888';
-                this.ctx.textAlign = 'center';
-                this.ctx.textBaseline = 'bottom';
-                this.ctx.fillText(`${secs}s`, sx + slotSize / 2, slotY + slotSize - 2);
-            }
-        }
-}
+// 5.64.11 — old 4-slot bottom-center skill bar removed. Skill HUD is
+// now a single square BELOW the PRM/PWR pair (see drawEquippedWeaponSquares
+// below). This shim is kept so existing call sites don't crash; it's a
+// no-op now that the third square is drawn alongside PRM/PWR.
+export function drawSkillCooldownHUD() { /* no-op */ }
 
 export function drawCanvasTriforce(ctx, lives, baseX, baseY) {
         const triangleSize = 12;
@@ -821,12 +743,14 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};
+    const skillCfg = this.player.getActiveSkillConfig?.() || {};
 
     // Animation: brief scale + glow pulse on whichever square just
-    // cycled. State lives on the game engine so any input source can
-    // trigger it. anim.slot is 'primary' or 'power'.
+    // cycled. State lives on the game engine. anim.slot is one of
+    // 'primary' / 'power' / 'skill'.
     let primaryScale = 1, primaryGlow = 0;
     let powerScale = 1, powerGlow = 0;
+    let skillScale = 1, skillGlow = 0;
     const anim = this._weaponCycleAnim;
     if (anim && Date.now() - anim.start < anim.duration) {
         const t = (Date.now() - anim.start) / anim.duration; // 0..1
@@ -834,6 +758,8 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         const scale = 1 + 0.18 * pulse;
         if (anim.slot === 'power') {
             powerScale = scale; powerGlow = pulse;
+        } else if (anim.slot === 'skill') {
+            skillScale = scale; skillGlow = pulse;
         } else {
             primaryScale = scale; primaryGlow = pulse;
         }
@@ -841,7 +767,7 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         this._weaponCycleAnim = null;
     }
 
-    // ── Primary square ──────────────────────────────────────────────
+    // ── Primary square (top-left) ──────────────────────────────────
     drawWeaponSquare.call(
         this, ctx,
         groupX + squareSize / 2, groupY + squareSize / 2,
@@ -853,7 +779,7 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         primaryGlow,
     );
 
-    // ── Power square ────────────────────────────────────────────────
+    // ── Power square (top-right) ───────────────────────────────────
     drawWeaponSquare.call(
         this, ctx,
         groupX + squareSize + gap + squareSize / 2, groupY + squareSize / 2,
@@ -864,6 +790,61 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         powerScale,
         powerGlow,
     );
+
+    // ── Skill square (5.64.11 — beneath PRM/PWR, centered between them) ──
+    // Mirrors PRM/PWR styling. Cooldown overlay if the skill is on
+    // cooldown; brighter ring while the effect is active. Label "SKILL".
+    const skillRowY = groupY + squareSize + 22; // ~22px below PRM/PWR row (label clearance)
+    const skillCx = groupX + squareSize + gap / 2; // centered between PRM and PWR
+    drawWeaponSquare.call(
+        this, ctx,
+        skillCx, skillRowY + squareSize / 2,
+        squareSize, cornerRadius,
+        skillCfg.icon || '?',
+        skillCfg.color || '#ff88dd',
+        'SKILL',
+        skillScale,
+        skillGlow,
+    );
+
+    // Cooldown overlay + active-effect ring on the skill square. Drawn
+    // inside the same square coords; no scale animation interaction.
+    const cdRemaining = this.player.activeSkillCooldown || 0;
+    const cdTotal = skillCfg.cooldown || 1;
+    const cdRatio = cdRemaining > 0 ? cdRemaining / cdTotal : 0;
+    if (cdRatio > 0) {
+        const half = squareSize / 2;
+        ctx.save();
+        ctx.beginPath();
+        _roundedRectPath(ctx, skillCx - half, skillRowY, squareSize, squareSize, cornerRadius);
+        ctx.clip();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(
+            skillCx - half,
+            skillRowY + squareSize * (1 - cdRatio),
+            squareSize,
+            squareSize * cdRatio,
+        );
+        ctx.restore();
+        // Cooldown seconds remaining
+        const secs = Math.ceil(cdRemaining / 1000);
+        ctx.font = 'bold 10px "Press Start 2P", monospace';
+        ctx.fillStyle = '#FF8888';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`${secs}s`, skillCx, skillRowY + squareSize - 4);
+    }
+    if (this.player.activeSkillEffects && this.player.activeSkillEffects.has(this.player.activeSkill)) {
+        const half = squareSize / 2;
+        ctx.save();
+        ctx.shadowColor = skillCfg.color || '#ff88dd';
+        ctx.shadowBlur = 14;
+        ctx.strokeStyle = skillCfg.color || '#ff88dd';
+        ctx.lineWidth = 2;
+        _roundedRectPath(ctx, skillCx - half, skillRowY, squareSize, squareSize, cornerRadius);
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 function _roundedRectPath(ctx, x, y, w, h, r) {

@@ -995,14 +995,10 @@ export class UIManager {
             this.syncMusicPlayerState();
         }
 
-        // Populate skill slots when switching to skills tab
-        if (tabName === 'skills') {
-            this.populateSkillSlots();
-        }
-
-        // Refresh weapon-equip lists when their tabs are opened.
+        // Refresh equip lists when their tabs are opened.
         if (tabName === 'primary') this.updatePrimaryTab();
         if (tabName === 'power') this.updatePowerTab();
+        if (tabName === 'skills') this.updateSkillsTab();
 
         // Re-render the Powerups card list whenever the tab is opened
         // so stack counts reflect current state.
@@ -1046,94 +1042,29 @@ export class UIManager {
         }
     }
 
-    populateSkillSlots() {
+    // ── Pause-menu SKILLS tab (5.64.11) ────────────────────────────────────
+    // Lists every defense skill. Click a row to equip it. Skills are now
+    // free and always available — same model as primaries / powers.
+    // Replaces the previous 4-slot assignment UI; a single equipped skill
+    // is shown on the HUD and activated with Space.
+    updateSkillsTab() {
+        const list = document.getElementById('skill-list');
+        if (!list) return;
         const ge = this.gameEngine;
-        if (!ge || !ge.player) return;
-
-        const player = ge.player;
-        const slotsContainer = document.getElementById('skill-slots-container');
-        const ownedGrid = document.getElementById('owned-skills-grid');
-        if (!slotsContainer || !ownedGrid) return;
-
-        // Import DEFENSE_SKILLS dynamically from window
-        let DEFENSE_SKILLS;
-        try {
-            // Access through the game engine's imported module
-            DEFENSE_SKILLS = ge._defenseSkillsRef;
-        } catch(e) {
+        const player = ge && ge.player;
+        if (!player) return;
+        const SKILLS = ge._defenseSkillsRef;
+        if (!SKILLS) {
+            list.replaceChildren();
             return;
         }
-        if (!DEFENSE_SKILLS) return;
-
-        // Render 4 skill slots
-        slotsContainer.innerHTML = '';
-        for (let i = 0; i < 4; i++) {
-            const skillId = player.skillSlots[i];
-            const skill = skillId ? DEFENSE_SKILLS[skillId] : null;
-            const slotDiv = document.createElement('div');
-            slotDiv.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 12px;background:rgba(40,40,60,0.8);border:1px solid rgba(255,255,255,0.2);border-radius:6px;';
-
-            const keyLabel = document.createElement('span');
-            keyLabel.textContent = `${i + 1}`;
-            keyLabel.style.cssText = 'font-size:18px;font-weight:bold;color:#FFD700;min-width:24px;text-align:center;';
-
-            const skillLabel = document.createElement('span');
-            if (skill) {
-                skillLabel.textContent = `${skill.icon} ${skill.name}`;
-                skillLabel.style.cssText = 'font-size:14px;color:#fff;flex:1;';
-                slotDiv.style.borderColor = skill.color;
-            } else {
-                skillLabel.textContent = '— Empty —';
-                skillLabel.style.cssText = 'font-size:14px;color:#666;font-style:italic;flex:1;';
-            }
-
-            const clearBtn = document.createElement('button');
-            clearBtn.textContent = '✕';
-            clearBtn.style.cssText = 'background:rgba(200,40,40,0.6);border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;';
-            clearBtn.style.display = skill ? 'block' : 'none';
-            clearBtn.addEventListener('click', () => {
-                player.skillSlots[i] = null;
-                this.populateSkillSlots();
-            });
-
-            slotDiv.appendChild(keyLabel);
-            slotDiv.appendChild(skillLabel);
-            slotDiv.appendChild(clearBtn);
-            slotsContainer.appendChild(slotDiv);
-
-            // Make slot a drop target
-            slotDiv.addEventListener('click', () => {
-                if (this._selectedSkillForAssign) {
-                    player.assignSkillToSlot(this._selectedSkillForAssign, i);
-                    this._selectedSkillForAssign = null;
-                    this.populateSkillSlots();
-                }
-            });
-        }
-
-        // Render owned skills
-        ownedGrid.innerHTML = '';
-        if (!player.ownedSkills || player.ownedSkills.size === 0) {
-            ownedGrid.innerHTML = '<div style="color:#666;font-style:italic;">No skills purchased yet. Buy skills in the shop SKILLS tab.</div>';
-            return;
-        }
-        for (const skillId of player.ownedSkills) {
-            const skill = DEFENSE_SKILLS[skillId];
-            if (!skill) continue;
-            const assigned = player.skillSlots.includes(skillId);
-            const btn = document.createElement('button');
-            btn.textContent = `${skill.icon} ${skill.name}`;
-            btn.style.cssText = `padding:8px 14px;border:1px solid ${assigned ? '#44ff88' : skill.color};background:rgba(40,40,60,0.8);color:${assigned ? '#44ff88' : '#fff'};border-radius:6px;cursor:pointer;font-family:'Silkscreen',monospace;font-size:12px;`;
-            btn.addEventListener('click', () => {
-                this._selectedSkillForAssign = skillId;
-                // Highlight: re-render to show selection state
-                this.populateSkillSlots();
-            });
-            if (this._selectedSkillForAssign === skillId) {
-                btn.style.boxShadow = `0 0 10px ${skill.color}`;
-                btn.style.borderWidth = '2px';
-            }
-            ownedGrid.appendChild(btn);
+        list.replaceChildren();
+        for (const id of Object.keys(SKILLS)) {
+            const equipped = player.activeSkill === id;
+            list.appendChild(this._buildWeaponRow(SKILLS[id], id, equipped, '#ff88dd', () => {
+                player.equipSkill(id);
+                this.updateSkillsTab();
+            }));
         }
     }
 }

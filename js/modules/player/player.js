@@ -73,12 +73,16 @@ export class Player {
         this.experienceToNextLevel = 100; // EXP needed for level 2
         this.skillPoints = 0; // Skill points for defensive upgrades
 
-        // Weapon system
+        // Weapon system. All primaries / powers / skills are FREE and
+        // selectable from start (5.64.11). The owned-sets are still
+        // tracked for legacy upgrade-tree compatibility but the pause
+        // menu treats every weapon and skill as equippable.
         this.activePrimary = 'PULSE_CANNON';
         this.activePower = 'CHARGE_SHOT';
+        this.activeSkill = 'BULWARK';        // single equipped skill (no slots)
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
-        this.ownedSkills = new Set();
+        this.ownedSkills = new Set(['BULWARK']);
 
         // Streak buff — set by combat-manager.onEnemyKill when the kill
         // streak crosses a tier threshold. Drives damage multiplier and the
@@ -87,9 +91,9 @@ export class Player {
         this.streakBuffEndTime = 0;
         this.streakTierLabel = null;
 
-        // Defense skill slots (number keys 1-4)
-        this.skillSlots = [null, null, null, null];
-        this.skillCooldowns = [0, 0, 0, 0];
+        // Defense skill — single equipped slot (5.64.11 — was 4 slots
+        // bound to keys 1-4). SHIFT cycles, SPACE activates.
+        this.activeSkillCooldown = 0;
         this.activeSkillEffects = new Map(); // skill id -> {timeRemaining, ...state}
 
         // Power weapon cooldown
@@ -186,7 +190,7 @@ export class Player {
         this.needleCount = 0;
         this.scatterShotCount = 0;
         this.lastPrimaryFireTime = 0;
-        this.skillCooldowns = [0, 0, 0, 0];
+        this.activeSkillCooldown = 0;
         this.activeSkillEffects = new Map();
         this.deflectorOrbs = [];
         this.isDashing = false;
@@ -525,13 +529,15 @@ export class Player {
             this.spawnChargeBeamParticles(particlePool);
         }
 
-        // Defense skill activation (number keys 1-4)
-        for (let i = 0; i < 4; i++) {
-            const key = `skill${i + 1}`;
-            if (input[key]) {
-                this.activateSkill(i);
-                input[key] = false; // consume the input
-            }
+        // Defense skill — SPACE activates the single equipped skill,
+        // SHIFT (tap) cycles to the next skill in DEFENSE_SKILLS.
+        if (input.activateSkill) {
+            this.activateSkill();
+            input.activateSkill = false; // consume one-shot pulse
+        }
+        if (input.cycleSkill) {
+            this.cycleSkill();
+            input.cycleSkill = false; // consume one-shot pulse
         }
 
         // Update beam state
@@ -667,16 +673,20 @@ export class Player {
         return weapons.buyPower.call(this, weaponId);
     }
 
-    buySkill(skillId) {
-        return skills.buySkill.call(this, skillId);
+    equipSkill(skillId) {
+        return skills.equipSkill.call(this, skillId);
     }
 
-    assignSkillToSlot(skillId, slotIndex) {
-        return skills.assignSkillToSlot.call(this, skillId, slotIndex);
+    cycleSkill() {
+        return skills.cycleSkill.call(this);
     }
 
-    activateSkill(slotIndex) {
-        return skills.activateSkill.call(this, slotIndex);
+    activateSkill() {
+        return skills.activateSkill.call(this);
+    }
+
+    getActiveSkillConfig() {
+        return skills.getActiveSkillConfig.call(this);
     }
 
     getEffectivePrimaryFireRate() {
