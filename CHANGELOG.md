@@ -11,6 +11,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.6] - 2026-05-04
+
+### Changed
+- **Enemy big-bang rings cut hard.** The 5.64.5 reduction (2.0/2.7/2.2/3.2 → 1.2/1.6/1.3/1.9) wasn't enough — rings still washed out the ship-shred + shrapnel. New values:
+  - **Big-bang final explosion**: dropped from 4 rings to 3, multipliers `1.2/1.6/1.3/1.9 → 0.55/0.75/0.9`. The 1.9× ring (the worst offender) is gone entirely; the largest remaining ring is now slightly smaller than the enemy ship itself.
+  - **Initial impact**: `1.3/0.9 → 0.7/0.5`.
+  - **Secondary outward ring**: `1.0 → 0.5`.
+- Net effect: rings now read as tight wavefronts around the impact point rather than a halo larger than the wreckage. The shred + shrapnel carries the explosion mass.
+
+---
+
+## [5.64.5] - 2026-05-04
+
+### Changed
+- **Enemy ships now visibly tear apart on death.** `createShapeDebris` rewritten:
+  - Each outline edge is **fragmented** into 2 half-segments before spawning, so a HUNTER goes from 6 pieces to ~12, a TITAN from 20 to ~40, etc.
+  - Every fragment gets a high-velocity outward kick (radial speed 2.6× base × random 0.25-1.75 jitter) plus a tangential perpendicular component at ~25% of the radial speed, so pieces scatter chaotically instead of unraveling in a clean ring.
+  - Rotation rate multiplied 2.4× — pieces visibly tumble.
+  - Internal struts expanded per enemy type (HUNTER: +engine-block detail lines, GUARDIAN: +grid ribs, WASP: +wing detail, TITAN/TANGERINE: +deeper inner ring + 4 more spokes, STALKER: +arm-tip caps, default: +radial spokes).
+- **Tighter enemy explosion rings.** Big-bang ring radius multipliers `2.0/2.7/2.2/3.2 → 1.2/1.6/1.3/1.9`. Initial-impact rings `2.2/1.4 → 1.3/0.9`. Secondary outward ring `1.8 → 1.0`. Rings no longer dominate the shrapnel + ship-shred signal — the actual blowup reads through.
+- **`lineDebrisPool` 20 → 100.** Sized for the new 2× fragment count plus simultaneous deaths.
+- **Hit/destruction effects redelineated** (5.64.4 wasn't enough — landed in this same version):
+  - Asteroid hit: NO screen shake (was light shake).
+  - Asteroid destruction: shake only — no screen flash (flash reserved for enemy kills).
+  - Enemy hit: small screen shake (NEW).
+  - Enemy destruction: flash + shake (unchanged).
+- **Shop sell button refund is now full at-cost.** `Math.floor(cost × 0.5) → cost`. Players don't lose currency when selling, so the upgrade tree functions as a permanent collection that lets you experiment freely instead of a sunk cost. Both `shop-dom.js`, `shop-manager.js`, and `shop-renderer.js` updated in lockstep so displayed and actual refunds match.
+- **Sell button restyled.** Padding `6px 10px → 9px 14px`, more opaque background (`0.7 → 0.92`), brighter border, subtle box-shadow for depth, hover lifts via `transform: translateY(-1px)`. The red background now pads evenly around the entire `SELL +### ` label.
+- **Shop opens on a random non-HELP tab.** Lands on PRIMARY / POWER / DEFENSE / SKILLS at random instead of always HELP, so each shop visit surfaces a different category up-front. HELP is still reachable from the tab row.
+- **DEFENSE / SKILLS tabs got header banners.** Mirrors the equipped-weapon banner above PRIMARY / POWER for visual consistency. DEFENSE shows a green 🛡️ "Defense" header; SKILLS shows a magenta ⚡ "Skills" header.
+
+---
+
+## [5.64.4] - 2026-05-04
+
+### Changed
+- **Hit/destruction effects redelineated between enemies and asteroids.** Enemies now feel "alive", asteroids "inert":
+  - Enemy hit: small screen shake (was: nothing). Communicates contact through camera feel.
+  - Enemy destruction: screen flash + screen shake (unchanged).
+  - Asteroid hit: NO screen shake (was: light shake). Hit feedback through cursor flash + shrapnel/sparkles only.
+  - Asteroid destruction: screen shake only (was: shake + screen flash). Flash is now reserved for enemy kills.
+- **Ember lifespan halved.** Initial life `1.0-1.8s → 0.6-1.0s`; decay rate `0.009/tick → 0.020/tick`. With both adjustments, embers visibly cool from spawn to extinguish in ~1-1.5s instead of ~3-6s. Frees pool slots for the next burst and matches the "spark cooling" read better than "lingering glow."
+- **Particle sprites sharpened further.** Second pass on the WebGL atlas:
+  - **Ember (`dot`)**: hot-core Gaussian coefficient `18 → 28` (tighter); halo amplitude `0.55 → 0.42`, exponent `2.4 → 3.0` (smaller, steeper falloff). Embers now read as discrete pin-sharp glowing motes.
+  - **Flash**: hotter radial body (Gaussian coefficient `6 → 8`); 4-point cross spike amplitude `0.45 → 0.6` and sigma tightened (`0.0008 → 0.0005`) so the spike is pixel-sharp.
+  - **Sparkle (`spark`)**: pixel-thinner cardinal arms (`σ²=0.0006 → 0.00035`) and diagonals (`σ²=0.0009 → 0.0006`); diagonal amplitude `0.35 → 0.5`; central glow Gaussian `25 → 32`. True 8-point twinkling-star silhouette.
+  - **Streak**: head taper `u^2.4 → u^2.8`; hot-tip boost `0.35 → 0.55` (sharper leading pixel-line).
+
+---
+
+## [5.64.3] - 2026-05-04
+
+### Changed
+- **Sharper, more defined WebGL particle sprites.** Rebuilt `js/modules/performance/webgl-particle-atlas.js` so each slot is rendered procedurally pixel-by-pixel from a custom alpha curve instead of a CSS radial gradient. Visual upgrades:
+  - **Ember (`dot`)**: Gaussian hot-core (`exp(-r² × 18)`) plus a softer quadratic halo. The bright centre is concentrated in the inner ~15% rather than spread through the inner 70%, so embers read as discrete glowing points instead of soft fuzzy clouds. Per-instance quad size trimmed `(r+6)×1.8 → (r+4)×1.55` to match.
+  - **Flash**: kept the cool-blue radial body but overlaid a thin 4-point cross spike that fades with radius. Adds visible "punch" to the destruction flash without dominating it. Slight peak-alpha boost (0.55 → 0.6) so the spike reads cleanly.
+  - **Sparkle**: NEW dedicated `spark` atlas slot — a 4-point cross star (cardinal arms full intensity, diagonals at 35%) with a tight central glow. `starSparkle` now maps to this slot instead of sharing `dot`, so sparkles look like actual sparkles instead of small fuzzy dots.
+  - **Streak**: steeper head taper (`u^1.7 → u^2.4`) plus a Gaussian hot-tip at u≈1. Streaks now have a defined leading edge that reads as fast directional motion.
+  - **Ring**: tighter Gaussian annulus (σ=0.13) with a soft inner-edge cut at r<0.45 so the ring reads as a defined wavefront edge.
+- **Atlas dimensions**: 1024×256 → 1280×256 (added one 256×256 slot for spark). VRAM cost: +256KB. Shader and renderer changes are minimal — the per-instance UV attribute already carried slot offset/scale, so adding a slot needed only a UV-table entry and a `TYPE_TO_SLOT` remap.
+
+---
+
 ## [5.64.2] - 2026-05-04
 
 ### Changed

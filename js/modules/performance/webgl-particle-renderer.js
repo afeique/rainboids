@@ -137,7 +137,7 @@ export class WebGLParticleRenderer {
         this.TYPE_TO_SLOT = {
             explosionEmber:        'dot',
             explosion:             'dot',
-            starSparkle:           'dot',
+            starSparkle:           'spark',
             explosionFlash:        'flash',
             explosionRingColored:  'ring',
             explosionShrapnel:     'streak',
@@ -407,45 +407,51 @@ export class WebGLParticleRenderer {
 
         switch (p.type) {
             case 'explosionEmber': {
-                // Canvas2D drew a blurred glow sprite ~ (p.radius + blur=8)
-                // wide. The atlas dot has a soft alpha falloff baked in,
-                // so expand the quad to roughly the same on-screen size
-                // as the original blurred sprite footprint.
+                // The new dot atlas slot has a sharp Gaussian hot core
+                // plus a tighter falloff (vs the soft gradient previously
+                // used). Trim the quad slightly: the bright signature
+                // comes from the core now, not from a big mushy halo.
                 const softA = Math.pow(lifeAlpha, 0.55);
-                const drawR = (p.radius + 6) * 1.8;
+                const drawR = (p.radius + 4) * 1.55;
                 w = drawR * 2;
                 h = drawR * 2;
                 alpha = softA;
                 break;
             }
             case 'explosion': {
-                // Classic small fill. Slightly larger than 2×radius so
-                // the soft atlas falloff blends to invisible at the edge.
-                w = p.radius * 3;
-                h = p.radius * 3;
+                // Classic small dust fragment. Quad slightly larger than
+                // 2×radius lets the dot's soft outer halo fade to invisible
+                // at the quad edge; the sharp Gaussian core gives each
+                // fragment a defined center.
+                w = p.radius * 2.6;
+                h = p.radius * 2.6;
                 alpha = lifeAlpha;
                 break;
             }
             case 'starSparkle': {
                 if (p.radius < 0.05) return false;
-                // Approximates the original double-glow (color + yellow)
-                // by drawing one bright quad scaled larger than the
-                // particle's nominal radius. Atlas falloff handles the
-                // perceived halo.
-                w = p.radius * 6;
-                h = p.radius * 6;
+                // Spark slot is a 4-point cross star — bright cardinal
+                // arms + diagonals at half intensity. Tighten the quad
+                // since the spike arms extend close to the edge already.
+                w = p.radius * 7;
+                h = p.radius * 7;
                 alpha = Math.min(1, lifeAlpha * 2.5);
                 break;
             }
             case 'explosionFlash': {
+                // Flash slot now has a subtle 4-point cross spike on top
+                // of the radial body — boost peak alpha slightly so the
+                // spike reads cleanly without washing out the radial.
                 const flashLife = lifeAlpha / 1.2;
                 const eased = flashLife * flashLife * Math.sqrt(Math.max(0, flashLife));
-                w = p.radius * 2;
-                h = p.radius * 2;
-                alpha = eased * 0.55;
+                w = p.radius * 2.2;
+                h = p.radius * 2.2;
+                alpha = eased * 0.6;
                 break;
             }
             case 'explosionRingColored': {
+                // Ring slot is a tighter Gaussian annulus now. Same size
+                // as before — the atlas curve does the visual work.
                 w = p.radius * 2;
                 h = p.radius * 2;
                 alpha = Math.min(1, lifeAlpha * 1.5);
@@ -453,15 +459,15 @@ export class WebGLParticleRenderer {
             }
             case 'explosionShrapnel': {
                 // Streak quad: width = streak length, height = stroke thickness.
-                // Atlas streak slot has its bright head on u=1 (right);
-                // we rotate the quad to the velocity angle, then shift
-                // the quad's CENTER backwards along the velocity by
-                // streakLen/2 so the head lands at (p.x, p.y) — matching
-                // the original Canvas2D line which drew tail→head with
-                // the head at the particle's position.
+                // Atlas streak slot has its bright head on u=1 (right) with
+                // a sharp hot tip; rotate the quad to the velocity angle,
+                // then shift the quad's CENTER backwards along the velocity
+                // by streakLen/2 so the head lands at (p.x, p.y) — matching
+                // the original Canvas2D line which drew tail→head with the
+                // head at the particle's position.
                 const streakLen = p.length < p._speed * 3 ? p.length : p._speed * 3;
                 w = streakLen;
-                h = Math.max(1.5, p.radius * 2);
+                h = Math.max(1.6, p.radius * 2);
                 alpha = lifeAlpha;
                 angle = p.angle || 0;
                 posX = p.x - p._cosA * (streakLen * 0.5);

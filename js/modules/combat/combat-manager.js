@@ -17,11 +17,14 @@ export function createDebris(ast) {
     const onScreen = this.isEntityOnScreen(ast);
     const isLarge = ast.baseRadius > (GAME_CONFIG.MIN_AST_RAD + 5);
 
-    // ── Kill juice: hitstop + camera kick + screen flash ──
+    // ── Kill juice: hitstop + camera kick ──
+    // No screen flash on asteroid destruction — flash is reserved for
+    // enemy kills so the destruction-flash carries weight (rocks are
+    // inert; ships are alive). Asteroid death still gets screen shake
+    // (triggered in collision-system on the destroyAsteroid path) and
+    // a camera kick away from the impact.
     if (onScreen) {
         this.triggerHitstop(isLarge ? 5 : 3);
-        // Refined screen flash — present but not in-your-face.
-        this.triggerScreenFlash(isLarge ? 0.06 : 0.035, 3);
         const kdx = this.player.x - ast.x;
         const kdy = this.player.y - ast.y;
         this.triggerCameraKick(kdx, kdy, isLarge ? 12 : 7);
@@ -169,14 +172,16 @@ export function createEnemyDebris(enemy) {
     // drops ~40% per kill, leaving more headroom for simultaneous big
     // explosions to render fully.
 
-    // 1. Impact flash + 2 expanding rings — the announce. All three
-    // are short-lived and drop out fast as they expand.
+    // 1. Impact flash + 2 TIGHT expanding rings — the announce. Rings
+    // shrunk again (1.3/0.9 → 0.7/0.5) so the wavefronts read as small
+    // pulses around the impact point instead of a halo larger than the
+    // enemy ship itself. The shred + shrapnel signal carries the actual
+    // explosion mass; rings are now just edge announce.
     this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 1.4 * sizeScale);
-    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 2.2 * sizeScale, '#ffffff');
-    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 1.4 * sizeScale, color);
+    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 0.7 * sizeScale, '#ffffff');
+    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 0.5 * sizeScale, color);
 
-    // 2. Directional shrapnel — fast streaks flying outward. THIS is
-    // the main motion-feel for the impact frame.
+    // 2. Directional shrapnel — fast streaks flying outward.
     const shrapnelCount = Math.floor(10 + 6 * sizeScale);
     for (let i = 0; i < shrapnelCount; i++) {
         const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
@@ -186,8 +191,9 @@ export function createEnemyDebris(enemy) {
     }
 
     // 3. Shape debris — the wreck's actual outline pieces scattered
-    // outward. Always-moving, always reads as "the ship physically
-    // came apart."
+    // outward at HIGH velocity. createShapeDebris fragments each edge
+    // and gives every piece a steep velocity boost, so the silhouette
+    // visibly tears apart in real time.
     this.createShapeDebris(enemy);
 }
 
@@ -227,26 +233,16 @@ export function triggerEnemyFinalExplosion(enemy) {
     // 1. Bright core flash, slightly larger than initial.
     this.particlePool.get(ex, ey, 'explosionFlash', r * 2.4 * sizeScale);
 
-    // 2. Four wavefront rings — ALL spawned instantly (no setTimeouts!).
-    //
-    // Why: the previous setTimeout-staggered version was the smoking gun
-    // for inconsistent explosions. Those .get() calls fired 60/130/220ms
-    // later, by which time bullet-hit and ambient-particle activity had
-    // refilled the pool — so the late-stagger rings would EVICT this
-    // very explosion's own earlier shrapnel/embers. The result: every
-    // OTHER kill looked weak because half its particles were gone by
-    // the time the rings spawned.
-    //
-    // The visual cascade is preserved by giving each ring a different
-    // maxRadius (small → huge): each ring expands from 15% of its own
-    // maxRadius to 100% over its 0.9s lifetime, so the four rings still
-    // look like concentric wavefronts radiating out — just all in the
-    // same frame instead of staggered. Reads identically at gameplay
-    // speed, but the pool stays consistent.
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 2.0 * sizeScale, '#ffffff');
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 2.7 * sizeScale, color);
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 2.2 * sizeScale, '#ffcc66');
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 3.2 * sizeScale, color);
+    // 2. Three TIGHT wavefront rings — all spawned instantly (no
+    // setTimeouts; see 5.63.0 for the eviction-bug history). Radius
+    // multipliers cut hard (1.2/1.6/1.3/1.9 → 0.55/0.75/0.9). Largest
+    // ring is now slightly smaller than the enemy itself, so the rings
+    // read as a tight wavefront around the impact rather than a halo
+    // that washes out the ship-shred + shrapnel. The 4th ring at 1.9×
+    // was the worst offender — dropped entirely.
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.55 * sizeScale, '#ffffff');
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.75 * sizeScale, color);
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.9  * sizeScale, '#ffcc66');
 
     // 3. Dense directional shrapnel — DENSER for the new midway-big-bang
     // moment where the ship visibly vanishes. Fast streaks in all
@@ -296,17 +292,27 @@ export function triggerEnemyFinalExplosion(enemy) {
         try { this.createShapeDebris(enemy); } catch (_) {}
     }
 
-    // 6. Secondary ring — final outward wavefront. No cookoff embers
-    // anymore (they were lingering filler).
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.8 * sizeScale, color);
+    // 6. Secondary tight ring — final outward wavefront, kept small so
+    // it doesn't merge with the 3 earlier rings into a thick blob.
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.5 * sizeScale, color);
 }
 
 export function createShapeDebris(enemy) {
-    // Full-silhouette scatter — same model as asteroid debris. Build a
-    // list of vertices that traces the enemy's outer outline at its
-    // actual radius, then emit one debris segment per consecutive pair.
-    // A few internal struts and broken-off chunks give the wreckage
-    // mass instead of leaving a hollow ring.
+    // Tear-apart silhouette scatter. Builds the enemy's hull as a list
+    // of outline edges + internal struts, then FRAGMENTS each edge into
+    // 2 half-segments and gives every piece a high-velocity outward kick
+    // with a tangential (perpendicular) spin component so the ship reads
+    // as physically blowing apart, not just unraveling.
+    //
+    // Per-piece treatment after spawn:
+    //   • velocity multiplied 2.5-4× (was unitless 2-5 in LineDebris.reset)
+    //   • tangential perpendicular component added at ~25% of radial speed
+    //     for chaotic outward spin
+    //   • rotation rate doubled so pieces visibly tumble
+    //
+    // Net debris count per enemy roughly doubles vs the pre-5.64.5
+    // version, which is why lineDebrisPool was bumped to 100 in the
+    // engine constructor.
     const r = enemy.radius;
     const color = enemy.color;
     const verts = [];           // outline vertices (closed loop)
@@ -323,6 +329,9 @@ export function createShapeDebris(enemy) {
             // internal hull bracing
             struts.push([{ x: tip * 0.5, y: 0 }, { x: -back * 0.45, y: 0 }]);
             struts.push([{ x: -back * 0.7, y: -back * 0.4 }, { x: -back * 0.7, y: back * 0.4 }]);
+            // engine-block detail lines
+            struts.push([{ x: -back * 0.85, y: -back * 0.2 }, { x: -back * 0.55, y: -back * 0.2 }]);
+            struts.push([{ x: -back * 0.85, y:  back * 0.2 }, { x: -back * 0.55, y:  back * 0.2 }]);
             break;
         }
         case 'GUARDIAN': { // Square hull
@@ -331,6 +340,11 @@ export function createShapeDebris(enemy) {
             // diagonals
             struts.push([{ x: -s, y: -s }, { x: s, y: s }]);
             struts.push([{ x: s, y: -s }, { x: -s, y: s }]);
+            // internal grid (4 quadrant ribs)
+            struts.push([{ x: -s, y: 0 }, { x: s, y: 0 }]);
+            struts.push([{ x: 0, y: -s }, { x: 0, y: s }]);
+            struts.push([{ x: -s * 0.5, y: -s * 0.5 }, { x: s * 0.5, y: -s * 0.5 }]);
+            struts.push([{ x: -s * 0.5, y:  s * 0.5 }, { x: s * 0.5, y:  s * 0.5 }]);
             break;
         }
         case 'WASP': { // Diamond
@@ -339,6 +353,9 @@ export function createShapeDebris(enemy) {
             // cross brace
             struts.push([{ x: -s * 0.4, y: -s * 0.4 }, { x: s * 0.4, y: s * 0.4 }]);
             struts.push([{ x: s * 0.4, y: -s * 0.4 }, { x: -s * 0.4, y: s * 0.4 }]);
+            // wing detail
+            struts.push([{ x: 0, y: -s * 0.5 }, { x: 0, y: s * 0.5 }]);
+            struts.push([{ x: -s * 0.35, y: 0 }, { x: s * 0.35, y: 0 }]);
             break;
         }
         case 'TITAN':
@@ -348,7 +365,7 @@ export function createShapeDebris(enemy) {
                 const a = (i / sides) * Math.PI * 2;
                 verts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
             }
-            // inner ring at half radius — second shell of wreckage
+            // inner ring at 0.55r — second shell of wreckage
             const inner = r * 0.55;
             for (let i = 0; i < sides; i++) {
                 const a = (i / sides) * Math.PI * 2 + Math.PI / sides;
@@ -358,11 +375,24 @@ export function createShapeDebris(enemy) {
                     { x: Math.cos(a2) * inner, y: Math.sin(a2) * inner },
                 ]);
             }
-            // a couple of radial spokes
-            struts.push([{ x: 0, y: 0 }, { x: r * 0.7, y: 0 }]);
-            struts.push([{ x: 0, y: 0 }, { x: -r * 0.7, y: 0 }]);
-            struts.push([{ x: 0, y: 0 }, { x: 0, y: r * 0.7 }]);
-            struts.push([{ x: 0, y: 0 }, { x: 0, y: -r * 0.7 }]);
+            // even-deeper inner ring at 0.3r
+            const deep = r * 0.3;
+            for (let i = 0; i < sides; i++) {
+                const a = (i / sides) * Math.PI * 2;
+                const a2 = a + Math.PI * 2 / sides;
+                struts.push([
+                    { x: Math.cos(a) * deep, y: Math.sin(a) * deep },
+                    { x: Math.cos(a2) * deep, y: Math.sin(a2) * deep },
+                ]);
+            }
+            // 8 radial spokes (was 4)
+            for (let i = 0; i < 8; i++) {
+                const a = (i / 8) * Math.PI * 2;
+                struts.push([
+                    { x: 0, y: 0 },
+                    { x: Math.cos(a) * r * 0.85, y: Math.sin(a) * r * 0.85 },
+                ]);
+            }
             break;
         }
         case 'STALKER': { // Cross/plus
@@ -380,6 +410,11 @@ export function createShapeDebris(enemy) {
             // cross-brace through center
             struts.push([{ x: -armLen, y: 0 }, { x: armLen, y: 0 }]);
             struts.push([{ x: 0, y: -armLen }, { x: 0, y: armLen }]);
+            // arm-tip caps
+            struts.push([{ x: -armW, y: -armLen * 0.7 }, { x: armW, y: -armLen * 0.7 }]);
+            struts.push([{ x: -armW, y:  armLen * 0.7 }, { x: armW, y:  armLen * 0.7 }]);
+            struts.push([{ x: -armLen * 0.7, y: -armW }, { x: -armLen * 0.7, y: armW }]);
+            struts.push([{ x:  armLen * 0.7, y: -armW }, { x:  armLen * 0.7, y: armW }]);
             break;
         }
         default: { // Generic 6-sided hull
@@ -397,20 +432,71 @@ export function createShapeDebris(enemy) {
                     { x: Math.cos(a2) * inner, y: Math.sin(a2) * inner },
                 ]);
             }
+            // radial spokes
+            for (let i = 0; i < sides; i++) {
+                const a = (i / sides) * Math.PI * 2;
+                struts.push([
+                    { x: 0, y: 0 },
+                    { x: Math.cos(a) * r * 0.7, y: Math.sin(a) * r * 0.7 },
+                ]);
+            }
             break;
         }
     }
 
-    // Emit outline edges (closed loop).
+    // Helper: emit one fragment with high outward velocity + tangential
+    // spin. p1, p2 are local-space endpoints; cx/cy is the local-space
+    // origin used to compute outward direction (typically the segment
+    // midpoint). The piece's world-space spawn point is enemy.{x,y};
+    // LineDebris stores p1/p2 in local space and renders rotated.
+    const SPEED_MUL = 2.6;       // overall outward velocity boost
+    const SPEED_JITTER = 1.5;    // per-piece random multiplier on top
+    const TAN_RATIO = 0.35;      // tangential / radial speed ratio
+    const ROT_MUL = 2.4;         // tumble-rate multiplier
+    const emit = (p1, p2) => {
+        const piece = this.lineDebrisPool.get(enemy.x, enemy.y, p1, p2, color);
+        if (!piece) return;
+        // Outward radial direction = midpoint normal.
+        const mx = (p1.x + p2.x) * 0.5;
+        const my = (p1.y + p2.y) * 0.5;
+        const len = Math.hypot(mx, my) || 1;
+        const ox = mx / len;
+        const oy = my / len;
+        const speed = SPEED_MUL * (1 + (Math.random() - 0.5) * SPEED_JITTER);
+        // Tangential direction = perpendicular to radial (signed random).
+        const tanSign = Math.random() < 0.5 ? -1 : 1;
+        const tx = -oy * tanSign;
+        const ty =  ox * tanSign;
+        const tanSpeed = speed * TAN_RATIO * Math.random();
+        piece.vel.x = ox * speed + tx * tanSpeed;
+        piece.vel.y = oy * speed + ty * tanSpeed;
+        piece.rotVel *= ROT_MUL;
+    };
+
+    // Helper: subdivide a segment and emit BOTH halves as separate
+    // fragments. Doubles debris count without changing the hull layout.
+    const fragmentEdge = (p1, p2) => {
+        const mid = { x: (p1.x + p2.x) * 0.5, y: (p1.y + p2.y) * 0.5 };
+        emit(p1, mid);
+        emit(mid, p2);
+    };
+
+    // Outline edges — fragment all of them (the ship's HULL is what the
+    // player sees ripping apart).
     for (let i = 0; i < verts.length; i++) {
         const p1 = verts[i];
         const p2 = verts[(i + 1) % verts.length];
-        this.lineDebrisPool.get(enemy.x, enemy.y, p1, p2, color);
+        fragmentEdge(p1, p2);
     }
-    // Emit internal struts.
+    // Internal struts — half fragmented (long ones) for visual variety.
     for (let i = 0; i < struts.length; i++) {
         const [p1, p2] = struts[i];
-        this.lineDebrisPool.get(enemy.x, enemy.y, p1, p2, color);
+        const segLen = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        if (segLen > r * 0.6) {
+            fragmentEdge(p1, p2);
+        } else {
+            emit(p1, p2);
+        }
     }
 }
 

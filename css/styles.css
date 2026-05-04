@@ -471,26 +471,39 @@ body.shop-open .ui-element:not(#shop-overlay) {
 .shop-item-status--owned { color: #44ff88; }
 
 .shop-item-sell {
-    margin-left: 8px;
-    padding: 6px 10px;
-    background: rgba(160, 40, 40, 0.7);
-    border: 1px solid #993333;
-    color: white;
+    margin-left: 12px;
+    padding: 9px 14px;
+    background: rgba(170, 45, 45, 0.92);
+    border: 1px solid #cc6666;
+    color: #ffffff;
     font-family: 'Press Start 2P', monospace;
     font-size: 9px;
-    border-radius: 4px;
+    border-radius: 5px;
     cursor: pointer;
-    align-self: stretch;
-    transition: all 0.15s;
+    align-self: center;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
     /* Force the SELL +### label onto a single line — Press Start 2P at
      * 9px is wide enough that the default flex shrink would clip-wrap
-     * "SELL +1500SP" into two lines on narrower rows. */
+     * "SELL +1500SP" into two lines on narrower rows. The fuller padding
+     * makes the red background pad evenly around the entire label so
+     * the text reads as "inside a button" instead of "next to a small
+     * tag". */
     white-space: nowrap;
     flex-shrink: 0;
     text-align: center;
-    line-height: 1.2;
+    line-height: 1.3;
+    letter-spacing: 0.5px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-.shop-item-sell:hover { background: rgba(220, 80, 80, 0.9); border-color: #ff9999; }
+.shop-item-sell:hover {
+    background: rgba(225, 85, 85, 0.96);
+    border-color: #ffaaaa;
+    transform: translateY(-1px);
+}
+.shop-item-sell:active {
+    transform: translateY(0);
+    background: rgba(140, 35, 35, 0.95);
+}
 
 /* HELP panel — instructional content shown on the HELP shop tab. */
 .shop-help {

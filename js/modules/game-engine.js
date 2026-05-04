@@ -371,7 +371,7 @@ export class GameEngine {
         
         this.bulletPool = new PoolManager(Bullet, 10);     // Reduced from 20  
         this.particlePool = new PoolManager(Particle, 50); // Cap is MAX_PARTICLES=50
-        this.lineDebrisPool = new PoolManager(LineDebris, 20); // Reduced from 100
+        this.lineDebrisPool = new PoolManager(LineDebris, 100); // Sized for 5.64.5 fragmented ship-shred — 2x pieces per enemy + multi-death overlap
         this.asteroidPool = new PoolManager(Asteroid, 5);  // Reduced from 20
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
         this.enemyBulletPool = new PoolManager(EnemyBullet, 20); // Reduced from 50

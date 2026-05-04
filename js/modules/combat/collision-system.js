@@ -156,10 +156,11 @@ export function handleCollisions() {
                     }
                 }
 
-                // Light screen shake for asteroid hits (only if on screen)
-                if (this.isEntityOnScreen(ast)) {
-                    this.triggerScreenShake(8, ast.baseRadius * 0.3, ast.baseRadius);
-                }
+                // No screen shake on asteroid hits — shake is reserved
+                // for the destruction event so the rock feels solid but
+                // the player isn't shaken every shot. (Hits still flash
+                // the cursor reticule and spawn shrapnel/sparkles for
+                // feedback; the destruction shake below is the payoff.)
 
                 // Use small tolerance for floating-point precision issues
                 if (ast.health <= 0.001) {
@@ -495,6 +496,14 @@ export function handleCollisions() {
                     if (Math.random() < 0.7) {
                         this.particlePool.get(bullet.x, bullet.y, 'starSparkle');
                         this.particlePool.get(bullet.x, bullet.y, 'starSparkle');
+                    }
+                    // Light shake on enemy hits — enemies are alive and
+                    // worth communicating contact through camera shake.
+                    // Asteroids get no hit-shake (they're inert rocks);
+                    // this delineation gives the player a tactile read on
+                    // what they're shooting at.
+                    if (this.isEntityOnScreen(enemy)) {
+                        this.triggerScreenShake(5, Math.max(2, (enemy.radius || 15) * 0.15), enemy.radius || 15);
                     }
                 }
 
