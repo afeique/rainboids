@@ -69,7 +69,7 @@ export const GAME_CONFIG = {
     WAVE_BREAK_TIME: 10000, // Time between waves (ms)
     
     // Performance settings optimized
-    MAX_PARTICLES: 320, // Headroom for the 36-frame multi-stage enemy death (impact + 9 popcorn bursts + midway big-bang) running concurrently with ambient bullets/asteroids without evicting its own particles
+    MAX_PARTICLES: 600, // Headroom for 3-4 simultaneous enemy big-bangs + ambient bullet/asteroid activity without ANY explosion's own particles getting evicted by later same-frame spawns. Sprite-cache renderer (5.60.0) makes the higher cap effectively free.
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 
     // Temporal settings

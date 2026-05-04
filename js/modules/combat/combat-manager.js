@@ -231,13 +231,26 @@ export function triggerEnemyFinalExplosion(enemy) {
     // 1. Bright core flash, slightly larger than initial.
     this.particlePool.get(ex, ey, 'explosionFlash', r * 2.4 * sizeScale);
 
-    // 2. Four staggered rings — wavefronts radiating out at decreasing
-    // intensity. Each is its own particle so they fade independently.
-    const ringPP = this.particlePool;
-    ringPP.get(ex, ey, 'explosionRingColored', r * 2.0 * sizeScale, '#ffffff');
-    setTimeout(() => ringPP && ringPP.get(ex, ey, 'explosionRingColored', r * 2.7 * sizeScale, color), 60);
-    setTimeout(() => ringPP && ringPP.get(ex, ey, 'explosionRingColored', r * 2.2 * sizeScale, '#ffcc66'), 130);
-    setTimeout(() => ringPP && ringPP.get(ex, ey, 'explosionRingColored', r * 3.2 * sizeScale, color), 220);
+    // 2. Four wavefront rings — ALL spawned instantly (no setTimeouts!).
+    //
+    // Why: the previous setTimeout-staggered version was the smoking gun
+    // for inconsistent explosions. Those .get() calls fired 60/130/220ms
+    // later, by which time bullet-hit and ambient-particle activity had
+    // refilled the pool — so the late-stagger rings would EVICT this
+    // very explosion's own earlier shrapnel/embers. The result: every
+    // OTHER kill looked weak because half its particles were gone by
+    // the time the rings spawned.
+    //
+    // The visual cascade is preserved by giving each ring a different
+    // maxRadius (small → huge): each ring expands from 15% of its own
+    // maxRadius to 100% over its 0.9s lifetime, so the four rings still
+    // look like concentric wavefronts radiating out — just all in the
+    // same frame instead of staggered. Reads identically at gameplay
+    // speed, but the pool stays consistent.
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 2.0 * sizeScale, '#ffffff');
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 2.7 * sizeScale, color);
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 2.2 * sizeScale, '#ffcc66');
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 3.2 * sizeScale, color);
 
     // 3. Dense directional shrapnel — DENSER for the new midway-big-bang
     // moment where the ship visibly vanishes. Fast streaks in all
@@ -302,17 +315,18 @@ export function triggerEnemyFinalExplosion(enemy) {
         try { this.createShapeDebris(enemy); } catch (_) {}
     }
 
-    // 8. Delayed secondary cookoff — scattered sparks + a small final
-    // ring 100ms after the main pop.
-    setTimeout(() => {
-        if (!ringPP) return;
-        for (let i = 0; i < 8; i++) {
-            const ox = ex + random(-22, 22);
-            const oy = ey + random(-22, 22);
-            ringPP.get(ox, oy, 'explosionEmber', color);
-        }
-        ringPP.get(ex, ey, 'explosionRingColored', r * 1.8 * sizeScale, color);
-    }, 100);
+    // 8. Cookoff sparks + secondary ring — spawned INSTANTLY (no
+    // setTimeout). Same eviction concern as the staggered rings above
+    // — a 100ms-deferred .get() can be triggered after dozens of
+    // ambient particles have refilled the pool, evicting THIS
+    // explosion's earlier particles. Spawning instantly keeps the
+    // pool stable for the entire kill.
+    for (let i = 0; i < 8; i++) {
+        const ox = ex + random(-22, 22);
+        const oy = ey + random(-22, 22);
+        this.particlePool.get(ox, oy, 'explosionEmber', color);
+    }
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.8 * sizeScale, color);
 }
 
 export function createShapeDebris(enemy) {

@@ -179,12 +179,20 @@ export class Particle {
                 const [shrapAngle, shrapSpeed, shrapColor] = args;
                 const a2 = (shrapAngle || 0) + random(-0.3, 0.3);
                 const sp = (shrapSpeed || 5) * random(0.7, 1.3);
-                this.vel = { x: Math.cos(a2) * sp, y: Math.sin(a2) * sp };
+                // Cache trig on the particle — angle and speed don't
+                // change after init, so the draw path can skip
+                // Math.cos/sin/hypot every frame.
+                const ca = Math.cos(a2);
+                const sa = Math.sin(a2);
+                this.vel = { x: ca * sp, y: sa * sp };
                 this.radius = random(1.5, 4);
                 this.length = random(6, 16); // streak length
                 this.life = random(0.6, 1.0);
                 this.color = shrapColor || '#ff8800';
                 this.angle = a2;
+                this._cosA = ca;
+                this._sinA = sa;
+                this._speed = sp;
                 break;
             }
             case 'explosionEmber': {
@@ -495,11 +503,13 @@ export class Particle {
             }
 
             case 'explosionShrapnel': {
-                // Directional streak — line from position in movement direction
-                const speed = Math.hypot(this.vel.x, this.vel.y);
-                const streakLen = Math.min(this.length, speed * 3);
-                const tailX = this.x - Math.cos(this.angle) * streakLen;
-                const tailY = this.y - Math.sin(this.angle) * streakLen;
+                // Directional streak — line from position in movement
+                // direction. Uses cached cos/sin/speed from init so we
+                // skip Math.hypot + 2× Math.cos/sin per particle per
+                // frame.
+                const streakLen = this.length < this._speed * 3 ? this.length : this._speed * 3;
+                const tailX = this.x - this._cosA * streakLen;
+                const tailY = this.y - this._sinA * streakLen;
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = this.radius;
                 ctx.lineCap = 'round';

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.63.0] - 2026-05-04
+
+### Fixed
+- **Enemy explosions are now actually consistent.** Root cause identified and removed: every big-bang scheduled FOUR `setTimeout`-deferred ring spawns at 60/130/220ms, plus a 100ms-deferred secondary cookoff. Those `.get()` calls fired AFTER ambient bullet/asteroid particle activity had refilled the pool — and the late spawns then evicted THIS explosion's earlier shrapnel/embers via the FIFO eviction policy. Result: every other kill looked weak because half its own particles were gone before the deferred rings even spawned. All deferred spawns now fire **instantly in the same frame** as the rest of the explosion. Visual cascade is preserved because each ring particle has its own `0.9s` lifetime and expansion curve — four rings at different `maxRadius` values still look like concentric wavefronts radiating out.
+
+### Changed
+- **MAX_PARTICLES 320 → 600** to give 3-4 simultaneous big-bangs full headroom alongside ambient activity. The 5.60.0 sprite-cache renderer makes the higher cap effectively free.
+- **Cached `cos/sin` for `explosionShrapnel`.** Angle and speed don't change after init, so the draw path no longer recomputes `Math.cos(angle)` / `Math.sin(angle)` / `Math.hypot(vel)` every frame per particle. ~3 trig ops per particle per frame eliminated. With 30-50 active shrapnel during enemy deaths, a small but free win.
+
+### Documentation
+- **`docs/WebGL Migration Analysis – 2026-05-04.md`** — full audit of the rendering surfaces, where Canvas2D wins now, where WebGL would help, realistic 4-6 week migration cost, and a hybrid (WebGL particles + Canvas2D everything else) middle path. Recommendation: stay on Canvas2D for now; revisit if we ever need >2-3K simultaneous particles or hit a wall the existing optimizations can't clear.
+
+---
+
 ## [5.62.2] - 2026-05-04
 
 ### Removed
