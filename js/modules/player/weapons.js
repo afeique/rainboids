@@ -45,7 +45,25 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
     const timeSinceLastShot = now - this.lastShotTime;
     const cooldownReady = timeSinceLastShot >= effectiveFireRate;
     const fireHeld = !!(input && input.fire);
-    this.canShoot = cooldownReady && fireHeld;
+
+    // ── Beam-weapon path (5.64.15) — Lance Beam is now a continuous
+    // tether that follows the fire button. While LMB is held the beam
+    // is on; releasing turns it off. The discrete cooldown / firePrimary
+    // path is bypassed — the beam stops at the first object it hits
+    // (collision-system.js sets `beamHitDist`).
+    const isBeamPrimary = this.activePrimary === 'LANCE_BEAM';
+    if (isBeamPrimary) {
+        const wasOn = !!this.beamActive;
+        this.beamActive = fireHeld;
+        if (this.beamActive) {
+            this.beamAngle = this.angle;
+            if (!wasOn) audioManager.playShoot();
+        }
+    } else if (this.beamActive) {
+        this.beamActive = false;
+    }
+
+    this.canShoot = !isBeamPrimary && cooldownReady && fireHeld;
     const poolBefore = bulletPool.activeObjects.length;
     let bulletCreated = false;
     if (this.canShoot) {
@@ -117,9 +135,22 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         this.tractorBeamActive = false;
         this.isFullyCharged = false;
 
-        if (input.fireSecondary && this.isPowerReady()) {
-            this.firePower(bulletPool, audioManager, particlePool);
-            input.fireSecondary = false;
+        // ── Beam-weapon path (5.64.15) — Lightning Arc is now a
+        // continuous tether that follows the power-fire button. While
+        // SPACE/right-click is held, the arc is on; release to turn off.
+        // Hits the nearest enemy/asteroid in range each frame (no
+        // chain — collision-system.js handles target acquisition).
+        const isBeamPower = this.activePower === 'LIGHTNING_ARC';
+        if (isBeamPower) {
+            const wasOn = !!this.lightningArcActive;
+            this.lightningArcActive = !!input.fireSecondary;
+            if (this.lightningArcActive && !wasOn) audioManager.playShoot();
+        } else {
+            if (this.lightningArcActive) this.lightningArcActive = false;
+            if (input.fireSecondary && this.isPowerReady()) {
+                this.firePower(bulletPool, audioManager, particlePool);
+                input.fireSecondary = false;
+            }
         }
     }
 }

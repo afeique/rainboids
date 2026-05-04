@@ -11,6 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.15] - 2026-05-04
+
+### Changed
+- **Beam-weapon category.** Lance Beam (primary) and Lightning Arc (power) are both now continuous-tether weapons that stop at the first object they hit. While the corresponding fire button is held, the beam is on; release to turn off.
+  - **Lance Beam (LMB)**: discrete fire-rate / 2-second-duration cooldown is gone. The beam is on continuously while LMB is held. Each frame it picks the closest entity along the ray (smallest `proj`) within the beam-strip width and damages only that one. The renderer reads `p.beamHitDist` and clamps the visible beam length to the impact point — no more pierce.
+  - **Lightning Arc (Space / RMB)**: 6-second cooldown gone. While held, the arc continuously targets the nearest enemy or asteroid within `chainRange` (no chain — single-target only) and applies `chainDamage` per frame as a nibble. Renderer draws a jagged-zigzag arc from player → target plus a bright inner core. Legacy chain-cast pipeline preserved as a no-op fallback for any old code paths.
+- **Tutorial hints now re-show on every wave-1 start** (`{ once: false }`). Persistence was masking them for players who had already seen earlier versions. IDs bumped to v5/v4 to keep the localStorage keyspace clean.
+
+### Removed
+- The `beamTimer` countdown gate on Lance Beam in `player.update()`. Beam state is set directly from `input.fire` each frame in `weapons.js` now.
+
+### Internal
+- New player fields: `beamHitDist` (clamps Lance Beam render length), `lightningArcActive` + `lightningArcTarget` (continuous-tether state).
+
+---
+
+## [5.64.14] - 2026-05-04
+
+### Changed
+- **New keybind layout.**
+  - **SPACE** — fire / charge POWER weapon (was: skill activate). Held to charge, released to fire. Mirrors right-click as a continuous trigger.
+  - **TAB** — activate equipped DEFENSE skill (was: cycle primary). Browser-default focus advance is `preventDefault`'d.
+  - **E** — cycle PRIMARY weapon (was: drop powerup cheat under SHIFT+E).
+  - **R** — cycle POWER weapon (unchanged).
+  - **F** — cycle DEFENSE skill (was: SHIFT-tap).
+  - **SHIFT** is now FREE — no longer interpreted by the input handler.
+  - Right-click stays as an alternate POWER-weapon trigger.
+- **Tutorial hint IDs bumped to v4** so the new layout re-shows for players who dismissed earlier versions. New 12s hint ("hold Space or right-click for power, Tab for skill") replaces the old "tap Shift / press Space" copy.
+- **Pause-menu CONTROLS tab** rewritten to list the new bindings explicitly (Space/Tab/E/R/F) instead of the abbreviated mouse-only summary.
+- **README controls section** updated with the new layout.
+
+### Removed
+- **SHIFT-tap-to-cycle-skill bookkeeping** in `input-handler.js`. The press-timestamp + "did another key fire while shift was held" gates are gone — SHIFT is plain again.
+- **`input.cycleSkill` flag.** The F key cycles directly via `event-setup.js` calling `player.cycleSkill()`; no input-flag pulse needed.
+
+---
+
 ## [5.64.13] - 2026-05-04
 
 ### Changed

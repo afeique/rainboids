@@ -99,10 +99,12 @@ export class Player {
         // Power weapon cooldown
         this.powerCooldown = 0;
 
-        // Lance beam state
+        // Lance beam state (5.64.15 — continuous tether; beamTimer kept
+        // for any legacy code paths but no longer drives the beam).
         this.beamActive = false;
         this.beamTimer = 0;
         this.beamAngle = 0;
+        this.beamHitDist = 0;
 
         // Mine state
         this.activeMines = [];
@@ -110,8 +112,12 @@ export class Player {
         // Nova blast state
         this.novaRings = [];
 
-        // Lightning arc state
+        // Lightning arc state (5.64.15 — continuous tether replaces
+        // the discrete-cast chain; lightningChains stays for any legacy
+        // entry points but is unused by the live beam path).
         this.lightningChains = [];
+        this.lightningArcActive = false;
+        this.lightningArcTarget = null;
 
         // Missile state
         this.activeMissiles = [];
@@ -183,9 +189,12 @@ export class Player {
         this.powerCooldown = 0;
         this.beamActive = false;
         this.beamTimer = 0;
+        this.beamHitDist = 0;
         this.activeMines = [];
         this.novaRings = [];
         this.lightningChains = [];
+        this.lightningArcActive = false;
+        this.lightningArcTarget = null;
         this.activeMissiles = [];
         this.needleCount = 0;
         this.scatterShotCount = 0;
@@ -529,25 +538,18 @@ export class Player {
             this.spawnChargeBeamParticles(particlePool);
         }
 
-        // Defense skill — SPACE activates the single equipped skill,
-        // SHIFT (tap) cycles to the next skill in DEFENSE_SKILLS.
+        // Defense skill — TAB activates the equipped skill (5.64.14;
+        // was SPACE in 5.64.11). Skill cycling lives directly in
+        // event-setup.js's F-key handler — no input flag required.
         if (input.activateSkill) {
             this.activateSkill();
             input.activateSkill = false; // consume one-shot pulse
         }
-        if (input.cycleSkill) {
-            this.cycleSkill();
-            input.cycleSkill = false; // consume one-shot pulse
-        }
 
-        // Update beam state
-        if (this.beamActive) {
-            this.beamTimer -= 1000 / GAME_CONFIG.LOGIC_HZ;
-            this.beamAngle = this.angle; // track current aim
-            if (this.beamTimer <= 0) {
-                this.beamActive = false;
-            }
-        }
+        // 5.64.15 — beamTimer-based deactivation removed. Lance Beam is
+        // now a continuous tether driven by `input.fire` directly in
+        // the weapons.js update loop. The legacy timer is preserved but
+        // no longer drives state.
 
         // Update active skill effects (regen, dash, etc.)
         this.updateActiveSkills(1000 / GAME_CONFIG.LOGIC_HZ);

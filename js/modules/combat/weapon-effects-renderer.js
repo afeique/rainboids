@@ -7,25 +7,33 @@ export function drawWeaponEffects() {
     const p = this.player;
 
     // ─── Lance Beam ──────────────────────────────────────────────────
-    // Width and range grow in over the first 150ms so the beam has
-    // weight to its strike — no instant-on full-power line. Drawn as
-    // jagged zig-zag segments (inspired by Lightning Arc) so the
-    // sustained beam reads as live energy rather than a static stroke.
-    if (p.beamActive && p.beamTimer > 0) {
+    // 5.64.15 — Lance Beam is a continuous tether: ON while LMB is held,
+    // terminates at the first object the ray hits (`p.beamHitDist` is
+    // set by `collision-system.checkLanceBeamCollisions`). The previous
+    // timer-driven 2-second beam window is gone. We keep a short
+    // grow-in animation against a per-beam-session timer so the visual
+    // doesn't snap to full-width on key down.
+    if (p.beamActive) {
         const config = PRIMARY_WEAPONS.LANCE_BEAM;
         const targetW = (config.beamWidth || 6) * (1 + this.player.getPowerupStacks('BEAM_WIDTH') * 0.3);
         const targetRange = config.range * 400;
+        const hitDist = (typeof p.beamHitDist === 'number' && p.beamHitDist > 0) ? p.beamHitDist : targetRange;
         const dx = Math.cos(p.angle);
         const dy = Math.sin(p.angle);
 
-        // Grow-in factor: 0 at strike, 1 after GROW_MS. Ease-out cubic
-        // so the ramp feels punchy at the start and settles smoothly.
-        const elapsed = Math.max(0, (p.beamMaxDuration || 1) - p.beamTimer);
+        // Grow-in factor — captures a per-beam-session start time so
+        // the beam ramps from 0 → 1 over the first GROW_MS, even when
+        // hitDist changes between frames as targets move.
+        if (!p._beamRenderStart || !p._beamRenderActive) {
+            p._beamRenderStart = Date.now();
+            p._beamRenderActive = true;
+        }
         const GROW_MS = 150;
+        const elapsed = Date.now() - p._beamRenderStart;
         const growT = Math.min(1, elapsed / GROW_MS);
         const growEase = 1 - (1 - growT) * (1 - growT) * (1 - growT);
         const beamW = Math.max(0.5, targetW * growEase);
-        const range = targetRange * growEase;
+        const range = hitDist * growEase + (1 - growEase) * Math.min(hitDist, 30);
         const endX = p.x + dx * range;
         const endY = p.y + dy * range;
 
@@ -68,6 +76,8 @@ export function drawWeaponEffects() {
         ctx.stroke();
 
         ctx.restore();
+    } else if (p._beamRenderActive) {
+        p._beamRenderActive = false;
     }
 
     // ─── Mines ──────────────────────────────────────────────────────
@@ -217,28 +227,51 @@ export function drawWeaponEffects() {
         }
     }
 
-    // ─── Lightning Chains ───────────────────────────────────────────
-    if (p.lightningChains && p.lightningChains.length > 0) {
+    // ─── Lightning Arc — continuous tether (5.64.15) ─────────────────
+    // Two render paths, both draw the same jagged arc style:
+    //   1. p.lightningArcActive + p.lightningArcTarget: draw player → target.
+    //   2. p.lightningChains (legacy): draw all chain segments.
+    if ((p.lightningArcActive && p.lightningArcTarget) || (p.lightningChains && p.lightningChains.length > 0)) {
         ctx.save();
         ctx.strokeStyle = POWER_WEAPONS.LIGHTNING_ARC.color;
         ctx.lineWidth = 3;
         ctx.shadowColor = '#aaaaff';
         ctx.shadowBlur = 8;
-        for (const chain of p.lightningChains) {
-            if (!chain.active) continue;
-            for (let j = 0; j < chain.targets.length - 1; j++) {
-                const from = chain.targets[j];
-                const to = chain.targets[j + 1];
-                ctx.beginPath();
-                ctx.moveTo(from.x, from.y);
-                const segs = 5;
-                for (let s = 1; s <= segs; s++) {
-                    const t = s / segs;
-                    const mx = from.x + (to.x - from.x) * t + (Math.random() - 0.5) * 20;
-                    const my = from.y + (to.y - from.y) * t + (Math.random() - 0.5) * 20;
-                    ctx.lineTo(mx, my);
+        const drawJaggedArc = (fromX, fromY, toX, toY, segs = 6, jitter = 18) => {
+            ctx.beginPath();
+            ctx.moveTo(fromX, fromY);
+            for (let s = 1; s < segs; s++) {
+                const t = s / segs;
+                const mx = fromX + (toX - fromX) * t + (Math.random() - 0.5) * jitter;
+                const my = fromY + (toY - fromY) * t + (Math.random() - 0.5) * jitter;
+                ctx.lineTo(mx, my);
+            }
+            ctx.lineTo(toX, toY);
+            ctx.stroke();
+        };
+        // Continuous tether path.
+        if (p.lightningArcActive && p.lightningArcTarget) {
+            const t = p.lightningArcTarget;
+            if (t.active) {
+                drawJaggedArc(p.x, p.y, t.x, t.y);
+                // Bright inner core for the visible "live wire" feel.
+                ctx.save();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.2;
+                ctx.shadowBlur = 0;
+                drawJaggedArc(p.x, p.y, t.x, t.y, 8, 8);
+                ctx.restore();
+            }
+        }
+        // Legacy chain path.
+        if (p.lightningChains && p.lightningChains.length > 0) {
+            for (const chain of p.lightningChains) {
+                if (!chain.active) continue;
+                for (let j = 0; j < chain.targets.length - 1; j++) {
+                    const from = chain.targets[j];
+                    const to = chain.targets[j + 1];
+                    drawJaggedArc(from.x, from.y, to.x, to.y, 5, 20);
                 }
-                ctx.stroke();
             }
         }
         ctx.restore();

@@ -157,13 +157,12 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         expect(result.active).toBe('STORM_NEEDLES');
     });
 
-    test('Tab key cycles primary weapon through every type in PRIMARY_WEAPONS_LIST', async ({ page }) => {
-        // Tab press dispatches a keydown 'Tab' event; cycle should land
-        // on a different primary after one press (2+ entries available).
+    test('E key cycles primary weapon through every type in PRIMARY_WEAPONS_LIST', async ({ page }) => {
+        // 5.64.14 — primary cycle is now E (was Tab).
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
             const before = ge.player.activePrimary;
-            const evt = new KeyboardEvent('keydown', { code: 'Tab', bubbles: true });
+            const evt = new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true });
             document.dispatchEvent(evt);
             return { before, after: ge.player.activePrimary };
         });

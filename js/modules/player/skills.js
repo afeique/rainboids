@@ -253,7 +253,7 @@ export function cycleSkill() {
     const next = ids[(i + 1) % ids.length];
     this.activeSkill = next;
     this.ownedSkills.add(next);
-    // Mirror Tab/R weapon-cycle behaviour: trigger HUD pulse + audio
+    // Mirror E/R weapon-cycle behaviour: trigger HUD pulse + audio
     // ping so cycling skills feels the same as cycling weapons.
     if (this.gameEngine) {
         if (typeof this.gameEngine.triggerWeaponCycleAnim === 'function') {

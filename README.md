@@ -34,19 +34,21 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 - **Movement**: WASD or arrow keys
 - **Aim**: Mouse cursor (ship faces cursor)
 - **Fire primary**: Hold left-click (no auto-fire — release to stop)
-- **Fire / charge power weapon**: Right-click OR Spacebar
-- **Defense skills**: Number keys 1-4 (assign in pause menu's SKILLS tab)
-- **Pause**: Escape
-- **Cycle primary weapon**: Tab (rotates through owned primaries during gameplay)
-- **Cycle power weapon**: R (rotates through owned power weapons during gameplay)
+- **Fire / charge power weapon**: Spacebar OR right-click
+- **Activate defense skill**: Tab
+- **Cycle primary weapon**: E
+- **Cycle power weapon**: R
+- **Cycle defense skill**: F
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
+- **Switch defense skill**: Pause menu → SKILLS tab (all 6 free, click to equip)
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
+- **Pause**: Escape
 
 ### Cheat Codes
-- **SHIFT+1-8**: Spawn individual enemy types
-- **SHIFT+9**: One-punch-man mode (one-hit kills)
-- **SHIFT+-**: Add coins
+- **`[`**: +1000 Gold
+- **`]`**: +5 SP
+- For full dev access, drive cheats from the browser console (`window.gameEngine.cheats.onePunchMan = true`, etc.)
 
 ---
 

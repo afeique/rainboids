@@ -10,20 +10,19 @@ export class InputHandler {
             left: false,
             right: false,
             fire: false,
-            fireSecondary: false, // Right-click: release charged shot
+            // 5.64.14 binding layout:
+            //   SPACE / right-click — POWER weapon (continuous; charge while
+            //                                       held, fire on release).
+            //   TAB                  — activate skill (one-shot pulse).
+            //   E / R / F            — cycle primary / power / skill (handled
+            //                          in event-setup.js).
+            fireSecondary: false,
+            activateSkill: false,
             aimX: window.innerWidth / 2,
             aimY: window.innerHeight / 2,
             screenAimX: window.innerWidth / 2,
             screenAimY: window.innerHeight / 2,
-            // 5.64.11 — replaced 4-slot skill bindings with single-equipped
-            // model. SPACE pulses activateSkill, tap-SHIFT pulses cycleSkill.
-            activateSkill: false,
-            cycleSkill: false,
         };
-
-        // Shift-tap-to-cycle bookkeeping (see handleKeyDown/Up).
-        this._shiftDownAt = 0;
-        this._shiftWithKey = false;
 
         this.gameEngine = null; // Set by GameEngine after construction.
         this.lastMouseMoveTime = 0;
@@ -117,32 +116,21 @@ export class InputHandler {
             case 'KeyD':
                 this.input.right = true;
                 break;
-            // Spacebar — activates the equipped defense skill (5.64.11
-            // moved from power weapon to skill activation; power weapon
-            // is now right-click only). preventDefault stops the page
-            // from scrolling.
+            // SPACE (5.64.14) — POWER weapon trigger. Continuous-state
+            // input mirroring right-click: hold to charge, release to
+            // fire. preventDefault stops the page from scrolling.
             case 'Space':
+                this.input.fireSecondary = true;
+                e.preventDefault();
+                break;
+            // TAB (5.64.14) — activate the equipped defense skill. One-
+            // shot pulse consumed in the player update loop. Tab's
+            // browser-default focus advance is preventDefault'd in
+            // event-setup.js so the in-game focus stays put.
+            case 'Tab':
                 this.input.activateSkill = true;
                 e.preventDefault();
                 break;
-            // Shift (5.64.11) — TAP shift to cycle to the next defense
-            // skill. We track a press timestamp + "did another key fire
-            // while shift was held" flag; on shift-keyup we only cycle
-            // if no other key was pressed AND the press was a brief tap
-            // (<300ms). That way shift+letter cheat combos still work
-            // without triggering skill cycle.
-            case 'ShiftLeft':
-            case 'ShiftRight':
-                if (this._shiftDownAt === 0) {
-                    this._shiftDownAt = Date.now();
-                    this._shiftWithKey = false;
-                }
-                break;
-        }
-        // Track "shift was held while another key fired" for the tap-to-
-        // cycle gate above.
-        if (e.shiftKey && e.code !== 'ShiftLeft' && e.code !== 'ShiftRight') {
-            this._shiftWithKey = true;
         }
     }
 
@@ -165,20 +153,10 @@ export class InputHandler {
                 this.input.right = false;
                 break;
             case 'Space':
-                // activateSkill is consumed as a one-shot pulse by the
-                // player update loop, so no keyup reset is needed.
+                this.input.fireSecondary = false;
                 break;
-            case 'ShiftLeft':
-            case 'ShiftRight':
-                if (this._shiftDownAt > 0) {
-                    const held = Date.now() - this._shiftDownAt;
-                    if (!this._shiftWithKey && held < 300) {
-                        this.input.cycleSkill = true;
-                    }
-                    this._shiftDownAt = 0;
-                    this._shiftWithKey = false;
-                }
-                break;
+            // Tab is consumed as a one-shot activateSkill pulse by the
+            // player update loop, so no keyup reset is needed.
         }
     }
 

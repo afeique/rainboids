@@ -651,9 +651,21 @@ export function handleWeaponEffectCollisions() {
 // (enemy + asteroid) intersecting it. Asteroids get a forward push
 // scaled by the player's KNOCKBACK powerup stacks so the beam reads
 // as a real physical force, not just a damage-applying line.
+// 5.64.15 — Lance Beam is now a continuous-tether weapon that stops at
+// the FIRST object hit. Each frame:
+//   1. Sweep both enemies and asteroids along the beam ray.
+//   2. Pick the entity with the smallest forward distance (`proj`) that
+//      meets the beam-strip width test.
+//   3. Damage ONLY that entity; clamp the rendered beam length to its
+//      proj distance so the visible beam terminates at the impact.
+// Stores `p.beamHitDist` on the player so the renderer knows where to
+// stop drawing the beam.
 export function checkLanceBeamCollisions() {
     const p = this.player;
-    if (!(p.beamActive && p.beamTimer > 0)) return;
+    if (!p.beamActive) {
+        p.beamHitDist = 0;
+        return;
+    }
 
     const config = PRIMARY_WEAPONS.LANCE_BEAM;
     const beamW = (config.beamWidth || 6) * (1 + p.getPowerupStacks('BEAM_WIDTH') * 0.3);
@@ -662,111 +674,99 @@ export function checkLanceBeamCollisions() {
     const dy = Math.sin(p.angle);
     const dmg = config.damage * (1 + p.getPowerupStacks('OVERLOAD_BEAM') * 2);
     const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
-    // Beam push is gentle (the beam is a per-frame nibble, not a single
-    // hit) — applying full mine-style impulse every frame would yeet
-    // anything across the map. 0.4 px/frame at 1× knockback is enough
-    // to read visually without breaking pacing.
     const BEAM_PUSH = 0.4 * knockMul;
 
     const BEAM_HIT_COLOR = '#88ddff';
     const BEAM_BRIGHT    = '#ffffff';
 
-    // Per-frame beam glitter — bright flecks streaking along the beam
-    // path even when nothing is hit. Looks like the air is ionized
-    // along the strike. Throttled at ~55% per frame so the pool isn't
-    // slammed.
+    // Find the closest hit along the ray (smallest forward proj that
+    // also satisfies the perpendicular-strip test).
+    let hitDist = range;
+    let hitTarget = null;          // 'enemy' | 'asteroid' | null
+    let hitRef = null;
+    let hitRadius = 0;
+    for (const enemy of this.enemyPool.activeObjects) {
+        if (!enemy.active || enemy._deathFlash > 0) continue;
+        const ex = enemy.x - p.x;
+        const ey = enemy.y - p.y;
+        const proj = ex * dx + ey * dy;
+        if (proj <= 0 || proj >= hitDist) continue;
+        const perpDist = Math.abs(ex * dy - ey * dx);
+        const r = enemy.radius || 15;
+        if (perpDist < beamW / 2 + r) {
+            hitDist = proj;
+            hitTarget = 'enemy';
+            hitRef = enemy;
+            hitRadius = r;
+        }
+    }
+    for (const ast of this.asteroidPool.activeObjects) {
+        if (!ast.active || ast._deathFlash > 0 || ast.warping) continue;
+        const ax = ast.x - p.x;
+        const ay = ast.y - p.y;
+        const proj = ax * dx + ay * dy;
+        if (proj <= 0 || proj >= hitDist) continue;
+        const perpDist = Math.abs(ax * dy - ay * dx);
+        const r = ast.baseRadius || ast.radius || 15;
+        if (perpDist < beamW / 2 + r) {
+            hitDist = proj;
+            hitTarget = 'asteroid';
+            hitRef = ast;
+            hitRadius = r;
+        }
+    }
+
+    p.beamHitDist = hitDist;
+
+    // Per-frame beam glitter along the visible portion of the beam.
     if (this.particlePool && Math.random() < 0.55) {
         const t = Math.random();
-        const sx = p.x + dx * range * t;
-        const sy = p.y + dy * range * t;
+        const sx = p.x + dx * hitDist * t;
+        const sy = p.y + dy * hitDist * t;
         const perpJitter = (Math.random() - 0.5) * (beamW * 1.6);
         const perpX = -dy, perpY = dx;
         const c = Math.random() < 0.4 ? BEAM_BRIGHT : BEAM_HIT_COLOR;
         this.particlePool.get(sx + perpX * perpJitter, sy + perpY * perpJitter, 'explosionEmber', c);
     }
-    // Bright muzzle hotspot at the player's gun mouth — small puff each
-    // frame so the beam reads as actively *firing* from the ship.
+    // Bright muzzle hotspot at the player's gun mouth.
     if (this.particlePool && Math.random() < 0.7) {
         const muzzleX = p.x + dx * (p.radius || 14);
         const muzzleY = p.y + dy * (p.radius || 14);
         this.particlePool.get(muzzleX, muzzleY, 'explosionEmber', BEAM_BRIGHT);
     }
 
-    // Enemies — point-to-line distance check inside the beam strip.
-    let connected = false;
-    for (const enemy of this.enemyPool.activeObjects) {
-        if (!enemy.active || enemy._deathFlash > 0) continue;
-        const ex = enemy.x - p.x;
-        const ey = enemy.y - p.y;
-        const proj = ex * dx + ey * dy;
-        if (proj < 0 || proj > range) continue;
-        const perpDist = Math.abs(ex * dy - ey * dx);
-        if (perpDist < beamW / 2 + (enemy.radius || 15)) {
-            this.damageEnemy(enemy, dmg);
-            if (enemy.vel) {
-                enemy.vel.x += dx * BEAM_PUSH;
-                enemy.vel.y += dy * BEAM_PUSH;
-            }
-            // Hit-point sparks — sparks fly off where the beam strikes,
-            // throttled per-enemy so sustained contact doesn't spawn
-            // thousands of particles. No flash on non-lethal hit —
-            // reserved for the destruction event.
-            if (this.particlePool && Math.random() < 0.55) {
-                for (let s = 0; s < 3; s++) {
-                    const a = Math.random() * Math.PI * 2;
-                    const sp = 2 + Math.random() * 4;
-                    const c = s === 0 ? BEAM_BRIGHT : BEAM_HIT_COLOR;
-                    this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', a, sp, c);
-                }
-            }
-            connected = true;
+    if (!hitTarget) return;
+
+    if (hitTarget === 'enemy') {
+        this.damageEnemy(hitRef, dmg);
+        if (hitRef.vel) {
+            hitRef.vel.x += dx * BEAM_PUSH;
+            hitRef.vel.y += dy * BEAM_PUSH;
+        }
+    } else {
+        hitRef.health = Math.max(0, (hitRef.health || 0) - dmg);
+        hitRef._hitFlashTimer = 4;
+        if (hitRef.vel) {
+            hitRef.vel.x += dx * BEAM_PUSH * 0.6;
+            hitRef.vel.y += dy * BEAM_PUSH * 0.6;
+        }
+        if (hitRef.health <= 0.001) this.destroyAsteroid(hitRef);
+    }
+
+    // Hit-point sparks at the impact.
+    if (this.particlePool && Math.random() < 0.55) {
+        for (let s = 0; s < 3; s++) {
+            const a = Math.random() * Math.PI * 2;
+            const sp = 2 + Math.random() * 4;
+            const c = s === 0 ? BEAM_BRIGHT : BEAM_HIT_COLOR;
+            this.particlePool.get(hitRef.x, hitRef.y, 'explosionShrapnel', a, sp, c);
         }
     }
 
-    // Asteroids — same line-distance test. Per-frame nibble damage and
-    // the same forward push. Lethal damage routes through
-    // destroyAsteroid for the proper death sequence (debris, drops,
-    // fragments). Snapshot the array first so spawned fragments
-    // don't enter the same scan frame.
-    const astSnapshot = this.asteroidPool.activeObjects.slice();
-    for (const ast of astSnapshot) {
-        if (!ast.active || ast._deathFlash > 0 || ast.warping) continue;
-        const ax = ast.x - p.x;
-        const ay = ast.y - p.y;
-        const proj = ax * dx + ay * dy;
-        if (proj < 0 || proj > range) continue;
-        const perpDist = Math.abs(ax * dy - ay * dx);
-        if (perpDist < beamW / 2 + (ast.baseRadius || ast.radius || 15)) {
-            ast.health = Math.max(0, (ast.health || 0) - dmg);
-            ast._hitFlashTimer = 4;
-            if (ast.vel) {
-                ast.vel.x += dx * BEAM_PUSH * 0.6; // asteroids are heavier
-                ast.vel.y += dy * BEAM_PUSH * 0.6;
-            }
-            // Asteroid spark burst — colored by the rock's own hue family
-            if (this.particlePool && Math.random() < 0.45) {
-                const hue = ast.baseHue || 200;
-                const astC = `hsl(${hue}, 80%, 75%)`;
-                for (let s = 0; s < 3; s++) {
-                    const a = Math.random() * Math.PI * 2;
-                    const sp = 2 + Math.random() * 4;
-                    this.particlePool.get(ast.x, ast.y, 'explosionShrapnel', a, sp, s === 0 ? BEAM_BRIGHT : astC);
-                }
-            }
-            if (ast.health <= 0.001) {
-                this.destroyAsteroid(ast);
-            }
-            connected = true;
-        }
-    }
-    // SFX throttling preserved — playSound is a no-op currently anyway,
-    // but keeping the event emit lets future SFX wire-ups land cleanly.
-    if (connected) {
-        const now = performance.now();
-        if (!p._lastBeamHitSfx || now - p._lastBeamHitSfx > 160) {
-            p._lastBeamHitSfx = now;
-            this.events.emit('audio:enemy-hit-by-bullet', 'LANCE_BEAM');
-        }
+    const now = performance.now();
+    if (!p._lastBeamHitSfx || now - p._lastBeamHitSfx > 160) {
+        p._lastBeamHitSfx = now;
+        this.events.emit('audio:enemy-hit-by-bullet', 'LANCE_BEAM');
     }
 }
 
@@ -1058,15 +1058,93 @@ export function checkNovaCollisions() {
     }
 }
 
-// ─── Lightning Chains ───────────────────────────────────────────
-// Applies damage along the chain once when the chain first appears.
-// Targets can be either enemies OR asteroids — both take the same
-// falloff-decayed damage. Each hit also gets a perpendicular-to-chain
-// kick scaled by KNOCKBACK powerup stacks so lightning visibly shoves
-// targets along the bolt. Asteroids get a hit-flash + death-flash on
-// lethal damage (no fragmentation, see mine collision for rationale).
+// ─── Lightning Arc — continuous tether (5.64.15) ───────────────────
+//
+// Lightning Arc is now a beam-style continuous weapon. Each frame
+// while `p.lightningArcActive` is true:
+//   1. Pick the nearest enemy/asteroid within `chainRange` of the player.
+//   2. Damage that single target (per-frame nibble — `chainDamage` is
+//      now treated as a per-frame value, not per-cast).
+//   3. Stash the target on `p.lightningArcTarget` so the renderer can
+//      draw a jagged arc from player → target.
+// The legacy chain pipeline (multiple hops over many frames) is gone;
+// `chainCount` / `chainFalloff` upgrade values are no longer used.
+//
+// `p.lightningChains` array is preserved for legacy code paths but
+// stays empty in the continuous-tether model.
 export function checkLightningCollisions() {
     const p = this.player;
+
+    // ── Continuous-tether path ──
+    if (p.lightningArcActive) {
+        const cfg = POWER_WEAPONS.LIGHTNING_ARC;
+        const range = cfg.chainRange;
+        const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
+        const TETHER_PUSH = 0.5 * knockMul;
+        // Per-frame damage. Was per-cast in the chain version; keep the
+        // same number here so DPS feels comparable when held.
+        const dmg = cfg.chainDamage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+
+        // Find the nearest target.
+        let best = null, bestKind = null, bestDist = range;
+        for (const e of this.enemyPool.activeObjects) {
+            if (!e.active || e._deathFlash > 0) continue;
+            const d = Math.hypot(e.x - p.x, e.y - p.y);
+            if (d < bestDist) { bestDist = d; best = e; bestKind = 'enemy'; }
+        }
+        for (const ast of this.asteroidPool.activeObjects) {
+            if (!ast.active || ast._deathFlash > 0 || ast.warping) continue;
+            const d = Math.hypot(ast.x - p.x, ast.y - p.y);
+            if (d < bestDist) { bestDist = d; best = ast; bestKind = 'asteroid'; }
+        }
+
+        if (best) {
+            p.lightningArcTarget = best;
+            // Apply damage. Direction = toward the target so kick reads
+            // as the beam dragging the target backward.
+            const dx = best.x - p.x;
+            const dy = best.y - p.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const kx = dx / len;
+            const ky = dy / len;
+            if (bestKind === 'enemy') {
+                this.damageEnemy(best, dmg);
+                if (best.vel) {
+                    best.vel.x += kx * TETHER_PUSH;
+                    best.vel.y += ky * TETHER_PUSH;
+                }
+            } else {
+                best.health = Math.max(0, (best.health || 0) - dmg);
+                best._hitFlashTimer = 4;
+                if (best.vel) {
+                    best.vel.x += kx * TETHER_PUSH * 0.6;
+                    best.vel.y += ky * TETHER_PUSH * 0.6;
+                }
+                if (best.health <= 0.001) this.destroyAsteroid(best);
+            }
+            // Sparks at impact, throttled.
+            if (this.particlePool && Math.random() < 0.45) {
+                const ARC_BLUE   = '#88ddff';
+                const ARC_WHITE  = '#ffffff';
+                for (let s = 0; s < 3; s++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const sp = 2 + Math.random() * 4;
+                    const col = s === 0 ? ARC_WHITE : ARC_BLUE;
+                    this.particlePool.get(best.x, best.y, 'explosionShrapnel', ang, sp, col);
+                }
+            }
+        } else {
+            p.lightningArcTarget = null;
+        }
+        // Skip the legacy chain loop below — the continuous tether is
+        // the only damage path for Lightning Arc now.
+        return;
+    } else {
+        p.lightningArcTarget = null;
+    }
+
+    // ── Legacy chain path (kept for compatibility; populated only by
+    // older fireLightning() entry points that may still exist). ──
     if (!p.lightningChains) return;
     const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
     const LIGHTNING_KNOCK = 6 * knockMul;

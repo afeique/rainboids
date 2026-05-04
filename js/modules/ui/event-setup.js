@@ -24,24 +24,23 @@ export function setupEventListeners() {
         if (e.code === 'Escape') {
             this.togglePause();
         }
-        // R-key reload was removed — auto-reload kicks in when the clip empties.
-        // R now cycles through owned primary weapons (during gameplay only —
-        // ignored if Shift is held so it doesn't conflict with Shift+R cheats).
-        // Tab cycles owned PRIMARY weapons; R cycles owned POWER weapons.
-        // Allowed during PLAYING and WAVE_TRANSITION so the player can
-        // re-equip between waves too. Tab needs preventDefault so the
-        // browser doesn't shift focus to the next page element.
+        // 5.64.14 keybind layout:
+        //   E         — cycle PRIMARY weapon
+        //   R         — cycle POWER weapon
+        //   F         — cycle SKILL
+        //   TAB       — activate equipped skill (handled in input-handler.js)
+        //   SPACE     — fire/charge POWER weapon (handled in input-handler.js)
+        //   left-clk  — fire PRIMARY
+        //   right-clk — alternate POWER weapon trigger
+        //
+        // Cycle handlers fire on keydown so the equipped weapon flips
+        // immediately. Allowed during PLAYING and WAVE_TRANSITION so the
+        // player can re-equip between waves.
         const cycleAllowed =
             this.game.state === GAME_STATES.PLAYING ||
             this.game.state === GAME_STATES.WAVE_TRANSITION;
-        // Tab/R cycle through ALL primary/power weapons in the game (not
-        // just the ones currently in the player's `ownedPrimaries` /
-        // `ownedPowers` set). Mirrors the pause-menu behavior where every
-        // weapon is selectable for free — pressing Tab/R auto-adds the
-        // newly-equipped weapon to the owned set so the rest of the game
-        // (shop upgrade trees, sell paths, etc.) treats it as owned.
-        if (e.code === 'Tab' && !e.shiftKey && cycleAllowed) {
-            e.preventDefault();
+
+        if (e.code === 'KeyE' && !e.shiftKey && cycleAllowed) {
             this.triggerWeaponCycleAnim('primary');
             const all = Object.keys(this.PRIMARY_WEAPONS_LIST || {});
             if (all.length > 1) {
@@ -69,7 +68,20 @@ export function setupEventListeners() {
                 this.events.emit('audio:coin');
             }
         }
-        // (Shift+R is still a cheat handled in the Shift block below.)
+        if (e.code === 'KeyF' && !e.shiftKey && cycleAllowed) {
+            // Skill cycle goes through player.cycleSkill() which already
+            // triggers the HUD pulse + audio ping.
+            if (this.player && typeof this.player.cycleSkill === 'function') {
+                this.player.cycleSkill();
+                hideHint();
+            }
+        }
+        // Tab still needs preventDefault so the browser doesn't shift
+        // focus to the next page element when the player presses it
+        // (the input handler interprets Tab as "activate skill").
+        if (e.code === 'Tab') {
+            e.preventDefault();
+        }
         // Test powerup spawn (for debugging) — pick a uniformly random
         // point inside the visible viewport (with a small margin from
         // the very edges so the powerup is fully visible), but reject

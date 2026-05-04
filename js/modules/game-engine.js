@@ -506,33 +506,37 @@ export class GameEngine {
             }
         }));
 
-        // Wave-1 onboarding hints (each shown at most once per browser via
-        // localStorage in hint-system.js). Hint IDs bumped to v3/v2 in
-        // 5.64.11 so the new SHIFT skill-cycle hint surfaces and the
-        // weapon-cycle hint re-shows for players who already dismissed
-        // the v2.
+        // Wave-1 onboarding hints. `once: false` means they re-fire
+        // on EVERY wave-1 start instead of being localStorage-suppressed
+        // after first view — players were reporting they never saw them.
+        // IDs bumped to v5 anyway so any persisted v4 entries are
+        // ignored; with once:false the persistence is irrelevant but
+        // bumping keeps the localStorage key set clean.
         this._gameTimers.push(new GameTimer(4000, () => {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
-                'wave1-cycle-weapons-v3',
-                'Press <strong>Tab</strong> to cycle primary weapons, <strong>R</strong> to cycle power weapons.',
-                7000,
+                'wave1-cycle-weapons-v5',
+                'Press <strong>E</strong> to cycle primary weapons, <strong>R</strong> for power weapons, <strong>F</strong> for skills.',
+                7500,
+                { once: false },
             );
         }));
-        this._gameTimers.push(new GameTimer(11000, () => {
+        this._gameTimers.push(new GameTimer(12000, () => {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
-                'wave1-cycle-skills-v1',
-                'Tap <strong>Shift</strong> to cycle defense skills. Press <strong>Space</strong> to activate the equipped skill.',
+                'wave1-fire-and-skill-v5',
+                'Hold <strong>Space</strong> (or right-click) to fire your power weapon. Press <strong>Tab</strong> to activate your skill.',
                 8000,
+                { once: false },
             );
         }));
-        this._gameTimers.push(new GameTimer(19000, () => {
+        this._gameTimers.push(new GameTimer(20000, () => {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
-                'wave1-open-shop-v2',
+                'wave1-open-shop-v4',
                 'Open the <strong>shop</strong> any time — pause menu (<strong>ESC</strong>) or the <strong>🛒</strong> button in the top-right.',
                 8000,
+                { once: false },
             );
         }));
     }
