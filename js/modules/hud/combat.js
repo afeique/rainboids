@@ -228,17 +228,25 @@ export function drawPowerupDisplay() {
         // POWERUP_TYPES[type].description (powerup.js).
         const desc = this.powerupDisplay.description;
         if (desc) {
-            ctx.font = "13px 'Silkscreen', monospace";
+            // 22px sans-serif — the previous 13px Silkscreen was nearly
+            // invisible against busy backgrounds. Wider stroke + glow
+            // backdrop make it readable over any starfield/explosion.
+            ctx.font = "22px 'Arial', sans-serif";
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            ctx.lineWidth = 3;
             ctx.lineJoin = 'round';
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-            ctx.fillStyle = '#ffffff';
             // Sit below the wavy name (topY is the baseline of the wavy
-            // text; ~28px gives room for its amplitude wobble).
-            const descY = topY + 28;
+            // text; ~38px gives room for its amplitude wobble at the new
+            // larger font size).
+            const descY = topY + 38;
+            // Soft black glow halo for legibility on any background.
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+            ctx.shadowBlur = 6;
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
             ctx.strokeText(desc, centerX, descY);
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#ffffff';
             ctx.fillText(desc, centerX, descY);
         }
 

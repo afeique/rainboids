@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.54.4] - 2026-05-03
+
+### Changed
+- **Powerup pickup description is much more legible.** Bumped from 13px Silkscreen (nearly invisible against the busy starfield/effects) to 22px Arial. Stroke width 3 → 5, soft black `shadowBlur: 6` halo behind the stroke for additional contrast, and the descY offset bumped 28 → 38 to clear the larger title's wave amplitude.
+
+---
+
 ## [5.54.3] - 2026-05-03
 
 ### Fixed
