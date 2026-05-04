@@ -1250,17 +1250,23 @@ export function destroyAsteroid(ast) {
         );
     }
 
-    // Fragmentation — large asteroids spawn 3-4 smaller pieces flying
-    // outward from the center, distributed evenly around 360°.
+    // Fragmentation — large asteroids spawn 2 smaller pieces (was 3-4).
+    // Reduced count keeps the field manageable so asteroids don't
+    // exponentially accumulate. Subsequent splits halt at non-large size
+    // (see isLarge gate above) so we never get a 16-fragment cascade.
     if (isLarge) {
-        const count = (Math.random() < 0.5 ? 2 : 3) + 1; // 3 or 4
+        const count = 2;
         const newR = ast.baseRadius / Math.sqrt(count);
         const baseAngle = random(0, Math.PI * 2);
         const sliceWidth = (Math.PI * 2) / count;
+        // While "enemies cleared" mode is active for this wave, fragments
+        // inherit halved HP so cleanup stays breezy after the pulse fires.
+        const easyMul = this.game.asteroidEasyMode ? 0.5 : 1.0;
         for (let k = 0; k < count; k++) {
             const newAst = this.asteroidPool.get(ast.x, ast.y, newR, ast.level);
             if (newAst) {
-                const fragHP = Math.max(5, Math.round((ast.maxHealth || 1) * random(0.7, 0.9)));
+                const baseFragHP = Math.max(5, Math.round((ast.maxHealth || 1) * random(0.7, 0.9)));
+                const fragHP = Math.max(1, Math.floor(baseFragHP * easyMul));
                 newAst.maxHealth = fragHP;
                 newAst.health = fragHP;
                 const angle = baseAngle + k * sliceWidth + random(-sliceWidth * 0.25, sliceWidth * 0.25);

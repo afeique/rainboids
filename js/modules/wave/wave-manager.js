@@ -27,18 +27,31 @@ export function updateWaveSystem() {
     this.enemyPool.cleanupInactive();
     this.asteroidPool.cleanupInactive();
 
-    // Check if current wave is complete. Two conditions BOTH have to hold:
-    //   1. All enemies are dead.
-    //   2. At least HALF of the wave's starting asteroid count has been
-    //      destroyed (or naturally lost). The starting count is captured
-    //      in `this.game.waveAsteroidStartCount` when entities spawn.
-    // This forces the player to actually engage the asteroid field instead
-    // of dancing around it — and pairs with the steeper scaling to keep
-    // late waves tense.
+    // Wave-clear pipeline:
+    //   Phase 1 — kill all enemies. The first frame this is true fires
+    //             the ENEMIES_CLEARED pulse: a "ENEMIES CLEARED" toast,
+    //             a screen flash, and every active asteroid's HP halves
+    //             so they're easy to mop up. Newly-spawned fragments
+    //             born during this mode also start at half HP.
+    //   Phase 2 — knock the asteroid count down to a generous threshold
+    //             (≤ 60% of the wave's starting count). It's deliberately
+    //             non-zero — leftover rocks bleed into the next wave so
+    //             the field gets satisfyingly chaotic at high waves.
     const totalEnemies = this.enemyPool.activeObjects.filter(e => !e._deathFlash).length;
     const startCount = this.game.waveAsteroidStartCount || 0;
     const liveAsteroids = this.asteroidPool.activeObjects.filter(a => a.active && !a._deathFlash).length;
-    const asteroidGoalMet = startCount === 0 || liveAsteroids <= Math.floor(startCount / 2);
+
+    // Trigger the "enemies cleared" pulse the moment the field clears.
+    if (totalEnemies === 0 && !this.game.enemiesClearedThisWave && this.game.state === GAME_STATES.PLAYING) {
+        this.game.enemiesClearedThisWave = true;
+        this.triggerEnemiesClearedPulse();
+    }
+
+    // Asteroid goal is generous — only trigger if we ever spawned any.
+    // Threshold: ≤ ceil(startCount * 0.40). For a wave that spawned 4
+    // asteroids, the player only needs to leave 1-2 alive.
+    const asteroidThreshold = Math.max(1, Math.ceil(startCount * 0.40));
+    const asteroidGoalMet = startCount === 0 || liveAsteroids <= asteroidThreshold;
 
     if (totalEnemies === 0 && asteroidGoalMet && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
         // Wave completed! If this is the final wave, the run is over —
@@ -69,6 +82,51 @@ export function updateWaveSystem() {
 export function getWaveSubtitle(waveNumber) {
     if (WAVE_SUBTITLES[waveNumber]) return WAVE_SUBTITLES[waveNumber];
     return WAVE_SUBTITLES_GENERIC[(waveNumber * 7 + 3) % WAVE_SUBTITLES_GENERIC.length];
+}
+
+// Fires once per wave the moment the last enemy dies. Visual flash +
+// camera kick + "ENEMIES CLEARED" toast, and ALL surviving asteroids
+// have their HP halved so the cleanup phase is breezy. Subsequent
+// fragments spawned during the same wave inherit halved HP via the
+// asteroidEasyMode flag.
+export function triggerEnemiesClearedPulse() {
+    // Visual punch
+    if (typeof this.triggerScreenFlash === 'function') this.triggerScreenFlash(0.18, 8);
+    if (typeof this.triggerCameraKick === 'function') this.triggerCameraKick(0, -1, 6);
+    if (typeof this.triggerScreenShake === 'function') this.triggerScreenShake(8, 4);
+    if (this.events) this.events.emit('audio:powerup');
+
+    // Outward shockwave particles + sparkles around the player
+    if (this.particlePool && this.player && this.player.active) {
+        const px = this.player.x, py = this.player.y;
+        this.particlePool.get(px, py, 'explosionRingColored', 240, '#aaffcc');
+        this.particlePool.get(px, py, 'explosionFlash', 90);
+        for (let i = 0; i < 18; i++) {
+            const a = (i / 18) * Math.PI * 2;
+            this.particlePool.get(px, py, 'explosionShrapnel', a, 4 + Math.random() * 3,
+                i % 2 ? '#ffffff' : '#aaffcc');
+        }
+        for (let i = 0; i < 14; i++) {
+            this.particlePool.get(px, py, 'explosionEmber', i % 2 ? '#aaffcc' : '#ffffff');
+        }
+    }
+
+    // Toast
+    this.events.emit('ui:show-message', {
+        title: 'ENEMIES CLEARED',
+        subtitle: 'Mop up the rocks',
+        duration: 1800,
+        position: 'top',
+    });
+
+    // Halve every surviving asteroid's HP so cleanup is fast. Future
+    // fragments born this wave start halved too — gated by the flag.
+    this.game.asteroidEasyMode = true;
+    for (const ast of this.asteroidPool.activeObjects) {
+        if (!ast.active || ast._deathFlash > 0 || ast.warping) continue;
+        ast.maxHealth = Math.max(1, Math.floor(ast.maxHealth * 0.5));
+        ast.health = Math.min(ast.health, ast.maxHealth);
+    }
 }
 
 export function showWaveComplete() {
@@ -152,14 +210,18 @@ export function spawnWaveEntities() {
     this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
 
-    // Capture the wave's starting asteroid count for the wave-clear check
-    // (player must destroy at least half of these to clear the wave).
-    // Respect the same MAX_ASTEROIDS clamp that spawnLeveledAsteroids does
-    // so we don't ask for more than will actually spawn.
+    // Capture the wave's starting asteroid count for the wave-clear check.
+    // Includes asteroids that bled in from the previous wave — those carry
+    // over by design so the field gets denser as waves progress.
     const activeAst = this.asteroidPool.activeObjects.length;
     const askedAst = waveConfig.asteroids;
     const willSpawn = Math.min(askedAst, GAME_CONFIG.MAX_ASTEROIDS - activeAst);
-    this.game.waveAsteroidStartCount = Math.max(0, willSpawn);
+    this.game.waveAsteroidStartCount = Math.max(0, willSpawn + activeAst);
+    // Reset per-wave flags. enemiesClearedThisWave gates the pulse to
+    // fire exactly once; asteroidEasyMode halves HP for fragments born
+    // post-clear and must be off again at next wave start.
+    this.game.enemiesClearedThisWave = false;
+    this.game.asteroidEasyMode = false;
 
     // Wave-start spawning places entities INSIDE the visible viewport so the
     // player sees the threats before the wave begins instead of having them

@@ -112,13 +112,15 @@ export function getAsteroidLevel(waveNumber) {
     return Math.max(1, Math.ceil(w / 2));
 }
 
-// Enemy speed multiplier — wave 1 ≈ 0.55× (gentle intro), wave 20 ≈ 2.79×
-// (full chase mode). Steeper still — the late waves are intentionally
-// harsh, and lower entity counts in the late roster keep perf in check.
-//   w=1: 0.55   w=5: 1.03   w=10: 1.63   w=15: 2.23   w=20: 2.83
+// Enemy speed multiplier — POWER CURVE so early waves are gentle and the
+// late waves climb fast. Replaces the linear ramp that made wave 5 feel
+// like wave 10.
+//   formula: 0.55 + ((w-1)/19)^1.5 * 2.0
+//   w=1: 0.55   w=5: 0.74   w=10: 1.20   w=15: 1.82   w=20: 2.55
 export function getEnemySpeedMultiplier(waveNumber) {
     const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    return 0.55 + (w - 1) * 0.12;
+    const t = (w - 1) / (MAX_WAVES - 1);
+    return 0.55 + Math.pow(t, 1.5) * 2.0;
 }
 
 // Enemy bullet speed multiplier — same curve as enemy speed so projectiles
@@ -162,25 +164,40 @@ export const WAVE_SUBTITLES_GENERIC = [
     "You're built different.",
 ];
 
-// Level-scaled enemy stats — even steeper for the rebalance pass.
-//   HP   +18% / level  →  wave 20 enemies = 1 + 19·0.18 = 4.42× base HP
-//   pts  +25% / level  →  wave 20 worth   = 1 + 19·0.25 = 5.75× base
-// Speed level multiplier (+6%/level) sits on top of getEnemySpeedMultiplier.
+// Level-scaled enemy stats — POWER-CURVED. Early levels are gentle so
+// new players (or returning ones at wave 1-4) aren't crushed; the curve
+// climbs sharply in the back half so wave 15-20 is genuinely tough.
+//
+//   HP    1 + ((L-1)/19)^1.6 · 4.5      L1: 1.0  L5: 1.36  L10: 2.34  L15: 3.82  L20: 5.50
+//   pts   1 + ((L-1)/19)^1.4 · 5.5      L1: 1.0  L5: 1.50  L10: 2.55  L15: 4.00  L20: 6.50
+//   spd   1 + ((L-1)/19)^1.4 · 0.7      L1: 1.00 L5: 1.06  L10: 1.20  L15: 1.38  L20: 1.70
+//
+// Speed-per-level is gentle on top of getEnemySpeedMultiplier (which
+// already drives the campaign-wide chase ramp).
 export function getLevelScaledEnemyStats(baseStats, level) {
+    const L = Math.max(1, level | 0);
+    const t = (L - 1) / 19;
+    const hpMul = 1 + Math.pow(t, 1.6) * 4.5;
+    const ptsMul = 1 + Math.pow(t, 1.4) * 5.5;
+    const spdMul = 1 + Math.pow(t, 1.4) * 0.7;
     return {
-        health: Math.floor(baseStats.health * (1 + (level - 1) * 0.18)),
-        speed: baseStats.speed * (1 + (level - 1) * 0.06),
+        health: Math.floor(baseStats.health * hpMul),
+        speed: baseStats.speed * spdMul,
         size: baseStats.size,
         shootRate: baseStats.shootRate,
-        points: Math.floor(baseStats.points * (1 + (level - 1) * 0.25)),
+        points: Math.floor(baseStats.points * ptsMul),
     };
 }
 
-// Asteroid HP scaling — 28%/level so wave-20 rocks (level 10) have
-// 1 + 9·0.28 = 3.52× base HP. Keeps them chewable for fully-upgraded
-// weapons but a serious commitment for the half-clear gate.
+// Asteroid HP — power-curved against asteroid level (1..10 across waves
+// 1..20). Gentle through level 4 then sharply steeper.
+//   1 + ((L-1)/9)^1.5 · 4.0
+//   L1: 1.0  L3: 1.21  L5: 1.94  L7: 3.21  L10: 5.0
 export function getLevelScaledAsteroidStats(baseHealth, level) {
-    return Math.floor(baseHealth * (1 + (level - 1) * 0.28));
+    const L = Math.max(1, level | 0);
+    const t = (L - 1) / 9;
+    const hpMul = 1 + Math.pow(t, 1.5) * 4.0;
+    return Math.floor(baseHealth * hpMul);
 }
 
 // Boss HP / size multipliers per boss tier (1 → 4). Boss enemies are TITAN

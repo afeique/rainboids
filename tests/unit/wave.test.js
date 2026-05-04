@@ -135,14 +135,23 @@ describe('getLevelScaledEnemyStats()', () => {
     expect(scaled.points).toBe(BASE.points);
   });
 
-  test('health rises 18% per level', () => {
-    expect(getLevelScaledEnemyStats(BASE, 2).health).toBe(Math.floor(BASE.health * 1.18));
-    expect(getLevelScaledEnemyStats(BASE, 5).health).toBe(Math.floor(BASE.health * 1.72));
+  // Power-curved scaling: 1 + ((L-1)/19)^1.6 · 4.5 for HP.
+  test('HP follows a power curve — gentle early, steep late', () => {
+    const l1  = getLevelScaledEnemyStats(BASE, 1).health;
+    const l5  = getLevelScaledEnemyStats(BASE, 5).health;
+    const l20 = getLevelScaledEnemyStats(BASE, 20).health;
+    expect(l1).toBe(BASE.health);                       // gentle start
+    expect(l5).toBeLessThan(BASE.health * 1.5);         // early waves stay easy
+    expect(l20).toBeGreaterThan(BASE.health * 5);       // wave 20 is brutal
+    // Curve must be monotonic
+    expect(getLevelScaledEnemyStats(BASE, 10).health).toBeGreaterThan(l5);
+    expect(l20).toBeGreaterThan(getLevelScaledEnemyStats(BASE, 10).health);
   });
 
-  test('speed rises 6% per level (gentle on top of campaign mult)', () => {
-    expect(getLevelScaledEnemyStats(BASE, 2).speed).toBeCloseTo(BASE.speed * 1.06);
-    expect(getLevelScaledEnemyStats(BASE, 5).speed).toBeCloseTo(BASE.speed * 1.24);
+  test('speed level mult is gentle (curve, not linear)', () => {
+    expect(getLevelScaledEnemyStats(BASE, 1).speed).toBeCloseTo(BASE.speed);
+    expect(getLevelScaledEnemyStats(BASE, 20).speed).toBeGreaterThan(BASE.speed * 1.6);
+    expect(getLevelScaledEnemyStats(BASE, 20).speed).toBeLessThan(BASE.speed * 1.8);
   });
 
   test('size stays constant across levels', () => {
@@ -151,8 +160,10 @@ describe('getLevelScaledEnemyStats()', () => {
     }
   });
 
-  test('points rise 25% per level', () => {
-    expect(getLevelScaledEnemyStats(BASE, 3).points).toBe(Math.floor(BASE.points * 1.50));
+  test('points follow a power curve (gentle early, big late)', () => {
+    expect(getLevelScaledEnemyStats(BASE, 1).points).toBe(BASE.points);
+    expect(getLevelScaledEnemyStats(BASE, 20).points).toBeGreaterThan(BASE.points * 6);
+    expect(getLevelScaledEnemyStats(BASE, 5).points).toBeLessThan(BASE.points * 1.7);
   });
 
   test('returns integer health and points', () => {
@@ -169,9 +180,10 @@ describe('getLevelScaledAsteroidStats()', () => {
     expect(getLevelScaledAsteroidStats(10, 1)).toBe(10);
   });
 
-  test('health rises 28% per level', () => {
-    expect(getLevelScaledAsteroidStats(10, 2)).toBe(Math.floor(10 * 1.28));
-    expect(getLevelScaledAsteroidStats(10, 5)).toBe(Math.floor(10 * 2.12));
+  test('HP follows a power curve (gentle early, steep late)', () => {
+    expect(getLevelScaledAsteroidStats(10, 1)).toBe(10);
+    expect(getLevelScaledAsteroidStats(10, 3)).toBeLessThan(15);    // early waves easy
+    expect(getLevelScaledAsteroidStats(10, 10)).toBeGreaterThan(40); // late game tough
   });
 
   test('returns an integer', () => {
@@ -182,12 +194,14 @@ describe('getLevelScaledAsteroidStats()', () => {
 });
 
 describe('getEnemySpeedMultiplier()', () => {
-  test('starts low at wave 1 and climbs aggressively', () => {
+  test('starts low at wave 1 and climbs sharply at the end', () => {
     const w1 = getEnemySpeedMultiplier(1);
+    const w5 = getEnemySpeedMultiplier(5);
     const w20 = getEnemySpeedMultiplier(20);
-    expect(w1).toBeLessThan(0.65);             // gentle intro
-    expect(w20).toBeGreaterThan(2.7);          // hits ~2.83× at the end
-    expect(w20).toBeGreaterThan(w1);
+    expect(w1).toBeLessThan(0.6);              // gentle intro
+    expect(w5).toBeLessThan(0.85);             // wave 5 is still easy
+    expect(w20).toBeGreaterThan(2.4);          // wave 20 is full-pace
+    expect(w20).toBeGreaterThan(w5);
   });
 
   test('clamps below 1 / above MAX_WAVES', () => {

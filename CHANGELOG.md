@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.57.0] - 2026-05-03
+
+### Added
+- **"ENEMIES CLEARED" pulse** — the moment the last enemy of a wave dies, the player gets:
+  - A green-tinted shockwave ring (radius 240) + bright flash + 18 directional sparks + 14 lingering embers anchored on the player's position.
+  - A camera kick + screen shake + screen flash (alpha 0.18) for tactile feedback.
+  - A "ENEMIES CLEARED — Mop up the rocks" toast at the top of the screen.
+  - **Asteroid HP is halved across the entire field**, and any fragments spawned during the rest of the wave inherit halved HP too (`asteroidEasyMode` flag). The cleanup phase is breezy instead of grindy.
+  Pulse fires exactly once per wave (`enemiesClearedThisWave` gates it). Both flags reset on the next `spawnWaveEntities`.
+
+### Changed
+- **Power-curve scaling formulas** — replaces the linear-per-level math so early waves are easy and late waves climb sharply.
+  - **Enemy HP**: `1 + ((L-1)/19)^1.6 · 4.5`. L1: 1.0×, L5: 1.36× (was 1.72×), L10: 2.34× (was 2.62×), L15: 3.82×, L20: 5.50× (was 4.42×).
+  - **Enemy points**: `1 + ((L-1)/19)^1.4 · 5.5`. L1: 1.0×, L5: 1.50× (was 2.0×), L20: 6.50× (was 5.75×).
+  - **Enemy speed level**: `1 + ((L-1)/19)^1.4 · 0.7`. L1: 1.0×, L5: 1.06× (was 1.24×), L20: 1.70× (was 2.14×). Gentle on top of the campaign mult.
+  - **Enemy speed campaign**: `0.55 + ((w-1)/19)^1.5 · 2.0`. W1: 0.55×, W5: 0.74× (was 1.03×), W10: 1.20× (was 1.63×), W15: 1.82×, W20: 2.55× (was 2.83×).
+  - **Asteroid HP**: `1 + ((L-1)/9)^1.5 · 4.0`. L1: 1.0×, L3: 1.21× (was 1.56×), L5: 1.94× (was 2.12×), L10: 5.0× (was 3.52×).
+  Net effect: waves 1-5 feel meaningfully easier than 5.56.x; waves 15-20 are roughly on-par or harder.
+- **Asteroid fragmentation reduced from 3-4 → 2 pieces per split.** Stops the field from exponentially accumulating after a few large-asteroid kills, while still preserving the satisfying split feel.
+- **Asteroid wave-clear threshold relaxed.** Was "live ≤ floor(start/2)" → now "live ≤ ceil(start · 0.40)". Some leftovers are intentional — they bleed into the next wave and make the late game feel chaotic.
+
+### Removed
+- The previous "must destroy half the asteroids" gate that contributed to the asteroid-accumulation problem. Replaced by the enemies-cleared-pulse + lenient threshold combo.
+
+---
+
 ## [5.56.1] - 2026-05-03
 
 ### Changed
