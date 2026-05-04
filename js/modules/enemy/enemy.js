@@ -248,10 +248,58 @@ export class Enemy {
         if (!this.active) return;
         this.gameEngine = gameEngine; // Cache ref for draw/takeDamage (removes window.gameEngine dependency)
 
-        // Death flash countdown — enemy renders as bright silhouette then deactivates
+        // Death sequence — enemy DRIFTS while emitting small popcorn
+        // explosions, then a big final explosion fires when the timer hits
+        // zero. Multi-stage death feels more dramatic than a single burst.
+        //
+        //   _deathFlash counts DOWN from _deathFlashMax.
+        //   While > 0:  drift at gentle speed, emit small bursts every
+        //               few frames (rings, embers, sparkles).
+        //   At 0:       fire the big final explosion via the engine,
+        //               then deactivate.
         if (this._deathFlash > 0) {
+            // Continue drifting under inertia, gradually decelerating.
+            const drag = 0.97;
+            this.vel.x *= drag;
+            this.vel.y *= drag;
+            this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
+            this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
+            // Small wobble rotation so the wreck visibly tumbles.
+            this.faceAngle = (this.faceAngle || 0) + 0.04;
+
+            // Periodic mini-bursts — every ~5 frames at random offsets
+            // around the dying enemy.
+            const tickIntoDeath = (this._deathFlashMax || 36) - this._deathFlash;
+            if (gameEngine && gameEngine.particlePool && tickIntoDeath % 5 === 0) {
+                const r = this.radius || 18;
+                const a = Math.random() * Math.PI * 2;
+                const dist = r * (0.4 + Math.random() * 0.6);
+                const sx = this.x + Math.cos(a) * dist;
+                const sy = this.y + Math.sin(a) * dist;
+                const c = (this.color || '#ff6644');
+                gameEngine.particlePool.get(sx, sy, 'explosionFlash', r * 0.6);
+                gameEngine.particlePool.get(sx, sy, 'explosionRingColored', r * (0.7 + Math.random() * 0.6),
+                    Math.random() < 0.5 ? '#ffffff' : c);
+                for (let i = 0; i < 3; i++) {
+                    const sa = Math.random() * Math.PI * 2;
+                    const sp = 1 + Math.random() * 2.2;
+                    gameEngine.particlePool.get(sx, sy, 'explosionShrapnel', sa, sp,
+                        i === 0 ? '#ffffff' : c);
+                }
+                gameEngine.particlePool.get(sx, sy, 'explosionEmber', i % 2 ? c : '#ffcc66');
+                gameEngine.particlePool.get(sx, sy, 'starSparkle');
+            }
+
             this._deathFlash--;
             if (this._deathFlash <= 0) {
+                // Final big explosion before we recycle. Wrapped in a try
+                // so a missing engine ref can't ever silently swallow the
+                // explosion (the user's complaint: explosions sometimes
+                // missing). If something explodes here we want to know.
+                if (gameEngine && typeof gameEngine.triggerEnemyFinalExplosion === 'function') {
+                    try { gameEngine.triggerEnemyFinalExplosion(this); }
+                    catch (err) { console.error('triggerEnemyFinalExplosion failed', err); }
+                }
                 this.active = false;
             }
             return;

@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.59.0] - 2026-05-03
+
+### Changed
+- **Multi-stage epic enemy death sequence.** Replaces the single-burst `createEnemyDebris` pop with a three-phase death:
+  - **Phase A — initial impact** (frame 0): bright flash + 2 expanding rings (white + enemy color), 10-22 directional shrapnel, 6-14 embers, 6 sparkle motes, shape debris, hitstop + screen flash + camera kick. Screen shake is held back for the finale.
+  - **Phase B — drift + popcorn** (frames 1-35, ≈600ms): the wreck keeps drifting under inertia (friction 0.97/frame, faceAngle wobble +0.04/frame). Every 5 frames a small popcorn burst spawns at a random offset around the body — flash + colored ring + 3 sparks + ember + sparkle. Reads as "the wreck is breaking apart as it tumbles."
+  - **Phase C — final explosion** (frame 36, just before recycle): big core flash (×2.4 radius), four staggered rings spaced 0/60/130/220ms, 22-34 directional shrapnel in a 4-color rotation (white/gold/enemy color/orange), 6-element core glow cluster, 14-22 lingering embers, 22 classic small particles, 14 sparkles, screen flash + camera kick + screen shake (28 frames @ 14 mag), plus a 100ms-delayed cookoff with 8 scattered embers + a final ring. Position is captured at function entry so pool recycling can never desync the spawn coords.
+  - Death-flash duration extended from 8 frames → 36 (~600ms) to give the drift phase room to read.
+- **Explosions are now guaranteed.** The final explosion fires from inside the enemy's update branch the tick `_deathFlash` hits 0 — same code path as the active-flag flip, so there's no way the enemy can deactivate without explode-trigger running. Wrapped in try/catch and `typeof === 'function'` gates so a transient missing engine ref can't silently swallow it.
+
+---
+
 ## [5.58.1] - 2026-05-03
 
 ### Removed

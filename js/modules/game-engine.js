@@ -688,6 +688,7 @@ export class GameEngine {
     spawnRandomEnemy() { return wave.spawnRandomEnemy.call(this); }
     
     createEnemyDebris(enemy) { return combat.createEnemyDebris.call(this, enemy); }
+    triggerEnemyFinalExplosion(enemy) { return combat.triggerEnemyFinalExplosion.call(this, enemy); }
     createShapeDebris(enemy) { return combat.createShapeDebris.call(this, enemy); }
     
     createHealthOrb(x, y) { return combat.createHealthOrb.call(this, x, y); }
