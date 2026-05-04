@@ -112,13 +112,13 @@ export function getAsteroidLevel(waveNumber) {
     return Math.max(1, Math.ceil(w / 2));
 }
 
-// Enemy speed multiplier — wave 1 ≈ 0.60× (gentle intro), wave 20 ≈ 2.50×
-// (chase mode). Steeper than the previous curve to make the late game
-// genuinely demanding.
-//   w=1: 0.60     w=5: 1.00     w=10: 1.50     w=15: 2.00     w=20: 2.50
+// Enemy speed multiplier — wave 1 ≈ 0.55× (gentle intro), wave 20 ≈ 2.79×
+// (full chase mode). Steeper still — the late waves are intentionally
+// harsh, and lower entity counts in the late roster keep perf in check.
+//   w=1: 0.55   w=5: 1.03   w=10: 1.63   w=15: 2.23   w=20: 2.83
 export function getEnemySpeedMultiplier(waveNumber) {
     const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    return 0.60 + (w - 1) * 0.10;
+    return 0.55 + (w - 1) * 0.12;
 }
 
 // Enemy bullet speed multiplier — same curve as enemy speed so projectiles
@@ -162,26 +162,25 @@ export const WAVE_SUBTITLES_GENERIC = [
     "You're built different.",
 ];
 
-// Level-scaled enemy stats — STEEPER curves for the rebalance pass.
-//   HP   +14% / level  →  wave 20 enemies have 1 + 19·0.14 = 3.66× base HP
-//   pts  +20% / level  →  wave 20 worth 1 + 19·0.20 = 4.80× base points
-// Speed level multiplier is gentle (+5%/level) because the campaign-wide
-// getEnemySpeedMultiplier already drives the chase-pace ramp.
+// Level-scaled enemy stats — even steeper for the rebalance pass.
+//   HP   +18% / level  →  wave 20 enemies = 1 + 19·0.18 = 4.42× base HP
+//   pts  +25% / level  →  wave 20 worth   = 1 + 19·0.25 = 5.75× base
+// Speed level multiplier (+6%/level) sits on top of getEnemySpeedMultiplier.
 export function getLevelScaledEnemyStats(baseStats, level) {
     return {
-        health: Math.floor(baseStats.health * (1 + (level - 1) * 0.14)),
-        speed: baseStats.speed * (1 + (level - 1) * 0.05),
+        health: Math.floor(baseStats.health * (1 + (level - 1) * 0.18)),
+        speed: baseStats.speed * (1 + (level - 1) * 0.06),
         size: baseStats.size,
         shootRate: baseStats.shootRate,
-        points: Math.floor(baseStats.points * (1 + (level - 1) * 0.20)),
+        points: Math.floor(baseStats.points * (1 + (level - 1) * 0.25)),
     };
 }
 
-// Asteroid HP scaling — 23%/level (was 18%) so wave-20 rocks (level 10)
-// have ~3.07× base HP. Keeps them chewable for upgraded weapons but
-// finally requires real focus to break in the late acts.
+// Asteroid HP scaling — 28%/level so wave-20 rocks (level 10) have
+// 1 + 9·0.28 = 3.52× base HP. Keeps them chewable for fully-upgraded
+// weapons but a serious commitment for the half-clear gate.
 export function getLevelScaledAsteroidStats(baseHealth, level) {
-    return Math.floor(baseHealth * (1 + (level - 1) * 0.23));
+    return Math.floor(baseHealth * (1 + (level - 1) * 0.28));
 }
 
 // Boss HP / size multipliers per boss tier (1 → 4). Boss enemies are TITAN

@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.56.0] - 2026-05-03
+
+### Added
+- **Wave-clear gate now requires destroying half the wave's asteroids** in addition to killing all enemies. The starting asteroid count is captured when the wave spawns; the player must reduce the live count to ≤ floor(start/2) before the wave will complete. Forces actual engagement with the asteroid field instead of dancing around it.
+- **Performance optimization plan** authored at `docs/Performance Optimization Plan – 2026-05-03.md` — audits suspected bottlenecks (particle render, O(N²) AI loops, asteroid 3D projection per-frame, shadowBlur cost), proposes 7+ technical and 5+ gameplay optimizations, and prioritizes by estimated payoff.
+
+### Changed
+- **Steeper enemy/asteroid scaling** (second pass — the difficulty curve in 5.55.0 was still too gentle):
+  - Enemy HP per level: +14% → +18% (wave 20 = 4.42× base, was 3.66×).
+  - Enemy speed per level: +5% → +6%.
+  - Enemy points per level: +20% → +25% (wave 20 = 5.75× base reward).
+  - Campaign-wide speed multiplier: 0.60→2.50 → 0.55→2.83 across waves 1-20.
+  - Asteroid HP per level: +23% → +28% (wave-20 rocks 3.52× base, was 3.07×).
+- **Sell button stays on one line.** Added `white-space: nowrap`, `flex-shrink: 0`, and explicit `text-align: center` to `.shop-item-sell` so labels like `SELL +1500SP` no longer wrap onto two lines on narrower rows.
+
+---
+
 ## [5.55.0] - 2026-05-03
 
 ### Changed

@@ -470,6 +470,13 @@ body.shop-open .ui-element:not(#shop-overlay) {
     cursor: pointer;
     align-self: stretch;
     transition: all 0.15s;
+    /* Force the SELL +### label onto a single line — Press Start 2P at
+     * 9px is wide enough that the default flex shrink would clip-wrap
+     * "SELL +1500SP" into two lines on narrower rows. */
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-align: center;
+    line-height: 1.2;
 }
 .shop-item-sell:hover { background: rgba(220, 80, 80, 0.9); border-color: #ff9999; }
 

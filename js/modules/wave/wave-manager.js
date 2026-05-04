@@ -27,11 +27,20 @@ export function updateWaveSystem() {
     this.enemyPool.cleanupInactive();
     this.asteroidPool.cleanupInactive();
 
-    // Check if current wave is complete (only enemies count — asteroids are obstacles/loot)
-    // Exclude enemies in death flash — they're visually dying but haven't been cleaned up yet
+    // Check if current wave is complete. Two conditions BOTH have to hold:
+    //   1. All enemies are dead.
+    //   2. At least HALF of the wave's starting asteroid count has been
+    //      destroyed (or naturally lost). The starting count is captured
+    //      in `this.game.waveAsteroidStartCount` when entities spawn.
+    // This forces the player to actually engage the asteroid field instead
+    // of dancing around it — and pairs with the steeper scaling to keep
+    // late waves tense.
     const totalEnemies = this.enemyPool.activeObjects.filter(e => !e._deathFlash).length;
+    const startCount = this.game.waveAsteroidStartCount || 0;
+    const liveAsteroids = this.asteroidPool.activeObjects.filter(a => a.active && !a._deathFlash).length;
+    const asteroidGoalMet = startCount === 0 || liveAsteroids <= Math.floor(startCount / 2);
 
-    if (totalEnemies === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
+    if (totalEnemies === 0 && asteroidGoalMet && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
         // Wave completed! If this is the final wave, the run is over —
         // route through GAME_COMPLETE instead of opening the shop.
         this.game.waveComplete = true;
@@ -142,6 +151,15 @@ export function spawnWaveEntities() {
     // Calculate levels for this wave
     this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
+
+    // Capture the wave's starting asteroid count for the wave-clear check
+    // (player must destroy at least half of these to clear the wave).
+    // Respect the same MAX_ASTEROIDS clamp that spawnLeveledAsteroids does
+    // so we don't ask for more than will actually spawn.
+    const activeAst = this.asteroidPool.activeObjects.length;
+    const askedAst = waveConfig.asteroids;
+    const willSpawn = Math.min(askedAst, GAME_CONFIG.MAX_ASTEROIDS - activeAst);
+    this.game.waveAsteroidStartCount = Math.max(0, willSpawn);
 
     // Wave-start spawning places entities INSIDE the visible viewport so the
     // player sees the threats before the wave begins instead of having them
