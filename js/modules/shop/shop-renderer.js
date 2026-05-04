@@ -548,7 +548,7 @@ export function drawShopItem(item, x, y, width, height, index, isHovered = false
                 else if (currentStacks === 2) sellCost = 3000;
                 else sellCost = 5000;
             }
-            const refund = Math.floor(sellCost * 0.5);
+            const refund = sellCost; // full at-cost refund (5.64.5)
             const sellLabel = item.currency === 'SP' ? `SELL +${refund}SP` : `SELL +${refund}`;
 
             const sbW = 80, sbH = 18;

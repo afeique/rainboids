@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.5] - 2026-05-04
+
+### Changed
+- **Enemy ships now visibly tear apart on death.** `createShapeDebris` rewritten:
+  - Each outline edge is **fragmented** into 2 half-segments before spawning, so a HUNTER goes from 6 pieces to ~12, a TITAN from 20 to ~40, etc.
+  - Every fragment gets a high-velocity outward kick (radial speed 2.6× base × random 0.25-1.75 jitter) plus a tangential perpendicular component at ~25% of the radial speed, so pieces scatter chaotically instead of unraveling in a clean ring.
+  - Rotation rate multiplied 2.4× — pieces visibly tumble.
+  - Internal struts expanded per enemy type (HUNTER: +engine-block detail lines, GUARDIAN: +grid ribs, WASP: +wing detail, TITAN/TANGERINE: +deeper inner ring + 4 more spokes, STALKER: +arm-tip caps, default: +radial spokes).
+- **Tighter enemy explosion rings.** Big-bang ring radius multipliers `2.0/2.7/2.2/3.2 → 1.2/1.6/1.3/1.9`. Initial-impact rings `2.2/1.4 → 1.3/0.9`. Secondary outward ring `1.8 → 1.0`. Rings no longer dominate the shrapnel + ship-shred signal — the actual blowup reads through.
+- **`lineDebrisPool` 20 → 100.** Sized for the new 2× fragment count plus simultaneous deaths.
+- **Hit/destruction effects redelineated** (5.64.4 wasn't enough — landed in this same version):
+  - Asteroid hit: NO screen shake (was light shake).
+  - Asteroid destruction: shake only — no screen flash (flash reserved for enemy kills).
+  - Enemy hit: small screen shake (NEW).
+  - Enemy destruction: flash + shake (unchanged).
+- **Shop sell button refund is now full at-cost.** `Math.floor(cost × 0.5) → cost`. Players don't lose currency when selling, so the upgrade tree functions as a permanent collection that lets you experiment freely instead of a sunk cost. Both `shop-dom.js`, `shop-manager.js`, and `shop-renderer.js` updated in lockstep so displayed and actual refunds match.
+- **Sell button restyled.** Padding `6px 10px → 9px 14px`, more opaque background (`0.7 → 0.92`), brighter border, subtle box-shadow for depth, hover lifts via `transform: translateY(-1px)`. The red background now pads evenly around the entire `SELL +### ` label.
+- **Shop opens on a random non-HELP tab.** Lands on PRIMARY / POWER / DEFENSE / SKILLS at random instead of always HELP, so each shop visit surfaces a different category up-front. HELP is still reachable from the tab row.
+- **DEFENSE / SKILLS tabs got header banners.** Mirrors the equipped-weapon banner above PRIMARY / POWER for visual consistency. DEFENSE shows a green 🛡️ "Defense" header; SKILLS shows a magenta ⚡ "Skills" header.
+
+---
+
 ## [5.64.4] - 2026-05-04
 
 ### Changed

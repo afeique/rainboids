@@ -32,7 +32,12 @@ export function sellShopItem(itemId) {
             else if (currentStacks === 2) lastStackCost = 3000;
             else if (currentStacks >= 3) lastStackCost = 5000;
         }
-        const refund = Math.floor(lastStackCost * 0.5);
+        // Full at-cost refund — players don't lose currency when selling
+        // (lets them experiment with builds; the upgrade tree is a
+        // permanent collection, not a sunk cost). Mirrors sellRefundFor
+        // in shop-dom.js — both must agree or the displayed refund and
+        // actual refund will diverge.
+        const refund = lastStackCost;
 
         if (itemId === 'SPARE_SHIP') {
             if (this.game.lives <= 1) return false;
@@ -93,9 +98,14 @@ export function openShop() {
         }
 
 
-        // Initialize shop state. HELP is the landing tab so new players
-        // immediately see how Gold / SP / XP work.
-        this.shopCategory = 'HELP';
+        // Initialize shop state. Land on a RANDOM purchasable tab so the
+        // player sees fresh content each open instead of always staring
+        // at HELP. HELP is still reachable via the tab row but isn't the
+        // default — picking from {PRIMARY, POWER, DEFENSE, SKILLS} keeps
+        // the open feeling fresh and surfaces upgrades the player might
+        // not have considered.
+        const _shopCats = ['PRIMARY', 'POWER', 'DEFENSE', 'SKILLS'];
+        this.shopCategory = _shopCats[Math.floor(Math.random() * _shopCats.length)];
 
         // Shop now sells PRIMARY/POWER weapons, DEFENSE upgrades, and
         // SKILLS. The OFFENSE and DROPS categories were removed —

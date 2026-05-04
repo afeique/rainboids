@@ -136,6 +136,9 @@ function actualCostFor(item, currentStacks) {
 }
 
 function sellRefundFor(item, currentStacks) {
+    // Full at-cost refund — players don't lose currency when selling.
+    // Lets the player experiment with builds freely; the upgrade tree
+    // is a permanent collection rather than a sunk cost.
     let baseCost = item.cost;
     if (item.costOverrides) {
         baseCost = item.costOverrides[Math.min(currentStacks - 1, item.costOverrides.length - 1)] || item.cost;
@@ -144,7 +147,7 @@ function sellRefundFor(item, currentStacks) {
         else if (currentStacks === 2) baseCost = 3000;
         else baseCost = 5000;
     }
-    return Math.floor(baseCost * 0.5);
+    return baseCost;
 }
 
 export function renderShopDom() {
@@ -172,6 +175,13 @@ export function renderShopDom() {
     const cat = _engine.shopCategory;
     if (cat === 'PRIMARY' || cat === 'POWER') {
         const banner = buildEquippedBanner(cat, player);
+        if (banner) list.appendChild(banner);
+    } else if (cat === 'DEFENSE' || cat === 'SKILLS') {
+        // DEFENSE / SKILLS get a category banner mirroring the equipped
+        // banner above PRIMARY/POWER. Same visual frame so all four
+        // shop tabs feel consistent — just titled with the category
+        // instead of a weapon name.
+        const banner = buildCategoryBanner(cat);
         if (banner) list.appendChild(banner);
     }
 
@@ -229,6 +239,41 @@ function buildEquippedBanner(category, player) {
 
     banner.appendChild(labelEl);
     banner.appendChild(weaponEl);
+    return banner;
+}
+
+// Banner shown above the upgrade list on the DEFENSE / SKILLS tabs.
+// Mirrors `buildEquippedBanner` visually but titles the category instead
+// of naming a weapon. Gives all four purchasable tabs a consistent
+// header so the shop layout doesn't reflow when switching between
+// PRIMARY/POWER and DEFENSE/SKILLS.
+function buildCategoryBanner(category) {
+    const meta = category === 'DEFENSE'
+        ? { label: 'Defense Upgrades', name: 'Defense', icon: '🛡️', color: '#44ff88' }
+        : { label: 'Skill Loadout',    name: 'Skills',  icon: '⚡',  color: '#ff88dd' };
+
+    const banner = document.createElement('div');
+    banner.className = 'shop-equipped-banner';
+    banner.style.borderColor = meta.color;
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'shop-equipped-label';
+    labelEl.textContent = meta.label;
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'shop-equipped-weapon';
+    titleEl.style.color = meta.color;
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'shop-equipped-icon';
+    iconSpan.textContent = meta.icon;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'shop-equipped-name';
+    nameSpan.textContent = meta.name;
+    titleEl.appendChild(iconSpan);
+    titleEl.appendChild(nameSpan);
+
+    banner.appendChild(labelEl);
+    banner.appendChild(titleEl);
     return banner;
 }
 
