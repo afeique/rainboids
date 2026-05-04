@@ -245,13 +245,77 @@ export function handleCollisions() {
         }
     }
 
-    // Asteroid vs Asteroid: detection + response disabled.
-    // Asteroids now overlap freely. The previous code applied an elastic
-    // bounce + positional displacement to separate overlapping rocks,
-    // which produced visible shifts/jumps — especially when fragments
-    // from a single split were forced apart in mid-frame. Asteroids
-    // still collide with the player, bullets, beams, mines, etc. via
-    // their own collision paths above; they just don't push each other.
+    // Asteroid vs Asteroid: velocity exchange ONLY when actively closing.
+    //
+    // Design constraints:
+    //   • Real impacts must register and bounce.
+    //   • Asteroids that are *already* overlapping (e.g. fragments from
+    //     a split spawned at the same point, or rocks that have drifted
+    //     into each other while the player ignored them) MUST NOT
+    //     teleport apart — that's the visible "shift/jump" the player
+    //     hated. So no positional correction at all.
+    //   • Stuck-overlapping pairs must not jitter or re-exchange
+    //     velocity every frame.
+    //
+    // Solution: gate the exchange on the relative-velocity-along-normal
+    // sign. If `(v2 - v1) · n̂` is negative the pair is closing → real
+    // impact → exchange. If positive they're already separating →
+    // ignore (lets fragments fly apart on their own velocity, lets
+    // overlapping-but-stationary rocks rest peacefully).
+    {
+        const activeAsteroids = this.asteroidPool.activeObjects;
+        for (let i = 0; i < activeAsteroids.length; i++) {
+            const a1 = activeAsteroids[i];
+            if (!a1.active || a1.warping || a1._deathFlash > 0) continue;
+            for (let j = i + 1; j < activeAsteroids.length; j++) {
+                const a2 = activeAsteroids[j];
+                if (!a2.active || a2.warping || a2._deathFlash > 0) continue;
+
+                const dx = a2.x - a1.x, dy = a2.y - a1.y;
+                const distSq = dx * dx + dy * dy;
+                const sumR = a1.radius + a2.radius;
+                if (distSq >= sumR * sumR || distSq < 0.01) continue;
+
+                const dist = Math.sqrt(distSq);
+                const nx = dx / dist, ny = dy / dist;
+
+                // Relative velocity along contact normal. Negative means
+                // a1→a2 along n̂ exceeds a2→a2 → they're closing in.
+                const rvx = (a2.vel.x || 0) - (a1.vel.x || 0);
+                const rvy = (a2.vel.y || 0) - (a1.vel.y || 0);
+                const closing = rvx * nx + rvy * ny;
+                if (closing >= 0) continue; // already separating — let it ride
+
+                // Light debris pop on real impacts (only when on-screen,
+                // since this can fire across many pairs in dense fields).
+                if (this.particlePool && (this.isEntityOnScreen(a1) || this.isEntityOnScreen(a2))) {
+                    const cx = (a1.x + a2.x) / 2;
+                    const cy = (a1.y + a2.y) / 2;
+                    const debris = 2 + Math.floor(Math.random() * 2);
+                    for (let d = 0; d < debris; d++) {
+                        this.particlePool.get(cx, cy, 'asteroidCollisionDebris');
+                    }
+                }
+
+                // Elastic exchange along the contact normal — preserves
+                // each rock's tangential motion and swaps the closing
+                // component. NO positional correction, by design.
+                const tx = -ny, ty = nx;
+                const dpTan1 = a1.vel.x * tx + a1.vel.y * ty;
+                const dpTan2 = a2.vel.x * tx + a2.vel.y * ty;
+                const dpNorm1 = a1.vel.x * nx + a1.vel.y * ny;
+                const dpNorm2 = a2.vel.x * nx + a2.vel.y * ny;
+                const m1 = a1.mass || 1, m2 = a2.mass || 1;
+                const totalM = m1 + m2;
+                const newN1 = (dpNorm1 * (m1 - m2) + 2 * m2 * dpNorm2) / totalM;
+                const newN2 = (dpNorm2 * (m2 - m1) + 2 * m1 * dpNorm1) / totalM;
+                a1.vel.x = tx * dpTan1 + nx * newN1;
+                a1.vel.y = ty * dpTan1 + ny * newN1;
+                a2.vel.x = tx * dpTan2 + nx * newN2;
+                a2.vel.y = ty * dpTan2 + ny * newN2;
+            }
+        }
+    }
 
     // Player vs Collectible Orbs (health and money orbs from entity destruction are collectible)
     if (this.player && this.player.active) {

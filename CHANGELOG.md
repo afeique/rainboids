@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.57.1] - 2026-05-03
+
+### Added
+- **Asteroid-vs-asteroid collision response is back — but no position correction.** Real impacts now bounce, while still-overlapping or already-separating pairs are left alone. The trick is gating the elastic-velocity-exchange on the relative-velocity-along-normal sign:
+  - `(v2 − v1) · n̂ < 0` → pair is closing → swap normal velocity components, keep tangential. Real impact bounce.
+  - `≥ 0` → already separating (or stationary-overlapping) → skip. Lets fragments from a split fly apart on their own velocity; lets stuck-overlapping rocks rest peacefully without jittering.
+  No positional displacement is ever applied — the visible "shift/jump" that prompted disabling collisions in 5.54.6 stays gone. Light debris particles spawn on real impacts (2-3, on-screen only) so the bump reads.
+
+---
+
 ## [5.57.0] - 2026-05-03
 
 ### Added
