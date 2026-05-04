@@ -478,13 +478,11 @@ export class Particle {
                 break;
 
             case 'explosionFlash': {
-                // Pre-baked radial gradient sprite — replaces the per-frame
-                // createRadialGradient + arc + fill (the heaviest path in
-                // the old hot loop) with a single drawImage. The sprite is
-                // baked once at module load and reused across all flash
-                // particles regardless of position or radius.
-                ctx.globalCompositeOperation = 'screen';
-                changedComposite = true;
+                // Composite handled by `drawParticlesBatched` (pass 2 sets
+                // 'screen' once for ALL screen-blend particles, instead of
+                // per-particle toggles). If draw() is called outside the
+                // batched path, screen blending is missing — caller must
+                // wrap. All in-game callers go through drawParticlesBatched.
                 const flashLife = Math.max(0, this.life / 1.2);
                 const eased = flashLife * flashLife * Math.sqrt(flashLife); // ~life^1.5
                 ctx.globalAlpha = eased * 0.55;
@@ -520,14 +518,10 @@ export class Particle {
             }
 
             case 'explosionEmber': {
-                // Pre-baked glow sprite via glowSpriteCache — the cache
-                // bakes one sprite per (color, radius, blur) tuple at
-                // 0.5-px radius granularity, so per-frame cost collapses
-                // to a single drawImage. Replaces the original 2× arc+fill
-                // body+halo combo. Dramatically reduces fillStyle thrash
-                // and arc/fill calls when many embers are on screen.
-                ctx.globalCompositeOperation = 'screen';
-                changedComposite = true;
+                // Composite handled by `drawParticlesBatched` — see the
+                // explosionFlash note above. One drawImage per particle,
+                // sprite cached per (color, radius, blur) tuple via the
+                // existing glowSpriteCache.
                 const aLife = Math.max(0, this.life);
                 const softA = Math.pow(aLife, 0.55);
                 glowSpriteCache.draw(ctx, this.x, this.y, this.color, this.radius, 8, softA);
@@ -549,4 +543,53 @@ export class Particle {
         if (changedComposite) ctx.globalCompositeOperation = 'source-over';
         if (changedLineCap) ctx.lineCap = 'butt';
     }
-} 
+}
+
+// Particle types that render with `globalCompositeOperation = 'screen'`.
+// Used by drawParticlesBatched to bucket particles into two passes so
+// the composite mode flips at most once per frame rather than once per
+// particle. Both flash and ember are sprite-based now (5.60.0) so they
+// only need one composite toggle for the whole bucket.
+const SCREEN_BLEND_TYPES = new Set(['explosionFlash', 'explosionEmber']);
+
+/**
+ * Two-pass batched draw for the particle pool.
+ *   Pass 1: every non-screen-blend particle. Composite stays 'source-over'
+ *           (the canvas default), so no per-particle toggling.
+ *   Pass 2: every screen-blend particle. Composite is set to 'screen'
+ *           ONCE before the loop and reset ONCE after.
+ *
+ * Net effect: 2 composite-mode changes per frame instead of N (where N
+ * is the active screen-blend particle count, currently 30-100 in late
+ * waves). Each composite-mode change in Canvas2D forces a render-state
+ * flush, so this saves real GPU time in dense scenes.
+ */
+export function drawParticlesBatched(pool, ctx, viewLeft, viewTop, viewRight, viewBottom) {
+    const list = pool.activeObjects;
+    // Pass 1 — opaque/source-over particles.
+    for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        if (!p.active) continue;
+        if (SCREEN_BLEND_TYPES.has(p.type)) continue;
+        const r = p.radius || 10;
+        if (p.x + r < viewLeft || p.x - r > viewRight ||
+            p.y + r < viewTop  || p.y - r > viewBottom) continue;
+        p.draw(ctx);
+    }
+    // Pass 2 — additive (screen-blend) particles. Composite set once.
+    let pass2Started = false;
+    for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        if (!p.active) continue;
+        if (!SCREEN_BLEND_TYPES.has(p.type)) continue;
+        const r = p.radius || 10;
+        if (p.x + r < viewLeft || p.x - r > viewRight ||
+            p.y + r < viewTop  || p.y - r > viewBottom) continue;
+        if (!pass2Started) {
+            ctx.globalCompositeOperation = 'screen';
+            pass2Started = true;
+        }
+        p.draw(ctx);
+    }
+    if (pass2Started) ctx.globalCompositeOperation = 'source-over';
+}

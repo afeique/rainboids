@@ -70,6 +70,11 @@ export class Asteroid {
         this.warping = false;
         this.warpScale = 1.0;
         this.warpTrail = null;
+        // Per-asteroid frame stagger for the projection-skip optimization.
+        // Half the field re-projects on even frames, half on odd, cutting
+        // total projection cost in half. The 16ms lag for any single rock
+        // is imperceptible at 60fps for tumbling motion.
+        this._projOffset = Math.random() < 0.5 ? 0 : 1;
 
         // Unique color palette per asteroid
         // Hue range: teal/cyan/blue-violet family (150-280°) with occasional gold (40-60°)
@@ -376,8 +381,13 @@ export class Asteroid {
         this.rot3D.y += this.rotVel3D.y;
         this.rot3D.z += this.rotVel3D.z;
 
-        // Defer projection to draw — skip entirely for off-screen asteroids
-        this._projectionDirty = true;
+        // Defer projection to draw — and stagger across frames so only
+        // half the field re-projects per tick. Cuts total projection cost
+        // in half. Rotations still advance every frame; the projected
+        // vertices just lag by at most one frame (16ms at 60fps).
+        if (((frameClock.tick & 1) === this._projOffset) || this.warping) {
+            this._projectionDirty = true;
+        }
     }
     
     draw(ctx) {

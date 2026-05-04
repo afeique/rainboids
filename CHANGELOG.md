@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.61.0] - 2026-05-04
+
+### Changed
+- **Background star count halved across the board.** Multiplier on `BACKGROUND_STAR_COUNT` cut from `4×` → `2×` (also in pool-init pre-allocation). Total background stars drop from 120 → 60. Parallax depth from the depth-bucket batched renderer carries the visual richness — 60 stars feel as full as 120 used to. Free perf for every frame in every wave.
+- **Particle render is now two-pass batched by composite mode.** New `drawParticlesBatched(pool, ctx, ...)` helper (in `world/particle.js`) splits the pool into source-over particles (drawn first) and screen-blend particles (drawn second with composite set ONCE). Replaces the old per-particle composite toggle: in dense scenes with 100+ screen-blend particles, that's 200 `globalCompositeOperation` writes per frame collapsing to 2. `Particle.draw` for `explosionFlash`/`explosionEmber` no longer touches composite — the batched caller manages it. Game-engine render path now uses the batched function.
+- **Late-wave AI throttle (waves 15+).** Each enemy's heavy spatial scans (`avoidAsteroids`, `maintainDistanceFromEnemies`, `dodgeEnemyBullets`, `dodgePlayerBullets`, `updateEvasiveManeuvers`, `maintainDistanceFromPlayer`, `patrolTerritory`) now run on alternating frames, staggered per-enemy via a random `_aiOffset` set at spawn. Half the enemies tick AI on even frames, half on odd. Movement, facing, and shooting still update every frame so the action stays smooth. Cuts AI cost ~50% in waves 15-20.
+- **Asteroid projection stagger.** `_projectionDirty` is now flipped every-other-frame per asteroid (random `_projOffset` per spawn), so only half the field re-projects 3D vertices each frame. Rotations still advance every frame; the projected vertices just lag by at most one frame (16ms at 60fps — imperceptible for tumbling rocks). Warping asteroids force-project every frame so the warp-in animation stays crisp.
+- **`frameClock.tick` is now an integer counter** (was the function name). Renamed the function to `frameClock.advance()`. Used by the new AI throttle and asteroid stagger to do cheap parity checks. Single call site (`game-engine.gameLoop`) updated.
+
+### Notes
+- Combined with the 5.60.0 sprite-baking pass, particle render cost should be down ~60% from pre-perf-plan baseline. Sustained 60fps in late-wave dense scenes is now the target.
+- Items still on the perf plan: spatial-grid bullet dodge, adaptive particle quality (fail-safe), classic-for-loop conversions for the dodge functions. Most-impactful wins are landed.
+
+---
+
 ## [5.60.0] - 2026-05-04
 
 ### Changed

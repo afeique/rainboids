@@ -5,5 +5,9 @@
  */
 export const frameClock = {
     now: Date.now(),
-    tick() { this.now = Date.now(); }
+    // Incrementing tick counter — used for cheap frame-parity checks
+    // (e.g. throttling enemy AI to alternating frames in late waves).
+    // Wraps at 2^31 which won't realistically be reached in a session.
+    tick: 0,
+    advance() { this.now = Date.now(); this.tick = (this.tick + 1) | 0; },
 };

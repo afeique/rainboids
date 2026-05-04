@@ -12,7 +12,7 @@ import { Bullet } from './player/bullet.js';
 import { Asteroid } from './world/asteroid.js';
 import { Enemy } from './enemy/enemy.js';
 import { EnemyBullet } from './enemy/enemy-bullet.js';
-import { Particle } from './world/particle.js';
+import { Particle, drawParticlesBatched } from './world/particle.js';
 import { ColorStar } from './world/color-star.js';
 import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
@@ -361,7 +361,7 @@ export class GameEngine {
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
         this.enemyBulletPool = new PoolManager(EnemyBullet, 20); // Reduced from 50
         this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 10);
-        this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 4);
+        this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 2);
         this.powerupPool = new PoolManager(Powerup, 5); // Reduced from 20
 
         // OPT-8: Spatial grid for O(1) insert / O(k) collision query
@@ -550,8 +550,10 @@ export class GameEngine {
         const spawnWidth = this.gameField.width;
         const spawnHeight = this.gameField.height;
         
-        // Use moderate multiplier for visual depth while maintaining performance (was 36x, now 4x)
-        const scaledStarCount = GAME_CONFIG.BACKGROUND_STAR_COUNT * 4;
+        // Halved 4× → 2× for perf headroom. Parallax depth provides the
+        // visual richness, not raw count — the depth-bucket batched
+        // renderer makes 60 stars feel as full as 120 used to.
+        const scaledStarCount = GAME_CONFIG.BACKGROUND_STAR_COUNT * 2;
         
         const backgroundStarPositions = generateStarPositions(spawnWidth, spawnHeight, scaledStarCount);
         
@@ -1032,7 +1034,10 @@ export class GameEngine {
             // appear at the center of the menu.
             if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-                this.particlePool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                // Batched two-pass particle draw — composite mode flips
+                // at most once per frame instead of once per screen-blend
+                // particle. Major win in dense scenes.
+                drawParticlesBatched(this.particlePool, this.ctx, vL, vT, vR, vB);
                 this.powerupPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
@@ -1164,7 +1169,7 @@ export class GameEngine {
 
     gameLoop() {
       try {
-        frameClock.tick();
+        frameClock.advance();
         const frameStart = performance.now();
 
         // ── Hitstop: selective freeze — entities stop, VFX/player keep going ──

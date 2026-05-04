@@ -90,6 +90,11 @@ export class Enemy {
         // pool slot doesn't start out destroyed.
         this._deathFlash = 0;
         this._shipDestroyed = false;
+        // Frame-stagger offset for late-wave AI throttling. Each enemy
+        // gets a random parity bucket at spawn so half the active
+        // enemies' heavy AI scans run on even frames and the other half
+        // on odd frames — halves the per-frame AI cost in waves 15+.
+        this._aiOffset = Math.random() < 0.5 ? 0 : 1;
         
         // Burst firing properties
         this.burstState = {
@@ -343,48 +348,59 @@ export class Enemy {
         }
 
         this.targetPlayer = playerRef;
-        
+
+        // Late-wave AI throttle: in waves 15+, run the heavy spatial
+        // scans (asteroid/enemy/bullet avoidance) on alternating frames
+        // per enemy. Each enemy has a random `_aiOffset` of 0/1 set at
+        // spawn — half tick on even frames, half on odd. Movement,
+        // facing, and shooting still update every frame so the action
+        // stays smooth. Saves ~50% of AI cost in dense late waves.
+        const wave = (gameEngine.game && gameEngine.game.currentWave) | 0;
+        const skipHeavyAI = wave >= 15 && (frameClock.tick & 1) !== this._aiOffset;
+
         // Calculate distance to player
         const playerDistance = Math.hypot(this.x - playerRef.x, this.y - playerRef.y);
-        
+
         // Distance-based behavior
         this.updateTargetPriority(playerDistance, gameEngine);
-        
+
         // Update face direction to look at current target
         this.updateFaceDirection();
-        
+
         // Update movement based on pattern
         this.updateMovement(gameEngine);
-        
-        // Enhanced evasive maneuvers
-        this.updateEvasiveManeuvers(gameEngine);
-        
-        // Asteroid avoidance — enemies now actively steer away from rocks.
-        // Collision still registers on contact (handlEnemyAsteroidCollision)
-        // and remains non-damaging for both enemy and asteroid; the AI just
-        // tries not to fly into them in the first place.
-        this.avoidAsteroids(gameEngine);
-        
-        // Maintain distance from player when targeting them
-        if (this.currentTarget === 'player') {
-            this.maintainDistanceFromPlayer();
+
+        if (!skipHeavyAI) {
+            // Enhanced evasive maneuvers
+            this.updateEvasiveManeuvers(gameEngine);
+
+            // Asteroid avoidance — enemies actively steer away from rocks.
+            // Collision still registers on contact (non-damaging) — the AI
+            // just tries not to fly into them in the first place.
+            this.avoidAsteroids(gameEngine);
+
+            // Maintain distance from player when targeting them
+            if (this.currentTarget === 'player') {
+                this.maintainDistanceFromPlayer();
+            }
+
+            // Maintain distance from other enemies to prevent clustering
+            this.maintainDistanceFromEnemies(gameEngine.enemyPool.active);
+
+            // Handle patrol behavior when no targets available
+            if (this.currentTarget === 'patrol') {
+                this.patrolTerritory();
+            }
+
+            // Apply enemy bullet dodging
+            this.dodgeEnemyBullets(gameEngine);
+
+            // Dodge player bullets
+            this.dodgePlayerBullets(gameEngine);
         }
-        
-        // Maintain distance from other enemies to prevent clustering
-        this.maintainDistanceFromEnemies(gameEngine.enemyPool.active);
-        
-        // Handle patrol behavior when no targets available
-        if (this.currentTarget === 'patrol') {
-            this.patrolTerritory();
-        }
-        
-        // Apply enemy bullet dodging
-        this.dodgeEnemyBullets(gameEngine);
-        
-        // Dodge player bullets
-        this.dodgePlayerBullets(gameEngine);
-        
-        // Update shooting (sweep laser system handles itself separately)
+
+        // Shooting always runs — gating it on alt frames would jitter
+        // the firing cadence visibly.
         this.updateShooting(gameEngine);
         
         // Update rotation with agility-based speed
