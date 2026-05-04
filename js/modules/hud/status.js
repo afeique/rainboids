@@ -791,11 +791,20 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         powerGlow,
     );
 
-    // ── Skill square (5.64.11 — beneath PRM/PWR, centered between them) ──
-    // Mirrors PRM/PWR styling. Cooldown overlay if the skill is on
-    // cooldown; brighter ring while the effect is active. Label "SKILL".
-    const skillRowY = groupY + squareSize + 22; // ~22px below PRM/PWR row (label clearance)
-    const skillCx = groupX + squareSize + gap / 2; // centered between PRM and PWR
+    // ── Skill square ────────────────────────────────────────────────
+    // Left-aligned with PRM (same X center, same square size = same left
+    // edge). Vertical spacing above the SKILL square matches the gap
+    // above the PRM/PWR row (10px from the bottom of the row above).
+    // PRM's row above is the coins display; SKILL's row above is the
+    // PRM/PWR squares + their PRM/PWR labels. The label baseline sits
+    // 14px below each square's bottom edge and the 9px glyphs extend
+    // ~2px below baseline, so the visible label bottom is at
+    //   labelBottom = squareBottom + 14 + 2 = squareBottom + 16
+    // For a matching 10px gap above the SKILL square:
+    //   skillRowY = labelBottom + 10 = squareBottom + 26
+    //             = groupY + squareSize + 26
+    const skillRowY = groupY + squareSize + 26;
+    const skillCx = groupX + squareSize / 2; // align horizontally with PRM
     drawWeaponSquare.call(
         this, ctx,
         skillCx, skillRowY + squareSize / 2,

@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.12] - 2026-05-04
+
+### Fixed
+- **SKILL HUD square repositioned.** Left-aligned with the PRM weapon square (`skillCx = groupX + squareSize / 2`) instead of centered between PRM and PWR. Vertical spacing above the SKILL square now matches the gap above the PRM/PWR row (10px from the bottom of the row above): `skillRowY = groupY + squareSize + 26`. Math: PRM label baseline sits 14px below the square; 9px glyphs extend ~2px below baseline → label bottom at `squareBottom + 16` → SKILL top at `squareBottom + 26` for a clean 10px clearance.
+
+---
+
 ## [5.64.11] - 2026-05-04
 
 ### Added
