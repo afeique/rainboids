@@ -134,13 +134,17 @@ export function createEnemyDebris(enemy) {
     const sizeScale = Math.min(2, enemy.radius / 15);
     const onScreen = this.isEntityOnScreen(enemy);
 
-    // ── Kill juice: hitstop + camera kick + screen flash ──
+    // ── Kill juice: hitstop + camera kick + screen flash + initial shake ──
+    // Enemies are a big deal — even the impact frame gets a meaningful
+    // shake so the player feels every kill before the drift sequence
+    // even starts. Final explosion gets the biggest shake.
     if (onScreen) {
-        this.triggerHitstop(5);
-        this.triggerScreenFlash(0.07, 4);
+        this.triggerHitstop(6);
+        this.triggerScreenFlash(0.10, 5);
         const kdx = this.player.x - enemy.x;
         const kdy = this.player.y - enemy.y;
-        this.triggerCameraKick(kdx, kdy, 14);
+        this.triggerCameraKick(kdx, kdy, 18);
+        this.triggerScreenShake(14, 7, enemy.radius * 1.6);
     }
 
     // Lengthen the death flash so the drift-and-popcorn phase reads.
@@ -208,16 +212,19 @@ export function triggerEnemyFinalExplosion(enemy) {
     const ey = enemy.y;
     const r  = enemy.radius || 18;
 
-    // ── Punch ──
+    // ── Punch ── Final-explosion shake is the biggest in the death
+    // sequence. The popcorn phase has dozens of small shakes leading
+    // into this — the finale should still hit noticeably harder than
+    // any of them. Enemies are a big deal.
     if (onScreen) {
-        this.triggerHitstop(4);
-        this.triggerScreenFlash(0.10, 5);
+        this.triggerHitstop(7);
+        this.triggerScreenFlash(0.16, 7);
         if (this.player) {
             const kdx = this.player.x - ex;
             const kdy = this.player.y - ey;
-            this.triggerCameraKick(kdx, kdy, 11);
+            this.triggerCameraKick(kdx, kdy, 18);
         }
-        this.triggerScreenShake(28, 14, r * 2.4);
+        this.triggerScreenShake(38, 22, r * 3.0);
     }
 
     // 1. Bright core flash, slightly larger than initial.

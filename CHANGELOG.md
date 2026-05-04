@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.59.2] - 2026-05-03
+
+### Changed
+- **Enemy explosions are significantly more epic.** Enemies are a big deal — the player should feel every kill from impact through finale.
+  - **Phase A (initial impact)** now triggers a real screen shake (14 frames @ 7 magnitude, scaled by radius), bumped hitstop 5 → 6 frames, screen flash 0.07 → 0.10, and camera kick 14 → 18.
+  - **Phase B (drift popcorn)** fires every **3** frames instead of 5 (≈12 popcorn bursts across the 36-frame death window, was ≈7). Each burst now spawns:
+    - 2 expanding rings (was 1) — bright core + colored halo
+    - 5 directional sparks (was 3)
+    - 2 embers (was 1) + 2 sparkle motes (was 1)
+    - **A small screen shake** (4 frames, magnitude 2-4.5 tapering with the wreck's remaining life) so the player feels every secondary cookoff
+  - **Phase C (final explosion)** got the biggest punch in the sequence: hitstop 4 → 7, screen flash 0.10 → 0.16, camera kick 11 → 18, screen shake **28/14 → 38/22** (frames/magnitude) with magnitude scaled at 3.0× radius (was 2.4×). The finale is unmistakable.
+
+---
+
 ## [5.59.1] - 2026-05-03
 
 ### Fixed

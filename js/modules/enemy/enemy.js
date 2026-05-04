@@ -267,31 +267,51 @@ export class Enemy {
             // Small wobble rotation so the wreck visibly tumbles.
             this.faceAngle = (this.faceAngle || 0) + 0.04;
 
-            // Periodic mini-bursts — every ~5 frames at random offsets
-            // around the dying enemy.
+            // Periodic mini-bursts — every 3 frames so the wreck looks
+            // like it's continuously cooking off as it tumbles. More
+            // particles per burst, plus a small screen shake on each
+            // pop so the player FEELS every secondary explosion.
             const tickIntoDeath = (this._deathFlashMax || 36) - this._deathFlash;
-            if (gameEngine && gameEngine.particlePool && tickIntoDeath % 5 === 0) {
+            if (gameEngine && gameEngine.particlePool && tickIntoDeath % 3 === 0) {
                 const r = this.radius || 18;
                 const a = Math.random() * Math.PI * 2;
-                const dist = r * (0.4 + Math.random() * 0.6);
+                const dist = r * (0.3 + Math.random() * 0.8);
                 const sx = this.x + Math.cos(a) * dist;
                 const sy = this.y + Math.sin(a) * dist;
                 const c = (this.color || '#ff6644');
-                gameEngine.particlePool.get(sx, sy, 'explosionFlash', r * 0.6);
-                gameEngine.particlePool.get(sx, sy, 'explosionRingColored', r * (0.7 + Math.random() * 0.6),
+                // Two flashes — bright core + colored halo — so each pop
+                // reads even on a busy screen.
+                gameEngine.particlePool.get(sx, sy, 'explosionFlash', r * 0.85);
+                gameEngine.particlePool.get(sx, sy, 'explosionRingColored', r * (0.8 + Math.random() * 0.8),
                     Math.random() < 0.5 ? '#ffffff' : c);
-                for (let i = 0; i < 3; i++) {
+                gameEngine.particlePool.get(sx, sy, 'explosionRingColored', r * (1.1 + Math.random() * 0.6),
+                    Math.random() < 0.4 ? '#ffcc66' : c);
+                // 5 sparks (was 3) flying in random directions
+                for (let i = 0; i < 5; i++) {
                     const sa = Math.random() * Math.PI * 2;
-                    const sp = 1 + Math.random() * 2.2;
-                    gameEngine.particlePool.get(sx, sy, 'explosionShrapnel', sa, sp,
-                        i === 0 ? '#ffffff' : c);
+                    const sp = 1.5 + Math.random() * 3.0;
+                    const col = i === 0 ? '#ffffff'
+                              : i === 1 ? '#ffcc66'
+                              : c;
+                    gameEngine.particlePool.get(sx, sy, 'explosionShrapnel', sa, sp, col);
                 }
-                // Tick parity decides ember color so the popcorn rotates
-                // between the enemy's own hue and warm gold without using
-                // the (now out-of-scope) loop counter.
+                // Two embers + two sparkles — visible afterglow on each pop
                 const emberC = (tickIntoDeath % 2) ? c : '#ffcc66';
                 gameEngine.particlePool.get(sx, sy, 'explosionEmber', emberC);
+                gameEngine.particlePool.get(sx, sy, 'explosionEmber', '#ffffff');
                 gameEngine.particlePool.get(sx, sy, 'starSparkle');
+                gameEngine.particlePool.get(sx, sy, 'starSparkle');
+
+                // Tactile feedback — small shake on each secondary pop.
+                // Only on-screen so off-screen wrecks don't shake the
+                // camera for no visible reason. Magnitude tapers as the
+                // wreck winds down.
+                if (typeof gameEngine.isEntityOnScreen === 'function'
+                    && gameEngine.isEntityOnScreen(this)
+                    && typeof gameEngine.triggerScreenShake === 'function') {
+                    const fade = this._deathFlash / (this._deathFlashMax || 36);
+                    gameEngine.triggerScreenShake(4, 2 + fade * 2.5);
+                }
             }
 
             this._deathFlash--;
