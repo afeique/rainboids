@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.62.1] - 2026-05-04
+
+### Removed
+- **`explosionFlash` particle on non-lethal enemy hits** across all damage paths:
+  - Bullet → enemy collision (`enemy.radius * 0.45` flash at impact point)
+  - Lance Beam → enemy contact (35%-throttled `enemy.radius` flash)
+  - Nova wavefront crossing each enemy (`size 22` flash)
+  - Lightning chain target (`size 28` flash)
+  Sparks, embers, and sparkles still fire on every hit so the contact reads — only the bright pop is gone. Flash is now reserved entirely for the destruction event (impact frame `0.06α` + midway big-bang `0.12α`), so the visual punch lands harder when an enemy actually dies.
+
+---
+
 ## [5.62.0] - 2026-05-04
 
 ### Added

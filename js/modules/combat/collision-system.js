@@ -478,8 +478,10 @@ export function handleCollisions() {
                 {
                     const eColor = enemy.color || '#ff4444';
                     const impactAngle = Math.atan2(bullet.vel.y, bullet.vel.x);
-                    // Small flash at impact (bumped for punch)
-                    this.particlePool.get(bullet.x, bullet.y, 'explosionFlash', enemy.radius * 0.45);
+                    // No flash on non-lethal hits — flash is reserved for
+                    // the destruction event so the visual punch carries
+                    // weight. Sparks + embers + sparkles still convey the
+                    // hit landed.
                     // Directional shrapnel — sparks fly AWAY from bullet direction (more pieces)
                     for (let p = 0; p < 8; p++) {
                         const spreadAngle = impactAngle + Math.PI + random(-0.8, 0.8);
@@ -700,16 +702,14 @@ export function checkLanceBeamCollisions() {
             }
             // Hit-point sparks — sparks fly off where the beam strikes,
             // throttled per-enemy so sustained contact doesn't spawn
-            // thousands of particles.
+            // thousands of particles. No flash on non-lethal hit —
+            // reserved for the destruction event.
             if (this.particlePool && Math.random() < 0.55) {
                 for (let s = 0; s < 3; s++) {
                     const a = Math.random() * Math.PI * 2;
                     const sp = 2 + Math.random() * 4;
                     const c = s === 0 ? BEAM_BRIGHT : BEAM_HIT_COLOR;
                     this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', a, sp, c);
-                }
-                if (Math.random() < 0.35) {
-                    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius || 16);
                 }
             }
             connected = true;
@@ -1011,9 +1011,9 @@ export function checkNovaCollisions() {
                     enemy.vel.x += (dx / dist) * KNOCK_ENEMY;
                     enemy.vel.y += (dy / dist) * KNOCK_ENEMY;
                 }
-                // Per-target impact burst on the wavefront crossing.
+                // Per-target impact burst on the wavefront crossing —
+                // sparks only, no flash (flash reserved for destruction).
                 if (this.particlePool) {
-                    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', 22);
                     for (let s = 0; s < 6; s++) {
                         const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.8;
                         const sp = 3 + Math.random() * 5;
@@ -1103,11 +1103,11 @@ export function checkLightningCollisions() {
             }
 
             // ── Per-target impact effect ──
-            // Bright flash + spark burst at the chain endpoint, plus a
-            // few sparkle particles along the segment from the previous
-            // link so the bolt path itself shimmers.
+            // Spark burst at the chain endpoint, plus a few sparkle
+            // particles along the segment from the previous link so the
+            // bolt path itself shimmers. No flash on non-lethal hit —
+            // reserved for the destruction event.
             if (this.particlePool) {
-                this.particlePool.get(t.x, t.y, 'explosionFlash', 28);
                 const sparkCount = 8;
                 for (let s = 0; s < sparkCount; s++) {
                     const ang = Math.random() * Math.PI * 2;
