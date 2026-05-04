@@ -174,16 +174,15 @@ test.describe('QA-05: Entity spawning and lifecycle', () => {
     });
 
     test('particle pool enforces MAX_PARTICLES limit', async ({ page }) => {
-        // Spawn way more than the cap
+        // MAX_PARTICLES = 2500 (5.64.2 — bumped after WebGL migration).
         await page.evaluate(() => {
             const ge = window.gameEngine;
-            for (let i = 0; i < 1000; i++) {
+            for (let i = 0; i < 2800; i++) {
                 ge.particlePool.get(200, 200, 'explosion');
             }
         });
         const count = (await getPoolCounts(page)).particles;
-        // Should be at or near the cap (600 by default), not 1000
-        expect(count).toBeLessThanOrEqual(610); // small tolerance for cap edge cases
+        expect(count).toBeLessThanOrEqual(2510);
     });
 
     // ------------------------------------------------------------------

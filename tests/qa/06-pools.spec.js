@@ -116,16 +116,16 @@ test.describe('QA-06: Pool manager correctness', () => {
     // ------------------------------------------------------------------
 
     test('particle pool never exceeds MAX_PARTICLES active objects', async ({ page }) => {
+        // MAX_PARTICLES = 2500 (5.64.2 — bumped from 600 after WebGL migration).
+        // Spawn well over the cap so eviction must kick in.
         await page.evaluate(() => {
             const ge = window.gameEngine;
-            // Spawn well over the cap so eviction must kick in
-            for (let i = 0; i < 900; i++) {
+            for (let i = 0; i < 2800; i++) {
                 ge.particlePool.get(300, 300, 'explosion');
             }
         });
         const count = await page.evaluate(() => window.gameEngine.particlePool.activeObjects.length);
-        // MAX_PARTICLES is 600 — allow a small tolerance for edge-of-cap behaviour
-        expect(count).toBeLessThanOrEqual(610);
+        expect(count).toBeLessThanOrEqual(2510);
     });
 
     // ------------------------------------------------------------------
