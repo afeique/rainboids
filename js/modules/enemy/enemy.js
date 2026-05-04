@@ -90,6 +90,7 @@ export class Enemy {
         // pool slot doesn't start out destroyed.
         this._deathFlash = 0;
         this._shipDestroyed = false;
+        this._debrisBurstFired = false;
         // Frame-stagger offset for late-wave AI throttling. Each enemy
         // gets a random parity bucket at spawn so half the active
         // enemies' heavy AI scans run on even frames and the other half
@@ -282,17 +283,19 @@ export class Enemy {
 
             const max = this._deathFlashMax || 24;
             const tickIntoDeath = max - this._deathFlash;
-            const midPoint = Math.floor(max / 2);
 
-            // ── Big midway explosion: ship vanishes, full debris cloud ──
-            // Fires exactly once when the wreck reaches the midpoint of
-            // its drift window. Sets _shipDestroyed so the renderer
-            // skips the silhouette.
-            if (!this._shipDestroyed && tickIntoDeath >= midPoint) {
-                this._shipDestroyed = true;
-                if (gameEngine && typeof gameEngine.triggerEnemyFinalExplosion === 'function') {
-                    try { gameEngine.triggerEnemyFinalExplosion(this); }
-                    catch (err) { console.error('triggerEnemyFinalExplosion failed', err); }
+            // ── Beat 2: debris flies ──
+            // Fires once 6 frames after the impact (the big-ring announce
+            // already fired synchronously in createEnemyDebris on tick 0).
+            // Shrapnel + classic dust + shape debris all spawn here, so
+            // the player sees them emerging through the still-expanding
+            // rings — clear visual delineation between wavefront and
+            // wreckage.
+            if (!this._debrisBurstFired && tickIntoDeath >= 6) {
+                this._debrisBurstFired = true;
+                if (gameEngine && typeof gameEngine.triggerEnemyDebrisBurst === 'function') {
+                    try { gameEngine.triggerEnemyDebrisBurst(this); }
+                    catch (err) { console.error('triggerEnemyDebrisBurst failed', err); }
                 }
             }
 

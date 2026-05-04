@@ -124,77 +124,48 @@ export function createColorStarBurst(x, y) {
     }
 }
 
-// ── Enemy Debris ──
+// ── Enemy Death Sequence ──
+//
+// Two visual beats, temporally separated for clear delineation:
+//
+//   Frame 0 (createEnemyDebris → triggerEnemyFinalExplosion)
+//     BIG RING + flash + main screen punch. Ship vanishes immediately.
+//     This is the visual "BANG."
+//
+//   Frame 6 (triggerEnemyDebrisBurst, fired from enemy update loop)
+//     Dense shrapnel streaks + classic dust + the ship's own outline
+//     pieces ripping outward. Reads as wreckage flying through the
+//     still-expanding ring (which has reached ~12% of its max radius
+//     by this point — visibly defined as a wavefront edge).
+//
+//   Frame 24
+//     Enemy deactivates.
+//
+// 6-frame gap (~100ms @ 60Hz) is enough to register as separate events
+// without feeling sluggish. Sequence reads as a cinematic shockwave-
+// then-debris cascade, exactly the pattern requested in 5.64.7.
 
-// Initial-impact pop. Sets the enemy on a ~36-frame death sequence; per
-// the enemy.update branch, the wreck DRIFTS while emitting small bursts
-// each tick, then `triggerEnemyFinalExplosion` fires the big pop right
-// before the enemy is recycled. This is what makes deaths feel epic
-// instead of an instant single-frame poof.
 export function createEnemyDebris(enemy) {
     if (!enemy) return;
-    const color = enemy.color || '#ff4444';
-    const sizeScale = Math.min(2, enemy.radius / 15);
-    const onScreen = this.isEntityOnScreen(enemy);
 
-    // ── Kill juice: hitstop + camera kick + screen shake + small flash ──
-    // Flash is gated behind isDeathFrame so non-lethal bullet hits don't
-    // wash the screen — only the actual destruction event flashes. Kept
-    // small (0.06α) since the midway big-bang adds a much bigger one.
-    if (onScreen) {
-        this.triggerHitstop(6);
-        this.triggerScreenFlash(0.06, 4);
-        const kdx = this.player.x - enemy.x;
-        const kdy = this.player.y - enemy.y;
-        this.triggerCameraKick(kdx, kdy, 18);
-        this.triggerScreenShake(14, 7, enemy.radius * 1.6);
-    }
-
-    // Death window — 24 frames @ 60Hz ≈ 400ms. Halved from 36 along
-    // with the popcorn removal in 5.62.2; the drift phase only needs
-    // a beat for the wreck to register before the big-bang at the
-    // midpoint (tick 12). Keeps the wave-clear → shop transition snappy.
+    // Death window — 24 frames @ 60Hz ≈ 400ms.
+    //   tick 0  : THIS function — sets flags + calls big-ring announce
+    //   tick 6  : triggerEnemyDebrisBurst — debris flies
+    //   tick 24 : enemy deactivates
     enemy._deathFlash = 24;
     enemy._deathFlashMax = 24;
-    // Slow the velocity right at impact so the drift starts more slowly,
-    // but keep direction so the wreck still slumps along its trajectory.
+    enemy._debrisBurstFired = false;
+    // Ship vanishes immediately — the ring takes over as the visual.
+    enemy._shipDestroyed = true;
     if (enemy.vel) {
         enemy.vel.x *= 0.55;
         enemy.vel.y *= 0.55;
     }
 
-    if (!this.particlePool) return;
-
-    // Enemy death particles are now MOTION-ONLY: flash, expanding rings,
-    // and outflying shrapnel/debris. Lingering embers + sparkles are
-    // gone — they sat in place fading and ate up pool slots without
-    // contributing to the "stuff blowing apart" read. Pool pressure
-    // drops ~40% per kill, leaving more headroom for simultaneous big
-    // explosions to render fully.
-
-    // 1. Impact flash + 2 TIGHT expanding rings — the announce. Rings
-    // shrunk again (1.3/0.9 → 0.7/0.5) so the wavefronts read as small
-    // pulses around the impact point instead of a halo larger than the
-    // enemy ship itself. The shred + shrapnel signal carries the actual
-    // explosion mass; rings are now just edge announce.
-    this.particlePool.get(enemy.x, enemy.y, 'explosionFlash', enemy.radius * 1.4 * sizeScale);
-    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 0.7 * sizeScale, '#ffffff');
-    this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.radius * 0.5 * sizeScale, color);
-
-    // 2. Directional shrapnel — fast streaks flying outward.
-    const shrapnelCount = Math.floor(10 + 6 * sizeScale);
-    for (let i = 0; i < shrapnelCount; i++) {
-        const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
-        const speed = random(3, 8) * sizeScale;
-        const sColor = i % 3 === 0 ? '#ffffff' : i % 3 === 1 ? '#ffcc66' : color;
-        this.particlePool.get(enemy.x, enemy.y, 'explosionShrapnel', angle, speed, sColor);
-    }
-
-    // 3. Shape debris — the wreck's actual outline pieces scattered
-    // outward at HIGH velocity. createShapeDebris fragments each edge
-    // and gives every piece a steep velocity boost, so the silhouette
-    // visibly tears apart in real time.
-    this.createShapeDebris(enemy);
+    // Fire the BIG ring announce in the same frame. All kill juice
+    // (hitstop, screen flash, camera kick, screen shake) lives inside
+    // that function so we don't double-punch the screen.
+    this.triggerEnemyFinalExplosion(enemy);
 }
 
 // Big final-frame explosion. Fired by the enemy update loop right when
@@ -204,21 +175,28 @@ export function createEnemyDebris(enemy) {
 //
 // Captures position once at call time so even if `enemy` gets recycled
 // later (pool reuse), the spawn coords stay correct.
+// ── BEAT 2: BIG ring announce ──
+// Fired by the enemy update loop at the death-window midpoint (frame 12).
+// THIS is the visual "BANG" — bright flash + 3 expanding wavefront rings
+// + the full screen punch (hitstop, flash, kick, shake). NO debris yet —
+// debris fires 6 frames later via triggerEnemyDebrisBurst, so the player
+// sees the wavefront first and the wreckage flying through it second.
+//
+// Ring sizes bumped back up since they no longer compete with debris in
+// the same frame: now `1.4/1.9/2.5` (was 0.55/0.75/0.9 in 5.64.6 when
+// rings + debris fired together). Largest ring is now ~2.5× the enemy
+// radius — clearly a wavefront, but bounded so simultaneous deaths
+// don't paint over the whole screen.
 export function triggerEnemyFinalExplosion(enemy) {
     if (!enemy || !this.particlePool) return;
     const color = enemy.color || '#ff4444';
     const sizeScale = Math.min(2, (enemy.radius || 18) / 15);
     const onScreen = this.isEntityOnScreen(enemy);
-    // Snapshot — DO NOT read enemy.x/y inside any setTimeout below; the
-    // pool may recycle this slot before the timer fires.
     const ex = enemy.x;
     const ey = enemy.y;
     const r  = enemy.radius || 18;
 
-    // ── Punch ── Final-explosion is the biggest moment in the death
-    // sequence. Reserved for actual destruction, not hits, so the flash
-    // can be a real beat. Stacks with the impact-frame flash of the
-    // initial pop for a 2-flash death cadence.
+    // ── Main screen punch lands HERE, not on impact. ──
     if (onScreen) {
         this.triggerHitstop(7);
         this.triggerScreenFlash(0.12, 6);
@@ -230,24 +208,33 @@ export function triggerEnemyFinalExplosion(enemy) {
         this.triggerScreenShake(38, 22, r * 3.0);
     }
 
-    // 1. Bright core flash, slightly larger than initial.
-    this.particlePool.get(ex, ey, 'explosionFlash', r * 2.4 * sizeScale);
+    // 1. Bright core flash.
+    this.particlePool.get(ex, ey, 'explosionFlash', r * 2.6 * sizeScale);
 
-    // 2. Three TIGHT wavefront rings — all spawned instantly (no
-    // setTimeouts; see 5.63.0 for the eviction-bug history). Radius
-    // multipliers cut hard (1.2/1.6/1.3/1.9 → 0.55/0.75/0.9). Largest
-    // ring is now slightly smaller than the enemy itself, so the rings
-    // read as a tight wavefront around the impact rather than a halo
-    // that washes out the ship-shred + shrapnel. The 4th ring at 1.9×
-    // was the worst offender — dropped entirely.
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.55 * sizeScale, '#ffffff');
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.75 * sizeScale, color);
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.9  * sizeScale, '#ffcc66');
+    // 2. Three expanding wavefront rings. Sizes bumped vs 5.64.6 since
+    // they now occupy their own beat — debris is delayed and won't
+    // wash them out.
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.4 * sizeScale, '#ffffff');
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.9 * sizeScale, color);
+    this.particlePool.get(ex, ey, 'explosionRingColored', r * 2.5 * sizeScale, '#ffcc66');
+}
 
-    // 3. Dense directional shrapnel — DENSER for the new midway-big-bang
-    // moment where the ship visibly vanishes. Fast streaks in all
-    // directions, 4-color rotation. Bumped count + bumped speed range
-    // so the debris cloud reads as the ship physically blowing apart.
+// ── BEAT 3: Debris flies through the still-expanding rings ──
+// Called by the enemy update loop ~6 frames after the big-ring announce
+// (death-window tick `midpoint + 6`). This is when the wreckage
+// actually scatters — shrapnel streaks, classic dust, and the ship's
+// own outline pieces ripping outward at high velocity. By this frame
+// the rings have expanded ~12% of their max radius, so the debris is
+// clearly emerging from a defined wavefront edge instead of being
+// born inside the ring blob.
+export function triggerEnemyDebrisBurst(enemy) {
+    if (!enemy || !this.particlePool) return;
+    const color = enemy.color || '#ff4444';
+    const sizeScale = Math.min(2, (enemy.radius || 18) / 15);
+    const ex = enemy.x;
+    const ey = enemy.y;
+
+    // 1. Dense directional shrapnel — fast streaks in all directions.
     const shrapnelCount = Math.floor(36 + 18 * sizeScale);
     for (let i = 0; i < shrapnelCount; i++) {
         const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
@@ -259,21 +246,8 @@ export function triggerEnemyFinalExplosion(enemy) {
         this.particlePool.get(ex, ey, 'explosionShrapnel', angle, speed, sColor);
     }
 
-    // The midway big-bang is now MOTION-ONLY: flash + 4 expanding rings
-    // + dense fast shrapnel + fast classic burst + shape debris. Every
-    // particle has outward velocity. Lingering embers (slow center
-    // cluster, afterglow embers, sparkle dust, cookoff embers) all
-    // removed — they were eating ~80 pool slots per kill while sitting
-    // mostly still, contributing little to the "stuff blowing apart"
-    // read.
-    //
-    // Net pool pressure per big-bang: ~145 → ~70 particles. With the
-    // 600 cap, that's room for 8 simultaneous big-bangs to render fully
-    // alongside ambient activity, instead of 3-4.
-
-    // 4. Classic small particles — outward-velocity dust. Speed range
-    // bumped (3-12, was 2-11) so even the slow tail still has visible
-    // motion away from the explosion center.
+    // 2. Classic small particles — outward-velocity dust filling in
+    // between the shrapnel streaks.
     for (let i = 0; i < 24; i++) {
         const p = this.particlePool.get(ex, ey, 'explosion');
         if (p) {
@@ -285,16 +259,16 @@ export function triggerEnemyFinalExplosion(enemy) {
         }
     }
 
-    // 5. Outline scatter — fresh batch of shape debris flies out at
-    // the moment the ship vanishes. (The impact-frame batch has
-    // drifted already; this reads as the ship actively coming apart.)
+    // 3. Outline scatter — the actual ship pieces fly out (high
+    // velocity + tangential spin per createShapeDebris).
     if (typeof this.createShapeDebris === 'function') {
         try { this.createShapeDebris(enemy); } catch (_) {}
     }
 
-    // 6. Secondary tight ring — final outward wavefront, kept small so
-    // it doesn't merge with the 3 earlier rings into a thick blob.
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 0.5 * sizeScale, color);
+    // 4. Tight inner secondary ring — fires as the debris emerges, so
+    // there's a final wavefront chasing the shrapnel out. Kept small
+    // (0.6×) so it reads as an "exhale" pulse, not another big ring.
+    this.particlePool.get(ex, ey, 'explosionRingColored', (enemy.radius || 18) * 0.6 * sizeScale, color);
 }
 
 export function createShapeDebris(enemy) {

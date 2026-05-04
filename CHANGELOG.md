@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.7] - 2026-05-04
+
+### Changed
+- **Enemy explosions now play in two clearly-delineated beats: BIG RING first, debris second.**
+  - **Beat 1 (frame 0)** — `triggerEnemyFinalExplosion` now fires synchronously on impact instead of waiting until the death-window midpoint. Bright flash + 3 expanding wavefront rings + the entire screen punch (hitstop, screen flash, camera kick, screen shake). Ship vanishes immediately. Ring sizes bumped back up since they no longer compete with debris in the same frame: `0.55/0.75/0.9 → 1.4/1.9/2.5` (largest is ~2.5× the enemy radius — substantial wavefront).
+  - **Beat 2 (frame 6, ≈100ms later)** — new `triggerEnemyDebrisBurst` fires from the enemy update loop. Dense shrapnel streaks (36+) + classic dust (24) + the ship's own outline pieces ripping outward via `createShapeDebris`, plus a tight 0.6× secondary ring chasing the wreckage out. Debris emerges through the still-expanding rings (which have reached ~12% of their max radius by this frame), so the wavefront edge is visibly defined when the wreckage starts flying.
+- **Impact frame is now particle-free.** No more flash / small ring / shrapnel / shape debris on tick 0 — those used to mush in front of the main bang. The kill juice (hitstop, kick, shake, flash) now lives entirely inside the big-ring announce so the screen only punches once, on the actual explosion frame.
+- New `triggerEnemyDebrisBurst` exported from `combat-manager.js` and wired through `game-engine.js`.
+
+### Fixed
+- Death-sequence flag `_debrisBurstFired` initialized in the enemy constructor and reset on every spawn so a recycled pool slot doesn't skip the debris beat.
+
+---
+
 ## [5.64.6] - 2026-05-04
 
 ### Changed

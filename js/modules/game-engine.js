@@ -706,6 +706,7 @@ export class GameEngine {
     
     createEnemyDebris(enemy) { return combat.createEnemyDebris.call(this, enemy); }
     triggerEnemyFinalExplosion(enemy) { return combat.triggerEnemyFinalExplosion.call(this, enemy); }
+    triggerEnemyDebrisBurst(enemy) { return combat.triggerEnemyDebrisBurst.call(this, enemy); }
     createShapeDebris(enemy) { return combat.createShapeDebris.call(this, enemy); }
     
     createHealthOrb(x, y) { return combat.createHealthOrb.call(this, x, y); }
