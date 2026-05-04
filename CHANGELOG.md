@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.10] - 2026-05-04
+
+### Changed
+- **Sell button moved left of the cost / level display.** Inside the `.shop-item-right` flex wrapper the sell button is now appended FIRST and `costCol` second, so the red CTA reads first as the eye scans rightward and the price/level summary anchors the row's right edge.
+
+### Added
+- **Red "Level 0" tag for unpurchased upgrades.** New `.shop-item-status--zero` class colors the level tag `#ff6666` when `currentStacks === 0`, so the player can tell at a glance which upgrades they haven't put any stacks into yet.
+
+---
+
 ## [5.64.9] - 2026-05-04
 
 ### Fixed

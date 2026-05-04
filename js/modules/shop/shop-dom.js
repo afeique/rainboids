@@ -429,16 +429,18 @@ function buildItemRow(item, player, game) {
         if (!isWeaponOrSkill) costCol.appendChild(stackStatus(currentStacks, item.maxStacks, maxedOut));
     }
 
-    // Wrap cost + sell button in a single grid cell so they share the
-    // rightmost column. Without this wrapper the sell button became the
-    // 4th child of a 3-column grid (`56px 1fr auto`) and got auto-placed
-    // into column 1 of an implicit second row — clamped to 56px wide,
-    // which clipped the red background to less than the SELL text. The
-    // wrapper is a flex row containing costCol + (optional) sellBtn, so
-    // the auto-sized rightmost grid column expands to fit BOTH.
+    // Wrap sell button + cost in a single rightmost grid cell so they
+    // share the auto-sized track. Sell button is placed FIRST (left of
+    // cost) so the red CTA reads first as the player scans rightward
+    // and the cost/level summary anchors the row's right edge.
+    //
+    // Why a wrapper at all: `.shop-item` is a 3-column grid
+    // (`56px 1fr auto`); without this wrap the second non-icon-non-body
+    // child gets reflowed into a phantom second row clamped to 56px
+    // wide, which clipped the sell button's background to less than
+    // its text.
     const rightCell = document.createElement('span');
     rightCell.className = 'shop-item-right';
-    rightCell.appendChild(costCol);
 
     if (!isWeaponOrSkill && currentStacks > 0) {
         const refund = sellRefundFor(item, currentStacks);
@@ -451,6 +453,7 @@ function buildItemRow(item, player, game) {
         rightCell.appendChild(sellBtn);
     }
 
+    rightCell.appendChild(costCol);
     row.appendChild(rightCell);
 
     return row;
@@ -482,5 +485,9 @@ function makeStatus(text, extraClass = '') {
 }
 
 function stackStatus(currentStacks, maxStacks, maxedOut) {
-    return makeStatus(maxedOut ? `MAX (${maxStacks})` : `Level ${currentStacks}`, maxedOut ? 'shop-item-status--maxed' : '');
+    if (maxedOut) return makeStatus(`MAX (${maxStacks})`, 'shop-item-status--maxed');
+    // Level 0 = item not yet purchased — render red so the player can
+    // tell at a glance which upgrades they haven't bought into yet.
+    if (currentStacks === 0) return makeStatus('Level 0', 'shop-item-status--zero');
+    return makeStatus(`Level ${currentStacks}`);
 }

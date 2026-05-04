@@ -469,6 +469,9 @@ body.shop-open .ui-element:not(#shop-overlay) {
 .shop-item-status { font-size: 10px; color: #00ffff; }
 .shop-item-status--maxed { color: #666; }
 .shop-item-status--owned { color: #44ff88; }
+/* Level 0 — item not yet purchased. Red so the player can tell at a
+ * glance which upgrades they haven't put any stacks into yet. */
+.shop-item-status--zero { color: #ff6666; }
 
 /* Right-side cell of each shop item: holds costCol and (optional) sell
  * button as siblings inside a single grid track. Without this wrapper
