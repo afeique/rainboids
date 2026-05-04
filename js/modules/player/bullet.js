@@ -40,6 +40,7 @@ export class Bullet {
         // Powerup effects (will be set by player when creating bullets)
         this.homing = false;
         this.homingStrength = 0;
+        this.helixActive = false; // Rail-Driver helix mode (set by fireRailDriver)
         this.piercing = 0; // Number of enemies it can pierce through
         this.piercedEnemies = 0; // Track how many it has pierced
         this.hitTargets = new Set(); // Track which targets (enemies/asteroids) this bullet has already hit
@@ -105,6 +106,24 @@ export class Bullet {
         // Movement
         this.x += this.vel.x;
         this.y += this.vel.y;
+
+        // Helix offset — Rail Driver double-helix bullets oscillate
+        // perpendicular to their rail axis. We apply the *delta* of the
+        // sine each frame so the underlying rail position still advances
+        // by `vel` exactly. A pair of bullets fired with phases 0 and π
+        // crosses over every half period.
+        if (this.helixActive) {
+            const speed = Math.hypot(this.vel.x, this.vel.y) || 1;
+            // Perpendicular unit vector (rotate vel by +90°).
+            const ux = -this.vel.y / speed;
+            const uy =  this.vel.x / speed;
+            const t = this.life;
+            const sNow  = Math.sin(t       * this.helixFreq + this.helixPhase);
+            const sPrev = Math.sin((t - 1) * this.helixFreq + this.helixPhase);
+            const delta = (sNow - sPrev) * this.helixAmplitude;
+            this.x += ux * delta;
+            this.y += uy * delta;
+        }
 
         // Boundary check (bullets disappear when off game field or screen)
         const boundaryWidth = gameField ? gameField.width : this.width;

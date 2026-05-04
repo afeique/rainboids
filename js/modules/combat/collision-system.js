@@ -1077,13 +1077,12 @@ export function checkLightningCollisions() {
 
     // ── Continuous-tether path ──
     if (p.lightningArcActive) {
-        const cfg = POWER_WEAPONS.LIGHTNING_ARC;
+        const cfg = PRIMARY_WEAPONS.LIGHTNING_ARC;
         const range = cfg.chainRange;
         const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
         const TETHER_PUSH = 0.5 * knockMul;
-        // Per-frame damage. Was per-cast in the chain version; keep the
-        // same number here so DPS feels comparable when held.
-        const dmg = cfg.chainDamage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+        // Per-frame damage; tuned to match Lance Beam DPS (~2.04 dps at 60Hz).
+        const dmg = cfg.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
 
         // Find the nearest target.
         let best = null, bestKind = null, bestDist = range;
@@ -1154,8 +1153,8 @@ export function checkLightningCollisions() {
     for (const chain of p.lightningChains) {
         if (!chain.active || chain.damageApplied) continue;
         chain.damageApplied = true;
-        let dmg = POWER_WEAPONS.LIGHTNING_ARC.chainDamage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
-        const falloff = POWER_WEAPONS.LIGHTNING_ARC.chainFalloff;
+        let dmg = PRIMARY_WEAPONS.LIGHTNING_ARC.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+        const falloff = 0.6;
         for (let i = 1; i < chain.targets.length; i++) {
             const t = chain.targets[i];
             const prev = chain.targets[i - 1];

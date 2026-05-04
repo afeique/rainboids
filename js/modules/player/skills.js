@@ -70,6 +70,13 @@ export function updateActiveSkills(dt) {
     // smooth angular interpolation so rotation reads naturally.
     const enemies = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
     const asteroidsForMissiles = (this.gameEngine && this.gameEngine.asteroidPool && this.gameEngine.asteroidPool.activeObjects) || [];
+    // Targets currently held by *other* live missiles — used to spread
+    // re-acquisition across distinct threats instead of stacking on the
+    // nearest one. Built once per frame.
+    const claimedTargets = new Set();
+    for (const om of this.activeMissiles) {
+        if (om.active && om.target && om.target.active) claimedTargets.add(om.target);
+    }
     for (let i = this.activeMissiles.length - 1; i >= 0; i--) {
         const m = this.activeMissiles[i];
         m.life -= dt;
@@ -78,15 +85,32 @@ export function updateActiveSkills(dt) {
             continue;
         }
 
-        // (Re-)acquire target if needed. Prefer enemies; if none in
-        // sight, fall back to nearest asteroid so missiles still do
-        // something useful.
+        // (Re-)acquire target if needed. First pass prefers enemies that
+        // no other missile has claimed; if every enemy is taken, allow
+        // duplicates; if no enemies at all, fall back to asteroids
+        // (also de-duped first).
         if (!m.target || !m.target.active) {
             let bestDist = Infinity, best = null;
             for (const e of enemies) {
-                if (!e.active) continue;
+                if (!e.active || claimedTargets.has(e)) continue;
                 const d = Math.hypot(e.x - m.x, e.y - m.y);
                 if (d < bestDist) { bestDist = d; best = e; }
+            }
+            if (!best) {
+                bestDist = Infinity;
+                for (const e of enemies) {
+                    if (!e.active) continue;
+                    const d = Math.hypot(e.x - m.x, e.y - m.y);
+                    if (d < bestDist) { bestDist = d; best = e; }
+                }
+            }
+            if (!best) {
+                bestDist = Infinity;
+                for (const ast of asteroidsForMissiles) {
+                    if (!ast.active || claimedTargets.has(ast)) continue;
+                    const d = Math.hypot(ast.x - m.x, ast.y - m.y);
+                    if (d < bestDist) { bestDist = d; best = ast; }
+                }
             }
             if (!best) {
                 bestDist = Infinity;
@@ -97,6 +121,7 @@ export function updateActiveSkills(dt) {
                 }
             }
             m.target = best;
+            if (best) claimedTargets.add(best);
         }
 
         // Steer toward the target via smooth angle interpolation.

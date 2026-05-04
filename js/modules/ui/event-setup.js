@@ -24,57 +24,31 @@ export function setupEventListeners() {
         if (e.code === 'Escape') {
             this.togglePause();
         }
-        // 5.64.14 keybind layout:
-        //   E         — cycle PRIMARY weapon
-        //   R         — cycle POWER weapon
-        //   F         — cycle SKILL
+        // Keybind layout:
+        //   E (hold)  — radial menu: PRIMARY weapon (mouse picks, click commits)
+        //   R (hold)  — radial menu: POWER weapon
+        //   F (hold)  — radial menu: SKILL
         //   TAB       — activate equipped skill (handled in input-handler.js)
         //   SPACE     — fire/charge POWER weapon (handled in input-handler.js)
-        //   left-clk  — fire PRIMARY
+        //   left-clk  — fire PRIMARY (or commit a radial selection while a
+        //               radial menu is open)
         //   right-clk — alternate POWER weapon trigger
         //
-        // Cycle handlers fire on keydown so the equipped weapon flips
-        // immediately. Allowed during PLAYING and WAVE_TRANSITION so the
-        // player can re-equip between waves.
+        // Radial menus open on the first keydown (e.repeat is ignored so
+        // browser auto-repeat doesn't reopen the menu) and close on keyup
+        // or after a click selection. Allowed during PLAYING and
+        // WAVE_TRANSITION so the player can re-equip between waves.
         const cycleAllowed =
             this.game.state === GAME_STATES.PLAYING ||
             this.game.state === GAME_STATES.WAVE_TRANSITION;
 
-        if (e.code === 'KeyE' && !e.shiftKey && cycleAllowed) {
-            this.triggerWeaponCycleAnim('primary');
-            const all = Object.keys(this.PRIMARY_WEAPONS_LIST || {});
-            if (all.length > 1) {
-                const i = all.indexOf(this.player.activePrimary);
-                const next = all[(i + 1) % all.length];
-                if (this.player.ownedPrimaries && !this.player.ownedPrimaries.has(next)) {
-                    this.player.ownedPrimaries.add(next);
-                }
-                this.player.equipPrimary(next);
-                hideHint();
-                this.events.emit('audio:coin');
-            }
-        }
-        if (e.code === 'KeyR' && !e.shiftKey && cycleAllowed) {
-            this.triggerWeaponCycleAnim('power');
-            const all = Object.keys(this.POWER_WEAPONS_LIST || {});
-            if (all.length > 1) {
-                const i = all.indexOf(this.player.activePower);
-                const next = all[(i + 1) % all.length];
-                if (this.player.ownedPowers && !this.player.ownedPowers.has(next)) {
-                    this.player.ownedPowers.add(next);
-                }
-                this.player.equipPower(next);
-                hideHint();
-                this.events.emit('audio:coin');
-            }
-        }
-        if (e.code === 'KeyF' && !e.shiftKey && cycleAllowed) {
-            // Skill cycle goes through player.cycleSkill() which already
-            // triggers the HUD pulse + audio ping.
-            if (this.player && typeof this.player.cycleSkill === 'function') {
-                this.player.cycleSkill();
-                hideHint();
-            }
+        const radialKey =
+            e.code === 'KeyE' ? 'primary' :
+            e.code === 'KeyR' ? 'power' :
+            e.code === 'KeyF' ? 'skill' : null;
+        if (radialKey && !e.shiftKey && cycleAllowed && !e.repeat) {
+            this.radialMenu.openFor(radialKey);
+            hideHint();
         }
         // Tab still needs preventDefault so the browser doesn't shift
         // focus to the next page element when the player presses it
@@ -132,6 +106,36 @@ export function setupEventListeners() {
         // dev-tools console (`window.gameEngine.cheats.*`).
     });
 
+    // Radial-menu keyup — releasing E/R/F closes the menu without changing
+    // the equipped item. Tied to the specific key that opened it so other
+    // unrelated keyups don't dismiss it.
+    document.addEventListener('keyup', (e) => {
+        if (!this.radialMenu || !this.radialMenu.isOpen()) return;
+        const t = this.radialMenu.type;
+        if ((e.code === 'KeyE' && t === 'primary') ||
+            (e.code === 'KeyR' && t === 'power')   ||
+            (e.code === 'KeyF' && t === 'skill')) {
+            this.radialMenu.cancel();
+        }
+    });
+
+    // Radial-menu click — when the menu is open, the next mousedown
+    // commits the slice under the cursor. Use mousedown (capture phase)
+    // so it runs before the input-handler's primary-fire mousedown and
+    // before the canvas click handlers.
+    document.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (this.radialMenu && this.radialMenu.isOpen()) {
+            this.radialMenu.handleClick();
+            // Mark this click so the canvas click handler (which runs
+            // after the radial closes) doesn't fall through to entity
+            // targeting on the same press.
+            this._radialClickConsumed = true;
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+
     // Handle game restart
     window.addEventListener('click', () => {
         if (this.game.state === GAME_STATES.GAME_OVER) {
@@ -158,6 +162,16 @@ export function setupEventListeners() {
 
     // Entity targeting click handling (for gameplay)
     this.canvas.addEventListener('click', (e) => {
+        // Swallow the click if the matching mousedown was a radial-menu
+        // commit — the radial closed inside mousedown so isOpen() is now
+        // false, but the canvas click handler must not fall through to
+        // entity targeting on the same press.
+        if (this._radialClickConsumed) {
+            this._radialClickConsumed = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         if (this.game.state === GAME_STATES.PLAYING) {
             e.preventDefault();
             e.stopPropagation();

@@ -46,13 +46,17 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
     const cooldownReady = timeSinceLastShot >= effectiveFireRate;
     const fireHeld = !!(input && input.fire);
 
-    // ── Beam-weapon path (5.64.15) — Lance Beam is now a continuous
-    // tether that follows the fire button. While LMB is held the beam
-    // is on; releasing turns it off. The discrete cooldown / firePrimary
-    // path is bypassed — the beam stops at the first object it hits
-    // (collision-system.js sets `beamHitDist`).
-    const isBeamPrimary = this.activePrimary === 'LANCE_BEAM';
-    if (isBeamPrimary) {
+    // ── Beam-weapon path — Lance Beam and Lightning Arc are continuous
+    // tethers that follow the fire button. While LMB is held the beam /
+    // arc is on; releasing turns it off. The discrete cooldown /
+    // firePrimary path is bypassed — Lance Beam stops at the first
+    // object it hits (collision-system.js sets `beamHitDist`); Lightning
+    // Arc snaps to the nearest target each frame.
+    const isLanceBeam = this.activePrimary === 'LANCE_BEAM';
+    const isLightningArc = this.activePrimary === 'LIGHTNING_ARC';
+    const isBeamPrimary = isLanceBeam || isLightningArc;
+
+    if (isLanceBeam) {
         const wasOn = !!this.beamActive;
         this.beamActive = fireHeld;
         if (this.beamActive) {
@@ -61,6 +65,14 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         }
     } else if (this.beamActive) {
         this.beamActive = false;
+    }
+
+    if (isLightningArc) {
+        const wasOn = !!this.lightningArcActive;
+        this.lightningArcActive = fireHeld;
+        if (this.lightningArcActive && !wasOn) audioManager.playShoot();
+    } else if (this.lightningArcActive) {
+        this.lightningArcActive = false;
     }
 
     this.canShoot = !isBeamPrimary && cooldownReady && fireHeld;
@@ -135,22 +147,11 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         this.tractorBeamActive = false;
         this.isFullyCharged = false;
 
-        // ── Beam-weapon path (5.64.15) — Lightning Arc is now a
-        // continuous tether that follows the power-fire button. While
-        // SPACE/right-click is held, the arc is on; release to turn off.
-        // Hits the nearest enemy/asteroid in range each frame (no
-        // chain — collision-system.js handles target acquisition).
-        const isBeamPower = this.activePower === 'LIGHTNING_ARC';
-        if (isBeamPower) {
-            const wasOn = !!this.lightningArcActive;
-            this.lightningArcActive = !!input.fireSecondary;
-            if (this.lightningArcActive && !wasOn) audioManager.playShoot();
-        } else {
-            if (this.lightningArcActive) this.lightningArcActive = false;
-            if (input.fireSecondary && this.isPowerReady()) {
-                this.firePower(bulletPool, audioManager, particlePool);
-                input.fireSecondary = false;
-            }
+        // Lightning Arc moved to primary slot in 5.65.4 — power weapons
+        // are now exclusively cooldown-triggered burst weapons.
+        if (input.fireSecondary && this.isPowerReady()) {
+            this.firePower(bulletPool, audioManager, particlePool);
+            input.fireSecondary = false;
         }
     }
 }
@@ -183,6 +184,9 @@ export function firePrimary(bulletPool, audioManager, particlePool) {
         case 'LANCE_BEAM':
             // Beam handled in update loop, not individual shots
             this.startLanceBeam(audioManager, config);
+            break;
+        case 'LIGHTNING_ARC':
+            // Continuous tether handled in update loop — no per-shot path.
             break;
         default:
             this.firePulseCannon(bulletPool, audioManager, config);
@@ -342,11 +346,12 @@ export function fireRailDriver(bulletPool, audioManager, config) {
     const penetratorStacks = this.getPowerupStacks('PENETRATOR');
     const rangeBonus = 1 + penetratorStacks * 0.5;
     const capacitorStacks = this.getPowerupStacks('RAILGUN_CAPACITOR');
-    // MULTI_SHOT carry-over: +1 rail per stack, narrowly fanned because
-    // rails travel far and a wide fan would feel chaotic.
+    // Rail Driver fires a helix pair — two bullets spiraling around each
+    // other on a shared rail. MULTI_SHOT adds extra pairs, fanned narrowly
+    // because rails travel far and a wide fan reads as chaotic.
     const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
-    const railCount = 1 + multiShotStacks;
-    const railFan = railCount > 1 ? Math.min(0.3, 0.06 * (railCount - 1)) : 0;
+    const pairCount = 1 + multiShotStacks;
+    const pairFan = pairCount > 1 ? Math.min(0.3, 0.06 * (pairCount - 1)) : 0;
 
     let finalDamage = damage;
     if (capacitorStacks > 0) {
@@ -356,12 +361,21 @@ export function fireRailDriver(bulletPool, audioManager, config) {
         }
     }
 
-    for (let i = 0; i < railCount; i++) {
-        const offset = railCount > 1
-            ? (i - (railCount - 1) / 2) * (railFan / Math.max(1, railCount - 1))
+    // Helix tuning. amp = lateral peak offset (px), freq = radians per
+    // logic-tick. Two bullets per pair, phase-offset by π so they sit on
+    // opposite sides of the rail axis at all times — visible double helix.
+    const HELIX_AMP = 9;
+    const HELIX_FREQ = 0.42;
+
+    for (let i = 0; i < pairCount; i++) {
+        const pairOffset = pairCount > 1
+            ? (i - (pairCount - 1) / 2) * (pairFan / Math.max(1, pairCount - 1))
             : 0;
-        const bullet = bulletPool.get(this.x, this.y, this.angle + offset);
-        if (bullet) {
+        const pairAngle = this.angle + pairOffset;
+
+        for (let strand = 0; strand < 2; strand++) {
+            const bullet = bulletPool.get(this.x, this.y, pairAngle);
+            if (!bullet) continue;
             bullet.damage = finalDamage;
             bullet.radius *= config.bulletSize;
             bullet.baseRadius = bullet.radius;
@@ -373,10 +387,18 @@ export function fireRailDriver(bulletPool, audioManager, config) {
             if (this.getPowerupStacks('KINETIC_IMPACT') > 0) bullet.knockback = 8;
             if (this.getPowerupStacks('THROUGH_AND_THROUGH') > 0) bullet.damageTrail = true;
 
-            // Speed boost for rail (apply after bulletPool initialized vel)
+            // Apply weapon-config speed scaling on top of pool defaults.
             const speed = Math.hypot(bullet.vel.x, bullet.vel.y);
             bullet.vel.x = (bullet.vel.x / speed) * speed * config.bulletSpeed;
             bullet.vel.y = (bullet.vel.y / speed) * speed * config.bulletSpeed;
+
+            // Helix: paired bullets oscillate perpendicular to their rail
+            // axis with opposite phases, so they cross over each other
+            // every half period.
+            bullet.helixActive = true;
+            bullet.helixAmplitude = HELIX_AMP;
+            bullet.helixFreq = HELIX_FREQ;
+            bullet.helixPhase = strand === 0 ? 0 : Math.PI;
 
             this.applyGlobalBulletUpgrades(bullet);
         }
@@ -483,9 +505,6 @@ export function firePower(bulletPool, audioManager, particlePool) {
             break;
         case 'NOVA_BLAST':
             this.fireNova(config);
-            break;
-        case 'LIGHTNING_ARC':
-            this.fireLightning(config);
             break;
         case 'MISSILE_SALVO':
             this.fireMissiles(bulletPool, config);
@@ -685,6 +704,39 @@ export function fireMissiles(bulletPool, config) {
     const extraOrdnanceStacks = this.getPowerupStacks('EXTRA_ORDNANCE');
     const count = config.missileCount + extraOrdnanceStacks;
 
+    // Pre-assign one distinct target per missile so the salvo spreads
+    // across multiple threats instead of stacking on the nearest. Enemies
+    // first (nearest-first), then asteroids as fallback. If we run out
+    // of candidates, the remaining missiles launch unguided and will
+    // re-acquire later (skills.js handles that path, also de-duped).
+    const eng = this.gameEngine;
+    const enemies = (eng && eng.enemyPool && eng.enemyPool.activeObjects) || [];
+    const asteroids = (eng && eng.asteroidPool && eng.asteroidPool.activeObjects) || [];
+    const enemyCandidates = [];
+    for (const e of enemies) {
+        if (!e.active || e._deathFlash > 0) continue;
+        enemyCandidates.push({ ent: e, d: Math.hypot(e.x - this.x, e.y - this.y) });
+    }
+    enemyCandidates.sort((a, b) => a.d - b.d);
+    const asteroidCandidates = [];
+    for (const a of asteroids) {
+        if (!a.active || a._deathFlash > 0 || a.warping) continue;
+        asteroidCandidates.push({ ent: a, d: Math.hypot(a.x - this.x, a.y - this.y) });
+    }
+    asteroidCandidates.sort((a, b) => a.d - b.d);
+    const initialTargets = new Array(count).fill(null);
+    let ti = 0;
+    for (let i = 0; i < count && ti < enemyCandidates.length; i++, ti++) {
+        initialTargets[i] = enemyCandidates[ti].ent;
+    }
+    let aj = 0;
+    for (let i = 0; i < count; i++) {
+        if (initialTargets[i]) continue;
+        if (aj < asteroidCandidates.length) {
+            initialTargets[i] = asteroidCandidates[aj++].ent;
+        }
+    }
+
     // Per-slot offset along the ship's perpendicular axis so the
     // missiles visibly launch from positions across the ship's wings
     // (not all from the same center point) and fan outward in a wider
@@ -713,7 +765,7 @@ export function fireMissiles(bulletPool, config) {
             life: 3000,
             maxLife: 3000,
             radius: 5,
-            target: null,
+            target: initialTargets[i],
             active: true,
             speed: config.missileSpeed,
         });
