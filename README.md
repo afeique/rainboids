@@ -269,22 +269,96 @@ npm run preview    # Preview production build
 
 ---
 
-## Testing
+## Running Scripts & Services
 
-Rainboids has a comprehensive test suite:
+All commands are run with `npm run <script>` from the project root after `npm install`. The `package.json` groups scripts into logical sections — the headers prefixed with `__` (e.g. `__UNIT_TESTS__`) are visual separators only and not executable.
 
+### Dev / build
 ```bash
-npm run test:unit         # 68 Jest unit tests (pool, wave, math)
-npm run test:qa           # 92 Playwright smoke tests
-npm run test:e2e          # Full E2E suite (menu, HUD, weapons, enemies, powerups, waves)
-npm run test:e2e:enemies  # All 10 enemy type tests
-npm run test:e2e:survival # 2-minute AI survival run
-npm run perf              # Microbenchmarks (mitata)
-npm run perf:compare <refA> <refB>  # Compare performance between git refs
-npm run report:allure     # Generate Allure HTML report
+npm run dev                # Vite dev server (default port 8090) — hot reload
+npm start                  # Alias for `dev`
+npm run build              # Production build → dist/
+npm run preview            # Preview the dist/ build locally
 ```
 
-Includes an **AI playtester** (`tests/helpers/game-ai.js`) — a reactive bot that pilots the ship, engages enemies, and detects stuck states and invariant violations.
+### Asset generators
+```bash
+npm run generate-playlist  # Rebuild the music playlist manifest from music/
+npm run generate-sfx       # Regenerate the SFXR-baked WAV library
+```
+
+### Tests
+```bash
+# Unit tests — Jest, no browser, ~1s
+npm run test:unit
+npm run test:unit:watch
+npm run test:unit:verbose
+
+# QA smoke — Playwright "qa" project (~20-30s)
+npm run test:qa
+
+# Full E2E — sequential, comprehensive
+npm run test:e2e
+npm run test:e2e:menu        # Title / menu interactions
+npm run test:e2e:hud         # HUD elements
+npm run test:e2e:weapons     # Primary / power weapons
+npm run test:e2e:music       # Music player controls
+npm run test:e2e:asteroids   # Asteroid behaviors
+npm run test:e2e:enemies     # All 10 enemy type tests
+npm run test:e2e:powerups    # Powerup pickups + effects
+npm run test:e2e:waves       # Wave progression
+npm run test:e2e:survival    # 2-minute AI survival run
+
+# Performance FPS tests — Playwright "performance" project
+npm run test:perf
+npm run test:perf:gpu        # Same suite under the GPU-enabled config
+
+# Run everything in order: unit → qa → e2e → perf
+npm test
+npm run test:all             # All Playwright projects in parallel (no order guarantee)
+```
+
+### Reports (Allure HTML)
+```bash
+npm run report:pw            # Playwright's built-in HTML report
+npm run report:allure        # Aggregate Allure across all suites
+npm run report:unit          # Unit-only Allure report
+npm run report:e2e           # E2E-only Allure report
+npm run report:perf          # Perf-only Allure report
+```
+
+### Microbenchmarks (mitata, on V8)
+```bash
+npm run bench                # Full benchmark suite
+npm run bench:pool           # Object pool benchmarks
+npm run bench:collision      # Spatial-grid collision benchmarks
+npm run bench:wave           # Wave scaling math
+npm run bench:math           # Hot math inner loops
+npm run bench:noise          # Noise generators
+npm run bench:all-engines    # Compare V8 / JSC / SpiderMonkey side-by-side
+npm run bench:compare        # Compare benchmark output against a baseline
+```
+
+### AI QA bot (automated playtesting)
+The QA bot is a reactive AI player that drives a real headless browser via Playwright, plays through wave N, and reports anomalies (stuck states, invariant violations, FPS drops, balance outliers). Implementation in `tools/ai-qa-bot/`.
+```bash
+npm run qa:bot               # Default run (one session, ~5-10 min)
+npm run qa:bot:quick         # 3-minute spot check
+npm run qa:bot:long          # 30-minute deep run
+npm run qa:bot:headed        # Watch the bot play in a real Chrome window
+npm run qa:bot:bugs          # Bug-detection mode only — skips balance metrics
+npm run qa:bot:balance       # 5 sessions × 10 min, all builds — balance pass
+npm run qa:bot:novice        # Run with the "novice" skill profile
+npm run qa:bot:report        # Generate a report from the most recent session
+```
+
+The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair with `npm run report:allure` to inspect.
+
+### Test infrastructure notes
+- All Playwright suites need browsers installed once: `npx playwright install` (Chromium is enough for the default projects).
+- Allure CLI is bundled as a dev dependency — no global install required.
+- The unit suite uses `--experimental-vm-modules`, so it requires a recent Node (≥18 recommended).
+- The **AI playtester helper** (`tests/helpers/game-ai.js`) is the underlying steering logic shared by both the in-test reactive bot AND the QA bot's session controller. `GameAI(page)` exposes `run(durationMs)`, `waitForEnemyDeath(type, timeout)`, `waitForAsteroidCount(n, timeout)` for use in your own specs.
 
 ---
 

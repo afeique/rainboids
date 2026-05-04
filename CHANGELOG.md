@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.56.1] - 2026-05-03
+
+### Changed
+- **Smallest health/money orbs now ~75% larger.** `HEALTH_ORB_SIZE_MIN` 1.3 → 2.28, `MONEY_ORB_SIZE_MIN` 1.3 → 2.28. Max sizes bumped proportionally (1.4 → 2.45 health, 1.6 → 2.55 money) so big drops still feel meaningfully larger than small ones. Tiny low-value orbs are now legible at a glance instead of vanishing into the asteroid debris.
+
+### Documentation
+- **README — full run instructions for every npm script.** Fleshed out the "Running Scripts & Services" section: dev/build, asset generators (`generate-playlist`, `generate-sfx`), all unit / QA / E2E / perf test variants, Allure reports, mitata microbenchmarks (with per-suite shortcuts), and the AI QA bot (`qa:bot:*` — quick / long / headed / bugs / balance / novice / report). Added infrastructure notes covering Playwright browser install, Allure bundling, Node version, and the shared `tests/helpers/game-ai.js` API.
+
+---
+
 ## [5.56.0] - 2026-05-03
 
 ### Added
