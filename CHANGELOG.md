@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.2] - 2026-05-04
+
+### Changed
+- **`MAX_PARTICLES` 600 → 2500.** The 5.64.0 WebGL particle layer renders the migrated types in one instanced draw call at ~50ns per particle, so the per-particle cost is essentially flat regardless of count. The old 600 cap was tuned for Canvas2D headroom (3-4 simultaneous big-bangs); the new cap supports 8+ simultaneous big-bangs alongside ambient bullet-hit activity with no measurable frame-time cost.
+- QA pool-cap tests updated to assert against the new cap.
+
+---
+
+## [5.64.1] - 2026-05-04
+
+### Removed
+- **Lingering ember trails behind enemies during combat.** Every bullet-on-enemy hit was spawning 4 `explosionEmber` particles at the impact point, each with 1.0-1.8s lifetime. As an enemy moved and the player kept shooting it, those embers accumulated as a soft fading cloud along the enemy's path. The 5.64.0 WebGL atlas dot has a more uniform falloff than the previous Canvas2D `shadowBlur` glow, so the cloud read as a continuous soft haze rather than discrete fading specks — louder visual noise. Hit feedback is unchanged: shrapnel streaks (8) + sparkle motes (2) still fire on every hit. Same motion-only philosophy as 5.63.1's enemy-explosion cleanup.
+
+---
+
 ## [5.64.0] - 2026-05-04
 
 ### Added

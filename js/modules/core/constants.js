@@ -69,7 +69,7 @@ export const GAME_CONFIG = {
     WAVE_BREAK_TIME: 10000, // Time between waves (ms)
     
     // Performance settings optimized
-    MAX_PARTICLES: 600, // Headroom for 3-4 simultaneous enemy big-bangs + ambient bullet/asteroid activity without ANY explosion's own particles getting evicted by later same-frame spawns. Sprite-cache renderer (5.60.0) makes the higher cap effectively free.
+    MAX_PARTICLES: 2500, // 5.64.0 WebGL particle layer renders the migrated types (embers, flashes, sparkles, classic, shrapnel, rings) in ONE instanced draw call, so per-particle cost is ~50ns instead of 1-2µs. The 600 → 2500 bump gives us 8+ simultaneous big-bangs at peak before pool eviction kicks in, with no measurable frame-time cost.
     PARTICLE_CLEANUP_INTERVAL: 30, // More frequent cleanup for better performance
 
     // Temporal settings

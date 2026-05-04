@@ -480,20 +480,18 @@ export function handleCollisions() {
                     const impactAngle = Math.atan2(bullet.vel.y, bullet.vel.x);
                     // No flash on non-lethal hits — flash is reserved for
                     // the destruction event so the visual punch carries
-                    // weight. Sparks + embers + sparkles still convey the
-                    // hit landed.
-                    // Directional shrapnel — sparks fly AWAY from bullet direction (more pieces)
+                    // weight. Shrapnel + sparkles convey the hit landed.
+                    // No embers: they linger 1-2s with low velocity and
+                    // accumulate as a soft fading trail along the enemy's
+                    // path, which the player flagged as visual noise. The
+                    // motion-only philosophy from 5.63.1 (enemy explosions)
+                    // applies here too.
                     for (let p = 0; p < 8; p++) {
                         const spreadAngle = impactAngle + Math.PI + random(-0.8, 0.8);
                         const speed = random(3, 8);
                         this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel',
                             spreadAngle, speed, p < 3 ? '#ffffff' : eColor);
                     }
-                    // Extra embers at impact
-                    for (let p = 0; p < 4; p++) {
-                        this.particlePool.get(bullet.x, bullet.y, 'explosionEmber', p % 2 ? eColor : '#ffffff');
-                    }
-                    // A pair of sparkle motes for twinkle
                     if (Math.random() < 0.7) {
                         this.particlePool.get(bullet.x, bullet.y, 'starSparkle');
                         this.particlePool.get(bullet.x, bullet.y, 'starSparkle');
