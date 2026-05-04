@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.54.7] - 2026-05-03
+
+### Added
+- **Enemies actively steer around asteroids.** The previously-disabled `avoidAsteroids` AI hook is re-enabled and tuned: detection threshold now factors in BOTH the enemy's and the asteroid's radii (plus a 70-px buffer) so a small enemy near a large rock starts dodging early; force scales inversely with distance (gentle at threshold, strong near impact); skips warping / death-flashing asteroids; capped at 1.7× the enemy's base speed so stacked pushes can't fling the enemy across the field. Bumped from 0.08 → 0.14 force for decisive clearing.
+- The existing enemy-vs-asteroid collision handler already deals no damage to either party (the "No damage to enemy" / "No enemy destruction" path) — it only transfers momentum + rotation. Behavior preserved: enemies and asteroids can bump into each other without dealing damage; AI just tries hard not to.
+
+---
+
 ## [5.54.6] - 2026-05-03
 
 ### Removed

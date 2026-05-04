@@ -361,44 +361,49 @@ export function createTrailParticles(gameEngine) {
 export function avoidAsteroids(gameEngine) {
     if (!gameEngine.asteroidPool) return;
 
-    const avoidanceRadius = this.radius + 60; // Detection radius for asteroids
-    const avoidanceForce = 0.08; // Strength of avoidance
+    // Buffer in addition to both bodies' radii — enemy starts steering
+    // away when its hull is within BUFFER px of the asteroid's surface.
+    const BUFFER = 70;
+    const avoidanceForce = 0.14; // Decisive enough to actually clear
 
-    let avoidanceX = 0;
-    let avoidanceY = 0;
-    let asteroidCount = 0;
+    let sumX = 0;
+    let sumY = 0;
+    let count = 0;
 
-    // Check all active asteroids
     for (const asteroid of gameEngine.asteroidPool.activeObjects) {
         if (!asteroid.active) continue;
+        if (asteroid.warping || asteroid._deathFlash > 0) continue;
 
         const dx = this.x - asteroid.x;
         const dy = this.y - asteroid.y;
         const distance = Math.hypot(dx, dy);
+        if (distance <= 0) continue;
 
-        // If asteroid is within avoidance radius
-        if (distance < avoidanceRadius && distance > 0) {
-            // Add repulsive force (stronger when closer)
-            const forceMultiplier = (avoidanceRadius - distance) / avoidanceRadius;
-            avoidanceX += (dx / distance) * forceMultiplier;
-            avoidanceY += (dy / distance) * forceMultiplier;
-            asteroidCount++;
+        // Effective threshold accounts for asteroid's own radius so a
+        // small enemy near a big rock starts steering early.
+        const threshold = (this.radius || 12) + (asteroid.radius || 30) + BUFFER;
+        if (distance < threshold) {
+            // Repulsive force scaled inversely with distance — gentle at
+            // the threshold, strong on the verge of impact.
+            const forceMultiplier = (threshold - distance) / threshold;
+            sumX += (dx / distance) * forceMultiplier;
+            sumY += (dy / distance) * forceMultiplier;
+            count++;
         }
     }
 
-    // Apply averaged avoidance force
-    if (asteroidCount > 0) {
-        avoidanceX = (avoidanceX / asteroidCount) * avoidanceForce;
-        avoidanceY = (avoidanceY / asteroidCount) * avoidanceForce;
-
-        // Apply avoidance to velocity
+    if (count > 0) {
+        // Average the desired-direction signal then scale by the force
+        // constant so multiple nearby asteroids don't compound into a
+        // teleporting kick.
+        const avoidanceX = (sumX / count) * avoidanceForce;
+        const avoidanceY = (sumY / count) * avoidanceForce;
         this.vel.x += avoidanceX;
         this.vel.y += avoidanceY;
 
-        // Cap speed to prevent runaway velocity
+        // Cap speed so an unlucky stack of pushes can't yeet the enemy.
         const speed = Math.hypot(this.vel.x, this.vel.y);
-        const maxSpeed = this.config.speed * 1.5; // Allow slightly higher speed when avoiding
-
+        const maxSpeed = this.config.speed * 1.7;
         if (speed > maxSpeed) {
             this.vel.x = (this.vel.x / speed) * maxSpeed;
             this.vel.y = (this.vel.y / speed) * maxSpeed;

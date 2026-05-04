@@ -280,7 +280,11 @@ export class Enemy {
         // Enhanced evasive maneuvers
         this.updateEvasiveManeuvers(gameEngine);
         
-        // Asteroid avoidance removed - enemies focus on player and patrol only
+        // Asteroid avoidance — enemies now actively steer away from rocks.
+        // Collision still registers on contact (handlEnemyAsteroidCollision)
+        // and remains non-damaging for both enemy and asteroid; the AI just
+        // tries not to fly into them in the first place.
+        this.avoidAsteroids(gameEngine);
         
         // Maintain distance from player when targeting them
         if (this.currentTarget === 'player') {
