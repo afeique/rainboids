@@ -101,10 +101,11 @@ export function openShop() {
         // Initialize shop state. Land on a RANDOM purchasable tab so the
         // player sees fresh content each open instead of always staring
         // at HELP. HELP is still reachable via the tab row but isn't the
-        // default — picking from {PRIMARY, POWER, DEFENSE, SKILLS} keeps
-        // the open feeling fresh and surfaces upgrades the player might
-        // not have considered.
-        const _shopCats = ['PRIMARY', 'POWER', 'DEFENSE', 'SKILLS'];
+        // default — picking from {PRIMARY, POWER, DEFENSE} keeps the
+        // open feeling fresh and surfaces upgrades the player might
+        // not have considered. (SKILLS tab removed — equipping skills
+        // is handled by the F radial menu now.)
+        const _shopCats = ['PRIMARY', 'POWER', 'DEFENSE'];
         this.shopCategory = _shopCats[Math.floor(Math.random() * _shopCats.length)];
 
         // Shop now sells PRIMARY/POWER weapons, DEFENSE upgrades, and
