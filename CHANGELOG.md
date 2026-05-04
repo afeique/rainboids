@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.59.1] - 2026-05-03
+
+### Fixed
+- **`ReferenceError: i is not defined` on every enemy explosion** that crashed the game loop. The popcorn-burst code in `enemy.update`'s death-flash branch (added in 5.59.0) referenced the for-loop counter `i` after the loop body ended — `i` is `let`-scoped and wasn't visible at the ember-spawn line. Replaced with `tickIntoDeath % 2` so the ember color still alternates without leaning on the dead loop variable.
+
+---
+
 ## [5.59.0] - 2026-05-03
 
 ### Changed

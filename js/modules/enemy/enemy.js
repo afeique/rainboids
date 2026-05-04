@@ -286,7 +286,11 @@ export class Enemy {
                     gameEngine.particlePool.get(sx, sy, 'explosionShrapnel', sa, sp,
                         i === 0 ? '#ffffff' : c);
                 }
-                gameEngine.particlePool.get(sx, sy, 'explosionEmber', i % 2 ? c : '#ffcc66');
+                // Tick parity decides ember color so the popcorn rotates
+                // between the enemy's own hue and warm gold without using
+                // the (now out-of-scope) loop counter.
+                const emberC = (tickIntoDeath % 2) ? c : '#ffcc66';
+                gameEngine.particlePool.get(sx, sy, 'explosionEmber', emberC);
                 gameEngine.particlePool.get(sx, sy, 'starSparkle');
             }
 
