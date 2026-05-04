@@ -429,9 +429,17 @@ function buildItemRow(item, player, game) {
         if (!isWeaponOrSkill) costCol.appendChild(stackStatus(currentStacks, item.maxStacks, maxedOut));
     }
 
-    row.appendChild(costCol);
+    // Wrap cost + sell button in a single grid cell so they share the
+    // rightmost column. Without this wrapper the sell button became the
+    // 4th child of a 3-column grid (`56px 1fr auto`) and got auto-placed
+    // into column 1 of an implicit second row — clamped to 56px wide,
+    // which clipped the red background to less than the SELL text. The
+    // wrapper is a flex row containing costCol + (optional) sellBtn, so
+    // the auto-sized rightmost grid column expands to fit BOTH.
+    const rightCell = document.createElement('span');
+    rightCell.className = 'shop-item-right';
+    rightCell.appendChild(costCol);
 
-    // Sell button — regular items with stacks (not weapons/skills).
     if (!isWeaponOrSkill && currentStacks > 0) {
         const refund = sellRefundFor(item, currentStacks);
         const sellLabel = item.currency === 'SP' ? `SELL +${refund}SP` : `SELL +${refund}`;
@@ -440,8 +448,10 @@ function buildItemRow(item, player, game) {
         sellBtn.className = 'shop-item-sell';
         sellBtn.dataset.id = item.id;
         sellBtn.textContent = sellLabel;
-        row.appendChild(sellBtn);
+        rightCell.appendChild(sellBtn);
     }
+
+    row.appendChild(rightCell);
 
     return row;
 }

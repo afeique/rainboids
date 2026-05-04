@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.64.9] - 2026-05-04
+
+### Fixed
+- **Sell button background was clipped to ~56px wide** (cutting off most of the "SELL +###" label). Root cause: `.shop-item` is a 3-column grid (`grid-template-columns: 56px 1fr auto`) and the sell button was being appended as the row's 4th child. CSS Grid auto-placed it into column 1 of an implicit second row — clamped to the icon column's 56px width, which clipped the red background to less than the SELL text. Fixed by wrapping `costCol` and `sellBtn` in a new `.shop-item-right` flex container that occupies the rightmost auto-sized grid column. The auto column now expands to fit cost + sell side-by-side, and the sell button's background spans the entire `SELL +1500SP` label.
+
+---
+
 ## [5.64.8] - 2026-05-04
 
 ### Fixed

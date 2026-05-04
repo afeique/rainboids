@@ -470,8 +470,20 @@ body.shop-open .ui-element:not(#shop-overlay) {
 .shop-item-status--maxed { color: #666; }
 .shop-item-status--owned { color: #44ff88; }
 
+/* Right-side cell of each shop item: holds costCol and (optional) sell
+ * button as siblings inside a single grid track. Without this wrapper
+ * the sell button overflows the grid and gets reflowed to a phantom
+ * second row, clipping its background. */
+.shop-item-right {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    /* Important: this needs to live in the rightmost (auto) grid column,
+     * which is implicit since it's the third child of `.shop-item`. */
+}
+
 .shop-item-sell {
-    margin-left: 12px;
     padding: 9px 14px;
     background: rgba(170, 45, 45, 0.92);
     border: 1px solid #cc6666;
