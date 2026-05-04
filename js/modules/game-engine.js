@@ -697,7 +697,7 @@ export class GameEngine {
     
     dropPowerup(x, y, type = null) { return combat.dropPowerup.call(this, x, y, type); }
     collectPowerup(powerup) { return combat.collectPowerup.call(this, powerup); }
-    showPowerupDisplay(name, color) { return combat.showPowerupDisplay.call(this, name, color); }
+    showPowerupDisplay(name, color, description) { return combat.showPowerupDisplay.call(this, name, color, description); }
     
     drawPowerupDisplay() { return hudCombat.drawPowerupDisplay.call(this); }
     

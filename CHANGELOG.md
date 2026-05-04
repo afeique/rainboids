@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.54.3] - 2026-05-03
+
+### Fixed
+- **Powerup pickup descriptions actually surface now.** The 5.54.2 fix added descriptions to `getPowerupConfig`, but the actual pickup path uses `POWERUP_TYPES[type]` (which already had description fields). The real bug was the engine dispatcher: `showPowerupDisplay(name, color)` only forwarded TWO args, dropping the third `description` arg even though `combat.showPowerupDisplay` accepted it and the HUD render code consumed it. Engine method now forwards all three args.
+- **Title-screen launch animations stay centered on the actual title.** Two issues compounded into a leftward bias on every animation:
+  - `_measureLetterPositions` returned each letter's left-edge x; `_titleLetterDraw` then re-rendered a single-char `drawWavyText` whose internal `textAlign='center'` shifted it half-a-letter-width further left. Fix: helper now returns the letter's visual center (left edge + width/2) so the static and animated rendering perfectly overlap.
+  - Wave / cascade / warpdrive used a hardcoded `baseSpacing = 70` and a `+6` rightward bias for layout, then scaled outward against `centerX` — but the actual title row sits at `centerX + 10` (an optical-alignment nudge in the static rendering), so the row's expansion was asymmetric. All three animations now read positions directly from the static-title `staticPositions` array and scale outward from the row's own midpoint (`(staticPositions[0].x + staticPositions[N-1].x) / 2`), so the row stays symmetric throughout the zoom.
+  - Twister, explosion, and pinwheel all projected toward `(centerX, centerY)` instead of the title's actual center. They now project toward the title midpoint so the column / explosion / ring is anchored on the static title.
+  - Explosion was using fully-random per-letter directions, which could cluster the burst toward one side. Now evenly distributes the N letters around the unit circle plus a small per-letter jitter so each launch still varies but the spread is balanced.
+
+---
+
 ## [5.54.2] - 2026-05-03
 
 ### Fixed

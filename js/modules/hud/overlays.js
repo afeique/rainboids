@@ -267,9 +267,15 @@ const TITLE_FADE_MS   = 400;
 const TITLE_SETTLE_MS = 250;
 
 // Measure the letters of `text` rendered with drawWavyText at (baseX, baseY)
-// with the given font size. Returns an array of { x, y } centers — the same
-// per-letter centers that drawWavyText draws to, so animations can use them
-// as starting positions and stay perfectly aligned with the static title.
+// with the given font size. Returns an array of { x, y } that match the
+// rendering origin _titleLetterDraw expects: when each per-letter call to
+// drawWavyText runs (with textAlign='center', single-char text), its own
+// internal startX = 0 - w/2 means the char ends up visually centered at
+// (origin.x - w/2). The static drawWavyText, by contrast, places each
+// char's visual center at `currentX` — so to make the animation positions
+// overlap the static title we add w/2 to each origin. Without this
+// compensation the title appears shifted ~half-a-letter-width to the left
+// at the start of every animation.
 function _measureLetterPositions(ctx, text, fontSize, baseX, baseY) {
     ctx.save();
     ctx.font = `${fontSize}px 'Press Start 2P', monospace`;
@@ -280,8 +286,9 @@ function _measureLetterPositions(ctx, text, fontSize, baseX, baseY) {
     const positions = [];
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
-        positions.push({ x: currentX, y: baseY });
-        currentX += ctx.measureText(ch).width;
+        const w = ctx.measureText(ch).width;
+        positions.push({ x: currentX + w / 2, y: baseY, w });
+        currentX += w;
     }
     ctx.restore();
     return positions;
@@ -356,6 +363,11 @@ function drawTwisterAnim(ctx, elapsed, total, text, seeds, centerX, centerY, sta
     const verticalSpread = 380;
     const yStep = N > 1 ? verticalSpread / (N - 1) : 0;
     const time = elapsed / 1000;
+    // Project toward the title's actual visual center (centerX+10, titleY)
+    // rather than centerX/centerY — so the twister hurtles toward where
+    // the static title sits, not slightly off-axis below it.
+    const titleMidX = (staticPositions[0].x + staticPositions[N - 1].x) / 2;
+    const titleMidY = staticPositions[0].y;
 
     ctx.save();
     for (let i = 0; i < N; i++) {
@@ -368,8 +380,8 @@ function drawTwisterAnim(ctx, elapsed, total, text, seeds, centerX, centerY, sta
         const yScale = 1 - zoomAmount * 0.35;
         const y3d = yBase * yScale;
         const projScale = TITLE_FOCAL / z3d;
-        const sx = centerX + x3d * projScale;
-        const sy = centerY + y3d * projScale;
+        const sx = titleMidX + x3d * projScale;
+        const sy = titleMidY + y3d * projScale;
         const drawScale = projScale * 1.6;
         const angleAlpha = (Math.cos(angle) * 0.5 + 0.5);
         const letterAlpha = Math.max(0.25, 0.45 + 0.55 * angleAlpha) * (1 - fadeAlpha * 0.85);
@@ -403,16 +415,24 @@ function drawExplosionAnim(ctx, elapsed, total, text, seeds, centerX, centerY, s
         burstT = 1;
     }
     const formProgress = Math.min(1, elapsed / FORM_END);
+    const N = text.length;
+    // Project from the title's own visual center so the explosion is
+    // anchored on the static title rather than a slightly off-axis point.
+    const titleMidX = (staticPositions[0].x + staticPositions[N - 1].x) / 2;
+    const titleMidY = staticPositions[0].y;
 
     ctx.save();
-    for (let i = 0; i < text.length; i++) {
+    for (let i = 0; i < N; i++) {
         const seed = seeds[i] || { angle: i, pitch: 0, speed: 1, phase: 0, spinDir: 1 };
-        // Direction vector — biased toward camera (-z)
+        // Direction vector — evenly distribute the N letters around the
+        // unit circle (so the burst is balanced left/right) plus a small
+        // per-letter jitter from seed.angle so each launch still varies.
+        const baseAngle = (i / N) * Math.PI * 2 + seed.angle * 0.35;
         const cosP = Math.cos(seed.pitch);
         const sinP = Math.sin(seed.pitch);
-        const dirX = Math.cos(seed.angle) * cosP * 1.35;
-        const dirY = sinP * 0.85 - 0.05; // slight upward bias for drama
-        const dirZ = -Math.abs(Math.sin(seed.angle * 0.5)) * 0.45 - 0.95;
+        const dirX = Math.cos(baseAngle) * cosP * 1.35;
+        const dirY = Math.sin(baseAngle) * cosP * 0.85 + sinP * 0.4 - 0.05;
+        const dirZ = -Math.abs(Math.sin(baseAngle * 0.5)) * 0.45 - 0.95;
 
         // Distance traveled — accelerates outward
         const dist = Math.pow(burstT, 1.55) * 750 * seed.speed;
@@ -422,8 +442,8 @@ function drawExplosionAnim(ctx, elapsed, total, text, seeds, centerX, centerY, s
         if (z3d <= 30) continue;
 
         const projScale = TITLE_FOCAL / z3d;
-        const sx = centerX + x3d * projScale;
-        const sy = centerY + y3d * projScale;
+        const sx = titleMidX + x3d * projScale;
+        const sy = titleMidY + y3d * projScale;
 
         // Scale: starts at 0 (formation), grows with both perspective + a
         // small intrinsic flare so the explosion feels energetic.
@@ -456,10 +476,6 @@ function drawWaveAnim(ctx, elapsed, total, text, seeds, centerX, centerY, static
     }
 
     const N = text.length;
-    const baseSpacing = 70;     // letter horizontal spacing
-    const totalWidth = (N - 1) * baseSpacing;
-    const leftX = centerX - totalWidth / 2 + 6;
-
     // Amplitude + frequency ramp
     const t = Math.min(1, elapsed / WAVE_END);
     const eased = Math.pow(t, 1.3);
@@ -468,21 +484,29 @@ function drawWaveAnim(ctx, elapsed, total, text, seeds, centerX, centerY, static
     const phaseSpd  = 1.4 + eased * 6.5;        // wave moves faster too
     const time = elapsed / 1000;
 
-    // Zoom: scale grows + small per-letter outward velocity to scatter
+    // Zoom: scale grows + per-letter outward drift from the title's
+    // visual center. We compute that center directly from the static
+    // positions so the row stays symmetric around its own midpoint
+    // instead of drifting against an arbitrary centerX.
     const drawScaleBase = 1 + zoomAmount * 5;
+    const titleMidX = (staticPositions[0].x + staticPositions[N - 1].x) / 2;
 
     ctx.save();
     for (let i = 0; i < N; i++) {
-        const x = leftX + i * baseSpacing;
+        const sp = staticPositions[i];
         const wavePhase = i * frequency * 0.55 + time * phaseSpd;
-        const y = centerY + Math.sin(wavePhase) * amplitude;
-        // During zoom, letters drift outward from center
-        const dxToCenter = x - centerX;
-        const sx = centerX + dxToCenter * (1 + zoomAmount * 0.6);
+        // Anchor the wave to each letter's static y so blend=1 still has
+        // letters in their idle row rather than drifting to centerY.
+        const x = sp.x;
+        const y = sp.y + Math.sin(wavePhase) * amplitude;
+        // During zoom, letters drift outward from the title's midpoint
+        // (symmetric around the row, not against off-anchor centerX).
+        const dxToMid = x - titleMidX;
+        const sx = titleMidX + dxToMid * (1 + zoomAmount * 0.6);
         const sy = y - zoomAmount * 60;
         const rotation = Math.cos(wavePhase) * 0.25 * eased;
         const letterAlpha = 1 - fadeAlpha * 0.9;
-        const r = _settleLerp(elapsed, staticPositions[i], sx, sy, drawScaleBase, letterAlpha, rotation);
+        const r = _settleLerp(elapsed, sp, sx, sy, drawScaleBase, letterAlpha, rotation);
         _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
     }
     ctx.restore();
@@ -528,7 +552,10 @@ function drawCascadeAnim(ctx, elapsed, total, text, seeds, centerX, centerY, sta
             rotation = seed.spinDir * Math.sin(t * Math.PI) * 0.18 * damp;
         }
 
-        const animSx = sp.x + (sp.x - centerX) * zoomAmount * 1.0;
+        // Zoom outward from the title's own midpoint so the row scales
+        // symmetrically (the static title sits at centerX+10, not centerX).
+        const titleMidX = (staticPositions[0].x + staticPositions[N - 1].x) / 2;
+        const animSx = sp.x + (sp.x - titleMidX) * zoomAmount * 1.0;
         const animSy = sp.y + yOffset - zoomAmount * 40;
         const drawScale = 1 + zoomAmount * 6;
         const letterAlpha = 1 - fadeAlpha * 0.9;
@@ -565,29 +592,34 @@ function drawWarpdriveAnim(ctx, elapsed, total, text, seeds, centerX, centerY, s
     }
 
     const N = text.length;
-    const baseSpacing = 70;
-    const totalWidth = (N - 1) * baseSpacing;
-    const leftX = centerX - totalWidth / 2 + 6;
-    const groundY = centerY;
+    // Streak destination = each letter's static title position. Using the
+    // static row keeps the row centered on its own midpoint rather than on
+    // the off-by-+10 centerX anchor.
+    const titleMidX = (staticPositions[0].x + staticPositions[N - 1].x) / 2;
 
     ctx.save();
     for (let i = 0; i < N; i++) {
         const seed = seeds[i] || { angle: i, speed: 1 };
-        const finalX = leftX + i * baseSpacing;
-        const finalY = groundY;
+        const sp = staticPositions[i];
+        const finalX = sp.x;
+        const finalY = sp.y;
         // Source: far point along seed.angle direction, ~1500px out
         const srcDist = 1500;
-        const srcX = centerX + Math.cos(seed.angle) * srcDist;
-        const srcY = centerY + Math.sin(seed.angle) * srcDist;
+        // Streak source: a far point along seed.angle, anchored to the
+        // title's own midpoint (not centerX, which sits 10px left of the
+        // title row's true center).
+        const srcX = titleMidX + Math.cos(seed.angle) * srcDist;
+        const srcY = sp.y + Math.sin(seed.angle) * srcDist;
 
         const x = srcX + (finalX - srcX) * streakT;
         const y = srcY + (finalY - srcY) * streakT;
 
-        // Apply zoom — letters drift outward + scale
-        const dxToCenter = x - centerX;
-        const dyToCenter = y - centerY;
-        const sx = centerX + dxToCenter * (1 + zoomAmount * 0.7);
-        const sy = centerY + dyToCenter * (1 + zoomAmount * 0.5);
+        // Apply zoom — letters drift outward from the title's midpoint /
+        // own y so the row scales symmetrically.
+        const dxToMid = x - titleMidX;
+        const dyToMid = y - sp.y;
+        const sx = titleMidX + dxToMid * (1 + zoomAmount * 0.7);
+        const sy = sp.y + dyToMid * (1 + zoomAmount * 0.5);
         const drawScale = (0.4 + 0.6 * streakT) * (1 + zoomAmount * 4.5);
 
         // During streak phase, letters are stretched faintly along motion
@@ -627,13 +659,17 @@ function drawPinwheelAnim(ctx, elapsed, total, text, seeds, centerX, centerY, st
     const N = text.length;
     const angularVelocity = 6.0;
     const time = elapsed / 1000;
+    // Anchor the ring on the static title's actual visual center (the
+    // title row sits at centerX+10, not centerX).
+    const titleMidX = (staticPositions[0].x + staticPositions[N - 1].x) / 2;
+    const titleMidY = staticPositions[0].y;
 
     ctx.save();
     for (let i = 0; i < N; i++) {
         const baseAngle = (i / N) * Math.PI * 2 - Math.PI / 2;
         const angle = baseAngle + time * angularVelocity;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = centerY + Math.sin(angle) * radius;
+        const x = titleMidX + Math.cos(angle) * radius;
+        const y = titleMidY + Math.sin(angle) * radius;
         // Letters tangentially rotate along with the ring
         const rotation = angle + Math.PI / 2;
         const drawScale = 1 + zoomAmount * 5.5;
