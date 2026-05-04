@@ -99,8 +99,13 @@ export function startNextWave() {
     // Reset player state at wave start
     this.playerState = PLAYER_STATES.NORMAL;
 
-    // Restore player health to full between waves
-    this.player.health = this.player.getEffectiveMaxHealth();
+    // Player keeps whatever health they finished the wave with — no
+    // free top-up between waves. Health-orb pickups, MEDPACK powerup,
+    // or the shop's repair option are the legitimate ways to heal.
+    // Cap to current max in case Health Boost upgrades changed it
+    // post-clear so we never report > max.
+    const cap = this.player.getEffectiveMaxHealth();
+    if (this.player.health > cap) this.player.health = cap;
 
     // Wave intro: full-screen dark overlay with "WAVE N" — entities warp
     // in during the dark hold, settling into place as the overlay fades.

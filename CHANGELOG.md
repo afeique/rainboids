@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.58.1] - 2026-05-03
+
+### Removed
+- **Free health top-up between waves.** `startNextWave` no longer sets `player.health = getEffectiveMaxHealth()`. The player keeps whatever HP they finished the wave with — health orbs, MEDPACK pickups, and the shop are the only legitimate heals now. Current health is still clamped to the live max in case a Health Boost stack purchased between waves changed the cap.
+
+---
+
 ## [5.58.0] - 2026-05-03
 
 ### Added
