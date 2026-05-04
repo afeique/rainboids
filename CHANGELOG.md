@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.54.2] - 2026-05-03
+
+### Fixed
+- **Powerup pickup blurbs now actually show.** The HUD's `drawPowerupDisplay` was already wired to render `powerupDisplay.description` under the powerup name, and `collectPowerup` was already piping `powerup.config.description` into it — but the configs returned from `getPowerupConfig` had no `description` field, so the blurb was always empty. Added a one-line description for every powerup type (Shielding, Rapid Fire, Multi Shot, Afterburner, Big Bullets, Piercing, Explosive, Homing, Medpack, Health Boost, Triage, Critical Chance, Critical Damage, Long Range, Charge Speed, Charge Power, Health/Money Orb Luck/Bounty, Doctor, Payday, High Roller) plus a passthrough for weapon/skill upgrades that already carry `description` in weapon-data.js.
+
+---
+
 ## [5.54.1] - 2026-05-03
 
 ### Added

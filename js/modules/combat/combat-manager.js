@@ -537,37 +537,45 @@ export function showPowerupDisplay(name, color, description = '') {
 
 export function getPowerupConfig(type) {
     const configs = {
-        'SHIELD_BOOST':             { name: 'Shielding',          duration: Infinity, icon: '🛡️', gradientColors: ['#33ff99', '#006644'] },
-        'RAPID_FIRE':               { name: 'Rapid Fire',          duration: Infinity, icon: '⚡', gradientColors: ['#ff6600', '#ff0000'] },
-        'MULTI_SHOT':               { name: 'Multi Shot',          duration: Infinity, icon: '✳️', gradientColors: ['#66aaff', '#0033cc'] },
-        'SPEED_BOOST':              { name: 'Afterburner',         duration: Infinity, icon: '💨', gradientColors: ['#ffff33', '#cc9900'] },
-        'BIG_BULLETS':              { name: 'Big Bullets',         duration: Infinity, icon: '🔵', gradientColors: ['#66ff66', '#009900'] },
-        'PIERCING':                 { name: 'Piercing',            duration: Infinity, icon: '🏹', gradientColors: ['#ffcc66', '#cc6600'] },
-        'EXPLOSIVE':                { name: 'Explosive',           duration: Infinity, icon: '💣', gradientColors: ['#ff9933', '#cc3300'] },
-        'HOMING':                   { name: 'Homing',              duration: Infinity, icon: '🎯', gradientColors: ['#ff66cc', '#cc0066'] },
-        'MEDPACK':                  { name: 'Medpack',             duration: Infinity, icon: '💊', gradientColors: ['#ff99cc', '#cc3366'] },
-        'HEALTH_BOOST':             { name: 'Health Boost',        duration: Infinity, icon: '❤️', gradientColors: ['#ff6666', '#cc0000'] },
-        'HEALTH_DROP_FREQUENCY':    { name: 'Triage',              duration: Infinity, icon: '⏳', gradientColors: ['#66ffaa', '#229966'] },
-        'CRIT_CHANCE':              { name: 'Critical Chance',     duration: Infinity, icon: '⭐', gradientColors: ['#ffff66', '#cc9900'] },
-        'CRIT_DAMAGE':              { name: 'Critical Damage',     duration: Infinity, icon: '🗡️', gradientColors: ['#ff3399', '#cc0033'] },
-        'LONG_RANGE':               { name: 'Long Range',          duration: Infinity, icon: '🏹', gradientColors: ['#bbff66', '#448800'] },
-        'CHARGE_SPEED':             { name: 'Charge Speed',        duration: Infinity, icon: '⏱️', gradientColors: ['#ffcc00', '#cc8800'] },
-        'CHARGE_POWER':             { name: 'Charge Power',        duration: Infinity, icon: '🔋', gradientColors: ['#ff6600', '#cc3300'] },
-        'HEALTH_ORB_DROP_CHANCE':   { name: 'Health Orb Luck',     duration: Infinity, icon: '🍀', gradientColors: ['#33ff99', '#009944'] },
-        'MONEY_ORB_DROP_CHANCE':    { name: 'Money Orb Luck',      duration: Infinity, icon: '💰', gradientColors: ['#ffdd00', '#cc8800'] },
-        'HEALTH_ORB_DROP_QUANTITY': { name: 'Health Orb Bounty',   duration: Infinity, icon: '💚', gradientColors: ['#66ff66', '#009900'] },
-        'MONEY_ORB_DROP_QUANTITY':  { name: 'Money Orb Bounty',    duration: Infinity, icon: '🪙', gradientColors: ['#ffcc00', '#996600'] },
-        'DOCTOR':                   { name: 'Doctor',              duration: Infinity, icon: '🏥', gradientColors: ['#ff6688', '#cc2244'] },
-        'PAYDAY':                   { name: 'Payday',              duration: Infinity, icon: '💵', gradientColors: ['#66ff66', '#228822'] },
-        'HIGH_ROLLER':              { name: 'High Roller',         duration: Infinity, icon: '🎰', gradientColors: ['#ffdd44', '#cc8800'] },
+        'SHIELD_BOOST':             { name: 'Shielding',          description: '+10% damage reduction',                  duration: Infinity, icon: '🛡️', gradientColors: ['#33ff99', '#006644'] },
+        'RAPID_FIRE':               { name: 'Rapid Fire',         description: 'Faster auto-fire rate',                  duration: Infinity, icon: '⚡', gradientColors: ['#ff6600', '#ff0000'] },
+        'MULTI_SHOT':               { name: 'Multi Shot',         description: '+1 bullet per shot, fanned out',         duration: Infinity, icon: '✳️', gradientColors: ['#66aaff', '#0033cc'] },
+        'SPEED_BOOST':              { name: 'Afterburner',        description: 'Faster ship movement',                   duration: Infinity, icon: '💨', gradientColors: ['#ffff33', '#cc9900'] },
+        'BIG_BULLETS':              { name: 'Big Bullets',        description: 'Larger bullets, easier to land',         duration: Infinity, icon: '🔵', gradientColors: ['#66ff66', '#009900'] },
+        'PIERCING':                 { name: 'Piercing',           description: 'Bullets pass through targets',           duration: Infinity, icon: '🏹', gradientColors: ['#ffcc66', '#cc6600'] },
+        'EXPLOSIVE':                { name: 'Explosive',          description: 'Bullets detonate on impact',             duration: Infinity, icon: '💣', gradientColors: ['#ff9933', '#cc3300'] },
+        'HOMING':                   { name: 'Homing',             description: 'Bullets curve toward enemies',           duration: Infinity, icon: '🎯', gradientColors: ['#ff66cc', '#cc0066'] },
+        'MEDPACK':                  { name: 'Medpack',            description: 'Restores 50% of max HP',                 duration: Infinity, icon: '💊', gradientColors: ['#ff99cc', '#cc3366'] },
+        'HEALTH_BOOST':             { name: 'Health Boost',       description: '+25 max HP, fully heals on pickup',      duration: Infinity, icon: '❤️', gradientColors: ['#ff6666', '#cc0000'] },
+        'HEALTH_DROP_FREQUENCY':    { name: 'Triage',             description: 'Health orbs drop more often',            duration: Infinity, icon: '⏳', gradientColors: ['#66ffaa', '#229966'] },
+        'CRIT_CHANCE':              { name: 'Critical Chance',    description: '+5% chance for crit hits',               duration: Infinity, icon: '⭐', gradientColors: ['#ffff66', '#cc9900'] },
+        'CRIT_DAMAGE':              { name: 'Critical Damage',    description: 'Crits deal more damage',                 duration: Infinity, icon: '🗡️', gradientColors: ['#ff3399', '#cc0033'] },
+        'LONG_RANGE':               { name: 'Long Range',         description: 'Bullets travel further before fading',   duration: Infinity, icon: '🏹', gradientColors: ['#bbff66', '#448800'] },
+        'CHARGE_SPEED':             { name: 'Charge Speed',       description: 'Charge shots build up faster',           duration: Infinity, icon: '⏱️', gradientColors: ['#ffcc00', '#cc8800'] },
+        'CHARGE_POWER':             { name: 'Charge Power',       description: 'Fully-charged shots hit harder',         duration: Infinity, icon: '🔋', gradientColors: ['#ff6600', '#cc3300'] },
+        'HEALTH_ORB_DROP_CHANCE':   { name: 'Health Orb Luck',    description: 'Higher chance enemies drop health orbs', duration: Infinity, icon: '🍀', gradientColors: ['#33ff99', '#009944'] },
+        'MONEY_ORB_DROP_CHANCE':    { name: 'Money Orb Luck',     description: 'Higher chance enemies drop coin orbs',   duration: Infinity, icon: '💰', gradientColors: ['#ffdd00', '#cc8800'] },
+        'HEALTH_ORB_DROP_QUANTITY': { name: 'Health Orb Bounty',  description: 'Enemies drop more health orbs at once',  duration: Infinity, icon: '💚', gradientColors: ['#66ff66', '#009900'] },
+        'MONEY_ORB_DROP_QUANTITY':  { name: 'Money Orb Bounty',   description: 'Enemies drop more coin orbs at once',    duration: Infinity, icon: '🪙', gradientColors: ['#ffcc00', '#996600'] },
+        'DOCTOR':                   { name: 'Doctor',             description: 'Health orbs heal more HP',               duration: Infinity, icon: '🏥', gradientColors: ['#ff6688', '#cc2244'] },
+        'PAYDAY':                   { name: 'Payday',             description: 'Money orbs award more coins',            duration: Infinity, icon: '💵', gradientColors: ['#66ff66', '#228822'] },
+        'HIGH_ROLLER':              { name: 'High Roller',        description: 'Boss/elite kills drop bonus loot',       duration: Infinity, icon: '🎰', gradientColors: ['#ffdd44', '#cc8800'] },
     };
     if (configs[type]) return configs[type];
 
-    // Dynamic fallback for weapon/skill upgrades from weapon-data.js
+    // Dynamic fallback for weapon/skill upgrades from weapon-data.js —
+    // pass through the upgrade's description so the pickup blurb shows
+    // the same one-liner used in the shop.
     const allUpgrades = { ...PRIMARY_UPGRADES, ...POWER_UPGRADES, ...SKILL_UPGRADES };
     if (allUpgrades[type]) {
         const upg = allUpgrades[type];
-        return { name: upg.name, duration: Infinity, icon: upg.icon, gradientColors: ['#aaaaff', '#4444aa'] };
+        return {
+            name: upg.name,
+            description: upg.description || '',
+            duration: Infinity,
+            icon: upg.icon,
+            gradientColors: ['#aaaaff', '#4444aa'],
+        };
     }
     return null;
 }
