@@ -8,7 +8,7 @@ A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave s
 
 ## Play Now
 
-Visit **https://rainboids.cat.computer** in any modern browser on a desktop or laptop.
+Visit **[rainboids.cat.computer](https://rainboids.cat.computer)** in any modern browser on a desktop or laptop.
 
 **Requires desktop or laptop.**
 
