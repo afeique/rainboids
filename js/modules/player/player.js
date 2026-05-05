@@ -440,18 +440,44 @@ export class Player {
         const dy = input.aimY - this.y;
         this.angle = Math.atan2(dy, dx);
 
-        // Auto Fire — auto-press primary; release power weapon when ready.
-        // Charge-based power weapons charge automatically (weapons.js starts
-        // the charge unconditionally), so we only flip fireSecondary on at
-        // full charge to release the peak-power shot.
+        // Auto Fire — only triggers when there's actually a destructible
+        // target within weapon range AND roughly in line with the current
+        // aim. Holding fire when nothing's hittable wastes ammo (visually,
+        // and for charged weapons it interrupts charging) and feels noisy.
+        // Charge-based power weapons still charge passively (weapons.js
+        // starts the charge unconditionally); we only flip fireSecondary
+        // on once a target is hittable AND charging is full.
         if (assists && assists.autoFire) {
-            input.fire = true;
-            const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
-            if (cfg) {
-                if (cfg.isChargeBased) {
-                    if (this.isFullyCharged) input.fireSecondary = true;
-                } else if (this.isPowerReady && this.isPowerReady()) {
-                    input.fireSecondary = true;
+            const primaryCfg = this.getActivePrimaryConfig && this.getActivePrimaryConfig();
+            const baseRange = primaryCfg ? (primaryCfg.range || 1) * 400 : 400;
+            const rangeMult = this.getRangeMultiplier ? this.getRangeMultiplier() : 1;
+            const maxRange = baseRange * rangeMult;
+            // Angular tolerance: ±25° cone around the aim. Tight enough
+            // to avoid firing at off-screen targets, loose enough that
+            // small auto-aim correction lag doesn't choke fire.
+            const cone = 25 * Math.PI / 180;
+            let canHit = false;
+            if (ge && ge.findNearestTarget) {
+                const t = ge.findNearestTarget(this.x, this.y, maxRange);
+                if (t) {
+                    const aimDx = Math.cos(this.angle);
+                    const aimDy = Math.sin(this.angle);
+                    const tDx = t.x - this.x;
+                    const tDy = t.y - this.y;
+                    const tLen = Math.hypot(tDx, tDy) || 1;
+                    const dot = (aimDx * tDx + aimDy * tDy) / tLen; // cosθ
+                    if (dot >= Math.cos(cone)) canHit = true;
+                }
+            }
+            if (canHit) {
+                input.fire = true;
+                const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
+                if (cfg) {
+                    if (cfg.isChargeBased) {
+                        if (this.isFullyCharged) input.fireSecondary = true;
+                    } else if (this.isPowerReady && this.isPowerReady()) {
+                        input.fireSecondary = true;
+                    }
                 }
             }
         }

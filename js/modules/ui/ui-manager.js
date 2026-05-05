@@ -390,7 +390,7 @@ export class UIManager {
             <h2>CONTROLS</h2>
             <div class="control-list">
                 <div>
-                    <span class="control-symbol">WASD</span> or <span class="control-symbol">ARROWS</span><br>
+                    <span class="control-symbol">WASD</span><br>
                     Movement
                 </div>
                 <div>
@@ -398,13 +398,26 @@ export class UIManager {
                     Aiming
                 </div>
                 <div>
-                    <span class="control-symbol">LEFT-CLICK</span><br>
+                    <span class="control-symbol">LEFT</span>
+                    or
+                    <span class="control-symbol">RIGHT</span>
+                    Arrows<br>
+                    Rotate Ship
+                </div>
+
+                <div>
+                    <span class="control-symbol">L.CLICK</span>
+                    or
+                    <span class="control-symbol">UP ↑</span><br>
                     Fire equipped primary weapon (hold)
                 </div>
                 <div>
-                    <span class="control-symbol">RIGHT-CLICK</span> 
+                    <span class="control-symbol">R.CLICK</span>
                     or 
-                    <span class="control-symbol">SPACE</span><br>
+                    <span class="control-symbol">SPACE</span>
+                    or
+                    <span class="control-symbol">DOWN ↓</span>
+                    <br>
                     Fire equipped power weapon
                 </div>
                 <div>
@@ -658,6 +671,19 @@ export class UIManager {
 
             const card = document.createElement('div');
             card.className = 'powerup-card' + (owned ? ' powerup-card--owned' : ' powerup-card--locked');
+            // 5.74.5 — entire card is clickable so the player can spend a
+            // pick by clicking anywhere on the row, not just the small +1
+            // chip on the right. Click-and-pick reads more naturally and
+            // dodges the failure mode where players tap the card body and
+            // think nothing happened. The +1 button still exists and runs
+            // the same purchase path.
+            if (picks > 0) {
+                card.style.cursor = 'pointer';
+                card.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.purchasePowerup(type);
+                });
+            }
 
             const iconWrap = document.createElement('div');
             iconWrap.className = 'powerup-card-icon';
@@ -695,6 +721,7 @@ export class UIManager {
             buyBtn.disabled = picks <= 0;
             buyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                e.preventDefault();
                 this.purchasePowerup(type);
             });
             card.appendChild(buyBtn);

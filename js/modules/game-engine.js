@@ -1910,9 +1910,11 @@ export class GameEngine {
         } catch (e) { /* localStorage may be unavailable */ }
     }
 
-    // Find the nearest threat (enemy / asteroid / enemy bullet) to a point.
-    // Returns {x, y, dist} or null. `maxDist` filters out far targets;
-    // `fromX/fromY` defaults to the point itself for nearest-to-cursor.
+    // Find the nearest *destructible* threat to a point. Includes enemies,
+    // asteroids, and mine-shaped enemy bullets (bombs — they have HP and
+    // can be shot). Excludes regular enemy bullets, which can't be hit and
+    // would just yank the reticle around when Auto Aim / Aim Assist is on.
+    // Returns {x, y, dist, target} or null.
     findNearestTarget(fromX, fromY, maxDist = Infinity) {
         let best = null;
         let bestDistSq = maxDist * maxDist;
@@ -1928,7 +1930,11 @@ export class GameEngine {
         };
         if (this.enemyPool) for (const e of this.enemyPool.activeObjects) consider(e);
         if (this.asteroidPool) for (const a of this.asteroidPool.activeObjects) consider(a);
-        if (this.enemyBulletPool) for (const b of this.enemyBulletPool.activeObjects) consider(b);
+        if (this.enemyBulletPool) {
+            for (const b of this.enemyBulletPool.activeObjects) {
+                if (b && (b.shape === 'mine' || b.shape === 'homing_mine')) consider(b);
+            }
+        }
         if (!best) return null;
         return { x: best.x, y: best.y, dist: Math.sqrt(bestDistSq), target: best };
     }

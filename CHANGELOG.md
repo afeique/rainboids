@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.74.6] - 2026-05-05
+
+### Changed
+- **Auto Fire only fires when something is in range AND roughly on-aim.** Previously the assist held `input.fire = true` every tick, so the ship spammed bullets into empty space and (worse) interrupted nothing — but visually it never stopped. Now it gates each tick on `findNearestTarget(player.x, player.y, range)` where `range = primary.range × 400 × LONG_RANGE multiplier`, plus a ±25° aim cone (`dot ≥ cos(25°)`) so the target also has to be in front of the ship. Power-weapon auto-release inherits the same gate — charge-based weapons keep charging passively, but the release only triggers when `canHit && isFullyCharged`; cooldown-based ones fire when `canHit && isPowerReady()`.
+
+---
+
+## [5.74.5] - 2026-05-05
+
+### Changed
+- **POWERUPS pause-tab — entire card is now a click-to-buy hit target.** Previously only the small `+1` chip on the right end spent a Pick; clicking anywhere else on the row did nothing, which caused players to think purchases were broken when they tapped the card body. The card itself now carries the same purchase click handler (with `stopPropagation` + `preventDefault`) so clicking any part of the row spends one Pick and stacks the powerup. The `+1` chip still works for players who target it directly.
+
+### Fixed
+- **Auto Aim / Aim Assist no longer track regular enemy bullets.** `GameEngine.findNearestTarget` was walking every active enemy bullet, so the reticle would snap onto incoming projectiles the player can't actually destroy — yanking the aim around as bullets streamed past. Now restricted to enemies, asteroids, and `shape === 'mine'` / `'homing_mine'` enemy bullets (the destructible Tangerine bombs).
+
+---
+
 ## [5.74.4] - 2026-05-05
 
 ### Fixed
