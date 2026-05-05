@@ -20,8 +20,11 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
 ## Game Overview
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/afbf1039-b46c-4717-9aa2-1a8bc4083354" />
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f1bfe140-5e6b-43df-969d-d1f49427aa02" />
+<img width="1280" height="720" alt="title-screen" src="https://github.com/user-attachments/assets/2438ad2e-59c2-4772-96c2-024db0090251" />
+
+<img width="1280" height="720" alt="screenshot-1" src="https://github.com/user-attachments/assets/a889633d-8f68-4c34-aff9-fe5799873545" />
+
+<img width="1280" height="720" alt="screemshot-2" src="https://github.com/user-attachments/assets/f18e8478-ec06-4443-8d59-feda235ec72b" />
 
 Rainboids is a supercharged asteroids game featuring:
 - **6 primary weapons**, **4 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
