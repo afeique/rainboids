@@ -1,6 +1,18 @@
 // UI management for overlays, messages, and interface elements
 import { MusicPlayer } from '../audio/music-player.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
+import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
+
+// Format an elapsed-time milliseconds value as M:SS for the pause-menu
+// TIMER tab. Mirrors the same formatter that lives in shop-dom.js for
+// the (now-removed) shop TIMER panel.
+function formatRunTime(ms) {
+    if (!isFinite(ms)) return '∞';
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 export class UIManager {
     constructor() {
@@ -604,6 +616,26 @@ export class UIManager {
         const player = this.gameEngine.player;
         const sub = this._powerupsSubTab;
 
+        // 5.73.0 — POWERUPS tab moved out of the shop into here. Top
+        // banner shows the player's unspent Pick budget; each card
+        // gets a "+1 Pick" button that spends a pick and adds a stack.
+        const picks = player.powerupPicks || 0;
+        const banner = document.createElement('div');
+        banner.className = 'powerups-pick-banner';
+        const bannerSigil = document.createElement('span');
+        bannerSigil.className = 'powerups-pick-sigil';
+        bannerSigil.textContent = '+';
+        banner.appendChild(bannerSigil);
+        const bannerCount = document.createElement('span');
+        bannerCount.className = 'powerups-pick-count';
+        bannerCount.textContent = `${picks}`;
+        banner.appendChild(bannerCount);
+        const bannerLabel = document.createElement('span');
+        bannerLabel.className = 'powerups-pick-label';
+        bannerLabel.textContent = picks === 1 ? 'PICK AVAILABLE' : 'PICKS AVAILABLE';
+        banner.appendChild(bannerLabel);
+        list.appendChild(banner);
+
         const entries = Object.entries(POWERUP_TYPES).filter(
             ([, cfg]) => (cfg.category || 'OFFENSE') === sub,
         );
@@ -634,9 +666,6 @@ export class UIManager {
 
             const name = document.createElement('div');
             name.className = 'powerup-card-name';
-            // Show full name + abbreviation parenthetically, e.g.
-            // "Pierce (PRC)" — keeps the player learning the codes
-            // they see on the bottom-of-screen HUD badges.
             const abbr = cfg.abbr || (cfg.name || type).slice(0, 3).toUpperCase();
             name.textContent = `${cfg.name || type} (${abbr})`;
             name.style.color = cfg.color || '#ffffff';
@@ -654,8 +683,37 @@ export class UIManager {
             right.textContent = owned ? `×${stacks}` : '—';
             card.appendChild(right);
 
+            // Buy button — spends 1 Pick to add 1 stack.
+            const buyBtn = document.createElement('button');
+            buyBtn.type = 'button';
+            buyBtn.className = 'powerup-card-buy';
+            buyBtn.textContent = '+1';
+            buyBtn.disabled = picks <= 0;
+            buyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.purchasePowerup(type);
+            });
+            card.appendChild(buyBtn);
+
             list.appendChild(card);
         }
+    }
+
+    // 5.73.0 — Buy a powerup by spending one Pick. Mirrors the shop
+    // PICKS-currency path (see shop-manager.buyShopItem) but lives on
+    // the pause menu's POWERUPS tab. Re-renders the list after success.
+    purchasePowerup(type) {
+        const ge = this.gameEngine;
+        if (!ge || !ge.player) return false;
+        const picks = ge.player.powerupPicks || 0;
+        if (picks <= 0) return false;
+        const cfg = POWERUP_TYPES[type];
+        if (!cfg) return false;
+        ge.player.powerupPicks = picks - 1;
+        ge.player.addPowerup(type, { ...cfg, duration: Infinity }, true);
+        if (ge.events) ge.events.emit('audio:coin');
+        this.renderPowerupsOverlay();
+        return true;
     }
 
     // Back-compat shim — older event subscriptions still call this.
@@ -1069,6 +1127,82 @@ export class UIManager {
         // Re-render the Powerups card list whenever the tab is opened
         // so stack counts reflect current state.
         if (tabName === 'powerups') this.renderPowerupsOverlay();
+
+        // 5.72.1 — TIMER tab moved from shop to pause menu. Render
+        // the speedrun-tier card on tab open. Don't poll-refresh here;
+        // the live elapsed-time row updates via updateTimerTab() called
+        // from the engine's HUD update loop while the tab is visible.
+        if (tabName === 'timer') this.updateTimerTab();
+    }
+
+    updateTimerTab() {
+        const mount = document.getElementById('timer-panel-mount');
+        if (!mount) return;
+        const ge = this.gameEngine;
+        const live = (ge && ge.game) ? (ge.game.survivalTime || 0) : 0;
+        const liveTier = speedrunTierFor(live);
+
+        const wrap = document.createElement('div');
+        wrap.className = 'shop-help shop-timer';
+
+        const intro = document.createElement('p');
+        intro.className = 'shop-help-intro';
+        intro.textContent = 'Speedrun bonus — finish the 20-wave campaign faster for a bigger score multiplier on the Game Complete screen. Live elapsed time below; tier table is your target.';
+        wrap.appendChild(intro);
+
+        const liveBox = document.createElement('div');
+        liveBox.className = 'shop-timer-live';
+        const lbl = document.createElement('span');
+        lbl.className = 'shop-timer-live-label';
+        lbl.textContent = 'CURRENT RUN';
+        const time = document.createElement('span');
+        time.className = 'shop-timer-live-time';
+        time.textContent = formatRunTime(live);
+        time.style.color = liveTier.color;
+        const proj = document.createElement('span');
+        proj.className = 'shop-timer-live-projected';
+        proj.textContent = `If you finish now: ${liveTier.label} (${liveTier.multiplier.toFixed(1)}×)`;
+        proj.style.color = liveTier.color;
+        liveBox.appendChild(lbl);
+        liveBox.appendChild(time);
+        liveBox.appendChild(proj);
+        wrap.appendChild(liveBox);
+
+        const table = document.createElement('div');
+        table.className = 'shop-timer-table';
+        const header = document.createElement('div');
+        header.className = 'shop-timer-row shop-timer-row--header';
+        for (const [text, cls] of [['TIER','tier'],['FINISH UNDER','time'],['MULTIPLIER','mult']]) {
+            const c = document.createElement('span');
+            c.className = `shop-timer-cell shop-timer-cell--${cls}`;
+            c.textContent = text;
+            header.appendChild(c);
+        }
+        table.appendChild(header);
+
+        for (const tier of SPEEDRUN_TIERS) {
+            const row = document.createElement('div');
+            row.className = 'shop-timer-row';
+            if (tier === liveTier) row.classList.add('shop-timer-row--current');
+            const tierCell = document.createElement('span');
+            tierCell.className = 'shop-timer-cell shop-timer-cell--tier';
+            tierCell.textContent = tier.label;
+            tierCell.style.color = tier.color;
+            row.appendChild(tierCell);
+            const timeCell = document.createElement('span');
+            timeCell.className = 'shop-timer-cell shop-timer-cell--time';
+            timeCell.textContent = tier.maxMs === Infinity ? '20:00+' : formatRunTime(tier.maxMs);
+            row.appendChild(timeCell);
+            const multCell = document.createElement('span');
+            multCell.className = 'shop-timer-cell shop-timer-cell--mult';
+            multCell.textContent = `${tier.multiplier.toFixed(1)}×`;
+            multCell.style.color = tier.color;
+            row.appendChild(multCell);
+            table.appendChild(row);
+        }
+        wrap.appendChild(table);
+
+        mount.replaceChildren(wrap);
     }
     
     startMusic() {

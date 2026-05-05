@@ -72,6 +72,7 @@
                 <button class="pause-tab" data-tab="power">POWER</button>
                 <button class="pause-tab" data-tab="skills">SKILLS</button>
                 <button class="pause-tab" data-tab="powerups">POWERUPS</button>
+                <button class="pause-tab" data-tab="timer">TIMER</button>
                 <button class="pause-tab" data-tab="music">MUSIC</button>
                 <button class="pause-tab" data-tab="sfx">SFX</button>
             </div>
@@ -162,6 +163,13 @@
                 </div>
             </div>
             
+            <div id="timer-tab" class="pause-tab-content">
+                <h2>RUN TIMER</h2>
+                <div id="timer-panel-mount">
+                    <!-- Populated dynamically by ui-manager.updateTimerTab() -->
+                </div>
+            </div>
+
             <div id="sfx-tab" class="pause-tab-content">
                 <h2>SOUND EFFECTS</h2>
                 <div id="sfx-volume-container" style="margin-top: 30px;">
@@ -202,11 +210,16 @@
                     <span id="shop-sp-amount">0</span>
                     <span class="shop-currency-label">SP</span>
                 </span>
+                <span class="shop-currency shop-currency--picks">
+                    <span class="shop-currency-icon shop-picks-icon">+</span>
+                    <span id="shop-picks-amount">0</span>
+                    <span class="shop-currency-label">PICKS</span>
+                </span>
             </div>
             <div class="shop-tabs">
-                <!-- Offense and Drops tabs were removed — those upgrades
-                     are now permanent stacking powerup pickups (see the
-                     Powerups overlay in the pause menu). -->
+                <!-- 5.70.0 — POWERUPS tab added. Powerups no longer drop
+                     from kills; players spend Picks (earned 1/wave + 1/
+                     level-up) on any powerup here for full build freedom. -->
                 <button class="shop-tab active" data-tab="HELP">HELP</button>
                 <button class="shop-tab" data-tab="PRIMARY">PRIMARY</button>
                 <button class="shop-tab" data-tab="POWER">POWER</button>

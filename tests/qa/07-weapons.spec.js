@@ -60,12 +60,12 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     // ------------------------------------------------------------------
 
     // Shop layout in the bullet-hell pass: HELP / PRIMARY / POWER /
-    // DEFENSE / SKILLS. OFFENSE and DROPS were removed — those upgrades
-    // are now permanent stacking powerup pickups (see Powerups overlay).
-    // Tabs are DOM buttons (`.shop-tab`) — the legacy canvas-rendered
-    // `shopTabBounds` is no longer populated.
+    // DEFENSE. POWERUPS moved to the pause menu in 5.73.0 (was a shop
+    // tab in 5.70.0–5.72.x); TIMER moved to the pause menu in 5.72.1.
+    // Shop is now strictly the gold + SP economy — picks-currency
+    // purchases happen in the pause menu's POWERUPS tab.
 
-    test('shop has 4 DOM tabs (SKILLS removed in 889a83a)', async ({ page }) => {
+    test('shop has 4 DOM tabs (POWERUPS + TIMER moved to pause menu in 5.73.0/5.72.1)', async ({ page }) => {
         await page.evaluate(() => window.gameEngine.openShop());
         await page.waitForTimeout(100);
         const tabCount = await page.evaluate(() =>

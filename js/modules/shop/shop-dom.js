@@ -8,6 +8,9 @@
 //   renderShopDom()           — rebuild the items list (after tab/state change)
 //   updateShopCurrencyDom()   — quick refresh of the coins/SP header
 
+// (5.72.1 — SPEEDRUN_TIERS / speedrunTierFor used only by the pause-
+// menu TIMER tab now; see ui-manager.js. Shop no longer needs them.)
+
 // SVG for the coin-stack icon. This is the same path used by the HUD's
 // drawCachedMoneyIcon() (see core/utils.js:421). Inlined as an SVG element
 // so it can scale crisply at any DOM size without a canvas hop.
@@ -41,6 +44,7 @@ export function initShopDom(gameEngine) {
         menu:      $('shop-menu'),
         coinsAmt:  $('shop-coins-amount'),
         spAmt:     $('shop-sp-amount'),
+        picksAmt:  $('shop-picks-amount'),
         tabs:      document.querySelectorAll('.shop-tab'),
         list:      $('shop-items-list'),
         closeBtn:  $('shop-close-button'),
@@ -111,6 +115,9 @@ export function updateShopCurrencyDom() {
     if (!_elements || !_engine) return;
     _elements.coinsAmt.textContent = `${Math.floor(_engine.game.money)}`;
     _elements.spAmt.textContent = `${_engine.player.skillPoints}`;
+    if (_elements.picksAmt) {
+        _elements.picksAmt.textContent = `${_engine.player.powerupPicks || 0}`;
+    }
 }
 
 function syncActiveTab() {
@@ -163,6 +170,8 @@ export function renderShopDom() {
         list.appendChild(buildHelpPanel());
         return;
     }
+
+    // (TIMER tab moved to the pause menu in 5.72.1.)
 
     const items = _engine.shopFilteredItems || [];
 
@@ -293,7 +302,7 @@ function buildHelpPanel() {
         iconNode: makeCoinIconSvg(28),
         title: 'GOLD',
         titleClass: 'shop-help-title--gold',
-        body: 'Dropped by destroyed enemies and asteroids. Picks up automatically when you fly near. Spend on the OFFENSE / PRIMARY / POWER tabs (gold-priced).',
+        body: 'Dropped as money orbs from kills. Money orbs fly to you automatically. Spend on the PRIMARY / POWER tabs (gold-priced weapon upgrades).',
     }));
 
     wrap.appendChild(buildHelpEntry({
@@ -301,7 +310,15 @@ function buildHelpPanel() {
         iconClass: 'shop-help-icon--sp',
         title: 'SKILL POINTS',
         titleClass: 'shop-help-title--sp',
-        body: 'Awarded each time you level up. Level by gaining XP. Spend on the DEFENSE / DROPS / SKILLS tabs (SP-priced) — these give you survivability, drop bonuses, and active defensive skills.',
+        body: 'Awarded each time you level up. Level by gaining XP. Spend on the DEFENSE tab (SP-priced) — survivability and lives.',
+    }));
+
+    wrap.appendChild(buildHelpEntry({
+        iconText: 'PICK',
+        iconClass: 'shop-help-icon--picks',
+        title: 'POWERUP PICKS',
+        titleClass: 'shop-help-title--picks',
+        body: 'New in 5.70.0. Earned +1 per wave clear and +1 per level-up. Spend on the POWERUPS tab — every powerup is purchasable, so you build a custom kit each run.',
     }));
 
     wrap.appendChild(buildHelpEntry({
@@ -309,16 +326,20 @@ function buildHelpPanel() {
         iconClass: 'shop-help-icon--xp',
         title: 'EXPERIENCE',
         titleClass: 'shop-help-title--xp',
-        body: 'Awarded for every hit you land — keep firing. Tracked by the red bar under your health. Filling the bar levels you up and grants a Skill Point.',
+        body: 'Awarded for every hit you land — including asteroid kills. Tracked by the red bar under your health. Filling the bar levels you up, granting +1 SP and +1 Powerup Pick.',
     }));
 
     const footer = document.createElement('p');
     footer.className = 'shop-help-footer';
-    footer.textContent = 'Tip: defense skills (1–4 keys) and survivability are SP-priced — invest there early. Weapon damage and per-weapon upgrades are gold-priced. Visit each tab to see what is available.';
+    footer.textContent = 'Tip: powerups no longer drop from kills — they are picks-only via the POWERUPS tab. Killing asteroids levels you up faster, which gives you more picks. Build with intent.';
     wrap.appendChild(footer);
 
     return wrap;
 }
+
+// 5.71.0 — TIMER tab. Shows the live run timer (current elapsed time
+// (5.72.1 — TIMER tab + helpers moved to ui-manager.js for the
+// pause-menu TIMER tab. Shop no longer renders a timer panel.)
 
 function buildHelpEntry({ iconNode, iconText, iconClass, title, titleClass, body }) {
     const entry = document.createElement('div');
@@ -366,9 +387,13 @@ function buildItemRow(item, player, game) {
                 : game.money >= actualCost;
         }
     } else {
-        canAfford = item.currency === 'SP'
-            ? player.skillPoints >= actualCost
-            : game.money >= actualCost;
+        if (item.currency === 'SP') {
+            canAfford = player.skillPoints >= actualCost;
+        } else if (item.currency === 'PICKS') {
+            canAfford = (player.powerupPicks || 0) >= actualCost;
+        } else {
+            canAfford = game.money >= actualCost;
+        }
         maxedOut = currentStacks >= item.maxStacks;
     }
 
@@ -417,6 +442,20 @@ function buildItemRow(item, player, game) {
         const cls = canAfford ? 'shop-item-price--sp' : 'shop-item-price--cant';
         costCol.appendChild(makePrice(`${actualCost} SP`, cls));
         if (!isWeaponOrSkill) costCol.appendChild(stackStatus(currentStacks, item.maxStacks, maxedOut));
+    } else if (item.currency === 'PICKS') {
+        const cls = canAfford ? 'shop-item-price--picks' : 'shop-item-price--cant';
+        // Big bold + sigil + numeric count instead of "1 PICK". Reads
+        // as a budget cost ("+1") and matches the header currency icon.
+        const el = document.createElement('span');
+        el.className = 'shop-item-price shop-item-price--picks-row' + (cls ? ' ' + cls : '');
+        const sigil = document.createElement('span');
+        sigil.className = 'shop-item-price-pick-sigil';
+        sigil.textContent = '+';
+        el.appendChild(sigil);
+        const num = document.createTextNode(String(actualCost));
+        el.appendChild(num);
+        costCol.appendChild(el);
+        if (!isWeaponOrSkill) costCol.appendChild(stackStatus(currentStacks, item.maxStacks, maxedOut));
     } else if (isWeaponOrSkill && item.spCost && item.spCost > 0) {
         // Dual-cost weapon
         const coinCls = (game.money >= actualCost) ? '' : 'shop-item-price--cant';
@@ -442,7 +481,9 @@ function buildItemRow(item, player, game) {
     const rightCell = document.createElement('span');
     rightCell.className = 'shop-item-right';
 
-    if (!isWeaponOrSkill && currentStacks > 0) {
+    // 5.70.0 — PICKS-currency items aren't refundable (would let players
+    // churn the same stack forever). Skip the sell button for them.
+    if (!isWeaponOrSkill && currentStacks > 0 && item.currency !== 'PICKS') {
         const refund = sellRefundFor(item, currentStacks);
         const sellLabel = item.currency === 'SP' ? `SELL +${refund}SP` : `SELL +${refund}`;
         const sellBtn = document.createElement('button');

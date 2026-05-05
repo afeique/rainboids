@@ -357,8 +357,21 @@ body.shop-open .ui-element:not(#shop-overlay) {
 .shop-currency { display: inline-flex; align-items: center; gap: 8px; }
 .shop-currency--coins { color: #ffd700; }
 .shop-currency--sp    { color: #6ab7ff; }
+.shop-currency--picks { color: #ff66cc; }
 .shop-currency-icon   { font-size: 18px; }
 .shop-currency-label  { color: #4a90e2; font-size: 14px; }
+.shop-currency--picks .shop-currency-label { color: #ff66cc; }
+/* 5.71.0 — big bold + sigil for the PICKS counter. Slightly oversized
+   vs. other currency icons so the resource reads clearly as a "free
+   pick" rather than a numeric cost. */
+.shop-picks-icon {
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1;
+    color: #ff66cc;
+    text-shadow: 0 0 8px rgba(255, 102, 204, 0.6);
+    margin-right: 2px;
+}
 
 .shop-tabs {
     /* 7 tabs: HELP + 6 category tabs. 4-column grid lays them out as
@@ -463,6 +476,15 @@ body.shop-open .ui-element:not(#shop-overlay) {
 .shop-item-price { font-size: 16px; font-weight: bold; color: #ffd700; display: inline-flex; align-items: center; gap: 6px; }
 .shop-item-price--coin .shop-coin-icon { vertical-align: middle; }
 .shop-item-price--sp { color: #4a90e2; }
+.shop-item-price--picks { color: #ff66cc; }
+.shop-item-price--picks-row { display: inline-flex; align-items: center; gap: 4px; }
+.shop-item-price-pick-sigil {
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+    color: inherit;
+    text-shadow: 0 0 6px rgba(255, 102, 204, 0.55);
+}
 .shop-item-price--cant { color: #ff6666; }
 .shop-item-price--equipped { color: #44ddff; }
 .shop-item-price--owned { color: #44ff88; }
@@ -563,10 +585,73 @@ body.shop-open .ui-element:not(#shop-overlay) {
 }
 .shop-help-icon--sp { color: #6ab7ff; border-color: rgba(74, 144, 226, 0.7); }
 .shop-help-icon--xp { color: #ff6e6e; border-color: rgba(220, 60, 60, 0.7); }
+.shop-help-icon--picks { color: #ff66cc; border-color: rgba(255, 102, 204, 0.7); font-size: 11px; }
+
+/* 5.71.0 — TIMER tab: live elapsed-time readout + tier table. */
+.shop-timer-live {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 14px;
+    margin: 8px 0 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+}
+.shop-timer-live-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #888;
+}
+.shop-timer-live-time {
+    font-size: 36px;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    line-height: 1;
+}
+.shop-timer-live-projected {
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-top: 4px;
+}
+.shop-timer-table {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+    margin-top: 6px;
+}
+.shop-timer-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 0.8fr;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+}
+.shop-timer-row--header {
+    background: transparent;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #888;
+    padding-bottom: 4px;
+}
+.shop-timer-row--current {
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.shop-timer-cell {
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+.shop-timer-cell--tier { font-weight: bold; }
+.shop-timer-cell--time { font-family: 'Courier New', monospace; color: #d8d8d8; }
+.shop-timer-cell--mult { text-align: right; font-weight: bold; }
 .shop-help-text { display: flex; flex-direction: column; gap: 6px; }
 .shop-help-title { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
 .shop-help-title--gold { color: #ffd700; }
 .shop-help-title--sp   { color: #6ab7ff; }
+.shop-help-title--picks { color: #ff66cc; }
 .shop-help-title--xp   { color: #ff6e6e; }
 .shop-help-body { font-size: 12px; color: #d8d8d8; line-height: 1.7; }
 
@@ -646,8 +731,12 @@ body.shop-open .ui-element:not(#shop-overlay) {
    Same visual language as the pause button (goldenrod, dim until hover). */
 #hud-shop-btn {
     position: fixed;
-    top: 16px;
-    right: 70px; /* width of pause btn (~38px) + 16px gap */
+    /* 5.72.1 — bottom-MIDDLE. Pause + shop sit centered along the bottom
+       edge (was bottom-right above timer). Two buttons centered: shop
+       sits to the LEFT of midline, pause to the RIGHT, with the gap
+       defined by `right: calc(50% + 6px)`. Total bottom margin 16px. */
+    bottom: 16px;
+    right: calc(50% + 6px);
     z-index: 90;
     display: none; /* shown via showHudShopBtn() */
     align-items: center;
@@ -679,8 +768,12 @@ body.shop-open #hud-shop-btn {
 /* HUD pause button — top-left, goldenrod, semi-transparent until hovered */
 #hud-pause-btn {
     position: fixed;
-    top: 16px;
-    right: 16px;
+    /* 5.72.1 — bottom-MIDDLE, mirror of shop button. Sits to the RIGHT
+       of midline (shop sits to the LEFT). Use `left: calc(50% + 6px)`
+       so the pair is symmetric around the screen center. */
+    bottom: 16px;
+    left: calc(50% + 6px);
+    right: auto;
     z-index: 90;
     display: none; /* shown via showHudPauseBtn() */
     align-items: center;
@@ -1875,6 +1968,59 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 }
 .powerup-card--locked .powerup-card-stacks {
     color: #666;
+}
+
+/* 5.73.0 — pause-menu POWERUPS tab buy controls. */
+.powerups-pick-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    background: rgba(255, 102, 204, 0.08);
+    border: 1px solid rgba(255, 102, 204, 0.4);
+    border-radius: 8px;
+}
+.powerups-pick-sigil {
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1;
+    color: #ff66cc;
+    text-shadow: 0 0 8px rgba(255, 102, 204, 0.6);
+}
+.powerups-pick-count {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 22px;
+    color: #ff66cc;
+}
+.powerups-pick-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #ff99dd;
+}
+.powerup-card-buy {
+    margin-left: 12px;
+    padding: 8px 14px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    font-weight: bold;
+    color: #ff66cc;
+    background: rgba(255, 102, 204, 0.12);
+    border: 2px solid rgba(255, 102, 204, 0.6);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.powerup-card-buy:hover:not(:disabled) {
+    background: #ff66cc;
+    color: #1a0a14;
+    transform: scale(1.06);
+}
+.powerup-card-buy:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
 }
 
 /* Hover-tooltip on HUD powerup badges. Same instant-fire pattern as

@@ -138,31 +138,35 @@ export class Bullet {
     
     applyHoming(enemyPool, asteroidPool = null, gameEngine = null) {
         if (!this.homing) return;
-        
+
         let bestTarget = null;
         let bestDistance = Infinity;
         let cursorX = null, cursorY = null;
-        
+
         // Get cursor position from game engine if available
         if (gameEngine && gameEngine.inputHandler) {
             cursorX = gameEngine.inputHandler.input.aimX;
             cursorY = gameEngine.inputHandler.input.aimY;
         }
-        
-        // Enhanced target selection - prioritize targets closest to cursor, fallback to closest to bullet
-        const checkTargets = (targets) => {
+
+        // Enhanced target selection - prioritize targets closest to cursor, fallback to closest to bullet.
+        // 5.73.0 — added optional `filter` so we can mix mines (from
+        // enemyBulletPool) into the target set without targeting all
+        // enemy bullets.
+        const checkTargets = (targets, filter = null) => {
             if (!targets) return;
             for (const target of targets.activeObjects) {
                 if (!target.active) continue;
-                
+                if (filter && !filter(target)) continue;
+
                 const dx = target.x - this.x;
                 const dy = target.y - this.y;
                 const bulletDistance = Math.hypot(dx, dy);
-                
+
                 if (bulletDistance > 400) continue; // Outside homing range
-                
+
                 let priority = bulletDistance; // Default: closest to bullet
-                
+
                 // If we have cursor position, prioritize targets closest to cursor
                 if (cursorX !== null && cursorY !== null) {
                     const cursorDx = target.x - cursorX;
@@ -170,20 +174,27 @@ export class Bullet {
                     const cursorDistance = Math.hypot(cursorDx, cursorDy);
                     priority = cursorDistance; // Prioritize cursor distance over bullet distance
                 }
-                
+
                 if (priority < bestDistance) {
                     bestDistance = priority;
                     bestTarget = target;
                 }
             }
         };
-        
+
         // Check enemies first (higher priority)
         if (enemyPool) {
             checkTargets(enemyPool);
         }
-        
-        // Check asteroids if no nearby enemies found
+
+        // 5.73.0 — also home toward enemy mines (proximity bombs). They
+        // sit in enemyBulletPool with shape='mine'. Filter so we don't
+        // target ordinary projectiles.
+        if (!bestTarget && gameEngine && gameEngine.enemyBulletPool) {
+            checkTargets(gameEngine.enemyBulletPool, t => t.shape === 'mine');
+        }
+
+        // Check asteroids if no nearby enemies / mines found
         if (!bestTarget && asteroidPool) {
             checkTargets(asteroidPool);
         }

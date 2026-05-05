@@ -7,6 +7,7 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS, getPrimaryUpgrades, getPowerUpgrades, getSkillUpgrades } from '../combat/weapon-data.js';
+import { POWERUP_TYPES } from '../world/powerup.js';
 import { showShopDom, hideShopDom, renderShopDom, updateShopCurrencyDom } from './shop-dom.js';
 
 
@@ -56,6 +57,12 @@ export function sellShopItem(itemId) {
             }
         }
 
+        // 5.70.0 — PICKS-currency items (powerups bought from the
+        // POWERUPS tab) are non-refundable. Picks earned per wave / per
+        // level-up are limited; refunding would let the player churn
+        // the same stack forever and trivialise the build choice.
+        if (item.currency === 'PICKS') return false;
+
         if (item.currency === 'SP') {
             this.player.skillPoints += refund;
         } else {
@@ -98,15 +105,11 @@ export function openShop() {
         }
 
 
-        // Initialize shop state. Land on a RANDOM purchasable tab so the
-        // player sees fresh content each open instead of always staring
-        // at HELP. HELP is still reachable via the tab row but isn't the
-        // default — picking from {PRIMARY, POWER, DEFENSE} keeps the
-        // open feeling fresh and surfaces upgrades the player might
-        // not have considered. (SKILLS tab removed — equipping skills
-        // is handled by the F radial menu now.)
-        const _shopCats = ['PRIMARY', 'POWER', 'DEFENSE'];
-        this.shopCategory = _shopCats[Math.floor(Math.random() * _shopCats.length)];
+        // 5.73.0 — POWERUPS tab moved to the pause menu. Shop now lands
+        // on HELP by default; the tabs that remain are HELP / PRIMARY /
+        // POWER / DEFENSE (gold + SP economies). Picks are spent in
+        // pause-menu POWERUPS instead.
+        this.shopCategory = 'HELP';
 
         // Shop now sells PRIMARY/POWER weapons, DEFENSE upgrades, and
         // SKILLS. The OFFENSE and DROPS categories were removed —
@@ -132,7 +135,8 @@ export function openShop() {
 export function _rebuildShopCache() {
         if (this.shopCategory === 'HELP') {
             // HELP tab has no purchasable items — the renderer paints
-            // an instructions panel instead.
+            // an instructions panel. (TIMER + POWERUPS both moved to
+            // the pause menu in 5.72.1 / 5.73.0.)
             this.shopFilteredItems = [];
             return;
         } else if (this.shopCategory === 'PRIMARY') {
@@ -144,6 +148,34 @@ export function _rebuildShopCache() {
         } else {
             this.shopFilteredItems = this.shopItems.filter(i => i.category === this.shopCategory);
         }
+}
+
+// 5.70.0 — Powerups tab. Lists every entry in POWERUP_TYPES; each
+// "costs" 1 powerup pick. Picks are earned at wave clear and on
+// player level-up. Powerups no longer drop from kills.
+//
+// 5.72.0 — maxStacks default raised from 1 to 99. POWERUP_TYPES doesn't
+// define per-id caps; the previous `??1` fallback meant every powerup
+// allowed only one purchase, which broke the build-stacking core loop.
+// 99 is effectively unlimited (no run will hit it), and per-powerup
+// caps can be added in POWERUP_TYPES later if specific powerups need
+// real limits (Crit Chance >100%, Multi-Shot 3, etc).
+export function _buildPowerupsTabItems() {
+        const items = [];
+        for (const [id, config] of Object.entries(POWERUP_TYPES)) {
+            if (config.hidden) continue;
+            items.push({
+                id,
+                name: config.name || id,
+                description: config.description || '',
+                icon: config.icon || '⚡',
+                cost: 1,
+                maxStacks: config.maxStacks ?? 99,
+                category: 'POWERUPS',
+                currency: 'PICKS',
+            });
+        }
+        this.shopFilteredItems = items;
 }
 
 export function _buildPrimaryTabItems() {
@@ -303,8 +335,14 @@ export function buyShopItem(itemId) {
                 return this._handleUpgradeBuy(filteredItem);
             }
 
-            // Regular shop item
-            const item = this.shopItems.find(i => i.id === itemId);
+            // Regular shop item — first check the static shopItems list,
+            // then fall through to the currently-built filteredItems
+            // (POWERUPS tab is built dynamically from POWERUP_TYPES so
+            // its entries don't live in the static list).
+            let item = this.shopItems.find(i => i.id === itemId);
+            if (!item && filteredItem && filteredItem.currency === 'PICKS') {
+                item = filteredItem;
+            }
             if (!item) {
                 console.error(`❌ Item not found: ${itemId}`);
                 return false;
@@ -326,12 +364,16 @@ export function buyShopItem(itemId) {
 
             if (item.currency === 'SP') {
                 if (this.player.skillPoints < actualCost) return false;
+            } else if (item.currency === 'PICKS') {
+                if ((this.player.powerupPicks || 0) < actualCost) return false;
             } else {
                 if (this.game.money < actualCost) return false;
             }
 
             if (item.currency === 'SP') {
                 this.player.skillPoints -= actualCost;
+            } else if (item.currency === 'PICKS') {
+                this.player.powerupPicks -= actualCost;
             } else {
                 this.game.money -= actualCost;
             }

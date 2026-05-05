@@ -115,14 +115,16 @@ export function getAsteroidLevel(waveNumber) {
 }
 
 // Enemy speed multiplier — POWER CURVE so early waves are gentle and the
-// late waves climb fast. Replaces the linear ramp that made wave 5 feel
-// like wave 10.
-//   formula: 0.55 + ((w-1)/19)^1.5 * 2.0
-//   w=1: 0.55   w=5: 0.74   w=10: 1.20   w=15: 1.82   w=20: 2.55
+// late waves climb fast. 5.72.0 — ceiling cut from 2.55 → 1.75 because
+// stacked with the per-level multiplier (now 1.40 at L20) the late-wave
+// speed used to compound to 4.3× base, making enemies appear to "warp"
+// across the screen between frames. New compound max: ~2.45× base.
+//   formula: 0.55 + ((w-1)/19)^1.5 * 1.2
+//   w=1: 0.55   w=5: 0.66   w=10: 0.94   w=15: 1.31   w=20: 1.75
 export function getEnemySpeedMultiplier(waveNumber) {
     const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
     const t = (w - 1) / (MAX_WAVES - 1);
-    return 0.55 + Math.pow(t, 1.5) * 2.0;
+    return 0.55 + Math.pow(t, 1.5) * 1.2;
 }
 
 // Enemy bullet speed multiplier — DECOUPLED from enemy movement so the
@@ -176,22 +178,22 @@ export const WAVE_SUBTITLES_GENERIC = [
     "You're built different.",
 ];
 
-// Level-scaled enemy stats — POWER-CURVED. Early levels are gentle so
-// new players (or returning ones at wave 1-4) aren't crushed; the curve
-// climbs sharply in the back half so wave 15-20 is genuinely tough.
+// Level-scaled enemy stats — POWER-CURVED.
 //
-//   HP    1 + ((L-1)/19)^1.6 · 4.5      L1: 1.0  L5: 1.36  L10: 2.34  L15: 3.82  L20: 5.50
+// 5.73.0 — HP curve flattened (exponent 1.6 → 1.0, scale 4.5 → 6.5)
+// to ramp HP MUCH faster from wave 5 onward. Players reported the
+// game stayed too easy in the mid-game; now wave 5 enemies have ~2.4×
+// HP (was 1.37×), wave 10 ~4× (was 2.3×), wave 20 ~7.5× (was 5.5×).
+//
+//   HP    1 + ((L-1)/19)^1.0 · 6.5      L1: 1.0  L5: 2.37  L10: 4.08  L15: 5.79  L20: 7.50
 //   pts   1 + ((L-1)/19)^1.4 · 5.5      L1: 1.0  L5: 1.50  L10: 2.55  L15: 4.00  L20: 6.50
-//   spd   1 + ((L-1)/19)^1.4 · 0.7      L1: 1.00 L5: 1.06  L10: 1.20  L15: 1.38  L20: 1.70
-//
-// Speed-per-level is gentle on top of getEnemySpeedMultiplier (which
-// already drives the campaign-wide chase ramp).
+//   spd   1 + ((L-1)/19)^1.4 · 0.4      L1: 1.00 L5: 1.03  L10: 1.11  L15: 1.22  L20: 1.40
 export function getLevelScaledEnemyStats(baseStats, level) {
     const L = Math.max(1, level | 0);
     const t = (L - 1) / 19;
-    const hpMul = 1 + Math.pow(t, 1.6) * 4.5;
+    const hpMul = 1 + t * 6.5;            // 5.73.0 — was Math.pow(t,1.6)*4.5
     const ptsMul = 1 + Math.pow(t, 1.4) * 5.5;
-    const spdMul = 1 + Math.pow(t, 1.4) * 0.7;
+    const spdMul = 1 + Math.pow(t, 1.4) * 0.4;
     return {
         health: Math.floor(baseStats.health * hpMul),
         speed: baseStats.speed * spdMul,
@@ -203,12 +205,15 @@ export function getLevelScaledEnemyStats(baseStats, level) {
 
 // Asteroid HP — power-curved against asteroid level (1..10 across waves
 // 1..20). Gentle through level 4 then sharply steeper.
-//   1 + ((L-1)/9)^1.5 · 4.0
-//   L1: 1.0  L3: 1.21  L5: 1.94  L7: 3.21  L10: 5.0
+// 5.73.0 — exponent 1.5 → 1.0, scale 4.0 → 6.5 to ramp asteroid HP
+// much harder by wave 5+. Players hit the same plateau of "feels too
+// easy mid-run" with asteroids as with enemies; this fix is parallel.
+//   1 + ((L-1)/9)^1.0 · 6.5
+//   L1: 1.0  L3: 2.44  L5: 3.89  L7: 5.33  L10: 7.50
 export function getLevelScaledAsteroidStats(baseHealth, level) {
     const L = Math.max(1, level | 0);
     const t = (L - 1) / 9;
-    const hpMul = 1 + Math.pow(t, 1.5) * 4.0;
+    const hpMul = 1 + t * 6.5;
     return Math.floor(baseHealth * hpMul);
 }
 

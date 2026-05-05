@@ -175,9 +175,10 @@ export function handleCollisions() {
                         this.createDebris(ast);
                         this.createColorStarBurst(ast.x, ast.y);
                         this.dropOrbsFromEntity(ast.x, ast.y, ast);
-                        if (Math.random() < COLLISION_CONFIG.POWERUP_DROP_CHANCE.SMALL_ASTEROID) {
-                            this.dropPowerup(ast.x, ast.y);
-                        }
+                        // 5.70.0 — powerups no longer drop from kills.
+                        // They're earned via shop picks (one per wave + one
+                        // per level-up). Asteroid kills still grant XP, which
+                        // levels up the player → another pick.
                         if (this.isEntityOnScreen(ast)) {
                             this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
                         }
@@ -192,9 +193,6 @@ export function handleCollisions() {
                         this.createDebris(ast);
                         this.createColorStarBurst(ast.x, ast.y);
                         this.dropOrbsFromEntity(ast.x, ast.y, ast);
-                        if (Math.random() < COLLISION_CONFIG.POWERUP_DROP_CHANCE.LARGE_ASTEROID) {
-                            this.dropPowerup(ast.x, ast.y);
-                        }
 
                         // Massive screen shake for large asteroid destruction (only if on screen)
                         if (this.isEntityOnScreen(ast)) {
@@ -513,7 +511,7 @@ export function handleCollisions() {
                     // Award money + XP for kill
                     const reward = enemy.getDestructionReward();
                     this.game.money += reward.points;
-                    this.player.gainExperience(Math.ceil(reward.points / 3));
+                    this.player.gainExperience(Math.ceil(reward.points / 6));
 
                     // Track kill streak
                     this.onEnemyKill(enemy);
@@ -539,14 +537,11 @@ export function handleCollisions() {
                     // Drop health and money orbs
                     this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
 
-                    // Enemies often drop powerups — stronger enemies drop more often
-                    const powerupChance = enemy.type === 'WASP' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_WASP :
-                                        enemy.type === 'TITAN' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TITAN :
-                                        enemy.type === 'TANGERINE' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TANGERINE : COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_DEFAULT;
-                    const roll = Math.random();
-                    if (roll < powerupChance) {
-                        this.dropPowerup(enemy.x, enemy.y);
-                    }
+                    // 5.70.0 — powerups no longer drop from enemy kills.
+                    // They're earned via shop picks (one per wave + one per
+                    // level-up). The wave-clear bonus and per-kill XP both
+                    // feed into the level-up pick grant, so high-DPS runs
+                    // stack picks faster.
 
                     // Don't release here — cleanupInactive() handles it after death flash completes
                 }
@@ -1384,12 +1379,7 @@ export function destroyAsteroid(ast) {
     this.createColorStarBurst(ast.x, ast.y);
     this.dropOrbsFromEntity(ast.x, ast.y, ast);
 
-    const dropChance = isLarge
-        ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.LARGE_ASTEROID
-        : COLLISION_CONFIG.POWERUP_DROP_CHANCE.SMALL_ASTEROID;
-    if (Math.random() < dropChance) {
-        this.dropPowerup(ast.x, ast.y);
-    }
+    // 5.70.0 — powerups no longer drop from kills (see top of file).
     if (onScreen) {
         this.triggerScreenShake(
             isLarge ? 25 : 12,
@@ -1449,19 +1439,14 @@ export function damageEnemy(enemy, damage) {
             this.game.stats.coinsEarned += reward.points;
             if (enemy.isBoss) this.game.stats.bossesKilled++;
         }
-        this.player.gainExperience(Math.ceil(reward.points / 3));
+        this.player.gainExperience(Math.ceil(reward.points / 6));
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {
             this.events.emit('audio:enemy-destroy', enemy.type);
         }
         this.createEnemyDebris(enemy);
         this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
-        const powerupChance = enemy.type === 'WASP' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_WASP :
-                            enemy.type === 'TITAN' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TITAN :
-                            enemy.type === 'TANGERINE' ? COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_TANGERINE : COLLISION_CONFIG.POWERUP_DROP_CHANCE.ENEMY_DEFAULT;
-        if (Math.random() < powerupChance) {
-            this.dropPowerup(enemy.x, enemy.y);
-        }
+        // 5.70.0 — powerups no longer drop from kills (see top of file).
     }
 }
 
@@ -1557,7 +1542,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         const reward = enemy.getDestructionReward();
         this.game.money += reward.points;
-        this.player.gainExperience(Math.ceil(reward.points / 3));
+        this.player.gainExperience(Math.ceil(reward.points / 6));
         this.onEnemyKill(enemy);
 
         // Create colored explosion effects (includes screen shake)

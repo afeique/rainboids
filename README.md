@@ -16,7 +16,7 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 
 ## Version and History
 
-Current version: **5.69.4**
+Current version: **5.73.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -27,7 +27,7 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 Rainboids is a supercharged asteroids game featuring:
 - **6 primary weapons**, **4 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs
-- **20 powerup types** with stacking mechanics and visual indicators
+- **20 powerup types** with stacking mechanics and visual indicators — picks-only since 5.70.0 (earned 1/wave + 1/level-up, spent in the shop's POWERUPS tab for full build freedom)
 - **Kill-streak damage tiers** (EMPOWERED → UNSTOPPABLE → GODLIKE → LEGENDARY) — sustained kills without taking damage build up to +100% damage
 - **20-wave speedrun campaign** with four scripted boss waves (waves 5/10/15/20) and a Game Complete stats screen — finish the run as fast as possible
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
@@ -132,7 +132,9 @@ Lumbering juggernaut boss. Sweeping purple laser beam telegraphed by a 1.8s dash
 
 ## Powerup System
 
-Powerups drop from destroyed enemies and provide temporary or permanent enhancements. Each powerup stacks for increased effectiveness.
+**5.70.0 redesign — picks-only.** Powerups no longer drop from kills. The player earns **Powerup Picks** (a new currency: +1 per wave clear, +1 per level-up) and spends them in the shop's **POWERUPS** tab on whichever powerup they want. Every powerup is purchasable, so each run becomes a deliberate, custom build. Picks accumulate; killing asteroids matters because XP feeds level-ups, which grant more picks.
+
+Per-powerup `maxStacks` limits still apply. Picks-currency items are non-refundable (no SELL button) — keeps the build choice meaningful.
 
 ### Offensive (9)
 | Icon | Powerup | Effect per stack |
@@ -163,7 +165,7 @@ Powerups drop from destroyed enemies and provide temporary or permanent enhancem
 | 🪙 | Money Orb Drop Quantity | +1 money orbs per drop |
 
 ### Pickup Magnetism
-All collectibles — money orbs, green health orbs, **and powerup pickups** — are magnetically pulled to the player. Pull strength ramps in three layers (always-on long-range homing, stronger at 100px, magnetic snap inside 40px). Holding the tractor-beam key adds an extra long-range pull. Health-orb drops are globally throttled (default 60s between drop events) — see the Triage upgrade above to shrink that cooldown.
+**Money orbs** use the strong three-tier magnetic pull (always-on long-range homing, stronger inside 100 px, magnetic snap inside 40 px). Tractor-beam key adds an extra long-range pull. **Green health orbs** (5.71.0 redesign) drift gently toward the player with the powerup-style soft magnet (same three-tier shape, 0.55× scale) and have a `life` countdown that fades them out before pool release — mechanically identical to powerup pickups. The player still has to commit toward the orb to collect it quickly; if they ignore it, it expires. Health-orb drops are still globally throttled (default 60 s between drop events) — see the Triage shop upgrade.
 
 ### Drop Sizes
 Money and green orbs are size-capped (`HEALTH_ORB_SIZE_MAX = 1.4`, `MONEY_ORB_SIZE_MAX = 1.6`). When a drop's reward budget exceeds the per-orb cap (`HEALTH_ORB_MAX_HEAL_PER_ORB = 2`, `MONEY_ORB_MAX_MONEY_PER_ORB = 20`), the drop is split into many small orbs that sum to the same total — preventing a single huge orb from dominating the screen.
@@ -191,7 +193,7 @@ The shop offers permanent upgrades using two currencies:
 - **Coins**: Earned by destroying enemies and collecting money orbs
 - **Skill Points (SP)**: Gained by leveling up through experience
 
-The shop has seven tabs: **Help**, **Offense**, **Primary**, **Power**, **Defense**, **Drops**, and **Skills**. **Help** is the landing tab and explains how Gold, SP, and XP are earned. Gold-priced tabs (Offense / Primary / Power) sit on row 1; SP-priced tabs (Defense / Drops / Skills) on row 2. The **Primary** and **Power** tabs show only the upgrades for whichever weapon is currently equipped (selection happens in the pause menu — see Controls above). Switching weapons in the pause menu instantly repopulates the shop with that weapon's upgrades. ~55 upgrades total across all tabs.
+The shop has six tabs: **Help**, **Powerups**, **Primary**, **Power**, **Defense**, and **Timer**. The shop opens automatically between waves AND on level-up (5.71.0). If the player has unspent **Powerup Picks**, the **Powerups** tab is the default landing tab; otherwise the shop lands on a random purchasable tab. **Powerups** (5.70.0) is picks-priced — every powerup is purchasable, 1 Pick each, with per-powerup `maxStacks` limits. **Primary** and **Power** are gold-priced and show upgrades for whichever weapon is currently equipped (selection happens in the pause menu — see Controls above). Switching weapons in the pause menu instantly repopulates the shop with that weapon's upgrades. **Defense** is SP-priced (survivability + lives). **Timer** (5.71.0) is info-only — shows the live run timer plus the speedrun multiplier tiers (GODLIKE 5× under 5 min, LEGENDARY 4× under 7:30, …, CASUAL 1.5× under 20 min). The three spendable currencies — **Gold**, **SP**, and **Picks** (big pink `+`) — show in the shop header.
 
 **The shop auto-opens between waves.** When a wave clears, a brief "WAVE COMPLETE!" toast plays, then the shop pops up. The next wave only starts when the player closes the shop — there is no countdown. A SHOP button in the top-right HUD (next to the pause button) lets the player jump in mid-wave at any time.
 

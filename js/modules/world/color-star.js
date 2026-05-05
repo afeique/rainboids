@@ -135,50 +135,58 @@ export class ColorStar {
                 this.active = false;
                 return;
             }
-            
+
             this.vel.x *= GAME_CONFIG.ORB_FRIC;
             this.vel.y *= GAME_CONFIG.ORB_FRIC;
             this.x += this.vel.x;
             this.y += this.vel.y;
-            
+
             this.opacity = Math.min(1, this.life / 120);
-            
-            // Home directly toward player
+
+            // 5.71.0 — money orbs use the strong three-tier magnet;
+            // health orbs use the softer powerup-style pull (same shape,
+            // 0.55× scale) so they drift toward the player but the
+            // player still has to fly toward them to collect quickly.
+            // Both types fade out + die when `life` runs to 0 above —
+            // mechanically identical to powerups (life-tick + blink-out).
+            const k = (this.starType === 'money') ? 1.0 : 0.55;
+
             const dx = playerPos.x - this.x;
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
-            
+
             if (dist > 1) {
-                // Strengthened base homing behavior - always moves towards player
-                const baseAttraction = 0.8; // Much stronger constant homing
-                this.vel.x += (dx / dist) * baseAttraction * 0.15 * this.z;
-                this.vel.y += (dy / dist) * baseAttraction * 0.15 * this.z;
-                
-                // Strong attraction at medium range (within 100 pixels)
+                // Constant base homing — always pulls, even at long range.
+                const baseAttraction = 0.8;
+                this.vel.x += (dx / dist) * baseAttraction * 0.15 * this.z * k;
+                this.vel.y += (dy / dist) * baseAttraction * 0.15 * this.z * k;
+
+                // Medium range (≤100px) — stronger as it gets closer.
                 if (dist < 100) {
-                    const strongAttraction = 15; // Stronger pull when in medium range
-                    const proximityMultiplier = (100 - dist) / 100; // Stronger as it gets closer
-                    this.vel.x += (dx / dist) * strongAttraction * proximityMultiplier * this.z;
-                    this.vel.y += (dy / dist) * strongAttraction * proximityMultiplier * this.z;
+                    const strongAttraction = 15;
+                    const proximityMultiplier = (100 - dist) / 100;
+                    this.vel.x += (dx / dist) * strongAttraction * proximityMultiplier * this.z * k;
+                    this.vel.y += (dy / dist) * strongAttraction * proximityMultiplier * this.z * k;
                 }
-                
-                // Very strong magnetic pull at close range (within 40 pixels)
+
+                // Close range (≤40px) — magnetic snap.
                 if (dist < 40) {
-                    const magneticAttraction = 25; // Very strong pull when very close
-                    const magneticMultiplier = (40 - dist) / 40; // Maximum strength when touching
-                    this.vel.x += (dx / dist) * magneticAttraction * magneticMultiplier * this.z;
-                    this.vel.y += (dy / dist) * magneticAttraction * magneticMultiplier * this.z;
+                    const magneticAttraction = 25;
+                    const magneticMultiplier = (40 - dist) / 40;
+                    this.vel.x += (dx / dist) * magneticAttraction * magneticMultiplier * this.z * k;
+                    this.vel.y += (dy / dist) * magneticAttraction * magneticMultiplier * this.z * k;
                 }
-                
-                // Enhanced attraction when tractor beam is active (works at longer range)
+
+                // Tractor beam — long-range pull when engaged. Affects
+                // both types (tractor reaches further than the natural
+                // pull, lets the player vacuum stragglers).
                 if (tractorEngaged) {
-                    let tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500; // Increased tractor strength
-                    let tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
-                    
+                    const tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
+                    const tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
                     if (dist < tractorDist) {
                         const tractorForce = tractorAttraction * (1 - dist / tractorDist);
-                        this.vel.x += (dx / dist) * tractorForce * this.z;
-                        this.vel.y += (dy / dist) * tractorForce * this.z;
+                        this.vel.x += (dx / dist) * tractorForce * this.z * k;
+                        this.vel.y += (dy / dist) * tractorForce * this.z * k;
                     }
                 }
             }

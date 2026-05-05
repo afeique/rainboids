@@ -44,6 +44,19 @@ export function updateWaveSystem() {
         this.game.waveCountdownTime = Date.now() + this.game.waveCountdownDuration;
         this.game.state = GAME_STATES.WAVE_TRANSITION;
 
+        // 5.72.2 — wave-clear bonuses inlined here. The old
+        // `completeWave()` export was never called from the live
+        // gameplay loop (only by tests / dev scripts), so the +1
+        // powerup pick + XP + coins bonus that 5.70.0 added there
+        // never actually fired in-game. Now it always does, on every
+        // wave clear, before the shop opens.
+        const clearedWave = this.game.currentWave;
+        const bonusXP = 20 + clearedWave * 10;
+        const bonusCoins = 50 + clearedWave * 25;
+        this.player.gainExperience(bonusXP);
+        this.game.money += bonusCoins;
+        this.player.powerupPicks = (this.player.powerupPicks || 0) + 1;
+
         if (this.game.currentWave >= MAX_WAVES) {
             this.completeRun();
             return;
@@ -51,13 +64,13 @@ export function updateWaveSystem() {
 
         this.showWaveComplete();
 
-        // Show "WAVE COMPLETE" for ~1.4s at full opacity, then ~0.6s
-        // fade-out (drives via showWaveComplete's duration). Open shop
-        // AFTER the fade so the player gets a clean visual pause
-        // between the action and the shop UI taking over.
+        // Bumped the shop delay 2000 → 2700ms so the WAVE COMPLETE
+        // banner has a clear ~700ms window to fully fade BEFORE the
+        // shop overlay covers the canvas. (showWaveComplete uses
+        // duration:2000 with the last 35% of that as fade-out.)
         setTimeout(() => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) this.openShop();
-        }, 2000);
+        }, 2700);
     }
 
     // (Removed) Auto-advance countdown — the shop now gates the next
@@ -305,13 +318,16 @@ export function completeWave() {
     this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
 
-    // Wave clear bonus: XP + coins scale with wave number
+    // Wave clear bonus: XP + coins scale with wave number, plus a
+    // free powerup pick (5.70.0) the player redeems in the shop.
+    // Picks accumulate, so skipping the shop one wave doesn't waste them.
     const bonusXP = 20 + clearedWave * 10;
     const bonusCoins = 50 + clearedWave * 25;
     this.player.gainExperience(bonusXP);
     this.game.money += bonusCoins;
+    this.player.powerupPicks += 1;
     this.queueNotification(`WAVE ${clearedWave} CLEARED`,
-        `+${bonusXP} XP  +${bonusCoins} coins`, 2500);
+        `+${bonusXP} XP  +${bonusCoins} coins  +1 powerup pick`, 2500);
 
     // Auto-unlock primary weapons at wave milestones
     for (const [id, weapon] of Object.entries(PRIMARY_WEAPONS)) {
@@ -709,13 +725,14 @@ export function isInMinimapArea(worldX, worldY) {
     const screenX = worldX - this.camera.x;
     const screenY = worldY - this.camera.y;
 
+    // 5.72.0 — minimap moved to TOP-LEFT (see hud/navigation.js).
     const minDim = Math.min(this.width, this.height);
     const mmSize = minDim < 500 ? Math.max(80, Math.floor(minDim * 0.22)) : 150;
     const mmMargin = mmSize < 120 ? 10 : 20;
-    const minimapLeft = this.width - mmSize - mmMargin;
-    const minimapTop = this.height - mmSize - mmMargin;
-    const minimapRight = this.width - mmMargin;
-    const minimapBottom = this.height - mmMargin;
+    const minimapLeft = mmMargin;
+    const minimapTop = mmMargin;
+    const minimapRight = mmMargin + mmSize;
+    const minimapBottom = mmMargin + mmSize;
 
     return screenX >= minimapLeft && screenX <= minimapRight &&
            screenY >= minimapTop && screenY <= minimapBottom;

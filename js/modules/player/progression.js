@@ -16,11 +16,20 @@ export function levelUp() {
     this.experience -= this.experienceToNextLevel;
     this.level++;
 
-    // Calculate next level requirements (exponential scaling)
-    this.experienceToNextLevel = Math.floor(100 * Math.pow(1.5, this.level - 1));
+    // 5.72.0 — base raised 100 → 400, exponent 1.5 → 1.7 to drastically
+    // slow level-up rate. See player.js for the rationale.
+    this.experienceToNextLevel = Math.floor(400 * Math.pow(1.7, this.level - 1));
 
     // Grant skill points for leveling up
     this.skillPoints += 1;
+    // 5.70.0 — also grant a powerup pick. Asteroid kills give XP, so
+    // grinding asteroids now meaningfully shapes the build (each level
+    // = another powerup choice in the shop).
+    // 5.72.0 — picks accumulate silently. The shop opens only at
+    // wave-end (see updateWaveSystem). The 5.71.0 level-up auto-shop
+    // was too disruptive — players reported it interrupted gameplay
+    // every time they hit a level threshold mid-fight.
+    this.powerupPicks = (this.powerupPicks || 0) + 1;
 
     // Health boost every 3 levels
     if (this.level % 3 === 0) {
@@ -98,7 +107,9 @@ export function triggerLevelUpEffects() {
     };
 
     // Build subtitle with bonus info
-    let subtitle = '+1 Skill Point';
+    // 5.73.0 — every level-up grants +5% Gold Find on top of the
+    // skill point + powerup pick + temp bonuses, advertised here.
+    let subtitle = '+1 Skill Point  +1 Powerup Pick  +5% Gold Find';
     if (this.lastLevelUpBonus && this.lastLevelUpBonus.length === 2) {
         const ge = this.gameEngine;
         const name1 = ge?.getPowerupConfig(this.lastLevelUpBonus[0])?.name || this.lastLevelUpBonus[0];
@@ -211,6 +222,14 @@ export function getMovementSpeedMultiplier() {
     // Each stack: +65% thrust (was +50%) — bumped to make a single
     // pickup decisively change ship feel given the new lower drop rates.
     return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.65) : 1;
+}
+
+// 5.73.0 — Gold Find: scales how much gold drops from kills.
+// +5% per player level past 1, additive. Level 1 = 1.0×, level 5 = 1.20×,
+// level 10 = 1.45×, level 20 = 1.95×. Applied as a multiplier on the
+// money-orb budget in dropOrbsFromEntity.
+export function getGoldFindMultiplier() {
+    return 1 + Math.max(0, (this.level || 1) - 1) * 0.05;
 }
 
 export function getRangeMultiplier() {

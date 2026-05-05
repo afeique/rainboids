@@ -9,8 +9,10 @@ export function drawMinimap() {
         const minDim = Math.min(this.width, this.height);
         const minimapSize = minDim < 500 ? Math.max(80, Math.floor(minDim * 0.22)) : 150;
         const margin = minimapSize < 120 ? 10 : 20;
-        const minimapX = this.width - minimapSize - margin;
-        const minimapY = this.height - minimapSize - margin; // Move to bottom right
+        // 5.72.0 — minimap moved to TOP-LEFT (was bottom-left). Bottom-
+        // left is now occupied by the healthbar / lives / loadout stack.
+        const minimapX = margin;
+        const minimapY = margin;
         const scaleX = minimapSize / this.gameField.width;
         const scaleY = minimapSize / this.gameField.height;
 

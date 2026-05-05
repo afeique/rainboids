@@ -108,8 +108,11 @@ export function drawGameComplete() {
     const statsTop = subtitleY + 70;
 
     // Title — wavy multicolor "GAME COMPLETE!"
+    // 5.72.0 — title size cut roughly 40% (110→64 cap, 64→40 floor,
+    // /14→/22 width-relative). Was overflowing on smaller viewports
+    // and dwarfing the stats below it.
     this.drawWavyText('GAME COMPLETE!', cx, titleY, {
-        fontSize: Math.min(110, Math.max(64, Math.floor(this.width / 14))),
+        fontSize: Math.min(64, Math.max(40, Math.floor(this.width / 22))),
         colors: WAVY_PALETTES.waveTitle,
         speed: 0.45,
         colorSpeed: 0.18,
@@ -303,75 +306,208 @@ export function drawCanvasTriforce(ctx, lives, baseX, baseY) {
 }
 
 export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
-        const livesX = 36; // Same as lives display position (left HUD margin)
-        const triforceWidth = 60; // Triforce canvas width from ui-manager.js
-        const triforceCenterX = livesX + triforceWidth / 2; // Center of triforce at x=40
+        // 5.72.0 — LV shield + level number now sits to the RIGHT of the
+        // healthbar on the SAME ROW (was below). Gold is drawn separately
+        // in drawBottomRightGold() above the timer.
+        const shieldIconSize = 28;
+        const shieldCenterX = barX + 220 + 10 + shieldIconSize / 2; // 10px gap right of bar (barWidth=220)
+        const shieldCenterY = barY + barHeight / 2;
 
         ctx.save();
 
-        // Level display beneath the triforce (lives) - first line
-        const levelY = barY + barHeight + 26; // 20px below health bar for more space
-
-        // Draw shield icon with "LV" text beneath lives, centered with triforce
-        const shieldIconSize = 30; // Slightly larger shield icon
-        const shieldIconX = triforceCenterX - shieldIconSize / 2; // Center shield with triforce
-        const shieldCenterX = shieldIconX + shieldIconSize / 2;
-        const shieldCenterY = levelY;
-
-        // Draw shield icon
         drawCachedShieldIcon(ctx, shieldCenterX, shieldCenterY, shieldIconSize);
 
-        // Draw "LV" text inside the shield icon
+        // "LV" inside the shield
         ctx.save();
-        ctx.font = "10px 'Press Start 2P', monospace"; // Larger font for larger icon
-        ctx.fillStyle = '#102342'; // Dark blue color
-        ctx.strokeStyle = '#155379'; // gray-blue stroke outline
+        ctx.font = "10px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#102342';
+        ctx.strokeStyle = '#155379';
         ctx.lineWidth = 1;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-
-        // Draw "LV" text with stroke outline inside shield
         ctx.strokeText('LV', shieldCenterX, shieldCenterY);
         ctx.fillText('LV', shieldCenterX, shieldCenterY);
         ctx.restore();
 
-        // Draw level number to the right of shield
-        const levelNumberX = shieldIconX + shieldIconSize + 10;
-        ctx.font = "14px 'Press Start 2P', monospace"; // Original level number size
-        ctx.fillStyle = '#4A90E2'; // Blue color for level number
+        // Level number to the right of the shield
+        const levelNumberX = shieldCenterX + shieldIconSize / 2 + 8;
+        ctx.font = "14px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#4A90E2';
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 1;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-
         const levelNumber = `${this.player.level}`;
-        ctx.strokeText(levelNumber, levelNumberX, levelY);
-        ctx.fillText(levelNumber, levelNumberX, levelY);
-
-        // Coins display on its own line beneath the level - second line
-        const coinsY = levelY + 40; // 30px below level for more spacing
-
-        // Draw coin icon, centered with triforce
-        const coinIconSize = 30; // Larger coin icon
-        const coinIconX = triforceCenterX - coinIconSize / 2; // Center coin with triforce
-        const coinIconY = coinsY - coinIconSize/2;
-
-        drawCachedMoneyIcon(ctx, coinIconX + coinIconSize/2, coinIconY + coinIconSize/2, coinIconSize, '#FFD700', '#B8860B');
-
-        // Draw coins text
-        const coinsTextX = coinIconX + coinIconSize + 10;
-        ctx.font = "14px 'Press Start 2P', monospace"; // Original coins text size
-        ctx.fillStyle = '#FFD700'; // Gold color for coins
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 1;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-
-        const coinsText = `${Math.floor(this.game.money)}`;
-        ctx.strokeText(coinsText, coinsTextX, coinsY);
-        ctx.fillText(coinsText, coinsTextX, coinsY);
+        ctx.strokeText(levelNumber, levelNumberX, shieldCenterY);
+        ctx.fillText(levelNumber, levelNumberX, shieldCenterY);
 
         ctx.restore();
+}
+
+// 5.72.2 — Gold readout: bottom-right above the timer, with two
+// animations stacked on top:
+//   1. A "+N" popup floats up + fades on every gain (mirrors the
+//      damage-number popup style).
+//   2. The numeric counter ROLLS toward the real money value like a
+//      casino slot reel, instead of snapping. Lerp speed is tuned so
+//      a +5 trickle feels brisk and a wave-clear bonus feels meaty.
+export function drawBottomRightGold(ctx) {
+        if (!this.game) return;
+        const margin = 20;
+        const rowY = this.canvas.height - 40 - 36;
+        const x = this.canvas.width - margin;
+
+        // ── 1. Detect gains, spawn popups ──────────────────────────────
+        // First-frame init (avoids a phantom +game.money popup on boot).
+        if (!this._goldInit) {
+            this._lastSeenMoney = this.game.money;
+            this._displayedMoney = this.game.money;
+            this._goldInit = true;
+        }
+        const real = this.game.money;
+        const delta = real - this._lastSeenMoney;
+        if (delta > 0) {
+            // 5.72.3 — popups arc parabolically. Two spawn points per
+            // gain so the feedback reads from both screen-corner gold
+            // counter AND the action zone:
+            //   1. Anchored at the bottom-right gold readout
+            //   2. Anchored over the player (5.73.0 addition) so the
+            //      "+N" pops above the ship as it scoops up the orb
+            const amount = Math.round(delta);
+            const jitter = (Math.random() - 0.5) * 30;
+            this.goldPopups.push({
+                amount, x: x - 60 + jitter, y: rowY - 8,
+                vx: (Math.random() - 0.5) * 2.4,
+                vy: -3.6,
+                gravity: 0.18,
+                life: 1.0,
+                maxLife: 1100,
+                age: 0,
+            });
+            // Player-anchored popup. Player coords are world-space; the
+            // HUD draw runs in screen-space (after the camera transform
+            // is restored), so convert via this.camera.
+            if (this.player && this.player.active && this.camera) {
+                const ps = (Math.random() - 0.5) * 24;
+                this.goldPopups.push({
+                    amount,
+                    x: (this.player.x - this.camera.x) + ps,
+                    y: (this.player.y - this.camera.y) - 40,
+                    vx: (Math.random() - 0.5) * 2.4,
+                    vy: -3.6,
+                    gravity: 0.18,
+                    life: 1.0,
+                    maxLife: 1100,
+                    age: 0,
+                });
+            }
+            if (this.goldPopups.length > 32) {
+                this.goldPopups.splice(0, this.goldPopups.length - 32);
+            }
+
+            // Counter flash — kicks in for ~280 ms on every gain.
+            this._goldFlashUntil = Date.now() + 280;
+        }
+        this._lastSeenMoney = real;
+
+        // ── 2. Slot-roll smoothing ────────────────────────────────────
+        // Lerp by 18%/frame toward real, with a minimum step so small
+        // gains finish quickly. Snap when within 0.5 to avoid creeping.
+        const diff = real - this._displayedMoney;
+        if (Math.abs(diff) < 0.5) {
+            this._displayedMoney = real;
+        } else {
+            const lerpStep = diff * 0.18;
+            const minStep = Math.sign(diff) * Math.min(2, Math.abs(diff));
+            this._displayedMoney += Math.abs(lerpStep) > Math.abs(minStep) ? lerpStep : minStep;
+        }
+
+        // ── 3. Draw counter (rolling + flash) ─────────────────────────
+        // 5.72.3 — counter pulses + tints bright white on every gain.
+        // Flash window is 280 ms; we ease both scale (1 → 1.18 → 1) and
+        // tint (gold → white-hot → gold) across that window.
+        const now = Date.now();
+        const flashRemaining = Math.max(0, (this._goldFlashUntil || 0) - now);
+        const flashT = flashRemaining > 0 ? flashRemaining / 280 : 0; // 1 → 0
+        // Bell curve so the flash peaks mid-window.
+        const flashPulse = flashT > 0 ? Math.sin(flashT * Math.PI) : 0;
+        const scale = 1 + 0.18 * flashPulse;
+        const flashFill = flashPulse > 0
+            ? `rgba(255, ${Math.round(215 + 40 * flashPulse)}, ${Math.round(40 + 200 * flashPulse)}, 1)`
+            : '#FFD700';
+        const rolling = Math.abs(real - this._displayedMoney) >= 1;
+        const glowActive = rolling || flashPulse > 0;
+
+        ctx.save();
+
+        const displayed = Math.floor(this._displayedMoney);
+        const coinsText = `${displayed}`;
+
+        ctx.font = "16px 'Press Start 2P', monospace";
+        ctx.fillStyle = flashFill;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+
+        if (glowActive) {
+            ctx.shadowColor = flashPulse > 0 ? '#FFFFFF' : '#FFD700';
+            ctx.shadowBlur = 10 + 14 * flashPulse;
+        }
+
+        const textWidth = ctx.measureText(coinsText).width;
+
+        // Apply scale-pulse around the text's right anchor (since textAlign='right',
+        // the rotation/scale anchor is at (x, rowY)).
+        if (scale !== 1) {
+            ctx.translate(x, rowY);
+            ctx.scale(scale, scale);
+            ctx.strokeText(coinsText, 0, 0);
+            ctx.fillText(coinsText, 0, 0);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+        } else {
+            ctx.strokeText(coinsText, x, rowY);
+            ctx.fillText(coinsText, x, rowY);
+        }
+
+        // Coin icon to the left of the text — also pulses on flash.
+        ctx.shadowBlur = 0;
+        const coinIconSize = 26;
+        const coinIconCx = x - textWidth - 10 - coinIconSize / 2;
+        drawCachedMoneyIcon(ctx, coinIconCx, rowY, coinIconSize, '#FFD700', '#B8860B');
+
+        ctx.restore();
+
+        // ── 4. Tick + draw popups (parabolic arc) ─────────────────────
+        const dt = 16; // approximate frame ms
+        for (let i = this.goldPopups.length - 1; i >= 0; i--) {
+            const p = this.goldPopups[i];
+            p.age += dt;
+            p.life = Math.max(0, 1 - p.age / p.maxLife);
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += p.gravity || 0.18; // gravity pulls back down → arc
+            if (p.life <= 0) {
+                this.goldPopups.splice(i, 1);
+                continue;
+            }
+            ctx.save();
+            ctx.globalAlpha = p.life;
+            ctx.font = "bold 18px 'Press Start 2P', monospace";
+            ctx.fillStyle = '#FFD700';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.lineWidth = 3;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            // Slight scale grow at spawn → fade so the popup feels poppy.
+            const popScale = 1 + 0.25 * Math.min(1, p.age / 120);
+            ctx.translate(p.x, p.y);
+            ctx.scale(popScale, popScale);
+            const txt = `+${p.amount}`;
+            ctx.strokeText(txt, 0, 0);
+            ctx.fillText(txt, 0, 0);
+            ctx.restore();
+        }
 }
 
 export function drawXPBar(ctx, barX, barY, barWidth, barHeight) {
@@ -459,8 +595,10 @@ export function drawLevelUpText() {
         const screenWidth = this.width;
         const screenHeight = this.height;
 
-        // Position text at the bottom of the screen
-        const textY = screenHeight - 80; // 80px from bottom
+        // 5.72.0 — moved from near-bottom (screenHeight - 80) to upper
+        // third so the LEVEL X! announce never overlaps the killstreak
+        // text that now lives at the bottom-center.
+        const textY = Math.floor(screenHeight * 0.30);
         const centerX = screenWidth / 2;
 
         this.ctx.save();
@@ -507,9 +645,14 @@ export function drawLevelUpText() {
 export function updateHUD() {
         const ctx = this.ctx;
         const barX = 86; // Close to triforce (triforce rightmost pixel ≈ x=79 with livesX=36)
-        const barY = 20;
+        // 5.72.1 — back to TOP-LEFT (5.72.0 moved it BL, user reverted).
+        // Top-left layout: triforce-LEFT, healthbar, LV-shield + level
+        // RIGHT of bar; HP text + heart icon below the bar. Loadout
+        // squares now live independently in the BOTTOM-LEFT corner
+        // (see drawEquippedWeaponSquares).
         const barHeight = 30;
         const barWidth = 220;
+        const barY = 20;
         const bevelSize = 12;
         const segments = 10; // Number of segments for the bar
 
@@ -592,27 +735,37 @@ export function updateHUD() {
         // Draw filled health bar with gradient
         if (filledWidth > 0) {
 
-            // Lazily create and cache the 3 tier gradients (constant coordinates)
-            if (!this._hpGradients) {
-                const gHigh = ctx.createLinearGradient(60, 20, 60, 50);
+            // 5.72.1 — gradients are cached PER-barY because the bar can
+            // now move (5.72.0 moved it bottom-anchored). The previous
+            // implementation cached gradients at fixed coordinates (60,20,60,50),
+            // so when barY changed the gradient ended up rendered above
+            // the bar's actual screen position — bar appeared unfilled.
+            // Cache keyed on barY: we keep the perf benefit when the
+            // window isn't resizing.
+            if (!this._hpGradients || this._hpGradientsBarY !== barY) {
+                const y0 = barY;
+                const y1 = barY + barHeight;
+
+                const gHigh = ctx.createLinearGradient(60, y0, 60, y1);
                 gHigh.addColorStop(0, 'rgba(0, 150, 255, 0.95)');
                 gHigh.addColorStop(0.3, 'rgba(0, 120, 255, 0.9)');
                 gHigh.addColorStop(0.7, 'rgba(0, 90, 255, 0.85)');
                 gHigh.addColorStop(1, 'rgba(0, 60, 220, 0.8)');
 
-                const gMid = ctx.createLinearGradient(60, 20, 60, 50);
+                const gMid = ctx.createLinearGradient(60, y0, 60, y1);
                 gMid.addColorStop(0, 'rgba(255, 255, 0, 0.95)');
                 gMid.addColorStop(0.3, 'rgba(255, 220, 0, 0.9)');
                 gMid.addColorStop(0.7, 'rgba(255, 180, 0, 0.85)');
                 gMid.addColorStop(1, 'rgba(220, 140, 0, 0.8)');
 
-                const gLow = ctx.createLinearGradient(60, 20, 60, 50);
+                const gLow = ctx.createLinearGradient(60, y0, 60, y1);
                 gLow.addColorStop(0, 'rgba(255, 50, 50, 0.95)');
                 gLow.addColorStop(0.3, 'rgba(255, 20, 20, 0.9)');
                 gLow.addColorStop(0.7, 'rgba(220, 0, 0, 0.85)');
                 gLow.addColorStop(1, 'rgba(180, 0, 0, 0.8)');
 
                 this._hpGradients = { high: gHigh, mid: gMid, low: gLow };
+                this._hpGradientsBarY = barY;
             }
 
             const tier = healthPercentage > 0.6 ? 'high' : healthPercentage > 0.3 ? 'mid' : 'low';
@@ -706,40 +859,33 @@ export function updateHUD() {
         // Draw level and coins beneath lives and health bar
         this.drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight);
 
-        // Equipped weapon squares (PRM / PWR) beneath the coins display.
+        // Equipped weapon squares (PRM / PWR / SKL) ABOVE the bar (5.72.0).
         this.drawEquippedWeaponSquares(ctx, barX, barY, barHeight);
 
-        // Draw survival timer at bottom left
+        // Survival timer (bottom-right) + gold readout above it (5.72.0).
         this.drawSurvivalTimer(ctx);
+        this.drawBottomRightGold(ctx);
 }
 
-// Two small squares — Primary and Power — below the coins display in
-// the top-left HUD. Show the equipped weapon's icon in its weapon
-// color, with PRM / PWR labels underneath. The Primary square pulses
-// briefly when the player cycles weapons via R (driven by
-// `gameEngine._weaponCycleAnim` set in event-setup.js).
+// Three loadout squares — Primary, Power, Skill — that sit directly
+// ABOVE the healthbar in the bottom-left HUD (5.72.0; was below the
+// coins display in the top-left). Show the equipped icon in its
+// weapon color, with PRM / PWR / SKL labels underneath. The Primary
+// square pulses briefly when the player cycles weapons via R (driven
+// by `gameEngine._weaponCycleAnim` set in event-setup.js).
 export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     if (!this.player) return;
     const livesX = 36;
-    const triforceCenterX = livesX + 30;     // matches drawLevelAndCoinsDisplay
-    const coinIconSize = 30;
-    const coinIconX = triforceCenterX - coinIconSize / 2; // left edge of the coin icon
 
-    const levelY = barY + barHeight + 26;
-    const coinsY = levelY + 40;
-
-    // Larger squares with rounded corners — easier-to-read icons + a bit
-    // more chunky and prominent. Gap widened to keep the visual breathing
-    // room between PRM and PWR proportional to the new size (~25% of size).
     const squareSize = 50;
     const gap = 12;
     const cornerRadius = 12;
-    // Align the Primary square's LEFT EDGE with the coin icon's LEFT EDGE
-    // — visually anchors the weapon row to the gold display directly above.
-    const groupX = coinIconX;
-    // 10px breathing room between the coin-icon bottom and the squares —
-    // matches the spacing between shield (level) and coin icons above.
-    const groupY = coinsY + coinIconSize / 2 + 12;
+    // 5.72.1 — loadout stays in the BOTTOM-LEFT corner regardless of
+    // where the healthbar lives (the bar moved back to top-left in
+    // 5.72.1). Anchor: 32 px from left, ~80 px from bottom (clears
+    // the labels printed beneath each square + a margin).
+    const groupX = livesX;
+    const groupY = this.canvas.height - squareSize - 80;
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};

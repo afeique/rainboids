@@ -11,6 +11,135 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.73.0] - 2026-05-05
+
+### Added
+- **Gold Find player stat.** New `Player.getGoldFindMultiplier()` returning `1 + (level - 1) × 0.05`. Applied as a multiplier on the money-orb budget in `dropOrbsFromEntity` — both the gold AMOUNT per drop and the SYMBOL COUNT (post-split) scale with player level. Level 5 = 1.20×, level 10 = 1.45×, level 20 = 1.95×.
+- **"+5% Gold Find" advertised on every level-up** alongside the existing +1 SP / +1 Pick / temp bonuses. Level-up subtitle now reads `+1 Skill Point  +1 Powerup Pick  +5% Gold Find` so the player sees the stat tick up.
+- **Player-anchored gold popup**. The gold "+N" arc now spawns at TWO points per gain — at the bottom-right gold counter AND directly over the player's ship — so the feedback reads from both the action zone and the corner readout.
+- **Homing bullets target enemy mines (Tangerine bombs).** `applyHoming` now also walks `enemyBulletPool` filtered to `shape === 'mine'` after enemies/asteroids are exhausted. Mines have HP and can be destroyed; this lets players "shoot the bombs."
+
+### Changed
+- **POWERUPS tab moved from shop to pause menu.** Shop is now strictly the gold + SP economy (HELP / PRIMARY / POWER / DEFENSE). The pause menu's POWERUPS tab gained a per-card "+1" buy button + a top banner showing the unspent Pick count. Buys decrement `player.powerupPicks` and call `addPowerup`. CSS picks-banner styling added.
+- **Money-orb base drop rate bumped 0.20 → 0.45.** Gold drops are roughly 2.25× more frequent baseline, before powerup stacks / Gold Find / hit-streak multipliers.
+- **Gold popup arc trajectory.** Was straight-up float + decel. Now spawns with a horizontal velocity component and a gravity term (`vx: ±2.4, vy: -3.6, gravity: 0.18`) so the popup describes a parabolic arc instead of a vertical line. Each popup also scale-pulses (1 → 1.25) at spawn for poppy emphasis.
+- **Gold counter flash on every gain.** 280 ms bell-curve flash where the text scale-pulses (×1.18) and tints from gold to white-hot, with a soft glow that decays through the window. Visible without being subtle.
+- **Old `drawMoneyPickupDisplay()` disabled.** Was rendering a stray "+N" at the obsolete top-left coin position (rogue popup the user spotted). Removed from the draw loop; the new `goldPopups` system replaces it.
+- **HP scaling much steeper from wave 5.** Both enemy and asteroid HP curves linearised (exponent 1.6/1.5 → 1.0) with higher ceilings (4.5/4.0 → 6.5). Wave-5 enemies now ~2.4× HP (was 1.37×); wave-5 asteroids ~3.9× (was 1.94×); wave-20 enemies ~7.5× (was 5.5×).
+
+---
+
+## [5.72.2] - 2026-05-05
+
+### Fixed
+- **Wave-clear bonus never fired in actual gameplay.** The XP / coins / +1 powerup pick / "WAVE N CLEARED" notification all lived in `wave-manager.completeWave()`, which has been dead code in the live loop since the shop-gated wave system was introduced — only tests and the dev console call it. Players never got the +1 pick they were promised, and the bonus message never showed. Inlined the bonus directly into `updateWaveSystem()` so every wave clear in real gameplay grants `+20+(wave×10) XP`, `+50+(wave×25) coins`, and `+1 powerup pick`.
+
+### Added
+- **Animated gold readout.** The bottom-right gold counter now:
+  - Spawns a "+N" popup near the readout on every gain (mirrors the damage-number popup style — gold colour, 16px bold, floats up + fades over ~1.1 s, slight x-jitter so back-to-back popups don't perfectly stack).
+  - Rolls toward the real value like a casino slot reel — 18% lerp per frame with a min step of 2 so small trickles finish quickly, large bonuses (wave clear) roll visibly. While rolling, the counter gets a subtle gold glow.
+
+### Changed
+- **WAVE COMPLETE banner gets a clean window before the shop.** Bumped the auto-shop delay from 2000 ms → 2700 ms so the banner has ~700 ms of clear screen after its fade-out finishes, before the shop overlay covers the canvas.
+
+---
+
+## [5.72.1] - 2026-05-05
+
+### Fixed
+- **Healthbar lost its color gradient.** When the bar moved bottom-anchored in 5.72.0, the cached `LinearGradient` (created with hardcoded coordinates `60, 20, 60, 50` for the old top-left position) was rendered above the bar's new screen position — bar appeared flat / unfilled. Cache key now includes `barY` so the gradient is regenerated when the bar moves. Bar reads correctly again at any anchor.
+- **Loadout squares overlapped the healthbar.** The 14 px gap between loadout-square bottom and bar top was too tight; rounded corners crashed into the bar's top edge. Bumped to 32 px (now moot — see HUD reshuffle below — but the constant is correct for any future layout that puts loadout above the bar).
+
+### Changed
+- **Shop always lands on POWERUPS tab.** Was: `POWERUPS` if any unspent picks, `HELP` otherwise. The HELP fallback never matched the player's intent — they're opening the shop to spend, not to read instructions. POWERUPS is the canonical entry tab now.
+- **TIMER tab moved from shop to pause menu.** Builds the same speedrun-tier reference card (label / finish-under / multiplier columns + live elapsed-time readout). The shop is now build-mode only; the timer reference is meta information that fits the pause menu better.
+- **HUD reshuffle (final, post-iteration):**
+  - Minimap: **commented out** (per user request — was top-left after 5.72.0 toggling, now disabled entirely).
+  - Healthbar / triforce / LV shield / level number / heart+HP text → **back to top-left** (5.72.0 moved them BL; this restores the original top-left layout).
+  - Weapon + skill loadout squares (PRM / PWR / SKL) → **stay in bottom-left**, anchored independently to canvas bottom (no longer relative to the bar).
+  - Pause + shop buttons → **bottom-middle** along the bottom edge (was bottom-right above timer). Centered around screen midline with a 12 px gap.
+  - Killstreak indicator → still bottom-center, but raised to clear the pause+shop buttons (`y = canvas.height - 180`).
+  - Gold above timer in BR + powerup-icon vertical column on right edge — unchanged.
+
+---
+
+## [5.72.0] - 2026-05-05
+
+### Fixed
+- **Powerups capped at 1 stack** — every powerup in the new POWERUPS shop tab refused a second purchase. POWERUP_TYPES doesn't define `maxStacks` per entry, and `_buildPowerupsTabItems` was defaulting to 1. Bumped the default to 99 (effectively unlimited within a run); per-powerup tuning can land later if specific powerups need real caps.
+- **Enemies warped across the screen at high waves.** Compound speed was 4.34× base at wave 20 (campaign mul 2.55 × level mul 1.70). Reduced both ceilings: campaign mul cap 2.55 → 1.75, per-level speed mul cap 1.70 → 1.40. New worst-case wave-20 speed: ~2.45× base.
+- **GAME COMPLETE title was oversized**, dwarfing the stats below it. Cut roughly 40% (110→64 cap, 64→40 floor, screen-width divisor 14→22).
+
+### Changed
+- **Level-up no longer auto-opens the shop.** The 5.71.0 auto-open was disruptive — every level threshold during a fight pre-empted gameplay. Picks accumulate silently; the shop opens only at wave-end now.
+- **XP curve drastically slowed.** Base `experienceToNextLevel` 100 → 400, exponent 1.5 → 1.7, per-kill XP `points/3` → `points/6`. Combined effect: leveling drops from ~1/wave to ~1 every 2-3 waves.
+- **Shop landing tab simplified.** Removed the 5.70.0 random-tab fallback (PRIMARY / POWER / DEFENSE). Now: POWERUPS if the player has unspent picks, HELP otherwise.
+- **HUD reshuffle (again — final layout):**
+  - Minimap → **top-left** (was bottom-left in 5.71.0).
+  - Healthbar / lives stack → **bottom-left**. Triforce sits LEFT of the bar; LV shield + level number sits to the RIGHT of the bar on the same row (was below it); heart icon + HP text below.
+  - Loadout squares (PRM / PWR / SKL) → directly **above** the healthbar (was below the coins display).
+  - Gold readout → **bottom-right above timer** (was below healthbar). New `drawBottomRightGold(ctx)` in `hud/status.js`.
+  - Powerup-stack icons → **right edge, vertical column** (was top-right horizontal). When a column fills, the next icon wraps to a new column to the LEFT. Top reserve = 20 px, bottom reserve = 110 px so the column never overlaps gold + timer.
+  - Killstreak indicator → **bottom-center** (was top-right). Centered alignment, sits above the timer/gold lane.
+  - LEVEL X! announce → **upper third** of screen (was near bottom). Avoids overlap with the bottom-center killstreak.
+
+---
+
+## [5.71.0] - 2026-05-05
+
+### Fixed
+- **Game froze on shop close from mid-wave.** Pressing Escape (or the X button) on a shop opened during PLAYING hid the shop overlay but left `game.state === 'SHOP'`. The state machine's transition table was missing `SHOP → PLAYING` — `closeShopToPlaying()` was calling `this.game.state = PLAYING`, the validator silently rejected the transition with `[GameState] Invalid transition: SHOP → PLAYING`, and the game loop (gated on PLAYING/WAVE_TRANSITION) stopped updating entities. Added `PLAYING` to the SHOP row in `TRANSITION_TABLE` (game-state.js).
+
+### Added
+- **Shop auto-opens on level-up** — `progression.levelUp()` now schedules `openShop()` ~700 ms after the level-up animation, mirroring the wave-end auto-shop. Skips if state is no longer PLAYING / WAVE_TRANSITION (e.g. player died mid-animation). The auto-open uses the existing "land on POWERUPS if any unspent picks" logic, so the player goes straight to the build choice.
+- **TIMER shop tab.** New info-only tab showing a live elapsed-time readout and the speedrun multiplier reference card. Tier table:
+  ```
+  GODLIKE      <  5:00     5.0×
+  LEGENDARY    <  7:30     4.0×
+  UNSTOPPABLE  < 10:00     3.0×
+  EMPOWERED    < 12:30     2.5×
+  STEADY       < 15:00     2.0×
+  CASUAL       < 20:00     1.5×
+  FINISHED     ≥ 20:00     1.0×
+  ```
+  Constants live in `core/constants.js` (`SPEEDRUN_TIERS`, `speedrunTierFor()`) so the Game Complete screen can apply them later. The current row highlights based on the live elapsed time, so the player can see what tier they're chasing in-shop.
+- **Big `+` sigil for the PICKS currency.** Replaces the ⚡ icon — bigger, bolder, pink (#ff66cc) with a soft glow. Reads as "free pick" rather than as a numeric cost. Applies to both the shop header counter and the per-row price display.
+
+### Changed
+- **HUD layout reshuffled.** Cleaner left/right edge use:
+  - Powerup-stack icons → **top-right** (was bottom-left). Stack right-to-left so the rightmost slot is the first powerup; new ones push leftward.
+  - Run timer → **bottom-right** (was bottom-left). Right-aligned now: text hugs the right margin, stopwatch icon sits to its left.
+  - Minimap → **bottom-left** (was bottom-right). Spawn-avoidance region in `wave-manager.js` updated to match.
+  - HUD shop + pause buttons → **bottom-right**, above the timer (was top-right). Bottom offset 70 px clears the timer row.
+- **Green health orbs are now mechanically identical to powerups.** They drift gently toward the player with the powerup-style soft magnet (k = 0.55× — same three-tier shape as money orbs but scaled), tick down their `life` counter, and fade out via the existing 120-frame opacity ramp before pool release. Money orbs keep the full-strength magnetic pull (k = 1.0) so coins still snap to the player. Tractor beam pulls both.
+
+---
+
+## [5.70.0] - 2026-05-05
+
+### Changed
+- **Powerup acquisition reworked end-to-end.** Powerups no longer drop from enemy or asteroid kills. Instead, the player earns **Powerup Picks** — a new currency — and spends them in the shop's new **POWERUPS** tab on whichever powerup they want. This gives every run a deliberate, custom build path:
+  - **+1 Pick per wave clear** (alongside the existing XP + coins bonus).
+  - **+1 Pick per player level-up** (asteroid kills now meaningfully shape the build because XP feeds directly into more picks).
+  - Picks accumulate; skipping a shop visit doesn't waste them.
+  - All 20 powerup types are purchasable. Each costs 1 Pick. Per-powerup `maxStacks` limits still apply.
+  - Picks-currency items are non-refundable (no SELL button) — keeps the build choice meaningful and prevents churn-farming the same stack.
+- **Shop auto-opens on the POWERUPS tab when the player has unspent Picks.** Otherwise it falls back to the old random-tab landing (PRIMARY / POWER / DEFENSE) so the open still feels fresh.
+- **Money orbs keep their magnetic three-tier pull. Health (green) orbs no longer auto-home** — they drift with their burst velocity + ORB_FRIC drag, and the player has to fly close to collect them. Makes the asteroids-vs-enemies trade-off more deliberate (you commit to flying over there for the heal).
+
+### Added
+- **`Player.powerupPicks` field** + grant logic in `wave-manager.js completeWave()` and `progression.js levelUp()`.
+- **`POWERUPS` shop category** (`shop-manager._buildPowerupsTabItems`) listing every entry in `POWERUP_TYPES` with currency `'PICKS'`.
+- **`PICKS` currency support in `buyShopItem`** — affordability check, decrement, and the existing `addPowerup()` hook handles the rest of the player-state side.
+- **Shop UI:** new `<button class="shop-tab" data-tab="POWERUPS">` in `index.html`, new `shop-currency--picks` counter in the header, new `shop-item-price--picks` style for the per-row cost. CSS picks accent: `#ff66cc`.
+- **HELP-tab content updated** to introduce Picks alongside Gold / SP / XP, and to clarify the new "asteroid kills feed into XP feeds into Picks" loop.
+
+### Removed
+- All `dropPowerup()` calls from kill paths in `collision-system.js` (small + large asteroid splits, enemy bullet-kill, `destroyAsteroid()`, `damageEnemy()` death path). The function itself remains because the `P` debug cheat still uses it to spawn a test pickup.
+- `COLLISION_CONFIG.POWERUP_DROP_CHANCE` constants are now unreferenced from kill paths (kept in `constants.js` for now in case the cheat or a future event-drop re-adopts them).
+
+---
+
 ## [5.69.4] - 2026-05-05
 
 ### Changed

@@ -70,8 +70,18 @@ export class Player {
         // Player leveling system
         this.level = 1;
         this.experience = 0;
-        this.experienceToNextLevel = 100; // EXP needed for level 2
+        // 5.72.0 — base raised 100 → 400 to slow early leveling.
+        // Combined with the 1.5 → 1.7 exponent in progression.levelUp()
+        // and the halved kill-XP rate, level-ups drop from ~1/wave to
+        // ~1 every 2-3 waves. The 5.71.0 auto-shop on level-up was
+        // disruptive partly because levels came too fast.
+        this.experienceToNextLevel = 400; // EXP needed for level 2
         this.skillPoints = 0; // Skill points for defensive upgrades
+        // 5.70.0 — Powerup Picks. New token-currency redeemed for any
+        // powerup in the shop's POWERUPS tab. Earned: +1 per wave clear,
+        // +1 per level-up. Powerups no longer drop from kills — picks
+        // are the only way to add stacks. Builds get personal.
+        this.powerupPicks = 0;
 
         // Weapon system. All primaries / powers / skills are FREE and
         // selectable from start (5.64.11). The owned-sets are still
@@ -615,6 +625,10 @@ export class Player {
 
     getRangeMultiplier() {
         return progression.getRangeMultiplier.call(this);
+    }
+
+    getGoldFindMultiplier() {
+        return progression.getGoldFindMultiplier.call(this);
     }
 
     getEffectiveShield() {

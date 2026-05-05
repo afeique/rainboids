@@ -308,6 +308,16 @@ export class GameEngine {
         
         // Damage numbers system
         this.damageNumbers = [];
+
+        // 5.72.2 — Gold popups + slot-roll display state.
+        //   goldPopups        : screen-space "+N" floaters (one per gain)
+        //   _lastSeenMoney    : last sampled game.money for delta detection
+        //   _displayedMoney   : smoothed value used by drawBottomRightGold
+        //                       so the readout rolls toward real money
+        //                       like a casino slot reel
+        this.goldPopups = [];
+        this._lastSeenMoney = 0;
+        this._displayedMoney = 0;
         
         // Initialize wave message system
         this.waveMessage = {
@@ -798,6 +808,8 @@ export class GameEngine {
     _buildPowerTabItems() { return shop._buildPowerTabItems.call(this); }
 
     _buildSkillsTabItems() { return shop._buildSkillsTabItems.call(this); }
+
+    _buildPowerupsTabItems() { return shop._buildPowerupsTabItems.call(this); }
 
     closeShop() { return shop.closeShop.call(this); }
     closeShopToPlaying() { return shop.closeShopToPlaying.call(this); }
@@ -1302,8 +1314,8 @@ export class GameEngine {
                 // Draw off-screen entity indicators
                 this.drawOffScreenIndicators();
 
-                // Draw minimap
-                this.drawMinimap();
+                // Draw minimap (5.72.1 — disabled per user request).
+                // this.drawMinimap();
 
                 // Draw spawn countdown timer (hidden per user request)
                 // this.drawSpawnTimer();
@@ -1450,7 +1462,12 @@ export class GameEngine {
             // pop out for the duration of the freeze, then back in. Now we
             // draw it during hitstop too, so the panel stays solid.
             this.drawTargetInfo();
-            this.drawMoneyPickupDisplay();
+            // 5.72.3 — drawMoneyPickupDisplay disabled. It rendered a "+N"
+        // text near the OLD top-left coin position, which is now empty
+        // (gold moved to bottom-right in 5.72.0). The new goldPopups
+        // system in drawBottomRightGold replaces it with proper
+        // BR-anchored, arc-trajectory popups.
+        // this.drawMoneyPickupDisplay();
             this.drawDamageNumbers();
             // Screen flash overlay
             if (this._screenFlashAlpha > 0) {
@@ -1542,7 +1559,12 @@ export class GameEngine {
         this.drawTargetInfo();
         
         // Draw money pickup display
-        this.drawMoneyPickupDisplay();
+        // 5.72.3 — drawMoneyPickupDisplay disabled. It rendered a "+N"
+        // text near the OLD top-left coin position, which is now empty
+        // (gold moved to bottom-right in 5.72.0). The new goldPopups
+        // system in drawBottomRightGold replaces it with proper
+        // BR-anchored, arc-trajectory popups.
+        // this.drawMoneyPickupDisplay();
         
         // Draw damage numbers
         this.drawDamageNumbers();
@@ -1875,6 +1897,7 @@ export class GameEngine {
     findNearestEnemy() { return col.findNearestEnemy.call(this); }
 
     drawSurvivalTimer(ctx) { return hudOverlays.drawSurvivalTimer.call(this, ctx); }
+    drawBottomRightGold(ctx) { return hudStatus.drawBottomRightGold.call(this, ctx); }
     drawPauseButton() { return hudOverlays.drawPauseButton.call(this); }
     drawStopwatchIcon(ctx, x, y, size) { return hudOverlays.drawStopwatchIcon.call(this, ctx, x, y, size); }
     drawCanvasTriforce(ctx, lives, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }

@@ -682,8 +682,10 @@ function drawPinwheelAnim(ctx, elapsed, total, text, seeds, centerX, centerY, st
 }
 
 export function drawSurvivalTimer(ctx) {
-        // Position at bottom left of screen
-        const timerX = 20;
+        // 5.71.0 — moved to bottom-RIGHT (was bottom-left). Minimap
+        // took over the bottom-left corner; HUD pause/shop buttons
+        // sit above this timer in the bottom-right column.
+        const timerX = this.canvas.width - 20;
         const timerY = this.canvas.height - 40;
 
         ctx.save();
@@ -697,27 +699,25 @@ export function drawSurvivalTimer(ctx) {
 
         const timeString = `${hours}:${minutes}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
 
-        // Draw stopwatch SVG icon
-        const iconSize = 24;
-        const iconX = timerX;
-        const iconY = timerY - iconSize/2;
-
-        this.drawStopwatchIcon(ctx, iconX, iconY, iconSize);
-
-        // Draw time text
+        // 5.71.0 — right-aligned layout. timerX is the RIGHT edge; we
+        // measure the text width, then place the stopwatch icon to its
+        // left so the whole readout hugs the screen-right margin.
         ctx.font = "16px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#FFA500'; // Subdued orange color
-        ctx.strokeStyle = '#CC8400'; // Darker orange for outline
+        const iconSize = 24;
+        const textWidth = ctx.measureText(timeString).width;
+
+        ctx.fillStyle = '#FFA500';
+        ctx.strokeStyle = '#CC8400';
         ctx.lineWidth = 1;
-        ctx.textAlign = 'left';
+        ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
 
-        const textX = iconX + iconSize + 8;
+        ctx.strokeText(timeString, timerX, timerY);
+        ctx.fillText(timeString, timerX, timerY);
 
-        // Draw text outline
-        ctx.strokeText(timeString, textX, timerY);
-        // Draw text fill
-        ctx.fillText(timeString, textX, timerY);
+        const iconX = timerX - textWidth - 8 - iconSize;
+        const iconY = timerY - iconSize / 2;
+        this.drawStopwatchIcon(ctx, iconX, iconY, iconSize);
 
         ctx.restore();
 }
@@ -938,8 +938,12 @@ export function drawStreakIndicator() {
     // Color: tier color when active, dim grey-white when SAVED.
     const tierColor = buffActive ? currentTier.color : '#BBBBBB';
 
-    const x = this.width - 20;
-    const y = 110;
+    // 5.72.1 — center-anchored, but raised to clear the bottom-middle
+    // pause + shop buttons (which sit at bottom: 16px). Streak block
+    // is ~90 px tall, anchored at this y; we want the bottom of the
+    // block ~80 px above the bottom edge.
+    const x = this.width / 2;
+    const y = this.height - 180;
     const pulse = buffActive ? 0.85 + Math.sin(Date.now() * 0.015) * 0.15 : 0;
 
     ctx.save();
@@ -954,7 +958,8 @@ export function drawStreakIndicator() {
     ctx.fillStyle = tierColor;
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 3;
-    ctx.textAlign = 'right';
+    // 5.72.0 — center-aligned for the bottom-center placement.
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     const streakText = `${k} KILL${k === 1 ? '' : 'S'}`;
     ctx.strokeText(streakText, x, y);
@@ -977,9 +982,10 @@ export function drawStreakIndicator() {
         ctx.strokeText(bonusText, x, y + 42);
         ctx.fillText(bonusText, x, y + 42);
 
-        // Progress bar toward next tier (or "MAX" pip if at top tier)
+        // Progress bar toward next tier (or "MAX" pip if at top tier).
+        // Center-anchored about x.
         const barW = 140, barH = 6;
-        const barX = x - barW;
+        const barX = x - barW / 2;
         const barY = y + 62;
 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';

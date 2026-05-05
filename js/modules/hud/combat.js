@@ -268,16 +268,32 @@ export function drawPowerupIndicators() {
         const ctx = this.ctx;
         const margin = 20;
         const iconSize = 40;
-        const spacing = 50;
-        const bottomY = this.height - margin - iconSize;
+        const spacing = 50; // vertical step between icons in a column
+
+        // 5.72.0 — VERTICAL column on the right edge of the screen.
+        // Icons stack top-to-bottom. Top reserve so they don't crash
+        // into anything; bottom reserve so they don't overlap the
+        // gold readout + timer (drawSurvivalTimer at canvas.height - 40,
+        // gold at canvas.height - 76, plus a 16px buffer).
+        const topReserve = margin;
+        const bottomReserve = 110; // gold + timer + buffer
+        const columnHeight = this.height - topReserve - bottomReserve;
+        const iconsPerColumn = Math.max(1, Math.floor(columnHeight / spacing));
+        const startX = this.width - margin - iconSize;
 
         let index = 0;
 
         ctx.save();
 
         for (const [type, powerupData] of this.player.powerups.entries()) {
-            const x = margin + index * spacing;
-            const y = bottomY;
+            // When the right column fills, wrap LEFTWARD into a second
+            // (then third, etc.) column. New columns appear to the
+            // LEFT of the previous one so the rightmost edge is the
+            // "first" stack and the build grows leftward.
+            const colIdx = Math.floor(index / iconsPerColumn);
+            const rowIdx = index % iconsPerColumn;
+            const x = startX - colIdx * spacing;
+            const y = topReserve + rowIdx * spacing;
 
             // Draw background circle
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';

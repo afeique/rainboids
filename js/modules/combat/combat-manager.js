@@ -624,7 +624,13 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE);
         const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE) + (highRollerStacks * GAME_CONFIG.HIGH_ROLLER_MONEY_MAX_UPGRADE));
         const avgMoney = (minMoney + maxMoney) / 2;
-        const moneyBudget = Math.max(1, Math.round(totalLegacyCount * avgMoney));
+        // 5.73.0 — apply Gold Find (+5%/level past 1) on the budget.
+        // Bigger budget → splitter generates more money orbs (each
+        // capped at MAX_MONEY_PER_ORB), giving more visible coin
+        // sprites per drop. Both the gold AMOUNT and the SYMBOL COUNT
+        // scale with player level.
+        const goldFind = this.player.getGoldFindMultiplier?.() || 1;
+        const moneyBudget = Math.max(1, Math.round(totalLegacyCount * avgMoney * goldFind));
 
         const orbValues = _splitBudgetIntoOrbs(moneyBudget, GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB);
         for (const v of orbValues) this.createMoneyOrb(x, y, v);

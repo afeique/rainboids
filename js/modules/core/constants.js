@@ -31,7 +31,7 @@ export const GAME_CONFIG = {
     // Money Orb Configuration (renamed from money stars)
     MONEY_ORB_MONEY_AMOUNT_MIN: 10, // Minimum money gained per money orb
     MONEY_ORB_MONEY_AMOUNT_MAX: 20, // Maximum money gained per money orb
-    MONEY_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop money orbs
+    MONEY_ORB_BASE_DROP_RATE: 0.45, // 5.73.0 — bumped 0.20 → 0.45 for more frequent gold
     MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum money orbs dropped (upgrade to get more)
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
     MONEY_ORB_SIZE_MIN: 2.05, // Smallest money orbs are now 75% larger (was 1.3) so they read clearly even when low-value
@@ -260,6 +260,28 @@ export const GAME_STATES = {
 export const MAX_WAVES = 20;
 export const BOSS_WAVE_INTERVAL = 5;
 export const BOSS_WAVES = [5, 10, 15, 20];
+
+// 5.71.0 — Speedrun completion tiers. Finishing the 20-wave campaign
+// faster awards a bigger score multiplier on the Game Complete stats
+// screen. Tiers are evaluated top-down — first row whose `maxMs` the
+// run beats wins. The TIMER shop tab renders this table as a
+// reference card so players know what they're chasing.
+export const SPEEDRUN_TIERS = [
+    { label: 'GODLIKE',    maxMs:  5 * 60 * 1000, multiplier: 5.0, color: '#ff66cc' },
+    { label: 'LEGENDARY',  maxMs:  7 * 60 * 1000 + 30 * 1000, multiplier: 4.0, color: '#ffaa44' },
+    { label: 'UNSTOPPABLE',maxMs: 10 * 60 * 1000, multiplier: 3.0, color: '#ffd700' },
+    { label: 'EMPOWERED',  maxMs: 12 * 60 * 1000 + 30 * 1000, multiplier: 2.5, color: '#88ff88' },
+    { label: 'STEADY',     maxMs: 15 * 60 * 1000, multiplier: 2.0, color: '#66ccff' },
+    { label: 'CASUAL',     maxMs: 20 * 60 * 1000, multiplier: 1.5, color: '#bbbbbb' },
+    { label: 'FINISHED',   maxMs: Infinity,       multiplier: 1.0, color: '#888888' },
+];
+
+export function speedrunTierFor(elapsedMs) {
+    for (const tier of SPEEDRUN_TIERS) {
+        if (elapsedMs <= tier.maxMs) return tier;
+    }
+    return SPEEDRUN_TIERS[SPEEDRUN_TIERS.length - 1];
+}
 
 export const STAR_SHAPES = [
     'point', 'point', 'point', 'point',  // Most common - simple points
