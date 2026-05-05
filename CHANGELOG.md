@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.74.2] - 2026-05-05
+
+### Changed
+- **Wave clear no longer auto-opens the shop.** The pause menu opens to the POWERUPS tab instead so the player can spend the +1 pick they just earned without being forced into the gold/SP economy. Pressing Resume (or ESC, or backdrop click) bridges through `togglePause` → `startNextWave` so the wave-gating behavior the shop used to provide is preserved. The pause menu's SHOP button still works during this window for players who want to visit the shop.
+- **Money-orb base drop rate bumped 0.45 → 0.65.** Closer to the user-targeted ~0.65 baseline before powerup stacks, Gold Find, and hit-streak multipliers.
+
+---
+
+## [5.74.1] - 2026-05-05
+
+### Fixed
+- **Enemies no longer "stand around" when the player drifts away.** `ai.updateTargetPriority` was switching `currentTarget` to `'patrol'` whenever the player left the enemy's territory or crossed `loseInterestDistance`, which routed the AI through `patrolTerritory()` — a slow meander to a random point inside the enemy's own territory. Removed the territorial-patrol branch entirely; every enemy now permanently locks `currentTarget = 'player'` and runs its native movePattern (chase / arc / weaver-spinup / etc.) toward the player.
+
+---
+
+## [5.74.0] - 2026-05-05
+
+### Added
+- **Arrow-key aim & fire bindings.** Movement is now WASD-only; the arrow keys drive aim and fire. `←`/`→` rotate the ship's aim at a constant rate (~210°/s); `↑` mirrors L-click (primary fire); `↓` mirrors Space / R-click (charge / fire power weapon). Mouse aim still works — the ship resumes mouse aim the moment arrow keys are released.
+- **Assists pause-menu tab.** New tab between POWERUPS and TIMER with three accessibility toggles, each persisted to `localStorage` (`rainboidsAssists`):
+  - **Aim Assist** — when the cursor passes within 90 world-px of an enemy / asteroid / enemy bullet, the reticle snaps onto the target.
+  - **Auto Aim** — overrides mouse and arrow aim every tick to track the nearest threat (enemies, asteroids, enemy bullets / mines).
+  - **Auto Fire** — auto-presses primary every tick. For charge-based power weapons, holds `fireSecondary` true at full charge to release peak shots; for cooldown-based ones, fires the moment `isPowerReady()` returns true.
+- **`GameEngine.findNearestTarget(x, y, maxDist)`** helper — walks `enemyPool`, `asteroidPool`, `enemyBulletPool` and returns the nearest active object's position. Used by both Aim Assist (snap radius) and Auto Aim (unbounded).
+
+### Changed
+- **CONTROLS pause-tab** now lists arrow-key aim/fire alongside mouse/click bindings. WASD shown as the sole movement binding.
+- **Pause-tab grid** moved from 4 columns to 3 columns to accommodate the 9 tabs cleanly (3×3).
+
+---
+
 ## [5.73.0] - 2026-05-05
 
 ### Added

@@ -9,13 +9,12 @@ export class InputHandler {
             down: false,
             left: false,
             right: false,
+            // Arrow-key aiming: hold ←/→ to rotate the ship's aim. Up arrow
+            // mirrors L-click (primary fire); Down arrow mirrors Space /
+            // R-click (power weapon).
+            rotateLeft: false,
+            rotateRight: false,
             fire: false,
-            // 5.64.14 binding layout:
-            //   SPACE / right-click — POWER weapon (continuous; charge while
-            //                                       held, fire on release).
-            //   Q                    — activate skill (one-shot pulse).
-            //   E / R / F            — cycle skill / primary / power (handled
-            //                          in event-setup.js; 5.68.3 keybind swap).
             fireSecondary: false,
             activateSkill: false,
             aimX: window.innerWidth / 2,
@@ -103,21 +102,37 @@ export class InputHandler {
         }
 
         switch (e.code) {
-            case 'ArrowUp':
             case 'KeyW':
                 this.input.up = true;
                 break;
-            case 'ArrowDown':
             case 'KeyS':
                 this.input.down = true;
                 break;
-            case 'ArrowLeft':
             case 'KeyA':
                 this.input.left = true;
                 break;
-            case 'ArrowRight':
             case 'KeyD':
                 this.input.right = true;
+                break;
+            // Arrow keys aim & fire (5.74). Left/Right rotate the ship's
+            // aim (handled in player.js); Up mirrors L-click; Down
+            // mirrors Space / R-click. preventDefault stops the page
+            // from scrolling when the canvas is focused.
+            case 'ArrowLeft':
+                this.input.rotateLeft = true;
+                e.preventDefault();
+                break;
+            case 'ArrowRight':
+                this.input.rotateRight = true;
+                e.preventDefault();
+                break;
+            case 'ArrowUp':
+                this.input.fire = true;
+                e.preventDefault();
+                break;
+            case 'ArrowDown':
+                this.input.fireSecondary = true;
+                e.preventDefault();
                 break;
             // SPACE (5.64.14) — POWER weapon trigger. Continuous-state
             // input mirroring right-click: hold to charge, release to
@@ -140,21 +155,29 @@ export class InputHandler {
 
     handleKeyUp(e) {
         switch (e.code) {
-            case 'ArrowUp':
             case 'KeyW':
                 this.input.up = false;
                 break;
-            case 'ArrowDown':
             case 'KeyS':
                 this.input.down = false;
                 break;
-            case 'ArrowLeft':
             case 'KeyA':
                 this.input.left = false;
                 break;
-            case 'ArrowRight':
             case 'KeyD':
                 this.input.right = false;
+                break;
+            case 'ArrowLeft':
+                this.input.rotateLeft = false;
+                break;
+            case 'ArrowRight':
+                this.input.rotateRight = false;
+                break;
+            case 'ArrowUp':
+                this.input.fire = false;
+                break;
+            case 'ArrowDown':
+                this.input.fireSecondary = false;
                 break;
             case 'Space':
                 this.input.fireSecondary = false;

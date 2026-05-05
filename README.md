@@ -40,11 +40,12 @@ Rainboids is a supercharged asteroids game featuring:
 
 ## Controls
 
-- **Movement**: WASD or arrow keys
-- **Aim**: Mouse cursor (ship faces cursor)
-- **Fire primary**: Hold left-click (no auto-fire — release to stop)
-- **Fire / charge power weapon**: Spacebar OR right-click
+- **Movement**: WASD
+- **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate
+- **Fire primary**: Hold left-click or ↑ arrow
+- **Fire / charge power weapon**: Spacebar, right-click, or ↓ arrow
 - **Activate defense skill**: Q
+- **Assists** (pause menu → ASSISTS tab — persisted): Aim Assist (cursor snap to nearest target), Auto Aim (lock onto nearest threat), Auto Fire (auto-trigger primary + power)
 - **Pick defense skill (radial menu)**: Hold E — aim with mouse, click to equip, release to cancel
 - **Pick primary weapon (radial menu)**: Hold R — same flow
 - **Pick power weapon (radial menu)**: Hold F — same flow

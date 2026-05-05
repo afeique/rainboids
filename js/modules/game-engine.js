@@ -167,6 +167,11 @@ export class GameEngine {
         // Initialize input handler aim coordinates to center of game field
         this.inputHandler.input.aimX = this.gameField.width / 2;
         this.inputHandler.input.aimY = this.gameField.height / 2;
+
+        // Accessibility assists (5.74). Persisted in localStorage; toggled
+        // via the ASSISTS pause-menu tab. Read by player.js each tick to
+        // adjust aim and auto-trigger fire / power weapon.
+        this.assists = this._loadAssists();
         
         // Hide DOM title screen so we only see the wavy canvas version
         // this.uiManager.hideTitleScreen();
@@ -796,6 +801,7 @@ export class GameEngine {
 
     completeWave() { return wave.completeWave.call(this); }
     completeRun() { return wave.completeRun.call(this); }
+    openWaveClearPowerupsMenu() { return wave.openWaveClearPowerupsMenu.call(this); }
     
     sellShopItem(itemId) { return shop.sellShopItem.call(this, itemId); }
 
@@ -1656,12 +1662,16 @@ export class GameEngine {
             }
             // Removed thruster sound on pause to reduce noise issues
         } else if (this.game.state === GAME_STATES.PAUSED) {
-            // Paused → Playing
-            this.game.state = GAME_STATES.PLAYING;
+            // Paused → Playing (or Paused → next wave if this pause was
+            // the wave-clear powerups menu — see openWaveClearPowerupsMenu).
             this.uiManager.togglePause();
-            // Resume the charge shot system
-            if (this.player) {
-                this.player.resumeChargeShot();
+            if (this.player) this.player.resumeChargeShot();
+            if (this._pausedFromWaveClear) {
+                this._pausedFromWaveClear = false;
+                this.game.state = GAME_STATES.WAVE_TRANSITION;
+                this.startNextWave();
+            } else {
+                this.game.state = GAME_STATES.PLAYING;
             }
         } else if (this.game.state === GAME_STATES.SHOP) {
             // Shop → return to whichever state the shop was opened from
@@ -1875,6 +1885,52 @@ export class GameEngine {
     
     setCursorState(isOverTarget) {
         this.cursor.isOverTarget = isOverTarget;
+    }
+
+    // ── Accessibility assists ─────────────────────────────────────────────
+    // Persisted toggles for Aim Assist (cursor snap), Auto Aim (track
+    // nearest), and Auto Fire (auto-trigger primary + power). Read by
+    // player.update each tick.
+    _loadAssists() {
+        const defaults = { aimAssist: false, autoAim: false, autoFire: false };
+        try {
+            const raw = localStorage.getItem('rainboidsAssists');
+            if (!raw) return defaults;
+            return Object.assign(defaults, JSON.parse(raw));
+        } catch (e) {
+            return defaults;
+        }
+    }
+
+    setAssist(name, value) {
+        if (!this.assists || !(name in this.assists)) return;
+        this.assists[name] = !!value;
+        try {
+            localStorage.setItem('rainboidsAssists', JSON.stringify(this.assists));
+        } catch (e) { /* localStorage may be unavailable */ }
+    }
+
+    // Find the nearest threat (enemy / asteroid / enemy bullet) to a point.
+    // Returns {x, y, dist} or null. `maxDist` filters out far targets;
+    // `fromX/fromY` defaults to the point itself for nearest-to-cursor.
+    findNearestTarget(fromX, fromY, maxDist = Infinity) {
+        let best = null;
+        let bestDistSq = maxDist * maxDist;
+        const consider = (obj) => {
+            if (!obj || !obj.active) return;
+            const dx = obj.x - fromX;
+            const dy = obj.y - fromY;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestDistSq) {
+                bestDistSq = d2;
+                best = obj;
+            }
+        };
+        if (this.enemyPool) for (const e of this.enemyPool.activeObjects) consider(e);
+        if (this.asteroidPool) for (const a of this.asteroidPool.activeObjects) consider(a);
+        if (this.enemyBulletPool) for (const b of this.enemyBulletPool.activeObjects) consider(b);
+        if (!best) return null;
+        return { x: best.x, y: best.y, dist: Math.sqrt(bestDistSq), target: best };
     }
     
     drawCustomCursor() { return hudCursor.drawCustomCursor.call(this); }

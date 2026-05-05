@@ -74,6 +74,10 @@ export class UIManager {
             // card list that the standalone overlay used to show.
             powerupsItemsList: document.getElementById('powerups-items-list'),
             powerupsSubtabs: document.querySelectorAll('.powerups-subtab'),
+            // Assists tab toggles (5.74).
+            assistAimAssist: document.getElementById('assist-aim-assist'),
+            assistAutoAim: document.getElementById('assist-auto-aim'),
+            assistAutoFire: document.getElementById('assist-auto-fire'),
             // HUD pause button (top-left)
             hudPauseBtn: document.getElementById('hud-pause-btn'),
             hudShopBtn: document.getElementById('hud-shop-btn')
@@ -721,6 +725,16 @@ export class UIManager {
     
     setGameEngine(gameEngine) {
         this.gameEngine = gameEngine;
+        this.syncAssistsTab();
+    }
+
+    // Reflect engine-side assists state in the tab checkboxes.
+    syncAssistsTab() {
+        const a = this.gameEngine && this.gameEngine.assists;
+        if (!a) return;
+        if (this.elements.assistAimAssist) this.elements.assistAimAssist.checked = !!a.aimAssist;
+        if (this.elements.assistAutoAim) this.elements.assistAutoAim.checked = !!a.autoAim;
+        if (this.elements.assistAutoFire) this.elements.assistAutoFire.checked = !!a.autoFire;
     }
 
     setAudioManager(audioManager) {
@@ -944,6 +958,18 @@ export class UIManager {
                 this.switchTab(tabName);
             });
         });
+
+        // Assists toggles (5.74) — read initial state from the engine and
+        // persist changes back through setAssist (which writes localStorage).
+        const wireAssist = (el, key) => {
+            if (!el) return;
+            el.addEventListener('change', () => {
+                if (this.gameEngine) this.gameEngine.setAssist(key, el.checked);
+            });
+        };
+        wireAssist(this.elements.assistAimAssist, 'aimAssist');
+        wireAssist(this.elements.assistAutoAim, 'autoAim');
+        wireAssist(this.elements.assistAutoFire, 'autoFire');
         
         // Music controls
         this.elements.musicPlayPause.addEventListener('click', () => {
@@ -1123,6 +1149,7 @@ export class UIManager {
         if (tabName === 'primary') this.updatePrimaryTab();
         if (tabName === 'power') this.updatePowerTab();
         if (tabName === 'skills') this.updateSkillsTab();
+        if (tabName === 'assists') this.syncAssistsTab();
 
         // Re-render the Powerups card list whenever the tab is opened
         // so stack counts reflect current state.

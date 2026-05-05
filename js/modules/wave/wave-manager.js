@@ -64,12 +64,15 @@ export function updateWaveSystem() {
 
         this.showWaveComplete();
 
-        // Bumped the shop delay 2000 → 2700ms so the WAVE COMPLETE
-        // banner has a clear ~700ms window to fully fade BEFORE the
-        // shop overlay covers the canvas. (showWaveComplete uses
-        // duration:2000 with the last 35% of that as fade-out.)
+        // 5.74.2 — wave clear no longer auto-opens the shop. Instead the
+        // pause menu opens to its POWERUPS tab so the player can spend
+        // the +1 pick they just earned. Resuming the game starts the
+        // next wave (see GameEngine.togglePause WAVE_TRANSITION → PAUSED
+        // bridging logic).
         setTimeout(() => {
-            if (this.game.state === GAME_STATES.WAVE_TRANSITION) this.openShop();
+            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+                this.openWaveClearPowerupsMenu();
+            }
         }, 2700);
     }
 
@@ -764,4 +767,21 @@ export function spawnRandomEnemy() {
         newEnemy.startWarpIn(sp.targetX, sp.targetY);
         this.enemyPool.activeObjects.push(newEnemy);
     }
+}
+
+// 5.74.2 — opens the pause menu on the POWERUPS tab as the wave-clear
+// reward window. Sets `_pausedFromWaveClear` so togglePause's resume
+// branch routes back into startNextWave instead of straight to PLAYING,
+// preserving the wave-gating behavior the shop used to provide.
+export function openWaveClearPowerupsMenu() {
+    if (!this.uiManager) return;
+    this.events.emit('ui:hide-message');
+    this._pausedFromWaveClear = true;
+    this.game.state = GAME_STATES.PAUSED;
+    if (this.player) this.player.pauseChargeShot();
+    // Show the pause overlay and switch to the POWERUPS tab.
+    const overlay = document.getElementById('pause-overlay');
+    if (overlay) overlay.style.display = 'flex';
+    this.uiManager.updatePowerupsList && this.uiManager.updatePowerupsList();
+    this.uiManager.switchTab && this.uiManager.switchTab('powerups');
 }

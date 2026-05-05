@@ -218,9 +218,9 @@ body.shop-open .ui-element:not(#shop-overlay) {
 }
 
 .pause-tabs {
-    /* 4-column grid forces two rows for the 7 tabs (4 + 3 layout). */
+    /* 3-col grid keeps the 9 tabs in a clean 3×3 layout. */
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 20px;
     width: min(720px, 100%);
@@ -265,8 +265,53 @@ body.shop-open .ui-element:not(#shop-overlay) {
 .pause-tab[data-tab="power"]    { --tab-color: #ff4444; --tab-glow: rgba(255,  68,  68, 0.40); }
 .pause-tab[data-tab="skills"]   { --tab-color: #aa66ff; --tab-glow: rgba(170, 102, 255, 0.40); }
 .pause-tab[data-tab="powerups"] { --tab-color: #ffd700; --tab-glow: rgba(255, 215,   0, 0.40); }
+.pause-tab[data-tab="assists"]  { --tab-color: #66ddcc; --tab-glow: rgba(102, 221, 204, 0.40); }
+.pause-tab[data-tab="timer"]    { --tab-color: #ff66cc; --tab-glow: rgba(255, 102, 204, 0.40); }
 .pause-tab[data-tab="music"]    { --tab-color: #44dd88; --tab-glow: rgba( 68, 221, 136, 0.40); }
 .pause-tab[data-tab="sfx"]      { --tab-color: #ffa500; --tab-glow: rgba(255, 165,   0, 0.40); }
+
+/* ── ASSISTS pause-tab — toggle rows for accessibility helpers. ─── */
+.assists-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+.assist-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(102, 221, 204, 0.30);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    line-height: 1.5;
+}
+.assist-row:hover {
+    background: rgba(102, 221, 204, 0.10);
+    border-color: rgba(102, 221, 204, 0.55);
+}
+.assist-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    margin-top: 2px;
+    accent-color: #66ddcc;
+    cursor: pointer;
+}
+.assist-row-text { flex: 1 1 auto; }
+.assist-row-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: #66ddcc;
+    margin-bottom: 6px;
+}
+.assist-row-desc {
+    font-size: 13px;
+    color: #cccccc;
+}
 
 .pause-tab-content {
     display: none;

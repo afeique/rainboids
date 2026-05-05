@@ -31,7 +31,7 @@ export const GAME_CONFIG = {
     // Money Orb Configuration (renamed from money stars)
     MONEY_ORB_MONEY_AMOUNT_MIN: 10, // Minimum money gained per money orb
     MONEY_ORB_MONEY_AMOUNT_MAX: 20, // Maximum money gained per money orb
-    MONEY_ORB_BASE_DROP_RATE: 0.45, // 5.73.0 — bumped 0.20 → 0.45 for more frequent gold
+    MONEY_ORB_BASE_DROP_RATE: 0.65, // 5.74.2 — bumped 0.45 → 0.65
     MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum money orbs dropped (upgrade to get more)
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
     MONEY_ORB_SIZE_MIN: 2.05, // Smallest money orbs are now 75% larger (was 1.3) so they read clearly even when low-value

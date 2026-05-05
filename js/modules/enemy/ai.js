@@ -65,24 +65,12 @@ export function updateTargetPriority(playerDistance, gameEngine) {
         this.initializeTerritory(gameEngine);
     }
 
-    // Check if player is within our territory
-    const playerInTerritory = this.isPlayerInTerritory(this.targetPlayer);
-
-    // Territorial behavior - patrol if player is outside territory
-    if (!playerInTerritory) {
-        // Player is outside our territory, patrol to defend our area
-            this.currentTarget = 'patrol';
-        return;
-    }
-
-    // Player is in territory - prioritize chasing them out
-    if (playerDistance > this.loseInterestDistance) {
-        // Player is at edge of territory, patrol to maintain presence
-        this.currentTarget = 'patrol';
-    } else {
-        // Player is in our territory, chase them aggressively
-            this.currentTarget = 'player';
-    }
+    // 5.74.1 — territorial patrol removed. Enemies were standing around
+    // whenever the player drifted past their loseInterestDistance / left
+    // their territory, slowly meandering to a patrol point and ignoring
+    // the fight. Now every enemy permanently locks onto the player; their
+    // base movePattern (chase / arc / weaver / etc.) handles the rest.
+    this.currentTarget = 'player';
 }
 
 // ── Territory System ─────────────────────────────────────────────────────────

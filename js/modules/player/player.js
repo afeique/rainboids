@@ -395,10 +395,66 @@ export class Player {
         // Update powerups
         this.updatePowerups();
 
+        // ── Aim resolution (5.74) ──
+        // Priority: Auto Aim > Arrow-key rotation > Aim Assist (cursor snap) > Mouse.
+        const ge = window.gameEngine;
+        const assists = ge && ge.assists ? ge.assists : null;
+
+        // Auto Aim — lock onto nearest threat. Overrides everything below.
+        let autoAimed = false;
+        if (assists && assists.autoAim && ge && ge.findNearestTarget) {
+            const target = ge.findNearestTarget(this.x, this.y);
+            if (target) {
+                input.aimX = target.x;
+                input.aimY = target.y;
+                autoAimed = true;
+            }
+        }
+
+        // Arrow-key rotation — hold ←/→ to spin the aim. Constant rate
+        // independent of mouse position. Skipped when auto-aim is active.
+        if (!autoAimed && (input.rotateLeft || input.rotateRight)) {
+            const rotSpeed = 0.06; // ~3.5°/tick @ 60Hz → 210°/s
+            if (typeof this._aimAngle !== 'number') this._aimAngle = this.angle;
+            if (input.rotateLeft) this._aimAngle -= rotSpeed;
+            if (input.rotateRight) this._aimAngle += rotSpeed;
+            const range = 1000;
+            input.aimX = this.x + Math.cos(this._aimAngle) * range;
+            input.aimY = this.y + Math.sin(this._aimAngle) * range;
+        } else if (!autoAimed && assists && assists.aimAssist && ge && ge.findNearestTarget) {
+            // Aim Assist — when the cursor is close to a threat, snap to it.
+            // Snap radius is generous (90px) so light corrections feel sticky.
+            const snap = ge.findNearestTarget(input.aimX, input.aimY, 90);
+            if (snap) {
+                input.aimX = snap.x;
+                input.aimY = snap.y;
+            }
+            // Keep _aimAngle in sync with mouse so a later arrow-press resumes smoothly.
+            this._aimAngle = Math.atan2(input.aimY - this.y, input.aimX - this.x);
+        } else if (!autoAimed) {
+            this._aimAngle = Math.atan2(input.aimY - this.y, input.aimX - this.x);
+        }
+
         // Mouse aiming
         const dx = input.aimX - this.x;
         const dy = input.aimY - this.y;
         this.angle = Math.atan2(dy, dx);
+
+        // Auto Fire — auto-press primary; release power weapon when ready.
+        // Charge-based power weapons charge automatically (weapons.js starts
+        // the charge unconditionally), so we only flip fireSecondary on at
+        // full charge to release the peak-power shot.
+        if (assists && assists.autoFire) {
+            input.fire = true;
+            const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
+            if (cfg) {
+                if (cfg.isChargeBased) {
+                    if (this.isFullyCharged) input.fireSecondary = true;
+                } else if (this.isPowerReady && this.isPowerReady()) {
+                    input.fireSecondary = true;
+                }
+            }
+        }
         
         // Debug player aiming occasionally
         if (Math.random() < 0.01) { // 1% chance
