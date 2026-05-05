@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-05T00:39:18.832Z",
+  "generatedAt": "2026-05-05T10:38:07.715Z",
   "sounds": {
     "shoot": "sfx/shoot.wav",
     "hit": "sfx/hit.wav",
@@ -31,6 +31,16 @@
     "enemyHit": "sfx/enemyHit.wav",
     "asteroidDestroy": "sfx/asteroidDestroy.wav",
     "enemyDestroy": "sfx/enemyDestroy.wav",
+    "enemyDestroy_HUNTER": "sfx/enemyDestroy_HUNTER.wav",
+    "enemyDestroy_GUARDIAN": "sfx/enemyDestroy_GUARDIAN.wav",
+    "enemyDestroy_WASP": "sfx/enemyDestroy_WASP.wav",
+    "enemyDestroy_STALKER": "sfx/enemyDestroy_STALKER.wav",
+    "enemyDestroy_DRIFTER": "sfx/enemyDestroy_DRIFTER.wav",
+    "enemyDestroy_PROWLER": "sfx/enemyDestroy_PROWLER.wav",
+    "enemyDestroy_WEAVER": "sfx/enemyDestroy_WEAVER.wav",
+    "enemyDestroy_SENTINEL": "sfx/enemyDestroy_SENTINEL.wav",
+    "enemyDestroy_TANGERINE": "sfx/enemyDestroy_TANGERINE.wav",
+    "enemyDestroy_TITAN": "sfx/enemyDestroy_TITAN.wav",
     "bulwark": "sfx/bulwark.wav",
     "repairNanites": "sfx/repairNanites.wav",
     "phaseDash": "sfx/phaseDash.wav",

@@ -396,19 +396,25 @@ export class UIManager {
                     Activate equipped defensive skill
                 </div>
                 <div>
-                    <span class="control-symbol">R</span><br>
-                    Cycle through primary weapons (PRM)<br>
-                    (hold to open radial menu)
+                    <span class="control-symbol">R</span>
+                    hold for radial menu
+                    <br>
+                    Cycle through primary weapons 
+                    <span class="control-symbol">PRM</span>
                 </div>
                 <div>
-                    <span class="control-symbol">F</span><br>
-                    Cycle through power weapons (POW)<br>
-                    (hold to open radial menu)
+                    <span class="control-symbol">F</span>
+                    hold for radial menu
+                    <br>
+                    Cycle through power weapons 
+                    <span class="control-symbol">POW</span>
                 </div>
                 <div>
-                    <span class="control-symbol">E</span><br>
-                    Cycle through defensive skills (SKILL)<br>
-                    (hold to open radial menu)
+                    <span class="control-symbol">E</span>
+                    hold for radial menu
+                    <br>
+                    Cycle through defensive skills 
+                    <span class="control-symbol">SKILL</span>
                 </div>
                 <div><span class="control-symbol">ESC</span> Pause / Resume</div>
             </div>

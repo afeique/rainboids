@@ -707,32 +707,382 @@ export const SOUND_DEFS = {
     },
 
     // ── Enemy ship destruction — energy detonation ──────────────────
-    // Sub-bass thump + descending square pop + ascending zap chirp.
-    // Reads as "energy core breach" — synthetic, not rocky.
+    //
+    // Design principles (5.69.4 — multi-band rewrite):
+    //
+    // Earlier passes oscillated between two extremes — 5.69.2 was 87-98%
+    // sub-bass (huge thump on a woofer, inaudible on laptop speakers),
+    // 5.69.3 was 1-6% sub-bass (audible everywhere, but lacking weight
+    // on a real subwoofer). This pass aims for a multi-band distribution
+    // that sounds great on either:
+    //
+    //   1. SUB-BASS LAYER (50-180Hz, `p_base_freq: 0.07-0.18`) — sine,
+    //      no HPF, hard `p_env_punch: 0.7-0.9`. Provides chest-thump
+    //      on woofers and good headphones; transparent on small
+    //      speakers (they pass through silently rather than masking).
+    //
+    //   2. MID BODY (300-500Hz, `p_base_freq: 0.38-0.55`) — square with
+    //      gentle `p_freq_ramp: -0.16 to -0.2` (descent stays >250Hz).
+    //      This is the "main" audible body across every speaker,
+    //      providing weight and explosive character independently of
+    //      the sub layer.
+    //
+    //   3. MID NOISE RUMBLE (broadband, HPF 0.18-0.26) — wave_type 3
+    //      with descending freq_ramp. Cuts its own sub content (which
+    //      would muddy with layer 1) but keeps 400Hz-3kHz texture for
+    //      crackle / fireball feel, audible everywhere.
+    //
+    // Per-user request, this design intentionally minimises bright
+    // high content (no HPF chirp tail) — energy concentrates in
+    // sub + low-mid + mid bands. Reads as "weighty boom" rather than
+    // "sharp pop." Each variant retains its character signature
+    // (vibrato for WEAVER, phaser for STALKER, repeat-stutter
+    // shrapnel for PROWLER, freq_dramp for TANGERINE, etc.).
+    //
+    // The 5.69.3 destruction WAVs are preserved as `.bak` files in
+    // `sfx/` for reference.
+    //
+    // Used as the registered fallback when no per-enemy clip exists.
     enemyDestroy: {
         layers: [
-            // Sub-bass body — sine thump with hard punch
+            // L1 sub-bass — sine ~120Hz thump (woofer chest-punch)
             { params: {
-                wave_type: 1, p_base_freq: 0.22, p_freq_ramp: -0.12,
+                wave_type: 1, p_base_freq: 0.13, p_freq_ramp: -0.08,
+                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.55,
+                p_env_punch: 0.78,
+                sound_vol: 0.5, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.4 },
+            // L2 mid body — square ~500Hz → ~300Hz (audible everywhere)
+            { params: {
+                wave_type: 0, p_base_freq: 0.5, p_freq_ramp: -0.18,
+                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.5,
+                p_env_punch: 0.85, p_repeat_speed: 0.42,
+                p_duty: 0.45, p_duty_ramp: -0.15,
+                sound_vol: 0.5, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise rumble — HPF cuts the sub overlap with L1
+            { params: {
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: -0.26,
+                p_env_attack: 0.01, p_env_sustain: 0.18, p_env_decay: 0.42,
+                p_env_punch: 0.55, p_hpf_freq: 0.2,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+        ],
+    },
+
+    // ── Per-enemy destructions ──────────────────────────────────────
+    // All variants follow the 3-layer body/mid/tail shape above with
+    // mass-class-appropriate decay and a character-specific signature
+    // modulation (phaser, vibrato, repeat, freq_dramp, etc.).
+    //
+    // Mass classes:
+    //   light  — HUNTER, WASP            (~250ms total)
+    //   mid    — STALKER, DRIFTER, WEAVER, TANGERINE  (~400-500ms)
+    //   heavy  — SENTINEL, PROWLER, GUARDIAN  (~600-900ms)
+    //   boss   — TITAN                   (~1100ms)
+
+    // HUNTER — light/agile. Audible-mid body that descends, plus
+    // bright HPF tail for the "pop" character.
+    enemyDestroy_HUNTER: {
+        layers: [
+            // L1 sub — quick sine thump
+            { params: {
+                wave_type: 1, p_base_freq: 0.16, p_freq_ramp: -0.1,
                 p_env_attack: 0, p_env_sustain: 0.1, p_env_decay: 0.32,
-                p_env_punch: 0.6,
+                p_env_punch: 0.7,
+                sound_vol: 0.45, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.4 },
+            // L2 mid body — square 600Hz desc, agile pop
+            { params: {
+                wave_type: 0, p_base_freq: 0.55, p_freq_ramp: -0.2,
+                p_env_attack: 0, p_env_sustain: 0.12, p_env_decay: 0.36,
+                p_env_punch: 0.78, p_repeat_speed: 0.4,
+                p_duty: 0.42, p_duty_ramp: -0.18,
+                sound_vol: 0.5, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise — bright burst HPF
+            { params: {
+                wave_type: 3, p_base_freq: 0.6, p_freq_ramp: -0.3,
+                p_env_attack: 0, p_env_sustain: 0.1, p_env_decay: 0.3,
+                p_env_punch: 0.55, p_hpf_freq: 0.24,
                 sound_vol: 0.4, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+        ],
+    },
+
+    // GUARDIAN — heavy. Lower-pitched body but still mid-audible
+    // (~350Hz). Long decay + rolling square arp tail.
+    enemyDestroy_GUARDIAN: {
+        layers: [
+            // L1 sub — deep sine ~80Hz with longest decay (heavy thump)
+            { params: {
+                wave_type: 1, p_base_freq: 0.09, p_freq_ramp: -0.06,
+                p_env_attack: 0, p_env_sustain: 0.24, p_env_decay: 0.7,
+                p_env_punch: 0.88, p_repeat_speed: 0.4,
+                p_vib_strength: 0.18, p_vib_speed: 0.32,
+                sound_vol: 0.55, sample_rate: 44100, sample_size: 8,
             }, gain: 0.45 },
-            // Mid square pop — descending energy
+            // L2 mid body — square ~420Hz, weighty descent
             { params: {
-                wave_type: 0, p_base_freq: 0.5, p_freq_ramp: -0.32,
-                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.22,
-                p_env_punch: 0.45, p_arp_mod: -0.4, p_arp_speed: 0.7,
+                wave_type: 0, p_base_freq: 0.42, p_freq_ramp: -0.18,
+                p_env_attack: 0, p_env_sustain: 0.24, p_env_decay: 0.65,
+                p_env_punch: 0.85, p_repeat_speed: 0.42,
+                p_duty: 0.5, p_duty_ramp: -0.22,
+                sound_vol: 0.55, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise — long rumble HPF
+            { params: {
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: -0.24,
+                p_env_attack: 0.03, p_env_sustain: 0.26, p_env_decay: 0.55,
+                p_env_punch: 0.6, p_hpf_freq: 0.2,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.45 },
+        ],
+    },
+
+    // WASP — small fast machine-gun. Tighter and brighter than HUNTER
+    // (body around 600Hz); heavy stutter for chitter character.
+    enemyDestroy_WASP: {
+        layers: [
+            // L1 sub — quick small thump
+            { params: {
+                wave_type: 1, p_base_freq: 0.18, p_freq_ramp: -0.12,
+                p_env_attack: 0, p_env_sustain: 0.08, p_env_decay: 0.28,
+                p_env_punch: 0.65,
+                sound_vol: 0.4, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.38 },
+            // L2 mid body — bright tinny pop with stutter
+            { params: {
+                wave_type: 0, p_base_freq: 0.55, p_freq_ramp: -0.22,
+                p_env_attack: 0, p_env_sustain: 0.1, p_env_decay: 0.32,
+                p_env_punch: 0.7, p_repeat_speed: 0.6,
+                p_duty: 0.38, p_duty_ramp: -0.18,
+                sound_vol: 0.46, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise stutter — chitter character
+            { params: {
+                wave_type: 3, p_base_freq: 0.58, p_freq_ramp: -0.3,
+                p_env_attack: 0, p_env_sustain: 0.16, p_env_decay: 0.34,
+                p_repeat_speed: 0.72, p_hpf_freq: 0.24, p_env_punch: 0.55,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.46 },
+        ],
+    },
+
+    // STALKER — charged-laser. Phaser-modulated mid body + vibrato
+    // tail → "energy collapse" character.
+    enemyDestroy_STALKER: {
+        layers: [
+            // L1 sub — phaser-modulated sine, "energy collapse"
+            { params: {
+                wave_type: 1, p_base_freq: 0.13, p_freq_ramp: -0.1,
+                p_env_attack: 0, p_env_sustain: 0.16, p_env_decay: 0.5,
+                p_env_punch: 0.78,
+                p_pha_offset: 0.18, p_pha_ramp: 0.22,
+                sound_vol: 0.5, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+            // L2 mid body — phaser square, charged-laser feel
+            { params: {
+                wave_type: 0, p_base_freq: 0.5, p_freq_ramp: -0.2,
+                p_env_attack: 0, p_env_sustain: 0.16, p_env_decay: 0.5,
+                p_env_punch: 0.78, p_repeat_speed: 0.34,
+                p_pha_offset: 0.22, p_pha_ramp: 0.28,
+                p_duty: 0.42, p_duty_ramp: -0.15,
+                sound_vol: 0.5, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise — phaser-swept rumble
+            { params: {
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: -0.24,
+                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.42,
+                p_pha_offset: 0.3, p_pha_ramp: 0.4, p_hpf_freq: 0.22,
+                p_env_punch: 0.55,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.45 },
+        ],
+    },
+
+    // DRIFTER — arc-lightning. Heavy stutter on body and noise mid →
+    // crackling "electric collapse" character. Body in audible mid.
+    enemyDestroy_DRIFTER: {
+        layers: [
+            // L1 sub — stuttered electric thump
+            { params: {
+                wave_type: 1, p_base_freq: 0.14, p_freq_ramp: -0.1,
+                p_env_attack: 0, p_env_sustain: 0.14, p_env_decay: 0.42,
+                p_env_punch: 0.72, p_repeat_speed: 0.5,
+                sound_vol: 0.46, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+            // L2 mid body — square stutter, electric pop
+            { params: {
+                wave_type: 0, p_base_freq: 0.45, p_freq_ramp: -0.18,
+                p_env_attack: 0, p_env_sustain: 0.14, p_env_decay: 0.42,
+                p_env_punch: 0.78, p_repeat_speed: 0.55,
+                p_duty: 0.4, p_duty_ramp: -0.2,
+                sound_vol: 0.5, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise — heavy stutter for crackle character
+            { params: {
+                wave_type: 3, p_base_freq: 0.5, p_freq_ramp: -0.26,
+                p_env_attack: 0, p_env_sustain: 0.2, p_env_decay: 0.4,
+                p_repeat_speed: 0.78, p_hpf_freq: 0.22, p_env_punch: 0.6,
+                sound_vol: 0.44, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.48 },
+        ],
+    },
+
+    // PROWLER — missile-launcher heavy. Lower body (~300Hz) + extended
+    // stuttered shrapnel tail → "two-stage detonation."
+    enemyDestroy_PROWLER: {
+        layers: [
+            // L1 sub — heaviest sub-bass, missile-impact slam
+            { params: {
+                wave_type: 1, p_base_freq: 0.1, p_freq_ramp: -0.08,
+                p_env_attack: 0, p_env_sustain: 0.2, p_env_decay: 0.6,
+                p_env_punch: 0.85, p_repeat_speed: 0.3,
+                p_vib_strength: 0.16, p_vib_speed: 0.3,
+                sound_vol: 0.55, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.45 },
+            // L2 mid body — square ~450Hz, weighty
+            { params: {
+                wave_type: 0, p_base_freq: 0.45, p_freq_ramp: -0.18,
+                p_env_attack: 0, p_env_sustain: 0.2, p_env_decay: 0.58,
+                p_env_punch: 0.85, p_repeat_speed: 0.36,
+                p_duty: 0.5, p_duty_ramp: -0.2,
+                sound_vol: 0.55, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid stutter rumble — shrapnel scatter
+            { params: {
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: -0.26,
+                p_env_attack: 0.02, p_env_sustain: 0.24, p_env_decay: 0.5,
+                p_repeat_speed: 0.6, p_hpf_freq: 0.22, p_env_punch: 0.6,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.45 },
+        ],
+    },
+
+    // WEAVER — spiral-laser. Vibrato-heavy body + phaser noise →
+    // smooth "tonal energy whorl" character.
+    enemyDestroy_WEAVER: {
+        layers: [
+            // L1 sub — vibrato sine, "spinning energy collapse"
+            { params: {
+                wave_type: 1, p_base_freq: 0.14, p_freq_ramp: -0.1,
+                p_env_attack: 0, p_env_sustain: 0.16, p_env_decay: 0.42,
+                p_env_punch: 0.72,
+                p_vib_strength: 0.28, p_vib_speed: 0.45,
+                sound_vol: 0.48, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+            // L2 mid body — vibrato square, tonal whorl
+            { params: {
+                wave_type: 0, p_base_freq: 0.5, p_freq_ramp: -0.2,
+                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.42,
+                p_env_punch: 0.78, p_repeat_speed: 0.32,
+                p_vib_strength: 0.3, p_vib_speed: 0.5,
                 p_duty: 0.45,
-                sound_vol: 0.32, sample_rate: 44100, sample_size: 8,
-            }, gain: 0.35 },
-            // High zap chirp — HPF square ascending tail
+                sound_vol: 0.5, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise — phaser-swept rumble
             { params: {
-                wave_type: 0, p_base_freq: 0.75, p_freq_ramp: 0.1,
-                p_env_attack: 0, p_env_sustain: 0.02, p_env_decay: 0.14,
-                p_hpf_freq: 0.35, p_env_punch: 0.4,
-                sound_vol: 0.22, sample_rate: 44100, sample_size: 8,
-            }, gain: 0.25 },
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: -0.24,
+                p_env_attack: 0.02, p_env_sustain: 0.18, p_env_decay: 0.4,
+                p_pha_offset: 0.34, p_pha_ramp: 0.42, p_hpf_freq: 0.22,
+                p_env_punch: 0.55,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.46 },
+        ],
+    },
+
+    // SENTINEL — heavy stationary mech. Square-dominant body for the
+    // "rigid mechanical breakdown" character. Lower mid (~320Hz) but
+    // still audible.
+    enemyDestroy_SENTINEL: {
+        layers: [
+            // L1 sub — heavy mech thump
+            { params: {
+                wave_type: 1, p_base_freq: 0.11, p_freq_ramp: -0.08,
+                p_env_attack: 0, p_env_sustain: 0.22, p_env_decay: 0.55,
+                p_env_punch: 0.82, p_repeat_speed: 0.38,
+                sound_vol: 0.52, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+            // L2 mid body — square with duty_ramp, mechanical breakdown
+            { params: {
+                wave_type: 0, p_base_freq: 0.46, p_freq_ramp: -0.18,
+                p_env_attack: 0, p_env_sustain: 0.22, p_env_decay: 0.55,
+                p_env_punch: 0.82, p_duty: 0.55, p_duty_ramp: -0.3,
+                p_repeat_speed: 0.4,
+                sound_vol: 0.55, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.52 },
+            // L3 mid noise — slow rumble
+            { params: {
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: -0.22,
+                p_env_attack: 0.02, p_env_sustain: 0.22, p_env_decay: 0.45,
+                p_env_punch: 0.6, p_hpf_freq: 0.22,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.46 },
+        ],
+    },
+
+    // TANGERINE — sweep-laser variant of SENTINEL but more aggressive.
+    // Brighter mid body + freq_dramp tail for "core overload" chirp.
+    enemyDestroy_TANGERINE: {
+        layers: [
+            // L1 sub — energetic thump with vibrato
+            { params: {
+                wave_type: 1, p_base_freq: 0.13, p_freq_ramp: -0.09,
+                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.45,
+                p_env_punch: 0.78, p_repeat_speed: 0.38,
+                p_vib_strength: 0.18, p_vib_speed: 0.4,
+                sound_vol: 0.5, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+            // L2 mid body — bright square, more aggressive than SENTINEL
+            { params: {
+                wave_type: 0, p_base_freq: 0.5, p_freq_ramp: -0.18,
+                p_env_attack: 0, p_env_sustain: 0.18, p_env_decay: 0.45,
+                p_env_punch: 0.82, p_repeat_speed: 0.42,
+                p_duty: 0.45, p_duty_ramp: -0.18,
+                sound_vol: 0.52, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise + freq_dramp signature chirp (core overload)
+            { params: {
+                wave_type: 0, p_base_freq: 0.55, p_freq_ramp: 0.18,
+                p_freq_dramp: -0.45,
+                p_env_attack: 0, p_env_sustain: 0.12, p_env_decay: 0.36,
+                p_arp_mod: 0.4, p_arp_speed: 0.7, p_hpf_freq: 0.22,
+                p_duty: 0.4, p_env_punch: 0.6,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.45 },
+        ],
+    },
+
+    // TITAN — boss. Cataclysmic, longest in the library. Lower mid
+    // body (~280Hz) but still audible; max envelope length; layered
+    // stuttered secondary detonations.
+    enemyDestroy_TITAN: {
+        layers: [
+            // L1 sub — deepest possible sub-bass, longest decay,
+            // rolling stutter for "rolling thunder" cataclysm
+            { params: {
+                wave_type: 1, p_base_freq: 0.07, p_freq_ramp: -0.05,
+                p_env_attack: 0, p_env_sustain: 0.3, p_env_decay: 0.78,
+                p_env_punch: 0.92, p_repeat_speed: 0.42,
+                p_vib_strength: 0.22, p_vib_speed: 0.28,
+                sound_vol: 0.62, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L2 mid body — square ~420Hz, longest envelope
+            { params: {
+                wave_type: 0, p_base_freq: 0.42, p_freq_ramp: -0.16,
+                p_env_attack: 0, p_env_sustain: 0.28, p_env_decay: 0.78,
+                p_env_punch: 0.9, p_repeat_speed: 0.42,
+                p_duty: 0.55, p_duty_ramp: -0.28,
+                sound_vol: 0.58, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // L3 mid noise + stuttered tail — secondary detonations
+            { params: {
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: -0.22,
+                p_env_attack: 0.05, p_env_sustain: 0.32, p_env_decay: 0.65,
+                p_repeat_speed: 0.55, p_env_punch: 0.7, p_hpf_freq: 0.2,
+                sound_vol: 0.46, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.46 },
         ],
     },
 

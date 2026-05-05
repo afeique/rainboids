@@ -520,7 +520,7 @@ export function handleCollisions() {
 
                     // Play enemy destruction sound only if on screen.
                     if (this.isEntityOnScreen(enemy)) {
-                        this.events.emit('audio:enemy-destroy');
+                        this.events.emit('audio:enemy-destroy', enemy.type);
                     }
 
                     // Death flash — enemy renders as bright silhouette before cleanup
@@ -1452,7 +1452,7 @@ export function damageEnemy(enemy, damage) {
         this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {
-            this.events.emit('audio:enemy-destroy');
+            this.events.emit('audio:enemy-destroy', enemy.type);
         }
         this.createEnemyDebris(enemy);
         this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);

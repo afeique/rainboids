@@ -11,6 +11,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.69.4] - 2026-05-05
+
+### Changed
+- **Enemy destruction sounds redesigned around a multi-band spectrum.** Earlier passes oscillated between two extremes — 5.69.2 was 87-98% sub-bass (massive thump on a woofer, inaudible on laptops); 5.69.3 was 1-6% sub-bass (audible everywhere but lacking weight on real subwoofers). 5.69.4 uses 3-layer designs that span both bands so the sounds work on either:
+  - **L1 sub-bass** — sine ~80-180 Hz (`p_base_freq: 0.07-0.18`), no HPF, hard `p_env_punch: 0.7-0.9`. Provides chest-thump on woofers and good headphones; transparent on small speakers (they pass through silently).
+  - **L2 mid body** — square ~420-550 Hz (`p_base_freq: 0.42-0.55`) with gentle `p_freq_ramp: -0.16 to -0.22` keeping the descent above 250 Hz. The "main" audible body across every speaker.
+  - **L3 mid noise rumble** — broadband noise with `p_hpf_freq: 0.18-0.24` cutting its own sub overlap with L1 while keeping 400 Hz – 3 kHz texture for crackle/fireball feel.
+- Per-user request, intentionally minimised bright high content (no HPF chirp tail). Energy concentrates in sub + low-mid + mid bands, reading as "weighty boom" rather than "sharp pop." Each variant retains its character signature (vibrato for WEAVER, phaser for STALKER, repeat-stutter shrapnel for PROWLER, freq_dramp for TANGERINE, etc.).
+- **Post-fix spectral distribution** (sliding-window FFT over full clip):
+  ```
+  band         5.69.2     5.69.3     5.69.4
+  sub-bass     87-98%     1.5-6%     14-60%   ← woofer thump restored
+  bass         1-5%       0.4-17%    0.3-1.2%
+  low-mid      0.2-7%     19-50%     17-34%   ← strong audible
+  mid          0.1-1%     14-48%     9-20%    ← strong audible
+  hmid+high    0-0.7%     19-47%     5-25%    ← dialled back per user req
+  ```
+
+### Added
+- **`tools/scripts/sound/`** — diagnostic scripts for the SFXR audio pipeline. Four tools, all preserved from the 5.68.10 / 5.69.x debugging sessions:
+  - `check-wavs.mjs` — peak / RMS / nonzero-sample audit per WAV (catches silent files).
+  - `spectrum.mjs` — per-WAV sliding-window FFT lumped into 6 frequency bands (catches band-mismatch issues like the 5.69.2 sub-bass concentration bug).
+  - `probe-event-dispatch.spec.js` — Playwright probe verifying `audio:enemy-destroy` → `playSound('enemyDestroy_<TYPE>')` end-to-end.
+  - `probe-playsound-internals.spec.js` — Playwright probe instrumenting every step inside `playSound` (manifest hit, throttle, buffer lookup, `src.start()`, `src.onended`).
+  - Includes a README documenting usage and the bug history each script was written to investigate.
+
+### Internal
+- 5.69.3 destruction WAVs preserved as `sfx/enemyDestroy*.wav.bak` for A/B reference.
+
+---
+
+## [5.69.3] - 2026-05-05
+
+### Fixed
+- **Enemy destruction sounds were inaudible because their energy lived below 150 Hz.** A spectrogram audit revealed that 5.69.2's destruction WAVs concentrated **87–98% of their acoustic energy in sub-bass (<150 Hz)** — a band most laptop and phone speakers physically cannot reproduce. Even though peak amplitudes were correct (-0.4 dB), the speakers were filtering all the content out. A runtime probe of `playSound()` confirmed every destruction was being queued correctly through the BufferSource → GainNode → AudioContext.destination chain (`onended` callbacks fired for each), and `audioContext.state` was `running` — the audio was playing, the user just couldn't hear it. The problem wasn't the dispatch; it was that I had designed the sounds for full-range studio monitors instead of integrated laptop / phone speakers.
+- **Energy redistributed into the audible 400 Hz–3 kHz band.** Body layers moved from `p_base_freq: 0.08-0.22` (≈80-220 Hz) up to `0.42-0.6` (≈420-600 Hz). Frequency ramps gentled from `-0.30 to -0.42` to `-0.16 to -0.22` so the descent stays above 250 Hz instead of dropping into the inaudible sub. Mid noise layers got higher HPF cutoffs (`p_hpf_freq: 0.22-0.28`) to drop their own sub-bass content. Tail layers raised to `0.65-0.72` base freq (~750 Hz) with HPF 0.28-0.36 so they sit firmly in the high-mid where every speaker reads them.
+- **Post-fix spectral distribution** (sliding-window FFT over full clip):
+  ```
+  band            5.69.2     5.69.3
+  sub-bass        87-98%     1.5-6%      ← speakers can render now
+  bass            1-5%       0.4-17%
+  low-mid         0.2-7%     19-50%      ← strong audible content
+  mid             0.1-1%     14-48%      ← strong audible content
+  high-mid        0-0.5%     13-25%
+  high            0-0.2%     6-22%
+  ```
+- **Caught a smaller bug**: `collision-system.js` had two `audio:enemy-destroy` emit sites, only one was passing `enemy.type` (line 523). The second (in `damageEnemy`, line 1455) was emitting with no payload, falling back to the generic `enemyDestroy` clip even for typed enemies. Both sites now pass `enemy.type`.
+
+### Internal
+- Diagnosed via two probes (intercepted `events.emit` + instrumented `playSound`) and a sliding-window FFT spectrum audit per WAV. Probes lived in `tests/qa/99-*` during diagnosis and have been removed; spectrum script is one-shot and not committed.
+
+---
+
+## [5.69.2] - 2026-05-04
+
+### Fixed
+- **Enemy destruction sounds were inaudible despite firing correctly.** A runtime probe (intercepting `events.emit` and `audioManager.playSound`) confirmed `audio:enemy-destroy` fires with `enemy.type` and `playSound('enemyDestroy_<TYPE>')` is called for every kill — the dispatch chain was correct end-to-end. The actual problem was **perceptual masking**: the 5.69.1 destruction sounds were too brief (HUNTER 79 ms, WASP 88 ms) and spectrally too similar to the `hit` tick that fires on the same frame, so the ear merged them into a single percussive event. **Fix:** rewrote all 11 destruction defs around four explicit perceptibility principles —
+  - **Sub-bass anchor** — every body layer now sits at `p_base_freq: 0.08-0.22` so the destruction is spectrally distinct from the high-frequency hit it overlaps with.
+  - **Long tails** — minimum ~320 ms even for HUNTER and WASP (was 79 ms / 88 ms). Below that threshold the sound is masked by surrounding gunfire.
+  - **Hard envelope punch** — `p_env_punch: 0.65–0.85` on every body layer. Punch boosts the attack peak ~2× for ~10 ms, the critical "BOOM" character.
+  - **Rumble stutter** — `p_repeat_speed: 0.32–0.55` on the body of every variant. Even a small stutter makes the sound read as "explosive" rather than "single tonal pop."
+- New durations: HUNTER 327 ms, WASP 320 ms, DRIFTER 454 ms, WEAVER 474 ms, TANGERINE 533 ms, STALKER 625 ms, generic `enemyDestroy` 759 ms, SENTINEL 795 ms, PROWLER 907 ms, GUARDIAN 1241 ms, TITAN 1557 ms — all peak-normalized to −0.4 dB with 99-100% nonzero samples.
+
+---
+
+## [5.69.1] - 2026-05-04
+
+### Added
+- **Per-enemy destruction sounds.** Each of the 10 enemy types now has its own SFXR-rendered destruction clip — `enemyDestroy_HUNTER` through `enemyDestroy_TITAN` — tuned to the ship's mass and fighting character. Length scales from ~80 ms (HUNTER, WASP) up to ~1 s (TITAN). Per-enemy variants:
+  - **HUNTER** — sharp pop with brief HPF chirp tail (light/agile).
+  - **GUARDIAN** — deep slow boom, longest decay (~760 ms), rolling square arp tail (heavy/armored).
+  - **WASP** — tinny stutter pop with `p_repeat_speed` chitter (small/electric).
+  - **STALKER** — phaser-modulated body with vibrato HPF tail (charged-laser energy).
+  - **DRIFTER** — heavy stuttered noise + arp square zap (arc-lightning crackle).
+  - **PROWLER** — massive sub thump + stuttered "shrapnel" square (missile-launcher).
+  - **WEAVER** — vibrato sine collapse, most tonal in the set (spiral-laser whorl).
+  - **SENTINEL** — square-dominant with `p_duty_ramp` for "machinery winding down" feel.
+  - **TANGERINE** — rising-then-falling HPF chirp with `p_freq_dramp` (energy core overload).
+  - **TITAN** — cataclysmic ~1 s multi-stage with `p_repeat_speed` rolling thunder, longest in the library (boss-tier).
+
+### Changed
+- **Generic `enemyDestroy` rebuilt from scratch around a 3-phase classical explosion architecture**: phase-1 HPF transient (5-15 ms crack), phase-2 sub-bass body with vibrato + hard envelope punch (BWOOOM), phase-3 descending noise rumble (fireball), phase-4 square arp tail with `p_arp_mod` negative (debris fall-off). Now also serves as the registered fallback when a new enemy type is added without a per-enemy clip.
+- **`audio:enemy-destroy` event now carries `enemy.type`** as its payload. The dispatch in `game-engine.js` tries `enemyDestroy_<TYPE>` first and falls back to `enemyDestroy` via `audioManager.playSound()`'s boolean return — graceful degrade for unknown types.
+- **Per-enemy throttle windows** added to `audio-manager.js`: 40 ms (HUNTER, WASP) → 200 ms (TITAN). Heavy ships need wider gaps to avoid thunder-on-thunder when chain-killed; light ships keep the tight default so kill-streaks still pop crisply.
+
+---
+
 ## [5.69.0] - 2026-05-04
 
 ### Added

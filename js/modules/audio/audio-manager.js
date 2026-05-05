@@ -53,6 +53,18 @@ const MANIFEST = {
     // ── Destruction ─────────────────────────────────────────────────
     asteroidDestroy:         ['asteroidDestroy.wav'],
     enemyDestroy:            ['enemyDestroy.wav'],
+    // Per-enemy destructions — game-engine tries `enemyDestroy_<TYPE>`
+    // first and falls back to the generic `enemyDestroy` above.
+    enemyDestroy_HUNTER:     ['enemyDestroy_HUNTER.wav'],
+    enemyDestroy_GUARDIAN:   ['enemyDestroy_GUARDIAN.wav'],
+    enemyDestroy_WASP:       ['enemyDestroy_WASP.wav'],
+    enemyDestroy_STALKER:    ['enemyDestroy_STALKER.wav'],
+    enemyDestroy_DRIFTER:    ['enemyDestroy_DRIFTER.wav'],
+    enemyDestroy_PROWLER:    ['enemyDestroy_PROWLER.wav'],
+    enemyDestroy_WEAVER:     ['enemyDestroy_WEAVER.wav'],
+    enemyDestroy_SENTINEL:   ['enemyDestroy_SENTINEL.wav'],
+    enemyDestroy_TANGERINE:  ['enemyDestroy_TANGERINE.wav'],
+    enemyDestroy_TITAN:      ['enemyDestroy_TITAN.wav'],
 
     // ── Per-weapon enemy-hit sounds ─────────────────────────────────
     playerHit_PULSE_CANNON:  ['playerHit_PULSE_CANNON.wav'],
@@ -116,6 +128,20 @@ const SOUND_THROTTLE_MS = {
     menuClick:         50,
     asteroidDestroy:   60,
     enemyDestroy:      60,
+    // Per-enemy throttles — heavier ships have longer destruction
+    // tails, so widen the gap to avoid stacking when a chain-kill
+    // happens. Light ships keep the default 30 ms so a streak still
+    // pops crisply.
+    enemyDestroy_HUNTER:    40,
+    enemyDestroy_WASP:      40,
+    enemyDestroy_DRIFTER:   60,
+    enemyDestroy_STALKER:   60,
+    enemyDestroy_WEAVER:    60,
+    enemyDestroy_TANGERINE: 80,
+    enemyDestroy_SENTINEL:  100,
+    enemyDestroy_PROWLER:   100,
+    enemyDestroy_GUARDIAN:  120,
+    enemyDestroy_TITAN:     200,
     // Per-weapon enemy-hit + per-pattern bullet-hit fall through to
     // the 30ms default — adequate for the highest-fire-rate guns.
 };

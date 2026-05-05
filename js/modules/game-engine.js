@@ -113,7 +113,14 @@ export class GameEngine {
         // boom + bass + zap pools per side. Generic `audio:explosion`
         // stays for mines / missile detonations / etc.
         this.events.on('audio:asteroid-destroy', () => this.audioManager.playSound('asteroidDestroy'));
-        this.events.on('audio:enemy-destroy', () => this.audioManager.playSound('enemyDestroy'));
+        // 5.69.1 — per-enemy destruction sound. Tries `enemyDestroy_<TYPE>`
+        // first; falls back to the generic `enemyDestroy` if no specific
+        // clip is registered (so adding a new enemy type degrades safely).
+        this.events.on('audio:enemy-destroy', (enemyType) => {
+            const am = this.audioManager;
+            const name = enemyType ? `enemyDestroy_${enemyType}` : null;
+            if (!name || !am.playSound(name)) am.playSound('enemyDestroy');
+        });
         this.events.on('audio:coin', () => this.audioManager.playCoin());
         this.events.on('audio:shield', () => this.audioManager.playShield());
         this.events.on('audio:health-regen', () => this.audioManager.playHealthRegen());

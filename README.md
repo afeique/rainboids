@@ -2,16 +2,26 @@
 
 A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave speedrun campaign with four boss waves, and a full upgrade economy. Built on Canvas 2D with a WebGL2 particle layer for bright/glowing effects.
 
-**Play now at: https://rainboids.cat.computer**
+## Play Now
 
-**Current version: see [VERSION](VERSION)**
+Visit **https://rainboids.cat.computer** in any modern browser on a desktop or laptop.
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/afbf1039-b46c-4717-9aa2-1a8bc4083354" />
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f1bfe140-5e6b-43df-969d-d1f49427aa02" />
+**Requires desktop or laptop.**
+
+Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones and tablets see a "desktop only" splash and the game does not initialize.
+
+## Version and History
+
+Current version: **5.69.4**
+
+See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
 ---
 
 ## Game Overview
+
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/afbf1039-b46c-4717-9aa2-1a8bc4083354" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f1bfe140-5e6b-43df-969d-d1f49427aa02" />
 
 Rainboids is a supercharged asteroids game featuring:
 - **6 primary weapons**, **4 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
@@ -22,14 +32,12 @@ Rainboids is a supercharged asteroids game featuring:
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **68 background music tracks** spanning chiptune, synthwave, and electronic
-- **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 37 WAVs; granular hit sounds per enemy bullet pattern and per player primary weapon, plus per-skill activation accents and a UI click tick
+- **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 47 WAVs; granular hit sounds per enemy bullet pattern, per player primary weapon, and per enemy-type destruction (10 ships, each with a unique destruction signature), plus per-skill activation accents and a UI click tick
 - **Modular ES6 architecture** — domain managers, extracted renderers, state machine, event bus, and frame-counted timers, built with Vite
 
 ---
 
 ## Controls
-
-Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones and tablets see a "desktop only" splash and the game does not initialize.
 
 - **Movement**: WASD or arrow keys
 - **Aim**: Mouse cursor (ship faces cursor)
@@ -48,6 +56,7 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 ### Cheat Codes
 - **`[`**: +1000 Gold
 - **`]`**: +5 SP
+- **`P`**: Spawn a random powerup at a random on-screen point (≥250 px from the player so you have to fly to it)
 - For full dev access, drive cheats from the browser console (`window.gameEngine.cheats.onePunchMan = true`, etc.)
 
 ---
@@ -57,32 +66,32 @@ Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones a
 ### Primary Weapons (6)
 Primary weapons are free — they auto-unlock at wave milestones as you progress:
 
-| Weapon | Unlocks | Description |
-|--------|---------|-------------|
-| Pulse Cannon | Start | Reliable stream of energy shots |
-| Storm Needles | Wave 3 | Rapid tiny shots — saturation fire |
-| Scatter Gun | Wave 5 | Shotgun burst, devastating up close |
-| Lightning Arc | Wave 5 | Continuous lightning tether — short range, hits nearest target |
-| Rail Driver | Wave 8 | Slow, powerful piercing rail — fires a double-helix pair |
-| Lance Beam | Wave 12 | Continuous beam tether — stops at first hit |
+| Icon | Weapon | Unlocks | Description |
+|------|--------|---------|-------------|
+| 🔫 | Pulse Cannon | Start | Reliable stream of energy shots |
+| 🌧️ | Storm Needles | Wave 3 | Rapid tiny shots — saturation fire |
+| 💥 | Scatter Gun | Wave 5 | Shotgun burst, devastating up close |
+| ⚡ | Lightning Arc | Wave 5 | Continuous lightning tether — short range, hits nearest target |
+| 🧬 | Rail Driver | Wave 8 | Slow, powerful piercing rail — fires a double-helix pair |
+| 🔦 | Lance Beam | Wave 12 | Continuous beam tether — stops at first hit |
 
 ### Power Weapons (4)
-| Weapon | Description |
-|--------|-------------|
-| Charge Shot | Hold to charge, release for powerful blast |
-| Mine Layer | Drop proximity mines |
-| Nova Blast | Expanding damage ring |
-| Missile Salvo | Homing missiles seek targets |
+| Icon | Weapon | Description |
+|------|--------|-------------|
+| 🔋 | Charge Shot | Hold to charge, release for powerful blast |
+| 💣 | Mine Layer | Drop proximity mines |
+| 💫 | Nova Blast | Expanding damage ring |
+| 🚀 | Missile Salvo | Homing missiles seek targets |
 
 ### Defense Skills (6)
-| Skill | Description |
-|-------|-------------|
-| Bulwark | 50% damage resistance for 4s |
-| Repair Nanites | Regen 3 HP/s for 5s |
-| Phase Dash | Invulnerable dash 150px |
-| Deflector Orbs | Orbiting orbs block bullets for 5s |
-| EMP Pulse | Stun nearby enemies for 2s |
-| Tractor Shield | Forward shield absorbs bullets for coins |
+| Icon | Skill | Description |
+|------|-------|-------------|
+| 🛡️ | Bulwark | 50% damage resistance for 4s |
+| 💚 | Repair Nanites | Regen 3 HP/s for 5s |
+| 💨 | Phase Dash | Invulnerable dash 150px |
+| 🔮 | Deflector Orbs | Orbiting orbs block bullets for 5s |
+| 📡 | EMP Pulse | Stun nearby enemies for 2s |
+| 🧲 | Tractor Shield | Forward shield absorbs bullets for coins |
 
 ---
 
@@ -125,32 +134,32 @@ Lumbering juggernaut boss. Sweeping purple laser beam telegraphed by a 1.8s dash
 Powerups drop from destroyed enemies and provide temporary or permanent enhancements. Each powerup stacks for increased effectiveness.
 
 ### Offensive (9)
-| Powerup | Effect per stack |
-|---------|-----------------|
-| Rapid Fire | +25% fire rate (max 5 stacks) |
-| Multi-Shot | +1 bullet per shot (max 3 stacks) |
-| Homing | Bullets track enemies |
-| Piercing | Bullets penetrate through multiple enemies |
-| Explosive | Area damage on impact |
-| Big Bullets | +30% bullet size |
-| Speed Boost | +50% thrust and top speed |
-| Long Range | +40% bullet range |
-| Crit Chance | +5% critical hit chance |
+| Icon | Powerup | Effect per stack |
+|------|---------|-----------------|
+| ⚡ | Rapid Fire | +25% fire rate (max 5 stacks) |
+| ✳️ | Multi-Shot | +1 bullet per shot (max 3 stacks) |
+| 🎯 | Homing | Bullets track enemies |
+| 🏹 | Piercing | Bullets penetrate through multiple enemies |
+| 💣 | Explosive | Area damage on impact |
+| 🔵 | Big Bullets | +30% bullet size |
+| 💨 | Speed Boost | +50% thrust and top speed |
+| 🏹 | Long Range | +40% bullet range |
+| ⭐ | Crit Chance | +5% critical hit chance |
 
 ### Defensive / Utility (11)
-| Powerup | Effect per stack |
-|---------|-----------------|
-| Crit Damage | +10% critical hit damage |
-| Shield Boost | Temporary damage reduction |
-| Triage | -5s on the global health-orb drop cooldown (60s base → 30s floor at 6 stacks) |
-| Medpack | More health per orb pickup |
-| Doctor | Increases max health per orb |
-| Payday | More money per orb pickup |
-| High Roller | Increases max money per orb |
-| Health Orb Drop Chance | +5% health orb drop rate |
-| Health Orb Drop Quantity | +1 health orbs per drop |
-| Money Orb Drop Chance | +5% money orb drop rate |
-| Money Orb Drop Quantity | +1 money orbs per drop |
+| Icon | Powerup | Effect per stack |
+|------|---------|-----------------|
+| 🗡️ | Crit Damage | +10% critical hit damage |
+| 🛡 | Shield Boost | Temporary damage reduction |
+| ⏳ | Triage | -5s on the global health-orb drop cooldown (60s base → 30s floor at 6 stacks) |
+| 💊 | Medpack | More health per orb pickup |
+| 🏥 | Doctor | Increases max health per orb |
+| 💵 | Payday | More money per orb pickup |
+| 🎰 | High Roller | Increases max money per orb |
+| 🍀 | Health Orb Drop Chance | +5% health orb drop rate |
+| 💚 | Health Orb Drop Quantity | +1 health orbs per drop |
+| 💰 | Money Orb Drop Chance | +5% money orb drop rate |
+| 🪙 | Money Orb Drop Quantity | +1 money orbs per drop |
 
 ### Pickup Magnetism
 All collectibles — money orbs, green health orbs, **and powerup pickups** — are magnetically pulled to the player. Pull strength ramps in three layers (always-on long-range homing, stronger at 100px, magnetic snap inside 40px). Holding the tractor-beam key adds an extra long-range pull. Health-orb drops are globally throttled (default 60s between drop events) — see the Triage upgrade above to shrink that cooldown.
@@ -239,16 +248,15 @@ Boss-tier TITANs at waves 5/10/15/20 receive an HP/size/speed multiplier on top 
 
 ### Audio
 - **68 background music tracks** spanning chiptune, synthwave, and electronic
-- **Curated futuristic SFX library** — 37 hand-tuned multi-layer WAVs (~1.1 MB), pre-rendered offline from stacked SFXR voices (sub-bass body + mid carrier + HPF brightness layer) and decoded once via WebAudio. Covers fire, hits, pickups, destructions, defense-skill activations, and UI clicks — every sound in the game is SFXR-generated, no third-party sample packs.
+- **Curated futuristic SFX library** — 47 hand-tuned multi-layer WAVs (~1.5 MB), pre-rendered offline from stacked SFXR voices (sub-bass body + mid carrier + HPF brightness layer) and decoded once via WebAudio. Covers fire, hits, pickups, destructions (one per enemy type), defense-skill activations, and UI clicks — every sound in the game is SFXR-generated, no third-party sample packs.
 - Built-in music player with playlist support
 - Individual sound effect toggles and volume control
 
 ---
 
-## Getting Started
+# Development
 
-### Playing Online
-Visit https://rainboids.cat.computer in any modern browser.
+## Getting Started
 
 ### Local Development
 ```bash
