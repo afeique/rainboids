@@ -2,6 +2,10 @@
 
 A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave speedrun campaign with four boss waves, and a full upgrade economy. Built on Canvas 2D with a WebGL2 particle layer for bright/glowing effects.
 
+<img width="1280" height="720" alt="title-screen" src="https://github.com/user-attachments/assets/2438ad2e-59c2-4772-96c2-024db0090251" />
+<img width="1280" height="720" alt="screenshot-1" src="https://github.com/user-attachments/assets/a889633d-8f68-4c34-aff9-fe5799873545" />
+<img width="1280" height="720" alt="screemshot-2" src="https://github.com/user-attachments/assets/f18e8478-ec06-4443-8d59-feda235ec72b" />
+
 ## Play Now
 
 Visit **https://rainboids.cat.computer** in any modern browser on a desktop or laptop.
@@ -19,12 +23,6 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 ---
 
 ## Game Overview
-
-<img width="1280" height="720" alt="title-screen" src="https://github.com/user-attachments/assets/2438ad2e-59c2-4772-96c2-024db0090251" />
-
-<img width="1280" height="720" alt="screenshot-1" src="https://github.com/user-attachments/assets/a889633d-8f68-4c34-aff9-fe5799873545" />
-
-<img width="1280" height="720" alt="screemshot-2" src="https://github.com/user-attachments/assets/f18e8478-ec06-4443-8d59-feda235ec72b" />
 
 Rainboids is a supercharged asteroids game featuring:
 - **6 primary weapons**, **4 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
