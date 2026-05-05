@@ -289,6 +289,17 @@ export function cycleSkill() {
     return true;
 }
 
+// Maps DEFENSE_SKILLS id → audio MANIFEST sound name. 5.68.9 — was
+// silent; each skill now plays its accent on activation.
+const SKILL_ACTIVATE_SOUND = {
+    BULWARK:        'bulwark',
+    REPAIR_NANITES: 'repairNanites',
+    PHASE_DASH:     'phaseDash',
+    DEFLECTOR_ORBS: 'deflectorOrbs',
+    EMP_PULSE:      'empPulse',
+    TRACTOR_SHIELD: 'tractorShield',
+};
+
 export function activateSkill() {
     const skillId = this.activeSkill;
     if (!skillId) return false;
@@ -301,6 +312,16 @@ export function activateSkill() {
     this.activeSkillEffects.set(skillId, {
         timeRemaining: config.duration,
     });
+
+    // Play the per-skill activation sound (5.68.9). Falls back to the
+    // generic shield sound if a specific clip isn't registered.
+    const ge = this.gameEngine;
+    if (ge && ge.audioManager) {
+        const soundName = SKILL_ACTIVATE_SOUND[skillId];
+        if (!soundName || !ge.audioManager.playSound(soundName)) {
+            ge.audioManager.playSound('shield');
+        }
+    }
     return true;
 }
 

@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-04-30T19:11:52Z",
-  "changed_file": "js/modules/player/player.js",
+  "timestamp": "2026-05-05T00:41:36Z",
+  "changed_file": "js/modules/ui/ui-manager.js",
   "test_command": "npx jest --verbose",
   "related_test": "",
   "recommendation": "テストの実行を推奨します"

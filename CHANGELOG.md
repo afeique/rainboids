@@ -11,6 +11,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.69.0] - 2026-05-04
+
+### Added
+- **11 new jsfxr sound definitions in `sound-defs.js`** filling every gap that previously routed to a Kenney mp3:
+  - **Destruction** — `asteroidDestroy` (3-layer noise rumble + low square thump + HPF debris crackle), `enemyDestroy` (3-layer sub-bass thump + descending square pop + ascending HPF zap chirp).
+  - **Defense skill activations** — `bulwark` (sub thump + sustained square hum), `repairNanites` (ascending sine arp + HPF shimmer), `phaseDash` (noise sweep + rising sine glide), `deflectorOrbs` (sine bell + HPF shimmer), `empPulse` (3-layer noise burst + descending square + rising HPF chirp), `tractorShield` (vibrato beam + slow square harmonic).
+  - **Per-weapon hit** — `playerHit_LIGHTNING_ARC` (3-layer noise crackle + arp square + HPF chirp).
+  - **Generic enemy-bullet-hit fallback** — `enemyHit` (light kinetic tick) for patterns without a dedicated `enemyHit_*` clip.
+- **`menuClick` UI tick** — short HPF square blip pre-rendered as `sfx/menuClick.wav`. A new delegated capture-phase click listener in `UIManager.setupEventListeners()` plays it on every button-shaped element across the document (button, a, [role="button"], plus the project's tab/card/shop classes), with explicit opt-out via `data-no-click-sound` and an automatic skip for canvas clicks (gameplay input). Throttled to 50 ms so multi-click streaks don't buzz.
+
+### Changed
+- **All SFX are now SFXR-generated; every Kenney mp3 has been removed from `sfx/`.** The `audio-manager.js` MANIFEST is rewritten to reference only `.wav` files generated from `sound-defs.js`. 62 Kenney mp3s, the `Digital_SFX_Set.zip` source archive, and the Kenney `readme.txt` were deleted from `sfx/`. The `sfx/` directory now contains 37 WAVs + `manifest.json` only.
+- **`asteroidDestroy` / `enemyDestroy` shape simplified.** Previously these were layered-bucket entries that picked one of several pre-mixed Kenney layer combinations per play. Now each is a single jsfxr WAV that's already 3-layer mixed offline — same per-call layered feel, less runtime work.
+- **`UIManager.setupEventListeners()` is now invoked from `setAudioManager()`.** Was previously a placeholder that nothing called.
+
+### Removed
+- **`playerHitBullet` MANIFEST entry and throttle** — the name was never fired by any code path; the only paths reach `enemyHit_<pattern>` (specific) or `enemyHit` (generic fallback).
+- **Kenney's Digital SFX assets** — 62 mp3 files, the Digital_SFX_Set.zip archive, and `sfx/readme.txt` (license attribution for the now-removed pack).
+
+---
+
+## [5.68.10] - 2026-05-04
+
+### Fixed
+- **All 26 jsfxr-generated WAVs were SILENT.** The 5.68.7 generator was passing partial params objects (only the fields each `sound-defs.js` entry chose to override) directly into `new SoundEffect(params)`. jsfxr's `Params` class defaults `p_lpf_freq` to `1` (low-pass wide open); when undefined, the engine treats it as `0` and runs every sample through a 0 Hz LPF — output is zero. Same trap affects every `p_*` field with a non-zero default. Files were the right length and format on disk (so `decodeAudioData` succeeded silently), but every single sample was 0. Confirmed via byte-level WAV audit: peak=0 and nonzero=0 across all 26 files. **Fix:** `tools/scripts/generate-sfx.js` now merges each layer's params onto a fresh `new Params()` so all 27 fields inherit jsfxr's documented defaults; partial fields override only what the def specifies. After regen, every WAV peaks between −9.4 dB and −0.4 dB with 99–100% nonzero samples — audible signal restored.
+
+### Internal
+- Verified by reading raw 16-bit PCM samples post-regeneration and tabulating peak / RMS / nonzero ratio per file. Audit script lives only in `/tmp/`; the production generator emits the same files via `npm run generate-sfx`.
+
+---
+
+## [5.68.9] - 2026-05-04
+
+### Fixed
+- **Defense skills were silent on activation.** `activateSkill()` in `skills.js` set the cooldown and effect-timer but never asked the audio manager for a clip — so BULWARK / REPAIR_NANITES / PHASE_DASH / DEFLECTOR_ORBS / EMP_PULSE / TRACTOR_SHIELD all played zero sound when the player triggered them. A `SKILL_ACTIVATE_SOUND` map now routes each skill id → its corresponding manifest entry (`bulwark`, `repairNanites`, `phaseDash`, `deflectorOrbs`, `empPulse`, `tractorShield`), with a `shield` fallback if a specific clip isn't registered.
+
+### Changed
+- **Default SFX volume bumped 0.5 → 0.8** (`AudioManager.sfxMasterVol`). Freshly-installed builds were quiet enough that several layered jsfxr clips read as inaudible against the music; the slider still tops out at 1.0, so headroom is unchanged.
+- **Throttles loosened on high-rate events.** Per-name min-interval-ms tightened so back-to-back sounds aren't dropped into silence: `shoot` 40 → 30, `hit` 60 → 40, `enemyHit` 60 → 40, `explosion` 80 → 60, `playerHitBullet` 80 → 60. Per-weapon and per-pattern variants continue to use the 30 ms default.
+
+---
+
+## [5.68.8] - 2026-05-04
+
+### Fixed
+- **SFX slider was still showing/applying the old 0–20% cap.** `updateSfxVolumeDisplay()` in `ui-manager.js` was multiplying the slider value by `0.2` for display (leftover from when `maxSfxVolume = 0.2`). The audio-manager's actual cap was lifted to 1.0 in 5.68.6, but the UI was still telling users their max was 20%. Now: slider 0–100% maps directly to the displayed percentage AND to the gain 0..1.
+
+---
+
+## [5.68.7] - 2026-05-04
+
+### Added
+- **jsfxr SFX pipeline restored.** The original layered-sfxr offline generator is back:
+  - `js/modules/audio/sound-defs.js` — 22 named sounds, each defined as 2-3 stacked sfxr voices (low body + mid impact + high sparkle / sweep, etc.). Single source of truth for the SFX library.
+  - `tools/scripts/generate-sfx.js` — Node script that renders every entry in `SOUND_DEFS` to `/sfx/<name>.wav`, peak-normalized to -0.45 dB, mono 16-bit PCM at 44.1 kHz. Layered defs are sum-mixed before normalization. Writes a `manifest.json` alongside the WAVs.
+  - **Run with**: `npm run generate-sfx` (script already wired in package.json).
+- **26 jsfxr WAVs generated** (~904 KB total) covering: shoot, hit, coin, powerup, healthRegen, shield, tractorBeam, explosion, playerExplosion, playerHitAsteroid, playerHitEnemy, 5 per-weapon `playerHit_*` clips, and 10 per-firing-pattern `enemyHit_*` clips.
+
+### Changed
+- **`audio-manager.js` MANIFEST repointed at jsfxr WAVs as the primary set.** Kenney's Digital SFX clips remain for sounds the jsfxr defs don't cover (asteroid/enemy destruction layered pools, defense-skill activations, generic enemy-bullet-hit fallback, Lightning Arc weapon-hit). Result: the gameplay-critical sounds (firing, generic explosions, pickups, hits) are now from the layered jsfxr generator that gives a coherent futuristic synthetic vocabulary; Kenney accents fill the remaining gaps.
+
+### Internal
+- The audio-manager's existing layered-bucket playback path (`1/√N` per-layer gain bias) handles Kenney layered pools (asteroidDestroy, enemyDestroy, ram impacts) unchanged. jsfxr WAVs are pre-mixed offline, so they're single-file entries.
+
+---
+
+## [5.68.6] - 2026-05-04
+
+### Changed
+- **SFX volume cap removed.** `maxSfxVolume = 0.2 → 1.0`; the slider now maps directly to gain `0..1` instead of being clipped to a fifth of master. Default boots at 50% slider position. Old default was inaudible-quiet for combat with the new layered destruction sounds.
+- **Asteroid + enemy destruction get layered sounds.** Manifest entries can now be EITHER a flat string array (pick one random clip) OR a layered-bucket array (pick one bucket, play ALL files in it simultaneously). Per-bucket gain is `1/√N` to keep peaks in check.
+  - **`asteroidDestroy`** — rocky shatter pools combining `spaceTrash` crash with descending tones (`lowDown`, `phaserDown1/3`, `zapThreeToneDown`).
+  - **`enemyDestroy`** — energy detonation pools layering `spaceTrash` + `zap1/2`/`zapTwoTone`/`zapThreeToneDown` + `lowDown`/`phaserDown1/2` for the "ship blowing apart" signature.
+  - **`playerExplosion`** — heaviest layered booms (3-layer `spaceTrash5 + lowDown + phaserDown3`).
+  - **`playerHitAsteroid` / `playerHitEnemy`** — collision rams now layered (`lowDown + spaceTrash2`, `lowRandom + zap1`) for proper thud + texture.
+- **New events** `audio:asteroid-destroy` and `audio:enemy-destroy` fired from `collision-system.js` at the kill sites (small/large asteroid path, single-bullet kill path, and the unified `destroyAsteroid` / enemy-kill path). Generic `audio:explosion` stays for mines and missile detonations.
+
+---
+
+## [5.68.5] - 2026-05-04
+
+### Added
+- **Sound effects wired up.** `audio-manager.js` was a no-op shell since the jsfxr removal; it now loads Kenney's Digital SFX set from `sfx/` and plays an appropriate clip per gameplay event.
+  - **Manifest** maps logical sound names → arrays of mp3 file paths. Names with multiple entries pick a random clip per play, so rapid-fire events get pleasant variation instead of buzz-saw repetition.
+  - **Throttle** (`SOUND_THROTTLE_MS`) prevents the same sound from stacking on top of itself when events fire faster than the human ear can distinguish (Storm Needles at 130ms cadence, per-frame Lance Beam contact, etc).
+  - **Per-weapon enemy-hit sounds**: pulse-cannon laser, storm-needles laser, scatter-gun crash, rail-driver zap, lance-beam zap, lightning-arc two-tone zap. Falls back to a generic hit clip if no per-weapon clip is registered.
+  - Mappings (logical name → file): `shoot` → laser1-3, `explosion` → spaceTrash1/3/4, `playerExplosion` → spaceTrash5/lowDown, `coin` → pepSound2, `powerup` → powerUp3/7/10, `healthRegen` → powerUp1/4, `shield` → phaseJump1, `playerHitAsteroid` → lowDown, `playerHitEnemy` → lowRandom, plus skill-specific (phaseDash, bulwark, empPulse, deflectorOrbs, repairNanites, tractorShield, tractorBeam).
+- **`playSound()` now returns a boolean** — true if the name exists in MANIFEST, false otherwise. Lets callers do specific→generic fallback (per-weapon hit → generic hit) without leaking knowledge of the manifest into the dispatch.
+
+### Changed
+- **SFX volume baseline bumped** `0.1 → 0.25` (default), max `0.2 → 0.5`. Old values were tuned for the silent stub; with real audio loaded the floor needs to be audible.
+- **`game-engine.js` audio dispatcher** rewritten for `audio:player-hit-bullet` and `audio:enemy-hit-by-bullet` to use the new `playSound()` boolean fallback path. The old dispatcher checked `audioManager.sounds[name]` which never existed.
+
+---
+
 ## [5.68.4] - 2026-05-04
 
 ### Changed

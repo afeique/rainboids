@@ -13,9 +13,10 @@
       }
     },
     "recommended": true,
-    "summary": "Context reset recommended (auto): 1646 session age (minutes) exceed threshold 120",
+    "summary": "Context reset recommended (auto): 20 recent edit count exceed threshold 8; 7247 session age (minutes) exceed threshold 120",
     "reasons": [
-      "1646 session age (minutes) exceed threshold 120"
+      "20 recent edit count exceed threshold 8",
+      "7247 session age (minutes) exceed threshold 120"
     ],
     "candidates": [
       {
@@ -35,9 +36,9 @@
       {
         "key": "recent_edits",
         "label": "recent edit count",
-        "actual": 6,
+        "actual": 20,
         "threshold": 8,
-        "triggered": false
+        "triggered": true
       },
       {
         "key": "failed_checks",
@@ -49,7 +50,7 @@
       {
         "key": "session_age_minutes",
         "label": "session age (minutes)",
-        "actual": 1646,
+        "actual": 7247,
         "threshold": 120,
         "triggered": true
       }
@@ -57,9 +58,9 @@
     "counters": {
       "wipTasks": 0,
       "blockedTasks": 0,
-      "recentEdits": 6,
+      "recentEdits": 20,
       "failedChecks": 0,
-      "sessionAgeMinutes": 1646
+      "sessionAgeMinutes": 7247
     }
   },
   "continuity": {
@@ -76,10 +77,24 @@
     ".claude/state/session-events.jsonl",
     ".claude/state/session.json",
     ".claude/state/test-recommendation.json",
-    "js/modules/audio/audio-manager.js"
+    "CHANGELOG.md",
+    "VERSION",
+    "docs/.obsidian/core-plugins.json",
+    "docs/.obsidian/workspace.json",
+    "js/modules/audio/audio-manager.js",
+    "js/modules/combat/collision-system.js",
+    "js/modules/core/constants.js",
+    "js/modules/game-engine.js",
+    "js/modules/player/skills.js",
+    "js/modules/ui/ui-manager.js",
+    "test-results/11-vfx-telemetry-VFX-Telem-5163c--analysis-—-15s-AI-gameplay-e2e-retry1/trace.zip",
+    "test-results/11-vfx-telemetry-VFX-Telem-5163c--analysis-—-15s-AI-gameplay-e2e/error-context.md",
+    "test-results/11-vfx-telemetry-VFX-Telem-5163c--analysis-—-15s-AI-gameplay-e2e/test-failed-1.png",
+    ".claude/scheduled_tasks.lock",
+    ".claude/state/session-events.jsonl.3"
   ],
   "sessionId": "",
-  "timestamp": "2026-04-26T17:38:53Z",
+  "timestamp": "2026-05-04T23:01:43Z",
   "version": "1.0.0",
   "wipTasks": null
 }

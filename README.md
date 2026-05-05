@@ -22,7 +22,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **68 background music tracks** spanning chiptune, synthwave, and electronic
-- **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 26 WAVs; granular hit sounds per enemy bullet pattern and per player primary weapon
+- **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 37 WAVs; granular hit sounds per enemy bullet pattern and per player primary weapon, plus per-skill activation accents and a UI click tick
 - **Modular ES6 architecture** — domain managers, extracted renderers, state machine, event bus, and frame-counted timers, built with Vite
 
 ---
@@ -239,7 +239,7 @@ Boss-tier TITANs at waves 5/10/15/20 receive an HP/size/speed multiplier on top 
 
 ### Audio
 - **68 background music tracks** spanning chiptune, synthwave, and electronic
-- **Curated futuristic SFX library** — 26 hand-tuned multi-layer WAVs (~900 KB), pre-rendered offline from stacked SFXR voices (sub-bass body + mid carrier + HPF brightness layer) and decoded once via WebAudio
+- **Curated futuristic SFX library** — 37 hand-tuned multi-layer WAVs (~1.1 MB), pre-rendered offline from stacked SFXR voices (sub-bass body + mid carrier + HPF brightness layer) and decoded once via WebAudio. Covers fire, hits, pickups, destructions, defense-skill activations, and UI clicks — every sound in the game is SFXR-generated, no third-party sample packs.
 - Built-in music player with playlist support
 - Individual sound effect toggles and volume control
 

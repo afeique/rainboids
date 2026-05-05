@@ -109,6 +109,11 @@ export class GameEngine {
         // Wire audio events — systems emit events, AudioManager handles playback
         this.events.on('audio:hit', () => this.audioManager.playHit());
         this.events.on('audio:explosion', () => this.audioManager.playExplosion());
+        // 5.68.6 — distinct asteroid / enemy destruction sounds. Layered
+        // boom + bass + zap pools per side. Generic `audio:explosion`
+        // stays for mines / missile detonations / etc.
+        this.events.on('audio:asteroid-destroy', () => this.audioManager.playSound('asteroidDestroy'));
+        this.events.on('audio:enemy-destroy', () => this.audioManager.playSound('enemyDestroy'));
         this.events.on('audio:coin', () => this.audioManager.playCoin());
         this.events.on('audio:shield', () => this.audioManager.playShield());
         this.events.on('audio:health-regen', () => this.audioManager.playHealthRegen());
@@ -119,21 +124,18 @@ export class GameEngine {
         // isn't registered (so adding new patterns degrades gracefully).
         this.events.on('audio:player-hit-asteroid', () => this.audioManager.playSound('playerHitAsteroid'));
         this.events.on('audio:player-hit-enemy', () => this.audioManager.playSound('playerHitEnemy'));
+        // 5.68.5 — per-pattern / per-weapon hit sounds. The audioManager
+        // tries the specific name first; if it isn't in MANIFEST, it
+        // returns false and we fall back to the generic.
         this.events.on('audio:player-hit-bullet', (pattern) => {
-            const name = `enemyHit_${pattern || ''}`;
-            if (this.audioManager.sounds && this.audioManager.sounds[name]) {
-                this.audioManager.playSound(name);
-            } else {
-                this.audioManager.playHit();
-            }
+            const am = this.audioManager;
+            const name = pattern ? `enemyHit_${pattern}` : null;
+            if (!name || !am.playSound(name)) am.playSound('enemyHit');
         });
         this.events.on('audio:enemy-hit-by-bullet', (weaponId) => {
-            const name = `playerHit_${weaponId || ''}`;
-            if (this.audioManager.sounds && this.audioManager.sounds[name]) {
-                this.audioManager.playSound(name);
-            } else {
-                this.audioManager.playHit();
-            }
+            const am = this.audioManager;
+            const name = weaponId ? `playerHit_${weaponId}` : null;
+            if (!name || !am.playSound(name)) am.playSound('hit');
         });
 
         // Wire UI events — systems emit events, UIManager handles display

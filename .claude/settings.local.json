@@ -60,7 +60,8 @@
       "Bash(curl -sI http://localhost:8091/js/playlist-data.js)",
       "Bash(curl -s http://localhost:8091/index.html)",
       "Bash(curl -s https://sfxr.me/sfxr.js)",
-      "Bash(npm view *)"
+      "Bash(npm view *)",
+      "Bash(xxd sfx/playerHit_STORM_NEEDLES.wav)"
     ],
     "deny": []
   }

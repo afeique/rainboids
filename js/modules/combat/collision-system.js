@@ -169,7 +169,7 @@ export function handleCollisions() {
                         ast._deathFlash = 6;
                         ast._deathFlashMax = 6;
                         if (this.isEntityOnScreen(ast)) {
-                            this.events.emit('audio:explosion');
+                            this.events.emit('audio:asteroid-destroy');
                             this.triggerHitstop(4);
                         }
                         this.createDebris(ast);
@@ -186,7 +186,7 @@ export function handleCollisions() {
                         ast._deathFlash = 6;
                         ast._deathFlashMax = 6;
                         if (this.isEntityOnScreen(ast)) {
-                            this.events.emit('audio:explosion');
+                            this.events.emit('audio:asteroid-destroy');
                             this.triggerHitstop(5);
                         }
                         this.createDebris(ast);
@@ -518,9 +518,9 @@ export function handleCollisions() {
                     // Track kill streak
                     this.onEnemyKill(enemy);
 
-                    // Play explosion sound only if enemy is on screen
+                    // Play enemy destruction sound only if on screen.
                     if (this.isEntityOnScreen(enemy)) {
-                        this.events.emit('audio:explosion');
+                        this.events.emit('audio:enemy-destroy');
                     }
 
                     // Death flash — enemy renders as bright silhouette before cleanup
@@ -1377,7 +1377,7 @@ export function destroyAsteroid(ast) {
     ast._deathFlash = 6;
     ast._deathFlashMax = 6;
     if (onScreen) {
-        this.events.emit('audio:explosion');
+        this.events.emit('audio:asteroid-destroy');
         this.triggerHitstop(isLarge ? 5 : 4);
     }
     this.createDebris(ast);
@@ -1452,7 +1452,7 @@ export function damageEnemy(enemy, damage) {
         this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {
-            this.events.emit('audio:explosion');
+            this.events.emit('audio:enemy-destroy');
         }
         this.createEnemyDebris(enemy);
         this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);

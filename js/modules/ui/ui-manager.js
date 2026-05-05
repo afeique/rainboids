@@ -69,8 +69,35 @@ export class UIManager {
     }
     
     setupEventListeners() {
-        // Reserved — currently no UIManager-owned listeners. Pause / shop /
-        // music inputs are wired in setupMusicPlayer().
+        // 5.69.0 — delegated UI click sound. Captures every click on any
+        // button-shaped element across the document and plays the
+        // `menuClick` SFX once. Capture-phase + dataset-tagging avoids
+        // double-fires for nested elements (e.g. clicking a label inside
+        // a tab; the bubble walks back up to the same root). The throttle
+        // in audio-manager keeps a multi-click streak from buzzing.
+        //
+        // Excluded: clicks that originate on the game canvas (gameplay
+        // input — bullets / radial menu / tap-to-fire), and clicks on
+        // explicitly opted-out elements (data-no-click-sound).
+        const playClick = (e) => {
+            const t = e.target;
+            if (!t || !(t instanceof Element)) return;
+            // Drop canvas clicks — those are gameplay, not UI.
+            if (t.closest('canvas')) return;
+            // Honor explicit opt-out.
+            if (t.closest('[data-no-click-sound]')) return;
+            // Match common button-like elements: native button, anchor,
+            // ARIA role=button, plus the project's UI element classes.
+            const matched = t.closest(
+                'button, a, [role="button"], [data-click-sound], ' +
+                '.pause-tab, .powerup-card, .shop-item, .shop-button, ' +
+                '.shop-tab, .shop-close, .shop-row, .powerups-subtab, ' +
+                '.music-track-row, .sfx-toggle-row'
+            );
+            if (!matched) return;
+            if (this.audioManager) this.audioManager.playSound('menuClick');
+        };
+        document.addEventListener('click', playClick, true);
     }
     
     updateScore(money) {
@@ -636,17 +663,19 @@ export class UIManager {
         this.audioManager = audioManager;
         this.setupSfxControls();
         this.setupMusicVolumeControl();
+        // Wire the delegated UI click sound now that audio is available.
+        this.setupEventListeners();
     }
     
     setupSfxControls() {
         if (!this.audioManager || !this.elements.sfxVolumeSlider) return;
-        
-        // Set initial value (50% on slider = 10% actual volume)
+
+        // Slider 0..100 maps directly to gain 0..1 (5.68.8 — was clipped
+        // to 0..20% via the old `maxSfxVolume = 0.2` cap, removed).
         const initialVolume = this.audioManager.getSfxVolume() * 100;
         this.elements.sfxVolumeSlider.value = initialVolume;
         this.updateSfxVolumeDisplay(initialVolume);
-        
-        // Handle slider changes
+
         this.elements.sfxVolumeSlider.addEventListener('input', (e) => {
             const sliderValue = e.target.value;
             const normalizedVolume = sliderValue / 100;
@@ -654,11 +683,10 @@ export class UIManager {
             this.updateSfxVolumeDisplay(sliderValue);
         });
     }
-    
+
     updateSfxVolumeDisplay(sliderValue) {
-        // Convert slider value (0-100) to actual volume percentage (0-20%)
-        const actualVolume = Math.round(sliderValue * 0.2);
-        this.elements.sfxVolumeValue.textContent = `${actualVolume}%`;
+        // Slider value IS the volume percentage now (1:1 mapping to gain).
+        this.elements.sfxVolumeValue.textContent = `${Math.round(sliderValue)}%`;
     }
     
     setupMusicVolumeControl() {

@@ -160,6 +160,7 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "bases:Create new base": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
       "canvas:Create new canvas": false,
@@ -170,6 +171,7 @@
   },
   "active": "d0016efdb880f49f",
   "lastOpenFiles": [
+    "WebGL Starfield Migration – Report – 2026-05-04.md",
     "Engine Writeup 2026-04-25.md",
     "Engine 2026-04-25.md",
     "Weapons Planning – 2026-03-10.md",
@@ -194,7 +196,6 @@
     "REFACTOR.md",
     "QA_BOT_QUANTIFY_FUN.md",
     "QA_BOT_HUMAN_SIM.md",
-    "PRIMARYWEAPON_update.md",
-    "PERFORMANCE_OPTIMIZATIONS_IMPLEMENTED.md"
+    "PRIMARYWEAPON_update.md"
   ]
 }
