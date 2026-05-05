@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.74.4] - 2026-05-05
+
+### Fixed
+- **Powerup picks were silently failing during the wave-clear pause.** The pause-overlay's `dismissOnBackdrop` listener used `e.target.closest('#pause-menu')` to decide whether a click was inside the menu. The POWERUPS tab `+1` buy button calls `purchasePowerup` → `renderPowerupsOverlay` → `replaceChildren()` synchronously inside its click handler, which detaches the original `<button>` before the click event finishes bubbling. `closest()` on a detached node walks a null parent chain and returns `null`, so the overlay treated the click as "outside the menu" and ran `togglePause` — which during a wave-clear pause routes through `_pausedFromWaveClear` straight into `startNextWave()`, closing the menu without applying the pick. (`stopPropagation()` on the buy button didn't always cover this path because the same bug exists for any in-menu control whose handler replaces its DOM ancestor.) Switched the dismiss check to a direct identity test (`e.target === e.currentTarget`) so only literal clicks on the overlay backdrop dismiss it.
+
+### Changed
+- **Assists tab — checkboxes vertically centered with their row text.** `.assist-row` is now `align-items: center` with `align-self: center` on the input, replacing the prior `flex-start` + 2px top margin that left the box visually drifting above the title.
+
+---
+
+## [5.74.3] - 2026-05-05
+
+### Changed
+- **Gold is pickup-only.** Removed the silent `game.money += reward.points` increments that fired on every enemy kill (bullet-kill path, weapon-effect kill path, player-collision kill path), the per-asteroid collision-kill `+10`, the kill-streak coin milestone bonus (3/5/8/12/20 kills × 10), and the explosive-bullet AoE kill bonus. Killing an enemy now spawns its money-orb drops only — the player must fly over to grab them. Stops the "phantom +N" gold popups that fired several times per kill from these stacked award sites. XP gain on kill, score, and stats counters are unchanged. Wave-clear bonus, shop refund, run-complete bonus, the Tractor Shield deflect-for-coins skill payoff, and the cheat code are preserved as deliberate non-pickup income paths.
+
+---
+
 ## [5.74.2] - 2026-05-05
 
 ### Changed

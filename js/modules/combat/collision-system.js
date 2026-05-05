@@ -508,9 +508,10 @@ export function handleCollisions() {
                 if (destroyed) {
                     // QA bot kill tracking — authoritative kill buffer
                     if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
-                    // Award money + XP for kill
+                    // 5.74.3 — gold no longer auto-awarded on kill. Players
+                    // must pick up the dropped money orbs (dropOrbsFromEntity)
+                    // to gain gold. XP still drops on kill.
                     const reward = enemy.getDestructionReward();
-                    this.game.money += reward.points;
                     this.player.gainExperience(Math.ceil(reward.points / 6));
 
                     // Track kill streak
@@ -1432,11 +1433,10 @@ export function damageEnemy(enemy, damage) {
         }
         // QA bot kill tracking — authoritative kill buffer (drained by state-reader)
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
+        // 5.74.3 — gold no longer auto-awarded on kill (pickup-only).
         const reward = enemy.getDestructionReward();
-        this.game.money += reward.points;
         if (this.game.stats) {
             this.game.stats.enemiesKilled++;
-            this.game.stats.coinsEarned += reward.points;
             if (enemy.isBoss) this.game.stats.bossesKilled++;
         }
         this.player.gainExperience(Math.ceil(reward.points / 6));
@@ -1540,8 +1540,8 @@ export function handlePlayerEnemyCollision(player, enemy) {
         enemy._deathFlashMax = 8;
         // QA bot kill tracking — authoritative kill buffer
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
+        // 5.74.3 — gold no longer auto-awarded on kill (pickup-only).
         const reward = enemy.getDestructionReward();
-        this.game.money += reward.points;
         this.player.gainExperience(Math.ceil(reward.points / 6));
         this.onEnemyKill(enemy);
 
@@ -1845,9 +1845,8 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
 
     // Check if asteroid is destroyed
     if (asteroid.health <= 0) {
-        // Award XP and money for destroying asteroid
+        // 5.74.3 — gold no longer auto-awarded on kill (pickup-only).
         this.player.gainExperience(8);
-        this.game.money += 10; // Bonus money for collision destruction
 
         // Screen shake for collision destruction (only if on screen)
         if (this.isEntityOnScreen(asteroid)) {

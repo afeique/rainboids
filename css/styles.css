@@ -279,7 +279,7 @@ body.shop-open .ui-element:not(#shop-overlay) {
 }
 .assist-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 14px;
     padding: 14px 16px;
     background: rgba(255, 255, 255, 0.04);
@@ -295,11 +295,12 @@ body.shop-open .ui-element:not(#shop-overlay) {
 }
 .assist-row input[type="checkbox"] {
     flex: 0 0 auto;
-    width: 22px;
-    height: 22px;
-    margin-top: 2px;
+    width: 26px;
+    height: 26px;
+    margin: 0;
     accent-color: #66ddcc;
     cursor: pointer;
+    align-self: center;
 }
 .assist-row-text { flex: 1 1 auto; }
 .assist-row-title {

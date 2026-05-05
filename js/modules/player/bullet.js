@@ -282,9 +282,10 @@ export class Bullet {
                     const destroyed = enemy.takeDamage(damage);
                     
                     if (destroyed && gameEngine.game) {
+                        // 5.74.3 — gold no longer auto-awarded on kill
+                        // (pickup-only). Score still ticks.
                         const reward = enemy.getDestructionReward();
                         gameEngine.game.score += reward.points;
-                        gameEngine.game.money += reward.points;
                         
                         // Create additional explosion particles for destroyed enemies
                         for (let j = 0; j < 8; j++) {

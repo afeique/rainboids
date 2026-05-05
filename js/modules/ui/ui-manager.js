@@ -892,10 +892,18 @@ export class UIManager {
             });
         }
         
-        // Pause overlay backdrop dismiss (tap outside menu unpauses)
+        // Pause overlay backdrop dismiss (tap outside menu unpauses).
+        // 5.74.4 — switched the in-menu test from `e.target.closest(...)`
+        // to a direct-click identity check (`e.target === e.currentTarget`).
+        // If a child handler (e.g. POWERUPS +1 buy button) replaces its
+        // own subtree via `replaceChildren()` before this listener fires,
+        // the original target is detached, `closest('#pause-menu')`
+        // returns null, and the backdrop misclassifies the click as
+        // outside-menu — closing the pause menu and starting the next
+        // wave when the player only meant to spend a Pick.
         if (this.elements.pauseOverlay) {
             const dismissOnBackdrop = (e) => {
-                if (!e.target.closest('#pause-menu')) {
+                if (e.target === e.currentTarget) {
                     if (this.gameEngine) this.gameEngine.togglePause();
                 }
             };

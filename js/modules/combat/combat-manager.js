@@ -736,11 +736,8 @@ export function onEnemyKill(enemy) {
     this.killStreakCount++;
     this.killStreakTimer = Date.now();
 
-    // Coin bonuses on streak milestones (separate from damage tiers).
-    const coinMilestones = { 3: true, 5: true, 8: true, 12: true, 20: true };
-    if (coinMilestones[this.killStreakCount]) {
-        this.game.money += this.killStreakCount * 10;
-    }
+    // 5.74.3 — kill-streak coin bonuses removed. Gold is pickup-only;
+    // the streak still grants its damage-tier buff below.
 
     // Streak damage buff — pick the highest tier the player has reached and
     // (re)apply its multiplier + duration. Each new kill while a buff is
