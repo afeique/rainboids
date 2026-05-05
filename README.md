@@ -10,7 +10,7 @@ A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave s
 
 Visit **[rainboids.cat.computer](https://rainboids.cat.computer)** in any modern browser on a desktop or laptop.
 
-**Requires desktop or laptop.**
+### Requires desktop or laptop
 
 Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones and tablets see a "desktop only" splash and the game does not initialize.
 
