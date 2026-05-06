@@ -899,29 +899,60 @@ export function triggerPlayerHitFX(impactX, impactY, damage = 1) {
 // ── Damage Numbers ──
 
 export function createDamageNumber(x, y, damage, opts = {}) {
-    // opts: { isCrit?: bool, isEmpowered?: bool, isPlayerHit?: bool }
-    // Crit numbers render with a bigger font, hot color, and a "CRIT!" tag.
-    // Empowered (perfect-reload buff) uses a cyan tint. isPlayerHit renders
-    // red with a leading "-" so the player can tell at a glance they were
-    // hurt vs they hurt something. See hud/combat.js drawDamageNumbers.
+    // opts: { isCrit?: bool, isEmpowered?: bool, isPlayerHit?: bool, target? }
+    // 5.76.0 — damage numbers are now AGGREGATED per-target on a 1s
+    // window. Hit the same enemy 30 times in a second → ONE growing
+    // number instead of 30 overlapping floaters. The aggregator
+    // tracks ".damage" as a running total and updates the visible
+    // text in-place. Crits, player-hits, and one-shot floaters
+    // (asteroid death tags, mine blasts without a target) bypass the
+    // aggregator and pop fresh — those are already discrete events
+    // the player wants individually.
+    const isCrit = !!opts.isCrit;
+    const isPlayerHit = !!opts.isPlayerHit;
+    const target = opts.target || null;
+    const now = Date.now();
+
+    if (target && !isCrit && !isPlayerHit) {
+        if (!this._enemyDmgAggs) this._enemyDmgAggs = new Map();
+        const existing = this._enemyDmgAggs.get(target);
+        if (existing && existing.dmgRef && existing.dmgRef.life > 0
+                && (now - existing.startTime) < 1000) {
+            existing.dmgRef.damage += Math.round(damage);
+            existing.dmgRef.x = x;
+            existing.dmgRef.y = y;
+            // Refresh life slightly so the floater sticks around for
+            // a beat after the last hit lands.
+            existing.dmgRef.life = Math.max(existing.dmgRef.life, 0.6);
+            return;
+        }
+    }
+
     const damageNumber = {
         x: x,
         y: y,
         damage: Math.round(damage),
         life: 1.0,
         maxLife: 1.5,
-        isCrit: !!opts.isCrit,
+        isCrit,
         isEmpowered: !!opts.isEmpowered,
-        isPlayerHit: !!opts.isPlayerHit,
+        isPlayerHit,
         vel: {
             x: (Math.random() - 0.5) * 2,
             y: -2 - Math.random() * 2
         },
         gravity: 0.1,
-        creationTime: Date.now()
+        creationTime: now,
     };
 
     this.damageNumbers.push(damageNumber);
+
+    if (target && !isCrit && !isPlayerHit) {
+        this._enemyDmgAggs.set(target, {
+            dmgRef: damageNumber,
+            startTime: now,
+        });
+    }
 }
 
 export function updateDamageNumbers(deltaTime) {

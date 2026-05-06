@@ -73,8 +73,10 @@ export function setupEventListeners() {
                 this.game.money += 1000;
                 this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+1000 Gold', duration: 1200 });
             } else if (e.code === 'BracketRight') {
-                this.player.skillPoints += 5;
-                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+5 SP', duration: 1200 });
+                // 5.76.0 — SP removed; ] now grants 5000 gold so the
+                // cheat key keeps a use without resurrecting the SP UI.
+                this.game.money += 5000;
+                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+5000 Gold', duration: 1200 });
             }
         }
 

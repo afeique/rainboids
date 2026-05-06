@@ -184,7 +184,16 @@ export class RadialMenu {
 
         const label = hover >= 0 ? (this.options[hover].name || '') : 'CLICK TO SELECT';
         const labelColor = hover >= 0 ? '#ffffff' : 'rgba(190, 195, 215, 0.7)';
-        const lines = wrapPixelText(ctx, label.toUpperCase(), hubMaxWidth);
+        // 5.76.0 — two-word names (e.g. "Pulse Cannon", "Charge Shot",
+        // "Phase Dash") always render as two lines in the radial center,
+        // one word per line. Cleaner read at the small hub diameter and
+        // matches the visual rhythm of the icon grid. Three-word or
+        // single-word labels fall back to the regular wrap path.
+        const upper = label.toUpperCase();
+        const words = upper.split(' ').filter(w => w.length > 0);
+        const lines = (words.length === 2)
+            ? words
+            : wrapPixelText(ctx, upper, hubMaxWidth);
         const blockH = lines.length * lineH;
         const startY = cy + lineH * 0.4 - blockH / 2 + lineH / 2;
         for (let i = 0; i < lines.length; i++) {

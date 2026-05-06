@@ -116,22 +116,26 @@ export function openShop() {
         // those upgrades are now permanent stacking powerup pickups
         // (see POWERUP_TYPES in powerup.js + the Powerups overlay).
         // SPARE_SHIP moved from OFFENSE to DEFENSE.
+        // 5.76.0 — DEFENSE category fully migrated to gold (SP currency
+        // removed). Costs scaled to match the bumped Gold Find economy:
+        // every upgrade should feel like a deliberate purchase. Floor
+        // costs roughly 2.5× the prior SP equivalents (1 SP ≈ 800g of
+        // mid-game value); per-stack scaling exponential so the 8th
+        // shielding stack costs more than the 1st.
         this.shopItems = [
-            // ── DEFENSE (SP unless noted) ──
-            { id: 'HEALTH_BOOST',          name: 'Health Boost', description: '+25 max health',                                        cost: 1,    icon: '❤️', maxStacks: 10, category: 'DEFENSE', currency: 'SP'    },
-            { id: 'SHIELD_BOOST',          name: 'Shielding',    description: '-5% damage taken per stack',                            cost: 1,    icon: '🛡️', maxStacks: 8,  category: 'DEFENSE', currency: 'SP'    },
-            { id: 'SPEED_BOOST',           name: 'Afterburner',  description: '+50% thrust & +35% top speed per stack',                cost: 2,    icon: '💨', maxStacks: 4,  category: 'DEFENSE', currency: 'SP'    },
-            { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',       description: '-5s cooldown between health drops (60s → 30s floor)',  cost: 2,    icon: '⏳', maxStacks: 6,  category: 'DEFENSE', currency: 'SP'    },
-            // 5.75.0 — qualitative defense layer. These three are designed
-            // to give late-game builds something OTHER than +HP/+shield to
-            // chase, so a maxed shielding build still has decisions left.
+            { id: 'HEALTH_BOOST',          name: 'Health Boost', description: '+25 max health',                                        cost: 1200, icon: '❤️', maxStacks: 10, category: 'DEFENSE', currency: 'COINS' },
+            { id: 'SHIELD_BOOST',          name: 'Shielding',    description: '-5% damage taken per stack',                            cost: 1500, icon: '🛡️', maxStacks: 8,  category: 'DEFENSE', currency: 'COINS' },
+            { id: 'SPEED_BOOST',           name: 'Afterburner',  description: '+50% thrust & +35% top speed per stack',                cost: 2200, icon: '💨', maxStacks: 4,  category: 'DEFENSE', currency: 'COINS' },
+            { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',       description: '-5s cooldown between health drops (60s → 30s floor)',  cost: 1800, icon: '⏳', maxStacks: 6,  category: 'DEFENSE', currency: 'COINS' },
+            // Qualitative defense layer (5.75.0). High costs because they're
+            // run-defining picks that change moment-to-moment survival math.
             { id: 'REFLEXES',              name: 'Reflexes',     description: 'One free dodge per 30s — next bullet that would hit you misses',
-                                                                  cost: 4,    icon: '🌀', maxStacks: 1,  category: 'DEFENSE', currency: 'SP' },
+                                                                  cost: 5500, icon: '🌀', maxStacks: 1,  category: 'DEFENSE', currency: 'COINS' },
             { id: 'LAST_STAND',            name: 'Last Stand',   description: 'On lethal hit, survive at 1 HP (once per run)',
-                                                                  cost: 6,    icon: '✊', maxStacks: 1,  category: 'DEFENSE', currency: 'SP' },
+                                                                  cost: 8000, icon: '✊', maxStacks: 1,  category: 'DEFENSE', currency: 'COINS' },
             { id: 'STATIC_FIELD',          name: 'Static Field', description: 'Auto-regen +2 HP shield per stack after 8s no damage',
-                                                                  cost: 3,    icon: '⚡', maxStacks: 3,  category: 'DEFENSE', currency: 'SP' },
-            { id: 'SPARE_SHIP',            name: 'Spare Ship',   description: '+1 extra life (max 3)',                                cost: 5000, icon: '🚀', maxStacks: 1,  flatCost: true, category: 'DEFENSE', currency: 'COINS' },
+                                                                  cost: 3200, icon: '⚡', maxStacks: 3,  category: 'DEFENSE', currency: 'COINS' },
+            { id: 'SPARE_SHIP',            name: 'Spare Ship',   description: '+1 extra life (max 3)',                                cost: 12000, icon: '🚀', maxStacks: 1,  flatCost: true, category: 'DEFENSE', currency: 'COINS' },
         ];
 
         this._rebuildShopCache();
@@ -268,7 +272,9 @@ export function _buildSkillsTabItems() {
                 owned,
             });
         }
-        // Add upgrades for all owned skills
+        // 5.76.0 — skill upgrades migrated from SP to COINS along with
+        // DEFENSE. Costs scaled to gold-equivalent (~1500g per former
+        // 1-2 SP). Currency uniformly COINS across the shop now.
         if (this.player && this.player.ownedSkills) {
             for (const skillId of this.player.ownedSkills) {
                 const upgrades = getSkillUpgrades(skillId);
@@ -278,10 +284,10 @@ export function _buildSkillsTabItems() {
                         name: upg.name,
                         description: upg.description,
                         icon: upg.icon,
-                        cost: upg.cost,
+                        cost: upg.cost * 1500, // SP-cost units rescaled to gold (1 SP ≈ 1500g)
                         maxStacks: upg.maxStacks,
                         category: 'SKILLS',
-                        currency: 'SP',
+                        currency: 'COINS',
                         isSkillUpgrade: true,
                         parentSkill: upg.skill,
                     });

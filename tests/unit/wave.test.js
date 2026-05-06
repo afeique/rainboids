@@ -153,8 +153,8 @@ describe('getLevelScaledEnemyStats()', () => {
     const l5  = getLevelScaledEnemyStats(BASE, 5).health;
     const l20 = getLevelScaledEnemyStats(BASE, 20).health;
     expect(l1).toBe(BASE.health);
-    expect(l5).toBeLessThan(BASE.health * 3);           // early waves still climbable
-    expect(l20).toBeGreaterThan(BASE.health * 10);      // wave 20 is brutal
+    expect(l5).toBeLessThan(BASE.health * 4);           // early waves still climbable
+    expect(l20).toBeGreaterThan(BASE.health * 13);      // wave 20 is brutal
     // Curve must be monotonic
     expect(getLevelScaledEnemyStats(BASE, 10).health).toBeGreaterThan(l5);
     expect(l20).toBeGreaterThan(getLevelScaledEnemyStats(BASE, 10).health);

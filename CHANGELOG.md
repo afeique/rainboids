@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.76.0] - 2026-05-06
+
+Big economy + difficulty rebalance: SP currency removed, all DEFENSE upgrades now cost gold, every upgrade tier ~2× cost, late-game HP curve scaled up, damage numbers aggregate per-enemy, and crit numbers zoom toward the camera.
+
+### Removed
+- **SP (Skill Points) currency entirely.** Every upgrade now uses gold. Shop currency row hides the SP element. Level-up still grants `+1 skillPoints` internally for back-compat with stats but it no longer affects gameplay. Cheat code `]` now grants `+5000 Gold` (was `+5 SP`).
+
+### Changed
+- **DEFENSE shop items migrated SP → COINS** with prices that match the late-game economy:
+  - Health Boost 1 SP → 1200g; Shielding 1 SP → 1500g; Afterburner 2 SP → 2200g; Triage 2 SP → 1800g.
+  - Reflexes 4 SP → 5500g; Last Stand 6 SP → 8000g; Static Field 3 SP → 3200g.
+  - Spare Ship: 5000g → 12000g (still flat-cost, only existing item that was already gold).
+- **All weapon and skill upgrades scaled up.**
+  - PRIMARY tier-1: 400-1750g → 900-3700g (~2×). Tier-2 capstones: 4500-5500g → 7500-9000g (~1.5×).
+  - POWER tier-1: 700-2000g → 1500-4300g.
+  - SKILL upgrades: SP cost × 1500g (e.g. 2 SP → 3000g, 3 SP → 4500g) and currency now COINS uniformly.
+- **Late-game HP curve scaled up** to keep up with stacked DPS post-Twin Cannon / Hailstorm / Overcharged Beam. `getLevelScaledEnemyStats` HP multiplier `1 + t × 6.5 + pow(t, 2.5) × 4` → `1 + t × 8.0 + pow(t, 2.5) × 6.5`. Wave 5 ~3.0× (was ~2.5×), wave 10 ~5.5× (was ~4.5×), wave 20 ~15.5× (was ~11.5×).
+- **Damage numbers aggregate per-enemy on a 1-second window.** Hitting the same enemy 30 times in a second now produces ONE growing number that ticks up in place, instead of 30 overlapping floaters. Crits, player-hit numbers, and one-shot AOE blasts (mines without a single target) bypass the aggregator and pop fresh — those are individually meaningful events. Each `createDamageNumber` call site now passes `{ target }` so the aggregator can key on identity.
+- **Two-word weapon and skill names render as two lines in the radial center.** "Pulse Cannon" / "Charge Shot" / "Phase Dash" now spawn one word per line instead of word-wrapping. Cleaner read at the small hub diameter.
+
+### Added
+- **Crit damage numbers zoom toward the camera.** Font scales 22 → 56 px over the 1-second life of the floater, with an 80 ms scale-pulse "punch" at impact and a soft white-hot edge glow. The CRIT! tag scales with the number. Pairs with the crit-rush fire-rate boost (5.75.0 B3) so crits land as a real visual burst.
+
+### Tests
+- HP-curve test bounds updated for the new multiplier. 62/62 pass.
+
+---
+
 ## [5.75.1] - 2026-05-06
 
 ### Added

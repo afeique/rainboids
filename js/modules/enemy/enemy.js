@@ -1121,7 +1121,9 @@ export class Enemy {
         // Create damage number — pass through crit/empowered flags so the
         // popup renders distinctly (bigger font, hot color, "CRIT!" label).
         if (this.gameEngine) {
-            this.gameEngine.createDamageNumber(this.x, this.y - this.radius, damage, opts);
+            // 5.76.0 — pass `target: this` so non-crit hits aggregate
+            // into a single growing number per enemy on a 1s window.
+            this.gameEngine.createDamageNumber(this.x, this.y - this.radius, damage, { ...opts, target: this });
         }
         
         // Safeguard: clamp health between 0 and maxHealth

@@ -115,11 +115,13 @@ export function handleCollisions() {
                     this.triggerHitstop(dmg >= 2 ? 3 : 2);
                 }
 
-                // Show damage number (same as enemy ships)
+                // Show damage number (same as enemy ships).
+                // 5.76.0 — pass target so non-crit hits aggregate.
                 if (this.isEntityOnScreen(ast)) {
                     this.createDamageNumber(ast.x, ast.y - ast.baseRadius, damage, {
                         isCrit: !!(bullet.isCrit || bullet.isCritical),
                         isEmpowered: !!bullet.isEmpowered,
+                        target: ast,
                     });
                 }
                 // 5.75.0 — crit feedback loop trigger.
@@ -1450,7 +1452,7 @@ export function damageEnemy(enemy, damage) {
     // Surface this enemy in the top-center info panel — covers AOE hits
     // (mines, lightning, nova, missiles) that don't go through the bullet path.
     this._setLastHit(enemy);
-    this.createDamageNumber(enemy.x, enemy.y - 15, damage);
+    this.createDamageNumber(enemy.x, enemy.y - 15, damage, { target: enemy });
     if (this.game.stats) this.game.stats.totalDamageDealt += damage;
     if (enemy.health <= 0) {
         // Start death flash — enemy renders as bright dissolving silhouette for 5 frames

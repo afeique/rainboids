@@ -38,18 +38,28 @@ export function drawDamageNumbers() {
                 ctx.strokeText(text, screenX, screenY);
                 ctx.fillText(text, screenX, screenY);
             } else if (dmgNum.isCrit) {
-                // CRITs: bigger font, hot orange-red, white outline, with a
-                // tiny "CRIT!" tag above so they're impossible to miss.
-                const fontSize = 26;
+                // 5.76.0 — CRIT damage zooms toward the camera. The font
+                // grows from 22 → 56 px over the lifetime of the floater
+                // (life starts at 1.0, decays toward 0). Pairs with a
+                // soft scale-pulse for the first ~80 ms (`zoomPunch`)
+                // so the impact reads as an immediate burst, then the
+                // number keeps growing as it floats up. White-hot edge
+                // glow on top of the existing hot-orange fill.
+                const lifeFrac = Math.max(0, Math.min(1, 1 - (dmgNum.life / 1.0)));
+                const zoomPunch = lifeFrac < 0.08 ? 1 + (1 - lifeFrac / 0.08) * 0.3 : 1;
+                const fontSize = (22 + lifeFrac * 34) * zoomPunch;
                 ctx.font = `bold ${fontSize}px 'Press Start 2P', monospace`;
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 4;
                 ctx.strokeStyle = rgba(0, 0, 0, alpha);
                 ctx.fillStyle = rgba(255, 80, 30, alpha);
+                ctx.shadowColor = `rgba(255, 240, 180, ${alpha * 0.85})`;
+                ctx.shadowBlur = 14 + lifeFrac * 20;
                 const text = dmgNum.damage.toString();
                 ctx.strokeText(text, screenX, screenY);
                 ctx.fillText(text, screenX, screenY);
+                ctx.shadowBlur = 0;
 
-                ctx.font = "10px 'Press Start 2P', monospace";
+                ctx.font = `${Math.round(fontSize * 0.36)}px 'Press Start 2P', monospace`;
                 ctx.fillStyle = rgba(255, 220, 80, alpha);
                 ctx.fillText('CRIT!', screenX, screenY - fontSize * 0.85);
             } else if (dmgNum.isEmpowered) {

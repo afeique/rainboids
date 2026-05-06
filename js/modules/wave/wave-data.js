@@ -253,12 +253,13 @@ export const WAVE_SUBTITLES_GENERIC = [
 export function getLevelScaledEnemyStats(baseStats, level) {
     const L = Math.max(1, level | 0);
     const t = (L - 1) / 19;
-    // 5.75.0 — HP curve recalibrated. Player DPS with stacked upgrades
-    // scales ~12× by mid-game; old linear HP curve maxed at 7.5× which
-    // left late waves feeling soft. New: linear base + steep tail
-    // (`pow(t, 2.5) * 4`) so wave 5 ~2.5×, wave 10 ~4.5×, wave 15 ~6.8×,
-    // wave 20 ~11.5×. The early game stays gentle; the back half bites.
-    const hpMul = 1 + t * 6.5 + Math.pow(t, 2.5) * 4;
+    // 5.76.0 — HP curve scaled up to match the post-5.75 player power
+    // budget (Twin Cannon / Hailstorm / +120% Lance + crit-rush + Gold
+    // Find compounding all stack DPS faster than the old curve handled).
+    // Linear coefficient 6.5 → 8.0 and tail 4 → 6.5: wave 5 ~3.0×,
+    // wave 10 ~5.5×, wave 15 ~8.5×, wave 20 ~15.5× (was 11.5×). Early
+    // waves stay tractable; late waves now require the build to land.
+    const hpMul = 1 + t * 8.0 + Math.pow(t, 2.5) * 6.5;
     const ptsMul = 1 + Math.pow(t, 1.4) * 5.5;
     const spdMul = 1 + Math.pow(t, 1.4) * 0.4;
     return {
