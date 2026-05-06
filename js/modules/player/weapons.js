@@ -241,6 +241,21 @@ export function firePulseCannon(bulletPool, audioManager, config) {
     if (echoStacks > 0 && Math.random() < echoStacks * 0.1) {
         this.createChargedBullets(bulletPool, 0.8, 1, damage * 0.7, 0, 0, config.range);
     }
+
+    // 5.75.1 — TWIN_CANNON capstone: fires two additional bullets at ±8°
+    // angle offsets at half damage. Triples Pulse Cannon's burst output
+    // for the cost of a wider effective spread. Implemented by briefly
+    // patching `this.angle` while calling createChargedBullets so the
+    // spawned bullets pick up the offset; restored before exit.
+    if (this.getPowerupStacks('TWIN_CANNON') > 0) {
+        const off = 8 * Math.PI / 180;
+        const baseAngle = this.angle;
+        this.angle = baseAngle + off;
+        this.createChargedBullets(bulletPool, 1, 1, damage * 0.5, 0, 0, config.range);
+        this.angle = baseAngle - off;
+        this.createChargedBullets(bulletPool, 1, 1, damage * 0.5, 0, 0, config.range);
+        this.angle = baseAngle;
+    }
 }
 
 export function fireStormNeedles(bulletPool, audioManager, config) {
@@ -249,7 +264,10 @@ export function fireStormNeedles(bulletPool, audioManager, config) {
     // MULTI_SHOT carry-over: +1 needle per stack, fanned across a small
     // additional spread so they don't overlap visually.
     const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
-    const bulletCount = 1 + multiShotStacks;
+    // 5.75.1 — HAILSTORM capstone: +1 needle and every needle pierces
+    // an extra enemy. Compounds with MULTI_SHOT for a saturating spread.
+    const hailstormBonus = this.getPowerupStacks('HAILSTORM') > 0 ? 1 : 0;
+    const bulletCount = 1 + multiShotStacks + hailstormBonus;
     const fanSpread = bulletCount > 1 ? Math.min(0.5, 0.10 * (bulletCount - 1)) : 0;
 
     for (let i = 0; i < bulletCount; i++) {
@@ -275,6 +293,10 @@ export function fireStormNeedles(bulletPool, audioManager, config) {
             }
             if (this.getPowerupStacks('SUPPRESSION') > 0) {
                 bullet.suppressionDuration = 1500;
+            }
+            // 5.75.1 — HAILSTORM grants +1 piercing to every needle.
+            if (this.getPowerupStacks('HAILSTORM') > 0) {
+                bullet.piercing = (bullet.piercing || 0) + 1;
             }
             const staticStacks = this.getPowerupStacks('STATIC_CHARGE');
             if (staticStacks > 0 && this.needleCount % 10 === 0) {
@@ -316,7 +338,10 @@ export function fireScatterGun(bulletPool, audioManager, config) {
         }
     } else {
         // Pellet spread — multiShot adds extra pellets to the fan.
-        const pelletCount = config.bulletCount + buckshotStacks + multiShotStacks;
+        // 5.75.1 — CONE_OF_FIRE capstone: +2 pellets per shot, every
+        // pellet pierces 1 enemy. Saturating sweep.
+        const coneFireBonus = this.getPowerupStacks('CONE_OF_FIRE') > 0 ? 2 : 0;
+        const pelletCount = config.bulletCount + buckshotStacks + multiShotStacks + coneFireBonus;
         const spread = config.spreadAngle * Math.pow(0.85, tightChokeStacks);
         const startAngle = this.angle - spread / 2;
 
@@ -333,6 +358,10 @@ export function fireScatterGun(bulletPool, audioManager, config) {
                 // Shrapnel upgrade
                 if (this.getPowerupStacks('SHRAPNEL') > 0) {
                     bullet.shrapnelOnExpire = true;
+                }
+                // 5.75.1 — CONE_OF_FIRE: every pellet pierces +1.
+                if (this.getPowerupStacks('CONE_OF_FIRE') > 0) {
+                    bullet.piercing = (bullet.piercing || 0) + 1;
                 }
                 this.applyGlobalBulletUpgrades(bullet);
             }
@@ -386,6 +415,14 @@ export function fireRailDriver(bulletPool, audioManager, config) {
 
             if (this.getPowerupStacks('KINETIC_IMPACT') > 0) bullet.knockback = 8;
             if (this.getPowerupStacks('THROUGH_AND_THROUGH') > 0) bullet.damageTrail = true;
+            // 5.75.1 — RAIL_PENETRATOR_PLUS capstone: effectively unlimited
+            // piercing (99). Decaying-damage-per-hit is hard to thread
+            // through the existing `piercing` count without rewriting
+            // the bullet hit accounting; the saturating pierce alone is
+            // already a major DPS lift on dense waves.
+            if (this.getPowerupStacks('RAIL_PENETRATOR_PLUS') > 0) {
+                bullet.piercing = 99;
+            }
 
             // Apply weapon-config speed scaling on top of pool defaults.
             const speed = Math.hypot(bullet.vel.x, bullet.vel.y);
@@ -414,8 +451,21 @@ export function startLanceBeam(audioManager, config) {
     this.beamAngle = this.angle;
 
     const widthStacks = this.getPowerupStacks('BEAM_WIDTH');
-    this.beamCurrentWidth = config.beamWidth * (1 + widthStacks * 0.3);
-    this.beamDamagePerTick = config.damage;
+    let widthMul = 1 + widthStacks * 0.3;
+    let damageMul = 1;
+    let rangeMul = 1;
+
+    // 5.75.1 — TRIPLE_BEAM (Overcharged Beam) capstone: +120% damage,
+    // +50% beam width, +50% range. Compounds with stacked tier-1.
+    if (this.getPowerupStacks('TRIPLE_BEAM') > 0) {
+        widthMul *= 1.5;
+        damageMul *= 2.2;
+        rangeMul *= 1.5;
+    }
+
+    this.beamCurrentWidth = config.beamWidth * widthMul;
+    this.beamDamagePerTick = config.damage * damageMul;
+    this.beamRangeMul = rangeMul;
     this.beamMaxDuration = duration;
 
     audioManager.playShoot();

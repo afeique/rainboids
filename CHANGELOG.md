@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.75.1] - 2026-05-06
+
+### Added
+- **Tier-2 weapon mastery upgrades (B1).** One capstone per primary weapon. Each is a single-stack high-cost upgrade hidden from the shop until its tier-1 prereq is at maxStacks; picking up the capstone changes the weapon's *feel*, not just its numbers.
+  - **Pulse Cannon — Twin Cannon** (4500g, requires OVERCHARGE × 4): fires two extra bullets at ±8° angles at half damage.
+  - **Storm Needles — Hailstorm** (4500g, requires NEEDLE_STORM × 4): +1 needle per shot AND every needle gets +1 piercing.
+  - **Scatter Gun — Cone of Fire** (4500g, requires BUCKSHOT × 2): +2 pellets AND every pellet pierces 1 enemy.
+  - **Rail Driver — Resonance Drive** (5000g, requires PENETRATOR × 3): rails effectively unlimited piercing (99).
+  - **Lance Beam — Overcharged Beam** (5500g, requires BEAM_WIDTH × 3): +120% beam damage, +50% width, +50% range.
+  - **Lightning Arc — Tesla Overcharge** (4500g, requires AMPLIFIER × 3): +30% arc damage, +50% chain range.
+- **Shop visibility gate** in `_buildPrimaryTabItems` reads `upg.requires.{id, stacks}` and only lists capstones once the prereq stacks are met. Late-game gold finally has somewhere meaningful to land after tier-1 saturates.
+
+---
+
 ## [5.75.0] - 2026-05-06
 
 Big balance + content rollup. Late-game HP, wave structure, powerup caps, defensive depth, mission system, streak qualitative bonus, and a few hot-path cleanups.

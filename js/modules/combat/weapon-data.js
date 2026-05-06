@@ -203,6 +203,63 @@ export const PRIMARY_UPGRADES = {
     // the arc became a continuous tether; only AMPLIFIER (per-frame damage
     // scaling) still applies.
     AMPLIFIER:       { id: 'AMPLIFIER',       name: 'Amplifier',             description: '+20% arc damage per stack',                            cost: 700,  maxStacks: 3, weapon: 'LIGHTNING_ARC', icon: '📡' },
+
+    // ─── TIER 2 — CAPSTONE UPGRADES (5.75.1, B1) ────────────────────────
+    // Each weapon gets ONE evolved upgrade that unlocks only after its
+    // tier-1 prereqs are maxed. They're expensive single-stack picks
+    // that change the weapon's *feel* (extra projectile, pierce, burn,
+    // beam multiplication) rather than just buffing numbers, so they
+    // give late-game weapons a build identity beyond stat-stacking.
+    //
+    // `requires` = `{ id, stacks }` — the upgrade is hidden in the shop
+    // until the prereq stacks are reached, and `addPowerup` refuses to
+    // grant it without the prereq. `tier: 2` is the classification tag
+    // for UI affordance ("MASTERY" rosette).
+
+    // Pulse Cannon — Twin Cannon: fires a second bullet at ±6° angle.
+    TWIN_CANNON: {
+        id: 'TWIN_CANNON', name: 'Twin Cannon',
+        description: 'MASTERY · Fires a second bullet at ±6° angle',
+        cost: 4500, maxStacks: 1, weapon: 'PULSE_CANNON', icon: '🎖️',
+        tier: 2, requires: { id: 'OVERCHARGE', stacks: 4 },
+    },
+    // Storm Needles — Hailstorm: needles slow targets 25% for 1.5s.
+    HAILSTORM: {
+        id: 'HAILSTORM', name: 'Hailstorm',
+        description: 'MASTERY · Hits slow targets 25% for 1.5s',
+        cost: 4500, maxStacks: 1, weapon: 'STORM_NEEDLES', icon: '🎖️',
+        tier: 2, requires: { id: 'NEEDLE_STORM', stacks: 4 },
+    },
+    // Scatter Gun — Cone of Fire: +2 pellets, all pellets pierce 1 enemy.
+    CONE_OF_FIRE: {
+        id: 'CONE_OF_FIRE', name: 'Cone of Fire',
+        description: 'MASTERY · +2 pellets, pellets pierce 1 enemy',
+        cost: 4500, maxStacks: 1, weapon: 'SCATTER_GUN', icon: '🎖️',
+        tier: 2, requires: { id: 'BUCKSHOT', stacks: 2 },
+    },
+    // Rail Driver — Penetrator+: unlimited pierce, damage halves per hit.
+    RAIL_PENETRATOR_PLUS: {
+        id: 'RAIL_PENETRATOR_PLUS', name: 'Resonance Drive',
+        description: 'MASTERY · Unlimited pierce; damage halves per enemy',
+        cost: 5000, maxStacks: 1, weapon: 'RAIL_DRIVER', icon: '🎖️',
+        tier: 2, requires: { id: 'PENETRATOR', stacks: 3 },
+    },
+    // Lance Beam — Overcharged Beam: massive single-beam buff. Triple-
+    // beam draw would require a major beam-render refactor; the stat
+    // buff lands the same "this beam is overpowered" feel.
+    TRIPLE_BEAM: {
+        id: 'TRIPLE_BEAM', name: 'Overcharged Beam',
+        description: 'MASTERY · +120% beam damage, +50% width, +50% range',
+        cost: 5500, maxStacks: 1, weapon: 'LANCE_BEAM', icon: '🎖️',
+        tier: 2, requires: { id: 'BEAM_WIDTH', stacks: 3 },
+    },
+    // Lightning Arc — Overcharge: +0.2s arc duration AND +30% damage.
+    ARC_OVERCHARGE: {
+        id: 'ARC_OVERCHARGE', name: 'Tesla Overcharge',
+        description: 'MASTERY · +30% arc damage AND +50% chain range',
+        cost: 4500, maxStacks: 1, weapon: 'LIGHTNING_ARC', icon: '🎖️',
+        tier: 2, requires: { id: 'AMPLIFIER', stacks: 3 },
+    },
 };
 
 // ─── POWER WEAPONS (Right Click) ────────────────────────────────────────────

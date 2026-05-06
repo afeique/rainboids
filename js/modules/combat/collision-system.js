@@ -1091,11 +1091,16 @@ export function checkLightningCollisions() {
     // ── Continuous-tether path ──
     if (p.lightningArcActive) {
         const cfg = PRIMARY_WEAPONS.LIGHTNING_ARC;
-        const range = cfg.chainRange;
+        // 5.75.1 — ARC_OVERCHARGE capstone extends chain range by 50%.
+        const overchargeStacks = p.getPowerupStacks('ARC_OVERCHARGE');
+        const rangeMul = overchargeStacks > 0 ? 1.5 : 1;
+        const range = cfg.chainRange * rangeMul;
         const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
         const TETHER_PUSH = 0.5 * knockMul;
         // Per-frame damage; tuned to match Lance Beam DPS (~2.04 dps at 60Hz).
-        const dmg = cfg.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+        // ARC_OVERCHARGE: +30% damage (multiplicative on top of AMPLIFIER).
+        const dmgBase = cfg.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+        const dmg = overchargeStacks > 0 ? dmgBase * 1.3 : dmgBase;
 
         // Find the nearest target.
         let best = null, bestKind = null, bestDist = range;

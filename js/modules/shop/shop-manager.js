@@ -193,10 +193,19 @@ export function _buildPrimaryTabItems() {
         // tab (see ui-manager.updatePrimaryTab). Switching the equipped
         // weapon there causes _rebuildShopCache to repopulate this list
         // with the new weapon's upgrades.
+        // 5.75.1 — tier-2 mastery upgrades are hidden until their prereq
+        // tier-1 upgrade is at maxStacks. Keeps the shop tidy and reveals
+        // capstones as a reward when the player invests in a build.
         const items = [];
         if (this.player && this.player.activePrimary) {
             const upgrades = getPrimaryUpgrades(this.player.activePrimary);
             for (const upg of upgrades) {
+                if (upg.requires) {
+                    const reqStacks = this.player.getPowerupStacks
+                        ? this.player.getPowerupStacks(upg.requires.id)
+                        : 0;
+                    if (reqStacks < (upg.requires.stacks || 1)) continue; // not unlocked yet
+                }
                 items.push({
                     id: upg.id,
                     name: upg.name,
