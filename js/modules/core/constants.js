@@ -32,6 +32,15 @@ export const GAME_CONFIG = {
     HEALTH_ORB_SIZE_MIN: 14, // Pixel radius for a 1-heal orb.
     HEALTH_ORB_SIZE_MAX: 24, // Pixel radius for a full-cap heal orb.
     HEALTH_ORB_MAX_HEAL_PER_ORB: 2, // Per-orb heal cap. Excess budget → more orbs at this cap.
+    // 5.79.19 — Hard cap on health orbs per single drop event (mirrors
+    //   the money orb cap added in 5.79.1). At high streak + level a
+    //   kill could spawn 30+ tiny green orbs, which both cluttered the
+    //   screen AND gave the player so much heal-on-pickup that they
+    //   were effectively invincible. With the cap, excess heal budget
+    //   collapses into fewer orbs of higher value (still capped per-orb
+    //   by HEALTH_ORB_MAX_HEAL_PER_ORB above, but the splitter
+    //   absorbs overflow into the existing orbs).
+    HEALTH_ORB_MAX_DROP_COUNT: 6,
     
     // Money Orb Configuration (renamed from money stars)
     MONEY_ORB_MONEY_AMOUNT_MIN: 10, // Minimum money gained per money orb

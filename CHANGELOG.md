@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.19] - 2026-05-06
+
+### Changed — Tighten kill-streak runaway loop
+The drop-yield multiplier compound (`hitStreakMultiplier × streakGoldMult × levelQuantityMultiplier × enemyQuantityMultiplier`) was hitting **31× baseline** at 70+ streak vs wave-15 enemies. Heal-orb spam alone made the player effectively invincible. All three streak knobs tightened, plus a hard count cap on health orbs.
+
+**Compound at 70 streak vs wave-15 enemy:**
+
+| Multiplier | Before | After |
+|---|---:|---:|
+| `hitStreakMultiplier` (drop count) | 4× | 2× |
+| `streakGoldMult` (gold rate + budget) | 2.5× | 1.4× |
+| `levelQuantityMultiplier` (entity level) | 2.4× | 2.4× |
+| `enemyQuantityMultiplier` (enemy bonus) | 1.3× | 1.3× |
+| **Total drop yield** | **31×** | **8.7×** (~3.5× tamer) |
+
+Specifics:
+- **`getHitStreakMultiplier`**: ceiling 4× → 2×. Curve gentler too (`<5`: 1× / `<15`: 1.25× / `<30`: 1.5× / `<60`: 1.75× / `60+`: 2×).
+- **`streakGoldMult`**: slope `0.06/kill → 0.025/kill`, cap `2.5× → 1.4×`. Old curve hit cap at 25 kills; new caps at ~16.
+- **New `HEALTH_ORB_MAX_DROP_COUNT = 6`** — hard cap on health orbs per drop event, mirroring the money-orb cap from 5.79.1. Excess heal budget folds into existing orbs as higher per-orb value instead of spawning a swarm of 30+ tiny ones.
+
+The streak still rewards skill — sustained kill chains still grant noticeably more loot — but the curve tops out where it stops trivializing the game.
+
+---
+
+## [5.79.18] - 2026-05-06
+
+### Changed
+- **Damage numbers coalesce crits too** (was: crits bypassed the per-target aggregator and spawned individual floaters). Scatter Shot's per-pellet crit rolls were producing 3-5 simultaneous crit numbers per shot — they piled on top of each other and became unreadable. Now ALL hits to the same target within a 1 s window merge into ONE growing number; the merged floater is marked as a crit (visual upgrade) if any of the merged hits was a crit. Player-hit floaters still stay discrete.
+- **Scatter Gun renamed to "Scatter Shot"** (display name only — internal id stays `SCATTER_GUN` for save-file back-compat).
+
+### Skipped 5.79.17 — never shipped (pulled back to 5.79.16 per user request before commit).
+
+---
+
 ## [5.79.16] - 2026-05-06
 
 XP/wave/SP balance rework — see `docs/XP_BALANCE_REWORK_5.79.md` for the full analysis.

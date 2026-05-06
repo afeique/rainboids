@@ -1095,12 +1095,18 @@ export function finalizeShotResult() {
 }
 
 export function getHitStreakMultiplier() {
-    // Higher streak = more orb drops
-    if (this.hitStreak < 5) return 1;
-    if (this.hitStreak < 10) return 1.5;
-    if (this.hitStreak < 20) return 2;
-    if (this.hitStreak < 50) return 3;
-    return 4; // Max multiplier for very high streaks
+    // Higher streak = more orb drops.
+    // 5.79.19 — Gentler curve + lower ceiling. Was 1×→1.5×→2×→3×→4×;
+    //   compounded with enemy-level (2.4× at wave 15) + enemy-only
+    //   (1.3×) + streakGoldMult (2.5×) the player got 31× baseline
+    //   drop yield at high streak/wave — runaway feedback loop where
+    //   the heal orbs alone made the player invincible. Now caps at
+    //   2× so the streak rewards skill without snowballing.
+    if (this.hitStreak < 5)  return 1;
+    if (this.hitStreak < 15) return 1.25;
+    if (this.hitStreak < 30) return 1.5;
+    if (this.hitStreak < 60) return 1.75;
+    return 2;
 }
 
 // ── Charged shot firing ────────────────────────────────────────────────────

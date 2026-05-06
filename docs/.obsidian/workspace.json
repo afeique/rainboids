@@ -171,6 +171,7 @@
   },
   "active": "d0016efdb880f49f",
   "lastOpenFiles": [
+    "PERF_RUNTIME_5.79.16.md",
     "XP_BALANCE_REWORK_5.79.md",
     "STROKE_PERF_ANALYSIS_5.79.md",
     "PERF_BOTTLENECKS_5.79.3.md",
@@ -195,7 +196,6 @@
     "ai-qa-bot-plan.md",
     "WEAPONS_PLANNING_2026-03-10.md",
     "STARFIELD_RENDERING_2026-03-08.md",
-    "SKU_deployment.md",
-    "REFACTOR.md"
+    "SKU_deployment.md"
   ]
 }

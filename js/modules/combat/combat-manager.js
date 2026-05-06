@@ -617,7 +617,13 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     //   reward curve compounds in both axes.
     const goldFindMult = this.player.getGoldFindMultiplier?.() || 1;
     const streakCount = this.killStreakCount || 0;
-    const streakGoldMult = Math.min(2.5, 1 + streakCount * 0.06);
+    // 5.79.19 — Slope 0.06/kill → 0.025/kill, cap 2.5× → 1.4×. The
+    //   old curve hit cap at 25 kills; combined with hitStreakMultiplier
+    //   (also cut to 2× ceiling) and enemy-level scaling, drop yield
+    //   at 70+ streak was 30× baseline. Now caps at ~16 kills with a
+    //   1.4× max so the streak still feels rewarding without
+    //   creating the runaway "invincible + rich" feedback loop.
+    const streakGoldMult = Math.min(1.4, 1 + streakCount * 0.025);
     const healthDropRate = Math.min(1.0, baseHealthDropRate);
     const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult * streakGoldMult);
 
@@ -651,7 +657,15 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const avgHeal = (minHeal + maxHeal) / 2;
         const healBudget = Math.max(1, Math.round(totalLegacyCount * avgHeal));
 
-        const orbValues = _splitBudgetIntoOrbs(healBudget, GAME_CONFIG.HEALTH_ORB_MAX_HEAL_PER_ORB);
+        // 5.79.19 — Hard cap on health orb count (mirrors money orbs in
+        //   5.79.1). Excess heal budget folds into the existing orbs as
+        //   higher per-orb value rather than spawning a swarm. Prevents
+        //   the "30+ tiny green orbs" runaway at high streak/level.
+        const orbValues = _splitBudgetIntoOrbs(
+            healBudget,
+            GAME_CONFIG.HEALTH_ORB_MAX_HEAL_PER_ORB,
+            GAME_CONFIG.HEALTH_ORB_MAX_DROP_COUNT,
+        );
         for (const v of orbValues) this.createHealthOrb(x, y, v);
 
         this.lastHealthOrbDropAt = now;
@@ -933,20 +947,28 @@ export function triggerPlayerHitFX(impactX, impactY, damage = 1) {
 
 export function createDamageNumber(x, y, damage, opts = {}) {
     // opts: { isCrit?: bool, isEmpowered?: bool, isPlayerHit?: bool, target? }
-    // 5.76.0 — damage numbers are now AGGREGATED per-target on a 1s
-    // window. Hit the same enemy 30 times in a second → ONE growing
-    // number instead of 30 overlapping floaters. The aggregator
-    // tracks ".damage" as a running total and updates the visible
-    // text in-place. Crits, player-hits, and one-shot floaters
-    // (asteroid death tags, mine blasts without a target) bypass the
-    // aggregator and pop fresh — those are already discrete events
-    // the player wants individually.
+    //
+    // 5.76.0 — damage numbers are AGGREGATED per-target on a 1s window
+    //   so 30 hits in a second show as ONE growing number instead of
+    //   30 overlapping floaters.
+    //
+    // 5.79.18 — Crits now also aggregate (was: crits bypassed and
+    //   spawned individual floaters). With Scatter Gun firing 5-7
+    //   pellets per shot — each independently rolling crit — the
+    //   bypass produced 3-5 simultaneous crit numbers per shot. They
+    //   pile on top of each other and become unreadable. Now crits
+    //   roll into the same per-target accumulator; the merged
+    //   floater is marked crit if ANY hit in the window was a crit
+    //   (crits are visually distinct via styling in
+    //   hud/combat.drawDamageNumbers).
+    //   Player-hit floaters still bypass — those are explicit
+    //   "you got hit" feedback the player wants discrete.
     const isCrit = !!opts.isCrit;
     const isPlayerHit = !!opts.isPlayerHit;
     const target = opts.target || null;
     const now = Date.now();
 
-    if (target && !isCrit && !isPlayerHit) {
+    if (target && !isPlayerHit) {
         if (!this._enemyDmgAggs) this._enemyDmgAggs = new Map();
         const existing = this._enemyDmgAggs.get(target);
         if (existing && existing.dmgRef && existing.dmgRef.life > 0
@@ -954,6 +976,10 @@ export function createDamageNumber(x, y, damage, opts = {}) {
             existing.dmgRef.damage += Math.round(damage);
             existing.dmgRef.x = x;
             existing.dmgRef.y = y;
+            // If any hit in the window crit, mark the merged floater
+            // as a crit so the player still sees the visual upgrade.
+            if (isCrit) existing.dmgRef.isCrit = true;
+            if (opts.isEmpowered) existing.dmgRef.isEmpowered = true;
             // Refresh life slightly so the floater sticks around for
             // a beat after the last hit lands.
             existing.dmgRef.life = Math.max(existing.dmgRef.life, 0.6);
@@ -980,7 +1006,7 @@ export function createDamageNumber(x, y, damage, opts = {}) {
 
     this.damageNumbers.push(damageNumber);
 
-    if (target && !isCrit && !isPlayerHit) {
+    if (target && !isPlayerHit) {
         this._enemyDmgAggs.set(target, {
             dmgRef: damageNumber,
             startTime: now,

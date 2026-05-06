@@ -47,8 +47,11 @@ export const PRIMARY_WEAPONS = {
         upgrades: ['NEEDLE_STORM', 'POISON_TIP', 'STATIC_CHARGE', 'SUPPRESSION', 'NEEDLE_VELOCITY'],
     },
     SCATTER_GUN: {
+        // 5.79.18 — Display name renamed Scatter Gun → Scatter Shot.
+        //   Internal id kept as SCATTER_GUN for save-file back-compat
+        //   (existing saves reference activePrimary: 'SCATTER_GUN').
         id: 'SCATTER_GUN',
-        name: 'Scatter Gun',
+        name: 'Scatter Shot',
         description: 'Shotgun burst — devastating up close',
         icon: '💥',
         color: '#ff8844',
@@ -207,7 +210,7 @@ export const PRIMARY_UPGRADES = {
     // damage scaling identical to the projectile weapons.
     PULSE_VELOCITY:  { id: 'PULSE_VELOCITY',  name: 'High-Velocity Rounds', description: '+12% bullet speed & damage per stack (Pulse Cannon)',  cost: 1500, maxStacks: 3, weapon: 'PULSE_CANNON',  icon: '🚄', velocityBonus: 0.12 },
     NEEDLE_VELOCITY: { id: 'NEEDLE_VELOCITY', name: 'Hypersonic Needles',   description: '+12% needle speed & damage per stack (Storm Needles)', cost: 1500, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: '🚄', velocityBonus: 0.12 },
-    SCATTER_VELOCITY:{ id: 'SCATTER_VELOCITY',name: 'Powder Charge',         description: '+12% pellet speed & damage per stack (Scatter Gun)',  cost: 1500, maxStacks: 3, weapon: 'SCATTER_GUN',   icon: '🚄', velocityBonus: 0.12 },
+    SCATTER_VELOCITY:{ id: 'SCATTER_VELOCITY',name: 'Powder Charge',         description: '+12% pellet speed & damage per stack (Scatter Shot)', cost: 1500, maxStacks: 3, weapon: 'SCATTER_GUN',   icon: '🚄', velocityBonus: 0.12 },
     RAIL_VELOCITY:   { id: 'RAIL_VELOCITY',   name: 'Tungsten Slug',         description: '+12% rail speed & damage per stack (Rail Driver)',    cost: 1900, maxStacks: 3, weapon: 'RAIL_DRIVER',   icon: '🚄', velocityBonus: 0.12 },
     LANCE_VELOCITY:  { id: 'LANCE_VELOCITY',  name: 'Focused Lens',          description: '+12% beam range & damage per stack (Lance Beam)',     cost: 1700, maxStacks: 3, weapon: 'LANCE_BEAM',    icon: '🚄', velocityBonus: 0.12 },
 
