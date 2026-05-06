@@ -62,35 +62,9 @@ export function setupEventListeners() {
         if (e.code === 'Tab') {
             e.preventDefault();
         }
-        // Test powerup spawn (for debugging) — pick a uniformly random
-        // point inside the visible viewport (with a small margin from
-        // the very edges so the powerup is fully visible), but reject
-        // any point too close to the player so they actually have to
-        // fly to it. Rejection sampling — simple, no edge logic.
-        if (e.code === 'KeyP' && this.game.state === GAME_STATES.PLAYING) {
-            const MARGIN = 80;       // keep the spawn at least this far from the screen edges
-            const MIN_DIST = 250;    // and at least this far from the player
-
-            const playerScreenX = this.player.x - this.camera.x;
-            const playerScreenY = this.player.y - this.camera.y;
-
-            let screenX, screenY;
-            for (let attempt = 0; attempt < 20; attempt++) {
-                screenX = random(MARGIN, this.width - MARGIN);
-                screenY = random(MARGIN, this.height - MARGIN);
-                const dx = screenX - playerScreenX;
-                const dy = screenY - playerScreenY;
-                if (Math.hypot(dx, dy) >= MIN_DIST) break; // good candidate
-                // else: too close to player, try again
-            }
-            // If 20 attempts all failed (tiny viewport), fall through with
-            // the last sample — still on-screen, just less ideal.
-
-            this.dropPowerup(
-                screenX + this.camera.x,
-                screenY + this.camera.y,
-            );
-        }
+        // 5.74.17 — P-key powerup spawn cheat removed. Powerups are now
+        // purchase-only via the POWERUPS pause-tab; ground pickups and
+        // random grants are gone, so this debug spawner has no place.
         // Solo-key cheat codes (no shift required, gameplay only).
         // [ → +1000 gold, ] → +5 SP. Quick mid-run boosts that don't
         // step on Shift+letter combos used elsewhere.

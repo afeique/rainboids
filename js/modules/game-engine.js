@@ -493,6 +493,14 @@ export class GameEngine {
 
         // Generate nebula background (pre-rendered, no per-frame cost)
         nebulaRenderer.generate(this.gameField.width, this.gameField.height);
+
+        // 5.74.20 — WebGL nebula cloud layer. Uses the new `cloud` atlas
+        // slot (soft volumetric blob with noise) added in the starfield
+        // atlas. Each cloud is just an oversized "star" instance with a
+        // huge size, low parallax, low alpha, and a saturated color tint.
+        // Drawn through the same instanced pipeline as the rest of the
+        // starfield — zero new draw calls, GPU-tiny.
+        this._populateWebGLNebula();
         
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
@@ -697,21 +705,37 @@ export class GameEngine {
         // alpha rule below additionally dampens any remaining big stars.
         const shapeSizeBump = (slotKey === 'dot') ? 1.4 : 1.5;
         const drawSize = star.radius * sizeMul * shapeSizeBump;
-        // 5.74.13 — shape stars push toward saturated palette tints (no
-        // dim damp factor) so the per-shape silhouette comes through as
-        // a colored burst rather than a pastel ghost. Dot stars keep the
-        // size-inverse alpha rule; shape stars use a higher floor since
-        // they're the *intended* nebula highlights.
+        // 5.74.19 — shape-star alpha floor lifted (0.65 → 0.95) to
+        // compensate for the BRIGHTNESS_GAIN removal in the fragment
+        // shader. Additive blend means `alpha × rgb` is the contribution,
+        // so a brighter alpha keeps the color punch without going through
+        // the rgb-clamp path that was desaturating colors. Dot stars
+        // keep their existing size-inverse damp.
         const baseAlpha = (slotKey === 'dot')
             ? this._starBrightnessForSize(drawSize)
-            : Math.max(0.65, this._starBrightnessForSize(drawSize));
-        // Boost saturation slightly toward the palette by lifting RGB
-        // channels above 0.85 toward 1 — visually reads as a brighter,
-        // more saturated tint without changing hue.
-        const sat = (slotKey === 'dot') ? 1.0 : 1.15;
-        const r = Math.min(1, rgba[0] * sat);
-        const g = Math.min(1, rgba[1] * sat);
-        const b = Math.min(1, rgba[2] * sat);
+            : Math.max(0.95, this._starBrightnessForSize(drawSize));
+        // Aggressive saturation boost for shape stars: subtract 75% of the
+        // min channel (kills the gray "white component" baked into pastel
+        // palette entries), then normalize to max-channel = 1. A pastel
+        // like #a6b3ff (0.65, 0.70, 1.0) → after desat (0.16, 0.21, 0.51)
+        // → after norm (0.31, 0.41, 1.0) — much more clearly BLUE. Pure
+        // colors stay pure: (1, 0, 0) → (0.75, 0, 0) → (1, 0, 0). Only
+        // shape stars get this; dot stars (the bulk of the field) stay
+        // in their muted natural palette so the field still reads like
+        // a starscape, not a rave.
+        let r = rgba[0], g = rgba[1], b = rgba[2];
+        if (slotKey !== 'dot') {
+            const minCh = Math.min(r, g, b);
+            const desat = minCh * 0.75;
+            r = Math.max(0, r - desat);
+            g = Math.max(0, g - desat);
+            b = Math.max(0, b - desat);
+            const maxCh = Math.max(r, g, b, 0.001);
+            const norm = 1 / maxCh;
+            r = Math.min(1, r * norm);
+            g = Math.min(1, g * norm);
+            b = Math.min(1, b * norm);
+        }
         const ok = this.starfieldRenderer.addStar(
             star.x, star.y,
             parallax,
@@ -725,6 +749,50 @@ export class GameEngine {
             (star.rotationSpeed || 0) * 60,
         );
         if (ok) star._inWebGL = true;
+    }
+
+    // 5.74.20 — populate the WebGL nebula cloud layer. ~16 clouds spread
+    // across the field, each a huge soft blob (300-700 px radius) with a
+    // saturated nebula tint and very low parallax. Slot 8 (`cloud`) of
+    // the starfield atlas is a wide gaussian + noise blob, so even a
+    // single texture renders as a varied volumetric haze. Drawn via the
+    // same instanced pipeline as stars — no new draw calls.
+    _populateWebGLNebula() {
+        if (!this.starfieldRenderer.supported) return;
+        const cloudSlot = 8; // STAR_SLOT_INDEX.cloud
+        const NUM = 16;
+        // Saturated nebula palette — same family as the lens-flare accents
+        // but applied across the volume so nebula tints layer the field.
+        const tints = [
+            [0.20, 0.50, 1.00], [0.60, 0.30, 1.00], [1.00, 0.30, 0.85],
+            [1.00, 0.45, 0.20], [0.30, 1.00, 0.80], [1.00, 0.85, 0.40],
+            [0.40, 0.80, 1.00], [0.95, 0.50, 1.00], [0.30, 1.00, 0.50],
+            [1.00, 0.55, 0.70],
+        ];
+        for (let i = 0; i < NUM; i++) {
+            const x = Math.random() * this.gameField.width;
+            const y = Math.random() * this.gameField.height;
+            // Massive size — these are background haze, not foreground objects.
+            const size = 300 + Math.random() * 400;
+            // Very low parallax so clouds drift slowly relative to camera.
+            const parallax = 0.02 + Math.random() * 0.05;
+            const tint = tints[(Math.random() * tints.length) | 0];
+            // Low alpha (0.10–0.20) — additive blend stacks them, two
+            // overlapping clouds produce a brighter mixed-hue patch.
+            const alpha = 0.10 + Math.random() * 0.10;
+            // Slow twinkle — almost imperceptible breathing.
+            const twinkleSpeed = 0.05 + Math.random() * 0.10;
+            const twinkleAmp = 0.10;
+            const twinklePhase = Math.random() * Math.PI * 2;
+            const baseAngle = Math.random() * Math.PI * 2;
+            const rotRate = (Math.random() - 0.5) * 0.005;
+            this.starfieldRenderer.addStar(
+                x, y, parallax, size,
+                tint[0], tint[1], tint[2], alpha,
+                twinklePhase, twinkleSpeed, twinkleAmp,
+                cloudSlot, baseAngle, rotRate,
+            );
+        }
     }
 
     /**
@@ -919,19 +987,11 @@ export class GameEngine {
 
     drawTargetInfo() { return hudCombat.drawTargetInfo.call(this); }
 
-    // Reset the kill streak + clear any active damage buff. Called from the
-    // three player-damage paths (lifecycle.takeDamage, player↔enemy
-    // collision, player↔enemy-bullet collision) whenever HP actually drops
-    // — Phase Dash invuln zeros damage at the source so this never fires
-    // during a successful dash.
-    _breakKillStreak() {
-        this.killStreakCount = 0;
-        if (this.player) {
-            this.player.streakDamageMult = 1;
-            this.player.streakTierLabel = null;
-            this.player.streakBuffEndTime = 0;
-        }
-    }
+    // 5.74.18 — taking damage no longer resets the kill streak. The
+    // existing damage-path callsites still call this for back-compat
+    // but it's now a no-op. Streak now decays only on a 30s no-kill
+    // timeout (see combat-manager.updateKillStreak).
+    _breakKillStreak() { /* intentional no-op — see comment above */ }
 
     // Snapshot the most recently hit target so the top-center info panel
     // can keep rendering for a grace period after the entity dies / the
@@ -1733,6 +1793,7 @@ export class GameEngine {
         this.generateInitialColorStars();
         this.generateBackgroundStars();
         nebulaRenderer.generate(this.gameField.width, this.gameField.height);
+        this._populateWebGLNebula();
         // Center the camera in the gameField so the title screen view is
         // anchored on the playable area's middle (no out-of-field artifacts).
         this.camera.x = (this.gameField.width  - this.width)  / 2;

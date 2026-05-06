@@ -782,20 +782,37 @@ export function onEnemyKill(enemy) {
         100: 'CENTURION', 200: 'DESTROYER', 500: 'ANNIHILATOR' };
     if (milestones[this.killCount]) {
         this.queueNotification(milestones[this.killCount],
-            `${this.killCount} enemies destroyed`, 2500);
+            `${this.killCount} targets destroyed`, 2500);
     }
 }
 
+// 5.74.18 — kill-streak now decays on inactivity rather than on damage.
+// If no kill / asteroid destruction lands within STREAK_IDLE_TIMEOUT_MS
+// the count resets to zero and the buff clears. Damage paths still call
+// `_breakKillStreak()` for back-compat but the engine implementation is
+// now a no-op.
+const STREAK_IDLE_TIMEOUT_MS = 10000;
+
 export function updateKillStreak() {
     const now = Date.now();
-    // Streak buff decays after STREAK_BUFF_DURATION ms with no fresh kill.
-    // The streak COUNT itself does NOT decay — it only resets on damage
-    // (see _breakKillStreak in game-engine.js, hooked from the player damage
-    // paths in lifecycle.js + collision-system.js).
+    // Streak buff (the damage multiplier) decays after STREAK_BUFF_DURATION
+    // ms with no fresh kill — independent shorter window for the *buff*
+    // versus the *count*. Count survives until the 30s idle timeout below.
     if (this.player && this.player.streakDamageMult > 1 &&
         now > this.player.streakBuffEndTime) {
         this.player.streakDamageMult = 1;
         this.player.streakTierLabel = null;
+    }
+
+    // Idle reset: 30s with no kill / asteroid destroy zeroes the count.
+    if (this.killStreakCount > 0 && this.killStreakTimer &&
+        now - this.killStreakTimer > STREAK_IDLE_TIMEOUT_MS) {
+        this.killStreakCount = 0;
+        if (this.player) {
+            this.player.streakDamageMult = 1;
+            this.player.streakTierLabel = null;
+            this.player.streakBuffEndTime = 0;
+        }
     }
 }
 

@@ -914,7 +914,11 @@ export function drawSpawnTimer() {
 export function drawStreakIndicator() {
     if (!this.player) return;
     const k = this.killStreakCount || 0;
-    if (k < WEAPON_DATA_STREAK_TIERS[0].kills) return; // need at least the first tier's threshold
+    // 5.74.23 — show indicator from the FIRST kill, not the first tier
+    // threshold. The idle-countdown bar (added below) is the primary
+    // motivator: the player needs to see how long they have to land
+    // their next kill or the streak resets.
+    if (k < 1) return;
 
     const ctx = this.ctx;
     const player = this.player;
@@ -927,16 +931,21 @@ export function drawStreakIndicator() {
             currentIdx = i;
         }
     }
-    if (!currentTier) return;
-    const nextTier = tiers[currentIdx + 1] || null;
+    // Below the first tier (1-2 kills): no tier yet but we still show
+    // the count + idle bar. `currentTier` stays null → use a neutral
+    // pre-tier color/label below.
+    const nextTier = currentTier ? (tiers[currentIdx + 1] || null) : tiers[0];
 
     const buffActive = player.streakDamageMult > 1;
     // Fade-out only applies to the active-buff display, not the SAVED state.
     const remaining = Math.max(0, player.streakBuffEndTime - Date.now());
-    const fadeAlpha = buffActive ? Math.min(1, remaining / 600) : 0.55;
+    const fadeAlpha = buffActive ? Math.min(1, remaining / 600) : 0.85;
 
-    // Color: tier color when active, dim grey-white when SAVED.
-    const tierColor = buffActive ? currentTier.color : '#BBBBBB';
+    // Color: tier color when active, dim grey-white when SAVED, neutral
+    // cyan when below the first tier (1-2 kills, no buff yet).
+    const tierColor = buffActive
+        ? currentTier.color
+        : (currentTier ? '#BBBBBB' : '#7FE7FF');
 
     // 5.72.1 — center-anchored, but raised to clear the bottom-middle
     // pause + shop buttons (which sit at bottom: 16px). Streak block
@@ -965,11 +974,13 @@ export function drawStreakIndicator() {
     ctx.strokeText(streakText, x, y);
     ctx.fillText(streakText, x, y);
 
-    // Tier label OR "SAVED" when buff faded
+    // Tier label OR "SAVED" when buff faded OR neutral hint pre-tier.
     ctx.font = "bold 12px 'Press Start 2P', monospace";
     ctx.shadowBlur = buffActive ? 6 : 0;
     ctx.fillStyle = tierColor;
-    const labelText = buffActive ? currentTier.label : 'SAVED';
+    const labelText = buffActive
+        ? currentTier.label
+        : (currentTier ? 'SAVED' : 'STREAK');
     ctx.strokeText(labelText, x, y + 26);
     ctx.fillText(labelText, x, y + 26);
 
@@ -1019,7 +1030,7 @@ export function drawStreakIndicator() {
             ctx.strokeText('▲ MAX TIER', x, barY + 12);
             ctx.fillText('▲ MAX TIER', x, barY + 12);
         }
-    } else {
+    } else if (currentTier) {
         // SAVED state — show small note that next kill re-arms buff at the
         // appropriate tier, no progress bar (the streak number IS the
         // progress).
@@ -1031,6 +1042,41 @@ export function drawStreakIndicator() {
         const reArmText = `▶ KILL TO RE-ARM`;
         ctx.strokeText(reArmText, x, y + 44);
         ctx.fillText(reArmText, x, y + 44);
+    }
+
+    // 5.74.23 — idle-countdown bar, always visible while killStreakCount > 0.
+    // Drains over the 10s STREAK_IDLE_TIMEOUT_MS window (refilled to full
+    // on each kill). Drains red as the streak nears reset so the player
+    // sees urgency.
+    {
+        const STREAK_IDLE_MS = 10000;
+        const elapsed = Math.max(0, Date.now() - (this.killStreakTimer || 0));
+        const remainingFrac = Math.max(0, 1 - elapsed / STREAK_IDLE_MS);
+        const idleBarW = 160, idleBarH = 5;
+        const idleBarX = x - idleBarW / 2;
+        const idleBarY = y + (buffActive ? 78 : 44);
+        // Track
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(idleBarX, idleBarY, idleBarW, idleBarH);
+        // Fill — green at full, fades to red as it drains.
+        const fillR = Math.round(255 * (1 - remainingFrac));
+        const fillG = Math.round(220 * remainingFrac);
+        ctx.fillStyle = `rgb(${fillR}, ${fillG}, 80)`;
+        ctx.fillRect(idleBarX, idleBarY, Math.round(idleBarW * remainingFrac), idleBarH);
+        // Border
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(idleBarX + 0.5, idleBarY + 0.5, idleBarW - 1, idleBarH - 1);
+        // Tiny label below the bar
+        ctx.font = "8px 'Press Start 2P', monospace";
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.lineWidth = 2;
+        const secLeft = (Math.max(0, STREAK_IDLE_MS - elapsed) / 1000).toFixed(1);
+        const idleLabel = `${secLeft}s`;
+        ctx.strokeText(idleLabel, x, idleBarY + 12);
+        ctx.fillText(idleLabel, x, idleBarY + 12);
     }
 
     ctx.restore();

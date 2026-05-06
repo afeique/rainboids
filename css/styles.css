@@ -1747,14 +1747,25 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     background: rgba(0, 200, 255, 0.3);
 }
 
-/* Powerup HUD - persistent DOM overlay above survival timer */
+/* 5.74.17 — Powerup HUD moved from bottom-left to a vertical column
+   anchored to the top-RIGHT corner. First column starts at the top-
+   right and fills downward; when it overflows the available height,
+   `flex-wrap: wrap-reverse` opens additional columns to the LEFT of
+   the previous one (the rightmost column is always the "newest" one).
+   `bottom: 110px` reserves clearance for the bottom-right gold readout
+   (canvas y = height-76) and survival timer (canvas y = height-40)
+   plus a small buffer, so icons never collide with either readout. */
 #powerup-hud {
-    bottom: 62px;
-    left: 20px;
+    top: 20px;
+    right: 20px;
+    bottom: 110px;
     display: flex;
+    flex-direction: column;
+    flex-wrap: wrap-reverse;
+    align-content: flex-start;
+    align-items: center;
     gap: 10px;
     pointer-events: none;
-    align-items: flex-end;
 }
 
 .powerup-hud-item {

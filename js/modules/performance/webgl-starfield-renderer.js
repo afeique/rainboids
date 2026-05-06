@@ -94,12 +94,21 @@ void main() {
     float slotW = 1.0 / u_atlasSlots;
     v_uv = vec2(slotU + a_quadUV.x * slotW, a_quadUV.y);
 
-    // 5.64.17 — peak-frame color shift toward hot white. At dim trough
-    // (wave=0) the star renders in its native palette color; at bright
-    // peak (wave=1) it shifts ~25% toward white, giving the impression
-    // of a "hot flash" at peak — extra dynamism beyond pure alpha pulse.
-    vec3 hotShift = mix(a_color.rgb, vec3(1.0), wave * 0.25);
-    v_color = vec4(hotShift, a_color.a * twink);
+    // 5.74.26 — flicker layer applies to STARS ONLY, not nebula clouds.
+    // Slot 8 is the cloud blob; isCloud=1 disables flicker AND zeroes
+    // the twinkle amplitude so clouds render with their static base
+    // alpha. (Flickering haze across the whole sky is distracting; the
+    // hard 5 Hz peaks were turning oversized cloud quads into a strobe.)
+    float isCloud = step(7.5, a_shape);
+    float flickPhase = u_time * 5.0 + a_twinklePhase * 7.0;
+    float flickPeak = pow(0.5 + 0.5 * sin(flickPhase), 8.0);
+    float flickerAlpha = mix(1.0 - flickPeak * 0.45, 1.0, isCloud);
+    float twinkAdj = mix(twink, 1.0, isCloud);
+
+    // Hot-shift removed (5.74.19). Pass palette color through unchanged;
+    // saturation preserved across the pulse. Brightness dynamism is
+    // alpha (twinkle × flicker) for stars; clouds stay rock-steady.
+    v_color = vec4(a_color.rgb, a_color.a * twinkAdj * flickerAlpha);
 }
 `;
 
@@ -115,35 +124,44 @@ in vec2 v_quadUV;     // 5.74.13 — local 0..1 UV across the whole quad,
 uniform sampler2D u_atlas;
 out vec4 fragColor;
 
-// 5.74.15 — gain rebalanced 1.6 → 1.3 on the shape, halo masked outside
-// the silhouette. Old code summed shape * 1.6 + halo * 1.6 then clamped,
-// which pushed every channel of saturated colors past 1.0 → all stars
-// looked white. Now the shape is gained (keeps the bright pulse) but
-// the halo only fills the empty area around the silhouette, so the
-// outer ring of every star carries the full-saturation hue.
-const float BRIGHTNESS_GAIN = 1.3;
-
+// 5.74.19 — gain on RGB removed entirely. With additive blending
+// (SRC_ALPHA, ONE) the visible contribution per pixel is alpha * rgb,
+// so the OLD rgb *= 1.3 then clamp(..,0,1) path desaturated any color
+// with two channels near max -- #ffd75c (1.0, 0.84, 0.36) was becoming
+// (1.0, 1.0, 0.47) post-clamp, i.e. yellow-gold turned into pale lemon.
+// Now we keep RGB at full palette saturation and drive brightness
+// through alpha alone. To compensate for losing the 1.3x gain, alpha
+// is bumped (halo x 0.9) so stars are still as bright as before but
+// their hue stays vivid.
 void main() {
     vec4 tex = texture(u_atlas, v_uv);
 
     // Radial glow halo — distance from quad center.
     vec2 q = v_quadUV - 0.5;
-    float dist = length(q) * 2.0;            // 0 at center, 1 at edge
+    float dist = length(q) * 2.0;
     float halo = 1.0 - smoothstep(0.0, 1.0, dist);
-    halo *= halo;                            // tighter core
+    halo *= halo;
 
-    // Shape: atlas silhouette × color × gain. Keeps the bright pulse the
-    // old code had so dot stars still pop.
-    vec3 shapeRGB = tex.rgb * v_color.rgb * BRIGHTNESS_GAIN;
+    // Shape: atlas silhouette × palette color (NO gain — preserves hue).
+    vec3 shapeRGB = tex.rgb * v_color.rgb;
 
-    // Halo: only fills where the atlas is transparent (1 - tex.a). Without
-    // this mask, halo stacks onto silhouette pixels that are already
-    // bright, clamping them toward white and washing out the hue.
+    // Halo: fills only where the atlas is transparent so it never stacks
+    // on top of the silhouette and clamps toward white.
     float haloMask = (1.0 - tex.a) * halo;
-    vec3 haloRGB  = v_color.rgb * haloMask * 0.85;
+    vec3 haloRGB = v_color.rgb * haloMask;
 
     vec3 rgb = clamp(shapeRGB + haloRGB, 0.0, 1.0);
-    float a = clamp(tex.a + haloMask * 0.5, 0.0, 1.0) * v_color.a;
+    float a = clamp(tex.a + haloMask * 0.9, 0.0, 1.0) * v_color.a;
+
+    // 5.74.24 — CRT-style scanlines on the WebGL starfield/nebula layer
+    // ONLY. The foreground action (gameCanvas) sits on top of glCanvas
+    // and is unaffected. gl_FragCoord.y is in framebuffer pixels, so
+    // every other row is darkened producing a fine horizontal banding.
+    // Scanline period is tuned to ~1px tall lines (Hz = pixel-row rate)
+    // — visible at native, gentle enough not to compete with the action.
+    float scan = 0.78 + 0.22 * sin(gl_FragCoord.y * 3.14159);
+    rgb *= scan;
+
     fragColor = vec4(rgb, a);
 }
 `;

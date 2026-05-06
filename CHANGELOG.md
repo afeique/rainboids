@@ -11,6 +11,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.74.27] - 2026-05-05
+
+### Fixed
+- **Lens-flare stars perceptible again.** Previous trim pass (5.74.23: counts 14, core 0.7-2.0px) plus the per-star animation amplitudes from 5.74.25 (twinkle 0.20-0.40, slide 0.15-0.30, blink dip 0.45) combined to a worst-case alpha of ~0.23 on already-tiny sprites — visually the stars dipped below perception and read as "missing." Three coordinated tweaks:
+  - **Counts bumped 14 → 25 total** (4/5/7/9 per layer). Camera parallax leaves roughly half off-screen at any time; 25 total → ~12 visible at once instead of ~7.
+  - **Sizes bumped:** core `0.7-2.0` → `1.4-2.8` px, halo `5-10×` → `7-14×` core, spike `0.7-1.1×` → `1.0-1.5×` halo. Brightness floor `0.7` → `0.85`. Dimmest layer luminance `0.55` → `0.70` so deepest stars still have presence.
+  - **Animation amps reduced** so the combined runtime alpha never dips far enough to hide a star: twinkleAmp `0.20-0.40` → `0.10-0.20`, slideAmp `0.15-0.30` → `0.08-0.18`, blink dip `0.45` → `0.30`. Worst-case alpha now ~0.50 (was 0.23). Twinkle/blink/slide still visible — just no longer self-obliterating.
+
+---
+
+## [5.74.26] - 2026-05-05
+
+### Fixed
+- **Lens-flare stars were drawing way off-screen.** The 5.74.25 per-star refactor flipped the parallax offset sign — stars were drawn at `star.x − cameraX × (1 − depth)` but the canvas was already pre-translated by `−cameraX`, which combined to `screen = star.x − cameraX × (2 − depth)` instead of the intended `screen = star.x − cameraX × depth`. Stars rendered at huge negative screen coords and never appeared. Sign corrected to `+ camOffX`, matching the original layer-canvas formula.
+- **Nebula clouds no longer flicker or twinkle.** The 5.74.24 flicker layer was applying to every WebGL instance, including the oversized cloud quads — which turned the entire haze layer into a 5 Hz strobe. Vertex shader now `step(7.5, a_shape)` gates flicker + twinkle to slot 0–7 (stars only); slot 8 (cloud) renders with its static base alpha. Clouds are background atmosphere; they should drift, not pulse.
+
+---
+
+## [5.74.25] - 2026-05-05
+
+### Changed
+- **Lens-flare stars now rotate, twinkle, blink, and opacity-slide.** Refactored `nebula-renderer.js` from baked-per-layer canvases to per-star sprites + per-frame draw. Each lens-flare star is pre-rendered once into its own small offscreen sprite (halo + 4-arm cross spikes + 45° cross + saturated core + white-hot center), then per frame drawn with:
+  - **Rotation** — `random(0.1, 0.4)` rad/s with a sign coin-flip, accumulated against `performance.now()`. Half spin CW, half CCW; the per-layer scene rotation (used by the title screen) still adds on top.
+  - **Twinkle** — slow smooth sine, 0.7–1.6 rad/s, amplitude 0.20–0.40, per-star phase. Same shape as the WebGL field's twinkle.
+  - **Blink** — fixed 5 Hz layer with `pow(sin, 8)` peaks (sharp on/off), per-star phase derived independently. Dips alpha by up to 45% briefly per cycle.
+  - **Opacity slide** — very slow sine (0.08–0.20 rad/s, ~30–80s period) with 15–30% amplitude. Long-period brightness drift on top of the fast twinkle so the field feels alive even between blinks.
+  - Final `alpha = twinkle × blink × slide`. Cost is ~14 `drawImage`/frame for the whole nebula layer — negligible. Legacy `_drawLensFlareStars` removed.
+
+---
+
+## [5.74.24] - 2026-05-05
+
+### Added
+- **Scanlines on the WebGL starfield/nebula layer.** Fragment shader multiplies RGB by `0.78 + 0.22 * sin(gl_FragCoord.y * π)` — every other framebuffer row is dimmed by ~22%, producing fine 1-pixel horizontal banding reminiscent of a CRT. Applied at the shader level so it only affects the WebGL star/nebula draws on `glCanvas`. The foreground action (entities, bullets, particles, HUD) renders on `gameCanvas` which sits on top — completely unaffected.
+- **Global flicker layer on top of per-star twinkle.** New uniform 5 Hz blink across all stars, with per-star phase derived from `a_twinklePhase * 7.0` so stars stutter independently rather than blinking in unison. Power-shaped peaks (`pow(sin, 8)`) give stuttery on/off character; flicker alpha dips to ~0.55 briefly at each peak so stars never go fully dark. Multiplies onto the existing smooth twinkle, so the field reads as "real" twinkling rather than a pure sine-wave breath.
+
+---
+
+## [5.74.23] - 2026-05-05
+
+### Changed
+- **Lens-flare stars rarer + smaller.** Counts cut again `2/3/4/5` per layer (was `3/4/6/8`), totalling ~14 across the field. Core size `1.2–3.4` → `0.7–2.0` px, halo radius `8–18×` → `5–10×` core, spike length `1.0–1.6×` → `0.7–1.1×` halo. Each flare now reads as a precise pinpoint rather than a sprawling glare; the field has fewer "wow" stars but each one earns its place.
+- **Kill-streak indicator now shows after every kill, with an idle countdown bar.** Was previously hidden until 3 kills (the first tier threshold). Now `drawStreakIndicator` shows from kill #1 with a "STREAK" label pre-tier, and adds an always-visible 10s drain bar (green→red gradient as it drains) plus a numeric "X.Xs" countdown so the player can see exactly how much time they have to land their next kill before the streak resets. The bar refills to full on every kill / asteroid destroy.
+
+---
+
+## [5.74.22] - 2026-05-05
+
+### Added
+- **3D shape stars: cube, octahedron, tetrahedron, prism.** Four new atlas slots (9–12) added to `webgl-starfield-atlas.js`. Each is a filled silhouette (full-alpha white) plus internal edges stroked at 45% alpha black so the shape reads as a dimensional solid against the silhouette tint. Cube uses the classic isometric "Y" projection (hex outline + 3 internal edges meeting at center). Octahedron is a vertical diamond with an equator line. Tetrahedron is a pointed-up triangle with internal edges to a centroid pulled slightly down for depth. Prism is an isometric box with slanted top edges. Added to the big-star shape pool in `ColorStar.reset` so they spawn naturally alongside the 2D `star4`/`star5`/`hexagon`/etc.
+
+### Changed
+- **Star rotation guaranteed bidirectional + minimum visible magnitude.** The old `random(-0.02, 0.02)` was uniform — half the stars ended up with `|rotationSpeed| ≈ 0` and looked statically oriented, and the few with appreciable speed happened to skew positive often enough that the field "looked like it rotated one way." New: explicit sign coin-flip × `random(0.008, 0.030)`, so every shape star visibly spins, half CW and half CCW. Initial rotation is also randomized so multiple stars of the same shape don't all line up at spawn.
+
+---
+
+## [5.74.21] - 2026-05-05
+
+### Changed
+- **Kill-streak idle timeout 30s → 10s.** Streak now needs a kill (enemy or asteroid) every 10 seconds to keep going, not 30. Tighter window keeps streak buffs feeling earned and active rather than passively maintained.
+- **Lens-flare star counts cut roughly in half** across all four parallax layers (6/9/12/16 → 3/4/6/8). With the brighter, more saturated 5.74.20 render recipe each flare carries more visual weight, so fewer of them reads cleaner — they're punctuation, not wallpaper.
+
+---
+
+## [5.74.20] - 2026-05-05
+
+### Added
+- **WebGL nebula cloud layer.** Atlas extended to 9 slots — slot 8 is a `cloud` blob (wide gaussian × bilinear-interpolated 8×8 noise lattice) baked once at startup. `_populateWebGLNebula` spawns ~16 oversized "star" instances with size 300–700 px, parallax 0.02–0.07, alpha 0.10–0.20, slow rotation, and saturated nebula tints (cobalt / violet / magenta / amber / emerald / gold / etc.). They render through the existing instanced starfield pipeline — zero new draw calls, GPU cost rounds to nothing. Additive blend stacks overlapping clouds into mixed-hue patches.
+
+### Changed
+- **Lens-flare stars dramatically more vibrant.** Three-pronged change in `nebula-renderer.js`:
+  - **Palettes overhauled.** Each palette now defines 5 fully-saturated accents from a hue family (was 3 desaturated); two new palettes added (`aurora`, `sunset`); 12 palettes total. The neutral "default star" tone shifted from `(220, 230, 255)` to `(240, 245, 255)` so neutral stars also pop.
+  - **Accent rate flipped 30% → 70%.** Lens-flare stars are *meant* to be the colorful accents of the field, not sparse sprinkles. Most flares are now palette-tinted; only 30% are hot blue-white.
+  - **Render recipe pumped.** Brightness floor 0.5 → 0.7. Core 0.8–2.4 → 1.2–3.4 px. Halo radius 6–14× → 8–18× core. Halo gradient hotter inner stop (`0.7 → 0.95` at center). Spike width bumped, spike falloff slower. Added a 45°-rotated cross-spike at 55% length for extra brilliance. White-hot center pixel now appears on every star (was only `brightness > 0.85`) at 32% of core size, so the saturated tint dominates while every flare still gets a hot pinpoint.
+
+---
+
+## [5.74.19] - 2026-05-05
+
+### Fixed
+- **Shape stars: actually vibrant now.** Three things were silently desaturating colors:
+  - **Fragment shader was multiplying RGB by `BRIGHTNESS_GAIN = 1.3` then clamping to [0,1].** A palette color like `#ffd75c` (1.0, 0.84, 0.36) became (1.3, 1.09, 0.47) and clamped to (1.0, 1.0, 0.47) — yellow-gold turned to pale lemon because the two highest channels both saturated. Removed the gain entirely; brightness now comes from alpha (additive blend `SRC_ALPHA, ONE` already multiplies contribution by alpha, so a fully-saturated RGB at alpha=1 contributes its pure hue without any clamp-induced desaturation). Halo alpha bumped 0.5 → 0.9 to compensate for the lost gain.
+  - **Vertex shader hot-shifted color toward white at the bright twinkle peak** (`mix(color, vec3(1.0), wave * 0.25)`). Removed — peaks are now where color is *most* visible, not where it washes out.
+  - **JS-side now applies an aggressive desaturation-to-saturation pass** for shape stars: subtracts 75% of the min channel (kills the gray "white component" baked into pastel palette entries) then normalizes max-channel to 1.0. `#a6b3ff` (0.65, 0.70, 1.0) now becomes (0.31, 0.41, 1.0) — visibly *blue* instead of lavender pastel. Pure colors like (1, 0, 0) stay pure. Shape-star alpha floor lifted 0.65 → 0.95 so the saturated hue is also as bright as possible. Dot stars (the bulk of the field) still use their natural palette + size-inverse damp, so the field reads like a starscape, not a rave.
+
+---
+
+## [5.74.18] - 2026-05-05
+
+### Changed
+- **Kill streak no longer resets on damage; resets on 30s of inactivity instead.** Previously every player-damage path (`lifecycle.takeDamage`, player↔enemy collision, player↔enemy-bullet collision) called `_breakKillStreak()`, zeroing the count + clearing the streak buff the moment HP dropped. The streak buff payoff was effectively unreachable because most builds take chip damage. Now: `_breakKillStreak()` is a no-op (existing damage callsites preserved for back-compat), and `combat-manager.updateKillStreak` checks `now - killStreakTimer > 30000` each tick and resets the count + buff on idle. Buff window (`STREAK_BUFF_DURATION`) still independently expires for the damage-multiplier portion.
+- **Asteroids now count toward the kill streak.** `destroyAsteroid` in `collision-system.js` calls `onEnemyKill(asteroid)` so asteroid kills increment `killStreakCount` + `killCount` and refresh the streak idle timer alongside enemy kills. Streak tier buffs work uniformly across both target types. Milestone notification copy updated from "enemies destroyed" → "targets destroyed".
+
+---
+
+## [5.74.17] - 2026-05-05
+
+### Removed
+- **Random "free" powerup grant on level-up.** `progression.grantLevelUpBonus` was awarding 2 random temporary stacks (45s) from a pool that included MULTI_SHOT, RAPID_FIRE, HOMING, BIG_BULLETS, etc. — which is why MULTI was randomly appearing without any pickup or purchase. Build determinism is back: level-up still grants `+1 SP` and `+1 powerup pick`, but no stealth stacks. `lastLevelUpBonus` now resolves to an empty array so any UI that reads it stays safe.
+- **`P` cheat key (debug powerup spawn) removed.** Powerups are purchase-only via the POWERUPS pause-tab — this debug spawner has no place now that ground pickups and random grants are gone.
+
+### Changed
+- **Powerup HUD relocated from bottom-left to top-right vertical column.** `#powerup-hud` CSS rewritten to anchor at `top: 20px; right: 20px; bottom: 110px` with `flex-direction: column; flex-wrap: wrap-reverse`. First column starts at the top-right corner and fills downward; when full, additional columns open to the LEFT of the previous one (rightmost column = newest, build grows leftward). The 110px bottom reserve clears the bottom-right gold readout (`canvas.height - 76`) and survival timer (`canvas.height - 40`) plus a buffer, so powerup icons never overlap either readout regardless of how many stacks are active.
+
+---
+
+## [5.74.16] - 2026-05-05
+
+### Changed
+- **Purchased powerup cards now use a single bright-blue accent border** (`#00ccff` + soft cyan glow) instead of the per-powerup `cfg.color`. The rainbow-of-borders pattern from 5.74.15 was visually noisy across the strip; a uniform cyan reads cleanly as "purchased" without competing for attention.
+
+---
+
 ## [5.74.15] - 2026-05-05
 
 ### Fixed

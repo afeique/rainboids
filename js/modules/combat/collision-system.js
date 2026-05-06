@@ -1370,6 +1370,11 @@ export function destroyAsteroid(ast) {
     const isLarge = ast.baseRadius > (GAME_CONFIG.MIN_AST_RAD + 5);
 
     if (this.game.stats) this.game.stats.asteroidsDestroyed++;
+    // 5.74.18 — asteroids now feed the kill streak counter alongside enemy
+    // kills. Routes through onEnemyKill (which doesn't reference the type
+    // beyond the milestone notification), so streak tier buffs and idle
+    // timeout work uniformly across both target types.
+    if (typeof this.onEnemyKill === 'function') this.onEnemyKill(ast);
     ast._deathFlash = 6;
     ast._deathFlashMax = 6;
     if (onScreen) {

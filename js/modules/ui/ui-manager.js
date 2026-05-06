@@ -671,15 +671,13 @@ export class UIManager {
 
             const card = document.createElement('div');
             card.className = 'powerup-card' + (owned ? ' powerup-card--owned' : ' powerup-card--locked');
-            // 5.74.15 — owned cards inline the powerup's own color as the
-            // accent border (mirrors the POWER pause-tab weapon row's
-            // EQUIPPED treatment in `_buildWeaponRow`). The `--owned`
-            // class gives the lighter background; the inline border
-            // gives each owned powerup a vibrant identity-colored frame
-            // so it reads at a glance as "purchased".
-            if (owned && cfg.color) {
-                card.style.borderColor = cfg.color;
-                card.style.boxShadow = `0 0 12px ${cfg.color}40`;
+            // 5.74.16 — owned cards use a single bright-blue accent
+            // (was cfg.color per-powerup, which made the strip look
+            // chaotic with rainbow borders). Fixed cyan-blue plus a
+            // soft glow reads as a clean uniform "purchased" frame.
+            if (owned) {
+                card.style.borderColor = '#00ccff';
+                card.style.boxShadow = '0 0 14px rgba(0, 204, 255, 0.45)';
             }
             if (picks > 0) {
                 card.classList.add('powerup-card--interactive');

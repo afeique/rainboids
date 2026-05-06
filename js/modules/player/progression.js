@@ -37,8 +37,13 @@ export function levelUp() {
         this.health = Math.min(this.health + 5, this.maxHealth);
     }
 
-    // Grant a random temporary bonus pair on level up
-    this.lastLevelUpBonus = this.grantLevelUpBonus();
+    // 5.74.17 — random temporary bonus pair removed. Players reported
+    // randomly being granted a MULTI (or other) powerup without any
+    // pickup or purchase, which broke the build-determinism the shop
+    // and POWERUPS pause-tab provide. Level-up still grants +1 SP and
+    // +1 powerup pick (deliberate, communicated rewards). Empty array
+    // preserves the field for any UI that reads it.
+    this.lastLevelUpBonus = [];
 
     // Trigger level up effects
     this.triggerLevelUpEffects();

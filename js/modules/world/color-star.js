@@ -46,7 +46,17 @@ export class ColorStar {
             this.shape = 'point';
             this.isBigStar = false;
         } else if (isBigStar) {
-            const interestingShapes = ['star4', 'star5', 'star6', 'star8', 'hexagon', 'diamond', 'triangle', 'sparkle', 'burst'];
+            // 5.74.22 — 3D solid shapes (cube / octahedron / tetrahedron /
+            // prism) added to the big-star pool. They render through the
+            // same WebGL atlas slots and get the same rotation + saturation
+            // pass as the 2D shapes, so the field gains depth variety
+            // without any per-frame cost.
+            const interestingShapes = [
+                'star4', 'star5', 'star6', 'star8',
+                'hexagon', 'diamond', 'triangle',
+                'sparkle', 'burst',
+                'cube', 'octahedron', 'tetrahedron', 'prism',
+            ];
             this.shape = Math.random() < 0.8 ?
                         interestingShapes[Math.floor(Math.random() * interestingShapes.length)] :
                         STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
@@ -57,10 +67,18 @@ export class ColorStar {
         this.points = Math.floor(random(4, 7)) * 2;
         this.innerRadiusRatio = random(0.4, 0.8);
         
-        // Add rotation and size variation
-        this.rotation = 0;
-        this.rotationSpeed = random(-0.02, 0.02);
-        
+        // 5.74.22 — rotation guaranteed bidirectional + minimum visible
+        // magnitude. Old `random(-0.02, 0.02)` was uniform, so half the
+        // stars ended up with rotRate near zero and looked statically
+        // oriented — and across a field, the few with appreciable speed
+        // happened to skew positive often enough that the field "looked
+        // like it rotated one way." Forcing a sign coin-flip + a 0.008
+        // minimum |speed| means every shape star visibly spins, half CW
+        // and half CCW. Range bumped 0.02 → 0.03 ceiling for more variety.
+        const rotSign = Math.random() < 0.5 ? -1 : 1;
+        this.rotation = Math.random() * Math.PI * 2; // random starting angle
+        this.rotationSpeed = rotSign * random(0.008, 0.030);
+
         // Big stars with interesting shapes get enhanced rotation - more subtle
         if (isBigStar && ['star5', 'star6', 'star8', 'sparkle'].includes(this.shape)) {
             this.rotationSpeed *= 1.3; // Gentle showcase of rotating complex shapes
