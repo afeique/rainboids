@@ -250,16 +250,14 @@ export function drawTargetingEffect(ctx) {
     const time = frameClock.now * 0.003;
     const pulseIntensity = 0.5 + Math.sin(time) * 0.3;
 
-    // Calculate center position (adjust for Guardian visual offset)
-    let centerX = this.x;
-    let centerY = this.y;
-
-    // Guardian-specific adjustment to center the targeting circle better
-    if (this.type === 'GUARDIAN') {
-        // Adjust forward to account for Guardian's visual center offset
-        centerX += Math.cos(this.faceAngle) * (this.radius * 0.3);
-        centerY += Math.sin(this.faceAngle) * (this.radius * 0.3);
-    }
+    // 5.74.36 — targeting circles are now drawn directly on the enemy's
+    // collision center (this.x, this.y) for every type. The old Guardian
+    // forward-offset (radius * 0.3 along faceAngle) made the highlight
+    // ring drift off the actual enemy and read as misaligned; centering
+    // on the canonical position is consistent with how every other enemy
+    // is drawn and how collision is computed.
+    const centerX = this.x;
+    const centerY = this.y;
 
     // Fake glow without shadowBlur: wide faint ring + sharp ring on top.
     // Stroked-ring shadowBlur is one of the slowest canvas patterns.

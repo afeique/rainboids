@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.74.36] - 2026-05-06
+
+### Changed
+- **Targeting circles around enemies are now centered on the canonical position.** `drawTargetingEffect` had a Guardian-specific forward offset (`radius × 0.3` along `faceAngle`) that pushed the highlight ring off the actual enemy center, making the ring read as drifting/misaligned. Removed; every enemy's targeting circle now sits on `(this.x, this.y)` — consistent with collision and every other enemy draw.
+- **Killstreak indicator fades to ~20% opacity when the player ship or mouse cursor overlaps it.** New AABB check around the block (~200×95 centered on the streak HUD anchor). When the ship hull (radius-aware) or mouse cursor enters the AABB, `_streakFade` lerps toward 0.20 at 0.12/frame; otherwise lerps back to 1.0. The streak still updates underneath; it just gets out of the way of whatever the player is doing or hovering on.
+
+---
+
 ## [5.74.35] - 2026-05-05
 
 ### Changed

@@ -955,7 +955,30 @@ export function drawStreakIndicator() {
     const y = this.height - 180;
     const pulse = buffActive ? 0.85 + Math.sin(Date.now() * 0.015) * 0.15 : 1;
 
+    // 5.74.36 — fade the streak block to ~25% opacity when the player
+    // ship or the mouse cursor is inside its bounding box, so it never
+    // hides what the player is doing. Slow lerp so the transition reads
+    // smoothly. Block AABB is roughly 200×95 centered on (x, y+40).
+    const halfW = 100, halfH = 50;
+    const blockTop = y - 8;
+    const blockBottom = y + 84;
+    const blockLeft = x - halfW;
+    const blockRight = x + halfW;
+    const playerSx = (this.player.x - this.camera.x);
+    const playerSy = (this.player.y - this.camera.y);
+    const mouseSx = (this.inputHandler && this.inputHandler.input.screenAimX) || -9999;
+    const mouseSy = (this.inputHandler && this.inputHandler.input.screenAimY) || -9999;
+    const playerOver = playerSx + this.player.radius >= blockLeft && playerSx - this.player.radius <= blockRight
+                     && playerSy + this.player.radius >= blockTop && playerSy - this.player.radius <= blockBottom;
+    const mouseOver = mouseSx >= blockLeft && mouseSx <= blockRight && mouseSy >= blockTop && mouseSy <= blockBottom;
+    const targetFade = (playerOver || mouseOver) ? 0.20 : 1.0;
+    if (this._streakFade === undefined) this._streakFade = 1.0;
+    // Lerp toward target — 0.12 per frame ≈ 60% in 90ms at 60Hz.
+    this._streakFade += (targetFade - this._streakFade) * 0.12;
+    const fadeAlpha = this._streakFade;
+
     ctx.save();
+    ctx.globalAlpha = fadeAlpha;
 
     // ── Streak count (big number) ──
     if (buffActive) {
