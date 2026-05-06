@@ -11,6 +11,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.74.15] - 2026-05-05
+
+### Fixed
+- **Shape stars no longer wash out to white.** The 5.74.13 halo pass summed `shape × 1.6 + halo × 1.6` then clamped, which pushed every channel of saturated colors past 1.0 — every shape star ended up rendered nearly white regardless of the palette pick. New shader: gain on the shape rebalanced 1.6 → 1.3, halo masked by `(1 - tex.a)` so it only fills the empty area around the silhouette (preserves hue) and bumped to 0.85 strength. Color burst is back; brightness is mostly preserved.
+
+### Changed
+- **Owned powerup cards now have a vibrant identity-colored border + lighter background** (mirrors the POWER pause-tab weapon-row EQUIPPED treatment). `renderPowerupsOverlay` inlines `cfg.color` as the border color and adds a soft 12px shadow at 25% opacity in that hue. The `.powerup-card--owned` base class flips the background from a 6%-opacity cyan tint to an 18%-opacity neutral white, and bumps border width 1 → 2px. Result: purchased powerups read as bought at a glance and each has its own visual identity instead of all sharing the same cyan accent. Hover on owned cards brightens via `filter: brightness(1.15)` to keep the inline border color intact.
+
+---
+
+## [5.74.14] - 2026-05-05
+
+### Fixed
+- **Wave sometimes refused to transition after killing every enemy.** Root cause: the wave-clear handler in `updateWaveSystem` immediately flips `state = WAVE_TRANSITION` and schedules a real-time `setTimeout(2700)` to open the powerups menu. The setTimeout's callback is gated by `if (state === WAVE_TRANSITION)`. If the player paused, alt-tabbed (browser timer throttling), or otherwise nudged the state out of `WAVE_TRANSITION` during that 2.7-second window, the gate failed and the menu never opened. `togglePause`'s resume path defaulted to `state = PLAYING` (because `_pausedFromWaveClear` was previously only set inside `openWaveClearPowerupsMenu`, which never ran). Result: empty enemy pool + `waveComplete = true` + `state = PLAYING` — and the regular wave-clear branch is gated by `!waveComplete`, so no progression was possible. Two-part fix:
+  - **Set `_pausedFromWaveClear = true` immediately at wave clear** (instead of waiting for `openWaveClearPowerupsMenu` to set it). Any pause during the 2.7s window now routes the resume through `togglePause`'s wave-clear branch into `startNextWave()`, so the run can never get stuck even if the menu setTimeout misfires.
+  - **Added a recovery branch in `updateWaveSystem`**: if `pool empty && waveComplete === true && state === PLAYING`, re-open the powerups menu. This single-shot catch-all (the menu flips state to `PAUSED`) handles any unforeseen path that lands in the stuck state. Belt and suspenders.
+
+---
+
+## [5.74.13] - 2026-05-05
+
+### Changed
+- **Colorful starfield + WebGL glow halo.** Three coordinated tweaks; no instance count change so frame cost is essentially flat.
+  - `NORMAL_STAR_COLORS` palette expanded from 8 cool pastels to 18 saturated entries spanning violet, magenta, hot pink, electric blue, neon cyan, emerald, lime, gold, and amber. Sampled uniformly by shape stars in `color-star.js`, so every silhouette has a chance to land on a saturated nebula hue.
+  - `BackgroundStar.reset` keeps blue-white / white / cyan / warm-gold as the dominant tones (75% combined) but adds a 15% chance for a saturated nebula tint (electric violet, hot magenta, amber, emerald, neon blue, gold). Result: the background reads like a real night sky most of the time with occasional bursts of color.
+  - `webgl-starfield-renderer` fragment shader gains a radial halo glow. New `v_quadUV` varying carries the local 0..1 quad position; the fragment shader computes `halo = (1 - smoothstep(0,1,dist))²` (cheap — one `length` + one `smoothstep` per fragment) and adds `v_color.rgb × halo × 0.55` on top of the atlas silhouette. Star shapes now have a colored bloom around their edges instead of a hard cutoff. Brightness gain (1.6×) is unchanged so peak hot-white pixels still saturate.
+  - Shape stars in `_tryAddColorStarToWebGL` push their RGB toward the palette by 1.15× (clamped) and use a higher alpha floor (0.65) + twinkle amplitude (0.55) than dot stars, so silhouette stars register as the nebula highlights they're meant to be. Dot stars (the bulk of the field) keep their existing size-inverse alpha damp so they stay quiet.
+
+---
+
+## [5.74.12] - 2026-05-05
+
+### Changed
+- **All 10 enemy types tougher from wave 1.** Base health bumped ~67% across the roster so early waves don't feel like a free shooting gallery — the bullet-hell-era values (3–12 HP) were tuned around an older damage curve and the player's current build chews through them too fast. New base HP: HUNTER 3→5, GUARDIAN 7→12, WASP 3→5, STALKER 4→7, DRIFTER 5→9, PROWLER 8→14, WEAVER 3→5, SENTINEL 6→10, TANGERINE 6→10, TITAN 12→20. Wave-scaled HP curve is unchanged — late-wave health still scales on top of the new bases, so high-wave enemies are proportionally tougher too.
+
+---
+
+## [5.74.11] - 2026-05-05
+
+### Changed
+- **Wave-clear pause auto-scrolls to the POWERUPS list.** When `openWaveClearPowerupsMenu` shows the pause overlay it now smooth-scrolls `#pause-menu` to `#powerups-tab.offsetTop − 12px` on the next animation frame, so the player lands directly on the spend-your-pick UI instead of the tab strip + CONTROLS panel above it. Manual pause (ESC) still opens at the top so the tab strip is visible.
+
+---
+
+## [5.74.10] - 2026-05-05
+
+### Changed
+- **Money drop rate clamped at 0.95.** Previously the post–Gold-Find money drop rate could reach 1.0, making every kill at high player level a guaranteed coin spawn. Cap lowered to 0.95 so there's always a small whiff chance — drops feel earned instead of mechanical. Health drops keep their 1.0 cap (already gated by the global health cooldown).
+
+---
+
+## [5.74.9] - 2026-05-05
+
+### Changed
+- **Gold Find now scales the money drop RATE, not just the amount.** Previously `getGoldFindMultiplier()` only multiplied the money budget in `dropOrbsFromEntity` (more coins per drop), but the per-kill probability of any drop was unaffected — so leveling up made each drop bigger but didn't make drops more frequent. The Gold Find multiplier (1 + (level − 1) × 0.05) is now also applied to `moneyDropRate` (clamped to 1.0). At level 10 the base 0.65 rate becomes ~0.94; at level 20 it's effectively guaranteed. Health drops are unchanged (Gold Find is a money stat).
+
+---
+
+## [5.74.8] - 2026-05-05
+
+### Added
+- **Powerup cards now have a hover effect** in the pause-menu POWERUPS tab. When the card is interactive (player has picks available), hovering lifts it 2px, swaps the background/border to a goldenrod tint with a soft glow, and pulses the inline `+1` chip pink. Owned cards keep their cyan accent on hover; locked cards (no picks) brighten back to full opacity to advertise that they're real, just-unbuyable powerups. Implemented via a new `.powerup-card--interactive` class added in `renderPowerupsOverlay` so cards without picks don't get a misleading "I can buy this" hover state.
+
+---
+
+## [5.74.7] - 2026-05-05
+
+### Changed
+- **Orb size now reflects amount, not random.** `MONEY_ORB_SIZE_*` and `HEALTH_ORB_SIZE_*` constants are now interpreted as **pixel radii** (was: multipliers), and the orb's actual radius is a linear map from `amount` (1..cap) to `[SIZE_MIN, SIZE_MAX]`. A 1-coin orb is `MONEY_ORB_SIZE_MIN` px; a 20-coin orb is `MONEY_ORB_SIZE_MAX` px; same for heal orbs. The `(z * 1.2 + 0.4) * scale * 3.2` random parallax baseRadius from `ColorStar.reset` is bypassed for collectibles (it produced a near-2× variance unrelated to amount, which is why bumping the SIZE constants previously had no visible effect on the biggest orbs). Render-path `sizeVariation` is also pinned to 1 on collectibles so SIZE_MIN/MAX are the sole controls. Defaults: heal orbs 6→18 px, money orbs 6→22 px.
+
+---
+
 ## [5.74.6] - 2026-05-05
 
 ### Changed

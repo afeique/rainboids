@@ -1977,13 +1977,47 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.04);
     font-family: 'Silkscreen', monospace;
+    transition: transform 0.15s ease, background 0.15s ease,
+                border-color 0.15s ease, box-shadow 0.15s ease;
 }
+/* Hover lift — only applies when the row is interactive (cursor:pointer set
+   in JS when picks > 0). The :hover selector still matches without it, so
+   gate the lift on the cursor being pointer to avoid hovering disabled
+   cards into a misleading "I can buy this" feedback. */
+.powerup-card--interactive { cursor: pointer; }
+.powerup-card--interactive:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 215, 0, 0.10);
+    border-color: rgba(255, 215, 0, 0.55);
+    box-shadow: 0 4px 16px rgba(255, 215, 0, 0.18);
+}
+.powerup-card--interactive:hover .powerup-card-buy:not(:disabled) {
+    background: #ff66cc;
+    color: #1a0a14;
+    transform: scale(1.06);
+}
+/* 5.74.15 — owned cards: lighter gray background + thicker accent border.
+   The vibrant accent color is applied INLINE in renderPowerupsOverlay
+   from cfg.color (mirrors the POWER pause-tab weapon-row treatment), so
+   each owned powerup gets a frame in its own identity color. The base
+   --owned class just lifts the background opacity from 0.06 → 0.18 so
+   purchased cards visually stand off the unowned ones. */
 .powerup-card--owned {
-    background: rgba(0, 204, 255, 0.06);
-    border-color: rgba(0, 204, 255, 0.35);
+    background: rgba(255, 255, 255, 0.18);
+    border-width: 2px;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.55);
+}
+.powerup-card--owned.powerup-card--interactive:hover {
+    background: rgba(255, 255, 255, 0.26);
+    /* Brightness lift on hover; the inline border-color stays vivid. */
+    filter: brightness(1.15);
 }
 .powerup-card--locked {
     opacity: 0.55;
+}
+.powerup-card--locked.powerup-card--interactive:hover {
+    opacity: 1;
 }
 .powerup-card-icon {
     font-size: 26px;

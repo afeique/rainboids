@@ -671,14 +671,18 @@ export class UIManager {
 
             const card = document.createElement('div');
             card.className = 'powerup-card' + (owned ? ' powerup-card--owned' : ' powerup-card--locked');
-            // 5.74.5 — entire card is clickable so the player can spend a
-            // pick by clicking anywhere on the row, not just the small +1
-            // chip on the right. Click-and-pick reads more naturally and
-            // dodges the failure mode where players tap the card body and
-            // think nothing happened. The +1 button still exists and runs
-            // the same purchase path.
+            // 5.74.15 — owned cards inline the powerup's own color as the
+            // accent border (mirrors the POWER pause-tab weapon row's
+            // EQUIPPED treatment in `_buildWeaponRow`). The `--owned`
+            // class gives the lighter background; the inline border
+            // gives each owned powerup a vibrant identity-colored frame
+            // so it reads at a glance as "purchased".
+            if (owned && cfg.color) {
+                card.style.borderColor = cfg.color;
+                card.style.boxShadow = `0 0 12px ${cfg.color}40`;
+            }
             if (picks > 0) {
-                card.style.cursor = 'pointer';
+                card.classList.add('powerup-card--interactive');
                 card.addEventListener('click', (e) => {
                     e.stopPropagation();
                     this.purchasePowerup(type);

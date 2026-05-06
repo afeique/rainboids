@@ -8,7 +8,7 @@ export const ENEMY_TYPES = {
     HUNTER: {
         name: 'Hunter',
         color: '#ff4444',
-        health: 3,                 // was 5 (bullet-hell pass — much frailer trash)
+        health: 5,                 // 5.74.12 — bumped 3 → 5 (early-game difficulty pass)
         speed: 2.0,
         size: 32,
         shootPattern: 'hunter_single',
@@ -43,7 +43,7 @@ export const ENEMY_TYPES = {
     GUARDIAN: {
         name: 'Guardian',
         color: '#44ff44',
-        health: 7,                 // was 10 (bullet-hell pass)
+        health: 12,                // 5.74.12 — bumped 7 → 12
         speed: 1.25,               // was 1.0 (+25%)
         size: 48,                  // was 57 (-15%)
         shootPattern: 'guardian_spread',
@@ -78,7 +78,7 @@ export const ENEMY_TYPES = {
     WASP: {
         name: 'Wasp',
         color: '#ffff44',
-        health: 3,                 // was 4 (bullet-hell pass — frail wasp)
+        health: 5,                 // 5.74.12 — bumped 3 → 5
         speed: 3.5,                // was 2.8
         size: 36,                  // was 42
         shootPattern: 'wasp_machinegun',
@@ -113,7 +113,7 @@ export const ENEMY_TYPES = {
     STALKER: {
         name: 'Stalker',
         color: '#44ffff',
-        health: 4,                 // was 6 (bullet-hell pass)
+        health: 7,                 // 5.74.12 — bumped 4 → 7
         speed: 3.1,                // was 2.5
         size: 38,                  // was 45
         shootPattern: 'charged_laser',
@@ -148,7 +148,7 @@ export const ENEMY_TYPES = {
     DRIFTER: {
         name: 'Drifter',
         color: '#00ffff',
-        health: 5,                 // was 7 (bullet-hell pass)
+        health: 9,                 // 5.74.12 — bumped 5 → 9
         speed: 3.1,                // was 2.5
         size: 38,                  // was 45
         shootPattern: 'arc_lightning',
@@ -183,7 +183,7 @@ export const ENEMY_TYPES = {
     PROWLER: {
         name: 'Prowler',
         color: '#ff00ff',
-        health: 8,                 // was 11 (bullet-hell pass)
+        health: 14,                // 5.74.12 — bumped 8 → 14
         speed: 0.75,               // was 0.6
         size: 45,                  // was 53
         shootPattern: 'missile',
@@ -219,7 +219,7 @@ export const ENEMY_TYPES = {
     WEAVER: {
         name: 'Weaver',
         color: '#ffff00',
-        health: 3,                 // was 5 (bullet-hell pass)
+        health: 5,                 // 5.74.12 — bumped 3 → 5
         speed: 2.75,
         size: 32,
         shootPattern: 'spiral_laser',
@@ -257,7 +257,7 @@ export const ENEMY_TYPES = {
     SENTINEL: {
         name: 'Sentinel',
         color: '#00ff00',
-        health: 6,                 // was 8 (bullet-hell pass)
+        health: 10,                // 5.74.12 — bumped 6 → 10
         speed: 2.5,                // was 2.0
         size: 41,                  // was 48
         shootPattern: 'sentinel_sweep',
@@ -295,7 +295,7 @@ export const ENEMY_TYPES = {
     TANGERINE: {
         name: 'Bomber',
         color: '#ff8844',
-        health: 6,                 // was 8 (bullet-hell pass)
+        health: 10,                // 5.74.12 — bumped 6 → 10
         speed: 2.0,                // was 1.6
         size: 45,                  // was 53
         shootPattern: 'lay_mine',
@@ -331,7 +331,7 @@ export const ENEMY_TYPES = {
     TITAN: {
         name: 'Titan',
         color: '#ff44ff',
-        health: 12,                // was 18 (bullet-hell pass)
+        health: 20,                // 5.74.12 — bumped 12 → 20 (Titan)
         speed: 1.5,                // was 1.2
         size: 64,                  // was 75 — still the biggest, but smaller
         shootPattern: 'sweep_laser',

@@ -497,13 +497,19 @@ export function createHealthOrb(x, y, healAmountOverride = null) {
     }
     healthOrb.healAmount = healAmount;
 
+    // 5.74.7 — orb radius is now derived directly from heal amount (linear
+    // map 1..cap → SIZE_MIN..SIZE_MAX in pixels). Bypasses the random
+    // parallax-z baseRadius randomization in ColorStar.reset so the SIZE
+    // constants are the SOLE controls for orb sizing — bigger orb = more
+    // heal, every time.
     const cap = GAME_CONFIG.HEALTH_ORB_MAX_HEAL_PER_ORB;
-    const ratio = Math.min(1, healAmount / cap);
+    const ratio = Math.min(1, Math.max(0, (healAmount - 1) / Math.max(1, cap - 1)));
     const minSize = GAME_CONFIG.HEALTH_ORB_SIZE_MIN;
     const maxSize = GAME_CONFIG.HEALTH_ORB_SIZE_MAX;
-    healthOrb.sizeMultiplier = minSize + (ratio * (maxSize - minSize));
-    const baseRadius = healthOrb.baseRadius || healthOrb.radius;
-    healthOrb.radius = baseRadius * healthOrb.sizeMultiplier;
+    healthOrb.radius = minSize + ratio * (maxSize - minSize);
+    healthOrb.baseRadius = healthOrb.radius;
+    healthOrb.sizeMultiplier = 1;
+    healthOrb.sizeVariation = 1; // Render path multiplies by sizeVariation; pin to 1 so the SIZE constants govern alone.
 
     const angle = random(0, Math.PI * 2);
     const speed = random(1, 3);
@@ -527,13 +533,17 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null) {
     }
     moneyOrb.moneyAmount = moneyAmount;
 
+    // 5.74.7 — see createHealthOrb. Orb radius now linearly maps amount
+    // (1..cap) → SIZE_MIN..SIZE_MAX in pixels, bypassing the random
+    // parallax-z baseRadius. SIZE constants are the sole size controls.
     const cap = GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB;
-    const ratio = Math.min(1, moneyAmount / cap);
+    const ratio = Math.min(1, Math.max(0, (moneyAmount - 1) / Math.max(1, cap - 1)));
     const minSize = GAME_CONFIG.MONEY_ORB_SIZE_MIN;
     const maxSize = GAME_CONFIG.MONEY_ORB_SIZE_MAX;
-    moneyOrb.sizeMultiplier = minSize + (ratio * (maxSize - minSize));
-    const baseRadius = moneyOrb.baseRadius || moneyOrb.radius;
-    moneyOrb.radius = baseRadius * moneyOrb.sizeMultiplier;
+    moneyOrb.radius = minSize + ratio * (maxSize - minSize);
+    moneyOrb.baseRadius = moneyOrb.radius;
+    moneyOrb.sizeMultiplier = 1;
+    moneyOrb.sizeVariation = 1;
 
     const angle = random(0, Math.PI * 2);
     const speed = random(1, 3);
@@ -577,8 +587,15 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const baseHealthDropRate = GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + (healthDropChanceStacks * GAME_CONFIG.HEALTH_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
     const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + (moneyDropChanceStacks * GAME_CONFIG.MONEY_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
 
+    // 5.74.9 — Gold Find scales the money drop RATE in addition to the
+    // amount. Applied as a multiplier on the base rate so progression
+    // lifts the floor of "did it drop?" alongside "how much did I get?".
+    // 5.74.10 — money rate clamped to 0.95 (was 1.0) so there's always a
+    // small chance a kill drops nothing — keeps drops from feeling
+    // mechanical at high Gold Find / drop-chance stacks.
+    const goldFindMult = this.player.getGoldFindMultiplier?.() || 1;
     const healthDropRate = Math.min(1.0, baseHealthDropRate);
-    const moneyDropRate = Math.min(1.0, baseMoneyDropRate);
+    const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult);
 
     // ── Health orbs ──
     // Gated by a global cooldown. Default is once every 60s; the Triage

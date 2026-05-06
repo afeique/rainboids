@@ -34,28 +34,45 @@ export class BackgroundStar {
         // rather than fading to half-visible at the bottom of the cycle.
         this.twinkleAmplitude = random(0.10, 0.20);
 
-        // Star colors: cool tones that contrast well with red danger indicators
+        // 5.74.13 — colorful starfield pass. Most stars stay cool / white
+        // (so the field reads like a real night sky and doesn't compete
+        // with combat FX), but ~15% land in a saturated nebula tint —
+        // violet / magenta / amber / emerald — for visual punch. The
+        // WebGL shader's brightness gain + size pulse makes these read
+        // as glowing color stars rather than pastel pinpoints.
         const colorRoll = Math.random();
-        const brightness = 230 + Math.floor(Math.random() * 25); // 230-255 — always near max
-        if (colorRoll < 0.45) {
+        const brightness = 230 + Math.floor(Math.random() * 25); // 230-255
+        if (colorRoll < 0.40) {
             // Blue-white (hot stars) — most common
             const b = Math.min(255, brightness + 15);
             const g = Math.min(255, brightness + 5);
             this.color = `rgb(${brightness}, ${g}, ${b})`;
-        } else if (colorRoll < 0.70) {
+        } else if (colorRoll < 0.60) {
             // Pure white
             this.color = `rgb(${brightness}, ${brightness}, ${brightness})`;
-        } else if (colorRoll < 0.85) {
-            // Cyan-white (blue giant)
+        } else if (colorRoll < 0.72) {
+            // Cyan-white
             const g = Math.min(255, brightness + 10);
             const b = Math.min(255, brightness + 20);
             this.color = `rgb(${brightness - 15}, ${g}, ${b})`;
-        } else {
-            // Warm gold-white (sun-like, no red push)
+        } else if (colorRoll < 0.85) {
+            // Warm gold
             const r = Math.min(255, brightness + 5);
             const g = Math.min(255, brightness);
             const b = Math.max(185, brightness - 15);
             this.color = `rgb(${r}, ${g}, ${b})`;
+        } else {
+            // Saturated nebula tint — violet / magenta / amber / emerald.
+            const tints = [
+                [180, 100, 255],  // electric violet
+                [255,  90, 220],  // hot magenta
+                [255, 130,  90],  // amber
+                [120, 255, 180],  // emerald
+                [ 90, 200, 255],  // neon blue
+                [255, 200,  60],  // gold
+            ];
+            const t = tints[(Math.random() * tints.length) | 0];
+            this.color = `rgb(${t[0]}, ${t[1]}, ${t[2]})`;
         }
         
         this.active = true;

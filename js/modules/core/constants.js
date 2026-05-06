@@ -24,8 +24,13 @@ export const GAME_CONFIG = {
     HEALTH_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop health orbs
     HEALTH_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum health orbs dropped (upgrade to get more)
     HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
-    HEALTH_ORB_SIZE_MIN: 2.05, // Smallest health orbs are now 75% larger (was 1.3) so they read clearly even when low-heal
-    HEALTH_ORB_SIZE_MAX: 2.1, // Bumped proportionally with the min so the size delta stays subtle (was 1.4)
+    // 5.74.7 — orb radii are now in PIXELS (not multipliers) and are
+    // applied as the orb's actual radius based on heal amount / cap. The
+    // old (z * 1.2 + 0.4) * scale * 1.8 baseRadius randomization is no
+    // longer applied to collectible orbs, so changing these values now
+    // directly changes the smallest/biggest orb you see in-game.
+    HEALTH_ORB_SIZE_MIN: 14, // Pixel radius for a 1-heal orb.
+    HEALTH_ORB_SIZE_MAX: 24, // Pixel radius for a full-cap heal orb.
     HEALTH_ORB_MAX_HEAL_PER_ORB: 2, // Per-orb heal cap. Excess budget → more orbs at this cap.
     
     // Money Orb Configuration (renamed from money stars)
@@ -34,8 +39,8 @@ export const GAME_CONFIG = {
     MONEY_ORB_BASE_DROP_RATE: 0.65, // 5.74.2 — bumped 0.45 → 0.65
     MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum money orbs dropped (upgrade to get more)
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
-    MONEY_ORB_SIZE_MIN: 2.05, // Smallest money orbs are now 75% larger (was 1.3) so they read clearly even when low-value
-    MONEY_ORB_SIZE_MAX: 2.1, // Bumped proportionally with the min so big drops still feel meaningfully larger (was 1.6)
+    MONEY_ORB_SIZE_MIN: 14, // 5.74.7 — pixel radius for a 1-coin orb.
+    MONEY_ORB_SIZE_MAX: 24, // Pixel radius for a full-cap (MAX_MONEY_PER_ORB) orb.
     MONEY_ORB_MAX_MONEY_PER_ORB: 20, // Per-orb money cap. Excess budget → more orbs at this cap.
     
     // Orb Drop Upgrade Configuration
@@ -239,9 +244,24 @@ export const NOISE_CONFIG = {
     }
 };
 
+// 5.74.13 — colorful starfield pass. Palette expanded from 8 cool pastels
+// to 18 entries spanning the full nebula gamut (violet, magenta, hot pink,
+// electric blue, neon cyan, emerald, lime, gold, amber). Bumped saturation
+// across the board so the WebGL color/brightness gain in the starfield
+// shader registers as a *burst* of color rather than a uniform pastel
+// wash. Sampled uniformly for shape stars, so every silhouette has a
+// chance to land on a saturated hue.
 export const NORMAL_STAR_COLORS = [
-    '#a6b3ff', '#c3a6ff', '#a6f3e8', '#a6e8ff',
-    '#b8d4ff', '#52e8ff', '#8cd9ff', '#a6ffcc'
+    // Cool blues / cyans
+    '#7da9ff', '#52d6ff', '#3effff', '#5cf2c8',
+    // Purples / pinks
+    '#b87dff', '#d65cff', '#ff66e0', '#ff5cad',
+    // Warms
+    '#ffd75c', '#ffb347', '#ff7e5c', '#ff5c5c',
+    // Greens
+    '#5cff9d', '#9eff5c', '#bdff52',
+    // Pastels (kept for variety)
+    '#a6b3ff', '#a6f3e8', '#c3a6ff'
 ];
 
 export const GAME_STATES = {

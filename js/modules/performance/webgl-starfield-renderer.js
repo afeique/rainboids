@@ -54,8 +54,10 @@ uniform float u_atlasSlots; // NUM_SLOTS
 
 out vec4 v_color;
 out vec2 v_uv;
+out vec2 v_quadUV;   // 5.74.13 — pass through local quad UV for halo math
 
 void main() {
+    v_quadUV = a_quadUV;
     // 5.64.17 — twinkle now drives BOTH alpha modulation AND a subtle
     // size pulse so stars breathe. Same sin, two outputs.
     float wave = 0.5 + 0.5 * sin(u_time * a_twinkleSpeed + a_twinklePhase);
@@ -106,21 +108,43 @@ precision mediump float;
 
 in vec4 v_color;
 in vec2 v_uv;
+in vec2 v_quadUV;     // 5.74.13 — local 0..1 UV across the whole quad,
+                      // independent of the atlas slot the shape occupies.
+                      // Used for the radial glow halo so the falloff is
+                      // shape-independent.
 uniform sampler2D u_atlas;
 out vec4 fragColor;
 
-// 5.64.18 — pre-blend brightness boost. With additive blend mode
-// (SRC_ALPHA, ONE) the source color's RGB drives the contribution
-// added to the framebuffer. Multiplying by 1.5× saturates hot pixels
-// (white core peaks at 1.0) while letting dim halo pixels stay
-// proportionally brighter — gives the field that "screen blend"
-// over-exposure feel without needing an HDR float framebuffer.
-const float BRIGHTNESS_GAIN = 1.6;
+// 5.74.15 — gain rebalanced 1.6 → 1.3 on the shape, halo masked outside
+// the silhouette. Old code summed shape * 1.6 + halo * 1.6 then clamped,
+// which pushed every channel of saturated colors past 1.0 → all stars
+// looked white. Now the shape is gained (keeps the bright pulse) but
+// the halo only fills the empty area around the silhouette, so the
+// outer ring of every star carries the full-saturation hue.
+const float BRIGHTNESS_GAIN = 1.3;
 
 void main() {
     vec4 tex = texture(u_atlas, v_uv);
-    vec3 rgb = clamp(tex.rgb * v_color.rgb * BRIGHTNESS_GAIN, 0.0, 1.0);
-    fragColor = vec4(rgb, tex.a * v_color.a);
+
+    // Radial glow halo — distance from quad center.
+    vec2 q = v_quadUV - 0.5;
+    float dist = length(q) * 2.0;            // 0 at center, 1 at edge
+    float halo = 1.0 - smoothstep(0.0, 1.0, dist);
+    halo *= halo;                            // tighter core
+
+    // Shape: atlas silhouette × color × gain. Keeps the bright pulse the
+    // old code had so dot stars still pop.
+    vec3 shapeRGB = tex.rgb * v_color.rgb * BRIGHTNESS_GAIN;
+
+    // Halo: only fills where the atlas is transparent (1 - tex.a). Without
+    // this mask, halo stacks onto silhouette pixels that are already
+    // bright, clamping them toward white and washing out the hue.
+    float haloMask = (1.0 - tex.a) * halo;
+    vec3 haloRGB  = v_color.rgb * haloMask * 0.85;
+
+    vec3 rgb = clamp(shapeRGB + haloRGB, 0.0, 1.0);
+    float a = clamp(tex.a + haloMask * 0.5, 0.0, 1.0) * v_color.a;
+    fragColor = vec4(rgb, a);
 }
 `;
 

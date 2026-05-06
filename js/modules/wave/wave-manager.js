@@ -37,12 +37,35 @@ export function updateWaveSystem() {
     // they leave. This keeps the shop from popping over the explosion.
     const totalEnemies = this.enemyPool.activeObjects.length;
 
+    // 5.74.14 — recovery for the wave-clear stuck state. The wave-clear
+    // setTimeout(2700) below opens the powerups menu only if state is
+    // still WAVE_TRANSITION when the timer fires. If the player paused
+    // (or the tab was backgrounded — browser timer throttling) during
+    // that 2.7s window, the gate fails and the menu never opens. After
+    // resume, togglePause defaults to PLAYING (because
+    // `_pausedFromWaveClear` is set inside openWaveClearPowerupsMenu,
+    // which never ran), and the regular wave-clear branch below is gated
+    // by `!waveComplete` — so the run is permanently stuck: empty pool,
+    // waveComplete=true, state=PLAYING, no progression. Catch that here
+    // and re-trigger the menu. openWaveClearPowerupsMenu flips state to
+    // PAUSED, so this branch only fires once per stuck wave.
+    if (totalEnemies === 0 && this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
+        this.openWaveClearPowerupsMenu();
+        return;
+    }
+
     if (totalEnemies === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
         // Wave completed! If this is the final wave, the run is over —
         // route through GAME_COMPLETE instead of opening the shop.
         this.game.waveComplete = true;
         this.game.waveCountdownTime = Date.now() + this.game.waveCountdownDuration;
         this.game.state = GAME_STATES.WAVE_TRANSITION;
+        // 5.74.14 — set the pause-from-wave-clear flag NOW (was: only set
+        // inside openWaveClearPowerupsMenu when its 2.7s setTimeout fires).
+        // If the player pauses during the 2.7s gap before the menu opens,
+        // their resume needs to route through startNextWave instead of
+        // straight to PLAYING — otherwise the run gets stuck.
+        this._pausedFromWaveClear = true;
 
         // 5.72.2 — wave-clear bonuses inlined here. The old
         // `completeWave()` export was never called from the live
@@ -784,4 +807,16 @@ export function openWaveClearPowerupsMenu() {
     if (overlay) overlay.style.display = 'flex';
     this.uiManager.updatePowerupsList && this.uiManager.updatePowerupsList();
     this.uiManager.switchTab && this.uiManager.switchTab('powerups');
+    // 5.74.11 — auto-scroll the pause-menu so the POWERUPS list is the
+    // first thing the player sees instead of the tab strip / CONTROLS
+    // text. requestAnimationFrame defers one frame so the freshly-
+    // activated tab content has been laid out before we scroll into it.
+    requestAnimationFrame(() => {
+        const tab = document.getElementById('powerups-tab');
+        const menu = document.getElementById('pause-menu');
+        if (tab && menu) {
+            const offset = tab.offsetTop - 12; // small breathing-room margin
+            menu.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+        }
+    });
 }

@@ -697,15 +697,29 @@ export class GameEngine {
         // alpha rule below additionally dampens any remaining big stars.
         const shapeSizeBump = (slotKey === 'dot') ? 1.4 : 1.5;
         const drawSize = star.radius * sizeMul * shapeSizeBump;
-        const baseAlpha = this._starBrightnessForSize(drawSize);
+        // 5.74.13 — shape stars push toward saturated palette tints (no
+        // dim damp factor) so the per-shape silhouette comes through as
+        // a colored burst rather than a pastel ghost. Dot stars keep the
+        // size-inverse alpha rule; shape stars use a higher floor since
+        // they're the *intended* nebula highlights.
+        const baseAlpha = (slotKey === 'dot')
+            ? this._starBrightnessForSize(drawSize)
+            : Math.max(0.65, this._starBrightnessForSize(drawSize));
+        // Boost saturation slightly toward the palette by lifting RGB
+        // channels above 0.85 toward 1 — visually reads as a brighter,
+        // more saturated tint without changing hue.
+        const sat = (slotKey === 'dot') ? 1.0 : 1.15;
+        const r = Math.min(1, rgba[0] * sat);
+        const g = Math.min(1, rgba[1] * sat);
+        const b = Math.min(1, rgba[2] * sat);
         const ok = this.starfieldRenderer.addStar(
             star.x, star.y,
             parallax,
             drawSize,
-            rgba[0], rgba[1], rgba[2], baseAlpha,
+            r, g, b, baseAlpha,
             star.opacityOffset || 0,
             (star.twinkleSpeed || 0.005) * 60,
-            0.40,
+            (slotKey === 'dot') ? 0.40 : 0.55,
             STAR_SLOT_INDEX[slotKey],
             star.rotation || 0,
             (star.rotationSpeed || 0) * 60,
