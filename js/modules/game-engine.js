@@ -1833,31 +1833,70 @@ export class GameEngine {
       }
     }
 
+    // 5.76.2 — state-resume stack. Replaces the divergent
+    // `_pausedFromWaveClear` flag + shop's `shopReturnState` with a
+    // single LIFO stack of `{ state, fromWaveClear? }` frames. Every
+    // transition that has a return-to (PLAYING/WAVE_TRANSITION → PAUSED,
+    // X → SHOP) pushes; every resume (PAUSED → ?, SHOP → ?) pops and
+    // restores. Wave-clear pause uses `fromWaveClear: true` so the
+    // resume routes through `startNextWave` instead of re-entering
+    // WAVE_TRANSITION mid-air.
+    _pushResumeFrame(frame) {
+        if (!this._stateResumeStack) this._stateResumeStack = [];
+        this._stateResumeStack.push(frame);
+    }
+    _popResumeFrame() {
+        if (!this._stateResumeStack || this._stateResumeStack.length === 0) return null;
+        return this._stateResumeStack.pop();
+    }
+    // Back-compat read-only proxy. Some code paths still set
+    // `this._pausedFromWaveClear = true` directly; expose a getter that
+    // peeks at the top frame.
+    get _pausedFromWaveClear() {
+        const top = this._stateResumeStack && this._stateResumeStack[this._stateResumeStack.length - 1];
+        return !!(top && top.fromWaveClear);
+    }
+    set _pausedFromWaveClear(v) {
+        if (!this._stateResumeStack) this._stateResumeStack = [];
+        const top = this._stateResumeStack[this._stateResumeStack.length - 1];
+        if (v) {
+            // If top frame already represents a wave-clear, no-op. Else
+            // tag it so consumers reading `_pausedFromWaveClear` see it.
+            if (top && top.state === GAME_STATES.WAVE_TRANSITION) top.fromWaveClear = true;
+            else this._stateResumeStack.push({ state: GAME_STATES.WAVE_TRANSITION, fromWaveClear: true });
+        } else if (top && top.fromWaveClear) {
+            top.fromWaveClear = false;
+        }
+    }
+
     togglePause() {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
-            // Playing → Paused
+            // Playing/WaveTransition → Paused. Push the prior state so
+            // resume can restore it. (For wave-clear pauses, the
+            // wave-manager will already have pushed { WAVE_TRANSITION,
+            // fromWaveClear: true } before this fires.)
+            const top = this._stateResumeStack && this._stateResumeStack[this._stateResumeStack.length - 1];
+            const alreadyPushedByWaveClear = top && top.fromWaveClear;
+            if (!alreadyPushedByWaveClear) {
+                this._pushResumeFrame({ state: this.game.state });
+            }
             this.game.state = GAME_STATES.PAUSED;
             this.uiManager.togglePause();
-            // Pause the charge shot system
-            if (this.player) {
-                this.player.pauseChargeShot();
-            }
-            // Removed thruster sound on pause to reduce noise issues
+            if (this.player) this.player.pauseChargeShot();
         } else if (this.game.state === GAME_STATES.PAUSED) {
-            // Paused → Playing (or Paused → next wave if this pause was
-            // the wave-clear powerups menu — see openWaveClearPowerupsMenu).
+            // Paused → resume. Pop the frame and route accordingly.
             this.uiManager.togglePause();
             if (this.player) this.player.resumeChargeShot();
-            if (this._pausedFromWaveClear) {
-                this._pausedFromWaveClear = false;
+            const frame = this._popResumeFrame();
+            if (frame && frame.fromWaveClear) {
                 this.game.state = GAME_STATES.WAVE_TRANSITION;
                 this.startNextWave();
+            } else if (frame && frame.state) {
+                this.game.state = frame.state;
             } else {
                 this.game.state = GAME_STATES.PLAYING;
             }
         } else if (this.game.state === GAME_STATES.SHOP) {
-            // Shop → return to whichever state the shop was opened from
-            // (PLAYING / WAVE_TRANSITION / PAUSED).
             this.closeShopAndReturn();
         }
     }

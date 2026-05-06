@@ -83,11 +83,13 @@ export function openShop() {
         // Store the time when shop opened to adjust spawn timers later
         this.shopOpenTime = Date.now();
 
-        // Remember which state to return to when the shop closes. Captured
-        // BEFORE we transition to SHOP so closeShopAndReturn() can route:
-        //   PAUSED          → closeShopToPause   (back to pause menu)
-        //   WAVE_TRANSITION → closeShop          (start next wave)
-        //   PLAYING         → closeShopToPlaying (resume gameplay)
+        // 5.76.2 — push a resume frame onto the shared `_stateResumeStack`
+        // so `closeShopAndReturn` can route uniformly. `shopReturnState`
+        // is kept as a back-compat read for any console / test code that
+        // still queries it.
+        if (this._pushResumeFrame) {
+            this._pushResumeFrame({ state: this.game.state });
+        }
         this.shopReturnState = this.game.state;
 
         // Transition to shop state from any valid state
@@ -586,10 +588,12 @@ export function closeShopToPlaying() {
         }
 }
 
-// Dispatcher: route close based on the state we were in when the shop
-// opened. Lets the X button / ESC do the right thing in all three cases.
+// Dispatcher: route close based on the popped resume frame. 5.76.2 —
+// reads from the shared `_stateResumeStack`; falls back to the legacy
+// `shopReturnState` for back-compat with any external caller.
 export function closeShopAndReturn() {
-        const target = this.shopReturnState;
+        const frame = this._popResumeFrame ? this._popResumeFrame() : null;
+        const target = (frame && frame.state) || this.shopReturnState;
         if (target === GAME_STATES.PAUSED) return this.closeShopToPause();
         if (target === GAME_STATES.WAVE_TRANSITION) return this.closeShop();
         return this.closeShopToPlaying();

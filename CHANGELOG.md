@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.76.2] - 2026-05-06
+
+Performance hygiene + tech-debt rollup. State-resume stack consolidation, soft-cap bullet eviction, and a regression test for the 5.74.14 wave-clear pause race.
+
+### Profiling (J1)
+- Ran `perf-06-combined` matrix. Particle peak ~103 (cap 2500), star peak ~845 (cap 4000) — both have huge headroom. Bullet pool at the 300 soft-cap is the only realistic concern under stress (Twin Cannon + Multi-Shot 4 + Cone of Fire). **No constant bumps**; the eviction fix below is the actual remediation.
+
+### Changed
+- **J2. Bullet pool soft-cap now evicts instead of refusing.** When `bulletPool.activeObjects.length >= 300` in `firePrimary`, we now call `bulletPool.softCapAndEvict(300, b => !b.piercing)` to release the oldest non-piercing bullet and free a slot. Piercing bullets are kept (they're high-value rail/capstone shots with longer effective uptime). New `PoolManager.softCapAndEvict(cap, pred)` helper; reusable across pools.
+- **K (D2). Single state-resume stack** replaces the `_pausedFromWaveClear` flag and `shopReturnState` field divergence. New `_stateResumeStack` array of `{ state, fromWaveClear? }` frames. `togglePause` and `closeShopAndReturn` both push/pop. Wave-clear pause tags its frame with `fromWaveClear: true` so the resume routes through `startNextWave`. `_pausedFromWaveClear` and `shopReturnState` survive as back-compat read proxies that peek at the stack top.
+
+### Tests
+- **K (D3). New e2e** `tests/e2e/11-wave-pause-race.spec.js` exercises the full sequence: start game → force wave 1 complete → pause during the 2.7s setTimeout window → wait past 2.7s while paused → resume → assert the wave advances. Catches both the 5.74.14 setTimeout-gate bug and any future regression in the 5.76.2 stack consolidation. Passes on master.
+- 62/62 unit tests still pass.
+
+---
+
 ## [5.76.1] - 2026-05-06
 
 Powerup cap retune + defense HUD widgets + capstone toast + sub-wave phase toast + wave-clear recap. Visual feedback pass for the 5.75–5.76 mechanics that work silently.

@@ -117,4 +117,33 @@ export class PoolManager {
             }
         }
     }
-} 
+
+    /**
+     * 5.76.2 — soft-cap eviction. When the active count is at or above
+     * `cap`, release the oldest active object that satisfies the
+     * predicate (default: any object). Used by `firePrimary` to evict
+     * the oldest non-piercing bullet rather than refusing the spawn,
+     * so heavy fire-rate builds don't silently drop shots during boss
+     * pressure. Returns true if an eviction was made.
+     *
+     * @param {number} cap        — soft active-count threshold
+     * @param {function} pred     — predicate(obj) → boolean; default true
+     */
+    softCapAndEvict(cap, pred = null) {
+        if (this.activeObjects.length < cap) return false;
+        const objs = this.activeObjects;
+        let target = null;
+        // Walk oldest-first. activeObjects is roughly LIFO since release
+        // swap-and-pops; for bullets the oldest visible-fire is whichever
+        // has the largest "age" or smallest remaining `life`. We cheaply
+        // approximate via index 0 (the bottom of the array — which gets
+        // the slowest churn). For a more correct walk, use the predicate.
+        for (let i = 0; i < objs.length; i++) {
+            const o = objs[i];
+            if (!pred || pred(o)) { target = o; break; }
+        }
+        if (!target) return false;
+        this.release(target);
+        return true;
+    }
+}

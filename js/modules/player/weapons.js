@@ -159,8 +159,17 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
 // ── Primary weapon dispatch ────────────────────────────────────────────────
 
 export function firePrimary(bulletPool, audioManager, particlePool) {
-    // Hard cap on player bullets to prevent pool explosion with RAPID_FIRE + MULTI_SHOT stacking
-    if (bulletPool.activeObjects.length >= 300) return false;
+    // 5.76.2 — soft-cap with eviction (was: refuse spawn). When the
+    // pool is at the 300 cap (which Twin Cannon + Multi-Shot 4 +
+    // Cone-of-Fire builds reach during boss pressure), evict the
+    // oldest non-piercing bullet to make room rather than silently
+    // dropping the shot. Piercing bullets are kept because they're
+    // still useful — they tend to be the high-value rail / capstone
+    // shots and have longer effective uptime.
+    if (bulletPool.activeObjects.length >= 300) {
+        const evicted = bulletPool.softCapAndEvict(300, (b) => !b.piercing || b.piercing <= 0);
+        if (!evicted) return false; // pool entirely piercing — let the cap hold
+    }
 
     const config = this.getActivePrimaryConfig();
 
