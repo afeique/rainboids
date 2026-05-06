@@ -178,8 +178,13 @@ export function addPowerup(type, config, isShopItem = false) {
     // ALL powerups are now permanent and stacking — drops included.
     // The `isShopItem` param is kept for back-compat with any caller
     // that still passes it; it no longer controls duration.
+    // 5.75.0 — `config.maxStacks` is now respected: the next pick at
+    // cap silently no-ops. The shop's purchasePowerup also gates buys
+    // on this cap so you can't waste picks; this is the safety net.
+    const cap = (config && config.maxStacks) || 99;
     if (this.powerups.has(type)) {
         const existing = this.powerups.get(type);
+        if (existing.stacks >= cap) return false;
         existing.stacks += 1;
         existing.timeRemaining = Infinity;
         existing.isPermanent = true;
@@ -211,6 +216,25 @@ export function updatePowerups() {
             powerup.timeRemaining -= 16; // Assume 60fps
             if (powerup.timeRemaining <= 0) {
                 this.powerups.delete(type);
+            }
+        }
+    }
+
+    // 5.75.0 — STATIC_FIELD regen. After 8s of no damage, the static
+    // shield slowly tops back up to its cap (+2 HP per stack).
+    const staticStacks = this.getPowerupStacks('STATIC_FIELD');
+    if (staticStacks > 0) {
+        const cap = staticStacks * 2;
+        if (this._staticShield === undefined) this._staticShield = cap;
+        if (this._staticShield < cap) {
+            const idleSinceDamage = Date.now() - (this._lastDamageAt || 0);
+            if (idleSinceDamage > 8000) {
+                // 1 HP per second of regen — modest so it doesn't trivialize.
+                this._staticShieldRegenAcc = (this._staticShieldRegenAcc || 0) + 16 / 1000;
+                while (this._staticShieldRegenAcc >= 1 && this._staticShield < cap) {
+                    this._staticShield += 1;
+                    this._staticShieldRegenAcc -= 1;
+                }
             }
         }
     }

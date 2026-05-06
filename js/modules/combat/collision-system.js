@@ -122,6 +122,10 @@ export function handleCollisions() {
                         isEmpowered: !!bullet.isEmpowered,
                     });
                 }
+                // 5.75.0 — crit feedback loop trigger.
+                if (bullet.isCrit || bullet.isCritical) {
+                    if (this.player) this.player._critRushUntil = Date.now() + 800;
+                }
 
                 // Award XP for hitting asteroid (bullet-hell pass — 2x)
                 this.player.gainExperience(4);
@@ -461,6 +465,12 @@ export function handleCollisions() {
                     isCrit: !!(bullet.isCrit || bullet.isCritical),
                     isEmpowered: !!bullet.isEmpowered,
                 });
+
+                // 5.75.0 — crit feedback loop trigger (enemy hit).
+                if (bullet.isCrit || bullet.isCritical) {
+                    this.player._critRushUntil = Date.now() + 800;
+                    if (typeof this.checkMissionOnCrit === 'function') this.checkMissionOnCrit();
+                }
 
                 // Hit flash on enemy — localized at impact point
                 enemy._hitFlashTimer = COLLISION_CONFIG.HIT_FLASH_FRAMES;
@@ -1382,6 +1392,8 @@ export function destroyAsteroid(ast) {
     // beyond the milestone notification), so streak tier buffs and idle
     // timeout work uniformly across both target types.
     if (typeof this.onEnemyKill === 'function') this.onEnemyKill(ast);
+    // 5.75.0 — asteroid mission progress.
+    if (typeof this.checkMissionOnAsteroidDestroy === 'function') this.checkMissionOnAsteroidDestroy();
     ast._deathFlash = 6;
     ast._deathFlashMax = 6;
     if (onScreen) {

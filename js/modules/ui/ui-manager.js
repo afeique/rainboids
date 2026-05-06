@@ -679,7 +679,11 @@ export class UIManager {
                 card.style.borderColor = '#00ccff';
                 card.style.boxShadow = '0 0 14px rgba(0, 204, 255, 0.45)';
             }
-            if (picks > 0) {
+            // Card-wide click behaves like the +1 button. Disabled at cap
+            // so maxed cards don't accept clicks.
+            const cardCap = cfg.maxStacks || 99;
+            const cardAtCap = stacks >= cardCap;
+            if (picks > 0 && !cardAtCap) {
                 card.classList.add('powerup-card--interactive');
                 card.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -710,17 +714,20 @@ export class UIManager {
 
             card.appendChild(body);
 
+            // 5.75.0 — show stacks against the cap (e.g. ×3 / 5).
+            const cap = cfg.maxStacks || 99;
+            const atCap = stacks >= cap;
             const right = document.createElement('div');
             right.className = 'powerup-card-stacks';
-            right.textContent = owned ? `×${stacks}` : '—';
+            right.textContent = owned ? `×${stacks} / ${cap}` : `0 / ${cap}`;
             card.appendChild(right);
 
-            // Buy button — spends 1 Pick to add 1 stack.
+            // Buy button — spends 1 Pick to add 1 stack. Disabled at cap.
             const buyBtn = document.createElement('button');
             buyBtn.type = 'button';
             buyBtn.className = 'powerup-card-buy';
-            buyBtn.textContent = '+1';
-            buyBtn.disabled = picks <= 0;
+            buyBtn.textContent = atCap ? 'MAX' : '+1';
+            buyBtn.disabled = picks <= 0 || atCap;
             buyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
@@ -742,6 +749,11 @@ export class UIManager {
         if (picks <= 0) return false;
         const cfg = POWERUP_TYPES[type];
         if (!cfg) return false;
+        // 5.75.0 — gate on per-powerup maxStacks. Spending a pick on a
+        // capped powerup is wasted, so refuse the purchase outright.
+        const cap = cfg.maxStacks || 99;
+        const stacks = ge.player.getPowerupStacks ? ge.player.getPowerupStacks(type) : 0;
+        if (stacks >= cap) return false;
         ge.player.powerupPicks = picks - 1;
         ge.player.addPowerup(type, { ...cfg, duration: Infinity }, true);
         if (ge.events) ge.events.emit('audio:coin');

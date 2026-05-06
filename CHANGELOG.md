@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.75.0] - 2026-05-06
+
+Big balance + content rollup. Late-game HP, wave structure, powerup caps, defensive depth, mission system, streak qualitative bonus, and a few hot-path cleanups.
+
+### Added
+- **Sub-wave system.** Waves now spawn in 2–3 staggered groups instead of one burst. New sub-wave fires when ≤2 enemies remain (or after a 12s fallback). Each wave's `WAVE_DATA` entry uses `subWaves: [[group, ...], ...]`. Wave-complete check now requires all sub-waves spawned AND pool empty. Boss waves hold the boss until the final sub-wave so the escort softens the player up first. Total wave duration roughly doubles.
+- **Mid-wave mini-bosses (A3).** From wave 4 onward, non-boss enemy spawns have a wave-scaled chance (capped at 45%) of promoting one enemy in the group to a "mini-boss": 1.7× HP, 1.25× size, 2× points. Adds threat spikes between scripted boss waves.
+- **Defense overhaul (B4).** Three new SP-priced shop items:
+  - **Reflexes** (4 SP, 1 stack): one free dodge per 30s — next bullet that would damage you misses.
+  - **Last Stand** (6 SP, 1 stack): on lethal hit, survive at 1 HP. One-time per run.
+  - **Static Field** (3 SP, 3 stacks): +2 HP regenerating shield per stack. Refills after 8s of no damage at 1 HP/s.
+- **Crit feedback loop (B3).** Landing a crit grants a 30% fire-rate cooldown reduction for 800ms. Stacks multiplicatively with RAPID_FIRE. Gives CRIT_CHANCE / CRIT_DAMAGE builds a moment-to-moment payoff.
+- **LEGENDARY streak qualitative bonus (C2).** At 15+ kill streak, every primary bullet gains a +22 px explosion radius (additive with the EXPLOSIVE powerup).
+- **Wave missions (C3).** One random objective per wave: TAKE NO DAMAGE / BLITZKRIEG (5 kills in 8s) / ROCK BREAKER / KEEP THE FIRE (12-streak) / PRECISION (25 crits). Boss waves always assign TAKE NO DAMAGE. Reward: +1 powerup pick. Mission announcement banner at wave start; success/fail toasts.
+
+### Changed
+- **Late-game HP curve recalibrated (A4).** `getLevelScaledEnemyStats` now `1 + t × 6.5 + pow(t, 2.5) × 4`. Wave 5 ~2.5×, wave 10 ~4.5×, wave 15 ~6.8×, wave 20 ~11.5× (was capped at 7.5×). Player DPS scales similarly with stacked upgrades, so late waves feel like a fight again.
+- **POWERUP `maxStacks` everywhere (B2).** Per-powerup caps added to `POWERUP_TYPES`: RAPID_FIRE 5, MULTI_SHOT 4, HOMING 3, BIG_BULLETS 4, SPEED_BOOST 3, PIERCING 3, EXPLOSIVE 3, CRIT_CHANCE 8, CRIT_DAMAGE 6, SHIELD_BOOST 5, LONG_RANGE 3, KNOCKBACK 3; DROPS family 3–5. `addPowerup` and `purchasePowerup` both gate on the cap; pause-menu cards display `×N / cap` and disable at MAX. No more silently dumping picks into one infinite-stack powerup.
+
+### Fixed / cleanup
+- **D1 — Autofire diagnostic disabled by default in production.** `autofireDiag.enabled = false` initially; toggle via `window.__autofireDiag.enable()` for debugging. Was on every fire tick + record(snap) + buffer write per shot.
+- **D4 — Nebula renderer caches the global blink phase term once per frame** instead of recomputing `now × 5 × 2π` per star, per frame. Same shape, ~25 fewer multiplies per frame.
+
+### Tests
+- Unit tests updated to walk the new `subWaves` shape and the recalibrated HP/speed bounds. 62 tests pass.
+
+---
+
 ## [5.74.36] - 2026-05-06
 
 ### Changed

@@ -24,13 +24,19 @@ class AutofireDiag {
         this.totalCalls = 0;         // how many times record() was called
         this.totalFires = 0;         // how many times a bullet was really created
         this.stalls = 0;             // number of auto-dumps triggered
-        this.enabled = true;
+        // 5.75.0 — disabled by default in production. Was on every fire
+        // tick (~14-field record + buffer write per shot). Toggle on via
+        // `window.__autofireDiag.enable()` in the console for debugging.
+        this.enabled = false;
 
         // Expose on window for console access
         if (typeof window !== 'undefined') {
             window.__autofireDiag = this;
         }
     }
+
+    enable() { this.enabled = true; return 'autofireDiag enabled'; }
+    disable() { this.enabled = false; return 'autofireDiag disabled'; }
 
     /**
      * Called every tick from updateChargingSystem.

@@ -122,6 +122,15 @@ export function openShop() {
             { id: 'SHIELD_BOOST',          name: 'Shielding',    description: '-5% damage taken per stack',                            cost: 1,    icon: '🛡️', maxStacks: 8,  category: 'DEFENSE', currency: 'SP'    },
             { id: 'SPEED_BOOST',           name: 'Afterburner',  description: '+50% thrust & +35% top speed per stack',                cost: 2,    icon: '💨', maxStacks: 4,  category: 'DEFENSE', currency: 'SP'    },
             { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',       description: '-5s cooldown between health drops (60s → 30s floor)',  cost: 2,    icon: '⏳', maxStacks: 6,  category: 'DEFENSE', currency: 'SP'    },
+            // 5.75.0 — qualitative defense layer. These three are designed
+            // to give late-game builds something OTHER than +HP/+shield to
+            // chase, so a maxed shielding build still has decisions left.
+            { id: 'REFLEXES',              name: 'Reflexes',     description: 'One free dodge per 30s — next bullet that would hit you misses',
+                                                                  cost: 4,    icon: '🌀', maxStacks: 1,  category: 'DEFENSE', currency: 'SP' },
+            { id: 'LAST_STAND',            name: 'Last Stand',   description: 'On lethal hit, survive at 1 HP (once per run)',
+                                                                  cost: 6,    icon: '✊', maxStacks: 1,  category: 'DEFENSE', currency: 'SP' },
+            { id: 'STATIC_FIELD',          name: 'Static Field', description: 'Auto-regen +2 HP shield per stack after 8s no damage',
+                                                                  cost: 3,    icon: '⚡', maxStacks: 3,  category: 'DEFENSE', currency: 'SP' },
             { id: 'SPARE_SHIP',            name: 'Spare Ship',   description: '+1 extra life (max 3)',                                cost: 5000, icon: '🚀', maxStacks: 1,  flatCost: true, category: 'DEFENSE', currency: 'COINS' },
         ];
 

@@ -5,8 +5,34 @@ import { random } from '../core/utils.js';
 export function takeDamage(damageAmount = this.baseDamage) {
     if (this.player.invincible) return;
 
+    // 5.75.0 — REFLEXES: one free dodge per 30s. The next bullet that
+    // would damage you misses entirely. Resets the cooldown timer on use.
+    if (this.player.getPowerupStacks && this.player.getPowerupStacks('REFLEXES') > 0) {
+        const now = Date.now();
+        if (!this.player._reflexesReadyAt || now >= this.player._reflexesReadyAt) {
+            this.player._reflexesReadyAt = now + 30000;
+            this.player.makeInvincible(700);
+            if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
+            return;
+        }
+    }
+
     const effectiveShield = this.player.getEffectiveShield();
-    const reducedDamage = damageAmount * (1 - effectiveShield / 100);
+    let reducedDamage = damageAmount * (1 - effectiveShield / 100);
+
+    // 5.75.0 — STATIC_FIELD: passive HP shield that regenerates after
+    // 8s of no damage. Each stack adds +2 max shield. Damage hits the
+    // shield first, then HP. Tracks via _staticShield + _lastDamageAt.
+    const staticStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('STATIC_FIELD') : 0;
+    const staticMax = staticStacks * 2;
+    if (this.player._staticShield === undefined) this.player._staticShield = staticMax;
+    if (staticStacks > 0 && this.player._staticShield > 0 && reducedDamage > 0) {
+        const absorbed = Math.min(this.player._staticShield, reducedDamage);
+        this.player._staticShield -= absorbed;
+        reducedDamage -= absorbed;
+    }
+    this.player._lastDamageAt = Date.now();
+
     this.player.health = Math.max(0, this.player.health - reducedDamage);
 
     // Any actual HP loss breaks the kill streak. Bulwark-reduced hits still
@@ -14,7 +40,27 @@ export function takeDamage(damageAmount = this.baseDamage) {
     // invincible check above blocks the call entirely.
     if (reducedDamage > 0) this._breakKillStreak();
 
+    // 5.75.0 — mission "no_damage" fails on any HP loss.
+    if (reducedDamage > 0 && typeof this.checkMissionOnDamage === 'function') {
+        if (this.game.mission) this.game.mission.damaged = true;
+        this.checkMissionOnDamage();
+    }
+
     if (this.player.health <= 0) {
+        // 5.75.0 — LAST_STAND: one-time-per-run survive at 1 HP. Consumed
+        // on use (sets _lastStandUsed flag).
+        const lastStandStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('LAST_STAND') : 0;
+        if (lastStandStacks > 0 && !this.player._lastStandUsed) {
+            this.player._lastStandUsed = true;
+            this.player.health = 1;
+            this.player.makeInvincible(2500);
+            if (typeof this.events?.emit === 'function') {
+                this.events.emit('ui:show-message', { title: 'LAST STAND', subtitle: 'Saved at 1 HP', duration: 1600 });
+                this.events.emit('audio:powerup');
+            }
+            return;
+        }
+
         if (this.shieldTanks > 0) {
             this.shieldTanks--;
             this.explodeTank(this.shieldTanks);

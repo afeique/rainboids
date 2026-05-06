@@ -794,6 +794,9 @@ export function onEnemyKill(enemy) {
         this.queueNotification(milestones[this.killCount],
             `${this.killCount} targets destroyed`, 2500);
     }
+
+    // 5.75.0 — mission progress hooks.
+    if (typeof this.checkMissionOnKill === 'function') this.checkMissionOnKill();
 }
 
 // 5.74.18 — kill-streak now decays on inactivity rather than on damage.

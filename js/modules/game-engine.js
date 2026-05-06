@@ -985,6 +985,12 @@ export class GameEngine {
     completeWave() { return wave.completeWave.call(this); }
     completeRun() { return wave.completeRun.call(this); }
     openWaveClearPowerupsMenu() { return wave.openWaveClearPowerupsMenu.call(this); }
+    // 5.75.0 — mission system bindings.
+    checkMissionOnKill() { return wave.checkMissionOnKill.call(this); }
+    checkMissionOnCrit() { return wave.checkMissionOnCrit.call(this); }
+    checkMissionOnAsteroidDestroy() { return wave.checkMissionOnAsteroidDestroy.call(this); }
+    checkMissionOnDamage() { return wave.checkMissionOnDamage.call(this); }
+    resolveMissionOnWaveClear() { return wave.resolveMissionOnWaveClear.call(this); }
     
     sellShopItem(itemId) { return shop.sellShopItem.call(this, itemId); }
 

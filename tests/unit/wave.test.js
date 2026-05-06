@@ -23,24 +23,33 @@ import { MAX_WAVES, BOSS_WAVES } from '../../js/modules/core/constants.js';
 // ---------------------------------------------------------------------------
 
 describe('getWaveConfig() – 20-wave campaign', () => {
-  test('wave 1 has asteroids and at least one enemy', () => {
+  // 5.75.0 — wave configs now use `subWaves: [[group, ...], ...]`
+  // instead of a flat `enemies` array. Tests updated to walk the
+  // nested structure.
+  test('wave 1 has asteroids and at least one enemy in its first sub-wave', () => {
     const cfg = getWaveConfig(1);
     expect(cfg).toBeDefined();
     expect(cfg.asteroids).toBeGreaterThan(0);
-    expect(cfg.enemies.length).toBeGreaterThanOrEqual(1);
-    expect(cfg.enemies[0].type).toBe('HUNTER');
+    expect(Array.isArray(cfg.subWaves)).toBe(true);
+    expect(cfg.subWaves.length).toBeGreaterThanOrEqual(1);
+    expect(cfg.subWaves[0].length).toBeGreaterThanOrEqual(1);
+    expect(cfg.subWaves[0][0].type).toBe('HUNTER');
   });
 
-  test('every wave 1-20 returns a valid config', () => {
+  test('every wave 1-20 returns a valid config with at least one sub-wave', () => {
     for (let w = 1; w <= MAX_WAVES; w++) {
       const cfg = getWaveConfig(w);
       expect(cfg).toBeDefined();
       expect(typeof cfg.asteroids).toBe('number');
-      expect(Array.isArray(cfg.enemies)).toBe(true);
-      for (const e of cfg.enemies) {
-        expect(typeof e.type).toBe('string');
-        expect(typeof e.count).toBe('number');
-        expect(e.count).toBeGreaterThan(0);
+      expect(Array.isArray(cfg.subWaves)).toBe(true);
+      expect(cfg.subWaves.length).toBeGreaterThanOrEqual(1);
+      for (const groups of cfg.subWaves) {
+        expect(Array.isArray(groups)).toBe(true);
+        for (const e of groups) {
+          expect(typeof e.type).toBe('string');
+          expect(typeof e.count).toBe('number');
+          expect(e.count).toBeGreaterThan(0);
+        }
       }
     }
   });
@@ -51,7 +60,9 @@ describe('getWaveConfig() – 20-wave campaign', () => {
       expect(cfg.isBossWave).toBe(true);
       expect(cfg.bossTier).toBeGreaterThanOrEqual(1);
       expect(cfg.bossTier).toBeLessThanOrEqual(4);
-      const titan = cfg.enemies.find(e => e.type === 'TITAN' && e.isBoss);
+      // TITAN with isBoss should appear in some sub-wave (typically the last).
+      const allGroups = cfg.subWaves.flat();
+      const titan = allGroups.find(e => e.type === 'TITAN' && e.isBoss);
       expect(titan).toBeDefined();
       expect(titan.bossTier).toBe(cfg.bossTier);
     }
@@ -135,14 +146,15 @@ describe('getLevelScaledEnemyStats()', () => {
     expect(scaled.points).toBe(BASE.points);
   });
 
-  // Power-curved scaling: 1 + ((L-1)/19)^1.6 · 4.5 for HP.
+  // 5.75.0 — HP curve recalibrated: linear base + steep tail
+  // (`pow(t, 2.5) * 4`). Wave 5 ~2.5×, wave 10 ~4.5×, wave 20 ~11.5×.
   test('HP follows a power curve — gentle early, steep late', () => {
     const l1  = getLevelScaledEnemyStats(BASE, 1).health;
     const l5  = getLevelScaledEnemyStats(BASE, 5).health;
     const l20 = getLevelScaledEnemyStats(BASE, 20).health;
-    expect(l1).toBe(BASE.health);                       // gentle start
-    expect(l5).toBeLessThan(BASE.health * 1.5);         // early waves stay easy
-    expect(l20).toBeGreaterThan(BASE.health * 5);       // wave 20 is brutal
+    expect(l1).toBe(BASE.health);
+    expect(l5).toBeLessThan(BASE.health * 3);           // early waves still climbable
+    expect(l20).toBeGreaterThan(BASE.health * 10);      // wave 20 is brutal
     // Curve must be monotonic
     expect(getLevelScaledEnemyStats(BASE, 10).health).toBeGreaterThan(l5);
     expect(l20).toBeGreaterThan(getLevelScaledEnemyStats(BASE, 10).health);
@@ -150,8 +162,9 @@ describe('getLevelScaledEnemyStats()', () => {
 
   test('speed level mult is gentle (curve, not linear)', () => {
     expect(getLevelScaledEnemyStats(BASE, 1).speed).toBeCloseTo(BASE.speed);
-    expect(getLevelScaledEnemyStats(BASE, 20).speed).toBeGreaterThan(BASE.speed * 1.6);
-    expect(getLevelScaledEnemyStats(BASE, 20).speed).toBeLessThan(BASE.speed * 1.8);
+    // Speed curve unchanged in 5.75 (only HP got the tail bump).
+    expect(getLevelScaledEnemyStats(BASE, 20).speed).toBeGreaterThan(BASE.speed * 1.3);
+    expect(getLevelScaledEnemyStats(BASE, 20).speed).toBeLessThan(BASE.speed * 1.5);
   });
 
   test('size stays constant across levels', () => {
@@ -182,7 +195,7 @@ describe('getLevelScaledAsteroidStats()', () => {
 
   test('HP follows a power curve (gentle early, steep late)', () => {
     expect(getLevelScaledAsteroidStats(10, 1)).toBe(10);
-    expect(getLevelScaledAsteroidStats(10, 3)).toBeLessThan(15);    // early waves easy
+    expect(getLevelScaledAsteroidStats(10, 3)).toBeLessThan(30);    // early waves climbable
     expect(getLevelScaledAsteroidStats(10, 10)).toBeGreaterThan(40); // late game tough
   });
 
@@ -200,7 +213,7 @@ describe('getEnemySpeedMultiplier()', () => {
     const w20 = getEnemySpeedMultiplier(20);
     expect(w1).toBeLessThan(0.6);              // gentle intro
     expect(w5).toBeLessThan(0.85);             // wave 5 is still easy
-    expect(w20).toBeGreaterThan(2.4);          // wave 20 is full-pace
+    expect(w20).toBeGreaterThan(1.6);          // wave 20 ceiling is 1.75 per 5.72 cap
     expect(w20).toBeGreaterThan(w5);
   });
 

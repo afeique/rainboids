@@ -12,78 +12,140 @@
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES } from '../core/constants.js';
 
+// 5.75.0 — Each wave is now a SEQUENCE of sub-waves instead of a single
+// burst spawn. `subWaves` is an array of enemy-group arrays; the wave
+// manager spawns sub-wave 0 at wave start, sub-wave 1 when ≤2 enemies
+// remain (or after a 12s fallback), etc. Wave only ends when ALL
+// sub-waves have spawned AND every enemy is dead. Result: waves last
+// 2–3× longer, density stays manageable, and the player gets time
+// between pulses to breathe / collect orbs / spend picks. Boss waves
+// hold the boss in the final sub-wave so the escort softens the player
+// up first. All non-boss waves get a CHANCE for a mid-wave mini-boss
+// (see wave-manager.spawnLeveledEnemies — the chance is wave-scaled).
 export const WAVE_DATA = {
 
     // ── Act I: First Contact ──
-    // Asteroid counts kept low across the run because rocks bleed
-    // forward into the next wave (no clear-the-field gate anymore).
-    1: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }] },
-    2: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 1 }] },
-    3: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }] },
-    4: { asteroids: 3, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }] },
+    1: { asteroids: 3, subWaves: [
+        [{ type: 'HUNTER', count: 2 }],
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
+    ] },
+    2: { asteroids: 3, subWaves: [
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
+    ] },
+    3: { asteroids: 3, subWaves: [
+        [{ type: 'HUNTER', count: 3 }],
+        [{ type: 'WASP', count: 3 }],
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
+    ] },
+    4: { asteroids: 3, subWaves: [
+        [{ type: 'GUARDIAN', count: 2 }],
+        [{ type: 'WASP', count: 3 }],
+        [{ type: 'GUARDIAN', count: 1 }, { type: 'HUNTER', count: 3 }],
+    ] },
 
-    // ── Boss 1: Iron Giant ──
+    // ── Boss 1: Iron Giant — escort softens, then boss arrives. ──
     5: {
         asteroids: 2, isBossWave: true, bossTier: 1,
-        enemies: [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'GUARDIAN', count: 2 }],
+        subWaves: [
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 2 }],
+            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'GUARDIAN', count: 2 }],
+        ],
     },
 
     // ── Act II: Escalation ──
-    6: { asteroids: 3, enemies: [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }] },
-    7: { asteroids: 3, enemies: [{ type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }] },
-    8: { asteroids: 3, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 1 }] },
-    9: { asteroids: 2, enemies: [{ type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 1 }] },
+    6: { asteroids: 3, subWaves: [
+        [{ type: 'STALKER', count: 2 }],
+        [{ type: 'HUNTER', count: 3 }],
+        [{ type: 'STALKER', count: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
+    ] },
+    7: { asteroids: 3, subWaves: [
+        [{ type: 'DRIFTER', count: 2 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'DRIFTER', count: 1 }, { type: 'HUNTER', count: 3 }],
+    ] },
+    8: { asteroids: 3, subWaves: [
+        [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 1 }],
+        [{ type: 'SENTINEL', count: 1 }, { type: 'HUNTER', count: 3 }],
+    ] },
+    9: { asteroids: 2, subWaves: [
+        [{ type: 'WEAVER', count: 1 }, { type: 'WASP', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }],
+        [{ type: 'WEAVER', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'WASP', count: 1 }],
+    ] },
 
-    // ── Boss 2: Twin Iron ──
+    // ── Boss 2: Twin Iron — two waves of escort, then twin bosses. ──
     10: {
         asteroids: 1, isBossWave: true, bossTier: 2,
-        enemies: [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'GUARDIAN', count: 2 }],
+        subWaves: [
+            [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
+            [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'GUARDIAN', count: 1 }],
+        ],
     },
 
     // ── Act III: The Gauntlet ──
-    11: { asteroids: 2, enemies: [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 1 }] },
-    12: { asteroids: 2, enemies: [{ type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'DRIFTER', count: 1 }] },
-    13: { asteroids: 2, enemies: [{ type: 'WASP', count: 3 }, { type: 'HUNTER', count: 2 }, { type: 'WEAVER', count: 1 }] },
-    14: { asteroids: 2, enemies: [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 1 }] },
+    11: { asteroids: 2, subWaves: [
+        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 1 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 1 }, { type: 'STALKER', count: 1 }, { type: 'WASP', count: 2 }],
+    ] },
+    12: { asteroids: 2, subWaves: [
+        [{ type: 'STALKER', count: 2 }, { type: 'WASP', count: 1 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'DRIFTER', count: 1 }],
+        [{ type: 'STALKER', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'HUNTER', count: 2 }],
+    ] },
+    13: { asteroids: 2, subWaves: [
+        [{ type: 'WASP', count: 4 }],
+        [{ type: 'WEAVER', count: 1 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'WASP', count: 2 }, { type: 'WEAVER', count: 1 }, { type: 'HUNTER', count: 2 }],
+    ] },
+    14: { asteroids: 2, subWaves: [
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 1 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 1 }],
+        [{ type: 'GUARDIAN', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'STALKER', count: 2 }],
+    ] },
 
-    // ── Boss 3: Triple Threat ──
+    // ── Boss 3: Triple Threat — three escort waves before triple TITAN. ──
     15: {
         asteroids: 1, isBossWave: true, bossTier: 3,
-        enemies: [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'SENTINEL', count: 1 }],
+        subWaves: [
+            [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
+            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'SENTINEL', count: 1 }],
+        ],
     },
 
     // ── Act IV: Endgame Approach ──
-    // Counts intentionally low so the steeper HP/speed scaling — not raw
-    // entity count — is what makes these waves hard. Keeps perf solid.
-    16: { asteroids: 2, enemies: [
-        { type: 'HUNTER',   count: 1 },
-        { type: 'GUARDIAN', count: 1 },
-        { type: 'WASP',     count: 1 },
-        { type: 'STALKER',  count: 1 },
+    16: { asteroids: 2, subWaves: [
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'STALKER', count: 1 }, { type: 'GUARDIAN', count: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
     ] },
-    17: { asteroids: 2, enemies: [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }] },
-    18: { asteroids: 2, enemies: [{ type: 'TITAN', count: 1 }, { type: 'TANGERINE', count: 1 }, { type: 'SENTINEL', count: 1 }, { type: 'HUNTER', count: 2 }] },
-    19: { asteroids: 2, enemies: [
-        { type: 'HUNTER',    count: 1 },
-        { type: 'GUARDIAN',  count: 1 },
-        { type: 'WASP',      count: 1 },
-        { type: 'STALKER',   count: 1 },
-        { type: 'DRIFTER',   count: 1 },
-        { type: 'WEAVER',    count: 1 },
-        { type: 'TANGERINE', count: 1 },
+    17: { asteroids: 2, subWaves: [
+        [{ type: 'WEAVER', count: 2 }],
+        [{ type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 1 }],
+        [{ type: 'WEAVER', count: 1 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
+    ] },
+    18: { asteroids: 2, subWaves: [
+        [{ type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'TITAN', count: 1 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }],
+    ] },
+    19: { asteroids: 2, subWaves: [
+        [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 1 }],
+        [{ type: 'STALKER', count: 1 }, { type: 'DRIFTER', count: 1 }, { type: 'WEAVER', count: 1 }],
+        [{ type: 'TANGERINE', count: 1 }, { type: 'GUARDIAN', count: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
     ] },
 
-    // ── Final Boss: The Last Stand ──
-    // Three TITAN bosses (was four) plus a small escort. With bossTier-4
-    // stacking 8× HP / 1.75× size onto level-20 base stats, three is
-    // already a serious wall — and it keeps the late-wave perf budget
-    // from blowing up.
+    // ── Final Boss: The Last Stand. ──
     20: {
         asteroids: 1, isBossWave: true, bossTier: 4, isFinalBoss: true,
-        enemies: [
-            { type: 'TITAN',    count: 3, isBoss: true, bossTier: 4 },
-            { type: 'GUARDIAN', count: 1 },
-            { type: 'SENTINEL', count: 2 },
+        subWaves: [
+            [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 1 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'PROWLER', count: 1 }, { type: 'WEAVER', count: 1 }, { type: 'TANGERINE', count: 1 }],
+            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 4 }, { type: 'GUARDIAN', count: 1 }, { type: 'SENTINEL', count: 1 }],
         ],
     },
 };
@@ -191,7 +253,12 @@ export const WAVE_SUBTITLES_GENERIC = [
 export function getLevelScaledEnemyStats(baseStats, level) {
     const L = Math.max(1, level | 0);
     const t = (L - 1) / 19;
-    const hpMul = 1 + t * 6.5;            // 5.73.0 — was Math.pow(t,1.6)*4.5
+    // 5.75.0 — HP curve recalibrated. Player DPS with stacked upgrades
+    // scales ~12× by mid-game; old linear HP curve maxed at 7.5× which
+    // left late waves feeling soft. New: linear base + steep tail
+    // (`pow(t, 2.5) * 4`) so wave 5 ~2.5×, wave 10 ~4.5×, wave 15 ~6.8×,
+    // wave 20 ~11.5×. The early game stays gentle; the back half bites.
+    const hpMul = 1 + t * 6.5 + Math.pow(t, 2.5) * 4;
     const ptsMul = 1 + Math.pow(t, 1.4) * 5.5;
     const spdMul = 1 + Math.pow(t, 1.4) * 0.4;
     return {

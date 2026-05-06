@@ -231,6 +231,11 @@ class NebulaRenderer {
         const halfH = (viewH || this.fieldHeight) / 2;
         const now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
 
+        // 5.75.0 — cache the global blink phase term once per frame. Was
+        // computed inside the loop; for ~25 stars × 60Hz that's 1500
+        // redundant Math.PI*2 multiplies per second. Same shape, free win.
+        const blinkPhaseBase = now * 5 * Math.PI * 2;
+
         ctx.save();
         for (const star of this.stars) {
             // Per-star animation:
@@ -245,7 +250,7 @@ class NebulaRenderer {
 
             // 5.74.27 — blink dip reduced 0.45 → 0.30 so flicker stays
             // visible without ever pushing the star toward invisibility.
-            const blinkPhaseT = now * 5 * Math.PI * 2 + star.blinkPhase;
+            const blinkPhaseT = blinkPhaseBase + star.blinkPhase;
             const blinkPeak = Math.pow(0.5 + 0.5 * Math.sin(blinkPhaseT), 8);
             const blink = 1 - 0.30 * blinkPeak;
 

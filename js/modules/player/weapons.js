@@ -492,6 +492,15 @@ export function applyGlobalBulletUpgrades(bullet) {
         bullet.explosive = true;
         bullet.explosionRadius = 30 + explosiveStacks * 10;
     }
+
+    // 5.75.0 — LEGENDARY streak qualitative bonus. At the top streak
+    // tier (15+ kills), every bullet gains a small explosion radius
+    // even without the EXPLOSIVE powerup. Stacks with EXPLOSIVE
+    // (additive). Visual payoff for sustained dominance.
+    if (this.streakTierLabel === 'LEGENDARY') {
+        bullet.explosive = true;
+        bullet.explosionRadius = (bullet.explosionRadius || 0) + 22;
+    }
 }
 
 // ── Power weapon dispatch ──────────────────────────────────────────────────
@@ -1181,6 +1190,14 @@ export function getEffectivePrimaryFireRate() {
     // Apply global Rapid Fire — -22% per stack compounding (was -15%)
     const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
     rate *= Math.pow(0.78, rapidFireStacks);
+
+    // 5.75.0 — crit feedback loop: a recent crit grants a brief 30%
+    // reduction in primary fire-rate cooldown for 800ms. Stacks with
+    // RAPID_FIRE multiplicatively. Encourages CRIT_CHANCE / CRIT_DAMAGE
+    // builds by giving a moment-to-moment payoff on top of damage.
+    if (this._critRushUntil && Date.now() < this._critRushUntil) {
+        rate *= 0.70;
+    }
 
     return Math.round(rate);
 }

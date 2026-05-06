@@ -54,7 +54,16 @@ export function updateWaveSystem() {
         return;
     }
 
-    if (totalEnemies === 0 && !this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
+    // 5.75.0 — sub-wave pacing. Try to advance the wave to its next
+    // sub-wave (fires when ≤2 enemies remain or after the 12s fallback).
+    // The wave-complete check below now ALSO requires all sub-waves to
+    // have been spawned — partial waves no longer end early.
+    tryAdvanceSubWave.call(this);
+
+    if (totalEnemies === 0
+        && !this.game.waveComplete
+        && this.game.state === GAME_STATES.PLAYING
+        && allSubWavesSpawned.call(this)) {
         // Wave completed! If this is the final wave, the run is over —
         // route through GAME_COMPLETE instead of opening the shop.
         this.game.waveComplete = true;
@@ -66,6 +75,9 @@ export function updateWaveSystem() {
         // their resume needs to route through startNextWave instead of
         // straight to PLAYING — otherwise the run gets stuck.
         this._pausedFromWaveClear = true;
+
+        // 5.75.0 — resolve the wave's mission (no_damage / asteroid clear).
+        resolveMissionOnWaveClear.call(this);
 
         // 5.72.2 — wave-clear bonuses inlined here. The old
         // `completeWave()` export was never called from the live
@@ -106,6 +118,116 @@ export function updateWaveSystem() {
 export function getWaveSubtitle(waveNumber) {
     if (WAVE_SUBTITLES[waveNumber]) return WAVE_SUBTITLES[waveNumber];
     return WAVE_SUBTITLES_GENERIC[(waveNumber * 7 + 3) % WAVE_SUBTITLES_GENERIC.length];
+}
+
+// 5.75.0 — wave missions (C3). One random side-objective per wave.
+// Reward: +1 powerup pick. Tracked entirely on `this.game.mission`.
+const MISSION_TEMPLATES = [
+    { id: 'no_damage',  label: 'TAKE NO DAMAGE',     desc: 'Clear the wave without taking a hit' },
+    { id: 'fast_kill',  label: 'BLITZKRIEG',         desc: 'Destroy 5 enemies in 8 seconds' },
+    { id: 'asteroid',   label: 'ROCK BREAKER',       desc: 'Destroy every asteroid spawned' },
+    { id: 'streak',     label: 'KEEP THE FIRE',      desc: 'Reach a 12-kill streak this wave' },
+    { id: 'precision',  label: 'PRECISION',          desc: 'Land 25 critical hits this wave' },
+];
+
+export function startWaveMission() {
+    // Boss waves get a fixed mission flavor; non-boss roll random.
+    const wave = this.game.currentWave;
+    const isBoss = isBossWave(wave);
+    const tpl = isBoss
+        ? MISSION_TEMPLATES[0]    // boss waves: take no damage (hard, but iconic)
+        : MISSION_TEMPLATES[(Math.random() * MISSION_TEMPLATES.length) | 0];
+    this.game.mission = {
+        id: tpl.id,
+        label: tpl.label,
+        desc: tpl.desc,
+        progress: 0,
+        target: tpl.id === 'fast_kill' ? 5 : tpl.id === 'streak' ? 12 : tpl.id === 'precision' ? 25 : 1,
+        startTime: Date.now(),
+        completed: false,
+        failed: false,
+        // For 'fast_kill' we track a sliding 8-second window of kill
+        // timestamps; the mission completes the moment the rolling
+        // count hits 5.
+        killTimes: [],
+        damaged: false,
+    };
+}
+
+export function checkMissionOnKill() {
+    const m = this.game.mission;
+    if (!m || m.completed || m.failed) return;
+    if (m.id === 'fast_kill') {
+        const now = Date.now();
+        m.killTimes.push(now);
+        // Drop entries older than 8s.
+        while (m.killTimes.length && now - m.killTimes[0] > 8000) m.killTimes.shift();
+        if (m.killTimes.length >= 5) completeMission.call(this);
+    } else if (m.id === 'streak') {
+        if ((this.killStreakCount || 0) >= m.target) completeMission.call(this);
+    }
+}
+
+export function checkMissionOnCrit() {
+    const m = this.game.mission;
+    if (!m || m.completed || m.failed) return;
+    if (m.id === 'precision') {
+        m.progress++;
+        if (m.progress >= m.target) completeMission.call(this);
+    }
+}
+
+export function checkMissionOnAsteroidDestroy() {
+    const m = this.game.mission;
+    if (!m || m.completed || m.failed) return;
+    if (m.id === 'asteroid') {
+        m.progress++;
+        // Completes when no asteroids remain AND every spawned one is dead.
+        if (this.asteroidPool && this.asteroidPool.activeObjects.length === 0) {
+            completeMission.call(this);
+        }
+    }
+}
+
+export function checkMissionOnDamage() {
+    const m = this.game.mission;
+    if (!m || m.completed || m.failed) return;
+    if (m.id === 'no_damage') {
+        m.failed = true;
+        if (this.events?.emit) {
+            this.events.emit('ui:show-message', {
+                title: 'MISSION FAILED', subtitle: m.label, duration: 1400,
+            });
+        }
+    }
+}
+
+function completeMission() {
+    const m = this.game.mission;
+    if (!m || m.completed) return;
+    m.completed = true;
+    if (this.player) this.player.powerupPicks = (this.player.powerupPicks || 0) + 1;
+    if (this.events?.emit) {
+        this.events.emit('ui:show-message', {
+            title: 'MISSION COMPLETE',
+            subtitle: `${m.label} — +1 PICK`,
+            duration: 2200,
+            position: 'top',
+        });
+    }
+}
+
+// Called on wave clear: completes the no_damage / asteroid missions if
+// the player kept their conditions.
+export function resolveMissionOnWaveClear() {
+    const m = this.game.mission;
+    if (!m || m.completed || m.failed) return;
+    if (m.id === 'no_damage' && !m.damaged) completeMission.call(this);
+    else if (m.id === 'asteroid'
+        && this.asteroidPool
+        && this.asteroidPool.activeObjects.length === 0) {
+        completeMission.call(this);
+    }
 }
 
 export function showWaveComplete() {
@@ -188,27 +310,88 @@ export function startNextWave() {
     }));
 }
 
+// 5.75.0 — sub-wave system. Waves are now sequences of enemy groups,
+// spawned one at a time. spawnWaveEntities only fires sub-wave 0;
+// updateWaveSystem promotes to the next sub-wave when ≤ 2 enemies
+// remain (or after a 12s fallback timer). Wave only ends when all
+// sub-waves have been spawned AND the pool is empty.
 export function spawnWaveEntities() {
-    // Get wave configuration from wave data
     const waveConfig = getWaveConfig(this.game.currentWave);
 
-    // Calculate levels for this wave
     this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
 
+    // Reset sub-wave bookkeeping each wave start.
+    this.game.subWaveIndex = 0;
+    this.game.lastSubWaveSpawnAt = Date.now();
 
-    // Wave-start spawning places entities INSIDE the visible viewport so the
-    // player sees the threats before the wave begins instead of having them
-    // drift in from beyond the gameField edge — important when the player
-    // moves quickly during the WAVE-START message and would otherwise lose
-    // sight of newly spawned entities.
+    // 5.75.0 — assign this wave's mission and announce it.
+    startWaveMission.call(this);
+    if (this.events?.emit && this.game.mission) {
+        this.events.emit('ui:show-message', {
+            title: this.game.mission.label,
+            subtitle: this.game.mission.desc + ' — +1 PICK',
+            duration: 3500,
+            position: 'top',
+        });
+    }
+
+    // Asteroids spawn ONCE at wave start (legacy behavior).
     this.spawnLeveledAsteroids(waveConfig.asteroids, { onScreen: true });
 
-    for (const enemyGroup of waveConfig.enemies) {
+    // First sub-wave (immediate). Subsequent sub-waves come via
+    // updateWaveSystem's pacing logic.
+    spawnSubWave.call(this, 0);
+}
+
+// Spawn the Nth sub-wave's enemy groups. Bumps `subWaveIndex` so the
+// pacing check in updateWaveSystem advances correctly.
+function spawnSubWave(idx) {
+    const waveConfig = getWaveConfig(this.game.currentWave);
+    const subWaves = waveConfig.subWaves
+        || (waveConfig.enemies ? [waveConfig.enemies] : []); // back-compat
+    const groups = subWaves[idx];
+    if (!groups || groups.length === 0) return false;
+
+    for (const enemyGroup of groups) {
         const opts = { onScreen: true };
         if (enemyGroup.isBoss && enemyGroup.bossTier) opts.bossTier = enemyGroup.bossTier;
         this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count, opts);
     }
+    this.game.subWaveIndex = idx + 1;
+    this.game.lastSubWaveSpawnAt = Date.now();
+    return true;
+}
+
+// Try to advance the active wave to the next sub-wave. Called from
+// updateWaveSystem. Returns true if a new sub-wave was spawned.
+export function tryAdvanceSubWave() {
+    if (this.game.state !== GAME_STATES.PLAYING) return false;
+    if (this.game.waveComplete) return false;
+    const waveConfig = getWaveConfig(this.game.currentWave);
+    const subWaves = waveConfig.subWaves
+        || (waveConfig.enemies ? [waveConfig.enemies] : []);
+    const idx = this.game.subWaveIndex || 0;
+    if (idx >= subWaves.length) return false; // all sub-waves spawned
+
+    const enemyCount = this.enemyPool.activeObjects.length;
+    const lastSpawn = this.game.lastSubWaveSpawnAt || 0;
+    const elapsed = Date.now() - lastSpawn;
+
+    // Advance when ≤2 enemies left (player has the field mostly cleared)
+    // OR after a 12s fallback so a defensive build doesn't stall the wave.
+    if (enemyCount <= 2 || elapsed > 12000) {
+        return spawnSubWave.call(this, idx);
+    }
+    return false;
+}
+
+// Returns true once every sub-wave for the current wave has been spawned.
+export function allSubWavesSpawned() {
+    const waveConfig = getWaveConfig(this.game.currentWave);
+    const subWaves = waveConfig.subWaves
+        || (waveConfig.enemies ? [waveConfig.enemies] : []);
+    return (this.game.subWaveIndex || 0) >= subWaves.length;
 }
 
 export function spawnAsteroids(count) {
@@ -246,12 +429,35 @@ export function spawnLeveledAsteroids(count, opts = {}) {
 }
 
 export function spawnLeveledEnemies(enemyType, count, opts = {}) {
+    // 5.75.0 — mid-wave mini-boss promotion. On non-boss spawns from
+    // wave 4 onward, one enemy in the group has a wave-scaled chance of
+    // becoming a "mini-boss": 1.7× HP, 1.25× size, distinct visual tag,
+    // and triple gold drops on death. Adds an interesting threat spike
+    // to the long stretches of regular waves between scripted bosses.
+    let miniBossIdx = -1;
+    if (!opts.bossTier && enemyType !== 'TITAN' && this.game.currentWave >= 4) {
+        const wave = this.game.currentWave;
+        const chance = Math.min(0.45, 0.06 + (wave - 4) * 0.025);
+        // Per group, but only one mini per group (so the player still
+        // sees a manageable mix on dense waves).
+        if (count >= 1 && Math.random() < chance) {
+            miniBossIdx = (Math.random() * count) | 0;
+        }
+    }
+
     for (let i = 0; i < count; i++) {
         const enemy = this.enemyPool.get();
         if (enemy) {
             const sp = this.getRandomSpawnPosition(opts);
             enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
             this.applyEnemyLevelScaling(enemy, opts);
+            if (i === miniBossIdx) {
+                enemy.isMiniBoss = true;
+                enemy.health *= 1.7;
+                enemy.maxHealth *= 1.7;
+                if (typeof enemy.radius === 'number') enemy.radius *= 1.25;
+                if (enemy.config) enemy.config.points = (enemy.config.points || 100) * 2;
+            }
             enemy.startWarpIn(sp.targetX, sp.targetY);
         }
     }

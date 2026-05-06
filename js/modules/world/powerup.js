@@ -54,6 +54,7 @@ export const POWERUP_TYPES = {
         effect: 'rapidFire',
         rarity: 0.3,
         category: 'OFFENSE',
+        maxStacks: 5,
         description: '22% faster shooting per stack'
     },
     MULTI_SHOT: {
@@ -66,6 +67,7 @@ export const POWERUP_TYPES = {
         effect: 'multiShot',
         rarity: 0.18,
         category: 'OFFENSE',
+        maxStacks: 4,
         description: '+1 bullet in a spread per stack'
     },
     HOMING: {
@@ -78,6 +80,7 @@ export const POWERUP_TYPES = {
         effect: 'homing',
         rarity: 0.15,
         category: 'OFFENSE',
+        maxStacks: 3,
         description: 'Bullets track nearest enemy per stack'
     },
     BIG_BULLETS: {
@@ -90,6 +93,7 @@ export const POWERUP_TYPES = {
         effect: 'bigBullets',
         rarity: 0.2,
         category: 'OFFENSE',
+        maxStacks: 4,
         description: '+2.2px bullet radius per stack'
     },
     SPEED_BOOST: {
@@ -102,6 +106,7 @@ export const POWERUP_TYPES = {
         effect: 'speedBoost',
         rarity: 0.22,
         category: 'OFFENSE',
+        maxStacks: 3,
         description: '+65% thrust & +45% top speed per stack'
     },
     PIERCING: {
@@ -114,6 +119,7 @@ export const POWERUP_TYPES = {
         effect: 'piercing',
         rarity: 0.12,
         category: 'OFFENSE',
+        maxStacks: 3,
         description: 'Bullets pass through +1 enemy per stack'
     },
     EXPLOSIVE: {
@@ -126,6 +132,7 @@ export const POWERUP_TYPES = {
         effect: 'explosive',
         rarity: 0.08,
         category: 'OFFENSE',
+        maxStacks: 3,
         description: 'AoE blast on bullet impact (+10px radius per stack)'
     },
     CRIT_CHANCE: {
@@ -138,6 +145,7 @@ export const POWERUP_TYPES = {
         effect: 'critChance',
         rarity: 0.18,
         category: 'OFFENSE',
+        maxStacks: 8,
         description: '+7% critical hit chance per stack'
     },
     CRIT_DAMAGE: {
@@ -150,6 +158,7 @@ export const POWERUP_TYPES = {
         effect: 'critDamage',
         rarity: 0.13,
         category: 'OFFENSE',
+        maxStacks: 6,
         description: '+15% critical hit damage per stack'
     },
     SHIELD_BOOST: {
@@ -162,6 +171,7 @@ export const POWERUP_TYPES = {
         effect: 'shieldBoost',
         rarity: 0.18,
         category: 'OFFENSE',
+        maxStacks: 5,
         description: '-8% damage taken per stack'
     },
     LONG_RANGE: {
@@ -174,6 +184,7 @@ export const POWERUP_TYPES = {
         effect: 'longRange',
         rarity: 0.22,
         category: 'OFFENSE',
+        maxStacks: 3,
         description: '+55% bullet range per stack'
     },
     KNOCKBACK: {
@@ -186,6 +197,7 @@ export const POWERUP_TYPES = {
         effect: 'knockback',
         rarity: 0.18,
         category: 'OFFENSE',
+        maxStacks: 3,
         description: '+40% knockback on all power weapons per stack'
     },
     MEDPACK: {
@@ -198,6 +210,7 @@ export const POWERUP_TYPES = {
         effect: 'medpack',
         rarity: 0.18,
         category: 'DROPS',
+        maxStacks: 4,
         description: 'More health per orb'
     },
     DOCTOR: {
@@ -210,6 +223,7 @@ export const POWERUP_TYPES = {
         effect: 'doctor',
         rarity: 0.09,
         category: 'DROPS',
+        maxStacks: 3,
         description: 'Increases the max amount of health per orb'
     },
     PAYDAY: {
@@ -222,6 +236,7 @@ export const POWERUP_TYPES = {
         effect: 'payday',
         rarity: 0.13,
         category: 'DROPS',
+        maxStacks: 4,
         description: 'More money per orb'
     },
     HIGH_ROLLER: {
@@ -234,6 +249,7 @@ export const POWERUP_TYPES = {
         effect: 'highRoller',
         rarity: 0.09,
         category: 'DROPS',
+        maxStacks: 3,
         description: 'Increases the max amount of money per orb'
     },
     HEALTH_ORB_DROP_CHANCE: {
@@ -246,6 +262,7 @@ export const POWERUP_TYPES = {
         effect: 'healthOrbDropChance',
         rarity: 0.13,
         category: 'DROPS',
+        maxStacks: 5,
         description: '+5% health orb drop chance per stack'
     },
     MONEY_ORB_DROP_CHANCE: {
@@ -258,6 +275,7 @@ export const POWERUP_TYPES = {
         effect: 'moneyOrbDropChance',
         rarity: 0.13,
         category: 'DROPS',
+        maxStacks: 5,
         description: '+5% money orb drop chance per stack'
     },
     HEALTH_ORB_DROP_QUANTITY: {
@@ -270,6 +288,7 @@ export const POWERUP_TYPES = {
         effect: 'healthOrbDropQuantity',
         rarity: 0.08,
         category: 'DROPS',
+        maxStacks: 3,
         description: '+1 max health orbs per drop'
     },
     MONEY_ORB_DROP_QUANTITY: {
@@ -282,6 +301,7 @@ export const POWERUP_TYPES = {
         effect: 'moneyOrbDropQuantity',
         rarity: 0.08,
         category: 'DROPS',
+        maxStacks: 3,
         description: '+1 max money orbs per drop'
     }
 };
