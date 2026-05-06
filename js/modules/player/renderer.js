@@ -100,6 +100,60 @@ export function draw(ctx) {
         ctx.fill();
     }
 
+    // ── Black silhouette outline pass (5.79.0) ────────────────────────────
+    // Drawn FIRST in source-over so the subsequent 'lighter' fills don't
+    // erase the outline. Wraps every major piece (wings, tips, hull,
+    // engine pods, cockpit) in a thick black stroke for visual definition
+    // against bright nebulae.
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = '#000';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 4;
+    // Right wing
+    ctx.beginPath();
+    ctx.moveTo( r * 0.32, -r * 0.18); ctx.lineTo( r * 1.12,  r * 0.28);
+    ctx.lineTo( r * 0.82,  r * 0.68); ctx.lineTo( r * 0.28,  r * 0.58);
+    ctx.closePath(); ctx.stroke();
+    // Left wing
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.32, -r * 0.18); ctx.lineTo(-r * 1.12,  r * 0.28);
+    ctx.lineTo(-r * 0.82,  r * 0.68); ctx.lineTo(-r * 0.28,  r * 0.58);
+    ctx.closePath(); ctx.stroke();
+    // Right tip
+    ctx.beginPath();
+    ctx.moveTo( r * 1.12,  r * 0.28); ctx.lineTo( r * 1.42,  r * 0.08);
+    ctx.lineTo( r * 1.18,  r * 0.56); ctx.lineTo( r * 0.82,  r * 0.68);
+    ctx.closePath(); ctx.stroke();
+    // Left tip
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.12,  r * 0.28); ctx.lineTo(-r * 1.42,  r * 0.08);
+    ctx.lineTo(-r * 1.18,  r * 0.56); ctx.lineTo(-r * 0.82,  r * 0.68);
+    ctx.closePath(); ctx.stroke();
+    // Central hull
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo( r * 0.32, -r * 0.18);
+    ctx.lineTo( r * 0.28,  r * 0.58);
+    ctx.lineTo(0,           r * 0.38);
+    ctx.lineTo(-r * 0.28,  r * 0.58);
+    ctx.lineTo(-r * 0.32, -r * 0.18);
+    ctx.closePath(); ctx.stroke();
+    // Engine pods
+    ctx.lineWidth = 2.6;
+    for (const eng of engines) {
+        ctx.beginPath();
+        ctx.ellipse(eng.x, eng.y, r * 0.13, r * 0.09, 0, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    // Cockpit
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.42, r * 0.17, r * 0.21, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
     // ── Primary swept wings ───────────────────────────────────────────────
     // OPT-2: live GPU blur removed — stroke provides sufficient wing edge glow
     ctx.shadowBlur = 0;

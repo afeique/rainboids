@@ -3,6 +3,19 @@ import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { hideHint } from './hint-system.js';
 
+// 5.79.2 — Hit-test the bottom-center HUD button bar. Mirrors
+// hudButtonHitTest in hud-buttons.js but kept inline here to avoid a
+// circular import (hud/* imports happen at engine-init time).
+function _hitHudButton(engine, sx, sy) {
+    const rects = engine && engine._hudButtonRects;
+    if (!rects) return null;
+    for (const k of Object.keys(rects)) {
+        const r = rects[k];
+        if (sx >= r.x && sx <= r.x + r.w && sy >= r.y && sy <= r.y + r.h) return r.id;
+    }
+    return null;
+}
+
 export function setupEventListeners() {
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -11,6 +24,7 @@ export function setupEventListeners() {
         this.canvas.width = this.width;
         this.canvas.height = this.height;
         if (this.particleRenderer) this.particleRenderer.resize(this.width, this.height);
+        if (this.bulletRenderer && this.bulletRenderer.resize) this.bulletRenderer.resize(this.width, this.height);
         this.events.emit('ui:check-orientation');
     });
 
@@ -22,7 +36,26 @@ export function setupEventListeners() {
     // Handle pause and test keys
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Escape') {
+            // 5.79.0 — Esc closes the stats screen first if it's open.
+            if (this.isStatsScreenOpen && this.isStatsScreenOpen()) {
+                this.toggleStatsScreen();
+                return;
+            }
             this.togglePause();
+        }
+        // 5.79.0 — backtick (`) opens the Diablo-style stats screen.
+        // Allowed in PLAYING / WAVE_TRANSITION / PAUSED. Pressing it
+        // again closes the screen and resumes whatever state was prior.
+        if (e.code === 'Backquote' && !e.repeat) {
+            const allowed =
+                this.game.state === GAME_STATES.PLAYING ||
+                this.game.state === GAME_STATES.WAVE_TRANSITION ||
+                this.game.state === GAME_STATES.PAUSED;
+            if (allowed && this.toggleStatsScreen) {
+                this.toggleStatsScreen();
+                e.preventDefault();
+                return;
+            }
         }
         // Keybind layout:
         //   E (hold)  — radial menu: PRIMARY weapon (mouse picks, click commits)
@@ -42,16 +75,16 @@ export function setupEventListeners() {
             this.game.state === GAME_STATES.PLAYING ||
             this.game.state === GAME_STATES.WAVE_TRANSITION;
 
-        // 5.68.3 — keybind swap. New mapping:
-        //   E → defense skill cycle (was primary)
-        //   R → primary weapon cycle (was power)
-        //   F → power weapon cycle (was skill)
+        // 5.79.3 — keybind reshuffle (per user request):
+        //   F → primary weapon cycle
+        //   E → power weapon cycle
+        //   R → defense skill cycle
         // The radial-menu types stay 'primary' / 'power' / 'skill';
-        // only the key that opens each is reshuffled.
+        // only the keys that open each are remapped.
         const radialKey =
-            e.code === 'KeyE' ? 'skill'   :
-            e.code === 'KeyR' ? 'primary' :
-            e.code === 'KeyF' ? 'power'   : null;
+            e.code === 'KeyF' ? 'primary' :
+            e.code === 'KeyE' ? 'power'   :
+            e.code === 'KeyR' ? 'skill'   : null;
         if (radialKey && !e.shiftKey && cycleAllowed && !e.repeat) {
             this.radialMenu.openFor(radialKey);
             hideHint();
@@ -66,17 +99,21 @@ export function setupEventListeners() {
         // purchase-only via the POWERUPS pause-tab; ground pickups and
         // random grants are gone, so this debug spawner has no place.
         // Solo-key cheat codes (no shift required, gameplay only).
-        // [ → +1000 gold, ] → +5 SP. Quick mid-run boosts that don't
-        // step on Shift+letter combos used elsewhere.
+        //   [   → +1000 gold
+        //   ]   → +5 SP   (5.79.3 — restored. SP currency came back
+        //                  with the 5.78.0 powerupPicks → skillPoints
+        //                  rename. Earlier the cheat had been
+        //                  redirected to gold; now it grants picks
+        //                  again to match the documented behavior.)
         if (this.game.state === GAME_STATES.PLAYING && !e.shiftKey) {
             if (e.code === 'BracketLeft') {
                 this.game.money += 1000;
                 this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+1000 Gold', duration: 1200 });
             } else if (e.code === 'BracketRight') {
-                // 5.76.0 — SP removed; ] now grants 5000 gold so the
-                // cheat key keeps a use without resurrecting the SP UI.
-                this.game.money += 5000;
-                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+5000 Gold', duration: 1200 });
+                if (this.player) {
+                    this.player.skillPoints = (this.player.skillPoints || 0) + 5;
+                }
+                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+5 SP', duration: 1200 });
             }
         }
 
@@ -88,16 +125,16 @@ export function setupEventListeners() {
         // dev-tools console (`window.gameEngine.cheats.*`).
     });
 
-    // Radial-menu keyup — releasing E/R/F closes the menu without changing
+    // Radial-menu keyup — releasing F/E/R closes the menu without changing
     // the equipped item. Tied to the specific key that opened it so other
-    // unrelated keyups don't dismiss it. (5.68.3 keybind swap mirrors
+    // unrelated keyups don't dismiss it. (5.79.3 keybind reshuffle mirrors
     // the keydown above.)
     document.addEventListener('keyup', (e) => {
         if (!this.radialMenu || !this.radialMenu.isOpen()) return;
         const t = this.radialMenu.type;
-        if ((e.code === 'KeyE' && t === 'skill')   ||
-            (e.code === 'KeyR' && t === 'primary') ||
-            (e.code === 'KeyF' && t === 'power')) {
+        if ((e.code === 'KeyF' && t === 'primary') ||
+            (e.code === 'KeyE' && t === 'power')   ||
+            (e.code === 'KeyR' && t === 'skill')) {
             this.radialMenu.cancel();
         }
     });
@@ -155,6 +192,33 @@ export function setupEventListeners() {
             e.stopPropagation();
             return;
         }
+
+        // 5.79.2 — bottom-center HUD buttons (SHOP / STATS) live on the
+        //   canvas. Hit-test FIRST so the click doesn't fall through to
+        //   entity targeting. Same in-screen coords as the rect map
+        //   `_hudButtonRects` produced by drawHudButtons().
+        const rect0 = this.canvas.getBoundingClientRect();
+        const sx = e.clientX - rect0.left;
+        const sy = e.clientY - rect0.top;
+        const hudHit = _hitHudButton(this, sx, sy);
+        if (hudHit) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (hudHit === 'shop') {
+                if (this.game.state === GAME_STATES.SHOP) this.closeShopAndReturn();
+                else this.openShop();
+            } else if (hudHit === 'stats') {
+                if (this.toggleStatsScreen) this.toggleStatsScreen();
+            } else if (hudHit === 'pause') {
+                // 5.79.14 — Pause button moved from DOM to the canvas
+                //   button bar. Same togglePause() entry point as the
+                //   ESC key.
+                if (this.togglePause) this.togglePause();
+            }
+            this._hudPressedButton = null;
+            return;
+        }
+
         if (this.game.state === GAME_STATES.PLAYING) {
             e.preventDefault();
             e.stopPropagation();
@@ -169,6 +233,26 @@ export function setupEventListeners() {
             this.handleEntityTargeting(worldX, worldY);
             return;
         }
+    });
+
+    // 5.79.2 — HUD button mousedown / mouseup feedback. Pressed state
+    //   shows visual depression; click handler above commits the
+    //   action. This block also intercepts mousedown so the radial
+    //   menu doesn't open on a HUD-button press.
+    this.canvas.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        const hit = _hitHudButton(this, sx, sy);
+        if (hit) {
+            this._hudPressedButton = hit;
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+    this.canvas.addEventListener('mouseup', () => {
+        this._hudPressedButton = null;
     });
 
     // Shop click handling with click-outside-to-close
@@ -305,6 +389,9 @@ export function setupEventListeners() {
             // Update cursor position for canvas rendering
             this.cursor.x = this.mouseX;
             this.cursor.y = this.mouseY;
+
+            // 5.79.2 — track HUD button hover for visual feedback.
+            this._hudHoveredButton = _hitHudButton(this, this.mouseX, this.mouseY);
 
             // Handle scrollbar dragging
             if (this.shopScrollThumbDrag && this.game.state === GAME_STATES.SHOP) {

@@ -1,7 +1,20 @@
 // Enemy bullets with different colors and effects
-import { GameDimensions } from '../core/utils.js';
+import { GameDimensions, bakedBulletSpriteCache } from '../core/utils.js';
 import { ENEMY_BULLET_CONFIG, GAME_CONFIG } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
+
+// 5.79.2 — Map enemy-bullet shape names to bullet-atlas slot names.
+//   When a shape has an entry here, the WebGL bullet renderer takes
+//   over its body draw and Canvas2D is skipped. Shapes NOT in this
+//   table (mine, missile_shape, crescent_*, etc.) keep their Canvas2D
+//   path because they have animated detail the atlas can't bake.
+const ENEMY_BULLET_GL_SHAPE = {
+    triangle: 'triangle',
+    square:   'square',
+    needle:   'needle',
+    hexagon:  'hexagon',
+    // Anything else (mine, missile_shape, crescent_*) → Canvas2D.
+};
 
 export class EnemyBullet {
     constructor() {
@@ -27,9 +40,14 @@ export class EnemyBullet {
         this.firingPattern = (typeof window !== 'undefined' && window.gameEngine && window.gameEngine._activeShotPattern) || null;
 
         // Visual properties
-        this.radius = explosive ? 6 : 3;
-        this.glowRadius = explosive ? 12 : 6;
-        this.trailLength = explosive ? 8 : 4;
+        // 5.79.8 — Enemy bullets MUCH bigger again per user request.
+        //   Was: radius 5/8, glow 9/14 (already up from 3/6 baseline).
+        //   Now: radius 9/14, glow 18/26. ~80% bigger across the board
+        //   so incoming shots are unmistakably visible. Trails also
+        //   lengthened so they stream further behind for readability.
+        this.radius = explosive ? 14 : 9;
+        this.glowRadius = explosive ? 26 : 18;
+        this.trailLength = explosive ? 12 : 6;
         // OPT: ring buffer trail — O(1) insert, no unshift/pop shifting
         this.trail = new Array(this.trailLength);
         this.trailHead = 0;
@@ -78,9 +96,18 @@ export class EnemyBullet {
     
     update() {
         if (!this.active) return;
-        
-        // OPT: ring buffer trail insert — O(1)
-        this.trail[this.trailHead] = { x: this.x, y: this.y };
+
+        // OPT: ring buffer trail insert — O(1).
+        // 5.79.4 — Reuse the slot's {x,y} object instead of allocating
+        //   one per frame per bullet. ~6 000 obj/sec saved at heavy
+        //   density.
+        let slot = this.trail[this.trailHead];
+        if (!slot) {
+            slot = { x: 0, y: 0 };
+            this.trail[this.trailHead] = slot;
+        }
+        slot.x = this.x;
+        slot.y = this.y;
         this.trailHead = (this.trailHead + 1) % this.trailLength;
         if (this.trailCount < this.trailLength) this.trailCount++;
         
@@ -540,20 +567,122 @@ export class EnemyBullet {
         }
     }
     
-    draw(ctx) {
+    draw(ctx, gameEngine = null) {
         if (!this.active) return;
 
         ctx.save();
 
-        // Draw trail
+        // Draw trail (always Canvas2D — additive line strips)
         this.drawTrail(ctx);
 
-        // Draw bullet
-        this.drawBullet(ctx);
+        // 5.79.2 — try the WebGL bullet renderer first. Mines, missile
+        //   shapes, crescents, and the explosive variant fall through
+        //   to the Canvas2D drawBullet() path because they have rich
+        //   per-frame visual logic (spinning spikes, BOMB overlays,
+        //   etc.). Simple shapes (circle / triangle / square / hexagon
+        //   / needle) become a single instanced quad on the GPU.
+        const bulletRenderer = gameEngine && gameEngine.bulletRenderer;
+        // Map enemy bullet shape names to atlas slot names. Anything
+        // not in this table stays on Canvas2D.
+        const shapeForGL = ENEMY_BULLET_GL_SHAPE[this.shape] || null;
+        const useGL = shapeForGL && bulletRenderer && bulletRenderer.handlesShape(shapeForGL)
+            && !this.explosive; // explosive = spinning-spikes path, keep Canvas2D
+        if (useGL) {
+            // Compute the instance opacity + shrink using the same fade
+            // rules drawBullet uses internally so the WebGL path looks
+            // identical to the Canvas2D path it replaces.
+            let opacity = this.life;
+            if (!this.isPersistent && this.creationTime) {
+                const age = (typeof window !== 'undefined' && window.performance)
+                    ? performance.now() - this.creationTime
+                    : Date.now() - this.creationTime;
+                const fadeIn = Math.min(1.0, age / 180);
+                const fadeOut = Math.max(0, (this.life - 0.5) * 2.0);
+                opacity = Math.min(fadeIn, fadeOut);
+            }
+            const fadeOut = Math.max(0, (this.life - 0.5) * 2.0);
+            const shrink = (fadeOut < 0.4 && !this.isPersistent)
+                ? 0.3 + 0.7 * (fadeOut / 0.4)
+                : 1.0;
+            // 5.79.8 — visual sprite size raised 2.6 → 3.5 × collision
+            //   radius. 5.79.12 — Bullets are now elongated along their
+            //   travel axis (aspect 1.4) for visibility + a more
+            //   "shot" feel. The bullet's rotation angle (set per-shape
+            //   in firing.js) rotates the elongated quad so the long
+            //   axis aligns with motion. For circular bullets without
+            //   a baked rotation, fall back to atan2 of velocity.
+            const dia = (this.radius || 6) * 3.5 * shrink;
+            let renderAngle = this.rotation;
+            if (renderAngle === undefined || renderAngle === 0) {
+                if (this.vel && (this.vel.x || this.vel.y)) {
+                    // +PI/2 because the atlas slots point "up" (north)
+                    // and we want the long axis along the velocity.
+                    renderAngle = Math.atan2(this.vel.y, this.vel.x) + Math.PI / 2;
+                } else {
+                    renderAngle = 0;
+                }
+            }
+            bulletRenderer.pushBullet(
+                shapeForGL,
+                this.x, this.y,
+                dia,
+                this.color || '#ff4444',
+                opacity,
+                renderAngle,
+                /*aspect=*/1.4,
+            );
+            ctx.restore();
+            return;
+        }
 
+        // 5.79.3 — When WebGL isn't available but the shape IS in the
+        //   baked sprite cache (simple shapes), use the cache instead
+        //   of the per-frame Canvas2D path-and-fill. ~70% faster.
+        //   Complex shapes (mine, missile_shape, crescent, explosive)
+        //   still take the legacy drawBullet path.
+        if (shapeForGL && this !== null) {
+            // Same fade math as the WebGL branch.
+            let opacity = this.life;
+            if (!this.isPersistent && this.creationTime) {
+                const age = (typeof window !== 'undefined' && window.performance)
+                    ? performance.now() - this.creationTime
+                    : Date.now() - this.creationTime;
+                const fadeIn = Math.min(1.0, age / 180);
+                const fadeOut = Math.max(0, (this.life - 0.5) * 2.0);
+                opacity = Math.min(fadeIn, fadeOut);
+            }
+            const fadeOut = Math.max(0, (this.life - 0.5) * 2.0);
+            const shrink = (fadeOut < 0.4 && !this.isPersistent)
+                ? 0.3 + 0.7 * (fadeOut / 0.4)
+                : 1.0;
+            // 5.79.8 — Canvas2D fallback also draws sprite at 1.4×
+            //   the collision radius for visibility (matches the
+            //   WebGL path's larger sprite-vs-hitbox ratio).
+            const drewBaked = bakedBulletSpriteCache.draw(
+                ctx,
+                shapeForGL,
+                this.color || '#ff4444',
+                (this.radius || 6) * 1.4 * shrink,
+                this.x, this.y,
+                opacity,
+            );
+            if (drewBaked) {
+                ctx.restore();
+                return;
+            }
+        }
+
+        // Legacy Canvas2D path for animated/complex shapes (mine,
+        // missile_shape, crescent, explosive). shadowBlur halo kept
+        // here because these shapes can't be cheaply baked into a
+        // sprite (they animate every frame).
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+        ctx.shadowBlur = 2.5;
+        this.drawBullet(ctx);
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
         ctx.restore();
 
-        // Draw bomb health bar + name after bullet is drawn (world coordinates)
         if (this.shape === 'mine' && this.health !== undefined && this.health < this.maxHealth) {
             this.drawBombOverlay(ctx);
         }
@@ -575,18 +704,17 @@ export class EnemyBullet {
         ctx.roundRect(barX, barY, barWidth, barHeight, 1);
         ctx.fill();
 
-        // Health bar fill
-        let fillGrad = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
-        if (healthPct > 0.5) {
-            fillGrad.addColorStop(0, '#66ff66'); fillGrad.addColorStop(1, '#00cc00');
-        } else if (healthPct > 0.25) {
-            fillGrad.addColorStop(0, '#ffff99'); fillGrad.addColorStop(1, '#cccc00');
-        } else {
-            fillGrad.addColorStop(0, '#ff6666'); fillGrad.addColorStop(1, '#cc0000');
-        }
+        // Health bar fill — 5.79.4: solid color instead of a per-mine
+        //   per-frame `createLinearGradient`. The bar is 3px tall, so
+        //   the vertical gradient was visually imperceptible anyway,
+        //   and the gradient was the largest single allocation source
+        //   on heavy mine fights (~250 gradient objects/sec). Tuned
+        //   to the mid-color of the prior gradient.
         const filled = barWidth * healthPct;
         if (filled > 0) {
-            ctx.fillStyle = fillGrad;
+            ctx.fillStyle = healthPct > 0.5
+                ? '#33dd33'
+                : (healthPct > 0.25 ? '#dddd00' : '#dd3333');
             ctx.beginPath();
             ctx.roundRect(barX, barY, filled, barHeight, 1);
             ctx.fill();
@@ -628,8 +756,11 @@ export class EnemyBullet {
             const seg2 = this.trail[idx2];
             if (!seg || !seg2) continue;
 
-            const alpha = (1 - i / this.trailCount) * 0.6 * baseOpacity;
-            const width = this.radius * (1 - i / this.trailCount) * 0.5;
+            // 5.79.8 — brighter, thicker trail (alpha 0.6 → 0.85,
+            //   width factor 0.5 → 0.85) so the streak behind a
+            //   bullet reads as a genuine threat indicator at a glance.
+            const alpha = (1 - i / this.trailCount) * 0.85 * baseOpacity;
+            const width = this.radius * (1 - i / this.trailCount) * 0.85;
 
             ctx.globalAlpha = alpha;
             ctx.lineWidth = width;

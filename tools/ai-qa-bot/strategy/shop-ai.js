@@ -15,7 +15,8 @@
 
 import { BUILD_ARCHETYPES } from '../core/config.js';
 
-const SHOP_CATEGORIES = ['OFFENSE', 'DEFENSE', 'DROPS', 'PRIMARY', 'POWER', 'SKILLS'];
+// 5.78.2 — DROPS category removed (drops now scale with player level).
+const SHOP_CATEGORIES = ['OFFENSE', 'DEFENSE', 'PRIMARY', 'POWER', 'SKILLS'];
 
 // How many waves of telemetry to use for need scoring
 const TELEMETRY_WINDOW = 5;
@@ -443,15 +444,12 @@ export class ShopAI {
     }
 
     _guessCategoryForItem(itemId) {
+        // 5.78.2 — DROPS category removed.
         const offense = ['RAPID_FIRE', 'CRIT_CHANCE', 'CRIT_DAMAGE', 'MULTI_SHOT',
                          'HOMING', 'PIERCING', 'EXPLOSIVE', 'LONG_RANGE', 'SPARE_SHIP'];
         const defense = ['HEALTH_BOOST', 'SHIELD_BOOST', 'SPEED_BOOST'];
-        const drops = ['MEDPACK', 'DOCTOR', 'PAYDAY', 'HIGH_ROLLER',
-                       'HEALTH_ORB_DROP_CHANCE', 'MONEY_ORB_DROP_CHANCE',
-                       'HEALTH_ORB_DROP_QUANTITY', 'MONEY_ORB_DROP_QUANTITY'];
         if (offense.includes(itemId)) return 'OFFENSE';
         if (defense.includes(itemId)) return 'DEFENSE';
-        if (drops.includes(itemId)) return 'DROPS';
         return 'OFFENSE';
     }
 

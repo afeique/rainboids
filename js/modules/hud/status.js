@@ -6,20 +6,34 @@ import { GAME_STATES } from '../core/constants.js';
 import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
 import { DEFENSE_SKILLS } from '../combat/weapon-data.js';
 import { WAVY_PALETTES } from './overlays.js';
+import { drawHudButtons } from './hud-buttons.js';
 
 export function drawHUD() {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
             // Draw health bar and UI elements
             this.updateHUD();
-            // Show shop / pause / hud-shop buttons during gameplay
-            this.events.emit('ui:show-shop-button');
+            // 5.79.2 — DOM hud-shop button is replaced by canvas-rendered
+            //   bottom-center buttons (see drawHudButtons below). Pause
+            //   button kept on DOM for now.
+            this.events.emit('ui:hide-hud-shop-btn');
             this.events.emit('ui:show-pause-btn');
-            this.events.emit('ui:show-hud-shop-btn');
         } else {
-            // Hide them on title screen and while shop is open
             this.events.emit('ui:hide-shop-button');
             this.events.emit('ui:hide-pause-btn');
             this.events.emit('ui:hide-hud-shop-btn');
+        }
+
+        // 5.79.2 — bottom-center canvas-rendered button bar (SHOP +
+        //   STATS). Drawn so the reticule cursor floats over them
+        //   like any in-world entity. Skipped on TITLE_SCREEN +
+        //   GAME_OVER + SHOP.
+        if (this.game.state === GAME_STATES.PLAYING
+            || this.game.state === GAME_STATES.WAVE_TRANSITION
+            || this.game.state === GAME_STATES.PAUSED) {
+            drawHudButtons(this.ctx, this);
+        } else {
+            // Clear stale rects so input handlers don't act on them.
+            this._hudButtonRects = null;
         }
 
         // 5.78.0 — defense indicators render in EVERY non-title state,
@@ -367,23 +381,40 @@ export function drawBottomRightGold(ctx) {
         const rowY = this.canvas.height - 40 - 36;
         const x = this.canvas.width - margin;
 
-        // ── 1. Detect gains, spawn popups ──────────────────────────────
+        // ── 1. Detect gains, coalesce popups ──────────────────────────
         // First-frame init (avoids a phantom +game.money popup on boot).
         if (!this._goldInit) {
             this._lastSeenMoney = this.game.money;
             this._displayedMoney = this.game.money;
             this._goldInit = true;
+            this._goldPending = 0;
+            this._goldPendingDeadline = 0;
         }
         const real = this.game.money;
         const delta = real - this._lastSeenMoney;
+        const nowMs = Date.now();
+        // 5.79.1 — Coalesce gold-pickup popups. Instead of pushing a
+        //   "+N" popup on every per-orb delta (which produced 4-30
+        //   stacked popups during a multi-orb collection burst), we
+        //   accumulate deltas into a running total and flush ONE big
+        //   popup after a short quiet window (250 ms of no new gains).
+        //   Counter flash + slot-roll still fire per-gain so the gold
+        //   reads "active"; only the floating popups are deduped.
+        const COALESCE_MS = 250;
         if (delta > 0) {
-            // 5.72.3 — popups arc parabolically. Two spawn points per
-            // gain so the feedback reads from both screen-corner gold
-            // counter AND the action zone:
-            //   1. Anchored at the bottom-right gold readout
-            //   2. Anchored over the player (5.73.0 addition) so the
-            //      "+N" pops above the ship as it scoops up the orb
-            const amount = Math.round(delta);
+            this._goldPending = (this._goldPending || 0) + delta;
+            this._goldPendingDeadline = nowMs + COALESCE_MS;
+            this._goldFlashUntil = nowMs + 280; // counter flash on every tick
+        }
+        this._lastSeenMoney = real;
+
+        // Flush the pending burst once the quiet window expires.
+        if (this._goldPending > 0 && nowMs >= this._goldPendingDeadline) {
+            const amount = Math.round(this._goldPending);
+            this._goldPending = 0;
+
+            // Two spawn points: HUD-anchored (bottom-right) + player-
+            // anchored (over the ship). Both are arc-trajectory floaters.
             const jitter = (Math.random() - 0.5) * 30;
             this.goldPopups.push({
                 amount, x: x - 60 + jitter, y: rowY - 8,
@@ -391,12 +422,10 @@ export function drawBottomRightGold(ctx) {
                 vy: -3.6,
                 gravity: 0.18,
                 life: 1.0,
-                maxLife: 1100,
+                maxLife: 1300,
                 age: 0,
+                big: amount >= 50,        // 5.79.1 — bigger glyph for chunky payouts
             });
-            // Player-anchored popup. Player coords are world-space; the
-            // HUD draw runs in screen-space (after the camera transform
-            // is restored), so convert via this.camera.
             if (this.player && this.player.active && this.camera) {
                 const ps = (Math.random() - 0.5) * 24;
                 this.goldPopups.push({
@@ -407,18 +436,15 @@ export function drawBottomRightGold(ctx) {
                     vy: -3.6,
                     gravity: 0.18,
                     life: 1.0,
-                    maxLife: 1100,
+                    maxLife: 1300,
                     age: 0,
+                    big: amount >= 50,
                 });
             }
-            if (this.goldPopups.length > 32) {
-                this.goldPopups.splice(0, this.goldPopups.length - 32);
+            if (this.goldPopups.length > 16) {
+                this.goldPopups.splice(0, this.goldPopups.length - 16);
             }
-
-            // Counter flash — kicks in for ~280 ms on every gain.
-            this._goldFlashUntil = Date.now() + 280;
         }
-        this._lastSeenMoney = real;
 
         // ── 2. Slot-roll smoothing ────────────────────────────────────
         // Lerp by 18%/frame toward real, with a minimum step so small
@@ -503,14 +529,20 @@ export function drawBottomRightGold(ctx) {
             }
             ctx.save();
             ctx.globalAlpha = p.life;
-            ctx.font = "bold 18px 'Press Start 2P', monospace";
+            // 5.79.1 — chunky payouts (≥50 gold) get a 24px glyph,
+            //   smaller drips stay at 18px. The coalesced popup is
+            //   the only "+N" the player sees per pickup burst.
+            ctx.font = p.big
+                ? "bold 24px 'Press Start 2P', monospace"
+                : "bold 18px 'Press Start 2P', monospace";
             ctx.fillStyle = '#FFD700';
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
+            ctx.lineWidth = p.big ? 4 : 3;
+            ctx.lineJoin = 'round';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             // Slight scale grow at spawn → fade so the popup feels poppy.
-            const popScale = 1 + 0.25 * Math.min(1, p.age / 120);
+            const popScale = 1 + (p.big ? 0.32 : 0.25) * Math.min(1, p.age / 120);
             ctx.translate(p.x, p.y);
             ctx.scale(popScale, popScale);
             const txt = `+${p.amount}`;

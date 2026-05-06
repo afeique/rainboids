@@ -59,6 +59,27 @@
         <span class="hud-pause-bar"></span>
     </button>
 
+    <!-- 5.79.0 — Diablo-style stats screen, opened by the ` (backtick)
+         key. Pauses the game while open. Hover any stat row for a
+         tooltip that explains how that stat is computed and how it
+         scales with level. -->
+    <div id="stats-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%; position: fixed; top: 0; left: 0; z-index: 9000; pointer-events: auto;">
+        <div id="stats-panel" role="dialog" aria-label="Player Stats">
+            <div id="stats-panel-header">
+                <h2 id="stats-panel-title">CHARACTER</h2>
+                <button id="stats-panel-close" aria-label="Close stats">×</button>
+            </div>
+            <div id="stats-panel-body">
+                <div id="stats-summary"></div>
+                <div id="stats-columns"></div>
+            </div>
+            <div id="stats-tooltip" role="tooltip"></div>
+            <div id="stats-panel-footer">
+                <span class="stats-hint">Hover stats for details · Press <kbd>\`</kbd> or <kbd>Esc</kbd> to close</span>
+            </div>
+        </div>
+    </div>
+
     <div id="pause-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%;">
         <div id="pause-menu">
             <div class="pause-menu-actions">
@@ -139,10 +160,8 @@
 
             <div id="powerups-tab" class="pause-tab-content">
                 <h2 style="text-align: center;">POWERUPS</h2>
-                <div class="powerups-subtab-row">
-                    <button class="powerups-subtab active" data-subtab="OFFENSE">OFFENSE</button>
-                    <button class="powerups-subtab" data-subtab="DROPS">DROPS</button>
-                </div>
+                <!-- 5.79.0 — OFFENSE sub-tab removed too. All powerups
+                     render as one flat list now. -->
                 <div id="powerups-items-list" style="overflow-y: auto; margin-top: 16px; display: flex; flex-direction: column; gap: 8px; max-height: 60vh;">
                     <!-- Populated by ui-manager.renderPowerupsOverlay() -->
                 </div>
@@ -276,6 +295,11 @@
          layer shows through. -->
     <canvas id="glCanvas"></canvas>
     <canvas id="gameCanvas"></canvas>
+    <!-- 5.79.2 — WebGL bullet layer. Sits ABOVE gameCanvas so bullets
+         render on top of asteroids / enemies / player (drawn on
+         gameCanvas) but BELOW HUD elements. Shares the WebGL2 pattern
+         with glCanvas but has its own context. -->
+    <canvas id="bulletCanvas"></canvas>
 
     <!-- Contextual hint overlay (driven by js/modules/ui/hint-system.js) -->
     <div id="hint-overlay">

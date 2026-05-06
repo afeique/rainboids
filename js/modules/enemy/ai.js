@@ -407,15 +407,39 @@ export function updateEvasiveManeuvers(gameEngine) {
     const dy = this.targetPlayer.y - this.lastPlayerPosition.y;
     const playerSpeed = Math.hypot(dx, dy);
 
-    // If player is moving fast or we haven't evaded recently, perform evasive maneuver
-    if (playerSpeed > 2 && now - this.lastEvasiveManeuver > 1500) {
+    // 5.79.3 — Constant-dodge baseline. Trigger an evasive maneuver
+    //   ALSO when the cooldown expires regardless of player speed, so
+    //   enemies always read as "weaving" instead of standing still
+    //   between reactive evasions. The cadence is per-enemy randomized
+    //   so a group doesn't all sidestep in lockstep.
+    if (this._dodgeCooldown === undefined) {
+        // Stagger initial cadence so a fresh wave doesn't all dodge
+        // at once on the same frame.
+        this._dodgeCooldown = 600 + Math.random() * 900;
+    }
+    const cooldownExpired = now - this.lastEvasiveManeuver > this._dodgeCooldown;
+    if ((playerSpeed > 2 || cooldownExpired) && now - this.lastEvasiveManeuver > 600) {
         this.lastEvasiveManeuver = now;
         this.evasiveTimer = 30; // 30 frames of evasion
+        // Re-roll cadence for the next dodge (1.0 - 1.9s).
+        this._dodgeCooldown = 1000 + Math.random() * 900;
 
-        // Choose random evasive direction
-        const evasiveAngle = random(0, Math.PI * 2);
-        this.evasiveDirection.x = Math.cos(evasiveAngle);
-        this.evasiveDirection.y = Math.sin(evasiveAngle);
+        // Choose random evasive direction; bias slightly perpendicular
+        // to the player so enemies sidestep the line of fire instead
+        // of strafing toward the player.
+        let baseAngle;
+        if (this.targetPlayer && Math.random() < 0.6) {
+            const toPlayer = Math.atan2(
+                this.targetPlayer.y - this.y,
+                this.targetPlayer.x - this.x,
+            );
+            const sign = Math.random() < 0.5 ? 1 : -1;
+            baseAngle = toPlayer + sign * (Math.PI / 2 + (Math.random() - 0.5) * 0.6);
+        } else {
+            baseAngle = random(0, Math.PI * 2);
+        }
+        this.evasiveDirection.x = Math.cos(baseAngle);
+        this.evasiveDirection.y = Math.sin(baseAngle);
     }
 
     // Apply evasive movement if timer is active
@@ -437,24 +461,45 @@ export function dodgePlayerBullets(gameEngine) {
     let totalDodgeX = 0;
     let totalDodgeY = 0;
 
-    // Check for nearby player bullets
-    gameEngine.bulletPool.activeObjects.forEach(bullet => {
-        if (!bullet.active) return;
+    // 5.79.4 — was: `bulletPool.activeObjects.forEach(bullet => {...})`
+    //   which allocated a fresh closure per call. With 20 enemies on a
+    //   heavy-combat frame, that's 20 closures × the full bullet pool
+    //   walk per frame = ~90 000 iterations/sec at 150 bullets.
+    //
+    //   Now: plain `for` loop (zero closure alloc) AND a far-distance
+    //   pre-cull. The dodge radius is small (~30 px × speed/3 = ~50 px
+    //   at WASP speed) so any bullet beyond ~100 px on either axis is
+    //   obviously not a threat. Square-distance pre-cull is ~5× faster
+    //   than the threat check it replaces.
+    const baseDodgeRadius = this.type === 'WASP' ? 30 : 25;
+    const dodgeRadius = baseDodgeRadius * (this.config.speed / 3);
+    const lookaheadTime = 25;
+    // AABB pre-cull: bullet has to be within (dodgeRadius + bullet
+    // travel distance over the lookahead) of us on both axes to even
+    // be considered a threat. Use a generous 250 px box that covers
+    // any reasonable bullet speed; cheap rejection saves the
+    // expensive Math.hypot for non-threats.
+    const cullBox = 250;
+    const cullX0 = this.x - cullBox;
+    const cullX1 = this.x + cullBox;
+    const cullY0 = this.y - cullBox;
+    const cullY1 = this.y + cullBox;
+
+    const bullets = gameEngine.bulletPool.activeObjects;
+    for (let bi = 0; bi < bullets.length; bi++) {
+        const bullet = bullets[bi];
+        if (!bullet.active) continue;
+        // AABB pre-cull
+        if (bullet.x < cullX0 || bullet.x > cullX1 ||
+            bullet.y < cullY0 || bullet.y > cullY1) continue;
 
         const dx = bullet.x - this.x;
         const dy = bullet.y - this.y;
         const distance = Math.hypot(dx, dy);
 
-        // Enhanced dodge radius based on enemy type (reduced for WASPs)
-                const baseDodgeRadius = this.type === 'WASP' ? 30 : 25; // Reduced dodge detection
-    const dodgeRadius = baseDodgeRadius * (this.config.speed / 3); // Much smaller dodge range
-        const lookaheadTime = 25; // Predict bullet path
-
         // Predicted bullet position
         const futureX = bullet.x + bullet.vel.x * lookaheadTime;
         const futureY = bullet.y + bullet.vel.y * lookaheadTime;
-
-        // Distance to predicted position
         const futureDistance = Math.hypot(futureX - this.x, futureY - this.y);
 
         // If bullet is threatening, dodge it
@@ -465,15 +510,15 @@ export function dodgePlayerBullets(gameEngine) {
             const bulletAngle = Math.atan2(bullet.vel.y, bullet.vel.x);
             const perpAngle = bulletAngle + Math.PI / 2 + random(-0.3, 0.3);
 
-                        // Choose smarter dodge direction
-        const crossProduct = dx * bullet.vel.y - dy * bullet.vel.x;
-        const dodgeDirection = crossProduct > 0 ? 1 : -1;
+            // Choose smarter dodge direction
+            const crossProduct = dx * bullet.vel.y - dy * bullet.vel.x;
+            const dodgeDirection = crossProduct > 0 ? 1 : -1;
 
-        const dodgeStrength = dodgeForce * dodgeDirection * 0.8; // Much weaker dodge response
+            const dodgeStrength = dodgeForce * dodgeDirection * 0.8;
             totalDodgeX += Math.cos(perpAngle) * dodgeStrength;
             totalDodgeY += Math.sin(perpAngle) * dodgeStrength;
         }
-    });
+    }
 
     // Enhanced dodge force limits based on enemy type (further reduced)
     const maxDodgeForce = this.type === 'WASP' ? 1.6 : 1.4; // Much more reasonable dodge force

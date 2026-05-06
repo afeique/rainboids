@@ -35,10 +35,13 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 Rainboids is a supercharged asteroids game featuring:
 - **6 primary weapons**, **4 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs
-- **20 powerup types** with stacking mechanics and visual indicators — picks-only since 5.70.0 (earned 1/wave + 1/level-up, spent in the shop's POWERUPS tab for full build freedom)
+- **12 powerup types** with stacking mechanics and visual indicators — picks-only since 5.70.0 (earned 1/wave + 1/level-up, spent in the shop's POWERUPS tab for full build freedom). Drop rate, drop quantity, and per-orb amount now scale automatically with player level (5.78.2) instead of being bought as discrete picks.
 - **Kill-streak damage tiers** (EMPOWERED → UNSTOPPABLE → GODLIKE → LEGENDARY) — sustained kills without taking damage build up to +100% damage
 - **20-wave speedrun campaign** with four scripted boss waves (waves 5/10/15/20) and a Game Complete stats screen — finish the run as fast as possible
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
+- **Save / Continue** (5.79.0): wave-start auto-save lets the player resume from the title screen's **CONTINUE** button. **NEW GAME** rolls a randomized starting loadout (primary, power, skill) and clears the save.
+- **Diablo-style stats screen** (5.79.0): press \` to pause and inspect level / XP / vitals / offense / economy / world-scaling with hover tooltips explaining every formula.
+- **Persistent volume settings** (5.79.0): music + SFX sliders save to localStorage.
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **68 background music tracks** spanning chiptune, synthwave, and electronic
 - **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 47 WAVs; granular hit sounds per enemy bullet pattern, per player primary weapon, and per enemy-type destruction (10 ships, each with a unique destruction signature), plus per-skill activation accents and a UI click tick
@@ -81,7 +84,7 @@ Primary weapons are free — they auto-unlock at wave milestones as you progress
 | 🔫 | Pulse Cannon | Start | Reliable stream of energy shots |
 | 🌧️ | Storm Needles | Wave 3 | Rapid tiny shots — saturation fire |
 | 💥 | Scatter Gun | Wave 5 | Shotgun burst, devastating up close |
-| ⚡ | Lightning Arc | Wave 5 | Continuous lightning tether — short range, hits nearest target |
+| ⚡ | Arc Lightning | Wave 5 | Continuous lightning tether — frayed forward static when out of range, focused beam when locked on (range 360 px, 5.79.0) |
 | 🧬 | Rail Driver | Wave 8 | Slow, powerful piercing rail — fires a double-helix pair |
 | 🔦 | Lance Beam | Wave 12 | Continuous beam tether — stops at first hit |
 
@@ -158,20 +161,22 @@ Per-powerup `maxStacks` limits still apply. Picks-currency items are non-refunda
 | 🏹 | Long Range | +40% bullet range |
 | ⭐ | Crit Chance | +5% critical hit chance |
 
-### Defensive / Utility (11)
+### Defensive / Utility (3)
 | Icon | Powerup | Effect per stack |
 |------|---------|-----------------|
 | 🗡️ | Crit Damage | +10% critical hit damage |
 | 🛡 | Shield Boost | Temporary damage reduction |
 | ⏳ | Triage | -5s on the global health-orb drop cooldown (60s base → 30s floor at 6 stacks) |
-| 💊 | Medpack | More health per orb pickup |
-| 🏥 | Doctor | Increases max health per orb |
-| 💵 | Payday | More money per orb pickup |
-| 🎰 | High Roller | Increases max money per orb |
-| 🍀 | Health Orb Drop Chance | +5% health orb drop rate |
-| 💚 | Health Orb Drop Quantity | +1 health orbs per drop |
-| 💰 | Money Orb Drop Chance | +5% money orb drop rate |
-| 🪙 | Money Orb Drop Quantity | +1 money orbs per drop |
+
+### Drop Economy — Auto-Scales With Player Level (5.78.2)
+The DROPS-category powerups (Medpack, Doctor, Payday, High Roller, Health/Money Drop Chance / Quantity) were removed in 5.78.2. The drop economy now scales **automatically with player level** instead of being bought as discrete picks:
+- **Drop rate**: +1.5%/level past 1 (level 20 → +28.5% on top of the base + entity bonuses).
+- **Drop quantity ceiling**: +1 max orb every 5 levels (L5 +1, L10 +2, L15 +3, L20 +4).
+- **Health orb amount**: +0.6 HP/level on the floor, +0.75 HP/level on the ceiling.
+- **Money orb amount**: +3 / +5 per level on min/max (Gold Find still applies on top).
+
+### Player Damage — Static (5.79.0 Reset)
+Player base damage **does NOT scale with player level**. The 5.78.2 `+4%/level` curve was reverted in 5.79.0 — DPS growth comes exclusively from shop upgrades, CRIT_CHANCE / CRIT_DAMAGE, RAPID_FIRE / MULTI_SHOT / BIG_BULLETS / PIERCING / EXPLOSIVE / LONG_RANGE / HOMING, and the kill-streak damage tier. To compensate, enemy and asteroid level scaling was steepened (enemy HP +0.22/lvl, dmg +0.30/lvl; asteroid HP +0.35/lvl, collision dmg +0.30/lvl). High-wave encounters require building DPS through the shop, not coasting on level-ups.
 
 ### Pickup Magnetism
 **Money orbs** use the strong three-tier magnetic pull (always-on long-range homing, stronger inside 100 px, magnetic snap inside 40 px). Tractor-beam key adds an extra long-range pull. **Green health orbs** (5.71.0 redesign) drift gently toward the player with the powerup-style soft magnet (same three-tier shape, 0.55× scale) and have a `life` countdown that fades them out before pool release — mechanically identical to powerup pickups. The player still has to commit toward the orb to collect it quickly; if they ignore it, it expires. Health-orb drops are still globally throttled (default 60 s between drop events) — see the Triage shop upgrade.
@@ -407,7 +412,9 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── pool-manager.js #  O(1) object pooling system
 │       │   ├── game-state.js  #   State machine with transition validation
 │       │   ├── event-bus.js   #   Lightweight synchronous pub/sub
-│       │   └── game-timer.js  #   Frame-counted timers (freeze during pause/shop)
+│       │   ├── game-timer.js  #   Frame-counted timers (freeze during pause/shop)
+│       │   ├── version.js     #   VERSION export (single-source build tag)
+│       │   └── storage.js     #   localStorage helpers — settings + wave-start save (5.79.0)
 │       ├── player/            # Player entity and subsystems
 │       │   ├── player.js      #   Player entity (movement, update, draw orchestration)
 │       │   ├── weapons.js     #   35 weapon methods (primary + power fire, charging, equip)
@@ -459,7 +466,9 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button, lives)
 │       │   ├── input-handler.js # Keyboard + mouse input (desktop-only build)
 │       │   ├── event-setup.js #   All event listeners: input, shop, cheats, resize
-│       │   └── radial-menu.js #   Held E/R/F radial picker for primary/power/skill
+│       │   ├── radial-menu.js #   Held E/R/F radial picker for primary/power/skill
+│       │   ├── stats-overlay.js # Diablo-style stats screen (` key, 5.79.0)
+│       │   └── hint-system.js #   Onboarding hint toasts
 │       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle renderer + atlas
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
 ├── css/

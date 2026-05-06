@@ -2,6 +2,7 @@
 import { MusicPlayer } from '../audio/music-player.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
+import { loadSettings, saveSettings } from '../core/storage.js';
 
 // Format an elapsed-time milliseconds value as M:SS for the pause-menu
 // TIMER tab. Mirrors the same formatter that lives in shop-dom.js for
@@ -12,6 +13,30 @@ function formatRunTime(ms) {
     const m = Math.floor(totalSec / 60);
     const s = totalSec % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// 5.79.3 — Beam-aware powerup description swap. When the equipped
+//   primary is a continuous-tether beam (Lance Beam, Arc Lightning),
+//   the bullet-flavored powerups don't actually fire faster / spawn
+//   more bullets / explode — instead they buff the beam's per-tick
+//   damage (see fireLanceBeam / checkLightningCollisions in 5.79.3).
+//   Show the player the right effect for their loadout. Falls back
+//   to the cfg.description for non-beam primaries or other powerups.
+const BEAM_PRIMARIES = new Set(['LANCE_BEAM', 'LIGHTNING_ARC']);
+const BEAM_DPS_DESCRIPTIONS = {
+    RAPID_FIRE:  'Beam: +22% DPS per stack',
+    MULTI_SHOT:  'Beam: +30% DPS per stack',
+    BIG_BULLETS: 'Beam: +18% DPS per stack',
+    PIERCING:    'Beam: +15% DPS per stack',
+    HOMING:      'Beam: +10% DPS per stack',
+    EXPLOSIVE:   'Beam: +25% DPS per stack',
+};
+function _beamAwarePowerupDescription(type, cfg, player) {
+    const equipped = player && player.activePrimary;
+    if (BEAM_PRIMARIES.has(equipped) && BEAM_DPS_DESCRIPTIONS[type]) {
+        return BEAM_DPS_DESCRIPTIONS[type];
+    }
+    return (cfg && cfg.description) || '';
 }
 
 export class UIManager {
@@ -425,27 +450,28 @@ export class UIManager {
                     Activate equipped defensive skill
                 </div>
                 <div>
-                    <span class="control-symbol">R</span>
-                    hold for radial menu
-                    <br>
-                    Cycle through primary weapons 
-                    <span class="control-symbol">PRM</span>
-                </div>
-                <div>
                     <span class="control-symbol">F</span>
                     hold for radial menu
                     <br>
-                    Cycle through power weapons 
-                    <span class="control-symbol">POW</span>
+                    Cycle through primary weapons
+                    <span class="control-symbol">PRM</span>
                 </div>
                 <div>
                     <span class="control-symbol">E</span>
                     hold for radial menu
                     <br>
-                    Cycle through defensive skills 
+                    Cycle through power weapons
+                    <span class="control-symbol">POW</span>
+                </div>
+                <div>
+                    <span class="control-symbol">R</span>
+                    hold for radial menu
+                    <br>
+                    Cycle through defensive skills
                     <span class="control-symbol">SKILL</span>
                 </div>
                 <div><span class="control-symbol">ESC</span> Pause / Resume</div>
+                <div><span class="control-symbol">\`</span> Stats screen — level, derived stats, scaling formulae</div>
             </div>
         `;
     }
@@ -631,7 +657,7 @@ export class UIManager {
         list.replaceChildren();
 
         const player = this.gameEngine.player;
-        const sub = this._powerupsSubTab;
+        // 5.79.0 — sub-tab UI removed; show every powerup in one list.
 
         // 5.73.0 — POWERUPS tab moved out of the shop into here. Top
         // banner shows the player's unspent Pick budget; each card
@@ -653,14 +679,12 @@ export class UIManager {
         banner.appendChild(bannerLabel);
         list.appendChild(banner);
 
-        const entries = Object.entries(POWERUP_TYPES).filter(
-            ([, cfg]) => (cfg.category || 'OFFENSE') === sub,
-        );
+        const entries = Object.entries(POWERUP_TYPES);
 
         if (entries.length === 0) {
             const empty = document.createElement('div');
             empty.style.cssText = 'text-align: center; color: #888; padding: 40px; font-family: monospace;';
-            empty.textContent = 'No powerups in this category.';
+            empty.textContent = 'No powerups available.';
             list.appendChild(empty);
             return;
         }
@@ -683,7 +707,10 @@ export class UIManager {
             // so maxed cards don't accept clicks.
             const cardCap = cfg.maxStacks || 99;
             const cardAtCap = stacks >= cardCap;
-            if (picks > 0 && !cardAtCap) {
+            // 5.79.16 — Tiered SP cost (default 1 if missing).
+            const cardSpCost = cfg.spCost || 1;
+            const cardCanAfford = picks >= cardSpCost;
+            if (cardCanAfford && !cardAtCap) {
                 card.classList.add('powerup-card--interactive');
                 card.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -709,7 +736,13 @@ export class UIManager {
 
             const desc = document.createElement('div');
             desc.className = 'powerup-card-desc';
-            desc.textContent = cfg.description || '';
+            // 5.79.3 — beam-aware powerup descriptions. When a beam
+            //   weapon is equipped, bullet-flavored powerups (RAPID,
+            //   MULTI, BIG, PIERCING, HOMING, EXPLOSIVE) read as
+            //   "beam DPS bonus" instead of their bullet-only effect.
+            //   Switches back automatically when the player swaps to
+            //   a non-beam primary.
+            desc.textContent = _beamAwarePowerupDescription(type, cfg, player);
             body.appendChild(desc);
 
             card.appendChild(body);
@@ -722,12 +755,15 @@ export class UIManager {
             right.textContent = owned ? `×${stacks} / ${cap}` : `0 / ${cap}`;
             card.appendChild(right);
 
-            // Buy button — spends 1 Pick to add 1 stack. Disabled at cap.
+            // Buy button — 5.79.16: shows the tiered SP cost
+            //   (e.g. "5 SP" instead of just "+1"). Disabled at cap or
+            //   when the player can't afford the cost.
             const buyBtn = document.createElement('button');
             buyBtn.type = 'button';
             buyBtn.className = 'powerup-card-buy';
-            buyBtn.textContent = atCap ? 'MAX' : '+1';
-            buyBtn.disabled = picks <= 0 || atCap;
+            const buySpCost = cfg.spCost || 1;
+            buyBtn.textContent = atCap ? 'MAX' : `${buySpCost} SP`;
+            buyBtn.disabled = atCap || picks < buySpCost;
             buyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
@@ -745,16 +781,19 @@ export class UIManager {
     purchasePowerup(type) {
         const ge = this.gameEngine;
         if (!ge || !ge.player) return false;
-        const picks = ge.player.skillPoints || 0;
-        if (picks <= 0) return false;
+        const have = ge.player.skillPoints || 0;
         const cfg = POWERUP_TYPES[type];
         if (!cfg) return false;
-        // 5.75.0 — gate on per-powerup maxStacks. Spending a pick on a
+        // 5.79.16 — Tiered SP cost (replaces flat 1 SP/stack). Defaults
+        //   to 1 if cfg.spCost is missing, preserving back-compat.
+        const cost = cfg.spCost || 1;
+        if (have < cost) return false;
+        // 5.75.0 — gate on per-powerup maxStacks. Spending SP on a
         // capped powerup is wasted, so refuse the purchase outright.
         const cap = cfg.maxStacks || 99;
         const stacks = ge.player.getPowerupStacks ? ge.player.getPowerupStacks(type) : 0;
         if (stacks >= cap) return false;
-        ge.player.skillPoints = picks - 1;
+        ge.player.skillPoints = have - cost;
         ge.player.addPowerup(type, { ...cfg, duration: Infinity }, true);
         if (ge.events) ge.events.emit('audio:coin');
         this.renderPowerupsOverlay();
@@ -789,6 +828,13 @@ export class UIManager {
     setupSfxControls() {
         if (!this.audioManager || !this.elements.sfxVolumeSlider) return;
 
+        // 5.79.0 — restore last-saved SFX volume from localStorage
+        // before reading the manager's current value, so the slider
+        // reflects the user's persisted preference on every load.
+        const settings = loadSettings();
+        if (typeof settings.sfxVolume === 'number') {
+            this.audioManager.setSfxVolume(settings.sfxVolume);
+        }
         // Slider 0..100 maps directly to gain 0..1 (5.68.8 — was clipped
         // to 0..20% via the old `maxSfxVolume = 0.2` cap, removed).
         const initialVolume = this.audioManager.getSfxVolume() * 100;
@@ -800,6 +846,7 @@ export class UIManager {
             const normalizedVolume = sliderValue / 100;
             this.audioManager.setSfxVolume(normalizedVolume);
             this.updateSfxVolumeDisplay(sliderValue);
+            saveSettings({ sfxVolume: normalizedVolume });
         });
     }
 
@@ -810,19 +857,26 @@ export class UIManager {
     
     setupMusicVolumeControl() {
         if (!this.elements.musicVolumeSlider) return;
-        
+
+        // 5.79.0 — restore last-saved music volume from localStorage.
+        const settings = loadSettings();
+        if (typeof settings.musicVolume === 'number') {
+            this.musicPlayer.setVolume(settings.musicVolume);
+        }
+
         // Set initial value
         const initialVolume = this.musicPlayer.getVolume() * 100;
         this.elements.musicVolumeSlider.value = initialVolume;
         this.elements.musicVolumeValue.textContent = `${Math.round(initialVolume)}%`;
-        
+
         // Handle slider changes
         this.elements.musicVolumeSlider.addEventListener('input', (e) => {
             const volume = e.target.value / 100;
             this.musicPlayer.setVolume(volume);
             this.elements.musicVolumeValue.textContent = `${e.target.value}%`;
+            saveSettings({ musicVolume: volume });
         });
-        
+
         // Create sound effect toggles
         this.createSfxToggles();
     }

@@ -105,7 +105,12 @@ export const PRIMARY_WEAPONS = {
         bulletCount: 0,
         spreadAngle: 0,
         piercing: 0,
-        range: 0.6,
+        // 5.79.15 — Range 0.6 → 0.9 (240 px → 360 px) so Lance Beam
+        //   reaches as far as Arc Lightning's chainRange. Both beams
+        //   are now equal-reach so the player can pick between them
+        //   on feel, not on range. The collision code multiplies
+        //   `range × 400` so 0.9 → 360 px, matching Arc's 360.
+        range: 0.9,
         beamDuration: 2000,
         beamWidth: 6,
         cost: 0,
@@ -115,8 +120,12 @@ export const PRIMARY_WEAPONS = {
     },
     LIGHTNING_ARC: {
         id: 'LIGHTNING_ARC',
-        name: 'Lightning Arc',
-        description: 'Continuous lightning tether — short range, hits nearest target',
+        // 5.79.0 — renamed "Lightning Arc" → "Arc Lightning". Range
+        //   bumped 200 → 360 px. When out of range, the player's
+        //   weapon-fire renderer sprays frayed forward static instead
+        //   of a beam, telegraphing the gun's reach.
+        name: 'Arc Lightning',
+        description: 'Continuous lightning tether — frayed when no target, focused beam in range',
         icon: '⚡',
         color: '#8888ff',
         // 5.68.1 — same per-frame damage as Lance Beam (3.0 DPS at 60Hz).
@@ -129,7 +138,7 @@ export const PRIMARY_WEAPONS = {
         spreadAngle: 0,
         piercing: 0,
         range: 1.0,
-        chainRange: 200,    // tether snap range, in px
+        chainRange: 360,    // tether snap range, in px (5.79.0 — was 200)
         cost: 0,
         spCost: 0,
         unlockWave: 5,

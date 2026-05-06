@@ -231,7 +231,11 @@ export const BUILD_ARCHETYPES = {
     },
     economy: {
         name: 'Economy',
-        priorities: ['PAYDAY', 'HIGH_ROLLER', 'MONEY_ORB_DROP_CHANCE', 'MONEY_ORB_DROP_QUANTITY', 'HEALTH_BOOST', 'MEDPACK'],
+        // 5.78.2 — DROPS-category powerups removed; drop economy now
+        // scales with player level. The economy archetype now leans on
+        // surviving long enough to level up: HEALTH_BOOST + SHIELD_BOOST
+        // for sustain, RAPID_FIRE / MULTI_SHOT to clear safely.
+        priorities: ['HEALTH_BOOST', 'SHIELD_BOOST', 'RAPID_FIRE', 'MULTI_SHOT', 'CRIT_CHANCE', 'SPEED_BOOST'],
         preferredPrimary: 'PULSE_CANNON',
         preferredPower: 'CHARGE_SHOT',
         preferredSkills: ['TRACTOR_SHIELD', 'REPAIR_NANITES'],

@@ -58,6 +58,16 @@ canvas {
     z-index: 1;
 }
 
+/* 5.79.2 — WebGL bullet layer. Above gameCanvas so bullets paint on top
+   of asteroids / enemies / player; below HUD (.ui-element z-index: 10).
+   pointer-events: none lets clicks fall through to gameCanvas for
+   targeting. */
+#bulletCanvas {
+    background-color: transparent;
+    z-index: 2;
+    pointer-events: none;
+}
+
 canvas.asteroid-hover {
     cursor: url('data:image/svg+xml;utf8,<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 12C21 16.9706 16.9706 21 12 21M21 12C21 7.02944 16.9706 3 12 3M21 12H17M12 21C7.02944 21 3 16.9706 3 12M12 21V17M3 12C3 7.02944 7.02944 3 12 3M3 12H7M12 3V7M12 12H12.01" stroke="%23ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') 12 12, crosshair;
 }
@@ -125,6 +135,197 @@ body.shop-open .ui-element:not(#shop-overlay) {
     display: none;
     pointer-events: all;
     z-index: 100;
+}
+
+/* ── 5.79.0 — Universal button click feedback ─────────────────────────
+   Every in-game DOM button gets a subtle press animation: shrinks 1px
+   on :active, deepens its background tint, and applies a small inset
+   shadow. Rules use `:not([disabled])` so disabled buttons don't fake
+   responsiveness. The `transform` is a 1-frame transition on transform
+   only — no layout reflow. */
+button:not([disabled]):active,
+.btn:not([disabled]):active,
+.shop-row:not([disabled]):active,
+.pause-action-btn:not([disabled]):active,
+.pause-tab:not([disabled]):active,
+.powerups-subtab:not([disabled]):active,
+.powerup-card-buy:not([disabled]):active {
+    transform: translateY(1px) scale(0.985);
+    filter: brightness(1.18) saturate(1.15);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+    transition: transform 60ms ease-out, filter 60ms ease-out;
+}
+button:not([disabled]),
+.btn:not([disabled]),
+.pause-action-btn:not([disabled]),
+.pause-tab:not([disabled]),
+.powerups-subtab:not([disabled]),
+.powerup-card-buy:not([disabled]) {
+    transition: transform 120ms ease-out, filter 120ms ease-out, background-color 120ms ease-out;
+}
+
+/* Card-style elements (powerup cards, shop rows) — same press feedback,
+   slightly more pronounced because they're visually larger. */
+.powerup-card.powerup-card--interactive:active {
+    transform: translateY(1px) scale(0.99);
+    filter: brightness(1.12);
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5),
+                0 0 14px rgba(0, 204, 255, 0.45);
+    transition: transform 60ms ease-out, filter 60ms ease-out;
+}
+.powerup-card.powerup-card--interactive {
+    transition: transform 120ms ease-out, filter 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+/* ── 5.79.0 — Diablo-style stats screen ────────────────────────────── */
+#stats-overlay {
+    background-color: rgba(0, 0, 0, 0.45);
+    z-index: 9000;
+    font-family: 'Press Start 2P', monospace;
+    color: #e8e4d4;
+}
+
+#stats-panel {
+    width: min(960px, 92vw);
+    max-height: 88vh;
+    background:
+        linear-gradient(180deg, rgba(36, 26, 18, 0.97) 0%, rgba(20, 14, 10, 0.97) 100%);
+    border: 2px solid #c2992f;
+    box-shadow: 0 0 24px rgba(255, 200, 64, 0.25), inset 0 0 60px rgba(80, 50, 0, 0.4);
+    padding: 18px 22px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+#stats-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(194, 153, 47, 0.35);
+}
+
+#stats-panel-header h2 {
+    margin: 0;
+    font-size: 22px;
+    color: #ffd97a;
+    letter-spacing: 2px;
+    text-shadow: 0 0 12px rgba(255, 200, 64, 0.5);
+}
+
+#stats-panel-close {
+    background: transparent;
+    color: #ffd97a;
+    border: 1px solid rgba(194, 153, 47, 0.55);
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    font-family: inherit;
+}
+#stats-panel-close:hover { background: rgba(255, 200, 64, 0.15); }
+
+#stats-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    padding-right: 4px;
+    flex: 1;
+}
+
+#stats-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    padding: 12px;
+    border: 1px solid rgba(194, 153, 47, 0.25);
+}
+#stats-summary .stats-summary-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+#stats-summary .stats-summary-label {
+    font-size: 10px;
+    color: #b09464;
+    letter-spacing: 1px;
+}
+#stats-summary .stats-summary-value {
+    font-size: 16px;
+    color: #ffe5a0;
+}
+
+#stats-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+.stats-section {
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(194, 153, 47, 0.25);
+    padding: 10px 12px 12px;
+}
+.stats-section-title {
+    font-size: 12px;
+    color: #ffd97a;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed rgba(194, 153, 47, 0.35);
+    padding-bottom: 6px;
+}
+.stats-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 4px;
+    font-size: 11px;
+    cursor: help;
+    border-radius: 2px;
+}
+.stats-row:hover {
+    background: rgba(255, 200, 64, 0.08);
+    outline: 1px solid rgba(194, 153, 47, 0.4);
+}
+.stats-row .stats-key   { color: #c8b986; }
+.stats-row .stats-value { color: #fff4c4; font-weight: bold; }
+
+#stats-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.95);
+    border: 1px solid #c2992f;
+    color: #f5e8b0;
+    padding: 10px 12px;
+    font-size: 11px;
+    line-height: 1.55;
+    max-width: 360px;
+    box-shadow: 0 0 12px rgba(255, 200, 64, 0.25);
+    display: none;
+    z-index: 100;
+    white-space: pre-line;
+}
+
+#stats-panel-footer {
+    text-align: center;
+    color: #8a7549;
+    font-size: 10px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(194, 153, 47, 0.25);
+}
+#stats-panel-footer kbd {
+    background: rgba(255, 200, 64, 0.18);
+    color: #ffe5a0;
+    border: 1px solid rgba(194, 153, 47, 0.5);
+    padding: 1px 6px;
+    font-family: inherit;
+    font-size: 10px;
 }
 
 #pause-menu {
@@ -776,28 +977,11 @@ body.shop-open .ui-element:not(#shop-overlay) {
    the player can pop into the shop at any time without first pausing.
    Same visual language as the pause button (goldenrod, dim until hover). */
 #hud-shop-btn {
-    position: fixed;
-    /* 5.72.1 — bottom-MIDDLE. Pause + shop sit centered along the bottom
-       edge (was bottom-right above timer). Two buttons centered: shop
-       sits to the LEFT of midline, pause to the RIGHT, with the gap
-       defined by `right: calc(50% + 6px)`. Total bottom margin 16px. */
-    bottom: 16px;
-    right: calc(50% + 6px);
-    z-index: 90;
-    display: none; /* shown via showHudShopBtn() */
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    padding: 0;
-    background: rgba(218, 165, 32, 0.08);
-    border: 2px solid rgba(218, 165, 32, 0.3);
-    border-radius: 8px;
-    cursor: pointer;
-    opacity: 0.4;
-    font-size: 22px;
-    line-height: 1;
-    transition: opacity 0.25s, background 0.25s, border-color 0.25s, box-shadow 0.25s;
+    /* 5.79.2 — DOM hud-shop-btn replaced by canvas-rendered bottom-center
+       buttons in hud-buttons.js. Permanently hidden so the canvas
+       layer owns the click region; the reticule cursor now floats
+       over the button visuals like any in-world entity. */
+    display: none !important;
 }
 #hud-shop-btn:hover {
     opacity: 1;
@@ -810,27 +994,11 @@ body.shop-open #hud-shop-btn {
     pointer-events: none;
 }
 
-/* Mobile pause menu — smaller, scrollable */
-/* HUD pause button — top-left, goldenrod, semi-transparent until hovered */
+/* HUD pause button (5.79.14 — moved to canvas; DOM hidden permanently)
+   Replaced by the canvas-rendered PAUSE button in hud-buttons.js so
+   the reticule cursor floats over it like any in-world entity. */
 #hud-pause-btn {
-    position: fixed;
-    /* 5.72.1 — bottom-MIDDLE, mirror of shop button. Sits to the RIGHT
-       of midline (shop sits to the LEFT). Use `left: calc(50% + 6px)`
-       so the pair is symmetric around the screen center. */
-    bottom: 16px;
-    left: calc(50% + 6px);
-    right: auto;
-    z-index: 90;
-    display: none; /* shown via showHudPauseBtn() */
-    align-items: center;
-    gap: 5px;
-    padding: 9px 11px;
-    background: rgba(218, 165, 32, 0.08);
-    border: 2px solid rgba(218, 165, 32, 0.3);
-    border-radius: 8px;
-    cursor: pointer;
-    opacity: 0.4;
-    transition: opacity 0.25s, background 0.25s, border-color 0.25s, box-shadow 0.25s;
+    display: none !important;
 }
 
 #hud-pause-btn:hover {

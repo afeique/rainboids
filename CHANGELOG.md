@@ -11,6 +11,353 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.16] - 2026-05-06
+
+XP/wave/SP balance rework — see `docs/XP_BALANCE_REWORK_5.79.md` for the full analysis.
+
+### Changed — Leveling
+- **Linear XP curve** replacing the geometric blow-up: `experienceToNextLevel = 200 + (level − 1) × 50` (was `400 × 1.7^(level-1)`). L1→L2 needs 200 XP; L20→L21 needs 1100. Cumulative L1→L30 ≈ 22 600 XP. Player now reaches ~level 30 across 20 waves (was ~level 8-12).
+- **Per-bullet-hit XP cut to reduce spam inflation**: enemy hit `6 → 2`, asteroid hit `4 → 1`. STORM_NEEDLES on a single rock used to yield 200+ XP/sec just from hit ticks; now kills are the dominant XP source.
+- **Per-kill XP doubled**: `points/6 → points/3`. Kill XP per enemy: HUNTER 20→40, WASP 17→34, TITAN 54→107, etc.
+- **Asteroid destruction now grants +12 XP** explicitly (was implicitly 0 — only hit ticks contributed). Routes through `destroyAsteroid` so every kill path (bullet, mine, lightning, missile, AOE) awards equally.
+- **Wave-clear bonus scales harder**: `20 + w×10 → 40 + w×15`. Wave 1 bonus 30 → 55; wave 20 bonus 220 → 340.
+
+### Changed — Wave content (~+60% enemies, +33% asteroids)
+- All 20 waves in `WAVE_DATA` rebalanced. Wave 1 now spawns 7 enemies + 4 asteroids (was 5 + 3). Boss waves get an extra escort sub-wave. Final boss: 18 escort enemies + 3 TITAN bosses + 2 asteroids (was 11 + 3 + 1).
+
+### Changed — SP costs (per-powerup tier-based pricing)
+Was flat **1 SP per stack**. Now tiered by impact:
+
+| Tier | SP cost | Powerups |
+| --- | --- | --- |
+| **T1 — major DPS / survival levers** | 5 SP | RAPID_FIRE, MULTI_SHOT, HOMING, BIG_BULLETS, PIERCING, CRIT_DAMAGE |
+| **T2 — meaningful but capped / single-axis** | 3 SP | CRIT_CHANCE, SHIELD_BOOST, LONG_RANGE, EXPLOSIVE, SPEED_BOOST |
+| **T3 — utility** | 2 SP | KNOCKBACK |
+
+`POWERUP_TYPES` entries now carry `spCost`. `purchasePowerup` deducts the variable cost. Pause-tab buy button label changed from `+1` to `5 SP` (or whichever tier). With ~50 SP earned across a full 20-wave run (1 per wave + 1 per level), the player can fully build a focused archetype (5×T1 = 25 SP + 3×T2 = 9 SP + 5×T3 = 10 SP = 44 SP) but **cannot** max every tree — forces meaningful build choices.
+
+### Predicted feel (per the analysis doc)
+- Wave 1: ~335 XP yield → ~1.5 levels (matches target).
+- Wave 10 (boss): ~1 290 XP → ~1.7 levels.
+- Wave 20 (final): ~2 240 XP → ~1.7 levels.
+- Run finishes around level 30; SP supply (~50 SP) just barely covers a focused tier-1 build.
+
+---
+
+## [5.79.15] - 2026-05-06
+
+### Changed
+- **Lance Beam range matches Arc Lightning** (240 → 360 px). Was `range: 0.6` × 400 px scaler = 240 px; Arc Lightning's `chainRange` is 360 px. Bumped Lance Beam to `range: 0.9` (× 400 = 360 px) so both beams reach equally — the player picks between them on feel, not on reach.
+
+---
+
+## [5.79.14] - 2026-05-06
+
+### Added
+- **Canvas-rendered PAUSE button** at bottom-center, joining SHOP and STATS in the canvas button bar. Three buttons centered along the bottom; reticule cursor floats over them like the others. DOM `#hud-pause-btn` permanently hidden — same treatment we gave `#hud-shop-btn` in 5.79.2. ESC keyboard shortcut still works.
+
+### Changed
+- **Stats screen GOLD cell now shows the cached coin icon** to the LEFT of the gold amount, matching the HUD's bottom-right gold readout. Same `iconSpriteCache` instance the canvas HUD uses, so the look is consistent across DOM + canvas. `iconSpriteCache` exported from `core/utils.js` for this purpose.
+- **Bullet WebGL look revamped — no more "stale" feel:**
+  - **Outline thickness 3 → 5 px** in the atlas. Every bullet now has an unmistakable black stroke around it.
+  - **Outline composites OVER the body** in the fragment shader (`mix(col, vec3(0.0), aOut)`) so the stroke wins over any body-channel bleed at the antialiased edge — crisp ring around every bullet, even dark-colored ones.
+  - **Brightness gain bumped 1.35× → 1.55×** — saturated colors pop harder against the dark space backdrop.
+  - **Soft top-left gloss highlight** added to the body in the shader. UV-space radial ramp brightest at (0.30, 0.30) gives every bullet a "3D ball with a light source above-left" look instead of a flat disc. Cheap — single `length(uv - vec2(0.3))` + `clamp` + `mix`.
+
+### Fixed
+- **Arc Lightning loop wraps before the fade-out (for real this time).** 5.79.13 set `loopEnd: 6.8`, but the actual fade-out begins at **3.5 s** in the 8.9 s MP3 — verified via RMS amplitude analysis on the decoded PCM (full volume to 3.5 s; drops to half at 4.0 s; near-silent by 5.0 s). `loopEnd` is now **3.4 s**, putting the wrap point just before the fade. Continuous full-volume rumble.
+
+---
+
+## [5.79.13] - 2026-05-06
+
+### Fixed
+- **Arc Lightning loop no longer wraps through the fade-out**. The `thunderous_lightning_laser.mp3` is 8.9 s with a natural fade in the last ~2 s. Without a `loopEnd`, every wrap played that fade — making the volume dip and then snap back loud on each repeat. Now `loopEnd: 6.8` cuts the loop region before the fade starts, so the wrap happens at peak sustain → seamless continuous rumble.
+
+---
+
+## [5.79.12] - 2026-05-06
+
+### Changed — Bullet visuals
+- **Enemy bullets are now slightly elongated** along their travel axis (aspect 1.4 — height 40 % taller than width). Bullets visibly "point" the direction they're going, gives a more "shot" feel and improves readability for direction-of-travel.
+- **Bullet body now has a radial gradient** in the WebGL atlas instead of a flat color disc. Body channel ramps from 1.0 at center to ~0.55 at the silhouette rim. Combined with the bright white core in the center, every bullet reads as a glowing ball of energy with a dim halo edge.
+- **Vibrant brightness gain in the fragment shader**: bullet color × 1.35 pre-clamp. Saturated values pop against the dark space background — bullets read as "neon" instead of flat colored discs. Free in the shader (no extra draw calls or uniforms).
+
+### Changed — Audio looping
+- **Lance Beam + Arc Lightning loops use Web Audio's `loopStart`** to splice past the opening attack envelope of each MP3. Without this, every loop wrap re-played the leading transient (the "power-up whoosh" on the laser, the "thunder crack" on the lightning) creating an audible click-click cadence.
+  - Lance Beam: loop region begins at 0.45 s — skips the initial weapon-power-up.
+  - Arc Lightning: loop region begins at 0.6 s — skips the opening strike, leaves a continuous rolling rumble.
+  - First playthrough still plays the full track (including the attack); only subsequent loops jump back to the splice point.
+- **`audioManager.startLoop(name, gain, { loopStart, loopEnd })`** API added to support the splice — any future looping SFX can opt into the same offset behavior.
+
+---
+
+## [5.79.11] - 2026-05-06
+
+### Changed
+- **Arc Lightning loop** now uses the high-quality `thunderous_lightning_laser.mp3` asset (dropped into `sfx/`). Replaces the synthesized `arcLightningLoop.wav`.
+- **Lance Beam loop** now uses `Laser_Beam_Weapon_Active.mp3`. Replaces the synthesized `laserBeamLoop.wav`.
+- Both MP3s are loaded via the same `decodeAudioData` path that handles every other SFX. The hit-sizzle one-shots (`laserBeamHit1..3`) stay synth-generated since they're short and read fine in context.
+
+---
+
+## [5.79.10] - 2026-05-06
+
+### Added — Beam weapon audio polish
+- **Lance Beam (laser) engaged loop** (`laserBeamLoop`): a continuous synthesized "energy weapon active" hum that plays while the beam is engaged. Layered:
+  - Sustained sine carrier (the futuristic high tone)
+  - Square harmonic with slow vibrato (synth bite)
+  - Sub-bass rumble (presence)
+
+  Replaces the single one-shot `playShoot()` that previously fired only on press. Loops seamlessly via `audioManager.startLoop` / `stopLoop`.
+
+- **Lance Beam hit-sizzle one-shots** (3 variants — `laserBeamHit1..3`): randomly alternate when the beam is touching an enemy. Throttled to 100 ms per-variant; per-target throttle (160 ms) keeps contact streaks tight. Crisp, satisfying sizzle/zap feedback.
+
+- **Arc Lightning HIT strikes** (3 variants — `arcHit1..3`): heavier strike-and-thunder one-shots used when the arc is locked on a target. Lower-pitched cracks + longer thunder roll than the existing idle `arcStrike1..4` set. The strike scheduler now picks from the heavy set when locked, the lighter idle set when frayed — gives clean audio confirmation of damage. Cadence also tightens when locked (150–400 ms vs 220–720 ms idle) so sustained contact reads as a continuous barrage.
+
+### Generated WAVs
+`laserBeamLoop.wav` (166 KB), `laserBeamHit1.wav` (4 KB), `laserBeamHit2.wav` (6 KB), `laserBeamHit3.wav` (3 KB), `arcHit1.wav` (52 KB), `arcHit2.wav` (80 KB), `arcHit3.wav` (33 KB).
+
+---
+
+## [5.79.9] - 2026-05-06
+
+### Fixed
+- **Title-screen click chime delay eliminated.** NEW GAME / CONTINUE button presses now fire their chime instantly with the click instead of 100-300 ms after.
+  - **Root cause**: the AudioContext was being created and `resume()`d *inside* the click handler. `resume()` returns a Promise; the subsequent `playSound()` ran while the context was still in `suspended` state and the buffer source got dispatched at `time = 0` (in the past relative to the just-resumed context's `currentTime`), which Safari/Chrome both delay slightly.
+  - **Fix #1**: Pre-warm the AudioContext on the FIRST title-screen mousemove / mousedown / keydown — all of which count as user gestures in modern browsers. By the time the user clicks NEW GAME or CONTINUE, the resume promise has already settled and the context is processing samples.
+  - **Fix #2**: All `src.start(0)` calls in `audio-manager.js` swapped for `src.start(audioContext.currentTime)`. Guarantees immediate playback the moment the context is processing samples instead of "as soon as possible after time 0" (which can lag on Safari when currentTime > 0).
+
+---
+
+## [5.79.8] - 2026-05-06
+
+### Changed
+- **Enemy bullets dramatically more visible**. Multi-pronged push:
+  - **Defaults**: standard radius `5 → 9`, explosive `8 → 14`, trail length `4/8 → 6/12`. Glow radius `9/14 → 18/26`.
+  - **Hunter** bullets `11 → 16` (32 glow). Hunters are the most common threat — these now read instantly.
+  - **Wasp pulse** `3.5 → 8` (16 glow). **Guardian sine** `6 → 11` (22 glow). **Sentinel hex** `7 → 12` (26 glow).
+  - **Drifter laser** `5 → 10` (26 glow). **Stalker laser sub-bullet** `4 → 8` (22 glow). **Spiral laser** `3 → 7` (16 glow).
+  - **Titan rocket** `5 → 10` (22 glow). **Prowler missile** `6 → 11` (24 glow). **Tangerine seeker** `7 → 12` (24 glow).
+  - **WebGL sprite size raised 2.6× → 3.5× collision radius** (Canvas2D fallback 1.0× → 1.4×). Body sprite now renders bigger than the hitbox so the player reads incoming threats clearly while collision math stays based on the smaller `radius`.
+  - **Trails brighter + thicker**: alpha `0.6 → 0.85`, width factor `0.5 → 0.85`. Streaks behind bullets now read as genuine threat indicators at a glance instead of faint wisps.
+
+---
+
+## [5.79.7] - 2026-05-06
+
+### Changed
+- **Frayed arc lightning is now a tight chaotic bolt** instead of a wide fan. Strand spread cut from ~43° to ~18°, so the three strands cluster much closer together — reads as a single forward bolt with weaving inner strands.
+- **More randomness + jitter** in arc lightning:
+  - Base interior jitter raised 18 → 32 px (peak); jitter sample now sums two random rolls for fatter-tailed distribution (more occasional big spikes).
+  - Per-segment high-frequency time-driven shimmer (4 px perpendicular sin-wave kick) adds a baseline electric crackle that fires every frame regardless of temporal blending.
+  - Strand angle wobble per strand widened 5° → 12° peak so strands visibly weave in and out of each other.
+  - Length wobble widened (0.85 ± 0.12 → 0.78 ± 0.18) so strands shoot out at varying distances.
+  - Temporal blending shifted 70/30 → 45/55 (previous/new) so each frame's new jitter dominates while the previous frame still pulls the path back toward continuity. Lightning now reads as far more lively and chaotic instead of sluggish-smooth.
+
+---
+
+## [5.79.6] - 2026-05-06
+
+### Changed
+- **Arc Lightning targets the entity nearest the aiming cursor**, not the entity geographically closest to the player. Range gate from the player's position still applies (the beam can't latch onto something out of reach), but selection priority is by distance to the aim reticule. Lets the player intentionally pick which enemy to fry instead of having the targeting decided for them.
+
+### Fixed
+- **Removed the dark circle around enemies** that was drawn under each ship as a `radius × 1.08` black silhouette. For non-circular enemies (HUNTER triangle, WASP fighter, STALKER blade) the circle extended past the colored body and read as a visible dark halo around the ship. The colored hull strokes already provide enough silhouette definition without it.
+
+---
+
+## [5.79.5] - 2026-05-06
+
+Arc Lightning audio + animation overhaul. Smoother in every dimension: frayed/focused crossfade is continuous, frayed motion is time-driven instead of stale-rolled, target switching is a clean lerp, and the audio is now a low rumble bed + four distinct random thunder strikes instead of a flat loop.
+
+### Changed
+- **Unified arc render** replaces the old frayed-vs-focused mode flip with a single render path that always emits N=3 strands. Each strand has TWO target poses (frayed-fan-end, focused-target-end) and the rendered endpoint is a `lerp(frayed, focused, lockBlend)`. `lockBlend` smoothly approaches 1 when a target is locked, 0 when none — gives a continuous crossfade instead of an abrupt mode change.
+- **Smoother frayed motion**: strand fan angles + lengths are now driven by sine sums (`sin(time * 1.7 + i * 2.3) + sin(time * 3.1 + i * 1.1)`) — continuous and smooth instead of stale-cached random rolls. Path interior points use jitter that falls off toward the endpoints (bell-shaped) so strands look anchored and natural.
+- **Temporal jitter blending applied to ALL strands** (not just the targeted one). Per-strand previous-frame path is blended 70%/30% with the new jitter roll → no more per-frame strobe.
+- **Smooth target switching**: visible endpoint lerps 25%/frame toward the live target; preserved across enemy death so the arc doesn't snap to player when the locked enemy is killed mid-fire.
+
+### Audio
+- **Ambient rumble loop** (`arcLightningLoop`) is now a quiet sub-bass + soft hiss (was a constant overpowering crackle). Provides a "weapon is on" presence without competing with the strikes.
+- **Four distinct lightning-strike one-shots** (`arcStrike1`..`arcStrike4`) play randomly at 220–720 ms intervals while the arc is firing:
+  - `arcStrike1` — sharp crackle + short thunder.
+  - `arcStrike2` — deeper hit + long thunder roll.
+  - `arcStrike3` — short bright zap.
+  - `arcStrike4` — distant double-crack + slow thunder rumble.
+  Random selection + randomized cadence makes each fire-press sound like a unique sequence of strikes instead of a flat monotone loop.
+- **Per-strike throttle 80 ms**, plus the random scheduler enforces a 220 ms minimum gap, so the strikes never overlap into a buzz.
+
+---
+
+## [5.79.4] - 2026-05-06
+
+GC-pressure pass implementing items A, B, C from `docs/PERF_BOTTLENECKS_5.79.3.md` plus an arc-lightning smoothness/audio overhaul.
+
+### Performance — GC pressure (item A: reuse arrays + objects)
+- **Jagged-arc paths now use module-level Float32Array scratch** instead of per-call `path = []; path.push([x, y])`. Targeted arc + Lance Beam + frayed-static all converted. Saves ~420 small-array allocations/sec at heavy density.
+- **Frayed-static cache uses typed-array slabs** (`Float32Array(STRANDS × 14)`) instead of `cache.strands.push({path: [...]})`. Removes another ~21 small-array allocs/sec.
+- **Mine HP bar gradient → solid color**. Was `ctx.createLinearGradient(...)` PER MINE PER FRAME (~250 gradient objects/sec at 4-mine peak). The bar is 3 px tall — the vertical gradient was visually imperceptible. Solid color saves ~120 KB/sec of gradient backing-state.
+- **Bullet-dodge inner loop**: `bulletPool.activeObjects.forEach(bullet => {...})` → plain `for` loop with AABB pre-cull. Was 20 enemies × 150 bullets × full-pool walk = ~90 000 iter/sec at heavy density. AABB pre-cull skips the expensive `Math.hypot` for any bullet outside a ±250 px box. Closure allocation gone too.
+
+### Performance — `{x, y}` allocations in update loops (item B)
+- **Bullet trail ring buffers** (player + enemy) now reuse the slot's `{x, y}` object across frames instead of allocating a fresh `{x: this.x, y: this.y}` each tick. Saves ~9 000 + ~6 000 short-lived objects/sec at heavy density.
+
+### Performance — shadowBlur sites (item C)
+- **Enemy silhouette outline** drops `ctx.shadowBlur = 3` halo for a single fattened black circle (`radius × 1.08`) drawn under the colored body. Was the largest remaining shadowBlur cost in gameplay (~120 µs/frame × 20 enemies on integrated GPUs); now ~6 µs/frame total.
+- **Lance Beam outer glow**: `shadowBlur = beamW × 2` Gaussian replaced with a wider faint colored stroke pass (fake-glow). Same look, no per-stroke Gaussian.
+- **Nova ring glow**: `shadowBlur = 10` replaced with fake-glow pass.
+- **Arc Lightning targeted + frayed-static colored strokes**: `shadowBlur = 8` Gaussian replaced with fake-glow under-strokes.
+
+### Arc Lightning — smoother feel
+- **Smooth target switching**: visible arc endpoint now lerps 25%/frame toward the live target instead of snapping. Half-life ~2.5 frames (~150 ms). Reaches ~95% by 10 frames.
+- **Temporal jitter blending**: targeted-arc path now blends 65% of the previous frame's jitter with 35% of the new roll. Eliminates the per-frame strobe; lightning reads as a wandering live wire instead of a flickering mess.
+- **Continuous static-y loop SFX** (`arcLightningLoop`): new layered crackle (broad-band hiss + square-wave mid pop + high-frequency zap ticks) plays on a `loop = true` BufferSource while the arc is firing. New `audioManager.startLoop` / `stopLoop` / `isLoopPlaying` API supports any future looping SFX.
+
+### Total predicted impact
+- Heavy combat median frame: **−0.7 to −1.5 ms** vs 5.79.3.
+- Major-GC pause frequency: **dramatically reduced** (the mine-HP-bar gradient was the dominant pre-existing source of large per-frame canvas-state objects).
+
+---
+
+## [5.79.3] - 2026-05-06
+
+Closes the remaining items from `docs/STROKE_PERF_ANALYSIS_5.79.md` (#1, #3, #6) plus a combat-readability + beam-balance pass.
+
+### Added (perf — close out the analysis recommendations)
+- **Baked outline bullet sprite cache** (`BakedBulletSpriteCache` in `core/utils.js`). Used by the Canvas2D fallback bullet path when WebGL2 isn't available. Each bullet's body, white core, and black outline are baked into a single offscreen sprite once and `drawImage`d every frame after — ~70% faster than the legacy path-and-fill chain (analysis item #1).
+- **Mine + missile black silhouette outline pass** restored. 5.79.2 dropped the `shadowBlur` halo for perf; 5.79.3 replaces it with a single wider black stroke under each colored fill — same look, no Gaussian blur cost (analysis item #3).
+- **HUD icons render at 2× supersample with bilinear downsample** (analysis item #6's pragmatic equivalent — true SDF would have required moving HUD to WebGL). Heart, shield, coin sprites stay crisp at any HUD scale.
+
+### Added (combat tuning)
+- **RAPID_FIRE + bullet-flavored powerups now buff BEAM DPS** (Lance Beam + Arc Lightning). Powerups that don't apply to a continuous tether (RAPID_FIRE, MULTI_SHOT, BIG_BULLETS, PIERCING, HOMING, EXPLOSIVE) translate to per-stack damage multipliers on the beam. Numbers tuned smaller than direct beam upgrades (BEAM_WIDTH, AMPLIFIER, TRIPLE_BEAM) so they read as spillover, not the primary build lever. Per-stack: RAPID +22%, MULTI +30%, BIG +18%, PIERCING +15%, HOMING +10%, EXPLOSIVE +25%.
+- **Bigger enemy bullets**: standard radius 3 → 5, explosive 6 → 8, **Hunter bullets 7 → 11**. Glow + trail scaled to match. Improves combat readability — Hunter bullets in particular are now obvious incoming threats.
+- **Constant-dodge enemy AI**: enemies now sidestep on a per-enemy randomized cadence (1.0–1.9 s) regardless of player speed or fire status. Dodge direction biases perpendicular to the player so enemies sidestep the line of fire instead of strafing toward the player. Each enemy's cadence is staggered at spawn so a wave doesn't all sidestep in lockstep.
+
+### Changed
+- **Reworked Arc Lightning frayed-static animation**. Was 7 short disjointed strands ("shoddy"); now 3 longer continuous strands rendered with the same 3-pass treatment as the targeted-arc beam (black under-stroke + colored mid + bright white core). End points oscillate over time so the fan undulates instead of hard-snapping.
+- **Arc Lightning chain range**: per-stack frayed-static visual length now scales with the actual chain range setting (360 px after 5.79.0 bump).
+
+### Fixed
+- **`]` cheat now grants +5 SP** (was wrongly granting +5000 gold since 5.76.0). Skill points came back with the 5.78.0 picks→SP rename — the cheat is back in sync with the documented behavior.
+
+### UX
+- **Beam-aware powerup descriptions**: when a beam weapon (LANCE_BEAM or LIGHTNING_ARC) is equipped, RAPID_FIRE / MULTI_SHOT / BIG_BULLETS / PIERCING / HOMING / EXPLOSIVE descriptions read as "Beam: +N% DPS per stack" instead of their bullet-only effect. Reverts to the original text the moment the player switches back to a non-beam primary.
+- **Keybind reshuffle (per user request)**: F now cycles primary weapons / opens primary radial; E cycles power weapons / opens power radial; R cycles defense skills / opens skill radial. Pause menu controls page + wave-1 hint toast updated to match.
+- **Animated RAINBOIDS title renders ABOVE other title text**: when the player presses NEW GAME / CONTINUE, the title-launch animation (twister / explosion / wave / cascade / warpdrive / pinwheel) now draws AFTER the chrome (subtitle, buttons, record, version tag) so the swirling letters are the focal point of the launch transition instead of being obscured by the buttons.
+
+### Docs
+- **`docs/PERF_BOTTLENECKS_5.79.3.md`** — investigation report identifying the root causes of perceived lag/choppiness. TL;DR: GC pressure from short-lived allocations (gradients, jagged-arc paths, dodge-loop closures) is the dominant source of frame-time spikes. Ranked 4-fix recommendation list with predicted frame budget recovery (~0.7 ms median + 15–35 ms peak-frame relief).
+
+---
+
+## [5.79.2] - 2026-05-06
+
+Performance pass implementing the recommendations in `docs/STROKE_PERF_ANALYSIS_5.79.md`. Bullet bodies now render through a new WebGL instanced renderer; expensive `ctx.shadowBlur` halos are removed from bullets, mines, and missiles; Arc Lightning frayed-static is jitter-cached. Frame budget recovered at heavy combat density: ~6–11% (≈1–2 ms per frame).
+
+### Added
+- **`js/modules/performance/webgl-bullet-renderer.js`** — new instanced WebGL2 bullet renderer. Single `drawArraysInstanced` per frame for every player + enemy bullet whose shape is in the atlas (circle, triangle, square, hexagon, diamond, star, needle, charge). 13 floats per instance: pos, size, color, uv, rotation. Supports up to 1024 simultaneous bullets.
+- **`js/modules/performance/webgl-bullet-atlas.js`** — bullet sprite atlas baker. 1024×128 RGBA texture with 8 shape slots. Each slot encodes a 3-mask sprite per pixel: R=outline, G=body, B=core, A=combined. Outline is **baked into the atlas alpha channels** so the fragment shader composes "black ring + colored body + bright core" with no extra cost — the per-bullet `shadowBlur` Gaussian pass is gone entirely.
+- **`#bulletCanvas`** — new HTML canvas + CSS layer above `gameCanvas` (z-index 2). Owns its own WebGL2 context. `pointer-events: none` lets clicks fall through to gameCanvas for entity targeting.
+- **Engine integration**: `WebGLBulletRenderer` lifecycle managed by the engine — `beginFrame()` clears the layer and resets the instance buffer, bullet pool draws push instances, `drawFrame()` flushes a single batched call. Camera + screen-shake offsets are applied to the WebGL camera so bullets shake in lock-step with the Canvas2D layer.
+
+### Changed
+- **Player + enemy bullet `draw()`** routes to the WebGL renderer when supported, falls back to Canvas2D for shapes the atlas doesn't cover (mine, missile_shape, crescent slices, explosive bullets with spinning spikes). Bullet trails still render on Canvas2D — they were never the dominant cost.
+- **Arc Lightning frayed-static path is now jitter-cached** for 3 frames at a time. Strands re-roll only when the cache expires OR the player has moved/rotated significantly. Drops effective per-frame stroke count from 21 → ~7 → ~50% cost reduction on the idle-fire state.
+
+### Removed
+- **`ctx.shadowBlur` halo on player bullets** (was the dominant per-frame stroke cost — ~6–8 µs per bullet × N bullets, 3–5× worse on integrated GPUs).
+- **`ctx.shadowBlur` halo on enemy bullets handled by WebGL** (mine / missile-shape / crescent / explosive bullets keep the Canvas2D shadow path because they have animated detail the atlas can't bake).
+- **`ctx.shadowBlur` halo on player mines** — kept the colored stroke + arming ring, dropped the Gaussian blur.
+- **`ctx.shadowBlur` halo on missiles** — kept the bright colored stroke, dropped the Gaussian blur.
+
+### Performance — measured impact (per analysis doc)
+| Scenario | Before (5.79.1) | After (5.79.2) | Saved |
+| --- | --- | --- | --- |
+| Mid combat (50 bullets) | ~480 µs | ~95 µs (WebGL) | **~385 µs (2.3% frame)** |
+| Heavy (150 bullets, arc idle) | ~2 200 µs | ~750 µs | **~1 450 µs (~9% frame)** |
+| Storm Needles peak (250 bullets) | ~2 000 µs | ~155 µs (WebGL only) | **~1 845 µs (~11% frame)** |
+
+### Also in 5.79.2 (UX polish)
+- **Bottom-center HUD buttons rendered on canvas**. Replaces the DOM `#hud-shop-btn` with two canvas-painted buttons (SHOP 🛒 + STATS 📊) drawn in `js/modules/hud/hud-buttons.js`. The reticule cursor floats over them like any in-world entity. Click + hover state tracked in `event-setup.js`. Canvas STATS button toggles the `\`` stats screen. Pressed state: 1 px down-shift + saturated-yellow tint, matching the title-screen buttons.
+- **In-game stats-menu hint** added to the wave-1 onboarding sequence (28 s after wave 1 starts, fires once per session) telling the player about the `\`` shortcut.
+- **Title text always shows above the bullet WebGL layer**: bulletCanvas (z-index 2) is now `beginFrame()`-cleared every frame regardless of game state, so the title-screen rendering on gameCanvas (z-index 1) is never obscured by stale bullets.
+- **Thicker, more apparent CRT scanlines** over the WebGL starfield/nebula. Was a 1-px sin-wave band at ~22% contrast; now 2-px hard dark bands every 5 px at 45% contrast — distinctly chunky retro CRT look without competing with foreground action.
+- **Title button chime SFX**: NEW GAME plays the heroic `powerup` ding, CONTINUE plays the lighter `coin` chime, both routed through the existing audio manager (no new assets).
+
+---
+
+## [5.79.1] - 2026-05-06
+
+Gold-drop spam pass: fewer, fatter orbs, and the +N popups coalesce into one big number per pickup burst. No-code performance analysis added to `docs/`.
+
+### Changed
+- **Gold orbs per drop hard-capped at 6** (`MONEY_ORB_MAX_DROP_COUNT = 6`). Above-budget drops absorb the overflow into bigger per-orb values instead of spawning more orbs.
+- **Per-orb gold cap raised 20 → 100** (`MONEY_ORB_MAX_MONEY_PER_ORB`). High-Gold-Find / streak drops now produce 2-6 chunky orbs (50–100+ gold each) instead of 30+ tiny orbs.
+- **Money orb max visual size 24 → 30 px** so big drops feel chunky.
+- **Gold popups coalesce**: per-orb "+N" floaters were stacking into ugly columns of identical popups during a multi-orb pickup burst. Now we accumulate gains for a 250 ms quiet window and emit ONE big popup with the cumulative total. Counter flash + slot-roll still fire per-gain so the gold reads "active". Popups ≥ 50 gold render at 24px (was 18px) for visual emphasis on chunky payouts.
+
+### Added
+- **`docs/STROKE_PERF_ANALYSIS_5.79.md`** — written analysis of the 5.79.0 black-stroke pass cost, projected gains from a `WebGLBulletRenderer`, and a ranked list of follow-up optimizations. Top recommendation: replace `ctx.shadowBlur` on bullets with a baked outline sprite cache extension to `glowSpriteCache` (~2 hours of work, recovers ~70% of bullet stroke cost). No code changes in this version — the analysis drives the next perf pass.
+
+---
+
+## [5.79.0] - 2026-05-06
+
+Save system, randomized starting loadout, persistent volume settings, Diablo-style stats screen, Arc Lightning rework, OFFENSE sub-tab removal, universal black-stroke pass on entities + bullets + weapon FX + title text, and explicit click-only title flow with click feedback. Player damage scaling reverted (level no longer raises base damage); enemy + asteroid level scaling steepened in compensation.
+
+### Added
+- **Save system**: a wave-start snapshot is written to `localStorage` at the beginning of every wave. Title screen now shows **NEW GAME** + **CONTINUE** buttons; Continue is grayed out when no save exists. New module `js/modules/core/storage.js` houses settings + save/load helpers.
+- **Diablo-style stats screen** (`js/modules/ui/stats-overlay.js`): `\`` (backtick) toggles a paused, modal panel showing the player's level, XP, vitals, offense, economy, owned powerups, and per-wave world-scaling factors. Hover any row for a tooltip explaining the formula and how it scales. Esc or backtick again closes.
+- **Persistent volume settings**: music + SFX sliders save to `localStorage` and restore on load — no more re-tweaking every session.
+- **Randomized starting loadout** on New Game: primary, power weapon, and skill are each rolled from the full pool. Continue keeps the saved loadout intact.
+- **Arc Lightning rename + rework**: `LIGHTNING_ARC` display name is now "Arc Lightning". Chain range bumped 200 → 360 px. When firing without a target in range, the renderer now sprays frayed forward static in a 60° fan from the player's nose, telegraphing the gun's reach. With a target locked, the strands collapse into a focused jagged beam (now drawn with a black under-stroke for definition).
+- **Universal black-stroke pass** on every visible combat entity:
+  - Player ship — explicit black silhouette stroke under each section (wings, tips, hull, engine pods, cockpit) drawn before the `lighter`-blend color pass.
+  - Enemies — `shadowColor` halo via the canvas shadow API in `drawEnemyShape`.
+  - Player + enemy bullets — same shadow-halo approach; trail untouched so streaks stay bright.
+  - Lance Beam — black 2-pass under-stroke that traces the same jagged path as the colored beam.
+  - Nova rings, mines, missiles — black halo via canvas shadow.
+  - Title-screen wavy text gains a per-glyph black stroke pass via a new `outline` option in `drawWavyText`.
+- **Click feedback** on every in-game DOM button: 1px press translation, brightness + saturation bump, inset shadow on `:active`. Powerup cards get a slightly more pronounced version. Title-screen NEW GAME / CONTINUE buttons add a saturated yellow press tint and 1px down-shift when pressed.
+- **Backtick (\`) added** to the in-pause CONTROLS list with a one-line description of the stats screen.
+
+### Changed
+- **OFFENSE sub-tab removed** from the Powerups pause-tab. All powerups now render as one flat list (DROPS was deleted in 5.78.2; OFFENSE was redundant as the sole remaining category).
+- **Title-screen flow** is now click-explicit: pressing any random key no longer launches a run. The player must click NEW GAME or CONTINUE (or press Enter / Space, which acts like a click on the currently-hovered button — defaults to Continue if a save exists, else New Game).
+- **Enemy level scaling steepened** (since player damage no longer scales): HP `+0.15/lvl → +0.22/lvl` (L20 = 5.18×, was 3.85×); size `+0.10/lvl → +0.13/lvl` (cap 2.2×, was 2.0×); speed `+0.15/lvl → +0.20/lvl` (L20 = 4.80×, was 3.85×); damage `+0.18/lvl → +0.30/lvl` (L20 = 6.7×, was 4.42×).
+- **Asteroid level scaling steepened**: HP `+0.25/lvl → +0.35/lvl` (L20 = 7.65×); collision damage `+0.20/lvl → +0.30/lvl` (L20 = 6.70×).
+
+### Removed
+- **Player level damage scaling** (the 5.78.2 `getPlayerLevelDamageMultiplier` curve): primary, beam, charge shot, mine, nova, lightning, and missile damage no longer multiply by `1 + (level-1) × 0.04`. Helper retained as a no-op (returns 1.0) so external callers stay valid. Player DPS growth must come from shop upgrades, CRIT_CHANCE / CRIT_DAMAGE, RAPID_FIRE, MULTI_SHOT, BIG_BULLETS, kill-streak, etc.
+- **OFFENSE sub-tab** in the Powerups pause-tab.
+
+---
+
+## [5.78.2] - 2026-05-06
+
+DROPS-category powerups removed. Drop economy and player damage now scale automatically with player level instead of being bought as discrete picks; enemy damage scaling softened to keep the curve balanced.
+
+### Removed
+- **All 8 DROPS-category powerups deleted** from `POWERUP_TYPES`: `MEDPACK`, `DOCTOR`, `PAYDAY`, `HIGH_ROLLER`, `HEALTH_ORB_DROP_CHANCE`, `MONEY_ORB_DROP_CHANCE`, `HEALTH_ORB_DROP_QUANTITY`, `MONEY_ORB_DROP_QUANTITY`. Their effects (drop rate, drop quantity, heal amount, money amount) are now driven by the player's level. Less shop friction, fewer redundant picks, and the level-up curve becomes the sole pacing knob for these stats.
+- **DROPS sub-tab removed** from the in-pause Powerups overlay (`index.html`). OFFENSE remains as the only category; the subtab row is preserved as a single-tab placeholder for future categories.
+
+### Changed
+- **Drop economy scales with player level** (`combat-manager.js#dropOrbsFromEntity`):
+  - Drop rate: `+1.5%/level past 1` (e.g. level 20 = +28.5% on top of base + entity-level bonus + enemy bonus). Both health and money rates lift uniformly.
+  - Drop quantity ceiling: `+1 max orb every 5 levels` (L5 +1, L10 +2, L15 +3, L20 +4) on top of `HEALTH_ORB_BASE_DROP_COUNT_MAX` / `MONEY_ORB_BASE_DROP_COUNT_MAX`.
+  - Health orb amount (`createHealthOrb`): `+0.6 HP/level on the floor`, `+0.75 HP/level on the ceiling` (L20 → +11 floor / +13 ceiling vs base).
+  - Money orb amount (`createMoneyOrb`): `+3 / +5 per level` on min/max (L20 → +57 floor / +95 ceiling). Gold Find still applies multiplicatively on top.
+- **Player damage scales with player level** (new `getPlayerLevelDamageMultiplier()` in `player/weapons.js`): `1 + (level - 1) × 0.04`. L20 = 1.76× base. Applied uniformly to:
+  - Primary weapons via `getEffectivePrimaryDamage()` (PULSE_CANNON, STORM_NEEDLES, SCATTER_GUN, RAIL_DRIVER).
+  - LANCE_BEAM tick damage.
+  - Power weapons: CHARGE_SHOT (totalDamage), MINE_LAYER (mine damage), NOVA_BLAST (both primary + DOUBLE_PULSE secondary ring), LIGHTNING_ARC (chain damage), MISSILE_SALVO (per-missile damage).
+- **Enemy damage scaling softened** (`enemy.js#getLevelScaledDamage`): from `1 + (level-1) × 0.25` to `1 + (level-1) × 0.18`. Level 20 = 4.42× base (was 5.75×); level 10 = 2.62× (was 3.25×). Combined with the new player damage scaling and the existing player HP / shield / Gold Find ramps, high-level encounters stay challenging without out-pacing the player's defensive pool.
+
+### Added
+- **`Player.getPlayerLevelDamageMultiplier()`** — public method exposed for combat manager, debug overlays, and tests.
+
+---
+
 ## [5.78.1] - 2026-05-06
 
 ### Changed

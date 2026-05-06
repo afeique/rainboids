@@ -42,28 +42,32 @@ export class Enemy {
         this.x = x !== undefined ? x : random(0, fieldWidth);
         this.y = y !== undefined ? y : random(0, fieldHeight);
         
-        // Scale health based on level (15% increase per level — gentle curve)
-        const levelMultiplier = 1 + (this.level - 1) * 0.15;
+        // 5.79.0 — Player damage no longer scales with level, so enemy
+        //   level scaling is steepened so encounters at higher levels
+        //   feel meaningfully harder. Player keeps pace through shop
+        //   upgrades and powerups, not raw level damage.
+        //   HP:    +0.15/lvl → +0.22/lvl   (L20 = 5.18×, was 3.85×)
+        //   Size:  +0.10/lvl → +0.13/lvl, capped at 2.2× (was 2.0×)
+        //   Speed: +0.15/lvl → +0.20/lvl   (L20 = 4.80×, was 3.85×)
+        const levelMultiplier = 1 + (this.level - 1) * 0.22;
         this.maxHealth = Math.round(this.config.health * levelMultiplier);
         this.health = this.maxHealth;
-        
+
         // Safeguard: ensure health never exceeds maxHealth
         if (this.health > this.maxHealth) {
             console.warn(`🐛 Enemy health bug detected: ${this.health} > ${this.maxHealth}, fixing...`);
             this.health = this.maxHealth;
         }
-        
-        // Scale size slightly based on level (10% increase per level, max 2x)
-        const sizeMultiplier = Math.min(2.0, 1 + (this.level - 1) * 0.1);
+
+        const sizeMultiplier = Math.min(2.2, 1 + (this.level - 1) * 0.13);
         this.radius = this.config.size * sizeMultiplier;
         this.baseRadius = this.config.size * sizeMultiplier;
         this.color = this.config.color;
-        
+
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
-        
-        // Scale speed based on level (15% increase per level)
-        const speedMultiplier = 1 + (this.level - 1) * 0.15;
+
+        const speedMultiplier = 1 + (this.level - 1) * 0.20;
         const scaledSpeed = this.config.speed * speedMultiplier;
         
         // Initialize movement
@@ -201,9 +205,15 @@ export class Enemy {
         }
     }
     
-    // Get level-scaled damage for enemy attacks
+    // Get level-scaled damage for enemy attacks.
+    // 5.79.0 — bumped to +0.30/level (was +0.18, +0.25 originally)
+    //   since player damage no longer scales with level. The player
+    //   has to invest in shop upgrades + powerups (CRIT, RAPID_FIRE,
+    //   MULTI_SHOT, BIG_BULLETS, etc.) to keep up — enemy damage
+    //   should make that investment feel mandatory.
+    //   L20 = 6.7× base, L10 = 3.7×, L5 = 2.2× — steep but reachable.
     getLevelScaledDamage(baseDamage) {
-        const levelMultiplier = 1 + (this.level - 1) * 0.25;
+        const levelMultiplier = 1 + (this.level - 1) * 0.30;
         return Math.round(baseDamage * levelMultiplier);
     }
 

@@ -514,24 +514,36 @@ class IconSpriteCache {
      * @returns {HTMLCanvasElement} The sprite canvas
      */
     createSprite(iconType, size, fillColor, strokeColor) {
+        // 5.79.3 — Practical "SDF-equivalent" quality bump (#6 in
+        //   docs/STROKE_PERF_ANALYSIS_5.79.md). Render every HUD icon
+        //   at 2× the requested size into the cache, so when the
+        //   browser downsamples via drawImage(...drawSize, drawSize)
+        //   the result stays crisp at the typical HUD draw size and
+        //   scales gracefully if a higher-DPI display ever asks for
+        //   bigger. We also bake a black silhouette stroke around the
+        //   icon path — same pattern as the bullet sprite cache, gives
+        //   us a free outline that reads against bright nebulae.
+        const SUPERSAMPLE = 2;
+        const renderSize = size * SUPERSAMPLE;
         const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
+        canvas.width = renderSize;
+        canvas.height = renderSize;
         const ctx = canvas.getContext('2d');
-        
-        // Render the icon to the sprite canvas
+
         switch (iconType) {
             case 'shield':
-                this.renderShieldToSprite(ctx, size, fillColor, strokeColor);
+                this.renderShieldToSprite(ctx, renderSize, fillColor, strokeColor);
                 break;
             case 'coin':
-                this.renderCoinToSprite(ctx, size, fillColor, strokeColor);
+                this.renderCoinToSprite(ctx, renderSize, fillColor, strokeColor);
                 break;
             case 'heart':
-                this.renderHeartToSprite(ctx, size, fillColor, strokeColor);
+                this.renderHeartToSprite(ctx, renderSize, fillColor, strokeColor);
                 break;
         }
-        
+        // Stamp the requested display size on the cache entry so the
+        // draw helpers can pass it to drawImage as the destination box.
+        canvas._displaySize = size;
         return canvas;
     }
     
@@ -651,6 +663,11 @@ class IconSpriteCache {
 // Global sprite cache instance
 const iconSpriteCache = new IconSpriteCache();
 
+// 5.79.14 — exported so the stats overlay (DOM) can pull the same
+//   cached icons that the HUD uses, keeping the gold/heart/shield
+//   visuals consistent across canvas + DOM contexts.
+export { iconSpriteCache };
+
 // OPT-2: Pre-rendered glow sprite cache — eliminates live ctx.shadowBlur calls
 // (shadowBlur triggers an O(r²) GPU blur kernel every frame; a cached drawImage is O(1))
 class GlowSpriteCache {
@@ -695,6 +712,142 @@ class GlowSpriteCache {
 
 export const glowSpriteCache = new GlowSpriteCache();
 
+// 5.79.3 — Baked outline bullet sprite cache. Used as the Canvas2D
+// fallback path for browsers without WebGL2 (rare on desktop, more
+// common on locked-down corporate machines). Replaces the per-frame
+// path-and-stroke chain with a single drawImage of a pre-rendered
+// sprite that has the **black outline + colored body + bright core
+// already baked in**.
+//
+// Recovers ~70% of the Canvas2D-fallback bullet stroke cost compared
+// to drawing the shape live every frame with a shadowBlur halo (see
+// docs/STROKE_PERF_ANALYSIS_5.79.md item #1).
+//
+// Cache key is (shape, color, size-bucket). Color is a CSS string;
+// size is rounded to 0.5-px to keep the cache bounded (~7 shapes ×
+// ~10 colors × ~6 sizes = 420 sprites max ≈ 80 KB).
+class BakedBulletSpriteCache {
+    constructor() {
+        this.cache = new Map();
+    }
+
+    /**
+     * Render shape `kind` once into an offscreen canvas with:
+     *   • body filled in `color`
+     *   • bright white inner core
+     *   • black outline ring (drawn under the body, slightly larger)
+     * Returns { canvas, half } so the caller can `drawImage(c, x-half, y-half)`.
+     */
+    getSprite(kind, color, size) {
+        const r = Math.max(2, Math.round(size * 2) / 2);
+        const key = `${kind}_${color}_${r}`;
+        let entry = this.cache.get(key);
+        if (entry) return entry;
+
+        const OUTLINE = 2;       // px outside the body
+        const pad = OUTLINE + 2; // sprite padding for AA
+        const dim = Math.ceil(r * 2) + pad * 2;
+        const c = document.createElement('canvas');
+        c.width = dim;
+        c.height = dim;
+        const cx = dim / 2;
+        const cy = dim / 2;
+        const octx = c.getContext('2d');
+
+        // Path traversal helper — closes a path of the given shape at
+        // the given radius around (cx, cy).
+        const tracePath = (radius) => {
+            octx.beginPath();
+            switch (kind) {
+                case 'circle':
+                    octx.arc(cx, cy, radius, 0, Math.PI * 2);
+                    break;
+                case 'triangle':
+                    octx.moveTo(cx, cy - radius);
+                    octx.lineTo(cx + radius * 0.866, cy + radius * 0.5);
+                    octx.lineTo(cx - radius * 0.866, cy + radius * 0.5);
+                    octx.closePath();
+                    break;
+                case 'diamond':
+                    octx.moveTo(cx, cy - radius);
+                    octx.lineTo(cx + radius, cy);
+                    octx.lineTo(cx, cy + radius);
+                    octx.lineTo(cx - radius, cy);
+                    octx.closePath();
+                    break;
+                case 'hexagon':
+                    for (let i = 0; i < 6; i++) {
+                        const a = (i / 6) * Math.PI * 2;
+                        const px = cx + Math.cos(a) * radius;
+                        const py = cy + Math.sin(a) * radius;
+                        if (i === 0) octx.moveTo(px, py); else octx.lineTo(px, py);
+                    }
+                    octx.closePath();
+                    break;
+                case 'star': {
+                    const points = 5;
+                    const innerR = radius * 0.45;
+                    for (let i = 0; i < points * 2; i++) {
+                        const a = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+                        const rad = i % 2 === 0 ? radius : innerR;
+                        const px = cx + Math.cos(a) * rad;
+                        const py = cy + Math.sin(a) * rad;
+                        if (i === 0) octx.moveTo(px, py); else octx.lineTo(px, py);
+                    }
+                    octx.closePath();
+                    break;
+                }
+                case 'square':
+                    octx.rect(cx - radius * 0.78, cy - radius * 0.78, radius * 1.56, radius * 1.56);
+                    break;
+                default:
+                    octx.arc(cx, cy, radius, 0, Math.PI * 2);
+            }
+        };
+
+        // 1) Black outline ring. Trace at radius + OUTLINE, fill black.
+        tracePath(r + OUTLINE);
+        octx.fillStyle = '#000';
+        octx.fill();
+
+        // 2) Colored body. Trace at r, fill with the bullet color.
+        tracePath(r);
+        octx.fillStyle = color;
+        octx.fill();
+
+        // 3) Bright white core (radial gradient for soft falloff).
+        const coreR = r * 0.5;
+        const grad = octx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        grad.addColorStop(0.6, 'rgba(255, 255, 255, 0.45)');
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        octx.fillStyle = grad;
+        octx.beginPath();
+        octx.arc(cx, cy, coreR, 0, Math.PI * 2);
+        octx.fill();
+
+        entry = { canvas: c, half: dim / 2 };
+        this.cache.set(key, entry);
+        return entry;
+    }
+
+    /**
+     * Draw the cached bullet sprite at (x, y) with optional alpha.
+     * Returns true on success; false if size/alpha is non-positive.
+     */
+    draw(ctx, kind, color, size, x, y, alpha = 1) {
+        if (!(size > 0) || !(alpha > 0)) return false;
+        const sprite = this.getSprite(kind, color, size);
+        const prev = ctx.globalAlpha;
+        ctx.globalAlpha = prev * alpha;
+        ctx.drawImage(sprite.canvas, x - sprite.half, y - sprite.half);
+        ctx.globalAlpha = prev;
+        return true;
+    }
+}
+
+export const bakedBulletSpriteCache = new BakedBulletSpriteCache();
+
 /**
  * Optimized function to draw a cached shield icon sprite
  * @param {CanvasRenderingContext2D} ctx - The canvas context
@@ -704,7 +857,10 @@ export const glowSpriteCache = new GlowSpriteCache();
  */
 export function drawCachedShieldIcon(ctx, x, y, size = 30) {
     const sprite = iconSpriteCache.getSprite('shield', size);
-    ctx.drawImage(sprite, x - size / 2, y - size / 2);
+    // 5.79.3 — sprite is rendered at 2× supersample; downsample to the
+    // requested display size for crisp scaling.
+    const d = sprite._displaySize || size;
+    ctx.drawImage(sprite, x - d / 2, y - d / 2, d, d);
 }
 
 /**
@@ -718,7 +874,8 @@ export function drawCachedShieldIcon(ctx, x, y, size = 30) {
  */
 export function drawCachedMoneyIcon(ctx, x, y, size = 20, fillColor = '#FFFF00', strokeColor = '#B8860B') {
     const sprite = iconSpriteCache.getSprite('coin', size, fillColor, strokeColor);
-    ctx.drawImage(sprite, x - size / 2, y - size / 2);
+    const d = sprite._displaySize || size;
+    ctx.drawImage(sprite, x - d / 2, y - d / 2, d, d);
 }
 
 /**
@@ -732,5 +889,6 @@ export function drawCachedMoneyIcon(ctx, x, y, size = 20, fillColor = '#FFFF00',
  */
 export function drawCachedHeartIcon(ctx, x, y, size = 20, fillColor = '#800000', strokeColor = '#DC143C') {
     const sprite = iconSpriteCache.getSprite('heart', size, fillColor, strokeColor);
-    ctx.drawImage(sprite, x - size / 2, y - size / 2);
-} 
+    const d = sprite._displaySize || size;
+    ctx.drawImage(sprite, x - d / 2, y - d / 2, d, d);
+}

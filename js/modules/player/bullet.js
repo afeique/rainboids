@@ -1,6 +1,6 @@
 // Bullet projectile entity
 import { GAME_CONFIG } from '../core/constants.js';
-import { wrap, random } from '../core/utils.js';
+import { wrap, random, bakedBulletSpriteCache } from '../core/utils.js';
 
 export class Bullet {
     constructor() {
@@ -98,8 +98,19 @@ export class Bullet {
             this.applyHoming(enemyPool, asteroidPool, gameEngine);
         }
 
-        // OPT: ring buffer trail — O(1) insert, no shifting
-        this.trail[this.trailHead] = { x: this.x, y: this.y };
+        // OPT: ring buffer trail — O(1) insert, no shifting.
+        // 5.79.4 — Reuse the existing slot's {x, y} object instead of
+        //   allocating a fresh one each frame. With ~150 player bullets
+        //   on heavy fights this saves ~9 000 short-lived objects/sec
+        //   off the GC's young generation. Same data layout downstream
+        //   (drawTrail still reads .x / .y).
+        let slot = this.trail[this.trailHead];
+        if (!slot) {
+            slot = { x: 0, y: 0 };
+            this.trail[this.trailHead] = slot;
+        }
+        slot.x = this.x;
+        slot.y = this.y;
         this.trailHead = (this.trailHead + 1) % this.maxTrailLength;
         if (this.trailCount < this.maxTrailLength) this.trailCount++;
 
@@ -343,26 +354,59 @@ export class Bullet {
         // Get powerup-enhanced visuals
         const visualData = this.getBulletVisuals(gameEngine);
 
-        // Draw trail first (behind bullet)
+        // Draw trail first (behind bullet) — always Canvas2D for now.
         this.drawTrail(ctx, visualData);
 
-        // Apply enhanced colors (shadow effects removed for performance)
-        ctx.fillStyle = visualData.color;
-
-        // Draw based on bullet type/powerups
-        if (visualData.shape === 'star') {
-            this.drawStarBullet(ctx, visualData);
-        } else if (visualData.shape === 'diamond') {
-            this.drawDiamondBullet(ctx, visualData);
-        } else if (visualData.shape === 'triangle') {
-            this.drawTriangleBullet(ctx, visualData);
-        } else if (visualData.shape === 'hexagon') {
-            this.drawHexagonBullet(ctx, visualData);
-        } else {
-            // Default circle shape
-            this.drawCircleBullet(ctx, visualData);
+        // 5.79.2 — Bullet body. If WebGL bullet renderer is available
+        //   AND it handles this shape, push the bullet into the
+        //   instance buffer and skip the Canvas2D body draw entirely.
+        //   The renderer flushes one batched draw call per frame.
+        //   Avoids the per-bullet shadowBlur Gaussian pass that used
+        //   to dominate frame time at high bullet counts.
+        const bulletRenderer = gameEngine && gameEngine.bulletRenderer;
+        const useGL = bulletRenderer && bulletRenderer.handlesShape(visualData.shape);
+        if (useGL) {
+            // Push (x, y, size, color, alpha). Size is the bullet's
+            // body diameter; the renderer scales the quad to give
+            // exactly that pixel size on screen.
+            const dia = visualData.size * 2.4;
+            bulletRenderer.pushBullet(visualData.shape, this.x, this.y, dia, visualData.color, fade);
+            ctx.restore();
+            return;
         }
 
+        // Canvas2D fallback (WebGL not supported). 5.79.3 — uses the
+        //   baked-outline sprite cache so we drawImage one cached
+        //   sprite per bullet instead of running the path/fill/stroke
+        //   chain. ~70% faster than the original shadowBlur path
+        //   (see docs/STROKE_PERF_ANALYSIS_5.79.md item #1). The
+        //   sprite already has the black outline + colored body +
+        //   bright core baked in.
+        const baked = bakedBulletSpriteCache.draw(
+            ctx,
+            visualData.shape || 'circle',
+            visualData.color,
+            visualData.size,
+            this.x, this.y,
+            fade,
+        );
+        if (!baked) {
+            // Sprite cache rejected (size/alpha 0) — fall back to the
+            // legacy path-and-fill so an off-screen / dying bullet
+            // doesn't disappear unexpectedly.
+            ctx.fillStyle = visualData.color;
+            if (visualData.shape === 'star') {
+                this.drawStarBullet(ctx, visualData);
+            } else if (visualData.shape === 'diamond') {
+                this.drawDiamondBullet(ctx, visualData);
+            } else if (visualData.shape === 'triangle') {
+                this.drawTriangleBullet(ctx, visualData);
+            } else if (visualData.shape === 'hexagon') {
+                this.drawHexagonBullet(ctx, visualData);
+            } else {
+                this.drawCircleBullet(ctx, visualData);
+            }
+        }
         ctx.restore();
     }
     

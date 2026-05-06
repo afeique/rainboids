@@ -16,9 +16,14 @@ export function levelUp() {
     this.experience -= this.experienceToNextLevel;
     this.level++;
 
-    // 5.72.0 — base raised 100 → 400, exponent 1.5 → 1.7 to drastically
-    // slow level-up rate. See player.js for the rationale.
-    this.experienceToNextLevel = Math.floor(400 * Math.pow(1.7, this.level - 1));
+    // 5.79.16 — Linear XP curve replacing the geometric blow-up.
+    //   Was: 400 × 1.7^(level-1), which doubled every level so the
+    //   player plateaued around L8-12 over a 20-wave run.
+    //   Now: 200 + (level - 1) × 50. Cumulative L1→L30 ≈ 22 600 XP.
+    //   Targets ~1.5 levels per wave when paired with the
+    //   collision-system XP rebalance and wave content scale-up.
+    //   See docs/XP_BALANCE_REWORK_5.79.md for the full plan.
+    this.experienceToNextLevel = 200 + (this.level - 1) * 50;
 
     // 5.78.0 — picks renamed to SP (skill points). Single field;
     // `skillPoints` is the canonical name now.
@@ -331,7 +336,8 @@ export function getKnockbackMultiplier() {
 }
 
 export function getEffectiveHealthOrbHealing(baseHealing = 1) {
-    // MEDPACK now increases min heal at orb creation time, so no collection bonus needed
+    // 5.78.2 — heal amount is decided at orb creation time inside
+    // createHealthOrb (level-scaled). No collection-time bonus.
     return baseHealing;
 }
 

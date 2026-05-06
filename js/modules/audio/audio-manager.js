@@ -33,6 +33,35 @@ const MANIFEST = {
     // ── Player firing / actions ─────────────────────────────────────
     shoot:                   ['shoot.wav'],
     tractorBeam:             ['tractorBeam.wav'],
+    // 5.79.5 — Arc Lightning audio rework. The continuous loop is now
+    //   a quiet ambient rumble (presence). On top of it we randomly
+    //   trigger one of four distinct strike-and-thunder one-shots
+    //   (arcStrike1..4) at randomized intervals, so each fire-press
+    //   sounds like a sequence of unique strikes instead of a flat
+    //   monotonous loop.
+    // 5.79.11 — Arc Lightning loop now uses the high-quality
+    //   `thunderous_lightning_laser.mp3` asset dropped into sfx/.
+    //   Replaces the synthesized arcLightningLoop.wav. Web Audio's
+    //   decodeAudioData handles MP3 natively.
+    arcLightningLoop:        ['thunderous_lightning_laser.mp3'],
+    arcStrike1:              ['arcStrike1.wav'],
+    arcStrike2:              ['arcStrike2.wav'],
+    arcStrike3:              ['arcStrike3.wav'],
+    arcStrike4:              ['arcStrike4.wav'],
+    // 5.79.10 — Heavier arc strike variants used when the beam is
+    //   locked on a target (vs the lighter idle arcStrike1..4).
+    arcHit1:                 ['arcHit1.wav'],
+    arcHit2:                 ['arcHit2.wav'],
+    arcHit3:                 ['arcHit3.wav'],
+    // 5.79.11 — Lance Beam loop uses the `Laser_Beam_Weapon_Active.mp3`
+    //   asset (high-quality recorded laser hum). Replaces the
+    //   synthesized laserBeamLoop.wav. The hit-sizzle variants
+    //   (laserBeamHit1..3) stay synth-generated since they're short
+    //   one-shots and the synth versions read fine in context.
+    laserBeamLoop:           ['Laser_Beam_Weapon_Active.mp3'],
+    laserBeamHit1:           ['laserBeamHit1.wav'],
+    laserBeamHit2:           ['laserBeamHit2.wav'],
+    laserBeamHit3:           ['laserBeamHit3.wav'],
 
     // ── Pickups ─────────────────────────────────────────────────────
     coin:                    ['coin.wav'],
@@ -123,6 +152,22 @@ const SOUND_THROTTLE_MS = {
     playerHitEnemy:    100,
     playerExplosion:   500,
     tractorBeam:       300,
+    // 5.79.5 — arc strike one-shots throttled per-name so two of the
+    //   same variant don't fire back-to-back. The scheduling logic
+    //   below also enforces a global 200ms minimum between strikes.
+    arcStrike1:        80,
+    arcStrike2:        80,
+    arcStrike3:        80,
+    arcStrike4:        80,
+    // 5.79.10 — heavier hit variants throttled the same.
+    arcHit1:           80,
+    arcHit2:           80,
+    arcHit3:           80,
+    // Lance Beam hit-sizzle variants throttled to 100 ms so a contact
+    //   streak doesn't buzz.
+    laserBeamHit1:     100,
+    laserBeamHit2:     100,
+    laserBeamHit3:     100,
     // 5.69.0 — UI tick throttled to ~50ms so a multi-click streak
     // (like rapidly tabbing the shop) doesn't build into a buzz.
     menuClick:         50,
@@ -283,6 +328,13 @@ export class AudioManager {
         const layerScale = files.length === 1 ? 1.0 : (1 / Math.sqrt(files.length));
         const gainAmount = this.sfxMasterVol * layerScale;
 
+        // 5.79.9 — Schedule sounds at `currentTime` instead of `0`. On
+        //   browsers (especially Safari) where the context resumed
+        //   recently, currentTime is monotonic-positive and `0` is in
+        //   the past, which can introduce a small dispatch lag. Using
+        //   currentTime guarantees immediate playback the moment the
+        //   context is processing samples.
+        const startAt = this.audioContext.currentTime;
         for (const f of files) {
             const path = SFX_BASE + f;
             const buf = this.audioBuffers.get(path);
@@ -293,7 +345,7 @@ export class AudioManager {
                 const gain = this.audioContext.createGain();
                 gain.gain.value = gainAmount;
                 src.connect(gain).connect(this.audioContext.destination);
-                src.start(0);
+                src.start(startAt);
             } catch (e) {
                 // Browser may throw on rapid play during context state shifts;
                 // soft-fail so a bad call never crashes gameplay.
@@ -316,6 +368,79 @@ export class AudioManager {
 
     setSfxVolume(normalized) { this.sfxMasterVol = normalized * this.maxSfxVolume; }
     getSfxVolume()           { return this.sfxMasterVol / this.maxSfxVolume; }
+
+    // 5.79.4 — Looping SFX (e.g. arc-lightning continuous static).
+    //   `startLoop(name, gain, opts)` plays the bound WAV on a buffer
+    //   source set to `loop = true` and stores the source so
+    //   `stopLoop(name)` can stop it later. Idempotent — calling
+    //   startLoop while already playing is a no-op.
+    //
+    // 5.79.12 — `opts` supports loop-region splicing:
+    //     loopStart: seconds into the buffer where the loop region
+    //                BEGINS. The source plays the full track once
+    //                (including the attack envelope), then on the
+    //                first wrap loops to `loopStart` instead of 0.
+    //                Skips the leading transient on every repeat.
+    //     loopEnd:   optional seconds into the buffer where the loop
+    //                region ENDS. Defaults to the end of the buffer.
+    //   Use loopStart for tracks with a percussive/attack opening
+    //   that would create a "click-click-click" loop seam if rewound.
+    startLoop(name, gainScale = 1, opts = {}) {
+        if (!this.audioContext || !this._loaded) return false;
+        if (this.soundEnabled[name] === false) return false;
+        if (!this._loops) this._loops = new Map();
+        if (this._loops.has(name)) return true; // already playing
+        const list = MANIFEST[name];
+        if (!list || list.length === 0) return false;
+        const item = list[0];
+        const files = (typeof item === 'string') ? [item] : item;
+        if (!files || files.length === 0) return false;
+        const path = SFX_BASE + files[0];
+        const buf = this.audioBuffers.get(path);
+        if (!buf) return false;
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume().catch(() => {});
+        }
+        try {
+            const src = this.audioContext.createBufferSource();
+            src.buffer = buf;
+            src.loop = true;
+            // Splice the loop region. loopStart > 0 makes the source
+            // skip the leading attack on every wrap; loopEnd defaults
+            // to the buffer's full duration so the entire tail-end
+            // remains audible before the wrap point.
+            if (typeof opts.loopStart === 'number' && opts.loopStart > 0) {
+                src.loopStart = Math.min(opts.loopStart, buf.duration - 0.05);
+            }
+            if (typeof opts.loopEnd === 'number' && opts.loopEnd > 0) {
+                src.loopEnd = Math.min(opts.loopEnd, buf.duration);
+            }
+            const gain = this.audioContext.createGain();
+            gain.gain.value = this.sfxMasterVol * gainScale;
+            src.connect(gain).connect(this.audioContext.destination);
+            // 5.79.9 — schedule at currentTime, not 0 (avoids past-time
+            //   dispatch lag on Safari).
+            src.start(this.audioContext.currentTime);
+            this._loops.set(name, { src, gain });
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    stopLoop(name) {
+        if (!this._loops) return false;
+        const entry = this._loops.get(name);
+        if (!entry) return false;
+        try { entry.src.stop(0); } catch {}
+        try { entry.src.disconnect(); entry.gain.disconnect(); } catch {}
+        this._loops.delete(name);
+        return true;
+    }
+
+    isLoopPlaying(name) {
+        return !!(this._loops && this._loops.has(name));
+    }
 
     setSoundEnabled(name, enabled) {
         this.soundEnabled[name] = !!enabled;

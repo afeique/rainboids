@@ -324,6 +324,16 @@ export function drawEnemyShape(ctx) {
     }
     drawCtx.lineWidth = 2;
 
+    // 5.79.5 — Removed the `radius × 1.08` black silhouette circle
+    //   that was drawn under each enemy. For non-circular enemies
+    //   (HUNTER triangle, WASP fighter, STALKER blade, etc.) the
+    //   circle extended past the colored body and read as a visible
+    //   dark halo around the ship — exactly the artifact the user
+    //   reported. The colored hull strokes already provide enough
+    //   silhouette definition; if a stronger outline is needed in the
+    //   future, it should be drawn per-shape inside each drawer's
+    //   actual path, not as a generic radial circle.
+
     switch (this.type) {
         case 'HUNTER':
             this.drawTriangle(drawCtx);
@@ -358,6 +368,7 @@ export function drawEnemyShape(ctx) {
         default:
             this.drawTriangle(drawCtx);
     }
+    // No shadow state to reset — the silhouette is a plain fill now.
 }
 
 export function drawTriangle(ctx) {

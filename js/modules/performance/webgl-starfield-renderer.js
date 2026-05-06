@@ -158,11 +158,18 @@ void main() {
 
     // 5.74.24 — CRT-style scanlines on the WebGL starfield/nebula layer
     // ONLY. The foreground action (gameCanvas) sits on top of glCanvas
-    // and is unaffected. gl_FragCoord.y is in framebuffer pixels, so
-    // every other row is darkened producing a fine horizontal banding.
-    // Scanline period is tuned to ~1px tall lines (Hz = pixel-row rate)
-    // — visible at native, gentle enough not to compete with the action.
-    float scan = 0.78 + 0.22 * sin(gl_FragCoord.y * 3.14159);
+    // and is unaffected. gl_FragCoord.y is in framebuffer pixels.
+    //
+    // 5.79.2 — thicker + more apparent CRT scanlines. Was a fine 1-px
+    // band at ~22% contrast (sin period 2). Now: hard 2-px dark band
+    // every 5 px → 40% contrast, much more visible. The hard threshold
+    // (rather than a smooth sin) gives the chunky retro CRT look the
+    // user asked for; we still smooth the edge over a single pixel
+    // with smoothstep so it doesn't shimmer at sub-pixel motion.
+    float modY = mod(gl_FragCoord.y, 5.0);
+    // 0..2 dark, 2..3 transition, 3..5 light.
+    float scanFactor = smoothstep(2.0, 3.0, modY);
+    float scan = mix(0.55, 1.0, scanFactor);
     rgb *= scan;
 
     fragColor = vec4(rgb, a);

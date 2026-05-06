@@ -15,11 +15,12 @@ import { EnemyBullet } from './enemy/enemy-bullet.js';
 import { Particle, drawParticlesBatched } from './world/particle.js';
 import { WebGLParticleRenderer } from './performance/webgl-particle-renderer.js';
 import { WebGLStarfieldRenderer } from './performance/webgl-starfield-renderer.js';
+import { WebGLBulletRenderer } from './performance/webgl-bullet-renderer.js';
 import { STAR_SLOT_INDEX, WEBGL_STAR_SHAPES } from './performance/webgl-starfield-atlas.js';
 import { ColorStar } from './world/color-star.js';
 import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
-import { Powerup } from './world/powerup.js';
+import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { DEFENSE_SKILLS, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
@@ -42,6 +43,8 @@ import * as weaponFx from './combat/weapon-effects-renderer.js';
 import * as events from './ui/event-setup.js';
 import { showHint, updateHintDimming } from './ui/hint-system.js';
 import { RadialMenu } from './ui/radial-menu.js';
+import { hasSave, loadSave, writeSave, clearSave } from './core/storage.js';
+import { StatsOverlay } from './ui/stats-overlay.js';
 
 export const PLAYER_STATES = {
     NORMAL: 'normal'
@@ -78,6 +81,24 @@ export class GameEngine {
             this.starfieldRenderer.init(this.particleRenderer.gl);
         }
 
+        // 5.79.2 — WebGL bullet renderer. Single instanced draw call for
+        // every player + enemy bullet on screen. Replaces the per-bullet
+        // Canvas2D + shadowBlur path that dominated stroke cost at high
+        // bullet counts.
+        //
+        // bulletCanvas sits ABOVE gameCanvas (different layer than the
+        // particle/starfield glCanvas which is BELOW gameCanvas) so
+        // bullets render on top of asteroids/enemies/player. It runs
+        // its own WebGL2 context — multiple contexts on a single page
+        // are well within modern browser limits.
+        this.bulletCanvas = document.getElementById('bulletCanvas');
+        this.bulletRenderer = this.bulletCanvas
+            ? new WebGLBulletRenderer(this.bulletCanvas)
+            : { supported: false, beginFrame: () => {}, pushBullet: () => false, drawFrame: () => {}, handlesShape: () => false, resize: () => {}, gl: null };
+        if (this.bulletCanvas) {
+            this.bulletRenderer.init();
+        }
+
         this.uiManager = uiManager;
         this.audioManager = audioManager;
         // Expose weapon catalogs to ui-manager for the pause-menu PRIMARY/POWER tabs.
@@ -99,6 +120,9 @@ export class GameEngine {
         this.canvas.width = this.width;
         this.canvas.height = this.height;
         this.particleRenderer.resize(this.width, this.height);
+        if (this.bulletRenderer && this.bulletRenderer.resize) {
+            this.bulletRenderer.resize(this.width, this.height);
+        }
         
         // State machine — owns all game state transitions with validation + epoch guards
         this.stateMachine = new GameStateMachine(GAME_STATES.TITLE_SCREEN);
@@ -428,7 +452,8 @@ export class GameEngine {
     
     setupEventListeners() { return events.setupEventListeners.call(this); }
     
-    init() {
+    init({ writeWave1Save = true } = {}) {
+        this._suppressWave1Save = !writeWave1Save;
         // Cancel any pending game timers from previous game
         for (let i = 0; i < this._gameTimers.length; i++) this._gameTimers[i].cancel();
         this._gameTimers.length = 0;
@@ -449,6 +474,26 @@ export class GameEngine {
         // Position player at center of game field
         this.player.x = this.gameField.width / 2;
         this.player.y = this.gameField.height / 2;
+
+        // 5.79.0 — apply randomized loadout if startNewRun seeded one.
+        //   Skipped on Continue (startContinueRun bypasses this branch
+        //   by calling init({ writeWave1Save:false }) without seeding).
+        const loadout = this._pendingNewRunLoadout;
+        this._pendingNewRunLoadout = null;
+        if (loadout) {
+            if (loadout.primary && PRIMARY_WEAPONS[loadout.primary]) {
+                this.player.activePrimary = loadout.primary;
+                this.player.ownedPrimaries = new Set([loadout.primary]);
+            }
+            if (loadout.power && POWER_WEAPONS[loadout.power]) {
+                this.player.activePower = loadout.power;
+                this.player.ownedPowers = new Set([loadout.power]);
+            }
+            if (loadout.skill && DEFENSE_SKILLS[loadout.skill]) {
+                this.player.activeSkill = loadout.skill;
+                this.player.ownedSkills = new Set([loadout.skill]);
+            }
+        }
         // Initialize lives display
         this.uiManager.updateLives(this.game.lives);
         // Wave bonus shield system removed
@@ -507,6 +552,12 @@ export class GameEngine {
         this.game.waveComplete = false;
         this.uiManager.updateLives(this.game.lives);
         this.game.state = GAME_STATES.WAVE_TRANSITION;
+        // 5.79.0 — write the initial wave-1 save so a fresh run that
+        //   quits before clearing wave 1 still has something to resume.
+        //   Suppressed when init() is called from startContinueRun()
+        //   so the loaded snapshot isn't clobbered.
+        if (!this._suppressWave1Save) this.persistWaveStartSave?.();
+        this._suppressWave1Save = false;
         // Reset stats for the new run — Game Complete pulls from this object.
         this.game.stats = {
             gameStartTime: Date.now(),
@@ -571,8 +622,8 @@ export class GameEngine {
         this._gameTimers.push(new GameTimer(4000, () => {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
-                'wave1-cycle-weapons-v5',
-                'Press <strong>R</strong> to cycle primary weapons, <strong>F</strong> for power weapons, <strong>E</strong> for skills.',
+                'wave1-cycle-weapons-v6',
+                'Press <strong>F</strong> to cycle primary weapons, <strong>E</strong> for power weapons, <strong>R</strong> for skills.',
                 7500,
                 { once: false },
             );
@@ -595,6 +646,171 @@ export class GameEngine {
                 { once: false },
             );
         }));
+        // 5.79.2 — stats menu hint. Fires once near the end of the
+        //   wave-1 onboarding window. `once: true` so returning players
+        //   don't see it every run.
+        this._gameTimers.push(new GameTimer(28000, () => {
+            if (this.game.state !== GAME_STATES.PLAYING) return;
+            showHint(
+                'stats-menu-v1',
+                'Press <strong>`</strong> (backtick, top-left of <strong>1</strong>) to open the <strong>STATS</strong> screen — see every derived stat, formula, and how it scales with level.',
+                9000,
+                { once: true },
+            );
+        }));
+    }
+
+    // ── Save / load (5.79.0) ──────────────────────────────────────────
+    //
+    // We snapshot the run at the start of each wave so the player can quit
+    // and pick up where they left off via the title screen's Continue
+    // button. Snapshot covers what the run would look like just after a
+    // wave-clear shop close — the new wave hasn't spawned yet, the player
+    // has whatever loadout/HP/gold/level they finished the prior wave with.
+
+    hasSavedRun() { return hasSave(); }
+    clearSavedRun() { clearSave(); }
+
+    serializeRunState() {
+        const p = this.player;
+        if (!p) return null;
+        const powerups = {};
+        if (p.powerups && typeof p.powerups.forEach === 'function') {
+            p.powerups.forEach((pw, type) => {
+                // Drop the heavy `config` ref — we can rehydrate from
+                // POWERUP_TYPES on load; keep just the stack count and
+                // permanent flag.
+                powerups[type] = {
+                    stacks: pw.stacks | 0,
+                    isPermanent: pw.isPermanent !== false,
+                };
+            });
+        }
+        return {
+            // Engine-side run fields
+            wave: this.game.currentWave | 0,
+            money: this.game.money | 0,
+            lives: this.game.lives | 0,
+            stats: this.game.stats ? { ...this.game.stats, weaponShots: { ...(this.game.stats.weaponShots || {}) } } : null,
+            // Player snapshot
+            player: {
+                level: p.level | 0,
+                experience: p.experience | 0,
+                experienceToNextLevel: p.experienceToNextLevel | 0,
+                skillPoints: p.skillPoints | 0,
+                health: p.health,
+                maxHealth: p.maxHealth,
+                shield: p.shield,
+                shieldTanks: p.shieldTanks | 0,
+                activePrimary: p.activePrimary,
+                activePower: p.activePower,
+                activeSkill: p.activeSkill,
+                ownedPrimaries: Array.from(p.ownedPrimaries || []),
+                ownedPowers: Array.from(p.ownedPowers || []),
+                ownedSkills: Array.from(p.ownedSkills || []),
+                powerups,
+            },
+        };
+    }
+
+    persistWaveStartSave() {
+        // Called by wave-manager.nextWave right after currentWave is
+        // bumped. Failures (private mode, full quota) are swallowed —
+        // the run keeps going.
+        try { writeSave(this.serializeRunState()); } catch {}
+    }
+
+    restoreRunState(snap) {
+        if (!snap) return false;
+        const p = this.player;
+        if (!p) return false;
+        // Engine-side
+        this.game.currentWave = Math.max(1, snap.wave | 0);
+        this.game.money = Math.max(0, snap.money | 0);
+        this.game.lives = Math.max(1, snap.lives | 0);
+        if (snap.stats) {
+            // Preserve the original gameStartTime so accumulated time
+            // numbers stay consistent across the resume.
+            this.game.stats = { ...this.game.stats, ...snap.stats };
+        }
+        // Player-side
+        const ps = snap.player || {};
+        if (typeof ps.level === 'number') p.level = Math.max(1, ps.level);
+        if (typeof ps.experience === 'number') p.experience = Math.max(0, ps.experience);
+        if (typeof ps.experienceToNextLevel === 'number' && ps.experienceToNextLevel > 0) {
+            p.experienceToNextLevel = ps.experienceToNextLevel;
+        }
+        if (typeof ps.skillPoints === 'number') p.skillPoints = Math.max(0, ps.skillPoints);
+        if (typeof ps.maxHealth === 'number') p.maxHealth = ps.maxHealth;
+        if (typeof ps.health === 'number') p.health = Math.min(ps.health, p.maxHealth);
+        if (typeof ps.shield === 'number') p.shield = ps.shield;
+        if (typeof ps.shieldTanks === 'number') p.shieldTanks = Math.max(0, ps.shieldTanks | 0);
+        if (typeof ps.activePrimary === 'string') p.activePrimary = ps.activePrimary;
+        if (typeof ps.activePower === 'string')   p.activePower   = ps.activePower;
+        if (typeof ps.activeSkill === 'string')   p.activeSkill   = ps.activeSkill;
+        if (Array.isArray(ps.ownedPrimaries)) p.ownedPrimaries = new Set(ps.ownedPrimaries);
+        if (Array.isArray(ps.ownedPowers))    p.ownedPowers    = new Set(ps.ownedPowers);
+        if (Array.isArray(ps.ownedSkills))    p.ownedSkills    = new Set(ps.ownedSkills);
+        // Rehydrate powerups via POWERUP_TYPES so cards / stats look up
+        // configs correctly. Falls back to a minimal stub if the type
+        // was deleted in a later patch.
+        if (ps.powerups && typeof ps.powerups === 'object') {
+            p.powerups = new Map();
+            for (const [type, pw] of Object.entries(ps.powerups)) {
+                const stacks = Math.max(1, pw.stacks | 0);
+                const cfg = POWERUP_TYPES[type] || {};
+                p.powerups.set(type, {
+                    stacks,
+                    timeRemaining: Infinity,
+                    config: cfg,
+                    isPermanent: true,
+                });
+            }
+        }
+        // Realign asteroid+enemy level for the resumed wave.
+        try {
+            const { getEnemyLevel, getAsteroidLevel } = wave;
+            if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
+            if (typeof getAsteroidLevel === 'function') this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
+        } catch {}
+        // HUD refresh
+        if (this.uiManager?.updateLives) this.uiManager.updateLives(this.game.lives);
+        if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
+        return true;
+    }
+
+    startContinueRun() {
+        // Convenience: do a full init() first to put pools / stars / wave
+        // intro in their wave-1 baseline, then overlay the saved snapshot.
+        // Pass writeWave1Save:false so init() doesn't clobber the saved
+        // snapshot we're about to restore.
+        const snap = loadSave();
+        if (!snap) return false;
+        this.init({ writeWave1Save: false });
+        return this.restoreRunState(snap);
+    }
+
+    startNewRun() {
+        clearSave();
+        // 5.79.0 — randomize starting loadout (primary, power, skill).
+        //   We seed `_pendingNewRunLoadout` here and `init()` reads it
+        //   right after the Player is constructed so the assignment
+        //   happens BEFORE the wave-1 save is written.
+        this._pendingNewRunLoadout = this._rollRandomLoadout();
+        this.init();
+    }
+
+    _rollRandomLoadout() {
+        const pickKey = (obj) => {
+            const keys = Object.keys(obj || {});
+            if (keys.length === 0) return null;
+            return keys[Math.floor(Math.random() * keys.length)];
+        };
+        return {
+            primary: pickKey(PRIMARY_WEAPONS),
+            power:   pickKey(POWER_WEAPONS),
+            skill:   pickKey(DEFENSE_SKILLS),
+        };
     }
 
     // Generate all initial color stars using purely generative method
@@ -1413,6 +1629,13 @@ export class GameEngine {
         // transparent layer; particles render on the GL layer beneath.
         this.ctx.clearRect(0, 0, this.width, this.height);
 
+        // 5.79.2 — clear the bullet canvas once per frame regardless of
+        //   game state so the title screen / pause overlays don't sit
+        //   behind stale bullet sprites. drawFrame() is also called
+        //   unconditionally at the end so any stale instance buffer is
+        //   flushed (no-op when no instances were pushed).
+        this.bulletRenderer.beginFrame();
+
         // 5.64.16 — clear the GL layer ONCE per frame (was previously
         // done inside particleRenderer.drawParticles). Doing it here
         // lets the starfield renderer draw BEFORE particles without
@@ -1523,8 +1746,17 @@ export class GameEngine {
                 this.powerupPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
-                this.enemyBulletPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+
+                // 5.79.2 — Bullet bodies render on WebGL via the
+                //   instanced renderer (bulletCanvas). Trails still
+                //   draw on Canvas2D below — the trail loop wasn't the
+                //   dominant cost. beginFrame() / drawFrame() are also
+                //   called unconditionally below at the end of draw()
+                //   so the bulletCanvas stays cleared on title-screen
+                //   frames; here we just push instances.
+                this.enemyBulletPool.drawActiveVisible(this.ctx, vL, vT, vR, vB, this);
                 this.bulletPool.drawActiveVisible(this.ctx, vL, vT, vR, vB, this);
+
                 this.player.draw(this.ctx);
                 this.drawWeaponEffects();
 
@@ -1562,6 +1794,15 @@ export class GameEngine {
                 }
             }
         }
+
+        // 5.79.2 — flush the bullet WebGL layer once at the end of draw()
+        //   regardless of game state. On title screen this just emits a
+        //   no-op (no instances pushed) but the beginFrame() clear at
+        //   the top still wipes any stale bullets, letting the title
+        //   show through unobstructed.
+        const bcamX = this.camera.x - (this._frameScreenOffsetX || 0);
+        const bcamY = this.camera.y - (this._frameScreenOffsetY || 0);
+        this.bulletRenderer.drawFrame(bcamX, bcamY);
     }
     
     drawHUD() { return hudStatus.drawHUD.call(this); }
@@ -1755,6 +1996,12 @@ export class GameEngine {
         // ── Camera kick (directional impact lurch) ──
         let kickX = this._cameraKickX || 0;
         let kickY = this._cameraKickY || 0;
+        // 5.79.2 — track the per-frame total screen offset (shake + kick)
+        //   in screen pixels so the WebGL bullet renderer can apply the
+        //   same translation to its draw call. Without this, bullets
+        //   wouldn't shake/kick with the rest of the frame.
+        let frameShakeX = 0;
+        let frameShakeY = 0;
 
         if (this.game.screenShakeDuration > 0) {
             // Enhanced shake — stronger random component for punchier feel
@@ -1768,6 +2015,8 @@ export class GameEngine {
                       (Math.random() - 0.5) * shakeIntensity * 0.75;
 
             this.ctx.translate(dx + kickX, dy + kickY);
+            frameShakeX = dx + kickX;
+            frameShakeY = dy + kickY;
             this.game.screenShakeDuration--;
 
             // Smooth decay of shake magnitude
@@ -1778,7 +2027,11 @@ export class GameEngine {
             }
         } else if (kickX || kickY) {
             this.ctx.translate(kickX, kickY);
+            frameShakeX = kickX;
+            frameShakeY = kickY;
         }
+        this._frameScreenOffsetX = frameShakeX;
+        this._frameScreenOffsetY = frameShakeY;
         
         this.draw();
         this.ctx.restore();
@@ -1911,6 +2164,19 @@ export class GameEngine {
             top.fromWaveClear = false;
         }
     }
+
+    // 5.79.0 — backtick-key Diablo-style stats screen. Pauses the game
+    //   while open; closing resumes (unless the player paused via ESC
+    //   while the stats screen was up — then closing restores pause).
+    toggleStatsScreen() {
+        if (!this._statsOverlay) {
+            this._statsOverlay = new StatsOverlay(this.uiManager);
+            this._statsOverlay.setGameEngine(this);
+        }
+        return this._statsOverlay.toggle();
+    }
+
+    isStatsScreenOpen() { return !!(this._statsOverlay && this._statsOverlay.isOpen()); }
 
     togglePause() {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {

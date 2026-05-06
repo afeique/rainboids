@@ -43,6 +43,12 @@ function getPowerupGradients(ctx, gradientColors) {
 // every drop as `isPermanent: true`. Each entry now declares a
 // `category` so the Powerups overlay can group them under
 // Offense / Drops sub-tabs.
+// 5.79.16 — Per-powerup spCost (skill-point cost) replaces the flat
+//   1-SP-per-stack pricing. Tiered by impact:
+//     Tier 1 (5 SP): major multiplicative DPS or survival levers
+//     Tier 2 (3 SP): meaningful but capped or single-axis bonuses
+//     Tier 3 (2 SP): utility / non-DPS
+//   See docs/XP_BALANCE_REWORK_5.79.md §"SP costs by impact tier".
 export const POWERUP_TYPES = {
     RAPID_FIRE: {
         name: 'Rapid',
@@ -55,6 +61,7 @@ export const POWERUP_TYPES = {
         rarity: 0.3,
         category: 'OFFENSE',
         maxStacks: 5,
+        spCost: 5,
         description: '22% faster shooting per stack'
     },
     MULTI_SHOT: {
@@ -68,6 +75,7 @@ export const POWERUP_TYPES = {
         rarity: 0.18,
         category: 'OFFENSE',
         maxStacks: 4,
+        spCost: 5,
         description: '+1 bullet in a spread per stack'
     },
     HOMING: {
@@ -81,6 +89,7 @@ export const POWERUP_TYPES = {
         rarity: 0.15,
         category: 'OFFENSE',
         maxStacks: 3,
+        spCost: 5,
         description: 'Bullets track nearest enemy per stack'
     },
     BIG_BULLETS: {
@@ -97,6 +106,7 @@ export const POWERUP_TYPES = {
         // bullet sizes; further stacks make bullets read as physics
         // objects rather than projectiles.
         maxStacks: 3,
+        spCost: 5,
         description: '+2.2px bullet radius per stack'
     },
     SPEED_BOOST: {
@@ -110,6 +120,7 @@ export const POWERUP_TYPES = {
         rarity: 0.22,
         category: 'OFFENSE',
         maxStacks: 3,
+        spCost: 3,
         description: '+65% thrust & +45% top speed per stack'
     },
     PIERCING: {
@@ -122,10 +133,8 @@ export const POWERUP_TYPES = {
         effect: 'piercing',
         rarity: 0.12,
         category: 'OFFENSE',
-        // 5.76.1 — 3 → 4. With sub-waves spawning denser groups, the
-        // 4th pierce is the difference between a clean sweep and a
-        // wasted shot on the back row of the cluster.
         maxStacks: 4,
+        spCost: 5,
         description: 'Bullets pass through +1 enemy per stack'
     },
     EXPLOSIVE: {
@@ -139,6 +148,7 @@ export const POWERUP_TYPES = {
         rarity: 0.08,
         category: 'OFFENSE',
         maxStacks: 3,
+        spCost: 3,
         description: 'AoE blast on bullet impact (+10px radius per stack)'
     },
     CRIT_CHANCE: {
@@ -151,9 +161,8 @@ export const POWERUP_TYPES = {
         effect: 'critChance',
         rarity: 0.18,
         category: 'OFFENSE',
-        // 5.76.1 — 8 → 6. 6 × 7% + 8% base = 50% crit chance — already
-        // half the shots crit. 56-64% above that diminishes to noise.
         maxStacks: 6,
+        spCost: 3,
         description: '+7% critical hit chance per stack'
     },
     CRIT_DAMAGE: {
@@ -167,6 +176,7 @@ export const POWERUP_TYPES = {
         rarity: 0.13,
         category: 'OFFENSE',
         maxStacks: 6,
+        spCost: 5,
         description: '+15% critical hit damage per stack'
     },
     SHIELD_BOOST: {
@@ -179,10 +189,8 @@ export const POWERUP_TYPES = {
         effect: 'shieldBoost',
         rarity: 0.18,
         category: 'OFFENSE',
-        // 5.76.1 — 5 → 4. getEffectiveShield clamps total at 75%; 4
-        // stacks alone (32%) plus base shielding already pushes near
-        // the cap. The 5th stack would be a no-op for many builds.
         maxStacks: 4,
+        spCost: 3,
         description: '-8% damage taken per stack'
     },
     LONG_RANGE: {
@@ -196,6 +204,7 @@ export const POWERUP_TYPES = {
         rarity: 0.22,
         category: 'OFFENSE',
         maxStacks: 3,
+        spCost: 3,
         description: '+55% bullet range per stack'
     },
     KNOCKBACK: {
@@ -209,122 +218,17 @@ export const POWERUP_TYPES = {
         rarity: 0.18,
         category: 'OFFENSE',
         maxStacks: 3,
+        spCost: 2,
         description: '+40% knockback on all power weapons per stack'
     },
-    MEDPACK: {
-        name: 'Medic',
-        abbr: 'MED',
-        color: '#ff6699',
-        gradientColors: ['#ff99cc', '#cc3366'],
-        icon: '💊',
-        duration: 30000,
-        effect: 'medpack',
-        rarity: 0.18,
-        category: 'DROPS',
-        // 5.76.1 — 4 → 3. 3 stacks already adds substantial healing per
-        // orb; with the global health-drop cooldown this saturates fast.
-        maxStacks: 3,
-        description: 'More health per orb'
-    },
-    DOCTOR: {
-        name: 'Doctor',
-        abbr: 'DOC',
-        color: '#ff6688',
-        gradientColors: ['#ff99aa', '#cc2244'],
-        icon: '🏥',
-        duration: 30000,
-        effect: 'doctor',
-        rarity: 0.09,
-        category: 'DROPS',
-        maxStacks: 3,
-        description: 'Increases the max amount of health per orb'
-    },
-    PAYDAY: {
-        name: 'Payday',
-        abbr: 'PAY',
-        color: '#66ff66',
-        gradientColors: ['#88ff88', '#228822'],
-        icon: '💵',
-        duration: 30000,
-        effect: 'payday',
-        rarity: 0.13,
-        category: 'DROPS',
-        // 5.76.1 — 4 → 3. 3 stacks adds +15g min money per orb on top
-        // of HIGH_ROLLER's max bumps; further stacks compound with the
-        // already-bumped Gold Find economy.
-        maxStacks: 3,
-        description: 'More money per orb'
-    },
-    HIGH_ROLLER: {
-        name: 'High Roller',
-        abbr: 'HRL',
-        color: '#ffdd44',
-        gradientColors: ['#ffee66', '#cc8800'],
-        icon: '🎰',
-        duration: 30000,
-        effect: 'highRoller',
-        rarity: 0.09,
-        category: 'DROPS',
-        maxStacks: 3,
-        description: 'Increases the max amount of money per orb'
-    },
-    HEALTH_ORB_DROP_CHANCE: {
-        name: 'Health Luck',
-        abbr: 'HLK',
-        color: '#33ff99',
-        gradientColors: ['#66ffbb', '#009944'],
-        icon: '🍀',
-        duration: 45000,
-        effect: 'healthOrbDropChance',
-        rarity: 0.13,
-        category: 'DROPS',
-        // 5.76.1 — 5 → 4. Health drops are gated by a global cooldown
-        // anyway; high stacks of % chance can't push past that floor.
-        maxStacks: 4,
-        description: '+5% health orb drop chance per stack'
-    },
-    MONEY_ORB_DROP_CHANCE: {
-        name: 'Gold Luck',
-        abbr: 'GLK',
-        color: '#ffdd00',
-        gradientColors: ['#ffee66', '#cc8800'],
-        icon: '💰',
-        duration: 45000,
-        effect: 'moneyOrbDropChance',
-        rarity: 0.13,
-        category: 'DROPS',
-        // 5.76.1 — 5 → 4. Money drop rate is clamped at 0.95; with
-        // Gold Find scaling on top, 4 stacks (+20%) is already near
-        // saturation for the rate slot.
-        maxStacks: 4,
-        description: '+5% money orb drop chance per stack'
-    },
-    HEALTH_ORB_DROP_QUANTITY: {
-        name: 'Health Bounty',
-        abbr: 'HBT',
-        color: '#66ff66',
-        gradientColors: ['#99ff99', '#009900'],
-        icon: '💚',
-        duration: 45000,
-        effect: 'healthOrbDropQuantity',
-        rarity: 0.08,
-        category: 'DROPS',
-        maxStacks: 3,
-        description: '+1 max health orbs per drop'
-    },
-    MONEY_ORB_DROP_QUANTITY: {
-        name: 'Gold Bounty',
-        abbr: 'GBT',
-        color: '#ffcc00',
-        gradientColors: ['#ffdd66', '#996600'],
-        icon: '🪙',
-        duration: 45000,
-        effect: 'moneyOrbDropQuantity',
-        rarity: 0.08,
-        category: 'DROPS',
-        maxStacks: 3,
-        description: '+1 max money orbs per drop'
-    }
+    // 5.78.2 — DROPS-category powerups removed. Drop rates, drop
+    // amounts, heal amounts, and money amounts now scale uniformly
+    // with player level (see combat-manager.dropOrbsFromEntity +
+    // createHealthOrb / createMoneyOrb). Removes 8 powerup picks the
+    // player would have spent SP on and folds the entire orb-drop
+    // economy into a single per-level curve. Less currency-flavored
+    // friction; more deterministic progression. The OFFENSE category
+    // still gates around player choice (damage shape per build).
 };
 
 export class Powerup {
@@ -602,14 +506,9 @@ export class Powerup {
                 else ctx.lineTo(x, y);
             }
             ctx.closePath();
-        } else if (this.type === 'MEDPACK') {
-            // Cross/plus shape for medpack
-            ctx.beginPath();
-            const armWidth = R * 0.3;
-            const armLength = R * 0.8;
-            ctx.rect(-armLength, -armWidth, armLength * 2, armWidth * 2);
-            ctx.rect(-armWidth, -armLength, armWidth * 2, armLength * 2);
-            ctx.closePath();
+        // 5.78.2 — MEDPACK powerup deleted; the cross-shape branch is
+        // unreachable for any current type but harmless if a save file
+        // ever resurrects the symbol. Falls through to the hexagon now.
         } else {
             // Hexagon for others
             ctx.beginPath();

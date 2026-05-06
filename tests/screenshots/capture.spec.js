@@ -170,8 +170,9 @@ test.describe('Blog article screenshots', () => {
         // Stack a few powerups so the screen has owned + locked rows.
         await page.evaluate(() => {
             const ge = window.gameEngine;
+            // 5.78.2 — DROPS-category seeds (MEDPACK, PAYDAY) removed.
             const seed = ['RAPID_FIRE', 'MULTI_SHOT', 'CRIT_CHANCE',
-                          'KNOCKBACK', 'MEDPACK', 'PAYDAY'];
+                          'KNOCKBACK', 'HEALTH_BOOST', 'SHIELD_BOOST'];
             for (const type of seed) {
                 const p = ge.powerupPool.get(0, 0, type);
                 if (p && p.config) {

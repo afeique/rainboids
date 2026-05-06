@@ -357,8 +357,8 @@ export function createArcLightningBolt(gameEngine, targetX, targetY) {
                     Math.cos(driftAngle) * driftSpeed,
                     Math.sin(driftAngle) * driftSpeed,
                     '#44ffff', false);
-                b.radius = 4 + Math.random() * 2;
-                b.glowRadius = 10;
+                b.radius = 8 + Math.random() * 3;
+                b.glowRadius = 18;
                 b.damage = this.getLevelScaledDamage(2);
                 b.isPersistent = true;
                 b.maxLifetimeOverride = 1000 + Math.random() * 500; // 1–1.5s
@@ -450,8 +450,8 @@ export function createWideLaserBeam(gameEngine, angle) {
                     '#ff0000',
                     false
                 );
-                bullet.radius = 4;
-                bullet.glowRadius = 12;
+                bullet.radius = 8;
+                bullet.glowRadius = 22;
                 bullet.damage = this.getLevelScaledDamage(3);
                 bullet.movementPattern = 'laser_beam';
                 bullet.life = 0.3;
@@ -501,8 +501,8 @@ export function shootMissile(gameEngine, targetX, targetY) {
             bullet.targetPlayer = this.targetPlayer;
             bullet.rotation = angle;
             bullet.rotationSpeed = 0;
-            bullet.radius = 7;
-            bullet.glowRadius = 14;
+            bullet.radius = 12;
+            bullet.glowRadius = 24;
             bullet.color = '#cc44ff';
             bullet.damage = this.getLevelScaledDamage(3);
             bullet.maxLifetimeOverride = 8000;
@@ -531,8 +531,8 @@ export function shootSpiralLaser(gameEngine) {
     // Fire a yellow laser in the current faceAngle — called while spinning during arc phase
     const bullet = this.createEnemyBullet(gameEngine, this.faceAngle, 6, '#ffff44', false, 'aimed');
     if (bullet) {
-        bullet.radius = 3;
-        bullet.glowRadius = 8;
+        bullet.radius = 7;
+        bullet.glowRadius = 16;
         bullet.damage = this.getLevelScaledDamage(2);
     }
 }
@@ -565,8 +565,11 @@ export function shootBurst3(gameEngine, targetX, targetY) {
         bullet.shape = 'triangle';
         bullet.rotation = angle; // Point in travel direction
         bullet.rotationSpeed = 0.1; // Spin as they fly
-        bullet.radius = 7;
-        bullet.glowRadius = 14;
+        // 5.79.3 — Hunter bullets bumped 7 → 11 radius. 5.79.8 — bumped
+        //   again to 16 so they're unmissable. Hunters are the most
+        //   common threat; their bullets should be obvious.
+        bullet.radius = 16;
+        bullet.glowRadius = 32;
         bullet.maxLifetimeOverride = 10000; // Long-range single shot — ~1120px
     }
 }
@@ -632,8 +635,8 @@ export function shootWaspBullet(gameEngine, targetX, targetY) {
         bullet.shape = null; // circle (default)
         bullet.rotation = 0;
         bullet.rotationSpeed = 0;
-        bullet.radius = 3.5;
-        bullet.glowRadius = 6;
+        bullet.radius = 8;
+        bullet.glowRadius = 16;
         bullet.color = '#ffff44';
         bullet.damage = this.getLevelScaledDamage(1);
         bullet.maxLifetimeOverride = 12000; // 2x extended range
@@ -680,8 +683,8 @@ export function shootGuardianSpread(gameEngine, targetX, targetY) {
             bullet.shape = shape;
             bullet.rotation = angle;
             bullet.rotationSpeed = 0;    // no spin
-            bullet.radius = 6;
-            bullet.glowRadius = 12;
+            bullet.radius = 11;
+            bullet.glowRadius = 22;
             bullet.color = '#44ff44';
             bullet.damage = this.getLevelScaledDamage(2);
             bullet.maxLifetimeOverride = 5000;
@@ -991,8 +994,8 @@ export function createEnemyBullet(gameEngine, angle, speed, color, explosive = f
 
         // Make titan rockets fast and powerful
         if (movementPattern === 'titan_rocket') {
-            bullet.radius = 5; // Medium-large rockets
-            bullet.glowRadius = 10; // Strong glow effect
+            bullet.radius = 10; // 5.79.8 — bumped 5 → 10 for visibility
+            bullet.glowRadius = 22;
             bullet.damage = this.getLevelScaledDamage(ENEMY_BULLET_CONFIG.MISSILE.TITAN_ROCKET.DAMAGE);
 
             // Set rocket properties from constants
@@ -1003,16 +1006,16 @@ export function createEnemyBullet(gameEngine, angle, speed, color, explosive = f
 
         // Make laser bullets more visible and powerful
         if (movementPattern === 'laser') {
-            bullet.radius = 5; // Larger laser bullets
-            bullet.glowRadius = 15; // Strong glow effect
+            bullet.radius = 10; // 5.79.8 — was 5
+            bullet.glowRadius = 26;
             bullet.damage = this.getLevelScaledDamage(2); // Reduced from 8 to 2 - much lower damage
             bullet.life = 0.4; // Reduced from 0.8 for ~1 screen range
         }
 
         // Make missile turret bullets larger and spiky
         if (movementPattern === 'missile_decelerate') {
-            bullet.radius = 6; // Large spiky orbs
-            bullet.glowRadius = 12; // Strong glow
+            bullet.radius = 11; // 5.79.8 — was 6
+            bullet.glowRadius = 24;
             bullet.damage = this.getLevelScaledDamage(5); // High damage
 
             // Set level-scaled max distance and deceleration for Prowler missiles
@@ -1198,8 +1201,8 @@ export function shootCircleBurst(gameEngine, count = 8) {
             bullet.shape = 'hexagon';
             bullet.rotation = angle;
             bullet.rotationSpeed = 0.12; // visibly spinning
-            bullet.radius = 7;
-            bullet.glowRadius = 14;
+            bullet.radius = 12;
+            bullet.glowRadius = 26;
             bullet.color = '#00ff88';
             bullet.damage = this.getLevelScaledDamage(2);
             bullet.maxLifetimeOverride = 4000;

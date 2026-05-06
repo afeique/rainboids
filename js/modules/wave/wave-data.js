@@ -24,128 +24,134 @@ import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES } from '../core/constants.js';
 // (see wave-manager.spawnLeveledEnemies — the chance is wave-scaled).
 export const WAVE_DATA = {
 
+    // 5.79.16 — Enemy + asteroid counts scaled up across the campaign
+    //   (~+60% enemies, ~+33% asteroids) so per-wave XP yields keep
+    //   pace with the new linear XP curve targeting ~1.5 levels per
+    //   wave. See docs/XP_BALANCE_REWORK_5.79.md for the analysis.
+
     // ── Act I: First Contact ──
-    1: { asteroids: 3, subWaves: [
-        [{ type: 'HUNTER', count: 2 }],
-        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
-    ] },
-    2: { asteroids: 3, subWaves: [
-        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
+    1: { asteroids: 4, subWaves: [
+        [{ type: 'HUNTER', count: 3 }],
         [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
     ] },
-    3: { asteroids: 3, subWaves: [
-        [{ type: 'HUNTER', count: 3 }],
-        [{ type: 'WASP', count: 3 }],
-        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
+    2: { asteroids: 4, subWaves: [
+        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
     ] },
-    4: { asteroids: 3, subWaves: [
-        [{ type: 'GUARDIAN', count: 2 }],
-        [{ type: 'WASP', count: 3 }],
-        [{ type: 'GUARDIAN', count: 1 }, { type: 'HUNTER', count: 3 }],
+    3: { asteroids: 4, subWaves: [
+        [{ type: 'HUNTER', count: 4 }],
+        [{ type: 'WASP', count: 4 }],
+        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+    ] },
+    4: { asteroids: 4, subWaves: [
+        [{ type: 'GUARDIAN', count: 3 }],
+        [{ type: 'WASP', count: 4 }, { type: 'HUNTER', count: 1 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 4 }],
     ] },
 
     // ── Boss 1: Iron Giant — escort softens, then boss arrives. ──
     5: {
-        asteroids: 2, isBossWave: true, bossTier: 1,
+        asteroids: 3, isBossWave: true, bossTier: 1,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 2 }],
-            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'GUARDIAN', count: 2 }],
+            [{ type: 'GUARDIAN', count: 4 }, { type: 'HUNTER', count: 3 }],
+            [{ type: 'WASP', count: 3 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 2 }],
         ],
     },
 
     // ── Act II: Escalation ──
-    6: { asteroids: 3, subWaves: [
-        [{ type: 'STALKER', count: 2 }],
-        [{ type: 'HUNTER', count: 3 }],
-        [{ type: 'STALKER', count: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
+    6: { asteroids: 4, subWaves: [
+        [{ type: 'STALKER', count: 3 }],
+        [{ type: 'HUNTER', count: 4 }, { type: 'WASP', count: 1 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
     ] },
-    7: { asteroids: 3, subWaves: [
-        [{ type: 'DRIFTER', count: 2 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'DRIFTER', count: 1 }, { type: 'HUNTER', count: 3 }],
+    7: { asteroids: 4, subWaves: [
+        [{ type: 'DRIFTER', count: 3 }],
+        [{ type: 'TANGERINE', count: 3 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 4 }, { type: 'WASP', count: 1 }],
     ] },
-    8: { asteroids: 3, subWaves: [
-        [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 1 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 1 }],
-        [{ type: 'SENTINEL', count: 1 }, { type: 'HUNTER', count: 3 }],
+    8: { asteroids: 4, subWaves: [
+        [{ type: 'HUNTER', count: 3 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'STALKER', count: 3 }, { type: 'SENTINEL', count: 1 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'HUNTER', count: 4 }, { type: 'STALKER', count: 1 }],
     ] },
-    9: { asteroids: 2, subWaves: [
-        [{ type: 'WEAVER', count: 1 }, { type: 'WASP', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }],
-        [{ type: 'WEAVER', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'WASP', count: 1 }],
+    9: { asteroids: 3, subWaves: [
+        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'PROWLER', count: 3 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 1 }, { type: 'WASP', count: 2 }, { type: 'HUNTER', count: 1 }],
     ] },
 
-    // ── Boss 2: Twin Iron — two waves of escort, then twin bosses. ──
+    // ── Boss 2: Twin Iron — three escort waves, then twin bosses. ──
     10: {
-        asteroids: 1, isBossWave: true, bossTier: 2,
+        asteroids: 2, isBossWave: true, bossTier: 2,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
-            [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
-            [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'GUARDIAN', count: 1 }],
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 3 }],
+            [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
+            [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
         ],
     },
 
     // ── Act III: The Gauntlet ──
-    11: { asteroids: 2, subWaves: [
-        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 1 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'GUARDIAN', count: 1 }, { type: 'STALKER', count: 1 }, { type: 'WASP', count: 2 }],
+    11: { asteroids: 3, subWaves: [
+        [{ type: 'HUNTER', count: 5 }, { type: 'WASP', count: 2 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 3 }],
     ] },
-    12: { asteroids: 2, subWaves: [
-        [{ type: 'STALKER', count: 2 }, { type: 'WASP', count: 1 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'DRIFTER', count: 1 }],
-        [{ type: 'STALKER', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'HUNTER', count: 2 }],
+    12: { asteroids: 3, subWaves: [
+        [{ type: 'STALKER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'PROWLER', count: 3 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
     ] },
-    13: { asteroids: 2, subWaves: [
-        [{ type: 'WASP', count: 4 }],
-        [{ type: 'WEAVER', count: 1 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'WASP', count: 2 }, { type: 'WEAVER', count: 1 }, { type: 'HUNTER', count: 2 }],
+    13: { asteroids: 3, subWaves: [
+        [{ type: 'WASP', count: 6 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'WASP', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
     ] },
-    14: { asteroids: 2, subWaves: [
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 1 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 1 }],
-        [{ type: 'GUARDIAN', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'STALKER', count: 2 }],
+    14: { asteroids: 3, subWaves: [
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 3 }],
     ] },
 
     // ── Boss 3: Triple Threat — three escort waves before triple TITAN. ──
     15: {
-        asteroids: 1, isBossWave: true, bossTier: 3,
+        asteroids: 2, isBossWave: true, bossTier: 3,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
-            [{ type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
-            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'SENTINEL', count: 1 }],
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
+            [{ type: 'SENTINEL', count: 3 }, { type: 'WASP', count: 3 }],
+            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'GUARDIAN', count: 1 }],
         ],
     },
 
     // ── Act IV: Endgame Approach ──
-    16: { asteroids: 2, subWaves: [
-        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
-        [{ type: 'STALKER', count: 1 }, { type: 'GUARDIAN', count: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 1 }],
+    16: { asteroids: 3, subWaves: [
+        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 3 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
     ] },
-    17: { asteroids: 2, subWaves: [
-        [{ type: 'WEAVER', count: 2 }],
-        [{ type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 1 }],
-        [{ type: 'WEAVER', count: 1 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
+    17: { asteroids: 3, subWaves: [
+        [{ type: 'WEAVER', count: 3 }],
+        [{ type: 'WASP', count: 5 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 1 }],
     ] },
-    18: { asteroids: 2, subWaves: [
-        [{ type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
-        [{ type: 'TITAN', count: 1 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }],
+    18: { asteroids: 3, subWaves: [
+        [{ type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'TITAN', count: 1 }, { type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'SENTINEL', count: 1 }],
     ] },
-    19: { asteroids: 2, subWaves: [
-        [{ type: 'HUNTER', count: 2 }, { type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 1 }],
-        [{ type: 'STALKER', count: 1 }, { type: 'DRIFTER', count: 1 }, { type: 'WEAVER', count: 1 }],
-        [{ type: 'TANGERINE', count: 1 }, { type: 'GUARDIAN', count: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
+    19: { asteroids: 3, subWaves: [
+        [{ type: 'HUNTER', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 3 }],
     ] },
 
     // ── Final Boss: The Last Stand. ──
     20: {
-        asteroids: 1, isBossWave: true, bossTier: 4, isFinalBoss: true,
+        asteroids: 2, isBossWave: true, bossTier: 4, isFinalBoss: true,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 1 }, { type: 'STALKER', count: 1 }],
-            [{ type: 'PROWLER', count: 1 }, { type: 'WEAVER', count: 1 }, { type: 'TANGERINE', count: 1 }],
-            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 4 }, { type: 'GUARDIAN', count: 1 }, { type: 'SENTINEL', count: 1 }],
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
+            [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }],
+            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
         ],
     },
 };

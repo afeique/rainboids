@@ -75,7 +75,9 @@ export class Player {
         // and the halved kill-XP rate, level-ups drop from ~1/wave to
         // ~1 every 2-3 waves. The 5.71.0 auto-shop on level-up was
         // disruptive partly because levels came too fast.
-        this.experienceToNextLevel = 400; // EXP needed for level 2
+        // 5.79.16 — Initial threshold matches the new linear curve in
+        //   progression.levelUp (200 + (level-1) × 50 → L1→L2 = 200).
+        this.experienceToNextLevel = 200; // EXP needed for level 2
         // 5.78.0 — `skillPoints` IS the new "picks" currency (renamed
         // from `powerupPicks`). The 5.76.0 SP-removal cleared the old
         // SP semantics; this field reuses the name for the picks pool
@@ -792,6 +794,12 @@ export class Player {
 
     getEffectivePrimaryDamage() {
         return weapons.getEffectivePrimaryDamage.call(this);
+    }
+
+    // 5.78.2 — exposed for external callers (combat manager, debug
+    // overlays, tests). Mirrors the helper on the weapons module.
+    getPlayerLevelDamageMultiplier() {
+        return weapons.getPlayerLevelDamageMultiplier.call(this);
     }
 
     getPowerCooldownRemaining() {

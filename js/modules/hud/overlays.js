@@ -56,6 +56,12 @@ export function drawWavyText(text, x, y, options = {}) {
             amplitude,
             speed = 0.48,
             colorSpeed = 0.15,
+            // 5.79.0 — opt-in black outline. Title, subtitle, and
+            //   record text on the title screen pass `outline: true`
+            //   so they read clearly against the live starfield.
+            outline = false,
+            outlineWidth = 4,
+            outlineColor = 'rgba(0, 0, 0, 0.92)',
         } = options;
 
         const palette = (colors && colors.length > 0) ? colors : DEFAULT_WAVY_COLORS;
@@ -112,6 +118,17 @@ export function drawWavyText(text, x, y, options = {}) {
 
             const waveOffset = halfAmp === 0 ? 0 : Math.sin(time * waveOmega + index * 0.8) * halfAmp;
 
+            // 5.79.0 — black stroke pass under each glyph (when opted
+            //   in). Drawn FIRST so the gradient fill stays on top.
+            if (outline) {
+                this.ctx.lineWidth = outlineWidth;
+                this.ctx.lineJoin = 'round';
+                this.ctx.strokeStyle = outlineColor;
+                this.ctx.font = `${effectiveFontSize}px 'Press Start 2P', monospace`;
+                this.ctx.globalAlpha = baseAlpha;
+                this.ctx.strokeText(char, currentX, y + waveOffset);
+            }
+
             // Glow via double-draw: larger translucent pass + crisp pass.
             this.ctx.fillStyle = grad;
             this.ctx.globalAlpha = baseAlpha * 0.35;
@@ -166,14 +183,158 @@ export function drawTitleScreen() {
         const showPressKey = true;
         let fadeAlpha = 0;
 
+        // 5.79.3 — when launching, defer the animated title until AFTER
+        //   the chrome (subtitle, buttons, record, version) draws so
+        //   the animated letters render ON TOP of everything else.
+        //   The static idle title still draws here at its normal
+        //   z-order.
+        if (!launching) {
+            // Static idle title — RAINBOIDS centered, subtitle below.
+            // 5.79.0 — outline:true adds a black stroke under each
+            //   glyph so the title stays legible over the dynamic
+            //   starfield/nebula.
+            this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
+                fontSize: 72,
+                colors: WAVY_PALETTES.title,
+                speed: 0.45,
+                colorSpeed: 0.18,
+                outline: true,
+                outlineWidth: 6,
+            });
+        }
+
+        // ── Subtitle / Press Any Key / Record (visible during launch too) ──
+        if (showSubtitle) {
+            this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
+                fontSize: 24,
+                colors: WAVY_PALETTES.whiteShimmer,
+                amplitude: 0,
+                colorSpeed: 0.1,
+                outline: true,
+                outlineWidth: 4,
+            });
+        }
+
+        if (showPressKey) {
+            // 5.79.0 — replaced "PRESS ANY KEY TO START" with NEW GAME +
+            //   CONTINUE buttons. Continue is grayed out when no save
+            //   exists. Bounds are stashed on the engine so the click
+            //   listener in main.js can route mouse hits.
+            const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
+            const ctx = this.ctx;
+            const labels = ['NEW GAME', 'CONTINUE'];
+            const buttonW = 220, buttonH = 46, gap = 36;
+            const totalW = buttonW * 2 + gap;
+            const yTop = centerY + 60;
+            const x0 = centerX - totalW / 2;
+            const rects = {
+                newGame: { id: 'newGame', x: x0,                       y: yTop, w: buttonW, h: buttonH, disabled: false },
+                continue:{ id: 'continue', x: x0 + buttonW + gap,      y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun },
+            };
+            this._titleButtonRects = rects;
+            const hovered = this._titleHoveredButton;
+            const pressed = this._titlePressedButton;
+
+            const drawButton = (rect, label) => {
+                ctx.save();
+                const isHover = hovered === rect.id && !rect.disabled;
+                const isPress = pressed === rect.id && !rect.disabled;
+                const baseAlpha = rect.disabled ? 0.32 : 1.0;
+                const time = Date.now() * 0.001;
+                const pulse = rect.disabled ? 0 : Math.sin(time * 3) * 0.10;
+                ctx.globalAlpha = baseAlpha + pulse;
+
+                // Press state shifts the button down 1px and uses a
+                // saturated fill so the click reads as physical contact.
+                const yOffset = isPress ? 1 : 0;
+                const x = rect.x;
+                const y = rect.y + yOffset;
+                const w = rect.w, h = rect.h;
+
+                ctx.lineWidth = 2;
+                if (rect.disabled) {
+                    ctx.strokeStyle = 'rgba(150, 150, 150, 0.55)';
+                    ctx.fillStyle   = 'rgba(40, 40, 40, 0.35)';
+                } else if (isPress) {
+                    ctx.strokeStyle = '#ffe5a0';
+                    ctx.fillStyle   = 'rgba(255, 200, 64, 0.55)';
+                } else if (isHover) {
+                    ctx.strokeStyle = 'rgba(140, 220, 255, 1)';
+                    ctx.fillStyle   = 'rgba(0, 80, 130, 0.55)';
+                } else {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                    ctx.fillStyle   = 'rgba(0, 0, 0, 0.55)';
+                }
+                ctx.beginPath();
+                ctx.roundRect ? ctx.roundRect(x, y, w, h, 8) : ctx.rect(x, y, w, h);
+                ctx.fill();
+                ctx.stroke();
+
+                // 5.79.0 — black text outline so labels stay legible
+                //   over the dynamic starfield/nebula. strokeText first,
+                //   then fillText.
+                ctx.font = "16px 'Press Start 2P', monospace";
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const tx = x + w / 2;
+                const ty = y + h / 2 + 1;
+                ctx.lineWidth = 4;
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
+                ctx.strokeText(label, tx, ty);
+                ctx.fillStyle = rect.disabled
+                    ? 'rgba(170, 170, 170, 0.85)'
+                    : (isPress ? '#fffadf' : (isHover ? '#fff' : 'rgba(230, 240, 250, 0.95)'));
+                ctx.fillText(label, tx, ty);
+                ctx.restore();
+            };
+            drawButton(rects.newGame, labels[0]);
+            drawButton(rects.continue, labels[1]);
+
+            if (this.game.survivalRecord > 0) {
+                const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
+                // 5.79.0 — outline:true gives a black stroke under the
+                //   wavy gold text for legibility against starfields.
+                this.drawWavyText(recText, centerX, centerY + 140, {
+                    fontSize: 16,
+                    colors: WAVY_PALETTES.gold,
+                    amplitude: 0,
+                    colorSpeed: 0.14,
+                    outline: true,
+                    outlineWidth: 3,
+                });
+            }
+
+            // 5.78.0 — version tag, bottom-right of the title screen.
+            // Small Press-Start-2P at 60% alpha; sits above any HUD
+            // padding the viewport adds. Mirrors the in-game gold /
+            // timer corner so the player notices but it doesn't fight
+            // for attention with the title text.
+            this.ctx.save();
+            this.ctx.font = "11px 'Press Start 2P', monospace";
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
+            // 5.79.0 — thicker outline for the version tag too.
+            this.ctx.lineWidth = 3;
+            this.ctx.lineJoin = 'round';
+            this.ctx.textAlign = 'right';
+            this.ctx.textBaseline = 'bottom';
+            const tag = `v${VERSION}`;
+            const tx = this.canvas.width - 14;
+            const ty = this.canvas.height - 12;
+            this.ctx.strokeText(tag, tx, ty);
+            this.ctx.fillText(tag, tx, ty);
+            this.ctx.restore();
+        }
+
+        // 5.79.3 — Animated title is drawn LAST (after the chrome) so
+        //   the swirling letters render ON TOP of subtitle / buttons /
+        //   record / version tag. The user explicitly wanted the
+        //   animation to be the focal point of the launch transition.
         if (launching) {
             const text = 'RAINBOIDS';
             const seeds = anim.letterSeeds || [];
             const style = anim.style || 'twister';
-            // Static letter origins — every animation begins each letter
-            // AT its idle title position, then transforms outward, so the
-            // existing on-screen letters appear to BECOME the animation
-            // rather than a new set of letters spawning.
             const titleX = centerX + 10;
             const titleY = centerY - 100;
             const staticPositions = _measureLetterPositions(this.ctx, text, 72, titleX, titleY);
@@ -198,67 +359,6 @@ export function drawTitleScreen() {
                     fadeAlpha = drawTwisterAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions);
                     break;
             }
-        } else {
-            // Static idle title — RAINBOIDS centered, subtitle below.
-            this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
-                fontSize: 72,
-                colors: WAVY_PALETTES.title,
-                speed: 0.45,
-                colorSpeed: 0.18,
-            });
-        }
-
-        // ── Subtitle / Press Any Key / Record (visible during launch too) ──
-        if (showSubtitle) {
-            this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
-                fontSize: 24,
-                colors: WAVY_PALETTES.whiteShimmer,
-                amplitude: 0,
-                colorSpeed: 0.1,
-            });
-        }
-
-        if (showPressKey) {
-            const time = Date.now() * 0.001;
-            const pulseAlpha = 0.5 + Math.sin(time * 3) * 0.3;
-            this.ctx.save();
-            this.ctx.globalAlpha = pulseAlpha;
-            this.drawWavyText('PRESS ANY KEY TO START', centerX, centerY + 80, {
-                fontSize: 18,
-                colors: WAVY_PALETTES.whiteShimmer,
-                amplitude: 0,
-                colorSpeed: 0.12,
-            });
-            this.ctx.restore();
-
-            if (this.game.survivalRecord > 0) {
-                const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
-                this.drawWavyText(recText, centerX, centerY + 120, {
-                    fontSize: 16,
-                    colors: WAVY_PALETTES.gold,
-                    amplitude: 0,
-                    colorSpeed: 0.14,
-                });
-            }
-
-            // 5.78.0 — version tag, bottom-right of the title screen.
-            // Small Press-Start-2P at 60% alpha; sits above any HUD
-            // padding the viewport adds. Mirrors the in-game gold /
-            // timer corner so the player notices but it doesn't fight
-            // for attention with the title text.
-            this.ctx.save();
-            this.ctx.font = "11px 'Press Start 2P', monospace";
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-            this.ctx.lineWidth = 2;
-            this.ctx.textAlign = 'right';
-            this.ctx.textBaseline = 'bottom';
-            const tag = `v${VERSION}`;
-            const tx = this.canvas.width - 14;
-            const ty = this.canvas.height - 12;
-            this.ctx.strokeText(tag, tx, ty);
-            this.ctx.fillText(tag, tx, ty);
-            this.ctx.restore();
         }
 
         // ── Fade-to-black overlay (final phase of launch animation) ──

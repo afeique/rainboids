@@ -489,10 +489,15 @@ export function createHealthOrb(x, y, healAmountOverride = null) {
     if (healAmountOverride !== null) {
         healAmount = Math.max(1, healAmountOverride);
     } else {
-        const medpackStacks = this.player.getPowerupStacks('MEDPACK');
-        const doctorStacks = this.player.getPowerupStacks('DOCTOR');
-        const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE);
-        const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE) + (doctorStacks * GAME_CONFIG.DOCTOR_HEAL_MAX_UPGRADE));
+        // 5.78.2 — heal amount scales with player level. The
+        // MEDPACK / DOCTOR powerups were removed; this curve replaces
+        // their stacks (level 1 = base amount, level 20 = +12 min /
+        // +14 max heal). Steeper than the old per-stack rate but
+        // monotonic with level so the player can rely on the curve.
+        const lvl = Math.max(1, (this.player.level | 0));
+        const lvlBonus = Math.floor((lvl - 1) * 0.6);          // L20 = +11
+        const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + lvlBonus;
+        const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + lvlBonus + Math.floor((lvl - 1) * 0.15));
         healAmount = Math.floor(Math.random() * (maxHeal - minHeal + 1)) + minHeal;
     }
     healthOrb.healAmount = healAmount;
@@ -525,10 +530,16 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null) {
     if (moneyAmountOverride !== null) {
         moneyAmount = Math.max(1, moneyAmountOverride);
     } else {
-        const paydayStacks = this.player.getPowerupStacks('PAYDAY');
-        const highRollerStacks = this.player.getPowerupStacks('HIGH_ROLLER');
-        const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE);
-        const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE) + (highRollerStacks * GAME_CONFIG.HIGH_ROLLER_MONEY_MAX_UPGRADE));
+        // 5.78.2 — money amount scales with player level (replaces the
+        // PAYDAY / HIGH_ROLLER stacks). Min adds +3/level, max +5/level
+        // → level 20 baseline becomes 67–115g per orb (was 10–20g).
+        // Combined with Gold Find rate scaling, level-20 income is
+        // ~2× per-orb × 1.5× rate = ~3× over level 1.
+        const lvl = Math.max(1, (this.player.level | 0));
+        const minBonus = (lvl - 1) * 3;
+        const maxBonus = (lvl - 1) * 5;
+        const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + minBonus;
+        const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + maxBonus);
         moneyAmount = Math.floor(Math.random() * (maxMoney - minMoney + 1)) + minMoney;
     }
     moneyOrb.moneyAmount = moneyAmount;
@@ -553,9 +564,15 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null) {
 
 // Split an integer total budget into N equal-ish orb values, each ≤ cap.
 // Returns an array of orb values whose sum === total.
-function _splitBudgetIntoOrbs(total, cap) {
+//
+// 5.79.1 — `maxOrbs` clamps the split count so high-budget drops don't
+//   spawn dozens of tiny orbs. When budget exceeds `cap × maxOrbs`, the
+//   excess gets distributed evenly so per-orb values overshoot `cap` —
+//   that's intentional: the orb's render still saturates at SIZE_MAX,
+//   but the value (and pickup gold) keeps growing.
+function _splitBudgetIntoOrbs(total, cap, maxOrbs = Infinity) {
     if (total <= 0) return [];
-    const count = Math.max(1, Math.ceil(total / cap));
+    const count = Math.max(1, Math.min(maxOrbs, Math.ceil(total / cap)));
     const base = Math.floor(total / count);
     const remainder = total - base * count;
     const out = new Array(count);
@@ -569,10 +586,14 @@ export function dropStarsFromEntity(x, y) {
 }
 
 export function dropOrbsFromEntity(x, y, entity = null) {
-    const healthDropChanceStacks = this.player.getPowerupStacks('HEALTH_ORB_DROP_CHANCE');
-    const moneyDropChanceStacks = this.player.getPowerupStacks('MONEY_ORB_DROP_CHANCE');
-    const healthDropQuantityStacks = this.player.getPowerupStacks('HEALTH_ORB_DROP_QUANTITY');
-    const moneyDropQuantityStacks = this.player.getPowerupStacks('MONEY_ORB_DROP_QUANTITY');
+    // 5.78.2 — DROPS-category powerup stacks were removed; drop rate
+    // and quantity now scale with PLAYER level (instead of being
+    // bought as discrete picks). The rate gets +1.5%/level past 1
+    // (level 20 → +28.5% on top of the base + entity bonuses), and
+    // the quantity ceiling adds +1 max orb every 5 levels.
+    const playerLvl = Math.max(1, (this.player.level | 0));
+    const playerLvlDropRateBonus = (playerLvl - 1) * 0.015;
+    const playerLvlQuantityBonus = Math.floor((playerLvl - 1) / 5);   // L5 +1, L10 +2, L15 +3, L20 +4
 
     const hitStreakMultiplier = this.player.getHitStreakMultiplier();
 
@@ -584,8 +605,8 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const levelDropRateBonus = (entityLevel - 1) * 0.05;
     const levelQuantityMultiplier = 1 + (entityLevel - 1) * 0.1;
 
-    const baseHealthDropRate = GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + (healthDropChanceStacks * GAME_CONFIG.HEALTH_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
-    const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + (moneyDropChanceStacks * GAME_CONFIG.MONEY_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
+    const baseHealthDropRate = GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + playerLvlDropRateBonus + levelDropRateBonus + enemyDropRateBonus;
+    const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + playerLvlDropRateBonus + levelDropRateBonus + enemyDropRateBonus;
 
     // 5.74.9 — Gold Find scales the money drop RATE in addition to the
     //   amount.
@@ -614,16 +635,19 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const healthCooldownReady = (now - (this.lastHealthOrbDropAt || 0)) >= healthCooldown;
 
     if (healthCooldownReady && Math.random() < healthDropRate) {
-        // Compute the heal "budget" the legacy formula would have produced,
-        // then split it into many small capped orbs.
-        const maxHealthOrbs = GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX + (healthDropQuantityStacks * GAME_CONFIG.HEALTH_ORB_DROP_QUANTITY_UPGRADE);
+        // 5.78.2 — quantity ceiling is base + player-level bonus (was
+        // base + per-stack DROP_QUANTITY powerup); per-orb amount is
+        // now level-scaled inside createHealthOrb (no more MEDPACK /
+        // DOCTOR stacks). Split-budget logic preserved so a high-level
+        // drop spawns many small visible orbs instead of one mega-orb.
+        const maxHealthOrbs = GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX + playerLvlQuantityBonus;
         const baseCount = Math.floor(Math.random() * maxHealthOrbs) + 1;
         const totalLegacyCount = Math.max(1, Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
 
-        const medpackStacks = this.player.getPowerupStacks('MEDPACK');
-        const doctorStacks = this.player.getPowerupStacks('DOCTOR');
-        const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE);
-        const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + (medpackStacks * GAME_CONFIG.MEDPACK_HEAL_MIN_UPGRADE) + (doctorStacks * GAME_CONFIG.DOCTOR_HEAL_MAX_UPGRADE));
+        const lvl = playerLvl;
+        const lvlBonus = Math.floor((lvl - 1) * 0.6);
+        const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + lvlBonus;
+        const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + lvlBonus + Math.floor((lvl - 1) * 0.15));
         const avgHeal = (minHeal + maxHeal) / 2;
         const healBudget = Math.max(1, Math.round(totalLegacyCount * avgHeal));
 
@@ -635,14 +659,19 @@ export function dropOrbsFromEntity(x, y, entity = null) {
 
     // ── Money orbs ── no cooldown, just budget-and-split.
     if (Math.random() < moneyDropRate) {
-        const maxMoneyOrbs = GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX + (moneyDropQuantityStacks * GAME_CONFIG.MONEY_ORB_DROP_QUANTITY_UPGRADE);
+        // 5.78.2 — quantity ceiling and per-orb amount both scale with
+        // player level (PAYDAY / HIGH_ROLLER stacks removed). Minimum
+        // adds +3 per level past 1 (so L20 starts at +57), and the max
+        // adds +5 per level (L20 cap +95). Gold Find still applies on
+        // top, so a level-20 + Gold Find player on a streak gets a
+        // significantly bigger budget than a level-1 baseline.
+        const maxMoneyOrbs = GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX + playerLvlQuantityBonus;
         const baseCount = Math.floor(Math.random() * maxMoneyOrbs) + 1;
         const totalLegacyCount = Math.max(1, Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
 
-        const paydayStacks = this.player.getPowerupStacks('PAYDAY');
-        const highRollerStacks = this.player.getPowerupStacks('HIGH_ROLLER');
-        const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE);
-        const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE) + (highRollerStacks * GAME_CONFIG.HIGH_ROLLER_MONEY_MAX_UPGRADE));
+        const lvl = playerLvl;
+        const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (lvl - 1) * 3;
+        const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (lvl - 1) * 5);
         const avgMoney = (minMoney + maxMoney) / 2;
         // 5.73.0 — apply Gold Find (+10%/level past 1, 5.74.33) on the
         //   budget. Bigger budget → splitter generates more money orbs
@@ -659,7 +688,14 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const goldFind = this.player.getGoldFindMultiplier?.() || 1;
         const moneyBudget = Math.max(1, Math.round(totalLegacyCount * avgMoney * goldFind * streakGoldMult));
 
-        const orbValues = _splitBudgetIntoOrbs(moneyBudget, GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB);
+        // 5.79.1 — hard-cap orb count so a level-20 streak doesn't spew
+        //   30+ tiny orbs. Excess budget per orb just makes each orb
+        //   worth more (visual size still saturates at SIZE_MAX).
+        const orbValues = _splitBudgetIntoOrbs(
+            moneyBudget,
+            GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB,
+            GAME_CONFIG.MONEY_ORB_MAX_DROP_COUNT,
+        );
         for (const v of orbValues) this.createMoneyOrb(x, y, v);
     }
 }
@@ -717,7 +753,11 @@ export function getPowerupConfig(type) {
         'PIERCING':                 { name: 'Piercing',           description: 'Bullets pass through +1 enemy per stack', duration: Infinity, icon: '🏹', gradientColors: ['#ffcc66', '#cc6600'] },
         'EXPLOSIVE':                { name: 'Explosive',          description: 'AoE blast on bullet impact',              duration: Infinity, icon: '💣', gradientColors: ['#ff9933', '#cc3300'] },
         'HOMING':                   { name: 'Homing',             description: 'Bullets curve toward enemies',            duration: Infinity, icon: '🎯', gradientColors: ['#ff66cc', '#cc0066'] },
-        'MEDPACK':                  { name: 'Medpack',            description: 'Restores 50% of max HP',                  duration: Infinity, icon: '💊', gradientColors: ['#ff99cc', '#cc3366'] },
+        // 5.78.2 — DROPS-category powerup display rows removed alongside
+        // the powerups themselves (MEDPACK, DOCTOR, PAYDAY, HIGH_ROLLER,
+        // HEALTH_ORB_DROP_CHANCE/QUANTITY, MONEY_ORB_DROP_CHANCE/QUANTITY).
+        // Drop rate, drop quantity, heal amount, and money amount now
+        // scale with player level instead of being bought as picks.
         'HEALTH_BOOST':             { name: 'Health Boost',       description: '+35 max HP per stack, full heal',         duration: Infinity, icon: '❤️', gradientColors: ['#ff6666', '#cc0000'] },
         'HEALTH_DROP_FREQUENCY':    { name: 'Triage',             description: 'Health orbs drop more often',             duration: Infinity, icon: '⏳', gradientColors: ['#66ffaa', '#229966'] },
         'CRIT_CHANCE':              { name: 'Critical Chance',    description: '+7% crit chance per stack',               duration: Infinity, icon: '⭐', gradientColors: ['#ffff66', '#cc9900'] },
@@ -725,13 +765,6 @@ export function getPowerupConfig(type) {
         'LONG_RANGE':               { name: 'Long Range',         description: '+55% bullet range per stack',             duration: Infinity, icon: '🏹', gradientColors: ['#bbff66', '#448800'] },
         'CHARGE_SPEED':             { name: 'Charge Speed',       description: 'Charge shots build up faster',           duration: Infinity, icon: '⏱️', gradientColors: ['#ffcc00', '#cc8800'] },
         'CHARGE_POWER':             { name: 'Charge Power',       description: 'Fully-charged shots hit harder',         duration: Infinity, icon: '🔋', gradientColors: ['#ff6600', '#cc3300'] },
-        'HEALTH_ORB_DROP_CHANCE':   { name: 'Health Orb Luck',    description: 'Higher chance enemies drop health orbs', duration: Infinity, icon: '🍀', gradientColors: ['#33ff99', '#009944'] },
-        'MONEY_ORB_DROP_CHANCE':    { name: 'Money Orb Luck',     description: 'Higher chance enemies drop coin orbs',   duration: Infinity, icon: '💰', gradientColors: ['#ffdd00', '#cc8800'] },
-        'HEALTH_ORB_DROP_QUANTITY': { name: 'Health Orb Bounty',  description: 'Enemies drop more health orbs at once',  duration: Infinity, icon: '💚', gradientColors: ['#66ff66', '#009900'] },
-        'MONEY_ORB_DROP_QUANTITY':  { name: 'Money Orb Bounty',   description: 'Enemies drop more coin orbs at once',    duration: Infinity, icon: '🪙', gradientColors: ['#ffcc00', '#996600'] },
-        'DOCTOR':                   { name: 'Doctor',             description: 'Health orbs heal more HP',               duration: Infinity, icon: '🏥', gradientColors: ['#ff6688', '#cc2244'] },
-        'PAYDAY':                   { name: 'Payday',             description: 'Money orbs award more coins',            duration: Infinity, icon: '💵', gradientColors: ['#66ff66', '#228822'] },
-        'HIGH_ROLLER':              { name: 'High Roller',        description: 'Boss/elite kills drop bonus loot',       duration: Infinity, icon: '🎰', gradientColors: ['#ffdd44', '#cc8800'] },
     };
     if (configs[type]) return configs[type];
 

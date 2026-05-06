@@ -176,11 +176,12 @@ async function stageAction(page, opts = {}) {
         }
 
         // Powerup HUD — random selection of stacks for visual loadout.
+        // 5.78.2 — DROPS-category seeds (MEDPACK, PAYDAY) removed.
         const allTypes = [
             'RAPID_FIRE', 'MULTI_SHOT', 'BIG_BULLETS', 'CRIT_CHANCE',
             'CRIT_DAMAGE', 'HOMING', 'PIERCING', 'SHIELD_BOOST',
             'EXPLOSIVE', 'LONG_RANGE', 'KNOCKBACK', 'SPEED_BOOST',
-            'MEDPACK', 'PAYDAY',
+            'HEALTH_BOOST', 'HEALTH_DROP_FREQUENCY',
         ];
         const picks = allTypes.sort(() => Math.random() - 0.5).slice(0, 6 + ((Math.random() * 5) | 0));
         for (const type of picks) {

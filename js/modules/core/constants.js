@@ -40,18 +40,18 @@ export const GAME_CONFIG = {
     MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum money orbs dropped (upgrade to get more)
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
     MONEY_ORB_SIZE_MIN: 14, // 5.74.7 — pixel radius for a 1-coin orb.
-    MONEY_ORB_SIZE_MAX: 24, // Pixel radius for a full-cap (MAX_MONEY_PER_ORB) orb.
-    MONEY_ORB_MAX_MONEY_PER_ORB: 20, // Per-orb money cap. Excess budget → more orbs at this cap.
+    MONEY_ORB_SIZE_MAX: 30, // 5.79.1 — pixel radius for a full-cap orb (was 24).
+    // 5.79.1 — per-orb money cap raised 20 → 100 so high-budget drops
+    //   pack value into fewer fat orbs instead of spamming dozens of
+    //   tiny ones. Combined with MONEY_ORB_MAX_DROP_COUNT below, a
+    //   level-20 streak now shows 4-6 chunky orbs instead of 30+.
+    MONEY_ORB_MAX_MONEY_PER_ORB: 100,
+    MONEY_ORB_MAX_DROP_COUNT: 6, // 5.79.1 — hard cap on orbs per single drop event.
     
-    // Orb Drop Upgrade Configuration
-    HEALTH_ORB_DROP_CHANCE_UPGRADE: 0.05, // +5% drop chance per upgrade stack
-    MONEY_ORB_DROP_CHANCE_UPGRADE: 0.05, // +5% drop chance per upgrade stack
-    HEALTH_ORB_DROP_QUANTITY_UPGRADE: 1, // +1 orb per upgrade stack
-    MONEY_ORB_DROP_QUANTITY_UPGRADE: 1, // +1 orb per upgrade stack
-    MEDPACK_HEAL_MIN_UPGRADE: 1, // +1 min heal per Medpack stack
-    PAYDAY_MONEY_MIN_UPGRADE: 5, // +5 min money per Payday stack
-    DOCTOR_HEAL_MAX_UPGRADE: 1, // +1 max heal per Doctor stack
-    HIGH_ROLLER_MONEY_MAX_UPGRADE: 10, // +10 max money per High Roller stack
+    // 5.78.2 — Orb-drop "*_UPGRADE" constants and MEDPACK / PAYDAY /
+    // DOCTOR / HIGH_ROLLER per-stack constants removed alongside the
+    // DROPS-category powerups. Drop rate, quantity, and per-orb amount
+    // now scale uniformly with player level (see combat-manager.js).
 
     // Health Orb Drop Cooldown (global throttle so health drops don't trivialize the game)
     HEALTH_DROP_COOLDOWN_BASE: 60000, // 60s default between health orb drop events

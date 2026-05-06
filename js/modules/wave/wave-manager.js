@@ -87,7 +87,11 @@ export function updateWaveSystem() {
         // never actually fired in-game. Now it always does, on every
         // wave clear, before the shop opens.
         const clearedWave = this.game.currentWave;
-        const bonusXP = 20 + clearedWave * 10;
+        // 5.79.16 — Wave-clear XP bonus scales harder with wave number
+        //   so late waves keep up with the steeper enemy/asteroid
+        //   counts. Was 20 + w×10 (~30 XP wave 1, 220 wave 20). Now
+        //   40 + w×15 (~55 XP wave 1, 340 wave 20).
+        const bonusXP = 40 + clearedWave * 15;
         const bonusCoins = 50 + clearedWave * 25;
         this.player.gainExperience(bonusXP);
         this.game.money += bonusCoins;
@@ -283,14 +287,21 @@ export function startNextWave() {
     this.game.waveComplete = false;
     this.game.state = GAME_STATES.WAVE_TRANSITION;
 
+    // 5.79.0 — Persist a wave-start snapshot so the player can quit and
+    //   resume from this wave via the title screen's Continue button.
+    //   Failures (private mode, full quota) are swallowed.
+    if (typeof this.persistWaveStartSave === 'function') {
+        this.persistWaveStartSave();
+    }
+
     // Reset player state at wave start
     this.playerState = PLAYER_STATES.NORMAL;
 
     // Player keeps whatever health they finished the wave with — no
-    // free top-up between waves. Health-orb pickups, MEDPACK powerup,
-    // or the shop's repair option are the legitimate ways to heal.
-    // Cap to current max in case Health Boost upgrades changed it
-    // post-clear so we never report > max.
+    // free top-up between waves. Health-orb pickups (now level-scaled
+    // per 5.78.2 — MEDPACK powerup removed) or the shop's repair option
+    // are the legitimate ways to heal. Cap to current max in case
+    // Health Boost upgrades changed it post-clear so we never report > max.
     const cap = this.player.getEffectiveMaxHealth();
     if (this.player.health > cap) this.player.health = cap;
 

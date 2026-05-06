@@ -185,6 +185,331 @@ export const SOUND_DEFS = {
         ],
     },
 
+    // ── Lance Beam engaged loop (5.79.10) ─────────────────────────
+    //   Futuristic synthesized "energy weapon active" hum. Designed
+    //   to loop seamlessly. Layered: high sustained sine carrier,
+    //   mid square harmonic with slow vibrato, sub-bass rumble. Reads
+    //   as a clean continuous laser tone — not noisy, not buzzy.
+    laserBeamLoop: {
+        layers: [
+            // Layer 1 — high sustained sine carrier (the "hum")
+            { params: {
+                wave_type: 2, p_base_freq: 0.42, p_freq_ramp: 0,
+                p_env_attack: 0.04, p_env_sustain: 0.92, p_env_decay: 0.04,
+                p_vib_strength: 0.18, p_vib_speed: 0.25,
+                p_lpf_freq: 0.85,
+                sound_vol: 0.18, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.55 },
+            // Layer 2 — mid square harmonic (gives it the synth bite)
+            { params: {
+                wave_type: 0, p_base_freq: 0.21, p_freq_ramp: 0,
+                p_env_attack: 0.04, p_env_sustain: 0.92, p_env_decay: 0.04,
+                p_duty: 0.5, p_duty_ramp: 0.0,
+                p_vib_strength: 0.22, p_vib_speed: 0.32,
+                p_lpf_freq: 0.65,
+                sound_vol: 0.13, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.4 },
+            // Layer 3 — sub-bass rumble (presence)
+            { params: {
+                wave_type: 2, p_base_freq: 0.07, p_freq_ramp: 0,
+                p_env_attack: 0.05, p_env_sustain: 0.92, p_env_decay: 0.03,
+                p_vib_strength: 0.12, p_vib_speed: 0.18,
+                sound_vol: 0.14, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.35 },
+        ],
+    },
+
+    // ── Lance Beam hit variants (5.79.10) ─────────────────────────
+    //   Three distinct "beam impacting target" sizzle/zap SFX that
+    //   alternate randomly. ~150 ms each — short and crisp so the
+    //   hit feedback feels punchy without piling up. Throttled to
+    //   100 ms in audio-manager so a contact streak doesn't buzz.
+    laserBeamHit1: {
+        layers: [
+            // Bright zap
+            { params: {
+                wave_type: 0, p_base_freq: 0.78, p_freq_ramp: -0.42,
+                p_env_attack: 0, p_env_sustain: 0.04, p_env_decay: 0.13,
+                p_arp_mod: 0.5, p_arp_speed: 0.85,
+                p_hpf_freq: 0.4,
+                sound_vol: 0.32, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.45 },
+            // Sizzle tail
+            { params: {
+                wave_type: 3, p_base_freq: 0.62, p_freq_ramp: -0.25,
+                p_env_attack: 0, p_env_sustain: 0.05, p_env_decay: 0.14,
+                p_hpf_freq: 0.5,
+                p_vib_strength: 0.4, p_vib_speed: 0.85,
+                sound_vol: 0.22, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.35 },
+        ],
+    },
+    laserBeamHit2: {
+        layers: [
+            // Lower harder zap
+            { params: {
+                wave_type: 0, p_base_freq: 0.62, p_freq_ramp: -0.32,
+                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.16,
+                p_duty: 0.4, p_duty_ramp: 0.35,
+                p_arp_mod: -0.4, p_arp_speed: 0.78,
+                sound_vol: 0.36, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+            // Crackle
+            { params: {
+                wave_type: 3, p_base_freq: 0.48, p_freq_ramp: -0.2,
+                p_env_attack: 0, p_env_sustain: 0.04, p_env_decay: 0.15,
+                p_hpf_freq: 0.42,
+                p_vib_strength: 0.55, p_vib_speed: 0.92,
+                sound_vol: 0.24, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.36 },
+        ],
+    },
+    laserBeamHit3: {
+        layers: [
+            // Quick high-tone bzzt
+            { params: {
+                wave_type: 1, p_base_freq: 0.85, p_freq_ramp: -0.5,
+                p_env_attack: 0, p_env_sustain: 0.03, p_env_decay: 0.11,
+                p_arp_mod: 0.6, p_arp_speed: 0.92,
+                p_hpf_freq: 0.45,
+                sound_vol: 0.32, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+            // Soft sub-bass thud
+            { params: {
+                wave_type: 2, p_base_freq: 0.16, p_freq_ramp: -0.08,
+                p_env_attack: 0.005, p_env_sustain: 0.03, p_env_decay: 0.12,
+                sound_vol: 0.22, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.32 },
+        ],
+    },
+
+    // ── Arc Lightning HIT strikes (5.79.10) ────────────────────────
+    //   Three heavier strike-and-thunder one-shots used when the arc
+    //   is locked on a target. Lower-pitched and longer thunder roll
+    //   than the idle arcStrike1..4 — sells the "we're connecting"
+    //   feeling and gives players audio confirmation of damage.
+    arcHit1: {
+        layers: [
+            // Heavier crack
+            { params: {
+                wave_type: 3, p_base_freq: 0.78, p_freq_ramp: -0.55,
+                p_env_attack: 0, p_env_sustain: 0.05, p_env_decay: 0.18,
+                p_hpf_freq: 0.38,
+                p_vib_strength: 0.62, p_vib_speed: 0.9,
+                sound_vol: 0.46, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.6 },
+            // Mid zap with descending pitch
+            { params: {
+                wave_type: 0, p_base_freq: 0.55, p_freq_ramp: -0.35,
+                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.22,
+                p_arp_mod: 0.55, p_arp_speed: 0.85,
+                p_duty: 0.45, p_duty_ramp: 0.35,
+                sound_vol: 0.34, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.45 },
+            // Long thunder roll
+            { params: {
+                wave_type: 3, p_base_freq: 0.1, p_freq_ramp: -0.06,
+                p_env_attack: 0.06, p_env_sustain: 0.12, p_env_decay: 0.5,
+                p_lpf_freq: 0.36, p_lpf_ramp: 0.1,
+                p_vib_strength: 0.4, p_vib_speed: 0.2,
+                sound_vol: 0.34, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.62 },
+        ],
+    },
+    arcHit2: {
+        layers: [
+            // Sub crack
+            { params: {
+                wave_type: 3, p_base_freq: 0.65, p_freq_ramp: -0.5,
+                p_env_attack: 0, p_env_sustain: 0.07, p_env_decay: 0.22,
+                p_hpf_freq: 0.3,
+                p_vib_strength: 0.5, p_vib_speed: 0.82,
+                sound_vol: 0.48, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.62 },
+            // Mid-low zap
+            { params: {
+                wave_type: 0, p_base_freq: 0.42, p_freq_ramp: -0.3,
+                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.24,
+                p_arp_mod: -0.4, p_arp_speed: 0.78,
+                sound_vol: 0.32, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+            // Distant thunder roll (very long)
+            { params: {
+                wave_type: 3, p_base_freq: 0.075, p_freq_ramp: -0.05,
+                p_env_attack: 0.08, p_env_sustain: 0.14, p_env_decay: 0.62,
+                p_lpf_freq: 0.28, p_lpf_ramp: 0.08,
+                p_vib_strength: 0.45, p_vib_speed: 0.16,
+                sound_vol: 0.36, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.65 },
+        ],
+    },
+    arcHit3: {
+        layers: [
+            // Very sharp crack (impact)
+            { params: {
+                wave_type: 0, p_base_freq: 0.9, p_freq_ramp: -0.65,
+                p_env_attack: 0, p_env_sustain: 0.03, p_env_decay: 0.13,
+                p_arp_mod: 0.7, p_arp_speed: 0.95,
+                p_hpf_freq: 0.4,
+                sound_vol: 0.4, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.55 },
+            // Crackle tail
+            { params: {
+                wave_type: 3, p_base_freq: 0.6, p_freq_ramp: -0.3,
+                p_env_attack: 0, p_env_sustain: 0.05, p_env_decay: 0.18,
+                p_hpf_freq: 0.5,
+                p_vib_strength: 0.6, p_vib_speed: 0.92,
+                sound_vol: 0.3, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.4 },
+            // Short thunder
+            { params: {
+                wave_type: 3, p_base_freq: 0.13, p_freq_ramp: -0.08,
+                p_env_attack: 0.05, p_env_sustain: 0.08, p_env_decay: 0.4,
+                p_lpf_freq: 0.42,
+                p_vib_strength: 0.32, p_vib_speed: 0.22,
+                sound_vol: 0.28, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+        ],
+    },
+
+    // ── Arc Lightning ambient rumble loop (5.79.5 rework) ──────────
+    //   Quiet low-frequency rumble that loops continuously while the
+    //   arc is firing. Provides a baseline "gun is on" presence; the
+    //   distinct strike sounds (arcStrike1..4) layer over it at
+    //   randomized intervals.
+    arcLightningLoop: {
+        layers: [
+            // Sub-bass rumble — slow vibrato low-frequency square
+            { params: {
+                wave_type: 0, p_base_freq: 0.06, p_freq_ramp: 0,
+                p_env_attack: 0.05, p_env_sustain: 0.92, p_env_decay: 0.03,
+                p_duty: 0.5, p_duty_ramp: 0.0,
+                p_vib_strength: 0.42, p_vib_speed: 0.18,
+                sound_vol: 0.18, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.55 },
+            // Soft hiss — high-pass noise at low volume
+            { params: {
+                wave_type: 3, p_base_freq: 0.32, p_freq_ramp: 0,
+                p_env_attack: 0.05, p_env_sustain: 0.92, p_env_decay: 0.03,
+                p_hpf_freq: 0.28,
+                p_vib_strength: 0.12, p_vib_speed: 0.32,
+                sound_vol: 0.08, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.3 },
+        ],
+    },
+
+    // ── Arc Lightning strike #1 — sharp crackle + short thunder ────
+    //   Played randomly at ~250-700 ms intervals while arc is firing.
+    arcStrike1: {
+        layers: [
+            // Crackle hit — high-frequency burst with quick decay
+            { params: {
+                wave_type: 3, p_base_freq: 0.85, p_freq_ramp: -0.45,
+                p_env_attack: 0, p_env_sustain: 0.04, p_env_decay: 0.16,
+                p_hpf_freq: 0.45,
+                p_vib_strength: 0.7, p_vib_speed: 0.95,
+                sound_vol: 0.4, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.6 },
+            // Mid zap — square wave with fast arp
+            { params: {
+                wave_type: 0, p_base_freq: 0.62, p_freq_ramp: -0.3,
+                p_env_attack: 0, p_env_sustain: 0.04, p_env_decay: 0.18,
+                p_arp_mod: 0.55, p_arp_speed: 0.88,
+                p_duty: 0.4, p_duty_ramp: 0.4,
+                sound_vol: 0.32, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.45 },
+            // Thunder rumble tail — low-freq noise with long decay
+            { params: {
+                wave_type: 3, p_base_freq: 0.12, p_freq_ramp: -0.05,
+                p_env_attack: 0.04, p_env_sustain: 0.06, p_env_decay: 0.42,
+                p_lpf_freq: 0.4,
+                p_vib_strength: 0.3, p_vib_speed: 0.22,
+                sound_vol: 0.28, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.5 },
+        ],
+    },
+
+    // ── Arc Lightning strike #2 — deeper hit, longer thunder roll ──
+    arcStrike2: {
+        layers: [
+            // Deeper crack
+            { params: {
+                wave_type: 3, p_base_freq: 0.7, p_freq_ramp: -0.5,
+                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.2,
+                p_hpf_freq: 0.32,
+                p_vib_strength: 0.55, p_vib_speed: 0.85,
+                sound_vol: 0.42, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.55 },
+            // Mid descending zap
+            { params: {
+                wave_type: 0, p_base_freq: 0.48, p_freq_ramp: -0.35,
+                p_env_attack: 0, p_env_sustain: 0.05, p_env_decay: 0.22,
+                p_arp_mod: -0.4, p_arp_speed: 0.78,
+                p_duty: 0.5, p_duty_ramp: -0.25,
+                sound_vol: 0.3, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.4 },
+            // Long thunder roll
+            { params: {
+                wave_type: 3, p_base_freq: 0.09, p_freq_ramp: -0.06,
+                p_env_attack: 0.06, p_env_sustain: 0.1, p_env_decay: 0.55,
+                p_lpf_freq: 0.32, p_lpf_ramp: 0.1,
+                p_vib_strength: 0.4, p_vib_speed: 0.18,
+                sound_vol: 0.32, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.6 },
+        ],
+    },
+
+    // ── Arc Lightning strike #3 — short and bright ────────────────
+    arcStrike3: {
+        layers: [
+            // Quick bright zap
+            { params: {
+                wave_type: 0, p_base_freq: 0.92, p_freq_ramp: -0.6,
+                p_env_attack: 0, p_env_sustain: 0.025, p_env_decay: 0.1,
+                p_arp_mod: 0.65, p_arp_speed: 0.92,
+                p_hpf_freq: 0.4,
+                sound_vol: 0.36, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.55 },
+            // Sizzle tail — noise burst
+            { params: {
+                wave_type: 3, p_base_freq: 0.55, p_freq_ramp: -0.25,
+                p_env_attack: 0, p_env_sustain: 0.04, p_env_decay: 0.18,
+                p_hpf_freq: 0.5,
+                p_vib_strength: 0.6, p_vib_speed: 0.92,
+                sound_vol: 0.3, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.4 },
+        ],
+    },
+
+    // ── Arc Lightning strike #4 — distant double-crack with long roll ─
+    arcStrike4: {
+        layers: [
+            // First crack — soft
+            { params: {
+                wave_type: 3, p_base_freq: 0.6, p_freq_ramp: -0.35,
+                p_env_attack: 0.005, p_env_sustain: 0.04, p_env_decay: 0.14,
+                p_hpf_freq: 0.35,
+                sound_vol: 0.32, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.42 },
+            // Second crack — slightly delayed via slow attack
+            { params: {
+                wave_type: 0, p_base_freq: 0.55, p_freq_ramp: -0.3,
+                p_env_attack: 0.05, p_env_sustain: 0.04, p_env_decay: 0.16,
+                p_arp_mod: 0.4, p_arp_speed: 0.82,
+                p_duty: 0.5, p_duty_ramp: 0.3,
+                sound_vol: 0.28, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.38 },
+            // Long thunder roll, even slower to start
+            { params: {
+                wave_type: 3, p_base_freq: 0.07, p_freq_ramp: -0.04,
+                p_env_attack: 0.1, p_env_sustain: 0.12, p_env_decay: 0.6,
+                p_lpf_freq: 0.28, p_lpf_ramp: 0.08,
+                p_vib_strength: 0.45, p_vib_speed: 0.16,
+                sound_vol: 0.34, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.65 },
+        ],
+    },
+
     // ── Tractor beam — sustained energy hum with shimmer ─────────────
     tractorBeam: {
         layers: [

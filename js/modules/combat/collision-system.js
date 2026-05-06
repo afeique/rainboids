@@ -130,8 +130,11 @@ export function handleCollisions() {
                     if (this.player) this.player._critRushUntil = Date.now() + 800;
                 }
 
-                // Award XP for hitting asteroid (bullet-hell pass — 2x)
-                this.player.gainExperience(4);
+                // 5.79.16 — Asteroid hit XP 4 → 1 (cuts bullet-spam
+                //   inflation; STORM_NEEDLES on a single rock used to
+                //   yield 200+ XP/sec just from hit-tick spam). Per-
+                //   destroy XP bumped to compensate (see destroyAsteroid).
+                this.player.gainExperience(1);
 
                 // Impart momentum from bullet
                 ast.vel.x += bullet.vel.x * COLLISION_CONFIG.BULLET_KNOCKBACK;
@@ -178,6 +181,10 @@ export function handleCollisions() {
                     // path didn't, so a player who only used the primary
                     // weapon never racked up streaks from rocks.
                     if (typeof this.onEnemyKill === 'function') this.onEnemyKill(ast);
+                    // 5.79.16 — Asteroid destroy XP +12 (was implicitly 0
+                    //   on this inlined bullet path; AOE paths route
+                    //   through destroyAsteroid which now grants the same).
+                    this.player.gainExperience(12);
                     if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                         // Small asteroid destroyed — death flash then cleanup
                         ast._deathFlash = 6;
@@ -490,8 +497,9 @@ export function handleCollisions() {
                     this.triggerHitstop(hitFrames);
                 }
 
-                // Award XP for hitting enemy (bullet-hell pass — 2x)
-                this.player.gainExperience(6);
+                // 5.79.16 — Enemy bullet-hit XP 6 → 2 (kills become
+                //   the dominant XP source instead of hit ticks).
+                this.player.gainExperience(2);
 
                 // Localized hit sparks at bullet impact point
                 {
@@ -532,7 +540,7 @@ export function handleCollisions() {
                     // must pick up the dropped money orbs (dropOrbsFromEntity)
                     // to gain gold. XP still drops on kill.
                     const reward = enemy.getDestructionReward();
-                    this.player.gainExperience(Math.ceil(reward.points / 6));
+                    this.player.gainExperience(Math.ceil(reward.points / 3));
 
                     // Track kill streak
                     this.onEnemyKill(enemy);
@@ -783,6 +791,12 @@ export function checkLanceBeamCollisions() {
     if (!p._lastBeamHitSfx || now - p._lastBeamHitSfx > 160) {
         p._lastBeamHitSfx = now;
         this.events.emit('audio:enemy-hit-by-bullet', 'LANCE_BEAM');
+        // 5.79.10 — Layer one of three random sizzle/zap variants on
+        //   top of the engaged-loop hum so contact reads as crisp
+        //   feedback. Throttled per-variant in the audio manager;
+        //   per-target throttle (160 ms above) keeps things tight.
+        const hitName = `laserBeamHit${1 + ((Math.random() * 3) | 0)}`;
+        if (this.audioManager) this.audioManager.playSound(hitName);
     }
 }
 
@@ -1102,21 +1116,61 @@ export function checkLightningCollisions() {
         const TETHER_PUSH = 0.5 * knockMul;
         // Per-frame damage; tuned to match Lance Beam DPS (~2.04 dps at 60Hz).
         // ARC_OVERCHARGE: +30% damage (multiplicative on top of AMPLIFIER).
-        const dmgBase = cfg.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+        //
+        // 5.79.3 — Bullet-flavored powerups buff arc DPS instead of
+        //   doing nothing. Mirrors fireLanceBeam — same per-stack
+        //   bumps so both beam weapons benefit equally. RAPID +22%,
+        //   MULTI +30%, BIG +18%, PIERCING +15%, HOMING +10%,
+        //   EXPLOSIVE +25%.
+        let bulletBumpMul = 1;
+        const arcBumps = [
+            ['RAPID_FIRE',  0.22],
+            ['MULTI_SHOT',  0.30],
+            ['BIG_BULLETS', 0.18],
+            ['PIERCING',    0.15],
+            ['HOMING',      0.10],
+            ['EXPLOSIVE',   0.25],
+        ];
+        for (const [powId, perStack] of arcBumps) {
+            const s = p.getPowerupStacks(powId);
+            if (s > 0) bulletBumpMul *= (1 + s * perStack);
+        }
+        const dmgBase = cfg.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2) * bulletBumpMul;
         const dmg = overchargeStacks > 0 ? dmgBase * 1.3 : dmgBase;
 
-        // Find the nearest target.
-        let best = null, bestKind = null, bestDist = range;
+        // 5.79.5 — Target selection now picks the entity nearest to
+        //   the AIMING CURSOR (not the player). Range-gated by the
+        //   player's distance to the entity so the beam still has to
+        //   reach. This lets the player intentionally pick which
+        //   enemy to fry instead of whichever is geographically
+        //   closest to the ship.
+        const aimX = (this.inputHandler && this.inputHandler.input)
+            ? this.inputHandler.input.aimX : p.x;
+        const aimY = (this.inputHandler && this.inputHandler.input)
+            ? this.inputHandler.input.aimY : p.y;
+
+        let best = null, bestKind = null, bestAimDist = Infinity;
         for (const e of this.enemyPool.activeObjects) {
             if (!e.active || e._deathFlash > 0) continue;
-            const d = Math.hypot(e.x - p.x, e.y - p.y);
-            if (d < bestDist) { bestDist = d; best = e; bestKind = 'enemy'; }
+            // Range gate from player.
+            const dxp = e.x - p.x, dyp = e.y - p.y;
+            if (dxp * dxp + dyp * dyp > range * range) continue;
+            // Closeness to aim cursor decides priority.
+            const dxa = e.x - aimX, dya = e.y - aimY;
+            const aimDist = Math.hypot(dxa, dya);
+            if (aimDist < bestAimDist) { bestAimDist = aimDist; best = e; bestKind = 'enemy'; }
         }
         for (const ast of this.asteroidPool.activeObjects) {
             if (!ast.active || ast._deathFlash > 0 || ast.warping) continue;
-            const d = Math.hypot(ast.x - p.x, ast.y - p.y);
-            if (d < bestDist) { bestDist = d; best = ast; bestKind = 'asteroid'; }
+            const dxp = ast.x - p.x, dyp = ast.y - p.y;
+            if (dxp * dxp + dyp * dyp > range * range) continue;
+            const dxa = ast.x - aimX, dya = ast.y - aimY;
+            const aimDist = Math.hypot(dxa, dya);
+            if (aimDist < bestAimDist) { bestAimDist = aimDist; best = ast; bestKind = 'asteroid'; }
         }
+        // (bestDist no longer used — kept commented as a marker for the
+        //  pre-5.79.5 player-distance-based selection if anyone needs to
+        //  diff against the new aim-cursor target logic above.)
 
         if (best) {
             p.lightningArcTarget = best;
@@ -1395,6 +1449,13 @@ export function destroyAsteroid(ast) {
     const isLarge = ast.baseRadius > (GAME_CONFIG.MIN_AST_RAD + 5);
 
     if (this.game.stats) this.game.stats.asteroidsDestroyed++;
+    // 5.79.16 — Asteroid destroy XP. Was implicitly 0 (only the
+    //   per-bullet hit XP at line 137 contributed, and that's now
+    //   1 XP per hit). Granting +12 on actual destruction makes the
+    //   "kill" the real XP event, mirroring enemies. Routes through
+    //   here so EVERY asteroid-kill path (bullet, mine, lightning,
+    //   missile, charged shot, AOE ring) awards equally.
+    if (this.player) this.player.gainExperience(12);
     // 5.74.18 — asteroids now feed the kill streak counter alongside enemy
     // kills. Routes through onEnemyKill (which doesn't reference the type
     // beyond the milestone notification), so streak tier buffs and idle
@@ -1514,7 +1575,7 @@ export function damageEnemy(enemy, damage) {
             this.game.stats.enemiesKilled++;
             if (enemy.isBoss) this.game.stats.bossesKilled++;
         }
-        this.player.gainExperience(Math.ceil(reward.points / 6));
+        this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {
             this.events.emit('audio:enemy-destroy', enemy.type);
@@ -1617,7 +1678,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         // 5.74.3 — gold no longer auto-awarded on kill (pickup-only).
         const reward = enemy.getDestructionReward();
-        this.player.gainExperience(Math.ceil(reward.points / 6));
+        this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
 
         // Create colored explosion effects (includes screen shake)

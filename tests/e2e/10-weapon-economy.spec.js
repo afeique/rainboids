@@ -63,7 +63,7 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
                 const bought = [];
                 ge.openShop();
 
-                const tabs = ['OFFENSE', 'PRIMARY', 'POWER', 'DEFENSE', 'DROPS', 'SKILLS'];
+                const tabs = ['OFFENSE', 'PRIMARY', 'POWER', 'DEFENSE', 'SKILLS'];
                 for (const tab of tabs) {
                     ge.shopCategory = tab;
                     ge._rebuildShopCache();

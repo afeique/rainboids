@@ -107,17 +107,20 @@ export class Asteroid {
             baseHealth = 1;                                         // small = one-shot
         }
 
-        // Level scaling: +25% per level beyond 1
-        const levelMultiplier = 1 + (this.level - 1) * 0.25;
+        // 5.79.0 — Asteroid level scaling steepened alongside enemies
+        //   since player damage no longer scales with player level.
+        //   HP:           +0.25/lvl → +0.35/lvl  (L20 = 7.65×)
+        //   Collision dmg: +0.20/lvl → +0.30/lvl (L20 = 6.70×)
+        const levelMultiplier = 1 + (this.level - 1) * 0.35;
         health = Math.round(baseHealth * levelMultiplier);
-        
+
         this.maxHealth = Math.max(1, health); // Ensure minimum 1 health
         this.health = this.maxHealth;
     }
-    
+
     // Get level-scaled collision damage for asteroid impacts
     getLevelScaledCollisionDamage(baseDamage) {
-        const levelMultiplier = 1 + (this.level - 1) * 0.2; // 20% damage increase per level
+        const levelMultiplier = 1 + (this.level - 1) * 0.30;
         return Math.round(baseDamage * levelMultiplier);
     }
 

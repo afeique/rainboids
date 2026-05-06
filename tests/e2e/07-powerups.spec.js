@@ -9,11 +9,12 @@
 import { test, expect } from '@playwright/test';
 import { loadGame, startGame } from '../helpers/game-helpers.js';
 
-// All powerup types defined in getPowerupConfig (from game-engine.js)
+// All powerup types defined in getPowerupConfig (from game-engine.js).
+// 5.78.2 — MEDPACK removed (drop economy now scales with player level).
 const POWERUP_TYPES = [
     'RAPID_FIRE', 'MULTI_SHOT', 'HOMING', 'BIG_BULLETS',
     'SPEED_BOOST', 'PIERCING', 'SPREAD_SHOT', 'EXPLOSIVE',
-    'CRIT_CHANCE', 'CRIT_DAMAGE', 'SHIELD_BOOST', 'MEDPACK', 'CHARGE_SHOT',
+    'CRIT_CHANCE', 'CRIT_DAMAGE', 'SHIELD_BOOST', 'CHARGE_SHOT',
 ];
 
 /** Grant a powerup to the player using the same code path as the shop. */
@@ -116,21 +117,21 @@ test.describe('E2E-07: Powerup system', () => {
         expect(ok).toBe(true);
     });
 
-    // ── MEDPACK restores health ───────────────────────────────────────────────
+    // ── Health-orb heal restores HP ───────────────────────────────────────────
+    // 5.78.2 — MEDPACK powerup removed; the equivalent functionality is
+    // now driven by health-orb pickups whose heal amount scales with
+    // player level (createHealthOrb in combat-manager.js). This test
+    // exercises the simple health-restore primitive used downstream.
 
-    test('[POWERUP] MEDPACK world-drop restores player health', async ({ page }) => {
-        // Damage player first
+    test('[POWERUP] health-orb heal restores player health', async ({ page }) => {
         await page.evaluate(() => {
             window.gameEngine.player.health = Math.max(1, window.gameEngine.player.maxHealth - 8);
         });
 
         const hpBefore = await page.evaluate(() => window.gameEngine.player.health);
 
-        // Simulate a medpack heal (same logic as collision handler)
         await page.evaluate(() => {
-            const ge  = window.gameEngine;
-            const p   = ge.player;
-            const cfg = ge.GAME_CONFIG ?? { HEALTH_ORB_HEAL_AMOUNT_MIN: 1, HEALTH_ORB_HEAL_AMOUNT_MAX: 4 };
+            const p = window.gameEngine.player;
             const heal = 3;
             p.health = Math.min(p.maxHealth, p.health + heal);
         });
