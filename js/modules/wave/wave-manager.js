@@ -91,7 +91,7 @@ export function updateWaveSystem() {
         const bonusCoins = 50 + clearedWave * 25;
         this.player.gainExperience(bonusXP);
         this.game.money += bonusCoins;
-        this.player.powerupPicks = (this.player.powerupPicks || 0) + 1;
+        this.player.skillPoints = (this.player.skillPoints || 0) + 1;
 
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
         // the bonus gold + pick info to the message renderer.
@@ -219,11 +219,11 @@ function completeMission() {
     const m = this.game.mission;
     if (!m || m.completed) return;
     m.completed = true;
-    if (this.player) this.player.powerupPicks = (this.player.powerupPicks || 0) + 1;
+    if (this.player) this.player.skillPoints = (this.player.skillPoints || 0) + 1;
     if (this.events?.emit) {
         this.events.emit('ui:show-message', {
             title: 'MISSION COMPLETE',
-            subtitle: `${m.label} — +1 PICK`,
+            subtitle: `${m.label} — +1 SP`,
             duration: 2200,
             position: 'top',
         });
@@ -258,7 +258,7 @@ export function showWaveComplete() {
             : r.mission.failed
                 ? ` · MISSION ✗`
                 : ` · MISSION —`;
-    const subtitle = `+${r.bonusCoins}G  ·  +${picks} PICK${picks === 1 ? '' : 'S'}${missionTag}`;
+    const subtitle = `+${r.bonusCoins}G  ·  +${picks} SP${missionTag}`;
     this.waveMessage = {
         active: true,
         startTime: Date.now(),
@@ -349,7 +349,7 @@ export function spawnWaveEntities() {
     if (this.events?.emit && this.game.mission) {
         this.events.emit('ui:show-message', {
             title: this.game.mission.label,
-            subtitle: this.game.mission.desc + ' — +1 PICK',
+            subtitle: this.game.mission.desc + ' — +1 SP',
             duration: 3500,
             position: 'top',
         });
@@ -601,7 +601,7 @@ export function completeWave() {
     const bonusCoins = 50 + clearedWave * 25;
     this.player.gainExperience(bonusXP);
     this.game.money += bonusCoins;
-    this.player.powerupPicks += 1;
+    this.player.skillPoints += 1;
     this.queueNotification(`WAVE ${clearedWave} CLEARED`,
         `+${bonusXP} XP  +${bonusCoins} coins  +1 powerup pick`, 2500);
 

@@ -433,19 +433,17 @@ export function buyShopItem(itemId) {
                 else if (currentStacks === 2) actualCost = 5000;
             }
 
-            if (item.currency === 'SP') {
-                if (this.player.skillPoints < actualCost) return false;
-            } else if (item.currency === 'PICKS') {
-                if ((this.player.powerupPicks || 0) < actualCost) return false;
+            // 5.78.0 — picks renamed to SP. The SP and PICKS currency
+            // tags now both spend from `player.skillPoints`. SP-currency
+            // shop items are dead post-5.76.0; PICKS-currency items
+            // (powerups) survived but are bought through the pause-tab
+            // path now. Both branches kept for back-compat with any
+            // legacy item def that still uses either tag.
+            if (item.currency === 'SP' || item.currency === 'PICKS') {
+                if ((this.player.skillPoints || 0) < actualCost) return false;
+                this.player.skillPoints -= actualCost;
             } else {
                 if (this.game.money < actualCost) return false;
-            }
-
-            if (item.currency === 'SP') {
-                this.player.skillPoints -= actualCost;
-            } else if (item.currency === 'PICKS') {
-                this.player.powerupPicks -= actualCost;
-            } else {
                 this.game.money -= actualCost;
             }
 

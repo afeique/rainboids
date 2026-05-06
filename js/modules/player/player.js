@@ -76,12 +76,11 @@ export class Player {
         // ~1 every 2-3 waves. The 5.71.0 auto-shop on level-up was
         // disruptive partly because levels came too fast.
         this.experienceToNextLevel = 400; // EXP needed for level 2
-        this.skillPoints = 0; // Skill points for defensive upgrades
-        // 5.70.0 — Powerup Picks. New token-currency redeemed for any
-        // powerup in the shop's POWERUPS tab. Earned: +1 per wave clear,
-        // +1 per level-up. Powerups no longer drop from kills — picks
-        // are the only way to add stacks. Builds get personal.
-        this.powerupPicks = 0;
+        // 5.78.0 — `skillPoints` IS the new "picks" currency (renamed
+        // from `powerupPicks`). The 5.76.0 SP-removal cleared the old
+        // SP semantics; this field reuses the name for the picks pool
+        // since the player never sees both at once.
+        this.skillPoints = 0;
 
         // Weapon system. All primaries / powers / skills are FREE and
         // selectable from start (5.64.11). The owned-sets are still

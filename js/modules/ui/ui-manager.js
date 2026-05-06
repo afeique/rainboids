@@ -636,7 +636,7 @@ export class UIManager {
         // 5.73.0 — POWERUPS tab moved out of the shop into here. Top
         // banner shows the player's unspent Pick budget; each card
         // gets a "+1 Pick" button that spends a pick and adds a stack.
-        const picks = player.powerupPicks || 0;
+        const picks = player.skillPoints || 0;
         const banner = document.createElement('div');
         banner.className = 'powerups-pick-banner';
         const bannerSigil = document.createElement('span');
@@ -649,7 +649,7 @@ export class UIManager {
         banner.appendChild(bannerCount);
         const bannerLabel = document.createElement('span');
         bannerLabel.className = 'powerups-pick-label';
-        bannerLabel.textContent = picks === 1 ? 'PICK AVAILABLE' : 'PICKS AVAILABLE';
+        bannerLabel.textContent = picks === 1 ? 'SP AVAILABLE' : 'SP AVAILABLE';
         banner.appendChild(bannerLabel);
         list.appendChild(banner);
 
@@ -745,7 +745,7 @@ export class UIManager {
     purchasePowerup(type) {
         const ge = this.gameEngine;
         if (!ge || !ge.player) return false;
-        const picks = ge.player.powerupPicks || 0;
+        const picks = ge.player.skillPoints || 0;
         if (picks <= 0) return false;
         const cfg = POWERUP_TYPES[type];
         if (!cfg) return false;
@@ -754,7 +754,7 @@ export class UIManager {
         const cap = cfg.maxStacks || 99;
         const stacks = ge.player.getPowerupStacks ? ge.player.getPowerupStacks(type) : 0;
         if (stacks >= cap) return false;
-        ge.player.powerupPicks = picks - 1;
+        ge.player.skillPoints = picks - 1;
         ge.player.addPowerup(type, { ...cfg, duration: Infinity }, true);
         if (ge.events) ge.events.emit('audio:coin');
         this.renderPowerupsOverlay();

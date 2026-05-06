@@ -30,6 +30,26 @@ export function draw(ctx) {
     const r = this.radius;
     const t = frameClock.now * 0.001;
 
+    // 5.78.0 — crit-rush ring (Q1). Lands on every crit; shrinks as the
+    // 800 ms boost window decays, giving the player a quick read on
+    // "is my fire-rate buff still active". Yellow pulse, draws inside
+    // the player transform but is rotation-invariant (full circle).
+    if (this._critRushUntil) {
+        const remain = this._critRushUntil - Date.now();
+        if (remain > 0) {
+            const frac = remain / 800;
+            const ringR = r * (1.85 + (1 - frac) * 0.6);
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.strokeStyle = `rgba(255, 230, 80, ${0.25 + 0.5 * frac})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
     // ── Engine startup shudder ──────────────────────────────────────────
     // Brief mechanical vibration when engines re-engage after idle.
     if (this.engineStartup > 0) {

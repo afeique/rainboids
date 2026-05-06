@@ -667,6 +667,45 @@ export class GameEngine {
         return v < 0.20 ? 0.20 : v;
     }
 
+    // 5.78.0 — O1 starfield-dirty mechanism. Whenever the engine
+    // adds/removes WebGL star instances outside the bulk-spawn path,
+    // call `markStarfieldDirty()` so the render layer can re-flush
+    // the instance buffer. The dirty flag is checked at the top of
+    // the WebGL starfield draw; if set, the buffer is cleared and
+    // re-populated from the live pools. Pre-emptive — we don't churn
+    // stars today but a future starburst FX would otherwise leave
+    // the WebGL buffer stale.
+    markStarfieldDirty() { this._starfieldDirty = true; }
+
+    _flushStarfieldIfDirty() {
+        if (!this._starfieldDirty) return;
+        if (!this.starfieldRenderer || !this.starfieldRenderer.supported) {
+            this._starfieldDirty = false;
+            return;
+        }
+        if (this.starfieldRenderer.clear) this.starfieldRenderer.clear();
+        // Re-populate from the live pools. Mark every active star as
+        // not-yet-in-WebGL so the engine helpers re-add them.
+        if (this.backgroundStarPool) {
+            for (const s of this.backgroundStarPool.activeObjects) {
+                s._inWebGL = false;
+                this._tryAddBackgroundStarToWebGL(s);
+            }
+        }
+        if (this.colorStarPool) {
+            for (const s of this.colorStarPool.activeObjects) {
+                if (s.isCollectible) continue;
+                s._inWebGL = false;
+                this._tryAddColorStarToWebGL(s);
+            }
+        }
+        // Re-seed nebula clouds (they aren't in any pool).
+        if (typeof this._populateWebGLNebula === 'function') {
+            this._populateWebGLNebula();
+        }
+        this._starfieldDirty = false;
+    }
+
     _tryAddBackgroundStarToWebGL(star) {
         if (!this.starfieldRenderer.supported) return;
         const rgba = this._parseStarColor(star.color);
@@ -1131,6 +1170,7 @@ export class GameEngine {
     checkDeflectorOrbCollisions() { return col.checkDeflectorOrbCollisions.call(this); }
     checkTractorShieldCollisions() { return col.checkTractorShieldCollisions.call(this); }
     damageEnemy(enemy, damage) { return col.damageEnemy.call(this, enemy, damage); }
+    applyDamageToEnemy(enemy, damage, opts) { return col.applyDamageToEnemy.call(this, enemy, damage, opts); }
     destroyAsteroid(ast) { return col.destroyAsteroid.call(this, ast); }
     handlePlayerEnemyCollision(player, enemy) { return col.handlePlayerEnemyCollision.call(this, player, enemy); }
     handlePlayerEnemyBulletCollision(player, bullet) { return col.handlePlayerEnemyBulletCollision.call(this, player, bullet); }
@@ -1388,6 +1428,9 @@ export class GameEngine {
             const timeSec = (typeof performance !== 'undefined' && performance.now)
                 ? performance.now() * 0.001
                 : Date.now() * 0.001;
+            // 5.78.0 — re-flush the starfield instance buffer if any
+            // pool churn marked it dirty. No-op on the typical frame.
+            this._flushStarfieldIfDirty();
             this.starfieldRenderer.setFieldSize(this.gameField.width, this.gameField.height);
             this.starfieldRenderer.draw(
                 this.camera.x, this.camera.y,

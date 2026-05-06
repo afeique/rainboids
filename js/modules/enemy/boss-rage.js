@@ -177,21 +177,24 @@ export function bossFormationMovement(enemy) {
     // the normal raged AI take over.
     if (enemy.bossTier === 4 && enemy._phaseIdx === 1) return false;
 
-    const c = enemy._formationCenter;
+    const center = enemy._formationCenter;
     enemy._formationAngle = (enemy._formationAngle || 0) + (enemy._formationOmega || 0.012);
-    const targetX = c.x + Math.cos(enemy._formationAngle) * (enemy._formationRadius || 320);
-    const targetY = c.y + Math.sin(enemy._formationAngle) * (enemy._formationRadius || 320);
+    const targetX = center.x + Math.cos(enemy._formationAngle) * (enemy._formationRadius || 320);
+    const targetY = center.y + Math.sin(enemy._formationAngle) * (enemy._formationRadius || 320);
 
-    // Steer toward the target slot. Light interpolation so the boss
-    // accelerates / decelerates rather than teleporting.
-    const dx = targetX - enemy.x;
-    const dy = targetY - enemy.y;
-    const dist = Math.hypot(dx, dy) || 1;
+    // 5.78.0 — critically-damped spring (S1). Replaces the directional
+    // steering that produced a lazy chase pattern around the slot at
+    // high speed scaling. Spring constant `k` plus damping `damp` gives
+    // a tight lock-on: vel decays by `(1 - damp)` then re-accumulates
+    // toward `(target - pos) × k`. Tuned so wave-20 speed-scaled bosses
+    // settle in 1-2 orbit ticks rather than oscillating.
     const speed = (enemy.config && enemy.config.speed) || 1.5;
-    enemy.vel.x += (dx / dist) * speed * 0.04;
-    enemy.vel.y += (dy / dist) * speed * 0.04;
-    // Cap velocity so the boss can't accelerate indefinitely.
-    const maxV = speed * 1.6;
+    const k = 0.08;
+    const damp = 0.20;
+    enemy.vel.x = enemy.vel.x * (1 - damp) + (targetX - enemy.x) * k;
+    enemy.vel.y = enemy.vel.y * (1 - damp) + (targetY - enemy.y) * k;
+    // Cap velocity so the boss can't snap-warp.
+    const maxV = speed * 1.8;
     const v = Math.hypot(enemy.vel.x, enemy.vel.y);
     if (v > maxV) {
         enemy.vel.x = (enemy.vel.x / v) * maxV;

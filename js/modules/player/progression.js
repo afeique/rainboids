@@ -20,16 +20,9 @@ export function levelUp() {
     // slow level-up rate. See player.js for the rationale.
     this.experienceToNextLevel = Math.floor(400 * Math.pow(1.7, this.level - 1));
 
-    // Grant skill points for leveling up
-    this.skillPoints += 1;
-    // 5.70.0 — also grant a powerup pick. Asteroid kills give XP, so
-    // grinding asteroids now meaningfully shapes the build (each level
-    // = another powerup choice in the shop).
-    // 5.72.0 — picks accumulate silently. The shop opens only at
-    // wave-end (see updateWaveSystem). The 5.71.0 level-up auto-shop
-    // was too disruptive — players reported it interrupted gameplay
-    // every time they hit a level threshold mid-fight.
-    this.powerupPicks = (this.powerupPicks || 0) + 1;
+    // 5.78.0 — picks renamed to SP (skill points). Single field;
+    // `skillPoints` is the canonical name now.
+    this.skillPoints = (this.skillPoints || 0) + 1;
 
     // Health boost every 3 levels
     if (this.level % 3 === 0) {
@@ -47,6 +40,26 @@ export function levelUp() {
 
     // Trigger level up effects
     this.triggerLevelUpEffects();
+
+    // 5.78.0 — T1 (lightweight). When unspent SP queue grows (≥3),
+    // surface a hint toast pointing at the pause-menu POWERUPS tab so
+    // the sink is discoverable. Avoids a full modal interrupt while
+    // closing the discoverability gap on the SP faucet.
+    if ((this.skillPoints || 0) >= 3
+        && this.gameEngine
+        && this.gameEngine.events?.emit) {
+        // Throttle: only fire once per N levels so it doesn't toast on
+        // every single level-up.
+        if (!this._lastSpHintLevel || (this.level - this._lastSpHintLevel) >= 2) {
+            this._lastSpHintLevel = this.level;
+            this.gameEngine.events.emit('ui:show-message', {
+                title: `+${this.skillPoints | 0} SP UNSPENT`,
+                subtitle: 'ESC → POWERUPS to spend',
+                duration: 2200,
+                position: 'top',
+            });
+        }
+    }
 
     return true;
 }

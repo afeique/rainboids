@@ -4,6 +4,7 @@
 
 import { rgba } from '../core/color-cache.js';
 import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS } from '../combat/weapon-data.js';
+import { VERSION } from '../core/version.js';
 
 export const _charWidthCache = new Map();
 
@@ -239,6 +240,25 @@ export function drawTitleScreen() {
                     colorSpeed: 0.14,
                 });
             }
+
+            // 5.78.0 — version tag, bottom-right of the title screen.
+            // Small Press-Start-2P at 60% alpha; sits above any HUD
+            // padding the viewport adds. Mirrors the in-game gold /
+            // timer corner so the player notices but it doesn't fight
+            // for attention with the title text.
+            this.ctx.save();
+            this.ctx.font = "11px 'Press Start 2P', monospace";
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            this.ctx.lineWidth = 2;
+            this.ctx.textAlign = 'right';
+            this.ctx.textBaseline = 'bottom';
+            const tag = `v${VERSION}`;
+            const tx = this.canvas.width - 14;
+            const ty = this.canvas.height - 12;
+            this.ctx.strokeText(tag, tx, ty);
+            this.ctx.fillText(tag, tx, ty);
+            this.ctx.restore();
         }
 
         // ── Fade-to-black overlay (final phase of launch animation) ──

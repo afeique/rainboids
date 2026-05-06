@@ -22,6 +22,16 @@ export function drawHUD() {
             this.events.emit('ui:hide-hud-shop-btn');
         }
 
+        // 5.78.0 — defense indicators render in EVERY non-title state,
+        // including PAUSED / WAVE_TRANSITION / SHOP. Players reflexively
+        // open the pause menu to check whether Reflexes is off cooldown;
+        // the widgets need to be visible there too. Title screen still
+        // suppresses them since the player has no kit yet.
+        if (this.game.state !== GAME_STATES.TITLE_SCREEN
+            && typeof this.drawDefenseIndicators === 'function') {
+            this.drawDefenseIndicators(this.ctx);
+        }
+
         // Draw level up text if active
         if (this.player && this.player.levelUpTextInfo && this.player.levelUpTextInfo.active) {
             this.drawLevelUpText();
@@ -866,12 +876,8 @@ export function updateHUD() {
         this.drawSurvivalTimer(ctx);
         this.drawBottomRightGold(ctx);
 
-        // 5.76.1 — defense layer indicators (REFLEXES / LAST_STAND /
-        // STATIC_FIELD). Sit on the LEFT side, above the loadout
-        // squares so the player's eye picks them up alongside HP.
-        // Only widgets for owned upgrades render; no clutter for
-        // builds that skipped DEFENSE.
-        this.drawDefenseIndicators(ctx);
+        // 5.78.0 — defense indicators moved to drawHUD's outer scope so
+        // they render during PAUSED / SHOP / WAVE_TRANSITION too.
 }
 
 // 5.76.1 — defense HUD widgets. Three small icons stacked vertically

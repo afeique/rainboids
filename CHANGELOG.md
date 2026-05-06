@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.78.0] - 2026-05-06
+
+Picks → SP rename + damage-system consolidation + boss-rage tests + UX polish + title-screen version tag. Larger-than-usual rollup that closes most of the open code-quality items.
+
+### Renamed
+- **`powerupPicks` → `skillPoints`.** The "PICKS" currency is now SP throughout. The vestigial post-5.76.0 `skillPoints` field (no longer spent on anything since SP-currency shop items were migrated to gold) is reclaimed for this. UI strings, banner labels, recap toasts (`+1 PICK` → `+1 SP`), and the shop currency badge all read SP. Internal currency tags `'SP'` and `'PICKS'` both spend from the same field; `'PICKS'` retained for any legacy item def.
+
+### Changed
+- **M1 — Single canonical damage entry point** (`applyDamageToEnemy` on the engine). Bullet path (`enemy.takeDamage` delegates to it) and AOE path (`damageEnemy` calls it) both funnel through the consolidator. One place owns invuln gating (warp / deathFlash / boss rage), HP subtract + clamp, damage number, stats, and boss-pair notify. Future damage modifiers land in one place instead of three.
+- **R1 — Defense indicators render in PAUSED + SHOP + WAVE_TRANSITION.** Moved from `updateHUD` (which was already gated to non-SHOP) into `drawHUD`'s outer scope. Title screen still suppresses them. Players can now check Reflexes cooldown / Static Field shield in the pause menu.
+- **S1 — Formation orbit uses critically-damped spring math** (S1). Replaces the prior directional steering that produced a lazy chase pattern at high speed scaling. Tuned so wave-20 speed-scaled bosses settle into formation slots in 1-2 ticks.
+
+### Added
+- **Q1 — Crit-rush ring on player.** Yellow pulse ring around the ship that drains as the 800 ms crit-rush fire-rate window expires. Closes the crit feedback loop alongside the crit-zoom damage numbers.
+- **P1 — Mini-boss visual marker.** Mini-bosses (5.75.0 promoted regular enemies) now render with a slow-pulsing same-color halo + dashed outer ring. Quick "this one's special" tell without changing the silhouette.
+- **T1 (lightweight) — SP-unspent reminder toast.** When `skillPoints ≥ 3` accumulate after a level-up, a 2.2s toast surfaces `+N SP UNSPENT — ESC → POWERUPS to spend`. Throttled to once per 2 levels.
+- **O1 — Starfield dirty flag.** New `markStarfieldDirty()` + `_flushStarfieldIfDirty()` on the engine. WebGL star buffer rebuilds from live pools when dirty. Pre-emptive — no current churn, but future starburst FX won't leave the GL buffer stale.
+- **U1 — Boss-rage unit tests.** New `tests/unit/boss-rage.test.js` covers HP-threshold trigger, telegraph countdown, activation effects (cooldown × 0.66 once, homing flag), invuln window, Tier-2 partner-died link, Tier-3 formation linking, Tier-4 phase cycling. **76 tests pass** (was 62; +14 new).
+- **Title-screen version tag.** Small `v5.78.0` in the bottom-right corner of the title screen. New `js/modules/core/version.js` module exports `VERSION` as a single-source const for any future consumer.
+
+---
+
 ## [5.77.0] - 2026-05-06
 
 Boss feel overhaul. Rage phase, per-tier mechanics, formation orbit, telegraph + tantrum + screen FX. New `js/modules/enemy/boss-rage.js` module.

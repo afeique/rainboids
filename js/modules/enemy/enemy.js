@@ -893,6 +893,37 @@ export class Enemy {
             this.drawWarpEffect(ctx);
         }
 
+        // 5.78.0 — mini-boss visual marker (P1). Mini-bosses (5.75.0
+        // promoted regular enemies) get a slow-pulsing halo + a thin
+        // outer ring in their type color. Quick visual tell that "this
+        // one's special" without changing the silhouette.
+        if (this.isMiniBoss && !this._deathFlash) {
+            const now = Date.now();
+            const pulse = 0.5 + 0.5 * Math.sin(now * 0.004);
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const grad = ctx.createRadialGradient(this.x, this.y, this.radius * 0.6, this.x, this.y, this.radius * 1.4);
+            const baseColor = (this.color && this.color[0] === '#') ? this.color : '#ffaa44';
+            grad.addColorStop(0, baseColor + '00');
+            grad.addColorStop(0.55, baseColor + Math.floor(50 + pulse * 35).toString(16).padStart(2, '0'));
+            grad.addColorStop(1, baseColor + '00');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 1.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            // Thin solid outer ring (rotation-invariant).
+            ctx.save();
+            ctx.strokeStyle = `rgba(255, 220, 90, ${0.45 + pulse * 0.25})`;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 1.45, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+
         // 5.77.0 — boss rage visuals.
         //   Telegraph (pre-rage): pulsing red ring for 0.4 s wind-up.
         //   Active: faint red aura + pulse so the player can read the
@@ -1170,46 +1201,23 @@ export class Enemy {
     hasLineOfSight(target, gameEngine) { return ai.hasLineOfSight.call(this, target, gameEngine); }
     
     takeDamage(damage, opts = {}) {
-        // opts: { isCrit?: bool, isEmpowered?: bool }
-        // Invulnerable during warp-in or death flash
+        // 5.78.0 — delegated to the engine's `applyDamageToEnemy`
+        // consolidator (M1). The consolidator owns invuln gating
+        // (warp / deathFlash / boss rage), HP subtract + clamp, damage
+        // number, stats, and boss-pair notify. Behaviour matches the
+        // pre-consolidation path exactly; future damage modifiers land
+        // in one place instead of three.
+        if (this.gameEngine && typeof this.gameEngine.applyDamageToEnemy === 'function') {
+            const result = this.gameEngine.applyDamageToEnemy(this, damage, opts);
+            return result.destroyed;
+        }
+        // Fallback (no gameEngine ref — unit-test path) keeps minimal
+        // damage application + return so tests that synthesize an enemy
+        // outside the engine still work.
         if (this.warping || this._deathFlash > 0) return false;
-        // 5.77.0 — boss rage entry grants 1.5 s invuln. Hits during the
-        // window flash a small "BLOCKED" sparkle but deal no damage.
-        if (bossRageBlocksDamage(this)) {
-            if (this.gameEngine && this.gameEngine.particlePool) {
-                const p = this.gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
-                if (p) {
-                    p.color = '#ff8888';
-                    p.vel.x = (Math.random() - 0.5) * 2;
-                    p.vel.y = (Math.random() - 0.5) * 2;
-                }
-            }
-            return false;
-        }
-
-        this.health -= damage;
-
-        // Create damage number — pass through crit/empowered flags so the
-        // popup renders distinctly (bigger font, hot color, "CRIT!" label).
-        if (this.gameEngine) {
-            // 5.76.0 — pass `target: this` so non-crit hits aggregate
-            // into a single growing number per enemy on a 1s window.
-            this.gameEngine.createDamageNumber(this.x, this.y - this.radius, damage, { ...opts, target: this });
-        }
-        
-        // Safeguard: clamp health between 0 and maxHealth
-        this.health = Math.max(0, Math.min(this.health, this.maxHealth));
-
-        const dead = this.health <= 0.001;
-        // 5.77.0 — Tier-2 partner-death link. When one boss in a pair
-        // dies, the survivor receives `_partnerDied = true` and rages
-        // immediately (handled in updateBossRage on the next tick).
-        if (dead && this.isBoss && !this._bossPairNotified) {
-            this._bossPairNotified = true;
-            notifyBossDeath(this);
-        }
-        // Use small tolerance for floating-point precision issues
-        return dead;
+        if (bossRageBlocksDamage(this)) return false;
+        this.health = Math.max(0, this.health - damage);
+        return this.health <= 0.001;
     }
     
     weaverSpinupMovement(gameEngine) { return movement.weaverSpinupMovement.call(this, gameEngine); }

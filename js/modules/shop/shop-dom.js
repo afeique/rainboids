@@ -114,9 +114,12 @@ export function hideShopDom() {
 export function updateShopCurrencyDom() {
     if (!_elements || !_engine) return;
     _elements.coinsAmt.textContent = `${Math.floor(_engine.game.money)}`;
-    _elements.spAmt.textContent = `${_engine.player.skillPoints}`;
+    // 5.78.0 — SP and PICKS counters now both read from skillPoints
+    // (picks was renamed to SP). The legacy SP element stays hidden
+    // (5.76.0); the PICKS element is the visible "SP available" badge.
+    _elements.spAmt.textContent = `${_engine.player.skillPoints || 0}`;
     if (_elements.picksAmt) {
-        _elements.picksAmt.textContent = `${_engine.player.powerupPicks || 0}`;
+        _elements.picksAmt.textContent = `${_engine.player.skillPoints || 0}`;
     }
 }
 
@@ -390,7 +393,7 @@ function buildItemRow(item, player, game) {
         if (item.currency === 'SP') {
             canAfford = player.skillPoints >= actualCost;
         } else if (item.currency === 'PICKS') {
-            canAfford = (player.powerupPicks || 0) >= actualCost;
+            canAfford = (player.skillPoints || 0) >= actualCost;
         } else {
             canAfford = game.money >= actualCost;
         }

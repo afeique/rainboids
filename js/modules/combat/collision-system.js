@@ -1447,24 +1447,58 @@ export function destroyAsteroid(ast) {
     ast.active = false;
 }
 
-export function damageEnemy(enemy, damage) {
-    if (!enemy || !enemy.active || enemy._deathFlash > 0) return;
-    // 5.77.0 — boss rage invuln window also blocks AOE damage paths
-    // (mines, lightning, nova, missiles) so the 1.5 s entry shield
-    // applies uniformly. The check mirrors enemy.takeDamage().
-    if (enemy.isBoss && enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil) return;
+// 5.78.0 — single canonical damage entry point. All paths that damage
+// enemies (bullets via enemy.takeDamage, AOE via damageEnemy, future
+// damage modifiers) now funnel through this helper so the invuln gates
+// (warp / deathFlash / boss rage) are checked in exactly one place.
+// Returns `{ blocked, destroyed }`. Callers that want the legacy boolean
+// can read `result.destroyed`.
+export function applyDamageToEnemy(enemy, damage, opts = {}) {
+    if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
+    if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
+    // Boss rage invuln window — sparkle feedback then drop the hit.
+    if (enemy.isBoss && enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil) {
+        if (this.particlePool) {
+            const p = this.particlePool.get(enemy.x, enemy.y, 'starSparkle');
+            if (p) {
+                p.color = '#ff8888';
+                p.vel.x = (Math.random() - 0.5) * 2;
+                p.vel.y = (Math.random() - 0.5) * 2;
+            }
+        }
+        return { blocked: true, destroyed: false };
+    }
+
     enemy.health -= damage;
+    enemy.health = Math.max(0, Math.min(enemy.health, enemy.maxHealth));
+
+    if (opts.showNumber !== false && typeof this.createDamageNumber === 'function') {
+        this.createDamageNumber(
+            opts.numberX != null ? opts.numberX : enemy.x,
+            opts.numberY != null ? opts.numberY : (enemy.y - (enemy.radius || 15)),
+            damage,
+            { isCrit: !!opts.isCrit, isEmpowered: !!opts.isEmpowered, target: enemy }
+        );
+    }
+    if (this.game?.stats) this.game.stats.totalDamageDealt += damage;
+
+    const destroyed = enemy.health <= 0.001;
+    if (destroyed && enemy.isBoss && !enemy._bossPairNotified) {
+        enemy._bossPairNotified = true;
+        notifyBossDeath(enemy);
+    }
+    return { blocked: false, destroyed };
+}
+
+export function damageEnemy(enemy, damage) {
+    const result = applyDamageToEnemy.call(this, enemy, damage, {
+        numberY: enemy ? enemy.y - 15 : undefined,
+    });
+    if (result.blocked) return;
     // Surface this enemy in the top-center info panel — covers AOE hits
     // (mines, lightning, nova, missiles) that don't go through the bullet path.
     this._setLastHit(enemy);
-    this.createDamageNumber(enemy.x, enemy.y - 15, damage, { target: enemy });
-    if (this.game.stats) this.game.stats.totalDamageDealt += damage;
-    if (enemy.health <= 0) {
-        // 5.77.0 — boss death notifies its pair so the survivor rages.
-        if (enemy.isBoss && !enemy._bossPairNotified) {
-            enemy._bossPairNotified = true;
-            notifyBossDeath(enemy);
-        }
+    if (result.destroyed) {
         // Start death flash — enemy renders as bright dissolving silhouette for 5 frames
         enemy._deathFlash = 8;
         enemy._deathFlashMax = 8;
