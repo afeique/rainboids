@@ -2,9 +2,17 @@
 
 A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave speedrun campaign with four boss waves, and a full upgrade economy. Built on Canvas 2D with a WebGL2 particle layer for bright/glowing effects.
 
-<img width="1280" height="720" alt="title-screen" src="https://github.com/user-attachments/assets/2438ad2e-59c2-4772-96c2-024db0090251" />
-<img width="1280" height="720" alt="screenshot-1" src="https://github.com/user-attachments/assets/a889633d-8f68-4c34-aff9-fe5799873545" />
-<img width="1280" height="720" alt="screemshot-2" src="https://github.com/user-attachments/assets/f18e8478-ec06-4443-8d59-feda235ec72b" />
+## Screenshots
+
+<img width="1280" height="720" alt="00-title-screen" src="https://github.com/user-attachments/assets/74c7c388-5992-4651-930d-1ad24d62023c" />
+
+<img width="1280" height="720" alt="action-01-wave-skirmish" src="https://github.com/user-attachments/assets/42957ad6-1ea3-47e8-8fcb-ee486058f442" />
+
+<img width="1280" height="720" alt="action-03-low-health-clutch" src="https://github.com/user-attachments/assets/bd69cd27-915b-4dc6-b962-3b3d7b7b6ed8" />
+
+<img width="1280" height="720" alt="starfield-3" src="https://github.com/user-attachments/assets/a585c1de-0197-47ef-8361-3441687d3606" />
+
+
 
 ## Play Now
 
