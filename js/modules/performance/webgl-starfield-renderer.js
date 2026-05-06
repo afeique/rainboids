@@ -94,12 +94,15 @@ void main() {
     float slotW = 1.0 / u_atlasSlots;
     v_uv = vec2(slotU + a_quadUV.x * slotW, a_quadUV.y);
 
-    // 5.74.26 — flicker layer applies to STARS ONLY, not nebula clouds.
-    // Slot 8 is the cloud blob; isCloud=1 disables flicker AND zeroes
-    // the twinkle amplitude so clouds render with their static base
-    // alpha. (Flickering haze across the whole sky is distracting; the
-    // hard 5 Hz peaks were turning oversized cloud quads into a strobe.)
-    float isCloud = step(7.5, a_shape);
+    // 5.74.28 — flicker / twinkle apply to STARS only. Slot 8 is the
+    // generic cloud, slots 13-14 are JWST-style nebula textures (wispy /
+    // core). All three are nebula content and should render with static
+    // base alpha — flickering haze is distracting and the hard 5 Hz
+    // peaks turn oversized cloud quads into a strobe. Slots 9-12 (3D
+    // shapes — cube, octahedron, tetrahedron, prism) DO flicker.
+    float isCloud8 = step(7.5, a_shape) * (1.0 - step(8.5, a_shape));
+    float isNeb = step(12.5, a_shape);  // slots 13+
+    float isCloud = max(isCloud8, isNeb);
     float flickPhase = u_time * 5.0 + a_twinklePhase * 7.0;
     float flickPeak = pow(0.5 + 0.5 * sin(flickPhase), 8.0);
     float flickerAlpha = mix(1.0 - flickPeak * 0.45, 1.0, isCloud);

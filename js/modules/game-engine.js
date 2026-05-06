@@ -751,46 +751,147 @@ export class GameEngine {
         if (ok) star._inWebGL = true;
     }
 
-    // 5.74.20 — populate the WebGL nebula cloud layer. ~16 clouds spread
-    // across the field, each a huge soft blob (300-700 px radius) with a
-    // saturated nebula tint and very low parallax. Slot 8 (`cloud`) of
-    // the starfield atlas is a wide gaussian + noise blob, so even a
-    // single texture renders as a varied volumetric haze. Drawn via the
-    // same instanced pipeline as stars — no new draw calls.
+    // 5.74.28 — JWST-inspired nebula regions. Instead of scattering
+    // single-color blobs across the field, we now generate 4-6 coherent
+    // "nebula regions" — each region is a cluster of 5-8 layered clouds
+    // at related positions with palette-coordinated colors, mimicking the
+    // multi-hue layered structure visible in JWST imagery (Pillars of
+    // Creation, Cosmic Cliffs / Carina, Tarantula, Southern Ring, etc).
+    //
+    // Each region picks a palette template (warm/cool/binary/cold) which
+    // defines a few related colors. Layers use mixed atlas slots:
+    //   slot 8  (cloud)         — soft gaussian backbone
+    //   slot 13 (nebula_wispy)  — anisotropic filaments / streamers
+    //   slot 14 (nebula_core)   — dense bright cores / ionization fronts
+    // Layers are jittered around the region center with size, alpha, and
+    // rotation variation. Result reads as a nebula region with depth,
+    // color variation, and structural complexity — all rendered through
+    // the same instanced WebGL pipeline as stars (zero new draw calls).
     _populateWebGLNebula() {
         if (!this.starfieldRenderer.supported) return;
-        const cloudSlot = 8; // STAR_SLOT_INDEX.cloud
-        const NUM = 16;
-        // Saturated nebula palette — same family as the lens-flare accents
-        // but applied across the volume so nebula tints layer the field.
-        const tints = [
-            [0.20, 0.50, 1.00], [0.60, 0.30, 1.00], [1.00, 0.30, 0.85],
-            [1.00, 0.45, 0.20], [0.30, 1.00, 0.80], [1.00, 0.85, 0.40],
-            [0.40, 0.80, 1.00], [0.95, 0.50, 1.00], [0.30, 1.00, 0.50],
-            [1.00, 0.55, 0.70],
+        const SLOT_CLOUD = 8;
+        const SLOT_WISPY = 13;
+        const SLOT_CORE = 14;
+
+        // Palette templates inspired by famous JWST images. Each entry
+        // is { core, mid, edge } RGB triplets — core is the brightest
+        // hottest tone, mid is the dominant color, edge is the cooler
+        // outer halo / dust.
+        const PALETTES = [
+            // Pillars of Creation — gold/amber dust + teal H II + deep red
+            { core: [1.00, 0.95, 0.70], mid: [1.00, 0.55, 0.20], edge: [0.85, 0.20, 0.30] },
+            { core: [0.85, 1.00, 0.95], mid: [0.30, 0.85, 0.95], edge: [0.20, 0.40, 0.85] },
+            // Cosmic Cliffs (Carina, NGC 3324) — orange ridge + cyan gas + tan dust
+            { core: [1.00, 0.85, 0.55], mid: [1.00, 0.45, 0.15], edge: [0.30, 0.85, 0.95] },
+            // Tarantula Nebula — magenta + blue + amber
+            { core: [1.00, 0.70, 0.95], mid: [0.85, 0.30, 0.85], edge: [0.30, 0.50, 1.00] },
+            // Southern Ring — emerald/teal core with violet halo
+            { core: [0.65, 1.00, 0.85], mid: [0.30, 0.85, 0.75], edge: [0.65, 0.40, 0.95] },
+            // NGC 6334 (Cat's Paw) — deep red core, violet wisps, gold edges
+            { core: [1.00, 0.55, 0.40], mid: [0.85, 0.30, 0.55], edge: [1.00, 0.80, 0.35] },
+            // Helix-style — gold center, cool teal halo
+            { core: [1.00, 0.90, 0.50], mid: [0.65, 0.85, 0.60], edge: [0.30, 0.70, 0.95] },
+            // Eagle Nebula greenish — emerald + warm dust
+            { core: [0.85, 1.00, 0.65], mid: [0.45, 0.85, 0.40], edge: [1.00, 0.55, 0.30] },
         ];
-        for (let i = 0; i < NUM; i++) {
+
+        // 5.74.30 — sizes scaled back UP (~1.7×) while keeping the dim
+        // alphas from 5.74.29. Bigger silhouette = more presence as a
+        // background structure, but the low alpha keeps gameplay legible.
+        // Region scale 0.7–1.3 (was 0.45–0.85), halo/wispy/core sizes
+        // restored toward the 5.74.28 footprint but at the dimmer alpha.
+        const NUM_REGIONS = 4;
+        for (let r = 0; r < NUM_REGIONS; r++) {
+            const palette = PALETTES[(Math.random() * PALETTES.length) | 0];
+            const regionX = (0.15 + Math.random() * 0.7) * this.gameField.width;
+            const regionY = (0.15 + Math.random() * 0.7) * this.gameField.height;
+            const regionAngle = Math.random() * Math.PI * 2;
+            const regionScale = 0.70 + Math.random() * 0.60;
+
+            // Outer halo: 1-2 large soft clouds with edge color.
+            const haloCount = 1 + ((Math.random() * 2) | 0);
+            for (let i = 0; i < haloCount; i++) {
+                const ox = (Math.random() - 0.5) * 220 * regionScale;
+                const oy = (Math.random() - 0.5) * 220 * regionScale;
+                const size = (520 + Math.random() * 220) * regionScale;
+                const alpha = 0.05 + Math.random() * 0.04;
+                this.starfieldRenderer.addStar(
+                    regionX + ox, regionY + oy,
+                    0.02 + Math.random() * 0.03,
+                    size,
+                    palette.edge[0], palette.edge[1], palette.edge[2], alpha,
+                    Math.random() * Math.PI * 2,
+                    0.03 + Math.random() * 0.05, 0.06,
+                    SLOT_CLOUD,
+                    Math.random() * Math.PI * 2,
+                    (Math.random() - 0.5) * 0.003,
+                );
+            }
+
+            // Mid-body: 2 wispy filaments aligned to region angle.
+            const wispyCount = 2;
+            for (let i = 0; i < wispyCount; i++) {
+                const along = (Math.random() - 0.5) * 360 * regionScale;
+                const across = (Math.random() - 0.5) * 110 * regionScale;
+                const ox = Math.cos(regionAngle) * along - Math.sin(regionAngle) * across;
+                const oy = Math.sin(regionAngle) * along + Math.cos(regionAngle) * across;
+                const size = (360 + Math.random() * 180) * regionScale;
+                const alpha = 0.07 + Math.random() * 0.06;
+                this.starfieldRenderer.addStar(
+                    regionX + ox, regionY + oy,
+                    0.03 + Math.random() * 0.04,
+                    size,
+                    palette.mid[0], palette.mid[1], palette.mid[2], alpha,
+                    Math.random() * Math.PI * 2,
+                    0.04 + Math.random() * 0.06, 0.08,
+                    SLOT_WISPY,
+                    regionAngle + (Math.random() - 0.5) * 0.6,
+                    (Math.random() - 0.5) * 0.004,
+                );
+            }
+
+            // Core: 1 dense bright core / ionization front.
+            const coreCount = 1;
+            for (let i = 0; i < coreCount; i++) {
+                const ox = (Math.random() - 0.5) * 150 * regionScale;
+                const oy = (Math.random() - 0.5) * 150 * regionScale;
+                const size = (230 + Math.random() * 150) * regionScale;
+                const alpha = 0.10 + Math.random() * 0.06;
+                this.starfieldRenderer.addStar(
+                    regionX + ox, regionY + oy,
+                    0.04 + Math.random() * 0.04,
+                    size,
+                    palette.core[0], palette.core[1], palette.core[2], alpha,
+                    Math.random() * Math.PI * 2,
+                    0.05 + Math.random() * 0.07, 0.10,
+                    SLOT_CORE,
+                    Math.random() * Math.PI * 2,
+                    (Math.random() - 0.5) * 0.005,
+                );
+            }
+        }
+
+        // Drift haze: 3 small lonely clouds scattered across the field.
+        const DRIFT_TINTS = [
+            [0.20, 0.40, 0.85], [0.40, 0.30, 0.80], [0.30, 0.55, 0.85],
+            [0.50, 0.40, 0.75], [0.25, 0.55, 0.75],
+        ];
+        const DRIFT_COUNT = 3;
+        for (let i = 0; i < DRIFT_COUNT; i++) {
             const x = Math.random() * this.gameField.width;
             const y = Math.random() * this.gameField.height;
-            // Massive size — these are background haze, not foreground objects.
-            const size = 300 + Math.random() * 400;
-            // Very low parallax so clouds drift slowly relative to camera.
-            const parallax = 0.02 + Math.random() * 0.05;
-            const tint = tints[(Math.random() * tints.length) | 0];
-            // Low alpha (0.10–0.20) — additive blend stacks them, two
-            // overlapping clouds produce a brighter mixed-hue patch.
-            const alpha = 0.10 + Math.random() * 0.10;
-            // Slow twinkle — almost imperceptible breathing.
-            const twinkleSpeed = 0.05 + Math.random() * 0.10;
-            const twinkleAmp = 0.10;
-            const twinklePhase = Math.random() * Math.PI * 2;
-            const baseAngle = Math.random() * Math.PI * 2;
-            const rotRate = (Math.random() - 0.5) * 0.005;
+            const size = 300 + Math.random() * 180;
+            const tint = DRIFT_TINTS[(Math.random() * DRIFT_TINTS.length) | 0];
+            const alpha = 0.04 + Math.random() * 0.03;
             this.starfieldRenderer.addStar(
-                x, y, parallax, size,
+                x, y, 0.02 + Math.random() * 0.03,
+                size,
                 tint[0], tint[1], tint[2], alpha,
-                twinklePhase, twinkleSpeed, twinkleAmp,
-                cloudSlot, baseAngle, rotRate,
+                Math.random() * Math.PI * 2,
+                0.04 + Math.random() * 0.05, 0.06,
+                SLOT_CLOUD,
+                Math.random() * Math.PI * 2,
+                (Math.random() - 0.5) * 0.003,
             );
         }
     }

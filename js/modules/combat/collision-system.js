@@ -164,6 +164,13 @@ export function handleCollisions() {
 
                 // Use small tolerance for floating-point precision issues
                 if (ast.health <= 0.001) {
+                    // 5.74.31 — bullet-killed asteroids count for the kill
+                    // streak. The other asteroid-kill paths (mine, lightning,
+                    // missile, charged-shot) all route through destroyAsteroid
+                    // which already calls onEnemyKill. This inlined bullet
+                    // path didn't, so a player who only used the primary
+                    // weapon never racked up streaks from rocks.
+                    if (typeof this.onEnemyKill === 'function') this.onEnemyKill(ast);
                     if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                         // Small asteroid destroyed — death flash then cleanup
                         ast._deathFlash = 6;
@@ -1851,6 +1858,8 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
     // Check if asteroid is destroyed
     if (asteroid.health <= 0) {
         // 5.74.3 — gold no longer auto-awarded on kill (pickup-only).
+        // 5.74.31 — counts toward the kill streak.
+        if (typeof this.onEnemyKill === 'function') this.onEnemyKill(asteroid);
         this.player.gainExperience(8);
 
         // Screen shake for collision destruction (only if on screen)

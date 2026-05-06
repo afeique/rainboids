@@ -588,14 +588,17 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + (moneyDropChanceStacks * GAME_CONFIG.MONEY_ORB_DROP_CHANCE_UPGRADE) + levelDropRateBonus + enemyDropRateBonus;
 
     // 5.74.9 — Gold Find scales the money drop RATE in addition to the
-    // amount. Applied as a multiplier on the base rate so progression
-    // lifts the floor of "did it drop?" alongside "how much did I get?".
-    // 5.74.10 — money rate clamped to 0.95 (was 1.0) so there's always a
-    // small chance a kill drops nothing — keeps drops from feeling
-    // mechanical at high Gold Find / drop-chance stacks.
+    //   amount.
+    // 5.74.10 — money rate clamped to 0.95 (was 1.0).
+    // 5.74.34 — kill-streak now ALSO scales drop rate (was: amount only).
+    //   Same +6%/streak / 2.5× cap as the budget multiplier — high
+    //   streaks earn both more frequent AND larger drops, so the
+    //   reward curve compounds in both axes.
     const goldFindMult = this.player.getGoldFindMultiplier?.() || 1;
+    const streakCount = this.killStreakCount || 0;
+    const streakGoldMult = Math.min(2.5, 1 + streakCount * 0.06);
     const healthDropRate = Math.min(1.0, baseHealthDropRate);
-    const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult);
+    const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult * streakGoldMult);
 
     // ── Health orbs ──
     // Gated by a global cooldown. Default is once every 60s; the Triage
@@ -641,13 +644,20 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE);
         const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (paydayStacks * GAME_CONFIG.PAYDAY_MONEY_MIN_UPGRADE) + (highRollerStacks * GAME_CONFIG.HIGH_ROLLER_MONEY_MAX_UPGRADE));
         const avgMoney = (minMoney + maxMoney) / 2;
-        // 5.73.0 — apply Gold Find (+5%/level past 1) on the budget.
-        // Bigger budget → splitter generates more money orbs (each
-        // capped at MAX_MONEY_PER_ORB), giving more visible coin
-        // sprites per drop. Both the gold AMOUNT and the SYMBOL COUNT
-        // scale with player level.
+        // 5.73.0 — apply Gold Find (+10%/level past 1, 5.74.33) on the
+        //   budget. Bigger budget → splitter generates more money orbs
+        //   (each capped at MAX_MONEY_PER_ORB), giving more visible
+        //   coin sprites per drop. Both the gold AMOUNT and the SYMBOL
+        //   COUNT scale with player level.
+        // 5.74.33 — kill-streak gold multiplier added on top: +6% per
+        //   streak count, capped at 2.5× (reached at 25-kill streak).
+        //   5.74.34 — applied to BOTH rate and budget (see hoisted
+        //   `streakGoldMult` definition near the top of this function).
+        //   Stacks multiplicatively with Gold Find, so a level-10
+        //   player on a 15-kill streak gets ~3.6× the base gold per
+        //   drop AND ~3.6× the per-kill drop probability.
         const goldFind = this.player.getGoldFindMultiplier?.() || 1;
-        const moneyBudget = Math.max(1, Math.round(totalLegacyCount * avgMoney * goldFind));
+        const moneyBudget = Math.max(1, Math.round(totalLegacyCount * avgMoney * goldFind * streakGoldMult));
 
         const orbValues = _splitBudgetIntoOrbs(moneyBudget, GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB);
         for (const v of orbValues) this.createMoneyOrb(x, y, v);

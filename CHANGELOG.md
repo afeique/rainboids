@@ -11,6 +11,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.74.34] - 2026-05-05
+
+### Changed
+- **Kill-streak now scales gold drop RATE in addition to amount.** 5.74.33 only multiplied the budget; 5.74.34 hoists `streakGoldMult = min(2.5, 1 + streakCount × 0.06)` to also apply to `moneyDropRate` (still clamped at 0.95). High streaks now earn both more *frequent* and *larger* gold drops, so the reward compounds in both axes. Sample stack at level 10 on a 15-kill streak: ~3.6× drop probability AND ~3.6× per-drop budget vs base.
+
+---
+
+## [5.74.33] - 2026-05-05
+
+### Changed
+- **Gold Find scaling per level doubled.** `getGoldFindMultiplier` now returns `1 + (level − 1) × 0.10` (was `× 0.05`). Level 1 = 1.0×, level 5 = 1.40×, level 10 = 1.90×, level 20 = 2.90×. Applies to both money drop rate and money budget per drop, so leveling now meaningfully accelerates the economy.
+- **Kill-streak gold multiplier added.** `dropOrbsFromEntity` now multiplies the money budget by `min(2.5, 1 + killStreakCount × 0.06)` — +6% gold per streak count, capped at 2.5× at 25 kills. Stacks multiplicatively with Gold Find: a level-10 player on a 15-kill streak gets ~3.6× the base gold per drop (1.90 × 1.90). Encourages chaining kills before the 10s idle timer expires.
+
+---
+
+## [5.74.32] - 2026-05-05
+
+### Changed
+- **Killstreak indicator: clean stacked layout, always-active color.** Removed every overlap and the gray-out SAVED state. Block now lays out as cleanly stacked rows from top to bottom:
+  - `y+0`  — `N KILLS` big number (22px), tier-colored.
+  - `y+30` — tier label (12px). Pre-tier shows `STREAK`; max tier appends `(MAX)`.
+  - `y+50` — tier progress bar (5px) toward next tier (full bar at max).
+  - `y+62` — idle-countdown drain bar (5px), green → red over 10s.
+  - `y+74` — `X.Xs` numeric countdown (8px), placed BELOW the bar.
+  - **Removed:** the `+N% DMG` line that overlapped the tier-progress bar caption, the `→ NEXT TIER @ N` / `▲ MAX TIER` text inside the tier bar, the `▶ KILL TO RE-ARM` text that overlapped the idle bar, the gray-out fade alpha + dim grey-white SAVED state. The streak now reads in the active tier color the entire time the streak is alive.
+
+---
+
+## [5.74.31] - 2026-05-05
+
+### Fixed
+- **Bullet-killed and collision-killed asteroids now feed the kill streak.** 5.74.18 wired `destroyAsteroid` into `onEnemyKill`, but two asteroid-destruction paths inline the destruction sequence instead of calling `destroyAsteroid`: the bullet-hits-asteroid path in `handleBulletAsteroidCollisions` (the most common kill path — small/large asteroid death-flash branches), and the player↔asteroid collision kill. Both now call `onEnemyKill(asteroid)` so primary-weapon-only kills and ramming kills both count toward the streak counter, refresh the idle timer, and earn streak-tier buffs.
+
+---
+
+## [5.74.30] - 2026-05-05
+
+### Changed
+- **Nebulae sized back up while staying dim.** 5.74.29 cut both size and alpha; the user wanted bigger silhouettes but kept the lower brightness. Sizes pushed ~1.7× toward the 5.74.28 footprint, alphas unchanged from 5.74.29:
+  - Region scale `0.45-0.85 → 0.70-1.30`.
+  - Halo size `320-450 → 520-740` px (alpha still `0.05-0.09`).
+  - Wispy filament size `220-330 → 360-540` px (alpha still `0.07-0.13`); along-axis spread `220 → 360`, across `70 → 110`.
+  - Core size `140-230 → 230-380` px (alpha still `0.10-0.16`); jitter `90 → 150`.
+  - Drift size `180-280 → 300-480` px (alpha still `0.04-0.07`).
+  - Region count `4`, drift count `3` unchanged. Each region now has more presence as a background structure but the dim alpha keeps the gameplay area legible.
+
+---
+
+## [5.74.29] - 2026-05-05
+
+### Changed
+- **Nebulae dimmer, smaller, and more focused.** The 5.74.28 sky-spanning JWST regions were dominating the screen and washing out the gameplay area. Cuts across the board:
+  - Regions `5 → 4`, drift clouds `5 → 3`.
+  - Region scale `0.7-1.4× → 0.45-0.85×` — base size halved.
+  - **Halo size** `550-800 → 320-450` px, **alpha** `0.08-0.15 → 0.05-0.09`.
+  - **Wispy filament size** `380-580 → 220-330` px, **alpha** `0.10-0.20 → 0.07-0.13`. Filament count fixed at 2 (was 2-3).
+  - **Core size** `220-380 → 140-230` px, **alpha** `0.14-0.24 → 0.10-0.16`. Count fixed at 1 (was 1-2).
+  - **Drift haze size** `280-500 → 180-280` px, **alpha** `0.06-0.12 → 0.04-0.07`.
+  - Region jitter offsets reduced proportionally so each region stays compact rather than sprawling. Net result: each nebula reads as a discrete focused cloud against the field instead of an overwhelming wash; gameplay area is clear again.
+
+---
+
+## [5.74.28] - 2026-05-05
+
+### Added
+- **JWST-style nebula regions.** Replaced the scattered single-color cloud blobs from 5.74.20 with coherent multi-layered nebula regions inspired by Webb Space Telescope imagery (Pillars of Creation, Cosmic Cliffs / Carina, Tarantula, Southern Ring, NGC 6334, Eagle).
+  - **2 new atlas slots (`nebula_wispy`, `nebula_core`)** painted via 3-octave value-noise FBM. `wispy` uses anisotropic frequency (X 2× Y) → elongated filamentary streamers like the gas pillars in Eagle/Carina. `core` uses a sharp inner exp-falloff plus noise-modulated halo → dense ionization-front cores like the Cosmic Cliffs ridge. Atlas now 15 slots (1920 × 128 px).
+  - **8 hand-tuned palettes** with `{core, mid, edge}` color triplets matching famous JWST images. E.g., Pillars: gold core + amber mid + deep red edge; Cosmic Cliffs: gold ridge + orange + cyan H II; Tarantula: pink core + magenta + electric blue.
+  - **5 nebula regions per scene**, each spawning **5–8 layered clouds** at related positions: 1–2 huge soft outer halos (edge color, slot 8), 2–3 wispy filaments aligned to a per-region rotation axis (mid color, slot 13), 1–2 dense bright cores (core color, slot 14). Filaments coherently align so each region reads as a directional gas structure rather than a scatter. 5 small cool-tinted drift clouds fill background atmosphere between regions.
+  - **Shader update**: flicker/twinkle exemption widened — was slot 8 only, now slots 8 + 13 + 14 (all nebula content). 3D shape stars (slots 9–12) still flicker. Range gate uses two `step()`s (`step(7.5, a_shape) * (1 - step(8.5, a_shape)) + step(12.5, a_shape)`). Zero new draw calls — entire nebula still renders through the existing instanced starfield pipeline.
+
+---
+
 ## [5.74.27] - 2026-05-05
 
 ### Fixed

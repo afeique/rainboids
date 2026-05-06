@@ -230,11 +230,12 @@ export function getMovementSpeedMultiplier() {
 }
 
 // 5.73.0 — Gold Find: scales how much gold drops from kills.
-// +5% per player level past 1, additive. Level 1 = 1.0×, level 5 = 1.20×,
-// level 10 = 1.45×, level 20 = 1.95×. Applied as a multiplier on the
-// money-orb budget in dropOrbsFromEntity.
+// 5.74.33 — scaling rate doubled: +10% per player level past 1 (was +5%).
+// Level 1 = 1.0×, level 5 = 1.40×, level 10 = 1.90×, level 20 = 2.90×.
+// Applied as a multiplier on the money-orb budget AND drop rate in
+// dropOrbsFromEntity.
 export function getGoldFindMultiplier() {
-    return 1 + Math.max(0, (this.level || 1) - 1) * 0.05;
+    return 1 + Math.max(0, (this.level || 1) - 1) * 0.10;
 }
 
 export function getRangeMultiplier() {
