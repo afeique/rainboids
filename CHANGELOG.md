@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.77.0] - 2026-05-06
+
+Boss feel overhaul. Rage phase, per-tier mechanics, formation orbit, telegraph + tantrum + screen FX. New `js/modules/enemy/boss-rage.js` module.
+
+### Added
+- **Boss rage phase (G1).** Single-trigger HP threshold. When `enemy.isBoss && enemy.health ≤ maxHealth × 0.33`:
+  - **Telegraph** — 24-frame (~0.4 s) red pulsing ring around the boss + sparse red ember particles. Players see the wind-up before the burst lands.
+  - **Activation** — 1.5 s invulnerability window (blocks damage from BOTH the bullet path AND every AOE path: mines, lightning, nova, missiles), screen flash (`alpha 0.42`, 12 frames), screen shake (40 frames, magnitude 22), 32-particle scream burst, `BOSS RAGE — <name> grows enraged` toast, and a 16-bullet circular tantrum at 4 px/tick.
+  - **Persistent buff** — `firingCooldown × 0.66` (one-shot multiplier so tier-4 toggles don't compound), `enableHomingBullets = true` for the rest of the fight. Every bullet the raged boss fires gets a 0.04-rad/frame homing nudge toward the player applied AFTER the per-pattern velocity step in `enemy-bullet.applyMovementPattern`. Pure dodge math is still possible; reactive panic-strafe isn't.
+  - **Visual indicator** — pulsing red aura ring around the boss for the rest of the fight + bright red shield ring during the 1.5 s invuln window.
+- **Tier 2 — Twin Iron partner-death link (G2).** `linkBosses` ties both bosses' `_bossPair` references together at spawn. When one dies, `notifyBossDeath` flips the survivor's `_partnerDied = true`, which `updateBossRage` picks up next tick and triggers immediate rage regardless of HP. Now the second boss is a dramatically different fight if you focus-fire the first.
+- **Tier 3 — Triple Threat formation (G2).** All three TITANs share a `_formationCenter` (gameField midpoint) and orbit at fixed angular offsets `(0, 2π/3, 4π/3)` with random clockwise/counterclockwise direction. New `bossFormationMovement` overrides `updateMovement` for any boss with `_formationCenter`. Radius `min(380, 0.22 × fieldWidth)`, omega 0.012 rad/tick — fast enough to read as movement, slow enough to track. Each boss still rages independently when its own HP crosses the threshold.
+- **Tier 4 — Final Boss phase cycling (G2).** New `_phaseTimer` + `_phaseIdx` on tier-4 bosses, alternating every 720 frames (12 s) between **Phase 0 (formation orbit)** and **Phase 1 (free raged AI)**. Phase entry triggers `FORMATION PHASE` / `RAGE PHASE` toast. Entering phase 1 force-activates rage if the HP threshold hasn't been crossed yet, so the boss commits to the cycle even on a precise speedrun.
+
+### Tests
+- 62/62 unit tests pass.
+- `tests/e2e/11-wave-pause-race.spec.js` still passes (run advances correctly with the new boss-link spawn path).
+
+---
+
 ## [5.76.2] - 2026-05-06
 
 Performance hygiene + tech-debt rollup. State-resume stack consolidation, soft-cap bullet eviction, and a regression test for the 5.74.14 wave-clear pause race.

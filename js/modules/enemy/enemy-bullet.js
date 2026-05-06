@@ -60,6 +60,10 @@ export class EnemyBullet {
 
         // For mine proximity: reference to player (set by enemy that laid the mine)
         this.targetPlayer = null;
+        // 5.77.0 — boss rage homing flag (set in createEnemyBullet when
+        // the source enemy has `enableHomingBullets`). Reset here so a
+        // recycled bullet from a non-raged source doesn't inherit it.
+        this.bossRageHoming = false;
 
         // Burst of particles on natural expiry (used by Stalker laser segments)
         this.deathBurst = false;
@@ -511,6 +515,27 @@ export class EnemyBullet {
                     this.rotation = Math.atan2(this.vel.y, this.vel.x);
                 }
                 break;
+            }
+        }
+
+        // 5.77.0 — boss-rage homing nudge. Applied AFTER the per-pattern
+        // velocity adjustment so it composes naturally over straight,
+        // burst, spread, missile, etc. Gentle turn rate so the player
+        // can still dodge with reasonable inputs.
+        if (this.bossRageHoming && this.targetPlayer) {
+            const dx = this.targetPlayer.x - this.x;
+            const dy = this.targetPlayer.y - this.y;
+            const distance = Math.hypot(dx, dy);
+            if (distance > 0) {
+                const turn = 0.04;
+                const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
+                this.vel.x += (dx / distance) * turn;
+                this.vel.y += (dy / distance) * turn;
+                const newSpeed = Math.hypot(this.vel.x, this.vel.y);
+                if (newSpeed > 0 && currentSpeed > 0) {
+                    this.vel.x = (this.vel.x / newSpeed) * currentSpeed;
+                    this.vel.y = (this.vel.y / newSpeed) * currentSpeed;
+                }
             }
         }
     }

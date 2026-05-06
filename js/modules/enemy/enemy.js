@@ -8,6 +8,7 @@ import * as movement from './movement.js';
 import * as firing from './firing.js';
 import * as shapes from './shapes.js';
 import * as ai from './ai.js';
+import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
 
 // Re-export for consumers that import from enemy.js
 export { ENEMY_TYPES };
@@ -314,6 +315,11 @@ export class Enemy {
 
         this.targetPlayer = playerRef;
 
+        // 5.77.0 — boss rage + per-tier mechanics. Telegraphs HP-threshold
+        // rage, activates the 1.5 s invuln + tantrum + screen FX, runs
+        // tier-4 phase cycling, and reads tier-2 partner-death flags.
+        if (this.isBoss) updateBossRage(this, gameEngine);
+
         // Late-wave AI throttle: in waves 15+, run the heavy spatial
         // scans (asteroid/enemy/bullet avoidance) on alternating frames
         // per enemy. Each enemy has a random `_aiOffset` of 0/1 set at
@@ -332,8 +338,16 @@ export class Enemy {
         // Update face direction to look at current target
         this.updateFaceDirection();
 
-        // Update movement based on pattern
-        this.updateMovement(gameEngine);
+        // 5.77.0 — tier-3 (and tier-4 phase 0) formation orbit overrides
+        // the normal movement dispatch. Returns true if it handled the
+        // step; otherwise fall through to the regular pattern.
+        if (!this.isBoss || !bossFormationMovement(this)) {
+            this.updateMovement(gameEngine);
+        } else {
+            // Formation movement still benefits from the same boundary
+            // bouncing applied below; just the velocity assignment was
+            // owned by bossFormationMovement.
+        }
 
         if (!skipHeavyAI) {
             // Enhanced evasive maneuvers
@@ -879,6 +893,50 @@ export class Enemy {
             this.drawWarpEffect(ctx);
         }
 
+        // 5.77.0 — boss rage visuals.
+        //   Telegraph (pre-rage): pulsing red ring for 0.4 s wind-up.
+        //   Active: faint red aura + pulse so the player can read the
+        //   "this thing is buffed" state at a glance.
+        //   Invuln window: bright red shield ring (1.5 s after activation).
+        if (this.isBoss) {
+            const now = Date.now();
+            const inv = this._rageInvulnUntil && now < this._rageInvulnUntil;
+            if (this._rageTelegraph > 0) {
+                const t = 1 - this._rageTelegraph / 24;
+                const r = this.radius * (1.4 + Math.sin(now * 0.04) * 0.15);
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 60, 60, ${0.55 * (0.4 + 0.6 * t)})`;
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            } else if (inv) {
+                const ttl = (this._rageInvulnUntil - now) / 1500;
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 90, 90, ${0.7 * ttl + 0.3})`;
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 1.55, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.strokeStyle = `rgba(255, 200, 200, ${0.5 * ttl})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 1.75, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            } else if (this._rageActive) {
+                const pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 70, 70, ${0.20 + 0.20 * pulse})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 1.35, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
         // Draw laser targeting line first (behind everything else)
         if (this.type === 'DRIFTER' && this.laserCharging && this.laserCharge > 0) {
             this.drawLaserTargetingLine(ctx);
@@ -1115,6 +1173,19 @@ export class Enemy {
         // opts: { isCrit?: bool, isEmpowered?: bool }
         // Invulnerable during warp-in or death flash
         if (this.warping || this._deathFlash > 0) return false;
+        // 5.77.0 — boss rage entry grants 1.5 s invuln. Hits during the
+        // window flash a small "BLOCKED" sparkle but deal no damage.
+        if (bossRageBlocksDamage(this)) {
+            if (this.gameEngine && this.gameEngine.particlePool) {
+                const p = this.gameEngine.particlePool.get(this.x, this.y, 'starSparkle');
+                if (p) {
+                    p.color = '#ff8888';
+                    p.vel.x = (Math.random() - 0.5) * 2;
+                    p.vel.y = (Math.random() - 0.5) * 2;
+                }
+            }
+            return false;
+        }
 
         this.health -= damage;
 
@@ -1128,9 +1199,17 @@ export class Enemy {
         
         // Safeguard: clamp health between 0 and maxHealth
         this.health = Math.max(0, Math.min(this.health, this.maxHealth));
-        
+
+        const dead = this.health <= 0.001;
+        // 5.77.0 — Tier-2 partner-death link. When one boss in a pair
+        // dies, the survivor receives `_partnerDied = true` and rages
+        // immediately (handled in updateBossRage on the next tick).
+        if (dead && this.isBoss && !this._bossPairNotified) {
+            this._bossPairNotified = true;
+            notifyBossDeath(this);
+        }
         // Use small tolerance for floating-point precision issues
-        return this.health <= 0.001;
+        return dead;
     }
     
     weaverSpinupMovement(gameEngine) { return movement.weaverSpinupMovement.call(this, gameEngine); }

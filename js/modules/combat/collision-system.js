@@ -3,6 +3,7 @@
 import { GAME_CONFIG } from '../core/constants.js';
 import { random, collision, starCollision, triggerHapticFeedback } from '../core/utils.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from './weapon-data.js';
+import { notifyBossDeath } from '../enemy/boss-rage.js';
 
 // ─── Collision Physics Config ────────────────────────────────────────────────
 export const COLLISION_CONFIG = {
@@ -1448,6 +1449,10 @@ export function destroyAsteroid(ast) {
 
 export function damageEnemy(enemy, damage) {
     if (!enemy || !enemy.active || enemy._deathFlash > 0) return;
+    // 5.77.0 — boss rage invuln window also blocks AOE damage paths
+    // (mines, lightning, nova, missiles) so the 1.5 s entry shield
+    // applies uniformly. The check mirrors enemy.takeDamage().
+    if (enemy.isBoss && enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil) return;
     enemy.health -= damage;
     // Surface this enemy in the top-center info panel — covers AOE hits
     // (mines, lightning, nova, missiles) that don't go through the bullet path.
@@ -1455,6 +1460,11 @@ export function damageEnemy(enemy, damage) {
     this.createDamageNumber(enemy.x, enemy.y - 15, damage, { target: enemy });
     if (this.game.stats) this.game.stats.totalDamageDealt += damage;
     if (enemy.health <= 0) {
+        // 5.77.0 — boss death notifies its pair so the survivor rages.
+        if (enemy.isBoss && !enemy._bossPairNotified) {
+            enemy._bossPairNotified = true;
+            notifyBossDeath(enemy);
+        }
         // Start death flash — enemy renders as bright dissolving silhouette for 5 frames
         enemy._deathFlash = 8;
         enemy._deathFlashMax = 8;

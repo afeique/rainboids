@@ -1041,6 +1041,17 @@ export function createEnemyBullet(gameEngine, angle, speed, color, explosive = f
             bullet.targetPlayer = target || this.targetPlayer;
         }
 
+        // 5.77.0 — boss rage homing. When a boss has `enableHomingBullets`
+        // (set on rage activation), every bullet it fires gets a gentle
+        // homing nudge toward the player, regardless of the underlying
+        // movement pattern. Implemented via a `bossRageHoming` flag the
+        // enemy-bullet update reads after the switch dispatch (see
+        // enemy-bullet.js update()).
+        if (this.enableHomingBullets) {
+            bullet.targetPlayer = target || this.targetPlayer;
+            bullet.bossRageHoming = true;
+        }
+
         // Titan accelerating missiles don't need target reference (they fly straight)
 
         // Enemy shooting sounds removed to reduce audio confusion

@@ -8,6 +8,7 @@
 import { GAME_CONFIG, GAME_STATES, MAX_WAVES, getEnemyFiringCooldown } from '../core/constants.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
+import { linkBosses } from '../enemy/boss-rage.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats, getEnemySpeedMultiplier, getEnemyBulletSpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
@@ -476,6 +477,11 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
         }
     }
 
+    // 5.77.0 — collect bosses spawned in this group so we can link
+    // their `_bossPair` (tier 2) and shared `_formationCenter`
+    // (tier 3+). Linking happens after the spawn loop so every
+    // boss exists before back-references are written.
+    const spawnedBosses = [];
     for (let i = 0; i < count; i++) {
         const enemy = this.enemyPool.get();
         if (enemy) {
@@ -490,7 +496,14 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
                 if (enemy.config) enemy.config.points = (enemy.config.points || 100) * 2;
             }
             enemy.startWarpIn(sp.targetX, sp.targetY);
+            if (enemy.isBoss) spawnedBosses.push(enemy);
         }
+    }
+    // Link bosses spawned together (tier 2 pair, tier 3 formation,
+    // tier 4 both). Only fires when the group spawned ≥ 2 bosses; a
+    // solo tier-4 still gets formation seeding but skips pair link.
+    if (spawnedBosses.length >= 2 || (spawnedBosses[0] && spawnedBosses[0].bossTier === 4)) {
+        linkBosses(spawnedBosses, this.gameField);
     }
 }
 
