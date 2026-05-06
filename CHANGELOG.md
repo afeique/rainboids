@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.78.1] - 2026-05-06
+
+### Changed
+- **Hunters now sweep in arcs and strafe one-way** instead of the burst-and-wait triangle pattern. New `hunterArcMovement` in `enemy/movement.js`:
+  - Picks a CW/CCW strafe direction at first spawn and *keeps it for life*. Players read the encounter as a coherent orbital threat ("the red ones are circling me clockwise") instead of stochastic zips.
+  - Maintains an orbital radius around the player (230–310 px per-instance) with a slow ±30 px sine breathe so the sweep doesn't feel like a perfect circle.
+  - Steers toward the next angular slot with light damping; velocity caps at 1.7× config.speed so they're agile but trackable.
+  - 15% chance per ~2 s roll triggers a 800 ms aggressive lunge (radius collapses to 90 px, speed cap raises to 2.4×) to break up the predictable orbit.
+- HUNTER `movePattern` config switched from `'triangle'` to `'hunter_arc'`. WASP and other triangle-burst users are unaffected.
+
+---
+
 ## [5.78.0] - 2026-05-06
 
 Picks → SP rename + damage-system consolidation + boss-rage tests + UX polish + title-screen version tag. Larger-than-usual rollup that closes most of the open code-quality items.

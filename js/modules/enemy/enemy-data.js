@@ -13,11 +13,15 @@ export const ENEMY_TYPES = {
         size: 32,
         shootPattern: 'hunter_single',
         shootRate: 1.5,
-        movePattern: 'triangle',
+        // 5.78.1 — Hunters now sweep in arcs around the player with a
+        // sticky one-way strafe (CW or CCW per-spawn) instead of the
+        // burst-and-wait triangle. Reads as a coherent orbital threat
+        // rather than stochastic zips. WASP keeps `triangle`.
+        movePattern: 'hunter_arc',
         points: 120,               // was 75 (faster economy)
         movement: {
-            pattern: 'triangle',
-            turnSpeed: 0.12,       // was 0.08 (+50%, sharper pivots)
+            pattern: 'hunter_arc',
+            turnSpeed: 0.12,
             rotationSpeed: { min: -0.01, max: 0.01 },
         },
         firing: {

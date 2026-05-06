@@ -782,6 +782,79 @@ export function heavyCrawlMovement() {
 }
 
 // Geometric Movement Patterns
+// 5.78.1 — Hunter sweeping-arc strafe. Replaces the old "burst-and-wait"
+// triangle pattern (still used by WASP). Hunters now:
+//   • Pick a strafe direction at first call (CW or CCW) and KEEP it for
+//     the rest of their life. Players read this as "the red ones are
+//     orbiting me one way" — gives the encounter a clear directional
+//     read instead of stochastic zips.
+//   • Maintain an orbital radius around the player with a slow sine
+//     breathe (±30 px) so the sweep doesn't feel like a perfect circle.
+//   • Steer toward the next angular slot with light damping; speed tops
+//     out at ~1.6× config.speed so they're agile but trackable.
+//   • Occasional 800 ms "lunge" toward the player at 2× speed (15%
+//     chance every ~2 s) to break up the predictable orbit.
+export function hunterArcMovement() {
+    if (!this.targetPlayer) return;
+
+    // First-call init. `_arcDirection` is sticky so the strafe stays
+    // one-way for the enemy's life — that's the user-requested feel.
+    if (this._arcDirection === undefined) {
+        this._arcDirection = Math.random() < 0.5 ? -1 : 1;
+        this._arcRadius = 230 + Math.random() * 80;          // 230..310 px
+        const dx = this.x - this.targetPlayer.x;
+        const dy = this.y - this.targetPlayer.y;
+        this._arcAngle = Math.atan2(dy, dx);
+        this._arcOmega = 0.020 + Math.random() * 0.012;      // angular speed
+        this._arcLungeUntil = 0;
+        this._arcLungeRollAt = frameClock.now + 1500 + Math.random() * 1200;
+    }
+
+    const now = frameClock.now;
+
+    // Occasional aggressive lunge — 15% chance on each ~2 s roll.
+    if (now > this._arcLungeRollAt) {
+        this._arcLungeRollAt = now + 1800 + Math.random() * 1400;
+        if (Math.random() < 0.15) this._arcLungeUntil = now + 800;
+    }
+    const lunging = now < this._arcLungeUntil;
+
+    // Sweep: advance the angular position around the player. Lunge
+    // freezes the angle so the velocity vector points straight at
+    // the player for the duration.
+    if (!lunging) {
+        this._arcAngle += this._arcDirection * this._arcOmega;
+    }
+
+    // Radius breathe (sine with phase keyed off arc angle so each
+    // hunter has a slightly different rhythm without per-instance state).
+    const radiusBreathe = Math.sin(now * 0.0006 + this._arcAngle * 1.7) * 30;
+    const targetRadius = lunging ? 90 : (this._arcRadius + radiusBreathe);
+
+    // Compute target slot.
+    const tx = this.targetPlayer.x + Math.cos(this._arcAngle) * targetRadius;
+    const ty = this.targetPlayer.y + Math.sin(this._arcAngle) * targetRadius;
+
+    // Steer with light damping. Friction keeps velocity from compounding.
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const speed = this.config.speed;
+    const steer = lunging ? 0.18 : 0.09;
+    this.vel.x += (dx / dist) * speed * steer;
+    this.vel.y += (dy / dist) * speed * steer;
+    this.vel.x *= 0.92;
+    this.vel.y *= 0.92;
+
+    // Cap velocity. Lunge gets a higher ceiling so it actually closes.
+    const maxV = speed * (lunging ? 2.4 : 1.7);
+    const v = Math.hypot(this.vel.x, this.vel.y);
+    if (v > maxV) {
+        this.vel.x = (this.vel.x / v) * maxV;
+        this.vel.y = (this.vel.y / v) * maxV;
+    }
+}
+
 export function triangleMovement() {
     if (!this.targetPlayer) return;
 

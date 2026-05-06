@@ -507,6 +507,9 @@ export class Enemy {
             case 'triangle':
                 this.triangleMovement();
                 break;
+            case 'hunter_arc':
+                this.hunterArcMovement();
+                break;
             case 'square':
                 this.squareMovement();
                 break;
@@ -637,6 +640,7 @@ export class Enemy {
     
     // Geometric Movement Patterns
     triangleMovement() { return movement.triangleMovement.call(this); }
+    hunterArcMovement() { return movement.hunterArcMovement.call(this); }
 
     calculateTriangleVertices() { return movement.calculateTriangleVertices.call(this); }
 
