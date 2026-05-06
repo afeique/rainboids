@@ -13,6 +13,20 @@ export function takeDamage(damageAmount = this.baseDamage) {
             this.player._reflexesReadyAt = now + 30000;
             this.player.makeInvincible(700);
             if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
+            // 5.76.1 — visual burst: 16 cyan-blue arc particles fan out
+            // from the player so the dodge reads as a deliberate save,
+            // not a confusing missed hit.
+            if (this.particlePool) {
+                for (let i = 0; i < 16; i++) {
+                    const a = (i / 16) * Math.PI * 2;
+                    const p = this.particlePool.get(this.player.x, this.player.y, 'starSparkle');
+                    if (p) {
+                        p.color = '#7fdfff';
+                        p.vel.x = Math.cos(a) * 4;
+                        p.vel.y = Math.sin(a) * 4;
+                    }
+                }
+            }
             return;
         }
     }
@@ -30,6 +44,23 @@ export function takeDamage(damageAmount = this.baseDamage) {
         const absorbed = Math.min(this.player._staticShield, reducedDamage);
         this.player._staticShield -= absorbed;
         reducedDamage -= absorbed;
+        // 5.76.1 — STATIC_FIELD soak feedback: blue crackle particles
+        // and the lighter "shield" sound so the player can tell their
+        // shield ate the hit (vs HP).
+        if (absorbed > 0) {
+            if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
+            if (this.particlePool) {
+                for (let i = 0; i < 6; i++) {
+                    const a = Math.random() * Math.PI * 2;
+                    const p = this.particlePool.get(this.player.x, this.player.y, 'starSparkle');
+                    if (p) {
+                        p.color = '#88ddff';
+                        p.vel.x = Math.cos(a) * 2.5;
+                        p.vel.y = Math.sin(a) * 2.5;
+                    }
+                }
+            }
+        }
     }
     this.player._lastDamageAt = Date.now();
 
@@ -57,6 +88,25 @@ export function takeDamage(damageAmount = this.baseDamage) {
             if (typeof this.events?.emit === 'function') {
                 this.events.emit('ui:show-message', { title: 'LAST STAND', subtitle: 'Saved at 1 HP', duration: 1600 });
                 this.events.emit('audio:powerup');
+                this.events.emit('audio:player-explosion');
+            }
+            // 5.76.1 — radial red flash + screen-shake burst on save.
+            if (typeof this.triggerScreenFlash === 'function') {
+                this.triggerScreenFlash(0.35, 8);
+            }
+            if (typeof this.triggerScreenShake === 'function') {
+                this.triggerScreenShake(20, 14);
+            }
+            if (this.particlePool) {
+                for (let i = 0; i < 24; i++) {
+                    const a = (i / 24) * Math.PI * 2;
+                    const p = this.particlePool.get(this.player.x, this.player.y, 'explosion');
+                    if (p) {
+                        p.color = '#ff4444';
+                        p.vel.x = Math.cos(a) * 5;
+                        p.vel.y = Math.sin(a) * 5;
+                    }
+                }
             }
             return;
         }

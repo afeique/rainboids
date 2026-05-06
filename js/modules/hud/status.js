@@ -865,6 +865,121 @@ export function updateHUD() {
         // Survival timer (bottom-right) + gold readout above it (5.72.0).
         this.drawSurvivalTimer(ctx);
         this.drawBottomRightGold(ctx);
+
+        // 5.76.1 — defense layer indicators (REFLEXES / LAST_STAND /
+        // STATIC_FIELD). Sit on the LEFT side, above the loadout
+        // squares so the player's eye picks them up alongside HP.
+        // Only widgets for owned upgrades render; no clutter for
+        // builds that skipped DEFENSE.
+        this.drawDefenseIndicators(ctx);
+}
+
+// 5.76.1 — defense HUD widgets. Three small icons stacked vertically
+// on the left edge above the loadout squares. Each appears only if
+// the player owns the corresponding upgrade.
+//   • REFLEXES — green ring fills as the 30s cooldown ticks down to
+//                ready; full ring + glow when armed.
+//   • LAST_STAND — ✊ icon. Full-color when armed; greyed once spent.
+//   • STATIC_FIELD — shield meter (vertical bar) showing current /
+//                    cap with the cap = stacks × 2.
+export function drawDefenseIndicators(ctx) {
+    if (!this.player || !this.player.getPowerupStacks) return;
+    const reflexStacks = this.player.getPowerupStacks('REFLEXES');
+    const lastStandStacks = this.player.getPowerupStacks('LAST_STAND');
+    const staticStacks = this.player.getPowerupStacks('STATIC_FIELD');
+    if (reflexStacks + lastStandStacks + staticStacks === 0) return;
+
+    const ICON = 32;
+    const GAP = 8;
+    const baseX = 36;                                  // align with triforce/loadout
+    let baseY = this.canvas.height - 50 - 80 - 24 - ICON; // sit above the loadout row
+    // Push up further if multiple icons stack so they don't overlap loadout.
+    const totalCount = (reflexStacks > 0 ? 1 : 0) + (lastStandStacks > 0 ? 1 : 0) + (staticStacks > 0 ? 1 : 0);
+    baseY -= (totalCount - 1) * (ICON + GAP);
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let y = baseY;
+    if (reflexStacks > 0) {
+        const now = Date.now();
+        const readyAt = this.player._reflexesReadyAt || 0;
+        // 1.0 = ready, 0.0 = just used.
+        const readyFrac = readyAt > now
+            ? Math.max(0, 1 - (readyAt - now) / 30000)
+            : 1;
+        const cx = baseX + ICON / 2;
+        const cy = y + ICON / 2;
+        // Track ring (dim).
+        ctx.beginPath();
+        ctx.arc(cx, cy, ICON / 2 - 2, 0, Math.PI * 2);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(60, 90, 80, 0.6)';
+        ctx.stroke();
+        // Fill ring (cooldown progress).
+        ctx.beginPath();
+        ctx.arc(cx, cy, ICON / 2 - 2, -Math.PI / 2, -Math.PI / 2 + readyFrac * Math.PI * 2);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = readyFrac >= 1 ? '#7FFFB0' : '#44ccaa';
+        if (readyFrac >= 1) {
+            ctx.shadowColor = '#7FFFB0';
+            ctx.shadowBlur = 10;
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Center icon.
+        ctx.font = "16px 'Press Start 2P', monospace";
+        ctx.fillStyle = readyFrac >= 1 ? '#7FFFB0' : 'rgba(127, 255, 176, 0.55)';
+        ctx.fillText('🌀', cx, cy);
+        y += ICON + GAP;
+    }
+    if (lastStandStacks > 0) {
+        const used = !!this.player._lastStandUsed;
+        const cx = baseX + ICON / 2;
+        const cy = y + ICON / 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, ICON / 2 - 2, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = used ? 'rgba(120, 60, 60, 0.5)' : '#ff8888';
+        if (!used) {
+            ctx.shadowColor = '#ff5555';
+            ctx.shadowBlur = 8;
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.font = "16px 'Press Start 2P', monospace";
+        ctx.fillStyle = used ? 'rgba(120, 60, 60, 0.5)' : '#ff8888';
+        ctx.fillText('✊', cx, cy);
+        y += ICON + GAP;
+    }
+    if (staticStacks > 0) {
+        const cap = staticStacks * 2;
+        const cur = Math.max(0, Math.min(cap, this.player._staticShield ?? cap));
+        const frac = cap > 0 ? cur / cap : 0;
+        const cx = baseX + ICON / 2;
+        const cy = y + ICON / 2;
+        // Square outline.
+        ctx.strokeStyle = '#88ccff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(baseX + 2, y + 2, ICON - 4, ICON - 4);
+        // Vertical fill from bottom.
+        const fillH = (ICON - 6) * frac;
+        const grad = ctx.createLinearGradient(0, y + ICON - 3, 0, y + 3);
+        grad.addColorStop(0, '#aae6ff');
+        grad.addColorStop(1, '#3399ff');
+        ctx.fillStyle = grad;
+        ctx.fillRect(baseX + 3, y + ICON - 3 - fillH, ICON - 6, fillH);
+        // Numeric overlay.
+        ctx.font = "9px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        const txt = `${cur|0}/${cap}`;
+        ctx.strokeText(txt, cx, cy);
+        ctx.fillText(txt, cx, cy);
+    }
+    ctx.restore();
 }
 
 // Three loadout squares — Primary, Power, Skill — that sit directly

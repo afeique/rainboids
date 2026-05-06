@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.76.1] - 2026-05-06
+
+Powerup cap retune + defense HUD widgets + capstone toast + sub-wave phase toast + wave-clear recap. Visual feedback pass for the 5.75–5.76 mechanics that work silently.
+
+### Changed
+- **Powerup `maxStacks` retuned** based on per-powerup gameplay analysis (where each stack stops being meaningful):
+  - `BIG_BULLETS` 4 → 3 (4 stacks turn bullets into physics objects).
+  - `PIERCING` 3 → 4 (sub-waves spawn denser groups; 4th pierce is the difference between sweep and waste).
+  - `CRIT_CHANCE` 8 → 6 (6 stacks + base = 50% crit; further is noise).
+  - `SHIELD_BOOST` 5 → 4 (`getEffectiveShield` clamps at 75%; 5th stack is a no-op).
+  - `MEDPACK` 4 → 3, `PAYDAY` 4 → 3, `HEALTH_ORB_DROP_CHANCE` 5 → 4, `MONEY_ORB_DROP_CHANCE` 5 → 4 (drop rate already clamps at 0.95–1.0).
+
+### Added
+- **Defense HUD indicators** (left edge, above the loadout squares). Only render when the player owns the upgrade:
+  - **Reflexes** — green ring fills as the 30s post-use cooldown ticks down to ready; full ring + soft glow when armed.
+  - **Last Stand** — ✊ icon framed by a red glowing ring while armed; greys + dims after consumed.
+  - **Static Field** — vertical shield meter showing `current / cap` with a numeric overlay; fills with a blue gradient.
+- **Defense trigger feedback**:
+  - REFLEXES dodge → 16 cyan-blue arc particles + `audio:shield`.
+  - LAST_STAND save → 24 red explosion particles + screen flash + screen shake + `audio:powerup` + `audio:player-explosion`.
+  - STATIC_FIELD soak → 6 blue crackle sparks + `audio:shield` per absorbed hit.
+- **🎖️ MASTERY UNLOCKED toast.** First time each tier-2 capstone becomes available, a 2.8s toast announces it. Tracked in a `_seenCapstoneUnlocks` set so re-opens don't re-spam. Also re-checked after every shop purchase so the unlock hits the moment the prereq's last stack is bought.
+- **Sub-wave phase toast.** Sub-waves > 0 now emit a `WAVE N · PHASE 2 of 3` 1.6s top-banner so the player notices the next group spawning. Sub-wave 0 keeps the existing WAVE INTRO splash.
+- **Wave-clear recap** in the WAVE COMPLETE message subtitle: `+G GOLD · +N PICKS · MISSION ✓/✗/—`. Renders during the existing 2.4s pre-menu window. Pulls bonus gold + mission state from a per-wave `_waveClearRecap` stash.
+
+---
+
 ## [5.76.0] - 2026-05-06
 
 Big economy + difficulty rebalance: SP currency removed, all DEFENSE upgrades now cost gold, every upgrade tier ~2× cost, late-game HP curve scaled up, damage numbers aggregate per-enemy, and crit numbers zoom toward the camera.

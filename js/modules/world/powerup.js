@@ -93,7 +93,10 @@ export const POWERUP_TYPES = {
         effect: 'bigBullets',
         rarity: 0.2,
         category: 'OFFENSE',
-        maxStacks: 4,
+        // 5.76.1 — 4 → 3. 3 stacks = +6.6 px diameter on top of base
+        // bullet sizes; further stacks make bullets read as physics
+        // objects rather than projectiles.
+        maxStacks: 3,
         description: '+2.2px bullet radius per stack'
     },
     SPEED_BOOST: {
@@ -119,7 +122,10 @@ export const POWERUP_TYPES = {
         effect: 'piercing',
         rarity: 0.12,
         category: 'OFFENSE',
-        maxStacks: 3,
+        // 5.76.1 — 3 → 4. With sub-waves spawning denser groups, the
+        // 4th pierce is the difference between a clean sweep and a
+        // wasted shot on the back row of the cluster.
+        maxStacks: 4,
         description: 'Bullets pass through +1 enemy per stack'
     },
     EXPLOSIVE: {
@@ -145,7 +151,9 @@ export const POWERUP_TYPES = {
         effect: 'critChance',
         rarity: 0.18,
         category: 'OFFENSE',
-        maxStacks: 8,
+        // 5.76.1 — 8 → 6. 6 × 7% + 8% base = 50% crit chance — already
+        // half the shots crit. 56-64% above that diminishes to noise.
+        maxStacks: 6,
         description: '+7% critical hit chance per stack'
     },
     CRIT_DAMAGE: {
@@ -171,7 +179,10 @@ export const POWERUP_TYPES = {
         effect: 'shieldBoost',
         rarity: 0.18,
         category: 'OFFENSE',
-        maxStacks: 5,
+        // 5.76.1 — 5 → 4. getEffectiveShield clamps total at 75%; 4
+        // stacks alone (32%) plus base shielding already pushes near
+        // the cap. The 5th stack would be a no-op for many builds.
+        maxStacks: 4,
         description: '-8% damage taken per stack'
     },
     LONG_RANGE: {
@@ -210,7 +221,9 @@ export const POWERUP_TYPES = {
         effect: 'medpack',
         rarity: 0.18,
         category: 'DROPS',
-        maxStacks: 4,
+        // 5.76.1 — 4 → 3. 3 stacks already adds substantial healing per
+        // orb; with the global health-drop cooldown this saturates fast.
+        maxStacks: 3,
         description: 'More health per orb'
     },
     DOCTOR: {
@@ -236,7 +249,10 @@ export const POWERUP_TYPES = {
         effect: 'payday',
         rarity: 0.13,
         category: 'DROPS',
-        maxStacks: 4,
+        // 5.76.1 — 4 → 3. 3 stacks adds +15g min money per orb on top
+        // of HIGH_ROLLER's max bumps; further stacks compound with the
+        // already-bumped Gold Find economy.
+        maxStacks: 3,
         description: 'More money per orb'
     },
     HIGH_ROLLER: {
@@ -262,7 +278,9 @@ export const POWERUP_TYPES = {
         effect: 'healthOrbDropChance',
         rarity: 0.13,
         category: 'DROPS',
-        maxStacks: 5,
+        // 5.76.1 — 5 → 4. Health drops are gated by a global cooldown
+        // anyway; high stacks of % chance can't push past that floor.
+        maxStacks: 4,
         description: '+5% health orb drop chance per stack'
     },
     MONEY_ORB_DROP_CHANCE: {
@@ -275,7 +293,10 @@ export const POWERUP_TYPES = {
         effect: 'moneyOrbDropChance',
         rarity: 0.13,
         category: 'DROPS',
-        maxStacks: 5,
+        // 5.76.1 — 5 → 4. Money drop rate is clamped at 0.95; with
+        // Gold Find scaling on top, 4 stacks (+20%) is already near
+        // saturation for the rate slot.
+        maxStacks: 4,
         description: '+5% money orb drop chance per stack'
     },
     HEALTH_ORB_DROP_QUANTITY: {

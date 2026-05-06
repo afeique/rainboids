@@ -92,6 +92,18 @@ export function updateWaveSystem() {
         this.game.money += bonusCoins;
         this.player.powerupPicks = (this.player.powerupPicks || 0) + 1;
 
+        // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
+        // the bonus gold + pick info to the message renderer.
+        this._waveClearRecap = {
+            bonusCoins,
+            picks: 1, // wave-clear pick; mission-pick adds in resolveMissionOnWaveClear
+            mission: this.game.mission ? {
+                completed: !!this.game.mission.completed,
+                failed: !!this.game.mission.failed,
+                label: this.game.mission.label,
+            } : null,
+        };
+
         if (this.game.currentWave >= MAX_WAVES) {
             this.completeRun();
             return;
@@ -231,22 +243,28 @@ export function resolveMissionOnWaveClear() {
 }
 
 export function showWaveComplete() {
-    // Show WAVE COMPLETE message with next wave number. Duration is
-    // 2000ms — matches the openShop delay in updateWaveSystem so the
-    // text finishes its fade-out (~last 30%) right before the shop UI
-    // takes over. Visual heads-up + temporal pause between action and
-    // shop interaction.
+    // 5.76.1 — wave-clear recap. The subtitle shows the gold earned,
+    // pick count, and mission outcome on a single line so the player
+    // sees their reward before the powerups menu pops. Pulls from
+    // `_waveClearRecap` stash set by the wave-complete branch.
     const nextWave = this.game.currentWave + 1;
+    const r = this._waveClearRecap || { bonusCoins: 0, picks: 1, mission: null };
+    const picks = r.picks + (r.mission && r.mission.completed ? 1 : 0);
+    const missionTag = !r.mission
+        ? ''
+        : r.mission.completed
+            ? ` · MISSION ✓`
+            : r.mission.failed
+                ? ` · MISSION ✗`
+                : ` · MISSION —`;
+    const subtitle = `+${r.bonusCoins}G  ·  +${picks} PICK${picks === 1 ? '' : 'S'}${missionTag}`;
     this.waveMessage = {
         active: true,
         startTime: Date.now(),
-        duration: 2000,
+        duration: 2400,
         title: 'WAVE COMPLETE!',
-        subtitle: `WAVE ${nextWave} INCOMING...`,
+        subtitle,
     };
-
-    // Also show DOM message as backup
-    // this.uiManager.showMessage('WAVE COMPLETE!', `WAVE ${nextWave} INCOMING...`, this.game.waveCountdownDuration, 'center');
 }
 
 export function startNextWave() {
@@ -360,6 +378,19 @@ function spawnSubWave(idx) {
     }
     this.game.subWaveIndex = idx + 1;
     this.game.lastSubWaveSpawnAt = Date.now();
+
+    // 5.76.1 — phase toast for sub-waves > 0. Sub-wave 0 already
+    // gets the WAVE INTRO splash; the later phases are silent today
+    // and easy to miss. Brief, non-blocking.
+    if (idx > 0 && this.events?.emit) {
+        const total = subWaves.length;
+        this.events.emit('ui:show-message', {
+            title: `WAVE ${this.game.currentWave} · PHASE ${idx + 1} of ${total}`,
+            subtitle: '',
+            duration: 1600,
+            position: 'top',
+        });
+    }
     return true;
 }
 

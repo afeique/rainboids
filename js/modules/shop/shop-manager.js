@@ -191,6 +191,36 @@ export function _buildPowerupsTabItems() {
         this.shopFilteredItems = items;
 }
 
+// 5.76.1 — fire 🎖️ MASTERY UNLOCKED toast the first time each capstone
+// becomes available. Walks every PRIMARY_UPGRADES entry with `requires`
+// and compares against the player's stacks. Tracks shown set on the
+// engine so re-opens don't spam.
+export function checkCapstoneUnlocks() {
+    if (!this.player || !this.player.getPowerupStacks) return;
+    if (!this._seenCapstoneUnlocks) this._seenCapstoneUnlocks = new Set();
+    const all = (typeof PRIMARY_UPGRADES_ALL !== 'undefined') ? PRIMARY_UPGRADES_ALL : null;
+    // Use getPrimaryUpgrades for every weapon to keep this scoped.
+    const weapons = this.PRIMARY_WEAPONS_LIST ? Object.keys(this.PRIMARY_WEAPONS_LIST) : [];
+    for (const weaponId of weapons) {
+        const upgrades = getPrimaryUpgrades(weaponId);
+        for (const upg of upgrades) {
+            if (!upg.requires) continue;
+            const stacks = this.player.getPowerupStacks(upg.requires.id);
+            if (stacks < (upg.requires.stacks || 1)) continue;
+            if (this._seenCapstoneUnlocks.has(upg.id)) continue;
+            this._seenCapstoneUnlocks.add(upg.id);
+            if (this.events?.emit) {
+                this.events.emit('ui:show-message', {
+                    title: '🎖️ MASTERY UNLOCKED',
+                    subtitle: upg.name,
+                    duration: 2800,
+                    position: 'top',
+                });
+            }
+        }
+    }
+}
+
 export function _buildPrimaryTabItems() {
         // PRIMARY tab now shows ONLY upgrades for the currently equipped
         // primary weapon. Weapon SELECTION moved to the pause-menu PRIMARY
@@ -203,12 +233,27 @@ export function _buildPrimaryTabItems() {
         const items = [];
         if (this.player && this.player.activePrimary) {
             const upgrades = getPrimaryUpgrades(this.player.activePrimary);
+            // 5.76.1 — capstone unlock toast. The first time a capstone
+            // becomes available, fire a 🎖️ MASTERY UNLOCKED toast. Track
+            // a "seen" set on the engine so it doesn't re-fire each open.
+            if (!this._seenCapstoneUnlocks) this._seenCapstoneUnlocks = new Set();
             for (const upg of upgrades) {
                 if (upg.requires) {
                     const reqStacks = this.player.getPowerupStacks
                         ? this.player.getPowerupStacks(upg.requires.id)
                         : 0;
                     if (reqStacks < (upg.requires.stacks || 1)) continue; // not unlocked yet
+                    if (!this._seenCapstoneUnlocks.has(upg.id)) {
+                        this._seenCapstoneUnlocks.add(upg.id);
+                        if (this.events?.emit) {
+                            this.events.emit('ui:show-message', {
+                                title: '🎖️ MASTERY UNLOCKED',
+                                subtitle: upg.name,
+                                duration: 2800,
+                                position: 'top',
+                            });
+                        }
+                    }
                 }
                 items.push({
                     id: upg.id,
@@ -418,6 +463,12 @@ export function buyShopItem(itemId) {
             }
 
             this.events.emit('audio:coin');
+            // 5.76.1 — re-check capstone unlocks after every purchase so
+            // the toast fires the moment the prereq is satisfied.
+            checkCapstoneUnlocks.call(this);
+            // Refresh the shop's filtered list so any newly-unlocked
+            // capstone appears immediately without a tab swap.
+            this._rebuildShopCache();
             return true;
 
         } catch (error) {

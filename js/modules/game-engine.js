@@ -995,6 +995,7 @@ export class GameEngine {
     sellShopItem(itemId) { return shop.sellShopItem.call(this, itemId); }
 
     openShop() { return shop.openShop.call(this); }
+    checkCapstoneUnlocks() { return shop.checkCapstoneUnlocks.call(this); }
 
     _rebuildShopCache() { return shop._rebuildShopCache.call(this); }
 
@@ -2147,6 +2148,7 @@ export class GameEngine {
     drawCanvasTriforce(ctx, lives, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }
     drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) { return hudStatus.drawLevelAndCoinsDisplay.call(this, ctx, barX, barY, barHeight); }
     drawEquippedWeaponSquares(ctx, barX, barY, barHeight) { return hudStatus.drawEquippedWeaponSquares.call(this, ctx, barX, barY, barHeight); }
+    drawDefenseIndicators(ctx) { return hudStatus.drawDefenseIndicators.call(this, ctx); }
     triggerWeaponCycleAnim(slot = 'primary') {
         this._weaponCycleAnim = { start: Date.now(), duration: 350, slot };
     }
