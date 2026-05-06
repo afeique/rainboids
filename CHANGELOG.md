@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.74.35] - 2026-05-05
+
+### Changed
+- **Asteroid wireframe edges now have a black stroke outline.** Pre-pass in `drawAsteroidShape` strokes every edge once at `lineWidth = 4.5` in opaque-ish black (`globalAlpha = 0.85`, `lineCap = round`) BEFORE the existing colored bucketed pass paints the visible 2px wireframe on top. Result: every line has a dark halo around it so the asteroid silhouette and 3D structure stay legible even when overlapping a bright nebula cloud or saturated lens-flare star. One extra `beginPath` + `stroke` per asteroid — negligible cost.
+
+---
+
 ## [5.74.34] - 2026-05-05
 
 ### Changed

@@ -695,11 +695,34 @@ export class Asteroid {
         const now = frameClock.now;
 
         // Set constant state once — not 30× per edge
-        ctx.lineWidth = 2;
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
+
+        // 5.74.35 — black underlayer pass. Strokes every edge once at
+        // a thicker line width in opaque black, BEFORE the colored
+        // bucketed pass below paints the visible wireframe on top.
+        // Result: every line gets a dark outline, making the asteroid
+        // wireframe legible even when it overlaps a bright nebula
+        // cloud or saturated lens-flare star. Single beginPath +
+        // stroke — one extra draw call per asteroid, negligible.
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (let i = 0; i < this.edges.length; i++) {
+            const edge = this.edges[i];
+            const v1 = this.projectedVertices[edge[0]];
+            const v2 = this.projectedVertices[edge[1]];
+            if (!v1 || !v2) continue;
+            ctx.moveTo(v1.x, v1.y);
+            ctx.lineTo(v2.x, v2.y);
+        }
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+        ctx.lineWidth = 2;
 
         // Compute per-edge alpha and hue, then group into ~5 depth buckets.
         // Pre-allocated arrays on `this` — zero per-frame allocation.
