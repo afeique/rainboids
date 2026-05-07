@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.22] - 2026-05-06
+
+### Disabled — Distracting starfield decorations
+Per user request, all "fancy" decorative star variants disabled. The starfield is now plain points only — much less busy against the combat layer.
+
+- **Lens-flare stars** (the parallax pinpoints with halos + diffraction spikes) — `nebulaRenderer.draw()` early-returns. Sprites still generated at startup; flip back on by removing the `return`.
+- **Multi-point stars** (`star4`, `star5`, `star6`, `star8`) — removed from spawn pool.
+- **3D solid stars** (`cube`, `octahedron`, `tetrahedron`, `prism`) — removed from spawn pool (the `isBigStar` interestingShapes branch was deleted).
+- **Geometric variants** (`diamond`, `triangle`, `hexagon`) — removed from spawn pool.
+- **Sparkle / burst stars** — pure-decoration sparkle/burst variants no longer render via the Canvas2D special-effects path. Collectible bursts (health/money orbs use `isBurst`) are unaffected.
+- **WebGL atlas redirect**: any already-spawned star with a fancy shape gets force-mapped to the plain `dot` atlas slot in `_tryAddColorStarToWebGL`, so the change takes effect even mid-run. Original mapping is preserved in a one-line override that's trivial to revert.
+
+The starfield ends up as a clean parallax field of plain points — same density, much less visual noise.
+
+---
+
+## [5.79.21] - 2026-05-06
+
+### Fixed — root cause of the missing bullet outline
+Bullets render at ~17 px on screen from a 128 px atlas slot — the GPU minifies the texture to ~14 % scale per axis. Without mipmaps, `LINEAR` minification only samples a 2×2 texel neighborhood per fragment, but the effective minified texel covers a 7×7 atlas region. The 12-px-wide outline ring (~9 % of the slot) was being **aliased away** on most fragments. The body and core (which fill 65 % of the slot) survived the aliasing, so bullets had bodies but no visible stroke. The 5.79.14 + 5.79.20 outline-thickness bumps couldn't fix it — the issue was sampling, not thickness.
+
+**Fix**: generate the full mipmap chain (`gl.generateMipmap`) and switch `MIN_FILTER` from `LINEAR` to `LINEAR_MIPMAP_LINEAR` (trilinear). The GPU now samples a pre-downsampled pyramid where each mip level averages adjacent texels, preserving the outline ring's contribution at every render size. Atlas dimensions are 1024×128 (both POT) so `generateMipmap` works without restriction.
+
+---
+
+## [5.79.20] - 2026-05-06
+
+### Fixed
+- **Bullet black outline now actually visible.** Atlas outline thickness was 5 px in a 128-px slot. With bullets rendering at 17–25 px on screen (atlas-to-screen ratio ~14 %), the outline projected to 0.7 screen pixels — sub-pixel, antialiased to invisible. Bumped to **12 px in the atlas** → ~1.7 screen pixels of black ring at typical bullet size. Body radius dropped 46 → 42 in the atlas to make room within the slot, and the renderer's quad scale formula updated 128/96 → 128/84 so the caller's intended bullet size still lands correctly on screen.
+
+---
+
 ## [5.79.19] - 2026-05-06
 
 ### Changed — Tighten kill-streak runaway loop

@@ -268,15 +268,38 @@ export class WebGLBulletRenderer {
         this._setupAttribs();
         gl.bindVertexArray(null);
 
-        // Atlas texture. Linear filtering gives anti-aliased edges when
-        // bullets render at non-pixel-aligned positions.
+        // Atlas texture.
+        //
+        // 5.79.21 — ROOT CAUSE FIX for the missing bullet outline:
+        //   We previously used `LINEAR` minification with no mipmaps.
+        //   When a bullet renders at ~17 screen px from a 128-px atlas
+        //   slot, the GPU minifies the texture to ~14% scale. Without
+        //   mipmaps, `LINEAR` only samples a 2×2 texel neighborhood
+        //   per fragment — out of a 7.5×7.5 effective texel region.
+        //   The 12-px-wide outline ring (~9% of the slot) was aliased
+        //   away on most fragments, so the outline was invisible at
+        //   typical bullet render sizes. The body + core (which fill
+        //   65% of the slot) survived the aliasing, but the thin
+        //   outline didn't.
+        //
+        //   Fix: generate the full mipmap chain via
+        //   `gl.generateMipmap()`, switch MIN_FILTER to
+        //   `LINEAR_MIPMAP_LINEAR` (trilinear). Now the GPU samples a
+        //   pre-downsampled pyramid where each mip level averages
+        //   adjacent atlas texels — the outline ring's contribution
+        //   is preserved through all the downsamples and shows up as
+        //   a proper black ring at every render size.
+        //
+        //   Atlas dimensions are 1024×128 — both POT, so generateMipmap
+        //   works without restriction.
         this.atlasCanvas = buildBulletAtlas();
         this.atlasTex = gl.createTexture();
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.atlasCanvas);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -392,7 +415,11 @@ export class WebGLBulletRenderer {
         // 5.79.12 — `aspect > 1` stretches the quad along its rotation
         //   axis (height) for an elongated bullet shape. `angle` then
         //   rotates the quad to align the long axis with travel.
-        const sizeScaled = size * (128 / 96);
+        // 5.79.20 — Atlas BODY_R is now 42 (was 46/48), body diameter
+        //   84 in the 128 slot. Scale factor 128/84 ≈ 1.524 so the
+        //   caller's `size` lands as the rendered body diameter; the
+        //   12-px outline ring extends beyond it for visibility.
+        const sizeScaled = size * (128 / 84);
         data[base + 0]  = x;
         data[base + 1]  = y;
         data[base + 2]  = sizeScaled;

@@ -227,6 +227,15 @@ class NebulaRenderer {
      */
     draw(ctx, cameraX, cameraY, driftX = 0, driftY = 0, rotation = 0, viewW = 0, viewH = 0) {
         if (!this.generated) return;
+        // 5.79.22 — Lens-flare stars disabled per user request. They were
+        //   bright twinkling pinpoints with halos + diffraction spikes
+        //   layered over the parallax starfield, and the player found
+        //   them distracting against busy combat scenes. The sprites
+        //   are still generated at startup (`generate()` runs as before)
+        //   so flipping this back on is a one-line change. To re-enable,
+        //   delete this `return`.
+        return;
+        // eslint-disable-next-line no-unreachable
         const halfW = (viewW || this.fieldWidth) / 2;
         const halfH = (viewH || this.fieldHeight) / 2;
         const now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;

@@ -949,8 +949,18 @@ export class GameEngine {
     _tryAddColorStarToWebGL(star) {
         if (!this.starfieldRenderer.supported) return;
         if (star.isCollectible) return;          // health/money orbs stay on Canvas
-        const slotKey = (star.shape === 'circle' || star.shape === 'point') ? 'dot' : star.shape;
+        // 5.79.22 — All decorative star shapes collapsed to plain `dot`
+        //   per user request. Multi-point stars, 3D solids, and the
+        //   geometric variants (diamond/triangle/hexagon) were
+        //   distracting against busy combat scenes. Existing stars in
+        //   the pool keep their `shape` field (so this is one-line
+        //   reversible: drop the override and let the original mapping
+        //   resume), they just all render through the dot slot. The
+        //   sparkle/burst Canvas2D path is also disabled below in
+        //   color-star.js#draw.
+        let slotKey = (star.shape === 'circle' || star.shape === 'point') ? 'dot' : star.shape;
         if (!WEBGL_STAR_SHAPES.has(slotKey)) return;  // sparkle/burst stay on Canvas
+        slotKey = 'dot';
         const rgba = this._parseStarColor(star.color);
         const parallax = Math.pow(star.z, 1.8) * 0.12;
         const sizeMul = star.sizeVariation || 1;

@@ -51,12 +51,14 @@ export const BULLET_ATLAS_SLOTS = {
 //   - outline: ~3 px ring outside body
 //   - core:    ~18% of slot   → ~22 px (bright center highlight)
 // Leaves padding so a unit-quad scaled up to 2× stays inside the slot.
-const BODY_R   = 46;
-// 5.79.14 — Outline thickness 3 → 5 px so every bullet has a stronger
-//   black edge (user noted bullets look stale in WebGL — the outline
-//   was too subtle). Body radius dropped 48 → 46 to make room for the
-//   wider outline within the same slot budget.
-const OUTLINE  = 5;
+const BODY_R   = 42;
+// 5.79.20 — Outline thickness 5 → 12 px in the atlas. Bullets render
+//   at ~17-25 px on screen; the atlas-to-screen ratio is ~14%. With
+//   OUTLINE=5 the on-screen stroke was ~0.7 px (sub-pixel,
+//   antialiased to invisible). 12 px in the atlas → ~1.7 screen px,
+//   visibly black around every bullet. Body radius dropped 46 → 42
+//   to give the wider outline room within the 64-px slot half-width.
+const OUTLINE  = 12;
 const CORE_R   = 22;
 
 /** Bake the bullet atlas into an offscreen canvas. */

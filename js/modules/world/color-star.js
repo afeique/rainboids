@@ -45,22 +45,13 @@ export class ColorStar {
         if (this.z >= 2.0) {
             this.shape = 'point';
             this.isBigStar = false;
-        } else if (isBigStar) {
-            // 5.74.22 — 3D solid shapes (cube / octahedron / tetrahedron /
-            // prism) added to the big-star pool. They render through the
-            // same WebGL atlas slots and get the same rotation + saturation
-            // pass as the 2D shapes, so the field gains depth variety
-            // without any per-frame cost.
-            const interestingShapes = [
-                'star4', 'star5', 'star6', 'star8',
-                'hexagon', 'diamond', 'triangle',
-                'sparkle', 'burst',
-                'cube', 'octahedron', 'tetrahedron', 'prism',
-            ];
-            this.shape = Math.random() < 0.8 ?
-                        interestingShapes[Math.floor(Math.random() * interestingShapes.length)] :
-                        STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
         } else {
+            // 5.79.22 — `isBigStar` interestingShapes pool (multi-point
+            //   stars + 3D solids) disabled per user request. All stars
+            //   now pick from the trimmed STAR_SHAPES pool which is
+            //   point/circle only. To revive the fancy shapes, paste
+            //   back the original `else if (isBigStar) { ... }` branch
+            //   from git history (see 5.74.22 commit).
             this.shape = STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
         }
         
@@ -239,15 +230,22 @@ export class ColorStar {
     
     draw(ctx) {
         if (!this.active) return;
-        
+
         // Calculate final opacity for rendering
         this.depthOpacity = Math.min(1, 0.5 + Math.pow(this.z / 4, 1.2));
         this.finalOpacity = this.opacity * this.depthOpacity;
-        
-        // Complex stars always use direct rendering for special effects
-        if (this.isBurst || this.shape === 'sparkle' || this.shape === 'burst') {
+
+        // 5.79.22 — Decorative sparkle/burst variants disabled per user
+        //   request. Only collectibles (health/money orbs) still take
+        //   the special-effects drawDirect path; pure-decoration
+        //   sparkle/burst stars are skipped entirely. To revive,
+        //   change the gate back to `this.isBurst || this.shape === ...`.
+        if (this.isBurst) {
             this.drawDirect(ctx);
             return;
+        }
+        if (this.shape === 'sparkle' || this.shape === 'burst') {
+            return; // skip decoration — was drawing flashy rays
         }
         
         // Simple stars will be handled by depth batch renderer

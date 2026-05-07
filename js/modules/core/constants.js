@@ -312,13 +312,25 @@ export function speedrunTierFor(elapsedMs) {
     return SPEEDRUN_TIERS[SPEEDRUN_TIERS.length - 1];
 }
 
+// 5.79.22 — Decorative star shape pool trimmed to simple points only,
+//   per user request. The fancy variants (multi-point, geometric,
+//   sparkle/burst) were distracting against the foreground combat.
+//   Newly-spawned stars only pick from `point` / `circle`. Already-
+//   spawned stars keep their original shape but get redirected to
+//   the `dot` atlas slot in game-engine.js#_tryAddColorStarToWebGL,
+//   so the entire field renders as plain points either way.
+//   Original pool retained in comment below for one-line revert.
+// const STAR_SHAPES = [
+//     'point', 'point', 'point', 'point',
+//     'diamond', 'diamond',
+//     'star4', 'star4',
+//     'star5', 'star6',
+//     'star8',
+//     'triangle', 'hexagon',
+//     'circle',
+//     'sparkle', 'burst'
+// ];
 export const STAR_SHAPES = [
-    'point', 'point', 'point', 'point',  // Most common - simple points
-    'diamond', 'diamond',                // Common diamonds
-    'star4', 'star4',                    // 4-pointed stars
-    'star5', 'star6',                    // 5 and 6-pointed stars
-    'star8',                             // 8-pointed star
-    'triangle', 'hexagon',               // Geometric shapes
-    'circle',                            // Basic shapes
-    'sparkle', 'burst'                   // Special effects
+    'point', 'point', 'point', 'point', 'point',
+    'circle',
 ]; 
