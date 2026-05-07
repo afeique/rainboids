@@ -599,7 +599,8 @@ button:not([disabled]),
     text-align: center;
     padding: 14px 18px 14px 34px;
     width: 50%;
-    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-family: 'Silkscreen', monospace;
+    /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
     font-size: 18px;
     font-weight: 500;
     line-height: 1.35;
@@ -729,7 +730,8 @@ button:not([disabled]),
     padding: 0 8px 4px;
     background: url('../sprites/keys/EMPTY1.png') center/contain no-repeat;
     image-rendering: pixelated;
-    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-family: 'Silkscreen', monospace;
+    /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
     font-size: 24px;
     font-weight: 700;
     letter-spacing: 0.4px;
@@ -851,7 +853,8 @@ button:not([disabled]),
     height: 48px;
     min-width: 60px;
     padding: 0 12px;
-    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-family: 'Silkscreen', monospace;
+    /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
     font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.5px;
@@ -872,7 +875,9 @@ button:not([disabled]),
 
 .kbd-or {
     color: #8090a0;
-    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-family: 'Silkscreen', monospace;
+    text-transform: uppercase;
+    /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
     font-size: 12px;
     font-style: italic;
     padding: 0 2px;
@@ -882,7 +887,8 @@ button:not([disabled]),
    page header per user's 5.79.39 directive. */
 .kbd-action {
     color: #f0f4fa;
-    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-family: 'Silkscreen', monospace;
+    /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
     font-size: 15px;
     font-weight: 500;
     line-height: 1.45;
@@ -899,7 +905,8 @@ button:not([disabled]),
     padding-top: 14px;
     border-top: 1px dashed rgba(255, 255, 255, 0.10);
     color: #a8b0bc;
-    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-family: 'Silkscreen', monospace;
+    /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
     font-size: 20px;
     font-weight: 400;
     letter-spacing: 0.3px;
@@ -1070,7 +1077,8 @@ button:not([disabled]),
 .pause-tab-subtitle {
     margin: -8px auto 16px;
     color: #9aa3b3;
-    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-family: 'Silkscreen', monospace;
+    /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
     font-size: 12px;
     font-style: italic;
     letter-spacing: 0.4px;

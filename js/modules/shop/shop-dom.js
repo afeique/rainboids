@@ -144,6 +144,12 @@ function actualCostFor(item, currentStacks) {
         if (currentStacks === 1) return 3000;
         return 5000;
     }
+    // 5.79.53 — Linear stack-scaling for SP-priced powerups. Mirrors
+    //   the formula in shop-manager.buyShopItem so the displayed
+    //   cost matches what gets charged.
+    if (item.stackCostIncrement) {
+        return item.cost + currentStacks * item.stackCostIncrement;
+    }
     return item.cost;
 }
 
@@ -158,6 +164,11 @@ function sellRefundFor(item, currentStacks) {
         if (currentStacks === 1) baseCost = 1500;
         else if (currentStacks === 2) baseCost = 3000;
         else baseCost = 5000;
+    } else if (item.stackCostIncrement) {
+        // 5.79.53 — Refund the cost the player paid for the most
+        //   recent stack: cost(stack N-1) = base + (N-1) × increment.
+        const lastStackIdx = Math.max(0, currentStacks - 1);
+        baseCost = item.cost + lastStackIdx * item.stackCostIncrement;
     }
     return baseCost;
 }

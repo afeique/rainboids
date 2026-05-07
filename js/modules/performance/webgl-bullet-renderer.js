@@ -32,7 +32,13 @@ import { buildBulletAtlas, BULLET_ATLAS_SLOTS } from './webgl-bullet-atlas.js';
 //   8,9   uvOffset (atlas slot top-left)
 //  10,11  uvScale  (atlas slot dimensions)
 //  12     angle    (radians; enemy bullets rotate, player bullets pass 0)
-const FLOATS_PER_INSTANCE = 13;
+// 5.79.52 — Added a 14th per-instance float `outlineScale`. Bullets
+//   pass a multiplier on the atlas's outline mask: <1 thins the
+//   black stroke, >1 thickens it (saturates AA edges earlier).
+//   Used so player bullets get a softer outline (cleaner readable
+//   color) and enemy bullets get a heavier outline (silhouette
+//   pops against bright nebula / explosions).
+const FLOATS_PER_INSTANCE = 14;
 const BYTES_PER_INSTANCE = FLOATS_PER_INSTANCE * 4;
 
 const VERTEX_SHADER = `#version 300 es
@@ -45,12 +51,14 @@ in vec4 a_color;
 in vec2 a_uvOffset;
 in vec2 a_uvScale;
 in float a_angle;
+in float a_outlineScale;
 
 uniform vec2 u_camera;
 uniform vec2 u_viewport;
 
 out vec4 v_color;
 out vec2 v_uv;
+out float v_outlineScale;
 
 void main() {
     float c = cos(a_angle);
@@ -64,6 +72,7 @@ void main() {
     gl_Position = vec4(clip, 0.0, 1.0);
     v_color = a_color;
     v_uv = a_uvOffset + a_quadUV * a_uvScale;
+    v_outlineScale = a_outlineScale;
 }
 `;
 
@@ -72,6 +81,7 @@ precision mediump float;
 
 in vec4 v_color;
 in vec2 v_uv;
+in float v_outlineScale;
 
 uniform sampler2D u_atlas;
 
@@ -101,7 +111,11 @@ out vec4 fragColor;
 //     blended weakly when the body bled into the outline texel.
 void main() {
     vec4 tex = texture(u_atlas, v_uv);
-    float aOut  = tex.r;
+    // 5.79.52 — Per-instance outline scale: <1 fades the stroke
+    //   (player bullets keep the colored body more legible), >1
+    //   saturates AA edges earlier (enemy bullets get a thicker
+    //   silhouette against bright backdrops).
+    float aOut  = clamp(tex.r * v_outlineScale, 0.0, 1.0);
     float aBody = tex.g;
     float aCore = tex.b;
     if (tex.a < 0.01) discard;
@@ -339,12 +353,13 @@ export class WebGLBulletRenderer {
         gl.enableVertexAttribArray(aQuadUV);
         gl.vertexAttribPointer(aQuadUV, 2, gl.FLOAT, false, QSTRIDE, 2 * 4);
 
-        const aPos     = gl.getAttribLocation(program, 'a_pos');
-        const aSize    = gl.getAttribLocation(program, 'a_size');
-        const aColor   = gl.getAttribLocation(program, 'a_color');
-        const aUvOff   = gl.getAttribLocation(program, 'a_uvOffset');
-        const aUvScale = gl.getAttribLocation(program, 'a_uvScale');
-        const aAngle   = gl.getAttribLocation(program, 'a_angle');
+        const aPos          = gl.getAttribLocation(program, 'a_pos');
+        const aSize         = gl.getAttribLocation(program, 'a_size');
+        const aColor        = gl.getAttribLocation(program, 'a_color');
+        const aUvOff        = gl.getAttribLocation(program, 'a_uvOffset');
+        const aUvScale      = gl.getAttribLocation(program, 'a_uvScale');
+        const aAngle        = gl.getAttribLocation(program, 'a_angle');
+        const aOutlineScale = gl.getAttribLocation(program, 'a_outlineScale');
         gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceVbo);
         const ISTRIDE = BYTES_PER_INSTANCE;
         let off = 0;
@@ -360,6 +375,7 @@ export class WebGLBulletRenderer {
         setInst(aUvOff, 2);
         setInst(aUvScale, 2);
         setInst(aAngle, 1);
+        setInst(aOutlineScale, 1);
     }
 
     /** Resize the bullet canvas drawing buffer. Engine calls this from
@@ -400,7 +416,7 @@ export class WebGLBulletRenderer {
      * @returns {boolean} true if pushed, false if buffer full or shape
      *                    unknown.
      */
-    pushBullet(shape, x, y, size, color, alpha, angle = 0, aspect = 1) {
+    pushBullet(shape, x, y, size, color, alpha, angle = 0, aspect = 1, outlineScale = 1) {
         if (this.instanceCount >= this.maxInstances) return false;
         const slot = BULLET_ATLAS_SLOTS[shape];
         if (!slot) return false;
@@ -418,9 +434,10 @@ export class WebGLBulletRenderer {
         // 5.79.32 — Atlas BODY_R is now 38 (was 42), body diameter 76
         //   in the 128 slot. Scale factor 128/76 ≈ 1.684 so the
         //   caller's `size` lands as the rendered body diameter; the
-        //   22-px outline ring extends beyond it for visibility — much
-        //   thicker stroke that reads cleanly even at aspect=1.4
-        //   (enemy bullets).
+        //   22-px outline ring extends beyond it for visibility.
+        // 5.79.52 — `outlineScale` is a per-bullet multiplier on the
+        //   outline mask (slot 13). Defaults to 1 so legacy callers
+        //   are unaffected.
         const sizeScaled = size * (128 / 76);
         data[base + 0]  = x;
         data[base + 1]  = y;
@@ -435,6 +452,7 @@ export class WebGLBulletRenderer {
         data[base + 10] = slot.uScale;
         data[base + 11] = slot.vScale;
         data[base + 12] = angle;
+        data[base + 13] = outlineScale;
         this.instanceCount++;
         return true;
     }

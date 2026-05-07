@@ -622,6 +622,13 @@ export class EnemyBullet {
                     renderAngle = 0;
                 }
             }
+            // 5.79.52 — `outlineScale = 1.55` thickens the black stroke
+            //   on enemy bullets so they pop against bright nebula
+            //   regions and explosion fireballs. The aspect=1.4 stretch
+            //   already thinned the outline along the long axis (a
+            //   12-px atlas ring becomes ~1.4× shorter on the long side
+            //   after the elongated quad scales it), so a bump back up
+            //   here gets the perceived stroke weight back to par.
             bulletRenderer.pushBullet(
                 shapeForGL,
                 this.x, this.y,
@@ -630,6 +637,7 @@ export class EnemyBullet {
                 opacity,
                 renderAngle,
                 /*aspect=*/1.4,
+                /*outlineScale=*/1.55,
             );
             ctx.restore();
             return;

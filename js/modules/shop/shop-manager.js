@@ -175,6 +175,13 @@ export function _rebuildShopCache() {
 // 99 is effectively unlimited (no run will hit it), and per-powerup
 // caps can be added in POWERUP_TYPES later if specific powerups need
 // real limits (Crit Chance >100%, Multi-Shot 3, etc).
+// 5.79.53 — Powerup cost rebalance. Initial purchase is 3 SP across
+//   the board (was 1) so the player can grab Rapid Fire / Multi Shot
+//   sooner without trivializing the SP economy. `stackCostIncrement`
+//   scales subsequent stacks linearly: stack 0 = base, stack 1 = base
+//   + inc, stack 2 = base + 2*inc, etc. With base 3 + inc 2 the
+//   curve runs 3, 5, 7, 9, 11... — cheap to break into a powerup,
+//   meaningful to mass-stack it.
 export function _buildPowerupsTabItems() {
         const items = [];
         for (const [id, config] of Object.entries(POWERUP_TYPES)) {
@@ -184,7 +191,8 @@ export function _buildPowerupsTabItems() {
                 name: config.name || id,
                 description: config.description || '',
                 icon: config.icon || '⚡',
-                cost: 1,
+                cost: 3,
+                stackCostIncrement: 2,
                 maxStacks: config.maxStacks ?? 99,
                 category: 'POWERUPS',
                 currency: 'PICKS',
@@ -431,6 +439,10 @@ export function buyShopItem(itemId) {
                 if (currentStacks === 0) actualCost = 1500;
                 else if (currentStacks === 1) actualCost = 3000;
                 else if (currentStacks === 2) actualCost = 5000;
+            } else if (item.stackCostIncrement) {
+                // 5.79.53 — Linear stack-scaling for SP-priced powerups.
+                //   actualCost = base + stacks × increment.
+                actualCost = item.cost + currentStacks * item.stackCostIncrement;
             }
 
             // 5.78.0 — picks renamed to SP. The SP and PICKS currency

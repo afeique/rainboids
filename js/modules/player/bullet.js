@@ -369,8 +369,17 @@ export class Bullet {
             // Push (x, y, size, color, alpha). Size is the bullet's
             // body diameter; the renderer scales the quad to give
             // exactly that pixel size on screen.
+            // 5.79.52 — `outlineScale = 0.55` thins the black stroke
+            //   on player bullets so the colored body reads through
+            //   more cleanly. The atlas's outline ring stays the
+            //   same width spatially; the per-instance multiplier
+            //   just attenuates the alpha contribution so AA edges
+            //   fall off sooner, giving a softer silhouette.
             const dia = visualData.size * 2.4;
-            bulletRenderer.pushBullet(visualData.shape, this.x, this.y, dia, visualData.color, fade);
+            bulletRenderer.pushBullet(
+                visualData.shape, this.x, this.y, dia, visualData.color, fade,
+                /*angle=*/0, /*aspect=*/1, /*outlineScale=*/0.55,
+            );
             ctx.restore();
             return;
         }
