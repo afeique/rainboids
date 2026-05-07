@@ -428,25 +428,25 @@ export class UIManager {
                 accent: 'orange',
                 iconPath: 'M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 Z M12 8 A4 4 0 1 0 12 16 A4 4 0 1 0 12 8 Z M12 11 A1 1 0 1 0 12 13 A1 1 0 1 0 12 11 Z',
                 rows: [
-                    { action: 'Aim reticle', keys: [
-                        { kind: 'text', label: 'Mouse', wide: true },
+                    { action: 'Aim Reticle', keys: [
+                        { kind: 'mouse', side: 'none' },
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWLEFT.png', alt: 'Left' },
                         { kind: 'sprite', file: 'ARROWRIGHT.png', alt: 'Right' },
                     ] },
-                    { action: 'Fire primary weapon', keys: [
+                    { action: 'Fire Primary Weapon', keys: [
                         { kind: 'mouse', side: 'left' },
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWUP.png', alt: 'Up' },
                     ] },
                     { action: 'Fire Power Weapon', keys: [
-                        { kind: 'sprite', file: 'SPACE.png', alt: 'Space' },
-                        { kind: 'or' },
                         { kind: 'mouse', side: 'right' },
+                        { kind: 'or' },
+                        { kind: 'sprite', file: 'SPACE.png', alt: 'Space' },
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWDOWN.png', alt: 'Down' },
                     ] },
-                    { action: 'Activate equipped skill', keys: [
+                    { action: 'Activate Skill', keys: [
                         { kind: 'sprite', file: 'Q.png', alt: 'Q' },
                     ] },
                 ],
@@ -456,13 +456,13 @@ export class UIManager {
                 accent: 'pink',
                 iconPath: 'M13 2 L4 14 H10 L9 22 L20 9 H13 Z',
                 rows: [
-                    { action: 'Cycle primary weapon', keys: [
+                    { action: 'Cycle Primary Weapon', keys: [
                         { kind: 'sprite', file: 'R.png', alt: 'R' },
                     ] },
-                    { action: 'Cycle power weapon', keys: [
+                    { action: 'Cycle Power Weapon', keys: [
                         { kind: 'sprite', file: 'F.png', alt: 'F' },
                     ] },
-                    { action: 'Cycle defense skill', keys: [
+                    { action: 'Cycle Skill', keys: [
                         { kind: 'sprite', file: 'E.png', alt: 'E' },
                     ] },
                 ],
@@ -472,10 +472,11 @@ export class UIManager {
                 accent: 'gold',
                 iconPath: 'M7 5 H10 V19 H7 Z M14 5 H17 V19 H14 Z',
                 rows: [
-                    { action: 'Pause / Resume', keys: [
-                        { kind: 'text', label: 'ESC' },
+                    { action: 'Pause or Resume', keys: [
+                        { kind: 'spriteCluster', files: ['ESC.png'], alt: 'ESC' },
+                        // { kind: 'spriteCluster', files: ['E.png', 'S.png', 'C.png'], alt: 'ESC' },
                     ] },
-                    { action: 'Stats screen', keys: [
+                    { action: 'Stats Screen', keys: [
                         { kind: 'text', label: '`' },
                     ] },
                 ],
@@ -557,7 +558,9 @@ export class UIManager {
 
         const footer = document.createElement('div');
         footer.className = 'controls-footer';
-        footer.appendChild(this._buildKeyTile({ kind: 'text', label: 'ESC', small: true }, SPRITE_DIR));
+
+        footer.appendChild(this._buildKeyTile({ kind: 'spriteCluster', files: ['ESC.png'], alt: 'ESC', small: true }, SPRITE_DIR));
+        // footer.appendChild(this._buildKeyTile({ kind: 'spriteCluster', files: ['E.png', 'S.png', 'C.png'], alt: 'ESC', small: true }, SPRITE_DIR));
         const hint = document.createElement('span');
         hint.className = 'controls-footer-text';
         hint.textContent = 'to resume play';
@@ -593,6 +596,27 @@ export class UIManager {
             span.textContent = 'or';
             return span;
         }
+        if (k.kind === 'spriteCluster') {
+            // 5.79.50 — Composite multi-letter key built from individual
+            //   Jumbo letter sprites (used for ESC = E + S + C). Letters
+            //   sit flush together so the cluster reads as a single
+            //   tactile key while reusing the existing single-letter
+            //   pixel-art assets.
+            const wrap = document.createElement('span');
+            const cls = ['kbd-sprite-cluster'];
+            if (k.small) cls.push('kbd-sprite-cluster-small');
+            wrap.className = cls.join(' ');
+            wrap.setAttribute('aria-label', k.alt || '');
+            for (const file of (k.files || [])) {
+                const img = document.createElement('img');
+                img.className = 'kbd';
+                img.src = dir + file;
+                img.alt = '';
+                img.decoding = 'sync';
+                wrap.appendChild(img);
+            }
+            return wrap;
+        }
         if (k.kind === 'wasd') {
             const wrap = document.createElement('span');
             wrap.className = 'kbd-cluster kbd-wasd';
@@ -622,13 +646,16 @@ export class UIManager {
         return document.createTextNode(String(k.label || ''));
     }
 
-    // 5.79.42 — Mouse-button SVG key tile. Original silhouette (no
-    //   external asset reproduction): pear-shaped body with a divider
-    //   between the L/R buttons and the body, a small scroll-wheel
-    //   rectangle at center-top, and the active button filled with
-    //   the accent color via `currentColor`. `side` is 'left' or
-    //   'right'; the corresponding button gets the active fill while
-    //   the other stays as outline only.
+    // 5.79.42 — Mouse-button SVG key tile. Original silhouette:
+    //   pear-shaped body with a divider between the L/R buttons and
+    //   the body, a small scroll-wheel rectangle at center-top.
+    //   `side` is 'left' / 'right' / 'none':
+    //     - 'left'  → left button filled with `currentColor` (cyan).
+    //     - 'right' → right button filled with `currentColor` (orange).
+    //     - 'none'  → neither button highlighted; just the silhouette,
+    //                 dividers, and wheel. Used by the "Aim reticle"
+    //                 binding (5.79.45) where the user mouses without
+    //                 a click.
     //
     //   Built with createElementNS so the SVG renders inline without
     //   any string-interpolated HTML (security-analyzer-friendly).
@@ -638,11 +665,16 @@ export class UIManager {
         wrap.className = 'kbd-mouse-svg';
         if (side === 'left')  wrap.classList.add('kbd-mouse-l');
         if (side === 'right') wrap.classList.add('kbd-mouse-r');
+        if (side === 'none')  wrap.classList.add('kbd-mouse-none');
 
         const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('viewBox', '0 0 24 32');
         svg.setAttribute('fill', 'none');
-        svg.setAttribute('aria-label', side === 'left' ? 'Left mouse button' : 'Right mouse button');
+        const ariaLabel =
+            side === 'left'  ? 'Left mouse button'  :
+            side === 'right' ? 'Right mouse button' :
+                               'Mouse';
+        svg.setAttribute('aria-label', ariaLabel);
 
         // Mouse body silhouette — symmetric pear shape.
         const body = document.createElementNS(SVG_NS, 'path');
@@ -654,17 +686,19 @@ export class UIManager {
         body.setAttribute('class', 'mouse-body');
         svg.appendChild(body);
 
-        // Active button highlight — top-half wedge on the active side.
-        const button = document.createElementNS(SVG_NS, 'path');
-        if (side === 'left') {
-            button.setAttribute('d',
-                'M 12 4 C 7 4 5 7 5 12 L 5 14 L 12 14 Z');
-        } else {
-            button.setAttribute('d',
-                'M 12 4 L 12 14 L 19 14 L 19 12 C 19 7 17 4 12 4 Z');
+        // Active button highlight — only drawn for left/right.
+        if (side === 'left' || side === 'right') {
+            const button = document.createElementNS(SVG_NS, 'path');
+            if (side === 'left') {
+                button.setAttribute('d',
+                    'M 12 4 C 7 4 5 7 5 12 L 5 14 L 12 14 Z');
+            } else {
+                button.setAttribute('d',
+                    'M 12 4 L 12 14 L 19 14 L 19 12 C 19 7 17 4 12 4 Z');
+            }
+            button.setAttribute('class', 'mouse-button-active');
+            svg.appendChild(button);
         }
-        button.setAttribute('class', 'mouse-button-active');
-        svg.appendChild(button);
 
         // Vertical divider between the two top buttons.
         const vDiv = document.createElementNS(SVG_NS, 'line');
@@ -693,6 +727,28 @@ export class UIManager {
         wheel.setAttribute('rx', '0.8');
         wheel.setAttribute('class', 'mouse-wheel');
         svg.appendChild(wheel);
+
+        // 5.79.45 — Motion arcs flanking the body convey "the mouse
+        //   is being moved" for the neutral aim-reticle binding.
+        //   Two short curves on each side, bowed outward at the
+        //   body's vertical midline. Drawn into a slightly wider
+        //   viewBox (-3 0 30 32) so the arcs sit just outside the
+        //   pear-shape silhouette without clipping.
+        if (side === 'none') {
+            svg.setAttribute('viewBox', '-3 0 30 32');
+            const arcs = [
+                'M 3 11 Q 0 16 3 21',   // left outer
+                'M 3 13 Q 1 16 3 19',   // left inner
+                'M 21 11 Q 24 16 21 21', // right outer
+                'M 21 13 Q 23 16 21 19', // right inner
+            ];
+            for (const d of arcs) {
+                const arc = document.createElementNS(SVG_NS, 'path');
+                arc.setAttribute('d', d);
+                arc.setAttribute('class', 'mouse-motion');
+                svg.appendChild(arc);
+            }
+        }
 
         wrap.appendChild(svg);
         return wrap;
