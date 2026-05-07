@@ -441,7 +441,9 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       ├── world/             # Game world entities and environment
 │       │   ├── asteroid.js    #   Asteroid entity (3D wireframe, splitting)
 │       │   ├── particle.js    #   Particle entity (explosions, sparks, etc.)
-│       │   ├── color-star.js  #   Collectible orbs (health, money)
+│       │   ├── color-star.js  #   Decorative starfield + health orbs (collectible)
+│       │   ├── gold-coin.js   #   Floating gold pixel coin (drift, no homing, 120s)
+│       │   ├── gold-shape.js  #   Floating gold shape orb (drift, no homing, 120s)
 │       │   ├── background-star.js # Parallax starfield
 │       │   ├── line-debris.js #   Wireframe debris fragments
 │       │   ├── powerup.js     #   Powerup pickup entity
@@ -468,6 +470,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── event-setup.js #   All event listeners: input, shop, cheats, resize
 │       │   ├── radial-menu.js #   Held E/R/F radial picker for primary/power/skill
 │       │   ├── stats-overlay.js # Diablo-style stats screen (` key, 5.79.0)
+│       │   ├── icons.js       #   SVG icon registry (53 paths) + DOM/Canvas renderers (5.79.37)
 │       │   └── hint-system.js #   Onboarding hint toasts
 │       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle renderer + atlas
 │       └── debug/             # VFX telemetry (per-frame effect state recording)

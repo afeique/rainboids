@@ -76,31 +76,50 @@ export const SOUND_DEFS = {
         ],
     },
 
-    // ── Coin / money pickup — crystalline ascending tinkle ───────────
-    // Three-tone bell stack tuned to a bright major-ish interval.
+    // ── Coin / money pickup — satisfying 4-layer bell ka-ching ───────
+    // 5.79.28 — Reworked into a fuller "ka-ching" bell. Old chime was
+    //   thin (3 layers, no body). New stack adds a sub-octave bell
+    //   for low-end weight, keeps the rising root, layers a perfect
+    //   fifth on top for harmonic richness, and ends with a high
+    //   sparkle tail. Both early layers get `p_env_punch` so the
+    //   transient is sharp — drives the "ding!" feel up front.
     coin: {
         layers: [
-            // Root tone — sine with quick rising sweep
+            // 1. BODY — sub-octave sine bell. Long decay carries weight
+            //    under the fundamental; punch makes the front transient
+            //    snap.
             { params: {
-                wave_type: 1, p_base_freq: 0.55, p_freq_ramp: 0.25,
-                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.32,
-                p_arp_mod: 0.5, p_arp_speed: 0.75,
-                sound_vol: 0.32, sample_rate: 44100, sample_size: 8,
+                wave_type: 1, p_base_freq: 0.32, p_freq_ramp: 0.10,
+                p_env_attack: 0, p_env_sustain: 0.04, p_env_decay: 0.55,
+                p_env_punch: 0.45,
+                sound_vol: 0.30, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.50 },
+            // 2. ROOT — the main "ding": clear sine, punchy attack,
+            //    rising sweep + arp gives that ascending coin feel.
+            { params: {
+                wave_type: 1, p_base_freq: 0.55, p_freq_ramp: 0.30,
+                p_env_attack: 0, p_env_sustain: 0.06, p_env_decay: 0.42,
+                p_env_punch: 0.30,
+                p_arp_mod: 0.50, p_arp_speed: 0.78,
+                sound_vol: 0.36, sample_rate: 44100, sample_size: 8,
             }, gain: 0.55 },
-            // Mid harmonic — square with vibrato
+            // 3. FIFTH — perfect-fifth harmonic on top of ROOT. Square
+            //    with vibrato gives the "bell" overtone shimmer
+            //    without dominating the fundamental.
             { params: {
-                wave_type: 0, p_base_freq: 0.75, p_freq_ramp: 0.1,
-                p_env_attack: 0.02, p_env_sustain: 0.05, p_env_decay: 0.28,
-                p_vib_strength: 0.35, p_vib_speed: 0.7, p_duty: 0.3,
+                wave_type: 0, p_base_freq: 0.78, p_freq_ramp: 0.12,
+                p_env_attack: 0.01, p_env_sustain: 0.05, p_env_decay: 0.36,
+                p_vib_strength: 0.30, p_vib_speed: 0.65, p_duty: 0.32,
                 sound_vol: 0.24, sample_rate: 44100, sample_size: 8,
-            }, gain: 0.35 },
-            // Top sparkle — high arp tail, HPF'd
+            }, gain: 0.32 },
+            // 4. SPARKLE — high arp tail, HPF'd. The "tinkle" finish.
             { params: {
-                wave_type: 0, p_base_freq: 0.9, p_freq_ramp: -0.05,
-                p_env_attack: 0.05, p_env_sustain: 0.02, p_env_decay: 0.32,
-                p_arp_mod: 0.7, p_arp_speed: 0.88, p_hpf_freq: 0.28,
-                sound_vol: 0.18, sample_rate: 44100, sample_size: 8,
-            }, gain: 0.25 },
+                wave_type: 0, p_base_freq: 0.92, p_freq_ramp: -0.04,
+                p_env_attack: 0.04, p_env_sustain: 0.02, p_env_decay: 0.42,
+                p_arp_mod: 0.72, p_arp_speed: 0.90,
+                p_hpf_freq: 0.30,
+                sound_vol: 0.20, sample_rate: 44100, sample_size: 8,
+            }, gain: 0.30 },
         ],
     },
 

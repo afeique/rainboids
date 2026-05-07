@@ -125,19 +125,19 @@ export function openShop() {
         // mid-game value); per-stack scaling exponential so the 8th
         // shielding stack costs more than the 1st.
         this.shopItems = [
-            { id: 'HEALTH_BOOST',          name: 'Health Boost', description: '+25 max health',                                        cost: 1200, icon: '❤️', maxStacks: 10, category: 'DEFENSE', currency: 'COINS' },
-            { id: 'SHIELD_BOOST',          name: 'Shielding',    description: '-5% damage taken per stack',                            cost: 1500, icon: '🛡️', maxStacks: 8,  category: 'DEFENSE', currency: 'COINS' },
-            { id: 'SPEED_BOOST',           name: 'Afterburner',  description: '+50% thrust & +35% top speed per stack',                cost: 2200, icon: '💨', maxStacks: 4,  category: 'DEFENSE', currency: 'COINS' },
-            { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',       description: '-5s cooldown between health drops (60s → 30s floor)',  cost: 1800, icon: '⏳', maxStacks: 6,  category: 'DEFENSE', currency: 'COINS' },
+            { id: 'HEALTH_BOOST',          name: 'Health Boost', description: '+25 max health',                                        cost: 1200, icon: 'heart', maxStacks: 10, category: 'DEFENSE', currency: 'COINS' },
+            { id: 'SHIELD_BOOST',          name: 'Shielding',    description: '-5% damage taken per stack',                            cost: 1500, icon: 'shield', maxStacks: 8,  category: 'DEFENSE', currency: 'COINS' },
+            { id: 'SPEED_BOOST',           name: 'Afterburner',  description: '+50% thrust & +35% top speed per stack',                cost: 2200, icon: 'wind', maxStacks: 4,  category: 'DEFENSE', currency: 'COINS' },
+            { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',       description: '-5s cooldown between health drops (60s → 30s floor)',  cost: 1800, icon: 'hourglass', maxStacks: 6,  category: 'DEFENSE', currency: 'COINS' },
             // Qualitative defense layer (5.75.0). High costs because they're
             // run-defining picks that change moment-to-moment survival math.
             { id: 'REFLEXES',              name: 'Reflexes',     description: 'One free dodge per 30s — next bullet that would hit you misses',
-                                                                  cost: 5500, icon: '🌀', maxStacks: 1,  category: 'DEFENSE', currency: 'COINS' },
+                                                                  cost: 5500, icon: 'vortex', maxStacks: 1,  category: 'DEFENSE', currency: 'COINS' },
             { id: 'LAST_STAND',            name: 'Last Stand',   description: 'On lethal hit, survive at 1 HP (once per run)',
-                                                                  cost: 8000, icon: '✊', maxStacks: 1,  category: 'DEFENSE', currency: 'COINS' },
+                                                                  cost: 8000, icon: 'fist', maxStacks: 1,  category: 'DEFENSE', currency: 'COINS' },
             { id: 'STATIC_FIELD',          name: 'Static Field', description: 'Auto-regen +2 HP shield per stack after 8s no damage',
-                                                                  cost: 3200, icon: '⚡', maxStacks: 3,  category: 'DEFENSE', currency: 'COINS' },
-            { id: 'SPARE_SHIP',            name: 'Spare Ship',   description: '+1 extra life (max 3)',                                cost: 12000, icon: '🚀', maxStacks: 1,  flatCost: true, category: 'DEFENSE', currency: 'COINS' },
+                                                                  cost: 3200, icon: 'bolt', maxStacks: 3,  category: 'DEFENSE', currency: 'COINS' },
+            { id: 'SPARE_SHIP',            name: 'Spare Ship',   description: '+1 extra life (max 3)',                                cost: 12000, icon: 'rocket', maxStacks: 1,  flatCost: true, category: 'DEFENSE', currency: 'COINS' },
         ];
 
         this._rebuildShopCache();

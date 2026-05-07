@@ -1,6 +1,6 @@
 // Color star entity - decorative stars with various shapes and behaviors
 // Note: Health and money orbs (created from asteroid/enemy destruction) are collectible
-import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES } from '../core/constants.js';
+import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES, BIG_STAR_SHAPES } from '../core/constants.js';
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 
@@ -45,18 +45,17 @@ export class ColorStar {
         if (this.z >= 2.0) {
             this.shape = 'point';
             this.isBigStar = false;
+        } else if (this.isBigStar) {
+            // 5.79.23 — Big stars pick from the simple pool only. The
+            //   fancy variants (multi-point, geometric, 3D solids) are
+            //   confined to SMALL stars per user request — no more
+            //   gigantic shape stars dominating the field. Big stars
+            //   stay as point/circle so they read as bright background
+            //   pinpoints rather than competing with combat shapes.
+            this.shape = BIG_STAR_SHAPES[Math.floor(Math.random() * BIG_STAR_SHAPES.length)];
         } else {
-            // 5.79.22 — `isBigStar` interestingShapes pool (multi-point
-            //   stars + 3D solids) disabled per user request. All stars
-            //   now pick from the trimmed STAR_SHAPES pool which is
-            //   point/circle only. To revive the fancy shapes, paste
-            //   back the original `else if (isBigStar) { ... }` branch
-            //   from git history (see 5.74.22 commit).
             this.shape = STAR_SHAPES[Math.floor(Math.random() * STAR_SHAPES.length)];
         }
-        
-        this.points = Math.floor(random(4, 7)) * 2;
-        this.innerRadiusRatio = random(0.4, 0.8);
         
         // 5.74.22 — rotation guaranteed bidirectional + minimum visible
         // magnitude. Old `random(-0.02, 0.02)` was uniform, so half the
@@ -80,17 +79,12 @@ export class ColorStar {
         } else {
             this.sizeVariation = random(0.9, 1.6); // Normal stars: 90% to 160% size variation
         }
-        this.pulseSpeed = random(0.002, 0.006); // Slower, more gentle pulsing
-        this.pulseOffset = Math.random() * Math.PI * 2;
-        
+
         // Shape-specific enhancements for visual interest - toned down
         if (['star5', 'star6', 'star8'].includes(this.shape)) {
             this.rotationSpeed *= 1.2; // Slightly faster rotation, not too dramatic
         }
-        if (['sparkle', 'burst'].includes(this.shape)) {
-            this.pulseSpeed *= 1.5; // More subtle pulse enhancement
-        }
-        
+
         this.vel = { x: 0, y: 0 };
         this.active = true;
         
@@ -100,30 +94,63 @@ export class ColorStar {
             this.y = y || random(0, this.height);
             this.z = random(1.5, 3.0); // Close and bright
             this.density = 0.8;
-            
-            // Set colors and symbols based on orb type
+
+            // 5.79.38 — Health orbs are exclusively 3D solids (cube,
+            //   octahedron, tetrahedron, prism). Gold drops moved to
+            //   their own pools in 5.79.32, so this branch only ever
+            //   runs for health pickups now; restricting to 3D shapes
+            //   makes every health orb read as a "solid pickup" with
+            //   a tumbling silhouette.
+            const HEALTH_3D_SHAPES = ['cube', 'octahedron', 'tetrahedron', 'prism'];
+            this.shape = HEALTH_3D_SHAPES[Math.floor(Math.random() * HEALTH_3D_SHAPES.length)];
+            this.is3DShape = true;
+
+            // 5.79.25 — Orb radius is set by combat-manager.createHealthOrb /
+            //   createMoneyOrb based on the heal/gold amount being delivered.
+            //   The reset() radius here is a fallback for any orb that's
+            //   spawned without going through those helpers.
             if (this.starType === 'health') {
-                this.color = '#00ff7f'; // Green for health orbs
-                this.borderColor = '#ffd700'; // Gold border
-                // Health orbs use random star geometries like other orbs
-                const healthStarShapes = ['star4', 'star5', 'star6', 'star8', 'burst', 'sparkle'];
-                this.shape = healthStarShapes[Math.floor(Math.random() * healthStarShapes.length)];
-                this.baseRadius = (this.z * 1.2 + 0.4) * scale * 1.8; // Store base radius for scaling
-                this.radius = this.baseRadius; // Will be modified by size multiplier in game engine
+                this.color = '#00aaff';        // Bright blue (matches health bar)
+                this.borderColor = '#001a33';  // Deep navy stroke for contrast
             } else if (this.starType === 'money') {
-                this.color = '#FFD700'; // Gold for money orbs
-                this.borderColor = '#FFA500'; // Orange border
-                this.shape = 'circle'; // Money orbs are circular with symbols
-                // Add money symbol
-                const symbols = ['$', '¥', '£', '€'];
-                this.moneySymbol = symbols[Math.floor(Math.random() * symbols.length)];
-                this.baseRadius = (this.z * 1.2 + 0.4) * scale * 3.2; // Store base radius for scaling
-                this.radius = this.baseRadius; // Will be modified by size multiplier in game engine
+                this.color = '#ffd700';        // Gold
+                this.borderColor = '#5a3d00';  // Dark amber stroke
             }
+            // Conservative fallback radius — combat-manager will overwrite.
+            this.baseRadius = 14;
+            this.radius = 14;
+
+            // 5.79.38 — Rotation speed lowered for 3D health orbs.
+            //   Was 0.06–0.16 rad/tick (3.6–9.6 rad/s @ 60Hz, hard
+            //   to track visually). Now 0.025–0.055 (1.5–3.3 rad/s) —
+            //   slow enough to read each face turning, fast enough to
+            //   never look frozen.
+            const orbRotSign = Math.random() < 0.5 ? -1 : 1;
+            const orbBaseRot = random(0.025, 0.055);
+            this.rotationSpeed = orbRotSign * orbBaseRot;
+            this.rotation = Math.random() * Math.PI * 2;
+
+            // Twinkle/shimmer phase + speed (per-orb so they don't all pulse
+            // in lockstep). Read by the WebGL starfield's vertex shader.
+            this.twinklePhase = Math.random() * Math.PI * 2;
+            this.twinkleSpeed = random(2.5, 4.5);  // rad/sec
+            // Sparkle particle cooldown — emit one starSparkle every
+            // `_sparkleEvery` ms so the orb shimmers as it floats.
+            this._sparkleEvery = 140 + Math.random() * 90;
+            this._nextSparkleAt = 0;
+
+            // 5.79.27 — `isPixelOrb` is set by combat-manager AFTER reset
+            //   (when the splitter classifies a money orb as a tiny pixel
+            //   particle). Defaulted false here so a non-pixel orb is the
+            //   safe fallback if the flag never gets set.
+            this.isPixelOrb = false;
 
             // Initial velocity will be set by createOrbBurst for explosion effect
             this.vel = { x: 0, y: 0 };
-            this.life = 1800;
+            // 5.79.32 — Lifetime bumped 1800 → 7200 ticks (30s → 120s)
+            //   to match gold-drop pickup window. Health orbs sit and
+            //   drift, waiting to be picked up.
+            this.life = 7200;
         } else {
             // Decorative stars use normal colors
             this.color = NORMAL_STAR_COLORS[Math.floor(Math.random() * NORMAL_STAR_COLORS.length)];
@@ -135,9 +162,9 @@ export class ColorStar {
         this.isBurst = (this.starType === 'health' || this.starType === 'money');
     }
     
-    update(shipVel, playerPos, tractorEngaged, gameField = null) {
+    update(shipVel, playerPos, tractorEngaged, gameField = null, particlePool = null) {
         if (!this.active) return;
-        
+
         if (this.isBurst) {
             this.life--;
             if (this.life <= 0) {
@@ -145,72 +172,61 @@ export class ColorStar {
                 return;
             }
 
-            this.vel.x *= GAME_CONFIG.ORB_FRIC;
-            this.vel.y *= GAME_CONFIG.ORB_FRIC;
+            // 5.79.24 — Orb shimmer. Each orb emits a small `starSparkle`
+            //   particle every `_sparkleEvery` ms at a random offset
+            //   inside its silhouette.
+            // 5.79.27 — Pixel orbs do NOT emit sparkles. A single drop
+            //   spawns 10-25 pixel orbs; if each one fired a sparkle
+            //   every ~200ms the particle pool would saturate
+            //   instantly. The pixel orbs themselves already read as a
+            //   shimmer cluster; the few shape orbs in the same drop
+            //   carry the sparkle trail.
+            if (particlePool && this.life > 30 && !this.isPixelOrb) {
+                const now = frameClock.now;
+                if (now >= this._nextSparkleAt) {
+                    this._nextSparkleAt = now + this._sparkleEvery;
+                    const r = this.radius * (this.sizeVariation || 1);
+                    const a = Math.random() * Math.PI * 2;
+                    const d = Math.random() * r * 0.85;
+                    const sx = this.x + Math.cos(a) * d;
+                    const sy = this.y + Math.sin(a) * d;
+                    // particle types: starSparkle takes (x, y, type, radius, color)
+                    particlePool.get(sx, sy, 'starSparkle', r * 0.45, this.color);
+                }
+            }
+
+            // 5.79.32 — Health orbs (the only collectible left in
+            //   colorStarPool now that gold drops moved to their own
+            //   pools) drift in space waiting to be picked up. No
+            //   homing magnet — player has to fly into them or pull
+            //   with the tractor beam.
+            this.vel.x *= 0.985;
+            this.vel.y *= 0.985;
             this.x += this.vel.x;
             this.y += this.vel.y;
 
             this.opacity = Math.min(1, this.life / 120);
 
-            // 5.71.0 — money orbs use the strong three-tier magnet;
-            // health orbs use the softer powerup-style pull (same shape,
-            // 0.55× scale) so they drift toward the player but the
-            // player still has to fly toward them to collect quickly.
-            // Both types fade out + die when `life` runs to 0 above —
-            // mechanically identical to powerups (life-tick + blink-out).
-            const k = (this.starType === 'money') ? 1.0 : 0.55;
-
             const dx = playerPos.x - this.x;
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
 
-            if (dist > 1) {
-                // Constant base homing — always pulls, even at long range.
-                const baseAttraction = 0.8;
-                this.vel.x += (dx / dist) * baseAttraction * 0.15 * this.z * k;
-                this.vel.y += (dy / dist) * baseAttraction * 0.15 * this.z * k;
-
-                // Medium range (≤100px) — stronger as it gets closer.
-                if (dist < 100) {
-                    const strongAttraction = 15;
-                    const proximityMultiplier = (100 - dist) / 100;
-                    this.vel.x += (dx / dist) * strongAttraction * proximityMultiplier * this.z * k;
-                    this.vel.y += (dy / dist) * strongAttraction * proximityMultiplier * this.z * k;
-                }
-
-                // Close range (≤40px) — magnetic snap.
-                if (dist < 40) {
-                    const magneticAttraction = 25;
-                    const magneticMultiplier = (40 - dist) / 40;
-                    this.vel.x += (dx / dist) * magneticAttraction * magneticMultiplier * this.z * k;
-                    this.vel.y += (dy / dist) * magneticAttraction * magneticMultiplier * this.z * k;
-                }
-
-                // Tractor beam — long-range pull when engaged. Affects
-                // both types (tractor reaches further than the natural
-                // pull, lets the player vacuum stragglers).
-                if (tractorEngaged) {
-                    const tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
-                    const tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
-                    if (dist < tractorDist) {
-                        const tractorForce = tractorAttraction * (1 - dist / tractorDist);
-                        this.vel.x += (dx / dist) * tractorForce * this.z * k;
-                        this.vel.y += (dy / dist) * tractorForce * this.z * k;
-                    }
+            // Tractor beam — long-range pull when engaged.
+            if (dist > 1 && tractorEngaged) {
+                const tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
+                const tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
+                if (dist < tractorDist) {
+                    const tractorForce = tractorAttraction * (1 - dist / tractorDist);
+                    this.vel.x += (dx / dist) * tractorForce * this.z;
+                    this.vel.y += (dy / dist) * tractorForce * this.z;
                 }
             }
         } else {
             // Update twinkle based on sine wave - much more subtle variation
             this.opacity = 0.6 + 0.3 * (Math.sin(frameClock.now * this.twinkleSpeed + this.opacityOffset) + 1) / 2;
-            
+
             // Rotate the star
             this.rotation += this.rotationSpeed;
-            
-            // Pulse size
-            this.pulseOffset += this.pulseSpeed;
-            
-            // Non-orb stars are no longer attracted to player - they just exist for visual effect
-            // Remove all tractor beam and attraction logic
         }
         
                     // Reduced parallax effect for less distraction
@@ -235,391 +251,128 @@ export class ColorStar {
         this.depthOpacity = Math.min(1, 0.5 + Math.pow(this.z / 4, 1.2));
         this.finalOpacity = this.opacity * this.depthOpacity;
 
-        // 5.79.22 — Decorative sparkle/burst variants disabled per user
-        //   request. Only collectibles (health/money orbs) still take
-        //   the special-effects drawDirect path; pure-decoration
-        //   sparkle/burst stars are skipped entirely. To revive,
-        //   change the gate back to `this.isBurst || this.shape === ...`.
+        // 5.79.24 — Orb body now renders through the WebGL starfield
+        //   (engine pushes a transient instance each frame). Canvas2D
+        //   only draws the stroke outline + collection-radius hint
+        //   ring on top so the orb has a hard, visible boundary
+        //   against bright nebula and a faint magnet-pulse halo.
         if (this.isBurst) {
-            this.drawDirect(ctx);
+            this.drawOrbOverlay(ctx);
             return;
         }
         if (this.shape === 'sparkle' || this.shape === 'burst') {
             return; // skip decoration — was drawing flashy rays
         }
-        
+
         // Simple stars will be handled by depth batch renderer
         // No rendering here - just property preparation
     }
-    
-    drawDirect(ctx) {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        
-        // Apply rotation
-        ctx.rotate(this.rotation);
-        
-        // Calculate dynamic radius with size variation and pulse
-        const pulseMultiplier = 1 + Math.sin(this.pulseOffset) * 0.08; // Much more subtle pulsing
-        const dynamicRadius = this.radius * this.sizeVariation * pulseMultiplier;
-        
-        // Adjust opacity based on depth - brighter overall
-        ctx.globalAlpha = this.finalOpacity;
-        
-        // Remove glow effects - use direct rendering for better visibility
-        
-        if (this.shape === 'point') {
-            const borderSize = 1;
-            ctx.fillStyle = this.borderColor;
-            ctx.fillRect(
-                -dynamicRadius / 2 - borderSize,
-                -dynamicRadius / 2 - borderSize,
-                dynamicRadius + borderSize * 2,
-                dynamicRadius + borderSize * 2
-            );
-            ctx.fillStyle = this.color;
-            ctx.fillRect(-dynamicRadius / 2, -dynamicRadius / 2, dynamicRadius, dynamicRadius);
-        } else if (this.starType !== 'money') {
-            // Skip normal shape drawing for money orbs - they have custom rendering
+
+    // 5.79.24 — Orb-only canvas overlay: stroke outline + magnet pulse
+    //   ring. Body fill comes from the WebGL starfield's transient
+    //   instance for this orb (see game-engine `_pushOrbsToWebGL`).
+    // 5.79.27 — Pixel orbs and 3D-shape orbs skip the stroke entirely:
+    //   pixels are too small for a stroke to read (would just be a
+    //   blob of border color), and the WebGL atlas already bakes
+    //   internal edges into the 3D shapes — drawing a circle stroke
+    //   on top of a tumbling cube would look wrong. Both still get
+    //   the magnet-pulse halo so they read as collectible.
+    drawOrbOverlay(ctx) {
+        const t = frameClock.now * 0.001;
+        const wave = 0.5 + 0.5 * Math.sin(t * (this.twinkleSpeed || 3.5) + (this.twinklePhase || 0));
+        const pulseMul = 0.94 + 0.18 * wave;
+        const r = this.radius * (this.sizeVariation || 1) * pulseMul;
+        const alpha = this.finalOpacity;
+
+        // Skip the full stroke for pixels and 3D shapes — see header note.
+        const skipStroke = this.isPixelOrb || this.is3DShape;
+
+        if (!skipStroke) {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate((this.rotation || 0) + t * (this.rotationSpeed || 0) * 60);
+
             ctx.beginPath();
-            
             switch (this.shape) {
                 case 'diamond':
-                    ctx.moveTo(0, -dynamicRadius);
-                    ctx.lineTo(dynamicRadius * 0.7, 0);
-                    ctx.lineTo(0, dynamicRadius);
-                    ctx.lineTo(-dynamicRadius * 0.7, 0);
+                    ctx.moveTo(0, -r);
+                    ctx.lineTo(r * 0.85, 0);
+                    ctx.lineTo(0, r);
+                    ctx.lineTo(-r * 0.85, 0);
                     ctx.closePath();
                     break;
-                    
                 case 'triangle':
-                    ctx.moveTo(0, -dynamicRadius);
-                    ctx.lineTo(dynamicRadius * 0.8, dynamicRadius * 0.5);
-                    ctx.lineTo(-dynamicRadius * 0.8, dynamicRadius * 0.5);
+                    ctx.moveTo(0, -r);
+                    ctx.lineTo(r * 0.866, r * 0.5);
+                    ctx.lineTo(-r * 0.866, r * 0.5);
                     ctx.closePath();
                     break;
-                    
                 case 'hexagon':
                     for (let i = 0; i < 6; i++) {
                         const a = i * Math.PI / 3;
-                        const x = Math.cos(a) * dynamicRadius;
-                        const y = Math.sin(a) * dynamicRadius;
-                        if (i === 0) ctx.moveTo(x, y);
-                        else ctx.lineTo(x, y);
+                        const x = Math.cos(a) * r;
+                        const y = Math.sin(a) * r;
+                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
                     }
                     ctx.closePath();
                     break;
-                    
-                case 'circle':
-                    ctx.arc(0, 0, dynamicRadius, 0, Math.PI * 2);
-                    break;
-                    
-                case 'square':
-                    ctx.rect(-dynamicRadius * 0.7, -dynamicRadius * 0.7, dynamicRadius * 1.4, dynamicRadius * 1.4);
-                    break;
-                    
-                case 'plus':
-                    ctx.moveTo(0, -dynamicRadius);
-                    ctx.lineTo(0, dynamicRadius);
-                    ctx.moveTo(-dynamicRadius, 0);
-                    ctx.lineTo(dynamicRadius, 0);
-                    break;
-                    
-                case 'x':
-                    ctx.moveTo(-dynamicRadius, -dynamicRadius);
-                    ctx.lineTo(dynamicRadius, dynamicRadius);
-                    ctx.moveTo(dynamicRadius, -dynamicRadius);
-                    ctx.lineTo(-dynamicRadius, dynamicRadius);
-                    break;
-                    
                 case 'star4':
-                    for (let i = 0; i < 8; i++) {
-                        const a = i * Math.PI / 4;
-                        const r = i % 2 === 0 ? dynamicRadius : dynamicRadius * 0.4;
-                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-                    }
-                    ctx.closePath();
+                    this._strokeNStar(ctx, r, 4, 0.45);
                     break;
-                    
                 case 'star5':
-                    for (let i = 0; i < 10; i++) {
-                        const a = i * Math.PI / 5;
-                        const r = i % 2 === 0 ? dynamicRadius : dynamicRadius * 0.4;
-                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-                    }
-                    ctx.closePath();
+                    this._strokeNStar(ctx, r, 5, 0.42);
                     break;
-                    
                 case 'star6':
-                    for (let i = 0; i < 12; i++) {
-                        const a = i * Math.PI / 6;
-                        const r = i % 2 === 0 ? dynamicRadius : dynamicRadius * 0.4;
-                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-                    }
-                    ctx.closePath();
+                    this._strokeNStar(ctx, r, 6, 0.5);
                     break;
-                    
                 case 'star8':
-                    for (let i = 0; i < 16; i++) {
-                        const a = i * Math.PI / 8;
-                        const r = i % 2 === 0 ? dynamicRadius : dynamicRadius * this.innerRadiusRatio;
-                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-                    }
-                    ctx.closePath();
+                    this._strokeNStar(ctx, r, 8, 0.5);
                     break;
-                    
-                case 'sparkle':
-                    // 8-pointed sparkle with varying lengths
-                    for (let i = 0; i < 8; i++) {
-                        const a = i * Math.PI / 4;
-                        const length = (i % 2 === 0) ? dynamicRadius : dynamicRadius * 0.6;
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(Math.cos(a) * length, Math.sin(a) * length);
-                    }
-                    // Add central cross for sparkle effect
-                    ctx.moveTo(-dynamicRadius * 0.3, 0);
-                    ctx.lineTo(dynamicRadius * 0.3, 0);
-                    ctx.moveTo(0, -dynamicRadius * 0.3);
-                    ctx.lineTo(0, dynamicRadius * 0.3);
-                    break;
-                    
-                case 'burst':
-                    // Radiating lines of varying lengths - more dramatic
-                    for (let i = 0; i < 16; i++) {
-                        const a = i * Math.PI / 8;
-                        const length = dynamicRadius * (0.4 + Math.sin(frameClock.now * 0.005 + i) * 0.3);
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(Math.cos(a) * length, Math.sin(a) * length);
-                    }
-                    break;
-                    
-                case 'circle':
-                    // For money orbs and other circular shapes, draw a filled circle
-                    ctx.arc(0, 0, dynamicRadius, 0, 2 * Math.PI);
-                    break;
-                    
                 default:
-                    // Default X shape
-                    ctx.moveTo(-dynamicRadius, -dynamicRadius);
-                    ctx.lineTo(dynamicRadius, dynamicRadius);
-                    ctx.moveTo(dynamicRadius, -dynamicRadius);
-                    ctx.lineTo(-dynamicRadius, dynamicRadius);
-                    break;
+                    ctx.arc(0, 0, r, 0, Math.PI * 2);
             }
-            
-            // Enhanced border for shape definition
-            ctx.strokeStyle = this.borderColor;
-            ctx.lineWidth = this.isBigStar ? 3 : 2;
+            // Dark stroke for contrast on bright backgrounds.
+            ctx.globalAlpha = alpha * 0.85;
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = this.borderColor || '#000';
+            ctx.lineWidth = 2.5;
             ctx.stroke();
-            
-            // Main shape stroke - thicker to showcase intricate shapes
-            ctx.strokeStyle = this.color;
-            ctx.lineWidth = (this.isBigStar ? 4 : 2.5) + this.z / 2; // Much thicker lines
-            ctx.stroke();
-            
-            // Add subtle fill for complex shapes to make them more visible
-            if (['star4', 'star5', 'star6', 'star8', 'hexagon', 'diamond', 'triangle'].includes(this.shape)) {
-                ctx.save();
-                ctx.globalAlpha = this.finalOpacity * 0.3; // Subtle fill
-                ctx.fillStyle = this.color;
-                ctx.fill();
-                ctx.restore();
-            }
-            
-            // Special fill for money orbs - make them more subtle to highlight the symbol
-            if (this.starType === 'money' && this.shape === 'circle') {
-                ctx.save();
-                ctx.globalAlpha = this.finalOpacity * 0.2; // Very subtle fill for money orbs
-                ctx.fillStyle = this.color;
-                ctx.fill();
-                ctx.restore();
-            }
-        }
-        
-        // Add extra visibility for big stars - enhanced center glow
-        // OPT-2: use pre-rendered glow sprite instead of live ctx.shadowBlur
-        if (this.isBigStar) {
-            ctx.save();
-            const glowR = dynamicRadius * 0.3;
-            glowSpriteCache.draw(ctx, 0, 0, this.color, glowR, 8, this.finalOpacity * 0.6);
-
-            // Add sparkle effect for the most interesting shapes (no shadowBlur needed)
-            if (['star5', 'star6', 'star8', 'sparkle', 'burst'].includes(this.shape)) {
-                ctx.globalAlpha = this.finalOpacity * 0.4;
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                for (let i = 0; i < 8; i++) {
-                    const angle = (i / 8) * Math.PI * 2;
-                    const innerR = dynamicRadius * 0.7;
-                    const outerR = dynamicRadius * 1.1;
-                    ctx.moveTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR);
-                    ctx.lineTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR);
-                }
-                ctx.stroke();
-            }
-
-            ctx.restore();
-        }
-        
-        // Special glow effect for collectible orbs to indicate they're collectible (skip for money orbs)
-        // OPT-2: use pre-rendered glow sprite for inner core; plain stroke for collection ring
-        if ((this.isBurst || this.isCollectible) && this.starType !== 'money') {
-            ctx.save();
-
-            const pulseIntensity = 0.3 + 0.4 * Math.sin(frameClock.now * 0.008 + this.x * 0.01);
-
-            // Collection area indicator - plain stroke (no shadowBlur needed, ring is visible)
-            ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.3;
-            ctx.strokeStyle = this.color;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(0, 0, dynamicRadius + 15, 0, 2 * Math.PI);
-            ctx.stroke();
-
-            // Inner bright core via pre-rendered glow sprite
-            glowSpriteCache.draw(ctx, 0, 0, this.color, dynamicRadius * 0.6, 8, this.finalOpacity * 0.9);
-
-            ctx.restore();
-        }
-        
-        // Custom rendering for money orbs - optimized for gameplay visibility
-        if (this.starType === 'money' && this.moneySymbol) {
-            ctx.save();
-            
-            // Pulsing effect for the circle
-            const pulseIntensity = 0.5 + 0.4 * Math.sin(frameClock.now * 0.01 + this.x * 0.01);
-            const circleRadius = dynamicRadius * (0.9 + pulseIntensity * 0.2);
-            
-            // Draw pulsating gold circle - more visible
-            ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.8;
-            ctx.strokeStyle = '#FFD700';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(0, 0, circleRadius, 0, 2 * Math.PI);
-            ctx.stroke();
-            
-            // Draw inner glow circle
-            ctx.globalAlpha = this.finalOpacity * pulseIntensity * 0.4;
-            ctx.strokeStyle = '#FFFF88';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(0, 0, circleRadius * 0.6, 0, 2 * Math.PI);
-            ctx.stroke();
-            
-            // Draw semi-transparent dark background for symbol contrast
-            ctx.globalAlpha = this.finalOpacity * 0.7;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-            ctx.beginPath();
-            ctx.arc(0, 0, dynamicRadius * 0.7, 0, 2 * Math.PI);
-            ctx.fill();
-            
-            // Reset for symbol drawing
-            ctx.globalAlpha = 1.0;
-            ctx.shadowColor = 'transparent';
-            ctx.shadowBlur = 0;
-            
-            // Draw the money symbol - large and highly visible
-            const fontSize = Math.max(16, Math.floor(dynamicRadius * 1.2));
-            ctx.font = `${fontSize}px "Fira Code", "Consolas", "Courier New", monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // Draw thin white outline for contrast
-            ctx.strokeStyle = '#FFFFFF';
+            // Lighter inner stroke gives a beveled rim.
+            ctx.globalAlpha = alpha * 0.6;
+            ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 1;
-            ctx.strokeText(this.moneySymbol, 0, 0);
-            
-            // Draw bright golden symbol (single draw call)
-            ctx.fillStyle = '#FFD700';
-            ctx.shadowColor = '#FFD700';
-            ctx.shadowBlur = 2;
-            ctx.fillText(this.moneySymbol, 0, 0);
-            
+            ctx.stroke();
+
             ctx.restore();
         }
-        
-        ctx.restore();
+
+        // ── Magnet pulse ring (skip for pixels — they're too tiny to
+        //   benefit from a halo; the cluster of pixels reads
+        //   collectible enough on its own).
+        if (!this.isPixelOrb) {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            const pulseIntensity = 0.4 + 0.4 * Math.sin(frameClock.now * 0.008 + this.x * 0.01);
+            ctx.globalAlpha = alpha * pulseIntensity * 0.3;
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, r + 12, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    _strokeNStar(ctx, r, points, innerRatio) {
+        const verts = points * 2;
+        for (let i = 0; i < verts; i++) {
+            const a = -Math.PI / 2 + (i * Math.PI) / points;
+            const rr = (i % 2 === 0) ? r : r * innerRatio;
+            const x = Math.cos(a) * rr;
+            const y = Math.sin(a) * rr;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
     }
     
-    // Direct rendering fallback for simple shapes (used when batching is disabled or as fallback)
-    drawDirectSimple(ctx) {
-        if (!this.active) return;
-        
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        
-        // Apply rotation
-        ctx.rotate(this.rotation);
-        
-        // Calculate dynamic radius with size variation and pulse
-        const pulseMultiplier = 1 + Math.sin(this.pulseOffset) * 0.1;
-        const dynamicRadius = this.radius * this.sizeVariation * pulseMultiplier;
-        
-        // Use stored opacity
-        ctx.globalAlpha = this.finalOpacity;
-        
-        if (this.shape === 'point') {
-            const borderSize = 1;
-            ctx.fillStyle = this.borderColor;
-            ctx.fillRect(
-                -dynamicRadius / 2 - borderSize,
-                -dynamicRadius / 2 - borderSize,
-                dynamicRadius + borderSize * 2,
-                dynamicRadius + borderSize * 2
-            );
-            ctx.fillStyle = this.color;
-            ctx.fillRect(-dynamicRadius / 2, -dynamicRadius / 2, dynamicRadius, dynamicRadius);
-        } else if (this.shape === 'circle') {
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.arc(0, 0, dynamicRadius, 0, 2 * Math.PI);
-            ctx.fill();
-        } else {
-            // Simple stroke rendering for other shapes
-            ctx.strokeStyle = this.color;
-            ctx.lineWidth = 1.5 + this.z / 3;
-            ctx.beginPath();
-            
-            switch (this.shape) {
-                case 'diamond':
-                    ctx.moveTo(0, -dynamicRadius);
-                    ctx.lineTo(dynamicRadius * 0.7, 0);
-                    ctx.lineTo(0, dynamicRadius);
-                    ctx.lineTo(-dynamicRadius * 0.7, 0);
-                    ctx.closePath();
-                    break;
-                case 'triangle':
-                    ctx.moveTo(0, -dynamicRadius);
-                    ctx.lineTo(dynamicRadius * 0.8, dynamicRadius * 0.5);
-                    ctx.lineTo(-dynamicRadius * 0.8, dynamicRadius * 0.5);
-                    ctx.closePath();
-                    break;
-                case 'plus':
-                    ctx.moveTo(0, -dynamicRadius);
-                    ctx.lineTo(0, dynamicRadius);
-                    ctx.moveTo(-dynamicRadius, 0);
-                    ctx.lineTo(dynamicRadius, 0);
-                    break;
-                case 'x':
-                    ctx.moveTo(-dynamicRadius, -dynamicRadius);
-                    ctx.lineTo(dynamicRadius, dynamicRadius);
-                    ctx.moveTo(dynamicRadius, -dynamicRadius);
-                    ctx.lineTo(-dynamicRadius, dynamicRadius);
-                    break;
-                default:
-                    // Default to circle
-                    ctx.arc(0, 0, dynamicRadius, 0, 2 * Math.PI);
-                    break;
-            }
-            
-            ctx.stroke();
-        }
-        
-        ctx.restore();
-    }
 } 

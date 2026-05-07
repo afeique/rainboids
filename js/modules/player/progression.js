@@ -17,13 +17,20 @@ export function levelUp() {
     this.level++;
 
     // 5.79.16 — Linear XP curve replacing the geometric blow-up.
-    //   Was: 400 × 1.7^(level-1), which doubled every level so the
-    //   player plateaued around L8-12 over a 20-wave run.
-    //   Now: 200 + (level - 1) × 50. Cumulative L1→L30 ≈ 22 600 XP.
-    //   Targets ~1.5 levels per wave when paired with the
-    //   collision-system XP rebalance and wave content scale-up.
-    //   See docs/XP_BALANCE_REWORK_5.79.md for the full plan.
-    this.experienceToNextLevel = 200 + (this.level - 1) * 50;
+    //   Was: 400 × 1.7^(level-1), which doubled every level.
+    //   Mid-range: 200 + (level-1)·50 (linear).
+    // 5.79.26 — Linear curve was too flat at high levels: enemy
+    //   points scale 6.5× by wave 20 while XP-to-next only grew
+    //   linearly, so a wave-20 player was leveling 8-10× per
+    //   wave (= 8-10 SP per wave on top of wave-clear). Now a
+    //   power curve `50 · level^1.45` so XP requirements scale
+    //   alongside enemy point yields:
+    //     L1: 50    L5: 525   L10: 1414  L15: 2647
+    //     L20: 4202  L25: 5990  L30: 7977
+    //   Approximates ~2 levels/wave across the campaign. SP gain
+    //   stays meaningful but no longer compounds into a runaway
+    //   pile at late waves.
+    this.experienceToNextLevel = Math.floor(50 * Math.pow(this.level, 1.45));
 
     // 5.78.0 — picks renamed to SP (skill points). Single field;
     // `skillPoints` is the canonical name now.

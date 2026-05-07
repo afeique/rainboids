@@ -128,6 +128,7 @@ export class Player {
         // entry points but is unused by the live beam path).
         this.lightningChains = [];
         this.lightningArcActive = false;
+        this.lightningArcTimer = 0;
         this.lightningArcTarget = null;
 
         // Missile state
@@ -205,6 +206,7 @@ export class Player {
         this.novaRings = [];
         this.lightningChains = [];
         this.lightningArcActive = false;
+        this.lightningArcTimer = 0;
         this.lightningArcTarget = null;
         this.activeMissiles = [];
         this.needleCount = 0;

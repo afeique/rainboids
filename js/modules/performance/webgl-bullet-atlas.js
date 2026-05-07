@@ -51,15 +51,17 @@ export const BULLET_ATLAS_SLOTS = {
 //   - outline: ~3 px ring outside body
 //   - core:    ~18% of slot   → ~22 px (bright center highlight)
 // Leaves padding so a unit-quad scaled up to 2× stays inside the slot.
-const BODY_R   = 42;
-// 5.79.20 — Outline thickness 5 → 12 px in the atlas. Bullets render
-//   at ~17-25 px on screen; the atlas-to-screen ratio is ~14%. With
-//   OUTLINE=5 the on-screen stroke was ~0.7 px (sub-pixel,
-//   antialiased to invisible). 12 px in the atlas → ~1.7 screen px,
-//   visibly black around every bullet. Body radius dropped 46 → 42
-//   to give the wider outline room within the 64-px slot half-width.
-const OUTLINE  = 12;
-const CORE_R   = 22;
+const BODY_R   = 38;
+// 5.79.32 — Outline thickness 12 → 22 px in the atlas. The 12 px
+//   outline read as ~1.7 px on screen — fine for non-stretched
+//   player bullets, but enemy bullets pass aspect=1.4 which thinned
+//   the outline along the long axis to ~1.2 px. User reported it as
+//   too thin. 22 px in the atlas → ~3 screen px on enemy bullets,
+//   matching the perceptual weight of the player bullet stroke. Body
+//   radius dropped 42 → 38 to give the wider outline room within the
+//   64-px slot half-width without clipping.
+const OUTLINE  = 22;
+const CORE_R   = 20;
 
 /** Bake the bullet atlas into an offscreen canvas. */
 export function buildBulletAtlas() {

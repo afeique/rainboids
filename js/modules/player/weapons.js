@@ -46,109 +46,47 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
     const cooldownReady = timeSinceLastShot >= effectiveFireRate;
     const fireHeld = !!(input && input.fire);
 
-    // ── Beam-weapon path — Lance Beam and Lightning Arc are continuous
-    // tethers that follow the fire button. While LMB is held the beam /
-    // arc is on; releasing turns it off. The discrete cooldown /
-    // firePrimary path is bypassed — Lance Beam stops at the first
-    // object it hits (collision-system.js sets `beamHitDist`); Lightning
-    // Arc snaps to the nearest target each frame.
-    const isLanceBeam = this.activePrimary === 'LANCE_BEAM';
-    const isLightningArc = this.activePrimary === 'LIGHTNING_ARC';
-    const isBeamPrimary = isLanceBeam || isLightningArc;
-
-    if (isLanceBeam) {
-        const wasOn = !!this.beamActive;
-        this.beamActive = fireHeld;
-        if (this.beamActive) {
-            this.beamAngle = this.angle;
-            if (!wasOn) {
-                // 5.79.10 — continuous engaged-loop. 5.79.12 — Loop
-                //   region splices past the MP3's attack envelope so
-                //   each wrap doesn't restart the "weapon power-up"
-                //   transient. The Laser_Beam_Weapon_Active.mp3 has
-                //   roughly 0.4s of attack ramp before settling into
-                //   the sustain — start the loop at 0.45s.
-                if (audioManager.startLoop) {
-                    audioManager.startLoop('laserBeamLoop', 0.6, { loopStart: 0.45 });
-                } else {
-                    audioManager.playShoot();
-                }
-            }
-        } else if (wasOn) {
+    // ── Beam time-out — beams are now power weapons (5.79.23). The
+    //   beam stays active for `beamMaxDuration` ms after activation,
+    //   then auto-shuts off. Strike audio for the lightning arc is
+    //   driven from this same tick while the beam is active.
+    if (this.beamActive) {
+        this.beamTimer -= dt;
+        if (this.beamTimer <= 0) {
+            this.beamActive = false;
+            this.beamTimer = 0;
             if (audioManager.stopLoop) audioManager.stopLoop('laserBeamLoop');
+        } else {
+            this.beamAngle = this.angle;
         }
-    } else if (this.beamActive) {
-        this.beamActive = false;
-        if (audioManager.stopLoop) audioManager.stopLoop('laserBeamLoop');
     }
 
-    if (isLightningArc) {
-        const wasOn = !!this.lightningArcActive;
-        this.lightningArcActive = fireHeld;
-        if (this.lightningArcActive && !wasOn) {
-            audioManager.playShoot();
-            // 5.79.4 — start the continuous low rumble loop on press,
-            //   stop it on release. 5.79.5 — schedule the FIRST random
-            //   strike for ~200 ms in so it doesn't fight the initial
-            //   playShoot zap. 5.79.12 — Loop offset past the
-            //   thunderous_lightning_laser.mp3's opening strike (the
-            //   first ~0.6s is a big crack). Looping from 0.6s in
-            //   gives a continuous rolling rumble without the strike
-            //   punching through every loop wrap.
-            // 5.79.14 — Measured RMS per 0.5s window of the
-            //   thunderous_lightning_laser.mp3:
-            //     0.0–3.5 s:  full volume (RMS ~8500-10000)
-            //     3.5–4.0 s:  fade begins (RMS drops to ~4800)
-            //     4.0–5.5 s:  heavy fade (RMS drops to ~150)
-            //     5.5+ s:     silent
-            //   Loop region is now [0.6, 3.4] — wraps BEFORE the fade
-            //   starts, keeping the rumble at full volume continuously.
-            //   (Previous 6.8 was past the fade-out tail; user heard
-            //   the fade on every wrap.)
-            if (audioManager.startLoop) {
-                audioManager.startLoop('arcLightningLoop', 0.4, {
-                    loopStart: 0.6,
-                    loopEnd: 3.4,
-                });
-            }
-            this._nextArcStrikeAt = Date.now() + 200 + Math.random() * 250;
-        } else if (!this.lightningArcActive && wasOn) {
+    if (this.lightningArcActive) {
+        this.lightningArcTimer = (this.lightningArcTimer || 0) - dt;
+        if (this.lightningArcTimer <= 0) {
+            this.lightningArcActive = false;
+            this.lightningArcTimer = 0;
             if (audioManager.stopLoop) audioManager.stopLoop('arcLightningLoop');
             this._nextArcStrikeAt = 0;
-        }
-        // 5.79.5 — While the arc is firing, randomly pick one of four
-        //   distinct strike-and-thunder one-shots and play it. Interval
-        //   between strikes randomized 220-720 ms so the cadence reads
-        //   as natural and unpredictable.
-        // 5.79.10 — Split into idle vs hit variants. When a target is
-        //   locked, play the heavier `arcHit1..3` strikes (deeper crack
-        //   + longer thunder). Idle/frayed mode keeps the lighter
-        //   `arcStrike1..4` set. Audio confirms damage.
-        if (this.lightningArcActive) {
-            const now = Date.now();
-            if (!this._nextArcStrikeAt) this._nextArcStrikeAt = now + 350;
-            if (now >= this._nextArcStrikeAt) {
+        } else {
+            const nowT = Date.now();
+            if (!this._nextArcStrikeAt) this._nextArcStrikeAt = nowT + 350;
+            if (nowT >= this._nextArcStrikeAt) {
                 const hasTarget = !!(this.lightningArcTarget && this.lightningArcTarget.active);
                 const strikeName = hasTarget
                     ? `arcHit${1 + ((Math.random() * 3) | 0)}`
                     : `arcStrike${1 + ((Math.random() * 4) | 0)}`;
                 audioManager.playSound(strikeName);
-                // Hit cadence is slightly tighter (150-400 ms) so
-                // sustained contact reads as a continuous barrage.
                 if (hasTarget) {
-                    this._nextArcStrikeAt = now + 150 + Math.random() * 250;
+                    this._nextArcStrikeAt = nowT + 150 + Math.random() * 250;
                 } else {
-                    this._nextArcStrikeAt = now + 220 + Math.random() * 500;
+                    this._nextArcStrikeAt = nowT + 220 + Math.random() * 500;
                 }
             }
         }
-    } else if (this.lightningArcActive) {
-        this.lightningArcActive = false;
-        if (audioManager.stopLoop) audioManager.stopLoop('arcLightningLoop');
-        this._nextArcStrikeAt = 0;
     }
 
-    this.canShoot = !isBeamPrimary && cooldownReady && fireHeld;
+    this.canShoot = cooldownReady && fireHeld;
     const poolBefore = bulletPool.activeObjects.length;
     let bulletCreated = false;
     if (this.canShoot) {
@@ -262,13 +200,6 @@ export function firePrimary(bulletPool, audioManager, particlePool) {
         case 'RAIL_DRIVER':
             this.fireRailDriver(bulletPool, audioManager, config);
             spawnMuzzleFlare.call(this, particlePool, 'heavy', '#44ffaa');
-            break;
-        case 'LANCE_BEAM':
-            // Beam handled in update loop, not individual shots
-            this.startLanceBeam(audioManager, config);
-            break;
-        case 'LIGHTNING_ARC':
-            // Continuous tether handled in update loop — no per-shot path.
             break;
         default:
             this.firePulseCannon(bulletPool, audioManager, config);
@@ -545,30 +476,13 @@ export function startLanceBeam(audioManager, config) {
         rangeMul *= 1.5;
     }
 
-    // 5.79.3 — Bullet-flavored powerups buff BEAM DPS instead, since
-    //   they're meaningless for a continuous tether. Each stack adds
-    //   a fraction of the bullet effect's "intuitive" power as flat
-    //   damage on the beam:
-    //     RAPID_FIRE   +22%   "fires faster" → +22% DPS
-    //     MULTI_SHOT   +30%   "more bullets" → +30% DPS
-    //     BIG_BULLETS  +18%   "bigger hits"  → +18% DPS
-    //     PIERCING     +15%   "passes through" → +15% DPS
-    //     HOMING       +10%   "tracks targets" → +10% DPS (beam already aims)
-    //     EXPLOSIVE    +25%   "AOE"          → +25% DPS
-    //   Numbers are smaller than direct beam upgrades (BEAM_WIDTH,
-    //   TRIPLE_BEAM) on purpose — these are spillover bonuses, not
-    //   primary build levers.
-    const beamPowerupBumps = [
-        ['RAPID_FIRE',  0.22],
-        ['MULTI_SHOT',  0.30],
-        ['BIG_BULLETS', 0.18],
-        ['PIERCING',    0.15],
-        ['HOMING',      0.10],
-        ['EXPLOSIVE',   0.25],
-    ];
-    for (const [powId, perStack] of beamPowerupBumps) {
-        const stacks = this.getPowerupStacks(powId);
-        if (stacks > 0) damageMul *= (1 + stacks * perStack);
+    // 5.79.23 — LANCE_VELOCITY now applied directly here. The beam no
+    //   longer routes through getBulletVelocityDamageMult since it's a
+    //   power weapon. Each stack: +12% damage and +12% range.
+    const lanceVelStacks = this.getPowerupStacks('LANCE_VELOCITY');
+    if (lanceVelStacks > 0) {
+        damageMul *= 1 + lanceVelStacks * 0.12;
+        rangeMul  *= 1 + lanceVelStacks * 0.12;
     }
 
     this.beamCurrentWidth = config.beamWidth * widthMul;
@@ -576,7 +490,14 @@ export function startLanceBeam(audioManager, config) {
     this.beamRangeMul = rangeMul;
     this.beamMaxDuration = duration;
 
-    audioManager.playShoot();
+    // 5.79.23 — Beam audio loop now driven by the power-weapon trigger
+    //   (no fire-button pulse). Start the splice-looped active sound
+    //   on activation; the timer in updateChargingSystem stops it.
+    if (audioManager.startLoop) {
+        audioManager.startLoop('laserBeamLoop', 0.6, { loopStart: 0.45 });
+    } else {
+        audioManager.playShoot();
+    }
 }
 
 // ── Global bullet upgrades ─────────────────────────────────────────────────
@@ -676,6 +597,28 @@ export function firePower(bulletPool, audioManager, particlePool) {
         case 'MISSILE_SALVO':
             this.fireMissiles(bulletPool, config);
             break;
+        case 'LANCE_BEAM':
+            // 5.79.23 — Beam now triggered as a power weapon. Activates
+            //   for beamDuration, drives a fixed cooldown.
+            this.startLanceBeam(audioManager, config);
+            this.powerCooldown = config.cooldown;
+            this.powerCooldownMax = this.powerCooldown;
+            return;
+        case 'LIGHTNING_ARC':
+            // 5.79.23 — Arc now triggered as a power weapon.
+            this.lightningArcActive = true;
+            this.lightningArcTimer = config.beamDuration;
+            this._nextArcStrikeAt = Date.now() + 200 + Math.random() * 250;
+            audioManager.playShoot();
+            if (audioManager.startLoop) {
+                audioManager.startLoop('arcLightningLoop', 0.4, {
+                    loopStart: 0.6,
+                    loopEnd: 3.4,
+                });
+            }
+            this.powerCooldown = config.cooldown;
+            this.powerCooldownMax = this.powerCooldown;
+            return;
     }
 
     // Each weapon's fire fn sets its own cooldown with discount applied

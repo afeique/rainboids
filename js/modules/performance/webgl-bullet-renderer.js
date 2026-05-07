@@ -415,11 +415,13 @@ export class WebGLBulletRenderer {
         // 5.79.12 — `aspect > 1` stretches the quad along its rotation
         //   axis (height) for an elongated bullet shape. `angle` then
         //   rotates the quad to align the long axis with travel.
-        // 5.79.20 — Atlas BODY_R is now 42 (was 46/48), body diameter
-        //   84 in the 128 slot. Scale factor 128/84 ≈ 1.524 so the
+        // 5.79.32 — Atlas BODY_R is now 38 (was 42), body diameter 76
+        //   in the 128 slot. Scale factor 128/76 ≈ 1.684 so the
         //   caller's `size` lands as the rendered body diameter; the
-        //   12-px outline ring extends beyond it for visibility.
-        const sizeScaled = size * (128 / 84);
+        //   22-px outline ring extends beyond it for visibility — much
+        //   thicker stroke that reads cleanly even at aspect=1.4
+        //   (enemy bullets).
+        const sizeScaled = size * (128 / 76);
         data[base + 0]  = x;
         data[base + 1]  = y;
         data[base + 2]  = sizeScaled;

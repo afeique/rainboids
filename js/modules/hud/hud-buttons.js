@@ -19,6 +19,7 @@
 // mouseup is still inside the same button (drag-out cancels).
 
 import { GAME_STATES } from '../core/constants.js';
+import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 
 const BUTTON_W = 64;
 const BUTTON_H = 56;
@@ -36,9 +37,9 @@ export function getHudButtonRects(canvasW, canvasH) {
     const y = canvasH - BOTTOM_MARGIN - BUTTON_H;
     const slot = (i) => startX + i * (BUTTON_W + BUTTON_GAP);
     return {
-        shop:  { id: 'shop',  x: slot(0), y, w: BUTTON_W, h: BUTTON_H, icon: '🛒', label: 'SHOP'  },
-        stats: { id: 'stats', x: slot(1), y, w: BUTTON_W, h: BUTTON_H, icon: '📊', label: 'STATS' },
-        pause: { id: 'pause', x: slot(2), y, w: BUTTON_W, h: BUTTON_H, icon: '⏸',  label: 'PAUSE' },
+        shop:  { id: 'shop',  x: slot(0), y, w: BUTTON_W, h: BUTTON_H, icon: 'cart',  label: 'SHOP'  },
+        stats: { id: 'stats', x: slot(1), y, w: BUTTON_W, h: BUTTON_H, icon: 'chart', label: 'STATS' },
+        pause: { id: 'pause', x: slot(2), y, w: BUTTON_W, h: BUTTON_H, icon: 'pause', label: 'PAUSE' },
     };
 }
 
@@ -90,12 +91,23 @@ export function drawHudButtons(ctx, engine) {
         ctx.fill();
         ctx.stroke();
 
-        // Icon (emoji)
-        ctx.font = ICON_FONT;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#fff';
-        ctx.fillText(r.icon, x + w / 2, y + h / 2 - 5);
+        // 5.79.37 — Icon now drawn from the SVG cache (slug → cached
+        //   canvas via getIconImage). Falls back to font rendering for
+        //   unknown slugs.
+        const slug = resolveIconSlug(r.icon);
+        const iconPx = 28;
+        const ix = x + w / 2;
+        const iy = y + h / 2 - 5;
+        if (slug) {
+            const img = getIconImage(slug, iconPx, '#ffffff');
+            if (img) ctx.drawImage(img, ix - iconPx / 2, iy - iconPx / 2, iconPx, iconPx);
+        } else {
+            ctx.font = ICON_FONT;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(r.icon, ix, iy);
+        }
 
         // Label
         ctx.font = LABEL_FONT;

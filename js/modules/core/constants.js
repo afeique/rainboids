@@ -22,40 +22,45 @@ export const GAME_CONFIG = {
     HEALTH_ORB_HEAL_AMOUNT_MIN: 1, // Minimum health restored per health orb
     HEALTH_ORB_HEAL_AMOUNT_MAX: 2, // Maximum health restored per health orb
     HEALTH_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop health orbs
-    HEALTH_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum health orbs dropped (upgrade to get more)
+    HEALTH_ORB_BASE_DROP_COUNT_MAX: 1, // Legacy field — health drops are now exactly one orb (5.79.27).
     HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
-    // 5.74.7 — orb radii are now in PIXELS (not multipliers) and are
-    // applied as the orb's actual radius based on heal amount / cap. The
-    // old (z * 1.2 + 0.4) * scale * 1.8 baseRadius randomization is no
-    // longer applied to collectible orbs, so changing these values now
-    // directly changes the smallest/biggest orb you see in-game.
-    HEALTH_ORB_SIZE_MIN: 14, // Pixel radius for a 1-heal orb.
-    HEALTH_ORB_SIZE_MAX: 24, // Pixel radius for a full-cap heal orb.
-    HEALTH_ORB_MAX_HEAL_PER_ORB: 2, // Per-orb heal cap. Excess budget → more orbs at this cap.
-    // 5.79.19 — Hard cap on health orbs per single drop event (mirrors
-    //   the money orb cap added in 5.79.1). At high streak + level a
-    //   kill could spawn 30+ tiny green orbs, which both cluttered the
-    //   screen AND gave the player so much heal-on-pickup that they
-    //   were effectively invincible. With the cap, excess heal budget
-    //   collapses into fewer orbs of higher value (still capped per-orb
-    //   by HEALTH_ORB_MAX_HEAL_PER_ORB above, but the splitter
-    //   absorbs overflow into the existing orbs).
-    HEALTH_ORB_MAX_DROP_COUNT: 6,
-    
-    // Money Orb Configuration (renamed from money stars)
-    MONEY_ORB_MONEY_AMOUNT_MIN: 10, // Minimum money gained per money orb
-    MONEY_ORB_MONEY_AMOUNT_MAX: 20, // Maximum money gained per money orb
+    // 5.79.32 — Health orbs sized to MATCH gold shape orbs (8-16 px),
+    //   per user request. The blue color contrast against gold is enough
+    //   to differentiate them; oversize was pulling visual weight that
+    //   the player no longer needs to differentiate "big important pickup."
+    HEALTH_ORB_SIZE_MIN: 8,   // Pixel radius for a 1-heal orb.
+    HEALTH_ORB_SIZE_MAX: 16,  // Pixel radius for a full-cap heal orb.
+    HEALTH_ORB_MAX_HEAL_PER_ORB: 2, // Heal cap drives the size-scaling ratio.
+
+    // Money Orb Configuration — gold drops are a "few shape orbs +
+    //   many pixel particles" mix (5.79.27). Two distinct visual
+    //   tiers share the gold color but differ in size and shape:
+    //     SHAPE — full visual treatment, picks from the WebGL star
+    //             shape pool (incl. 3D solids), chunky orb size.
+    //     PIXEL — tiny gold dot, simple, many per drop.
+    MONEY_ORB_MONEY_AMOUNT_MIN: 10, // Min legacy per-orb amount, used by avgMoney calc.
+    MONEY_ORB_MONEY_AMOUNT_MAX: 20, // Max legacy per-orb amount, used by avgMoney calc.
     MONEY_ORB_BASE_DROP_RATE: 0.65, // 5.74.2 — bumped 0.45 → 0.65
-    MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum money orbs dropped (upgrade to get more)
+    MONEY_ORB_BASE_DROP_COUNT_MAX: 1, // Maximum BASE orbs (drives drop budget; not the visible orb count).
     MONEY_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
-    MONEY_ORB_SIZE_MIN: 14, // 5.74.7 — pixel radius for a 1-coin orb.
-    MONEY_ORB_SIZE_MAX: 30, // 5.79.1 — pixel radius for a full-cap orb (was 24).
-    // 5.79.1 — per-orb money cap raised 20 → 100 so high-budget drops
-    //   pack value into fewer fat orbs instead of spamming dozens of
-    //   tiny ones. Combined with MONEY_ORB_MAX_DROP_COUNT below, a
-    //   level-20 streak now shows 4-6 chunky orbs instead of 30+.
-    MONEY_ORB_MAX_MONEY_PER_ORB: 100,
-    MONEY_ORB_MAX_DROP_COUNT: 6, // 5.79.1 — hard cap on orbs per single drop event.
+    // Shape orbs — chunky, value-scaled. EXACTLY 1 per drop now (5.79.31).
+    //   Was 1-2 with a "big drop" exception that let two chunky orbs
+    //   pile on top of each other; user wanted a single homing piece
+    //   surrounded by a coin shower instead.
+    MONEY_ORB_SHAPE_SIZE_MIN: 8,    // Pixel radius for a 1g shape orb.
+    MONEY_ORB_SHAPE_SIZE_MAX: 16,   // Pixel radius at SHAPE_VALUE_MAX (was 24, lighter footprint).
+    MONEY_ORB_SHAPE_VALUE_MAX: 80,  // Per-shape-orb value cap — bumped so the single shape can carry more of the budget.
+    // Pixel particles — 1.5-3 px gold coins (5.79.31). Was 1-2 px and
+    //   read as ambient sparkle rather than coins; bumped so the
+    //   shower actually looks like dropped currency.
+    MONEY_ORB_PIXEL_SIZE_MIN: 1.5,  // Pixel radius for a tiny gold coin.
+    MONEY_ORB_PIXEL_SIZE_MAX: 3.0,  // Pixel radius at the upper end of the coin.
+    MONEY_ORB_PIXEL_COUNT_MAX: 30,  // Hard cap on pixel particles per drop (5.79.31, was 15).
+    // Hard ceiling on the per-drop money budget — defense against
+    //   the runaway compounding multipliers documented in 5.79.26.
+    //   With the new visual layout (1 shape + ≤30 pixels) this
+    //   keeps the drop event from delivering more than ~250g.
+    MONEY_ORB_DROP_BUDGET_MAX: 250,
     
     // 5.78.2 — Orb-drop "*_UPGRADE" constants and MEDPACK / PAYDAY /
     // DOCTOR / HIGH_ROLLER per-stack constants removed alongside the
@@ -312,25 +317,19 @@ export function speedrunTierFor(elapsedMs) {
     return SPEEDRUN_TIERS[SPEEDRUN_TIERS.length - 1];
 }
 
-// 5.79.22 — Decorative star shape pool trimmed to simple points only,
-//   per user request. The fancy variants (multi-point, geometric,
-//   sparkle/burst) were distracting against the foreground combat.
-//   Newly-spawned stars only pick from `point` / `circle`. Already-
-//   spawned stars keep their original shape but get redirected to
-//   the `dot` atlas slot in game-engine.js#_tryAddColorStarToWebGL,
-//   so the entire field renders as plain points either way.
-//   Original pool retained in comment below for one-line revert.
-// const STAR_SHAPES = [
-//     'point', 'point', 'point', 'point',
-//     'diamond', 'diamond',
-//     'star4', 'star4',
-//     'star5', 'star6',
-//     'star8',
-//     'triangle', 'hexagon',
-//     'circle',
-//     'sparkle', 'burst'
-// ];
+// 5.79.23 — Fancy decorative star variants restored to the spawn pool
+//   (multi-point, geometric, 3D solids) — but only at SMALL star
+//   size. `STAR_SHAPES` is the small-star pool, `BIG_STAR_SHAPES` the
+//   big-star pool. Per user, no more big multi-point / 3D / geometric
+//   stars; big stars stay as plain points so they don't dominate the
+//   field. Sparkle/burst still disabled (Canvas2D special-effects
+//   path skipped per 5.79.22). Lens flare also still disabled.
 export const STAR_SHAPES = [
     'point', 'point', 'point', 'point', 'point',
     'circle',
-]; 
+    'diamond', 'diamond',
+    'triangle', 'hexagon',
+    'star4', 'star5', 'star6', 'star8',
+    'cube', 'octahedron', 'tetrahedron', 'prism',
+];
+export const BIG_STAR_SHAPES = ['point', 'circle']; 

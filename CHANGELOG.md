@@ -11,6 +11,343 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.38] - 2026-05-07
+
+### Changed — Health orbs all 3D, gold shapes all 2D (visual distinction)
+- **Health orbs** (`color-star.js`) now pick exclusively from 3D solids — `cube`, `octahedron`, `tetrahedron`, `prism`. Was a mixed pool of 2D and 3D shapes; now every health orb tumbles as a recognizable solid.
+- **Rotation speed** lowered for 3D health orbs from 0.06–0.16 rad/tick (3.6–9.6 rad/s @ 60Hz, "too fast" per user) to **0.025–0.055** (1.5–3.3 rad/s) — slow enough to read each face turning, fast enough to never look frozen.
+- **Gold shapes** (`gold-shape.js`) now pick exclusively from 2D silhouettes — `star4`, `star5`, `star6`, `star8`, `hexagon`, `diamond`, `triangle`. Dropped the 3D solids from the pool. Pairs with the health-orb change so the two pickups read as visually distinct: flat geometric coin-shapes (gold) vs. tumbling solid orbs (health).
+
+---
+
+## [5.79.37] - 2026-05-07
+
+### Changed — Emoji icons replaced with SVG vector paths; Controls page restructured
+
+**Emoji → SVG transition** (per `docs/Emoji to SVG Transition – 2026-05-07.md`):
+
+- New module `js/modules/ui/icons.js` — registry of **53 hand-authored SVG paths** (24×24 viewBox, `currentColor` fill) keyed by slug, plus a **54-entry emoji → slug map** for legacy compatibility.
+- Two render helpers:
+    - `renderIconHTML(input, opts)` — returns inline `<svg>` markup for DOM `innerHTML` consumers.
+    - `getIconImage(input, sizePx, color)` — returns a cached `HTMLCanvasElement` rasterized once per `(slug, size, color)` tuple, ready for `ctx.drawImage()` on Canvas2D consumers.
+    - `resolveIconSlug(input)` accepts either an emoji glyph or a slug and returns the canonical slug (or null) — half-migrated codebases stay safe.
+- **104 emoji icon definitions** rewritten to slug strings across `combat-manager.js`, `weapon-data.js`, `shop-manager.js`, `shop-dom.js`.
+- **9 render call sites** wired through the new helpers with text-fallback branches: `ui-manager.js` (weapon list, powerup overlay), `shop-dom.js` (equipped banners, item tiles), `world/powerup.js` (floating powerup pickup), `hud/combat.js` (powerup pickup banner + HUD circle), `hud/status.js` (PRM/PWR/SKILL squares), `hud/hud-buttons.js` (SHOP/STATS/PAUSE bottom bar), `hud/overlays.js` (circular wave-spawn timer), `ui/radial-menu.js` (radial weapon picker).
+- The legacy `shop-renderer.js` (canvas shop, marked unused) is left untouched.
+
+**Controls page restructured (5.79.37 polish, follows 5.79.35 sprite work):**
+
+- Layout split into themed cards: **Movement / Combat / Loadout / System** instead of a single dense list. Cards arrange in a responsive grid (auto-fit, `minmax(360px, 1fr)`), so the controls reflow naturally in the pause overlay.
+- Each card has a goldenrod border + inset-glow + drop shadow, lifts on hover with a stronger glow, and a small gold bullet next to a `Press Start 2P` section title.
+- **Body copy now uses Inter / system-ui** at 15 px instead of Press Start 2P at 1.25 rem — the pixel font was illegible at body sizes. Section titles + key tiles (`.kbd`, `.kbd-mouse`, `.kbd-text`) keep the pixel-styled treatment so the gameplay identity survives.
+- Action labels are now sentence-case and slightly more verbose ("Move ship", "Aim reticle", "Fire / charge power weapon") — the freed-up readability budget pays for clearer copy.
+- SimpleKeys pixel-art sprites and WASD diamond layout preserved from 5.79.35.
+
+---
+
+## [5.79.36] - 2026-05-07
+
+### Changed — Gold drops drift freely; magnet only triggers when player is near
+5.79.34 restored the full three-tier magnet (constant base pull at any range + medium proximity + close-range snap), but the user wanted drops to actually drift in space — not stream toward the player from across the screen. Removed Tier 1 (the always-on base pull) from both `gold-coin.js` and `gold-shape.js`. Drops now:
+
+- **Drift** on their initial scatter velocity, decaying through `0.92` friction with the gentle wobble for residual motion.
+- Sit motionless when far from the player — no auto-pull.
+- Magnetize **only when the player gets within 100 px** (`MAGNET_MID_RANGE`); the medium-range pull ramps up as proximity tightens.
+- Snap into the player at ≤ 40 px (`MAGNET_NEAR_RANGE`) — the "scoop" tier.
+- Tractor beam still works at long range as the player's active vacuum tool.
+
+Reads as: drops scatter, settle in space, and the player has to actually move close (or use tractor) to collect them. The original "fly within a screen-width and watch them fly toward you" homing is gone.
+
+---
+
+## [5.79.35] - 2026-05-07
+
+### Changed — Controls page redesigned with pixel-art key sprites; SFX files renamed
+- **Controls tab in the pause menu** now renders each input as a SimpleKeys pixel-art sprite (sourced from `sprites/SimpleKeys/Classic/Dark/Single PNGs/`, copied to `sprites/keys/` for clean URL paths). Each row is now a flex track `[input cluster] [chevron] [action]` with the cluster columns aligned so chevrons line up vertically. WASD renders as a 2-row diamond (W on top, A/S/D below); arrow keys render as a 4-key cluster; mouse buttons get pixel-styled `kbd-mouse` cards in cyan / orange to match the L/R click colors used elsewhere in the HUD. Hover lifts each row 4 px and tints the background goldenrod for a tactile feel. CSS-side: `image-rendering: pixelated` keeps the 16-px sprites crisp at 3× scale.
+- **`sfx/Laser_Beam_Weapon_Active.mp3` → `sfx/laserBeamLoop.mp3`** and **`sfx/thunderous_lightning_laser.mp3` → `sfx/arcLightningLoop.mp3`**. Both files were dropped into the project with verbose snake_case names that didn't match the camelCase convention used by every other file in `sfx/` (e.g. `arcStrike1.wav`, `laserBeamHit1.wav`). Renamed to match. `audio-manager.js` updated to reference the new filenames; their stale duplicate copies in the project root were removed.
+
+---
+
+## [5.79.34] - 2026-05-07
+
+### Fixed — Magnetism restored on gold drops
+The 5.79.32 rework moved gold pickups out of `colorStarPool` into independent `GoldCoin` / `GoldShape` classes — but the new classes only had drift + tractor pull, no homing magnet. Result: every gold drop had to be picked up by flying directly into it, which the user reported felt much worse than the original behavior.
+
+Restored the **three-tier homing magnet** in both `gold-coin.js` and `gold-shape.js` (independent copies — the classes stay decoupled per the user's earlier request):
+
+| Tier | Range | Strength |
+|---|---|---|
+| 1 (base) | any distance | `0.8 × 0.15 × Z` (constant pull) |
+| 2 (medium) | ≤ 100 px | `15 × (100 − dist)/100 × Z` (proximity-scaled) |
+| 3 (snap) | ≤ 40 px | `25 × (40 − dist)/40 × Z` (magnetic snap) |
+
+`Z = 2.5` (mid-range default — the legacy code used per-orb depth `1.5–3.0`, but gold drops aren't depth-stratified so a fixed value is correct). Tractor boost still stacks on top when engaged.
+
+Friction lowered from `0.985` → `0.92` to match the pre-rework `ORB_FRIC`. Without that change the magnet's velocity additions accumulate to absurd speeds (steady-state at base pull would be ~1200 px/s instead of ~225 px/s).
+
+Live test: drops spawned 200 px from the player show negative-x velocity bias within 10 ticks, moving 15-20 px toward the player in 166 ms. In-game collision (radius ~32 px, swept) catches drops before any overshoot.
+
+---
+
+## [5.79.33] - 2026-05-07
+
+### Changed — Pickup polish: blue health sparkles, scanline-skip for orbs, pixel-sharp gold coins
+
+- **Health pickup sparkles are now blue.** The 8-sparkle ring + central blip on health-orb collect was hardcoded `#FFFF00` (gold) for ALL collectibles, popping a yellow burst on the blue orb. Now branches by `starType`: health → cyan-blue (`#33ddff` blip + `#66e6ff` sparkles), money/legacy → original gold.
+- **Orbs (health, gold shape, gold coin) skip the WebGL CRT scanlines.** Added a per-instance `a_noScan` attribute (slot 14 in the 16-float instance layout) that's set to 1 for collectibles in `_pushOrbInstance`. The fragment shader does `mix(scan, 1.0, v_noScan)` so orbs render at full brightness while the starfield + nebula behind them keep the scanline effect. Reads as "game objects on top of CRT background" instead of "tinted dressing".
+- **Gold coins render as pixel-sharp `fillRect` squares on Canvas2D**, bypassing the WebGL atlas entirely. The atlas-baked dot has a Gaussian-falloff core that made coins look like glowy specks even after the shader-side halo was killed. New `_drawGoldCoinsCanvas2D` draws each coin as a 1-3 px hard square (sized by `radius`), `imageSmoothingEnabled = false`, no antialiasing, no halo, no Gaussian blur. Gold shapes still ride the WebGL pipeline (their geometric silhouettes need atlas sampling).
+- A `a_sharp` attribute (slot 15 in the instance layout) was added in case the WebGL path needs to disable the halo per-instance later (e.g. for any other "crisp dot" cases). Currently unused since coins moved to Canvas2D, but the plumbing stays.
+
+---
+
+## [5.79.32] - 2026-05-07
+
+### Changed — Gold pickups rebuilt as independent floating drops; `createColorStarBurst` deleted
+Major rework of the pickup layer driven by user feedback that drops still felt cluttered with rotating geometry:
+
+**`createColorStarBurst` removed entirely.** The function spawned 5 decorative shape stars (cubes / octahedra / star8 / etc., picked from `STAR_SHAPES`) at every asteroid/enemy kill location. Their assigned velocities were dead code — decorative stars ignore `vel.x/y` in update — so the 5 stars just sat at the kill point, visually identical to gold geometry. Combined with the gold drop's shape orb, drops looked like ~6 spinning shapes per kill. All three call sites in `collision-system.js` removed and the function deleted from `combat-manager.js`.
+
+**Gold pickups split into two new independent classes** (`js/modules/world/gold-coin.js`, `js/modules/world/gold-shape.js`), each with its own self-contained motion + lifetime + render fields. They no longer live in `colorStarPool` or share code:
+
+- `GoldCoin` — pure dot, 1.5-3 px gold pixel. Many spawn per drop (6-30 via splitter). No rotation, no shape variation, just a dot.
+- `GoldShape` — chunky geometric piece, 8-16 px. One per drop. Picks from a pool of stars / hexagons / cubes / octahedra / etc.
+
+Both classes drift in space with high friction (0.985) plus a slow per-instance wobble. **No homing magnet** — the player must fly into them or pull them with the tractor beam. **120-second lifetime** with a 5-second blink in the last 5s and a smooth fade in the last 0.5s.
+
+**Health orbs** (still in `colorStarPool` since they're the only collectible left there) also drift instead of homing now. Friction lowered from `ORB_FRIC` (0.92) to 0.985, three-tier homing magnet removed, lifetime bumped 1800 → 7200 ticks (30s → 120s).
+
+**Health orb size** trimmed from 12-30 px to **8-16 px** so it matches the gold shape size; the blue color is enough to differentiate it from gold.
+
+**Bullet outline** (`webgl-bullet-atlas.js`) bumped from 12 to 22 atlas px (and `BODY_R` 42 → 38 to give the wider outline room). On enemy bullets — which render at aspect=1.4, thinning the outline along the long axis — the stroke went from ~1.2 screen px to ~3 px, matching the perceptual weight of player bullets.
+
+### Removed
+- `combat-manager.createColorStarBurst()` and the `game-engine.createColorStarBurst()` wrapper.
+- 1-or-2-shape gating in `_splitMoneyDrop` (5.79.31 already forced 1, but the old "≥100g → 2" branch is now physically gone).
+
+---
+
+## [5.79.31] - 2026-05-07
+
+### Fixed — One homing geometry piece per gold drop, plus the explosive-splash bypass
+Two compounding bugs were making gold drops feel cluttered with chunky geometry:
+
+1. **The splitter still allowed 2 shape orbs.** Drops with budget ≥100g produced two chunky homing pieces stacked at the kill point. Lowered to **exactly 1 shape orb per drop, always.**
+2. **Explosive bullet AOE bypassed the splitter entirely.** `dropStarsFromEntity` (the legacy splash-kill path used by `bullet.js` explode()) was spawning a fresh chunky shape orb per AOE kill. With a 4-enemy splash that meant 4 extra chunky orbs piled on top of the primary kill's drop. Rerouted to spawn a small **floating pixel-coin shower instead** — no chunky homing piece on splash, since the primary kill already provides one.
+
+Side-by-side on the splitter:
+
+| | 5.79.30 | **5.79.31** |
+|---|---|---|
+| Shape orbs per drop | 1 (small) or 2 (≥100g) | **1, always** |
+| Shape MAX size | 24 px | **16 px** |
+| Shape value cap | 50g | **80g** (single shape carries more) |
+| Pixel size MIN/MAX | 1.0 / 2.0 px | **1.5 / 3.0 px** (visible as coins) |
+| Pixel count cap | 15 | **30** |
+| Pixel count divisor | budget / 5 (min 4) | **budget / 4 (min 6)** |
+| Splash AOE drop | chunky shape orb per kill | **5-pixel coin shower per kill** |
+
+Net result: every drop reads as one homing chunky coin surrounded by a clear shower of floating pixel coins, regardless of weapon. No more piles of geometry from explosive AOE.
+
+---
+
+## [5.79.30] - 2026-05-07
+
+### Changed — Gold pixel particles now just float, no homing
+The 1-2 px gold "glimmer" particles spawned alongside each shape orb no longer feed into the three-tier homing magnet that pulls collectibles toward the player. They:
+
+- Scatter on their initial drop velocity (`random(2, 5)` px/frame, wide angle).
+- Decay through `ORB_FRIC` (0.92 per tick), settling to nearly stationary in ~1-2 seconds.
+- Stay where they settle. The player has to **fly into them** to collect — they don't auto-stream into the ship.
+
+The **tractor beam still works on pixels** (and uses full strength `k = 1.0` instead of the `0.55` health-orb scale), so the player has a sweep tool when they want to vacuum up the floating coin scatter without flying through every glimmer individually.
+
+Shape orbs (gold and health) keep the original three-tier magnet — they snap to the player as before. Only the pixel particles got the "free-floating" treatment, which matches their visual role: subtle background glimmer scattered around the chunky orb you actually fly toward.
+
+---
+
+## [5.79.29] - 2026-05-07
+
+### Changed — Gold drops are now MUCH subtler
+Per user feedback, gold drops still felt cluttered. Pared down further on every axis:
+
+| | 5.79.28 | **5.79.29** |
+|---|---|---|
+| Shape gate (1 vs 2) | <60g → 1, else 2 | **<100g → 1, else 2** |
+| Shape size MAX | 28 px | **24 px** |
+| Pixel size MIN/MAX | 1.8 / 4.2 px | **1.0 / 2.0 px** |
+| Pixel count cap | 30 | **15** |
+| Pixel count divisor | budget / 3 | **budget / 5** |
+
+Now most drops show **1 chunky shape orb + 4-10 tiny 1-2 px glimmers**; only big payday drops (≥100g) get a second shape. A maxed-out drop tops out at 17 visible entities (was 32). Pixel particles really are 1-2 px gold sparks now — they read as a faint scatter of glimmers around the shape, not a swarm.
+
+Drop entity counts:
+
+| Budget | Shapes | Pixels | Total |
+|---|---|---|---|
+| 10g | 1 | 0 | 1 |
+| 30g | 1 | 4 | 5 |
+| 60g | 1 | 5 | 6 |
+| 100g | 2 | 10 | 12 |
+| 150g | 2 | 15 | 17 |
+| 250g (cap) | 2 | 15 | 17 |
+
+Runaway-gold defense is unchanged: `MONEY_ORB_DROP_BUDGET_MAX = 250` still caps total per-drop budget regardless of multiplier compound.
+
+---
+
+## [5.79.28] - 2026-05-07
+
+### Changed — Gold drop: at most 2 shape orbs (was up to 3)
+Per user feedback, big gold drops were spawning too many large geometry shapes — three chunky tumbling 3D solids was visually too much. The shape-orb cap is now **2** universally. Small drops (<60g) get 1 chunky shape; everything else gets exactly 2. The remainder of the budget always pours into the pixel coin shower, so a big drop reads as "two big tumbling shapes surrounded by a wide spray of gold dots."
+
+To make the fewer shapes carry more visual weight, shape-orb max radius bumped 22 → 28 px. A maxed-value shape orb now renders at ~42 px on screen, big enough to feel like *the* prize amid the surrounding pixel scatter.
+
+| Constant | Old | New |
+|---|---|---|
+| shape-orb count cap | 3 | **2** |
+| `MONEY_ORB_SHAPE_SIZE_MIN` | 8 | **10** |
+| `MONEY_ORB_SHAPE_SIZE_MAX` | 22 | **28** |
+
+### Changed — Coin pickup chime is now a richer 4-layer ka-ching
+The old coin sound was a 3-layer crystalline tinkle — clear but thin, no body. Reworked into a fuller bell stack:
+
+1. **BODY** — sub-octave sine bell, 0.55s decay, with `p_env_punch: 0.45`. Adds low-end weight under the fundamental and a sharp front transient.
+2. **ROOT** — clear sine "ding" with rising pitch sweep + arp; this is the main note the player hears.
+3. **FIFTH** — perfect-fifth harmonic (square + vibrato) above ROOT for bell shimmer without dominating.
+4. **SPARKLE** — high arp tail with HPF, the "tinkle" finish.
+
+Each layer's decay extended slightly so the chime rings out instead of cutting off cleanly — pickups now feel rewarding rather than clinical.
+
+Also bumped the coin-name throttle 50 ms → **70 ms** so a 30-orb pixel coin shower played in <1s reads as distinct chimes instead of piling into a buzz.
+
+---
+
+## [5.79.27] - 2026-05-07
+
+### Changed — Gold drops are now a few shape orbs + a coin shower of pixel particles
+A single gold drop event now spawns **1-3 chunky shape orbs** (varying values up to 50g each) and **6-30 tiny pixel particles** that scatter outward at higher velocity. Both kinds remain collectible — the player scoops everything up — but visually a kill drop reads as "a couple of fancy orbs surrounded by a glittering shower of coins" instead of "N uniform orbs of the same size."
+
+| Constant | Old (5.79.26) | New |
+|---|---|---|
+| `MONEY_ORB_SIZE_MIN` / `_MAX` (single tier) | 4 / 14 | *removed* |
+| `MONEY_ORB_SHAPE_SIZE_MIN` | — | **8** |
+| `MONEY_ORB_SHAPE_SIZE_MAX` | — | **22** |
+| `MONEY_ORB_SHAPE_VALUE_MAX` | — | **50** |
+| `MONEY_ORB_PIXEL_SIZE_MIN` / `_MAX` | — | **1.8 / 4.2** |
+| `MONEY_ORB_PIXEL_COUNT_MAX` | — | **30** |
+| `MONEY_ORB_DROP_BUDGET_MAX` | — | **250** |
+| `MONEY_ORB_MAX_MONEY_PER_ORB` / `_MAX_DROP_COUNT` | 15 / 25 | *removed* |
+
+The `MONEY_ORB_DROP_BUDGET_MAX = 250` is a hard ceiling on per-drop budget, replacing the old `_splitBudgetIntoOrbs` cap-times-count clamp. Even with the 5.79.26 multiplier compound delivering a 12,000g intent, the actual drop now caps at **250g of pickups** — same defense against the runaway-gold bug, just expressed at the budget level instead of inside the splitter.
+
+### Changed — Health drops are now exactly one shape orb
+Health was previously split via `_splitBudgetIntoOrbs` into up to 6 orbs per drop (gated by streak/level multipliers). Now: **one orb per drop event**, sized by heal amount (level-scaled formula in `createHealthOrb`). Range bumped from 9-28 px → 12-30 px so the blue health pickup reads as "the big important one" against the surrounding gold coin shower. The drop cooldown (60s base, 30s minimum) is unchanged.
+
+### Added — 3D shapes (cube/octahedron/tetrahedron/prism) on orbs, with fast tumble
+The orb shape pool now includes the WebGL atlas's four 3D solids, alongside the existing 2D shapes (`star4`, `star5`, `star6`, `star8`, `hexagon`, `diamond`, `triangle`). Both gold shape orbs AND health orbs can roll any of these. Orb rotation rates were bumped 4-8× faster than decorative stars so the 3D shapes tumble visibly (3D shapes specifically get an extra speed bump because their atlas-baked internal edges only "read" as a tumbling solid at speed) — the "interesting rotation" the user asked for. Stroke overlays on canvas-2D are skipped for 3D shapes so the atlas's baked edges aren't fighting a circle stroke.
+
+### Internal
+- New `createMoneyOrb(x, y, amount, isPixel)` flag selects between the chunky-shape and tiny-pixel branches. Pixel orbs force `shape='dot'`, override radius to 1.8-4.2 px, skip the canvas-2D stroke and magnet halo, and *do not emit shimmer particles* (one drop = up to 30 pixel orbs; without this guard, sparkle emission alone would saturate the particle pool).
+- Pixel orbs spawn with a wider scatter speed (`random(2,5)` vs `random(1,3)` for shapes), giving the "shower" silhouette before the magnet pulls everything in.
+- `_splitBudgetIntoOrbs` removed; replaced by `_splitMoneyDrop` (returns `{ shapes, pixels }`) and a `_evenSplit` helper. `HEALTH_ORB_MAX_DROP_COUNT` removed — single orb per drop.
+- `is3DShape` flag set in `ColorStar.reset()` based on the chosen shape; consumed by `drawOrbOverlay` (skip stroke) and the rotation-speed pick (extra bump for 3D).
+
+---
+
+## [5.79.26] - 2026-05-07
+
+### Fixed — Runaway gold per kill at late waves
+**Root cause**: `_splitBudgetIntoOrbs` was documented to *intentionally* overshoot the per-orb cap when budget exceeded `cap × maxOrbs`. The cap (`MONEY_ORB_MAX_MONEY_PER_ORB = 100`) was supposed to limit per-orb value, but the splitter would inflate each orb's value past the cap if the budget was huge — clamping orb count, not orb value. Combined with six compounding multipliers in `dropOrbsFromEntity` (`baseCount × levelQuantityMultiplier × enemyQuantityMultiplier × hitStreakMultiplier × goldFindMultiplier × streakGoldMult`, product ~35× at peak with a 60-kill streak at wave 20), a single kill could deliver 12,000+ gold packed into 6 oversized orbs.
+
+The splitter now CLAMPS total budget to `cap × maxOrbs` before splitting. Excess is discarded — the per-orb value stays bounded at the cap, so combined with the constants below the worst-case single-kill payout is now **375 gold instead of unbounded** (96.9% reduction in the worst case).
+
+Not a floating-point issue. It was a multiplicative compounding pile and a documented "feature" that effectively defeated the per-orb cap.
+
+### Fixed — Late-wave SP runaway
+**Same shape, different mechanic**. SP comes from level-ups (+1/level). Enemy points scale 6.5× by wave 20 (`ptsMul = 1 + ((L-1)/19)^1.4 × 5.5`), and XP is `ceil(points / 3)` per kill — so a wave-20 kill grants ~430 XP. The XP-to-next curve was linear at `200 + (level-1) × 50` (5.79.16), giving 1150 XP at L20. That meant 2-3 kills per level at late waves → 8-10 levels per wave → 8-10 SP per wave on top of the wave-clear bonus.
+
+XP curve now grows as a power: `experienceToNextLevel = floor(50 × level^1.45)`. New cost at L20 is 3850 (vs old 1150 — 3.3× steeper); at L30 it's 6930 (vs old 1650 — 4.2× steeper). Gain rate stays meaningful at low levels (L5: 515 vs old 400) but late-wave SP no longer compounds into a runaway pile.
+
+### Changed — Gold orbs are now a coin shower (per user request)
+Big payday drops now spawn 20+ tiny coins instead of 6 chunky orbs. Per-orb cap dropped from 100g to 15g and the drop count cap raised from 6 to 25 — combined with the now-enforced `_splitBudgetIntoOrbs` ceiling, this gives a "scoop up the coin shower" feel instead of a "grab the fat orb" feel.
+
+| Constant | Old | New |
+|---|---|---|
+| `MONEY_ORB_SIZE_MIN` | 8 | **4** |
+| `MONEY_ORB_SIZE_MAX` | 38 | **14** |
+| `MONEY_ORB_MAX_MONEY_PER_ORB` | 100 | **15** |
+| `MONEY_ORB_MAX_DROP_COUNT` | 6 | **25** |
+
+A 1g coin renders at 4×1.5 = 6 px (a tiny speck); a 15g coin renders at 14×1.5 = 21 px (a small coin). Health orb sizes (9-28 px) are unchanged on purpose — they stay visibly larger than the gold coin shower so the player can distinguish "scoop the coins" from "grab the bigger blue orb" at a glance.
+
+---
+
+## [5.79.25] - 2026-05-07
+
+### Changed — Orb size scales more dramatically with amount delivered
+Both pickup orbs already mapped value linearly to size, but the ranges were narrow enough that the dependence wasn't visually obvious. Widened the size constants so the smallest orbs read as pocket-change pickups and the biggest as chunky payloads.
+
+| Constant | Old | New | Ratio (max ÷ min) |
+|---|---|---|---|
+| `HEALTH_ORB_SIZE_MIN` | 14 | 9 | 3.1× (was 1.7×) |
+| `HEALTH_ORB_SIZE_MAX` | 24 | 28 | |
+| `MONEY_ORB_SIZE_MIN` | 14 | 8 | 4.75× (was 2.1×) |
+| `MONEY_ORB_SIZE_MAX` | 30 | 38 | |
+
+A 1-heal orb is now visibly tiny next to a 2-heal orb; a 10g pickup is a small coin while a 100g orb is a fat chunky pickup.
+
+### Removed — Dead orb fields and unused renderer state
+Cleanup pass after the WebGL orb redesign in 5.79.24 left several fields and a wasted compute on the orb spawn path. None of these were read anywhere after the canvas-2D `drawDirect` and `drawDirectSimple` paths were deleted in 5.79.24.
+
+- **`points`** and **`innerRadiusRatio`** on `ColorStar` — set in `reset()` but never read by any draw path.
+- **`pulseOffset`** and **`pulseSpeed`** on `ColorStar` — set in `reset()` and incremented in `update()` but never read; the orb shimmer is now driven by `twinkleSpeed`/`twinklePhase` (read by both the WebGL shader and `drawOrbOverlay`).
+- **`sizeMultiplier`** on orbs — set to 1 in `combat-manager.createHealthOrb`/`createMoneyOrb` but no draw or render code reads it. The `sizeVariation` pin to 1 (which the WebGL push and stroke overlay both read) is what actually disables size jitter for orbs.
+- **Wasted z-based `baseRadius` compute** for orbs in `ColorStar.reset()` — `combat-manager` overwrites both `radius` and `baseRadius` immediately after with the amount-derived size, so the parallax-z formula was throwaway work. Replaced with a conservative fallback (`radius = 14`) for the off-path case where an orb spawns without going through the combat helpers.
+
+---
+
+## [5.79.24] - 2026-05-07
+
+### Changed — Gold and health orbs now look like stars (WebGL)
+Both pickup orbs were redesigned to read as glittering star variants instead of the old "circle with $ sign" / "green diamond" treatment. Each orb at spawn picks a random shape from the WebGL starfield's pool — `star4`, `star5`, `star6`, `star8`, `hexagon`, `diamond`, or `triangle` — and renders through the same instanced WebGL pipeline that draws the background starfield. The orb body is GPU-rendered with the per-orb color, twinkle phase, twinkle speed, and rotation rate, giving orbs the same shimmer the field stars already had. A thin canvas-2D stroke + magnet-pulse halo overlays the WebGL body for a hard outline against bright nebula, and a `starSparkle` particle is emitted every ~140-230 ms inside each orb's silhouette so they read as actively glimmering on the playfield.
+
+- **Health orb color → bright blue** (`#00aaff`), matching the high-HP gradient of the health bar (was `#00ff7f` green).
+- **Money orb color → unchanged** at `#FFD700` gold; symbol overlay (`$`/`¥`/`£`/`€`) is gone — the orb's silhouette and color carry the read.
+- **Sparkle particle** types accept optional radius + color args so the existing `starSparkle` slot can carry both the gold and blue shimmer.
+
+### Internal
+- `WebGLStarfieldRenderer` gains `setBaseline()` + `resetTransients()`. The instance buffer is partitioned into a permanent prefix (background stars, nebula, decorative color stars) seeded once at init, and a transient suffix repopulated each frame for moving orbs. Single instanced draw call still covers everything.
+- `_pushOrbsToWebGL()` runs each frame between `_flushStarfieldIfDirty()` and `starfieldRenderer.draw()`, walking the active color-star pool and submitting one transient instance per orb at parallax 0.
+- `ColorStar.update()` now takes a `particlePool` argument and emits the periodic shimmer sparkle from the orb's interior.
+- `ColorStar.drawOrbOverlay()` replaces the old `drawDirect` body draw for orbs — only the stroke ring + magnet pulse stay on canvas-2D; the orb fill is GPU-rendered.
+- `setBaseline()` is called from BOTH `init()` and the title-screen `start()`. The title screen pre-populates the starfield via its own path (not through `init()`), so it needed its own baseline lock to keep `resetTransients()` from rewinding the buffer to 0 and rendering the title screen as a black void.
+
+---
+
+## [5.79.23] - 2026-05-06
+
+Three bundled changes per user request: small fancy stars come back, beams move to the power slot, and the beam-DPS spillover for primary upgrades is gone now that the beams are no longer primaries.
+
+### Changed — Fancy stars limited to small sizes
+Small stars can pick from the full geometric / multi-point / 3D pool again (`STAR_SHAPES`). Big stars are restricted to a new `BIG_STAR_SHAPES = ['point', 'circle']` list — no more giant cubes, octahedrons, multi-point bursts, or geometric chunks parading across the playfield. The WebGL force-redirect override added in 5.79.22 is removed; the slot mapping is back to its original 1-to-1 form. Lens-flare stars stay disabled.
+
+### Changed — Lance Beam and Arc Lightning are now POWER weapons
+Both beams (`LANCE_BEAM`, `LIGHTNING_ARC`) moved from `PRIMARY_WEAPONS` to `POWER_WEAPONS`. They're cooldown-based: trigger fires the beam for `beamDuration` (3s default), then waits out `cooldown` (8s) before re-activation. The continuous-tether feel is preserved during the active window, but the beam now occupies the power slot like the other heavy weapons. Beam upgrades (`BEAM_WIDTH`, `LINGER`, `REFRACTION`, `OVERLOAD_BEAM`, `LANCE_VELOCITY`, `TRIPLE_BEAM`, `AMPLIFIER`, `ARC_OVERCHARGE`) moved from `PRIMARY_UPGRADES` to `POWER_UPGRADES` accordingly.
+
+This frees the primary slot for projectile weapons exclusively (Pulse Cannon, Storm Needles, Scatter Shot, Rail Driver), and lets a player run a projectile primary alongside a beam power weapon — a combination the old slotting forbade.
+
+### Removed — Beam-DPS spillover for bullet-flavored primary upgrades
+With the beams off the primary slot, the 5.79.3 spillover (`RAPID_FIRE` / `MULTI_SHOT` / `BIG_BULLETS` / `PIERCING` / `HOMING` / `EXPLOSIVE` each adding flat % DPS to an equipped beam) is gone. Beams are now buffed only by their dedicated upgrades. The beam-aware powerup descriptions in the pause-menu Powerups tab also revert to plain `cfg.description` — no more "Beam: +22% DPS per stack" overrides.
+
+### Internal
+- `firePower` switch now dispatches `LANCE_BEAM` (calls `startLanceBeam`, sets cooldown) and `LIGHTNING_ARC` (sets `lightningArcActive` + `lightningArcTimer`, starts arc loop, sets cooldown).
+- `updateChargingSystem` runs an active-beam timer instead of a press-to-hold gate. The beam audio loops still start on activation and stop when the timer expires.
+- `LANCE_VELOCITY` damage/range bonus now applied directly in `startLanceBeam` since the beam no longer routes through the primary-weapon `getBulletVelocityDamageMult` path.
+- `collision-system.js` and `weapon-effects-renderer.js` now read beam configs from `POWER_WEAPONS` instead of `PRIMARY_WEAPONS`.
+- Random new-game loadout still picks from `Object.keys(POWER_WEAPONS)`; beams are now valid roll results.
+
+---
+
 ## [5.79.22] - 2026-05-06
 
 ### Disabled — Distracting starfield decorations

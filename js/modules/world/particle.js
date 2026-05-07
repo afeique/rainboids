@@ -67,9 +67,13 @@ export class Particle {
                 break;
                 
             case 'starSparkle':
+                // 5.79.24 — radius + color now optional args so the orb
+                //   shimmer (gold + bright blue) can reuse this type
+                //   instead of inventing a new one. Defaults preserve
+                //   the legacy "tiny gold spark" behavior.
                 this.life = 0.4;
-                this.radius = 1;
-                this.color = '#FFD700';
+                this.radius = args[0] || 1;
+                this.color = args[1] || '#FFD700';
                 this.vel = { x: 0, y: 0 };
                 break;
             case 'explosionPulse':

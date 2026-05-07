@@ -39,11 +39,12 @@ const MANIFEST = {
     //   (arcStrike1..4) at randomized intervals, so each fire-press
     //   sounds like a sequence of unique strikes instead of a flat
     //   monotonous loop.
-    // 5.79.11 — Arc Lightning loop now uses the high-quality
-    //   `thunderous_lightning_laser.mp3` asset dropped into sfx/.
-    //   Replaces the synthesized arcLightningLoop.wav. Web Audio's
-    //   decodeAudioData handles MP3 natively.
-    arcLightningLoop:        ['thunderous_lightning_laser.mp3'],
+    // 5.79.11 — Arc Lightning loop uses the high-quality recorded
+    //   thunder/lightning asset (5.79.35 — renamed from
+    //   `thunderous_lightning_laser.mp3` to `arcLightningLoop.mp3` to
+    //   match the camelCase convention used elsewhere in sfx/).
+    //   Web Audio's decodeAudioData handles MP3 natively.
+    arcLightningLoop:        ['arcLightningLoop.mp3'],
     arcStrike1:              ['arcStrike1.wav'],
     arcStrike2:              ['arcStrike2.wav'],
     arcStrike3:              ['arcStrike3.wav'],
@@ -53,12 +54,12 @@ const MANIFEST = {
     arcHit1:                 ['arcHit1.wav'],
     arcHit2:                 ['arcHit2.wav'],
     arcHit3:                 ['arcHit3.wav'],
-    // 5.79.11 — Lance Beam loop uses the `Laser_Beam_Weapon_Active.mp3`
-    //   asset (high-quality recorded laser hum). Replaces the
-    //   synthesized laserBeamLoop.wav. The hit-sizzle variants
-    //   (laserBeamHit1..3) stay synth-generated since they're short
-    //   one-shots and the synth versions read fine in context.
-    laserBeamLoop:           ['Laser_Beam_Weapon_Active.mp3'],
+    // 5.79.11 — Lance Beam loop uses the high-quality recorded laser
+    //   hum (5.79.35 — renamed from `Laser_Beam_Weapon_Active.mp3` to
+    //   `laserBeamLoop.mp3` to match the camelCase convention used
+    //   elsewhere in sfx/). The hit-sizzle variants (laserBeamHit1..3)
+    //   stay synth-generated since they're short one-shots.
+    laserBeamLoop:           ['laserBeamLoop.mp3'],
     laserBeamHit1:           ['laserBeamHit1.wav'],
     laserBeamHit2:           ['laserBeamHit2.wav'],
     laserBeamHit3:           ['laserBeamHit3.wav'],
@@ -138,7 +139,7 @@ const SOUND_THROTTLE_MS = {
     hit:               40,
     enemyHit:          40,
     explosion:         60,
-    coin:              50,
+    coin:              70,  // 5.79.28 — bumped 50 → 70ms so a 30-pixel coin shower doesn't pile up into a buzz; the new richer bell needs a touch of breathing room to read as distinct chimes.
     powerup:           120,
     healthRegen:       150,
     shield:            150,

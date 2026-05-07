@@ -8,7 +8,7 @@ export const PRIMARY_WEAPONS = {
         id: 'PULSE_CANNON',
         name: 'Pulse Cannon',
         description: 'Steady stream of reliable shots',
-        icon: '🔫',
+        icon: 'pistol',
         color: '#00ccff',
         // 5.68.1 — bumped damage 0.8 → 1.2 (DPS 2.0 → 3.0). Brings
         // Pulse Cannon up to par with Rail Driver's single-target
@@ -30,7 +30,7 @@ export const PRIMARY_WEAPONS = {
         id: 'STORM_NEEDLES',
         name: 'Storm Needles',
         description: 'Rapid tiny shots that saturate targets',
-        icon: '🌧️',
+        icon: 'rain',
         color: '#88ffff',
         // 5.68.1 — bumped damage 0.3 → 0.4 (DPS 2.31 → 3.08).
         fireRate: 130,
@@ -53,7 +53,7 @@ export const PRIMARY_WEAPONS = {
         id: 'SCATTER_GUN',
         name: 'Scatter Shot',
         description: 'Shotgun burst — devastating up close',
-        icon: '💥',
+        icon: 'explosion',
         color: '#ff8844',
         // 5.68.1 — damage tuned for 3.0 DPS at point-blank (5 pellets
         // hitting). Single-pellet glancing hits naturally fall below
@@ -77,7 +77,7 @@ export const PRIMARY_WEAPONS = {
         id: 'RAIL_DRIVER',
         name: 'Rail Driver',
         description: 'Slow, powerful piercing rail shot — fires a double-helix pair',
-        icon: '🧬',
+        icon: 'dna',
         color: '#ff44ff',
         fireRate: 1200,
         damage: 3,
@@ -92,61 +92,13 @@ export const PRIMARY_WEAPONS = {
         unlockWave: 8,
         upgrades: ['PENETRATOR', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH', 'RAIL_VELOCITY'],
     },
-    LANCE_BEAM: {
-        id: 'LANCE_BEAM',
-        name: 'Lance Beam',
-        description: 'Sustained energy beam — steady DPS, long uptime',
-        icon: '🔦',
-        color: '#44ff44',
-        // 5.68.1 — damage 0.034 → 0.05 per-frame nibble.
-        //   60Hz × 0.05 = 3.0 DPS. On par with the bumped Pulse Cannon
-        //   and the rest of the rebalanced primary roster.
-        fireRate: 2200,
-        damage: 0.05,
-        bulletSpeed: 0,
-        bulletSize: 0,
-        bulletCount: 0,
-        spreadAngle: 0,
-        piercing: 0,
-        // 5.79.15 — Range 0.6 → 0.9 (240 px → 360 px) so Lance Beam
-        //   reaches as far as Arc Lightning's chainRange. Both beams
-        //   are now equal-reach so the player can pick between them
-        //   on feel, not on range. The collision code multiplies
-        //   `range × 400` so 0.9 → 360 px, matching Arc's 360.
-        range: 0.9,
-        beamDuration: 2000,
-        beamWidth: 6,
-        cost: 0,
-        spCost: 0,
-        unlockWave: 12,
-        upgrades: ['BEAM_WIDTH', 'LINGER', 'REFRACTION', 'OVERLOAD_BEAM', 'LANCE_VELOCITY'],
-    },
-    LIGHTNING_ARC: {
-        id: 'LIGHTNING_ARC',
-        // 5.79.0 — renamed "Lightning Arc" → "Arc Lightning". Range
-        //   bumped 200 → 360 px. When out of range, the player's
-        //   weapon-fire renderer sprays frayed forward static instead
-        //   of a beam, telegraphing the gun's reach.
-        name: 'Arc Lightning',
-        description: 'Continuous lightning tether — frayed when no target, focused beam in range',
-        icon: '⚡',
-        color: '#8888ff',
-        // 5.68.1 — same per-frame damage as Lance Beam (3.0 DPS at 60Hz).
-        // The two beam-tether primaries stay locked-step in the bracket.
-        fireRate: 0,
-        damage: 0.05,
-        bulletSpeed: 0,
-        bulletSize: 0,
-        bulletCount: 0,
-        spreadAngle: 0,
-        piercing: 0,
-        range: 1.0,
-        chainRange: 360,    // tether snap range, in px (5.79.0 — was 200)
-        cost: 0,
-        spCost: 0,
-        unlockWave: 5,
-        upgrades: ['AMPLIFIER'],
-    },
+    // 5.79.23 — LANCE_BEAM and LIGHTNING_ARC moved to POWER_WEAPONS
+    //   below. They're now cooldown-based power weapons: press the
+    //   power-weapon trigger to activate the beam for `beamDuration`,
+    //   then wait out the cooldown before re-activating. The "charge"
+    //   feel will land in a follow-up patch — for now the cooldown
+    //   gates re-activation, which the existing power-weapon UI
+    //   already displays as a ring around the player.
 };
 
 // Streak damage tiers. Each tier adds +0.25× damage. Capped at LEGENDARY
@@ -174,48 +126,41 @@ export const STREAK_BUFF_DURATION = 4000; // ms — buff lasts 4s, refreshes on 
 // purchase rather than a fistful-of-gold dump.
 export const PRIMARY_UPGRADES = {
     // Pulse Cannon
-    STEADY_AIM:     { id: 'STEADY_AIM',     name: 'Steady Aim',     description: '-8% spread per stack',                    cost: 900,  maxStacks: 3,  weapon: 'PULSE_CANNON', icon: '🎯' },
-    OVERCHARGE:     { id: 'OVERCHARGE',      name: 'Overcharge',     description: '+15% auto-fire damage per stack',         cost: 1200, maxStacks: 4,  weapon: 'PULSE_CANNON', icon: '⚡' },
-    ECHO_ROUND:     { id: 'ECHO_ROUND',      name: 'Echo Round',     description: '10% chance to fire a bonus bullet',      cost: 1900, maxStacks: 3,  weapon: 'PULSE_CANNON', icon: '🔁' },
+    STEADY_AIM:     { id: 'STEADY_AIM',     name: 'Steady Aim',     description: '-8% spread per stack',                    cost: 900,  maxStacks: 3,  weapon: 'PULSE_CANNON', icon: 'target' },
+    OVERCHARGE:     { id: 'OVERCHARGE',      name: 'Overcharge',     description: '+15% auto-fire damage per stack',         cost: 1200, maxStacks: 4,  weapon: 'PULSE_CANNON', icon: 'bolt' },
+    ECHO_ROUND:     { id: 'ECHO_ROUND',      name: 'Echo Round',     description: '10% chance to fire a bonus bullet',      cost: 1900, maxStacks: 3,  weapon: 'PULSE_CANNON', icon: 'loop' },
 
     // Storm Needles
-    NEEDLE_STORM:   { id: 'NEEDLE_STORM',    name: 'Needle Storm',   description: '+15% fire rate per stack',                cost: 900,  maxStacks: 4,  weapon: 'STORM_NEEDLES', icon: '🌪️' },
-    POISON_TIP:     { id: 'POISON_TIP',      name: 'Poison Tip',     description: 'Enemies take 1 DoT for 2s',             cost: 1900, maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: '☠️' },
-    STATIC_CHARGE:  { id: 'STATIC_CHARGE',   name: 'Static Charge',  description: 'Every 10th needle chains to nearby enemy',cost: 2700, maxStacks: 2,  weapon: 'STORM_NEEDLES', icon: '⚡' },
-    SUPPRESSION:    { id: 'SUPPRESSION',     name: 'Suppression',    description: 'Hit enemies fire 15% slower for 1.5s',   cost: 2300, maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: '🔇' },
+    NEEDLE_STORM:   { id: 'NEEDLE_STORM',    name: 'Needle Storm',   description: '+15% fire rate per stack',                cost: 900,  maxStacks: 4,  weapon: 'STORM_NEEDLES', icon: 'tornado' },
+    POISON_TIP:     { id: 'POISON_TIP',      name: 'Poison Tip',     description: 'Enemies take 1 DoT for 2s',             cost: 1900, maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: 'skull' },
+    STATIC_CHARGE:  { id: 'STATIC_CHARGE',   name: 'Static Charge',  description: 'Every 10th needle chains to nearby enemy',cost: 2700, maxStacks: 2,  weapon: 'STORM_NEEDLES', icon: 'bolt' },
+    SUPPRESSION:    { id: 'SUPPRESSION',     name: 'Suppression',    description: 'Hit enemies fire 15% slower for 1.5s',   cost: 2300, maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: 'mute' },
 
     // Scatter Gun
-    TIGHT_CHOKE:    { id: 'TIGHT_CHOKE',     name: 'Tight Choke',    description: '-15% spread angle per stack',             cost: 1100, maxStacks: 3,  weapon: 'SCATTER_GUN', icon: '🔧' },
-    BUCKSHOT:        { id: 'BUCKSHOT',        name: 'Buckshot',       description: '+1 pellet per stack',                     cost: 1500, maxStacks: 2,  weapon: 'SCATTER_GUN', icon: '💣' },
-    SHRAPNEL:        { id: 'SHRAPNEL',        name: 'Shrapnel',       description: 'Pellets fragment at max range',           cost: 2300, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: '💥' },
-    SLUG_ROUND:      { id: 'SLUG_ROUND',      name: 'Slug Round',     description: 'Every 4th shot is a single big slug',    cost: 3000, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: '🔵' },
+    TIGHT_CHOKE:    { id: 'TIGHT_CHOKE',     name: 'Tight Choke',    description: '-15% spread angle per stack',             cost: 1100, maxStacks: 3,  weapon: 'SCATTER_GUN', icon: 'wrench' },
+    BUCKSHOT:        { id: 'BUCKSHOT',        name: 'Buckshot',       description: '+1 pellet per stack',                     cost: 1500, maxStacks: 2,  weapon: 'SCATTER_GUN', icon: 'bomb' },
+    SHRAPNEL:        { id: 'SHRAPNEL',        name: 'Shrapnel',       description: 'Pellets fragment at max range',           cost: 2300, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: 'explosion' },
+    SLUG_ROUND:      { id: 'SLUG_ROUND',      name: 'Slug Round',     description: 'Every 4th shot is a single big slug',    cost: 3000, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: 'circle-fill' },
 
     // Rail Driver
-    PENETRATOR:      { id: 'PENETRATOR',      name: 'Penetrator',     description: '+50% range per stack',                   cost: 1200, maxStacks: 3,  weapon: 'RAIL_DRIVER', icon: '🏹' },
-    KINETIC_IMPACT:  { id: 'KINETIC_IMPACT',  name: 'Kinetic Impact', description: 'Enemies hit are knocked back',           cost: 1500, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '💨' },
-    RAILGUN_CAPACITOR:{ id: 'RAILGUN_CAPACITOR',name:'Capacitor',     description: '2x damage after 2s idle',                cost: 2300, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '🔋' },
-    THROUGH_AND_THROUGH:{ id: 'THROUGH_AND_THROUGH',name:'Through',   description: 'Leaves a lingering damage trail',        cost: 3700, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: '✨' },
+    PENETRATOR:      { id: 'PENETRATOR',      name: 'Penetrator',     description: '+50% range per stack',                   cost: 1200, maxStacks: 3,  weapon: 'RAIL_DRIVER', icon: 'bow-arrow' },
+    KINETIC_IMPACT:  { id: 'KINETIC_IMPACT',  name: 'Kinetic Impact', description: 'Enemies hit are knocked back',           cost: 1500, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: 'wind' },
+    RAILGUN_CAPACITOR:{ id: 'RAILGUN_CAPACITOR',name:'Capacitor',     description: '2x damage after 2s idle',                cost: 2300, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: 'battery' },
+    THROUGH_AND_THROUGH:{ id: 'THROUGH_AND_THROUGH',name:'Through',   description: 'Leaves a lingering damage trail',        cost: 3700, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: 'sparkle' },
 
-    // Lance Beam
-    BEAM_WIDTH:      { id: 'BEAM_WIDTH',      name: 'Beam Width',     description: '+30% beam width per stack',              cost: 1100, maxStacks: 3,  weapon: 'LANCE_BEAM', icon: '📐' },
-    LINGER:          { id: 'LINGER',          name: 'Linger',         description: '+0.1s beam duration per stack',           cost: 1500, maxStacks: 3,  weapon: 'LANCE_BEAM', icon: '⏱️' },
-    REFRACTION:      { id: 'REFRACTION',      name: 'Refraction',     description: 'Beam splits on hitting enemy',           cost: 2700, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: '🔀' },
-    OVERLOAD_BEAM:   { id: 'OVERLOAD_BEAM',   name: 'Overload',       description: 'Final 0.1s deals 3x damage',             cost: 2300, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: '🔥' },
+    // 5.79.23 — Beam upgrades (BEAM_WIDTH, LINGER, REFRACTION,
+    //   OVERLOAD_BEAM, LANCE_VELOCITY, AMPLIFIER, TRIPLE_BEAM,
+    //   ARC_OVERCHARGE) moved to POWER_UPGRADES below now that the
+    //   beams themselves are power weapons.
 
     // Velocity-and-damage upgrades — kinetic-energy flavor: faster bullets
     // hit harder. Each stack is +12% bullet velocity AND +12% damage (additive,
     // so 3 stacks = +36% / +36%, ~+36% sustained DPS). Read via
-    // getBulletVelocityDamageMult() in player/weapons.js. For LANCE_BEAM the
-    // "velocity" portion becomes range (it has no projectiles), keeping the
-    // damage scaling identical to the projectile weapons.
-    PULSE_VELOCITY:  { id: 'PULSE_VELOCITY',  name: 'High-Velocity Rounds', description: '+12% bullet speed & damage per stack (Pulse Cannon)',  cost: 1500, maxStacks: 3, weapon: 'PULSE_CANNON',  icon: '🚄', velocityBonus: 0.12 },
-    NEEDLE_VELOCITY: { id: 'NEEDLE_VELOCITY', name: 'Hypersonic Needles',   description: '+12% needle speed & damage per stack (Storm Needles)', cost: 1500, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: '🚄', velocityBonus: 0.12 },
-    SCATTER_VELOCITY:{ id: 'SCATTER_VELOCITY',name: 'Powder Charge',         description: '+12% pellet speed & damage per stack (Scatter Shot)', cost: 1500, maxStacks: 3, weapon: 'SCATTER_GUN',   icon: '🚄', velocityBonus: 0.12 },
-    RAIL_VELOCITY:   { id: 'RAIL_VELOCITY',   name: 'Tungsten Slug',         description: '+12% rail speed & damage per stack (Rail Driver)',    cost: 1900, maxStacks: 3, weapon: 'RAIL_DRIVER',   icon: '🚄', velocityBonus: 0.12 },
-    LANCE_VELOCITY:  { id: 'LANCE_VELOCITY',  name: 'Focused Lens',          description: '+12% beam range & damage per stack (Lance Beam)',     cost: 1700, maxStacks: 3, weapon: 'LANCE_BEAM',    icon: '🚄', velocityBonus: 0.12 },
-
-    // Lightning Arc.
-    AMPLIFIER:       { id: 'AMPLIFIER',       name: 'Amplifier',             description: '+20% arc damage per stack',                            cost: 1500, maxStacks: 3, weapon: 'LIGHTNING_ARC', icon: '📡' },
+    // getBulletVelocityDamageMult() in player/weapons.js.
+    PULSE_VELOCITY:  { id: 'PULSE_VELOCITY',  name: 'High-Velocity Rounds', description: '+12% bullet speed & damage per stack (Pulse Cannon)',  cost: 1500, maxStacks: 3, weapon: 'PULSE_CANNON',  icon: 'bullet-train', velocityBonus: 0.12 },
+    NEEDLE_VELOCITY: { id: 'NEEDLE_VELOCITY', name: 'Hypersonic Needles',   description: '+12% needle speed & damage per stack (Storm Needles)', cost: 1500, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'bullet-train', velocityBonus: 0.12 },
+    SCATTER_VELOCITY:{ id: 'SCATTER_VELOCITY',name: 'Powder Charge',         description: '+12% pellet speed & damage per stack (Scatter Shot)', cost: 1500, maxStacks: 3, weapon: 'SCATTER_GUN',   icon: 'bullet-train', velocityBonus: 0.12 },
+    RAIL_VELOCITY:   { id: 'RAIL_VELOCITY',   name: 'Tungsten Slug',         description: '+12% rail speed & damage per stack (Rail Driver)',    cost: 1900, maxStacks: 3, weapon: 'RAIL_DRIVER',   icon: 'bullet-train', velocityBonus: 0.12 },
 
     // ─── TIER 2 — CAPSTONE UPGRADES (5.75.1, B1) ────────────────────────
     // Each weapon gets ONE evolved upgrade that unlocks only after its
@@ -235,39 +180,28 @@ export const PRIMARY_UPGRADES = {
     TWIN_CANNON: {
         id: 'TWIN_CANNON', name: 'Twin Cannon',
         description: 'MASTERY · Fires a second bullet at ±6° angle',
-        cost: 7500, maxStacks: 1, weapon: 'PULSE_CANNON', icon: '🎖️',
+        cost: 7500, maxStacks: 1, weapon: 'PULSE_CANNON', icon: 'medal',
         tier: 2, requires: { id: 'OVERCHARGE', stacks: 4 },
     },
     HAILSTORM: {
         id: 'HAILSTORM', name: 'Hailstorm',
         description: 'MASTERY · +1 needle per shot, all needles pierce +1',
-        cost: 7500, maxStacks: 1, weapon: 'STORM_NEEDLES', icon: '🎖️',
+        cost: 7500, maxStacks: 1, weapon: 'STORM_NEEDLES', icon: 'medal',
         tier: 2, requires: { id: 'NEEDLE_STORM', stacks: 4 },
     },
     CONE_OF_FIRE: {
         id: 'CONE_OF_FIRE', name: 'Cone of Fire',
         description: 'MASTERY · +2 pellets, pellets pierce 1 enemy',
-        cost: 7500, maxStacks: 1, weapon: 'SCATTER_GUN', icon: '🎖️',
+        cost: 7500, maxStacks: 1, weapon: 'SCATTER_GUN', icon: 'medal',
         tier: 2, requires: { id: 'BUCKSHOT', stacks: 2 },
     },
     RAIL_PENETRATOR_PLUS: {
         id: 'RAIL_PENETRATOR_PLUS', name: 'Resonance Drive',
         description: 'MASTERY · Unlimited pierce on every rail',
-        cost: 8500, maxStacks: 1, weapon: 'RAIL_DRIVER', icon: '🎖️',
+        cost: 8500, maxStacks: 1, weapon: 'RAIL_DRIVER', icon: 'medal',
         tier: 2, requires: { id: 'PENETRATOR', stacks: 3 },
     },
-    TRIPLE_BEAM: {
-        id: 'TRIPLE_BEAM', name: 'Overcharged Beam',
-        description: 'MASTERY · +120% beam damage, +50% width, +50% range',
-        cost: 9000, maxStacks: 1, weapon: 'LANCE_BEAM', icon: '🎖️',
-        tier: 2, requires: { id: 'BEAM_WIDTH', stacks: 3 },
-    },
-    ARC_OVERCHARGE: {
-        id: 'ARC_OVERCHARGE', name: 'Tesla Overcharge',
-        description: 'MASTERY · +30% arc damage AND +50% chain range',
-        cost: 7500, maxStacks: 1, weapon: 'LIGHTNING_ARC', icon: '🎖️',
-        tier: 2, requires: { id: 'AMPLIFIER', stacks: 3 },
-    },
+    // 5.79.23 — TRIPLE_BEAM + ARC_OVERCHARGE moved to POWER_UPGRADES.
 };
 
 // ─── POWER WEAPONS (Right Click) ────────────────────────────────────────────
@@ -277,7 +211,7 @@ export const POWER_WEAPONS = {
         id: 'CHARGE_SHOT',
         name: 'Charge Shot',
         description: 'Hold to charge, release to fire',
-        icon: '🔋',
+        icon: 'battery',
         color: '#00ffff',
         cooldown: 0,          // charge-based, not cooldown-based
         isChargeBased: true,
@@ -290,7 +224,7 @@ export const POWER_WEAPONS = {
         id: 'MINE_LAYER',
         name: 'Seeker Mines',
         description: 'Magnetic seekers that hunt and detonate',
-        icon: '💣',
+        icon: 'bomb',
         color: '#ff6600',
         cooldown: 4000,
         isChargeBased: false,
@@ -307,7 +241,7 @@ export const POWER_WEAPONS = {
         id: 'NOVA_BLAST',
         name: 'Nova Blast',
         description: 'Explosive shockwave that pushes everything out',
-        icon: '💫',
+        icon: 'dizzy',
         color: '#ffaa00',
         cooldown: 8000,
         isChargeBased: false,
@@ -323,7 +257,7 @@ export const POWER_WEAPONS = {
         id: 'MISSILE_SALVO',
         name: 'Missile Salvo',
         description: 'Homing missiles seek targets',
-        icon: '🚀',
+        icon: 'rocket',
         color: '#ff4444',
         cooldown: 10000,
         isChargeBased: false,
@@ -336,6 +270,51 @@ export const POWER_WEAPONS = {
         unlockWave: 7,
         upgrades: ['EXTRA_ORDNANCE', 'CLUSTER_WARHEAD', 'QUICK_RELOAD'],
     },
+    // 5.79.23 — Beams promoted from primary weapons to power weapons
+    //   per user request. Cooldown-based: trigger fires the beam for
+    //   `beamDuration` ms, then waits out `cooldown` before
+    //   re-activation. The original `range`/`damage`/`beamWidth`/etc.
+    //   fields stay so collision-system + weapon-effects-renderer
+    //   can keep reading them via POWER_WEAPONS lookups.
+    LANCE_BEAM: {
+        id: 'LANCE_BEAM',
+        name: 'Lance Beam',
+        description: 'Sustained energy beam — power weapon, fires for 3s',
+        icon: 'flashlight',
+        color: '#44ff44',
+        cooldown: 8000,
+        isChargeBased: false,
+        // Beam DPS held at 3.0 from the original primary tuning. The
+        // 3s active window × 3 DPS = 9 dmg per activation; offset by
+        // the 8s cooldown for an effective ~0.8 DPS over the cooldown
+        // period — much lower than the old primary-equivalent so the
+        // power-weapon slot stays fair vs CHARGE_SHOT / NOVA / etc.
+        damage: 0.05,
+        range: 0.9,
+        beamDuration: 3000,
+        beamWidth: 6,
+        cost: 0,
+        spCost: 0,
+        unlockWave: 12,
+        upgrades: ['BEAM_WIDTH', 'LINGER', 'REFRACTION', 'OVERLOAD_BEAM', 'LANCE_VELOCITY'],
+    },
+    LIGHTNING_ARC: {
+        id: 'LIGHTNING_ARC',
+        name: 'Arc Lightning',
+        description: 'Continuous lightning tether — power weapon, fires for 3s',
+        icon: 'bolt',
+        color: '#8888ff',
+        cooldown: 8000,
+        isChargeBased: false,
+        damage: 0.05,
+        range: 1.0,
+        chainRange: 360,
+        beamDuration: 3000,
+        cost: 0,
+        spCost: 0,
+        unlockWave: 5,
+        upgrades: ['AMPLIFIER', 'ARC_OVERCHARGE'],
+    },
 };
 
 // ─── POWER WEAPON UPGRADES ──────────────────────────────────────────────────
@@ -343,27 +322,49 @@ export const POWER_WEAPONS = {
 // 5.76.0 — power-weapon upgrade costs scaled ~2× to match the gold curve.
 export const POWER_UPGRADES = {
     // Charge Shot
-    CHARGE_POWER:     { id: 'CHARGE_POWER',     name: 'Charge Power',     description: '+0.5 charge shot base damage per stack', cost: 1600, maxStacks: 6,  weapon: 'CHARGE_SHOT', icon: '🔋' },
-    CHARGE_SPEED:     { id: 'CHARGE_SPEED',     name: 'Charge Speed',     description: '-1 second charge time',               cost: 3200, maxStacks: 3,  weapon: 'CHARGE_SHOT', icon: '⏱️',
+    CHARGE_POWER:     { id: 'CHARGE_POWER',     name: 'Charge Power',     description: '+0.5 charge shot base damage per stack', cost: 1600, maxStacks: 6,  weapon: 'CHARGE_SHOT', icon: 'battery' },
+    CHARGE_SPEED:     { id: 'CHARGE_SPEED',     name: 'Charge Speed',     description: '-1 second charge time',               cost: 3200, maxStacks: 3,  weapon: 'CHARGE_SHOT', icon: 'stopwatch',
                         costOverrides: [3200, 6400, 10500] },
-    CHARGE_OVERCHARGE:{ id: 'CHARGE_OVERCHARGE', name: 'Overcharge',      description: 'Full charge explodes on impact',      cost: 4300, maxStacks: 1,  weapon: 'CHARGE_SHOT', icon: '💥' },
+    CHARGE_OVERCHARGE:{ id: 'CHARGE_OVERCHARGE', name: 'Overcharge',      description: 'Full charge explodes on impact',      cost: 4300, maxStacks: 1,  weapon: 'CHARGE_SHOT', icon: 'explosion' },
 
     // Mine Layer
-    EXTRA_PAYLOAD:    { id: 'EXTRA_PAYLOAD',    name: 'Extra Payload',    description: '+1 max active mine per stack',         cost: 1500, maxStacks: 2,  weapon: 'MINE_LAYER', icon: '💣' },
-    BLAST_RADIUS:     { id: 'BLAST_RADIUS',     name: 'Blast Radius',     description: '+30px blast & +20px trigger range per stack', cost: 1700, maxStacks: 3,  weapon: 'MINE_LAYER', icon: '💥' },
-    DAISY_CHAIN:      { id: 'DAISY_CHAIN',      name: 'Daisy Chain',      description: 'Nearby mines detonate together',      cost: 4300, maxStacks: 1,  weapon: 'MINE_LAYER', icon: '🔗' },
-    RAPID_DEPLOY:     { id: 'RAPID_DEPLOY',     name: 'Rapid Deploy',     description: '-25% mine cooldown per stack (4s → 3s → 2.25s)', cost: 2400, maxStacks: 2, weapon: 'MINE_LAYER', icon: '⚡' },
+    EXTRA_PAYLOAD:    { id: 'EXTRA_PAYLOAD',    name: 'Extra Payload',    description: '+1 max active mine per stack',         cost: 1500, maxStacks: 2,  weapon: 'MINE_LAYER', icon: 'bomb' },
+    BLAST_RADIUS:     { id: 'BLAST_RADIUS',     name: 'Blast Radius',     description: '+30px blast & +20px trigger range per stack', cost: 1700, maxStacks: 3,  weapon: 'MINE_LAYER', icon: 'explosion' },
+    DAISY_CHAIN:      { id: 'DAISY_CHAIN',      name: 'Daisy Chain',      description: 'Nearby mines detonate together',      cost: 4300, maxStacks: 1,  weapon: 'MINE_LAYER', icon: 'chain' },
+    RAPID_DEPLOY:     { id: 'RAPID_DEPLOY',     name: 'Rapid Deploy',     description: '-25% mine cooldown per stack (4s → 3s → 2.25s)', cost: 2400, maxStacks: 2, weapon: 'MINE_LAYER', icon: 'bolt' },
 
     // Nova Blast
-    SHOCKWAVE:        { id: 'SHOCKWAVE',        name: 'Shockwave',        description: '+40px ring radius per stack',          cost: 1700, maxStacks: 3,  weapon: 'NOVA_BLAST', icon: '🌊' },
-    AFTERSHOCK:       { id: 'AFTERSHOCK',       name: 'Aftershock',       description: 'Enemies hit are slowed 30% for 2s',   cost: 2600, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: '🐌' },
-    DOUBLE_PULSE:     { id: 'DOUBLE_PULSE',     name: 'Double Pulse',     description: 'Fire a second ring 0.3s later',       cost: 4300, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: '🔁' },
-    RESONANCE:        { id: 'RESONANCE',        name: 'Resonance',        description: '-1.5s cooldown per stack',             cost: 3200, maxStacks: 2,  weapon: 'NOVA_BLAST', icon: '🔊' },
+    SHOCKWAVE:        { id: 'SHOCKWAVE',        name: 'Shockwave',        description: '+40px ring radius per stack',          cost: 1700, maxStacks: 3,  weapon: 'NOVA_BLAST', icon: 'wave' },
+    AFTERSHOCK:       { id: 'AFTERSHOCK',       name: 'Aftershock',       description: 'Enemies hit are slowed 30% for 2s',   cost: 2600, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: 'snail' },
+    DOUBLE_PULSE:     { id: 'DOUBLE_PULSE',     name: 'Double Pulse',     description: 'Fire a second ring 0.3s later',       cost: 4300, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: 'loop' },
+    RESONANCE:        { id: 'RESONANCE',        name: 'Resonance',        description: '-1.5s cooldown per stack',             cost: 3200, maxStacks: 2,  weapon: 'NOVA_BLAST', icon: 'volume' },
 
     // Missile Salvo
-    EXTRA_ORDNANCE:   { id: 'EXTRA_ORDNANCE',   name: 'Extra Ordnance',   description: '+1 missile per stack',                cost: 2200, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: '🚀' },
-    CLUSTER_WARHEAD:  { id: 'CLUSTER_WARHEAD',  name: 'Cluster Warhead',  description: 'Missiles split into 3 on impact',     cost: 3900, maxStacks: 1,  weapon: 'MISSILE_SALVO', icon: '💥' },
-    QUICK_RELOAD:     { id: 'QUICK_RELOAD',     name: 'Quick Reload',     description: '-2s cooldown per stack',               cost: 3200, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: '⏩' },
+    EXTRA_ORDNANCE:   { id: 'EXTRA_ORDNANCE',   name: 'Extra Ordnance',   description: '+1 missile per stack',                cost: 2200, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: 'rocket' },
+    CLUSTER_WARHEAD:  { id: 'CLUSTER_WARHEAD',  name: 'Cluster Warhead',  description: 'Missiles split into 3 on impact',     cost: 3900, maxStacks: 1,  weapon: 'MISSILE_SALVO', icon: 'explosion' },
+    QUICK_RELOAD:     { id: 'QUICK_RELOAD',     name: 'Quick Reload',     description: '-2s cooldown per stack',               cost: 3200, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: 'fast-forward' },
+
+    // 5.79.23 — Lance Beam (now power weapon)
+    BEAM_WIDTH:      { id: 'BEAM_WIDTH',      name: 'Beam Width',     description: '+30% beam width per stack',              cost: 1100, maxStacks: 3,  weapon: 'LANCE_BEAM', icon: 'ruler' },
+    LINGER:          { id: 'LINGER',          name: 'Linger',         description: '+0.1s beam duration per stack',           cost: 1500, maxStacks: 3,  weapon: 'LANCE_BEAM', icon: 'stopwatch' },
+    REFRACTION:      { id: 'REFRACTION',      name: 'Refraction',     description: 'Beam splits on hitting enemy',           cost: 2700, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: 'shuffle' },
+    OVERLOAD_BEAM:   { id: 'OVERLOAD_BEAM',   name: 'Overload',       description: 'Final 0.1s deals 3x damage',             cost: 2300, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: 'fire' },
+    LANCE_VELOCITY:  { id: 'LANCE_VELOCITY',  name: 'Focused Lens',   description: '+12% beam range & damage per stack (Lance Beam)', cost: 1700, maxStacks: 3, weapon: 'LANCE_BEAM',    icon: 'bullet-train', velocityBonus: 0.12 },
+    TRIPLE_BEAM: {
+        id: 'TRIPLE_BEAM', name: 'Overcharged Beam',
+        description: 'MASTERY · +120% beam damage, +50% width, +50% range',
+        cost: 9000, maxStacks: 1, weapon: 'LANCE_BEAM', icon: 'medal',
+        tier: 2, requires: { id: 'BEAM_WIDTH', stacks: 3 },
+    },
+
+    // 5.79.23 — Arc Lightning (now power weapon)
+    AMPLIFIER:       { id: 'AMPLIFIER',       name: 'Amplifier',      description: '+20% arc damage per stack',                            cost: 1500, maxStacks: 3, weapon: 'LIGHTNING_ARC', icon: 'satellite' },
+    ARC_OVERCHARGE: {
+        id: 'ARC_OVERCHARGE', name: 'Tesla Overcharge',
+        description: 'MASTERY · +30% arc damage AND +50% chain range',
+        cost: 7500, maxStacks: 1, weapon: 'LIGHTNING_ARC', icon: 'medal',
+        tier: 2, requires: { id: 'AMPLIFIER', stacks: 3 },
+    },
 };
 
 // ─── DEFENSE SKILLS (Number Keys 1-4) ───────────────────────────────────────
@@ -373,7 +374,7 @@ export const DEFENSE_SKILLS = {
         id: 'BULWARK',
         name: 'Bulwark',
         description: '50% damage resistance for 4s',
-        icon: '🛡️',
+        icon: 'shield',
         color: '#ffcc00',
         cooldown: 20000,
         duration: 4000,
@@ -386,7 +387,7 @@ export const DEFENSE_SKILLS = {
         id: 'REPAIR_NANITES',
         name: 'Repair Nanites',
         description: 'Regen 3 HP/s for 5s',
-        icon: '💚',
+        icon: 'heart',
         color: '#44ff88',
         cooldown: 25000,
         duration: 5000,
@@ -399,7 +400,7 @@ export const DEFENSE_SKILLS = {
         id: 'PHASE_DASH',
         name: 'Phase Dash',
         description: 'Invulnerable dash 150px',
-        icon: '💨',
+        icon: 'wind',
         color: '#aa88ff',
         cooldown: 8000,
         duration: 300,
@@ -412,7 +413,7 @@ export const DEFENSE_SKILLS = {
         id: 'DEFLECTOR_ORBS',
         name: 'Deflector Orbs',
         description: 'Orbiting orbs block bullets for 5s',
-        icon: '🔮',
+        icon: 'crystal-ball',
         color: '#44ddff',
         cooldown: 15000,
         duration: 5000,
@@ -426,7 +427,7 @@ export const DEFENSE_SKILLS = {
         id: 'EMP_PULSE',
         name: 'EMP Pulse',
         description: 'Stun nearby enemies for 2s',
-        icon: '📡',
+        icon: 'satellite',
         color: '#8888ff',
         cooldown: 22000,
         duration: 2000,
@@ -439,7 +440,7 @@ export const DEFENSE_SKILLS = {
         id: 'TRACTOR_SHIELD',
         name: 'Tractor Shield',
         description: 'Forward shield absorbs bullets for coins',
-        icon: '🧲',
+        icon: 'magnet',
         color: '#ff88ff',
         cooldown: 18000,
         duration: 4000,
@@ -455,34 +456,34 @@ export const DEFENSE_SKILLS = {
 
 export const SKILL_UPGRADES = {
     // Bulwark
-    FORTIFY:          { id: 'FORTIFY',          name: 'Fortify',          description: '+1s duration per stack',               cost: 2, maxStacks: 2, skill: 'BULWARK', icon: '⏱️' },
-    IRON_WILL:        { id: 'IRON_WILL',        name: 'Iron Will',        description: 'Resistance increased to 65%',         cost: 3, maxStacks: 1, skill: 'BULWARK', icon: '🛡️' },
-    RETALIATION:      { id: 'RETALIATION',      name: 'Retaliation',      description: 'Emit a damage pulse when hit',        cost: 3, maxStacks: 1, skill: 'BULWARK', icon: '💥' },
+    FORTIFY:          { id: 'FORTIFY',          name: 'Fortify',          description: '+1s duration per stack',               cost: 2, maxStacks: 2, skill: 'BULWARK', icon: 'stopwatch' },
+    IRON_WILL:        { id: 'IRON_WILL',        name: 'Iron Will',        description: 'Resistance increased to 65%',         cost: 3, maxStacks: 1, skill: 'BULWARK', icon: 'shield' },
+    RETALIATION:      { id: 'RETALIATION',      name: 'Retaliation',      description: 'Emit a damage pulse when hit',        cost: 3, maxStacks: 1, skill: 'BULWARK', icon: 'explosion' },
 
     // Repair Nanites
-    POTENCY:          { id: 'POTENCY',          name: 'Potency',          description: '+1 HP/s per stack',                    cost: 2, maxStacks: 2, skill: 'REPAIR_NANITES', icon: '💊' },
-    EXTENDED_CARE:    { id: 'EXTENDED_CARE',    name: 'Extended Care',    description: '+2s duration per stack',               cost: 2, maxStacks: 2, skill: 'REPAIR_NANITES', icon: '⏱️' },
-    EMERGENCY_PROTOCOL:{ id:'EMERGENCY_PROTOCOL',name:'Emergency',        description: 'Auto-activates below 20% HP',         cost: 3, maxStacks: 1, skill: 'REPAIR_NANITES', icon: '🚨' },
+    POTENCY:          { id: 'POTENCY',          name: 'Potency',          description: '+1 HP/s per stack',                    cost: 2, maxStacks: 2, skill: 'REPAIR_NANITES', icon: 'pill' },
+    EXTENDED_CARE:    { id: 'EXTENDED_CARE',    name: 'Extended Care',    description: '+2s duration per stack',               cost: 2, maxStacks: 2, skill: 'REPAIR_NANITES', icon: 'stopwatch' },
+    EMERGENCY_PROTOCOL:{ id:'EMERGENCY_PROTOCOL',name:'Emergency',        description: 'Auto-activates below 20% HP',         cost: 3, maxStacks: 1, skill: 'REPAIR_NANITES', icon: 'siren' },
 
     // Phase Dash
-    EXTENDED_PHASE:   { id: 'EXTENDED_PHASE',   name: 'Extended Phase',   description: '+0.2s invulnerability per stack',      cost: 2, maxStacks: 2, skill: 'PHASE_DASH', icon: '⏱️' },
-    AFTERIMAGE:       { id: 'AFTERIMAGE',       name: 'Afterimage',       description: 'Leave a damaging trail',              cost: 3, maxStacks: 1, skill: 'PHASE_DASH', icon: '👻' },
-    QUICK_PHASE:      { id: 'QUICK_PHASE',      name: 'Quick Phase',      description: '-2s cooldown per stack',               cost: 2, maxStacks: 2, skill: 'PHASE_DASH', icon: '⏩' },
+    EXTENDED_PHASE:   { id: 'EXTENDED_PHASE',   name: 'Extended Phase',   description: '+0.2s invulnerability per stack',      cost: 2, maxStacks: 2, skill: 'PHASE_DASH', icon: 'stopwatch' },
+    AFTERIMAGE:       { id: 'AFTERIMAGE',       name: 'Afterimage',       description: 'Leave a damaging trail',              cost: 3, maxStacks: 1, skill: 'PHASE_DASH', icon: 'ghost' },
+    QUICK_PHASE:      { id: 'QUICK_PHASE',      name: 'Quick Phase',      description: '-2s cooldown per stack',               cost: 2, maxStacks: 2, skill: 'PHASE_DASH', icon: 'fast-forward' },
 
     // Deflector Orbs
-    EXTRA_ORB:        { id: 'EXTRA_ORB',        name: 'Extra Orb',        description: '+1 orbiting orb per stack',            cost: 2, maxStacks: 2, skill: 'DEFLECTOR_ORBS', icon: '🔮' },
-    HARDENED_ORBS:    { id: 'HARDENED_ORBS',    name: 'Hardened Orbs',    description: '+2 hits per orb per stack',            cost: 2, maxStacks: 2, skill: 'DEFLECTOR_ORBS', icon: '💎' },
-    REFLECT:          { id: 'REFLECT',          name: 'Reflect',          description: 'Blocked bullets fire back at enemies', cost: 3, maxStacks: 1, skill: 'DEFLECTOR_ORBS', icon: '🔁' },
+    EXTRA_ORB:        { id: 'EXTRA_ORB',        name: 'Extra Orb',        description: '+1 orbiting orb per stack',            cost: 2, maxStacks: 2, skill: 'DEFLECTOR_ORBS', icon: 'crystal-ball' },
+    HARDENED_ORBS:    { id: 'HARDENED_ORBS',    name: 'Hardened Orbs',    description: '+2 hits per orb per stack',            cost: 2, maxStacks: 2, skill: 'DEFLECTOR_ORBS', icon: 'gem' },
+    REFLECT:          { id: 'REFLECT',          name: 'Reflect',          description: 'Blocked bullets fire back at enemies', cost: 3, maxStacks: 1, skill: 'DEFLECTOR_ORBS', icon: 'loop' },
 
     // EMP Pulse
-    WIDE_BAND:        { id: 'WIDE_BAND',        name: 'Wide Band',        description: '+60px radius per stack',               cost: 2, maxStacks: 2, skill: 'EMP_PULSE', icon: '📡' },
-    EMP_OVERLOAD:     { id: 'EMP_OVERLOAD',     name: 'Overload',         description: 'Stunned enemies take +20% damage',    cost: 3, maxStacks: 1, skill: 'EMP_PULSE', icon: '⚡' },
-    CASCADE:          { id: 'CASCADE',          name: 'Cascade',          description: 'Kill a stunned enemy to stun nearby',  cost: 3, maxStacks: 1, skill: 'EMP_PULSE', icon: '🔗' },
+    WIDE_BAND:        { id: 'WIDE_BAND',        name: 'Wide Band',        description: '+60px radius per stack',               cost: 2, maxStacks: 2, skill: 'EMP_PULSE', icon: 'satellite' },
+    EMP_OVERLOAD:     { id: 'EMP_OVERLOAD',     name: 'Overload',         description: 'Stunned enemies take +20% damage',    cost: 3, maxStacks: 1, skill: 'EMP_PULSE', icon: 'bolt' },
+    CASCADE:          { id: 'CASCADE',          name: 'Cascade',          description: 'Kill a stunned enemy to stun nearby',  cost: 3, maxStacks: 1, skill: 'EMP_PULSE', icon: 'chain' },
 
     // Tractor Shield
-    WIDE_ANGLE:       { id: 'WIDE_ANGLE',       name: 'Wide Angle',       description: '+30° shield arc per stack',            cost: 2, maxStacks: 2, skill: 'TRACTOR_SHIELD', icon: '📐' },
-    PROFIT:           { id: 'PROFIT',           name: 'Profit',           description: '+5 coins per absorbed bullet',         cost: 2, maxStacks: 2, skill: 'TRACTOR_SHIELD', icon: '💰' },
-    REDIRECTION:      { id: 'REDIRECTION',      name: 'Redirection',      description: '30% of absorbed bullets fire back',   cost: 3, maxStacks: 1, skill: 'TRACTOR_SHIELD', icon: '↩️' },
+    WIDE_ANGLE:       { id: 'WIDE_ANGLE',       name: 'Wide Angle',       description: '+30° shield arc per stack',            cost: 2, maxStacks: 2, skill: 'TRACTOR_SHIELD', icon: 'ruler' },
+    PROFIT:           { id: 'PROFIT',           name: 'Profit',           description: '+5 coins per absorbed bullet',         cost: 2, maxStacks: 2, skill: 'TRACTOR_SHIELD', icon: 'money-bag' },
+    REDIRECTION:      { id: 'REDIRECTION',      name: 'Redirection',      description: '30% of absorbed bullets fire back',   cost: 3, maxStacks: 1, skill: 'TRACTOR_SHIELD', icon: 'undo' },
 };
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────

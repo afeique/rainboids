@@ -5,6 +5,7 @@
 import { rgba } from '../core/color-cache.js';
 import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS } from '../combat/weapon-data.js';
 import { VERSION } from '../core/version.js';
+import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 
 export const _charWidthCache = new Map();
 
@@ -974,7 +975,7 @@ export function drawSpawnTimer() {
 
         // Draw spawn timer (top) - shows generic "entity" icon
         const spawnY = startY;
-        this.drawCircularTimer(ctx, timerX, spawnY, radius, spawnProgress, '#00ff88', '⚡', timeUntilSpawn);
+        this.drawCircularTimer(ctx, timerX, spawnY, radius, spawnProgress, '#00ff88', 'bolt', timeUntilSpawn);
 
         // Draw shop timer (bottom) - disabled per user request
         // if (timeUntilShop > 30000) {
@@ -1395,12 +1396,19 @@ export function drawCircularTimer(ctx, x, y, radius, progress, color, icon, time
         ctx.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + (progress * Math.PI * 2));
         ctx.stroke();
 
-        // Draw icon in center
-        ctx.font = '16px "Press Start 2P", monospace';
-        ctx.fillStyle = color;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(icon, x, y);
+        // 5.79.37 — SVG icon when slug resolves, font fallback otherwise.
+        const slug = resolveIconSlug(icon);
+        const iconPx = 16;
+        if (slug) {
+            const img = getIconImage(slug, iconPx, color);
+            if (img) ctx.drawImage(img, x - iconPx / 2, y - iconPx / 2, iconPx, iconPx);
+        } else {
+            ctx.font = '16px "Press Start 2P", monospace';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(icon, x, y);
+        }
 
         // Draw countdown text below
         const totalSeconds = Math.ceil(timeRemaining / 1000);

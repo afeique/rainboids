@@ -5,6 +5,7 @@
 import { GAME_STATES } from '../core/constants.js';
 import { rgba } from '../core/color-cache.js';
 import { pulsePalette } from './overlays.js';
+import { getIconImage, resolveIconSlug, renderIconHTML } from '../ui/icons.js';
 
 export function drawDamageNumbers() {
         const ctx = this.ctx;
@@ -332,21 +333,28 @@ export function drawPowerupIndicators() {
             // low in the circle. Measure the glyph and offset by its real
             // (ascent − descent) / 2 from the alphabetic baseline.
             ctx.fillStyle = '#ffffff';
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 1;
-            ctx.font = `bold ${iconSize * 0.5}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'alphabetic';
             const cx = x + iconSize / 2;
             const cy = y + iconSize / 2;
-            const m = ctx.measureText(powerupData.config.icon);
-            // Fallback fudge factors if a browser doesn't report bounding box
-            // metrics for emoji (older Safari).
-            const ascent = m.actualBoundingBoxAscent || iconSize * 0.4;
-            const descent = m.actualBoundingBoxDescent || iconSize * 0.05;
-            const iconY = cy + (ascent - descent) / 2;
-            ctx.strokeText(powerupData.config.icon, cx, iconY);
-            ctx.fillText(powerupData.config.icon, cx, iconY);
+            // 5.79.37 — Icon now drawn from the SVG cache. Fallback to
+            //   text rendering if the icon string isn't a known slug.
+            const slug = resolveIconSlug(powerupData.config.icon);
+            const innerSize = Math.round(iconSize * 0.65);
+            if (slug) {
+                const img = getIconImage(slug, innerSize, '#ffffff');
+                if (img) ctx.drawImage(img, cx - innerSize / 2, cy - innerSize / 2, innerSize, innerSize);
+            } else {
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.font = `bold ${iconSize * 0.5}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'alphabetic';
+                const m = ctx.measureText(powerupData.config.icon);
+                const ascent = m.actualBoundingBoxAscent || iconSize * 0.4;
+                const descent = m.actualBoundingBoxDescent || iconSize * 0.05;
+                const iconY = cy + (ascent - descent) / 2;
+                ctx.strokeText(powerupData.config.icon, cx, iconY);
+                ctx.fillText(powerupData.config.icon, cx, iconY);
+            }
 
             // Draw stack count if > 1
             if (powerupData.stacks > 1) {
@@ -452,7 +460,8 @@ export function syncPowerupHUD() {
                 circle.className = 'powerup-hud-circle';
                 circle.style.borderColor = colors[0];
                 circle.style.boxShadow = `0 0 8px ${colors[0]}80`;
-                circle.textContent = powerupData.config.icon || '⭐';
+                circle.style.color = '#ffffff';
+                circle.innerHTML = renderIconHTML(powerupData.config.icon, { size: 22, fallback: '★' });
                 item.appendChild(circle);
 
                 let bar = null;

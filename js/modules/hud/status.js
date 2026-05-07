@@ -7,6 +7,7 @@ import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '
 import { DEFENSE_SKILLS } from '../combat/weapon-data.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
+import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 
 export function drawHUD() {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
@@ -1191,12 +1192,19 @@ function drawWeaponSquare(ctx, cx, cy, size, radius, icon, color, label, scale =
     _roundedRectPath(ctx, -half, -half, size, size, radius);
     ctx.stroke();
 
-    // Icon
-    ctx.font = `${Math.round(size * 0.55)}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(icon, 0, 1);
+    // Icon — 5.79.37 SVG-cached image when slug is known, fallback to text.
+    const slug = resolveIconSlug(icon);
+    const iconPx = Math.round(size * 0.55);
+    if (slug) {
+        const img = getIconImage(slug, iconPx, '#ffffff');
+        if (img) ctx.drawImage(img, -iconPx / 2, -iconPx / 2, iconPx, iconPx);
+    } else {
+        ctx.font = `${iconPx}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(icon, 0, 1);
+    }
 
     // Label below the square (un-scaled so text size doesn't pulse).
     // Shifted slightly farther down to match the larger square.

@@ -111,18 +111,6 @@ export function createDebris(ast) {
     }, 180);
 }
 
-export function createColorStarBurst(x, y) {
-    for (let i = 0; i < 5; i++) {
-        const angle = (i / 5) * Math.PI * 2 + random(-0.3, 0.3);
-        const speed = random(2, 5);
-
-        const colorStar = this.colorStarPool.get(x, y, true);
-        if (colorStar) {
-            colorStar.vel.x = Math.cos(angle) * speed;
-            colorStar.vel.y = Math.sin(angle) * speed;
-        }
-    }
-}
 
 // ── Enemy Death Sequence ──
 //
@@ -513,7 +501,6 @@ export function createHealthOrb(x, y, healAmountOverride = null) {
     const maxSize = GAME_CONFIG.HEALTH_ORB_SIZE_MAX;
     healthOrb.radius = minSize + ratio * (maxSize - minSize);
     healthOrb.baseRadius = healthOrb.radius;
-    healthOrb.sizeMultiplier = 1;
     healthOrb.sizeVariation = 1; // Render path multiplies by sizeVariation; pin to 1 so the SIZE constants govern alone.
 
     const angle = random(0, Math.PI * 2);
@@ -522,19 +509,23 @@ export function createHealthOrb(x, y, healAmountOverride = null) {
     healthOrb.vel.y = Math.sin(angle) * speed;
 }
 
-export function createMoneyOrb(x, y, moneyAmountOverride = null) {
-    const moneyOrb = this.colorStarPool.get(x, y, 'money');
-    if (!moneyOrb) return;
-
+// 5.79.27 — `isPixel` flag splits the gold-orb path into "shape orb"
+//   (full visual treatment, value-scaled size) and "pixel particle"
+//   (tiny dot, low value, many per drop). Both stay collectible — the
+//   player scoops everything up — but visually a drop reads as a few
+//   chunky orbs surrounded by a coin shower.
+// 5.79.32 — Money orbs (gold) live in goldCoinPool / goldShapePool —
+//   two independent classes, each with its own drift + lifetime + blink
+//   logic. The old pool's orbs were homing collectibles; the new types
+//   drift instead, blink-fade after 120s, and only respond to the
+//   tractor beam when engaged. createMoneyOrb keeps the legacy
+//   (x, y, amountOverride, isPixel) signature so existing callers
+//   (dropStarsFromEntity, the splitter) keep working unchanged.
+export function createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false) {
     let moneyAmount;
     if (moneyAmountOverride !== null) {
         moneyAmount = Math.max(1, moneyAmountOverride);
     } else {
-        // 5.78.2 — money amount scales with player level (replaces the
-        // PAYDAY / HIGH_ROLLER stacks). Min adds +3/level, max +5/level
-        // → level 20 baseline becomes 67–115g per orb (was 10–20g).
-        // Combined with Gold Find rate scaling, level-20 income is
-        // ~2× per-orb × 1.5× rate = ~3× over level 1.
         const lvl = Math.max(1, (this.player.level | 0));
         const minBonus = (lvl - 1) * 3;
         const maxBonus = (lvl - 1) * 5;
@@ -542,47 +533,87 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null) {
         const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + maxBonus);
         moneyAmount = Math.floor(Math.random() * (maxMoney - minMoney + 1)) + minMoney;
     }
-    moneyOrb.moneyAmount = moneyAmount;
 
-    // 5.74.7 — see createHealthOrb. Orb radius now linearly maps amount
-    // (1..cap) → SIZE_MIN..SIZE_MAX in pixels, bypassing the random
-    // parallax-z baseRadius. SIZE constants are the sole size controls.
-    const cap = GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB;
-    const ratio = Math.min(1, Math.max(0, (moneyAmount - 1) / Math.max(1, cap - 1)));
-    const minSize = GAME_CONFIG.MONEY_ORB_SIZE_MIN;
-    const maxSize = GAME_CONFIG.MONEY_ORB_SIZE_MAX;
-    moneyOrb.radius = minSize + ratio * (maxSize - minSize);
-    moneyOrb.baseRadius = moneyOrb.radius;
-    moneyOrb.sizeMultiplier = 1;
-    moneyOrb.sizeVariation = 1;
-
-    const angle = random(0, Math.PI * 2);
-    const speed = random(1, 3);
-    moneyOrb.vel.x = Math.cos(angle) * speed;
-    moneyOrb.vel.y = Math.sin(angle) * speed;
+    if (isPixel) {
+        const coin = this.goldCoinPool.get(x, y, moneyAmount);
+        return coin;
+    }
+    const shape = this.goldShapePool.get(x, y, moneyAmount);
+    return shape;
 }
 
-// Split an integer total budget into N equal-ish orb values, each ≤ cap.
-// Returns an array of orb values whose sum === total.
-//
-// 5.79.1 — `maxOrbs` clamps the split count so high-budget drops don't
-//   spawn dozens of tiny orbs. When budget exceeds `cap × maxOrbs`, the
-//   excess gets distributed evenly so per-orb values overshoot `cap` —
-//   that's intentional: the orb's render still saturates at SIZE_MAX,
-//   but the value (and pickup gold) keeps growing.
-function _splitBudgetIntoOrbs(total, cap, maxOrbs = Infinity) {
-    if (total <= 0) return [];
-    const count = Math.max(1, Math.min(maxOrbs, Math.ceil(total / cap)));
+// 5.79.31 — Money drops are visually "ONE homing shape orb + many
+//   floating pixel coins". Was 1-2 shapes which compounded with the
+//   explosive-splash bypass into a pile of geometry per kill cluster.
+//   Now: exactly one chunky homing piece per drop (capped at
+//   MONEY_ORB_SHAPE_VALUE_MAX gold), and the rest of the budget
+//   spreads across up to MONEY_ORB_PIXEL_COUNT_MAX small floating
+//   pixel coins. Total budget bounded by MONEY_ORB_DROP_BUDGET_MAX.
+//   The splitter returns the two lists; caller spawns each kind via
+//   createMoneyOrb(..., isPixel).
+function _splitMoneyDrop(total) {
+    if (total <= 0) return { shapes: [], pixels: [] };
+
+    const dropMax = GAME_CONFIG.MONEY_ORB_DROP_BUDGET_MAX;
+    total = Math.min(total, dropMax);
+
+    // Exactly ONE shape orb per drop. Per the user's explicit ask:
+    //   "1-2 homing geometry pieces and a bunch of pixel gold coins
+    //   that float." We pick 1 (the simpler end of that range) so
+    //   the homing pull is unambiguous — the player streams toward
+    //   one chunky piece and sweeps up the floating coins around it.
+    const shapeN = 1;
+
+    const shapeCap = GAME_CONFIG.MONEY_ORB_SHAPE_VALUE_MAX;
+    // Single shape gets up to ~30% of the budget (capped at SHAPE_VALUE_MAX
+    // so a 250g drop's shape doesn't grow grotesquely large). Most of
+    // the gold flows into the floating pixel coins.
+    const shapeBudgetTarget = Math.min(total, Math.floor(total * 0.30) + 6);
+    const shapeBudget = Math.min(shapeBudgetTarget, shapeCap);
+    const shapes = _evenSplit(shapeBudget, shapeN);
+
+    // Pixel coins — divisor 4, min 6, cap MONEY_ORB_PIXEL_COUNT_MAX (30).
+    //   With the larger pixel size constants (1.5-3px) and 6-30 count
+    //   range, drops read as a clear coin shower around the single
+    //   homing piece.
+    const pixelBudget = Math.max(0, total - shapeBudget);
+    const pixelN = pixelBudget <= 0
+        ? 0
+        : Math.min(GAME_CONFIG.MONEY_ORB_PIXEL_COUNT_MAX, Math.max(6, Math.floor(pixelBudget / 4)));
+    const pixels = _evenSplit(pixelBudget, pixelN);
+
+    return { shapes, pixels };
+}
+
+// Even-distribute `total` across `count` slots. If `count` is 0 returns []
+// even when total > 0 (caller's responsibility to handle leftover).
+function _evenSplit(total, count) {
+    if (total <= 0 || count <= 0) return [];
     const base = Math.floor(total / count);
     const remainder = total - base * count;
     const out = new Array(count);
-    for (let i = 0; i < count; i++) out[i] = base + (i < remainder ? 1 : 0);
+    for (let i = 0; i < count; i++) out[i] = Math.max(1, base + (i < remainder ? 1 : 0));
     return out;
 }
 
+// 5.79.31 — Legacy splash-kill drop path (used by explosive bullet
+//   AOE in player/bullet.js). Was spawning ONE chunky shape money
+//   orb per AOE kill — bypassing the splitter entirely. With a
+//   3-enemy splash that meant 3 chunky orbs piled on the primary
+//   kill's drop, which is what the user means by "ridiculous gold
+//   geometry per drop". Now spawns a small floating coin shower
+//   only — no chunky homing piece, since the primary kill already
+//   provides one (collision-system → dropOrbsFromEntity).
 export function dropStarsFromEntity(x, y) {
     this.createHealthOrb(x, y);
-    this.createMoneyOrb(x, y);
+
+    const lvl = Math.max(1, (this.player?.level | 0) || 1);
+    const avgValue = Math.max(1, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (lvl - 1) * 3);
+    const splashCount = 5;
+    const perCoin = Math.max(1, Math.floor(avgValue / splashCount));
+    for (let i = 0; i < splashCount; i++) {
+        this.createMoneyOrb(x, y, perCoin, true);
+    }
 }
 
 export function dropOrbsFromEntity(x, y, entity = null) {
@@ -641,44 +672,19 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const healthCooldownReady = (now - (this.lastHealthOrbDropAt || 0)) >= healthCooldown;
 
     if (healthCooldownReady && Math.random() < healthDropRate) {
-        // 5.78.2 — quantity ceiling is base + player-level bonus (was
-        // base + per-stack DROP_QUANTITY powerup); per-orb amount is
-        // now level-scaled inside createHealthOrb (no more MEDPACK /
-        // DOCTOR stacks). Split-budget logic preserved so a high-level
-        // drop spawns many small visible orbs instead of one mega-orb.
-        const maxHealthOrbs = GAME_CONFIG.HEALTH_ORB_BASE_DROP_COUNT_MAX + playerLvlQuantityBonus;
-        const baseCount = Math.floor(Math.random() * maxHealthOrbs) + 1;
-        const totalLegacyCount = Math.max(1, Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
-
-        const lvl = playerLvl;
-        const lvlBonus = Math.floor((lvl - 1) * 0.6);
-        const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + lvlBonus;
-        const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + lvlBonus + Math.floor((lvl - 1) * 0.15));
-        const avgHeal = (minHeal + maxHeal) / 2;
-        const healBudget = Math.max(1, Math.round(totalLegacyCount * avgHeal));
-
-        // 5.79.19 — Hard cap on health orb count (mirrors money orbs in
-        //   5.79.1). Excess heal budget folds into the existing orbs as
-        //   higher per-orb value rather than spawning a swarm. Prevents
-        //   the "30+ tiny green orbs" runaway at high streak/level.
-        const orbValues = _splitBudgetIntoOrbs(
-            healBudget,
-            GAME_CONFIG.HEALTH_ORB_MAX_HEAL_PER_ORB,
-            GAME_CONFIG.HEALTH_ORB_MAX_DROP_COUNT,
-        );
-        for (const v of orbValues) this.createHealthOrb(x, y, v);
-
+        // 5.79.27 — One health orb per drop event (was: budget split
+        //   across up to MAX_DROP_COUNT orbs). The per-orb heal amount
+        //   is just the level-scaled formula in createHealthOrb — no
+        //   compound multipliers, no swarm. Health is rare and
+        //   important; one chunky blue orb communicates "grab this"
+        //   better than a cluster.
+        this.createHealthOrb(x, y);
         this.lastHealthOrbDropAt = now;
     }
 
-    // ── Money orbs ── no cooldown, just budget-and-split.
+    // ── Money orbs ── no cooldown; "few shape orbs + many pixel
+    //   particles" split (5.79.27).
     if (Math.random() < moneyDropRate) {
-        // 5.78.2 — quantity ceiling and per-orb amount both scale with
-        // player level (PAYDAY / HIGH_ROLLER stacks removed). Minimum
-        // adds +3 per level past 1 (so L20 starts at +57), and the max
-        // adds +5 per level (L20 cap +95). Gold Find still applies on
-        // top, so a level-20 + Gold Find player on a streak gets a
-        // significantly bigger budget than a level-1 baseline.
         const maxMoneyOrbs = GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX + playerLvlQuantityBonus;
         const baseCount = Math.floor(Math.random() * maxMoneyOrbs) + 1;
         const totalLegacyCount = Math.max(1, Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
@@ -687,30 +693,17 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (lvl - 1) * 3;
         const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (lvl - 1) * 5);
         const avgMoney = (minMoney + maxMoney) / 2;
-        // 5.73.0 — apply Gold Find (+10%/level past 1, 5.74.33) on the
-        //   budget. Bigger budget → splitter generates more money orbs
-        //   (each capped at MAX_MONEY_PER_ORB), giving more visible
-        //   coin sprites per drop. Both the gold AMOUNT and the SYMBOL
-        //   COUNT scale with player level.
-        // 5.74.33 — kill-streak gold multiplier added on top: +6% per
-        //   streak count, capped at 2.5× (reached at 25-kill streak).
-        //   5.74.34 — applied to BOTH rate and budget (see hoisted
-        //   `streakGoldMult` definition near the top of this function).
-        //   Stacks multiplicatively with Gold Find, so a level-10
-        //   player on a 15-kill streak gets ~3.6× the base gold per
-        //   drop AND ~3.6× the per-kill drop probability.
         const goldFind = this.player.getGoldFindMultiplier?.() || 1;
         const moneyBudget = Math.max(1, Math.round(totalLegacyCount * avgMoney * goldFind * streakGoldMult));
 
-        // 5.79.1 — hard-cap orb count so a level-20 streak doesn't spew
-        //   30+ tiny orbs. Excess budget per orb just makes each orb
-        //   worth more (visual size still saturates at SIZE_MAX).
-        const orbValues = _splitBudgetIntoOrbs(
-            moneyBudget,
-            GAME_CONFIG.MONEY_ORB_MAX_MONEY_PER_ORB,
-            GAME_CONFIG.MONEY_ORB_MAX_DROP_COUNT,
-        );
-        for (const v of orbValues) this.createMoneyOrb(x, y, v);
+        // 5.79.27 — Splitter returns { shapes, pixels }. Shapes get
+        //   the chunky-orb visual treatment; pixels render as tiny
+        //   gold dots in the same drop. Total budget is hard-capped
+        //   inside _splitMoneyDrop (defense against the runaway
+        //   compound multipliers documented in 5.79.26).
+        const { shapes, pixels } = _splitMoneyDrop(moneyBudget);
+        for (const v of shapes) this.createMoneyOrb(x, y, v, false);
+        for (const v of pixels) this.createMoneyOrb(x, y, v, true);
     }
 }
 
@@ -759,26 +752,26 @@ export function showPowerupDisplay(name, color, description = '') {
 
 export function getPowerupConfig(type) {
     const configs = {
-        'SHIELD_BOOST':             { name: 'Shielding',          description: '+8% damage reduction per stack',          duration: Infinity, icon: '🛡️', gradientColors: ['#33ff99', '#006644'] },
-        'RAPID_FIRE':               { name: 'Rapid Fire',         description: '22% faster auto-fire per stack',          duration: Infinity, icon: '⚡', gradientColors: ['#ff6600', '#ff0000'] },
-        'MULTI_SHOT':               { name: 'Multi Shot',         description: '+1 bullet per shot, fanned out',          duration: Infinity, icon: '✳️', gradientColors: ['#66aaff', '#0033cc'] },
-        'SPEED_BOOST':              { name: 'Afterburner',        description: '+65% thrust per stack',                   duration: Infinity, icon: '💨', gradientColors: ['#ffff33', '#cc9900'] },
-        'BIG_BULLETS':              { name: 'Big Bullets',        description: '+2.2px bullet radius per stack',          duration: Infinity, icon: '🔵', gradientColors: ['#66ff66', '#009900'] },
-        'PIERCING':                 { name: 'Piercing',           description: 'Bullets pass through +1 enemy per stack', duration: Infinity, icon: '🏹', gradientColors: ['#ffcc66', '#cc6600'] },
-        'EXPLOSIVE':                { name: 'Explosive',          description: 'AoE blast on bullet impact',              duration: Infinity, icon: '💣', gradientColors: ['#ff9933', '#cc3300'] },
-        'HOMING':                   { name: 'Homing',             description: 'Bullets curve toward enemies',            duration: Infinity, icon: '🎯', gradientColors: ['#ff66cc', '#cc0066'] },
+        'SHIELD_BOOST':             { name: 'Shielding',          description: '+8% damage reduction per stack',          duration: Infinity, icon: 'shield', gradientColors: ['#33ff99', '#006644'] },
+        'RAPID_FIRE':               { name: 'Rapid Fire',         description: '22% faster auto-fire per stack',          duration: Infinity, icon: 'bolt', gradientColors: ['#ff6600', '#ff0000'] },
+        'MULTI_SHOT':               { name: 'Multi Shot',         description: '+1 bullet per shot, fanned out',          duration: Infinity, icon: 'multi-shot', gradientColors: ['#66aaff', '#0033cc'] },
+        'SPEED_BOOST':              { name: 'Afterburner',        description: '+65% thrust per stack',                   duration: Infinity, icon: 'wind', gradientColors: ['#ffff33', '#cc9900'] },
+        'BIG_BULLETS':              { name: 'Big Bullets',        description: '+2.2px bullet radius per stack',          duration: Infinity, icon: 'circle-fill', gradientColors: ['#66ff66', '#009900'] },
+        'PIERCING':                 { name: 'Piercing',           description: 'Bullets pass through +1 enemy per stack', duration: Infinity, icon: 'bow-arrow', gradientColors: ['#ffcc66', '#cc6600'] },
+        'EXPLOSIVE':                { name: 'Explosive',          description: 'AoE blast on bullet impact',              duration: Infinity, icon: 'bomb', gradientColors: ['#ff9933', '#cc3300'] },
+        'HOMING':                   { name: 'Homing',             description: 'Bullets curve toward enemies',            duration: Infinity, icon: 'target', gradientColors: ['#ff66cc', '#cc0066'] },
         // 5.78.2 — DROPS-category powerup display rows removed alongside
         // the powerups themselves (MEDPACK, DOCTOR, PAYDAY, HIGH_ROLLER,
         // HEALTH_ORB_DROP_CHANCE/QUANTITY, MONEY_ORB_DROP_CHANCE/QUANTITY).
         // Drop rate, drop quantity, heal amount, and money amount now
         // scale with player level instead of being bought as picks.
-        'HEALTH_BOOST':             { name: 'Health Boost',       description: '+35 max HP per stack, full heal',         duration: Infinity, icon: '❤️', gradientColors: ['#ff6666', '#cc0000'] },
-        'HEALTH_DROP_FREQUENCY':    { name: 'Triage',             description: 'Health orbs drop more often',             duration: Infinity, icon: '⏳', gradientColors: ['#66ffaa', '#229966'] },
-        'CRIT_CHANCE':              { name: 'Critical Chance',    description: '+7% crit chance per stack',               duration: Infinity, icon: '⭐', gradientColors: ['#ffff66', '#cc9900'] },
-        'CRIT_DAMAGE':              { name: 'Critical Damage',    description: '+15% crit damage per stack',              duration: Infinity, icon: '🗡️', gradientColors: ['#ff3399', '#cc0033'] },
-        'LONG_RANGE':               { name: 'Long Range',         description: '+55% bullet range per stack',             duration: Infinity, icon: '🏹', gradientColors: ['#bbff66', '#448800'] },
-        'CHARGE_SPEED':             { name: 'Charge Speed',       description: 'Charge shots build up faster',           duration: Infinity, icon: '⏱️', gradientColors: ['#ffcc00', '#cc8800'] },
-        'CHARGE_POWER':             { name: 'Charge Power',       description: 'Fully-charged shots hit harder',         duration: Infinity, icon: '🔋', gradientColors: ['#ff6600', '#cc3300'] },
+        'HEALTH_BOOST':             { name: 'Health Boost',       description: '+35 max HP per stack, full heal',         duration: Infinity, icon: 'heart', gradientColors: ['#ff6666', '#cc0000'] },
+        'HEALTH_DROP_FREQUENCY':    { name: 'Triage',             description: 'Health orbs drop more often',             duration: Infinity, icon: 'hourglass', gradientColors: ['#66ffaa', '#229966'] },
+        'CRIT_CHANCE':              { name: 'Critical Chance',    description: '+7% crit chance per stack',               duration: Infinity, icon: 'star', gradientColors: ['#ffff66', '#cc9900'] },
+        'CRIT_DAMAGE':              { name: 'Critical Damage',    description: '+15% crit damage per stack',              duration: Infinity, icon: 'dagger', gradientColors: ['#ff3399', '#cc0033'] },
+        'LONG_RANGE':               { name: 'Long Range',         description: '+55% bullet range per stack',             duration: Infinity, icon: 'bow-arrow', gradientColors: ['#bbff66', '#448800'] },
+        'CHARGE_SPEED':             { name: 'Charge Speed',       description: 'Charge shots build up faster',           duration: Infinity, icon: 'stopwatch', gradientColors: ['#ffcc00', '#cc8800'] },
+        'CHARGE_POWER':             { name: 'Charge Power',       description: 'Fully-charged shots hit harder',         duration: Infinity, icon: 'battery', gradientColors: ['#ff6600', '#cc3300'] },
     };
     if (configs[type]) return configs[type];
 

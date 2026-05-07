@@ -40,7 +40,7 @@ export function drawWeaponEffects() {
     // grow-in animation against a per-beam-session timer so the visual
     // doesn't snap to full-width on key down.
     if (p.beamActive) {
-        const config = PRIMARY_WEAPONS.LANCE_BEAM;
+        const config = POWER_WEAPONS.LANCE_BEAM;
         const targetW = (config.beamWidth || 6) * (1 + this.player.getPowerupStacks('BEAM_WIDTH') * 0.3);
         const targetRange = config.range * 400;
         const hitDist = (typeof p.beamHitDist === 'number' && p.beamHitDist > 0) ? p.beamHitDist : targetRange;
@@ -358,7 +358,7 @@ export function drawWeaponEffects() {
     // Range is decided by the collision system (chainRange in
     // weapon-data); we reach into config.chainRange here to size the
     // frayed-fan distance so it visually previews the actual reach.
-    const arcCfg = PRIMARY_WEAPONS.LIGHTNING_ARC;
+    const arcCfg = POWER_WEAPONS.LIGHTNING_ARC;
     const arcColor = arcCfg ? arcCfg.color : '#aaeeff';
 
     // 5.79.4 — Reused scratch buffers for jagged-arc paths. Was

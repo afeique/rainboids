@@ -1,3 +1,5 @@
+import { renderIconHTML } from '../ui/icons.js';
+
 // Shop DOM overlay — replaces canvas-rendered shop with HTML elements.
 // All rendering, hit-testing, and scrolling is delegated to the browser.
 //
@@ -219,13 +221,13 @@ function buildEquippedBanner(category, player) {
         const cfg = player.getActivePrimaryConfig();
         label = 'Upgrading Primary Weapon';
         weaponName = cfg?.name || 'Primary';
-        weaponIcon = cfg?.icon || '🔫';
+        weaponIcon = cfg?.icon || 'pistol';
         weaponColor = cfg?.color || '#00ccff';
     } else {
         const cfg = player.getActivePowerConfig();
         label = 'Upgrading Power Weapon';
         weaponName = cfg?.name || 'Power';
-        weaponIcon = cfg?.icon || '⚡';
+        weaponIcon = cfg?.icon || 'bolt';
         weaponColor = cfg?.color || '#ffcc44';
     }
 
@@ -242,7 +244,8 @@ function buildEquippedBanner(category, player) {
     weaponEl.style.color = weaponColor;
     const iconSpan = document.createElement('span');
     iconSpan.className = 'shop-equipped-icon';
-    iconSpan.textContent = weaponIcon;
+    iconSpan.style.color = weaponColor;
+    iconSpan.innerHTML = renderIconHTML(weaponIcon, { size: 28, fallback: '?' });
     const nameSpan = document.createElement('span');
     nameSpan.className = 'shop-equipped-name';
     nameSpan.textContent = weaponName;
@@ -261,8 +264,8 @@ function buildEquippedBanner(category, player) {
 // PRIMARY/POWER and DEFENSE/SKILLS.
 function buildCategoryBanner(category) {
     const meta = category === 'DEFENSE'
-        ? { label: 'Defense Upgrades', name: 'Defense', icon: '🛡️', color: '#44ff88' }
-        : { label: 'Skill Loadout',    name: 'Skills',  icon: '⚡',  color: '#ff88dd' };
+        ? { label: 'Defense Upgrades', name: 'Defense', icon: 'shield', color: '#44ff88' }
+        : { label: 'Skill Loadout',    name: 'Skills',  icon: 'bolt',  color: '#ff88dd' };
 
     const banner = document.createElement('div');
     banner.className = 'shop-equipped-banner';
@@ -277,7 +280,8 @@ function buildCategoryBanner(category) {
     titleEl.style.color = meta.color;
     const iconSpan = document.createElement('span');
     iconSpan.className = 'shop-equipped-icon';
-    iconSpan.textContent = meta.icon;
+    iconSpan.style.color = meta.color;
+    iconSpan.innerHTML = renderIconHTML(meta.icon, { size: 28, fallback: '?' });
     const nameSpan = document.createElement('span');
     nameSpan.className = 'shop-equipped-name';
     nameSpan.textContent = meta.name;
@@ -411,10 +415,11 @@ function buildItemRow(item, player, game) {
 
     if (maxedOut) row.disabled = true;
 
-    // Icon
+    // Icon (5.79.37 — SVG path via icon registry, falls back to legacy
+    //   emoji for any unmigrated entries).
     const icon = document.createElement('span');
     icon.className = 'shop-item-icon';
-    icon.textContent = item.icon || '';
+    icon.innerHTML = renderIconHTML(item.icon, { size: 32, fallback: item.icon || '' });
     row.appendChild(icon);
 
     // Body: name + description

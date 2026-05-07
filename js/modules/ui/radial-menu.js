@@ -5,6 +5,7 @@
 // the equipped item.
 
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from '../combat/weapon-data.js';
+import { getIconImage, resolveIconSlug } from './icons.js';
 
 const TYPE_LABELS = {
     primary: 'PRM',
@@ -158,11 +159,19 @@ export class RadialMenu {
 
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            // Emoji icons render through the system emoji face regardless
-            // of the requested family — pixel-font override is unnecessary.
-            ctx.font = '32px sans-serif';
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(opt.icon || '?', ax, ay);
+            // 5.79.37 — Icon now drawn from the SVG cache (slug → cached
+            //   canvas via getIconImage). Falls back to font rendering
+            //   for unmigrated entries.
+            const slug = resolveIconSlug(opt.icon);
+            const iconPx = 32;
+            if (slug) {
+                const img = getIconImage(slug, iconPx, '#ffffff');
+                if (img) ctx.drawImage(img, ax - iconPx / 2, ay - iconPx / 2, iconPx, iconPx);
+            } else {
+                ctx.font = `${iconPx}px sans-serif`;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(opt.icon || '?', ax, ay);
+            }
         }
 
         // Center hub. Type label sits above; the hovered option's name

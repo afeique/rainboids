@@ -13,7 +13,7 @@
 //     Per-instance attribute carries rotation rate.
 //   * Color tint: per-instance RGBA, multiplied with sampled atlas texel.
 //
-// Per-instance attribute layout (14 floats, 56 bytes):
+// Per-instance attribute layout (16 floats, 64 bytes):
 //    0,1   basePos (world x, y; immutable after spawn)
 //    2     parallaxFactor (depth × parallax constant)
 //    3     baseSize (full-quad-half-width in px before twinkle scaling)
@@ -24,10 +24,16 @@
 //   11     shapeSlot (0..NUM_SLOTS-1; integer)
 //   12     baseAngle (initial rotation, radians)
 //   13     rotationRate (radians per second)
+//   14     noScan flag — 0 = apply CRT scanlines, 1 = skip (collectible
+//          orbs/coins/shapes pass 1 so they read as game objects, not
+//          background dressing). 5.79.33.
+//   15     sharp flag — 0 = apply radial glow halo, 1 = skip (gold
+//          coins pass 1 so they render as crisp point-like pixels
+//          without the gaussian-blur halo). 5.79.33.
 
 import { ATLAS_W, ATLAS_H, SLOT, NUM_SLOTS, buildStarfieldAtlas } from './webgl-starfield-atlas.js';
 
-const FLOATS_PER_INSTANCE = 14;
+const FLOATS_PER_INSTANCE = 16;
 const BYTES_PER_INSTANCE = FLOATS_PER_INSTANCE * 4;
 
 const VERTEX_SHADER = `#version 300 es
@@ -44,6 +50,8 @@ in float a_twinkleAmp;
 in float a_shape;
 in float a_baseAngle;
 in float a_rotRate;
+in float a_noScan;
+in float a_sharp;
 
 uniform vec2 u_drift;       // cumulative ship-motion drift (px)
 uniform vec2 u_camera;      // camera world position (px)
@@ -55,6 +63,8 @@ uniform float u_atlasSlots; // NUM_SLOTS
 out vec4 v_color;
 out vec2 v_uv;
 out vec2 v_quadUV;   // 5.74.13 — pass through local quad UV for halo math
+out float v_noScan;  // 5.79.33 — flag forwarded to fragment shader
+out float v_sharp;   // 5.79.33 — sharp flag forwarded to fragment shader
 
 void main() {
     v_quadUV = a_quadUV;
@@ -112,6 +122,8 @@ void main() {
     // saturation preserved across the pulse. Brightness dynamism is
     // alpha (twinkle × flicker) for stars; clouds stay rock-steady.
     v_color = vec4(a_color.rgb, a_color.a * twinkAdj * flickerAlpha);
+    v_noScan = a_noScan;
+    v_sharp = a_sharp;
 }
 `;
 
@@ -124,6 +136,8 @@ in vec2 v_quadUV;     // 5.74.13 — local 0..1 UV across the whole quad,
                       // independent of the atlas slot the shape occupies.
                       // Used for the radial glow halo so the falloff is
                       // shape-independent.
+in float v_noScan;    // 5.79.33 — 1 = skip CRT scanlines (orbs).
+in float v_sharp;     // 5.79.33 — 1 = skip radial halo (gold coins).
 uniform sampler2D u_atlas;
 out vec4 fragColor;
 
@@ -144,6 +158,9 @@ void main() {
     float dist = length(q) * 2.0;
     float halo = 1.0 - smoothstep(0.0, 1.0, dist);
     halo *= halo;
+    // 5.79.33 — sharp orbs (gold coins) suppress the halo entirely so
+    //   they render as crisp point-like pixels instead of glowy dots.
+    halo *= (1.0 - v_sharp);
 
     // Shape: atlas silhouette × palette color (NO gain — preserves hue).
     vec3 shapeRGB = tex.rgb * v_color.rgb;
@@ -170,7 +187,12 @@ void main() {
     // 0..2 dark, 2..3 transition, 3..5 light.
     float scanFactor = smoothstep(2.0, 3.0, modY);
     float scan = mix(0.55, 1.0, scanFactor);
-    rgb *= scan;
+    // 5.79.33 — orbs (health, gold shape, gold coin) pass v_noScan=1
+    //   so the scanline tint stays at 1.0, leaving them at full
+    //   brightness while the starfield/nebula behind them keeps the
+    //   CRT effect.
+    float scanFinal = mix(scan, 1.0, v_noScan);
+    rgb *= scanFinal;
 
     fragColor = vec4(rgb, a);
 }
@@ -191,6 +213,15 @@ export class WebGLStarfieldRenderer {
         this.maxStars = maxStars;
         this.instanceData = new Float32Array(maxStars * FLOATS_PER_INSTANCE);
         this.instanceCount = 0;
+        // 5.79.24 — `_baselineCount` divides the instance buffer into a
+        //   permanent prefix (background stars + nebula + decorative
+        //   color stars) and a transient suffix repopulated each frame
+        //   for moving collectibles (gold + health orbs). The renderer
+        //   doesn't care about the split — both halves render in one
+        //   instanced draw call. The engine writes the prefix once at
+        //   init via `setBaseline()`, then per-frame calls
+        //   `resetTransients()` + `addStar()` to fill the suffix.
+        this._baselineCount = 0;
         this._dirty = false;
 
         this.uDrift = null;
@@ -342,6 +373,8 @@ export class WebGLStarfieldRenderer {
         const aShape   = gl.getAttribLocation(program, 'a_shape');
         const aAngle   = gl.getAttribLocation(program, 'a_baseAngle');
         const aRot     = gl.getAttribLocation(program, 'a_rotRate');
+        const aNoScan  = gl.getAttribLocation(program, 'a_noScan');
+        const aSharp   = gl.getAttribLocation(program, 'a_sharp');
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceVbo);
         const ISTRIDE = BYTES_PER_INSTANCE;
@@ -362,6 +395,8 @@ export class WebGLStarfieldRenderer {
         setInst(aShape, 1);
         setInst(aAngle, 1);
         setInst(aRot, 1);
+        setInst(aNoScan, 1);
+        setInst(aSharp, 1);
     }
 
     setFieldSize(w, h) {
@@ -375,8 +410,32 @@ export class WebGLStarfieldRenderer {
      */
     clear() {
         this.instanceCount = 0;
+        this._baselineCount = 0;
         this.driftX = 0;
         this.driftY = 0;
+        this._dirty = true;
+    }
+
+    /**
+     * 5.79.24 — Capture the current `instanceCount` as the "permanent"
+     *   baseline. Subsequent calls to `resetTransients()` will rewind
+     *   `instanceCount` back to this baseline so the prefix stays
+     *   intact. Call after the engine finishes seeding the static
+     *   starfield (background stars + nebula + decorative color
+     *   stars).
+     */
+    setBaseline() {
+        this._baselineCount = this.instanceCount;
+    }
+
+    /**
+     * 5.79.24 — Rewind `instanceCount` back to the captured baseline so
+     *   the engine can repopulate the suffix with moving entities
+     *   (orbs) for the current frame. The permanent stars in [0,
+     *   baseline) are preserved; their data is already on the GPU.
+     */
+    resetTransients() {
+        this.instanceCount = this._baselineCount;
         this._dirty = true;
     }
 
@@ -398,7 +457,7 @@ export class WebGLStarfieldRenderer {
      */
     addStar(x, y, parallax, size, r, g, b, a,
             twinklePhase, twinkleSpeed, twinkleAmp,
-            shapeSlot, baseAngle, rotRate) {
+            shapeSlot, baseAngle, rotRate, noScan = 0, sharp = 0) {
         if (this.instanceCount >= this.maxStars) return false;
         const base = this.instanceCount * FLOATS_PER_INSTANCE;
         const data = this.instanceData;
@@ -416,6 +475,8 @@ export class WebGLStarfieldRenderer {
         data[base + 11] = shapeSlot;
         data[base + 12] = baseAngle;
         data[base + 13] = rotRate;
+        data[base + 14] = noScan;
+        data[base + 15] = sharp;
         this.instanceCount++;
         this._dirty = true;
         return true;

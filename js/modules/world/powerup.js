@@ -2,6 +2,7 @@
 import { GAME_CONFIG } from '../core/constants.js';
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
+import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 
 // ── Cached body gradients ──────────────────────────────────────────────────
 // `createRadialGradient` allocates a fresh GPU-uploaded gradient on every
@@ -525,17 +526,27 @@ export class Powerup {
         ctx.fill();
         ctx.stroke();
 
-        // Icon — pre-built font string (radius is constant, so the size
-        // never changes in unscaled coords; pulse scaling is handled by
-        // the ctx.scale above).
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 1;
-        ctx.font = POWERUP_ICON_FONT;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.strokeText(this.icon, 0, 0);
-        ctx.fillText(this.icon, 0, 0);
+        // 5.79.37 — Icon now drawn from the SVG cache (getIconImage).
+        //   Falls back to font-rendered text if the icon string isn't a
+        //   known slug (handles any pre-migration emoji that slipped
+        //   through). Pulse scaling is handled by the ctx.scale above.
+        const iconSlug = resolveIconSlug(this.icon);
+        if (iconSlug) {
+            const iconSize = Math.round(POWERUP_BASE_RADIUS * 1.4);
+            const iconImg = getIconImage(iconSlug, iconSize, '#ffffff');
+            if (iconImg) {
+                ctx.drawImage(iconImg, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+            }
+        } else {
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            ctx.font = POWERUP_ICON_FONT;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.strokeText(this.icon, 0, 0);
+            ctx.fillText(this.icon, 0, 0);
+        }
 
         // Sparkling edge effect
         ctx.strokeStyle = '#ffffff';

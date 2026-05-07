@@ -194,7 +194,6 @@ export function handleCollisions() {
                             this.triggerHitstop(4);
                         }
                         this.createDebris(ast);
-                        this.createColorStarBurst(ast.x, ast.y);
                         this.dropOrbsFromEntity(ast.x, ast.y, ast);
                         // 5.70.0 — powerups no longer drop from kills.
                         // They're earned via shop picks (one per wave + one
@@ -212,7 +211,6 @@ export function handleCollisions() {
                             this.triggerHitstop(5);
                         }
                         this.createDebris(ast);
-                        this.createColorStarBurst(ast.x, ast.y);
                         this.dropOrbsFromEntity(ast.x, ast.y, ast);
 
                         // Massive screen shake for large asteroid destruction (only if on screen)
@@ -384,38 +382,108 @@ export function handleCollisions() {
                     }
                 }
 
-                // Create focused golden burst effect
-                // Central bright flash - smaller and more focused
+                // 5.79.33 — Pickup burst color now matches the orb type:
+                //   health = bright cyan-blue, money/legacy = golden-yellow.
+                //   Was hardcoded gold for ALL collectibles, which made the
+                //   blue health orb pop a yellow burst on collect — visually
+                //   confusing and inconsistent with its drift-trail color.
+                const isHealth = colorStar.starType === 'health';
+                const burstColor = isHealth ? '#33ddff' : '#FFFF00';
+                const sparkleColor = isHealth ? '#66e6ff' : '#FFFF00';
+
                 const blip = this.particlePool.get(colorStar.x, colorStar.y, 'starBlip');
                 if (blip) {
-                    blip.color = '#FFFF00'; // Bright golden-yellow
-                    blip.radius = 4; // Smaller, more focused
-                    blip.life = 0.4; // Shorter duration
+                    blip.color = burstColor;
+                    blip.radius = 4;
+                    blip.life = 0.4;
                     blip.fadeRate = 0.1;
-                    blip.growthRate = 0.2; // Less expansion
+                    blip.growthRate = 0.2;
                 }
 
-                // Enhanced ring of sparkles - more visible but balanced
                 for (let i = 0; i < 8; i++) {
                     const angle = (i / 8) * Math.PI * 2;
-                    const dist = 12; // Slightly larger radius for better spread
+                    const dist = 12;
                     const sparkle = this.particlePool.get(
                         colorStar.x + Math.cos(angle) * dist,
                         colorStar.y + Math.sin(angle) * dist,
                         'starSparkle'
                     );
                     if (sparkle) {
-                        sparkle.color = '#FFFF00'; // Bright golden-yellow
-                        sparkle.radius = 2.5; // Larger sparkles for better visibility
-                        sparkle.life = 0.8; // Longer duration so they're visible longer
+                        sparkle.color = sparkleColor;
+                        sparkle.radius = 2.5;
+                        sparkle.life = 0.8;
                         sparkle.vel = {
-                            x: Math.cos(angle) * 1.8, // Slightly slower so they're visible longer
-                            y: Math.sin(angle) * 1.8
+                            x: Math.cos(angle) * 1.8,
+                            y: Math.sin(angle) * 1.8,
                         };
                     }
                 }
 
                 this.colorStarPool.release(colorStar);
+            }
+        }
+
+        // 5.79.32 — Gold drops (coins + shapes) live in their own pools
+        //   now (separate from colorStarPool's collectible orbs). Same
+        //   pickup behavior — gold value into purse, golden blip + ring,
+        //   release back to pool.
+        const collectGold = (drop, pool) => {
+            const moneyAmount = drop.value || GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN;
+            this.game.money += moneyAmount;
+            this.addMoneyPickup(moneyAmount);
+            this.events.emit('audio:coin');
+
+            const moneyParticle = this.particlePool.get(this.player.x, this.player.y, 'starBlip');
+            if (moneyParticle) {
+                moneyParticle.color = '#FFD700';
+                moneyParticle.radius = 6;
+                moneyParticle.life = 0.6;
+            }
+
+            const blip = this.particlePool.get(drop.x, drop.y, 'starBlip');
+            if (blip) {
+                blip.color = '#FFFF00';
+                blip.radius = 4;
+                blip.life = 0.4;
+                blip.fadeRate = 0.1;
+                blip.growthRate = 0.2;
+            }
+            // Lighter sparkle ring for coins (cluster spawns ~6-30 per
+            //   drop, full 8-sparkle ring per coin would saturate the
+            //   particle pool); shapes still get the full ring.
+            const isCoin = drop.kind === 'coin';
+            const ringCount = isCoin ? 3 : 8;
+            const ringDist  = isCoin ? 8  : 12;
+            for (let i = 0; i < ringCount; i++) {
+                const angle = (i / ringCount) * Math.PI * 2;
+                const sparkle = this.particlePool.get(
+                    drop.x + Math.cos(angle) * ringDist,
+                    drop.y + Math.sin(angle) * ringDist,
+                    'starSparkle'
+                );
+                if (sparkle) {
+                    sparkle.color = '#FFFF00';
+                    sparkle.radius = isCoin ? 1.8 : 2.5;
+                    sparkle.life = isCoin ? 0.5 : 0.8;
+                    sparkle.vel = {
+                        x: Math.cos(angle) * 1.8,
+                        y: Math.sin(angle) * 1.8,
+                    };
+                }
+            }
+            pool.release(drop);
+        };
+
+        for (let i = this.goldCoinPool.activeObjects.length - 1; i >= 0; i--) {
+            const coin = this.goldCoinPool.activeObjects[i];
+            if (coin.active && starCollision(this.player, coin)) {
+                collectGold(coin, this.goldCoinPool);
+            }
+        }
+        for (let i = this.goldShapePool.activeObjects.length - 1; i >= 0; i--) {
+            const shape = this.goldShapePool.activeObjects[i];
+            if (shape.active && starCollision(this.player, shape)) {
+                collectGold(shape, this.goldShapePool);
             }
         }
     }
@@ -691,7 +759,7 @@ export function checkLanceBeamCollisions() {
         return;
     }
 
-    const config = PRIMARY_WEAPONS.LANCE_BEAM;
+    const config = POWER_WEAPONS.LANCE_BEAM;
     const beamW = (config.beamWidth || 6) * (1 + p.getPowerupStacks('BEAM_WIDTH') * 0.3);
     const range = config.range * 400;
     const dx = Math.cos(p.angle);
@@ -1107,7 +1175,7 @@ export function checkLightningCollisions() {
 
     // ── Continuous-tether path ──
     if (p.lightningArcActive) {
-        const cfg = PRIMARY_WEAPONS.LIGHTNING_ARC;
+        const cfg = POWER_WEAPONS.LIGHTNING_ARC;
         // 5.75.1 — ARC_OVERCHARGE capstone extends chain range by 50%.
         const overchargeStacks = p.getPowerupStacks('ARC_OVERCHARGE');
         const rangeMul = overchargeStacks > 0 ? 1.5 : 1;
@@ -1228,7 +1296,7 @@ export function checkLightningCollisions() {
     for (const chain of p.lightningChains) {
         if (!chain.active || chain.damageApplied) continue;
         chain.damageApplied = true;
-        let dmg = PRIMARY_WEAPONS.LIGHTNING_ARC.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
+        let dmg = POWER_WEAPONS.LIGHTNING_ARC.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2);
         const falloff = 0.6;
         for (let i = 1; i < chain.targets.length; i++) {
             const t = chain.targets[i];
@@ -1470,7 +1538,6 @@ export function destroyAsteroid(ast) {
         this.triggerHitstop(isLarge ? 5 : 4);
     }
     this.createDebris(ast);
-    this.createColorStarBurst(ast.x, ast.y);
     this.dropOrbsFromEntity(ast.x, ast.y, ast);
 
     // 5.70.0 — powerups no longer drop from kills (see top of file).

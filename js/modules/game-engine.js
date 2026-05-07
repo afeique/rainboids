@@ -18,6 +18,8 @@ import { WebGLStarfieldRenderer } from './performance/webgl-starfield-renderer.j
 import { WebGLBulletRenderer } from './performance/webgl-bullet-renderer.js';
 import { STAR_SLOT_INDEX, WEBGL_STAR_SHAPES } from './performance/webgl-starfield-atlas.js';
 import { ColorStar } from './world/color-star.js';
+import { GoldCoin } from './world/gold-coin.js';
+import { GoldShape } from './world/gold-shape.js';
 import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
@@ -425,6 +427,12 @@ export class GameEngine {
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
         this.enemyBulletPool = new PoolManager(EnemyBullet, 20); // Reduced from 50
         this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 10);
+        // 5.79.32 — Gold drops live in their own pools (separate from
+        //   colorStarPool's collectible-orb path so they don't share the
+        //   homing/heal-orb logic). GoldCoin = pixel coins (many per
+        //   drop), GoldShape = chunky shape orb (one per drop).
+        this.goldCoinPool = new PoolManager(GoldCoin, 60);
+        this.goldShapePool = new PoolManager(GoldShape, 20);
         this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 2);
         this.powerupPool = new PoolManager(Powerup, 5); // Reduced from 20
 
@@ -525,6 +533,8 @@ export class GameEngine {
         this.enemyPool.activeObjects = [];
         this.enemyBulletPool.activeObjects = [];
         this.colorStarPool.activeObjects = [];
+        this.goldCoinPool.activeObjects = [];
+        this.goldShapePool.activeObjects = [];
         this.backgroundStarPool.activeObjects = [];
         this.powerupPool.activeObjects = [];
 
@@ -546,6 +556,12 @@ export class GameEngine {
         // Drawn through the same instanced pipeline as the rest of the
         // starfield — zero new draw calls, GPU-tiny.
         this._populateWebGLNebula();
+
+        // 5.79.24 — Lock the starfield's permanent prefix. After this
+        //   call, the buffer in [0, baseline) holds every static
+        //   star/nebula instance; per-frame `_pushOrbsToWebGL()`
+        //   appends moving orbs to the suffix.
+        if (this.starfieldRenderer.setBaseline) this.starfieldRenderer.setBaseline();
         
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
@@ -919,6 +935,10 @@ export class GameEngine {
         if (typeof this._populateWebGLNebula === 'function') {
             this._populateWebGLNebula();
         }
+        // 5.79.24 — Re-anchor the baseline since we just rewrote the
+        //   permanent prefix; transient orbs should layer on top of
+        //   the freshly populated background.
+        if (this.starfieldRenderer.setBaseline) this.starfieldRenderer.setBaseline();
         this._starfieldDirty = false;
     }
 
@@ -949,18 +969,13 @@ export class GameEngine {
     _tryAddColorStarToWebGL(star) {
         if (!this.starfieldRenderer.supported) return;
         if (star.isCollectible) return;          // health/money orbs stay on Canvas
-        // 5.79.22 — All decorative star shapes collapsed to plain `dot`
-        //   per user request. Multi-point stars, 3D solids, and the
-        //   geometric variants (diamond/triangle/hexagon) were
-        //   distracting against busy combat scenes. Existing stars in
-        //   the pool keep their `shape` field (so this is one-line
-        //   reversible: drop the override and let the original mapping
-        //   resume), they just all render through the dot slot. The
-        //   sparkle/burst Canvas2D path is also disabled below in
-        //   color-star.js#draw.
-        let slotKey = (star.shape === 'circle' || star.shape === 'point') ? 'dot' : star.shape;
+        // 5.79.23 — Restored original slot mapping. Fancy shapes (multi-
+        //   point, geometric, 3D solids) reach their actual atlas
+        //   slots again. Big-star pool was independently restricted to
+        //   point/circle in the constructor, so no fancy shape ever
+        //   spawns at big size.
+        const slotKey = (star.shape === 'circle' || star.shape === 'point') ? 'dot' : star.shape;
         if (!WEBGL_STAR_SHAPES.has(slotKey)) return;  // sparkle/burst stay on Canvas
-        slotKey = 'dot';
         const rgba = this._parseStarColor(star.color);
         const parallax = Math.pow(star.z, 1.8) * 0.12;
         const sizeMul = star.sizeVariation || 1;
@@ -1014,6 +1029,94 @@ export class GameEngine {
             (star.rotationSpeed || 0) * 60,
         );
         if (ok) star._inWebGL = true;
+    }
+
+    // 5.79.24 — Push every active money/health orb into the WebGL
+    //   starfield as a transient instance. Called per-frame after
+    //   `resetTransients()` so the suffix of the instance buffer
+    //   carries the orbs at their CURRENT world position. Orbs use
+    //   parallax 0 (their position is the world position; no drift
+    //   correction). Atlas slot is picked from the orb's `shape` field
+    //   (already constrained to the WEBGL_STAR_SHAPES pool in
+    //   color-star.js → reset).
+    _pushOrbsToWebGL() {
+        if (!this.starfieldRenderer.supported) return;
+        // Health/legacy collectibles in colorStarPool.
+        const orbs = this.colorStarPool.activeObjects;
+        for (let i = 0; i < orbs.length; i++) {
+            const orb = orbs[i];
+            if (!orb.active || !orb.isCollectible) continue;
+            this._pushOrbInstance(orb);
+        }
+        // 5.79.32 — Gold shapes ride the WebGL starfield pipeline (atlas
+        //   silhouettes for cubes / octahedra / stars / etc.).
+        // 5.79.33 — Gold coins are NOT pushed here. They render on
+        //   Canvas2D via _drawGoldCoinsCanvas2D() below as hard
+        //   fillRect pixels, giving the user the crisp point-like look
+        //   that the Gaussian-falloff atlas slot couldn't deliver.
+        const shapes = this.goldShapePool.activeObjects;
+        for (let i = 0; i < shapes.length; i++) {
+            if (shapes[i].active) this._pushOrbInstance(shapes[i]);
+        }
+    }
+
+    /**
+     * 5.79.33 — Render gold coins as pixel-perfect filled squares on
+     * Canvas2D. Bypasses the WebGL starfield's antialiased atlas-dot
+     * silhouette which made them look like soft glowy specks. Hard
+     * `fillRect` gives the user "sharp and point-like pixels" they
+     * asked for — no halo, no AA, no Gaussian falloff.
+     */
+    _drawGoldCoinsCanvas2D(ctx, vL, vT, vR, vB) {
+        const coins = this.goldCoinPool.activeObjects;
+        if (coins.length === 0) return;
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        for (let i = 0; i < coins.length; i++) {
+            const c = coins[i];
+            if (!c.active) continue;
+            // Viewport cull.
+            if (c.x < vL || c.x > vR || c.y < vT || c.y > vB) continue;
+            const alpha = c.opacity ?? 1;
+            if (alpha <= 0) continue;
+            // Hard pixel render — 1×1 at radius<2, 2×2 at radius<2.5,
+            // 3×3 at the upper bound. Keeps coins crisp regardless of
+            // the underlying float radius.
+            const size = c.radius >= 2.5 ? 3 : c.radius >= 1.8 ? 2 : 1;
+            const half = size / 2;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = c.color || '#ffd700';
+            ctx.fillRect(c.x - half, c.y - half, size, size);
+        }
+        ctx.restore();
+    }
+
+    _pushOrbInstance(orb) {
+        const slotKey = WEBGL_STAR_SHAPES.has(orb.shape) ? orb.shape : 'dot';
+        const rgba = this._parseStarColor(orb.color);
+        const sizeMul = orb.sizeVariation || 1;
+        const drawSize = orb.radius * sizeMul * 1.5;
+        const alpha = (orb.opacity ?? 1) * 0.95;
+        // 5.79.33 — Orbs (health, gold shape, gold coin) skip the CRT
+        //   scanline darkening so they read as game objects, not
+        //   background dressing. Gold coins ALSO skip the radial halo
+        //   so they render as crisp point-like pixels — user wants
+        //   sharp dots, not glowy specks.
+        const isCoin = orb.kind === 'coin';
+        this.starfieldRenderer.addStar(
+            orb.x, orb.y,
+            0,
+            drawSize,
+            rgba[0], rgba[1], rgba[2], alpha,
+            orb.twinklePhase || 0,
+            orb.twinkleSpeed || 3.5,
+            0.45,
+            STAR_SLOT_INDEX[slotKey],
+            orb.rotation || 0,
+            (orb.rotationSpeed || 0) * 60,
+            1,                    // noScan = 1
+            isCoin ? 1 : 0,       // sharp = 1 for gold coins
+        );
     }
 
     // 5.74.28 — JWST-inspired nebula regions. Instead of scattering
@@ -1218,8 +1321,7 @@ export class GameEngine {
     spawnAsteroidOffscreen() { return wave.spawnAsteroidOffscreen.call(this); }
     
     createDebris(ast) { return combat.createDebris.call(this, ast); }
-    createColorStarBurst(x, y) { return combat.createColorStarBurst.call(this, x, y); }
-    
+
     updateWaveSystem() { return wave.updateWaveSystem.call(this); }
 
     getWaveSubtitle(waveNumber) { return wave.getWaveSubtitle.call(this, waveNumber); }
@@ -1327,8 +1429,8 @@ export class GameEngine {
     triggerEnemyDebrisBurst(enemy) { return combat.triggerEnemyDebrisBurst.call(this, enemy); }
     createShapeDebris(enemy) { return combat.createShapeDebris.call(this, enemy); }
     
-    createHealthOrb(x, y) { return combat.createHealthOrb.call(this, x, y); }
-    createMoneyOrb(x, y) { return combat.createMoneyOrb.call(this, x, y); }
+    createHealthOrb(x, y, healAmountOverride = null) { return combat.createHealthOrb.call(this, x, y, healAmountOverride); }
+    createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false) { return combat.createMoneyOrb.call(this, x, y, moneyAmountOverride, isPixel); }
     dropStarsFromEntity(x, y) { return combat.dropStarsFromEntity.call(this, x, y); }
     dropOrbsFromEntity(x, y, entity = null) { return combat.dropOrbsFromEntity.call(this, x, y, entity); }
     
@@ -1505,7 +1607,22 @@ export class GameEngine {
             this.enemyBulletPool.cleanupInactive();
             
             // Update color stars with player position and tractor beam state
-            this.colorStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.player, tractorEngaged, this.gameField));
+            this.colorStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.player, tractorEngaged, this.gameField, this.particlePool));
+            // 5.79.32 — Gold drops (coins + shapes) integrate motion +
+            //   lifetime + blink. Independent classes — each calls
+            //   its own update(). No homing; tractor pulls them in
+            //   when engaged. Inactive entries are released.
+            const playerPos = this.player ? { x: this.player.x, y: this.player.y } : null;
+            for (let i = this.goldCoinPool.activeObjects.length - 1; i >= 0; i--) {
+                const c = this.goldCoinPool.activeObjects[i];
+                c.update(playerPos, tractorEngaged);
+                if (!c.active) this.goldCoinPool.release(c);
+            }
+            for (let i = this.goldShapePool.activeObjects.length - 1; i >= 0; i--) {
+                const s = this.goldShapePool.activeObjects[i];
+                s.update(playerPos, tractorEngaged);
+                if (!s.active) this.goldShapePool.release(s);
+            }
             // Update background stars with just player velocity for parallax
             this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.gameField));
 
@@ -1590,6 +1707,15 @@ export class GameEngine {
             };
             this.backgroundStarPool.activeObjects.forEach(s => s.update(drift, this.gameField));
 
+            // 5.79.24 — Feed the synthetic drift into the WebGL starfield
+            //   too. Without this, the background stars rendered by the
+            //   GPU sit static while only the (mostly empty) Canvas2D
+            //   pool moves — title screen reads as a frozen field.
+            //   Mirrors the in-game `accumulateDrift(player.vel)` call.
+            if (this.starfieldRenderer.accumulateDrift) {
+                this.starfieldRenderer.accumulateDrift(drift.x, drift.y);
+            }
+
             // Lens-flare nebula drift accumulator — multiplier kept low
             // so the lens flare stars feel much further away than the
             // foreground starfield. We negate so the nebula drifts in the
@@ -1664,6 +1790,15 @@ export class GameEngine {
             // 5.78.0 — re-flush the starfield instance buffer if any
             // pool churn marked it dirty. No-op on the typical frame.
             this._flushStarfieldIfDirty();
+            // 5.79.24 — Repopulate the transient suffix with active
+            //   gold/health orbs at their CURRENT world positions.
+            //   `resetTransients()` rewinds instanceCount to the
+            //   permanent baseline; `_pushOrbsToWebGL()` appends one
+            //   instance per active orb. Both no-op when WebGL is off.
+            if (this.starfieldRenderer.resetTransients) {
+                this.starfieldRenderer.resetTransients();
+                this._pushOrbsToWebGL();
+            }
             this.starfieldRenderer.setFieldSize(this.gameField.width, this.gameField.height);
             this.starfieldRenderer.draw(
                 this.camera.x, this.camera.y,
@@ -1754,6 +1889,10 @@ export class GameEngine {
                 );
                 drawParticlesBatched(this.particlePool, this.ctx, vL, vT, vR, vB, this.particleRenderer);
                 this.powerupPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                // 5.79.33 — Gold coins render here as hard fillRect
+                //   pixels (above the world layer, below entities) so
+                //   they read as crisp point-like collectibles.
+                this._drawGoldCoinsCanvas2D(this.ctx, vL, vT, vR, vB);
                 this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
 
@@ -2260,6 +2399,12 @@ export class GameEngine {
         this.generateBackgroundStars();
         nebulaRenderer.generate(this.gameField.width, this.gameField.height);
         this._populateWebGLNebula();
+        // 5.79.24 — Lock the starfield baseline here too (in addition to
+        //   init()), so the per-frame `resetTransients()` in the render
+        //   loop doesn't rewind to 0 and erase the title screen
+        //   starfield. Without this the title screen rendered as a
+        //   black void because the baseline was never recorded.
+        if (this.starfieldRenderer.setBaseline) this.starfieldRenderer.setBaseline();
         // Center the camera in the gameField so the title screen view is
         // anchored on the playable area's middle (no out-of-field artifacts).
         this.camera.x = (this.gameField.width  - this.width)  / 2;
