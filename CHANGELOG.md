@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.41] - 2026-05-07
+
+### Changed — Tab-header gold gradient verified across all tabs; controls table dappered up
+Per user request: gold-gradient header on every tab + dapper-yet-readable controls + obvious DYNAMIC markers.
+
+- **All five pause-menu tabs** (CONTROLS, ASSISTS, PRIMARY WEAPON, POWER WEAPON, POWERUPS) now render their `<h2>` with the same shared Press Start 2P / 24 px / gold-gradient / tapered-underline treatment. Verified via Playwright smoke test on each tab's `getComputedStyle` — all five show the linear-gradient backgroundImage and the `title-sheen` animation.
+- **Animated title shimmer** — the title gradient is now `200% × 100%` and slides 0 → 100 % background-position over 7 s in an `ease-in-out` loop (`@keyframes title-sheen`). Reads as polished metal catching light, not a flashy strobe.
+
+**Dapper polish on the controls table:**
+- **Accent dot prefix** in the action cell — 4-px dot in the section accent color, scales 1× → 1.4× and gains a soft glow on row hover. Subtle "you-are-here" cue without crowding the typography.
+- **Hover lift** — hovered row's action cell shifts 4 px right (padding-left 18 → 22 px) and brightens to white, while the keys cell picks up a horizontal accent gradient. No layout reflow on neighbours.
+- **Hairline row dividers** — built with `::after` pseudos that fade out at the column edges so they don't fight the rounded hover corners.
+- **Refined typography** — action labels at Inter 15 px / 0.4-px tracking / 500 weight (was 0.3-px). Generous 12-px vertical padding. Color softened from `#f0f4fa` → `#d8e0ec` so brightening on hover reads as a state change, not just a color shift.
+- **Larger card radius** — 14 px → 16 px; row corners 8 → 10 px so the rhythm scales with the new card.
+- **Diagonal sheen ribbon** in the table corner (already present in 5.79.40) stays.
+
+**Index.html cleanup — explicit DYNAMIC markers:**
+- The PRIMARY / POWER / POWERUPS tabs now carry `<!-- ▼ DYNAMIC: ui-manager.update*Tab() owns the children of #...-list -->` comments above the dynamic containers, so it's obvious at a glance which markup is JS-owned and which is static.
+- Inline `style="..."` attributes on those tab containers and the "Click a weapon to equip it" subtitle were lifted to semantic CSS classes (`.pause-tab-subtitle`, `.pause-tab-list`, `.pause-tab-list--scroll`).
+- `<h2 style="text-align: center;">POWERUPS</h2>` lost its inline center because the shared `.pause-tab-content > h2` rule already centers the title — this allowed the gold-gradient to apply uniformly without inline-style specificity wars.
+
+### Body-copy font review
+Action labels stay in Inter at 15 px (0.4-px tracking, weight 500). Section titles at 13 px (2.8-px tracking, uppercase, weight 700, accent-tinted). Subtitle copy at 12 px italic (`.pause-tab-subtitle`). Press Start 2P is now used **only** for the page header — every body-copy element on the controls page renders in a system-readable font.
+
+---
+
 ## [5.79.40] - 2026-05-07
 
 ### Fixed — Controls tab sprites finally show up; rebuilt as a proper table

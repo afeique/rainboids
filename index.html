@@ -139,27 +139,27 @@
             
             <div id="primary-tab" class="pause-tab-content">
                 <h2>PRIMARY WEAPON</h2>
-                <div style="margin-bottom: 15px; color: #aaa; font-size: 12px; text-align: center;">Click a weapon to equip it</div>
-                <div id="primary-weapon-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                    <!-- Populated dynamically by ui-manager.updatePrimaryTab() -->
-                </div>
+                <div class="pause-tab-subtitle">Click a weapon to equip it</div>
+                <!-- ▼ DYNAMIC: ui-manager.updatePrimaryTab() rebuilds
+                     the children of #primary-weapon-list on every pause-
+                     menu open. Don't add static rows here — they'll be
+                     wiped. The container itself stays. -->
+                <div id="primary-weapon-list" class="pause-tab-list"></div>
             </div>
 
             <div id="power-tab" class="pause-tab-content">
                 <h2>POWER WEAPON</h2>
-                <div style="margin-bottom: 15px; color: #aaa; font-size: 12px; text-align: center;">Click a weapon to equip it</div>
-                <div id="power-weapon-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                    <!-- Populated dynamically by ui-manager.updatePowerTab() -->
-                </div>
+                <div class="pause-tab-subtitle">Click a weapon to equip it</div>
+                <!-- ▼ DYNAMIC: ui-manager.updatePowerTab() owns the
+                     children of #power-weapon-list. -->
+                <div id="power-weapon-list" class="pause-tab-list"></div>
             </div>
 
             <div id="powerups-tab" class="pause-tab-content">
-                <h2 style="text-align: center;">POWERUPS</h2>
-                <!-- 5.79.0 — OFFENSE sub-tab removed too. All powerups
-                     render as one flat list now. -->
-                <div id="powerups-items-list" style="overflow-y: auto; margin-top: 16px; display: flex; flex-direction: column; gap: 8px; max-height: 60vh;">
-                    <!-- Populated by ui-manager.renderPowerupsOverlay() -->
-                </div>
+                <h2>POWERUPS</h2>
+                <!-- ▼ DYNAMIC: ui-manager.renderPowerupsOverlay() owns
+                     the children of #powerups-items-list. -->
+                <div id="powerups-items-list" class="pause-tab-list pause-tab-list--scroll"></div>
             </div>
 
             <div id="music-tab" class="pause-tab-content">
