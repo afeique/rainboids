@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.40] - 2026-05-07
+
+### Fixed — Controls tab sprites finally show up; rebuilt as a proper table
+**Root cause of "why aren't the keyboard sprites integrated and working?"** — `ui-manager.updateControlsTab()` was rewriting the entire `#controls-tab` innerHTML with the legacy text-based `<span class="control-symbol">WASD</span>` markup *every time the pause menu opened*, blowing away the sprite-based HTML I had been adding to `index.html` over the past several patches. Static markup → JS overwrites → user sees text.
+
+Fix: stripped the static controls block from `index.html` (now just an empty `<div id="controls-tab">`) and rewrote `updateControlsTab()` from scratch as a programmatic table builder driven by a single declarative `sections` array. Each section is `{ name, accent, iconPath, rows: [{ action, keys: [...] }] }`. Each key entry is one of `{ kind: 'sprite' | 'text' | 'or' | 'wasd' }`. Built with `createElement` / `appendChild` (and `createElementNS` for the SVG icon, no `innerHTML`).
+
+### Changed — Controls page redesigned as a dapper two-column table
+Per user request: action on the left, key binding (SimpleKeys sprites) on the right.
+
+- **Table layout** — `<table class="controls-table">` with section header rows (`colspan=2`) and data rows. Borders collapse with 4-px row spacing. Backdrop is glass-morphism (`backdrop-filter: blur(12px) saturate(130%)`) over a radial gold-tint gradient. Inset highlights + drop-shadow + a 1-px ring for depth. A diagonal sheen ribbon (`::before`) gives the corner a subtle reflective highlight.
+- **Per-section accents** — Movement = cyan, Combat = orange, Loadout = pink, System = gold. Drives the section icon color, animated bullet, and the row hover stripe.
+- **Hover state** — row lights up with a horizontal gradient that fades from the section's accent color to white-tinted; `inset 3px 0` accent stripe on the action cell. No layout shift; the gradient makes each row feel distinct without crowding.
+- **Section header** — SVG icon (built via `createElementNS`) + animated 6-px bullet (1× → 1.4× pulse @ 2.4 s) + uppercase Inter title at 13 px / 2.8-px tracking, all in the section accent color with `drop-shadow` glow.
+- **Footer hint** — `[ESC] to resume play` line below the table with the same sprite-backed text tile.
+
+### Changed — Pause-menu tab headers now share a gold-gradient title style
+All `.pause-tab-content > h2` elements (CONTROLS, ASSISTS, PRIMARY WEAPON, POWER WEAPON, POWERUPS, MUSIC, etc.) now render with:
+- Press Start 2P at 24 px / 5-px letter-spacing
+- A `linear-gradient(180deg, #fff7d6, #FFC107, #cf8b00)` text-clip
+- A 20-px gold halo `text-shadow`
+- A tapered horizontal underline (`::after`) — fades from transparent → gold → bright gold → gold → transparent, with a 10-px glow
+
+The legacy `.pause-tab-content h2` rule (descendant selector with `font-size: 28px`) was reduced to a `margin-top: 0` reset so it no longer overrides the gradient styling.
+
+### Body-copy font readability
+- Action labels: Inter 15 px / 500 weight / 0.3-px tracking.
+- Section titles: Inter 13 px / 700 weight / 2.8-px tracking, uppercase, accent color.
+- "or" separator: Inter 12 px italic, dim gray.
+- Press Start 2P is now reserved for the page header only — body copy is fully readable system font.
+
+---
+
 ## [5.79.39] - 2026-05-07
 
 ### Fixed — HUD button labels now fit cleanly inside the squares

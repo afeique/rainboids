@@ -396,75 +396,227 @@ export class UIManager {
         return !isPaused;
     }
 
+    // 5.79.40 — Controls tab rewritten as a programmatic table builder.
+    //   Two columns: action on the left, key binding (SimpleKeys
+    //   pixel-art sprites) on the right. Sections (Movement / Combat /
+    //   Loadout / System) are full-width header rows that span the
+    //   table. The previous version called innerHTML with text-only
+    //   markup every time the pause menu opened, which is why the
+    //   sprite-based HTML never survived a tab open — the JS overrode
+    //   it. Rebuilding from data on each open keeps the bindings in a
+    //   single declarative source.
     updateControlsTab() {
         const controlsTab = document.getElementById('controls-tab');
         if (!controlsTab) return;
-        // Desktop-only build — single keyboard / mouse layout.
-        // 5.68.4 — Q activates the equipped skill (was TAB in 5.64.14–5.68.3).
-        // E/R/F cycle skill/primary/power; held = open radial menu.
-        controlsTab.innerHTML = `
-            <h2>CONTROLS</h2>
-            <div class="control-list">
-                <div>
-                    <span class="control-symbol">WASD</span><br>
-                    Movement
-                </div>
-                <div>
-                    <span class="control-symbol">MOUSE</span><br>
-                    Aiming
-                </div>
-                <div>
-                    <span class="control-symbol">LEFT</span>
-                    or
-                    <span class="control-symbol">RIGHT</span>
-                    Arrows<br>
-                    Rotate Ship
-                </div>
 
-                <div>
-                    <span class="control-symbol">L.CLICK</span>
-                    or
-                    <span class="control-symbol">UP ↑</span><br>
-                    Fire equipped primary weapon (hold)
-                </div>
-                <div>
-                    <span class="control-symbol">R.CLICK</span>
-                    or 
-                    <span class="control-symbol">SPACE</span>
-                    or
-                    <span class="control-symbol">DOWN ↓</span>
-                    <br>
-                    Fire equipped power weapon
-                </div>
-                <div>
-                    <span class="control-symbol">Q</span><br>
-                    Activate equipped defensive skill
-                </div>
-                <div>
-                    <span class="control-symbol">F</span>
-                    hold for radial menu
-                    <br>
-                    Cycle through primary weapons
-                    <span class="control-symbol">PRM</span>
-                </div>
-                <div>
-                    <span class="control-symbol">E</span>
-                    hold for radial menu
-                    <br>
-                    Cycle through power weapons
-                    <span class="control-symbol">POW</span>
-                </div>
-                <div>
-                    <span class="control-symbol">R</span>
-                    hold for radial menu
-                    <br>
-                    Cycle through defensive skills
-                    <span class="control-symbol">SKILL</span>
-                </div>
-                <div><span class="control-symbol">ESC</span> Pause / Resume</div>
-                <div><span class="control-symbol">\`</span> Stats screen — level, derived stats, scaling formulae</div>
-            </div>
-        `;
+        const SPRITE_DIR = 'sprites/keys/';
+
+        // Section icons reuse the SVG icon registry so the section
+        //   headers carry the same visual treatment as the rest of
+        //   the SVG-based UI.
+        const sections = [
+            {
+                name: 'Movement',
+                accent: 'cyan',
+                iconPath: 'M12 2 L4 5 V11 C4 16 7.5 20.5 12 22 C16.5 20.5 20 16 20 11 V5 Z',
+                rows: [
+                    { action: 'Move ship', keys: [{ kind: 'wasd' }] },
+                ],
+            },
+            {
+                name: 'Combat',
+                accent: 'orange',
+                iconPath: 'M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 Z M12 8 A4 4 0 1 0 12 16 A4 4 0 1 0 12 8 Z M12 11 A1 1 0 1 0 12 13 A1 1 0 1 0 12 11 Z',
+                rows: [
+                    { action: 'Aim reticle', keys: [
+                        { kind: 'text', label: 'Mouse', wide: true },
+                        { kind: 'or' },
+                        { kind: 'sprite', file: 'ARROWLEFT.png', alt: 'Left' },
+                        { kind: 'sprite', file: 'ARROWRIGHT.png', alt: 'Right' },
+                    ] },
+                    { action: 'Fire primary weapon', keys: [
+                        { kind: 'text', label: 'L-Click', wide: true, tone: 'cyan' },
+                        { kind: 'or' },
+                        { kind: 'sprite', file: 'ARROWUP.png', alt: 'Up' },
+                    ] },
+                    { action: 'Fire / charge power weapon', keys: [
+                        { kind: 'sprite', file: 'SPACE.png', alt: 'Space' },
+                        { kind: 'or' },
+                        { kind: 'text', label: 'R-Click', wide: true, tone: 'orange' },
+                        { kind: 'or' },
+                        { kind: 'sprite', file: 'ARROWDOWN.png', alt: 'Down' },
+                    ] },
+                    { action: 'Activate equipped skill', keys: [
+                        { kind: 'sprite', file: 'Q.png', alt: 'Q' },
+                    ] },
+                ],
+            },
+            {
+                name: 'Loadout',
+                accent: 'pink',
+                iconPath: 'M13 2 L4 14 H10 L9 22 L20 9 H13 Z',
+                rows: [
+                    { action: 'Cycle primary weapon', keys: [
+                        { kind: 'sprite', file: 'R.png', alt: 'R' },
+                    ] },
+                    { action: 'Cycle power weapon', keys: [
+                        { kind: 'sprite', file: 'F.png', alt: 'F' },
+                    ] },
+                    { action: 'Cycle defense skill', keys: [
+                        { kind: 'sprite', file: 'E.png', alt: 'E' },
+                    ] },
+                ],
+            },
+            {
+                name: 'System',
+                accent: 'gold',
+                iconPath: 'M7 5 H10 V19 H7 Z M14 5 H17 V19 H14 Z',
+                rows: [
+                    { action: 'Pause / Resume', keys: [
+                        { kind: 'text', label: 'ESC' },
+                    ] },
+                    { action: 'Stats screen', keys: [
+                        { kind: 'text', label: '`' },
+                    ] },
+                ],
+            },
+        ];
+
+        // Build DOM with createElement — no innerHTML for the body,
+        //   so the sprite paths are guaranteed to resolve via the
+        //   browser's standard <img> resource pipeline.
+        controlsTab.replaceChildren();
+
+        const heading = document.createElement('h2');
+        heading.textContent = 'CONTROLS';
+        controlsTab.appendChild(heading);
+
+        const table = document.createElement('table');
+        table.className = 'controls-table';
+
+        for (const section of sections) {
+            // Section header row — spans both columns.
+            const headerRow = document.createElement('tr');
+            headerRow.className = 'controls-section-row';
+            headerRow.dataset.accent = section.accent;
+
+            const headerCell = document.createElement('td');
+            headerCell.colSpan = 2;
+            headerCell.className = 'controls-section-cell';
+
+            const iconWrap = document.createElement('span');
+            iconWrap.className = 'controls-section-icon';
+            // Build the SVG via createElementNS so there's no
+            //   string-interpolated HTML — keeps the static analyzer
+            //   happy and avoids any innerHTML usage on this branch.
+            const SVG_NS = 'http://www.w3.org/2000/svg';
+            const svgEl = document.createElementNS(SVG_NS, 'svg');
+            svgEl.setAttribute('viewBox', '0 0 24 24');
+            svgEl.setAttribute('width', '18');
+            svgEl.setAttribute('height', '18');
+            svgEl.setAttribute('fill', 'currentColor');
+            const pathEl = document.createElementNS(SVG_NS, 'path');
+            pathEl.setAttribute('d', section.iconPath);
+            svgEl.appendChild(pathEl);
+            iconWrap.appendChild(svgEl);
+            headerCell.appendChild(iconWrap);
+
+            const dot = document.createElement('span');
+            dot.className = 'controls-section-bullet';
+            headerCell.appendChild(dot);
+
+            const title = document.createElement('span');
+            title.className = 'controls-section-title';
+            title.textContent = section.name;
+            headerCell.appendChild(title);
+
+            headerRow.appendChild(headerCell);
+            table.appendChild(headerRow);
+
+            for (const row of section.rows) {
+                const tr = document.createElement('tr');
+                tr.className = 'controls-row';
+                tr.dataset.accent = section.accent;
+
+                const actionCell = document.createElement('td');
+                actionCell.className = 'controls-action';
+                actionCell.textContent = row.action;
+                tr.appendChild(actionCell);
+
+                const keysCell = document.createElement('td');
+                keysCell.className = 'controls-keys';
+                for (const k of row.keys) {
+                    keysCell.appendChild(this._buildKeyTile(k, SPRITE_DIR));
+                }
+                tr.appendChild(keysCell);
+
+                table.appendChild(tr);
+            }
+        }
+
+        controlsTab.appendChild(table);
+
+        const footer = document.createElement('div');
+        footer.className = 'controls-footer';
+        footer.appendChild(this._buildKeyTile({ kind: 'text', label: 'ESC', small: true }, SPRITE_DIR));
+        const hint = document.createElement('span');
+        hint.className = 'controls-footer-text';
+        hint.textContent = 'to resume play';
+        footer.appendChild(hint);
+        controlsTab.appendChild(footer);
+    }
+
+    // Build a single key tile: sprite, sprite-backed text, or "or"
+    //   separator. Returns a DOM Node ready to append.
+    _buildKeyTile(k, dir) {
+        if (k.kind === 'sprite') {
+            const img = document.createElement('img');
+            img.className = 'kbd';
+            img.src = dir + k.file;
+            img.alt = k.alt || '';
+            img.decoding = 'sync';
+            return img;
+        }
+        if (k.kind === 'text') {
+            const span = document.createElement('span');
+            const cls = ['kbd-sprite-text'];
+            if (k.wide)  cls.push('kbd-sprite-wide');
+            if (k.small) cls.push('kbd-sprite-small');
+            if (k.tone)  cls.push('kbd-tone-' + k.tone);
+            span.className = cls.join(' ');
+            span.textContent = k.label;
+            return span;
+        }
+        if (k.kind === 'or') {
+            const span = document.createElement('span');
+            span.className = 'kbd-or';
+            span.textContent = 'or';
+            return span;
+        }
+        if (k.kind === 'wasd') {
+            const wrap = document.createElement('span');
+            wrap.className = 'kbd-cluster kbd-wasd';
+            const w = document.createElement('img');
+            w.className = 'kbd';
+            w.src = dir + 'W.png';
+            w.alt = 'W';
+            w.decoding = 'sync';
+            wrap.appendChild(w);
+            const bottom = document.createElement('span');
+            bottom.className = 'kbd-row-bottom';
+            for (const letter of ['A', 'S', 'D']) {
+                const im = document.createElement('img');
+                im.className = 'kbd';
+                im.src = dir + letter + '.png';
+                im.alt = letter;
+                im.decoding = 'sync';
+                bottom.appendChild(im);
+            }
+            wrap.appendChild(bottom);
+            return wrap;
+        }
+        // Fallback — plain text node.
+        return document.createTextNode(String(k.label || ''));
     }
 
     // ── Pause-menu PRIMARY tab ─────────────────────────────────────────────
