@@ -489,30 +489,29 @@ button:not([disabled]),
     filter: drop-shadow(0 0 6px var(--accent-glow));
 }
 
-.controls-section-bullet {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    background: var(--accent);
-    border-radius: 50%;
-    box-shadow: 0 0 8px var(--accent), 0 0 14px var(--accent-glow);
-    margin: 0 10px 2px 0;
-    vertical-align: middle;
-    animation: control-bullet-pulse 2.4s ease-in-out infinite;
-}
-@keyframes control-bullet-pulse {
-    0%, 100% { transform: scale(1);   opacity: 1;   }
-    50%      { transform: scale(1.4); opacity: 0.7; }
-}
+/* 5.79.43 — Animated bullet dot removed; the SVG icon alone serves
+   as the section indicator. `.controls-section-bullet` and the
+   `control-bullet-pulse` keyframes were dropped along with the
+   render path in ui-manager. */
 
 .controls-section-title {
-    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
-    font-size: 13px;
+    font-family: 'Silkscreen', monospace;
+    font-size: 14px;
     font-weight: 700;
-    letter-spacing: 2.8px;
+    letter-spacing: 2px;
     color: var(--accent);
     text-transform: uppercase;
     vertical-align: middle;
+    /* Layered text-shadow: 1-px black outline (4 corners) + soft
+       accent-color glow on top so the title pops against the
+       backdrop while still reading as a pixel-font label. */
+    text-shadow:
+        -1px -1px 0 #000,
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000,
+         0    0 10px var(--accent-glow),
+         0    0 18px var(--accent-glow);
 }
 
 /* Body row — action text (left) + key cluster (right). */
@@ -527,11 +526,40 @@ button:not([disabled]),
 .controls-row[data-accent="pink"]   { --accent: #ff88dd; --accent-glow: rgba(255, 136, 221, 0.30); }
 .controls-row[data-accent="gold"]   { --accent: #FFC107; --accent-glow: rgba(255, 193, 7, 0.30); }
 
-.controls-row:hover td {
+/* 5.79.42 — Hover gradient was resetting at each <td> boundary
+   because the previous fix transitioned `background` directly on
+   each cell, which produced a visible flash mid-transition (cells
+   repaint slightly out of sync, and CSS `background-image` doesn't
+   smoothly transition between "none" and a gradient).
+   New approach: each cell's gradient lives on a `::after` pseudo
+   that's pre-rendered at full opacity from page load. The pseudo
+   is hidden via `opacity: 0` at rest; on row hover, both pseudos
+   transition opacity 0 → 1 in lockstep. Opacity is GPU-accelerated
+   and synchronized, so there's no flash. The 200%-background-size
+   slice technique still aligns the two halves across the column
+   boundary into a continuous sweep. */
+.controls-action::after,
+.controls-keys::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
     background: linear-gradient(90deg,
         var(--accent-glow) 0%,
-        rgba(255, 255, 255, 0.05) 22%,
-        rgba(255, 255, 255, 0.025) 100%);
+        rgba(255, 255, 255, 0.06) 50%,
+        rgba(255, 255, 255, 0.02) 100%);
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity 200ms ease;
+    pointer-events: none;
+    z-index: 0;
+}
+.controls-action::after { background-position: 0 0; }
+.controls-keys::after   { background-position: 100% 0; }
+.controls-row:hover .controls-action::after,
+.controls-row:hover .controls-keys::after {
+    opacity: 1;
 }
 .controls-row:hover .controls-action {
     box-shadow: inset 3px 0 0 var(--accent);
@@ -593,26 +621,19 @@ button:not([disabled]),
     margin-right: 0;
 }
 
-/* Hairline divider between rows — fades out toward the column
-   edges so it doesn't fight the rounded corners on hover. */
-.controls-row + .controls-row .controls-action,
-.controls-row + .controls-row .controls-keys {
+/* 5.79.42 — Cells need position:relative so the absolute hover-
+   gradient ::after pseudo (defined further down) anchors to the
+   cell box. The previous fade-edge divider that lived on this
+   pseudo was removed because the gradient now owns ::after; row
+   separation is handled by `border-spacing: 0 4px` on the table
+   plus a soft border-top on body rows below. */
+.controls-action,
+.controls-keys {
     position: relative;
 }
-.controls-row + .controls-row .controls-action::after,
-.controls-row + .controls-row .controls-keys::after {
-    content: '';
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    top: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(255, 255, 255, 0.05) 20%,
-        rgba(255, 255, 255, 0.05) 80%,
-        transparent 100%);
-    pointer-events: none;
+.controls-row + .controls-row .controls-action,
+.controls-row + .controls-row .controls-keys {
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 .controls-row + .controls-section-row .controls-section-cell {
     margin-top: 6px;
@@ -644,10 +665,12 @@ button:not([disabled]),
     gap: 2px;
 }
 
-/* Pixel-art key sprite. SimpleKeys are 16-px-tall PNGs; render at
-   3× with crisp sampling so they read as game-style keys. */
+/* 5.79.42 — Pixel-art key sprite. Switched from Classic SimpleKeys
+   (16 px tall) to Jumbo SimpleKeys (21 px tall) per user request.
+   Render at 3× with crisp sampling — Jumbo at 3× is 63 px tall vs
+   Classic's 48 px, so keys are slightly chunkier and easier to read. */
 .kbd {
-    height: 48px;
+    height: 63px;
     width: auto;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
@@ -661,21 +684,20 @@ button:not([disabled]),
     filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 0 6px rgba(255, 255, 255, 0.15));
 }
 
-/* 5.79.39 — Sprite-backed text key. Uses EMPTY2.png as the
-   pixel-art tile background and overlays a readable Inter label
-   on top so ESC / Mouse / L-Click / R-Click read as the same
-   visual family as the actual sprite keys. */
+/* Sprite-backed text key. Uses EMPTY1/EMPTY2.png Jumbo backgrounds
+   and overlays a readable Inter label on top so ESC reads as the
+   same visual family as the actual sprite keys. */
 .kbd-sprite-text {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 48px;
-    min-width: 51px;            /* matches EMPTY1.png at 3× (17×3) */
-    padding: 0 6px 4px;          /* small bottom pad for the baseline of the sprite */
+    height: 63px;
+    min-width: 57px;            /* Jumbo EMPTY1.png at 3× (19×3) */
+    padding: 0 8px 4px;
     background: url('../sprites/keys/EMPTY1.png') center/contain no-repeat;
     image-rendering: pixelated;
     font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 0.4px;
     text-transform: uppercase;
@@ -686,20 +708,64 @@ button:not([disabled]),
     transition: transform 120ms ease, filter 120ms ease;
 }
 .kbd-sprite-text.kbd-sprite-wide {
-    min-width: 117px;            /* matches EMPTY2.png at 3× (39×3) */
+    min-width: 123px;            /* Jumbo EMPTY2.png at 3× (41×3) */
     background-image: url('../sprites/keys/EMPTY2.png');
-    font-size: 13px;
+    font-size: 14px;
 }
 .kbd-sprite-text.kbd-sprite-small {
-    height: 36px;
-    min-width: 39px;
-    font-size: 10px;
+    height: 48px;
+    min-width: 48px;
+    font-size: 11px;
 }
 .kbd-tone-cyan   { color: #66e6ff; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 8px rgba(102, 230, 255, 0.45); }
 .kbd-tone-orange { color: #ffb366; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 8px rgba(255, 179, 102, 0.45); }
 .control-row:hover .kbd-sprite-text {
     transform: translateY(-1px);
     filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 0 6px rgba(255, 255, 255, 0.15));
+}
+
+/* 5.79.42 — Mouse-button SVG tile. Rendered inline by ui-manager
+   (see _buildMouseSvgKey). Slight glow + drop shadow matches the
+   key sprites so it reads as part of the same family. */
+.kbd-mouse-svg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 63px;
+    width: 56px;
+    user-select: none;
+    transition: transform 120ms ease, filter 120ms ease;
+    filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6));
+}
+.kbd-mouse-svg svg {
+    width: 100%;
+    height: 100%;
+    color: #d8e0ec;
+}
+.kbd-mouse-svg.kbd-mouse-l { color: #66e6ff; }
+.kbd-mouse-svg.kbd-mouse-r { color: #ffb366; }
+.kbd-mouse-svg.kbd-mouse-l svg { color: #66e6ff; }
+.kbd-mouse-svg.kbd-mouse-r svg { color: #ffb366; }
+.kbd-mouse-svg .mouse-body {
+    fill: rgba(255, 255, 255, 0.04);
+    stroke: #d8e0ec;
+    stroke-width: 1.4;
+}
+.kbd-mouse-svg .mouse-divider {
+    stroke: #d8e0ec;
+    stroke-width: 1.2;
+    fill: none;
+}
+.kbd-mouse-svg .mouse-wheel {
+    fill: #d8e0ec;
+}
+.kbd-mouse-svg .mouse-button-active {
+    fill: currentColor;
+    opacity: 0.95;
+}
+.control-row:hover .kbd-mouse-svg {
+    transform: translateY(-1px);
+    filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 0 8px currentColor);
 }
 
 /* Legacy classes kept as aliases of the sprite-backed key so any

@@ -435,14 +435,14 @@ export class UIManager {
                         { kind: 'sprite', file: 'ARROWRIGHT.png', alt: 'Right' },
                     ] },
                     { action: 'Fire primary weapon', keys: [
-                        { kind: 'text', label: 'L-Click', wide: true, tone: 'cyan' },
+                        { kind: 'mouse', side: 'left' },
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWUP.png', alt: 'Up' },
                     ] },
-                    { action: 'Fire / charge power weapon', keys: [
+                    { action: 'Fire Power Weapon', keys: [
                         { kind: 'sprite', file: 'SPACE.png', alt: 'Space' },
                         { kind: 'or' },
-                        { kind: 'text', label: 'R-Click', wide: true, tone: 'orange' },
+                        { kind: 'mouse', side: 'right' },
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWDOWN.png', alt: 'Down' },
                     ] },
@@ -521,10 +521,9 @@ export class UIManager {
             iconWrap.appendChild(svgEl);
             headerCell.appendChild(iconWrap);
 
-            const dot = document.createElement('span');
-            dot.className = 'controls-section-bullet';
-            headerCell.appendChild(dot);
-
+            // 5.79.43 — Animated bullet dot removed; the SVG icon alone
+            //   is the section indicator. The doubled-up icon+dot was
+            //   crowded.
             const title = document.createElement('span');
             title.className = 'controls-section-title';
             title.textContent = section.name;
@@ -566,8 +565,9 @@ export class UIManager {
         controlsTab.appendChild(footer);
     }
 
-    // Build a single key tile: sprite, sprite-backed text, or "or"
-    //   separator. Returns a DOM Node ready to append.
+    // Build a single key tile: sprite, sprite-backed text, "or"
+    //   separator, WASD diamond, or mouse SVG. Returns a DOM Node
+    //   ready to append.
     _buildKeyTile(k, dir) {
         if (k.kind === 'sprite') {
             const img = document.createElement('img');
@@ -615,8 +615,87 @@ export class UIManager {
             wrap.appendChild(bottom);
             return wrap;
         }
+        if (k.kind === 'mouse') {
+            return this._buildMouseSvgKey(k.side);
+        }
         // Fallback — plain text node.
         return document.createTextNode(String(k.label || ''));
+    }
+
+    // 5.79.42 — Mouse-button SVG key tile. Original silhouette (no
+    //   external asset reproduction): pear-shaped body with a divider
+    //   between the L/R buttons and the body, a small scroll-wheel
+    //   rectangle at center-top, and the active button filled with
+    //   the accent color via `currentColor`. `side` is 'left' or
+    //   'right'; the corresponding button gets the active fill while
+    //   the other stays as outline only.
+    //
+    //   Built with createElementNS so the SVG renders inline without
+    //   any string-interpolated HTML (security-analyzer-friendly).
+    _buildMouseSvgKey(side) {
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+        const wrap = document.createElement('span');
+        wrap.className = 'kbd-mouse-svg';
+        if (side === 'left')  wrap.classList.add('kbd-mouse-l');
+        if (side === 'right') wrap.classList.add('kbd-mouse-r');
+
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 32');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('aria-label', side === 'left' ? 'Left mouse button' : 'Right mouse button');
+
+        // Mouse body silhouette — symmetric pear shape.
+        const body = document.createElementNS(SVG_NS, 'path');
+        body.setAttribute('d',
+            'M 12 4 C 7 4 5 7 5 12 L 5 22 ' +
+            'C 5 28 8 30 12 30 ' +
+            'C 16 30 19 28 19 22 ' +
+            'L 19 12 C 19 7 17 4 12 4 Z');
+        body.setAttribute('class', 'mouse-body');
+        svg.appendChild(body);
+
+        // Active button highlight — top-half wedge on the active side.
+        const button = document.createElementNS(SVG_NS, 'path');
+        if (side === 'left') {
+            button.setAttribute('d',
+                'M 12 4 C 7 4 5 7 5 12 L 5 14 L 12 14 Z');
+        } else {
+            button.setAttribute('d',
+                'M 12 4 L 12 14 L 19 14 L 19 12 C 19 7 17 4 12 4 Z');
+        }
+        button.setAttribute('class', 'mouse-button-active');
+        svg.appendChild(button);
+
+        // Vertical divider between the two top buttons.
+        const vDiv = document.createElementNS(SVG_NS, 'line');
+        vDiv.setAttribute('x1', '12');
+        vDiv.setAttribute('y1', '4');
+        vDiv.setAttribute('x2', '12');
+        vDiv.setAttribute('y2', '14');
+        vDiv.setAttribute('class', 'mouse-divider');
+        svg.appendChild(vDiv);
+
+        // Horizontal divider — separates the button row from the body.
+        const hDiv = document.createElementNS(SVG_NS, 'line');
+        hDiv.setAttribute('x1', '5');
+        hDiv.setAttribute('y1', '14');
+        hDiv.setAttribute('x2', '19');
+        hDiv.setAttribute('y2', '14');
+        hDiv.setAttribute('class', 'mouse-divider');
+        svg.appendChild(hDiv);
+
+        // Tiny scroll-wheel rectangle centered between the buttons.
+        const wheel = document.createElementNS(SVG_NS, 'rect');
+        wheel.setAttribute('x', '11');
+        wheel.setAttribute('y', '7');
+        wheel.setAttribute('width', '2');
+        wheel.setAttribute('height', '4');
+        wheel.setAttribute('rx', '0.8');
+        wheel.setAttribute('class', 'mouse-wheel');
+        svg.appendChild(wheel);
+
+        wrap.appendChild(svg);
+        return wrap;
     }
 
     // ── Pause-menu PRIMARY tab ─────────────────────────────────────────────

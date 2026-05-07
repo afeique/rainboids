@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.43] - 2026-05-07
+
+### Fixed — Hover-gradient flash on controls rows; section-title typography
+- **Hover gradient flash fixed.** The previous fix (200%-background-size on each `<td>`) had the math right but visually flashed because each cell transitioned its `background` independently and the two cells repainted slightly out of sync. New approach: gradient lives on a `td::after` pseudo at full opacity from page load, hidden via `opacity: 0` at rest. On row hover, both pseudos transition `opacity: 0 → 1` in lockstep — opacity is GPU-accelerated and synchronized, so the two halves animate as one continuous sweep across the row.
+- **Row dividers** moved from a separate `::after` pseudo to a plain `border-top` (`rgba(255, 255, 255, 0.04)`) on the cells, freeing `::after` for the gradient. The fade-edge effect was lost but the row-spacing already provides enough separation.
+- **Section-title font** swapped to Silkscreen (the project's other loaded pixel font) at 14 px. Uppercase, with a layered text-shadow: 1-px black outline (four-corner offsets) + an `accent-glow`-tinted soft halo at 10 px and 18 px radii. Pops against the glass backdrop while still reading as a pixel-art label.
+- **Section bullet dot** removed — the SVG icon alone is enough as a section indicator. Both the JS render path (in `ui-manager.updateControlsTab`) and the `.controls-section-bullet` / `control-bullet-pulse` keyframes were dropped.
+
+### Changed — Controls/Music tab text + mouse SVGs + Jumbo sprite swap
+- **Power-weapon binding label** changed from "Fire / charge power weapon" → **"Fire Power Weapon"**. The "/charge" wording was misleading; the existing `weapons.js` charge logic already accumulates charge automatically over time (charging is gated by elapsed time since `chargeStartTime`, not by input being held), and pressing the input only triggers firing once minimum charge is met. Verified by reading the `if (powerConfig.isChargeBased)` branch — no input-gated charge accumulation existed.
+- **Music tab** now has a `<h2>MUSIC</h2>` heading inside `#music-tab`, picking up the shared gold-gradient `title-sheen` styling. Was the only pause tab without a header.
+- **Keyboard sprites** switched from Classic SimpleKeys (16-px-tall) to **Jumbo SimpleKeys (21-px-tall)**. `sprites/keys/*.png` was repopulated from `sprites/SimpleKeys/Jumbo/Dark/Single PNGs/`. CSS bumped: `.kbd` 48 → 63 px tall; `.kbd-sprite-text` 48 → 63 px / `min-width` 51 → 57 px (matches Jumbo `EMPTY1.png` at 3×); `.kbd-sprite-text.kbd-sprite-wide` `min-width` 117 → 123 px (matches Jumbo `EMPTY2.png` at 3×); `.kbd-sprite-small` 36 → 48 px.
+- **L-Click / R-Click bindings** swapped from sprite-backed text tiles to inline mouse-silhouette SVGs (`new _buildMouseSvgKey(side)` in `ui-manager.js`). The renderer builds an original mouse-shaped silhouette via `createElementNS` — pear-shaped body, vertical divider between L/R buttons, horizontal divider between buttons and body, a tiny scroll-wheel rectangle at center, and the active button (left or right) filled with the accent color via `currentColor`. Cyan tone for L-Click, orange for R-Click; lift + accent-color drop-shadow on row hover.
+
+---
+
 ## [5.79.41] - 2026-05-07
 
 ### Changed — Tab-header gold gradient verified across all tabs; controls table dappered up
