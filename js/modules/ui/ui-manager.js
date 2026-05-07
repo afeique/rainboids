@@ -3,6 +3,7 @@ import { MusicPlayer } from '../audio/music-player.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
 import { loadSettings, saveSettings } from '../core/storage.js';
+import { renderIconHTML } from './icons.js';
 
 // Format an elapsed-time milliseconds value as M:SS for the pause-menu
 // TIMER tab. Mirrors the same formatter that lives in shop-dom.js for
@@ -22,20 +23,10 @@ function formatRunTime(ms) {
 //   damage (see fireLanceBeam / checkLightningCollisions in 5.79.3).
 //   Show the player the right effect for their loadout. Falls back
 //   to the cfg.description for non-beam primaries or other powerups.
-const BEAM_PRIMARIES = new Set(['LANCE_BEAM', 'LIGHTNING_ARC']);
-const BEAM_DPS_DESCRIPTIONS = {
-    RAPID_FIRE:  'Beam: +22% DPS per stack',
-    MULTI_SHOT:  'Beam: +30% DPS per stack',
-    BIG_BULLETS: 'Beam: +18% DPS per stack',
-    PIERCING:    'Beam: +15% DPS per stack',
-    HOMING:      'Beam: +10% DPS per stack',
-    EXPLOSIVE:   'Beam: +25% DPS per stack',
-};
-function _beamAwarePowerupDescription(type, cfg, player) {
-    const equipped = player && player.activePrimary;
-    if (BEAM_PRIMARIES.has(equipped) && BEAM_DPS_DESCRIPTIONS[type]) {
-        return BEAM_DPS_DESCRIPTIONS[type];
-    }
+// 5.79.23 — Beams moved to power weapons; the beam-aware DPS spillover
+//   for bullet-flavored primary upgrades is gone. Powerups now show
+//   their plain cfg.description regardless of equipped weapon.
+function _beamAwarePowerupDescription(type, cfg, _player) {
     return (cfg && cfg.description) || '';
 }
 
@@ -563,8 +554,8 @@ export class UIManager {
         `;
 
         const iconEl = document.createElement('span');
-        iconEl.style.cssText = 'font-size: 28px; min-width: 36px; text-align: center;';
-        iconEl.textContent = weaponDef.icon || '🔫';
+        iconEl.style.cssText = 'font-size: 28px; min-width: 36px; text-align: center; display: inline-flex; align-items: center; justify-content: center; color: inherit;';
+        iconEl.innerHTML = renderIconHTML(weaponDef.icon, { size: 28, fallback: '?' });
         row.appendChild(iconEl);
 
         const body = document.createElement('div');
@@ -720,8 +711,8 @@ export class UIManager {
 
             const iconWrap = document.createElement('div');
             iconWrap.className = 'powerup-card-icon';
-            iconWrap.textContent = cfg.icon || '⭐';
             iconWrap.style.color = cfg.color || '#cccccc';
+            iconWrap.innerHTML = renderIconHTML(cfg.icon, { size: 32, fallback: '★' });
             card.appendChild(iconWrap);
 
             const body = document.createElement('div');

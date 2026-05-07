@@ -21,12 +21,17 @@
 import { GAME_STATES } from '../core/constants.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 
-const BUTTON_W = 64;
-const BUTTON_H = 56;
+// 5.79.39 — Button height bumped 56 → 64 and label slot reworked so
+//   the text fits cleanly inside the rounded square. Was overlapping
+//   the bottom border because the label's textBaseline was implicitly
+//   inheriting `middle` from the icon block.
+const BUTTON_W = 72;
+const BUTTON_H = 64;
 const BUTTON_GAP = 14;
 const BOTTOM_MARGIN = 22;
-const ICON_FONT = "28px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+const ICON_FONT = "26px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
 const LABEL_FONT = "9px 'Press Start 2P', monospace";
+const ICON_PX = 26;
 
 export function getHudButtonRects(canvasW, canvasH) {
     // Layout: SHOP, STATS, PAUSE centered at bottom. Total width =
@@ -91,16 +96,16 @@ export function drawHudButtons(ctx, engine) {
         ctx.fill();
         ctx.stroke();
 
-        // 5.79.37 — Icon now drawn from the SVG cache (slug → cached
-        //   canvas via getIconImage). Falls back to font rendering for
-        //   unknown slugs.
+        // 5.79.39 — Icon sits in the top portion of the button so the
+        //   label has a dedicated bottom strip with no overlap. Icon
+        //   center y is roughly 38% of the button height (vs the old
+        //   center-minus-5 which crowded the label).
         const slug = resolveIconSlug(r.icon);
-        const iconPx = 28;
         const ix = x + w / 2;
-        const iy = y + h / 2 - 5;
+        const iy = y + Math.round(h * 0.36);
         if (slug) {
-            const img = getIconImage(slug, iconPx, '#ffffff');
-            if (img) ctx.drawImage(img, ix - iconPx / 2, iy - iconPx / 2, iconPx, iconPx);
+            const img = getIconImage(slug, ICON_PX, '#ffffff');
+            if (img) ctx.drawImage(img, ix - ICON_PX / 2, iy - ICON_PX / 2, ICON_PX, ICON_PX);
         } else {
             ctx.font = ICON_FONT;
             ctx.textAlign = 'center';
@@ -109,14 +114,21 @@ export function drawHudButtons(ctx, engine) {
             ctx.fillText(r.icon, ix, iy);
         }
 
-        // Label
+        // Label — bottom-baselined inside a fixed strip at the bottom
+        //   of the button. With baseline=bottom and y=button-bottom-7,
+        //   the 9-px font fully clears the rounded border (8 px corner
+        //   radius). Stroke pad is 3 px which still fits at the
+        //   chosen 7-px bottom margin.
         ctx.font = LABEL_FONT;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
         ctx.lineWidth = 3;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
         ctx.lineJoin = 'round';
-        ctx.strokeText(r.label, x + w / 2, y + h - 9);
+        const labelY = y + h - 7;
+        ctx.strokeText(r.label, x + w / 2, labelY);
         ctx.fillStyle = isPress ? '#fffadf' : (isHover ? '#fff' : 'rgba(230, 240, 250, 0.95)');
-        ctx.fillText(r.label, x + w / 2, y + h - 9);
+        ctx.fillText(r.label, x + w / 2, labelY);
     }
     ctx.restore();
     return rects;

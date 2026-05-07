@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.39] - 2026-05-07
+
+### Fixed — HUD button labels now fit cleanly inside the squares
+Bottom-center HUD buttons (`SHOP` / `STATS` / `PAUSE`) had labels that visually overlapped the bottom border. Two issues:
+- The label was rendered with the previous `textBaseline = 'middle'` left over from the icon block, which placed text vertically off where I intended.
+- Button height (56 px) didn't leave a clean strip for the label below the icon.
+
+Reworked layout in `js/modules/hud/hud-buttons.js`:
+- Button size 64×56 → **72×64**.
+- Icon centered at 36 % of button height (top portion) instead of `center − 5 px`.
+- Label uses explicit `textBaseline = 'bottom'` and sits at `y + h − 7`, fully inside the 8-px corner radius.
+- Icon size 28 → 26 px so it doesn't crowd the label slot.
+
+### Changed — Controls page modernized; sprite-backed ESC + Mouse keys
+Per user request (cooler, more modern + readable fonts + sprite-styled non-letter keys):
+
+- **Glass-morphism cards** with `backdrop-filter: blur(10px) saturate(120%)` and a layered hairline border via a `::before` linear-gradient mask. Per-section accent palette: Movement = cyan, Combat = orange, Loadout = pink, System = gold.
+- **SVG section icons** drawn from the icon registry (`shield` / `target` / `bolt` / `pause`) prefixed before each section title, glowing in the section's accent color via `drop-shadow`.
+- **Animated section bullet** — 6-px dot pulsing 1× → 1.4× over 2.4 s (`@keyframes control-bullet-pulse`).
+- **CONTROLS header** is the only piece still using `Press Start 2P`, now with a gold gradient text-clip and a soft 18-px halo. Section titles, action labels, mouse buttons, and ESC tile all use Inter.
+- **`kbd-sprite-text` class** — uses `EMPTY1.png` / `EMPTY2.png` as a CSS background image (`image-rendering: pixelated`) so the ESC, Mouse, L-Click, R-Click tiles share the SimpleKeys pixel-art aesthetic with the actual sprite keys instead of standing out as DOM rectangles. Tonal variants `kbd-tone-cyan` / `kbd-tone-orange` keep the L/R-click color coding.
+- **Hover micro-anim** — keys lift 1 px and pick up a subtle white drop-shadow when their row is hovered.
+- **Footer hint** — `[ESC] to resume play` line below the grid, dashed-border separator, references the same sprite-backed key tile so the page feels cohesive.
+
+---
+
 ## [5.79.38] - 2026-05-07
 
 ### Changed — Health orbs all 3D, gold shapes all 2D (visual distinction)

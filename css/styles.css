@@ -369,68 +369,129 @@ button:not([disabled]),
 #controls-tab {
     text-align: center;
 }
-/* 5.79.37 — Controls page redesigned again: themed groups (Movement /
-   Combat / Loadout / System) inside cards, body copy in a readable
-   system font (the pixel font was hard to read at 15 px), key tiles
-   keep the SimpleKeys pixel-art treatment for game identity. */
+/* 5.79.39 — Controls page modernized: glass-morphism cards with
+   backdrop blur, animated gradient hairline borders, neon section
+   bullets with a soft pulse, SVG section icons, and EMPTY2 sprite
+   backgrounds for the ESC / Mouse / L-Click / R-Click "text" keys
+   so every visible key in the layout reads as a pixel-art tile.
+   The pixel font is reserved for the "CONTROLS" header and key
+   tiles only — body copy uses Inter for readability. */
+
 #controls-tab h2 {
     font-family: 'Press Start 2P', monospace;
-    letter-spacing: 2px;
-    margin-bottom: 14px;
+    font-size: 22px;
+    letter-spacing: 4px;
+    margin-bottom: 18px;
+    background: linear-gradient(180deg, #fff7d6 0%, #FFC107 60%, #cf8b00 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 18px rgba(255, 193, 7, 0.25);
 }
 
 .controls-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 16px;
     text-align: left;
     margin: 8px auto 0;
     padding: 4px;
-    max-width: 880px;
+    max-width: 920px;
 }
 
+/* Card — glass morphism + animated hairline border. The ::before
+   pseudo carries a conic-gradient sweep that's cheap (no JS) and
+   gives each card a subtle living edge. */
 .control-group {
+    --accent: #FFC107;
+    --accent-faint: rgba(255, 193, 7, 0.18);
+    --accent-glow: rgba(255, 193, 7, 0.35);
+    position: relative;
     background:
-        linear-gradient(180deg, rgba(255, 193, 7, 0.05) 0%, rgba(0, 0, 0, 0) 60%),
-        rgba(0, 0, 0, 0.40);
-    border: 1px solid rgba(255, 193, 7, 0.22);
-    border-radius: 10px;
-    padding: 14px 18px 16px;
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 50%),
+        rgba(8, 12, 22, 0.55);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border: 1px solid var(--accent-faint);
+    border-radius: 14px;
+    padding: 16px 20px 18px;
     box-shadow:
-        inset 0 0 30px rgba(255, 193, 7, 0.04),
-        0 2px 12px rgba(0, 0, 0, 0.4);
-    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        inset 0 0 30px rgba(255, 193, 7, 0.03),
+        0 4px 18px rgba(0, 0, 0, 0.45);
+    transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+    overflow: hidden;
+}
+.control-group::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, var(--accent-glow) 0%, transparent 35%, transparent 65%, var(--accent-glow) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0.7;
+    pointer-events: none;
 }
 .control-group:hover {
-    border-color: rgba(255, 193, 7, 0.45);
+    border-color: var(--accent-glow);
     box-shadow:
-        inset 0 0 30px rgba(255, 193, 7, 0.08),
-        0 4px 18px rgba(0, 0, 0, 0.5),
-        0 0 18px rgba(255, 193, 7, 0.10);
-    transform: translateY(-1px);
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 0 30px rgba(255, 193, 7, 0.06),
+        0 6px 24px rgba(0, 0, 0, 0.55),
+        0 0 22px var(--accent-faint);
+    transform: translateY(-2px);
 }
+
+/* Per-section accent palette — overrides the gold default with a
+   complementary hue so each card has its own identity. */
+.control-group[data-accent="cyan"]   { --accent: #66e6ff; --accent-faint: rgba(102, 230, 255, 0.20); --accent-glow: rgba(102, 230, 255, 0.40); }
+.control-group[data-accent="orange"] { --accent: #ffb366; --accent-faint: rgba(255, 179, 102, 0.20); --accent-glow: rgba(255, 179, 102, 0.40); }
+.control-group[data-accent="pink"]   { --accent: #ff88dd; --accent-faint: rgba(255, 136, 221, 0.20); --accent-glow: rgba(255, 136, 221, 0.40); }
+.control-group[data-accent="gold"]   { --accent: #FFC107; --accent-faint: rgba(255, 193, 7, 0.22); --accent-glow: rgba(255, 193, 7, 0.40); }
 
 .control-group-header {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 193, 7, 0.20);
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--accent-faint);
 }
-.control-group-bullet {
-    width: 8px;
-    height: 8px;
-    background: #FFC107;
-    border-radius: 50%;
-    box-shadow: 0 0 8px rgba(255, 193, 7, 0.8);
+
+.control-group-icon {
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
     flex: 0 0 auto;
+    filter: drop-shadow(0 0 6px var(--accent-glow));
 }
+
+.control-group-bullet {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent), 0 0 14px var(--accent-glow);
+    flex: 0 0 auto;
+    animation: control-bullet-pulse 2.4s ease-in-out infinite;
+}
+@keyframes control-bullet-pulse {
+    0%, 100% { transform: scale(1);   opacity: 1;   }
+    50%      { transform: scale(1.4); opacity: 0.7; }
+}
+
 .control-group-title {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 12px;
-    letter-spacing: 1.5px;
-    color: #FFC107;
+    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2.8px;
+    color: var(--accent);
     text-transform: uppercase;
 }
 
@@ -446,11 +507,11 @@ button:not([disabled]),
     align-items: center;
     gap: 14px;
     padding: 6px 4px;
-    border-radius: 6px;
-    transition: background-color 120ms ease, transform 120ms ease;
+    border-radius: 8px;
+    transition: background-color 140ms ease, transform 140ms ease;
 }
 .control-row:hover {
-    background: rgba(255, 193, 7, 0.07);
+    background: rgba(255, 255, 255, 0.04);
     transform: translateX(3px);
 }
 
@@ -461,7 +522,7 @@ button:not([disabled]),
     align-items: center;
     gap: 6px;
     flex: 0 0 auto;
-    min-width: 168px;
+    min-width: 184px;
 }
 
 /* WASD diamond — W on top centered, A/S/D row below. */
@@ -486,15 +547,62 @@ button:not([disabled]),
     -ms-interpolation-mode: nearest-neighbor;
     filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6));
     user-select: none;
+    transition: transform 120ms ease, filter 120ms ease;
+}
+.control-row:hover .kbd {
+    transform: translateY(-1px);
+    filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 0 6px rgba(255, 255, 255, 0.15));
 }
 
-/* Mouse-button card + ESC text-only key — match the pixel-key silhouette. */
+/* 5.79.39 — Sprite-backed text key. Uses EMPTY2.png as the
+   pixel-art tile background and overlays a readable Inter label
+   on top so ESC / Mouse / L-Click / R-Click read as the same
+   visual family as the actual sprite keys. */
+.kbd-sprite-text {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    min-width: 51px;            /* matches EMPTY1.png at 3× (17×3) */
+    padding: 0 6px 4px;          /* small bottom pad for the baseline of the sprite */
+    background: url('../sprites/keys/EMPTY1.png') center/contain no-repeat;
+    image-rendering: pixelated;
+    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #f4f0e0;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+    filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6));
+    user-select: none;
+    transition: transform 120ms ease, filter 120ms ease;
+}
+.kbd-sprite-text.kbd-sprite-wide {
+    min-width: 117px;            /* matches EMPTY2.png at 3× (39×3) */
+    background-image: url('../sprites/keys/EMPTY2.png');
+    font-size: 13px;
+}
+.kbd-sprite-text.kbd-sprite-small {
+    height: 36px;
+    min-width: 39px;
+    font-size: 10px;
+}
+.kbd-tone-cyan   { color: #66e6ff; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 8px rgba(102, 230, 255, 0.45); }
+.kbd-tone-orange { color: #ffb366; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 8px rgba(255, 179, 102, 0.45); }
+.control-row:hover .kbd-sprite-text {
+    transform: translateY(-1px);
+    filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 0 6px rgba(255, 255, 255, 0.15));
+}
+
+/* Legacy classes kept as aliases of the sprite-backed key so any
+   page still using `.kbd-mouse` / `.kbd-text` doesn't regress. */
 .kbd-mouse,
 .kbd-text {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 44px;
+    height: 48px;
     min-width: 60px;
     padding: 0 12px;
     font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
@@ -517,24 +625,41 @@ button:not([disabled]),
 .kbd-mouse-r { color: #ffb366; }
 
 .kbd-or {
-    color: #888;
+    color: #8090a0;
     font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
     font-size: 12px;
     font-style: italic;
     padding: 0 2px;
 }
 
-/* Action label uses readable system font at 15 px — pixel font was
-   illegible at body sizes. Color-tweaked to a soft white so the
-   gold accent on the bullet stays the dominant visual cue. */
+/* Action label — readable Inter copy. Pixel font reserved for the
+   page header per user's 5.79.39 directive. */
 .kbd-action {
-    color: #e8e8e8;
+    color: #f0f4fa;
     font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
     font-size: 15px;
     font-weight: 500;
     line-height: 1.45;
     letter-spacing: 0.3px;
     flex: 1 1 auto;
+}
+
+.controls-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 22px auto 0;
+    padding-top: 14px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.10);
+    color: #a8b0bc;
+    font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.3px;
+}
+.controls-footer-text {
+    opacity: 0.85;
 }
 
 /* Goldenrod scrollbars throughout the pause menu.
