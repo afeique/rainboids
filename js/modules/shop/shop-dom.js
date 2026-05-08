@@ -320,7 +320,7 @@ function buildHelpPanel() {
         iconNode: makeCoinIconSvg(28),
         title: 'GOLD',
         titleClass: 'shop-help-title--gold',
-        body: 'Dropped as money orbs from kills. Money orbs fly to you automatically. Spend on the PRIMARY / POWER tabs (gold-priced weapon upgrades).',
+        body: 'Dropped as money orbs from kills. The orbs drift in space; fly close (or use the tractor beam) to scoop them. Spend on the weapon-specific tabs above — each weapon has its own tab listing that weapon\'s offensive upgrade tree.',
     }));
 
     wrap.appendChild(buildHelpEntry({
@@ -328,15 +328,7 @@ function buildHelpPanel() {
         iconClass: 'shop-help-icon--sp',
         title: 'SKILL POINTS',
         titleClass: 'shop-help-title--sp',
-        body: 'Awarded each time you level up. Level by gaining XP. Spend on the DEFENSE tab (SP-priced) — survivability and lives.',
-    }));
-
-    wrap.appendChild(buildHelpEntry({
-        iconText: 'PICK',
-        iconClass: 'shop-help-icon--picks',
-        title: 'POWERUP PICKS',
-        titleClass: 'shop-help-title--picks',
-        body: 'New in 5.70.0. Earned +1 per wave clear and +1 per level-up. Spend on the POWERUPS tab — every powerup is purchasable, so you build a custom kit each run.',
+        body: 'Earned +1 per wave clear and +1 per level-up. Spend in the pause-menu POWERUPS tab — every powerup is purchasable, so you build a custom kit each run. Initial buy costs 3 SP; each additional stack costs 2 SP more than the last.',
     }));
 
     wrap.appendChild(buildHelpEntry({
@@ -344,12 +336,12 @@ function buildHelpPanel() {
         iconClass: 'shop-help-icon--xp',
         title: 'EXPERIENCE',
         titleClass: 'shop-help-title--xp',
-        body: 'Awarded for every hit you land — including asteroid kills. Tracked by the red bar under your health. Filling the bar levels you up, granting +1 SP and +1 Powerup Pick.',
+        body: 'Awarded for every hit you land — including asteroid kills. Tracked by the red bar under your health. Filling the bar levels you up, granting +1 SP.',
     }));
 
     const footer = document.createElement('p');
     footer.className = 'shop-help-footer';
-    footer.textContent = 'Tip: powerups no longer drop from kills — they are picks-only via the POWERUPS tab. Killing asteroids levels you up faster, which gives you more picks. Build with intent.';
+    footer.textContent = 'Tip: powerups don\'t drop from kills — they\'re purchased exclusively via the pause-menu POWERUPS tab using SP. The shop here is for gold-priced offensive upgrades, one tab per weapon. Killing asteroids levels you up faster, which gives you more SP. Build with intent.';
     wrap.appendChild(footer);
 
     return wrap;

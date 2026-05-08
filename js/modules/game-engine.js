@@ -32,7 +32,10 @@ import * as hudCombat from './hud/combat.js';
 import * as hudNav from './hud/navigation.js';
 import * as hudOverlays from './hud/overlays.js';
 import * as hudCursor from './hud/cursor.js';
-import * as shopRenderer from './shop/shop-renderer.js';
+// 5.79.60 — `shop-renderer.js` import removed. The legacy canvas-
+//   based shop renderer was superseded by the HTML overlay
+//   (shop-dom.js); the file now has no live importers. Left on disk
+//   for now in case someone wants to revive a canvas-mode shop later.
 import * as shopDom from './shop/shop-dom.js';
 import * as cam from './world/camera-manager.js';
 import { recordVFXFrame } from './debug/vfx-telemetry.js';
@@ -1347,7 +1350,7 @@ export class GameEngine {
 
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
-    applyEnemyLevelScaling(enemy) { return wave.applyEnemyLevelScaling.call(this, enemy); }
+    applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }
 
     completeWave() { return wave.completeWave.call(this); }
     completeRun() { return wave.completeRun.call(this); }
@@ -1366,23 +1369,24 @@ export class GameEngine {
 
     _rebuildShopCache() { return shop._rebuildShopCache.call(this); }
 
-    _buildPrimaryTabItems() { return shop._buildPrimaryTabItems.call(this); }
+    _buildPrimaryTabItems(weaponId = null) { return shop._buildPrimaryTabItems.call(this, weaponId); }
 
-    _buildPowerTabItems() { return shop._buildPowerTabItems.call(this); }
+    _buildPowerTabItems(weaponId = null) { return shop._buildPowerTabItems.call(this, weaponId); }
 
-    _buildSkillsTabItems() { return shop._buildSkillsTabItems.call(this); }
-
-    _buildPowerupsTabItems() { return shop._buildPowerupsTabItems.call(this); }
-
+    // 5.79.62 — Removed wrappers for shop functions that were deleted
+    //   alongside the 5.79.57 SKILLS / DEFENSE / POWERUPS tab cleanups
+    //   and the 5.79.55 _buildPowerupsTabItems stub:
+    //     _buildSkillsTabItems       (skills moved to pause menu)
+    //     _buildPowerupsTabItems     (powerups moved to pause menu)
+    //     _handleWeaponBuyOrEquip    (weapon switching moved to pause menu)
+    //     _handleSkillBuy            (skill equip moved to pause menu)
+    //   The remaining live wrappers (close*, buyShopItem,
+    //   _handleUpgradeBuy) cover the per-weapon offensive-upgrade path.
     closeShop() { return shop.closeShop.call(this); }
     closeShopToPlaying() { return shop.closeShopToPlaying.call(this); }
     closeShopAndReturn() { return shop.closeShopAndReturn.call(this); }
 
     buyShopItem(itemId) { return shop.buyShopItem.call(this, itemId); }
-
-    _handleWeaponBuyOrEquip(item) { return shop._handleWeaponBuyOrEquip.call(this, item); }
-
-    _handleSkillBuy(item) { return shop._handleSkillBuy.call(this, item); }
 
     _handleUpgradeBuy(item) { return shop._handleUpgradeBuy.call(this, item); }
     
@@ -1394,14 +1398,12 @@ export class GameEngine {
 
     processNotificationQueue() { return wave.processNotificationQueue.call(this); }
 
-    drawShop() { return shopRenderer.drawShop.call(this); }
-    
-    drawShopTabs(shopX, tabY, shopWidth) { return shopRenderer.drawShopTabs.call(this, shopX, tabY, shopWidth); }
-    
-    drawShopItem(item, x, y, width, height, index, isHovered = false) { return shopRenderer.drawShopItem.call(this, item, x, y, width, height, index, isHovered); }
-    
-    drawMultilineText(text, x, startY, maxWidth, lineHeight, maxLines = null) { return shopRenderer.drawMultilineText.call(this, text, x, startY, maxWidth, lineHeight, maxLines); }
-    
+    // 5.79.60 — drawShop / drawShopTabs / drawShopItem /
+    //   drawMultilineText wrappers removed. The legacy canvas shop
+    //   was replaced by the HTML overlay (shop-dom.js) in earlier
+    //   patches; nothing called these four methods anymore. The
+    //   `import * as shopRenderer` at the top of this file was
+    //   dropped in the same cleanup.
     startNewWave() { return wave.startNewWave.call(this); }
     
     spawnWaveAsteroids() { return wave.spawnWaveAsteroids.call(this); }

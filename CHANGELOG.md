@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.56] - 2026-05-08
+
+### Removed — Pass 3: Defense registry, gradient cache hardening, dead shop handlers
+- **`js/modules/combat/defense-data.js` created** as the single source of truth for the eight defense items (`HEALTH_BOOST`, `SHIELD_BOOST`, `SPEED_BOOST`, `HEALTH_DROP_FREQUENCY`, `REFLEXES`, `LAST_STAND`, `STATIC_FIELD`, `SPARE_SHIP`). Schema: `id / name / description / icon / gradientColors / cost / maxStacks / flatCost`. Both `combat-manager.getPowerupConfig` (for in-game lookup) and the suspended `shopItems[]` (for when DEFENSE shop tab returns) read from this same registry — no more hand-mirrored copies that can drift.
+- **Powerup-card gradient cache key hardened** in `world/powerup.js`. Previous key was `gradientColors[0] + '|' + gradientColors[1]` — fragile against gradients with 3+ stops. New key is `gradientColors.join('|')` so the cache disambiguates correctly regardless of gradient length.
+- **Pause-tab HELP body refreshed** in `shop/shop-dom.js`. Old copy referenced removed shop tabs (DEFENSE-tab as SP-priced, "POWERUP PICKS" shop section); since the shop has been weapon-only since 5.78.0, that text was misleading. New copy: "Spend on the weapon-specific tabs above" + footer pointer to the in-pause POWERUPS tab.
+- **Dead shop handlers removed** from `shop/shop-manager.js`: `_buildPowerupsTabItems`, `_buildSkillsTabItems`, `_handleSkillBuy`, `_handleWeaponBuyOrEquip` had been orphaned since 5.79.57's tab-builder rewrite. The `isWeapon`/`isSkill` dispatch branches in `buyShopItem` went with them.
+
+## [5.79.55] - 2026-05-08
+
+### Removed — Pass 2: Dead modules, getPowerupConfig consolidation, icon slug conversion
+- **`js/modules/hud/index.js` deleted** — barrel re-export of HUD modules with zero importers anywhere in the codebase. Verified via grep before removal.
+- **Seven unused performance modules deleted** from `js/modules/performance/`: `canvas-layers.js`, `frustum-culling.js`, `path-cache.js`, `render-batch.js`, `temporal-upsampling.js`, `text-cache.js`, `typed-array-particles.js`. All were class definitions (~1,250 LoC total) with zero `import` references. The active perf modules (e.g., `webgl-starfield-renderer.js`) are unaffected.
+- **`combat/combat-manager.js#getPowerupConfig` consolidated** from a hand-mirrored 15-entry table into a 3-tier resolver: `POWERUP_TYPES` (offensive powerups, owned by `world/powerup.js`) → `DEFENSE_CONFIGS` (defense items, owned by the new `defense-data.js`) → weapon-data fallback (`PRIMARY_UPGRADES`/`POWER_UPGRADES`/`SKILL_UPGRADES`). Eliminates the drift surface where toast text and powerup-card text could disagree.
+- **`displayName` field added** to all 10 `POWERUP_TYPES` entries in `world/powerup.js`. The short `name` (e.g., `'Rapid'`) keeps fitting on the powerup card, while `displayName` (e.g., `'Rapid Fire'`) is what `getPowerupConfig` returns for toast/log text — no need for the consumer to translate.
+- **`POWERUP_TYPES` icons converted from emoji to slug strings** (`'⚡' → 'bolt'`, `'✳️' → 'multi-shot'`, etc.) to match the existing 79/79 weapon-data convention. Renders go through the same SVG-icon path that weapon icons already use.
+
+## [5.79.54] - 2026-05-08
+
+### Removed — Pass 1: Dead canvas-shop wrappers, arg-drop wrapper bug fix, dead shape branch
+- **Four dead canvas-shop wrappers deleted** from `game-engine.js`: the `import * as shopRenderer` line plus the `drawShop` / `drawShopTabs` / `drawShopItem` / `drawMultilineText` wrappers. The shop is fully DOM-rendered (since 5.78.x); the canvas-shop module hadn't been called for some time but the wrappers were still keeping it loaded.
+- **Wrapper arg-drop bug fixed** (3rd occurrence of this pattern in the codebase): `applyEnemyLevelScaling(enemy)` was dropping its `opts` parameter when forwarding to the wave module. Now `applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }`. Audited the entire wrapper surface in `game-engine.js` via a Python script — only this one bug found.
+- **Dead `SHIELD_BOOST` octagon shape branch removed** from `world/powerup.js`. SHIELD_BOOST hasn't been an offensive-powerup type for a long time (it lives in DEFENSE_CONFIGS now), so the rendering branch in the powerup polygon switch was unreachable.
+- **Dead `_buildSkillsTabItems`, `_buildPowerupsTabItems`, `_handleWeaponBuyOrEquip`, `_handleSkillBuy` wrappers removed** from `game-engine.js` (the corresponding shop-manager methods were also removed in pass 3).
+
+---
+
 ## [5.79.43] - 2026-05-07
 
 ### Fixed — Hover-gradient flash on controls rows; section-title typography

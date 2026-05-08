@@ -18,7 +18,13 @@ const POWERUP_GLOW_RADIUS = POWERUP_BASE_RADIUS * 2.5;
 const POWERUP_ICON_FONT = `bold ${POWERUP_BASE_RADIUS * 0.8}px Arial`;
 
 function getPowerupGradients(ctx, gradientColors) {
-    const key = gradientColors[0] + '|' + gradientColors[1];
+    // 5.79.62 — Key off the full color array, not just the first two
+    //   stops. The previous `gradientColors[0] + '|' + [1]` hash
+    //   silently collided when a future powerup reached for a 3+
+    //   stop gradient — the cache would return a 2-stop gradient
+    //   that visually mismatched the requested colors. `join('|')`
+    //   is O(n) over a 2-3-element array and 100% collision-free.
+    const key = gradientColors.join('|');
     let entry = _powerupGradientCache.get(key);
     if (entry) return entry;
 
@@ -53,52 +59,59 @@ function getPowerupGradients(ctx, gradientColors) {
 export const POWERUP_TYPES = {
     RAPID_FIRE: {
         name: 'Rapid',
+        displayName: 'Rapid Fire',
         abbr: 'RPD',
         color: '#ff3300',
         gradientColors: ['#ff6600', '#ff0000'],
-        icon: '⚡',
+        icon: 'bolt',
         duration: 30000,
         effect: 'rapidFire',
         rarity: 0.3,
         category: 'OFFENSE',
         maxStacks: 5,
-        spCost: 5,
+        spCost: 3,
+        spCostIncrement: 2,
         description: '22% faster shooting per stack'
     },
     MULTI_SHOT: {
         name: 'Multi',
+        displayName: 'Multi Shot',
         abbr: 'MUL',
         color: '#3366ff',
         gradientColors: ['#66aaff', '#0033cc'],
-        icon: '✳️',
+        icon: 'multi-shot',
         duration: 30000,
         effect: 'multiShot',
         rarity: 0.18,
         category: 'OFFENSE',
         maxStacks: 4,
-        spCost: 5,
+        spCost: 3,
+        spCostIncrement: 2,
         description: '+1 bullet in a spread per stack'
     },
     HOMING: {
         name: 'Homing',
+        displayName: 'Homing',
         abbr: 'HOM',
         color: '#ff3399',
         gradientColors: ['#ff66cc', '#cc0066'],
-        icon: '🎯',
+        icon: 'target',
         duration: 30000,
         effect: 'homing',
         rarity: 0.15,
         category: 'OFFENSE',
         maxStacks: 3,
-        spCost: 5,
+        spCost: 3,
+        spCostIncrement: 2,
         description: 'Bullets track nearest enemy per stack'
     },
     BIG_BULLETS: {
         name: 'Big',
+        displayName: 'Big Bullets',
         abbr: 'BIG',
         color: '#33cc33',
         gradientColors: ['#66ff66', '#009900'],
-        icon: '🔵',
+        icon: 'circle-fill',
         duration: 30000,
         effect: 'bigBullets',
         rarity: 0.2,
@@ -107,119 +120,113 @@ export const POWERUP_TYPES = {
         // bullet sizes; further stacks make bullets read as physics
         // objects rather than projectiles.
         maxStacks: 3,
-        spCost: 5,
+        spCost: 3,
+        spCostIncrement: 2,
         description: '+2.2px bullet radius per stack'
     },
-    SPEED_BOOST: {
-        name: 'Afterburner',
-        abbr: 'BURN',
-        color: '#ffcc00',
-        gradientColors: ['#ffff33', '#cc9900'],
-        icon: '💨',
-        duration: 30000,
-        effect: 'speedBoost',
-        rarity: 0.22,
-        category: 'OFFENSE',
-        maxStacks: 3,
-        spCost: 3,
-        description: '+65% thrust & +45% top speed per stack'
-    },
+    // 5.79.56 — SPEED_BOOST removed from POWERUP_TYPES. It's now a
+    //   defense-economy purchase only (DEFENSE tab, COINS currency).
+    //   The combat-manager.js getPowerupConfig fallback keeps the shop
+    //   purchase path working (still resolves the Afterburner config
+    //   when the shop calls addPowerup('SPEED_BOOST', …)).
     PIERCING: {
         name: 'Pierce',
+        displayName: 'Piercing',
         abbr: 'PRC',
         color: '#ff9933',
         gradientColors: ['#ffcc66', '#cc6600'],
-        icon: '🏹',
+        icon: 'bow-arrow',
         duration: 30000,
         effect: 'piercing',
         rarity: 0.12,
         category: 'OFFENSE',
         maxStacks: 4,
-        spCost: 5,
+        spCost: 3,
+        spCostIncrement: 2,
         description: 'Bullets pass through +1 enemy per stack'
     },
     EXPLOSIVE: {
         name: 'Explode',
+        displayName: 'Explosive',
         abbr: 'EXPL',
         color: '#ff6600',
         gradientColors: ['#ff9933', '#cc3300'],
-        icon: '💣',
+        icon: 'bomb',
         duration: 30000,
         effect: 'explosive',
         rarity: 0.08,
         category: 'OFFENSE',
         maxStacks: 3,
         spCost: 3,
+        spCostIncrement: 2,
         description: 'AoE blast on bullet impact (+10px radius per stack)'
     },
     CRIT_CHANCE: {
         name: 'Crit %',
+        displayName: 'Critical Chance',
         abbr: 'CRIT',
         color: '#ffcc00',
         gradientColors: ['#ffff66', '#cc9900'],
-        icon: '⭐',
+        icon: 'star',
         duration: 30000,
         effect: 'critChance',
         rarity: 0.18,
         category: 'OFFENSE',
         maxStacks: 6,
         spCost: 3,
+        spCostIncrement: 2,
         description: '+7% critical hit chance per stack'
     },
     CRIT_DAMAGE: {
         name: 'Crit Dmg',
+        displayName: 'Critical Damage',
         abbr: 'CDMG',
         color: '#ff0066',
         gradientColors: ['#ff3399', '#cc0033'],
-        icon: '🗡️',
+        icon: 'dagger',
         duration: 30000,
         effect: 'critDamage',
         rarity: 0.13,
         category: 'OFFENSE',
         maxStacks: 6,
-        spCost: 5,
+        spCost: 3,
+        spCostIncrement: 2,
         description: '+15% critical hit damage per stack'
     },
-    SHIELD_BOOST: {
-        name: 'Shield',
-        abbr: 'SHLD',
-        color: '#00cc88',
-        gradientColors: ['#33ff99', '#006644'],
-        icon: '🛡',
-        duration: 30000,
-        effect: 'shieldBoost',
-        rarity: 0.18,
-        category: 'OFFENSE',
-        maxStacks: 4,
-        spCost: 3,
-        description: '-8% damage taken per stack'
-    },
+    // 5.79.56 — SHIELD_BOOST removed from POWERUP_TYPES. Defense-
+    //   economy only now (DEFENSE tab, COINS currency). The
+    //   combat-manager.js getPowerupConfig fallback keeps the shop's
+    //   addPowerup('SHIELD_BOOST', …) path resolving correctly.
     LONG_RANGE: {
         name: 'Range',
+        displayName: 'Long Range',
         abbr: 'RNG',
         color: '#88cc44',
         gradientColors: ['#bbff66', '#448800'],
-        icon: '🏹',
+        icon: 'bow-arrow',
         duration: 30000,
         effect: 'longRange',
         rarity: 0.22,
         category: 'OFFENSE',
         maxStacks: 3,
         spCost: 3,
+        spCostIncrement: 2,
         description: '+55% bullet range per stack'
     },
     KNOCKBACK: {
         name: 'Knockback',
+        displayName: 'Knockback',
         abbr: 'KNCK',
         color: '#ffaa44',
         gradientColors: ['#ffd58a', '#cc6611'],
-        icon: '💢',
+        icon: 'anger',
         duration: 30000,
         effect: 'knockback',
         rarity: 0.18,
         category: 'OFFENSE',
         maxStacks: 3,
-        spCost: 2,
+        spCost: 3,
+        spCostIncrement: 2,
         description: '+40% knockback on all power weapons per stack'
     },
     // 5.78.2 — DROPS-category powerups removed. Drop rates, drop
@@ -496,20 +503,14 @@ export class Powerup {
                 else ctx.lineTo(x, y);
             }
             ctx.closePath();
-        } else if (this.type === 'SHIELD_BOOST') {
-            // Octagon for shield
-            ctx.beginPath();
-            for (let i = 0; i < 8; i++) {
-                const angle = (i / 8) * Math.PI * 2;
-                const x = Math.cos(angle) * R;
-                const y = Math.sin(angle) * R;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            }
-            ctx.closePath();
-        // 5.78.2 — MEDPACK powerup deleted; the cross-shape branch is
-        // unreachable for any current type but harmless if a save file
-        // ever resurrects the symbol. Falls through to the hexagon now.
+        // 5.79.60 — SHIELD_BOOST octagon branch removed. SHIELD_BOOST
+        //   left POWERUP_TYPES in 5.79.56 (now defense-economy only,
+        //   purchased via the shop's DEFENSE tab — and the DEFENSE
+        //   tab itself was suspended in 5.79.57), so this case can no
+        //   longer be reached. The earlier MEDPACK cross-shape branch
+        //   (deleted in 5.78.2) was already gone; this commit completes
+        //   the dead-shape cleanup. All non-special powerup types now
+        //   fall through to the hexagon below.
         } else {
             // Hexagon for others
             ctx.beginPath();

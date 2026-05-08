@@ -386,8 +386,13 @@ export class UIManager {
             // Sync music player button state when pause menu is shown
             this.syncMusicPlayerState();
 
-            // Update controls tab for platform (mobile vs desktop)
-            this.updateControlsTab();
+            // 5.79.58 — Controls tab is now built ONCE in setGameEngine()
+            //   at boot. The bindings array is fully static (WASD,
+            //   arrows, ESC etc. never change at runtime), so rebuilding
+            //   it on every pause-open was both wasteful and the source
+            //   of a visible flash where the empty `<div id="controls-tab">`
+            //   stub showed for a frame before innerHTML repopulated.
+            //   Removed — no per-open update needed.
 
             // Refresh weapon-equip tabs so the EQUIPPED badge stays current.
             this.updatePrimaryTab();
@@ -762,20 +767,43 @@ export class UIManager {
     // keep XSS risk impossible even if a future weapon-data entry contains
     // markup-flavored characters.
     updatePrimaryTab() {
-        const list = document.getElementById('primary-weapon-list');
-        if (!list) return;
+        // 5.79.59 — Owns the entire #primary-tab now (h2 + subtitle +
+        //   list). Was scoped to the inner #primary-weapon-list
+        //   container with the heading hardcoded in index.html, which
+        //   meant the tab couldn't be pre-rendered without leaving
+        //   stale static markup behind. Now the function builds
+        //   everything from scratch via createElement so a single
+        //   stub `<div id="primary-tab">` in index.html is enough.
+        const tab = document.getElementById('primary-tab');
+        if (!tab) return;
         const player = this.gameEngine && this.gameEngine.player;
-        if (!player) return;
+        if (!player) {
+            tab.replaceChildren();
+            return;
+        }
+
+        tab.replaceChildren();
+        const h2 = document.createElement('h2');
+        h2.textContent = 'PRIMARY WEAPON';
+        tab.appendChild(h2);
+        const subtitle = document.createElement('div');
+        subtitle.className = 'pause-tab-subtitle';
+        subtitle.textContent = 'Click a weapon to equip it';
+        tab.appendChild(subtitle);
+
+        const list = document.createElement('div');
+        list.id = 'primary-weapon-list';
+        list.className = 'pause-tab-list';
+        tab.appendChild(list);
+
         const PRIMARY = this.gameEngine.PRIMARY_WEAPONS_LIST;
         if (!PRIMARY) {
-            list.replaceChildren();
             const placeholder = document.createElement('div');
             placeholder.style.color = '#888';
             placeholder.textContent = 'Weapon list unavailable.';
             list.appendChild(placeholder);
             return;
         }
-        list.replaceChildren();
         for (const id of Object.keys(PRIMARY)) {
             const equipped = player.activePrimary === id;
             list.appendChild(this._buildWeaponRow(PRIMARY[id], id, equipped, '#00ccff', () => {
@@ -794,16 +822,34 @@ export class UIManager {
     // still purchased in the shop's POWER tab (which surfaces the upgrades
     // for whichever power is currently equipped).
     updatePowerTab() {
-        const list = document.getElementById('power-weapon-list');
-        if (!list) return;
+        // 5.79.59 — Owns the entire #power-tab now (h2 + subtitle +
+        //   list). Same refactor pattern as updatePrimaryTab: a single
+        //   stub `<div id="power-tab">` in index.html is enough; the
+        //   function builds everything from scratch on each call.
+        const tab = document.getElementById('power-tab');
+        if (!tab) return;
         const player = this.gameEngine && this.gameEngine.player;
-        if (!player) return;
-        const POWER = this.gameEngine.POWER_WEAPONS_LIST;
-        if (!POWER) {
-            list.replaceChildren();
+        if (!player) {
+            tab.replaceChildren();
             return;
         }
-        list.replaceChildren();
+
+        tab.replaceChildren();
+        const h2 = document.createElement('h2');
+        h2.textContent = 'POWER WEAPON';
+        tab.appendChild(h2);
+        const subtitle = document.createElement('div');
+        subtitle.className = 'pause-tab-subtitle';
+        subtitle.textContent = 'Click a weapon to equip it';
+        tab.appendChild(subtitle);
+
+        const list = document.createElement('div');
+        list.id = 'power-weapon-list';
+        list.className = 'pause-tab-list';
+        tab.appendChild(list);
+
+        const POWER = this.gameEngine.POWER_WEAPONS_LIST;
+        if (!POWER) return;
         for (const id of Object.keys(POWER)) {
             const equipped = player.activePower === id;
             list.appendChild(this._buildWeaponRow(POWER[id], id, equipped, '#ffaa00', () => {
@@ -930,9 +976,23 @@ export class UIManager {
     // player hasn't picked up yet). Mirrors the shop-card visual so
     // the screen reads as a "collection" page.
     renderPowerupsOverlay() {
-        if (!this.elements.powerupsItemsList || !this.gameEngine?.player) return;
-        const list = this.elements.powerupsItemsList;
-        list.replaceChildren();
+        // 5.79.59 — Owns the entire #powerups-tab now. Builds h2 +
+        //   scroll-container `#powerups-items-list` from scratch on
+        //   each call so a single empty stub in index.html is enough.
+        const tab = document.getElementById('powerups-tab');
+        if (!tab || !this.gameEngine?.player) return;
+        tab.replaceChildren();
+        const h2 = document.createElement('h2');
+        h2.textContent = 'POWERUPS';
+        tab.appendChild(h2);
+        const list = document.createElement('div');
+        list.id = 'powerups-items-list';
+        list.className = 'pause-tab-list pause-tab-list--scroll';
+        tab.appendChild(list);
+        // Keep `this.elements.powerupsItemsList` pointing at the live
+        //   container so any external caller that cached the reference
+        //   still works.
+        this.elements.powerupsItemsList = list;
 
         const player = this.gameEngine.player;
         // 5.79.0 — sub-tab UI removed; show every powerup in one list.
@@ -985,8 +1045,15 @@ export class UIManager {
             // so maxed cards don't accept clicks.
             const cardCap = cfg.maxStacks || 99;
             const cardAtCap = stacks >= cardCap;
-            // 5.79.16 — Tiered SP cost (default 1 if missing).
-            const cardSpCost = cfg.spCost || 1;
+            // 5.79.54 — Stack-aware SP cost. cost = base + stacks × inc.
+            //   Initial buy is `spCost` (3 for everything in the
+            //   refreshed POWERUP_TYPES); each subsequent stack adds
+            //   `spCostIncrement` (default 2). Mirrors the shop-side
+            //   formula in shop-manager.buyShopItem so the two
+            //   pricing surfaces agree.
+            const cardSpCostBase = cfg.spCost || 1;
+            const cardSpCostInc  = cfg.spCostIncrement || 0;
+            const cardSpCost     = cardSpCostBase + stacks * cardSpCostInc;
             const cardCanAfford = picks >= cardSpCost;
             if (cardCanAfford && !cardAtCap) {
                 card.classList.add('powerup-card--interactive');
@@ -1033,15 +1100,17 @@ export class UIManager {
             right.textContent = owned ? `×${stacks} / ${cap}` : `0 / ${cap}`;
             card.appendChild(right);
 
-            // Buy button — 5.79.16: shows the tiered SP cost
-            //   (e.g. "5 SP" instead of just "+1"). Disabled at cap or
-            //   when the player can't afford the cost.
+            // Buy button — shows the stack-aware cost (e.g. "3 SP" at
+            //   stack 0, "5 SP" at stack 1, etc.). Disabled at cap or
+            //   when the player can't afford.
             const buyBtn = document.createElement('button');
             buyBtn.type = 'button';
             buyBtn.className = 'powerup-card-buy';
-            const buySpCost = cfg.spCost || 1;
-            buyBtn.textContent = atCap ? 'MAX' : `${buySpCost} SP`;
-            buyBtn.disabled = atCap || picks < buySpCost;
+            // 5.79.54 — Reuses the cardSpCost computed above so the
+            //   button label and the affordability check both share
+            //   the same scaled value.
+            buyBtn.textContent = atCap ? 'MAX' : `${cardSpCost} SP`;
+            buyBtn.disabled = atCap || picks < cardSpCost;
             buyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
@@ -1062,15 +1131,17 @@ export class UIManager {
         const have = ge.player.skillPoints || 0;
         const cfg = POWERUP_TYPES[type];
         if (!cfg) return false;
-        // 5.79.16 — Tiered SP cost (replaces flat 1 SP/stack). Defaults
-        //   to 1 if cfg.spCost is missing, preserving back-compat.
-        const cost = cfg.spCost || 1;
-        if (have < cost) return false;
-        // 5.75.0 — gate on per-powerup maxStacks. Spending SP on a
-        // capped powerup is wasted, so refuse the purchase outright.
+        // Read stacks BEFORE the cost calculation — the cost we charge
+        //   is for buying the *next* stack on top of what's already owned.
         const cap = cfg.maxStacks || 99;
         const stacks = ge.player.getPowerupStacks ? ge.player.getPowerupStacks(type) : 0;
         if (stacks >= cap) return false;
+        // 5.79.54 — Stack-aware SP cost. Same formula the render path
+        //   uses; deducted amount matches the displayed amount.
+        const baseCost = cfg.spCost || 1;
+        const incCost  = cfg.spCostIncrement || 0;
+        const cost = baseCost + stacks * incCost;
+        if (have < cost) return false;
         ge.player.skillPoints = have - cost;
         ge.player.addPowerup(type, { ...cfg, duration: Infinity }, true);
         if (ge.events) ge.events.emit('audio:coin');
@@ -1084,6 +1155,17 @@ export class UIManager {
     setGameEngine(gameEngine) {
         this.gameEngine = gameEngine;
         this.syncAssistsTab();
+        // 5.79.58/59 — Pre-render every dynamic pause-menu tab ONCE
+        //   at boot, before the pause overlay can ever be opened. The
+        //   pause-menu first open finds every tab already populated;
+        //   no flash of empty-then-rebuilt content. The per-pause
+        //   refresh calls in togglePauseMenu still fire so live state
+        //   (equipped weapon, money/SP balance, owned powerups) stays
+        //   accurate, but the FIRST paint of any tab is never empty.
+        this.updateControlsTab();
+        this.updatePrimaryTab();
+        this.updatePowerTab();
+        this.renderPowerupsOverlay();
     }
 
     // Reflect engine-side assists state in the tab checkboxes.

@@ -113,24 +113,21 @@ export function openShop() {
         // pause-menu POWERUPS instead.
         this.shopCategory = 'HELP';
 
-        // Shop now sells PRIMARY/POWER weapons, DEFENSE upgrades, and
-        // SKILLS. The OFFENSE and DROPS categories were removed —
-        // those upgrades are now permanent stacking powerup pickups
-        // (see POWERUP_TYPES in powerup.js + the Powerups overlay).
-        // SPARE_SHIP moved from OFFENSE to DEFENSE.
-        // 5.76.0 — DEFENSE category fully migrated to gold (SP currency
-        // removed). Costs scaled to match the bumped Gold Find economy:
-        // every upgrade should feel like a deliberate purchase. Floor
-        // costs roughly 2.5× the prior SP equivalents (1 SP ≈ 800g of
-        // mid-game value); per-stack scaling exponential so the 8th
-        // shielding stack costs more than the 1st.
+        // 5.79.57 — Shop is now exclusively offensive: one tab per
+        //   weapon, each tab listing that weapon's offensive upgrades
+        //   (sourced from getPrimaryUpgrades / getPowerUpgrades in
+        //   weapon-data.js). The DEFENSE economy is suspended for now.
+        //   The previous shopItems[] array (HEALTH_BOOST, SHIELD_BOOST,
+        //   SPEED_BOOST, TRIAGE, REFLEXES, LAST_STAND, STATIC_FIELD,
+        //   SPARE_SHIP) is preserved here as a comment block so it can
+        //   be revived without re-deriving costs/stack caps.
+        this.shopItems = [];
+        /* Suspended in 5.79.57 — defensive shop list:
         this.shopItems = [
             { id: 'HEALTH_BOOST',          name: 'Health Boost', description: '+25 max health',                                        cost: 1200, icon: 'heart', maxStacks: 10, category: 'DEFENSE', currency: 'COINS' },
             { id: 'SHIELD_BOOST',          name: 'Shielding',    description: '-5% damage taken per stack',                            cost: 1500, icon: 'shield', maxStacks: 8,  category: 'DEFENSE', currency: 'COINS' },
             { id: 'SPEED_BOOST',           name: 'Afterburner',  description: '+50% thrust & +35% top speed per stack',                cost: 2200, icon: 'wind', maxStacks: 4,  category: 'DEFENSE', currency: 'COINS' },
             { id: 'HEALTH_DROP_FREQUENCY', name: 'Triage',       description: '-5s cooldown between health drops (60s → 30s floor)',  cost: 1800, icon: 'hourglass', maxStacks: 6,  category: 'DEFENSE', currency: 'COINS' },
-            // Qualitative defense layer (5.75.0). High costs because they're
-            // run-defining picks that change moment-to-moment survival math.
             { id: 'REFLEXES',              name: 'Reflexes',     description: 'One free dodge per 30s — next bullet that would hit you misses',
                                                                   cost: 5500, icon: 'vortex', maxStacks: 1,  category: 'DEFENSE', currency: 'COINS' },
             { id: 'LAST_STAND',            name: 'Last Stand',   description: 'On lethal hit, survive at 1 HP (once per run)',
@@ -139,6 +136,7 @@ export function openShop() {
                                                                   cost: 3200, icon: 'bolt', maxStacks: 3,  category: 'DEFENSE', currency: 'COINS' },
             { id: 'SPARE_SHIP',            name: 'Spare Ship',   description: '+1 extra life (max 3)',                                cost: 12000, icon: 'rocket', maxStacks: 1,  flatCost: true, category: 'DEFENSE', currency: 'COINS' },
         ];
+        */
 
         this._rebuildShopCache();
 
@@ -154,52 +152,33 @@ export function _rebuildShopCache() {
             // the pause menu in 5.72.1 / 5.73.0.)
             this.shopFilteredItems = [];
             return;
-        } else if (this.shopCategory === 'PRIMARY') {
-            this._buildPrimaryTabItems();
-        } else if (this.shopCategory === 'POWER') {
-            this._buildPowerTabItems();
-        } else if (this.shopCategory === 'SKILLS') {
-            this._buildSkillsTabItems();
-        } else {
-            this.shopFilteredItems = this.shopItems.filter(i => i.category === this.shopCategory);
         }
+        // 5.79.57 — Per-weapon shop tabs. Each weapon ID is a valid
+        //   shopCategory value; route to the appropriate generalized
+        //   builder. PRIMARY_WEAPONS / POWER_WEAPONS objects are the
+        //   single source of truth for weapon IDs (no hardcoded list).
+        if (PRIMARY_WEAPONS[this.shopCategory]) {
+            this._buildPrimaryTabItems(this.shopCategory);
+            return;
+        }
+        if (POWER_WEAPONS[this.shopCategory]) {
+            this._buildPowerTabItems(this.shopCategory);
+            return;
+        }
+        // Legacy 'PRIMARY' / 'POWER' / 'SKILLS' / 'DEFENSE' values
+        //   from older save state or third-party callers — degrade
+        //   gracefully to an empty list. The DEFENSE economy is
+        //   suspended (5.79.57) and skill purchasing was removed from
+        //   the shop in the same patch.
+        this.shopFilteredItems = [];
 }
 
-// 5.70.0 — Powerups tab. Lists every entry in POWERUP_TYPES; each
-// "costs" 1 powerup pick. Picks are earned at wave clear and on
-// player level-up. Powerups no longer drop from kills.
-//
-// 5.72.0 — maxStacks default raised from 1 to 99. POWERUP_TYPES doesn't
-// define per-id caps; the previous `??1` fallback meant every powerup
-// allowed only one purchase, which broke the build-stacking core loop.
-// 99 is effectively unlimited (no run will hit it), and per-powerup
-// caps can be added in POWERUP_TYPES later if specific powerups need
-// real limits (Crit Chance >100%, Multi-Shot 3, etc).
-// 5.79.53 — Powerup cost rebalance. Initial purchase is 3 SP across
-//   the board (was 1) so the player can grab Rapid Fire / Multi Shot
-//   sooner without trivializing the SP economy. `stackCostIncrement`
-//   scales subsequent stacks linearly: stack 0 = base, stack 1 = base
-//   + inc, stack 2 = base + 2*inc, etc. With base 3 + inc 2 the
-//   curve runs 3, 5, 7, 9, 11... — cheap to break into a powerup,
-//   meaningful to mass-stack it.
-export function _buildPowerupsTabItems() {
-        const items = [];
-        for (const [id, config] of Object.entries(POWERUP_TYPES)) {
-            if (config.hidden) continue;
-            items.push({
-                id,
-                name: config.name || id,
-                description: config.description || '',
-                icon: config.icon || '⚡',
-                cost: 3,
-                stackCostIncrement: 2,
-                maxStacks: config.maxStacks ?? 99,
-                category: 'POWERUPS',
-                currency: 'PICKS',
-            });
-        }
-        this.shopFilteredItems = items;
-}
+// 5.79.62 — `_buildPowerupsTabItems` fully removed. The 5.79.55
+//   stub was kept "in case any save/replay path serialized the
+//   function name" — verified that no such path exists, so the
+//   stub joins the rest of the dead shop-tab code (POWERUPS,
+//   SKILLS, DEFENSE) in the trash. Powerups live exclusively on
+//   the pause-menu POWERUPS tab (ui-manager.renderPowerupsOverlay).
 
 // 5.76.1 — fire 🎖️ MASTERY UNLOCKED toast the first time each capstone
 // becomes available. Walks every PRIMARY_UPGRADES entry with `requires`
@@ -231,18 +210,19 @@ export function checkCapstoneUnlocks() {
     }
 }
 
-export function _buildPrimaryTabItems() {
-        // PRIMARY tab now shows ONLY upgrades for the currently equipped
-        // primary weapon. Weapon SELECTION moved to the pause-menu PRIMARY
-        // tab (see ui-manager.updatePrimaryTab). Switching the equipped
-        // weapon there causes _rebuildShopCache to repopulate this list
-        // with the new weapon's upgrades.
+export function _buildPrimaryTabItems(weaponId = null) {
+        // 5.79.57 — Optional `weaponId` argument lets the shop populate
+        //   any primary weapon's upgrade list, not just the currently
+        //   equipped one. Per-weapon shop tabs (PULSE / NEEDLES /
+        //   SCATTER / RAIL) call this with their explicit weapon ID;
+        //   passing null keeps the legacy "follow the equipped weapon"
+        //   behavior for any code path that still relies on it.
         // 5.75.1 — tier-2 mastery upgrades are hidden until their prereq
-        // tier-1 upgrade is at maxStacks. Keeps the shop tidy and reveals
-        // capstones as a reward when the player invests in a build.
+        //   tier-1 upgrade is at maxStacks.
         const items = [];
-        if (this.player && this.player.activePrimary) {
-            const upgrades = getPrimaryUpgrades(this.player.activePrimary);
+        const targetWeapon = weaponId || (this.player && this.player.activePrimary);
+        if (targetWeapon) {
+            const upgrades = getPrimaryUpgrades(targetWeapon);
             // 5.76.1 — capstone unlock toast. The first time a capstone
             // becomes available, fire a 🎖️ MASTERY UNLOCKED toast. Track
             // a "seen" set on the engine so it doesn't re-fire each open.
@@ -282,15 +262,16 @@ export function _buildPrimaryTabItems() {
         this.shopFilteredItems = items;
 }
 
-export function _buildPowerTabItems() {
-        // POWER tab now shows ONLY upgrades for the currently equipped
-        // power weapon. Weapon SELECTION moved to the pause-menu POWER tab
-        // (see ui-manager.updatePowerTab). Switching the equipped weapon
-        // there causes _rebuildShopCache to repopulate this list with the
-        // new weapon's upgrades.
+export function _buildPowerTabItems(weaponId = null) {
+        // 5.79.57 — Optional `weaponId` argument lets the shop populate
+        //   any power weapon's upgrade list. Per-weapon shop tabs
+        //   (CHARGE / MINES / NOVA / MISSILES / LANCE / ARC) call this
+        //   with their explicit weapon ID; passing null falls back to
+        //   the equipped weapon for legacy compatibility.
         const items = [];
-        if (this.player && this.player.activePower) {
-            const upgrades = getPowerUpgrades(this.player.activePower);
+        const targetWeapon = weaponId || (this.player && this.player.activePower);
+        if (targetWeapon) {
+            const upgrades = getPowerUpgrades(targetWeapon);
             for (const upg of upgrades) {
                 items.push({
                     id: upg.id,
@@ -310,47 +291,13 @@ export function _buildPowerTabItems() {
         this.shopFilteredItems = items;
 }
 
-export function _buildSkillsTabItems() {
-        const items = [];
-        for (const skill of Object.values(DEFENSE_SKILLS)) {
-            const owned = this.player && this.player.ownedSkills && this.player.ownedSkills.has(skill.id);
-            items.push({
-                id: skill.id,
-                name: skill.name,
-                description: skill.description,
-                icon: skill.icon,
-                cost: 0,             // free — see 5.64.11
-                maxStacks: 1,
-                category: 'SKILLS',
-                currency: 'FREE',
-                isSkill: true,
-                owned,
-            });
-        }
-        // 5.76.0 — skill upgrades migrated from SP to COINS along with
-        // DEFENSE. Costs scaled to gold-equivalent (~1500g per former
-        // 1-2 SP). Currency uniformly COINS across the shop now.
-        if (this.player && this.player.ownedSkills) {
-            for (const skillId of this.player.ownedSkills) {
-                const upgrades = getSkillUpgrades(skillId);
-                for (const upg of upgrades) {
-                    items.push({
-                        id: upg.id,
-                        name: upg.name,
-                        description: upg.description,
-                        icon: upg.icon,
-                        cost: upg.cost * 1500, // SP-cost units rescaled to gold (1 SP ≈ 1500g)
-                        maxStacks: upg.maxStacks,
-                        category: 'SKILLS',
-                        currency: 'COINS',
-                        isSkillUpgrade: true,
-                        parentSkill: upg.skill,
-                    });
-                }
-            }
-        }
-        this.shopFilteredItems = items;
-}
+// 5.79.62 — `_buildSkillsTabItems` removed. The SKILLS shop tab was
+//   suspended in 5.79.57 along with DEFENSE; skills now live exclusively
+//   in the pause-menu SKILLS tab (see ui-manager.updateSkillsTab). The
+//   builder was never called by `_rebuildShopCache` after that patch
+//   and the items it produced (`isSkill: true` / `isSkillUpgrade: true`)
+//   never reached the shop list. Removed alongside `_handleSkillBuy`
+//   (the corresponding purchase handler) in the same cleanup.
 
 export function closeShop() {
         try {
@@ -396,28 +343,26 @@ export function buyShopItem(itemId) {
         try {
             if (!this.player || !this.game) return false;
 
-            // First check dynamic tab items (weapons/skills/their upgrades)
+            // First check dynamic tab items (weapon upgrades; per-weapon
+            //   shop tabs land here via `_buildPrimaryTabItems` /
+            //   `_buildPowerTabItems`).
             const filteredItem = this.shopFilteredItems && this.shopFilteredItems.find(i => i.id === itemId);
 
-            // Handle weapon buy/equip
-            if (filteredItem && filteredItem.isWeapon) {
-                return this._handleWeaponBuyOrEquip(filteredItem);
-            }
-
-            // Handle skill buy
-            if (filteredItem && filteredItem.isSkill) {
-                return this._handleSkillBuy(filteredItem);
-            }
-
-            // Handle weapon-specific upgrades
+            // 5.79.62 — Skill / weapon buy-or-equip branches dropped.
+            //   The shop's SKILLS tab and weapon-selection rows were
+            //   removed in 5.79.57 (skills moved to the pause-menu
+            //   SKILLS tab, weapon switching moved to the pause-menu
+            //   PRIMARY/POWER tabs). Items reaching `buyShopItem` are
+            //   now exclusively weapon upgrades from the per-weapon
+            //   shop tabs, so the only live branch is the upgrade
+            //   handler below.
             if (filteredItem && (filteredItem.isWeaponUpgrade || filteredItem.isSkillUpgrade)) {
                 return this._handleUpgradeBuy(filteredItem);
             }
 
-            // Regular shop item — first check the static shopItems list,
-            // then fall through to the currently-built filteredItems
-            // (POWERUPS tab is built dynamically from POWERUP_TYPES so
-            // its entries don't live in the static list).
+            // Regular shop item — falls through to the suspended
+            //   shopItems[] (DEFENSE, currently empty per 5.79.57).
+            //   Reactivating the DEFENSE shop tab restores this path.
             let item = this.shopItems.find(i => i.id === itemId);
             if (!item && filteredItem && filteredItem.currency === 'PICKS') {
                 item = filteredItem;
@@ -489,51 +434,14 @@ export function buyShopItem(itemId) {
         }
 }
 
-export function _handleWeaponBuyOrEquip(item) {
-        // Wave-gating removed — every weapon is purchasable from wave 1.
-        // Equip happens in the PAUSE MENU now (PRIMARY / POWER tabs), not in
-        // the shop. Shop is buy-only for power weapons; primary weapons no
-        // longer appear in the shop at all (they're free in the pause menu).
-        const isOwned = item.weaponType === 'primary'
-            ? this.player.ownedPrimaries.has(item.id)
-            : this.player.ownedPowers.has(item.id);
-
-        if (isOwned) {
-            // Already owned — clicking does nothing in the shop. The player
-            // switches active weapons in the pause menu.
-            return false;
-        }
-
-        // Purchase: check dual cost (coins + SP)
-        const coinCost = item.cost || 0;
-        const spCost = item.spCost || 0;
-        if (coinCost > 0 && this.game.money < coinCost) return false;
-        if (spCost > 0 && this.player.skillPoints < spCost) return false;
-
-        if (coinCost > 0) this.game.money -= coinCost;
-        if (spCost > 0) this.player.skillPoints -= spCost;
-
-        if (item.weaponType === 'primary') {
-            this.player.buyPrimary(item.id);
-        } else {
-            this.player.buyPower(item.id);
-        }
-
-        this._rebuildShopCache();
-        this.events.emit('audio:coin');
-        return true;
-}
-
-export function _handleSkillBuy(item) {
-        // 5.64.11 — skills are free and selectable from the pause menu's
-        // SKILLS tab. Shop "purchase" is now a free equip — keeps any
-        // legacy shop SKILLS tab functional, but the canonical UX is the
-        // pause menu.
-        this.player.equipSkill(item.id);
-        this._rebuildShopCache();
-        this.events.emit('audio:coin');
-        return true;
-}
+// 5.79.62 — `_handleWeaponBuyOrEquip` and `_handleSkillBuy` removed.
+//   Weapon equipping moved to the pause-menu PRIMARY / POWER tabs in
+//   5.74.x and skill equipping moved to the pause-menu SKILLS tab in
+//   5.64.11. After 5.79.57 stripped the SKILLS shop tab and the
+//   per-weapon shop tabs only surface upgrade items (no isWeapon /
+//   isSkill rows), neither handler can be reached. Their `buyShopItem`
+//   dispatch branches were removed in the same cleanup; only
+//   `_handleUpgradeBuy` (for weapon-upgrade rows) is live.
 
 export function _handleUpgradeBuy(item) {
         const currentStacks = this.player.getPowerupStacks(item.id);

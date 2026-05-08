@@ -99,177 +99,17 @@
                 <button class="pause-tab" data-tab="sfx">SFX</button>
             </div>
 
-            <!-- 5.79.51 — STATIC MIRROR of the dynamic render produced
-                 by ui-manager.updateControlsTab(). This markup is
-                 wiped + rebuilt by JS on every pause-menu open, so it
-                 only renders verbatim during the pre-pause state (or
-                 if JS is delayed/disabled). Keep this in sync with
-                 the `sections` array + `_buildKeyTile` / `_buildMouseSvgKey`
-                 paths in ui-manager.js so the no-JS preview matches
-                 the live render. -->
-            <div id="controls-tab" class="pause-tab-content active">
-                <h2>CONTROLS</h2>
-                <table class="controls-table">
-
-                    <!-- ─── Movement ─── -->
-                    <tr class="controls-section-row" data-accent="cyan">
-                        <td colspan="2" class="controls-section-cell">
-                            <span class="controls-section-icon">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2 L4 5 V11 C4 16 7.5 20.5 12 22 C16.5 20.5 20 16 20 11 V5 Z"/></svg>
-                            </span>
-                            <span class="controls-section-title">Movement</span>
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="cyan">
-                        <td class="controls-action">Move ship</td>
-                        <td class="controls-keys">
-                            <span class="kbd-cluster kbd-wasd">
-                                <img src="sprites/keys/W.png" alt="W" class="kbd" decoding="sync">
-                                <span class="kbd-row-bottom">
-                                    <img src="sprites/keys/A.png" alt="A" class="kbd" decoding="sync">
-                                    <img src="sprites/keys/S.png" alt="S" class="kbd" decoding="sync">
-                                    <img src="sprites/keys/D.png" alt="D" class="kbd" decoding="sync">
-                                </span>
-                            </span>
-                        </td>
-                    </tr>
-
-                    <!-- ─── Combat ─── -->
-                    <tr class="controls-section-row" data-accent="orange">
-                        <td colspan="2" class="controls-section-cell">
-                            <span class="controls-section-icon">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 Z M12 8 A4 4 0 1 0 12 16 A4 4 0 1 0 12 8 Z M12 11 A1 1 0 1 0 12 13 A1 1 0 1 0 12 11 Z"/></svg>
-                            </span>
-                            <span class="controls-section-title">Combat</span>
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="orange">
-                        <td class="controls-action">Aim Reticle</td>
-                        <td class="controls-keys">
-                            <span class="kbd-mouse-svg kbd-mouse-none">
-                                <svg viewBox="-3 0 30 32" fill="none" aria-label="Mouse">
-                                    <path class="mouse-body" d="M 12 4 C 7 4 5 7 5 12 L 5 22 C 5 28 8 30 12 30 C 16 30 19 28 19 22 L 19 12 C 19 7 17 4 12 4 Z"/>
-                                    <line class="mouse-divider" x1="12" y1="4" x2="12" y2="14"/>
-                                    <line class="mouse-divider" x1="5" y1="14" x2="19" y2="14"/>
-                                    <rect class="mouse-wheel" x="11" y="7" width="2" height="4" rx="0.8"/>
-                                    <path class="mouse-motion" d="M 3 11 Q 0 16 3 21"/>
-                                    <path class="mouse-motion" d="M 3 13 Q 1 16 3 19"/>
-                                    <path class="mouse-motion" d="M 21 11 Q 24 16 21 21"/>
-                                    <path class="mouse-motion" d="M 21 13 Q 23 16 21 19"/>
-                                </svg>
-                            </span>
-                            <span class="kbd-or">or</span>
-                            <img src="sprites/keys/ARROWLEFT.png" alt="Left" class="kbd" decoding="sync">
-                            <img src="sprites/keys/ARROWRIGHT.png" alt="Right" class="kbd" decoding="sync">
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="orange">
-                        <td class="controls-action">Fire Primary Weapon</td>
-                        <td class="controls-keys">
-                            <span class="kbd-mouse-svg kbd-mouse-l">
-                                <svg viewBox="0 0 24 32" fill="none" aria-label="Left mouse button">
-                                    <path class="mouse-body" d="M 12 4 C 7 4 5 7 5 12 L 5 22 C 5 28 8 30 12 30 C 16 30 19 28 19 22 L 19 12 C 19 7 17 4 12 4 Z"/>
-                                    <path class="mouse-button-active" d="M 12 4 C 7 4 5 7 5 12 L 5 14 L 12 14 Z"/>
-                                    <line class="mouse-divider" x1="12" y1="4" x2="12" y2="14"/>
-                                    <line class="mouse-divider" x1="5" y1="14" x2="19" y2="14"/>
-                                    <rect class="mouse-wheel" x="11" y="7" width="2" height="4" rx="0.8"/>
-                                </svg>
-                            </span>
-                            <span class="kbd-or">or</span>
-                            <img src="sprites/keys/ARROWUP.png" alt="Up" class="kbd" decoding="sync">
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="orange">
-                        <td class="controls-action">Fire Power Weapon</td>
-                        <td class="controls-keys">
-                            <img src="sprites/keys/SPACE.png" alt="Space" class="kbd" decoding="sync">
-                            <span class="kbd-or">or</span>
-                            <span class="kbd-mouse-svg kbd-mouse-r">
-                                <svg viewBox="0 0 24 32" fill="none" aria-label="Right mouse button">
-                                    <path class="mouse-body" d="M 12 4 C 7 4 5 7 5 12 L 5 22 C 5 28 8 30 12 30 C 16 30 19 28 19 22 L 19 12 C 19 7 17 4 12 4 Z"/>
-                                    <path class="mouse-button-active" d="M 12 4 L 12 14 L 19 14 L 19 12 C 19 7 17 4 12 4 Z"/>
-                                    <line class="mouse-divider" x1="12" y1="4" x2="12" y2="14"/>
-                                    <line class="mouse-divider" x1="5" y1="14" x2="19" y2="14"/>
-                                    <rect class="mouse-wheel" x="11" y="7" width="2" height="4" rx="0.8"/>
-                                </svg>
-                            </span>
-                            <span class="kbd-or">or</span>
-                            <img src="sprites/keys/ARROWDOWN.png" alt="Down" class="kbd" decoding="sync">
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="orange">
-                        <td class="controls-action">Activate Skill</td>
-                        <td class="controls-keys">
-                            <img src="sprites/keys/Q.png" alt="Q" class="kbd" decoding="sync">
-                        </td>
-                    </tr>
-
-                    <!-- ─── Loadout ─── -->
-                    <tr class="controls-section-row" data-accent="pink">
-                        <td colspan="2" class="controls-section-cell">
-                            <span class="controls-section-icon">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M13 2 L4 14 H10 L9 22 L20 9 H13 Z"/></svg>
-                            </span>
-                            <span class="controls-section-title">Loadout</span>
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="pink">
-                        <td class="controls-action">Cycle Primary Weapon</td>
-                        <td class="controls-keys">
-                            <img src="sprites/keys/R.png" alt="R" class="kbd" decoding="sync">
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="pink">
-                        <td class="controls-action">Cycle Power Weapon</td>
-                        <td class="controls-keys">
-                            <img src="sprites/keys/F.png" alt="F" class="kbd" decoding="sync">
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="pink">
-                        <td class="controls-action">Cycle Skill</td>
-                        <td class="controls-keys">
-                            <img src="sprites/keys/E.png" alt="E" class="kbd" decoding="sync">
-                        </td>
-                    </tr>
-
-                    <!-- ─── System ─── -->
-                    <tr class="controls-section-row" data-accent="gold">
-                        <td colspan="2" class="controls-section-cell">
-                            <span class="controls-section-icon">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 5 H10 V19 H7 Z M14 5 H17 V19 H14 Z"/></svg>
-                            </span>
-                            <span class="controls-section-title">System</span>
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="gold">
-                        <td class="controls-action">Pause or Resume</td>
-                        <td class="controls-keys">
-                            <span class="kbd-sprite-cluster" aria-label="ESC">
-                                <img src="sprites/keys/ESC.png" alt="" class="kbd" decoding="sync">
-                                <!-- <img src="sprites/keys/E.png" alt="" class="kbd" decoding="sync">
-                                <img src="sprites/keys/S.png" alt="" class="kbd" decoding="sync">
-                                <img src="sprites/keys/C.png" alt="" class="kbd" decoding="sync"> -->
-                            </span>
-                        </td>
-                    </tr>
-                    <tr class="controls-row" data-accent="gold">
-                        <td class="controls-action">Stats Screen</td>
-                        <td class="controls-keys">
-                            <span class="kbd-sprite-text">`</span>
-                        </td>
-                    </tr>
-
-                </table>
-                <div class="controls-footer">
-                    <span class="kbd-sprite-cluster kbd-sprite-cluster-small" aria-label="ESC">
-                        <img src="sprites/keys/ESC.png" alt="" class="kbd" decoding="sync">
-                        <!-- <img src="sprites/keys/E.png" alt="" class="kbd" decoding="sync">
-                        <img src="sprites/keys/S.png" alt="" class="kbd" decoding="sync">
-                        <img src="sprites/keys/C.png" alt="" class="kbd" decoding="sync"> -->
-                    </span>
-                    <span class="controls-footer-text">to resume play</span>
-                </div>
-            </div>
+            <!-- 5.79.58 — Controls tab is built ONCE by
+                 ui-manager.setGameEngine() at boot via
+                 updateControlsTab(), before the pause overlay can
+                 ever be opened. The bindings array is fully static
+                 (WASD / arrows / ESC etc. never change at runtime),
+                 so a per-pause rebuild was both wasteful and the
+                 source of a visible flash where the previous static
+                 mirror briefly showed before innerHTML repopulated.
+                 The static mirror was removed in 5.79.58 — this stub
+                 stays empty; the dynamic render owns it. -->
+            <div id="controls-tab" class="pause-tab-content active"></div>
 
             <div id="assists-tab" class="pause-tab-content">
                 <h2>ASSISTS</h2>
@@ -301,30 +141,19 @@
                 </div>
             </div>
             
-            <div id="primary-tab" class="pause-tab-content">
-                <h2>PRIMARY WEAPON</h2>
-                <div class="pause-tab-subtitle">Click a weapon to equip it</div>
-                <!-- ▼ DYNAMIC: ui-manager.updatePrimaryTab() rebuilds
-                     the children of #primary-weapon-list on every pause-
-                     menu open. Don't add static rows here — they'll be
-                     wiped. The container itself stays. -->
-                <div id="primary-weapon-list" class="pause-tab-list"></div>
-            </div>
-
-            <div id="power-tab" class="pause-tab-content">
-                <h2>POWER WEAPON</h2>
-                <div class="pause-tab-subtitle">Click a weapon to equip it</div>
-                <!-- ▼ DYNAMIC: ui-manager.updatePowerTab() owns the
-                     children of #power-weapon-list. -->
-                <div id="power-weapon-list" class="pause-tab-list"></div>
-            </div>
-
-            <div id="powerups-tab" class="pause-tab-content">
-                <h2>POWERUPS</h2>
-                <!-- ▼ DYNAMIC: ui-manager.renderPowerupsOverlay() owns
-                     the children of #powerups-items-list. -->
-                <div id="powerups-items-list" class="pause-tab-list pause-tab-list--scroll"></div>
-            </div>
+            <!-- 5.79.59 — All three pause-menu tabs below are owned
+                 by ui-manager render functions called once at boot via
+                 setGameEngine(): updatePrimaryTab() / updatePowerTab()
+                 / renderPowerupsOverlay(). Each function builds h2 +
+                 subtitle (where applicable) + list container from
+                 scratch via createElement, so a single empty stub is
+                 enough — no static markup to flash before the JS
+                 takes over. The per-pause refresh calls in
+                 togglePauseMenu keep equipped-weapon and money/SP
+                 state accurate. -->
+            <div id="primary-tab"  class="pause-tab-content"></div>
+            <div id="power-tab"    class="pause-tab-content"></div>
+            <div id="powerups-tab" class="pause-tab-content"></div>
 
             <div id="music-tab" class="pause-tab-content">
                 <h2>MUSIC</h2>
@@ -427,13 +256,30 @@
                 </span>
             </div>
             <div class="shop-tabs">
-                <!-- 5.70.0 — POWERUPS tab added. Powerups no longer drop
-                     from kills; players spend Picks (earned 1/wave + 1/
-                     level-up) on any powerup here for full build freedom. -->
+                <!-- 5.79.57 — Shop is now exclusively offensive: one
+                     tab per weapon (4 primaries + 6 power weapons),
+                     each tab listing that weapon's offensive upgrade
+                     tree from weapon-data.js getPrimaryUpgrades /
+                     getPowerUpgrades. The DEFENSE tab is suspended
+                     (the defense economy lives in the pause menu only
+                     for now). The legacy HELP / PRIMARY / POWER /
+                     DEFENSE four-tab layout was:
+                       <button class="shop-tab active" data-tab="HELP">HELP</button>
+                       <button class="shop-tab" data-tab="PRIMARY">PRIMARY</button>
+                       <button class="shop-tab" data-tab="POWER">POWER</button>
+                       <button class="shop-tab" data-tab="DEFENSE">DEFENSE</button>
+                     — preserved here as a comment for revert. -->
                 <button class="shop-tab active" data-tab="HELP">HELP</button>
-                <button class="shop-tab" data-tab="PRIMARY">PRIMARY</button>
-                <button class="shop-tab" data-tab="POWER">POWER</button>
-                <button class="shop-tab" data-tab="DEFENSE">DEFENSE</button>
+                <button class="shop-tab" data-tab="PULSE_CANNON">PULSE</button>
+                <button class="shop-tab" data-tab="STORM_NEEDLES">NEEDLES</button>
+                <button class="shop-tab" data-tab="SCATTER_GUN">SCATTER</button>
+                <button class="shop-tab" data-tab="RAIL_DRIVER">RAIL</button>
+                <button class="shop-tab" data-tab="CHARGE_SHOT">CHARGE</button>
+                <button class="shop-tab" data-tab="MINE_LAYER">MINES</button>
+                <button class="shop-tab" data-tab="NOVA_BLAST">NOVA</button>
+                <button class="shop-tab" data-tab="MISSILE_SALVO">MISSILES</button>
+                <button class="shop-tab" data-tab="LANCE_BEAM">LANCE</button>
+                <button class="shop-tab" data-tab="LIGHTNING_ARC">ARC</button>
             </div>
             <div id="shop-items-list" class="shop-content">
                 <!-- Populated dynamically by shop-dom.renderShopDom() -->

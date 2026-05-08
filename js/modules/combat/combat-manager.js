@@ -2,6 +2,8 @@
 import { GAME_CONFIG, GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION } from './weapon-data.js';
+import { DEFENSE_CONFIGS } from './defense-data.js';
+import { POWERUP_TYPES } from '../world/powerup.js';
 
 // ── Asteroid Debris ──
 
@@ -750,34 +752,47 @@ export function showPowerupDisplay(name, color, description = '') {
     this.powerupDisplay.fadeTimer = this.powerupDisplay.maxFadeTime;
 }
 
+// 5.79.62 — Three-tier resolver. Each tier is a registry that owns
+//   its data, so there's no parallel copy to keep in sync:
+//     1. POWERUP_TYPES        — offensive powerups (world/powerup.js)
+//     2. DEFENSE_CONFIGS      — defense items (combat/defense-data.js)
+//     3. weapon-data fallback — every upgrade tree (PRIMARY/POWER/SKILL)
+//   Display name uses `displayName` (POWERUP_TYPES) so the toast keeps
+//   reading "Rapid Fire" rather than the card-shorthand "Rapid".
+//   The CHARGE_SPEED / CHARGE_POWER entries that used to live in a
+//   local table here were dropped — every weapon-data icon is already
+//   a slug (audited: 79/79), so the fallback returns them correctly
+//   without the explicit override.
 export function getPowerupConfig(type) {
-    const configs = {
-        'SHIELD_BOOST':             { name: 'Shielding',          description: '+8% damage reduction per stack',          duration: Infinity, icon: 'shield', gradientColors: ['#33ff99', '#006644'] },
-        'RAPID_FIRE':               { name: 'Rapid Fire',         description: '22% faster auto-fire per stack',          duration: Infinity, icon: 'bolt', gradientColors: ['#ff6600', '#ff0000'] },
-        'MULTI_SHOT':               { name: 'Multi Shot',         description: '+1 bullet per shot, fanned out',          duration: Infinity, icon: 'multi-shot', gradientColors: ['#66aaff', '#0033cc'] },
-        'SPEED_BOOST':              { name: 'Afterburner',        description: '+65% thrust per stack',                   duration: Infinity, icon: 'wind', gradientColors: ['#ffff33', '#cc9900'] },
-        'BIG_BULLETS':              { name: 'Big Bullets',        description: '+2.2px bullet radius per stack',          duration: Infinity, icon: 'circle-fill', gradientColors: ['#66ff66', '#009900'] },
-        'PIERCING':                 { name: 'Piercing',           description: 'Bullets pass through +1 enemy per stack', duration: Infinity, icon: 'bow-arrow', gradientColors: ['#ffcc66', '#cc6600'] },
-        'EXPLOSIVE':                { name: 'Explosive',          description: 'AoE blast on bullet impact',              duration: Infinity, icon: 'bomb', gradientColors: ['#ff9933', '#cc3300'] },
-        'HOMING':                   { name: 'Homing',             description: 'Bullets curve toward enemies',            duration: Infinity, icon: 'target', gradientColors: ['#ff66cc', '#cc0066'] },
-        // 5.78.2 — DROPS-category powerup display rows removed alongside
-        // the powerups themselves (MEDPACK, DOCTOR, PAYDAY, HIGH_ROLLER,
-        // HEALTH_ORB_DROP_CHANCE/QUANTITY, MONEY_ORB_DROP_CHANCE/QUANTITY).
-        // Drop rate, drop quantity, heal amount, and money amount now
-        // scale with player level instead of being bought as picks.
-        'HEALTH_BOOST':             { name: 'Health Boost',       description: '+35 max HP per stack, full heal',         duration: Infinity, icon: 'heart', gradientColors: ['#ff6666', '#cc0000'] },
-        'HEALTH_DROP_FREQUENCY':    { name: 'Triage',             description: 'Health orbs drop more often',             duration: Infinity, icon: 'hourglass', gradientColors: ['#66ffaa', '#229966'] },
-        'CRIT_CHANCE':              { name: 'Critical Chance',    description: '+7% crit chance per stack',               duration: Infinity, icon: 'star', gradientColors: ['#ffff66', '#cc9900'] },
-        'CRIT_DAMAGE':              { name: 'Critical Damage',    description: '+15% crit damage per stack',              duration: Infinity, icon: 'dagger', gradientColors: ['#ff3399', '#cc0033'] },
-        'LONG_RANGE':               { name: 'Long Range',         description: '+55% bullet range per stack',             duration: Infinity, icon: 'bow-arrow', gradientColors: ['#bbff66', '#448800'] },
-        'CHARGE_SPEED':             { name: 'Charge Speed',       description: 'Charge shots build up faster',           duration: Infinity, icon: 'stopwatch', gradientColors: ['#ffcc00', '#cc8800'] },
-        'CHARGE_POWER':             { name: 'Charge Power',       description: 'Fully-charged shots hit harder',         duration: Infinity, icon: 'battery', gradientColors: ['#ff6600', '#cc3300'] },
-    };
-    if (configs[type]) return configs[type];
-
-    // Dynamic fallback for weapon/skill upgrades from weapon-data.js —
-    // pass through the upgrade's description so the pickup blurb shows
-    // the same one-liner used in the shop.
+    // 1) POWERUP_TYPES — offensive powerups.
+    const cfg = POWERUP_TYPES[type];
+    if (cfg) {
+        return {
+            name: cfg.displayName || cfg.name,
+            description: cfg.description || '',
+            duration: Infinity,
+            icon: cfg.icon,
+            gradientColors: cfg.gradientColors,
+        };
+    }
+    // 2) DEFENSE_CONFIGS — defense items (HEALTH_BOOST, SHIELD_BOOST,
+    //    SPEED_BOOST, HEALTH_DROP_FREQUENCY, REFLEXES, LAST_STAND,
+    //    STATIC_FIELD, SPARE_SHIP). Same source the DEFENSE shop tab
+    //    pulls from when active, so the pickup banner and the shop
+    //    tile read the exact same metadata.
+    const dcfg = DEFENSE_CONFIGS[type];
+    if (dcfg) {
+        return {
+            name: dcfg.name,
+            description: dcfg.description,
+            duration: Infinity,
+            icon: dcfg.icon,
+            gradientColors: dcfg.gradientColors,
+        };
+    }
+    // 3) Weapon / skill upgrades from weapon-data.js — pass through
+    //    the upgrade's description so the pickup blurb shows the same
+    //    one-liner used in the shop.
     const allUpgrades = { ...PRIMARY_UPGRADES, ...POWER_UPGRADES, ...SKILL_UPGRADES };
     if (allUpgrades[type]) {
         const upg = allUpgrades[type];
