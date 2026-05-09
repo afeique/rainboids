@@ -12,12 +12,12 @@ on commit. The user runs both terminals and hands the tree back and forth.
 
 | Field | Value |
 |-------|-------|
-| Branch | `master` |
+| Branch | `master` (with worktrees — see "Workflow" below) |
 | Version | `5.84.0` (see `VERSION`) |
-| Working tree | shared — agents alternate turns |
-| Last touched | 2026-05-09 by **server agent** (`#[ignore]` for known-failing PCG-64 vector + open-question #4) |
-| Last commit | `d5687f4` — 5.83.0 + 5.84.0 multiplayer client + parity infra (committed by client agent as a single combined commit) |
-| Uncommitted | follow-up commit pending: this doc + `server/tests/parity_vectors.rs` ignore-annotation |
+| Working tree | **multi-worktree as of 2026-05-09** — server agent on `../rainboids-server-wt` (`mp/server-week7`), client agent on the original tree at `master`. Merge to master at hand-off points. |
+| Last touched | 2026-05-09 by **server agent** (introducing worktree workflow + queueing wire codegen) |
+| Last commit | `3745d55` — `#[ignore]` PCG-64 vector + open-question #4 (server agent, follow-up to d5687f4) |
+| Uncommitted | none on master at handoff time |
 
 ## Ownership boundaries
 
@@ -58,23 +58,29 @@ Both agents must agree on these. Do not break them silently.
 
 Each agent updates their column on every session start.
 
-### Server agent (this terminal, currently active)
+### Server agent (worktree `../rainboids-server-wt`, branch `mp/server-week7`)
 
-- **Just shipped (uncommitted)**:
-  - 5.83.0 — Server `SessionRegistry` (reconnect-by-session), Ping/Pong
-    RTT, real `BrowseRooms` counts, `Error::NotFound` on bad joins,
-    25 integration tests + 6 wire-golden tests, `lib.rs` facade.
-  - 5.84.0 — Documenting + locking in the client agent's earlier work
-    (Hello/Welcome handshake + premature Phase 1 engine primitives +
-    parity tooling). Fixed `tools/check-schema.mjs` version-path bug.
-- **Considering next (not started)**:
-  - Wire codegen tooling — generate `server/src/protocol/generated.rs`
+- **Shipped on master**:
+  - `d5687f4` — 5.83.0 + 5.84.0 (combined commit: server SessionRegistry,
+    Ping/Pong, browse counts, NotFound, 25 server tests + 6 wire-golden;
+    plus client Hello/Welcome, js/sim/ engine primitives, schema/ +
+    parity tooling).
+  - `3745d55` — `#[ignore]` for the known-failing PCG-64 vector +
+    open-question #4 + worktree workflow doc.
+- **Currently working on (worktree, not yet merged)**:
+  - **Wire codegen** — generate `server/src/protocol/generated.rs`
     and `js/sim/protocol-generated.js` from `schema/protocol.toml`,
-    retire the hand-mirror.
-  - Server-side simulation port (Weeks 7–9 in the plan). Blocked on
-    `js/sim/` engine extraction; coordinate before starting.
-  - More integration tests: lagging-client detection (currently no test
-    coverage), grace timer end-to-end with a real disconnect.
+    retire the hand-mirror. Closes the door on name/discriminant drift
+    and makes future variant additions free. Touches:
+    - new: `tools/codegen-protocol/` (codegen script)
+    - new: `server/src/protocol/generated.rs` (generated)
+    - new: `js/sim/protocol-generated.js` (generated)
+    - modify: `server/src/protocol/mod.rs` (re-export from generated)
+    - modify: `js/sim/protocol.js` (re-export from generated)
+    - modify: `tools/check-schema.mjs` (validate generated outputs match)
+- **Queue (after codegen)**:
+  - Lagging-client integration test (no coverage today).
+  - Server-side simulation port (Weeks 7–9). Blocked on Phase 1.
 
 ### Client agent (other terminal)
 
@@ -165,6 +171,35 @@ npm run dev
 # Click MULTIPLAYER → modal → Connect → expect "✓ Connected · player #N"
 ```
 
+## Workflow — worktrees + master as integration
+
+Each agent works in its own `git worktree` rooted at a sibling directory.
+The original project tree (`/Users/silvr/projects/rainboids`) stays on
+`master` and is the integration point. Only land on master when the work
+is ready to share — that prevents one agent's WIP from interrupting the
+other.
+
+```
+/Users/silvr/projects/
+├── rainboids/                # master, integration target
+└── rainboids-server-wt/      # server agent's worktree on `mp/server-week7`
+    └── (created via `git worktree add ../rainboids-server-wt -b mp/server-week7`)
+```
+
+**Server agent's loop**:
+1. `cd /Users/silvr/projects/rainboids-server-wt`.
+2. Pull from master if needed: `git fetch && git rebase master`.
+3. Work, commit on `mp/server-week7`.
+4. When ready to share: switch back to `/Users/silvr/projects/rainboids`,
+   `git merge mp/server-week7 --no-ff` (or `git merge --ff-only` if it
+   advances cleanly), update this doc with a hand-off entry, optionally
+   delete the worktree branch and recreate.
+
+**Client agent's loop**:
+- Works on master in the original tree as before. May also create a worktree
+  if useful (`git worktree add ../rainboids-client-wt -b mp/client-…`).
+- Should `git pull` master before starting a session to pick up any merges.
+
 ## Coordination protocol
 
 1. **Session start**: read this doc top-to-bottom; check `git log -1`
@@ -172,9 +207,12 @@ npm run dev
 2. **Before editing**: confirm the file is in your ownership column.
    If not, write a hand-off entry and stop.
 3. **Before commit**: run the relevant test suite (server: `cargo test`;
-   client: `npm run test:unit`). Plus `node tools/check-schema.mjs`.
-4. **After commit**: update the **Status snapshot** + **In-flight work**
-   sections in this doc with a date and a one-line summary.
+   client: `npm run test:unit`). Plus `node tools/check-schema.mjs` from
+   project root.
+4. **Before merging to master**: rebase your branch onto current master,
+   re-run the test suite, then merge with `--no-ff` so the merge commit
+   carries an explicit summary. Update this doc's Status snapshot in the
+   merge commit.
 5. **On scope-creep instinct**: write the proposal in **Open questions**;
    wait for the other agent / user to weigh in. Don't ship Phase-1
    engine refactors on a Hello/Welcome ticket.
