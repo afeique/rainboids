@@ -1298,14 +1298,6 @@ export function getEffectivePrimaryFireRate() {
     const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
     rate *= Math.pow(0.78, rapidFireStacks);
 
-    // 5.75.0 — crit feedback loop: a recent crit grants a brief 30%
-    // reduction in primary fire-rate cooldown for 800ms. Stacks with
-    // RAPID_FIRE multiplicatively. Encourages CRIT_CHANCE / CRIT_DAMAGE
-    // builds by giving a moment-to-moment payoff on top of damage.
-    if (this._critRushUntil && Date.now() < this._critRushUntil) {
-        rate *= 0.70;
-    }
-
     return Math.round(rate);
 }
 

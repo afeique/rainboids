@@ -125,11 +125,6 @@ export function handleCollisions() {
                         target: ast,
                     });
                 }
-                // 5.75.0 — crit feedback loop trigger.
-                if (bullet.isCrit || bullet.isCritical) {
-                    if (this.player) this.player._critRushUntil = Date.now() + 800;
-                }
-
                 // 5.79.16 — Asteroid hit XP 4 → 1 (cuts bullet-spam
                 //   inflation; STORM_NEEDLES on a single rock used to
                 //   yield 200+ XP/sec just from hit-tick spam). Per-
@@ -544,9 +539,7 @@ export function handleCollisions() {
                     isEmpowered: !!bullet.isEmpowered,
                 });
 
-                // 5.75.0 — crit feedback loop trigger (enemy hit).
                 if (bullet.isCrit || bullet.isCritical) {
-                    this.player._critRushUntil = Date.now() + 800;
                     if (typeof this.checkMissionOnCrit === 'function') this.checkMissionOnCrit();
                 }
 

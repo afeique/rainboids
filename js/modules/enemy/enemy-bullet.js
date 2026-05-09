@@ -605,30 +605,22 @@ export class EnemyBullet {
                 ? 0.3 + 0.7 * (fadeOut / 0.4)
                 : 1.0;
             // 5.79.8 — visual sprite size raised 2.6 → 3.5 × collision
-            //   radius. 5.79.12 — Bullets are now elongated along their
+            //   radius. 5.79.12 — Bullets are elongated along their
             //   travel axis (aspect 1.4) for visibility + a more
             //   "shot" feel. The bullet's rotation angle (set per-shape
             //   in firing.js) rotates the elongated quad so the long
-            //   axis aligns with motion. For circular bullets without
-            //   a baked rotation, fall back to atan2 of velocity.
+            //   axis aligns with motion.
             const dia = (this.radius || 6) * 3.5 * shrink;
             let renderAngle = this.rotation;
             if (renderAngle === undefined || renderAngle === 0) {
                 if (this.vel && (this.vel.x || this.vel.y)) {
                     // +PI/2 because the atlas slots point "up" (north)
-                    // and we want the long axis along the velocity.
+                    // and we want the long axis along velocity.
                     renderAngle = Math.atan2(this.vel.y, this.vel.x) + Math.PI / 2;
                 } else {
                     renderAngle = 0;
                 }
             }
-            // 5.79.52 — `outlineScale = 1.55` thickens the black stroke
-            //   on enemy bullets so they pop against bright nebula
-            //   regions and explosion fireballs. The aspect=1.4 stretch
-            //   already thinned the outline along the long axis (a
-            //   12-px atlas ring becomes ~1.4× shorter on the long side
-            //   after the elongated quad scales it), so a bump back up
-            //   here gets the perceived stroke weight back to par.
             bulletRenderer.pushBullet(
                 shapeForGL,
                 this.x, this.y,
@@ -637,7 +629,6 @@ export class EnemyBullet {
                 opacity,
                 renderAngle,
                 /*aspect=*/1.4,
-                /*outlineScale=*/1.55,
             );
             ctx.restore();
             return;

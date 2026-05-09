@@ -1,64 +1,63 @@
-// WebGL bullet renderer (5.79.2). Mirrors the WebGLParticleRenderer
-// architecture — instanced quads, dynamic per-bullet VBO, single
-// `drawArraysInstanced` per frame for every bullet that maps to an
-// atlas slot.
+// WebGL bullet renderer (5.79.60 — procedural-SDF rewrite).
 //
-// Why this exists:
-//   The Canvas2D bullet path was using `ctx.shadowBlur` to bake a
-//   black outline halo around every bullet. shadowBlur runs a Gaussian
-//   pass per shape. At 150 bullets that's ~1.2 ms / frame on a modern
-//   machine and 3-5× more on integrated GPUs (see
-//   docs/STROKE_PERF_ANALYSIS_5.79.md). Lifting the body draw to WebGL
-//   eliminates the per-bullet Canvas2D cost AND makes the outline
-//   "free" — it lives in the atlas alpha channels and is composed in
-//   the fragment shader.
+// Single instanced draw call per frame for every player + enemy bullet.
+// No atlas, no texture, no mipmaps — each bullet's silhouette, body,
+// core, and glow are computed in the fragment shader from analytical
+// signed-distance fields. Replaces the atlas-based 5.79.2 architecture.
 //
-// Notes:
-//   • Bullet TRAILS still render on Canvas2D. They were never the
-//     dominant cost. Migrating them would require a textured-quad
-//     ribbon pass; not worth the complexity right now.
-//   • Player bullets and enemy bullets share the SAME atlas. The
-//     atlas slots cover every shape both pools use (circle, triangle,
-//     hexagon, diamond, star, square, needle, charge).
-//   • Renderer is a no-op when WebGL2 isn't available; the bullet
-//     pool falls back to its Canvas2D draw().
+// Why the rewrite:
+//   • The previous atlas + mix-blend-mode pipeline was paying for a
+//     full-screen GPU composition pass every frame (tanked FPS).
+//   • The atlas occupied a 1024×128 RGBA texture + a full mipmap chain
+//     for what is essentially a few SDF bands. Procedural SDFs have
+//     zero memory cost, no mipmap upload, and cheaper per-fragment
+//     work (no texture sampling).
+//   • Standard src-over alpha blending — no exotic blend modes, no
+//     CSS mix-blend on the canvas — so the bullet layer composites
+//     onto the page like any normal canvas.
+//
+// Per-instance layout (10 floats):
+//    0,1   world position (x, y)
+//    2,3   quad size (width, height) — height differs from width by
+//          aspect for elongated enemy bullets
+//    4-7   color (r, g, b, instance-alpha)
+//    8     rotation angle (radians)
+//    9     shape id (0..7)
+//
+// Bullet TRAILS still render on Canvas2D (drawTrail in player/bullet.js
+// and enemy/enemy-bullet.js). They were never the dominant cost.
+// Renderer is a no-op when WebGL2 isn't available; the bullet pool
+// falls back to its Canvas2D draw().
 
-import { buildBulletAtlas, BULLET_ATLAS_SLOTS } from './webgl-bullet-atlas.js';
+const SHAPE_IDS = {
+    circle:   0,
+    triangle: 1,
+    hexagon:  2,
+    diamond:  3,
+    star:     4,
+    square:   5,
+    needle:   6,
+    charge:   7,
+};
 
-// 13 floats per instance.
-//   0,1   position (world x, y)
-//   2,3   size (width, height in world pixels)
-//   4-7   color (r, g, b, a)
-//   8,9   uvOffset (atlas slot top-left)
-//  10,11  uvScale  (atlas slot dimensions)
-//  12     angle    (radians; enemy bullets rotate, player bullets pass 0)
-// 5.79.52 — Added a 14th per-instance float `outlineScale`. Bullets
-//   pass a multiplier on the atlas's outline mask: <1 thins the
-//   black stroke, >1 thickens it (saturates AA edges earlier).
-//   Used so player bullets get a softer outline (cleaner readable
-//   color) and enemy bullets get a heavier outline (silhouette
-//   pops against bright nebula / explosions).
-const FLOATS_PER_INSTANCE = 14;
+const FLOATS_PER_INSTANCE = 10;
 const BYTES_PER_INSTANCE = FLOATS_PER_INSTANCE * 4;
 
 const VERTEX_SHADER = `#version 300 es
 in vec2 a_quadPos;
-in vec2 a_quadUV;
 
 in vec2 a_pos;
 in vec2 a_size;
 in vec4 a_color;
-in vec2 a_uvOffset;
-in vec2 a_uvScale;
 in float a_angle;
-in float a_outlineScale;
+in float a_shape;
 
 uniform vec2 u_camera;
 uniform vec2 u_viewport;
 
 out vec4 v_color;
-out vec2 v_uv;
-out float v_outlineScale;
+out vec2 v_local;
+out float v_shape;
 
 void main() {
     float c = cos(a_angle);
@@ -71,74 +70,88 @@ void main() {
     clip.y = -clip.y;
     gl_Position = vec4(clip, 0.0, 1.0);
     v_color = a_color;
-    v_uv = a_uvOffset + a_quadUV * a_uvScale;
-    v_outlineScale = a_outlineScale;
+    v_local = a_quadPos;
+    v_shape = a_shape;
 }
 `;
 
+// Each shape SDF returns the signed distance from the silhouette in
+// unit-quad space (-0.5..0.5). Negative = inside, positive = outside.
+// Body silhouette sits at distance 0; body radius is ~0.40 of the quad
+// half-width, leaving ~0.10 of headroom for the soft glow tail before
+// the quad edge clips at 0.5.
 const FRAGMENT_SHADER = `#version 300 es
 precision mediump float;
 
 in vec4 v_color;
-in vec2 v_uv;
-in float v_outlineScale;
-
-uniform sampler2D u_atlas;
+in vec2 v_local;
+in float v_shape;
 
 out vec4 fragColor;
 
-// Atlas channel layout (see webgl-bullet-atlas.js):
-//   R = outline mask  (1.0 where the black ring is)
-//   G = body mask     (1.0 where the colored body is)
-//   B = core mask     (1.0 where the bright white center is)
-//   A = max(R, G, B)  — combined opacity
-//
-// Composition rule (additive in RGB so the channels don't fight each
-// other when the texture sampler interpolates):
-//   color = body*tint + core*white + outline*black
-//   alpha = atlasAlpha * instanceAlpha
-//
-// 5.79.14 — Punched-up bullet shader for the "neon ball" look:
-//   • Brightness gain bumped 1.35× → 1.55× so the colored body
-//     saturates more aggressively. Hot pixels read as "glowing" not
-//     "flat colored disc".
-//   • Top-left highlight (UV-space ramp) adds a subtle gloss to the
-//     body, making bullets look like 3D balls instead of 2D circles.
-//     Cheap — one mix() against a clamped UV diagonal.
-//   • Outline channel (R) explicitly composites BLACK on top of the
-//     body so the dark stroke is unmistakable even when the bullet
-//     color is dark itself. Was just "RGB at zero" via masking which
-//     blended weakly when the body bled into the outline texel.
+float circleSDF(vec2 p)   { return length(p) - 0.40; }
+
+float triangleSDF(vec2 p) {
+    p.y = -p.y;
+    p.x = abs(p.x);
+    const float k = 0.866;
+    return max(p.x * k + p.y * 0.5 - 0.40, -p.y - 0.34);
+}
+
+float hexagonSDF(vec2 p) {
+    p = abs(p);
+    return max(p.x - 0.40, p.x * 0.5 + p.y * 0.866 - 0.40);
+}
+
+float diamondSDF(vec2 p)  { return abs(p.x) + abs(p.y) - 0.42; }
+
+float starSDF(vec2 p) {
+    float ang = atan(p.y, p.x) + 1.5708;
+    float r = length(p);
+    float k = ang * (5.0 / 6.2832);
+    float sector = fract(k);
+    float w = sector < 0.5 ? sector * 2.0 : (1.0 - sector) * 2.0;
+    return r - mix(0.18, 0.42, w);
+}
+
+float squareSDF(vec2 p) {
+    vec2 d = abs(p) - 0.32;
+    return max(d.x, d.y);
+}
+
+float needleSDF(vec2 p) {
+    p = abs(p);
+    return length(vec2(p.x, max(0.0, p.y - 0.32))) - 0.06;
+}
+
+float chargeSDF(vec2 p)   { return length(p) - 0.45; }
+
+float bulletSDF(vec2 p, int shape) {
+    if (shape == 0) return circleSDF(p);
+    if (shape == 1) return triangleSDF(p);
+    if (shape == 2) return hexagonSDF(p);
+    if (shape == 3) return diamondSDF(p);
+    if (shape == 4) return starSDF(p);
+    if (shape == 5) return squareSDF(p);
+    if (shape == 6) return needleSDF(p);
+    if (shape == 7) return chargeSDF(p);
+    return circleSDF(p);
+}
+
 void main() {
-    vec4 tex = texture(u_atlas, v_uv);
-    // 5.79.52 — Per-instance outline scale: <1 fades the stroke
-    //   (player bullets keep the colored body more legible), >1
-    //   saturates AA edges earlier (enemy bullets get a thicker
-    //   silhouette against bright backdrops).
-    float aOut  = clamp(tex.r * v_outlineScale, 0.0, 1.0);
-    float aBody = tex.g;
-    float aCore = tex.b;
-    if (tex.a < 0.01) discard;
+    vec2 p = v_local;
+    int shape = int(v_shape + 0.5);
+    float d = bulletSDF(p, shape);
 
-    // Saturated body color
-    vec3 lit = clamp(v_color.rgb * 1.55, 0.0, 1.0);
+    // 5.79.61 — Flat body only, no glow / no core / no gradient.
+    // Cheapest possible bullet: SDF + 1px antialiased edge.
+    if (d > 0.005) discard;
 
-    // Soft top-left gloss — 0..1 ramp across the UV, brightest at
-    // (0.30, 0.30). Adds white toward the upper-left of every body.
-    vec2 g = v_uv;
-    float gloss = clamp(1.0 - length(g - vec2(0.30, 0.30)) * 1.6, 0.0, 1.0);
-    gloss *= aBody * 0.35;
+    float aa = fwidth(d);
+    float bodyMask = 1.0 - smoothstep(-aa, aa, d);
+    if (bodyMask < 0.005) discard;
 
-    vec3 bodyCol = lit + vec3(gloss);
-    vec3 col = bodyCol * aBody + vec3(1.0) * aCore;
-
-    // Outline → composite black ON TOP. Uses the outline mask
-    // directly so the black stroke wins over any body bleed at the
-    // antialiased edge, giving a crisp ring around every bullet.
-    col = mix(col, vec3(0.0), aOut);
-
-    float alpha = tex.a * v_color.a;
-    fragColor = vec4(col, alpha);
+    fragColor = vec4(v_color.rgb, bodyMask * v_color.a);
 }
 `;
 
@@ -170,23 +183,20 @@ export class WebGLBulletRenderer {
         this.canvas = canvas;
         this.gl = null;
         this.program = null;
-        this.atlasTex = null;
-        this.atlasCanvas = null;
 
         this.quadVbo = null;
         this.instanceVbo = null;
         this.vao = null;
 
-        // Sized for the worst-case bullet count we'd reasonably see in a
-        // single frame across both pools (player + enemy + missiles, etc.).
-        // 1024 is generous; storm-needles peak is ~250.
+        // Sized for the worst-case bullet count we'd reasonably see
+        // in a single frame across both pools. 1024 is generous;
+        // storm-needles peak is ~250.
         this.maxInstances = 1024;
         this.instanceData = new Float32Array(this.maxInstances * FLOATS_PER_INSTANCE);
         this.instanceCount = 0;
 
         this.uCamera = null;
         this.uViewport = null;
-        this.uAtlas = null;
 
         this.supported = false;
         this._contextLost = false;
@@ -202,33 +212,23 @@ export class WebGLBulletRenderer {
         };
     }
 
-    /**
-     * Boot the renderer. The `sharedGL` argument lets us reuse the WebGL2
-     * context already created by WebGLParticleRenderer (browsers limit
-     * the number of simultaneous contexts; sharing keeps us inside the
-     * limit). Returns true on success.
-     */
-    init(sharedGL = null) {
-        if (sharedGL) {
-            this.gl = sharedGL;
-        } else {
-            const gl = this.canvas.getContext('webgl2', {
-                alpha: true,
-                premultipliedAlpha: false,
-                antialias: false,
-                depth: false,
-                stencil: false,
-                preserveDrawingBuffer: false,
-                failIfMajorPerformanceCaveat: false,
-            });
-            if (!gl) {
-                console.warn('[WebGLBulletRenderer] WebGL2 unavailable — bullets will use Canvas2D');
-                return false;
-            }
-            this.gl = gl;
-            this.canvas.addEventListener('webglcontextlost', this._onContextLost, false);
-            this.canvas.addEventListener('webglcontextrestored', this._onContextRestored, false);
+    init() {
+        const gl = this.canvas.getContext('webgl2', {
+            alpha: true,
+            premultipliedAlpha: false,
+            antialias: false,
+            depth: false,
+            stencil: false,
+            preserveDrawingBuffer: false,
+            failIfMajorPerformanceCaveat: false,
+        });
+        if (!gl) {
+            console.warn('[WebGLBulletRenderer] WebGL2 unavailable — bullets will use Canvas2D');
+            return false;
         }
+        this.gl = gl;
+        this.canvas.addEventListener('webglcontextlost', this._onContextLost, false);
+        this.canvas.addEventListener('webglcontextrestored', this._onContextRestored, false);
         try {
             this._initGL();
         } catch (err) {
@@ -257,16 +257,13 @@ export class WebGLBulletRenderer {
 
         this.uCamera   = gl.getUniformLocation(program, 'u_camera');
         this.uViewport = gl.getUniformLocation(program, 'u_viewport');
-        this.uAtlas    = gl.getUniformLocation(program, 'u_atlas');
-        gl.uniform1i(this.uAtlas, 0);
 
-        // Static unit quad — TRIANGLE_STRIP. Same layout as the particle
-        // renderer.
+        // Static unit quad — TRIANGLE_STRIP, just position. No UVs needed.
         const quad = new Float32Array([
-            -0.5, -0.5,  0, 0,
-             0.5, -0.5,  1, 0,
-            -0.5,  0.5,  0, 1,
-             0.5,  0.5,  1, 1,
+            -0.5, -0.5,
+             0.5, -0.5,
+            -0.5,  0.5,
+             0.5,  0.5,
         ]);
         this.quadVbo = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVbo);
@@ -282,45 +279,9 @@ export class WebGLBulletRenderer {
         this._setupAttribs();
         gl.bindVertexArray(null);
 
-        // Atlas texture.
-        //
-        // 5.79.21 — ROOT CAUSE FIX for the missing bullet outline:
-        //   We previously used `LINEAR` minification with no mipmaps.
-        //   When a bullet renders at ~17 screen px from a 128-px atlas
-        //   slot, the GPU minifies the texture to ~14% scale. Without
-        //   mipmaps, `LINEAR` only samples a 2×2 texel neighborhood
-        //   per fragment — out of a 7.5×7.5 effective texel region.
-        //   The 12-px-wide outline ring (~9% of the slot) was aliased
-        //   away on most fragments, so the outline was invisible at
-        //   typical bullet render sizes. The body + core (which fill
-        //   65% of the slot) survived the aliasing, but the thin
-        //   outline didn't.
-        //
-        //   Fix: generate the full mipmap chain via
-        //   `gl.generateMipmap()`, switch MIN_FILTER to
-        //   `LINEAR_MIPMAP_LINEAR` (trilinear). Now the GPU samples a
-        //   pre-downsampled pyramid where each mip level averages
-        //   adjacent atlas texels — the outline ring's contribution
-        //   is preserved through all the downsamples and shows up as
-        //   a proper black ring at every render size.
-        //
-        //   Atlas dimensions are 1024×128 — both POT, so generateMipmap
-        //   works without restriction.
-        this.atlasCanvas = buildBulletAtlas();
-        this.atlasTex = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
-        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.atlasCanvas);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-        // Standard alpha blending — bullet outlines need to darken
-        // (not add to) the destination so they read as black on bright
-        // backgrounds.
+        // Standard src-over alpha blending — predictable, no exotic
+        // blend modes. The canvas itself composites onto the page via
+        // ordinary alpha (no mix-blend-mode).
         gl.enable(gl.BLEND);
         gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);
@@ -345,21 +306,15 @@ export class WebGLBulletRenderer {
         const program = this.program;
 
         const aQuadPos = gl.getAttribLocation(program, 'a_quadPos');
-        const aQuadUV  = gl.getAttribLocation(program, 'a_quadUV');
         gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVbo);
-        const QSTRIDE = 4 * 4;
         gl.enableVertexAttribArray(aQuadPos);
-        gl.vertexAttribPointer(aQuadPos, 2, gl.FLOAT, false, QSTRIDE, 0);
-        gl.enableVertexAttribArray(aQuadUV);
-        gl.vertexAttribPointer(aQuadUV, 2, gl.FLOAT, false, QSTRIDE, 2 * 4);
+        gl.vertexAttribPointer(aQuadPos, 2, gl.FLOAT, false, 2 * 4, 0);
 
-        const aPos          = gl.getAttribLocation(program, 'a_pos');
-        const aSize         = gl.getAttribLocation(program, 'a_size');
-        const aColor        = gl.getAttribLocation(program, 'a_color');
-        const aUvOff        = gl.getAttribLocation(program, 'a_uvOffset');
-        const aUvScale      = gl.getAttribLocation(program, 'a_uvScale');
-        const aAngle        = gl.getAttribLocation(program, 'a_angle');
-        const aOutlineScale = gl.getAttribLocation(program, 'a_outlineScale');
+        const aPos    = gl.getAttribLocation(program, 'a_pos');
+        const aSize   = gl.getAttribLocation(program, 'a_size');
+        const aColor  = gl.getAttribLocation(program, 'a_color');
+        const aAngle  = gl.getAttribLocation(program, 'a_angle');
+        const aShape  = gl.getAttribLocation(program, 'a_shape');
         gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceVbo);
         const ISTRIDE = BYTES_PER_INSTANCE;
         let off = 0;
@@ -372,14 +327,11 @@ export class WebGLBulletRenderer {
         setInst(aPos, 2);
         setInst(aSize, 2);
         setInst(aColor, 4);
-        setInst(aUvOff, 2);
-        setInst(aUvScale, 2);
         setInst(aAngle, 1);
-        setInst(aOutlineScale, 1);
+        setInst(aShape, 1);
     }
 
-    /** Resize the bullet canvas drawing buffer. Engine calls this from
-     *  the window resize handler. */
+    /** Resize the bullet canvas drawing buffer. */
     resize(w, h) {
         if (!this.supported || this._contextLost) return;
         this.canvas.width = w;
@@ -387,10 +339,7 @@ export class WebGLBulletRenderer {
         this.gl.viewport(0, 0, w, h);
     }
 
-    /**
-     * Reset the per-frame instance scratch AND clear the canvas. Caller
-     * invokes this once per frame before walking the bullet pools.
-     */
+    /** Reset the per-frame instance scratch AND clear the canvas. */
     beginFrame() {
         this.instanceCount = 0;
         if (this.supported && !this._contextLost) {
@@ -404,64 +353,41 @@ export class WebGLBulletRenderer {
     /**
      * Push one bullet into the instance buffer.
      *
-     * @param {string} shape    'circle' | 'triangle' | 'hexagon' | ...
-     * @param {number} x        world x
-     * @param {number} y        world y
-     * @param {number} size     world-pixel diameter (the quad will be
-     *                          drawn at this size; the atlas slot is
-     *                          designed to fit into a 100-px diameter
-     *                          quad — the size attribute scales it).
-     * @param {string} color    bullet body tint (CSS color string)
-     * @param {number} alpha    0..1 instance alpha
-     * @returns {boolean} true if pushed, false if buffer full or shape
-     *                    unknown.
+     * `size` is the desired body diameter in screen pixels. The body
+     * silhouette in unit-quad space sits at radius 0.40, so the quad
+     * needs to be `size / 0.80 = size * 1.25` wide for the body to
+     * land at the requested diameter. The remaining 0.10 of quad
+     * half-width is the soft glow tail.
+     *
+     * `aspect > 1` stretches the quad along its rotation axis (height)
+     * for elongated enemy bullets. `angle` then rotates the quad to
+     * align the long axis with travel.
      */
-    pushBullet(shape, x, y, size, color, alpha, angle = 0, aspect = 1, outlineScale = 1) {
+    pushBullet(shape, x, y, size, color, alpha, angle = 0, aspect = 1) {
         if (this.instanceCount >= this.maxInstances) return false;
-        const slot = BULLET_ATLAS_SLOTS[shape];
-        if (!slot) return false;
+        const shapeId = SHAPE_IDS[shape];
+        if (shapeId === undefined) return false;
+
         const data = this.instanceData;
         const base = this.instanceCount * FLOATS_PER_INSTANCE;
         const rgb = this._colorParser.parse(color || '#ffff80');
-        // Pick a quad size that gives the bullet roughly the right
-        // pixel diameter. The atlas's body radius is ~48 px in a 128
-        // slot → body diameter ≈ 96 px. The quad coords run -0.5..0.5,
-        // so a quad of `size = bullet_diameter * (128/96)` produces a
-        // body of `bullet_diameter` pixels on screen.
-        // 5.79.12 — `aspect > 1` stretches the quad along its rotation
-        //   axis (height) for an elongated bullet shape. `angle` then
-        //   rotates the quad to align the long axis with travel.
-        // 5.79.32 — Atlas BODY_R is now 38 (was 42), body diameter 76
-        //   in the 128 slot. Scale factor 128/76 ≈ 1.684 so the
-        //   caller's `size` lands as the rendered body diameter; the
-        //   22-px outline ring extends beyond it for visibility.
-        // 5.79.52 — `outlineScale` is a per-bullet multiplier on the
-        //   outline mask (slot 13). Defaults to 1 so legacy callers
-        //   are unaffected.
-        const sizeScaled = size * (128 / 76);
-        data[base + 0]  = x;
-        data[base + 1]  = y;
-        data[base + 2]  = sizeScaled;
-        data[base + 3]  = sizeScaled * aspect;
-        data[base + 4]  = rgb[0];
-        data[base + 5]  = rgb[1];
-        data[base + 6]  = rgb[2];
-        data[base + 7]  = alpha;
-        data[base + 8]  = slot.uOff;
-        data[base + 9]  = slot.vOff;
-        data[base + 10] = slot.uScale;
-        data[base + 11] = slot.vScale;
-        data[base + 12] = angle;
-        data[base + 13] = outlineScale;
+        const sizeScaled = size * 1.25;
+
+        data[base + 0] = x;
+        data[base + 1] = y;
+        data[base + 2] = sizeScaled;
+        data[base + 3] = sizeScaled * aspect;
+        data[base + 4] = rgb[0];
+        data[base + 5] = rgb[1];
+        data[base + 6] = rgb[2];
+        data[base + 7] = alpha;
+        data[base + 8] = angle;
+        data[base + 9] = shapeId;
         this.instanceCount++;
         return true;
     }
 
-    /**
-     * Draw all pushed instances. Bullet canvas has its own WebGL2
-     * context — no shared blend state with the particle/starfield
-     * renderer to worry about.
-     */
+    /** Draw all pushed instances. One instanced draw call. */
     drawFrame(camX, camY) {
         if (!this.supported || this._contextLost) return;
         if (this.instanceCount === 0) return;
@@ -478,9 +404,6 @@ export class WebGLBulletRenderer {
         gl.uniform2f(this.uCamera, camX, camY);
         gl.uniform2f(this.uViewport, this.canvas.width, this.canvas.height);
 
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
-
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, n);
 
         gl.bindVertexArray(null);
@@ -488,6 +411,8 @@ export class WebGLBulletRenderer {
 
     /** Returns true when this renderer can handle the given shape key. */
     handlesShape(shape) {
-        return this.supported && !this._contextLost && BULLET_ATLAS_SLOTS.hasOwnProperty(shape);
+        return this.supported
+            && !this._contextLost
+            && Object.prototype.hasOwnProperty.call(SHAPE_IDS, shape);
     }
 }

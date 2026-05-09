@@ -11,6 +11,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.61] - 2026-05-08
+
+### Changed — Bullet shader stripped to flat silhouettes (no glow / core / gradient)
+Removed all decorative work from the procedural-SDF fragment shader. Each bullet is now a solid-color body with a single-pixel antialiased edge — no halo tail, no bright core, no radial gradient, no gloss highlight. About 1/3 the per-fragment work of 5.79.60.
+
+**Measured — Playwright `perf-06` combined matrix (headless software renderer):**
+
+| Scenario | 5.79.60 | 5.79.61 | Δ |
+|---|---|---|---|
+| Default config | 16.0 fps | 19.1 fps | +19% |
+| 5 asteroids | 15.1 | 18.3 | +21% |
+| 4 enemies | 14.5 | 18.5 | +28% |
+| 30 particles | 13.7 | 18.2 | +33% |
+| 5 ast + 4 enemies | 13.6 | 17.7 | +30% |
+| Combat burst (mid) | 13.1 | 16.6 | +27% |
+| Combat burst (heavy) | 12.7 | 15.8 | +24% |
+| Maximum stress | 11.9 | 15.0 | +26% |
+
+(Absolute fps is artificially low in headless Playwright; the deltas are what matter. Real-browser numbers are ~5–10× higher.)
+
+The shader is now:
+```glsl
+void main() {
+    float d = bulletSDF(v_local, int(v_shape + 0.5));
+    if (d > 0.005) discard;
+    float aa = fwidth(d);
+    float bodyMask = 1.0 - smoothstep(-aa, aa, d);
+    if (bodyMask < 0.005) discard;
+    fragColor = vec4(v_color.rgb, bodyMask * v_color.a);
+}
+```
+
+---
+
+## [5.79.60] - 2026-05-08
+
+### Changed — Bullets rewritten from scratch (procedural SDF, no atlas)
+The 5.79.59 "really glow" approach used `mix-blend-mode: screen` on the bullet canvas, which forces a full-screen GPU composition pass every frame. That was the FPS killer. Rewrote the entire bullet pipeline to be smaller, simpler, and faster.
+
+**What's gone:**
+- `js/modules/performance/webgl-bullet-atlas.js` — **deleted entirely**. No more 1024×128 RGBA atlas, no mipmap chain, no per-shape painters, no halo/body/core mask channels.
+- `mix-blend-mode: screen` on `#bulletCanvas` — removed. Standard alpha compositing onto the page.
+- Premultiplied additive blending in the WebGL renderer — replaced with plain src-over (`gl.blendFuncSeparate(SRC_ALPHA, ONE_MINUS_SRC_ALPHA, ONE, ONE_MINUS_SRC_ALPHA)`).
+
+**What replaces it:**
+- **Procedural SDF shapes in the fragment shader.** Each bullet's silhouette is computed analytically from a per-shape signed-distance function (`circleSDF`, `triangleSDF`, `hexagonSDF`, `diamondSDF`, `starSDF`, `squareSDF`, `needleSDF`, `chargeSDF`). No texture sampling — just math.
+- **Body + core + halo composed inline.** `bodyMask` from a `smoothstep(-aa, aa, d)` AA edge using `fwidth(d)` (so the silhouette antialiases cleanly at every render size). `coreMask` from a tight radial gradient at the bullet center. `haloMask` from a soft `(1 - smoothstep(0, 0.10, d))²` falloff outside the silhouette.
+- **Per-instance layout shrunk 13 → 10 floats.** No more atlas UVs, no outline scale. Just position, size, color, angle, and shape ID.
+- **One instanced draw call** per frame, same as before.
+
+**Why this is faster:**
+- No texture sampling means less GPU memory bandwidth per fragment.
+- No `mix-blend-mode: screen` means no full-screen GPU composition pass.
+- Fragment shader does early `discard` for pixels well outside the silhouette (`d > 0.10`).
+- Smaller VBO (40 → 40 bytes per instance is the same, but with 10 floats packed instead of 13 + tight bind layout there's less per-frame upload).
+
+**API kept identical** — `pushBullet(shape, x, y, size, color, alpha, angle, aspect)` works exactly as before. Player and enemy call sites need no changes.
+
+**Visual:** bullets still have body + bright core + soft glow tail. Glow lives inside the bullet's quad (no full-screen blend), so it's contained but still visually distinct against dark space. Without `mix-blend-mode: screen` lighting up the world, the glow is more localized — but the perf budget is back.
+
+---
+
+## [5.79.59] - 2026-05-08
+
+### Changed — Bullets really glow (additive blend + Gaussian halo + screen layer)
+The energy-orb composite from 5.79.57 is now a real luminous glow. Three changes work together:
+
+- **`js/modules/performance/webgl-bullet-atlas.js`** — Halo channel (R) reshaped from a hard band into a Gaussian-ish soft falloff (`softHalo(d, maxD)` helper). Halo reach widened 22 → 26 px so the glow tail extends all the way to the slot edge. All eight shape painters (circle, charge, square, triangle, hexagon, diamond, star, needle) updated to use `softHalo(sdf, HALO_REACH)` in place of the old hard `band(...)` ring. Result: every bullet shape gets a smooth radial corona instead of a sharp colored ring.
+
+- **`js/modules/performance/webgl-bullet-renderer.js`** — Premultiplied additive blending: `gl.blendFuncSeparate(SRC_ALPHA, ONE, ONE, ONE)`. Overlapping bullets now sum their RGB instead of overwriting, so dense storm-needle volleys glow brighter than isolated shots. Fragment shader switched to a premultiplied composite (`bodyTint·G + white·B + hotTint·R`) with brightness pushed up — body multiplier 1.55 → 1.7, halo multiplier 2.2 → 2.6 with a `+0.25` floor so dark-tinted bullets still get a hot rim.
+
+- **`css/styles.css`** — `#bulletCanvas` now uses `mix-blend-mode: screen` so the entire bullet layer lights up the underlying gameCanvas/glCanvas like a real light source. Empty pixels still pass through (RGB=0 means no screen contribution); bright bullet pixels brighten whatever's beneath. Combined with the additive within-layer blending, you get a true luminous bullet hell.
+
+**What you'll see:** isolated bullets read as glowing energy projectiles with a soft corona. Dense fire (storm needles, multi-shot, scatter) saturates toward white-hot. Bullets crossing bright nebula regions stay visible because the screen blend brightens those pixels rather than fighting them.
+
+---
+
+## [5.79.58] - 2026-05-08
+
+### Removed — Crit rush fire-rate buff
+- **Removed the "crit feedback loop"** added in 5.75.0 — every critical hit was setting `player._critRushUntil = Date.now() + 800`, which then multiplied primary fire rate by 0.70 (30% faster) for 800 ms in `getEffectivePrimaryFireRate()`. Since the rate boost stacked multiplicatively with RAPID_FIRE and a high crit-chance build kept the timer constantly refreshed, this was a permanent ~30% DPS uplift on top of crit damage. Player was already strong enough.
+- Removed call sites at `combat/collision-system.js:130` (asteroid hit) and `:549` (enemy hit). The enemy-hit branch retains the `checkMissionOnCrit()` mission tracker.
+- Removed the fire-rate effect at `player/weapons.js:1305-1307`.
+- Removed the visual cue (yellow pulse ring) at `player/renderer.js:33-51`.
+- No leftover references; `_critRushUntil` field is no longer set or read anywhere.
+
+---
+
+## [5.79.57] - 2026-05-08
+
+### Changed — Bullet rendering rewritten as energy-orb composite (no black outline)
+The black-outline stroke pipeline (5.79.14 / 5.79.21 / 5.79.32 / 5.79.52 lineage) is gone. Player and enemy bullets now share one composite — saturated body, bright white core, hot-tinted halo rim — with no per-pool stroke tuning.
+
+**Why:** The black outline was visually inconsistent across bullet sizes and pools. At the most recent tunings, player bullets read as too bold/thick at every `outlineScale` we tried (`0.55`, `0.35`), while enemy bullets read as having no visible stroke at all (the elongated `aspect=1.4` quad combined with mip-level selection thinned the rim ring to under a pixel along the long axis). Rather than chase per-pool calibration, the R channel of the bullet atlas is now interpreted as a **saturated halo glow** instead of a black mask. Same band shape in the atlas, fundamentally different visual.
+
+**Shader composite (`js/modules/performance/webgl-bullet-renderer.js`):**
+- `color = bodyTint * G + white * B + brightTint * R`
+  - `bodyTint = clamp(v_color.rgb * 1.55, 0, 1)` — saturated body
+  - Top-left UV gloss adds a 3D ball feel (`v_uv` ramped against `(0.30, 0.30)`)
+  - `brightTint = clamp(v_color.rgb * 2.2 + 0.15, 0, 1)` — over-saturated, white-hot rim
+- Halo alpha is attenuated to `0.7×` of the body-vs-halo-only mask, so the rim falls off softly into the background instead of writing a solid colored ring.
+
+**Atlas (`js/modules/performance/webgl-bullet-atlas.js`):**
+- R channel renamed `outline mask → halo mask`; `OUTLINE` constant kept as a legacy alias so the eight shape painters don't need rewrites.
+- Comments updated throughout to reflect the new channel semantics.
+
+**Per-instance plumbing simplified:**
+- `FLOATS_PER_INSTANCE` 14 → 13 — the per-bullet `outlineScale` attribute is removed. There is no longer any per-pool stroke multiplier.
+- `pushBullet(shape, x, y, size, color, alpha, angle, aspect)` — 8 args (was 9).
+- Player bullet (`js/modules/player/bullet.js`) and enemy bullet (`js/modules/enemy/enemy-bullet.js`) call sites both drop the `outlineScale` argument.
+
+**What's unchanged:** atlas slot layout, body/core radii, mipmap chain, bullet trail rendering (still Canvas2D), the WebGL2-or-fallback contract. Aspect=1.4 on enemy bullets stays (visual identity choice — elongates along travel direction).
+
+---
+
 ## [5.79.56] - 2026-05-08
 
 ### Removed — Pass 3: Defense registry, gradient cache hardening, dead shop handlers
