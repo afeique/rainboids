@@ -21,7 +21,7 @@ export const GAME_CONFIG = {
     // Health Orb Configuration (renamed from health stars)
     HEALTH_ORB_HEAL_AMOUNT_MIN: 1, // Minimum health restored per health orb
     HEALTH_ORB_HEAL_AMOUNT_MAX: 2, // Maximum health restored per health orb
-    HEALTH_ORB_BASE_DROP_RATE: 0.2, // 20% base chance to drop health orbs
+    HEALTH_ORB_BASE_DROP_RATE: 0.40, // 5.81.1 — bumped 0.20 → 0.40. Combined with the 60s cooldown the effective heal rate was too sparse; doubling the roll keeps the cooldown gate as the primary throttle while making "next health drop" feel consistently within reach.
     HEALTH_ORB_BASE_DROP_COUNT_MAX: 1, // Legacy field — health drops are now exactly one orb (5.79.27).
     HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
     // 5.79.32 — Health orbs sized to MATCH gold shape orbs (8-16 px),
@@ -179,7 +179,7 @@ export const ENEMY_BULLET_CONFIG = {
     // Enemy firing rate cooldowns (in milliseconds)
     // MIN = fast (high level), MAX = slow (level 1 — dumb punching bags)
     ENEMY_FIRING_COOLDOWNS: {
-        HUNTER: { MIN: 800, MAX: 3000 },        // Fast burst shooter
+        HUNTER: { MIN: 600, MAX: 2200 },        // 5.80.x — burst shooter (3-shot rapid bursts via handleBurstShooting)
         GUARDIAN: { MIN: 3000, MAX: 8000 },     // Slow but devastating
         WASP: { MIN: 600, MAX: 2000 },          // Rapid pulse shooter
         TITAN: { MIN: 1200, MAX: 4000 },        // Tank missiles

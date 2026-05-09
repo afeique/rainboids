@@ -195,13 +195,18 @@ export class ColorStar {
                 }
             }
 
-            // 5.79.32 — Health orbs (the only collectible left in
-            //   colorStarPool now that gold drops moved to their own
-            //   pools) drift in space waiting to be picked up. No
-            //   homing magnet — player has to fly into them or pull
-            //   with the tractor beam.
-            this.vel.x *= 0.985;
-            this.vel.y *= 0.985;
+            // 5.80.x — Health orbs now have a passive proximity magnet
+            //   (was: drift-only as of 5.79.32). Per user request, heal
+            //   pickups should pull in from FAR away so the player isn't
+            //   forced to chase down each orb. Tractor beam still works
+            //   independently for the all-pickups long-range scoop.
+            //   Friction bumped 0.985 → 0.92 for orbs with the magnet
+            //   active so the per-tick force pump doesn't accelerate
+            //   them to absurd speeds (steady-state v ≈ F/(1−f)).
+            const isHealth = this.starType === 'health';
+            const friction = isHealth ? 0.92 : 0.985;
+            this.vel.x *= friction;
+            this.vel.y *= friction;
             this.x += this.vel.x;
             this.y += this.vel.y;
 
@@ -211,7 +216,26 @@ export class ColorStar {
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
 
-            // Tractor beam — long-range pull when engaged.
+            // Passive health-orb magnet (5.80.x). Two-tier: a gentle far
+            //   pull (≤320 px) so heals drift toward the player from
+            //   well off-screen-quadrant range, plus a stronger snap
+            //   inside 120 px that scoops them in. ~3.2× gold-coin's
+            //   100 px range — health is less common than gold and
+            //   players reliably need it, so it warrants a wider net.
+            if (isHealth && dist > 1 && dist < 320) {
+                const inv = 1 / dist;
+                const farFactor = (320 - dist) / 320;
+                this.vel.x += dx * inv * 8 * farFactor;
+                this.vel.y += dy * inv * 8 * farFactor;
+                if (dist < 120) {
+                    const nearFactor = (120 - dist) / 120;
+                    this.vel.x += dx * inv * 22 * nearFactor;
+                    this.vel.y += dy * inv * 22 * nearFactor;
+                }
+            }
+
+            // Tractor beam — long-range pull when engaged. Stacks on
+            // top of the passive magnet for an even snappier scoop.
             if (dist > 1 && tractorEngaged) {
                 const tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
                 const tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;

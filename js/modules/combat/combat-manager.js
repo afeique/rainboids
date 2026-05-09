@@ -544,78 +544,74 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false
     return shape;
 }
 
-// 5.79.31 — Money drops are visually "ONE homing shape orb + many
-//   floating pixel coins". Was 1-2 shapes which compounded with the
-//   explosive-splash bypass into a pile of geometry per kill cluster.
-//   Now: exactly one chunky homing piece per drop (capped at
-//   MONEY_ORB_SHAPE_VALUE_MAX gold), and the rest of the budget
-//   spreads across up to MONEY_ORB_PIXEL_COUNT_MAX small floating
-//   pixel coins. Total budget bounded by MONEY_ORB_DROP_BUDGET_MAX.
-//   The splitter returns the two lists; caller spawns each kind via
-//   createMoneyOrb(..., isPixel).
+// 5.81.1 — Money drops are now a HARD CAP of 3 chunky shape orbs per
+//   drop event, with no pixel-coin swarm. The previous "1 shape + up
+//   to 30 pixel coins" layout (5.79.31) was too visually noisy across
+//   stacked kills — pixel coins read as ambient sparkle and the
+//   distinct geometric shape was lost in the pile. Now each drop is
+//   1-3 distinct geometric pieces that scatter outward (see
+//   gold-shape.js reset() — initial velocity bumped so they fan out
+//   visibly instead of clustering). Shape count is value-driven:
+//     ≤ SHAPE_VALUE_MAX            → 1 shape  (small kill)
+//     ≤ 2 × SHAPE_VALUE_MAX        → 2 shapes (mid kill / boss part)
+//     >  2 × SHAPE_VALUE_MAX       → 3 shapes (big kill / streak)
+//   Total is capped by MONEY_ORB_DROP_BUDGET_MAX. Splitter returns
+//   { shapes, pixels: [] } — pixels stays empty so existing call sites
+//   keep working (the for-of over pixels just no-ops).
 function _splitMoneyDrop(total) {
     if (total <= 0) return { shapes: [], pixels: [] };
 
     const dropMax = GAME_CONFIG.MONEY_ORB_DROP_BUDGET_MAX;
     total = Math.min(total, dropMax);
 
-    // Exactly ONE shape orb per drop. Per the user's explicit ask:
-    //   "1-2 homing geometry pieces and a bunch of pixel gold coins
-    //   that float." We pick 1 (the simpler end of that range) so
-    //   the homing pull is unambiguous — the player streams toward
-    //   one chunky piece and sweeps up the floating coins around it.
-    const shapeN = 1;
-
     const shapeCap = GAME_CONFIG.MONEY_ORB_SHAPE_VALUE_MAX;
-    // Single shape gets up to ~30% of the budget (capped at SHAPE_VALUE_MAX
-    // so a 250g drop's shape doesn't grow grotesquely large). Most of
-    // the gold flows into the floating pixel coins.
-    const shapeBudgetTarget = Math.min(total, Math.floor(total * 0.30) + 6);
-    const shapeBudget = Math.min(shapeBudgetTarget, shapeCap);
-    const shapes = _evenSplit(shapeBudget, shapeN);
+    // Decide shape count from total budget so small kills stay
+    //   quiet (1 piece) and big multi-kills produce up to 3.
+    let shapeN;
+    if (total <= shapeCap)            shapeN = 1;
+    else if (total <= shapeCap * 2)   shapeN = 2;
+    else                              shapeN = 3;
 
-    // Pixel coins — divisor 4, min 6, cap MONEY_ORB_PIXEL_COUNT_MAX (30).
-    //   With the larger pixel size constants (1.5-3px) and 6-30 count
-    //   range, drops read as a clear coin shower around the single
-    //   homing piece.
-    const pixelBudget = Math.max(0, total - shapeBudget);
-    const pixelN = pixelBudget <= 0
-        ? 0
-        : Math.min(GAME_CONFIG.MONEY_ORB_PIXEL_COUNT_MAX, Math.max(6, Math.floor(pixelBudget / 4)));
-    const pixels = _evenSplit(pixelBudget, pixelN);
+    // Distribute the full budget across the chosen shapes; per-shape
+    //   value is clamped to SHAPE_VALUE_MAX inside _evenSplitClamped
+    //   so a 250g drop spreads as 80+80+80+leftover (leftover is just
+    //   dropped — the cap is intentional so no single piece grows
+    //   grotesquely large).
+    const shapes = _evenSplitClamped(total, shapeN, shapeCap);
 
-    return { shapes, pixels };
+    return { shapes, pixels: [] };
 }
 
-// Even-distribute `total` across `count` slots. If `count` is 0 returns []
-// even when total > 0 (caller's responsibility to handle leftover).
-function _evenSplit(total, count) {
+// Like _evenSplit but each slot is hard-capped at `cap`. Any leftover
+//   budget that exceeds cap × count is discarded — intentional so the
+//   shape size never exceeds MONEY_ORB_SHAPE_SIZE_MAX.
+function _evenSplitClamped(total, count, cap) {
     if (total <= 0 || count <= 0) return [];
-    const base = Math.floor(total / count);
-    const remainder = total - base * count;
+    const capped = Math.min(total, cap * count);
+    const base = Math.floor(capped / count);
+    const remainder = capped - base * count;
     const out = new Array(count);
-    for (let i = 0; i < count; i++) out[i] = Math.max(1, base + (i < remainder ? 1 : 0));
+    for (let i = 0; i < count; i++) {
+        out[i] = Math.min(cap, Math.max(1, base + (i < remainder ? 1 : 0)));
+    }
     return out;
 }
 
-// 5.79.31 — Legacy splash-kill drop path (used by explosive bullet
-//   AOE in player/bullet.js). Was spawning ONE chunky shape money
-//   orb per AOE kill — bypassing the splitter entirely. With a
-//   3-enemy splash that meant 3 chunky orbs piled on the primary
-//   kill's drop, which is what the user means by "ridiculous gold
-//   geometry per drop". Now spawns a small floating coin shower
-//   only — no chunky homing piece, since the primary kill already
-//   provides one (collision-system → dropOrbsFromEntity).
+// 5.81.1 — Legacy splash-kill drop path (used by explosive bullet
+//   AOE in player/bullet.js). Now spawns ONE chunky shape orb per
+//   splash kill (was: 5 floating pixel coins, removed alongside the
+//   pixel-coin swarm in the same version). The primary kill still
+//   goes through dropOrbsFromEntity and gets its own 1-3 shapes; the
+//   splash bonus adds one more distinct piece per AOE-killed target,
+//   capped naturally by enemy count rather than by per-drop budget.
+//   Health orb still spawned here as before — explosive splashes are
+//   the legacy "guaranteed health on AOE" path.
 export function dropStarsFromEntity(x, y) {
     this.createHealthOrb(x, y);
 
     const lvl = Math.max(1, (this.player?.level | 0) || 1);
-    const avgValue = Math.max(1, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (lvl - 1) * 3);
-    const splashCount = 5;
-    const perCoin = Math.max(1, Math.floor(avgValue / splashCount));
-    for (let i = 0; i < splashCount; i++) {
-        this.createMoneyOrb(x, y, perCoin, true);
-    }
+    const value = Math.max(1, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (lvl - 1) * 3);
+    this.createMoneyOrb(x, y, value, false);
 }
 
 export function dropOrbsFromEntity(x, y, entity = null) {

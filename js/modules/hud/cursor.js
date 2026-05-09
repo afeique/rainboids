@@ -3,6 +3,7 @@
 // so all `this.*` references work exactly as they did as class methods.
 
 import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
+import { GAME_CONFIG, GAME_STATES } from '../core/constants.js';
 
 export function drawCustomCursor() {
         if (!this.cursor.x && !this.cursor.y) return; // Don't draw if no mouse position
@@ -234,4 +235,454 @@ export function drawJitterCircle() {
 // drawCursorCooldownTimer's prior history if a future feature wants it back.
 export function drawCursorCooldownTimer() {
         return;
+}
+
+// Mirrors the per-weapon range/lifetime/velocity stack-up from
+// firePulseCannon / fireStormNeedles / fireScatterGun / fireRailDriver
+// + applyGlobalBulletUpgrades. Pulse Cannon takes the
+// createChargedBullets path which skips applyGlobalBulletUpgrades, so
+// its rangeMultiplier is single-applied; the other primaries get
+// playerRangeMult applied twice (once at fire, once in
+// applyGlobalBulletUpgrades). We match that quirk so the pointer's
+// endpoint lines up with where bullets actually expire.
+function _predictPrimaryBulletRange(player) {
+    if (!player || !player.getActivePrimaryConfig) return 0;
+    const cfg = player.getActivePrimaryConfig();
+    if (!cfg) return 0;
+    const cfgRange = cfg.range || 1.0;
+    const cfgSpeed = cfg.bulletSpeed || 1.0;
+    const playerRangeMult = player.getRangeMultiplier ? player.getRangeMultiplier() : 1;
+    const baseMaxLife = Math.round(30 / GAME_CONFIG.TICK_SCALE);
+    const baseSpeed = GAME_CONFIG.BULLET_SPEED;
+
+    let extra = 1.0;
+    if (player.activePrimary === 'RAIL_DRIVER') {
+        const stacks = player.getPowerupStacks ? player.getPowerupStacks('PENETRATOR') : 0;
+        extra = 1 + stacks * 0.5;
+    }
+
+    const doubleApply = player.activePrimary !== 'PULSE_CANNON';
+
+    let bulletRangeMult = playerRangeMult * cfgRange * extra;
+    if (doubleApply) bulletRangeMult *= playerRangeMult;
+
+    const bulletMaxLife = Math.round(baseMaxLife * cfgRange * extra);
+    const effectiveMaxLife = Math.round(bulletMaxLife * bulletRangeMult);
+
+    let bulletSpeed = baseSpeed;
+    if (player.activePrimary === 'RAIL_DRIVER') bulletSpeed *= cfgSpeed;
+    if (doubleApply && player.getBulletVelocityDamageMult) {
+        bulletSpeed *= player.getBulletVelocityDamageMult();
+    }
+
+    return bulletSpeed * effectiveMaxLife;
+}
+
+// How many additional targets a single primary bullet can punch through
+// past the first hit. 0 = stops at first hit. Pulls weapon built-in,
+// PIERCING upgrade stacks, and the per-weapon capstone bonuses
+// (HAILSTORM, CONE_OF_FIRE, RAIL_PENETRATOR_PLUS) the same way
+// applyGlobalBulletUpgrades + the fire functions do.
+function _predictPrimaryPiercing(player) {
+    if (!player || !player.getActivePrimaryConfig) return 0;
+    const cfg = player.getActivePrimaryConfig();
+    let p = (cfg && cfg.piercing) || 0;
+    if (!player.getPowerupStacks) return p;
+    p += player.getPowerupStacks('PIERCING');
+    if (player.getPowerupStacks('RAIL_PENETRATOR_PLUS') > 0) p = Math.max(p, 99);
+    if (player.activePrimary === 'STORM_NEEDLES' && player.getPowerupStacks('HAILSTORM') > 0) p += 1;
+    if (player.activePrimary === 'SCATTER_GUN' && player.getPowerupStacks('CONE_OF_FIRE') > 0) p += 1;
+    return p;
+}
+
+// Render the Scatter Shot cone of fire — a wedge from the muzzle
+// spanning the active spread (after TIGHT_CHOKE), with a faint red
+// gas fill, two stacked-stroke edge lasers, an arc at the max-range
+// boundary, and a reticle around every entity that falls inside the
+// cone. Branched out of drawLaserPointerAim so the line/cone paths
+// don't crowd each other.
+function _drawScatterCone(engine, player, ox, oy, angle, maxRange) {
+    const ctx = engine.ctx;
+    const cfg = player.getActivePrimaryConfig();
+    const tightChoke = player.getPowerupStacks ? player.getPowerupStacks('TIGHT_CHOKE') : 0;
+    const spread = (cfg.spreadAngle || 0.6) * Math.pow(0.85, tightChoke);
+    const halfSpread = spread / 2;
+
+    const a1 = angle - halfSpread;
+    const a2 = angle + halfSpread;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    const e1x = ox + Math.cos(a1) * maxRange;
+    const e1y = oy + Math.sin(a1) * maxRange;
+    const e2x = ox + Math.cos(a2) * maxRange;
+    const e2y = oy + Math.sin(a2) * maxRange;
+
+    // Targets inside the cone — angular check with an entity-radius
+    // pad so wide rocks at long range still register a reticle when
+    // their silhouette grazes the cone edge.
+    const hits = [];
+    const collect = (pool) => {
+        if (!pool || !pool.activeObjects) return;
+        for (const t of pool.activeObjects) {
+            if (!t.active || t.warping || t._deathFlash > 0) continue;
+            const dx = t.x - ox;
+            const dy = t.y - oy;
+            const dist = Math.hypot(dx, dy);
+            if (dist > maxRange || dist < 1) continue;
+            const targetAngle = Math.atan2(dy, dx);
+            let diff = targetAngle - angle;
+            if (diff > Math.PI) diff -= 2 * Math.PI;
+            if (diff < -Math.PI) diff += 2 * Math.PI;
+            const r = t.radius || 10;
+            const angularPad = Math.atan2(r, dist);
+            if (Math.abs(diff) > halfSpread + angularPad) continue;
+            hits.push({ entity: t, distance: dist, radius: r });
+        }
+    };
+    collect(engine.enemyPool);
+    collect(engine.asteroidPool);
+
+    const t = Date.now() * 0.001;
+    const haloPulse = 1.0 + 0.10 * Math.sin(t * 1.7);
+    const corePulse = 0.92 + 0.08 * Math.sin(t * 4.3);
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Faint gas-fill across the wedge — radial gradient from the muzzle
+    // outward so the spread feels denser near the gun and dissipates at
+    // range. ONE fill call.
+    {
+        const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, maxRange);
+        grad.addColorStop(0.0, 'rgba(255, 40, 60, 0.14)');
+        grad.addColorStop(0.5, 'rgba(255, 30, 50, 0.06)');
+        grad.addColorStop(1.0, 'rgba(255, 0, 30, 0.0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.arc(ox, oy, maxRange, a1, a2, false);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Two edge lasers — same 4-stack stroke recipe as the single-line
+    // laser, but slightly thinner so the fan reads as fan rather than a
+    // pair of solo beams.
+    const drawEdge = (ex, ey) => {
+        ctx.strokeStyle = 'rgba(255, 30, 60, 0.05)';
+        ctx.lineWidth = 12 * haloPulse;
+        ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 50, 70, 0.16)';
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 90, 110, 0.36)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = `rgba(255, 220, 220, ${0.78 * corePulse})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+    };
+    drawEdge(e1x, e1y);
+    drawEdge(e2x, e2y);
+
+    // Range-boundary arc — closes the cone visually at maxRange.
+    ctx.strokeStyle = 'rgba(255, 50, 70, 0.22)';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(ox, oy, maxRange, a1, a2, false); ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 220, 220, ${0.65 * corePulse})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(ox, oy, maxRange, a1, a2, false); ctx.stroke();
+
+    // Center-axis tick — small hash mark at maxRange along the aim,
+    // matches the single-line laser's range tick so the two modes feel
+    // related.
+    const cx = ox + cosA * maxRange;
+    const cy = oy + sinA * maxRange;
+    const tickLen = 5;
+    const tx = -sinA * tickLen;
+    const ty = cosA * tickLen;
+    ctx.strokeStyle = 'rgba(255, 50, 70, 0.30)';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(cx - tx, cy - ty); ctx.lineTo(cx + tx, cy + ty); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 220, 220, 0.85)';
+    ctx.lineWidth = 1.25;
+    ctx.beginPath(); ctx.moveTo(cx - tx, cy - ty); ctx.lineTo(cx + tx, cy + ty); ctx.stroke();
+
+    // Muzzle hotspot — anchors the cone to the gun barrel.
+    {
+        const r = 10 * corePulse;
+        const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+        grad.addColorStop(0.0, 'rgba(255, 240, 240, 0.85)');
+        grad.addColorStop(0.4, 'rgba(255, 80, 90, 0.45)');
+        grad.addColorStop(1.0, 'rgba(255, 0, 30, 0.0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(ox, oy, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Reticles on every entity inside the cone. No "first hit" emphasis —
+    // pellets spread across the full fan so it's visually honest to mark
+    // every potential target the same way.
+    for (const h of hits) {
+        const radius = (h.radius || 10) * 1.08 + 4;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(255, 50, 70, 0.28)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(h.entity.x, h.entity.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(255, 220, 220, ${0.65 * corePulse})`;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.arc(h.entity.x, h.entity.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    ctx.restore();
+}
+
+// Render a thin laser-pointer trace from the player muzzle along the
+// current aim, tick-marked at the bullet's max range, with a subtle
+// reticle around the first entity the shot hits. Piercing builds get
+// extra (fading) reticles around each subsequent target the bullet
+// will punch through. Drawn in WORLD coords — the caller must invoke
+// it inside the camera transform (see drawWeaponEffects neighborhood
+// in game-engine.js).
+export function drawLaserPointerAim() {
+    if (!this.player || !this.player.active) return;
+    if (this.game.state !== GAME_STATES.PLAYING && this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
+    if (this.radialMenu && this.radialMenu.isOpen && this.radialMenu.isOpen()) return;
+
+    const player = this.player;
+    const ctx = this.ctx;
+    const angle = player.angle;
+    if (!Number.isFinite(angle)) return;
+
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    const muzzleDist = GAME_CONFIG.SHIP_SIZE / 1.5;
+    const ox = player.x + cosA * muzzleDist;
+    const oy = player.y + sinA * muzzleDist;
+
+    const maxRange = _predictPrimaryBulletRange(player);
+    if (!(maxRange > 0)) return;
+
+    // Scatter Shot fires a fan of pellets — show the cone of fire instead
+    // of a single laser ray so the player can read the spread and choke
+    // upgrades at a glance.
+    if (player.activePrimary === 'SCATTER_GUN') {
+        _drawScatterCone(this, player, ox, oy, angle, maxRange);
+        return;
+    }
+
+    const piercing = _predictPrimaryPiercing(player);
+    const maxTargets = piercing + 1;
+
+    // Trace through enemies + asteroids. Using along/perpendicular ray
+    // projection: along = (P-O)·D, perp = |(P-O)·N| with N = (-sin, cos).
+    // A target hits when perp < target.radius + bulletThickness, with the
+    // entry point being along - sqrt(r² - perp²) so the reticle/stop
+    // lines up at the front face of the entity, not its center.
+    const bulletThickness = 4;
+    const candidates = [];
+    const collect = (pool) => {
+        if (!pool || !pool.activeObjects) return;
+        for (const t of pool.activeObjects) {
+            if (!t.active) continue;
+            if (t.warping) continue;
+            if (t._deathFlash > 0) continue;
+            const dx = t.x - ox;
+            const dy = t.y - oy;
+            const along = dx * cosA + dy * sinA;
+            if (along <= 0) continue;
+            if (along > maxRange) continue;
+            const perp = Math.abs(-dx * sinA + dy * cosA);
+            const r = (t.radius || 10) + bulletThickness;
+            if (perp > r) continue;
+            const entry = Math.max(0, along - Math.sqrt(Math.max(0, r * r - perp * perp)));
+            candidates.push({ entity: t, distance: entry, radius: t.radius || 10 });
+        }
+    };
+    collect(this.enemyPool);
+    collect(this.asteroidPool);
+    candidates.sort((a, b) => a.distance - b.distance);
+
+    const hits = candidates.slice(0, maxTargets);
+
+    // Stop point: when piercing is exhausted (hits.length === maxTargets),
+    // the bullet expires at the last hit. Otherwise it travels to maxRange.
+    let stopDist = maxRange;
+    if (hits.length > 0 && hits.length === maxTargets) {
+        stopDist = hits[hits.length - 1].distance;
+    }
+
+    // Time-based shimmer for the "ionized gas" feel — the outer halo
+    // breathes ±10% on a slow sine, and the core pulses faster but more
+    // subtly. Single Date.now() read shared across all layers; cheap.
+    const t = Date.now() * 0.001;
+    const haloPulse  = 1.0 + 0.10 * Math.sin(t * 1.7);
+    const corePulse  = 0.92 + 0.08 * Math.sin(t * 4.3);
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Faint dashed extension to maxRange when the shot stops short. Tells
+    // the player "this is your max reach" even when the visible beam is
+    // truncated by a target. Drawn FIRST (under the hot beam) so the
+    // active segment overlays it cleanly at the boundary.
+    if (stopDist < maxRange - 1) {
+        const fx = ox + cosA * maxRange;
+        const fy = oy + sinA * maxRange;
+        const ex0 = ox + cosA * stopDist;
+        const ey0 = oy + sinA * stopDist;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(255, 40, 50, 0.18)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 6]);
+        ctx.beginPath();
+        ctx.moveTo(ex0, ey0);
+        ctx.lineTo(fx, fy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // Active beam — stacked strokes with additive ('lighter') blending
+    // build up a saturated red core surrounded by a softer halo. Four
+    // passes total; each is one stroke call. Outer-to-inner so the
+    // brightest layer renders last and dominates the additive sum.
+    const ex = ox + cosA * stopDist;
+    const ey = oy + sinA * stopDist;
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Outer scatter — wide, very faint, pulses slightly. Reads as
+    // "ionized air around the beam path."
+    ctx.strokeStyle = 'rgba(255, 30, 60, 0.05)';
+    ctx.lineWidth = 14 * haloPulse;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    // Mid glow — the bulk of the visible red.
+    ctx.strokeStyle = 'rgba(255, 50, 70, 0.18)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    // Inner glow — saturated red, gives the beam its color identity.
+    ctx.strokeStyle = 'rgba(255, 90, 110, 0.42)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    // Hot core — near-white center stripe; this is what the eye locks onto.
+    ctx.strokeStyle = `rgba(255, 220, 220, ${0.85 * corePulse})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    // Muzzle hotspot — small radial bloom at the emitter so the laser
+    // feels anchored to the gun barrel.
+    {
+        const r = 9 * corePulse;
+        const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+        grad.addColorStop(0.0, 'rgba(255, 240, 240, 0.85)');
+        grad.addColorStop(0.4, 'rgba(255, 80, 90, 0.45)');
+        grad.addColorStop(1.0, 'rgba(255, 0, 30, 0.0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(ox, oy, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Impact hotspot at the first hit (where the beam terminates against
+    // the target). Pulses faster than the muzzle for a "live contact" feel.
+    if (hits.length > 0) {
+        const hp = hits[0];
+        const ix = ox + cosA * hp.distance;
+        const iy = oy + sinA * hp.distance;
+        const r = 7 * corePulse;
+        const grad = ctx.createRadialGradient(ix, iy, 0, ix, iy, r);
+        grad.addColorStop(0.0, 'rgba(255, 240, 240, 0.95)');
+        grad.addColorStop(0.5, 'rgba(255, 70, 80, 0.55)');
+        grad.addColorStop(1.0, 'rgba(255, 0, 30, 0.0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(ix, iy, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Range-end tick (perpendicular hash mark at maxRange). Stacked
+    // strokes for a small red glow so it reads as part of the beam
+    // hardware, not a thin pencil mark.
+    const rex = ox + cosA * maxRange;
+    const rey = oy + sinA * maxRange;
+    const tickLen = 6;
+    const tx = -sinA * tickLen;
+    const ty = cosA * tickLen;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255, 50, 70, 0.30)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(rex - tx, rey - ty);
+    ctx.lineTo(rex + tx, rey + ty);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 220, 220, 0.85)';
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(rex - tx, rey - ty);
+    ctx.lineTo(rex + tx, rey + ty);
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Aim reticles around each hit. First hit = layered red ring with
+    // glow (matches the beam material). Subsequent piercing hits =
+    // single dashed amber rings fading by depth so the shot order is
+    // legible at a glance.
+    for (let i = 0; i < hits.length; i++) {
+        const h = hits[i];
+        const isFirst = i === 0;
+        const radius = (h.radius || 10) * 1.08 + 4;
+        if (isFirst) {
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.strokeStyle = 'rgba(255, 50, 70, 0.30)';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(h.entity.x, h.entity.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(255, 220, 220, ${0.80 * corePulse})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(h.entity.x, h.entity.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalCompositeOperation = 'source-over';
+        } else {
+            const alpha = Math.max(0.10, 0.40 * Math.pow(0.62, i));
+            ctx.strokeStyle = `rgba(255, 130, 140, ${alpha})`;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.arc(h.entity.x, h.entity.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+
+    ctx.restore();
 }

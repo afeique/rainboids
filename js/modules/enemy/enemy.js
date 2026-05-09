@@ -758,8 +758,12 @@ export class Enemy {
             if (Math.abs(aimDiff) > Math.PI / 6) return; // ~30° tolerance
         }
 
-        // Handle burst patterns
-        if (this.config.shootPattern === 'burst_3' || this.config.shootPattern === 'burst_2' || this.config.shootPattern === 'square_burst') {
+        // Handle burst patterns. 5.80.x — `hunter_single` joins the burst
+        // pipeline; the data was always declared as a 3-shot burst (see
+        // enemy-data.js firing.burstCount) but the prior single-shot
+        // fallback ignored that. Burst handler now routes Hunter to a
+        // tight 3-shot rapid burst per fire trigger.
+        if (this.config.shootPattern === 'burst_3' || this.config.shootPattern === 'burst_2' || this.config.shootPattern === 'square_burst' || this.config.shootPattern === 'hunter_single') {
             this.handleBurstShooting(gameEngine, now);
         } else if (isChargingPattern) {
             // Charging patterns need per-frame calls to advance charge state

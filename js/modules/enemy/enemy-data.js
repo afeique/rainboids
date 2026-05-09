@@ -9,7 +9,11 @@ export const ENEMY_TYPES = {
         name: 'Hunter',
         color: '#ff4444',
         health: 5,                 // 5.74.12 — bumped 3 → 5 (early-game difficulty pass)
-        speed: 2.0,
+        // 5.80.x — Speed bumped 2.0 → 2.6 + evasion 0.45 → 0.65 to match
+        //   the Wasp threat tier. Hunters are now the second-fastest enemy
+        //   and dodge as aggressively as the Wasp swarm. Their orbital
+        //   strafe still distinguishes them visually from the zigzag.
+        speed: 2.6,
         size: 32,
         shootPattern: 'hunter_single',
         shootRate: 1.5,
@@ -17,6 +21,10 @@ export const ENEMY_TYPES = {
         // sticky one-way strafe (CW or CCW per-spawn) instead of the
         // burst-and-wait triangle. Reads as a coherent orbital threat
         // rather than stochastic zips. WASP keeps `triangle`.
+        // 5.80.x — Arc enriched with vortex-paced angular speed,
+        //   periodic slingshot contractions, and more frequent lunges
+        //   (see hunterArcMovement). Hunters no longer move smoothly;
+        //   they hunt.
         movePattern: 'hunter_arc',
         points: 120,               // was 75 (faster economy)
         movement: {
@@ -27,8 +35,8 @@ export const ENEMY_TYPES = {
         firing: {
             pattern: 'hunter_single',
             burstCount: 3,
-            burstDelay: 70,        // was 100 (-30%, faster bursts)
-            cooldown: { min: 600, max: 3000 }, // min was 800
+            burstDelay: 75,        // 5.80.x — now actually wired through handleBurstShooting
+            cooldown: { min: 600, max: 2200 }, // 5.80.x — between-burst gap (constants.js drives the live value)
         },
         visual: {
             shape: 'triangle',
@@ -36,7 +44,7 @@ export const ENEMY_TYPES = {
             trailLength: 15,
         },
         ai: {
-            evasion: 0.45,         // was 0.3 (+50%)
+            evasion: 0.65,         // 5.80.x — bumped 0.45 → 0.65 (matches Wasp's 0.7)
             preferredRange: 250,
             dodgeBullets: true,
             microMovements: true,

@@ -783,71 +783,116 @@ export function heavyCrawlMovement() {
 
 // Geometric Movement Patterns
 // 5.78.1 — Hunter sweeping-arc strafe. Replaces the old "burst-and-wait"
-// triangle pattern (still used by WASP). Hunters now:
-//   • Pick a strafe direction at first call (CW or CCW) and KEEP it for
-//     the rest of their life. Players read this as "the red ones are
-//     orbiting me one way" — gives the encounter a clear directional
-//     read instead of stochastic zips.
-//   • Maintain an orbital radius around the player with a slow sine
-//     breathe (±30 px) so the sweep doesn't feel like a perfect circle.
-//   • Steer toward the next angular slot with light damping; speed tops
-//     out at ~1.6× config.speed so they're agile but trackable.
-//   • Occasional 800 ms "lunge" toward the player at 2× speed (15%
-//     chance every ~2 s) to break up the predictable orbit.
+// triangle pattern (still used by WASP).
+// 5.80.x — Predator-pace overhaul. Hunters now hunt: vortex angular speed
+// (the orbit accelerates and decelerates around the player), slingshot
+// contractions (periodic dive into close range with a snap-back), and
+// significantly more frequent lunges. Plus a perpendicular weave so the
+// orbit path snakes instead of tracing a clean circle. Combined with the
+// 3-shot rapid-burst fire (firing.js handleBurstShooting hunter_single
+// case) this turns the Hunter into the second most-aggressive non-boss.
+//
+// State the pattern owns on the enemy:
+//   • _arcDirection      sticky CW/CCW choice (one-way orbit feel)
+//   • _arcRadius         baseline orbit radius (per-spawn 230–310 px)
+//   • _arcAngle          current angular position around player
+//   • _arcOmega          baseline angular speed (rad/tick)
+//   • _arcLungeUntil     while frameClock.now < this, freeze angle and
+//                        dive straight at the player
+//   • _arcLungeRollAt    next time we roll the lunge dice
+//   • _arcSlingUntil     while < this, contract orbit to ~90 px
+//   • _arcSlingRollAt    next time we roll the slingshot dice
+//   • _arcWeavePhase     per-spawn weave seed for perpendicular wobble
 export function hunterArcMovement() {
     if (!this.targetPlayer) return;
 
     // First-call init. `_arcDirection` is sticky so the strafe stays
-    // one-way for the enemy's life — that's the user-requested feel.
+    // one-way for the enemy's life.
     if (this._arcDirection === undefined) {
         this._arcDirection = Math.random() < 0.5 ? -1 : 1;
-        this._arcRadius = 230 + Math.random() * 80;          // 230..310 px
+        this._arcRadius = 230 + Math.random() * 80;
         const dx = this.x - this.targetPlayer.x;
         const dy = this.y - this.targetPlayer.y;
         this._arcAngle = Math.atan2(dy, dx);
-        this._arcOmega = 0.020 + Math.random() * 0.012;      // angular speed
+        this._arcOmega = 0.020 + Math.random() * 0.012;
         this._arcLungeUntil = 0;
-        this._arcLungeRollAt = frameClock.now + 1500 + Math.random() * 1200;
+        this._arcLungeRollAt = frameClock.now + 800 + Math.random() * 700;
+        this._arcSlingUntil = 0;
+        this._arcSlingRollAt = frameClock.now + 2500 + Math.random() * 1500;
+        this._arcWeavePhase = Math.random() * Math.PI * 2;
     }
 
     const now = frameClock.now;
 
-    // Occasional aggressive lunge — 15% chance on each ~2 s roll.
+    // Lunge dice — much more aggressive than 5.78.1 (was 15% on a ~2 s
+    // roll → ~1 lunge / 13 s). Now 35% on a ~1.5 s roll → ~1 lunge / 4 s.
     if (now > this._arcLungeRollAt) {
-        this._arcLungeRollAt = now + 1800 + Math.random() * 1400;
-        if (Math.random() < 0.15) this._arcLungeUntil = now + 800;
+        this._arcLungeRollAt = now + 1300 + Math.random() * 800;
+        if (Math.random() < 0.35) this._arcLungeUntil = now + 700;
     }
     const lunging = now < this._arcLungeUntil;
 
-    // Sweep: advance the angular position around the player. Lunge
-    // freezes the angle so the velocity vector points straight at
-    // the player for the duration.
+    // Slingshot dice — periodic 1 s contraction toward close range.
+    // Distinct from a lunge: the orbit angle keeps advancing (so the
+    // player still sees the strafing path), but the *radius* collapses
+    // briefly. Reads as "predator winding tighter before a strike."
+    if (now > this._arcSlingRollAt) {
+        this._arcSlingRollAt = now + 3500 + Math.random() * 2000;
+        if (Math.random() < 0.6) this._arcSlingUntil = now + 1000;
+    }
+    const slingshot = now < this._arcSlingUntil;
+
+    // Vortex angular speed — angular velocity oscillates ±50 % around the
+    // baseline omega so the orbit accelerates on one side and decelerates
+    // on the other. Period ~5 s, phase keyed off direction so CW/CCW
+    // hunters don't all peak at the same instant.
+    const vortex = 1 + 0.5 * Math.sin(now * 0.0012 + this._arcAngle * 0.9);
+    const omega = this._arcOmega * vortex * (slingshot ? 1.4 : 1.0);
+
+    // Sweep. Lunge freezes the angle so the bullet vector points right
+    // at the player; otherwise we keep advancing.
     if (!lunging) {
-        this._arcAngle += this._arcDirection * this._arcOmega;
+        this._arcAngle += this._arcDirection * omega;
     }
 
-    // Radius breathe (sine with phase keyed off arc angle so each
-    // hunter has a slightly different rhythm without per-instance state).
+    // Radius: breathe + slingshot contraction + weave on perpendicular.
     const radiusBreathe = Math.sin(now * 0.0006 + this._arcAngle * 1.7) * 30;
-    const targetRadius = lunging ? 90 : (this._arcRadius + radiusBreathe);
+    let targetRadius;
+    if (lunging) targetRadius = 90;
+    else if (slingshot) targetRadius = 130 + Math.sin(now * 0.004) * 20;
+    else targetRadius = this._arcRadius + radiusBreathe;
 
-    // Compute target slot.
-    const tx = this.targetPlayer.x + Math.cos(this._arcAngle) * targetRadius;
-    const ty = this.targetPlayer.y + Math.sin(this._arcAngle) * targetRadius;
+    // Perpendicular weave — small sine-driven wobble normal to the
+    // radial direction. ~18 px peak so the orbit path snakes visibly
+    // without breaking the orbital read. Disabled during lunge so the
+    // straight dive stays straight.
+    const cosAng = Math.cos(this._arcAngle);
+    const sinAng = Math.sin(this._arcAngle);
+    let weaveX = 0, weaveY = 0;
+    if (!lunging) {
+        const w = Math.sin(now * 0.0085 + this._arcWeavePhase) * 18;
+        weaveX = -sinAng * w;
+        weaveY = cosAng * w;
+    }
 
-    // Steer with light damping. Friction keeps velocity from compounding.
+    const tx = this.targetPlayer.x + cosAng * targetRadius + weaveX;
+    const ty = this.targetPlayer.y + sinAng * targetRadius + weaveY;
+
+    // Steer with light damping. Friction keeps velocity bounded.
     const dx = tx - this.x;
     const dy = ty - this.y;
     const dist = Math.hypot(dx, dy) || 1;
     const speed = this.config.speed;
-    const steer = lunging ? 0.18 : 0.09;
+    const steer = lunging ? 0.20 : (slingshot ? 0.13 : 0.10);
     this.vel.x += (dx / dist) * speed * steer;
     this.vel.y += (dy / dist) * speed * steer;
     this.vel.x *= 0.92;
     this.vel.y *= 0.92;
 
-    // Cap velocity. Lunge gets a higher ceiling so it actually closes.
-    const maxV = speed * (lunging ? 2.4 : 1.7);
+    // Cap velocity. Lunge / slingshot get higher ceilings to close fast.
+    const lungeCap = 2.6;
+    const slingCap = 2.0;
+    const maxV = speed * (lunging ? lungeCap : (slingshot ? slingCap : 1.7));
     const v = Math.hypot(this.vel.x, this.vel.y);
     if (v > maxV) {
         this.vel.x = (this.vel.x / v) * maxV;

@@ -87,9 +87,16 @@ export class GoldShape {
         this.rotationSpeed = sign * baseRot;
         this.rotation = Math.random() * Math.PI * 2;
 
-        // Shapes drift sedately (slower scatter than coins).
+        // 5.81.1 — Bumped initial scatter so the 1-3 chunky shapes
+        //   per drop explode outward distinctly instead of clustering
+        //   on top of each other at the spawn point. Friction (0.92)
+        //   damps them to a gentle drift within ~30 ticks (~0.5 s) so
+        //   the burst is felt but the orbs settle quickly enough to
+        //   be magnet-grabbable. Was random(0.4, 1.4) — ~3× faster
+        //   initial pop so three star/diamond shapes triangulate
+        //   visibly before friction takes over.
         const angle = Math.random() * Math.PI * 2;
-        const speed = random(0.4, 1.4);
+        const speed = random(2.4, 4.5);
         this.vel.x = Math.cos(angle) * speed;
         this.vel.y = Math.sin(angle) * speed;
 

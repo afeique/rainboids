@@ -2071,6 +2071,13 @@ export class GameEngine {
                 this.player.draw(this.ctx);
                 this.drawWeaponEffects();
 
+                // Laser-pointer aim — subtle line from muzzle to bullet's
+                // max range, with a tick at the end and reticles around
+                // any entities the shot will hit/pierce. Drawn in the
+                // world-space camera transform so it stays anchored to
+                // the ship as the camera moves/shakes.
+                this.drawLaserPointerAim();
+
                 // Draw game field boundaries
                 this.drawGameFieldBoundaries();
             }
@@ -2196,6 +2203,8 @@ export class GameEngine {
     }
 
     drawJitterCircle() { return hudCursor.drawJitterCircle.call(this); }
+
+    drawLaserPointerAim() { return hudCursor.drawLaserPointerAim.call(this); }
     
     triggerHitstop(frames) { return cam.triggerHitstop.call(this, frames); }
     triggerCameraKick(dx, dy, magnitude) { return cam.triggerCameraKick.call(this, dx, dy, magnitude); }

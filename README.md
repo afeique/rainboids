@@ -52,7 +52,7 @@ Rainboids is a supercharged asteroids game featuring:
 ## Controls
 
 - **Movement**: WASD
-- **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate
+- **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate. A red laser-pointer beam shows where your next primary shot will land — with a tick at the bullet's max range, a reticle around the first enemy/asteroid in line, and fading reticles around any further targets piercing builds will punch through.
 - **Fire primary**: Hold left-click or ↑ arrow
 - **Fire / charge power weapon**: Spacebar, right-click, or ↓ arrow
 - **Activate defense skill**: Q
@@ -111,7 +111,7 @@ Primary weapons are free — they auto-unlock at wave milestones as you progress
 ## Enemy Types
 
 ### Hunter (Triangle) — Red
-Aggressive pursuer that surges at the player in sharp directional bursts. Fires 3-round bursts of red triangle projectiles with 2s cooldown. Darts a random direction at high speed, decelerates, waits, then bursts again.
+Predator that orbits the player one direction (CW or CCW per spawn) on a vortex-paced arc — angular speed accelerates on one side and decelerates on the other, with a perpendicular weave that snakes the path. Periodic slingshot contractions tighten the orbit to ~130 px before snapping back, and frequent lunges (~one per 4 s) dive straight at the player. Fires tight 3-shot rapid bursts of oversized red triangle projectiles every 600 ms (high-level), pausing only between bursts. Second-fastest non-boss; demands active dodging.
 
 ### Guardian (Square) — Green
 Armored patrol enemy that holds territory with axis-aligned movement. Fires 3-round bursts of spinning green squares with long 4s cooldown. Moves in strict horizontal or vertical bursts, then pauses. High health.

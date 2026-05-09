@@ -6,7 +6,7 @@
 // route through the one-liner delegators back on Enemy, keeping the same API.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { GAME_CONFIG, ENEMY_BULLET_CONFIG } from '../core/constants.js';
+import { GAME_CONFIG, ENEMY_BULLET_CONFIG, getEnemyFiringCooldown } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
 
 // ── Burst Shooting State Machine ─────────────────────────────────────────────
@@ -29,6 +29,13 @@ export function handleBurstShooting(gameEngine, now) {
         } else if (this.config.shootPattern === 'square_burst') {
             this.burstState.shotsRemaining = 3;
             this.burstState.shotDelay = 180;
+        } else if (this.config.shootPattern === 'hunter_single') {
+            // 5.80.x — Hunter rapid 3-shot burst. Tight 75 ms spacing
+            //   (matches firing.burstDelay in enemy-data.js) — fast enough
+            //   to feel like a wasp pulse but with the heavier triangle
+            //   bullet so misses still leave the player room to read.
+            this.burstState.shotsRemaining = 3;
+            this.burstState.shotDelay = 75;
         } else {
             this.burstState.shotsRemaining = 4;
             this.burstState.shotDelay = 100;
@@ -51,6 +58,12 @@ export function handleBurstShooting(gameEngine, now) {
                 this.burstState.cooldownUntil = now + 1800;
             } else if (this.config.shootPattern === 'square_burst') {
                 this.burstState.cooldownUntil = now + 4000; // 4s cooldown for guardians
+            } else if (this.config.shootPattern === 'hunter_single') {
+                // 5.80.x — Hunter inter-burst gap scales with level.
+                //   getEnemyFiringCooldown reads HUNTER {MIN:600,MAX:2200}
+                //   from constants.js so wave progression tightens the
+                //   cadence the same way Wasp / Stalker / Sentinel do.
+                this.burstState.cooldownUntil = now + getEnemyFiringCooldown(this.type, this.level || 1);
             } else {
                 this.burstState.cooldownUntil = now + 1500;
             }

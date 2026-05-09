@@ -11,6 +11,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.81.1] - 2026-05-09
+
+### Changed — Gold drops capped at 3 scattering shapes; health drop rate doubled
+The 5.79.31 "1 chunky shape + up to 30 pixel coins" layout produced too much visual noise across stacked kills — pixel coins read as ambient sparkle and the distinct geometric shape was lost in the pile. Per user request, drops now consist of **at most 3 chunky geometric shape orbs per enemy/asteroid**, scattering outward so each is read as a distinct pickup.
+
+**Splitter rewrite (`combat-manager.js` `_splitMoneyDrop`).** Pixel-coin path retired from the splitter; output is now `{ shapes: [...], pixels: [] }`. Shape count is value-driven against `MONEY_ORB_SHAPE_VALUE_MAX` (80 g):
+- `≤ 80 g` → 1 shape (small kill)
+- `≤ 160 g` → 2 shapes (mid kill / boss part)
+- `> 160 g` → 3 shapes (big kill / streak)
+
+Per-shape value is hard-capped at SHAPE_VALUE_MAX via the new `_evenSplitClamped` helper so a 250 g drop spreads as 80+80+80 (leftover discarded — the cap protects orb size). The `createMoneyOrb(..., isPixel)` API still accepts `isPixel=true` for any caller that wants a pixel coin; it's just no longer fed by the splitter. The legacy `_evenSplit` helper was removed.
+
+**Splash-kill path (`dropStarsFromEntity`).** Was spawning 5 floating pixel coins per AOE-killed target. Now spawns ONE chunky shape orb per splash kill, which sits alongside the primary kill's 1-3 shapes. A 3-target explosive splash now produces at most ~6 distinct geometric pieces (1-3 from the primary + 1 per splash) instead of the old 1 shape + 30 pixels + 15 splash pixels.
+
+**Scatter velocity (`gold-shape.js` `reset`).** Initial speed bumped `random(0.4, 1.4)` → `random(2.4, 4.5)` (~3× faster pop). With FRICTION=0.92 the burst damps to a gentle drift within ~30 ticks (~0.5 s), so three star/diamond shapes triangulate visibly off the kill point before friction takes over and the magnet can grab them. The previous low-velocity drift left all shapes overlapping at the spawn pixel; the new pop reads as "three coins fly out, then settle."
+
+**Health drop rate (`constants.js`).** `HEALTH_ORB_BASE_DROP_RATE` 0.20 → 0.40. Combined with the unchanged 60 s cooldown gate (`HEALTH_DROP_COOLDOWN_BASE`), the cooldown remains the primary throttle — but doubling the per-event roll means the next health drop reliably lands within the next cooldown window instead of being skipped 4 out of 5 times. User feedback: health was dropping too rarely, making sustained encounters punitive.
+
+Net effect per drop event: 1-3 chunky geometric shapes that explode outward, each clearly distinct, with no pixel-coin haze around them. Health orbs land roughly 2× as often.
+
+---
+
+## [5.81.0] - 2026-05-09
+
+### Changed — Hunter overhaul: rapid-burst fire, vortex orbit, slingshot dives
+Hunters were the most common red threat but the safest to fight — single-shot at 800–3000 ms cooldown, smooth one-way orbital strafe with a rare 15 % lunge. Per user request they now operate on the Wasp threat tier: still distinct visually (orbit instead of zigzag), but actually dangerous.
+
+**Firing.** `enemy.js` dispatch now routes `hunter_single` through `handleBurstShooting`. Each fire trigger emits a tight 3-shot rapid burst (75 ms between shots — `firing.js` `hunter_single` case), then waits the level-scaled inter-burst cooldown (`getEnemyFiringCooldown('HUNTER', level)`). Cooldown table tightened from `{MIN:800, MAX:3000}` to `{MIN:600, MAX:2200}` in `constants.js`, so high-level Hunters fire bursts every 600 ms — three triangle bullets in 150 ms, then 600 ms gap, repeating. The 5.79.8 oversized 16 px triangle bullet is unchanged so misses are still readable.
+
+**Movement.** `hunterArcMovement` (`movement.js`) gained four mechanics on top of the 5.78.1 sticky one-way arc:
+1. **Vortex angular speed** — angular velocity oscillates ±50 % around the baseline omega on a ~5 s sine, so each Hunter accelerates on one side of its orbit and decelerates on the other.
+2. **Slingshot contraction** — every 3.5–5.5 s, ~60 % chance to roll a 1-second orbit-radius collapse to ~130 px, then snap back. Reads as "predator winding tighter before a strike."
+3. **Aggressive lunges** — 35 % chance every 1.3–2.1 s (was 15 % every 1.8–3.2 s). Roughly one lunge every 4 s instead of every 13 s. Lunge cap bumped to 2.6×.
+4. **Perpendicular weave** — small ±18 px sine wobble normal to the radial direction so the orbit path snakes instead of tracing a clean circle.
+
+**Stats.** `enemy-data.js` HUNTER speed 2.0 → 2.6 and `ai.evasion` 0.45 → 0.65 (matches Wasp's 0.7). Hunters are now the second-fastest non-boss enemy.
+
+Net effect: Hunters circle aggressively, occasionally dive in close (slingshot or lunge), and rapid-fire 3-bullet bursts at the player throughout. The orbital read is preserved (sticky CW/CCW direction, baseline radius, weave) so they still feel different from Wasps' chaotic dart-and-fire — but they now demand active dodging.
+
+---
+
+## [5.80.2] - 2026-05-09
+
+### Changed — Health-orb magnetism boosted to 320 px (was 100 px tractor-only)
+Health orbs were drift-only since 5.79.32 — the player had to fly into them or actively engage the tractor beam (100 px range) to scoop heals. Per user request, health orbs now have a passive proximity magnet with significantly longer reach: a gentle far-pull starts at 320 px (~3.2× the prior tractor radius), ramping smoothly to a strong scoop inside 120 px. Tractor still works on top of the passive magnet for an even snappier grab.
+
+Health-orb friction bumped 0.985 → 0.92 (matches `gold-coin.js` `FRICTION`) so the per-tick force pump doesn't let steady-state velocity run away (`v ≈ F/(1−f)` blows up at 0.985). Money orbs in `colorStarPool` are unaffected — that branch is dead code in practice (gold drops live in their own pools as of 5.79.32) but the friction/magnet only applies when `starType === 'health'`. Gold pickups still use their own three-tier 100 px magnet.
+
+`js/modules/world/color-star.js` `update()` collectible branch.
+
+---
+
+## [5.80.1] - 2026-05-09
+
+### Changed — Scatter Shot aim shows a cone of fire instead of a single laser line
+Scatter Shot fires a fan of pellets, so the single-line aim from 5.80.0 was misleading — it pointed along the central pellet only. The aim now branches on `player.activePrimary`: SCATTER_GUN renders a wedge spanning the active spread (after `TIGHT_CHOKE`'s 0.85ⁿ tightening), with a faint red gas-fill, two stacked-stroke edge lasers, an arc closing the cone at the bullet's max range, and a center-axis tick that matches the single-line range marker.
+
+Hit detection switches from along/perp ray projection to angular containment (`atan2(dy, dx)` vs `player.angle ± halfSpread`, with an `atan2(radius, dist)` pad so wide rocks at long range still register on a grazing edge). Every entity inside the cone gets a consistent red+core reticle — no "first hit" emphasis, since the pellet fan spreads damage across the full wedge anyway.
+
+`js/modules/hud/cursor.js` adds `_drawScatterCone` and a one-line dispatch in `drawLaserPointerAim`. ~14 strokes + 2 fills per frame — same order as the line-laser path.
+
+---
+
+## [5.80.0] - 2026-05-09
+
+### Added — Laser-pointer aim with red gas-glow beam, range tick, and pierce reticles
+A real-time aim trace from the muzzle along `player.angle` shows where the next primary shot will actually go. Renders four stacked strokes with `globalCompositeOperation = 'lighter'` — outer scatter (14 px halo, 0.05 α), mid glow (6 px, 0.18 α), inner glow (2.5 px saturated red, 0.42 α), and a near-white hot core (1 px, ~0.85 α). The additive stack reads as a saturated red beam diffusing through ionized atmosphere. Subtle time-driven shimmer (sin 1.7 Hz on halo width, sin 4.3 Hz on core alpha) gives it the live "gas" feel without per-pixel work.
+
+A radial-gradient muzzle hotspot anchors the beam to the gun barrel; a faster-pulsing radial-gradient impact spot lights up the first hit point. A perpendicular hash-mark tick sits at the bullet's true max range — and when the shot is stopped short by a target, a faint dashed extension still draws to the max-range tick so the player can read their effective reach independently of what's currently in the line of fire.
+
+Hit detection ray-marches through `enemyPool` and `asteroidPool` in world coords (along/perp ray projection, ~46 entities/frame ceiling). The first hit gets a layered red+core ring; piercing builds (RAIL_DRIVER's built-in 99, PIERCING stacks, RAIL_PENETRATOR_PLUS, HAILSTORM, CONE_OF_FIRE) get fading dashed amber rings on each subsequent target the bullet will punch through. Range prediction mirrors the per-weapon stack-up exactly — including the documented quirk that Storm Needles / Scatter Gun / Rail Driver pass through `applyGlobalBulletUpgrades` and double-apply `playerRangeMult`, while Pulse Cannon's `createChargedBullets` path applies it once.
+
+Drawn inside the camera transform (right after `drawWeaponEffects`) so the beam stays anchored to the ship under camera shake/kick. Hidden during PAUSED/SHOP/GAME_OVER and while the radial menu is open. ~12 stroke calls + 2 radial-gradient fills per frame; below the noise floor on the perf budget.
+
+`js/modules/hud/cursor.js` gets `drawLaserPointerAim` plus two private predictor helpers (`_predictPrimaryBulletRange`, `_predictPrimaryPiercing`); `game-engine.js` gets a one-line `this.drawLaserPointerAim()` call in the world-space draw block and a method binding alongside the other cursor helpers.
+
+---
+
 ## [5.79.62] - 2026-05-08
 
 ### Fixed — Health-pickup 3D shapes are pixel-perfect (no more shimmer)
