@@ -11,6 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.87.0] - 2026-05-09
+
+### Added — JS-side wire-protocol codegen (closes the parity loop)
+The JS encoder/decoder layer is no longer hand-mirrored. `tools/codegen-protocol.mjs` now emits **both** outputs from `schema/protocol.toml`:
+
+  - `server/src/protocol/generated.rs` — Rust types (5.85.0)
+  - `js/sim/protocol-generated.js`     — JS encoders / decoders / tag tables (this commit)
+
+Adding or changing a wire variant is now a single edit to the schema followed by `npm run codegen`. Name and discriminant drift between schema, Rust, and JS is no longer possible — `npm run codegen:check` is the CI gate that catches forgotten regenerations on either side.
+
+- `tools/codegen-protocol.mjs` extended:
+  - Snake-case → camel-case for JS struct/object field names (`wire_version` → `wireVersion`, `aim_x` → `aimX`).
+  - PascalCase → SCREAMING_SNAKE for the C2S/S2C/EVT/ENTITY_REF tag tables (matching the existing convention).
+  - Plain-enum tables stay PascalCase (`ErrCode.Version`, etc.) to match what tests already import.
+  - Tagged-enum codecs (`writeEntityRef` / `readEntityRef`) emitted with `kind` + `id` shape.
+  - Top-level `encode/decode{Client,Server}Msg` helpers + `bufToView` shim emitted.
+  - Recursive type translation handles `Option<T>`, `Vec<T>`, newtypes, nested struct refs, and tagged-union message types as field types (e.g. `ServerMsg::Event { event: GameEvent }`).
+- `js/sim/protocol-generated.js` (751 lines, generated). Replaces the 676-line hand-mirror.
+- `js/sim/protocol.js` slimmed to a one-line `export * from './protocol-generated.js'` re-export shim. Existing imports anywhere in `js/`, `tests/unit/sim/`, etc. continue to work unchanged.
+- `tools/check-schema.mjs` now reads both `generated.rs` and `protocol-generated.js`. Defense-in-depth: if either codegen is buggy or its output is committed out of sync, the checker still catches the divergence.
+
+Verification (locked in by tests, not just by inspection):
+- `npm run test:unit` — 224 / 224 (zero regressions; the six byte-golden parity tests in `tests/unit/sim/protocol.test.js` still pass byte-for-byte against `server/tests/wire_golden.rs`).
+- `cargo test` — 29 / 29 + 1 ignored.
+- `npm run codegen:check` — idempotent.
+- `npm run schema:check` — OK (13 ClientMsg + 10 ServerMsg + 14 GameEvent).
+
+End-to-end parity status:
+- Schema → Rust:  codegen'd ✓
+- Schema → JS:    codegen'd ✓
+- Schema cross-check: `npm run schema:check` ✓
+- Byte-level cross-check: golden vectors in both `wire_golden.rs` and `protocol.test.js` ✓
+
+Wire format unchanged — still bincode 1.x default + fixint + LE, still WIRE_VERSION=1 / SIM_VERSION=1. No client-visible behavior change.
+
+---
+
 ## [5.86.0] - 2026-05-09
 
 ### Added — Mode-aware `EngineDriver` so single-player and multiplayer run identically

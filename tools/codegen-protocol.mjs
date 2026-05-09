@@ -1,25 +1,30 @@
 #!/usr/bin/env node
 //
-// Wire-protocol codegen.
+// Wire-protocol codegen — Rust + JS.
 //
 // Reads `schema/protocol.toml` (the cross-language single source of truth)
-// and emits `server/src/protocol/generated.rs`, a Rust module that defines
-// every wire-format newtype, enum, struct, and tagged-union message.
+// and emits two parallel modules:
 //
-// `server/src/protocol/mod.rs` then `pub use`s from the generated module
-// instead of hand-mirroring the schema. This kills name and discriminant
-// drift between the schema and the Rust side: adding a variant means
-// editing the schema, running this codegen, and committing the diff.
+//   - `server/src/protocol/generated.rs`     (Rust types, derives,
+//                                              tagged-union enums)
+//   - `js/sim/protocol-generated.js`         (encoders, decoders, tag
+//                                              tables; uses Reader/Writer
+//                                              from `./codec.js`)
 //
-// JS-side codegen (`js/sim/protocol-generated.js`) is a follow-up; this
-// pass keeps scope tight to the Rust side.
+// Both `server/src/protocol/mod.rs` and `js/sim/protocol.js` then
+// re-export from their respective generated modules; the schema is the
+// only place a new variant needs to land. Adding one becomes a single
+// edit to `protocol.toml` followed by `npm run codegen` — name and
+// discriminant drift between the schema, Rust, and JS is no longer
+// possible.
 //
 // Usage:
-//   node tools/codegen-protocol.mjs            # rewrite generated.rs
-//   node tools/codegen-protocol.mjs --check    # exit non-zero if rewrite would diff
+//   node tools/codegen-protocol.mjs            # rewrite both outputs
+//   node tools/codegen-protocol.mjs --check    # exit non-zero if either
+//                                                output would change
 //
-// The `--check` mode is for CI: we commit the generated file, and CI
-// verifies that re-running the codegen produces no change.
+// `--check` is the CI gate: the generated files are committed, and CI
+// verifies that re-running the codegen produces no diff.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -30,6 +35,7 @@ import TOML from '@iarna/toml';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SCHEMA_PATH = resolve(ROOT, 'schema/protocol.toml');
 const RUST_OUT = resolve(ROOT, 'server/src/protocol/generated.rs');
+const JS_OUT = resolve(ROOT, 'js/sim/protocol-generated.js');
 
 const args = new Set(process.argv.slice(2));
 const CHECK_ONLY = args.has('--check');
@@ -196,6 +202,320 @@ function emitMessageEnum(e, name, variants) {
     e.line('');
 }
 
+// ─── JS-side codegen ─────────────────────────────────────────────────────────
+
+// snake_case → camelCase. Used for JS object field names (the schema uses
+// snake_case to match Rust convention).
+function snakeToCamel(s) {
+    return s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
+// PascalCase → SCREAMING_SNAKE. Used for the C2S/S2C/EVT/ENTITY_REF tag
+// tables. e.g. `JoinRoomByCode` → `JOIN_ROOM_BY_CODE`.
+function pascalToScreaming(s) {
+    return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+}
+
+// Map a schema type name to (a) the JS reader expression for `r` and (b)
+// the JS writer call template for `(w, value)`. Both are returned as
+// strings; callers interpolate. The third element is a "needs context"
+// flag — true means the writer/reader requires a callback (Option/Vec).
+//
+// Returns `null` if the type isn't a primitive or known schema type.
+function jsCodecFor(type, lookup) {
+    type = type.trim();
+
+    // Newtypes: emit the underlying scalar.
+    if (lookup.newtypeMap.has(type)) {
+        return jsCodecFor(lookup.newtypeMap.get(type), lookup);
+    }
+    // Plain enums: encoded as `u32` variant tag.
+    if (lookup.enumNames.has(type)) {
+        return { read: 'r.u32()', write: 'w.u32(##)' };
+    }
+    // Tagged enum (currently only EntityRef).
+    if (lookup.taggedEnumNames.has(type)) {
+        return { read: `read${type}(r)`, write: `write${type}(w, ##)` };
+    }
+    // Struct types.
+    if (lookup.structNames.has(type)) {
+        return { read: `read${type}(r)`, write: `write${type}(w, ##)` };
+    }
+    // Tagged-union message types (ClientMsg/ServerMsg/GameEvent).
+    if (lookup.messageEnumNames.has(type)) {
+        return { read: `read${type}(r)`, write: `write${type}(w, ##)` };
+    }
+    // Primitive scalars.
+    const scalar = SCALAR_JS[type];
+    if (scalar) return scalar;
+
+    // Generic: Option<T> / Vec<T>.
+    let inner;
+    if (type.startsWith('Option<') && type.endsWith('>')) {
+        inner = jsCodecFor(type.slice(7, -1), lookup);
+        return {
+            read: `r.option((rr) => ${inner.read.replace(/\br\./g, 'rr.').replace(/\(r\)/g, '(rr)').replace(/\br\b/g, 'rr')})`,
+            write: `w.option(##, (ww, v) => ${inner.write.replace(/##/g, 'v').replace(/\bw\./g, 'ww.').replace(/\(w,/g, '(ww,').replace(/\bw\b/g, 'ww')})`,
+        };
+    }
+    if (type.startsWith('Vec<') && type.endsWith('>')) {
+        inner = jsCodecFor(type.slice(4, -1), lookup);
+        // Vec<T> uses the helper-form when T is a struct (passes the
+        // function reference) or the inline-form for primitives.
+        if (inner.read.startsWith('read')) {
+            const helper = inner.read.replace(/\(r\)$/, '');
+            return {
+                read: `r.vec(${helper})`,
+                write: `w.vec(##, write${type.slice(4, -1)})`,
+            };
+        }
+        return {
+            read: `r.vec((rr) => ${inner.read.replace(/\br\./g, 'rr.').replace(/\br\b/g, 'rr')})`,
+            write: `w.vec(##, (ww, v) => ${inner.write.replace(/##/g, 'v').replace(/\bw\./g, 'ww.').replace(/\bw\b/g, 'ww')})`,
+        };
+    }
+
+    throw new Error(`jsCodecFor: unknown type ${JSON.stringify(type)}`);
+}
+
+const SCALAR_JS = {
+    bool:   { read: 'r.bool()', write: 'w.bool(##)' },
+    u8:     { read: 'r.u8()',   write: 'w.u8(##)'   },
+    u16:    { read: 'r.u16()',  write: 'w.u16(##)'  },
+    u32:    { read: 'r.u32()',  write: 'w.u32(##)'  },
+    u64:    { read: 'r.u64()',  write: 'w.u64(##)'  },
+    i8:     { read: 'r.i8()',   write: 'w.i8(##)'   },
+    i16:    { read: 'r.i16()',  write: 'w.i16(##)'  },
+    i32:    { read: 'r.i32()',  write: 'w.i32(##)'  },
+    i64:    { read: 'r.i64()',  write: 'w.i64(##)'  },
+    f32:    { read: 'r.f32()',  write: 'w.f32(##)'  },
+    f64:    { read: 'r.f64()',  write: 'w.f64(##)'  },
+    String: { read: 'r.str()',  write: 'w.str(##)'  },
+    Uuid:   { read: 'r.uuid()', write: 'w.uuid(##)' },
+};
+
+function buildLookup(schema) {
+    const newtypeMap = new Map();
+    for (const nt of schema.newtype) newtypeMap.set(nt.name, nt.underlying);
+
+    const enumNames = new Set();
+    const taggedEnumNames = new Set();
+    for (const en of schema.enum) {
+        if (en.tagged) taggedEnumNames.add(en.name);
+        else enumNames.add(en.name);
+    }
+    const structNames = new Set(schema.struct.map((s) => s.name));
+    // Tagged-union message enums (ClientMsg, ServerMsg, GameEvent) — these
+    // can appear as field types (e.g. `ServerMsg::Event { event: GameEvent }`)
+    // and resolve to `write<Name>` / `read<Name>` helpers.
+    const messageEnumNames = new Set(['ClientMsg', 'ServerMsg', 'GameEvent']);
+    return { newtypeMap, enumNames, taggedEnumNames, structNames, messageEnumNames };
+}
+
+function emitJsHeader(e, schema) {
+    e.line('// Auto-generated wire protocol — DO NOT EDIT.');
+    e.line('//');
+    e.line('// Source: `schema/protocol.toml`. To regenerate, run');
+    e.line('//   `npm run codegen`         (rewrite both Rust + JS outputs)');
+    e.line('//   `npm run codegen:check`   (CI gate — exits non-zero on drift)');
+    e.line('//');
+    e.line(`// Schema: wire_version=${schema.wire_version}, sim_version=${schema.sim_version}`);
+    e.line(`// Codec:  ${schema.codec}`);
+    e.line('');
+    e.line(`import { Reader, Writer } from './codec.js';`);
+    e.line('');
+    e.line(`export const WIRE_VERSION = ${schema.wire_version};`);
+    e.line(`export const SIM_VERSION = ${schema.sim_version};`);
+    e.line('');
+}
+
+function emitJsPlainEnum(e, en) {
+    e.line(`export const ${en.name} = Object.freeze({`);
+    en.variants.forEach((v, i) => {
+        e.line(`    ${v}: ${i},`);
+    });
+    e.line('});');
+    e.line('');
+}
+
+function emitJsTaggedEnumTable(e, en) {
+    // EntityRef → ENTITY_REF table, variant names → SCREAMING_SNAKE.
+    const tableName = pascalToScreaming(en.name);
+    e.line(`export const ${tableName} = Object.freeze({`);
+    en.variants.forEach((v, i) => {
+        e.line(`    ${pascalToScreaming(v.name)}: ${i},`);
+    });
+    e.line('});');
+    e.line('');
+}
+
+function emitJsTaggedEnumCodec(e, en, lookup) {
+    // For EntityRef: tagged enum, every variant has a single id payload.
+    // We emit a `kind` + payload-spread codec to keep the API similar to
+    // the hand-mirror.
+    e.line(`export function write${en.name}(w, e) {`);
+    e.line('    w.variant(e.kind);');
+    // All variants must have a single tuple field of an id type. Find one to
+    // emit the right writer call (they're all u64 newtypes today).
+    const sample = en.variants.find((v) => v.fields && v.fields.length > 0);
+    if (sample) {
+        const codec = jsCodecFor(sample.fields[0].type, lookup);
+        e.line(`    ${codec.write.replace(/##/g, 'e.id')};`);
+    }
+    e.line('}');
+    e.line(`export function read${en.name}(r) {`);
+    e.line('    const kind = r.variant();');
+    if (sample) {
+        const codec = jsCodecFor(sample.fields[0].type, lookup);
+        e.line(`    const id = ${codec.read};`);
+    }
+    e.line('    return { kind, id };');
+    e.line('}');
+    e.line('');
+}
+
+function emitJsTagTable(e, name, variants) {
+    e.line(`export const ${name} = Object.freeze({`);
+    variants.forEach((v, i) => {
+        e.line(`    ${pascalToScreaming(v.name)}: ${i},`);
+    });
+    e.line('});');
+    e.line('');
+}
+
+function emitJsStructCodec(e, st, lookup) {
+    e.line(`export function write${st.name}(w, s) {`);
+    for (const f of st.fields) {
+        const codec = jsCodecFor(f.type, lookup);
+        const jsName = snakeToCamel(f.name);
+        e.line(`    ${codec.write.replace(/##/g, `s.${jsName}`)};`);
+    }
+    e.line('}');
+    e.line(`export function read${st.name}(r) {`);
+    e.line('    return {');
+    for (const f of st.fields) {
+        const codec = jsCodecFor(f.type, lookup);
+        const jsName = snakeToCamel(f.name);
+        e.line(`        ${jsName}: ${codec.read},`);
+    }
+    e.line('    };');
+    e.line('}');
+    e.line('');
+}
+
+function emitJsMessageCodec(e, name, tagTableName, variants, lookup) {
+    e.line(`export function write${name}(w, msg) {`);
+    e.line('    switch (msg.type) {');
+    for (const v of variants) {
+        const tag = `${tagTableName}.${pascalToScreaming(v.name)}`;
+        e.line(`        case ${tag}:`);
+        e.line(`            w.variant(${tag});`);
+        for (const f of v.fields ?? []) {
+            const codec = jsCodecFor(f.type, lookup);
+            const jsName = snakeToCamel(f.name);
+            e.line(`            ${codec.write.replace(/##/g, `msg.${jsName}`)};`);
+        }
+        e.line('            return;');
+    }
+    e.line(`        default:`);
+    e.line(`            throw new TypeError('write${name}: unknown variant ' + msg.type);`);
+    e.line('    }');
+    e.line('}');
+    e.line('');
+    e.line(`export function read${name}(r) {`);
+    e.line('    const tag = r.variant();');
+    e.line('    switch (tag) {');
+    for (const v of variants) {
+        const tag = `${tagTableName}.${pascalToScreaming(v.name)}`;
+        e.line(`        case ${tag}:`);
+        if ((v.fields ?? []).length === 0) {
+            e.line(`            return { type: tag };`);
+        } else {
+            e.line(`            return {`);
+            e.line(`                type: tag,`);
+            for (const f of v.fields) {
+                const codec = jsCodecFor(f.type, lookup);
+                const jsName = snakeToCamel(f.name);
+                e.line(`                ${jsName}: ${codec.read},`);
+            }
+            e.line(`            };`);
+        }
+    }
+    e.line(`        default:`);
+    e.line(`            throw new TypeError('read${name}: unknown tag ' + tag);`);
+    e.line('    }');
+    e.line('}');
+    e.line('');
+}
+
+function emitJsHelpers(e) {
+    e.line('// ─── Top-level convenience encoders/decoders ────────────────────');
+    e.line('');
+    for (const [name, tagTable] of [['ClientMsg', 'C2S'], ['ServerMsg', 'S2C']]) {
+        e.line(`export function encode${name}(msg) {`);
+        e.line('    const w = new Writer(256);');
+        e.line(`    write${name}(w, msg);`);
+        e.line('    return w.bytes();');
+        e.line('}');
+        e.line('');
+        e.line(`export function decode${name}(buf) {`);
+        e.line('    const view = bufToView(buf);');
+        e.line('    const r = new Reader(view);');
+        e.line(`    return read${name}(r);`);
+        e.line('}');
+        e.line('');
+        // Suppress unused-tag-table warning; tagTable referenced via switch above.
+        void tagTable;
+    }
+    e.line('function bufToView(buf) {');
+    e.line('    if (buf instanceof DataView) return buf;');
+    e.line('    if (buf instanceof ArrayBuffer) return new DataView(buf);');
+    e.line('    if (ArrayBuffer.isView(buf)) {');
+    e.line('        return new DataView(buf.buffer, buf.byteOffset, buf.byteLength);');
+    e.line('    }');
+    e.line(`    throw new TypeError('decodeXxx: expected ArrayBuffer or TypedArray');`);
+    e.line('}');
+}
+
+function generateJs(schema) {
+    const lookup = buildLookup(schema);
+    const e = new Emit();
+    emitJsHeader(e, schema);
+
+    e.line('// ─── Plain enums ────────────────────────────────────────────────');
+    e.line('');
+    for (const en of schema.enum) {
+        if (!en.tagged) emitJsPlainEnum(e, en);
+    }
+
+    e.line('// ─── Tagged-enum tables (SCREAMING_SNAKE keys) ──────────────────');
+    e.line('');
+    for (const en of schema.enum) {
+        if (en.tagged) emitJsTaggedEnumTable(e, en);
+    }
+    emitJsTagTable(e, 'C2S', schema.message.client);
+    emitJsTagTable(e, 'S2C', schema.message.server);
+    emitJsTagTable(e, 'EVT', schema.message.event);
+
+    e.line('// ─── Struct codecs ──────────────────────────────────────────────');
+    e.line('');
+    for (const st of schema.struct) emitJsStructCodec(e, st, lookup);
+
+    for (const en of schema.enum) {
+        if (en.tagged) emitJsTaggedEnumCodec(e, en, lookup);
+    }
+
+    e.line('// ─── Message codecs ─────────────────────────────────────────────');
+    e.line('');
+    emitJsMessageCodec(e, 'GameEvent', 'EVT', schema.message.event, lookup);
+    emitJsMessageCodec(e, 'ClientMsg', 'C2S', schema.message.client, lookup);
+    emitJsMessageCodec(e, 'ServerMsg', 'S2C', schema.message.server, lookup);
+
+    emitJsHelpers(e);
+
+    return e.text();
+}
+
 // ─── Driver ──────────────────────────────────────────────────────────────────
 
 function generate(schema) {
@@ -243,45 +563,54 @@ function rustfmt(src) {
     }
 }
 
-function main() {
-    const schema = TOML.parse(readFileSync(SCHEMA_PATH, 'utf-8'));
-    let out = generate(schema);
-    out = rustfmt(out);
-
-    const before = readFileSync(RUST_OUT, 'utf-8').replace(/\s+$/, '') + '\n';
-    if (out === before) {
-        if (CHECK_ONLY) console.log('codegen-protocol: up to date');
-        return 0;
-    }
-
-    if (CHECK_ONLY) {
-        console.error('codegen-protocol: DIFFERENCES DETECTED');
-        console.error(`  ${RUST_OUT}`);
-        console.error('Run `node tools/codegen-protocol.mjs` and commit the result.');
-        return 1;
-    }
-
-    writeFileSync(RUST_OUT, out);
-    console.log(`codegen-protocol: wrote ${RUST_OUT}`);
-    return 0;
-}
-
-// `before = readFileSync(...)` will throw if the file doesn't exist; on the
-// initial run we want to write it.
-function safeMain() {
+// Read a file, returning '' if it doesn't exist (so first-run codegen
+// can compare against an empty baseline). Trailing whitespace is
+// normalized to a single newline so reformatters don't trigger false
+// drifts.
+function readOrEmpty(path) {
     try {
-        process.exit(main());
+        return readFileSync(path, 'utf-8').replace(/\s+$/, '') + '\n';
     } catch (e) {
-        if (e?.code === 'ENOENT' && !CHECK_ONLY) {
-            // File doesn't exist yet; just write it.
-            const schema = TOML.parse(readFileSync(SCHEMA_PATH, 'utf-8'));
-            const out = rustfmt(generate(schema));
-            writeFileSync(RUST_OUT, out);
-            console.log(`codegen-protocol: created ${RUST_OUT}`);
-            process.exit(0);
-        }
+        if (e?.code === 'ENOENT') return '';
         throw e;
     }
 }
 
-safeMain();
+function main() {
+    const schema = TOML.parse(readFileSync(SCHEMA_PATH, 'utf-8'));
+
+    const rustOut = rustfmt(generate(schema));
+    const jsOut = generateJs(schema);
+
+    const rustBefore = readOrEmpty(RUST_OUT);
+    const jsBefore = readOrEmpty(JS_OUT);
+    const rustChanged = rustOut !== rustBefore;
+    const jsChanged = jsOut !== jsBefore;
+
+    if (CHECK_ONLY) {
+        if (!rustChanged && !jsChanged) {
+            console.log('codegen-protocol: up to date');
+            return 0;
+        }
+        console.error('codegen-protocol: DIFFERENCES DETECTED');
+        if (rustChanged) console.error(`  ${RUST_OUT}`);
+        if (jsChanged) console.error(`  ${JS_OUT}`);
+        console.error('Run `node tools/codegen-protocol.mjs` and commit the result.');
+        return 1;
+    }
+
+    if (rustChanged) {
+        writeFileSync(RUST_OUT, rustOut);
+        console.log(`codegen-protocol: wrote ${RUST_OUT}`);
+    }
+    if (jsChanged) {
+        writeFileSync(JS_OUT, jsOut);
+        console.log(`codegen-protocol: wrote ${JS_OUT}`);
+    }
+    if (!rustChanged && !jsChanged) {
+        console.log('codegen-protocol: up to date');
+    }
+    return 0;
+}
+
+process.exit(main());
