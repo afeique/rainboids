@@ -82,6 +82,14 @@ export function triggerScreenFlash(alpha, duration) {
     this._screenFlashTimer = duration;
 }
 
+// 5.85.0 — gold-tinted flash channel for the life-loss event. Runs in
+// parallel with the main white flash so the two can layer.
+export function triggerGoldScreenFlash(alpha, duration) {
+    this._goldFlashAlpha = alpha;
+    this._goldFlashDuration = duration;
+    this._goldFlashTimer = duration;
+}
+
 export function triggerScreenShake(duration, magnitude, asteroidSize = 0) {
     // Enhanced screen shake based on asteroid size
     const baseMagnitude = magnitude;

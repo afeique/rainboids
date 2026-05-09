@@ -289,12 +289,125 @@ export function drawWaveIntroOverlay() {
 // no-op now that the third square is drawn alongside PRM/PWR.
 export function drawSkillCooldownHUD() { /* no-op */ }
 
+// 5.85.0 — triforce geometry shared between draw + vaporize-spawn so
+// the burst lines up exactly with the triangle that just disappeared.
+// Keep these in sync with drawCanvasTriforce' constants.
+const TRIFORCE_TRIANGLE_SIZE = 12;
+const TRIFORCE_SPACING = 2;
+
+function triforceLayout(baseX, baseY) {
+    const centerX = baseX + 30;
+    const topY = baseY + 8;
+    const bottomY = topY + TRIFORCE_TRIANGLE_SIZE + TRIFORCE_SPACING - 1;
+    const half = TRIFORCE_TRIANGLE_SIZE / 2 + TRIFORCE_SPACING / 2;
+    return {
+        topTri:   { x: centerX,        y: topY },
+        btmLeft:  { x: centerX - half, y: bottomY },
+        btmRight: { x: centerX + half, y: bottomY },
+        size: TRIFORCE_TRIANGLE_SIZE,
+    };
+}
+
+// Returns the (x, y, size) of the triangle that vanishes when the
+// player drops from `livesBefore` → `livesBefore - 1`. Defaults match
+// the baseX=36, baseY=20 used in updateHUD().
+export function getDisappearingTriforcePos(livesBefore, baseX = 36, baseY = 20) {
+    const L = triforceLayout(baseX, baseY);
+    if (livesBefore >= 3) return { x: L.topTri.x,   y: L.topTri.y,   size: L.size };
+    if (livesBefore === 2) return { x: L.btmRight.x, y: L.btmRight.y, size: L.size };
+    if (livesBefore === 1) return { x: L.btmLeft.x,  y: L.btmLeft.y,  size: L.size };
+    return { x: L.topTri.x, y: L.topTri.y, size: L.size };
+}
+
+// Spawn the gold/white particle blast + flash sprite at the triangle's
+// center. Stored on the engine instance so the HUD draw path can tick
+// and render them on top of the (now-shorter) triforce next frame.
+export function spawnTriforceVaporize(x, y, size = TRIFORCE_TRIANGLE_SIZE) {
+    if (!this._triforceVaporize) this._triforceVaporize = [];
+    const PARTICLES = 36;
+    for (let i = 0; i < PARTICLES; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const speed = 0.7 + Math.random() * 2.6;
+        const ox = (Math.random() - 0.5) * size;
+        const oy = (Math.random() - 0.5) * size;
+        const roll = Math.random();
+        const color = roll < 0.5 ? '#FFD700'
+            : roll < 0.8 ? '#FFEC8B'
+            : roll < 0.95 ? '#FFFFFF'
+            : '#FFB000';
+        this._triforceVaporize.push({
+            x: x + ox,
+            y: y + oy,
+            vx: Math.cos(a) * speed,
+            vy: Math.sin(a) * speed - 0.4,
+            life: 1.0,
+            decay: 0.018 + Math.random() * 0.018,
+            radius: 0.8 + Math.random() * 1.7,
+            color,
+        });
+    }
+    // Companion flash sprite at the triangle's former center.
+    this._triforceFlash = { x, y, t: 0 };
+}
+
+export function updateAndDrawTriforceVaporize(ctx) {
+    // Flash sprite (radial gradient halo + bright ring) — short, snappy.
+    if (this._triforceFlash) {
+        const f = this._triforceFlash;
+        f.t += 0.09;
+        if (f.t >= 1.0) {
+            this._triforceFlash = null;
+        } else {
+            const r = 4 + f.t * 20;
+            const a = (1 - f.t) * 0.95;
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+            grad.addColorStop(0,   `rgba(255, 245, 180, ${a})`);
+            grad.addColorStop(0.55, `rgba(255, 200, 60, ${a * 0.55})`);
+            grad.addColorStop(1,   'rgba(255, 200, 60, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = `rgba(255, 245, 200, ${a})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(f.x, f.y, r * 0.62, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    if (!this._triforceVaporize || this._triforceVaporize.length === 0) return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = this._triforceVaporize.length - 1; i >= 0; i--) {
+        const p = this._triforceVaporize[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.94;
+        p.vy *= 0.94;
+        p.vy += 0.04;
+        p.life -= p.decay;
+        if (p.life <= 0) {
+            this._triforceVaporize.splice(i, 1);
+            continue;
+        }
+        const a = Math.max(0, p.life);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(0.5, p.radius * a), 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
 export function drawCanvasTriforce(ctx, lives, baseX, baseY) {
-        const triangleSize = 12;
-        const spacing = 2;
-        const centerX = baseX + 30; // Center of the 60px-wide triforce slot
-        const topY = baseY + 8;
-        const bottomY = topY + triangleSize + spacing - 1;
+        const L = triforceLayout(baseX, baseY);
+        const triangleSize = L.size;
 
         const drawTri = (cx, cy) => {
             const h = triangleSize * 0.866;
@@ -312,22 +425,24 @@ export function drawCanvasTriforce(ctx, lives, baseX, baseY) {
         ctx.strokeStyle = '#B8860B';
         ctx.lineWidth = 1;
 
-        const topTri  = { x: centerX, y: topY };
-        const btmLeft = { x: centerX - (triangleSize / 2 + spacing / 2), y: bottomY };
-        const btmRight = { x: centerX + (triangleSize / 2 + spacing / 2), y: bottomY };
-
         if (lives >= 3) {
-            drawTri(topTri.x, topTri.y);
-            drawTri(btmLeft.x, btmLeft.y);
-            drawTri(btmRight.x, btmRight.y);
+            drawTri(L.topTri.x, L.topTri.y);
+            drawTri(L.btmLeft.x, L.btmLeft.y);
+            drawTri(L.btmRight.x, L.btmRight.y);
         } else if (lives === 2) {
-            drawTri(btmLeft.x, btmLeft.y);
-            drawTri(btmRight.x, btmRight.y);
+            drawTri(L.btmLeft.x, L.btmLeft.y);
+            drawTri(L.btmRight.x, L.btmRight.y);
         } else if (lives === 1) {
-            drawTri(btmLeft.x, btmLeft.y);
+            drawTri(L.btmLeft.x, L.btmLeft.y);
         }
 
         ctx.restore();
+
+        // 5.85.0 — vaporize FX (gold particle blast + flash) on top of
+        // whatever triangles remain. The disappearing triangle's slot is
+        // empty by the time this runs (lives already decremented), so the
+        // burst alone tells the eye "that one just shattered".
+        updateAndDrawTriforceVaporize.call(this, ctx);
 }
 
 export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {

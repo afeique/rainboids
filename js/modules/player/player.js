@@ -17,7 +17,7 @@ export class Player {
         this.radius = 12;
         this.health = 25;
         this.maxHealth = 25;
-        this.shieldTanks = 1; // Start with 1 shield tank
+        this.shieldTanks = 0; // 5.85.0 — no free second chance; first 0-HP event ends a life
         this.shield = 15; // 15% damage reduction (start with basic armor for survivability)
         this.invulnerable = false;
         this.lastHitTime = 0;

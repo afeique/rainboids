@@ -147,6 +147,20 @@ export function handlePlayerDeath() {
 
     this.deathLocation = { x: dx, y: dy };
 
+    // 5.85.0 — life-loss feedback: vaporize the triforce triangle that
+    // is about to disappear, layered with a gold screen flash. Read the
+    // triangle position with the lives value BEFORE the decrement (the
+    // triangle is still drawn at this count).
+    const livesBefore = this.game.lives;
+    if (livesBefore > 0 && typeof this.spawnTriforceVaporize === 'function' &&
+        typeof this.getDisappearingTriforcePos === 'function') {
+        const tri = this.getDisappearingTriforcePos(livesBefore, 36, 20);
+        if (tri) this.spawnTriforceVaporize(tri.x, tri.y, tri.size || 12);
+    }
+    if (typeof this.triggerGoldScreenFlash === 'function') {
+        this.triggerGoldScreenFlash(0.32, 9);
+    }
+
     this.game.lives--;
     this.events.emit('ui:update-lives', { lives: this.game.lives });
     this.events.emit('audio:player-explosion');
