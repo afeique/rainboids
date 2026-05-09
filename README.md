@@ -474,11 +474,15 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   └── hint-system.js #   Onboarding hint toasts
 │       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle renderer + atlas
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
+├── js/engine/                 # Mode-aware driver: solo & multiplayer share the same GameEngine (5.86.0)
+│   ├── engine-driver.js       #   EngineDriver: startSolo / startOnline / quit
+│   ├── online-status-overlay.js #  DOM badge for connection state in online mode
+│   └── index.js               #   public exports
 ├── js/net/                    # Multiplayer client networking (5.84.0)
 │   ├── codec.js               #   bincode 1.x mirror (Reader/Writer, UUID + length-prefix rules)
 │   ├── protocol.js            #   wire enum tags + Hello/Welcome encoders/decoders
 │   ├── ws-client.js           #   ConnectionTask, feature-flag gating, session persistence
-│   ├── multiplayer-modal.js   #   title-screen connect modal
+│   ├── multiplayer-modal.js   #   title-screen connect modal (with onStartGame handoff in 5.86.0)
 │   └── (prediction, interpolation, matchmaking, session, event-firehose) — Phase 3 skeletons
 ├── js/sim/                    # Simulation primitives — Phase 1 engine refactor (5.84.0, in progress)
 │   ├── codec.js               #   alternative codec (parallel to js/net/codec.js — to be reconciled)

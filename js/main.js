@@ -5,6 +5,7 @@ import { UIManager } from './modules/ui/ui-manager.js';
 import { GameEngine } from './modules/game-engine.js';
 import { GAME_STATES } from './modules/core/constants.js';
 import { VERSION } from './modules/core/version.js';
+import { EngineDriver } from './engine/engine-driver.js';
 import { openMultiplayerModal } from './net/multiplayer-modal.js';
 import { SESSION_STORAGE_KEY } from './net/ws-client.js';
 
@@ -31,6 +32,7 @@ class RainboidsGame {
         this.inputHandler = null;
         this.uiManager = null;
         this.gameEngine = null;
+        this.engineDriver = null;
     }
 
     async init() {
@@ -90,6 +92,13 @@ class RainboidsGame {
         this.uiManager.setGameEngine(this.gameEngine);
         window.gameEngine = this.gameEngine;
         window.game = this.gameEngine;
+
+        // EngineDriver wraps the GameEngine and adds mode-awareness
+        // (solo vs online). Both modes route through the same GameEngine
+        // — the driver only differs in whether a multiplayer connection
+        // is held open in the background. See js/engine/engine-driver.js.
+        this.engineDriver = new EngineDriver({ gameEngine: this.gameEngine });
+        window.engineDriver = this.engineDriver;
     }
 
     setupStartHandlers() {
@@ -106,14 +115,10 @@ class RainboidsGame {
         //   their save before committing. The only keyboard shortcut
         //   left is Enter / Space, which acts like a click on the
         //   currently-hovered button (if any).
-        const launch = (mode) => {
-            if (_gameStarted) return;
-            if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) return;
-
-            const ge = this.gameEngine;
-            const wantContinue = mode === 'continue' && ge.hasSavedRun?.();
-            if (mode === 'continue' && !wantContinue) return; // disabled button click
-
+        // Shared "leaving the title screen" prelude — runs the same audio
+        // warm-up, button chime, and event-listener teardown for every
+        // launch path (solo, continue, or online).
+        const consumeTitleScreen = ({ chime } = {}) => {
             _gameStarted = true;
             window.removeEventListener('keydown', onKey);
             window.removeEventListener('mousedown', onMouseDown);
@@ -123,20 +128,38 @@ class RainboidsGame {
 
             this.audioManager.initializeAudio();
             this.uiManager.startMusic();
+            if (chime) {
+                try { this.audioManager.playSound(chime); } catch {}
+            }
+        };
 
-            // 5.79.2 — title button chime SFX. NEW GAME plays the
-            //   heroic powerup ding ("starting fresh"); CONTINUE
-            //   plays the coin chime ("you're already in"). Both
-            //   ride on the existing SFX manifest — no new audio
-            //   assets needed.
-            try {
-                if (wantContinue) this.audioManager.playSound('coin');
-                else              this.audioManager.playSound('powerup');
-            } catch {}
+        const launch = (mode) => {
+            if (_gameStarted) return;
+            if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) return;
 
-            const startFn = () => wantContinue ? ge.startContinueRun() : ge.startNewRun();
-            const launched = ge.triggerTitleStart(() => startFn());
-            if (!launched) startFn();
+            const ge = this.gameEngine;
+            const wantContinue = mode === 'continue' && ge.hasSavedRun?.();
+            if (mode === 'continue' && !wantContinue) return; // disabled button click
+
+            // 5.79.2 chime: NEW GAME → 'powerup', CONTINUE → 'coin'.
+            consumeTitleScreen({ chime: wantContinue ? 'coin' : 'powerup' });
+            this.engineDriver.startSolo({ continueRun: wantContinue });
+        };
+
+        // Online entry. Called when the multiplayer modal hands off the
+        // ConnectionTask after a successful Welcome. Title-screen prelude
+        // is identical to solo so the player can't tell the modes apart
+        // from this point on (the whole point of "solo and multiplayer
+        // run identically").
+        const launchOnline = (connection, welcome) => {
+            if (_gameStarted) return;
+            if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) {
+                // Title already left for some reason — don't double-start.
+                try { connection.disconnect(); } catch {}
+                return;
+            }
+            consumeTitleScreen({ chime: 'powerup' });
+            this.engineDriver.startOnline({ connection, welcome });
         };
 
         const ge = () => this.gameEngine;
@@ -155,8 +178,10 @@ class RainboidsGame {
             return null;
         };
 
-        // 5.81+ — open the v1 Hello/Welcome modal. Does NOT call launch();
-        // multiplayer is purely additive WIP and must not start a solo run.
+        // 5.81 introduced the v1 Hello/Welcome modal. 5.85 wires its
+        // "▶ START MULTIPLAYER GAME" button to actually launch a run
+        // through the EngineDriver — the modal hands the live socket
+        // over and goes away; gameplay continues identically to solo.
         const openMultiplayer = () => {
             const ge = this.gameEngine;
             if (ge.game.state !== GAME_STATES.TITLE_SCREEN) return;
@@ -166,6 +191,7 @@ class RainboidsGame {
                 clientVersion: VERSION,
                 displayName: 'Pilot',
                 session,
+                onStartGame: (connection, welcome) => launchOnline(connection, welcome),
             });
         };
 

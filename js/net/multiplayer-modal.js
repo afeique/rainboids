@@ -28,10 +28,14 @@ let activeModal = null;
  * one is already open is a no-op so a double-click never spawns two.
  *
  * @param {object} opts
- * @param {string} opts.clientVersion        e.g. VERSION import
- * @param {string} [opts.displayName]        defaults to "Pilot"
- * @param {string|null} [opts.session]       persistent session, if any
- * @param {() => void} [opts.onClose]        called whenever the modal closes
+ * @param {string} opts.clientVersion          e.g. VERSION import
+ * @param {string} [opts.displayName]          defaults to "Pilot"
+ * @param {string|null} [opts.session]         persistent session, if any
+ * @param {() => void} [opts.onClose]          called whenever the modal closes
+ * @param {(connection: object, welcome: object) => void} [opts.onStartGame]
+ *        called when the player clicks "▶ START MULTIPLAYER GAME". The caller
+ *        takes ownership of the live ConnectionTask. If omitted, only the
+ *        Disconnect action is shown (modal is then a v1 connectivity probe).
  */
 export function openMultiplayerModal(opts) {
     if (activeModal) return activeModal;
@@ -47,12 +51,23 @@ export function closeMultiplayerModal() {
 }
 
 class MultiplayerModal {
-    constructor({ clientVersion, displayName = 'Pilot', session = null, onClose = null }) {
+    constructor({
+        clientVersion,
+        displayName = 'Pilot',
+        session = null,
+        onClose = null,
+        onStartGame = null,
+    }) {
         this.clientVersion = clientVersion;
         this.displayName = displayName;
         this.session = session;
         this.onClose = onClose;
+        // onStartGame(connection, welcome): caller takes ownership of the
+        // ConnectionTask and continues using it for the in-game session.
+        // The modal closes itself but leaves the socket open.
+        this.onStartGame = onStartGame;
         this.connection = null;
+        this.welcome = null;
 
         this._buildDom();
         this._bindEscape();
@@ -66,7 +81,12 @@ class MultiplayerModal {
 
     dismiss() {
         this._unbindEscape();
-        try { this.connection?.disconnect(); } catch {}
+        // If the connection was handed off via _handoffToGame, the
+        // caller owns it now — don't disconnect the socket out from
+        // under them.
+        if (this.connection && this.connection !== this._releasedConnection) {
+            try { this.connection.disconnect(); } catch {}
+        }
         this.root.remove();
         if (activeModal === this) activeModal = null;
         try { this.onClose?.(); } catch {}
@@ -229,6 +249,7 @@ class MultiplayerModal {
 
     _renderConnected(conn, welcome) {
         this.body.innerHTML = '';
+        this.welcome = welcome;
 
         const ok = document.createElement('div');
         ok.textContent = `✓ Connected`;
@@ -256,9 +277,43 @@ class MultiplayerModal {
         });
         this.body.appendChild(tLine);
 
-        this._renderActions([
-            { label: 'DISCONNECT', kind: 'danger', onClick: () => { this._closing = true; this.dismiss(); } },
-        ]);
+        // Action row depends on whether the caller wired an `onStartGame`
+        // hook. With one, the player can choose to launch the game; the
+        // socket lifetime transfers to the EngineDriver. Without one,
+        // the modal still works as the v1 "is the server reachable?"
+        // diagnostic and only offers Disconnect.
+        const actions = [];
+        if (typeof this.onStartGame === 'function') {
+            actions.push({
+                label: '▶ START MULTIPLAYER GAME',
+                kind: 'primary',
+                onClick: () => this._handoffToGame(conn, welcome),
+            });
+        }
+        actions.push({
+            label: 'DISCONNECT',
+            kind: 'danger',
+            onClick: () => { this._closing = true; this.dismiss(); },
+        });
+        this._renderActions(actions);
+    }
+
+    /**
+     * Hand the live ConnectionTask over to the caller (typically the
+     * EngineDriver) and close the modal without disconnecting. The caller
+     * inherits both the socket and the responsibility to disconnect at
+     * end of play.
+     */
+    _handoffToGame(conn, welcome) {
+        try {
+            this.onStartGame?.(conn, welcome);
+        } catch (e) {
+            console.error('multiplayer-modal: onStartGame threw', e);
+        }
+        // Mark the socket as released so dismiss() doesn't disconnect it.
+        this._releasedConnection = conn;
+        this._closing = true;
+        this.dismiss();
     }
 
     _renderError({ msg, wasWelcomed }) {
