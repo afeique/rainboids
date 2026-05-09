@@ -291,31 +291,46 @@ export function drawSkillCooldownHUD() { /* no-op */ }
 
 // 5.85.0 — triforce geometry shared between draw + vaporize-spawn so
 // the burst lines up exactly with the triangle that just disappeared.
-// 5.88.0 — geometry extended for the tank-based hit model: the triforce
-// represents tanks 1..3 (btm-left → btm-right → top, in that loss order)
-// and a standalone "spare" tank icon above the triforce represents tank 4.
-// Keep these in sync with drawCanvasTriforce' constants.
+// 5.88.2 — layout reshaped: triforce is vertically centered with the
+// healthbar (matching how the LV-shield icon is centered), and the
+// spare tank icon (tanks=4) sits to the LEFT of the triforce on the
+// same vertical center so the cluster reads horizontally:
+//
+//   [spare]  [triforce]  [healthbar]  [LV-shield][level-num]
+//
+// Loss order across the four tanks: spare → top → btm-right → btm-left.
 const TRIFORCE_TRIANGLE_SIZE = 12;
 const TRIFORCE_SPACING = 2;
 const SPARE_TANK_WIDTH = 9;
-const SPARE_TANK_HEIGHT = 5;
-const SPARE_TANK_GAP = 4;          // gap above the triforce
+const SPARE_TANK_HEIGHT = 11;
+const SPARE_TANK_GAP = 4;          // gap between spare tank and triforce
 const SPARE_TANK_NUB = 1.5;        // little battery-cap stub width
 
-function triforceLayout(baseX, baseY) {
-    // 5.88.0 — the standalone spare tank sits above the triforce; bump
-    // the triforce baseline down so both fit in roughly the same vertical
-    // band the original triforce occupied.
-    const centerX = baseX + 30;
-    const topY = baseY + 8 + (SPARE_TANK_HEIGHT + SPARE_TANK_GAP);
+// triforceLeftX is the leftmost pixel of the triforce widget.
+// centerY is the vertical center (set by the caller to the healthbar's
+// vertical center so the triforce sits inline with the bar).
+function triforceLayout(triforceLeftX, centerY) {
+    // halfHalf = horizontal offset from centerX to btmLeft.x / btmRight.x
+    const halfHalf = TRIFORCE_TRIANGLE_SIZE / 2 + TRIFORCE_SPACING / 2;
+    // Triforce horizontal: leftmost pixel = btmLeft.x - triangleSize/2
+    //   = centerX - halfHalf - triangleSize/2 = centerX - 13
+    // So centerX = triforceLeftX + 13.
+    const centerX = triforceLeftX + halfHalf + TRIFORCE_TRIANGLE_SIZE / 2;
+    // Triforce vertical: top tri's apex extends `triangleSize * 0.866 / 2`
+    // (~5.2) above topY. Bottom row bounding extends the same below
+    // bottomY. Total bounding height ≈ 2 * 5.2 + (bottomY - topY) =
+    //   10.4 + 13 = 23.4 → half = 11.7 → topY = centerY - (TRIFORCE_TRIANGLE_SIZE + TRIFORCE_SPACING - 1) / 2
+    // Solved for centerY = (top + bottom) / 2 = topY + (bottomY - topY) / 2 = topY + 6.5.
+    const topY = centerY - (TRIFORCE_TRIANGLE_SIZE + TRIFORCE_SPACING - 1) / 2;
     const bottomY = topY + TRIFORCE_TRIANGLE_SIZE + TRIFORCE_SPACING - 1;
-    const half = TRIFORCE_TRIANGLE_SIZE / 2 + TRIFORCE_SPACING / 2;
-    const spareY = baseY + 8 + SPARE_TANK_HEIGHT / 2; // center of the spare-tank rect
+    // Spare tank (battery-shape) to the LEFT of the triforce, vertically
+    // centered too. Nub points right toward the triforce.
+    const spareCenterX = triforceLeftX - SPARE_TANK_GAP - SPARE_TANK_WIDTH / 2 - SPARE_TANK_NUB;
     return {
-        topTri:   { x: centerX,        y: topY },
-        btmLeft:  { x: centerX - half, y: bottomY },
-        btmRight: { x: centerX + half, y: bottomY },
-        spare:    { x: centerX,        y: spareY },
+        topTri:   { x: centerX,           y: topY },
+        btmLeft:  { x: centerX - halfHalf, y: bottomY },
+        btmRight: { x: centerX + halfHalf, y: bottomY },
+        spare:    { x: spareCenterX,      y: centerY },
         size: TRIFORCE_TRIANGLE_SIZE,
         spareW: SPARE_TANK_WIDTH,
         spareH: SPARE_TANK_HEIGHT,
@@ -325,9 +340,10 @@ function triforceLayout(baseX, baseY) {
 // 5.88.0 — Returns the (x, y, size) of the slot that vanishes when the
 // player drops from `tanksBefore` → `tanksBefore - 1`. Loss order:
 //   4 → spare standalone, 3 → top triangle, 2 → btm-right, 1 → btm-left.
-// Defaults match the baseX=12, baseY=20 used in updateHUD() (5.88.0).
-export function getDisappearingTankPos(tanksBefore, baseX = 12, baseY = 20) {
-    const L = triforceLayout(baseX, baseY);
+// 5.88.2 — defaults updated for the new "triforce-leftmost X + bar centerY"
+// layout convention (was "baseX, baseY" with internal +30 / +8 offsets).
+export function getDisappearingTankPos(tanksBefore, triforceLeftX = 18, centerY = 35) {
+    const L = triforceLayout(triforceLeftX, centerY);
     if (tanksBefore >= 4) return { x: L.spare.x,    y: L.spare.y,    size: L.size, spare: true };
     if (tanksBefore === 3) return { x: L.topTri.x,   y: L.topTri.y,   size: L.size };
     if (tanksBefore === 2) return { x: L.btmRight.x, y: L.btmRight.y, size: L.size };
@@ -338,8 +354,8 @@ export function getDisappearingTankPos(tanksBefore, baseX = 12, baseY = 20) {
 // 5.88.0 — Recharge sparkle, fired when a tank is *gained* via overflow
 // healing. Mirrors spawnTriforceVaporize but with a green/cyan palette
 // so the visual reads as a refill, not a loss.
-export function spawnTankRecharge(slotIndex, baseX = 12, baseY = 20) {
-    const L = triforceLayout(baseX, baseY);
+export function spawnTankRecharge(slotIndex, triforceLeftX = 18, centerY = 35) {
+    const L = triforceLayout(triforceLeftX, centerY);
     let pos;
     if (slotIndex === 1) pos = L.btmLeft;
     else if (slotIndex === 2) pos = L.btmRight;
@@ -467,8 +483,8 @@ export function updateAndDrawTriforceVaporize(ctx) {
     ctx.restore();
 }
 
-export function drawCanvasTriforce(ctx, tanks, baseX, baseY) {
-        const L = triforceLayout(baseX, baseY);
+export function drawCanvasTriforce(ctx, tanks, triforceLeftX, centerY) {
+        const L = triforceLayout(triforceLeftX, centerY);
         const triangleSize = L.size;
 
         const drawTri = (cx, cy) => {
@@ -879,24 +895,29 @@ export function drawLevelUpText() {
 
 export function updateHUD() {
         const ctx = this.ctx;
-        // 5.88.0 — top-left cluster pulled closer to the screen edge.
-        //   triforce baseX: 36 → 12 (24px closer)
-        //   barX:           86 → 62 (24px closer)
-        //   The standalone spare-tank icon now sits ABOVE the triforce,
-        //   so the triforce baseline shifts down inside its layout
-        //   helper rather than encroaching on the bar's vertical space.
-        const barX = 62;
+        // 5.88.2 — top-left cluster shape:
+        //   [spare] [triforce] [healthbar] [LV-shield] [level-num]
+        //   All four share a vertical center (= barCenterY). The spare
+        //   tank slot is reserved (~13 px wide); when tanks ≤ 3 it's
+        //   empty so the layout doesn't jitter on gain/loss.
+        //   triforce-left: 18 (was 12 + 30 internal offset → 42 in 5.88.0)
+        //   barX:          52 (was 62 in 5.88.0; was 86 pre-5.88.0)
+        //   spare-tank slot: ~5..14 (5px from screen edge)
+        const triforceLeftX = 18;
+        const barX = 52;
         const barHeight = 30;
         const barWidth = 220;
         const barY = 20;
+        const barCenterY = barY + barHeight / 2;
         const bevelSize = 12;
         const segments = 10; // Number of segments for the bar
 
         ctx.save();
 
-        // Draw triforce (energy-tank indicator) on canvas — same layer
-        // as HP bar, coins, level. shieldTanks is the source of truth.
-        this.drawCanvasTriforce(ctx, this.shieldTanks | 0, 12, barY);
+        // Draw triforce (energy-tank indicator) on canvas — vertically
+        // centered with the healthbar so the cluster reads as a single
+        // horizontal HUD widget. shieldTanks is the source of truth.
+        this.drawCanvasTriforce(ctx, this.shieldTanks | 0, triforceLeftX, barCenterY);
 
         // Create futuristic angled health bar geometry
         const createHealthBarPath = (width) => {

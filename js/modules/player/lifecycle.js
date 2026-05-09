@@ -146,15 +146,14 @@ export function _consumeTank() {
     const tanksBefore = this.shieldTanks;
     this.shieldTanks--;
 
-    // Visual feedback: vaporize the slot that just emptied. The HUD's
-    // current top-left base coordinates (baseX, baseY) are read by the
-    // existing triforce/standalone helpers so the burst lines up with the
-    // pixel that just disappeared.
-    const baseX = HUD_TRIFORCE_BASE_X;
-    const baseY = HUD_TRIFORCE_BASE_Y;
+    // Visual feedback: vaporize the slot that just emptied. Mirrored
+    // coordinates below must match the values updateHUD() passes to
+    // drawCanvasTriforce — see HUD_TRIFORCE_LEFT_X / HUD_BAR_CENTER_Y.
     if (typeof this.getDisappearingTankPos === 'function' &&
         typeof this.spawnTriforceVaporize === 'function') {
-        const slot = this.getDisappearingTankPos(tanksBefore, baseX, baseY);
+        const slot = this.getDisappearingTankPos(
+            tanksBefore, HUD_TRIFORCE_LEFT_X, HUD_BAR_CENTER_Y,
+        );
         if (slot) this.spawnTriforceVaporize(slot.x, slot.y, slot.size || 12);
     }
     if (typeof this.triggerGoldScreenFlash === 'function') {
@@ -167,10 +166,11 @@ export function _consumeTank() {
     return true;
 }
 
-// HUD coordinates are mirrored here so the lifecycle path knows where to
-// spawn the vaporize FX. Keep in sync with status.js's updateHUD().
-const HUD_TRIFORCE_BASE_X = 12;
-const HUD_TRIFORCE_BASE_Y = 20;
+// 5.88.2 — HUD coordinates mirrored here so the lifecycle vaporize FX
+// lands on the right slot. Keep in sync with the constants in
+// hud/status.js's updateHUD() — `triforceLeftX` and `barCenterY`.
+const HUD_TRIFORCE_LEFT_X = 18;
+const HUD_BAR_CENTER_Y = 35;
 
 // 5.88.0 — health-pickup overflow → tank progress. `amountHealed` is
 // the actual HP delta (post-cap); `orbAmount` is the original orb value
@@ -210,13 +210,15 @@ export function handlePlayerDeath() {
 
     this.deathLocation = { x: dx, y: dy };
 
-    // Vaporize the LAST triangle (or whatever slot is currently rendered
-    // as `tanks=1` → the bottom-left). shieldTanks is still 0 at this
-    // point (the consumeTank that exhausted it already decremented), so
-    // the FX site is computed from the just-emptied slot count + 1.
+    // Vaporize the LAST triangle (the bottom-left, which is what's
+    // rendered when tanks=1). shieldTanks is already 0 by the time
+    // handlePlayerDeath fires, so the FX site is computed for "loss
+    // from 1 → 0".
     if (typeof this.spawnTriforceVaporize === 'function' &&
         typeof this.getDisappearingTankPos === 'function') {
-        const tri = this.getDisappearingTankPos(1, HUD_TRIFORCE_BASE_X, HUD_TRIFORCE_BASE_Y);
+        const tri = this.getDisappearingTankPos(
+            1, HUD_TRIFORCE_LEFT_X, HUD_BAR_CENTER_Y,
+        );
         if (tri) this.spawnTriforceVaporize(tri.x, tri.y, tri.size || 12);
     }
     if (typeof this.triggerGoldScreenFlash === 'function') {

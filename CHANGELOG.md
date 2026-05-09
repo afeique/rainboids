@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.88.2] - 2026-05-09
+
+### Changed — HUD top-left tightened further; triforce vertically centered with healthbar
+The new tank widget read as a stacked 2-row block (spare-tank above, triforce below) which made the cluster sit higher than the LV-shield icon's center alignment with the healthbar. Layout reshaped so the four pieces sit on one horizontal line at the bar's vertical center:
+
+```
+[spare]  [triforce]  [healthbar]  [LV-shield][level]
+```
+
+- Spare-tank icon moved from above the triforce to the LEFT of it. Vertically centered with the healthbar (centerY = barY + barHeight/2 = 35), matching how the LV-shield is centered.
+- Triforce vertically centered too — `topY = centerY - 6.5`, `bottomY = centerY + 6.5` — so the triangle bounding box straddles the bar's middle.
+- HUD pulled left again: `triforceLeftX = 18` (so the spare tank's left edge sits ~5 px from the screen edge); `barX = 52` (was 62 in 5.88.0). Net margin from screen edge to first HUD pixel ~5 px (was ~36 px pre-5.88.0).
+- Spare-tank slot is reserved (~13 px of horizontal space) whether or not the player has 4 tanks; that prevents layout jitter when a tank is gained/lost. Slot is empty when tanks ≤ 3.
+- `triforceLayout()` rewritten to take `(triforceLeftX, centerY)` instead of `(baseX, baseY)`; the old `+30` internal X offset and `+8` internal Y offset are gone, so the first arg is now literally "the leftmost pixel of the triforce widget".
+- Spare-tank icon resized to 9×11 (was 9×5) so it visually balances against the triforce when sitting next to it; the battery-cap nub still pokes right toward the triforce.
+
+`HUD_TRIFORCE_LEFT_X` / `HUD_BAR_CENTER_Y` mirrored in `lifecycle.js` so vaporize FX still lands on the disappearing slot.
+
+---
+
 ## [5.88.1] - 2026-05-09
 
 ### Changed — Gold shape rotation dialed back to a gentle tumble
