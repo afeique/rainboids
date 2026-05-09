@@ -11,16 +11,13 @@ use rainboids_server::sim::rng;
 use rand::RngCore;
 
 #[test]
-#[ignore = "open: PCG-64 cross-language divergence — see Multiplayer Coordination doc, open question 4"]
 fn rng_seed42_first_5_values() {
-    // KNOWN FAILING — pinned, not hidden. Run via `cargo test -- --ignored`.
-    //
-    // The hardcoded `expected` values below are what the *JS* `rng.test.js`
-    // emits today. Rust `rand_pcg::Pcg64::seed_from_u64(42)` produces a
-    // different sequence (the algorithm-level divergence flagged in the
-    // 5.84.0 CHANGELOG entry — Lcg128Xsl64 init step ordering). Resolving
-    // this is a prerequisite for byte-level cross-language parity in
-    // weeks 7–9 of the plan.
+    // Cross-language parity vector. Verified bit-identical against
+    // `tools/parity-runner.mjs --kind rng --seed 42 --iters 5` after the
+    // JS Pcg64 fix in 5.84.1 (see CHANGELOG; this test was #[ignore]'d in
+    // 5.84.0 as a known-failing tripwire, then fixed and re-enabled). If
+    // either side emits something different, both this test AND
+    // `tests/unit/sim/rng.test.js` will catch it.
     let mut r = rng::from_seed(42);
     let mut got = Vec::new();
     for _ in 0..5 {
@@ -28,16 +25,18 @@ fn rng_seed42_first_5_values() {
     }
     let json = format!(r#"{{"values":[{}]}}"#,
         got.iter().map(|s| format!(r#""{}""#, s)).collect::<Vec<_>>().join(","));
-    eprintln!("RUST-EMITS: {}", json);
+    eprintln!("JS-EXPECTS: {}", json);
+
     let expected: &[&str] = &[
-        // JS parity-runner output for `from_seed(42).next_u64() ×5`.
-        "16477301938277355279",
-        "16271422411348349250",
-        "9978099221472886187",
-        "18065352563548492970",
-        "6399164219305406576",
+        // Captured 2026-05-09 from `rand_pcg::Pcg64::seed_from_u64(42)`.
+        // The matching JS sequence lives in `tests/unit/sim/rng.test.js`.
+        "4178418447715145737",
+        "4410739922618931473",
+        "14034899209665866285",
+        "9736923071240364268",
+        "17902128262962705724",
     ];
-    assert_eq!(got, expected, "PCG-64 seed=42 vector drifted; JS harness will diverge");
+    assert_eq!(got, expected, "PCG-64 seed=42 reference vector drifted");
 }
 
 #[test]

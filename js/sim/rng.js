@@ -1,31 +1,34 @@
 // PCG-64 (Lcg128Xsl64) seedable RNG, mirroring Rust's `rand_pcg::Pcg64`.
 //
 // Bit-identicality with Rust is critical for cross-language deterministic
-// fixtures. The parity harness in `tools/parity-runner.mjs` and
-// `server/tests/parity_vectors.rs` cross-checks this with a known
-// reference vector for seed=42 (locked in `tests/unit/sim/rng.test.js`).
+// fixtures. The parity harness (`tools/parity-runner.mjs` +
+// `server/tests/parity_vectors.rs`) cross-checks this with the seed=42
+// reference vector locked in `tests/unit/sim/rng.test.js`.
 //
-// Three pieces have to agree exactly:
+// All three pieces below have been verified bit-identical against
+// `rand_pcg 0.3.1` source via `server/tests/pcg64_trace.rs`:
 //
-//   1. `seed_from_u64`  — `rand_core` uses a tiny PCG32 stepper (NOT
-//      SplitMix64) to expand a u64 seed into 32 seed-bytes.
+//   1. `seed_from_u64`  — `rand_core` uses a tiny PCG-32 stepper that
+//      *advances state first* then outputs from the NEW state (the
+//      reverse of canonical PCG-XSH-RR; see comment in `pcg32Step`).
+//      Eight u32 samples are written little-endian into 32 seed bytes.
 //
-//   2. `Lcg128Xsl64::new(state, increment)` — interprets the 32 bytes
-//      as two LE u128s, sets `increment = (parsed_increment << 1) | 1`,
-//      then runs:   state := 0
-//                   state := state · MULT + increment        (step 1)
-//                   state := state + parsed_state            (mix in seed)
-//                   state := state · MULT + increment        (step 2)
+//   2. `from_seed([u8; 32])` — splits the seed into two LE u128s. The
+//      `SeedableRng::from_seed` path constructs the increment as
+//      `(parsed_increment | 1)` — NOT `((parsed_increment << 1) | 1)`.
+//      The `<< 1` shift is part of `Lcg128Xsl64::new(state, stream)`,
+//      a *different* public constructor that we never call from
+//      `seed_from_u64`. This was a silent gotcha in the rand_pcg API.
+//      Then `from_state_incr`:
+//          state := parsed_state + increment      (mix in)
+//          state := state * MULT + increment      (one step)
 //
-//   3. `next_u64`  — captures the current state, advances by one
-//      LCG step, then emits XSL-RR over the captured state:
-//                   rot := (old_state >> 122) & 63
-//                   xor := (old_state >> 64) ^ old_state    (low 64 bits)
-//                   return xor.rotate_right(rot)
+//   3. `next_u64`  — STEPS FIRST, then outputs XSL-RR from the new
+//      state. Also reversed from canonical PCG, also gotcha-prone.
 //
-// Performance: u128 math is done with BigInt (~5–10× slower than native
-// integer arithmetic). RNG is called outside the hot prediction path
-// (enemy spawns, drop rolls, asteroid splits), so this is fine.
+// Performance: u128 math is BigInt (~5–10× slower than native integer
+// arithmetic). RNG is called outside the hot prediction path (enemy
+// spawns, drop rolls, asteroid splits), so this is fine.
 
 const MASK_128 = (1n << 128n) - 1n;
 const MASK_64 = (1n << 64n) - 1n;
@@ -42,17 +45,25 @@ const PCG32_INC = 11634580027462260723n;
  * One step of the small PCG32-XSH-RR generator that `rand_core` uses to
  * fan out a 64-bit seed into 32 seed-bytes.
  *
- * Mutates the state by reference (returned via the array trick because
- * JS can't pass primitives by reference).
+ * Important: the `rand_core` variant advances the state FIRST and then
+ * computes the output from the NEW state. This is the reverse of the
+ * canonical PCG-XSH-RR (which captures the old state, advances, and
+ * outputs from the captured value). The comment in `rand_core` explains:
+ *   "advance the state first (to get away from the input value, in
+ *    case it has low Hamming Weight)"
+ * Verified bit-identical to `rand_core::seed_from_u64::pcg32` via
+ * `server/tests/pcg64_trace.rs`.
  *
- * @param {{state: bigint}} cell
+ * @param {{state: bigint}} cell  - mutable state container
  * @returns {number} u32
  */
 function pcg32Step(cell) {
-    const oldState = cell.state;
-    cell.state = BigInt.asUintN(64, oldState * PCG32_MUL + PCG32_INC);
-    const xorshifted = Number(((oldState >> 18n) ^ oldState) >> 27n) >>> 0;
-    const rot = Number(oldState >> 59n) & 31;
+    cell.state = BigInt.asUintN(64, cell.state * PCG32_MUL + PCG32_INC);
+    const newState = cell.state;
+    const xorshifted = Number(((newState >> 18n) ^ newState) >> 27n) >>> 0;
+    // rot = (newState >> 59) as u32 — at most 5 bits, so rotate_right(rot)
+    // and rotate_right(rot % 32) agree.
+    const rot = Number(newState >> 59n) & 31;
     if (rot === 0) return xorshifted >>> 0;
     return ((xorshifted >>> rot) | (xorshifted << (32 - rot))) >>> 0;
 }
@@ -80,32 +91,37 @@ export class Pcg64 {
             seedBytes[i + 3] = (u >>> 24) & 0xff;
         }
 
-        // Step 2: parse two LE u128s.
+        // Step 2: parse two LE u128s from the 32 seed bytes.
         const parsedState = readLeU128(seedBytes, 0);
         const parsedIncrement = readLeU128(seedBytes, 16);
 
-        // Step 3: Lcg128Xsl64::new(state, increment).
-        const increment = ((parsedIncrement << 1n) | 1n) & MASK_128;
-        let state = 0n;
-        // step()
-        state = BigInt.asUintN(128, state * PCG64_MULT + increment);
-        // state += parsed_state
-        state = (state + parsedState) & MASK_128;
-        // step()
+        // Step 3: Lcg128Xsl64::SeedableRng::from_seed:
+        //   increment = parsed_increment | 1            (NB: just OR, no shift)
+        //   state := parsed_state + increment           (mix-in)
+        //   state := state * MULT + increment           (one step)
+        const increment = (parsedIncrement | 1n) & MASK_128;
+        let state = (parsedState + increment) & MASK_128;
         state = BigInt.asUintN(128, state * PCG64_MULT + increment);
 
         this.state = state;
         this.inc = increment;
     }
 
-    /** @returns {bigint} u64 */
+    /**
+     * Advance and emit. Note: `rand_pcg::Lcg128Xsl64::next_u64` STEPS the
+     * LCG *first* and then outputs XSL-RR from the new state, NOT from
+     * the captured pre-step state — the opposite of canonical PCG. The
+     * cross-language parity tests pin this down.
+     *
+     * @returns {bigint} u64
+     */
     nextU64() {
-        const old = this.state;
         // step()
-        this.state = BigInt.asUintN(128, old * PCG64_MULT + this.inc);
-        // XSL-RR output over the pre-advance state
-        const rot = Number((old >> 122n) & 63n);
-        const xor = BigInt.asUintN(64, (old >> 64n) ^ old);
+        this.state = BigInt.asUintN(128, this.state * PCG64_MULT + this.inc);
+        const s = this.state;
+        // XSL-RR output over the post-step state.
+        const rot = Number((s >> 122n) & 63n);
+        const xor = BigInt.asUintN(64, (s >> 64n) ^ s);
         if (rot === 0) return xor;
         const r = BigInt(rot);
         return BigInt.asUintN(64, (xor >> r) | (xor << (64n - r)));
