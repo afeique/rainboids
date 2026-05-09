@@ -15,9 +15,9 @@ on commit. The user runs both terminals and hands the tree back and forth.
 | Branch | `master` (with worktrees — see "Workflow" below) |
 | Version | `5.84.0` (see `VERSION`) |
 | Working tree | **multi-worktree as of 2026-05-09** — server agent on `../rainboids-server-wt` (`mp/server-week7`), client agent on the original tree at `master`. Merge to master at hand-off points. |
-| Last touched | 2026-05-09 by **server agent** (introducing worktree workflow + queueing wire codegen) |
-| Last commit | `3745d55` — `#[ignore]` PCG-64 vector + open-question #4 (server agent, follow-up to d5687f4) |
-| Uncommitted | none on master at handoff time |
+| Last touched | 2026-05-09 by **client agent** (PCG-64 parity fix merged from worktree, 5.84.1) |
+| Last commit | `74d7627` — merge `client-parity-pcg64` (5.84.1, PCG-64 cross-language parity) |
+| Uncommitted | doc updates pending (this commit) |
 
 ## Ownership boundaries
 
@@ -131,18 +131,15 @@ These need a decision before either agent can move forward:
 3. **Production deploy gating.** When the Hello/Welcome path is feature-
    complete, do we drop the feature flag, ship a `staging.rainboids.io`
    first, or continue gating? Affects what "done" means for v1.
-4. **PCG-64 cross-language divergence.** `server/tests/parity_vectors.rs::rng_seed42_first_5_values`
-   is `#[ignore]`d — the JS `from_seed(42).next_u64() ×5` and Rust
-   `rand_pcg::Pcg64::seed_from_u64(42)` produce different sequences. The
-   client agent traced this to the `Lcg128Xsl64` init-step ordering and
-   noted that fixing requires aligning either the JS rng port to match
-   `rand_pcg`'s exact init pattern, or — if we'd rather own the seeding
-   formula ourselves — switching the Rust side to a hand-written PCG-64
-   that uses the JS-emitted constants. The right answer probably comes
-   out of the engine-refactor work in Phase 1; punt until then. Diagnosis
-   path: `cargo test -- --ignored rng_seed42` to see `RUST-EMITS:` and
-   `node tools/parity-runner.mjs schema/snapshots/<rng-fixture>.json` to
-   see the JS sequence.
+4. ~~**PCG-64 cross-language divergence.**~~ **Resolved 2026-05-09 by client agent in 5.84.1.**
+   JS `Pcg64` is now bit-identical to `rand_pcg::Pcg64::seed_from_u64`;
+   both sides emit `[4178418447715145737, 4410739922618931473, …]` for
+   seed=42. The fix aligned the JS port to `rand_pcg`'s exact pattern
+   (three deviations from canonical PCG-XSH-RR — see CHANGELOG entry
+   for 5.84.1 and the `js/sim/rng.js` header comment). The
+   `rng_seed42_first_5_values` test is no longer `#[ignore]`d and runs
+   green by default. The diagnostic `pcg64_trace.rs` is left in place
+   for the next debugging session.
 
 ## How to run
 
@@ -156,7 +153,7 @@ cargo test                          # 25 integration + 6 wire-golden + 1 lib uni
 Client (JS):
 ```bash
 npm run dev                         # Vite dev server on :8090
-npm run test:unit                   # 211 Jest tests
+npm run test:unit                   # 212 Jest tests (incl. PCG-64 cross-language vector)
 node tools/check-schema.mjs         # name-level wire parity check
 ```
 
@@ -219,27 +216,23 @@ other.
 
 ## Known-WIP failures (intentional red tests)
 
-Not every cross-language parity vector is green yet. The following are
-**intentional reds** — they pin a known divergence so the next debugging
-session has a precise failure to chase rather than a vague TODO. Don't
-silence these; fix them.
+None at present. Open Question #4 (PCG-64 parity) was the last one;
+it was closed in 5.84.1 — see CHANGELOG and `js/sim/rng.js` header.
 
-- `cargo test --test parity_vectors -- rng_seed42_first_5_values` — JS
-  `Pcg64` output for seed=42 disagrees with `rand_pcg::Pcg64`. Hypothesis:
-  `Lcg128Xsl64::new()` does two `step()` calls separated by `state += parsed_state`,
-  but the JS reproduction may still be drifting at the `(parsed_increment << 1) | 1`
-  bitwise shift or the byte-LE ordering of the seed parse. Logs both
-  Rust and JS first-5 values for diff-by-eyeball. Closing this fully
-  unblocks the rng-fixture path of `tools/parity-runner.mjs`.
+If a future parity divergence has to be pinned this way, list the
+exact `cargo test` / `npm run test:unit` invocation here so the next
+session has a precise failure to chase rather than a vague TODO.
+Don't silence them; fix them.
 
 ## v1 milestones (cribbed from the plan)
 
 - ✅ Weeks 4–6 — server scaffold (5.80.0–5.83.0)
 - ✅ Week 6 — Hello/Welcome round-trip from title screen (5.84.0)
 - ⬜ Phase 1 — engine refactor: extract `simulateTick` into `js/sim/`
-  (primitives landed in 5.84.0; full extraction TBD)
+  (primitives landed in 5.84.0; PCG-64 cross-language parity closed in
+  5.84.1; full extraction TBD)
 - ⬜ Weeks 7–9 — port simulation into `server/src/sim/`, parity harness
-  in CI
+  in CI (rng vector pinned; fxp + trig vectors next, then ship/bullet)
 - ⬜ Phase 4 — co-op design (revive, shared wave-clear, drop attribution)
 - ⬜ Phase 5 — matchmaking & lobby UX
 - ⬜ Phase 6 — drop-in/drop-out polish
