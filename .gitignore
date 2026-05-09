@@ -15,3 +15,6 @@ tools/ai-qa-bot/reports/*
 
 # Juice tuning clips
 tools/juice-clips/
+
+# Claude Code harness state (per-machine; not source)
+.claude/

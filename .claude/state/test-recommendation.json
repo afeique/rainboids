@@ -1,7 +1,0 @@
-{
-  "timestamp": "2026-05-05T18:49:13Z",
-  "changed_file": "tests/qa/07-weapons.spec.js",
-  "test_command": "npx jest --verbose",
-  "related_test": "",
-  "recommendation": "テストの実行を推奨します"
-}
