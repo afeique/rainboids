@@ -17,13 +17,14 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SCHEMA_PATH = resolve(ROOT, 'schema/protocol.toml');
-// As of 5.85.0 the Rust protocol is codegen'd from `schema/protocol.toml`
-// into `server/src/protocol/generated.rs`. This checker reads the generated
-// file rather than the hand-mirror so it stays useful as a safety net even
-// after the hand-mirror is gone — if the codegen is buggy or the generated
-// file is committed out of sync, the checker still catches it.
+// Both sides are now codegen'd from `schema/protocol.toml`. The Rust
+// types live in `server/src/protocol/generated.rs` (5.85.0); the JS
+// codecs live in `js/sim/protocol-generated.js` (5.87.0). This checker
+// reads the generated files rather than the re-export shims (`mod.rs` /
+// `protocol.js`) so it stays a useful safety net if the codegen is buggy
+// or a generated file is committed out of sync.
 const RUST_PROTOCOL_PATH = resolve(ROOT, 'server/src/protocol/generated.rs');
-const JS_PROTOCOL_PATH = resolve(ROOT, 'js/sim/protocol.js');
+const JS_PROTOCOL_PATH = resolve(ROOT, 'js/sim/protocol-generated.js');
 
 const issues = [];
 const note = (s) => issues.push(s);
