@@ -15,9 +15,15 @@ export class Player {
         this.lastY = 0;
         this.rotation = 0;
         this.radius = 12;
-        this.health = 25;
-        this.maxHealth = 25;
-        this.shieldTanks = 0; // 5.85.0 — no free second chance; first 0-HP event ends a life
+        // 5.88.5 — base max HP bumped 25 → 40 for the energy-tank hit
+        // model. With no post-hit invuln window, low-base HP meant a
+        // single sustained burst could clip through a tank in one go;
+        // 40 gives the player ~2 hits of headroom per tank at typical
+        // enemy damage values, so picked-up health actually has room
+        // to land before the next consume-tank trigger.
+        this.health = 40;
+        this.maxHealth = 40;
+        this.healthTanks = 0; // engine init overrides to 3 (5.88.3 spare-count semantics)
         this.shield = 15; // 15% damage reduction (start with basic armor for survivability)
         this.invulnerable = false;
         this.lastHitTime = 0;

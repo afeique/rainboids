@@ -1,9 +1,9 @@
 // Player damage, tank consumption, and game-over.
 //
 // 5.88.3 — energy tanks fully unified with the triforce:
-//   - shieldTanks ∈ [0, 3] is the SPARE count. Each triangle = 1 spare.
+//   - healthTanks ∈ [0, 3] is the SPARE count. Each triangle = 1 spare.
 //   - The healthbar represents the *active* tank (the implicit "+1").
-//     Total effective tanks = shieldTanks + 1, capped at 4.
+//     Total effective tanks = healthTanks + 1, capped at 4.
 //   - Hits reduce HP. When HP hits 0:
 //       * spares > 0: consume one spare → vaporize a triangle (top →
 //         btm-right → btm-left in that loss order), refill HP, keep
@@ -20,7 +20,7 @@
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
 
-export const MAX_SHIELD_TANKS = 3;
+export const MAX_HEALTH_TANKS = 3;
 
 export function takeDamage(damageAmount = this.baseDamage) {
     if (this.player.invincible) return;
@@ -116,7 +116,7 @@ export function takeDamage(damageAmount = this.baseDamage) {
             return;
         }
 
-        if (this.shieldTanks > 0) {
+        if (this.healthTanks > 0) {
             this._consumeTank();
             return;
         }
@@ -142,10 +142,10 @@ export function takeDamage(damageAmount = this.baseDamage) {
 // keep playing. Returns true if a tank was consumed (HP refilled), false
 // if there were no tanks to consume (caller should handle game-over).
 export function _consumeTank() {
-    if (this.shieldTanks <= 0) return false;
+    if (this.healthTanks <= 0) return false;
 
-    const tanksBefore = this.shieldTanks;
-    this.shieldTanks--;
+    const tanksBefore = this.healthTanks;
+    this.healthTanks--;
 
     // Visual feedback: vaporize the slot that just emptied. Mirrored
     // coordinates below must match the values updateHUD() passes to
@@ -163,7 +163,7 @@ export function _consumeTank() {
 
     this.player.health = this.player.getEffectiveMaxHealth();
     this.events.emit('audio:coin');
-    this.events.emit('ui:update-tanks', { tanks: this.shieldTanks });
+    this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
     return true;
 }
 
@@ -178,7 +178,7 @@ const HUD_BAR_CENTER_Y = 35;
 // 5.88.0 — health-pickup overflow → tank progress. `amountHealed` is
 // the actual HP delta (post-cap); `orbAmount` is the original orb value
 // before cap. Overflow = orbAmount - amountHealed. When the accumulated
-// overflow reaches one full max-HP, +1 tank (capped at MAX_SHIELD_TANKS).
+// overflow reaches one full max-HP, +1 tank (capped at MAX_HEALTH_TANKS).
 export function applyHealthOrbToTanks(orbAmount, amountHealed) {
     const overflow = Math.max(0, orbAmount - amountHealed);
     if (overflow <= 0 && this.player.health < this.player.getEffectiveMaxHealth()) return;
@@ -191,17 +191,17 @@ export function applyHealthOrbToTanks(orbAmount, amountHealed) {
     const credit = overflow > 0 ? overflow : orbAmount;
     this.player._tankProgress += credit / maxHp;
 
-    while (this.player._tankProgress >= 1 && this.shieldTanks < MAX_SHIELD_TANKS) {
-        this.shieldTanks++;
+    while (this.player._tankProgress >= 1 && this.healthTanks < MAX_HEALTH_TANKS) {
+        this.healthTanks++;
         this.player._tankProgress -= 1;
         this.events.emit('audio:powerup');
-        this.events.emit('ui:update-tanks', { tanks: this.shieldTanks });
+        this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
         if (typeof this.spawnTankRecharge === 'function') {
-            this.spawnTankRecharge(this.shieldTanks);
+            this.spawnTankRecharge(this.healthTanks);
         }
     }
     // Cap progress at <1 once at max tanks so overflow doesn't sit forever.
-    if (this.shieldTanks >= MAX_SHIELD_TANKS && this.player._tankProgress > 1) {
+    if (this.healthTanks >= MAX_HEALTH_TANKS && this.player._tankProgress > 1) {
         this.player._tankProgress = 1;
     }
 }
@@ -214,7 +214,7 @@ export function handlePlayerDeath() {
     this.deathLocation = { x: dx, y: dy };
 
     // Vaporize the LAST triangle (the bottom-left, which is what's
-    // rendered when tanks=1). shieldTanks is already 0 by the time
+    // rendered when tanks=1). healthTanks is already 0 by the time
     // handlePlayerDeath fires, so the FX site is computed for "loss
     // from 1 → 0".
     if (typeof this.spawnTriforceVaporize === 'function' &&

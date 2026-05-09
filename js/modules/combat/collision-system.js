@@ -1688,7 +1688,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         // 5.88.0 — tank-based hit model: HP→0 consumes a tank (vaporize
         // FX + HP refill, no invuln); the only "lives" left are tanks.
         if (player.health <= 0) {
-            if (this.shieldTanks > 0) {
+            if (this.healthTanks > 0) {
                 this._consumeTank();
             } else {
                 this.handlePlayerDeath();
@@ -1851,7 +1851,7 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
 
     // 5.88.0 — tank-based hit model.
     if (player.health <= 0) {
-        if (this.shieldTanks > 0) {
+        if (this.healthTanks > 0) {
             this._consumeTank();
         } else {
             this.handlePlayerDeath();
@@ -1982,7 +1982,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
 
         // 5.88.0 — tank-based hit model.
         if (this.player.health <= 0) {
-            if (this.shieldTanks > 0) {
+            if (this.healthTanks > 0) {
                 this._consumeTank();
             } else {
                 this.handlePlayerDeath();

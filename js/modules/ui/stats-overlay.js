@@ -71,7 +71,7 @@ function buildStatsModel(player, gameEngine) {
             },
             {
                 key: 'Shield Tanks',
-                value: `${player.shieldTanks || 0}`,
+                value: `${player.healthTanks || 0}`,
                 tip:
                     `Number of full HP-bar tanks. When HP hits 0, one tank is\n` +
                     `consumed and HP refills. Earned via the Defense shop tab.`,

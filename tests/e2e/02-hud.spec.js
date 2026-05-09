@@ -202,17 +202,17 @@ test.describe('E2E-02: HUD elements', () => {
     // inside the triforce widget.
     test.describe('energy-tank state (5.88.0)', () => {
         test('player starts with 3 energy tanks', async ({ page }) => {
-            const tanks = await page.evaluate(() => window.gameEngine.shieldTanks);
+            const tanks = await page.evaluate(() => window.gameEngine.healthTanks);
             expect(tanks).toBe(3);
         });
 
         test('energy tanks cap at 4 (3 triforce + spare)', async ({ page }) => {
             const cap = await page.evaluate(() => {
-                window.gameEngine.shieldTanks = 99; // try to over-set
+                window.gameEngine.healthTanks = 99; // try to over-set
                 if (window.gameEngine.applyHealthOrbToTanks) {
                     window.gameEngine.applyHealthOrbToTanks(0, 0);
                 }
-                return window.gameEngine.shieldTanks;
+                return window.gameEngine.healthTanks;
             });
             // The runtime accepts any value when set externally; the cap
             // is enforced by applyHealthOrbToTanks (the gain path), not

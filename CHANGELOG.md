@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.88.5] - 2026-05-09
+
+### Changed — 3D health shapes now have proper 3-axis rotation (no atlas, no smearing)
+The cube/octahedron/tetrahedron/prism health pickups were drawn as fixed 2D silhouettes that just spun around the camera axis. They now tumble in real 3D — vertices live in 3-space, get rotated by a per-orb Rz·Ry·Rx matrix every frame, and project to a convex-hull silhouette + back-face-culled edges. The cube goes from "isometric hexagon spinning" to "actual cube tumbling".
+
+Implementation: pure procedural Canvas2D, no atlas, no cached sprites, no WebGL textures. Considered:
+
+- **Cached Canvas2D sprites** — would need bake-at-multiple-size-buckets (orbs vary 8–18 px) AND many rotation bins for 3-axis tumble; bilinear scaling would smear at non-bake sizes, nearest scaling would chunk pixels on rotated geometry. Slow tumble crosses bin boundaries every frame so the cache wouldn't even win much.
+- **WebGL with vertex geometry** — fastest, but a new dedicated renderer for ≤20 orbs/frame is more code than the savings justify at this scale.
+
+Procedural draw at native size with vector primitives has nothing for filters or minification to bug up — there are no textures involved. ~80 µs per orb, comfortably under any frame budget for typical orb counts.
+
+Per-orb state: existing `rotation` + `rotationSpeed` (Z-axis spin) preserved; new `rotX`, `rotY`, `tumbleSpeedX`, `tumbleSpeedY` (X/Y tumble at ~1/4 the Z spin rate) added in `color-star.js` reset. Per-frame in `_drawHealthShape3D`: build matrix from time + per-orb angles, project N≤8 vertices, run Andrew's monotone-chain hull for the silhouette polygon, draw filled hull + back-face-culled edges over the top.
+
+Geometry data lives in a top-level `HEALTH_SHAPE_GEOMETRY` const at `js/modules/game-engine.js`: per shape, `verts` (unit-radius), `faces` (CCW from outside, used for the back-face cull's 2D cross test), and `edges` (each carrying its two adjacent face indices).
+
+### Changed — Health drops more common; player more survivable
+The 5.88.0 energy-tank model removed automatic post-hit invuln, which made low base HP + sparse healing punishing in sustained combat. Tuned for the new model:
+
+- **Heal range**: `HEALTH_ORB_HEAL_AMOUNT_MIN/MAX` 1/2 → **4/8**.
+- **Drop rate**: `HEALTH_ORB_BASE_DROP_RATE` 0.40 → **0.70** (matches money orb rate).
+- **Drop cooldown**: `HEALTH_DROP_COOLDOWN_BASE` 60s → **25s**; floor 30s → **12s**; per-Triage-stack reduction 5s → 2.5s.
+- **Heal cap**: `HEALTH_ORB_MAX_HEAL_PER_ORB` 2 → **8** (re-anchors orb size scaling to the new heal range).
+- **Orb size cap**: `HEALTH_ORB_SIZE_MAX` 16 → **18 px**.
+- **Collection radius**: 15 → **22 px**.
+- **Player base max HP**: 25 → **40** (mirrored in `player.js` and the engine's `playerShields` / `displayShields` init).
+
+### Changed — `shieldTanks` renamed to `healthTanks`
+Better names — the field has been the safety net for the *health* bar, never a shield, since 5.88.0 unified the lives system into it. Plain identifier rename across 9 files (game-engine, lifecycle, player, hud/status, combat/collision, ui/stats-overlay, tests/qa, tests/e2e, tests/helpers). Constant `MAX_SHIELD_TANKS` → `MAX_HEALTH_TANKS`. The serialized save-state field `engineTanks` is unchanged so existing saves still load.
+
+---
+
 ## [5.88.4] - 2026-05-09
 
 ### Changed — Triforce unified with shield-tank state; cap = 3 spares

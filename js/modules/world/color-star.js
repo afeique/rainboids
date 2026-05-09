@@ -120,15 +120,27 @@ export class ColorStar {
             this.baseRadius = 14;
             this.radius = 14;
 
-            // 5.79.38 — Rotation speed lowered for 3D health orbs.
+            // 5.79.38 — Z-axis spin (around the camera-facing axis).
             //   Was 0.06–0.16 rad/tick (3.6–9.6 rad/s @ 60Hz, hard
-            //   to track visually). Now 0.025–0.055 (1.5–3.3 rad/s) —
-            //   slow enough to read each face turning, fast enough to
-            //   never look frozen.
+            //   to track visually). 0.025–0.055 (1.5–3.3 rad/s) is
+            //   slow enough to read each face turning, fast enough
+            //   to never look frozen.
             const orbRotSign = Math.random() < 0.5 ? -1 : 1;
             const orbBaseRot = random(0.025, 0.055);
             this.rotationSpeed = orbRotSign * orbBaseRot;
             this.rotation = Math.random() * Math.PI * 2;
+
+            // 5.88.5 — X/Y-axis tumble, the "slight 3D rotation".
+            //   Roughly 1/4 the speed of the Z spin so the tumble
+            //   reads as background motion rather than a wobble.
+            //   Each orb gets its own random axis + rate so the
+            //   pickup pile doesn't tumble in lockstep.
+            const tx = Math.random() < 0.5 ? -1 : 1;
+            const ty = Math.random() < 0.5 ? -1 : 1;
+            this.tumbleSpeedX = tx * random(0.005, 0.012);
+            this.tumbleSpeedY = ty * random(0.005, 0.012);
+            this.rotX = Math.random() * Math.PI * 2;
+            this.rotY = Math.random() * Math.PI * 2;
 
             // Twinkle/shimmer phase + speed (per-orb so they don't all pulse
             // in lockstep). Read by the WebGL starfield's vertex shader.

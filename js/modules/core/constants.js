@@ -19,18 +19,21 @@ export const GAME_CONFIG = {
     ORB_FRIC: 0.92, // Increased friction to slow down money and health orbs
     
     // Health Orb Configuration (renamed from health stars)
-    HEALTH_ORB_HEAL_AMOUNT_MIN: 1, // Minimum health restored per health orb
-    HEALTH_ORB_HEAL_AMOUNT_MAX: 2, // Maximum health restored per health orb
-    HEALTH_ORB_BASE_DROP_RATE: 0.40, // 5.81.1 — bumped 0.20 → 0.40. Combined with the 60s cooldown the effective heal rate was too sparse; doubling the roll keeps the cooldown gate as the primary throttle while making "next health drop" feel consistently within reach.
+    // 5.88.5 — drops bumped + heal amounts widened for the energy-tank
+    // hit model. With no automatic post-hit invuln (5.88.0), the player
+    // takes hits more frequently; the old 1-2 HP / 60s cooldown / 0.40
+    // drop rate pushed the rest-state HP curve into "always one bullet
+    // away from a tank loss" territory. New numbers raise the steady
+    // state to about half-tank-burn-per-wave instead of full-tank.
+    HEALTH_ORB_HEAL_AMOUNT_MIN: 4, // 1 → 4 (5.88.5)
+    HEALTH_ORB_HEAL_AMOUNT_MAX: 8, // 2 → 8 (5.88.5)
+    HEALTH_ORB_BASE_DROP_RATE: 0.70, // 0.40 → 0.70 (5.88.5)
     HEALTH_ORB_BASE_DROP_COUNT_MAX: 1, // Legacy field — health drops are now exactly one orb (5.79.27).
-    HEALTH_ORB_COLLECTION_RADIUS: 15, // Extra pixels added to collection radius
-    // 5.79.32 — Health orbs sized to MATCH gold shape orbs (8-16 px),
-    //   per user request. The blue color contrast against gold is enough
-    //   to differentiate them; oversize was pulling visual weight that
-    //   the player no longer needs to differentiate "big important pickup."
+    HEALTH_ORB_COLLECTION_RADIUS: 22, // 15 → 22 (5.88.5) — wider scoop matches the longer magnet range
+    // 5.79.32 — Health orbs sized to MATCH gold shape orbs (8-16 px).
     HEALTH_ORB_SIZE_MIN: 8,   // Pixel radius for a 1-heal orb.
-    HEALTH_ORB_SIZE_MAX: 16,  // Pixel radius for a full-cap heal orb.
-    HEALTH_ORB_MAX_HEAL_PER_ORB: 2, // Heal cap drives the size-scaling ratio.
+    HEALTH_ORB_SIZE_MAX: 18,  // Pixel radius for a full-cap heal orb. 16 → 18 to track the heal range bump.
+    HEALTH_ORB_MAX_HEAL_PER_ORB: 8, // 2 → 8 (5.88.5) — re-anchors the size scaling to the new max heal.
 
     // Money Orb Configuration — gold drops are a "few shape orbs +
     //   many pixel particles" mix (5.79.27). Two distinct visual
@@ -68,9 +71,11 @@ export const GAME_CONFIG = {
     // now scale uniformly with player level (see combat-manager.js).
 
     // Health Orb Drop Cooldown (global throttle so health drops don't trivialize the game)
-    HEALTH_DROP_COOLDOWN_BASE: 60000, // 60s default between health orb drop events
-    HEALTH_DROP_COOLDOWN_REDUCTION_PER_STACK: 5000, // -5s per Triage stack
-    HEALTH_DROP_COOLDOWN_MIN: 30000, // 30s floor (reached at 6 stacks)
+    // 5.88.5 — cooldown roughly halved alongside the drop-rate + heal-amount
+    // bump so health drops actually keep up with sustained combat.
+    HEALTH_DROP_COOLDOWN_BASE: 25000, // 60s → 25s
+    HEALTH_DROP_COOLDOWN_REDUCTION_PER_STACK: 2500, // 5s → 2.5s (smaller absolute, similar % impact on the new base)
+    HEALTH_DROP_COOLDOWN_MIN: 12000, // 30s → 12s (reached at ~5 Triage stacks)
 
     ENEMY_BULLET_ASTEROID_DAMAGE: 1, // Damage enemy bullets deal to asteroids
     MIN_AST_RAD: 15,

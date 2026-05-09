@@ -291,10 +291,10 @@ export function drawSkillCooldownHUD() { /* no-op */ }
 
 // 5.85.0 — triforce geometry shared between draw + vaporize-spawn so
 // the burst lines up exactly with the triangle that just disappeared.
-// 5.88.3 — triforce + shieldTanks fully unified. Each triangle is one
+// 5.88.3 — triforce + healthTanks fully unified. Each triangle is one
 // spare energy tank. The healthbar to the right is the *active* tank
 // (the "last" one in the user's framing — the one with no triangle).
-// Total effective tanks = shieldTanks + 1 (the active tank), capped at
+// Total effective tanks = healthTanks + 1 (the active tank), capped at
 // 4 effective = 3 spares (full triforce) + 1 active. The standalone
 // battery icon I introduced in 5.88.0–5.88.2 is gone; nothing stands
 // between the triforce and the screen edge anymore.
@@ -882,9 +882,9 @@ export function updateHUD() {
 
         // Draw triforce (= spare energy-tank indicator) on canvas,
         // vertically centered with the healthbar so the row reads as
-        // one HUD widget. shieldTanks (= spare count, 0..3) is the
+        // one HUD widget. healthTanks (= spare count, 0..3) is the
         // source of truth.
-        this.drawCanvasTriforce(ctx, this.shieldTanks | 0, triforceLeftX, barCenterY);
+        this.drawCanvasTriforce(ctx, this.healthTanks | 0, triforceLeftX, barCenterY);
 
         // Create futuristic angled health bar geometry
         const createHealthBarPath = (width) => {
@@ -1061,8 +1061,8 @@ export function updateHUD() {
         const tanksY = barY + barHeight + 10;
 
         // Update shield tanks display
-        let shieldTanksContainer = document.getElementById('shield-tanks');
-        if (!shieldTanksContainer) {
+        let healthTanksContainer = document.getElementById('shield-tanks');
+        if (!healthTanksContainer) {
             // Create shield tanks container if it doesn't exist
             const container = document.createElement('div');
             container.id = 'shield-tanks';
@@ -1075,7 +1075,7 @@ export function updateHUD() {
             document.body.appendChild(container);
         } else {
             // Clear existing tanks
-            shieldTanksContainer.innerHTML = '';
+            healthTanksContainer.innerHTML = '';
         }
 
         // Shield tanks display removed - was causing green square overlay

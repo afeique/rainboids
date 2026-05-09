@@ -293,8 +293,8 @@ export class GameAI {
                 // 5.88.0 — lives replaced with energy tanks; old field
                 // name kept on the AI snapshot for back-compat in case
                 // any e2e/perf script reads `state.lives`.
-                lives:        ge.shieldTanks,
-                tanks:        ge.shieldTanks,
+                lives:        ge.healthTanks,
+                tanks:        ge.healthTanks,
                 player: {
                     x:        p?.x,
                     y:        p?.y,

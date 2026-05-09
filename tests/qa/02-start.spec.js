@@ -90,7 +90,7 @@ test.describe('QA-02: Game start and state transitions', () => {
 
     test('player starts with 3 energy tanks (5.88.0)', async ({ page }) => {
         await startGame(page);
-        const tanks = await page.evaluate(() => window.gameEngine?.shieldTanks);
+        const tanks = await page.evaluate(() => window.gameEngine?.healthTanks);
         expect(tanks).toBe(3);
     });
 
