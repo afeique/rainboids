@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.79.62] - 2026-05-08
+
+### Fixed — Health-pickup 3D shapes are pixel-perfect (no more shimmer)
+The 3D health pickups (cube, octahedron, tetrahedron, prism) were rendering through the WebGL starfield atlas — baked at 128×128 px and minified to 8–16 px on screen. The thin internal "3D" edges (`lineWidth ≈ r*0.06` ≈ 3 atlas px) shrank to sub-pixel after minification and shimmered or disappeared entirely as the orbs rotated. The prism in particular looked broken because its slanted top edge ended up below the texel grid resolution.
+
+Fix: render 3D health shapes via Canvas2D directly at their on-screen size, same pattern gold coins use (`_drawGoldCoinsCanvas2D`). Added `_drawHealthShapesCanvas2D` to game-engine.js with per-shape draw helpers — `_drawCubeShape`, `_drawOctahedronShape`, `_drawTetrahedronShape`, `_drawPrismShape`. Each draws its silhouette + internal "3D" edges using integer-aligned coords, 2-px outlines, and a `Math.max(1, round(r * 0.12))` internal-edge line width that stays at least 1 px crisp at every render size. `_pushOrbsToWebGL` now skips orbs with `is3DShape` so they only render via the Canvas2D path.
+
+Trade-off: one extra Canvas2D pass per frame, but bounded — there are typically 1–3 health orbs on screen at most. Not a perf concern.
+
+---
+
 ## [5.79.61] - 2026-05-08
 
 ### Changed — Bullet shader stripped to flat silhouettes (no glow / core / gradient)

@@ -1045,10 +1045,18 @@ export class GameEngine {
     _pushOrbsToWebGL() {
         if (!this.starfieldRenderer.supported) return;
         // Health/legacy collectibles in colorStarPool.
+        // 5.79.62 — 3D health shapes (cube/octahedron/tetrahedron/prism)
+        //   skip the WebGL atlas entirely — they render via Canvas2D in
+        //   `_drawHealthShapesCanvas2D` for pixel-perfect crisp edges.
+        //   The atlas was baking 128-px sprites which then minified to
+        //   8-16 px on screen; the thin internal "3D" edges shimmered
+        //   sub-pixel during rotation. Canvas2D draws at on-screen size
+        //   so the lines stay crisp.
         const orbs = this.colorStarPool.activeObjects;
         for (let i = 0; i < orbs.length; i++) {
             const orb = orbs[i];
             if (!orb.active || !orb.isCollectible) continue;
+            if (orb.is3DShape) continue;
             this._pushOrbInstance(orb);
         }
         // 5.79.32 — Gold shapes ride the WebGL starfield pipeline (atlas
@@ -1092,6 +1100,157 @@ export class GameEngine {
             ctx.fillRect(c.x - half, c.y - half, size, size);
         }
         ctx.restore();
+    }
+
+    /**
+     * 5.79.62 — Render 3D health-shape orbs as crisp Canvas2D polygons
+     * at their actual on-screen size. Replaces the WebGL atlas path,
+     * which baked 128-px sprites with thin internal "3D" edges that
+     * minified to sub-pixel and shimmered during rotation. Drawing at
+     * native size with integer-aligned translate + rounded line widths
+     * gives pixel-perfect outlines that read cleanly at every radius.
+     */
+    _drawHealthShapesCanvas2D(ctx, vL, vT, vR, vB) {
+        const orbs = this.colorStarPool.activeObjects;
+        if (orbs.length === 0) return;
+
+        const t = frameClock.now * 0.001;
+
+        for (let i = 0; i < orbs.length; i++) {
+            const orb = orbs[i];
+            if (!orb.active || !orb.is3DShape) continue;
+            if (orb.x < vL || orb.x > vR || orb.y < vT || orb.y > vB) continue;
+
+            const sizeMul = orb.sizeVariation || 1;
+            const wave = 0.5 + 0.5 * Math.sin(
+                t * (orb.twinkleSpeed || 3.5) + (orb.twinklePhase || 0),
+            );
+            const pulseMul = 0.94 + 0.18 * wave;
+            const r = Math.max(4, Math.round(orb.radius * sizeMul * pulseMul));
+            const depthOpacity = orb.depthOpacity ?? 1;
+            const alpha = (orb.opacity ?? 1) * depthOpacity * 0.95;
+            if (alpha <= 0) continue;
+
+            const rotation = (orb.rotation || 0) + t * (orb.rotationSpeed || 0) * 60;
+
+            ctx.save();
+            // Integer-aligned translate so polygon strokes land on
+            // whole-pixel rows when rotation is 0. With rotation the
+            // pixel grid no longer aligns, but Canvas2D AA handles
+            // sub-pixel rotated lines smoothly (no shimmering — that
+            // came from texture-minification aliasing in WebGL).
+            ctx.translate(Math.round(orb.x), Math.round(orb.y));
+            ctx.rotate(rotation);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = orb.color;
+            ctx.lineJoin = 'miter';
+            ctx.lineCap = 'butt';
+
+            const borderCol = orb.borderColor || '#000';
+
+            switch (orb.shape) {
+                case 'cube':        this._drawCubeShape(ctx, r, borderCol); break;
+                case 'octahedron':  this._drawOctahedronShape(ctx, r, borderCol); break;
+                case 'tetrahedron': this._drawTetrahedronShape(ctx, r, borderCol); break;
+                case 'prism':       this._drawPrismShape(ctx, r, borderCol); break;
+            }
+            ctx.restore();
+        }
+    }
+
+    _drawCubeShape(ctx, r, borderCol) {
+        // Isometric hexagon silhouette, top vertex at -π/2.
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = -Math.PI / 2 + (i * Math.PI) / 3;
+            const x = Math.cos(a) * r;
+            const y = Math.sin(a) * r;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = borderCol;
+        ctx.stroke();
+        // 3 internal edges from center to top/lower-left/lower-right
+        // verts — the "Y" projection that makes it read as a cube.
+        const a2 = -Math.PI / 2 + (2 * Math.PI) / 3;
+        const a4 = -Math.PI / 2 + (4 * Math.PI) / 3;
+        ctx.lineWidth = Math.max(1, Math.round(r * 0.12));
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(0, -r);
+        ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a2) * r, Math.sin(a2) * r);
+        ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a4) * r, Math.sin(a4) * r);
+        ctx.stroke();
+    }
+
+    _drawOctahedronShape(ctx, r, borderCol) {
+        // Vertical diamond + horizontal equator line for the 3D split.
+        ctx.beginPath();
+        ctx.moveTo(0, -r);
+        ctx.lineTo(r,  0);
+        ctx.lineTo(0,  r);
+        ctx.lineTo(-r, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = borderCol;
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1, Math.round(r * 0.12));
+        ctx.beginPath();
+        ctx.moveTo(-r, 0); ctx.lineTo(r, 0);
+        ctx.stroke();
+    }
+
+    _drawTetrahedronShape(ctx, r, borderCol) {
+        // Front-facing triangle + 3 internal edges to the centroid.
+        const apexY  = -r;
+        const baseY  = Math.round(r * 0.5);
+        const baseX  = Math.round(r * 0.866);
+        ctx.beginPath();
+        ctx.moveTo(0,     apexY);
+        ctx.lineTo(baseX, baseY);
+        ctx.lineTo(-baseX, baseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = borderCol;
+        ctx.stroke();
+        // Centroid pulled slightly down for 3D feel.
+        const gy = Math.round((apexY + baseY + baseY) / 3 + r * 0.15);
+        ctx.lineWidth = Math.max(1, Math.round(r * 0.12));
+        ctx.beginPath();
+        ctx.moveTo(0,      apexY);  ctx.lineTo(0, gy);
+        ctx.moveTo(-baseX, baseY);  ctx.lineTo(0, gy);
+        ctx.moveTo(baseX,  baseY);  ctx.lineTo(0, gy);
+        ctx.stroke();
+    }
+
+    _drawPrismShape(ctx, r, borderCol) {
+        // Front rectangle + slanted top edge — classic isometric box.
+        const w    = Math.round(r * 0.9);
+        const h    = Math.round(r * 1.1);
+        const skew = Math.round(r * 0.32);
+        const topY = Math.round(-h * 0.4);
+        const skY  = topY - Math.round(skew * 0.7);
+        ctx.beginPath();
+        ctx.moveTo(-w,         h);
+        ctx.lineTo( w,         h);
+        ctx.lineTo( w,         topY);
+        ctx.lineTo( w + skew,  skY);
+        ctx.lineTo(-w + skew,  skY);
+        ctx.lineTo(-w,         topY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = borderCol;
+        ctx.stroke();
+        // Front-top horizontal + back-skew internal edges.
+        ctx.lineWidth = Math.max(1, Math.round(r * 0.12));
+        ctx.beginPath();
+        ctx.moveTo(-w, topY); ctx.lineTo(w, topY);
+        ctx.moveTo( w, topY); ctx.lineTo(w + skew, skY);
+        ctx.stroke();
     }
 
     _pushOrbInstance(orb) {
@@ -1895,6 +2054,7 @@ export class GameEngine {
                 //   pixels (above the world layer, below entities) so
                 //   they read as crisp point-like collectibles.
                 this._drawGoldCoinsCanvas2D(this.ctx, vL, vT, vR, vB);
+                this._drawHealthShapesCanvas2D(this.ctx, vL, vT, vR, vB);
                 this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
 
