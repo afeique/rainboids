@@ -40,21 +40,19 @@ export function sellShopItem(itemId) {
         // actual refund will diverge.
         const refund = lastStackCost;
 
-        if (itemId === 'SPARE_SHIP') {
-            if (this.game.lives <= 1) return false;
-            this.game.lives--;
-            this.events.emit('ui:update-lives', { lives: this.game.lives });
+        // 5.88.0 — SPARE_SHIP retired with the lives system. Energy tanks
+        // can't be sold back: they're earned through gameplay (overflow
+        // healing) and represent a per-run safety net rather than a
+        // shop-purchased commodity.
+        const entry = this.player.powerups.get(itemId);
+        if (!entry) return false;
+        if (entry.stacks <= 1) {
+            this.player.powerups.delete(itemId);
         } else {
-            const entry = this.player.powerups.get(itemId);
-            if (!entry) return false;
-            if (entry.stacks <= 1) {
-                this.player.powerups.delete(itemId);
-            } else {
-                entry.stacks--;
-            }
-            if (itemId === 'HEALTH_BOOST') {
-                this.player.health = Math.min(this.player.health, this.player.getEffectiveMaxHealth());
-            }
+            entry.stacks--;
+        }
+        if (itemId === 'HEALTH_BOOST') {
+            this.player.health = Math.min(this.player.health, this.player.getEffectiveMaxHealth());
         }
 
         // 5.70.0 — PICKS-currency items (powerups bought from the
@@ -372,7 +370,9 @@ export function buyShopItem(itemId) {
                 return false;
             }
 
-            if (itemId === 'SPARE_SHIP' && this.game.lives >= 3) return false;
+            // 5.88.0 — SPARE_SHIP retired with the lives system. The
+            // category-cap check below still rejects it cleanly.
+            if (itemId === 'SPARE_SHIP') return false;
 
             const currentStacks = this.player.getPowerupStacks(itemId);
             if (currentStacks >= item.maxStacks) return false;
@@ -404,10 +404,10 @@ export function buyShopItem(itemId) {
                 this.game.money -= actualCost;
             }
 
-            if (itemId === 'SPARE_SHIP') {
-                this.game.lives = Math.min(3, this.game.lives + 1);
-                this.events.emit('ui:update-lives', { lives: this.game.lives });
-            } else {
+            // 5.88.0 — SPARE_SHIP retired (was a +1 life purchase). Any
+            // legacy code path that still tags an item as SPARE_SHIP is
+            // already rejected above before we deduct currency.
+            {
                 const powerupConfig = this.getPowerupConfig(itemId);
                 if (!powerupConfig) {
                     console.error(`❌ Powerup config not found for: ${itemId}`);

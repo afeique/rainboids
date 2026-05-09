@@ -207,7 +207,7 @@ The shop offers permanent upgrades using two currencies:
 - **Coins**: Earned by destroying enemies and collecting money orbs
 - **Skill Points (SP)**: Gained by leveling up through experience
 
-The shop has six tabs: **Help**, **Powerups**, **Primary**, **Power**, **Defense**, and **Timer**. The shop opens automatically between waves AND on level-up (5.71.0). If the player has unspent **Powerup Picks**, the **Powerups** tab is the default landing tab; otherwise the shop lands on a random purchasable tab. **Powerups** (5.70.0) is picks-priced — every powerup is purchasable, 1 Pick each, with per-powerup `maxStacks` limits. **Primary** and **Power** are gold-priced and show upgrades for whichever weapon is currently equipped (selection happens in the pause menu — see Controls above). Switching weapons in the pause menu instantly repopulates the shop with that weapon's upgrades. **Defense** is SP-priced (survivability + lives). **Timer** (5.71.0) is info-only — shows the live run timer plus the speedrun multiplier tiers (GODLIKE 5× under 5 min, LEGENDARY 4× under 7:30, …, CASUAL 1.5× under 20 min). The three spendable currencies — **Gold**, **SP**, and **Picks** (big pink `+`) — show in the shop header.
+The shop has six tabs: **Help**, **Powerups**, **Primary**, **Power**, **Defense**, and **Timer**. The shop opens automatically between waves AND on level-up (5.71.0). If the player has unspent **Powerup Picks**, the **Powerups** tab is the default landing tab; otherwise the shop lands on a random purchasable tab. **Powerups** (5.70.0) is picks-priced — every powerup is purchasable, 1 Pick each, with per-powerup `maxStacks` limits. **Primary** and **Power** are gold-priced and show upgrades for whichever weapon is currently equipped (selection happens in the pause menu — see Controls above). Switching weapons in the pause menu instantly repopulates the shop with that weapon's upgrades. **Defense** is SP-priced (survivability — note: SPARE_SHIP retired in 5.88.0 with the lives system; energy tanks now act as the safety net). **Timer** (5.71.0) is info-only — shows the live run timer plus the speedrun multiplier tiers (GODLIKE 5× under 5 min, LEGENDARY 4× under 7:30, …, CASUAL 1.5× under 20 min). The three spendable currencies — **Gold**, **SP**, and **Picks** (big pink `+`) — show in the shop header.
 
 **The shop auto-opens between waves.** When a wave clears, a brief "WAVE COMPLETE!" toast plays, then the shop pops up. The next wave only starts when the player closes the shop — there is no countdown. A SHOP button in the top-right HUD (next to the pause button) lets the player jump in mid-wave at any time.
 
@@ -421,7 +421,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── skills.js      #   5 defense skill methods
 │       │   ├── progression.js #   18 leveling, powerup, stat methods
 │       │   ├── renderer.js    #   5 player draw methods
-│       │   ├── lifecycle.js   #   Damage, death, respawn, shield tanks
+│       │   ├── lifecycle.js   #   Damage, energy tanks, game-over (5.88.0)
 │       │   └── bullet.js      #   Player projectile entity
 │       ├── enemy/             # Enemy entity and subsystems
 │       │   ├── enemy.js       #   Enemy entity (10 types, update/draw orchestration)
@@ -433,10 +433,10 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   └── enemy-bullet.js #  Enemy projectile entity
 │       ├── hud/               # HUD rendering (split by domain)
 │       │   ├── index.js       #   Barrel re-export
-│       │   ├── status.js      #   Health bar, lives, level/coins, XP, skill cooldowns
+│       │   ├── status.js      #   Health bar, energy tanks (triforce + spare), level/coins, XP
 │       │   ├── combat.js      #   Damage numbers, target info, powerups, money pickup
 │       │   ├── navigation.js  #   Minimap, off-screen enemy indicators
-│       │   ├── overlays.js    #   Title screen, wavy text, timers, respawn, ghosts
+│       │   ├── overlays.js    #   Title screen, wavy text, timers, ghosts
 │       │   └── cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer
 │       ├── world/             # Game world entities and environment
 │       │   ├── asteroid.js    #   Asteroid entity (3D wireframe, splitting)
@@ -465,7 +465,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── sound-defs.js   #   Source-of-truth SFX registry (presets + custom params)
 │       │   └── music-player.js #  Background music player with playlist
 │       ├── ui/                # DOM UI and input
-│       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button, lives)
+│       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button)
 │       │   ├── input-handler.js # Keyboard + mouse input (desktop-only build)
 │       │   ├── event-setup.js #   All event listeners: input, shop, cheats, resize
 │       │   ├── radial-menu.js #   Held E/R/F radial picker for primary/power/skill

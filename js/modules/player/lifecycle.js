@@ -1,21 +1,37 @@
-// Player damage, death, respawn, and related effects
+// Player damage, tank consumption, and game-over.
+//
+// 5.88.3 — energy tanks fully unified with the triforce:
+//   - healthTanks ∈ [0, 3] is the SPARE count. Each triangle = 1 spare.
+//   - The healthbar represents the *active* tank (the implicit "+1").
+//     Total effective tanks = healthTanks + 1, capped at 4.
+//   - Hits reduce HP. When HP hits 0:
+//       * spares > 0: consume one spare → vaporize a triangle (top →
+//         btm-right → btm-left in that loss order), refill HP, keep
+//         playing. No respawn delay, no automatic invincibility.
+//       * spares == 0: game over.
+//   - Health pickups heal HP normally; overflow accumulates into a
+//     hidden `_tankProgress` counter; each full max-HP-worth of
+//     overflow grants +1 spare, capped at 3.
+//
+// Defense skills that grant deliberate invuln (LAST_STAND, REFLEXES,
+// PHASE_DASH, wave-start grace) still call makeInvincible — those are
+// active-ability windows, not damage-aftermath grace.
+
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
+
+export const MAX_HEALTH_TANKS = 3;
 
 export function takeDamage(damageAmount = this.baseDamage) {
     if (this.player.invincible) return;
 
-    // 5.75.0 — REFLEXES: one free dodge per 30s. The next bullet that
-    // would damage you misses entirely. Resets the cooldown timer on use.
+    // 5.75.0 — REFLEXES: one free dodge per 30s.
     if (this.player.getPowerupStacks && this.player.getPowerupStacks('REFLEXES') > 0) {
         const now = Date.now();
         if (!this.player._reflexesReadyAt || now >= this.player._reflexesReadyAt) {
             this.player._reflexesReadyAt = now + 30000;
             this.player.makeInvincible(700);
             if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
-            // 5.76.1 — visual burst: 16 cyan-blue arc particles fan out
-            // from the player so the dodge reads as a deliberate save,
-            // not a confusing missed hit.
             if (this.particlePool) {
                 for (let i = 0; i < 16; i++) {
                     const a = (i / 16) * Math.PI * 2;
@@ -34,9 +50,7 @@ export function takeDamage(damageAmount = this.baseDamage) {
     const effectiveShield = this.player.getEffectiveShield();
     let reducedDamage = damageAmount * (1 - effectiveShield / 100);
 
-    // 5.75.0 — STATIC_FIELD: passive HP shield that regenerates after
-    // 8s of no damage. Each stack adds +2 max shield. Damage hits the
-    // shield first, then HP. Tracks via _staticShield + _lastDamageAt.
+    // 5.75.0 — STATIC_FIELD: passive HP shield that regenerates after 8s.
     const staticStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('STATIC_FIELD') : 0;
     const staticMax = staticStacks * 2;
     if (this.player._staticShield === undefined) this.player._staticShield = staticMax;
@@ -44,9 +58,6 @@ export function takeDamage(damageAmount = this.baseDamage) {
         const absorbed = Math.min(this.player._staticShield, reducedDamage);
         this.player._staticShield -= absorbed;
         reducedDamage -= absorbed;
-        // 5.76.1 — STATIC_FIELD soak feedback: blue crackle particles
-        // and the lighter "shield" sound so the player can tell their
-        // shield ate the hit (vs HP).
         if (absorbed > 0) {
             if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
             if (this.particlePool) {
@@ -66,20 +77,15 @@ export function takeDamage(damageAmount = this.baseDamage) {
 
     this.player.health = Math.max(0, this.player.health - reducedDamage);
 
-    // Any actual HP loss breaks the kill streak. Bulwark-reduced hits still
-    // count (they still hit HP). Phase Dash never reaches here because the
-    // invincible check above blocks the call entirely.
     if (reducedDamage > 0) this._breakKillStreak();
 
-    // 5.75.0 — mission "no_damage" fails on any HP loss.
     if (reducedDamage > 0 && typeof this.checkMissionOnDamage === 'function') {
         if (this.game.mission) this.game.mission.damaged = true;
         this.checkMissionOnDamage();
     }
 
     if (this.player.health <= 0) {
-        // 5.75.0 — LAST_STAND: one-time-per-run survive at 1 HP. Consumed
-        // on use (sets _lastStandUsed flag).
+        // 5.75.0 — LAST_STAND: one-time-per-run survive at 1 HP.
         const lastStandStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('LAST_STAND') : 0;
         if (lastStandStacks > 0 && !this.player._lastStandUsed) {
             this.player._lastStandUsed = true;
@@ -90,7 +96,6 @@ export function takeDamage(damageAmount = this.baseDamage) {
                 this.events.emit('audio:powerup');
                 this.events.emit('audio:player-explosion');
             }
-            // 5.76.1 — radial red flash + screen-shake burst on save.
             if (typeof this.triggerScreenFlash === 'function') {
                 this.triggerScreenFlash(0.35, 8);
             }
@@ -111,32 +116,93 @@ export function takeDamage(damageAmount = this.baseDamage) {
             return;
         }
 
-        if (this.shieldTanks > 0) {
-            this.shieldTanks--;
-            this.explodeTank(this.shieldTanks);
-            this.player.health = this.player.getEffectiveMaxHealth();
-            this.events.emit('audio:coin');
-            this.player.makeInvincible(2000);
-        } else {
-            this.handlePlayerDeath();
+        if (this.healthTanks > 0) {
+            this._consumeTank();
             return;
         }
+        this.handlePlayerDeath();
+        return;
     }
 
-    this.player.makeInvincible(3000);
     this.events.emit('audio:hit');
     if (reducedDamage > 0) {
         if (typeof this.createDamageNumber === 'function') {
             this.createDamageNumber(this.player.x, this.player.y - (this.player.radius || 14), reducedDamage, { isPlayerHit: true });
         }
-        // Generic-source path: no impact point, just radial. Pass the
-        // player's own pos so the camera kick collapses to zero —
-        // triggerPlayerHitFX handles that gracefully.
         if (typeof this.triggerPlayerHitFX === 'function') {
             this.triggerPlayerHitFX(this.player.x, this.player.y, reducedDamage);
         } else {
             this.triggerScreenShake(15, 8);
         }
+    }
+}
+
+// Consume one energy tank: vaporize the corresponding triforce triangle
+// (or fade the standalone "spare" icon at tanks=4), refill HP to max, and
+// keep playing. Returns true if a tank was consumed (HP refilled), false
+// if there were no tanks to consume (caller should handle game-over).
+export function _consumeTank() {
+    if (this.healthTanks <= 0) return false;
+
+    const tanksBefore = this.healthTanks;
+    this.healthTanks--;
+
+    // Visual feedback: vaporize the slot that just emptied. Mirrored
+    // coordinates below must match the values updateHUD() passes to
+    // drawCanvasTriforce — see HUD_TRIFORCE_LEFT_X / HUD_BAR_CENTER_Y.
+    if (typeof this.getDisappearingTankPos === 'function' &&
+        typeof this.spawnTriforceVaporize === 'function') {
+        const slot = this.getDisappearingTankPos(
+            tanksBefore, HUD_TRIFORCE_LEFT_X, HUD_BAR_CENTER_Y,
+        );
+        if (slot) this.spawnTriforceVaporize(slot.x, slot.y, slot.size || 12);
+    }
+    if (typeof this.triggerGoldScreenFlash === 'function') {
+        this.triggerGoldScreenFlash(0.32, 9);
+    }
+
+    this.player.health = this.player.getEffectiveMaxHealth();
+    this.events.emit('audio:coin');
+    this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
+    return true;
+}
+
+// 5.88.3 — HUD coordinates mirrored here so the lifecycle vaporize FX
+// lands on the right slot. Keep in sync with the constants in
+// hud/status.js's updateHUD() — `triforceLeftX` and `barCenterY`.
+// Left margin matches the bottom-left loadout (livesX=36 in
+// drawEquippedWeaponSquares).
+const HUD_TRIFORCE_LEFT_X = 36;
+const HUD_BAR_CENTER_Y = 35;
+
+// 5.88.0 — health-pickup overflow → tank progress. `amountHealed` is
+// the actual HP delta (post-cap); `orbAmount` is the original orb value
+// before cap. Overflow = orbAmount - amountHealed. When the accumulated
+// overflow reaches one full max-HP, +1 tank (capped at MAX_HEALTH_TANKS).
+export function applyHealthOrbToTanks(orbAmount, amountHealed) {
+    const overflow = Math.max(0, orbAmount - amountHealed);
+    if (overflow <= 0 && this.player.health < this.player.getEffectiveMaxHealth()) return;
+
+    const maxHp = this.player.getEffectiveMaxHealth();
+    if (this.player._tankProgress === undefined) this.player._tankProgress = 0;
+
+    // If the player picks up health while already at max HP, the entire
+    // orb amount counts toward tank progress. Otherwise just the overflow.
+    const credit = overflow > 0 ? overflow : orbAmount;
+    this.player._tankProgress += credit / maxHp;
+
+    while (this.player._tankProgress >= 1 && this.healthTanks < MAX_HEALTH_TANKS) {
+        this.healthTanks++;
+        this.player._tankProgress -= 1;
+        this.events.emit('audio:powerup');
+        this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
+        if (typeof this.spawnTankRecharge === 'function') {
+            this.spawnTankRecharge(this.healthTanks);
+        }
+    }
+    // Cap progress at <1 once at max tanks so overflow doesn't sit forever.
+    if (this.healthTanks >= MAX_HEALTH_TANKS && this.player._tankProgress > 1) {
+        this.player._tankProgress = 1;
     }
 }
 
@@ -147,12 +213,23 @@ export function handlePlayerDeath() {
 
     this.deathLocation = { x: dx, y: dy };
 
-    this.game.lives--;
-    this.events.emit('ui:update-lives', { lives: this.game.lives });
+    // Vaporize the LAST triangle (the bottom-left, which is what's
+    // rendered when tanks=1). healthTanks is already 0 by the time
+    // handlePlayerDeath fires, so the FX site is computed for "loss
+    // from 1 → 0".
+    if (typeof this.spawnTriforceVaporize === 'function' &&
+        typeof this.getDisappearingTankPos === 'function') {
+        const tri = this.getDisappearingTankPos(
+            1, HUD_TRIFORCE_LEFT_X, HUD_BAR_CENTER_Y,
+        );
+        if (tri) this.spawnTriforceVaporize(tri.x, tri.y, tri.size || 12);
+    }
+    if (typeof this.triggerGoldScreenFlash === 'function') {
+        this.triggerGoldScreenFlash(0.32, 9);
+    }
+
     this.events.emit('audio:player-explosion');
     this.player.active = false;
-
-    const isGameOver = this.game.lives <= 0;
 
     // ── Phase 0: Impact Freeze (immediate) ──────────────────────────
     this.triggerHitstop(15);
@@ -160,10 +237,10 @@ export function handlePlayerDeath() {
     const kickAngle = playerAngle + Math.PI;
     this.triggerCameraKick(Math.cos(kickAngle), Math.sin(kickAngle), 25);
 
-    // Death overlay
-    this._deathOverlayTimer = isGameOver ? 90 : 50;
+    // Death overlay — full hold since it's terminal now.
+    this._deathOverlayTimer = 90;
     this._deathOverlayDuration = this._deathOverlayTimer;
-    this._deathOverlayHold = isGameOver;
+    this._deathOverlayHold = true;
 
     // ── Phase 1: Ship Fragmentation (immediate) ─────────────────────
     this.particlePool.get(dx, dy, 'explosionFlash', 55);
@@ -176,7 +253,7 @@ export function handlePlayerDeath() {
         this.particlePool.get(dx, dy, 'explosionShrapnel', a, spd, c);
     }
 
-    // ── Phase 2: Main Blast (100-300ms) ─────────────────────────────
+    // ── Phase 2: Main Blast ─────────────────────────────────────────
     setTimeout(() => {
         this.triggerCameraKick(
             Math.cos(kickAngle + random(-0.5, 0.5)),
@@ -215,7 +292,7 @@ export function handlePlayerDeath() {
         }
     }, 220);
 
-    // ── Phase 3: Aftershock (400-1200ms) ────────────────────────────
+    // ── Phase 3: Aftershock ─────────────────────────────────────────
     setTimeout(() => {
         this.triggerCameraKick(
             Math.cos(kickAngle + random(-1, 1)),
@@ -250,18 +327,13 @@ export function handlePlayerDeath() {
         }, 650 + p * 120);
     }
 
-    // ── Handle game state ───────────────────────────────────────────
-    if (isGameOver) {
-        this.game.state = GAME_STATES.GAME_OVER;
-        this.checkSurvivalRecord();
-        this.events.emit('ui:show-message', { title: 'GAME OVER', subtitle: 'Press Enter or click to restart' });
-    } else {
-        const respawnEpoch = this.stateMachine.epoch;
-        setTimeout(() => {
-            if (this.stateMachine.epoch !== respawnEpoch) return;
-            this.respawnPlayerSafely();
-        }, 1800);
-    }
+    // 5.88.4 — proper GAME OVER screen with NEW GAME + RESTART WAVE
+    // buttons (drawn from hud/overlays.js::drawGameOverScreen on the
+    // engine's GAME_OVER render branch). The DOM `ui:show-message`
+    // popup is gone; the screen lives on the canvas alongside the rest
+    // of the HUD so it can carry buttons + survival summary.
+    this.game.state = GAME_STATES.GAME_OVER;
+    this.checkSurvivalRecord();
 }
 
 export function createPlayerShipDebris(x, y, angle) {
@@ -305,187 +377,5 @@ export function createPlayerShipDebris(x, y, angle) {
             debris.vel.y = Math.sin(outAngle) * spd;
             debris.rotVel = random(-0.2, 0.2);
         }
-    }
-}
-
-export function respawnPlayer() {
-    this.respawnPlayerSafely();
-}
-
-export function respawnPlayerSafely() {
-    const safeLocation = this.findSafeRespawnLocation();
-
-    this.player.x = safeLocation.x;
-    this.player.y = safeLocation.y;
-    this.player.vel.x = 0;
-    this.player.vel.y = 0;
-    this.player.angle = 0;
-    this.player.active = true;
-
-    this.player.health = this.player.getEffectiveMaxHealth();
-    this.playerShields = this.player.health;
-    this.displayShields = this.player.health;
-
-    this.player.makeInvincible(5000);
-    this.player.justRespawned = true;
-    this.player.firingDisabled = false;
-    this.player.chargePaused = false;
-
-    this.clearAreaAroundPlayer(200);
-
-    this.deathExplosionActive = false;
-    this.game.respawning = false;
-}
-
-export function findSafeRespawnLocation() {
-    const gameField = this.gameField;
-    const margin = 100;
-    const minSafeDistance = 250;
-    const maxAttempts = 50;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const x = margin + Math.random() * (gameField.width - 2 * margin);
-        const y = margin + Math.random() * (gameField.height - 2 * margin);
-
-        let isSafe = true;
-
-        for (const enemy of this.enemyPool.activeObjects) {
-            const dx = x - enemy.x;
-            const dy = y - enemy.y;
-            if (Math.hypot(dx, dy) < minSafeDistance) {
-                isSafe = false;
-                break;
-            }
-        }
-
-        if (!isSafe) continue;
-
-        for (const asteroid of this.asteroidPool.activeObjects) {
-            const dx = x - asteroid.x;
-            const dy = y - asteroid.y;
-            if (Math.hypot(dx, dy) < minSafeDistance) {
-                isSafe = false;
-                break;
-            }
-        }
-
-        if (!isSafe) continue;
-
-        for (const bullet of this.enemyBulletPool.activeObjects) {
-            const dx = x - bullet.x;
-            const dy = y - bullet.y;
-            if (Math.hypot(dx, dy) < minSafeDistance * 0.6) {
-                isSafe = false;
-                break;
-            }
-        }
-
-        if (isSafe) {
-            return { x, y };
-        }
-    }
-
-    return {
-        x: gameField.width / 2,
-        y: gameField.height / 2
-    };
-}
-
-export function updateRespawnAnimation(input) {
-    const now = Date.now();
-    const elapsed = now - this.game.respawnStartTime;
-    const progress = Math.min(1, elapsed / this.game.respawnDuration);
-
-    this.particlePool.updateActive();
-    this.lineDebrisPool.updateActive();
-    this.backgroundStarPool.activeObjects.forEach(s => s.update({ x: 0, y: 0 }, this.gameField));
-
-    if (Math.random() < 0.8) {
-        const angle = Math.random() * Math.PI * 2;
-        const distance = 100 + Math.random() * 200;
-        const startX = this.player.x + Math.cos(angle) * distance;
-        const startY = this.player.y + Math.sin(angle) * distance;
-
-        const particle = this.particlePool.get(startX, startY, 'spawnParticle', this.player.x, this.player.y, this.player);
-        if (particle) {
-            particle.color = `hsl(210, 100%, ${70 + Math.random() * 30}%)`;
-            particle.radius = 2 + Math.random() * 2;
-        }
-    }
-
-    if (progress >= 1) {
-        this.player.active = true;
-        this.player.makeInvincible(this.game.respawnDuration);
-        this.player.firingDisabled = true;
-
-        this.game.respawning = false;
-    }
-}
-
-export function clearAreaAroundPlayer(radius) {
-    this.enemyPool.activeObjects.forEach(enemy => {
-        const dx = enemy.x - this.player.x;
-        const dy = enemy.y - this.player.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance < radius) {
-            enemy.active = false;
-            for (let i = 0; i < 5; i++) {
-                this.particlePool.get(enemy.x, enemy.y, 'explosion');
-            }
-        }
-    });
-
-    this.enemyBulletPool.activeObjects.forEach(bullet => {
-        const dx = bullet.x - this.player.x;
-        const dy = bullet.y - this.player.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance < radius) {
-            bullet.active = false;
-        }
-    });
-}
-
-export function explodeTank(tankIndex) {
-    const tanks = document.querySelectorAll('.shield-tank');
-    if (tanks[tankIndex]) {
-        const tank = tanks[tankIndex];
-        const rect = tank.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-
-        for (let i = 0; i < 12; i++) {
-            const particle = document.createElement('div');
-            particle.style.position = 'fixed';
-            particle.style.left = centerX + 'px';
-            particle.style.top = centerY + 'px';
-            particle.style.width = '4px';
-            particle.style.height = '4px';
-            particle.style.background = '#00ff00';
-            particle.style.borderRadius = '50%';
-            particle.style.zIndex = '1000';
-            particle.style.pointerEvents = 'none';
-            document.body.appendChild(particle);
-
-            const angle = (i / 12) * Math.PI * 2;
-            const speed = 50 + Math.random() * 50;
-            const duration = 500 + Math.random() * 500;
-
-            particle.animate([
-                { transform: 'translate(0, 0) scale(1)', opacity: 1 },
-                { transform: `translate(${Math.cos(angle) * speed}px, ${Math.sin(angle) * speed}px) scale(0)`, opacity: 0 }
-            ], {
-                duration: duration,
-                easing: 'ease-out'
-            }).onfinish = () => particle.remove();
-        }
-
-        tank.animate([
-            { opacity: 1, transform: 'scale(1)' },
-            { opacity: 1, transform: 'scale(1.5)' },
-            { opacity: 0, transform: 'scale(0)' }
-        ], {
-            duration: 300,
-            easing: 'ease-out'
-        });
     }
 }

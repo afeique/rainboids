@@ -55,6 +55,179 @@ export const PLAYER_STATES = {
     NORMAL: 'normal'
 };
 
+/* ─── Health-shape 3D geometry (5.88.5) ─────────────────────────────────────
+ *
+ * Per shape: unit-radius vertex coordinates, a flat edge list, and a face
+ * list (each face's vertex indices in CCW order viewed from outside, so
+ * `cross(b−a, c−a).z > 0` in canvas space → back-facing). Each edge stores
+ * its endpoint indices PLUS its two adjacent face indices so the renderer
+ * can cull edges whose both faces are back-facing.
+ *
+ * Cube/octahedron/tetrahedron use unit-sphere coordinates so the projected
+ * silhouette fits inside the orb's `radius`. Prism is taller than wide on
+ * purpose (the existing prism look from 5.79.62).
+ */
+const _CUBE_S = 1 / Math.sqrt(3); // ≈ 0.577 — fits the 8 cube vertices in a unit sphere
+const HEALTH_SHAPE_GEOMETRY = (() => {
+    // Cube
+    const cubeVerts = [
+        [-_CUBE_S, -_CUBE_S, -_CUBE_S], [ _CUBE_S, -_CUBE_S, -_CUBE_S],
+        [ _CUBE_S,  _CUBE_S, -_CUBE_S], [-_CUBE_S,  _CUBE_S, -_CUBE_S],
+        [-_CUBE_S, -_CUBE_S,  _CUBE_S], [ _CUBE_S, -_CUBE_S,  _CUBE_S],
+        [ _CUBE_S,  _CUBE_S,  _CUBE_S], [-_CUBE_S,  _CUBE_S,  _CUBE_S],
+    ];
+    // Faces: indices CCW when viewed from outside the cube
+    //   0:back  1:front  2:bottom  3:top  4:left  5:right
+    const cubeFaces = [
+        [0, 3, 2, 1], // back  (z = -s, viewed from -z)
+        [4, 5, 6, 7], // front (z = +s, viewed from +z)
+        [0, 1, 5, 4], // bottom (y = -s)
+        [3, 7, 6, 2], // top (y = +s)
+        [0, 4, 7, 3], // left (x = -s)
+        [1, 2, 6, 5], // right (x = +s)
+    ];
+    const cubeEdges = [
+        // [vA, vB, faceA, faceB]
+        [0, 1, 0, 2], [1, 2, 0, 5], [2, 3, 0, 3], [3, 0, 0, 4], // back face quad
+        [4, 5, 1, 2], [5, 6, 1, 5], [6, 7, 1, 3], [7, 4, 1, 4], // front face quad
+        [0, 4, 2, 4], [1, 5, 2, 5], [2, 6, 3, 5], [3, 7, 3, 4], // connecting
+    ];
+
+    // Octahedron — 6 verts on the unit axes, 8 triangular faces.
+    //   v0=+x v1=-x v2=+y v3=-y v4=+z v5=-z
+    const octVerts = [
+        [ 1,  0,  0], [-1,  0,  0],
+        [ 0,  1,  0], [ 0, -1,  0],
+        [ 0,  0,  1], [ 0,  0, -1],
+    ];
+    // 8 faces, each a triangle, CCW from outside
+    const octFaces = [
+        [0, 2, 4], // +x +y +z
+        [2, 1, 4], // -x +y +z
+        [1, 3, 4], // -x -y +z
+        [3, 0, 4], // +x -y +z
+        [0, 5, 2], // +x +y -z
+        [2, 5, 1], // -x +y -z
+        [1, 5, 3], // -x -y -z
+        [3, 5, 0], // +x -y -z
+    ];
+    const octEdges = [
+        [0, 2, 0, 4], [2, 4, 0, 1], [4, 0, 0, 3], // top-right cap
+        [2, 1, 1, 5], [1, 4, 1, 2],                // top-left cap
+        [1, 3, 2, 6], [3, 4, 2, 3],                // bottom-left cap
+        [3, 0, 3, 7],                              // bottom-right cap
+        [0, 5, 4, 7], [5, 2, 4, 5],                // -z hemisphere upper
+        [5, 1, 5, 6], [5, 3, 6, 7],                // -z hemisphere lower
+    ];
+
+    // Tetrahedron — 4 verts on alternate cube corners (regular tet).
+    const tetVerts = [
+        [ _CUBE_S,  _CUBE_S,  _CUBE_S],
+        [ _CUBE_S, -_CUBE_S, -_CUBE_S],
+        [-_CUBE_S,  _CUBE_S, -_CUBE_S],
+        [-_CUBE_S, -_CUBE_S,  _CUBE_S],
+    ];
+    // 4 faces; CCW from outside
+    const tetFaces = [
+        [0, 1, 2], // face opposite v3
+        [0, 3, 1], // face opposite v2
+        [0, 2, 3], // face opposite v1
+        [1, 3, 2], // face opposite v0
+    ];
+    const tetEdges = [
+        [0, 1, 0, 1], [0, 2, 0, 2], [0, 3, 1, 2],
+        [1, 2, 0, 3], [1, 3, 1, 3], [2, 3, 2, 3],
+    ];
+
+    // Triangular prism — top + bottom equilateral triangles, 3 rect sides.
+    //   Top triangle: v0, v1, v2 at y = -h
+    //   Bottom triangle: v3, v4, v5 at y = +h
+    const _PRISM_H = 0.85;
+    const _PRISM_R = 0.65;
+    const _PRISM_VS = [];
+    for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i * 2 * Math.PI) / 3;
+        _PRISM_VS.push([Math.cos(a) * _PRISM_R, -_PRISM_H, Math.sin(a) * _PRISM_R]);
+    }
+    for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i * 2 * Math.PI) / 3;
+        _PRISM_VS.push([Math.cos(a) * _PRISM_R,  _PRISM_H, Math.sin(a) * _PRISM_R]);
+    }
+    // Faces: top, bottom, 3 sides. CCW from outside.
+    //   face 0: top   (y=-h, viewed from -y)
+    //   face 1: bot   (y=+h, viewed from +y)
+    //   faces 2/3/4: sides (between vertical edges 0-3, 1-4, 2-5)
+    const prismFaces = [
+        [0, 2, 1],         // top (CCW viewed from -y)
+        [3, 4, 5],         // bottom (CCW viewed from +y)
+        [0, 1, 4, 3],      // side between v0/v1 (and below v3/v4)
+        [1, 2, 5, 4],      // side between v1/v2
+        [2, 0, 3, 5],      // side between v2/v0
+    ];
+    const prismEdges = [
+        [0, 1, 0, 2], [1, 2, 0, 3], [2, 0, 0, 4], // top tri
+        [3, 4, 1, 2], [4, 5, 1, 3], [5, 3, 1, 4], // bottom tri
+        [0, 3, 2, 4], [1, 4, 2, 3], [2, 5, 3, 4], // verticals
+    ];
+
+    return {
+        cube:        { verts: cubeVerts, edges: cubeEdges, faces: cubeFaces },
+        octahedron:  { verts: octVerts,  edges: octEdges,  faces: octFaces  },
+        tetrahedron: { verts: tetVerts,  edges: tetEdges,  faces: tetFaces  },
+        prism:       { verts: _PRISM_VS, edges: prismEdges, faces: prismFaces },
+    };
+})();
+
+// Scratch buffers shared across all health-shape draws (reused per frame
+// so the GC doesn't see thousands of one-off allocations).
+const HEALTH_SHAPE_PROJ_BUF = []; // each slot: [x, y, z]
+const HEALTH_SHAPE_HULL_BUF = []; // hull vertex indices
+const HEALTH_SHAPE_FACE_BUF = []; // face front-facing flags
+
+// Andrew's monotone chain convex hull, specialized for the small N (≤8)
+// of health-shape vertices. Writes hull vertex INDICES (into `points`)
+// in CCW order to `out`. `points[i]` must be a tuple-like with x,y at
+// indices 0,1.
+function _convexHull2D(points, n, out) {
+    if (n < 3) {
+        for (let i = 0; i < n; i++) out.push(i);
+        return;
+    }
+    // Sort indices by (x, y).
+    const idx = [];
+    for (let i = 0; i < n; i++) idx.push(i);
+    idx.sort((ai, bi) => {
+        const a = points[ai], b = points[bi];
+        return a[0] - b[0] || a[1] - b[1];
+    });
+    const cross = (oi, ai, bi) => {
+        const o = points[oi], a = points[ai], b = points[bi];
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    };
+    const lower = [];
+    for (let i = 0; i < n; i++) {
+        const p = idx[i];
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+            lower.pop();
+        }
+        lower.push(p);
+    }
+    const upper = [];
+    for (let i = n - 1; i >= 0; i--) {
+        const p = idx[i];
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+            upper.pop();
+        }
+        upper.push(p);
+    }
+    // Drop the last point of each list — it's the first point of the
+    // other list.
+    upper.pop();
+    lower.pop();
+    for (let i = 0; i < lower.length; i++) out.push(lower[i]);
+    for (let i = 0; i < upper.length; i++) out.push(upper[i]);
+}
+
 export class GameEngine {
     constructor(canvas, uiManager, audioManager, inputHandler) {
         this.canvas = canvas;
@@ -177,7 +350,12 @@ export class GameEngine {
         // Wire UI events — systems emit events, UIManager handles display
         this.events.on('ui:show-message', (d) => this.uiManager.showMessage(d.title, d.subtitle, d.duration, d.position));
         this.events.on('ui:hide-message', () => this.uiManager.hideMessage());
-        this.events.on('ui:update-lives', (d) => this.uiManager.updateLives(d.lives));
+        // 5.88.0 — `ui:update-tanks` is the new equivalent of the old
+        // `ui:update-lives`; consumed by anything DOM-side that wants to
+        // reflect the energy-tank count. UIManager has no DOM lives
+        // element anymore, so it's a no-op there — kept for analytics
+        // hooks / future HUD widgets.
+        this.events.on('ui:update-tanks', () => { /* no-op v1 */ });
         this.events.on('ui:check-orientation', () => this.uiManager.checkOrientation());
         this.events.on('ui:toggle-pause', () => this.uiManager.togglePause());
         this.events.on('ui:show-shop-button', () => this.uiManager.showShopButton());
@@ -262,7 +440,6 @@ export class GameEngine {
             survivalRecord: parseInt(localStorage.getItem('rainboidsSurvivalRecord')) || 0, // Best survival time
             gameStartTime: 0, // When the current game started
             currentWave: 0,
-            lives: 3, // Start with 3 lives
             screenShakeDuration: 0,
             screenShakeMagnitude: 0,
             enemyLevel: 1,    // Enemy level increases each wave
@@ -270,9 +447,6 @@ export class GameEngine {
             waveComplete: false,
             waveCountdownTime: 0,
             waveCountdownDuration: 5000, // 5 seconds between waves
-            respawning: false,
-            respawnStartTime: 0,
-            respawnDuration: 5000, // 5 seconds respawn sequence
             // Run-wide stats — drive the Game Complete screen + speedrun meta.
             stats: {
                 gameStartTime: 0,        // set when run actually starts
@@ -505,14 +679,20 @@ export class GameEngine {
                 this.player.ownedSkills = new Set([loadout.skill]);
             }
         }
-        // Initialize lives display
-        this.uiManager.updateLives(this.game.lives);
-        // Wave bonus shield system removed
-        // Reset shields
-        this.playerShields = 25; // Start with 25 health
-        this.shieldTanks = 1; // Start with 1 shield tank for survivability
-        this.displayShields = 25; // Match starting health
-        this.displayTanks = 1;
+        // 5.88.3 — energy tanks unified with the triforce. healthTanks is
+        // now the SPARE count (each triangle = 1 spare); the active tank
+        // is the healthbar. Start at 3 spares = full triforce; total
+        // effective lives = 4 (3 spares + 1 active). Health-orb overflow
+        // grants spares, capped at 3. No invincibility / respawn delay.
+        // 5.88.5 — base HP bumped to 40 alongside player.js. These
+        // mirror legacy fields used by the HUD bar's smoothed-display
+        // animation; values are overwritten later anyway, so the
+        // initial number just needs to match the player's start HP.
+        this.playerShields = 40;
+        this.healthTanks = 3;
+        if (this.player) this.player._tankProgress = 0;
+        this.displayShields = 40;
+        this.displayTanks = 3;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
         
@@ -569,7 +749,7 @@ export class GameEngine {
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
         this.game.waveComplete = false;
-        this.uiManager.updateLives(this.game.lives);
+        // 5.88.0 — `updateLives` removed; tanks are rendered on the canvas.
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         // 5.79.0 — write the initial wave-1 save so a fresh run that
         //   quits before clearing wave 1 still has something to resume.
@@ -620,9 +800,12 @@ export class GameEngine {
         this._gameTimers.push(new GameTimer(1100, () => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.spawnWaveEntities();
+                // 5.88.0 — wave-start invincibility (3s while the field
+                // populates). Kept because spawning enemies on top of
+                // the player would be unfair regardless of the new
+                // tank-based hit model.
                 if (this.player && this.player.active) {
                     this.player.makeInvincible(3000);
-                    this.player.justRespawned = false;
                 }
             }
         }));
@@ -709,7 +892,11 @@ export class GameEngine {
             // Engine-side run fields
             wave: this.game.currentWave | 0,
             money: this.game.money | 0,
-            lives: this.game.lives | 0,
+            // 5.88.0 — `lives` removed; energy tanks are now serialized via
+            // `engineTanks` below (the runtime owner is `this.healthTanks`,
+            // distinct from per-player `p.healthTanks` used in multiplayer
+            // snapshots).
+            engineTanks: this.healthTanks | 0,
             stats: this.game.stats ? { ...this.game.stats, weaponShots: { ...(this.game.stats.weaponShots || {}) } } : null,
             // Player snapshot
             player: {
@@ -720,7 +907,7 @@ export class GameEngine {
                 health: p.health,
                 maxHealth: p.maxHealth,
                 shield: p.shield,
-                shieldTanks: p.shieldTanks | 0,
+                healthTanks: p.healthTanks | 0,
                 activePrimary: p.activePrimary,
                 activePower: p.activePower,
                 activeSkill: p.activeSkill,
@@ -746,7 +933,16 @@ export class GameEngine {
         // Engine-side
         this.game.currentWave = Math.max(1, snap.wave | 0);
         this.game.money = Math.max(0, snap.money | 0);
-        this.game.lives = Math.max(1, snap.lives | 0);
+        // 5.88.3 — energy-tank restore. `engineTanks` is the new field
+        // (= spare count, 0..3). Older saves with `lives` (1..3) map 1:1.
+        // Saves from the brief 5.88.0 window where engineTanks could be
+        // up to 4 are clamped down to 3 — one of the tanks is now the
+        // active healthbar, not a separate slot.
+        if (typeof snap.engineTanks === 'number') {
+            this.healthTanks = Math.max(0, Math.min(3, snap.engineTanks | 0));
+        } else if (typeof snap.lives === 'number') {
+            this.healthTanks = Math.max(0, Math.min(3, snap.lives | 0));
+        }
         if (snap.stats) {
             // Preserve the original gameStartTime so accumulated time
             // numbers stay consistent across the resume.
@@ -763,7 +959,7 @@ export class GameEngine {
         if (typeof ps.maxHealth === 'number') p.maxHealth = ps.maxHealth;
         if (typeof ps.health === 'number') p.health = Math.min(ps.health, p.maxHealth);
         if (typeof ps.shield === 'number') p.shield = ps.shield;
-        if (typeof ps.shieldTanks === 'number') p.shieldTanks = Math.max(0, ps.shieldTanks | 0);
+        if (typeof ps.healthTanks === 'number') p.healthTanks = Math.max(0, ps.healthTanks | 0);
         if (typeof ps.activePrimary === 'string') p.activePrimary = ps.activePrimary;
         if (typeof ps.activePower === 'string')   p.activePower   = ps.activePower;
         if (typeof ps.activeSkill === 'string')   p.activeSkill   = ps.activeSkill;
@@ -792,8 +988,8 @@ export class GameEngine {
             if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
             if (typeof getAsteroidLevel === 'function') this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
         } catch {}
-        // HUD refresh
-        if (this.uiManager?.updateLives) this.uiManager.updateLives(this.game.lives);
+        // HUD refresh — tanks render straight from `this.healthTanks` on
+        // the canvas, so there's no DOM update to dispatch here.
         if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
         return true;
     }
@@ -1103,12 +1299,24 @@ export class GameEngine {
     }
 
     /**
-     * 5.79.62 — Render 3D health-shape orbs as crisp Canvas2D polygons
-     * at their actual on-screen size. Replaces the WebGL atlas path,
-     * which baked 128-px sprites with thin internal "3D" edges that
-     * minified to sub-pixel and shimmered during rotation. Drawing at
-     * native size with integer-aligned translate + rounded line widths
-     * gives pixel-perfect outlines that read cleanly at every radius.
+     * 5.88.5 — 3D health shapes: real polyhedron vertices rotated through
+     * a per-orb 3-axis matrix, projected to 2D each frame, drawn as a
+     * convex-hull silhouette plus the front-facing edges. No textures,
+     * no atlas, no cached sprites — pure vector primitives at native
+     * size, so there is nothing for bilinear / minification filters to
+     * smear. Replaces the fixed 2D silhouette + 2D spin from 5.79.62.
+     *
+     * Per orb per frame:
+     *   • build Rz·Ry·Rx from rotZ (existing spin) + rotX, rotY (tumble)
+     *   • project N≤8 vertices to 2D
+     *   • silhouette = convex hull of projected verts (exact for convex
+     *     polyhedra)
+     *   • cull back-facing faces; draw edges of remaining front faces as
+     *     "internal 3D" lines on top of the filled silhouette
+     *
+     * Cost is dominated by ~10 small-N convex hull computations + a
+     * handful of Canvas2D path calls per orb, comfortably <100 µs/frame
+     * for the typical 1–20 orb count.
      */
     _drawHealthShapesCanvas2D(ctx, vL, vT, vR, vB) {
         const orbs = this.colorStarPool.activeObjects;
@@ -1131,125 +1339,116 @@ export class GameEngine {
             const alpha = (orb.opacity ?? 1) * depthOpacity * 0.95;
             if (alpha <= 0) continue;
 
-            const rotation = (orb.rotation || 0) + t * (orb.rotationSpeed || 0) * 60;
+            // Three axes of rotation. Z is the existing camera-axis spin
+            // (rotation + rotationSpeed); X and Y are the new "slight"
+            // tumble. Compute angles from time so frame-rate doesn't
+            // affect the visual speed.
+            const rotZ = (orb.rotation || 0) + t * (orb.rotationSpeed || 0) * 60;
+            const rotX = (orb.rotX || 0) + t * (orb.tumbleSpeedX || 0) * 60;
+            const rotY = (orb.rotY || 0) + t * (orb.tumbleSpeedY || 0) * 60;
+
+            const geom = HEALTH_SHAPE_GEOMETRY[orb.shape];
+            if (!geom) continue;
 
             ctx.save();
-            // Integer-aligned translate so polygon strokes land on
-            // whole-pixel rows when rotation is 0. With rotation the
-            // pixel grid no longer aligns, but Canvas2D AA handles
-            // sub-pixel rotated lines smoothly (no shimmering — that
-            // came from texture-minification aliasing in WebGL).
+            // Integer-aligned translate so the pixel grid is consistent
+            // across the whole orb. The 3D rotation produces sub-pixel
+            // edge coords, but Canvas2D's polygon AA renders those
+            // crisply — no minification aliasing because there's no
+            // texture being sampled.
             ctx.translate(Math.round(orb.x), Math.round(orb.y));
-            ctx.rotate(rotation);
             ctx.globalAlpha = alpha;
             ctx.fillStyle = orb.color;
             ctx.lineJoin = 'miter';
             ctx.lineCap = 'butt';
 
-            const borderCol = orb.borderColor || '#000';
-
-            switch (orb.shape) {
-                case 'cube':        this._drawCubeShape(ctx, r, borderCol); break;
-                case 'octahedron':  this._drawOctahedronShape(ctx, r, borderCol); break;
-                case 'tetrahedron': this._drawTetrahedronShape(ctx, r, borderCol); break;
-                case 'prism':       this._drawPrismShape(ctx, r, borderCol); break;
-            }
+            this._drawHealthShape3D(
+                ctx, r, orb.borderColor || '#000', geom, rotX, rotY, rotZ,
+            );
             ctx.restore();
         }
     }
 
-    _drawCubeShape(ctx, r, borderCol) {
-        // Isometric hexagon silhouette, top vertex at -π/2.
+    /**
+     * Project the geometry's 3D vertices through a Rz·Ry·Rx rotation
+     * matrix, fill the convex-hull silhouette, and stroke front-facing
+     * edges. `geom` carries per-shape verts (unit-scale), edges, and
+     * faces (CCW from outside).
+     */
+    _drawHealthShape3D(ctx, r, borderCol, geom, rotX, rotY, rotZ) {
+        const cx = Math.cos(rotX), sx = Math.sin(rotX);
+        const cy = Math.cos(rotY), sy = Math.sin(rotY);
+        const cz = Math.cos(rotZ), sz = Math.sin(rotZ);
+
+        // Reuse a scratch array per shape so the GC isn't beat up.
+        const projected = HEALTH_SHAPE_PROJ_BUF;
+        const verts = geom.verts;
+        const n = verts.length;
+        for (let i = 0; i < n; i++) {
+            const v = verts[i];
+            const vx = v[0], vy = v[1], vz = v[2];
+            // Rx
+            const y1 = vy * cx - vz * sx;
+            const z1 = vy * sx + vz * cx;
+            // Ry
+            const x2 = vx * cy + z1 * sy;
+            const z2 = -vx * sy + z1 * cy;
+            // Rz
+            const x3 = x2 * cz - y1 * sz;
+            const y3 = x2 * sz + y1 * cz;
+            // Project (drop z2 — orthographic) and scale to radius.
+            // Y is negated because canvas Y grows downward.
+            const p = projected[i] || (projected[i] = [0, 0, 0]);
+            p[0] = x3 * r;
+            p[1] = -y3 * r;
+            p[2] = z2;
+        }
+
+        // Convex hull of the projected (x, y) — exact silhouette for a
+        // convex polyhedron. Indices into `projected`.
+        const hullIdxs = HEALTH_SHAPE_HULL_BUF;
+        hullIdxs.length = 0;
+        _convexHull2D(projected, n, hullIdxs);
+
+        // Fill silhouette polygon.
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const a = -Math.PI / 2 + (i * Math.PI) / 3;
-            const x = Math.cos(a) * r;
-            const y = Math.sin(a) * r;
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        for (let i = 0; i < hullIdxs.length; i++) {
+            const p = projected[hullIdxs[i]];
+            if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
         }
         ctx.closePath();
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = borderCol;
         ctx.stroke();
-        // 3 internal edges from center to top/lower-left/lower-right
-        // verts — the "Y" projection that makes it read as a cube.
-        const a2 = -Math.PI / 2 + (2 * Math.PI) / 3;
-        const a4 = -Math.PI / 2 + (4 * Math.PI) / 3;
-        ctx.lineWidth = Math.max(1, Math.round(r * 0.12));
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(0, -r);
-        ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a2) * r, Math.sin(a2) * r);
-        ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a4) * r, Math.sin(a4) * r);
-        ctx.stroke();
-    }
 
-    _drawOctahedronShape(ctx, r, borderCol) {
-        // Vertical diamond + horizontal equator line for the 3D split.
-        ctx.beginPath();
-        ctx.moveTo(0, -r);
-        ctx.lineTo(r,  0);
-        ctx.lineTo(0,  r);
-        ctx.lineTo(-r, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = borderCol;
-        ctx.stroke();
-        ctx.lineWidth = Math.max(1, Math.round(r * 0.12));
-        ctx.beginPath();
-        ctx.moveTo(-r, 0); ctx.lineTo(r, 0);
-        ctx.stroke();
-    }
+        // Front-facing edges: an edge is drawn iff at least one of its
+        // adjacent faces is front-facing (face normal's z component > 0
+        // after rotation; we test via the 2D cross product of the first
+        // 3 projected vertices, with faces defined CCW from outside).
+        const faces = geom.faces;
+        const faceFront = HEALTH_SHAPE_FACE_BUF;
+        for (let f = 0; f < faces.length; f++) {
+            const face = faces[f];
+            const a = projected[face[0]], b = projected[face[1]], c = projected[face[2]];
+            // 2D cross of (b-a) × (c-a). Negative → CCW in screen-space
+            // (canvas Y down) → front-facing.
+            const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+            faceFront[f] = cross < 0;
+        }
 
-    _drawTetrahedronShape(ctx, r, borderCol) {
-        // Front-facing triangle + 3 internal edges to the centroid.
-        const apexY  = -r;
-        const baseY  = Math.round(r * 0.5);
-        const baseX  = Math.round(r * 0.866);
+        const innerW = Math.max(1, Math.round(r * 0.12));
+        ctx.lineWidth = innerW;
         ctx.beginPath();
-        ctx.moveTo(0,     apexY);
-        ctx.lineTo(baseX, baseY);
-        ctx.lineTo(-baseX, baseY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = borderCol;
-        ctx.stroke();
-        // Centroid pulled slightly down for 3D feel.
-        const gy = Math.round((apexY + baseY + baseY) / 3 + r * 0.15);
-        ctx.lineWidth = Math.max(1, Math.round(r * 0.12));
-        ctx.beginPath();
-        ctx.moveTo(0,      apexY);  ctx.lineTo(0, gy);
-        ctx.moveTo(-baseX, baseY);  ctx.lineTo(0, gy);
-        ctx.moveTo(baseX,  baseY);  ctx.lineTo(0, gy);
-        ctx.stroke();
-    }
-
-    _drawPrismShape(ctx, r, borderCol) {
-        // Front rectangle + slanted top edge — classic isometric box.
-        const w    = Math.round(r * 0.9);
-        const h    = Math.round(r * 1.1);
-        const skew = Math.round(r * 0.32);
-        const topY = Math.round(-h * 0.4);
-        const skY  = topY - Math.round(skew * 0.7);
-        ctx.beginPath();
-        ctx.moveTo(-w,         h);
-        ctx.lineTo( w,         h);
-        ctx.lineTo( w,         topY);
-        ctx.lineTo( w + skew,  skY);
-        ctx.lineTo(-w + skew,  skY);
-        ctx.lineTo(-w,         topY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = borderCol;
-        ctx.stroke();
-        // Front-top horizontal + back-skew internal edges.
-        ctx.lineWidth = Math.max(1, Math.round(r * 0.12));
-        ctx.beginPath();
-        ctx.moveTo(-w, topY); ctx.lineTo(w, topY);
-        ctx.moveTo( w, topY); ctx.lineTo(w + skew, skY);
+        const edges = geom.edges;
+        for (let e = 0; e < edges.length; e++) {
+            const edge = edges[e];
+            const fA = edge[2], fB = edge[3]; // adjacent face indices
+            if (!faceFront[fA] && !faceFront[fB]) continue;
+            const pa = projected[edge[0]], pb = projected[edge[1]];
+            ctx.moveTo(pa[0], pa[1]);
+            ctx.lineTo(pb[0], pb[1]);
+        }
         ctx.stroke();
     }
 
@@ -2104,12 +2303,9 @@ export class GameEngine {
                 // Draw jitter circle to show bullet spread area
                 this.drawJitterCircle();
 
-                // Respawn is now instant - no countdown needed
-
-                // Draw invincibility countdown timer only after respawn (not during hits)
-                if (this.player.active && this.player.invincible && this.player.justRespawned) {
-                    this.drawInvincibilityCountdown();
-                }
+                // 5.88.0 — respawn / post-respawn invincibility countdown
+                // removed entirely. The tank-based hit model has no respawn
+                // window: hits cost a tank, hp refills, gameplay continues.
             }
         }
 
@@ -2209,6 +2405,7 @@ export class GameEngine {
     triggerHitstop(frames) { return cam.triggerHitstop.call(this, frames); }
     triggerCameraKick(dx, dy, magnitude) { return cam.triggerCameraKick.call(this, dx, dy, magnitude); }
     triggerScreenFlash(alpha, duration) { return cam.triggerScreenFlash.call(this, alpha, duration); }
+    triggerGoldScreenFlash(alpha, duration) { return cam.triggerGoldScreenFlash.call(this, alpha, duration); }
 
     gameLoop() {
       try {
@@ -2266,6 +2463,16 @@ export class GameEngine {
                 this.ctx.fillStyle = `rgba(255,255,255,${this._screenFlashAlpha})`;
                 this.ctx.fillRect(0, 0, this.width, this.height);
                 this._screenFlashAlpha -= this._screenFlashAlpha / (this._screenFlashDuration || 1);
+            }
+            // 5.85.0 — gold flash channel (life-loss feedback)
+            if (this._goldFlashTimer > 0) {
+                const ga = (this._goldFlashTimer / (this._goldFlashDuration || 1)) * (this._goldFlashAlpha || 0);
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'lighter';
+                this.ctx.fillStyle = `rgba(255, 215, 0, ${ga})`;
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                this.ctx.restore();
+                this._goldFlashTimer--;
             }
             // Wave intro overlay — disabled for now so the warp-in visuals
             // stay visible. Re-enable by uncommenting the call below.
@@ -2381,6 +2588,8 @@ export class GameEngine {
         if (this.game.state === GAME_STATES.GAME_OVER) {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             this.ctx.fillRect(0, 0, this.width, this.height);
+            // 5.88.4 — proper screen with NEW GAME / RESTART WAVE buttons.
+            this.drawGameOverScreen();
         }
         
         // Shop UI is rendered as an HTML overlay (#shop-overlay) — no canvas
@@ -2396,6 +2605,19 @@ export class GameEngine {
             this.ctx.fillRect(0, 0, this.width, this.height);
             this.ctx.restore();
             this._screenFlashTimer--;
+        }
+
+        // 5.85.0 — gold-tinted flash for life-loss feedback. Layers on top
+        // of (and outlasts) the white death-flash so the moment reads as a
+        // distinct "Triforce shattered" beat rather than another hit.
+        if (this._goldFlashTimer > 0) {
+            const goldAlpha = (this._goldFlashTimer / (this._goldFlashDuration || 1)) * (this._goldFlashAlpha || 0);
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'lighter';
+            this.ctx.fillStyle = `rgba(255, 215, 0, ${goldAlpha})`;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            this.ctx.restore();
+            this._goldFlashTimer--;
         }
 
         // Death overlay — brief dark tint after player death
@@ -2805,21 +3027,22 @@ export class GameEngine {
     takeDamage(damageAmount = this.baseDamage) { return lifecycle.takeDamage.call(this, damageAmount); }
     handlePlayerDeath() { return lifecycle.handlePlayerDeath.call(this); }
     createPlayerShipDebris(x, y, angle) { return lifecycle.createPlayerShipDebris.call(this, x, y, angle); }
-    respawnPlayer() { return lifecycle.respawnPlayer.call(this); }
-    respawnPlayerSafely() { return lifecycle.respawnPlayerSafely.call(this); }
-    findSafeRespawnLocation() { return lifecycle.findSafeRespawnLocation.call(this); }
-    updateRespawnAnimation(input) { return lifecycle.updateRespawnAnimation.call(this, input); }
-    clearAreaAroundPlayer(radius) { return lifecycle.clearAreaAroundPlayer.call(this, radius); }
+    _consumeTank() { return lifecycle._consumeTank.call(this); }
+    applyHealthOrbToTanks(orbAmount, amountHealed) { return lifecycle.applyHealthOrbToTanks.call(this, orbAmount, amountHealed); }
     
     updateHUD() { return hudStatus.updateHUD.call(this); }
     
     findNearestEnemy() { return col.findNearestEnemy.call(this); }
 
     drawSurvivalTimer(ctx) { return hudOverlays.drawSurvivalTimer.call(this, ctx); }
+    drawGameOverScreen() { return hudOverlays.drawGameOverScreen.call(this); }
     drawBottomRightGold(ctx) { return hudStatus.drawBottomRightGold.call(this, ctx); }
     drawPauseButton() { return hudOverlays.drawPauseButton.call(this); }
     drawStopwatchIcon(ctx, x, y, size) { return hudOverlays.drawStopwatchIcon.call(this, ctx, x, y, size); }
-    drawCanvasTriforce(ctx, lives, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }
+    drawCanvasTriforce(ctx, tanks, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, tanks, baseX, baseY); }
+    spawnTriforceVaporize(x, y, size) { return hudStatus.spawnTriforceVaporize.call(this, x, y, size); }
+    getDisappearingTankPos(tanksBefore, baseX, baseY) { return hudStatus.getDisappearingTankPos(tanksBefore, baseX, baseY); }
+    spawnTankRecharge(slotIndex) { return hudStatus.spawnTankRecharge.call(this, slotIndex); }
     drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) { return hudStatus.drawLevelAndCoinsDisplay.call(this, ctx, barX, barY, barHeight); }
     drawEquippedWeaponSquares(ctx, barX, barY, barHeight) { return hudStatus.drawEquippedWeaponSquares.call(this, ctx, barX, barY, barHeight); }
     drawDefenseIndicators(ctx) { return hudStatus.drawDefenseIndicators.call(this, ctx); }
@@ -2828,8 +3051,6 @@ export class GameEngine {
     }
     drawLevelUpText() { return hudStatus.drawLevelUpText.call(this); }
     
-    explodeTank(tankIndex) { return lifecycle.explodeTank.call(this, tankIndex); }
-
     handlePlayerAsteroidCollision(player, asteroid) { return col.handlePlayerAsteroidCollision.call(this, player, asteroid); }
     
     drawSpawnTimer() { return hudOverlays.drawSpawnTimer.call(this); }

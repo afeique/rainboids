@@ -156,21 +156,78 @@ export function setupEventListeners() {
         }
     }, true);
 
-    // Handle game restart
-    window.addEventListener('click', () => {
-        if (this.game.state === GAME_STATES.GAME_OVER) {
-            this.init();
+    // 5.88.4 — GAME OVER screen routing. Hit-test the two buttons
+    // (NEW GAME / RESTART WAVE) drawn by hud/overlays.js::drawGameOverScreen.
+    // Hover/press state mirrors the title-screen system so the visual
+    // feedback (depressed button, pulsing alpha) is identical.
+    const _gameOverHitId = (e) => {
+        if (this.game.state !== GAME_STATES.GAME_OVER) return null;
+        const rects = this._gameOverButtonRects;
+        if (!rects) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * (this.canvas.width  / rect.width);
+        const my = (e.clientY - rect.top)  * (this.canvas.height / rect.height);
+        for (const id of ['newGame', 'restartWave']) {
+            const r = rects[id];
+            if (!r || r.disabled) continue;
+            if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) return id;
         }
+        return null;
+    };
+
+    const _runGameOverAction = (id) => {
+        if (id === 'newGame') {
+            // Fresh run: clear save + roll a new random loadout. Mirrors
+            // the title-screen NEW GAME path.
+            if (typeof this.startNewRun === 'function') this.startNewRun();
+            else this.init();
+        } else if (id === 'restartWave') {
+            // Restart at the wave-start auto-save (the wave they died
+            // on, with their pre-wave loadout + economy intact).
+            if (typeof this.startContinueRun === 'function') {
+                const ok = this.startContinueRun();
+                if (!ok && typeof this.startNewRun === 'function') this.startNewRun();
+                else if (!ok) this.init();
+            } else {
+                this.init();
+            }
+        }
+    };
+
+    // Handle game restart on click
+    window.addEventListener('click', (e) => {
+        if (this.game.state !== GAME_STATES.GAME_OVER) return;
+        const id = _gameOverHitId(e);
+        if (id) _runGameOverAction(id);
+    });
+
+    // Hover + press visual feedback on the GAME OVER buttons.
+    window.addEventListener('mousemove', (e) => {
+        if (this.game.state !== GAME_STATES.GAME_OVER) return;
+        this._gameOverHoveredButton = _gameOverHitId(e);
+    });
+    window.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (this.game.state !== GAME_STATES.GAME_OVER) return;
+        this._gameOverPressedButton = _gameOverHitId(e);
+    });
+    window.addEventListener('mouseup', () => {
+        this._gameOverPressedButton = null;
     });
 
     document.addEventListener('keydown', (e) => {
-        if (e.code === 'Enter' && this.game.state === GAME_STATES.GAME_OVER) {
-            this.init();
+        if (this.game.state !== GAME_STATES.GAME_OVER) return;
+        if (e.code !== 'Enter' && e.code !== 'Space' && e.code !== 'NumpadEnter') return;
+        e.preventDefault();
+        // Enter/Space activate the hovered button if any; otherwise fall
+        // back to RESTART WAVE when a save exists, else NEW GAME.
+        const hovered = this._gameOverHoveredButton;
+        if (hovered === 'newGame' || hovered === 'restartWave') {
+            _runGameOverAction(hovered);
+            return;
         }
-        // ESC closing the shop is handled by the global Escape handler at
-        // the top of this file — it calls togglePause(), which routes
-        // GAME_STATES.SHOP → closeShopToPause(). The old SPACE → closeShop
-        // shortcut is gone (along with click-outside-to-close).
+        const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
+        _runGameOverAction(hasSavedRun ? 'restartWave' : 'newGame');
     });
 
     // Auto-pause when window loses focus

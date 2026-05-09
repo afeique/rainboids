@@ -357,6 +357,14 @@ export function handleCollisions() {
                     } else {
                         this.events.emit('audio:coin'); // Normal sound if already at max health
                     }
+
+                    // 5.88.0 — overflow → tank progress. When the player
+                    // is at (or near) max HP, the unused portion of the
+                    // pickup builds toward an extra energy tank. Capped
+                    // at 4 effective tanks (3 triforce triangles + spare).
+                    if (typeof this.applyHealthOrbToTanks === 'function') {
+                        this.applyHealthOrbToTanks(healAmount, actualHeal);
+                    }
                 } else if (colorStar.starType === 'money') {
                     // Money orb collected - use the orb's individual money amount
                     const moneyAmount = colorStar.moneyAmount || GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN; // Fallback for legacy orbs
@@ -1677,17 +1685,12 @@ export function handlePlayerEnemyCollision(player, enemy) {
         // Award XP for surviving enemy collision
         this.player.gainExperience(5);
 
-        // Check for death/shield tank usage
+        // 5.88.0 — tank-based hit model: HP→0 consumes a tank (vaporize
+        // FX + HP refill, no invuln); the only "lives" left are tanks.
         if (player.health <= 0) {
-            if (this.shieldTanks > 0) {
-                // Use shield tank to restore health (no life lost)
-                this.shieldTanks--;
-                this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-                player.health = player.getEffectiveMaxHealth();
-                this.events.emit('audio:coin'); // Tank used sound
-                player.makeInvincible(2000); // Brief invincibility after revival
+            if (this.healthTanks > 0) {
+                this._consumeTank();
             } else {
-                // No shield tanks - lose a life and respawn
                 this.handlePlayerDeath();
                 return;
             }
@@ -1722,9 +1725,9 @@ export function handlePlayerEnemyCollision(player, enemy) {
             }
         }
 
-        // Make player invulnerable briefly after taking damage
-        this.player.makeInvincible(1500);
-        this.player._hitFlashTimer = 8; // white flash on hit
+        // 5.88.0 — no automatic post-hit invuln. The hit-flash still fires
+        // so the visual confirms the impact registered.
+        this.player._hitFlashTimer = 8;
     }
 
     // Always damage the enemy when colliding with player (massive damage)
@@ -1811,8 +1814,8 @@ export function handlePlayerEnemyCollision(player, enemy) {
         }
     }
 
-    // Make player invulnerable briefly
-    player.makeInvincible(1500);
+    // 5.88.0 — no automatic post-bounce invuln. Tank consumption (above)
+    // is the only "safety net" between the player and the next hit.
 }
 
 export function handlePlayerEnemyBulletCollision(player, bullet) {
@@ -1846,17 +1849,11 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     // Award XP for surviving enemy bullet hit
     this.player.gainExperience(3);
 
-    // Check for death/shield tank usage
+    // 5.88.0 — tank-based hit model.
     if (player.health <= 0) {
-        if (this.shieldTanks > 0) {
-            // Use shield tank to restore health (no life lost)
-            this.shieldTanks--;
-            this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-            player.health = player.getEffectiveMaxHealth();
-            this.events.emit('audio:coin'); // Tank used sound
-            player.makeInvincible(2000); // Brief invincibility after revival
+        if (this.healthTanks > 0) {
+            this._consumeTank();
         } else {
-            // No shield tanks - lose a life and respawn
             this.handlePlayerDeath();
             return;
         }
@@ -1894,9 +1891,8 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
         }
     }
 
-    // Make player invulnerable briefly
-    player.makeInvincible(1000);
-    player._hitFlashTimer = 5; // briefer flash for bullet hits
+    // 5.88.0 — no automatic post-hit invuln; brief hit-flash still fires.
+    player._hitFlashTimer = 5;
 }
 
 export function handleEnemyAsteroidCollision(enemy, asteroid) {
@@ -1984,24 +1980,17 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         // Award XP for surviving asteroid collision
         this.player.gainExperience(4);
 
-        // Handle death/shield tank usage
+        // 5.88.0 — tank-based hit model.
         if (this.player.health <= 0) {
-            if (this.shieldTanks > 0) {
-                // Use shield tank to restore health (no life lost)
-                this.shieldTanks--;
-                this.explodeTank(this.shieldTanks); // Visual effect for tank explosion
-                this.player.health = this.player.getEffectiveMaxHealth();
-                this.events.emit('audio:coin'); // Tank used sound
-                this.player.makeInvincible(2000); // Brief invincibility after revival
+            if (this.healthTanks > 0) {
+                this._consumeTank();
             } else {
-                // No shield tanks - lose a life and respawn
                 this.handlePlayerDeath();
                 return;
             }
         }
 
-        // Visual and audio feedback
-        this.player.makeInvincible(3000); // 3 seconds of invincibility
+        // 5.88.0 — no automatic post-hit invuln. Hit feedback still fires.
         this.events.emit('audio:player-hit-asteroid');
         // (Damage number already created above via createDamageNumber.
         // Old particle-pool 'damageNumber' duplicate removed in 5.64.8.)

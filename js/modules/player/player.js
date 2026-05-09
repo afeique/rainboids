@@ -15,9 +15,15 @@ export class Player {
         this.lastY = 0;
         this.rotation = 0;
         this.radius = 12;
-        this.health = 25;
-        this.maxHealth = 25;
-        this.shieldTanks = 1; // Start with 1 shield tank
+        // 5.88.5 — base max HP bumped 25 → 40 for the energy-tank hit
+        // model. With no post-hit invuln window, low-base HP meant a
+        // single sustained burst could clip through a tank in one go;
+        // 40 gives the player ~2 hits of headroom per tank at typical
+        // enemy damage values, so picked-up health actually has room
+        // to land before the next consume-tank trigger.
+        this.health = 40;
+        this.maxHealth = 40;
+        this.healthTanks = 0; // engine init overrides to 3 (5.88.3 spare-count semantics)
         this.shield = 15; // 15% damage reduction (start with basic armor for survivability)
         this.invulnerable = false;
         this.lastHitTime = 0;
@@ -185,7 +191,9 @@ export class Player {
         this.invincible = false;
         this.invincibilityTimer = 0;
         this.firingDisabled = false;
-        this.justRespawned = false;
+        // 5.88.0 — `justRespawned` retired with the respawn system; tank
+        // consumption (lifecycle._consumeTank) refills HP in place with no
+        // post-hit invuln window, so there's nothing to flag here.
         this.levelUpAnimation = { active: false };
         
         // Reset auto-fire timer
@@ -375,14 +383,14 @@ export class Player {
         const prevX = this.x;
         const prevY = this.y;
         
-        // Update invincibility timer
+        // Update invincibility timer (still used by deliberate-save skills:
+        // REFLEXES, LAST_STAND, PHASE_DASH, plus the wave-start grace window).
         if (this.invincibilityTimer > 0) {
             this.invincibilityTimer -= GAME_CONFIG.LOGIC_TICK_MS;
             if (this.invincibilityTimer <= 0) {
                 this.invincible = false;
                 this.invincibilityTimer = 0;
-                this.firingDisabled = false; // Re-enable firing when invincibility ends
-                this.justRespawned = false; // Clear respawn flag when invincibility ends
+                this.firingDisabled = false;
             }
         }
         

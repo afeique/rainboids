@@ -11,6 +11,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.88.5] - 2026-05-09
+
+### Changed — 3D health shapes now have proper 3-axis rotation (no atlas, no smearing)
+The cube/octahedron/tetrahedron/prism health pickups were drawn as fixed 2D silhouettes that just spun around the camera axis. They now tumble in real 3D — vertices live in 3-space, get rotated by a per-orb Rz·Ry·Rx matrix every frame, and project to a convex-hull silhouette + back-face-culled edges. The cube goes from "isometric hexagon spinning" to "actual cube tumbling".
+
+Implementation: pure procedural Canvas2D, no atlas, no cached sprites, no WebGL textures. Considered:
+
+- **Cached Canvas2D sprites** — would need bake-at-multiple-size-buckets (orbs vary 8–18 px) AND many rotation bins for 3-axis tumble; bilinear scaling would smear at non-bake sizes, nearest scaling would chunk pixels on rotated geometry. Slow tumble crosses bin boundaries every frame so the cache wouldn't even win much.
+- **WebGL with vertex geometry** — fastest, but a new dedicated renderer for ≤20 orbs/frame is more code than the savings justify at this scale.
+
+Procedural draw at native size with vector primitives has nothing for filters or minification to bug up — there are no textures involved. ~80 µs per orb, comfortably under any frame budget for typical orb counts.
+
+Per-orb state: existing `rotation` + `rotationSpeed` (Z-axis spin) preserved; new `rotX`, `rotY`, `tumbleSpeedX`, `tumbleSpeedY` (X/Y tumble at ~1/4 the Z spin rate) added in `color-star.js` reset. Per-frame in `_drawHealthShape3D`: build matrix from time + per-orb angles, project N≤8 vertices, run Andrew's monotone-chain hull for the silhouette polygon, draw filled hull + back-face-culled edges over the top.
+
+Geometry data lives in a top-level `HEALTH_SHAPE_GEOMETRY` const at `js/modules/game-engine.js`: per shape, `verts` (unit-radius), `faces` (CCW from outside, used for the back-face cull's 2D cross test), and `edges` (each carrying its two adjacent face indices).
+
+### Changed — Health drops more common; player more survivable
+The 5.88.0 energy-tank model removed automatic post-hit invuln, which made low base HP + sparse healing punishing in sustained combat. Tuned for the new model:
+
+- **Heal range**: `HEALTH_ORB_HEAL_AMOUNT_MIN/MAX` 1/2 → **4/8**.
+- **Drop rate**: `HEALTH_ORB_BASE_DROP_RATE` 0.40 → **0.70** (matches money orb rate).
+- **Drop cooldown**: `HEALTH_DROP_COOLDOWN_BASE` 60s → **25s**; floor 30s → **12s**; per-Triage-stack reduction 5s → 2.5s.
+- **Heal cap**: `HEALTH_ORB_MAX_HEAL_PER_ORB` 2 → **8** (re-anchors orb size scaling to the new heal range).
+- **Orb size cap**: `HEALTH_ORB_SIZE_MAX` 16 → **18 px**.
+- **Collection radius**: 15 → **22 px**.
+- **Player base max HP**: 25 → **40** (mirrored in `player.js` and the engine's `playerShields` / `displayShields` init).
+
+### Changed — `shieldTanks` renamed to `healthTanks`
+Better names — the field has been the safety net for the *health* bar, never a shield, since 5.88.0 unified the lives system into it. Plain identifier rename across 9 files (game-engine, lifecycle, player, hud/status, combat/collision, ui/stats-overlay, tests/qa, tests/e2e, tests/helpers). Constant `MAX_SHIELD_TANKS` → `MAX_HEALTH_TANKS`. The serialized save-state field `engineTanks` is unchanged so existing saves still load.
+
+---
+
+## [5.88.4] - 2026-05-09
+
+### Changed — Triforce unified with shield-tank state; cap = 3 spares
+The triforce + shield-tank systems were two parallel visualizations of the same idea. Unified: each triangle is now exactly one spare energy tank. The healthbar is the *active* tank (the implicit "+1" the user described as "the last energy tank with no triangles"); the triforce is the spare count, 0–3.
+
+- `MAX_SHIELD_TANKS`: 4 → **3** (was the brief 5.88.0 cap that included a separate "spare battery" slot).
+- Standalone battery icon retired. The HUD top-left is now `[triforce] [healthbar] [LV-shield] [level]` — no extra widget left of the triforce.
+- Loss order: top → btm-right → btm-left (matches the original `getDisappearingTriforcePos` ordering pre-5.88.0).
+- Game over fires when HP→0 with `shieldTanks === 0` (the last tank — the active healthbar — runs out, no triangle to vaporize).
+- Save migration: `engineTanks` clamped to `[0, 3]` on load.
+- Triforce render: `drawCanvasTriforce` emits 1, 2, or 3 triangles based on `shieldTanks` directly; no spare-icon branch.
+
+### Changed — Top-left HUD aligned with bottom-left loadout (left margin = 36 px)
+The triforce + healthbar cluster now starts at the same `x = 36` pixel as the bottom-left loadout squares' `groupX` in `drawEquippedWeaponSquares`. The two HUD clusters sit flush against the same invisible left rail.
+
+- `triforceLeftX`: 18 → **36** (matches loadout `livesX = 36`).
+- `barX`: 52 → **70** (= 36 + 26 px triforce width + 8 px gap).
+- `HUD_TRIFORCE_LEFT_X` mirrored in `lifecycle.js` for vaporize-FX placement.
+
+### Added — Proper GAME OVER screen with NEW GAME + RESTART WAVE buttons
+The "GAME OVER · Press Enter or click to restart" DOM popup is replaced by a canvas screen with two buttons:
+
+- **NEW GAME** — clears the save and starts a fresh run with a fresh random loadout (= title-screen NEW GAME). Routes through `startNewRun()`.
+- **RESTART WAVE** — loads the wave-start auto-save (`startContinueRun()` → `loadSave()` + `restoreRunState()`) and replays the wave the player died on with their pre-wave loadout and economy intact. Disabled (with a "(no checkpoint yet)" hint) when no save exists.
+- Wavy "GAME OVER" title in gold; subtitle line shows `Wave N · M:SS` survival summary.
+- Buttons share the title-screen button styling — same hit-test pattern, same hover/press feedback. Enter/Space activate the hovered button or default to RESTART WAVE if a save exists, NEW GAME otherwise.
+- `_gameOverButtonRects` / `_gameOverHoveredButton` / `_gameOverPressedButton` mirror the title-screen `_titleButton*` machinery in `event-setup.js`.
+
+### Fixed — `updateHUD()` syntax error
+Earlier 5.88.x edits accidentally dropped the `export function updateHUD() {` opening line, leaving an orphan `}` that broke Vite's import analysis. Function header restored.
+
+---
+
+## [5.88.2] - 2026-05-09
+
+### Changed — HUD top-left tightened further; triforce vertically centered with healthbar
+The new tank widget read as a stacked 2-row block (spare-tank above, triforce below) which made the cluster sit higher than the LV-shield icon's center alignment with the healthbar. Layout reshaped so the four pieces sit on one horizontal line at the bar's vertical center:
+
+```
+[spare]  [triforce]  [healthbar]  [LV-shield][level]
+```
+
+- Spare-tank icon moved from above the triforce to the LEFT of it. Vertically centered with the healthbar (centerY = barY + barHeight/2 = 35), matching how the LV-shield is centered.
+- Triforce vertically centered too — `topY = centerY - 6.5`, `bottomY = centerY + 6.5` — so the triangle bounding box straddles the bar's middle.
+- HUD pulled left again: `triforceLeftX = 18` (so the spare tank's left edge sits ~5 px from the screen edge); `barX = 52` (was 62 in 5.88.0). Net margin from screen edge to first HUD pixel ~5 px (was ~36 px pre-5.88.0).
+- Spare-tank slot is reserved (~13 px of horizontal space) whether or not the player has 4 tanks; that prevents layout jitter when a tank is gained/lost. Slot is empty when tanks ≤ 3.
+- `triforceLayout()` rewritten to take `(triforceLeftX, centerY)` instead of `(baseX, baseY)`; the old `+30` internal X offset and `+8` internal Y offset are gone, so the first arg is now literally "the leftmost pixel of the triforce widget".
+- Spare-tank icon resized to 9×11 (was 9×5) so it visually balances against the triforce when sitting next to it; the battery-cap nub still pokes right toward the triforce.
+
+`HUD_TRIFORCE_LEFT_X` / `HUD_BAR_CENTER_Y` mirrored in `lifecycle.js` so vaporize FX still lands on the disappearing slot.
+
+---
+
+## [5.88.1] - 2026-05-09
+
+### Changed — Gold shape rotation dialed back to a gentle tumble
+The 1–3 chunky gold shapes that scatter on enemy/asteroid kill were spinning at ~0.4–0.8 revolutions per second (`baseRot = random(0.04, 0.08)`), which read as fidget-spinner-grade chaos once three shapes overlapped at the spawn point. Rate cut to `random(0.012, 0.024)` (~0.12–0.24 rev/s, 4–8s per full rotation) so the 3D-baked solid faces still tumble visibly but the drop feels like loot, not a centrifuge. Single edit in `js/modules/world/gold-shape.js`; no other tuning changed.
+
+---
+
+## [5.88.0] - 2026-05-09
+
+### Changed — Lives replaced by energy tanks; no respawn, no post-hit invincibility
+The "lives" system is gone. The triforce + a new "spare tank" icon are the entire safety net:
+
+- **One state, four tanks max**. `this.shieldTanks` is the single number that drives the HUD. Capped at 4: three triforce triangles + one standalone "spare tank" battery icon above the triforce. Starts at 3 (full triforce, no spare).
+- **Hits cost a tank, not a life**. When HP hits zero, `_consumeTank()` decrements `shieldTanks`, vaporizes the matching slot (gold particle blast + flash, reusing the existing `spawnTriforceVaporize` infrastructure), and refills HP to max. The player keeps flying — no respawn timer, no safe-spawn relocation, no post-hit invuln window.
+- **Loss order**: spare → top triangle → bottom-right → bottom-left. The bottom-left triangle is the final hit before game over.
+- **Game over** fires immediately when HP hits 0 with `shieldTanks === 0`. The full death-explosion choreography (hitstop, three explosion phases, ember pops) still plays; the run just ends instead of looping back to a respawn.
+- **Tank gain via overflow healing**. Health pickups heal HP normally; the unused portion (or the entire orb if at max HP) accumulates into a hidden `_tankProgress` counter (0..1, fraction of max HP). Each full max-HP-worth of overflow grants +1 tank, capped at 4. Visual feedback: a green/cyan particle burst on the new slot (`spawnTankRecharge`).
+- **No automatic post-hit invincibility**. The `makeInvincible(1500)`, `makeInvincible(2000)`, `makeInvincible(3000)` calls scattered through the three player-collision paths are gone. Deliberate-save skills (REFLEXES dodge, LAST_STAND save, PHASE_DASH, wave-start grace) still call `makeInvincible` — those are active-ability windows, not damage-aftermath grace.
+- **Removed**: `respawnPlayer`, `respawnPlayerSafely`, `findSafeRespawnLocation`, `updateRespawnAnimation`, `clearAreaAroundPlayer`, `explodeTank` (DOM-based), `player.justRespawned`, `game.lives`, `game.respawning`, `game.respawnStartTime`, `game.respawnDuration`, `ui:update-lives` event, `UIManager.updateLives` / `positionLivesDisplay` / `drawTriforceFormation` / `drawTriangle`, `SPARE_SHIP` defense powerup definition, the post-respawn invincibility-countdown HUD ring.
+- **Save-state migration**: older saves carrying `lives` are mapped 1:1 to `engineTanks` on load (clamped to [0, 4]). New saves write `engineTanks` instead.
+- **DOM lives display retired**: `#lives-display` is no longer queried; the count was already canvas-rendered, so this just removes the orphaned hook.
+
+### Changed — Top-left HUD tightened against the screen edge
+The triforce + health bar + level cluster moves left:
+
+- Triforce baseX: `36` → `12` (left margin 36 px → 12 px from screen edge).
+- Health bar `barX`: `86` → `62`.
+- Level shield + number ride along automatically (positioned relative to `barX`).
+- The new spare-tank icon sits above the triforce in the same column. The triforce baseline shifts down inside the layout helper so spare + triforce both fit in the original vertical band; the health bar's vertical position is unchanged.
+
+### Migration / playtest notes
+- The first hit you take used to be a ~200ms blink + invuln; now it's a tank loss + immediate continue. Expect to die faster on early waves until the muscle memory adjusts.
+- Tank gain is a real economy: overhealing builds tanks, so picking the right moment to grab a health drop while at full HP is now strategic.
+- Defense skills that grant brief invuln still work — REFLEXES one-free-dodge, LAST_STAND 1HP save, PHASE_DASH dash-through. Those are deliberate active windows, not automatic.
+
+---
+
+## [5.87.1] - 2026-05-09
+
+### Fixed — First life now decrements on first death (silent shield-tank removed)
+The player started with `shieldTanks = 1`, an invisible second-chance buffer that silently restored full HP on the first 0-HP event without decrementing `game.lives`. The shield-tank UI was removed back in an earlier release ("Shield tanks display removed - was causing green square overlay" — `js/modules/hud/status.js:899`), so the mechanic was a phantom: the triforce stayed at three triangles after the first death, making it look like dying didn't count. Starting tanks are now `0` in both `js/modules/game-engine.js` and `js/modules/player/player.js`. The four shield-tank absorb code paths (`lifecycle.js`, three sites in `collision-system.js`) are kept intact for snapshot/multiplayer state restore — they just don't fire by default anymore. A real life is now spent on the very first death.
+
+### Added — Triforce vaporize animation + gold screen flash on life loss
+Each life loss now plays a dedicated visual beat at the disappearing triforce triangle's HUD position, layered with a gold-tinted screen flash, before the 1800 ms reincarnation timer hands off to `respawnPlayerSafely()` (which already picks a safe spot 250 px from enemies/asteroids and grants 5 s of invincibility).
+
+- `js/modules/hud/status.js` — new `getDisappearingTriforcePos(livesBefore, baseX, baseY)` returns the (x, y, size) of the triangle that vanishes when lives drop from `livesBefore` → `livesBefore - 1` (top at 3→2, bottom-right at 2→1, bottom-left at 1→0). New `spawnTriforceVaporize(x, y, size)` populates a HUD-particle ring (36 gold/white/amber dots fanning out with light gravity) plus a companion radial flash sprite at the triangle's center. New `updateAndDrawTriforceVaporize(ctx)` ticks and draws both, called from the end of `drawCanvasTriforce` so particles render on top of whatever triangles remain.
+- `js/modules/world/camera-manager.js` — new `triggerGoldScreenFlash(alpha, duration)` running on its own `_goldFlashTimer / _goldFlashDuration / _goldFlashAlpha` channel, parallel to the existing white flash.
+- `js/modules/game-engine.js` — proxy methods (`spawnTriforceVaporize`, `getDisappearingTriforcePos`, `triggerGoldScreenFlash`); two render passes (the hitstop branch and the main render) get a gold-flash overlay block right after the white-flash overlay block, using `globalCompositeOperation = 'lighter'` so the gold layers cleanly over death tint.
+- `js/modules/player/lifecycle.js` — `handlePlayerDeath()` reads `livesBefore = this.game.lives` and fires `spawnTriforceVaporize` + `triggerGoldScreenFlash(0.32, 9)` BEFORE `game.lives--`, so the burst position lines up with the still-drawn triangle. Game-over case naturally vaporizes the final triangle on its way out.
+
+The reincarnation path (`respawnPlayerSafely → findSafeRespawnLocation → makeInvincible(5000)`) was already in place and didn't need to change; the vaporize/flash plays out within the existing 1800 ms death-to-respawn window.
+
+---
+
 ## [5.87.0] - 2026-05-09
 
 ### Added — JS-side wire-protocol codegen (closes the parity loop)

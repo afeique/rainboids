@@ -825,6 +825,144 @@ function drawPinwheelAnim(ctx, elapsed, total, text, seeds, centerX, centerY, st
     return fadeAlpha;
 }
 
+// 5.88.4 — Proper GAME OVER screen.
+//
+//   ┌─────────────────────────────┐
+//   │      GAME OVER (wavy)       │
+//   │       Wave 8 · 4:23         │
+//   │                             │
+//   │  [ NEW GAME ] [ RESTART WAVE ]
+//   └─────────────────────────────┘
+//
+// RESTART WAVE loads the wave-start save (`startContinueRun()`) — i.e.
+// the player retries the wave they died on with their pre-wave loadout
+// and economy. NEW GAME clears the save and starts a fresh run. Button
+// rects are stashed on `_gameOverButtonRects` so the click/keyboard
+// handlers in event-setup.js can route hits using the same machinery
+// that powers the title screen's buttons.
+export function drawGameOverScreen() {
+    const ctx = this.ctx;
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+
+    // Dim the playfield further (atop the 0.5 black overlay drawn by
+    // game-engine's GAME_OVER block) so the screen reads as terminal
+    // rather than a paused beat.
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.restore();
+
+    // GAME OVER title — wavy palette, large, with a black outline so it
+    // stays legible over any explosion shrapnel still in flight.
+    this.drawWavyText('GAME OVER', centerX, centerY - 110, {
+        fontSize: 72,
+        colors: WAVY_PALETTES.gold,
+        speed: 0.45,
+        colorSpeed: 0.18,
+        outline: true,
+        outlineWidth: 6,
+    });
+
+    // Run summary line: wave reached + survival time. Survival time
+    // comes from this.game.survivalTime (set in updateSurvival).
+    const wave = this.game?.currentWave | 0;
+    const survivalMs = (this.game?.survivalTime | 0);
+    const seconds = Math.floor(survivalMs / 1000);
+    const mm = Math.floor(seconds / 60);
+    const ss = String(seconds % 60).padStart(2, '0');
+    const summary = `Wave ${wave} · ${mm}:${ss}`;
+    this.drawWavyText(summary, centerX, centerY - 50, {
+        fontSize: 22,
+        colors: WAVY_PALETTES.whiteShimmer,
+        amplitude: 0,
+        colorSpeed: 0.12,
+        outline: true,
+        outlineWidth: 4,
+    });
+
+    // Buttons — same geometry the title screen uses so the two screens
+    // feel like one button system.
+    const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
+    const labels = ['NEW GAME', 'RESTART WAVE'];
+    const buttonW = 220, buttonH = 46, gap = 36;
+    const totalW = buttonW * 2 + gap;
+    const yTop = centerY + 30;
+    const x0 = centerX - totalW / 2;
+    const rects = {
+        newGame:     { id: 'newGame',     x: x0,                  y: yTop, w: buttonW, h: buttonH, disabled: false },
+        restartWave: { id: 'restartWave', x: x0 + buttonW + gap,  y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun },
+    };
+    this._gameOverButtonRects = rects;
+
+    const hovered = this._gameOverHoveredButton;
+    const pressed = this._gameOverPressedButton;
+
+    const drawButton = (rect, label) => {
+        ctx.save();
+        const isHover = hovered === rect.id && !rect.disabled;
+        const isPress = pressed === rect.id && !rect.disabled;
+        const baseAlpha = rect.disabled ? 0.32 : 1.0;
+        const time = Date.now() * 0.001;
+        const pulse = rect.disabled ? 0 : Math.sin(time * 3) * 0.10;
+        ctx.globalAlpha = baseAlpha + pulse;
+
+        const yOffset = isPress ? 1 : 0;
+        const x = rect.x;
+        const y = rect.y + yOffset;
+        const w = rect.w, h = rect.h;
+
+        ctx.lineWidth = 2;
+        if (rect.disabled) {
+            ctx.strokeStyle = 'rgba(150, 150, 150, 0.55)';
+            ctx.fillStyle   = 'rgba(40, 40, 40, 0.35)';
+        } else if (isPress) {
+            ctx.strokeStyle = '#ffe5a0';
+            ctx.fillStyle   = 'rgba(255, 200, 64, 0.55)';
+        } else if (isHover) {
+            ctx.strokeStyle = 'rgba(140, 220, 255, 1)';
+            ctx.fillStyle   = 'rgba(0, 80, 130, 0.55)';
+        } else {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.fillStyle   = 'rgba(0, 0, 0, 0.55)';
+        }
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(x, y, w, h, 8) : ctx.rect(x, y, w, h);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = "16px 'Press Start 2P', monospace";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const tx = x + w / 2;
+        const ty = y + h / 2 + 1;
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
+        ctx.strokeText(label, tx, ty);
+        ctx.fillStyle = rect.disabled
+            ? 'rgba(170, 170, 170, 0.85)'
+            : (isPress ? '#fffadf' : (isHover ? '#fff' : 'rgba(230, 240, 250, 0.95)'));
+        ctx.fillText(label, tx, ty);
+        ctx.restore();
+    };
+    drawButton(rects.newGame, labels[0]);
+    drawButton(rects.restartWave, labels[1]);
+
+    // Disabled-button hint so the player understands why RESTART WAVE
+    // is greyed out (only happens before any wave-start save fires —
+    // i.e. the player died inside their first ~second of wave 1).
+    if (!hasSavedRun) {
+        ctx.save();
+        ctx.font = "12px 'Press Start 2P', monospace";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = 'rgba(180, 180, 180, 0.7)';
+        ctx.fillText('(no checkpoint yet)', rects.restartWave.x + rects.restartWave.w / 2, rects.restartWave.y + rects.restartWave.h + 8);
+        ctx.restore();
+    }
+}
+
 export function drawSurvivalTimer(ctx) {
         // 5.71.0 — moved to bottom-RIGHT (was bottom-left). Minimap
         // took over the bottom-left corner; HUD pause/shop buttons

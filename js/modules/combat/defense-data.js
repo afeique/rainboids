@@ -103,14 +103,7 @@ export const DEFENSE_CONFIGS = {
         cost: 3200,
         maxStacks: 3,
     },
-    SPARE_SHIP: {
-        id: 'SPARE_SHIP',
-        name: 'Spare Ship',
-        description: '+1 extra life (max 3)',
-        icon: 'rocket',
-        gradientColors: ['#ffeeaa', '#cc8800'],
-        cost: 12000,
-        maxStacks: 1,
-        flatCost: true,
-    },
+    // 5.88.0 — SPARE_SHIP retired with the lives system. Energy tanks now
+    // act as the safety net (3 triforce + spare; gained via overflow
+    // healing, capped at 4); see lifecycle.js + hud/status.js.
 };
