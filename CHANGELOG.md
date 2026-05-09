@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.87.1] - 2026-05-09
+
+### Fixed — First life now decrements on first death (silent shield-tank removed)
+The player started with `shieldTanks = 1`, an invisible second-chance buffer that silently restored full HP on the first 0-HP event without decrementing `game.lives`. The shield-tank UI was removed back in an earlier release ("Shield tanks display removed - was causing green square overlay" — `js/modules/hud/status.js:899`), so the mechanic was a phantom: the triforce stayed at three triangles after the first death, making it look like dying didn't count. Starting tanks are now `0` in both `js/modules/game-engine.js` and `js/modules/player/player.js`. The four shield-tank absorb code paths (`lifecycle.js`, three sites in `collision-system.js`) are kept intact for snapshot/multiplayer state restore — they just don't fire by default anymore. A real life is now spent on the very first death.
+
+### Added — Triforce vaporize animation + gold screen flash on life loss
+Each life loss now plays a dedicated visual beat at the disappearing triforce triangle's HUD position, layered with a gold-tinted screen flash, before the 1800 ms reincarnation timer hands off to `respawnPlayerSafely()` (which already picks a safe spot 250 px from enemies/asteroids and grants 5 s of invincibility).
+
+- `js/modules/hud/status.js` — new `getDisappearingTriforcePos(livesBefore, baseX, baseY)` returns the (x, y, size) of the triangle that vanishes when lives drop from `livesBefore` → `livesBefore - 1` (top at 3→2, bottom-right at 2→1, bottom-left at 1→0). New `spawnTriforceVaporize(x, y, size)` populates a HUD-particle ring (36 gold/white/amber dots fanning out with light gravity) plus a companion radial flash sprite at the triangle's center. New `updateAndDrawTriforceVaporize(ctx)` ticks and draws both, called from the end of `drawCanvasTriforce` so particles render on top of whatever triangles remain.
+- `js/modules/world/camera-manager.js` — new `triggerGoldScreenFlash(alpha, duration)` running on its own `_goldFlashTimer / _goldFlashDuration / _goldFlashAlpha` channel, parallel to the existing white flash.
+- `js/modules/game-engine.js` — proxy methods (`spawnTriforceVaporize`, `getDisappearingTriforcePos`, `triggerGoldScreenFlash`); two render passes (the hitstop branch and the main render) get a gold-flash overlay block right after the white-flash overlay block, using `globalCompositeOperation = 'lighter'` so the gold layers cleanly over death tint.
+- `js/modules/player/lifecycle.js` — `handlePlayerDeath()` reads `livesBefore = this.game.lives` and fires `spawnTriforceVaporize` + `triggerGoldScreenFlash(0.32, 9)` BEFORE `game.lives--`, so the burst position lines up with the still-drawn triangle. Game-over case naturally vaporizes the final triangle on its way out.
+
+The reincarnation path (`respawnPlayerSafely → findSafeRespawnLocation → makeInvincible(5000)`) was already in place and didn't need to change; the vaporize/flash plays out within the existing 1800 ms death-to-respawn window.
+
+---
+
 ## [5.87.0] - 2026-05-09
 
 ### Added — JS-side wire-protocol codegen (closes the parity loop)

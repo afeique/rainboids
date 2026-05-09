@@ -510,9 +510,14 @@ export class GameEngine {
         // Wave bonus shield system removed
         // Reset shields
         this.playerShields = 25; // Start with 25 health
-        this.shieldTanks = 1; // Start with 1 shield tank for survivability
+        // 5.85.0 — start with 0 shield tanks. Previously the player got a
+        // free invisible second chance (shieldTank UI was removed), which
+        // soaked the first 0-HP event and made it look like the first
+        // life never decremented. Snapshot/multiplayer restore can still
+        // populate tanks; the absorb code below stays in place for that.
+        this.shieldTanks = 0;
         this.displayShields = 25; // Match starting health
-        this.displayTanks = 1;
+        this.displayTanks = 0;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
         
@@ -2209,6 +2214,7 @@ export class GameEngine {
     triggerHitstop(frames) { return cam.triggerHitstop.call(this, frames); }
     triggerCameraKick(dx, dy, magnitude) { return cam.triggerCameraKick.call(this, dx, dy, magnitude); }
     triggerScreenFlash(alpha, duration) { return cam.triggerScreenFlash.call(this, alpha, duration); }
+    triggerGoldScreenFlash(alpha, duration) { return cam.triggerGoldScreenFlash.call(this, alpha, duration); }
 
     gameLoop() {
       try {
@@ -2266,6 +2272,16 @@ export class GameEngine {
                 this.ctx.fillStyle = `rgba(255,255,255,${this._screenFlashAlpha})`;
                 this.ctx.fillRect(0, 0, this.width, this.height);
                 this._screenFlashAlpha -= this._screenFlashAlpha / (this._screenFlashDuration || 1);
+            }
+            // 5.85.0 — gold flash channel (life-loss feedback)
+            if (this._goldFlashTimer > 0) {
+                const ga = (this._goldFlashTimer / (this._goldFlashDuration || 1)) * (this._goldFlashAlpha || 0);
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'lighter';
+                this.ctx.fillStyle = `rgba(255, 215, 0, ${ga})`;
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                this.ctx.restore();
+                this._goldFlashTimer--;
             }
             // Wave intro overlay — disabled for now so the warp-in visuals
             // stay visible. Re-enable by uncommenting the call below.
@@ -2396,6 +2412,19 @@ export class GameEngine {
             this.ctx.fillRect(0, 0, this.width, this.height);
             this.ctx.restore();
             this._screenFlashTimer--;
+        }
+
+        // 5.85.0 — gold-tinted flash for life-loss feedback. Layers on top
+        // of (and outlasts) the white death-flash so the moment reads as a
+        // distinct "Triforce shattered" beat rather than another hit.
+        if (this._goldFlashTimer > 0) {
+            const goldAlpha = (this._goldFlashTimer / (this._goldFlashDuration || 1)) * (this._goldFlashAlpha || 0);
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'lighter';
+            this.ctx.fillStyle = `rgba(255, 215, 0, ${goldAlpha})`;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            this.ctx.restore();
+            this._goldFlashTimer--;
         }
 
         // Death overlay — brief dark tint after player death
@@ -2820,6 +2849,8 @@ export class GameEngine {
     drawPauseButton() { return hudOverlays.drawPauseButton.call(this); }
     drawStopwatchIcon(ctx, x, y, size) { return hudOverlays.drawStopwatchIcon.call(this, ctx, x, y, size); }
     drawCanvasTriforce(ctx, lives, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }
+    spawnTriforceVaporize(x, y, size) { return hudStatus.spawnTriforceVaporize.call(this, x, y, size); }
+    getDisappearingTriforcePos(lives, baseX, baseY) { return hudStatus.getDisappearingTriforcePos(lives, baseX, baseY); }
     drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) { return hudStatus.drawLevelAndCoinsDisplay.call(this, ctx, barX, barY, barHeight); }
     drawEquippedWeaponSquares(ctx, barX, barY, barHeight) { return hudStatus.drawEquippedWeaponSquares.call(this, ctx, barX, barY, barHeight); }
     drawDefenseIndicators(ctx) { return hudStatus.drawDefenseIndicators.call(this, ctx); }
