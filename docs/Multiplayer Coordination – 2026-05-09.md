@@ -13,10 +13,10 @@ on commit. The user runs both terminals and hands the tree back and forth.
 | Field | Value |
 |-------|-------|
 | Branch | `master` (with worktrees — see "Workflow" below) |
-| Version | `5.85.0` (see `VERSION`) |
-| Working tree | **multi-worktree as of 2026-05-09** — server agent on `../rainboids-server-wt` (`mp/server-week7`), client agent on the original tree at `master`. Merge to master at hand-off points. |
-| Last touched | 2026-05-09 by **server agent** (merged 5.85.0 wire-codegen onto master) |
-| Last commit | merge of `mp/server-week7` (5.85.0 codegen) — `71db207` on the branch |
+| Version | `5.86.0` (see `VERSION`) |
+| Working tree | **multi-worktree as of 2026-05-09** — server agent on `../rainboids-server-wt` (`mp/server-week7`), client agent on `../rainboids-worktrees/engine-driver` (`client-engine-driver`). Merge to master at hand-off points. |
+| Last touched | 2026-05-09 by **client agent** (merged 5.86.0 EngineDriver onto master) |
+| Last commit | `4683928` — merge `client-engine-driver` (5.86.0 EngineDriver) |
 | Uncommitted | this doc update |
 
 ## Ownership boundaries
@@ -82,15 +82,29 @@ Each agent updates their column on every session start.
   - Server-side simulation port (Weeks 7–9). Blocked on Phase 1
     extraction of `simulateTick` from `game-engine.js`.
 
-### Client agent (other terminal)
+### Client agent (worktree `../rainboids-worktrees/engine-driver`, branch `client-engine-driver`)
 
-- **Currently on**: `js/net/` integration — wiring the Hello/Welcome modal
-  into the actual game loop / room-join UI / peer rendering. Details TBD;
-  fill in here on next session.
-- **Just shipped**: see 5.84.0 in CHANGELOG — Hello/Welcome handshake +
-  Phase 1 engine primitives + parity tooling.
-- **Open**: integrating the multiplayer modal beyond the connect-and-
-  display step; room creation/join UI; peer state rendering.
+- **Shipped on master**:
+  - 5.84.1 — JS PCG-64 fix (cross-language parity).
+  - **5.86.0 EngineDriver merge** — `client-engine-driver` (`d0793e3`) merged
+    onto master via `4683928`. Solo and multiplayer now route through the
+    same `EngineDriver` wrapping the same `GameEngine`. The "▶ START
+    MULTIPLAYER GAME" button on the title-screen modal hands the live
+    `ConnectionTask` over to the driver and dismisses the modal without
+    disconnecting; gameplay continues identical to solo with a
+    `🟢 ONLINE` overlay in the top-right.
+- **Currently working on**: nothing in flight; deciding next queue item
+  with the user.
+- **Queue (suggested)**:
+  - Wire the engine-driver `quit()` to GameEngine's "return to title"
+    transition so the socket gets cleaned up on game over (currently
+    leaks the connection until next page reload — acceptable for v1
+    but would be nice to close).
+  - Phase 1 simulation extraction: ship physics → `js/sim/ship.js`
+    (Phase 1 of the planning doc; touches `js/modules/` so coordinate
+    with server agent before starting).
+  - Room creation / browse / join-by-code UI (Phase 5 of the plan).
+  - Peer ship rendering once the server starts emitting Snapshot frames.
 
 ## Hand-offs
 
