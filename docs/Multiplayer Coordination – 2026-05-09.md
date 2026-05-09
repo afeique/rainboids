@@ -13,11 +13,12 @@ on commit. The user runs both terminals and hands the tree back and forth.
 | Field | Value |
 |-------|-------|
 | Branch | `master` (with worktrees — see "Workflow" below) |
-| Version | `5.86.0` (see `VERSION`) |
+| Version | `5.87.0` (see `VERSION`) |
 | Working tree | **multi-worktree as of 2026-05-09** — server agent on `../rainboids-server-wt` (`mp/server-week7`), client agent on `../rainboids-worktrees/engine-driver` (`client-engine-driver`). Merge to master at hand-off points. |
-| Last touched | 2026-05-09 by **client agent** (merged 5.86.0 EngineDriver onto master) |
-| Last commit | `4683928` — merge `client-engine-driver` (5.86.0 EngineDriver) |
+| Last touched | 2026-05-09 by **server agent** (merged 5.87.0 JS-side codegen onto master; pushing master to origin at this milestone) |
+| Last commit | merge of `mp/server-week7` (5.87.0 JS codegen) — `eaf0a3a` on the branch |
 | Uncommitted | this doc update |
+| Parity status | **Schema → Rust → JS pipeline complete.** Both sides codegen'd; `npm run codegen:check` is the CI gate; byte-level cross-checks (Rust `wire_golden.rs` ↔ JS `protocol.test.js`) pass byte-for-byte. |
 
 ## Ownership boundaries
 
@@ -69,18 +70,25 @@ Each agent updates their column on every session start.
     open-question #4 + worktree workflow doc.
   - **5.85.0 wire codegen merge** — `mp/server-week7` (`71db207`) merged
     onto master. Rust types (`server/src/protocol/generated.rs`) are now
-    codegen'd from `schema/protocol.toml` via `tools/codegen-protocol.mjs`
-    (`npm run codegen` to regenerate, `npm run codegen:check` is the CI
-    gate). The hand-mirror in `mod.rs` is gone. JS still hand-mirrored.
-- **Currently working on**: nothing in flight; deciding next queue item
-  with the user.
-- **Queue (suggested)**:
-  - JS-side codegen (`js/sim/protocol-generated.js`) — natural follow-up
-    to retire the JS hand-mirror too. Touches `js/sim/` (currently
-    shared/coordinated; coordinate with client agent before starting).
+    codegen'd from `schema/protocol.toml`.
+  - **5.87.0 JS-side codegen merge** — `mp/server-week7` (`eaf0a3a`)
+    merged onto master. JS types (`js/sim/protocol-generated.js`) are
+    now codegen'd from the same schema. The hand-mirror in
+    `js/sim/protocol.js` is gone — replaced by a one-line
+    `export *` shim. **Parity loop closed:** `npm run codegen:check`
+    catches drift on either side, and the existing byte-golden tests
+    in `wire_golden.rs` (Rust) ↔ `protocol.test.js` (JS) pin the wire
+    layout byte-for-byte.
+- **Currently working on**: nothing in flight; pushing master to origin
+  at this milestone (parity loop closure is the right cut point).
+- **Queue (suggested, post-push)**:
   - Lagging-client integration test (no coverage today).
   - Server-side simulation port (Weeks 7–9). Blocked on Phase 1
     extraction of `simulateTick` from `game-engine.js`.
+  - `js/sim/version.js` consolidation — currently has its own
+    `WIRE_VERSION` / `SIM_VERSION` constants that mirror the schema;
+    could re-export from `protocol-generated.js` to remove the dual
+    source. Small cleanup, low priority.
 
 ### Client agent (worktree `../rainboids-worktrees/engine-driver`, branch `client-engine-driver`)
 
