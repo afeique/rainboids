@@ -18,3 +18,7 @@ tools/juice-clips/
 
 # Claude Code harness state (per-machine; not source)
 .claude/
+
+# Generated test artifacts and rendered docs
+test-results/
+README.html
