@@ -17,8 +17,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SCHEMA_PATH = resolve(ROOT, 'schema/protocol.toml');
-const RUST_PROTOCOL_PATH = resolve(ROOT, 'server/src/protocol/mod.rs');
-const RUST_VERSION_PATH = resolve(ROOT, 'server/src/protocol/version.rs');
+// As of 5.85.0 the Rust protocol is codegen'd from `schema/protocol.toml`
+// into `server/src/protocol/generated.rs`. This checker reads the generated
+// file rather than the hand-mirror so it stays useful as a safety net even
+// after the hand-mirror is gone — if the codegen is buggy or the generated
+// file is committed out of sync, the checker still catches it.
+const RUST_PROTOCOL_PATH = resolve(ROOT, 'server/src/protocol/generated.rs');
 const JS_PROTOCOL_PATH = resolve(ROOT, 'js/sim/protocol.js');
 
 const issues = [];
@@ -26,12 +30,11 @@ const note = (s) => issues.push(s);
 
 const schema = parseSchemaToml(readFileSync(SCHEMA_PATH, 'utf-8'));
 const rustSrc = readFileSync(RUST_PROTOCOL_PATH, 'utf-8');
-const rustVersionSrc = readFileSync(RUST_VERSION_PATH, 'utf-8');
 const jsSrc = readFileSync(JS_PROTOCOL_PATH, 'utf-8');
 
-// Wire/sim version match. Rust constants live in version.rs (not mod.rs).
-const rustWire = parseRustU16(rustVersionSrc, 'WIRE_VERSION');
-const rustSim = parseRustU16(rustVersionSrc, 'SIM_VERSION');
+// Wire/sim version match.
+const rustWire = parseRustU16(rustSrc, 'WIRE_VERSION');
+const rustSim = parseRustU16(rustSrc, 'SIM_VERSION');
 if (schema.wire_version !== rustWire) {
     note(`wire_version: schema=${schema.wire_version} ≠ rust=${rustWire}`);
 }

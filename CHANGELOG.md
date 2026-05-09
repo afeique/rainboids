@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.85.0] - 2026-05-09
+
+### Added — Wire-protocol codegen (Rust types now generated from `schema/protocol.toml`)
+The Rust side of the wire protocol is no longer hand-mirrored. `tools/codegen-protocol.mjs` reads `schema/protocol.toml` and emits `server/src/protocol/generated.rs`, which `protocol/mod.rs` re-exports. Adding or changing a wire variant is now a one-edit change in the schema followed by `npm run codegen` — name and discriminant drift between schema and Rust is no longer possible.
+
+- `tools/codegen-protocol.mjs` — Node script (uses `@iarna/toml`) that emits Rust newtypes, plain enums, the tagged `EntityRef` enum, structs, and the three tagged-union messages (`ClientMsg`, `ServerMsg`, `GameEvent`). Auto-runs `rustfmt` if available so committed output is canonical. `--check` mode is the CI gate: re-running codegen against the committed `generated.rs` must produce no diff.
+- `server/src/protocol/generated.rs` — 322 lines of generated types. Replaces ~290 lines of hand-mirrored definitions in `mod.rs`.
+- `server/src/protocol/mod.rs` — slimmed to module declarations + re-exports + the `hello_round_trips` test. Now `pub use generated::*` for all wire types and `pub use codec::{decode, decode_client, encode, encode_into, encode_server}` for codec helpers.
+- `server/src/protocol/version.rs` — collapsed to `pub use super::generated::{is_compatible, SIM_VERSION, WIRE_VERSION}`. Existing `crate::protocol::version::WIRE_VERSION` imports still resolve.
+- `tools/check-schema.mjs` — now reads `generated.rs` for the version+variant cross-check rather than `mod.rs`. The check still has value as a defense-in-depth tripwire if the codegen is buggy or the generated file is committed out of sync.
+- `schema/protocol.toml` — the seven `[[newtype]]` blocks were edited to use the standard one-key-per-line TOML form (the previous `name = "X"   ; underlying = "Y"` form is non-standard and rejected by `@iarna/toml`).
+- `package.json` — three new scripts: `npm run codegen`, `npm run codegen:check`, `npm run schema:check`. Adds `@iarna/toml` to devDependencies.
+
+Cross-language status:
+- Rust: codegen'd from schema. ✓
+- JS (`js/sim/protocol.js`): still hand-mirrored. JS-side codegen (`js/sim/protocol-generated.js`) is the obvious follow-up; deferred to keep this PR scoped.
+
+Verification: 29 server tests pass (`cargo test`), 212 JS tests pass (`npm run test:unit`), `npm run schema:check` and `npm run codegen:check` both green.
+
+Server-only refactor — wire format unchanged (still `WIRE_VERSION=1`), no behavior changes for connected clients.
+
+---
+
 ## [5.84.1] - 2026-05-09
 
 ### Fixed — Cross-language PCG-64 parity (JS now bit-identical to `rand_pcg::Pcg64`)

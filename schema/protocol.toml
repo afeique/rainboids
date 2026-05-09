@@ -77,19 +77,32 @@ variants = [
 # Keep these aliased so reviewers don't lose track of which scalar a field is.
 
 [[newtype]]
-name = "PlayerId"   ; underlying = "u64"
+name = "PlayerId"
+underlying = "u64"
+
 [[newtype]]
-name = "RoomId"     ; underlying = "u64"
+name = "RoomId"
+underlying = "u64"
+
 [[newtype]]
-name = "BulletId"   ; underlying = "u64"
+name = "BulletId"
+underlying = "u64"
+
 [[newtype]]
-name = "EnemyId"    ; underlying = "u64"
+name = "EnemyId"
+underlying = "u64"
+
 [[newtype]]
-name = "AsteroidId" ; underlying = "u64"
+name = "AsteroidId"
+underlying = "u64"
+
 [[newtype]]
-name = "DropId"     ; underlying = "u64"
+name = "DropId"
+underlying = "u64"
+
 [[newtype]]
-name = "PowerupId"  ; underlying = "u16"
+name = "PowerupId"
+underlying = "u16"
 
 # ─── Structs ──────────────────────────────────────────────────────────────────
 
