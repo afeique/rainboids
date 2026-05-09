@@ -290,7 +290,11 @@ export class GameAI {
                 gameState:    ge.game.state,
                 wave:         ge.game.currentWave,
                 money:        ge.game.money,
-                lives:        ge.game.lives,
+                // 5.88.0 — lives replaced with energy tanks; old field
+                // name kept on the AI snapshot for back-compat in case
+                // any e2e/perf script reads `state.lives`.
+                lives:        ge.shieldTanks,
+                tanks:        ge.shieldTanks,
                 player: {
                     x:        p?.x,
                     y:        p?.y,

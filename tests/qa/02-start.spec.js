@@ -88,10 +88,10 @@ test.describe('QA-02: Game start and state transitions', () => {
         expect(health).toBeGreaterThan(0);
     });
 
-    test('player starts with 3 lives', async ({ page }) => {
+    test('player starts with 3 energy tanks (5.88.0)', async ({ page }) => {
         await startGame(page);
-        const lives = await page.evaluate(() => window.gameEngine?.game?.lives);
-        expect(lives).toBe(3);
+        const tanks = await page.evaluate(() => window.gameEngine?.shieldTanks);
+        expect(tanks).toBe(3);
     });
 
     test('game money starts at zero', async ({ page }) => {

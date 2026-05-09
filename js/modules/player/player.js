@@ -185,7 +185,9 @@ export class Player {
         this.invincible = false;
         this.invincibilityTimer = 0;
         this.firingDisabled = false;
-        this.justRespawned = false;
+        // 5.88.0 — `justRespawned` retired with the respawn system; tank
+        // consumption (lifecycle._consumeTank) refills HP in place with no
+        // post-hit invuln window, so there's nothing to flag here.
         this.levelUpAnimation = { active: false };
         
         // Reset auto-fire timer
@@ -375,14 +377,14 @@ export class Player {
         const prevX = this.x;
         const prevY = this.y;
         
-        // Update invincibility timer
+        // Update invincibility timer (still used by deliberate-save skills:
+        // REFLEXES, LAST_STAND, PHASE_DASH, plus the wave-start grace window).
         if (this.invincibilityTimer > 0) {
             this.invincibilityTimer -= GAME_CONFIG.LOGIC_TICK_MS;
             if (this.invincibilityTimer <= 0) {
                 this.invincible = false;
                 this.invincibilityTimer = 0;
-                this.firingDisabled = false; // Re-enable firing when invincibility ends
-                this.justRespawned = false; // Clear respawn flag when invincibility ends
+                this.firingDisabled = false;
             }
         }
         

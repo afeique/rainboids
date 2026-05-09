@@ -177,7 +177,12 @@ export class GameEngine {
         // Wire UI events — systems emit events, UIManager handles display
         this.events.on('ui:show-message', (d) => this.uiManager.showMessage(d.title, d.subtitle, d.duration, d.position));
         this.events.on('ui:hide-message', () => this.uiManager.hideMessage());
-        this.events.on('ui:update-lives', (d) => this.uiManager.updateLives(d.lives));
+        // 5.88.0 — `ui:update-tanks` is the new equivalent of the old
+        // `ui:update-lives`; consumed by anything DOM-side that wants to
+        // reflect the energy-tank count. UIManager has no DOM lives
+        // element anymore, so it's a no-op there — kept for analytics
+        // hooks / future HUD widgets.
+        this.events.on('ui:update-tanks', () => { /* no-op v1 */ });
         this.events.on('ui:check-orientation', () => this.uiManager.checkOrientation());
         this.events.on('ui:toggle-pause', () => this.uiManager.togglePause());
         this.events.on('ui:show-shop-button', () => this.uiManager.showShopButton());
@@ -262,7 +267,6 @@ export class GameEngine {
             survivalRecord: parseInt(localStorage.getItem('rainboidsSurvivalRecord')) || 0, // Best survival time
             gameStartTime: 0, // When the current game started
             currentWave: 0,
-            lives: 3, // Start with 3 lives
             screenShakeDuration: 0,
             screenShakeMagnitude: 0,
             enemyLevel: 1,    // Enemy level increases each wave
@@ -270,9 +274,6 @@ export class GameEngine {
             waveComplete: false,
             waveCountdownTime: 0,
             waveCountdownDuration: 5000, // 5 seconds between waves
-            respawning: false,
-            respawnStartTime: 0,
-            respawnDuration: 5000, // 5 seconds respawn sequence
             // Run-wide stats — drive the Game Complete screen + speedrun meta.
             stats: {
                 gameStartTime: 0,        // set when run actually starts
@@ -505,19 +506,16 @@ export class GameEngine {
                 this.player.ownedSkills = new Set([loadout.skill]);
             }
         }
-        // Initialize lives display
-        this.uiManager.updateLives(this.game.lives);
-        // Wave bonus shield system removed
-        // Reset shields
+        // 5.88.0 — energy tanks replaced the lives system. Start with
+        // 3 tanks (= 3 triforce triangles, no spare). Cap is 4 (3 triangles
+        // + standalone "spare" icon). Tanks gain from health-orb overflow
+        // (see lifecycle.applyHealthOrbToTanks); each lost tank vaporizes
+        // the matching slot. No invincibility / respawn delay between hits.
         this.playerShields = 25; // Start with 25 health
-        // 5.85.0 — start with 0 shield tanks. Previously the player got a
-        // free invisible second chance (shieldTank UI was removed), which
-        // soaked the first 0-HP event and made it look like the first
-        // life never decremented. Snapshot/multiplayer restore can still
-        // populate tanks; the absorb code below stays in place for that.
-        this.shieldTanks = 0;
+        this.shieldTanks = 3;
+        if (this.player) this.player._tankProgress = 0;
         this.displayShields = 25; // Match starting health
-        this.displayTanks = 0;
+        this.displayTanks = 3;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
         
@@ -574,7 +572,7 @@ export class GameEngine {
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
         this.game.waveComplete = false;
-        this.uiManager.updateLives(this.game.lives);
+        // 5.88.0 — `updateLives` removed; tanks are rendered on the canvas.
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         // 5.79.0 — write the initial wave-1 save so a fresh run that
         //   quits before clearing wave 1 still has something to resume.
@@ -625,9 +623,12 @@ export class GameEngine {
         this._gameTimers.push(new GameTimer(1100, () => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.spawnWaveEntities();
+                // 5.88.0 — wave-start invincibility (3s while the field
+                // populates). Kept because spawning enemies on top of
+                // the player would be unfair regardless of the new
+                // tank-based hit model.
                 if (this.player && this.player.active) {
                     this.player.makeInvincible(3000);
-                    this.player.justRespawned = false;
                 }
             }
         }));
@@ -714,7 +715,11 @@ export class GameEngine {
             // Engine-side run fields
             wave: this.game.currentWave | 0,
             money: this.game.money | 0,
-            lives: this.game.lives | 0,
+            // 5.88.0 — `lives` removed; energy tanks are now serialized via
+            // `engineTanks` below (the runtime owner is `this.shieldTanks`,
+            // distinct from per-player `p.shieldTanks` used in multiplayer
+            // snapshots).
+            engineTanks: this.shieldTanks | 0,
             stats: this.game.stats ? { ...this.game.stats, weaponShots: { ...(this.game.stats.weaponShots || {}) } } : null,
             // Player snapshot
             player: {
@@ -751,7 +756,15 @@ export class GameEngine {
         // Engine-side
         this.game.currentWave = Math.max(1, snap.wave | 0);
         this.game.money = Math.max(0, snap.money | 0);
-        this.game.lives = Math.max(1, snap.lives | 0);
+        // 5.88.0 — energy-tank restore. `engineTanks` is the new field;
+        // older saves that still carry `lives` are migrated to tanks 1:1
+        // (clamped to [1, 4]) so a resumed run doesn't lose the player's
+        // remaining safety net.
+        if (typeof snap.engineTanks === 'number') {
+            this.shieldTanks = Math.max(0, Math.min(4, snap.engineTanks | 0));
+        } else if (typeof snap.lives === 'number') {
+            this.shieldTanks = Math.max(0, Math.min(4, snap.lives | 0));
+        }
         if (snap.stats) {
             // Preserve the original gameStartTime so accumulated time
             // numbers stay consistent across the resume.
@@ -797,8 +810,8 @@ export class GameEngine {
             if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
             if (typeof getAsteroidLevel === 'function') this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
         } catch {}
-        // HUD refresh
-        if (this.uiManager?.updateLives) this.uiManager.updateLives(this.game.lives);
+        // HUD refresh — tanks render straight from `this.shieldTanks` on
+        // the canvas, so there's no DOM update to dispatch here.
         if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
         return true;
     }
@@ -2109,12 +2122,9 @@ export class GameEngine {
                 // Draw jitter circle to show bullet spread area
                 this.drawJitterCircle();
 
-                // Respawn is now instant - no countdown needed
-
-                // Draw invincibility countdown timer only after respawn (not during hits)
-                if (this.player.active && this.player.invincible && this.player.justRespawned) {
-                    this.drawInvincibilityCountdown();
-                }
+                // 5.88.0 — respawn / post-respawn invincibility countdown
+                // removed entirely. The tank-based hit model has no respawn
+                // window: hits cost a tank, hp refills, gameplay continues.
             }
         }
 
@@ -2834,11 +2844,8 @@ export class GameEngine {
     takeDamage(damageAmount = this.baseDamage) { return lifecycle.takeDamage.call(this, damageAmount); }
     handlePlayerDeath() { return lifecycle.handlePlayerDeath.call(this); }
     createPlayerShipDebris(x, y, angle) { return lifecycle.createPlayerShipDebris.call(this, x, y, angle); }
-    respawnPlayer() { return lifecycle.respawnPlayer.call(this); }
-    respawnPlayerSafely() { return lifecycle.respawnPlayerSafely.call(this); }
-    findSafeRespawnLocation() { return lifecycle.findSafeRespawnLocation.call(this); }
-    updateRespawnAnimation(input) { return lifecycle.updateRespawnAnimation.call(this, input); }
-    clearAreaAroundPlayer(radius) { return lifecycle.clearAreaAroundPlayer.call(this, radius); }
+    _consumeTank() { return lifecycle._consumeTank.call(this); }
+    applyHealthOrbToTanks(orbAmount, amountHealed) { return lifecycle.applyHealthOrbToTanks.call(this, orbAmount, amountHealed); }
     
     updateHUD() { return hudStatus.updateHUD.call(this); }
     
@@ -2848,9 +2855,10 @@ export class GameEngine {
     drawBottomRightGold(ctx) { return hudStatus.drawBottomRightGold.call(this, ctx); }
     drawPauseButton() { return hudOverlays.drawPauseButton.call(this); }
     drawStopwatchIcon(ctx, x, y, size) { return hudOverlays.drawStopwatchIcon.call(this, ctx, x, y, size); }
-    drawCanvasTriforce(ctx, lives, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, lives, baseX, baseY); }
+    drawCanvasTriforce(ctx, tanks, baseX, baseY) { return hudStatus.drawCanvasTriforce.call(this, ctx, tanks, baseX, baseY); }
     spawnTriforceVaporize(x, y, size) { return hudStatus.spawnTriforceVaporize.call(this, x, y, size); }
-    getDisappearingTriforcePos(lives, baseX, baseY) { return hudStatus.getDisappearingTriforcePos(lives, baseX, baseY); }
+    getDisappearingTankPos(tanksBefore, baseX, baseY) { return hudStatus.getDisappearingTankPos(tanksBefore, baseX, baseY); }
+    spawnTankRecharge(slotIndex) { return hudStatus.spawnTankRecharge.call(this, slotIndex); }
     drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) { return hudStatus.drawLevelAndCoinsDisplay.call(this, ctx, barX, barY, barHeight); }
     drawEquippedWeaponSquares(ctx, barX, barY, barHeight) { return hudStatus.drawEquippedWeaponSquares.call(this, ctx, barX, barY, barHeight); }
     drawDefenseIndicators(ctx) { return hudStatus.drawDefenseIndicators.call(this, ctx); }
@@ -2859,8 +2867,6 @@ export class GameEngine {
     }
     drawLevelUpText() { return hudStatus.drawLevelUpText.call(this); }
     
-    explodeTank(tankIndex) { return lifecycle.explodeTank.call(this, tankIndex); }
-
     handlePlayerAsteroidCollision(player, asteroid) { return col.handlePlayerAsteroidCollision.call(this, player, asteroid); }
     
     drawSpawnTimer() { return hudOverlays.drawSpawnTimer.call(this); }

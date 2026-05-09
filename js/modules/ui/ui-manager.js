@@ -43,7 +43,9 @@ export class UIManager {
         // Get all UI elements
         this.elements = {
             score: document.getElementById('score'),
-            livesDisplay: document.getElementById('lives-display'),
+            // 5.88.0 — `livesDisplay` retired with the lives system. The
+            // tank count is rendered straight to the canvas inside the
+            // triforce widget (see hud/status.js → drawCanvasTriforce).
             waveDisplay: document.getElementById('wave-display'),
             pauseOverlay: document.getElementById('pause-overlay'),
             messageTitle: document.getElementById('message-title'), // Commented out in HTML
@@ -138,80 +140,10 @@ export class UIManager {
         }
     }
     
-    updateLives(lives) {
-        // Lives are now rendered on the game canvas in drawCanvasTriforce() / updateHUD()
-        if (this.elements.livesDisplay) {
-            this.elements.livesDisplay.style.display = 'none';
-        }
-    }
-    
-    positionLivesDisplay() {
-        // Check if lives display element exists (it's commented out in HTML)
-        if (!this.elements.livesDisplay) {
-            return;
-        }
-        
-        // Position triforce all the way on the left, before the health bar
-        const livesX = 10; // Far left position with small margin from edge
-        
-        // Position the lives display
-        this.elements.livesDisplay.style.left = `${livesX}px`;
-        this.elements.livesDisplay.style.top = '20px'; // Same as other HUD elements
-    }
-    
-    drawTriforceFormation(ctx, lives, width, height) {
-        const triangleSize = 12;
-        const spacing = 2;
-        
-        // Calculate positions for perfect triforce formation
-        const centerX = width / 2; // Center within the canvas (no additional offset needed)
-        const topY = 8;
-        const bottomY = topY + triangleSize + spacing - 1; // Move bottom row up by 1px
-        
-        // Triangle positions
-        const topTriangle = { x: centerX, y: topY };
-        const bottomLeftTriangle = { x: centerX - (triangleSize / 2 + spacing / 2), y: bottomY };
-        const bottomRightTriangle = { x: centerX + (triangleSize / 2 + spacing / 2), y: bottomY };
-        
-        // Set triangle style
-        ctx.fillStyle = '#FFD700'; // Gold
-        ctx.strokeStyle = '#B8860B'; // Goldenrod border
-        ctx.lineWidth = 1;
-        
-        // Draw triangles based on lives count
-        if (lives >= 3) {
-            // Full triforce: all 3 triangles
-            this.drawTriangle(ctx, topTriangle.x, topTriangle.y, triangleSize);
-            this.drawTriangle(ctx, bottomLeftTriangle.x, bottomLeftTriangle.y, triangleSize);
-            this.drawTriangle(ctx, bottomRightTriangle.x, bottomRightTriangle.y, triangleSize);
-        } else if (lives === 2) {
-            // Bottom two triangles
-            this.drawTriangle(ctx, bottomLeftTriangle.x, bottomLeftTriangle.y, triangleSize);
-            this.drawTriangle(ctx, bottomRightTriangle.x, bottomRightTriangle.y, triangleSize);
-        } else if (lives === 1) {
-            // Bottom left triangle only
-            this.drawTriangle(ctx, bottomLeftTriangle.x, bottomLeftTriangle.y, triangleSize);
-        }
-        // No triangles drawn for 0 lives
-    }
-    
-    drawTriangle(ctx, centerX, centerY, size) {
-        const height = size * 0.866; // Equilateral triangle height
-        
-        ctx.beginPath();
-        // Top point
-        ctx.moveTo(centerX, centerY - height / 2);
-        // Bottom left
-        ctx.lineTo(centerX - size / 2, centerY + height / 2);
-        // Bottom right
-        ctx.lineTo(centerX + size / 2, centerY + height / 2);
-        ctx.closePath();
-        
-        // Fill and stroke
-        ctx.fill();
-        ctx.stroke();
-    }
-    
+    // 5.88.0 — `updateLives`, `positionLivesDisplay`, `drawTriforceFormation`,
+    // and `drawTriangle` retired with the lives system. The canvas-based
+    // tank widget in hud/status.js owns the visualization now.
+
     updateWave(wave) {
         // Wave display element no longer exists - wave info now shown via spawn timers
         if (this.elements.waveDisplay) {

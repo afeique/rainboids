@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.88.0] - 2026-05-09
+
+### Changed — Lives replaced by energy tanks; no respawn, no post-hit invincibility
+The "lives" system is gone. The triforce + a new "spare tank" icon are the entire safety net:
+
+- **One state, four tanks max**. `this.shieldTanks` is the single number that drives the HUD. Capped at 4: three triforce triangles + one standalone "spare tank" battery icon above the triforce. Starts at 3 (full triforce, no spare).
+- **Hits cost a tank, not a life**. When HP hits zero, `_consumeTank()` decrements `shieldTanks`, vaporizes the matching slot (gold particle blast + flash, reusing the existing `spawnTriforceVaporize` infrastructure), and refills HP to max. The player keeps flying — no respawn timer, no safe-spawn relocation, no post-hit invuln window.
+- **Loss order**: spare → top triangle → bottom-right → bottom-left. The bottom-left triangle is the final hit before game over.
+- **Game over** fires immediately when HP hits 0 with `shieldTanks === 0`. The full death-explosion choreography (hitstop, three explosion phases, ember pops) still plays; the run just ends instead of looping back to a respawn.
+- **Tank gain via overflow healing**. Health pickups heal HP normally; the unused portion (or the entire orb if at max HP) accumulates into a hidden `_tankProgress` counter (0..1, fraction of max HP). Each full max-HP-worth of overflow grants +1 tank, capped at 4. Visual feedback: a green/cyan particle burst on the new slot (`spawnTankRecharge`).
+- **No automatic post-hit invincibility**. The `makeInvincible(1500)`, `makeInvincible(2000)`, `makeInvincible(3000)` calls scattered through the three player-collision paths are gone. Deliberate-save skills (REFLEXES dodge, LAST_STAND save, PHASE_DASH, wave-start grace) still call `makeInvincible` — those are active-ability windows, not damage-aftermath grace.
+- **Removed**: `respawnPlayer`, `respawnPlayerSafely`, `findSafeRespawnLocation`, `updateRespawnAnimation`, `clearAreaAroundPlayer`, `explodeTank` (DOM-based), `player.justRespawned`, `game.lives`, `game.respawning`, `game.respawnStartTime`, `game.respawnDuration`, `ui:update-lives` event, `UIManager.updateLives` / `positionLivesDisplay` / `drawTriforceFormation` / `drawTriangle`, `SPARE_SHIP` defense powerup definition, the post-respawn invincibility-countdown HUD ring.
+- **Save-state migration**: older saves carrying `lives` are mapped 1:1 to `engineTanks` on load (clamped to [0, 4]). New saves write `engineTanks` instead.
+- **DOM lives display retired**: `#lives-display` is no longer queried; the count was already canvas-rendered, so this just removes the orphaned hook.
+
+### Changed — Top-left HUD tightened against the screen edge
+The triforce + health bar + level cluster moves left:
+
+- Triforce baseX: `36` → `12` (left margin 36 px → 12 px from screen edge).
+- Health bar `barX`: `86` → `62`.
+- Level shield + number ride along automatically (positioned relative to `barX`).
+- The new spare-tank icon sits above the triforce in the same column. The triforce baseline shifts down inside the layout helper so spare + triforce both fit in the original vertical band; the health bar's vertical position is unchanged.
+
+### Migration / playtest notes
+- The first hit you take used to be a ~200ms blink + invuln; now it's a tank loss + immediate continue. Expect to die faster on early waves until the muscle memory adjusts.
+- Tank gain is a real economy: overhealing builds tanks, so picking the right moment to grab a health drop while at full HP is now strategic.
+- Defense skills that grant brief invuln still work — REFLEXES one-free-dodge, LAST_STAND 1HP save, PHASE_DASH dash-through. Those are deliberate active windows, not automatic.
+
+---
+
 ## [5.87.1] - 2026-05-09
 
 ### Fixed — First life now decrements on first death (silent shield-tank removed)
