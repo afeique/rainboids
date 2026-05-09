@@ -1,8 +1,7 @@
-//! Wire and simulation versions. Bumped together when breaking client compat.
+//! Wire and simulation versions.
+//!
+//! These constants now live in `generated.rs` (codegen'd from
+//! `schema/protocol.toml`); this module re-exports them so existing
+//! `crate::protocol::version::WIRE_VERSION` imports resolve.
 
-pub const WIRE_VERSION: u16 = 1;
-pub const SIM_VERSION: u16 = 1;
-
-pub fn is_compatible(wire: u16, sim: u16) -> bool {
-    wire == WIRE_VERSION && sim == SIM_VERSION
-}
+pub use super::generated::{is_compatible, SIM_VERSION, WIRE_VERSION};
