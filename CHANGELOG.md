@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.80.0] - 2026-05-09
+
+### Added — Rust authoritative multiplayer server scaffold
+New top-level `server/` crate implementing the design in `docs/Multiplayer Rust Server – 2026-05-07.md` (weeks 4–6 of the planned timeline). Stack: `axum` 0.7 + `tokio` + `bincode` 1.x; layout mirrors the plan (`server/`, `protocol/`, `matchmaking/`, `room/`, `sim/`, `obs/`, `util/`).
+
+Wired up: `/health` and `/ws` endpoints, Hello/version handshake with `WIRE_VERSION`/`SIM_VERSION` gates, full `ClientMsg`/`ServerMsg`/`GameEvent` enums, `Matchmaker` (QuickMatch / Browse / Create / Join / JoinByCode) over a `DashMap` registry with nanoid 6-char codes, per-room actor running a 60Hz `tokio::time::interval` tick loop with `MissedTickBehavior::Burst`, 20Hz snapshot fanout, lagging-client detection via `try_send`-Full, 30s grace timer on disconnect, Halton-sequence safe-spawn picker, Prometheus exporter on a separate listener, `tracing` JSON/pretty logs, clap+dotenvy config, graceful shutdown on Ctrl-C/SIGTERM. Hardened systemd unit, nginx config, and Debian-slim Dockerfile under `server/deploy/`.
+
+Deliberately stubbed (per the plan's weeks 7–9 milestone): all `sim/*` updaters except `ship.rs` are no-ops; ship physics integrates with `f32` rather than fixed-point; the `fxp` Q16.16 module is a typed sketch awaiting the cross-language parity harness. No reconnect-by-session registry, no delta snapshots, no shared `Bytes` broadcast, no admin endpoints.
+
+Server-only code — does not affect game runtime; solo JS play is unchanged.
+
+---
+
 ## [5.79.62] - 2026-05-08
 
 ### Fixed — Health-pickup 3D shapes are pixel-perfect (no more shimmer)

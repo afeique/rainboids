@@ -499,6 +499,10 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │   ├── e2e/                   # Playwright E2E suite
 │   ├── performance/           # FPS benchmark tests
 │   └── helpers/               # Game helpers and AI playtester
+├── server/                    # Rust authoritative multiplayer server (scaffold)
+│   ├── Cargo.toml             #   axum + tokio + bincode wire protocol
+│   ├── src/                   #   server/, protocol/, matchmaking/, room/, sim/, obs/, util/
+│   └── deploy/                #   systemd unit, nginx config, Dockerfile
 └── dist/                      # Production build output
 ```
 
