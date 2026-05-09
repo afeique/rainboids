@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.86.0] - 2026-05-09
+
+### Added — Mode-aware `EngineDriver` so single-player and multiplayer run identically
+First architectural step toward "solo and multiplayer are the same game". The new `EngineDriver` (`js/engine/engine-driver.js`) wraps the existing `GameEngine` and owns a `mode: 'solo' | 'online'` flag; both modes route through the same `GameEngine` instance, the same simulation, the same renderer, the same audio. The only difference is whether a multiplayer `ConnectionTask` is held open in the background — gameplay is byte-for-byte identical between modes.
+
+This is the foundation for the Phase 1 simulation extraction (planning doc §"Engine driver — mode-aware"): once `simulateTick` lands in `js/sim/`, the online path will additionally compose `Predictor` + `Interpolator` here, but the call shape doesn't change. Solo runs keep the current code path; online runs add the network layer on top.
+
+- `js/engine/engine-driver.js` — `EngineDriver` class. `startSolo({continueRun})` is a thin pass-through to the existing NEW GAME / CONTINUE logic. `startOnline({connection, welcome})` accepts a live `ConnectionTask` (handed off from the multiplayer modal post-Welcome), wires its `disconnect` event to a graceful downgrade-to-solo path, and runs `GameEngine.startNewRun` exactly like solo. `quit()` tears the socket down idempotently.
+- `js/engine/online-status-overlay.js` — DOM-only status badge in the top-right corner. Three states: `🟢 ONLINE · player #N · ########` while connected, `🟡 RECONNECTING…` on transient drops, `🔴 DISCONNECTED` (auto-hide 4s) on terminal close. Lives outside the canvas/renderer so it can't affect frame timing or game rendering.
+- `js/engine/index.js` — public entry point.
+- `js/main.js` — `RainboidsGame` now constructs an `EngineDriver` wrapping the `GameEngine`. The shared `consumeTitleScreen()` helper extracts the title-leaving prelude (audio warm-up + chime + listener teardown) so solo and online launches produce identical state transitions.
+- `js/net/multiplayer-modal.js` — accepts an `onStartGame(connection, welcome)` callback. The connected-state view now shows a `▶ START MULTIPLAYER GAME` primary button; clicking it hands the live socket to the caller and dismisses the modal without disconnecting. Without a callback the modal still works as the v1 connectivity probe.
+- `tests/unit/engine/engine-driver.test.js` — 12 unit tests with a `StubGameEngine` + `StubConnection` covering: initial state, NEW GAME / CONTINUE pass-through, online-mode connection ownership, post-disconnect downgrade, idempotent `quit()`, and solo→online→solo transitions. JS suite is now 224/224 passing (was 212/212).
+
+The "solo and multiplayer run identically" property is enforced by tests: `StubGameEngine.calls` must equal `['triggerTitleStart', 'startNewRun']` for both `startSolo({continueRun:false})` and `startOnline({...})`.
+
+### Added — Project structure
+- New `js/engine/` directory housing the mode-aware driver and related glue. Both modes go through this layer; the canvas/renderer/audio paths underneath are unchanged.
+
+---
+
 ## [5.85.0] - 2026-05-09
 
 ### Added — Wire-protocol codegen (Rust types now generated from `schema/protocol.toml`)
