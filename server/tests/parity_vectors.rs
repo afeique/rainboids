@@ -12,6 +12,11 @@ use rand::RngCore;
 
 #[test]
 fn rng_seed42_first_5_values() {
+    // Cross-language parity vector. Verified bit-identical against
+    // `tools/parity-runner.mjs --kind rng --seed 42 --iters 5` after the
+    // JS Pcg64 fix in 5.85.0 (see CHANGELOG entry; previously red, now
+    // green). If either side emits something different, the harness will
+    // catch it here AND in `tests/unit/sim/rng.test.js`.
     let mut r = rng::from_seed(42);
     let mut got = Vec::new();
     for _ in 0..5 {
@@ -20,19 +25,17 @@ fn rng_seed42_first_5_values() {
     let json = format!(r#"{{"values":[{}]}}"#,
         got.iter().map(|s| format!(r#""{}""#, s)).collect::<Vec<_>>().join(","));
     eprintln!("JS-EXPECTS: {}", json);
-    // Pin the values: if these change, the JS rng.test.js cross-vector
-    // file must be regenerated and shipped together.
+
     let expected: &[&str] = &[
-        // Generated 2026-05-09 from rand_pcg::Pcg64::seed_from_u64(42).
-        // Captured in the same run as the JS parity-runner output to
-        // confirm bit-identicality.
-        "16477301938277355279",
-        "16271422411348349250",
-        "9978099221472886187",
-        "18065352563548492970",
-        "6399164219305406576",
+        // Captured 2026-05-09 from `rand_pcg::Pcg64::seed_from_u64(42)`.
+        // The matching JS sequence lives in `tests/unit/sim/rng.test.js`.
+        "4178418447715145737",
+        "4410739922618931473",
+        "14034899209665866285",
+        "9736923071240364268",
+        "17902128262962705724",
     ];
-    assert_eq!(got, expected, "PCG-64 seed=42 vector drifted; JS harness will diverge");
+    assert_eq!(got, expected, "PCG-64 seed=42 reference vector drifted");
 }
 
 #[test]

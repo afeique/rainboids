@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.84.1] - 2026-05-09
+
+### Fixed — Cross-language PCG-64 parity (JS now bit-identical to `rand_pcg::Pcg64`)
+The 5.84.0 JS `Pcg64` shipped with three subtle algorithm bugs that caused its `nextU64` sequence to disagree with `rand_pcg::Pcg64::seed_from_u64` for every input. The parity vector in `server/tests/parity_vectors.rs::rng_seed42_first_5_values` (locked in 5.84.0 as a known-failing tripwire) now passes; both sides emit `[4178418447715145737, 4410739922618931473, 14034899209665866285, 9736923071240364268, 17902128262962705724]` for seed=42.
+
+The bugs (bequeathed by reading bare PCG references rather than the actual `rand_core` and `rand_pcg` source):
+
+1. **Seed expansion uses post-step output, not pre-step**: `rand_core::seed_from_u64`'s internal PCG-32 stepper *advances the LCG first* and computes the XSH-RR output from the **new** state. Comment in the source: "advance the state first (to get away from the input value, in case it has low Hamming Weight)". My JS captured the old state and output from that — the canonical PCG behavior, which `rand_core` deliberately deviates from.
+2. **`SeedableRng::from_seed` constructs the increment as `(parsed_increment | 1)` — NOT `((parsed_increment << 1) | 1)`**. The `<< 1` bit-shift is part of the public `Lcg128Xsl64::new(state, stream)` constructor, which `seed_from_u64` doesn't go through. Subtle API gotcha; the rand_pcg source flags it inline.
+3. **`Lcg128Xsl64::next_u64` STEPS the LCG first and outputs XSL-RR from the new state**, again opposite of canonical PCG. My JS captured the pre-step state and output from that.
+
+`js/sim/rng.js` updated; the file's header comment now spells out the three deviations from canonical PCG so a future contributor doesn't make the same mistake. `js/sim/rng.js`'s `Pcg64.nextU64()` and `pcg32Step()` are now bit-identical to `rand_pcg 0.3.1` source.
+
+### Added — Locked-in cross-language reference vectors
+- `server/tests/pcg64_trace.rs` — debug-only `#[ignore]`d trace test. Manually replicates the PCG-64 seed expansion and init algorithm and asserts the result matches `rand_pcg::Pcg64`. Useful next time someone has to debug the algorithm. Run via `cargo test --test pcg64_trace -- --ignored --nocapture`.
+- `tests/unit/sim/rng.test.js` — new `Pcg64 cross-language reference vector (seed=42)` describe block; the assertion has been promoted from "JS-side determinism only" to "byte-identical with Rust". Test count is now 212/212 passing.
+- `server/tests/parity_vectors.rs` — `rng_seed42_first_5_values` updated to the actual `rand_pcg::Pcg64` output and re-enabled (was `#[ignore]`'d in 5.84.0 because it was failing). Pairs with the JS-side test above.
+
+This unblocks the rng-fixture path of `tools/parity-runner.mjs`. Closes the parity loop end-to-end for PCG-64; fxp and trig fixtures will follow the same locked-in pattern.
+
+---
+
 ## [5.84.0] - 2026-05-09
 
 ### Added — Multiplayer client Hello/Welcome handshake + Phase 1 engine primitives + parity tooling
