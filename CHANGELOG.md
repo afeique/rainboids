@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.88.1] - 2026-05-09
+
+### Changed — Gold shape rotation dialed back to a gentle tumble
+The 1–3 chunky gold shapes that scatter on enemy/asteroid kill were spinning at ~0.4–0.8 revolutions per second (`baseRot = random(0.04, 0.08)`), which read as fidget-spinner-grade chaos once three shapes overlapped at the spawn point. Rate cut to `random(0.012, 0.024)` (~0.12–0.24 rev/s, 4–8s per full rotation) so the 3D-baked solid faces still tumble visibly but the drop feels like loot, not a centrifuge. Single edit in `js/modules/world/gold-shape.js`; no other tuning changed.
+
+---
+
 ## [5.88.0] - 2026-05-09
 
 ### Changed — Lives replaced by energy tanks; no respawn, no post-hit invincibility

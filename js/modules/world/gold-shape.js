@@ -80,10 +80,14 @@ export class GoldShape {
         const maxSize = GAME_CONFIG.MONEY_ORB_SHAPE_SIZE_MAX;
         this.radius = minSize + ratio * (maxSize - minSize);
 
-        // Rotation — 3D solids spin a bit faster so their baked
-        //   internal edges read as a tumbling solid.
+        // 5.88.1 — Rotation dialed back to a gentle tumble. Was
+        //   random(0.04, 0.08) → ~0.4-0.8 rev/s, which read as a
+        //   chaotic spin once 1-3 shapes scattered together. The
+        //   slower range (~0.12-0.24 rev/s, or 4-8s per revolution)
+        //   keeps the 3D solid faces visible without making the drop
+        //   feel like a fidget spinner.
         const sign = Math.random() < 0.5 ? -1 : 1;
-        const baseRot = random(0.04, 0.08);
+        const baseRot = random(0.012, 0.024);
         this.rotationSpeed = sign * baseRot;
         this.rotation = Math.random() * Math.PI * 2;
 
