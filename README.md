@@ -474,6 +474,26 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   └── hint-system.js #   Onboarding hint toasts
 │       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle renderer + atlas
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
+├── js/engine/                 # Mode-aware driver: solo & multiplayer share the same GameEngine (5.86.0)
+│   ├── engine-driver.js       #   EngineDriver: startSolo / startOnline / quit
+│   ├── online-status-overlay.js #  DOM badge for connection state in online mode
+│   └── index.js               #   public exports
+├── js/net/                    # Multiplayer client networking (5.84.0)
+│   ├── codec.js               #   bincode 1.x mirror (Reader/Writer, UUID + length-prefix rules)
+│   ├── protocol.js            #   wire enum tags + Hello/Welcome encoders/decoders
+│   ├── ws-client.js           #   ConnectionTask, feature-flag gating, session persistence
+│   ├── multiplayer-modal.js   #   title-screen connect modal (with onStartGame handoff in 5.86.0)
+│   └── (prediction, interpolation, matchmaking, session, event-firehose) — Phase 3 skeletons
+├── js/sim/                    # Simulation primitives — Phase 1 engine refactor (5.84.0, in progress)
+│   ├── codec.js               #   alternative codec (parallel to js/net/codec.js — to be reconciled)
+│   ├── fxp.js                 #   Q16.16 fixed-point math, mirrors server/src/sim/fxp.rs
+│   ├── protocol.js, rng.js    #   wire-protocol mirror + seeded PCG64
+│   ├── state.js, input.js     #   GameState + PlayerInput shapes
+│   └── trig.js, version.js    #   trig tables + WIRE_VERSION/SIM_VERSION
+├── schema/                    # Cross-language wire-protocol source-of-truth (5.84.0)
+│   ├── protocol.toml          #   variant tables (ClientMsg/ServerMsg/GameEvent), pinned versions
+│   ├── SIM_SPEC.md            #   simulation contract
+│   └── snapshots/             #   byte-level parity fixtures (empty until weeks 7–9)
 ├── css/
 │   └── styles.css             # Game styling
 ├── music/                     # 58 MP3 tracks (~336MB)
@@ -492,13 +512,22 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │   ├── benchmark/             #   Mitata microbenchmark suite
 │   ├── ai-qa-bot/             #   AI QA bot for automated playtesting
 │   ├── scripts/               #   Playlist generation, SFX generation, utilities
+│   ├── check-schema.mjs       #   Wire-protocol parity checker (Rust ↔ schema ↔ JS) (5.84.0)
+│   ├── parity-runner.mjs      #   Byte-level parity runner for schema/snapshots (5.84.0)
 │   └── juice-capture.mjs      #   Juice tuning screen capture
 ├── tests/
-│   ├── unit/                  # Jest unit tests
+│   ├── unit/                  # Jest unit tests (205 tests; +137 new sim tests in 5.84.0)
+│   │   ├── sim/               #   Engine-refactor primitives (rng, trig, fxp, codec, protocol)
+│   │   └── wire-codec.test.js #   Hello/Welcome golden-byte regression
 │   ├── qa/                    # Playwright smoke tests (95 tests)
 │   ├── e2e/                   # Playwright E2E suite
 │   ├── performance/           # FPS benchmark tests
 │   └── helpers/               # Game helpers and AI playtester
+├── server/                    # Rust authoritative multiplayer server (scaffold)
+│   ├── Cargo.toml             #   axum + tokio + bincode wire protocol
+│   ├── src/                   #   lib.rs facade + server/, protocol/, matchmaking/, room/, sim/, obs/, util/
+│   ├── tests/                 #   wire-golden, handshake, room-lifecycle, grace+reconnect (25 tests)
+│   └── deploy/                #   systemd unit, nginx config, Dockerfile
 └── dist/                      # Production build output
 ```
 

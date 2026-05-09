@@ -1,0 +1,504 @@
+# schema/protocol.toml
+#
+# Single source of truth for the Rainboids wire protocol and the
+# prediction-relevant simulation subset. Both `server/src/protocol/mod.rs`
+# (Rust) and `js/sim/protocol.js` (JS) must agree with this file.
+#
+# v1: hand-mirrored on both sides; this file is documentation that the
+#     parity-check tools (`tools/check-schema.mjs`) verify against the two
+#     implementations.
+# v2: codegen target. A `tools/codegen-protocol/` will read this and emit
+#     both `server/src/protocol/generated.rs` and
+#     `js/sim/protocol-generated.js`, retiring the hand-mirror.
+#
+# When a variant is added/removed/changed:
+#   1. Update this file FIRST.
+#   2. Update both `server/src/protocol/mod.rs` and `js/sim/protocol.js`.
+#   3. Bump WIRE_VERSION (or SIM_VERSION if simulation rules changed).
+#   4. Run the parity harness — if a fixture covers the change, it must stay
+#      green; if not, add a fixture.
+#   5. Mention this file in the PR description so reviewers compare both sides.
+
+wire_version = 1
+sim_version  = 1
+
+# Bincode 1.x default config plus `with_fixint_encoding()` and
+# `with_little_endian()`. The JS codec mirrors this exactly:
+#   - integers: little-endian, fixed-width (u8=1, u16=2, u32=4, u64=8)
+#   - floats:   little-endian IEEE-754 (f32=4, f64=8)
+#   - bool:     1 byte (0=false, 1=true)
+#   - Option<T>:  1 byte tag (0=None, 1=Some) + payload if Some
+#   - enum:       u32 variant tag + payload (with_fixint_encoding makes this
+#                 fixed-width rather than varint)
+#   - Vec<T>:     u64 length prefix + elements
+#   - String:     u64 length prefix + UTF-8 bytes
+#   - [u8; N]:    N raw bytes (tuple, no length prefix) — incl. Uuid (16)
+#   - struct:     fields encoded in declaration order
+codec = "bincode-1.x-default-with-fixint-le"
+
+# ─── Enums ────────────────────────────────────────────────────────────────────
+
+[[enum]]
+name = "ErrCode"
+variants = ["Version", "BadHello", "NotFound", "Full", "Banned", "RateLimited", "Internal"]
+
+[[enum]]
+name = "LeaveReason"
+variants = ["Voluntary", "Disconnect", "GraceExpired", "Kicked", "RoomClosed"]
+
+[[enum]]
+name = "DespawnReason"
+variants = ["Lifetime", "OutOfBounds", "Hit", "Killed"]
+
+[[enum]]
+name = "DmgKind"
+variants = ["Normal", "Crit", "Heal"]
+
+[[enum]]
+name = "WeaponId"
+variants = [
+  "PulseCannon", "StormNeedles", "ScatterGun", "RailDriver", "LanceBeam",
+  "ChargeShot",  "MineLayer",    "NovaBlast",  "LightningArc", "MissileSalvo",
+]
+
+# Tagged-union (variant + payload) enum for entity references.
+[[enum]]
+name = "EntityRef"
+tagged = true
+variants = [
+  { name = "Ship",     fields = [{ name = "0", type = "PlayerId" }] },
+  { name = "Enemy",    fields = [{ name = "0", type = "EnemyId" }] },
+  { name = "Asteroid", fields = [{ name = "0", type = "AsteroidId" }] },
+  { name = "Bullet",   fields = [{ name = "0", type = "BulletId" }] },
+]
+
+# ─── Newtypes / id types ──────────────────────────────────────────────────────
+# All entity ids wrap u64 on the Rust side; they encode as 8 LE bytes.
+# Keep these aliased so reviewers don't lose track of which scalar a field is.
+
+[[newtype]]
+name = "PlayerId"
+underlying = "u64"
+
+[[newtype]]
+name = "RoomId"
+underlying = "u64"
+
+[[newtype]]
+name = "BulletId"
+underlying = "u64"
+
+[[newtype]]
+name = "EnemyId"
+underlying = "u64"
+
+[[newtype]]
+name = "AsteroidId"
+underlying = "u64"
+
+[[newtype]]
+name = "DropId"
+underlying = "u64"
+
+[[newtype]]
+name = "PowerupId"
+underlying = "u16"
+
+# ─── Structs ──────────────────────────────────────────────────────────────────
+
+[[struct]]
+name = "PackedInput"
+fields = [
+  # Move axes: -127..127 (signed i8), 0 = neutral.
+  { name = "move_x", type = "i8" },
+  { name = "move_y", type = "i8" },
+  # Aim direction (unit vector): -32767..32767 (i16), encoded as 1/32767-scale.
+  { name = "aim_x",  type = "i16" },
+  { name = "aim_y",  type = "i16" },
+  # Bitfield: bit 0 = shoot, 1 = dash, 2 = ability1, 3 = ability2, 4..7 reserved.
+  { name = "buttons", type = "u8" },
+]
+
+[[struct]]
+name = "PeerInfo"
+fields = [
+  { name = "player_id",    type = "PlayerId" },
+  { name = "display_name", type = "String" },
+  { name = "slot",         type = "u8" },
+]
+
+[[struct]]
+name = "RoomSummary"
+fields = [
+  { name = "room_id",     type = "RoomId" },
+  { name = "name",        type = "String" },
+  { name = "players",     type = "u8" },
+  { name = "max_players", type = "u8" },
+  { name = "wave",        type = "u32" },
+]
+
+[[struct]]
+name = "ShipState"
+fields = [
+  { name = "player", type = "PlayerId" },
+  { name = "x",      type = "f32" },
+  { name = "y",      type = "f32" },
+  { name = "vx",     type = "f32" },
+  { name = "vy",     type = "f32" },
+  { name = "angle",  type = "f32" },
+  { name = "hp",     type = "f32" },
+  { name = "shield", type = "f32" },
+]
+
+[[struct]]
+name = "EnemyState"
+fields = [
+  { name = "id",   type = "EnemyId" },
+  { name = "kind", type = "u8" },
+  { name = "x",    type = "f32" },
+  { name = "y",    type = "f32" },
+  { name = "hp",   type = "f32" },
+]
+
+[[struct]]
+name = "AsteroidState"
+fields = [
+  { name = "id",   type = "AsteroidId" },
+  { name = "size", type = "u8" },
+  { name = "x",    type = "f32" },
+  { name = "y",    type = "f32" },
+]
+
+[[struct]]
+name = "DropState"
+fields = [
+  { name = "id",   type = "DropId" },
+  { name = "kind", type = "u8" },
+  { name = "x",    type = "f32" },
+  { name = "y",    type = "f32" },
+]
+
+[[struct]]
+name = "SnapshotPayload"
+fields = [
+  { name = "ships",     type = "Vec<ShipState>" },
+  { name = "enemies",   type = "Vec<EnemyState>" },
+  { name = "asteroids", type = "Vec<AsteroidState>" },
+  { name = "drops",     type = "Vec<DropState>" },
+]
+
+# ─── GameEvent (tagged union) ─────────────────────────────────────────────────
+# Encoded as `u32 variant_tag + payload`. Reordering variants is a
+# wire-breaking change.
+
+[[message.event]]
+name = "BulletSpawn"
+fields = [
+  { name = "id",     type = "BulletId" },
+  { name = "owner",  type = "PlayerId" },
+  { name = "weapon", type = "WeaponId" },
+  { name = "x",      type = "f32" },
+  { name = "y",      type = "f32" },
+  { name = "vx",     type = "f32" },
+  { name = "vy",     type = "f32" },
+]
+
+[[message.event]]
+name = "BulletDespawn"
+fields = [
+  { name = "id",     type = "BulletId" },
+  { name = "reason", type = "DespawnReason" },
+]
+
+[[message.event]]
+name = "EnemyDestroy"
+fields = [
+  { name = "id",    type = "EnemyId" },
+  { name = "by",    type = "Option<PlayerId>" },
+  { name = "drops", type = "Vec<DropId>" },
+]
+
+[[message.event]]
+name = "AsteroidDestroy"
+fields = [
+  { name = "id",        type = "AsteroidId" },
+  { name = "by",        type = "Option<PlayerId>" },
+  { name = "fragments", type = "Vec<AsteroidId>" },
+]
+
+[[message.event]]
+name = "OrbCollect"
+fields = [
+  { name = "id",    type = "DropId" },
+  { name = "by",    type = "PlayerId" },
+  { name = "value", type = "u32" },
+]
+
+[[message.event]]
+name = "PlayerDamaged"
+fields = [
+  { name = "player", type = "PlayerId" },
+  { name = "hp",     type = "f32" },
+]
+
+[[message.event]]
+name = "PlayerDowned"
+fields = [
+  { name = "player", type = "PlayerId" },
+]
+
+[[message.event]]
+name = "PlayerRevived"
+fields = [
+  { name = "player", type = "PlayerId" },
+  { name = "by",     type = "PlayerId" },
+]
+
+[[message.event]]
+name = "WaveStart"
+fields = [
+  { name = "wave",        type = "u32" },
+  { name = "enemy_count", type = "u32" },
+]
+
+[[message.event]]
+name = "WaveClear"
+fields = [
+  { name = "wave",    type = "u32" },
+  { name = "time_ms", type = "u32" },
+]
+
+[[message.event]]
+name = "PowerupOffer"
+fields = [
+  { name = "player", type = "PlayerId" },
+  { name = "picks",  type = "u8" },
+]
+
+[[message.event]]
+name = "PowerupChosen"
+fields = [
+  { name = "player",  type = "PlayerId" },
+  { name = "powerup", type = "PowerupId" },
+]
+
+[[message.event]]
+name = "HitFlash"
+fields = [
+  { name = "entity",    type = "EntityRef" },
+  { name = "intensity", type = "f32" },
+]
+
+[[message.event]]
+name = "DamageNumber"
+fields = [
+  { name = "x",     type = "f32" },
+  { name = "y",     type = "f32" },
+  { name = "value", type = "i32" },
+  { name = "kind",  type = "DmgKind" },
+]
+
+# ─── ClientMsg (tagged union) ─────────────────────────────────────────────────
+
+[[message.client]]
+name = "Hello"
+fields = [
+  { name = "wire_version",   type = "u16" },
+  { name = "sim_version",    type = "u16" },
+  { name = "client_version", type = "String" },
+  { name = "display_name",   type = "String" },
+  { name = "session",        type = "Option<Uuid>" },
+]
+
+[[message.client]]
+name = "QuickMatch"
+
+[[message.client]]
+name = "BrowseRooms"
+
+[[message.client]]
+name = "CreateRoom"
+fields = [
+  { name = "name",        type = "String" },
+  { name = "public",      type = "bool" },
+  { name = "max_players", type = "u8" },
+]
+
+[[message.client]]
+name = "JoinRoom"
+fields = [
+  { name = "room_id", type = "RoomId" },
+]
+
+[[message.client]]
+name = "JoinRoomByCode"
+fields = [
+  { name = "code", type = "String" },
+]
+
+[[message.client]]
+name = "LeaveRoom"
+
+[[message.client]]
+name = "Input"
+fields = [
+  { name = "tick",   type = "u32" },
+  { name = "packed", type = "PackedInput" },
+]
+
+[[message.client]]
+name = "Ack"
+fields = [
+  { name = "snapshot_tick", type = "u32" },
+]
+
+[[message.client]]
+name = "Pong"
+fields = [
+  { name = "client_t", type = "u32" },
+  { name = "server_t", type = "u32" },
+]
+
+[[message.client]]
+name = "PowerupChoose"
+fields = [
+  { name = "powerup", type = "PowerupId" },
+]
+
+[[message.client]]
+name = "Revive"
+fields = [
+  { name = "target", type = "PlayerId" },
+]
+
+[[message.client]]
+name = "Chat"
+fields = [
+  { name = "text", type = "String" },
+]
+
+# ─── ServerMsg (tagged union) ─────────────────────────────────────────────────
+
+[[message.server]]
+name = "Welcome"
+fields = [
+  { name = "player_id",   type = "PlayerId" },
+  { name = "session",     type = "Uuid" },
+  { name = "server_t_ms", type = "u64" },
+]
+
+[[message.server]]
+name = "Error"
+fields = [
+  { name = "code", type = "ErrCode" },
+  { name = "msg",  type = "String" },
+]
+
+[[message.server]]
+name = "RoomList"
+fields = [
+  { name = "rooms", type = "Vec<RoomSummary>" },
+]
+
+[[message.server]]
+name = "RoomJoined"
+fields = [
+  { name = "room_id", type = "RoomId" },
+  { name = "code",    type = "String" },
+  { name = "slot",    type = "u8" },
+  { name = "peers",   type = "Vec<PeerInfo>" },
+  { name = "wave",    type = "u32" },
+  { name = "seed",    type = "u64" },
+]
+
+[[message.server]]
+name = "RoomLeft"
+fields = [
+  { name = "reason", type = "LeaveReason" },
+]
+
+[[message.server]]
+name = "PeerJoined"
+fields = [
+  { name = "peer", type = "PeerInfo" },
+  { name = "slot", type = "u8" },
+]
+
+[[message.server]]
+name = "PeerLeft"
+fields = [
+  { name = "slot",   type = "u8" },
+  { name = "reason", type = "LeaveReason" },
+]
+
+[[message.server]]
+name = "Snapshot"
+fields = [
+  { name = "tick",      type = "u32" },
+  { name = "base_tick", type = "Option<u32>" },
+  { name = "payload",   type = "SnapshotPayload" },
+]
+
+[[message.server]]
+name = "Event"
+fields = [
+  { name = "tick",  type = "u32" },
+  { name = "event", type = "GameEvent" },
+]
+
+[[message.server]]
+name = "Ping"
+fields = [
+  { name = "client_t", type = "u32" },
+  { name = "server_t", type = "u32" },
+]
+
+# ─── Prediction-relevant subset ───────────────────────────────────────────────
+# Fields below MUST agree bit-by-bit between Rust and JS. Anything not
+# listed here is server-authoritative + interpolated client-side.
+# The parity harness diffs these fields; cosmetic-only fields can drift.
+
+[prediction]
+relevant_fields = [
+  "Ship.x",  "Ship.y",   "Ship.vx", "Ship.vy",
+  "Bullet.x", "Bullet.y", "Bullet.vx", "Bullet.vy",   # at spawn only — emitted as events
+]
+
+# ─── Fixed-point math constants ───────────────────────────────────────────────
+# Both `js/sim/fxp.js` and `server/src/sim/fxp.rs` must produce bit-identical
+# output for the same inputs over the same operations.
+
+[fxp]
+# I16F16: 16 integer bits, 16 fractional bits, stored as i32 raw bits.
+# ~15µm precision over a 32k-meter playfield.
+fract_bits = 16
+storage    = "i32"
+one_raw    = 65536            # 1 << 16
+dt_raw     = 1092             # round(1/60 * 65536)  — fixed sim timestep at 60 Hz
+two_pi_raw = 411775           # round(2π * 65536)
+pi_raw     = 205887           # round(π  * 65536)
+half_pi_raw = 102944          # round(π/2 * 65536)
+
+# ─── Trig polynomial coefficients ─────────────────────────────────────────────
+# Same coefficients on both sides; output bit-identical given Fxp inputs.
+# Bartholomew-style 8-term Taylor for sin in [-π, π].
+
+[trig.sin_coeffs_f64]
+c0 =  1.0
+c1 = -0.16666666666666666     # -1/3!
+c2 =  0.008333333333333333    #  1/5!
+c3 = -0.0001984126984126984   # -1/7!
+c4 =  0.0000027557319223985893 # 1/9!
+
+# ─── PRNG ────────────────────────────────────────────────────────────────────
+# Both sides use rand_pcg::Pcg64 (Lcg128Xsl64). JS implements via BigInt to
+# get bit-identical output sequences.
+#
+# Note: SIM_SPEC.md flags this as a discipline checkpoint — RNG is only
+# used outside the hot prediction path (enemy spawns, drop rolls, asteroid
+# splits), so BigInt's overhead is acceptable.
+
+[rng]
+algorithm     = "Lcg128Xsl64"
+multiplier_hex = "2360ED051FC65DA44385DF649FCCF645"  # PCG-64 multiplier (constant)
+seed_init      = "rand_core::SeedableRng::seed_from_u64 → SplitMix64 fill_bytes(32) → from_seed"

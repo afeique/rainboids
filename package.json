@@ -10,6 +10,10 @@
     "start": "vite",
     "generate-playlist": "node tools/scripts/generate-playlist.js",
     "generate-sfx": "node tools/scripts/generate-sfx.js",
+    "__CODEGEN__": "── Wire-protocol codegen (Rust types from schema/protocol.toml) ──",
+    "codegen": "node tools/codegen-protocol.mjs",
+    "codegen:check": "node tools/codegen-protocol.mjs --check",
+    "schema:check": "node tools/check-schema.mjs",
     "__UNIT_TESTS__": "── Jest unit tests (fast, no browser) ──────────────────",
     "test:unit": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:unit:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
@@ -76,6 +80,7 @@
     "jsmediatags": "^3.9.7"
   },
   "devDependencies": {
+    "@iarna/toml": "^2.2.5",
     "@jest/globals": "^30.2.0",
     "@playwright/test": "^1.58.2",
     "allure-commandline": "^2.37.0",
