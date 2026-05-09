@@ -13,11 +13,11 @@ on commit. The user runs both terminals and hands the tree back and forth.
 | Field | Value |
 |-------|-------|
 | Branch | `master` (with worktrees — see "Workflow" below) |
-| Version | `5.84.0` (see `VERSION`) |
+| Version | `5.85.0` (see `VERSION`) |
 | Working tree | **multi-worktree as of 2026-05-09** — server agent on `../rainboids-server-wt` (`mp/server-week7`), client agent on the original tree at `master`. Merge to master at hand-off points. |
-| Last touched | 2026-05-09 by **client agent** (PCG-64 parity fix merged from worktree, 5.84.1) |
-| Last commit | `74d7627` — merge `client-parity-pcg64` (5.84.1, PCG-64 cross-language parity) |
-| Uncommitted | doc updates pending (this commit) |
+| Last touched | 2026-05-09 by **server agent** (merged 5.85.0 wire-codegen onto master) |
+| Last commit | merge of `mp/server-week7` (5.85.0 codegen) — `71db207` on the branch |
+| Uncommitted | this doc update |
 
 ## Ownership boundaries
 
@@ -67,20 +67,20 @@ Each agent updates their column on every session start.
     parity tooling).
   - `3745d55` — `#[ignore]` for the known-failing PCG-64 vector +
     open-question #4 + worktree workflow doc.
-- **Currently working on (worktree, not yet merged)**:
-  - **Wire codegen** — generate `server/src/protocol/generated.rs`
-    and `js/sim/protocol-generated.js` from `schema/protocol.toml`,
-    retire the hand-mirror. Closes the door on name/discriminant drift
-    and makes future variant additions free. Touches:
-    - new: `tools/codegen-protocol/` (codegen script)
-    - new: `server/src/protocol/generated.rs` (generated)
-    - new: `js/sim/protocol-generated.js` (generated)
-    - modify: `server/src/protocol/mod.rs` (re-export from generated)
-    - modify: `js/sim/protocol.js` (re-export from generated)
-    - modify: `tools/check-schema.mjs` (validate generated outputs match)
-- **Queue (after codegen)**:
+  - **5.85.0 wire codegen merge** — `mp/server-week7` (`71db207`) merged
+    onto master. Rust types (`server/src/protocol/generated.rs`) are now
+    codegen'd from `schema/protocol.toml` via `tools/codegen-protocol.mjs`
+    (`npm run codegen` to regenerate, `npm run codegen:check` is the CI
+    gate). The hand-mirror in `mod.rs` is gone. JS still hand-mirrored.
+- **Currently working on**: nothing in flight; deciding next queue item
+  with the user.
+- **Queue (suggested)**:
+  - JS-side codegen (`js/sim/protocol-generated.js`) — natural follow-up
+    to retire the JS hand-mirror too. Touches `js/sim/` (currently
+    shared/coordinated; coordinate with client agent before starting).
   - Lagging-client integration test (no coverage today).
-  - Server-side simulation port (Weeks 7–9). Blocked on Phase 1.
+  - Server-side simulation port (Weeks 7–9). Blocked on Phase 1
+    extraction of `simulateTick` from `game-engine.js`.
 
 ### Client agent (other terminal)
 
