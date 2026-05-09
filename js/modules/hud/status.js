@@ -291,76 +291,61 @@ export function drawSkillCooldownHUD() { /* no-op */ }
 
 // 5.85.0 — triforce geometry shared between draw + vaporize-spawn so
 // the burst lines up exactly with the triangle that just disappeared.
-// 5.88.2 — layout reshaped: triforce is vertically centered with the
-// healthbar (matching how the LV-shield icon is centered), and the
-// spare tank icon (tanks=4) sits to the LEFT of the triforce on the
-// same vertical center so the cluster reads horizontally:
+// 5.88.3 — triforce + shieldTanks fully unified. Each triangle is one
+// spare energy tank. The healthbar to the right is the *active* tank
+// (the "last" one in the user's framing — the one with no triangle).
+// Total effective tanks = shieldTanks + 1 (the active tank), capped at
+// 4 effective = 3 spares (full triforce) + 1 active. The standalone
+// battery icon I introduced in 5.88.0–5.88.2 is gone; nothing stands
+// between the triforce and the screen edge anymore.
 //
-//   [spare]  [triforce]  [healthbar]  [LV-shield][level-num]
+//   [triforce]  [healthbar]  [LV-shield][level]
 //
-// Loss order across the four tanks: spare → top → btm-right → btm-left.
+// Loss order across the three spares: top → btm-right → btm-left.
 const TRIFORCE_TRIANGLE_SIZE = 12;
 const TRIFORCE_SPACING = 2;
-const SPARE_TANK_WIDTH = 9;
-const SPARE_TANK_HEIGHT = 11;
-const SPARE_TANK_GAP = 4;          // gap between spare tank and triforce
-const SPARE_TANK_NUB = 1.5;        // little battery-cap stub width
 
 // triforceLeftX is the leftmost pixel of the triforce widget.
 // centerY is the vertical center (set by the caller to the healthbar's
 // vertical center so the triforce sits inline with the bar).
 function triforceLayout(triforceLeftX, centerY) {
-    // halfHalf = horizontal offset from centerX to btmLeft.x / btmRight.x
     const halfHalf = TRIFORCE_TRIANGLE_SIZE / 2 + TRIFORCE_SPACING / 2;
-    // Triforce horizontal: leftmost pixel = btmLeft.x - triangleSize/2
-    //   = centerX - halfHalf - triangleSize/2 = centerX - 13
-    // So centerX = triforceLeftX + 13.
     const centerX = triforceLeftX + halfHalf + TRIFORCE_TRIANGLE_SIZE / 2;
-    // Triforce vertical: top tri's apex extends `triangleSize * 0.866 / 2`
-    // (~5.2) above topY. Bottom row bounding extends the same below
-    // bottomY. Total bounding height ≈ 2 * 5.2 + (bottomY - topY) =
-    //   10.4 + 13 = 23.4 → half = 11.7 → topY = centerY - (TRIFORCE_TRIANGLE_SIZE + TRIFORCE_SPACING - 1) / 2
-    // Solved for centerY = (top + bottom) / 2 = topY + (bottomY - topY) / 2 = topY + 6.5.
+    // Vertically centered: triangle bounding (~10.4 px tall) + a 13px
+    // row offset means topY = centerY - 6.5; bottomY = centerY + 6.5.
     const topY = centerY - (TRIFORCE_TRIANGLE_SIZE + TRIFORCE_SPACING - 1) / 2;
     const bottomY = topY + TRIFORCE_TRIANGLE_SIZE + TRIFORCE_SPACING - 1;
-    // Spare tank (battery-shape) to the LEFT of the triforce, vertically
-    // centered too. Nub points right toward the triforce.
-    const spareCenterX = triforceLeftX - SPARE_TANK_GAP - SPARE_TANK_WIDTH / 2 - SPARE_TANK_NUB;
     return {
         topTri:   { x: centerX,           y: topY },
         btmLeft:  { x: centerX - halfHalf, y: bottomY },
         btmRight: { x: centerX + halfHalf, y: bottomY },
-        spare:    { x: spareCenterX,      y: centerY },
         size: TRIFORCE_TRIANGLE_SIZE,
-        spareW: SPARE_TANK_WIDTH,
-        spareH: SPARE_TANK_HEIGHT,
     };
 }
 
-// 5.88.0 — Returns the (x, y, size) of the slot that vanishes when the
-// player drops from `tanksBefore` → `tanksBefore - 1`. Loss order:
-//   4 → spare standalone, 3 → top triangle, 2 → btm-right, 1 → btm-left.
-// 5.88.2 — defaults updated for the new "triforce-leftmost X + bar centerY"
-// layout convention (was "baseX, baseY" with internal +30 / +8 offsets).
-export function getDisappearingTankPos(tanksBefore, triforceLeftX = 18, centerY = 35) {
+// 5.88.3 — Returns the (x, y, size) of the triangle that vanishes when
+// the player drops from `tanksBefore` → `tanksBefore - 1`. Loss order:
+//   3 → top triangle, 2 → btm-right, 1 → btm-left.
+// `tanksBefore` here is the SPARE count; the active (healthbar) tank
+// has no triangle to vaporize, so spares=0 with HP=0 just transitions
+// to game-over without an FX call.
+export function getDisappearingTankPos(tanksBefore, triforceLeftX = 36, centerY = 35) {
     const L = triforceLayout(triforceLeftX, centerY);
-    if (tanksBefore >= 4) return { x: L.spare.x,    y: L.spare.y,    size: L.size, spare: true };
-    if (tanksBefore === 3) return { x: L.topTri.x,   y: L.topTri.y,   size: L.size };
+    if (tanksBefore >= 3) return { x: L.topTri.x,   y: L.topTri.y,   size: L.size };
     if (tanksBefore === 2) return { x: L.btmRight.x, y: L.btmRight.y, size: L.size };
     if (tanksBefore === 1) return { x: L.btmLeft.x,  y: L.btmLeft.y,  size: L.size };
     return { x: L.btmLeft.x, y: L.btmLeft.y, size: L.size };
 }
 
-// 5.88.0 — Recharge sparkle, fired when a tank is *gained* via overflow
-// healing. Mirrors spawnTriforceVaporize but with a green/cyan palette
-// so the visual reads as a refill, not a loss.
-export function spawnTankRecharge(slotIndex, triforceLeftX = 18, centerY = 35) {
+// 5.88.0 — Recharge sparkle, fired when a spare tank is *gained* via
+// overflow healing. Mirrors spawnTriforceVaporize but with a green/cyan
+// palette so the visual reads as a refill, not a loss.
+export function spawnTankRecharge(slotIndex, triforceLeftX = 36, centerY = 35) {
     const L = triforceLayout(triforceLeftX, centerY);
     let pos;
     if (slotIndex === 1) pos = L.btmLeft;
     else if (slotIndex === 2) pos = L.btmRight;
     else if (slotIndex === 3) pos = L.topTri;
-    else if (slotIndex === 4) pos = L.spare;
     else return;
 
     if (!this._triforceVaporize) this._triforceVaporize = [];
@@ -483,7 +468,7 @@ export function updateAndDrawTriforceVaporize(ctx) {
     ctx.restore();
 }
 
-export function drawCanvasTriforce(ctx, tanks, triforceLeftX, centerY) {
+export function drawCanvasTriforce(ctx, spareTanks, triforceLeftX, centerY) {
         const L = triforceLayout(triforceLeftX, centerY);
         const triangleSize = L.size;
 
@@ -498,43 +483,22 @@ export function drawCanvasTriforce(ctx, tanks, triforceLeftX, centerY) {
             ctx.stroke();
         };
 
-        // 5.88.0 — small "battery" tank icon for the standalone spare
-        // (tanks=4). Rectangle with a tiny nub on the right so it reads
-        // as a battery rather than a button. Same gold palette as the
-        // triforce so the cluster feels like one HUD widget.
-        const drawSpare = (cx, cy) => {
-            const w = L.spareW;
-            const h = L.spareH;
-            const x = cx - w / 2;
-            const y = cy - h / 2;
-            ctx.beginPath();
-            ctx.rect(x, y, w, h);
-            ctx.fill();
-            ctx.stroke();
-            // battery cap nub on the right
-            ctx.beginPath();
-            ctx.rect(x + w, y + h * 0.2, SPARE_TANK_NUB, h * 0.6);
-            ctx.fill();
-            ctx.stroke();
-        };
-
         ctx.save();
         ctx.fillStyle = '#FFD700';
         ctx.strokeStyle = '#B8860B';
         ctx.lineWidth = 1;
 
-        // 5.88.0 — render order: spare tank above (tanks ≥ 4), then
-        // triforce triangles in btm-left → btm-right → top order so the
-        // loss order is btm-left LAST (final hit before game over).
-        if (tanks >= 4) drawSpare(L.spare.x, L.spare.y);
-        if (tanks >= 1) drawTri(L.btmLeft.x, L.btmLeft.y);
-        if (tanks >= 2) drawTri(L.btmRight.x, L.btmRight.y);
-        if (tanks >= 3) drawTri(L.topTri.x, L.topTri.y);
+        // 5.88.3 — render order: btm-left → btm-right → top, so loss
+        // order is top FIRST (matches getDisappearingTankPos) and the
+        // bottom-left triangle is the final spare before game over.
+        if (spareTanks >= 1) drawTri(L.btmLeft.x, L.btmLeft.y);
+        if (spareTanks >= 2) drawTri(L.btmRight.x, L.btmRight.y);
+        if (spareTanks >= 3) drawTri(L.topTri.x, L.topTri.y);
 
         ctx.restore();
 
         // Vaporize FX (gold blast on loss, green sparkle on gain) draws
-        // on top of whatever slots remain.
+        // on top of whatever triangles remain.
         updateAndDrawTriforceVaporize.call(this, ctx);
 }
 
@@ -895,16 +859,18 @@ export function drawLevelUpText() {
 
 export function updateHUD() {
         const ctx = this.ctx;
-        // 5.88.2 — top-left cluster shape:
-        //   [spare] [triforce] [healthbar] [LV-shield] [level-num]
-        //   All four share a vertical center (= barCenterY). The spare
-        //   tank slot is reserved (~13 px wide); when tanks ≤ 3 it's
-        //   empty so the layout doesn't jitter on gain/loss.
-        //   triforce-left: 18 (was 12 + 30 internal offset → 42 in 5.88.0)
-        //   barX:          52 (was 62 in 5.88.0; was 86 pre-5.88.0)
-        //   spare-tank slot: ~5..14 (5px from screen edge)
-        const triforceLeftX = 18;
-        const barX = 52;
+        // 5.88.3 — top-left cluster:
+        //   [triforce] [healthbar] [LV-shield] [level-num]
+        //   All share the bar's vertical center (barCenterY = 35). The
+        //   triforce IS the spare-tank visualization (each triangle =
+        //   1 spare); the active tank is the healthbar itself.
+        //   Left margin matches the bottom-left loadout squares' left
+        //   margin (livesX=36 in drawEquippedWeaponSquares) so the two
+        //   HUD clusters align flush against an invisible left rail.
+        const triforceLeftX = 36;
+        // bar starts 8 px right of the triforce's rightmost pixel.
+        // triforce occupies 26 px → barX = 36 + 26 + 8 = 70.
+        const barX = 70;
         const barHeight = 30;
         const barWidth = 220;
         const barY = 20;
@@ -914,9 +880,10 @@ export function updateHUD() {
 
         ctx.save();
 
-        // Draw triforce (energy-tank indicator) on canvas — vertically
-        // centered with the healthbar so the cluster reads as a single
-        // horizontal HUD widget. shieldTanks is the source of truth.
+        // Draw triforce (= spare energy-tank indicator) on canvas,
+        // vertically centered with the healthbar so the row reads as
+        // one HUD widget. shieldTanks (= spare count, 0..3) is the
+        // source of truth.
         this.drawCanvasTriforce(ctx, this.shieldTanks | 0, triforceLeftX, barCenterY);
 
         // Create futuristic angled health bar geometry

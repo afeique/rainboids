@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.88.4] - 2026-05-09
+
+### Changed — Triforce unified with shield-tank state; cap = 3 spares
+The triforce + shield-tank systems were two parallel visualizations of the same idea. Unified: each triangle is now exactly one spare energy tank. The healthbar is the *active* tank (the implicit "+1" the user described as "the last energy tank with no triangles"); the triforce is the spare count, 0–3.
+
+- `MAX_SHIELD_TANKS`: 4 → **3** (was the brief 5.88.0 cap that included a separate "spare battery" slot).
+- Standalone battery icon retired. The HUD top-left is now `[triforce] [healthbar] [LV-shield] [level]` — no extra widget left of the triforce.
+- Loss order: top → btm-right → btm-left (matches the original `getDisappearingTriforcePos` ordering pre-5.88.0).
+- Game over fires when HP→0 with `shieldTanks === 0` (the last tank — the active healthbar — runs out, no triangle to vaporize).
+- Save migration: `engineTanks` clamped to `[0, 3]` on load.
+- Triforce render: `drawCanvasTriforce` emits 1, 2, or 3 triangles based on `shieldTanks` directly; no spare-icon branch.
+
+### Changed — Top-left HUD aligned with bottom-left loadout (left margin = 36 px)
+The triforce + healthbar cluster now starts at the same `x = 36` pixel as the bottom-left loadout squares' `groupX` in `drawEquippedWeaponSquares`. The two HUD clusters sit flush against the same invisible left rail.
+
+- `triforceLeftX`: 18 → **36** (matches loadout `livesX = 36`).
+- `barX`: 52 → **70** (= 36 + 26 px triforce width + 8 px gap).
+- `HUD_TRIFORCE_LEFT_X` mirrored in `lifecycle.js` for vaporize-FX placement.
+
+### Added — Proper GAME OVER screen with NEW GAME + RESTART WAVE buttons
+The "GAME OVER · Press Enter or click to restart" DOM popup is replaced by a canvas screen with two buttons:
+
+- **NEW GAME** — clears the save and starts a fresh run with a fresh random loadout (= title-screen NEW GAME). Routes through `startNewRun()`.
+- **RESTART WAVE** — loads the wave-start auto-save (`startContinueRun()` → `loadSave()` + `restoreRunState()`) and replays the wave the player died on with their pre-wave loadout and economy intact. Disabled (with a "(no checkpoint yet)" hint) when no save exists.
+- Wavy "GAME OVER" title in gold; subtitle line shows `Wave N · M:SS` survival summary.
+- Buttons share the title-screen button styling — same hit-test pattern, same hover/press feedback. Enter/Space activate the hovered button or default to RESTART WAVE if a save exists, NEW GAME otherwise.
+- `_gameOverButtonRects` / `_gameOverHoveredButton` / `_gameOverPressedButton` mirror the title-screen `_titleButton*` machinery in `event-setup.js`.
+
+### Fixed — `updateHUD()` syntax error
+Earlier 5.88.x edits accidentally dropped the `export function updateHUD() {` opening line, leaving an orphan `}` that broke Vite's import analysis. Function header restored.
+
+---
+
 ## [5.88.2] - 2026-05-09
 
 ### Changed — HUD top-left tightened further; triforce vertically centered with healthbar

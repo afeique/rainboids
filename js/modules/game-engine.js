@@ -506,11 +506,11 @@ export class GameEngine {
                 this.player.ownedSkills = new Set([loadout.skill]);
             }
         }
-        // 5.88.0 — energy tanks replaced the lives system. Start with
-        // 3 tanks (= 3 triforce triangles, no spare). Cap is 4 (3 triangles
-        // + standalone "spare" icon). Tanks gain from health-orb overflow
-        // (see lifecycle.applyHealthOrbToTanks); each lost tank vaporizes
-        // the matching slot. No invincibility / respawn delay between hits.
+        // 5.88.3 — energy tanks unified with the triforce. shieldTanks is
+        // now the SPARE count (each triangle = 1 spare); the active tank
+        // is the healthbar. Start at 3 spares = full triforce; total
+        // effective lives = 4 (3 spares + 1 active). Health-orb overflow
+        // grants spares, capped at 3. No invincibility / respawn delay.
         this.playerShields = 25; // Start with 25 health
         this.shieldTanks = 3;
         if (this.player) this.player._tankProgress = 0;
@@ -756,14 +756,15 @@ export class GameEngine {
         // Engine-side
         this.game.currentWave = Math.max(1, snap.wave | 0);
         this.game.money = Math.max(0, snap.money | 0);
-        // 5.88.0 — energy-tank restore. `engineTanks` is the new field;
-        // older saves that still carry `lives` are migrated to tanks 1:1
-        // (clamped to [1, 4]) so a resumed run doesn't lose the player's
-        // remaining safety net.
+        // 5.88.3 — energy-tank restore. `engineTanks` is the new field
+        // (= spare count, 0..3). Older saves with `lives` (1..3) map 1:1.
+        // Saves from the brief 5.88.0 window where engineTanks could be
+        // up to 4 are clamped down to 3 — one of the tanks is now the
+        // active healthbar, not a separate slot.
         if (typeof snap.engineTanks === 'number') {
-            this.shieldTanks = Math.max(0, Math.min(4, snap.engineTanks | 0));
+            this.shieldTanks = Math.max(0, Math.min(3, snap.engineTanks | 0));
         } else if (typeof snap.lives === 'number') {
-            this.shieldTanks = Math.max(0, Math.min(4, snap.lives | 0));
+            this.shieldTanks = Math.max(0, Math.min(3, snap.lives | 0));
         }
         if (snap.stats) {
             // Preserve the original gameStartTime so accumulated time
@@ -2407,6 +2408,8 @@ export class GameEngine {
         if (this.game.state === GAME_STATES.GAME_OVER) {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             this.ctx.fillRect(0, 0, this.width, this.height);
+            // 5.88.4 — proper screen with NEW GAME / RESTART WAVE buttons.
+            this.drawGameOverScreen();
         }
         
         // Shop UI is rendered as an HTML overlay (#shop-overlay) — no canvas
@@ -2852,6 +2855,7 @@ export class GameEngine {
     findNearestEnemy() { return col.findNearestEnemy.call(this); }
 
     drawSurvivalTimer(ctx) { return hudOverlays.drawSurvivalTimer.call(this, ctx); }
+    drawGameOverScreen() { return hudOverlays.drawGameOverScreen.call(this); }
     drawBottomRightGold(ctx) { return hudStatus.drawBottomRightGold.call(this, ctx); }
     drawPauseButton() { return hudOverlays.drawPauseButton.call(this); }
     drawStopwatchIcon(ctx, x, y, size) { return hudOverlays.drawStopwatchIcon.call(this, ctx, x, y, size); }

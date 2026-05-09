@@ -1,25 +1,26 @@
 // Player damage, tank consumption, and game-over.
 //
-// 5.88.0 — energy tanks replace the old "lives" system entirely:
-//   - shieldTanks ∈ [0, 4]; starts at 3 (3 triforce triangles, no spare).
-//   - Hits reduce HP. When HP hits 0 we consume one tank, vaporize the
-//     visual representation (top→btm-right→btm-left triangle, or the
-//     standalone "spare" icon at tanks=4), and refill HP to max. No
-//     respawn delay, no automatic invincibility window — the player
-//     keeps flying.
-//   - Game over fires only when HP hits 0 with no tanks left.
+// 5.88.3 — energy tanks fully unified with the triforce:
+//   - shieldTanks ∈ [0, 3] is the SPARE count. Each triangle = 1 spare.
+//   - The healthbar represents the *active* tank (the implicit "+1").
+//     Total effective tanks = shieldTanks + 1, capped at 4.
+//   - Hits reduce HP. When HP hits 0:
+//       * spares > 0: consume one spare → vaporize a triangle (top →
+//         btm-right → btm-left in that loss order), refill HP, keep
+//         playing. No respawn delay, no automatic invincibility.
+//       * spares == 0: game over.
 //   - Health pickups heal HP normally; overflow accumulates into a
-//     hidden _tankProgress counter, capped at 4 effective tanks.
+//     hidden `_tankProgress` counter; each full max-HP-worth of
+//     overflow grants +1 spare, capped at 3.
 //
-// Removed from the prior implementation: post-hit invincibility,
-// respawn delay, safe-respawn-location search, respawn-blink animation,
-// SPARE_SHIP shop interaction. Defense skills that grant deliberate
-// invuln (LAST_STAND, REFLEXES, PHASE_DASH) still call makeInvincible.
+// Defense skills that grant deliberate invuln (LAST_STAND, REFLEXES,
+// PHASE_DASH, wave-start grace) still call makeInvincible — those are
+// active-ability windows, not damage-aftermath grace.
 
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
 
-export const MAX_SHIELD_TANKS = 4;
+export const MAX_SHIELD_TANKS = 3;
 
 export function takeDamage(damageAmount = this.baseDamage) {
     if (this.player.invincible) return;
@@ -166,10 +167,12 @@ export function _consumeTank() {
     return true;
 }
 
-// 5.88.2 — HUD coordinates mirrored here so the lifecycle vaporize FX
+// 5.88.3 — HUD coordinates mirrored here so the lifecycle vaporize FX
 // lands on the right slot. Keep in sync with the constants in
 // hud/status.js's updateHUD() — `triforceLeftX` and `barCenterY`.
-const HUD_TRIFORCE_LEFT_X = 18;
+// Left margin matches the bottom-left loadout (livesX=36 in
+// drawEquippedWeaponSquares).
+const HUD_TRIFORCE_LEFT_X = 36;
 const HUD_BAR_CENTER_Y = 35;
 
 // 5.88.0 — health-pickup overflow → tank progress. `amountHealed` is
@@ -324,10 +327,13 @@ export function handlePlayerDeath() {
         }, 650 + p * 120);
     }
 
-    // 5.88.0 — game over fires immediately; no respawn branch.
+    // 5.88.4 — proper GAME OVER screen with NEW GAME + RESTART WAVE
+    // buttons (drawn from hud/overlays.js::drawGameOverScreen on the
+    // engine's GAME_OVER render branch). The DOM `ui:show-message`
+    // popup is gone; the screen lives on the canvas alongside the rest
+    // of the HUD so it can carry buttons + survival summary.
     this.game.state = GAME_STATES.GAME_OVER;
     this.checkSurvivalRecord();
-    this.events.emit('ui:show-message', { title: 'GAME OVER', subtitle: 'Press Enter or click to restart' });
 }
 
 export function createPlayerShipDebris(x, y, angle) {
