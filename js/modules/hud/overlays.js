@@ -6,6 +6,7 @@ import { rgba } from '../core/color-cache.js';
 import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS } from '../combat/weapon-data.js';
 import { VERSION } from '../core/version.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
+import { multiplayerEnabled } from '../../net/ws-client.js';
 
 export const _charWidthCache = new Map();
 
@@ -232,6 +233,25 @@ export function drawTitleScreen() {
                 newGame: { id: 'newGame', x: x0,                       y: yTop, w: buttonW, h: buttonH, disabled: false },
                 continue:{ id: 'continue', x: x0 + buttonW + gap,      y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun },
             };
+
+            // 5.81+ — gated MULTIPLAYER button (Hello/Welcome handshake only,
+            // Week-6 deliverable). Hidden in production unless ?multiplayer=1
+            // or localStorage rainboidsMultiplayer='1' is set, so the WIP
+            // networking path doesn't reach players. Sits below NEW GAME /
+            // CONTINUE as a single full-width row that matches the existing
+            // canvas button styling.
+            if (multiplayerEnabled()) {
+                const mpY = yTop + buttonH + 18;
+                rects.multiplayer = {
+                    id: 'multiplayer',
+                    x: x0,
+                    y: mpY,
+                    w: totalW,
+                    h: buttonH,
+                    disabled: false,
+                };
+            }
+
             this._titleButtonRects = rects;
             const hovered = this._titleHoveredButton;
             const pressed = this._titlePressedButton;
@@ -291,6 +311,9 @@ export function drawTitleScreen() {
             };
             drawButton(rects.newGame, labels[0]);
             drawButton(rects.continue, labels[1]);
+            if (rects.multiplayer) {
+                drawButton(rects.multiplayer, 'MULTIPLAYER');
+            }
 
             if (this.game.survivalRecord > 0) {
                 const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;

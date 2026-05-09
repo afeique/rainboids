@@ -4,6 +4,9 @@ import { InputHandler } from './modules/ui/input-handler.js';
 import { UIManager } from './modules/ui/ui-manager.js';
 import { GameEngine } from './modules/game-engine.js';
 import { GAME_STATES } from './modules/core/constants.js';
+import { VERSION } from './modules/core/version.js';
+import { openMultiplayerModal } from './net/multiplayer-modal.js';
+import { SESSION_STORAGE_KEY } from './net/ws-client.js';
 
 // Rainboids is mouse-and-keyboard only. If the browser is a phone or tablet
 // (coarse pointer, no hover, OR small viewport), we show a "desktop only"
@@ -148,7 +151,22 @@ class RainboidsGame {
             const hit = (r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
             if (rects.newGame  && hit(rects.newGame))  return 'newGame';
             if (rects.continue && hit(rects.continue) && !rects.continue.disabled) return 'continue';
+            if (rects.multiplayer && hit(rects.multiplayer) && !rects.multiplayer.disabled) return 'multiplayer';
             return null;
+        };
+
+        // 5.81+ — open the v1 Hello/Welcome modal. Does NOT call launch();
+        // multiplayer is purely additive WIP and must not start a solo run.
+        const openMultiplayer = () => {
+            const ge = this.gameEngine;
+            if (ge.game.state !== GAME_STATES.TITLE_SCREEN) return;
+            let session = null;
+            try { session = localStorage.getItem(SESSION_STORAGE_KEY); } catch {}
+            openMultiplayerModal({
+                clientVersion: VERSION,
+                displayName: 'Pilot',
+                session,
+            });
         };
 
         const onMove = (e) => {
@@ -192,6 +210,10 @@ class RainboidsGame {
             if (e.button !== 0 && e.button !== undefined) return;
             const id = hitId(e);
             if (!id) return;
+            if (id === 'multiplayer') {
+                openMultiplayer();
+                return;
+            }
             launch(id === 'newGame' ? 'new' : 'continue');
         };
 
@@ -211,6 +233,7 @@ class RainboidsGame {
             e.preventDefault();
             const g = ge();
             const hovered = g._titleHoveredButton;
+            if (hovered === 'multiplayer') return openMultiplayer();
             if (hovered === 'continue') return launch('continue');
             if (hovered === 'newGame')  return launch('new');
             launch(g.hasSavedRun?.() ? 'continue' : 'new');

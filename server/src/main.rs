@@ -6,19 +6,15 @@ use anyhow::Result;
 use tokio::net::TcpListener;
 use tracing::info;
 
-mod config;
-mod error;
-mod matchmaking;
-mod obs;
-mod protocol;
-mod room;
-mod server;
-mod sim;
-mod util;
-
-use config::Config;
-use matchmaking::Matchmaker;
-use server::http::{router, AppState};
+use rainboids_server::{
+    config::Config,
+    matchmaking::Matchmaker,
+    obs, protocol,
+    server::{
+        http::{router, AppState},
+        session::{spawn_reaper, SessionRegistry},
+    },
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -37,7 +33,13 @@ async fn main() -> Result<()> {
     );
 
     let mm = Matchmaker::new(cfg.clone());
-    let app = router(AppState { mm });
+    let sessions = SessionRegistry::new();
+    spawn_reaper(sessions.clone(), std::time::Duration::from_secs(30));
+    let app = router(AppState {
+        mm,
+        sessions,
+        cfg: cfg.clone(),
+    });
 
     let listener = TcpListener::bind(cfg.bind_addr).await?;
     axum::serve(listener, app)

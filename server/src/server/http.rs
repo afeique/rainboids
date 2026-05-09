@@ -3,6 +3,8 @@
 //! Metrics live on a separate listener installed by `obs::metrics::install`
 //! so the public surface and the scrape surface have different ACLs.
 
+use std::sync::Arc;
+
 use axum::{
     extract::{
         ws::{WebSocket, WebSocketUpgrade},
@@ -13,11 +15,15 @@ use axum::{
     Router,
 };
 
+use crate::config::Config;
 use crate::matchmaking::Matchmaker;
+use crate::server::session::SessionRegistry;
 
 #[derive(Clone)]
 pub struct AppState {
     pub mm: Matchmaker,
+    pub sessions: Arc<SessionRegistry>,
+    pub cfg: Arc<Config>,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -39,5 +45,5 @@ async fn ws_upgrade(
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState) {
-    super::connection::run(socket, state.mm).await;
+    super::connection::run(socket, state.mm, state.sessions, state.cfg).await;
 }

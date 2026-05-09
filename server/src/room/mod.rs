@@ -35,6 +35,15 @@ pub enum RoomInbound {
         display_name: String,
         out: mpsc::Sender<ServerMsg>,
     },
+    /// Re-attach an existing player slot whose connection dropped during
+    /// the grace window. Replaces the player's outbound channel and clears
+    /// their grace timer; on miss (player no longer in room) replies with
+    /// `ServerMsg::Error { NotFound }` on `out`.
+    Reattach {
+        player_id: PlayerId,
+        display_name: String,
+        out: mpsc::Sender<ServerMsg>,
+    },
     Leave {
         player_id: PlayerId,
         reason: LeaveReason,
@@ -51,7 +60,20 @@ pub enum RoomInbound {
         player_id: PlayerId,
         snapshot_tick: u32,
     },
+    /// Cheap snapshot of room population — used by matchmaking to render
+    /// `RoomList` without taking the actor lock.
+    Summary {
+        reply: tokio::sync::oneshot::Sender<RoomSummarySnap>,
+    },
     Shutdown,
+}
+
+/// Snapshot the matchmaker pulls every poll for `BrowseRooms`. Cheap to
+/// build; no entity collections are copied.
+#[derive(Debug, Clone, Copy)]
+pub struct RoomSummarySnap {
+    pub players: u8,
+    pub wave: u32,
 }
 
 #[derive(Debug)]
@@ -124,6 +146,11 @@ impl Room {
                 display_name,
                 out,
             } => self.handle_join(player_id, display_name, out),
+            RoomInbound::Reattach {
+                player_id,
+                display_name,
+                out,
+            } => self.handle_reattach(player_id, display_name, out),
             RoomInbound::Leave { player_id, reason } => self.handle_leave(player_id, reason),
             RoomInbound::Disconnected { player_id } => self.handle_disconnect(player_id),
             RoomInbound::Input {
@@ -145,8 +172,58 @@ impl Room {
                     p.last_ack_tick = snapshot_tick;
                 }
             }
+            RoomInbound::Summary { reply } => {
+                let _ = reply.send(RoomSummarySnap {
+                    players: self.players.len() as u8,
+                    wave: self.state.wave.current,
+                });
+            }
             RoomInbound::Shutdown => self.sim_state = RoomState::Closing,
         }
+    }
+
+    fn handle_reattach(
+        &mut self,
+        player_id: PlayerId,
+        display_name: String,
+        out: mpsc::Sender<ServerMsg>,
+    ) {
+        let Some(p) = self.players.iter_mut().find(|p| p.id == player_id) else {
+            // Slot isn't here anymore — caller should mint a fresh player.
+            let _ = out.try_send(ServerMsg::Error {
+                code: crate::protocol::ErrCode::NotFound,
+                msg: "session expired".into(),
+            });
+            return;
+        };
+        p.out = out.clone();
+        p.display_name = display_name;
+        p.lagging = false;
+        let slot = p.slot;
+        self.grace.remove(&player_id);
+
+        let peers: Vec<PeerInfo> = self
+            .players
+            .iter()
+            .filter(|other| other.id != player_id)
+            .map(|p| PeerInfo {
+                player_id: p.id,
+                display_name: p.display_name.clone(),
+                slot: p.slot,
+            })
+            .collect();
+
+        let _ = out.try_send(ServerMsg::RoomJoined {
+            room_id: self.id,
+            code: self.code.clone(),
+            slot,
+            peers,
+            wave: self.state.wave.current,
+            seed: self.seed,
+        });
+
+        info!(player_id = %player_id, slot, "player reattached after grace");
+        metrics::counter!("rainboids_players_reattached_total").increment(1);
     }
 
     fn handle_join(

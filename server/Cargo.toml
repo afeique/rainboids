@@ -7,6 +7,10 @@ description = "Authoritative WebSocket server for Rainboids co-op multiplayer."
 license = "MIT"
 publish = false
 
+[lib]
+name = "rainboids_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "rainboids-server"
 path = "src/main.rs"

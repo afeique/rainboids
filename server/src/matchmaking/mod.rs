@@ -89,18 +89,39 @@ impl Matchmaker {
     }
 
     async fn send_browse(&self, out: &mpsc::Sender<ServerMsg>) {
-        let rooms = self
+        // Snapshot every public room. Each Summary is a oneshot round-trip
+        // through the room actor (cheap — just reads two fields).
+        let candidates: Vec<(crate::util::id::RoomId, RoomEntry)> = self
             .rooms
             .iter()
             .filter(|r| r.value().public)
-            .map(|r| RoomSummary {
-                room_id: *r.key(),
-                name: r.value().name.clone(),
-                players: 0, // Plan §"Browse" — real player counts come from a room poll.
-                max_players: r.value().max_players,
-                wave: 0,
-            })
+            .map(|r| (*r.key(), r.value().clone()))
             .collect();
+
+        let mut rooms = Vec::with_capacity(candidates.len());
+        for (room_id, entry) in candidates {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            if entry
+                .handle
+                .send(RoomInbound::Summary { reply: tx })
+                .await
+                .is_err()
+            {
+                // Room actor exited between iter and send; skip.
+                continue;
+            }
+            let snap = match tokio::time::timeout(std::time::Duration::from_millis(50), rx).await {
+                Ok(Ok(s)) => s,
+                _ => continue,
+            };
+            rooms.push(RoomSummary {
+                room_id,
+                name: entry.name.clone(),
+                players: snap.players,
+                max_players: entry.max_players,
+                wave: snap.wave,
+            });
+        }
         let _ = out.try_send(ServerMsg::RoomList { rooms });
     }
 
@@ -132,7 +153,13 @@ impl Matchmaker {
         display_name: &str,
         out: mpsc::Sender<ServerMsg>,
     ) -> Option<RoomHandle> {
-        let entry = self.rooms.get(&room_id).map(|r| r.clone())?;
+        let Some(entry) = self.rooms.get(&room_id).map(|r| r.clone()) else {
+            let _ = out.try_send(ServerMsg::Error {
+                code: ErrCode::NotFound,
+                msg: "no such room".into(),
+            });
+            return None;
+        };
         let _ = entry
             .handle
             .send(RoomInbound::Join {
@@ -151,7 +178,13 @@ impl Matchmaker {
         display_name: &str,
         out: mpsc::Sender<ServerMsg>,
     ) -> Option<RoomHandle> {
-        let room_id = *self.by_code.get(&code.to_uppercase())?.value();
+        let Some(room_id) = self.by_code.get(&code.to_uppercase()).map(|r| *r.value()) else {
+            let _ = out.try_send(ServerMsg::Error {
+                code: ErrCode::NotFound,
+                msg: "no such code".into(),
+            });
+            return None;
+        };
         self.join(room_id, player_id, display_name, out).await
     }
 
