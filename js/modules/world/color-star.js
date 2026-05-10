@@ -3,6 +3,14 @@
 import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES, BIG_STAR_SHAPES } from '../core/constants.js';
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
+// Phase-1 multiplayer engine refactor: drop physics extracted to
+// `js/sim/drops.js`. The wrapper in `update()` below builds a plain-data
+// `DropState` from `this`, calls `updateDrop`, and writes the result back.
+// Behavior is byte-for-byte equivalent to the legacy inline code (drift,
+// friction, two-tier health magnet, tractor pull, lifetime). Decorative
+// stars (`starType === 'decorative'`) are not drops — they keep the inline
+// path below.
+import { updateDrop } from '../../sim/drops.js';
 
 export class ColorStar {
     constructor() {
@@ -178,12 +186,7 @@ export class ColorStar {
         if (!this.active) return;
 
         if (this.isBurst) {
-            this.life--;
-            if (this.life <= 0) {
-                this.active = false;
-                return;
-            }
-
+            // ── Sparkle particle FX (presentation, must run BEFORE physics) ──
             // 5.79.24 — Orb shimmer. Each orb emits a small `starSparkle`
             //   particle every `_sparkleEvery` ms at a random offset
             //   inside its silhouette.
@@ -193,6 +196,11 @@ export class ColorStar {
             //   instantly. The pixel orbs themselves already read as a
             //   shimmer cluster; the few shape orbs in the same drop
             //   carry the sparkle trail.
+            // Sparkles read `this.x` / `this.y` — these were the
+            // pre-position-update values in the legacy code (the
+            // friction + position step ran AFTER the sparkle block in
+            // the original `update()`). We preserve that ordering by
+            // emitting sparkles before calling `updateDrop`.
             if (particlePool && this.life > 30 && !this.isPixelOrb) {
                 const now = frameClock.now;
                 if (now >= this._nextSparkleAt) {
@@ -207,56 +215,84 @@ export class ColorStar {
                 }
             }
 
-            // 5.80.x — Health orbs now have a passive proximity magnet
-            //   (was: drift-only as of 5.79.32). Per user request, heal
-            //   pickups should pull in from FAR away so the player isn't
-            //   forced to chase down each orb. Tractor beam still works
-            //   independently for the all-pickups long-range scoop.
-            //   Friction bumped 0.985 → 0.92 for orbs with the magnet
-            //   active so the per-tick force pump doesn't accelerate
-            //   them to absurd speeds (steady-state v ≈ F/(1−f)).
-            const isHealth = this.starType === 'health';
-            const friction = isHealth ? 0.92 : 0.985;
-            this.vel.x *= friction;
-            this.vel.y *= friction;
-            this.x += this.vel.x;
-            this.y += this.vel.y;
-
-            this.opacity = Math.min(1, this.life / 120);
-
-            const dx = playerPos.x - this.x;
-            const dy = playerPos.y - this.y;
-            const dist = Math.hypot(dx, dy);
-
-            // Passive health-orb magnet (5.80.x). Two-tier: a gentle far
-            //   pull (≤320 px) so heals drift toward the player from
-            //   well off-screen-quadrant range, plus a stronger snap
-            //   inside 120 px that scoops them in. ~3.2× gold-coin's
-            //   100 px range — health is less common than gold and
-            //   players reliably need it, so it warrants a wider net.
-            if (isHealth && dist > 1 && dist < 320) {
-                const inv = 1 / dist;
-                const farFactor = (320 - dist) / 320;
-                this.vel.x += dx * inv * 8 * farFactor;
-                this.vel.y += dy * inv * 8 * farFactor;
-                if (dist < 120) {
-                    const nearFactor = (120 - dist) / 120;
-                    this.vel.x += dx * inv * 22 * nearFactor;
-                    this.vel.y += dy * inv * 22 * nearFactor;
-                }
+            // ── Drop physics step (extracted to js/sim/drops.js) ──
+            // The wrapper builds a plain-data DropState from `this`,
+            // hands it to the pure `updateDrop` function, and writes
+            // the result back. This is the F-agent slice of the
+            // Phase-1 multiplayer engine refactor; behavior is
+            // byte-for-byte equivalent to the legacy inline code
+            // (lifetime decay, friction, position update, opacity
+            // fade-in/fade-out, two-tier health magnet, tractor pull).
+            //
+            // Reusable scratch objects to avoid per-tick allocation.
+            // The pure sim doesn't need fresh objects each call; the
+            // ColorStar instance gets one scratch DropState attached
+            // and reuses it across ticks.
+            if (!this._dropScratch) {
+                this._dropScratch = {
+                    id: 0,
+                    kind: 'health',
+                    x: 0, y: 0, vx: 0, vy: 0,
+                    life: 0,
+                    radius: 0,
+                    value: 0,
+                    opacity: 1,
+                    z: 1,
+                    active: true,
+                };
             }
-
-            // Tractor beam — long-range pull when engaged. Stacks on
-            // top of the passive magnet for an even snappier scoop.
-            if (dist > 1 && tractorEngaged) {
-                const tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
-                const tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
-                if (dist < tractorDist) {
-                    const tractorForce = tractorAttraction * (1 - dist / tractorDist);
-                    this.vel.x += (dx / dist) * tractorForce * this.z;
-                    this.vel.y += (dy / dist) * tractorForce * this.z;
-                }
+            if (!this._dropCtxScratch) {
+                this._dropCtxScratch = {
+                    ships: [null],
+                    field: null,
+                    dt: 1 / 60,
+                    tractorEngaged: false,
+                    tractorAttraction: 0,
+                    tractorRange: 0,
+                };
             }
+            const drop = this._dropScratch;
+            // Map starType ('health' | 'money') to the DropState
+            // discriminator. Pixel-orb subtype is independent of the
+            // money kind for physics purposes (both use the default
+            // 0.985 friction) — `kind` only branches the magnet path.
+            drop.kind = (this.starType === 'health') ? 'health'
+                       : (this.isPixelOrb ? 'money_pixel' : 'money_shape');
+            drop.x = this.x;
+            drop.y = this.y;
+            drop.vx = this.vel.x;
+            drop.vy = this.vel.y;
+            drop.life = this.life;
+            drop.radius = this.radius;
+            drop.opacity = this.opacity;
+            drop.z = this.z;
+            drop.active = this.active;
+
+            const ctx = this._dropCtxScratch;
+            // Wrap the live `playerPos` (a Player ref) as a single-ship
+            // array. updateDrop picks the nearest from `ships`; for solo
+            // there's only one player so this is the trivial case.
+            ctx.ships[0] = playerPos;
+            ctx.field = gameField;
+            ctx.tractorEngaged = !!tractorEngaged;
+            ctx.tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
+            ctx.tractorRange = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
+
+            updateDrop(drop, ctx, null);
+
+            // Write physics back to `this`. The vel object stays the
+            // same reference (mutated in place); x/y/life/opacity/active
+            // are simple scalars copied back.
+            this.x = drop.x;
+            this.y = drop.y;
+            this.vel.x = drop.vx;
+            this.vel.y = drop.vy;
+            this.life = drop.life;
+            this.opacity = drop.opacity;
+            // `active` flips false when life reaches 0 — copy the
+            // signal back so the existing engine pool cleanup picks
+            // it up on the next pass.
+            if (!drop.active) this.active = false;
         } else {
             // Update twinkle based on sine wave - much more subtle variation
             this.opacity = 0.6 + 0.3 * (Math.sin(frameClock.now * this.twinkleSpeed + this.opacityOffset) + 1) / 2;

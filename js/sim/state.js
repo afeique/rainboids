@@ -219,6 +219,159 @@ export function freshGameState(seed) {
     };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Round-2 additions (agent F — sim/wave-drops-extract).
+//
+// WaveState + DropState typedefs, their `*UpdateContext` bags, and
+// `freshWaveState` / `freshDropState` factories. Appended at the END
+// of the file so siblings D (enemy) and E (projectile) can also append
+// their typedefs cleanly without merge conflicts on this file.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Working WaveState used by the pure wave sim (`js/sim/wave.js`).
+ *
+ * Supersedes the bare 3-field `WaveState` typedef earlier in this file
+ * (which was a placeholder for the future server snapshot shape — kept
+ * around to avoid breaking the `GameState.wave` reference there). The
+ * shape below is the **current** plain-data shape consumed by
+ * `updateWave` and produced by `freshWaveState`.
+ *
+ * Phase machine — explicit, drives the pure step:
+ *   - 'intro'    : wave just started; sub-wave 0 has not yet spawned.
+ *                  The wrapper transitions intro → spawning when the
+ *                  intro overlay lifts (legacy timing: ~700 ms after
+ *                  startNextWave).
+ *   - 'spawning' : at least one sub-wave has spawned, more may follow.
+ *                  This is the steady state during gameplay.
+ *   - 'clearing' : all sub-waves have spawned but enemies remain.
+ *                  No further spawn events fire; we're waiting for
+ *                  the player to clear the field.
+ *   - 'complete' : all sub-waves spawned AND zero enemies. Terminal —
+ *                  the wrapper observes this and triggers wave-clear
+ *                  flow (mission resolve, bonus XP/coins, powerups
+ *                  menu). Next wave allocates a fresh WaveState.
+ *
+ * @typedef {Object} WaveState
+ * @property {number} number             current wave (1..20)
+ * @property {number} startedAtTick      tick this wave started on
+ * @property {number} remainingToSpawn   sub-waves not yet emitted
+ *                                       (informational; tests + the
+ *                                       server mirror use it, the
+ *                                       wrapper does not).
+ * @property {number} subWaveIndex       index of the next sub-wave
+ *                                       to spawn (0..subWaves.length).
+ * @property {number} spawnTimer         ms accumulated since the last
+ *                                       sub-wave spawn — feeds the
+ *                                       12 000 ms stale-fallback that
+ *                                       advances even when enemies
+ *                                       are still alive. Reset to 0
+ *                                       on every spawn.
+ * @property {string} phase              'intro' | 'spawning' | 'clearing'
+ *                                       | 'complete'
+ */
+
+/**
+ * Working DropState used by the pure drop sim (`js/sim/drops.js`).
+ *
+ * Distinct from the wire `Drop` typedef earlier in this file — that
+ * one is the prediction-relevant subset for snapshots. This one is the
+ * **current** plain-data shape consumed by `updateDrop` in the
+ * collectible-orb branch of `js/modules/world/color-star.js`.
+ *
+ * Discriminator semantics:
+ *   - 'health'      blue 3D-shape orb, magnet-attractive (the two-tier
+ *                   320 / 120 px health-orb magnet from 5.80.x)
+ *   - 'money_shape' gold shape orb (the 1-3 "big" gold drops per kill,
+ *                   tractor-only)
+ *   - 'money_pixel' gold pixel orb (the 10-25 "tiny" gold drops per kill,
+ *                   tractor-only, no sparkle for pool budget reasons)
+ *   - 'powerup'     reserved for future powerup pickups (no game state
+ *                   uses this kind at pure-sim level today)
+ *
+ * @typedef {Object} DropState
+ * @property {DropId|number} id          per-spawn id (Number for solo)
+ * @property {string} kind               'health' | 'money_shape' |
+ *                                       'money_pixel' | 'powerup'
+ * @property {number} x                  world x (f32 px)
+ * @property {number} y                  world y (f32 px)
+ * @property {number} vx                 velocity x (f32 px/tick)
+ * @property {number} vy                 velocity y (f32 px/tick)
+ * @property {number} life               ticks remaining until despawn
+ *                                       (legacy 7200 ticks ≈ 120 s @60Hz)
+ * @property {number} radius             collision radius for pickup
+ * @property {number} value              heal-amount or money-value
+ *                                       (reserved for collision-extract)
+ * @property {number} [opacity]          0..1 fade output (computed by
+ *                                       updateDrop; renderer reads).
+ * @property {number} [z]                parallax depth (1.5..3.0 for
+ *                                       collectibles); used by the
+ *                                       tractor pull as a force scale.
+ * @property {boolean} active
+ */
+
+/**
+ * Per-tick context bag for `updateWave`.
+ *
+ * @typedef {Object} WaveUpdateContext
+ * @property {number} enemyCount         count of live enemies (used to
+ *                                       gate sub-wave advance).
+ * @property {(import('./state.js').ShipState[]|Object[])} ships  active player
+ *                                       ships. Currently informational —
+ *                                       reserved for future
+ *                                       co-op-aware spawning.
+ * @property {number} dt                 seconds (typically 1/60).
+ * @property {(import('./rng.js').Pcg64|null)} rng  seeded RNG (unused
+ *                                       today; reserved for randomized
+ *                                       enemy-mix variance).
+ */
+
+/**
+ * Per-tick context bag for `updateDrop`.
+ *
+ * @typedef {Object} DropUpdateContext
+ * @property {(import('./state.js').ShipState[]|Object[])} ships   active
+ *                                       player ships. The pure step
+ *                                       picks the nearest as the magnet/
+ *                                       tractor anchor.
+ * @property {(import('./state.js').Field|null)} field  world bounds
+ *                                       (currently unused — drops don't
+ *                                       bounce off the field; they
+ *                                       expire via the lifetime tick).
+ * @property {number} dt                 seconds (typically 1/60).
+ * @property {boolean} tractorEngaged    true when the player's tractor
+ *                                       skill is active this tick.
+ * @property {number} [tractorAttraction]  passed by the wrapper —
+ *                                         GAME_CONFIG.ACTIVE_STAR_ATTR * 1500
+ *                                         in the legacy code.
+ * @property {number} [tractorRange]     passed by the wrapper —
+ *                                       GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST.
+ */
+
+/**
+ * Construct a fresh WaveState anchored at the start of the given wave.
+ *
+ * Defaults match the legacy `wave-manager.startNextWave()` behavior:
+ * `subWaveIndex=0` (sub-wave 0 spawns first), `phase='intro'` (the
+ * intro overlay holds for ~2.8 s), `spawnTimer=0`, `startedAtTick=0`.
+ *
+ * @param {number} waveNumber                1..MAX_WAVES
+ * @param {Partial<WaveState>} [overrides]
+ * @returns {WaveState}
+ */
+export function freshWaveState(waveNumber, overrides = {}) {
+    const o = overrides;
+    const n = Math.max(1, waveNumber | 0);
+    return {
+        number: o.number !== undefined ? o.number : n,
+        startedAtTick: o.startedAtTick !== undefined ? o.startedAtTick : 0,
+        remainingToSpawn: o.remainingToSpawn !== undefined ? o.remainingToSpawn : 0,
+        subWaveIndex: o.subWaveIndex !== undefined ? o.subWaveIndex : 0,
+        spawnTimer: o.spawnTimer !== undefined ? o.spawnTimer : 0,
+        phase: o.phase !== undefined ? o.phase : 'intro',
+    };
+}
+
 // ── Round-2 agent E (sim/projectile-extract) additions ───────────────
 //
 // Working AsteroidState + BulletState used by the f32 sims
@@ -366,6 +519,35 @@ export function freshAsteroidState(id, overrides = {}) {
         active: overrides.active !== undefined ? overrides.active : true,
         warping: overrides.warping !== undefined ? overrides.warping : false,
         deathFlash: overrides.deathFlash !== undefined ? overrides.deathFlash : 0,
+    };
+}
+
+/**
+ * Construct a fresh DropState. `kind` is the discriminator; the other
+ * fields default to a plausible drift-orb shape so unit tests can
+ * exercise the magnet/tractor formulas without pulling in the live
+ * combat-manager helpers.
+ *
+ * @param {string} kind                 'health' | 'money_shape' |
+ *                                       'money_pixel' | 'powerup'
+ * @param {Partial<DropState>} [overrides]
+ * @returns {DropState}
+ */
+export function freshDropState(kind, overrides = {}) {
+    const o = overrides;
+    return {
+        id: o.id !== undefined ? o.id : 0,
+        kind,
+        x: o.x !== undefined ? o.x : 0,
+        y: o.y !== undefined ? o.y : 0,
+        vx: o.vx !== undefined ? o.vx : 0,
+        vy: o.vy !== undefined ? o.vy : 0,
+        life: o.life !== undefined ? o.life : 7200,
+        radius: o.radius !== undefined ? o.radius : 14,
+        value: o.value !== undefined ? o.value : (kind === 'health' ? 1 : 5),
+        opacity: o.opacity !== undefined ? o.opacity : 1,
+        z: o.z !== undefined ? o.z : 2,
+        active: o.active !== undefined ? o.active : true,
     };
 }
 
