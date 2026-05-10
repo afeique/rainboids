@@ -12,14 +12,14 @@ on commit. The user runs both terminals and hands the tree back and forth.
 
 | Field | Value |
 |-------|-------|
-| Branch | `master` (with worktrees — see "Workflow" below). Master is at the merged 5.87.1 state; the active feature branch is `feature/energy-tank-overhaul` (single-player gameplay work, not yet merged) |
-| Version | `5.88.5` on `feature/energy-tank-overhaul`; master sits behind at 5.87.1 |
-| Working tree | **5.88.5 single-player work has been the focus since the parity-loop merge.** Multiplayer is paused at the 5.87.0 milestone. About to fan out 3 parallel subagents to resume MP work. |
-| Last touched | 2026-05-09 by **server agent** (orchestrator — analyzing plan vs state, dispatching subagents) |
-| Last commit | `9fbc83e` — 5.88.5 single-player tune-up (energy-tank, healing, 3D rotation). Multiplayer code untouched since 5.87.0. |
+| Branch | `master` (Phase-1 wiring all merged). Worktrees idle; future parallel work needs to avoid `state.js` / `index.js` / `game-engine.js` due to the harness worktree-isolation bug (see "Open questions"). |
+| Version | `5.89.0` on master (final Phase-1 wrapper landed via PR #17) |
+| Working tree | **Phase 1 engine refactor COMPLETE.** All six pure functions (`ship`, `enemy`, `asteroid`, `bullet`, `wave`, `drops`) live under `js/sim/` and drive their respective live entities through thin wrappers. Next phase: Rust mirror impls (Weeks 7–9 server sim port). |
+| Last touched | 2026-05-10 by **client agent** (orchestrator — Phase-1 wiring sessions complete, doc sync) |
+| Last commit | `216b54a` — Merge of PR #17 (5.89.0 wave-manager wiring). Phase-1 cap. |
 | Uncommitted | this doc update |
-| Parity status | **Schema → Rust → JS pipeline complete.** Both sides codegen'd; `npm run codegen:check` is the CI gate; byte-level cross-checks (Rust `wire_golden.rs` ↔ JS `protocol.test.js`) pass byte-for-byte. |
-| Critical path | **Phase 1 engine extraction** — `js/modules/game-engine.js` + `js/modules/player/player.js` need to spit out `js/sim/ship.js`, then `enemy.js`, etc. Until this lands, server-side `sim/*.rs` stubs can't be ported (no source-of-truth to mirror) and the client can't run prediction/interpolation. |
+| Parity status | **Schema → Rust → JS pipeline complete.** Wire layout pinned byte-for-byte. **Sim layer**: ship has full Rust mirror + parity fixture (`ship_basic_movement`, ≈2.41421356 equilibrium). Enemy/asteroid/bullet/wave/drops mirrors NOT yet ported — that's task #30 next. |
+| Critical path | **Server sim port (#30)** — port `js/sim/{enemy,asteroid,bullet,wave,drops}.js` into `server/src/sim/` mirroring agent B's pattern from ship. Each port needs a parity fixture (golden input → expected JS output, asserted on Rust side with f32 tolerance). Once enemy + asteroid + bullet land, client prediction (#31) becomes unblocked. |
 
 ## Ownership boundaries
 
@@ -63,47 +63,47 @@ Each agent updates their column on every session start.
 ### Server agent (worktree `../rainboids-server-wt`, branch `mp/server-week7`)
 
 - **Shipped on master**:
-  - `d5687f4` — 5.83.0 + 5.84.0 (combined commit: server SessionRegistry,
-    Ping/Pong, browse counts, NotFound, 25 server tests + 6 wire-golden;
-    plus client Hello/Welcome, js/sim/ engine primitives, schema/ +
-    parity tooling).
-  - `3745d55` — `#[ignore]` for the known-failing PCG-64 vector +
-    open-question #4 + worktree workflow doc.
-  - **5.85.0 wire codegen merge** — `mp/server-week7` (`71db207`) merged
-    onto master. Rust types (`server/src/protocol/generated.rs`) are now
-    codegen'd from `schema/protocol.toml`.
-  - **5.87.0 JS-side codegen merge** — `mp/server-week7` (`eaf0a3a`)
-    merged onto master. JS types (`js/sim/protocol-generated.js`) are
-    now codegen'd from the same schema. The hand-mirror in
-    `js/sim/protocol.js` is gone — replaced by a one-line
-    `export *` shim. **Parity loop closed:** `npm run codegen:check`
-    catches drift on either side, and the existing byte-golden tests
-    in `wire_golden.rs` (Rust) ↔ `protocol.test.js` (JS) pin the wire
-    layout byte-for-byte.
-- **Currently working on**: nothing in flight; pushing master to origin
-  at this milestone (parity loop closure is the right cut point).
-- **Queue (suggested, post-push)**:
-  - Lagging-client integration test (no coverage today).
-  - Server-side simulation port (Weeks 7–9). Blocked on Phase 1
-    extraction of `simulateTick` from `game-engine.js`.
-  - `js/sim/version.js` consolidation — currently has its own
-    `WIRE_VERSION` / `SIM_VERSION` constants that mirror the schema;
-    could re-export from `protocol-generated.js` to remove the dual
-    source. Small cleanup, low priority.
+  - `d5687f4` — 5.83.0 + 5.84.0 (server SessionRegistry, Ping/Pong, browse
+    counts, NotFound, 25 server tests + 6 wire-golden; client Hello/Welcome,
+    js/sim/ engine primitives, schema/ + parity tooling).
+  - `3745d55` — `#[ignore]` for known-failing PCG-64 vector (resolved 5.84.1).
+  - **5.85.0 wire codegen** (`71db207`) — Rust types codegen'd from `schema/protocol.toml`.
+  - **5.87.0 JS-side codegen** (`eaf0a3a`) — JS types codegen'd from the same schema.
+- **Currently working on**: nothing in flight; awaiting kickoff for Phase 2
+  (server sim port — task #30). With Phase 1 JS-side complete (PR #17),
+  the path is unblocked.
+- **Queue (next sessions)**:
+  - **Port `js/sim/enemy.js` → `server/src/sim/enemy.rs`** + parity fixture
+    `enemy_hunter_basic_chase` (golden tick sequence with player at fixed
+    position, expected enemy position after N ticks, f32 tolerance ≤ 0.01).
+    Use agent B's `ship.rs` as the structural template: pure `update_enemy(&mut EnemyState, &EnemyContext, &mut Vec<Event>)` plus a parity fixture in `server/tests/parity_vectors.rs`.
+  - **Port asteroid + bullet** next (largely linear physics, easier than enemy AI).
+  - **Port wave + drops** last (wave is small; drops uses simple friction physics).
+  - Once all five mirrors land, **lagging-client integration test** can drive both client and server through the same input sequence and assert state convergence.
 
 ### Client agent (worktree `../rainboids-worktrees/engine-driver`, branch `client-engine-driver`)
 
 - **Shipped on master**:
   - 5.84.1 — JS PCG-64 fix (cross-language parity).
-  - **5.86.0 EngineDriver merge** — `client-engine-driver` (`d0793e3`) merged
-    onto master via `4683928`. Solo and multiplayer now route through the
-    same `EngineDriver` wrapping the same `GameEngine`. The "▶ START
-    MULTIPLAYER GAME" button on the title-screen modal hands the live
-    `ConnectionTask` over to the driver and dismisses the modal without
-    disconnecting; gameplay continues identical to solo with a
-    `🟢 ONLINE` overlay in the top-right.
-- **Currently working on**: nothing in flight; deciding next queue item
-  with the user.
+  - **5.86.0 EngineDriver merge** (`d0793e3` → `4683928`).
+  - **Round 2 dispatch + wiring** (2026-05-09 → 2026-05-10):
+    - PR #13 (`mp/sim-enemy-extract`, `cad5b7a`) — pure `js/sim/enemy.js` (391 lines, 6 event types).
+    - PR #14 (`mp/sim-projectile-extract`) — pure `js/sim/asteroid.js` + `js/sim/bullet.js` (split into `updatePlayerBullet` + `updateEnemyBullet` due to divergent state shapes).
+    - PR #15 (`mp/sim-wave-drops-extract`) — pure `js/sim/wave.js` + `js/sim/drops.js` (drops wired in same PR; wave wiring deferred pending parity test).
+    - PR #16 (`mp/wiring-enemy`, `6129173`) — `Enemy.update` wrapper drives `updateEnemy`. -210/+58 lines in `js/modules/enemy/enemy.js`.
+    - **PR #17 (`mp/wiring-wave`, `12cde07`) — final Phase-1 wrapper.** `WaveManager.tryAdvanceSubWave` drives `updateWave`; 7 replay-parity tests pin behavioral equivalence.
+- **Currently working on**: Phase 1 cleanup + this doc sync. Then unblocking Phase 2.
+
+### Phase-1 status table
+
+| Subsystem | Pure function | Wrapper wired | Rust mirror | Rust parity fixture |
+|---|---|---|---|---|
+| ship | ✓ PR (5.84.0) | ✓ (`Player.update`) | ✓ (`server/src/sim/ship.rs`) | ✓ `ship_basic_movement` |
+| enemy | ✓ PR #13 | ✓ PR #16 | ⬜ #30 | ⬜ #30 |
+| asteroid | ✓ PR #14 | ✓ PR #14 | ⬜ #30 | ⬜ #30 |
+| bullet | ✓ PR #14 | ✓ PR #14 | ⬜ #30 | ⬜ #30 |
+| wave | ✓ PR #15 | ✓ PR #17 | ⬜ #30 | ⬜ #30 |
+| drops | ✓ PR #15 | ✓ PR #15 | ⬜ #30 | ⬜ #30 |
 
 ## Subagent dispatch round 1 (2026-05-09) — COMPLETED
 
@@ -142,30 +142,43 @@ A simply didn't commit and the orchestrator recovered the work via
 `git switch` + selective `git add`). Future dispatches: agents should
 verify `git branch --show-current` immediately before commit.
 
-## Subagent dispatch round 2 (2026-05-09) — in flight
+## Subagent dispatch round 2 (2026-05-09) — COMPLETED
 
-Three more parallel subagents extracting the remaining Phase-1 subsystems.
-Each follows agent A's pattern: extract pure-function logic into a new
-`js/sim/<subsystem>.js`, leave a thin wrapper in the existing module that
-delegates to the pure function, do **not** touch `game-engine.js`'s top-level
-update loop (the orchestrator collapses the wrappers into a single
-`simulateTick()` in a follow-up).
+Three parallel subagents extracted the remaining Phase-1 subsystems. The
+harness's `isolation: "worktree"` mode did NOT actually isolate worktrees
+(see Open Question #5) — agents raced on `state.js` and `index.js` writes.
+The orchestrator did serial salvage onto each branch, then merged via PRs.
 
-| Agent | Branch | Touches | Owns |
-|-------|--------|---------|------|
-| **D — sim/enemy-extract** | `mp/sim-enemy-extract` | `js/modules/enemy/**`, `js/sim/enemy.js` (new), `js/sim/state.js` (EnemyState typedef) | enemy AI, movement strategies, firing decisions; emits events for bullet spawn rather than calling fire() directly |
-| **E — sim/projectile-extract** | `mp/sim-projectile-extract` | `js/modules/world/asteroid.js`, `js/modules/player/bullet.js`, `js/modules/enemy/enemy-bullet.js`, `js/sim/asteroid.js` (new), `js/sim/bullet.js` (new), `js/sim/state.js` | asteroid drift + split, player+enemy bullet ballistics |
-| **F — sim/wave-drops-extract** | `mp/sim-wave-drops-extract` | `js/modules/wave/**`, `js/modules/world/color-star.js` (drop physics only), `js/sim/wave.js` (new), `js/sim/drops.js` (new), `js/sim/state.js` | wave spawn schedule, drop attraction physics (NOT pickup — that goes with collision in a future session) |
+| Agent | Branch | Result | Wiring |
+|-------|--------|--------|--------|
+| **D — sim/enemy-extract** | `mp/sim-enemy-extract` (`cad5b7a` after salvage) | `js/sim/enemy.js` (391 lines, 6 event types: `enemy_debris_burst`, `enemy_fire_continuous`, `enemy_fire_burst`, `enemy_fire_charging`, `enemy_fire`, `enemy_death_recycle`) | PR #16 (`mp/wiring-enemy`) — `Enemy.update` wrapper drains events into existing `triggerEnemyDebrisBurst`/`updateWaspMachineGun`/`shoot` helpers. Merged 2026-05-10. |
+| **E — sim/projectile-extract** | `mp/sim-projectile-extract` | `js/sim/asteroid.js` + `js/sim/bullet.js` (split into `updatePlayerBullet` + `updateEnemyBullet` due to divergent state shapes) | Wired in PR #14 alongside extraction (`Asteroid.update`, `Bullet.update`, `EnemyBullet.update` thin wrappers). |
+| **F — sim/wave-drops-extract** | `mp/sim-wave-drops-extract` | `js/sim/wave.js` (207 lines, phase machine) + `js/sim/drops.js` (230 lines, two-tier magnet) | Drops wired in PR #15. **Wave wiring deferred** pending parity test → landed via PR #17 (this session). |
 
-**Shared file**: all three may add typedefs to `js/sim/state.js`. Each agent
-adds at the END of the file (no replace_all), so additions merge cleanly
-in append-order. None of them touch ship.js, collision.js, or each other's
-new sim files.
+**Phase-1 capstone — PR #17 (5.89.0, 2026-05-10):** `WaveManager.tryAdvanceSubWave`
+now drives the pure `updateWave` step. 7 replay-parity tests in
+`tests/unit/sim/wave.test.js` pin behavioral equivalence by driving both
+the pure path and the legacy `tryAdvanceSubWave` through identical
+per-tick `enemyCount` vectors. **Phase 1 is now complete.**
 
-**Out of scope for this round** (separate session): collision extraction
-(touches all three subsystems' entities + player.js), pickup attribution
-(needs collision), Rust mirror impls (will follow agent B's pattern after
-each JS extraction lands).
+## Phase 2 plan (server sim port — task #30)
+
+Each `js/sim/<subsystem>.js` needs a Rust mirror at `server/src/sim/<subsystem>.rs`
+plus a parity fixture in `server/tests/parity_vectors.rs`. Pattern from
+agent B's `ship.rs` + `ship_basic_movement` fixture:
+
+1. **Mirror the pure function signature** — Rust `pub fn update_<subsystem>(state: &mut <Subsystem>State, ctx: &<Subsystem>Context, events: &mut Vec<Event>)`. Constants must be byte-identical to the JS module (re-export from a shared `constants.rs` if any are reused across subsystems).
+
+2. **Capture JS golden values first** — run a 60-tick replay through the JS pure function with a fixed input sequence, dump `(x, y, vx, vy, …)` per tick, then bake those into the Rust fixture as `expected: &[…]`.
+
+3. **Parity tolerance** — `f64 ↔ f32` drift over 60 ticks tends to stay under `0.01` for linear physics, may need `0.05` for trig-heavy paths (atan2-based aim, bezier sweep). Use the `close = |actual, expected, what| { … }` helper pattern from `ship_basic_movement`.
+
+4. **Order of operations** — port asteroid first (simplest physics), then bullet (linear with helix offset for player bullets), then wave (small, no f32 math), then drops (friction + magnet pull), then enemy (AI is the most complex; movement strategies + firing decisions need the most parity scaffolding).
+
+**Out of scope for Phase 2**: the actual *event consumption* on the server
+side (who creates new entities when an `enemy_spawn` event fires, how the
+spatial grid index updates, how snapshots reflect the new state). That's
+Phase 3 (snapshot diff + client prediction wiring).
 
 ## Hand-offs
 
@@ -190,31 +203,27 @@ Append entries when crossing ownership lines. Format:
 
 These need a decision before either agent can move forward:
 
-1. **`js/sim/` ownership.** The Phase 1 engine refactor primitives (`fxp`,
-   `rng`, `state`, `input`, `trig`, `version`, `codec`, `protocol`) landed
-   unauthorized in 5.84.0. Who finishes the extraction of `simulateTick`
-   from `game-engine.js`? The plan calls it a Phase 1 deliverable that
-   gates server porting.
+1. ~~**`js/sim/` ownership.**~~ **Resolved 2026-05-10.** Phase 1 extraction
+   complete via PRs #13/14/15/16/17. All six pure functions live in `js/sim/`
+   and drive their respective live entities through wrappers. Ship has full
+   Rust mirror; the other five are queued for Phase 2 (#30).
 2. ~~**`js/sim/codec.js` UUID bug.**~~ **Resolved 2026-05-09 by client agent.**
-   `js/sim/codec.js` now writes the correct 24-byte UUID layout
-   (u64 length + 16 raw bytes) and the byte-golden tests in
-   `tests/unit/sim/protocol.test.js` cross-check against
-   `server/tests/wire_golden.rs`. The two parallel codecs
-   (`js/sim/codec.js` and `js/net/codec.js`) are now byte-identical;
-   future PRs can consolidate by re-exporting one from the other,
-   but doing so isn't blocking.
 3. **Production deploy gating.** When the Hello/Welcome path is feature-
    complete, do we drop the feature flag, ship a `staging.rainboids.io`
    first, or continue gating? Affects what "done" means for v1.
 4. ~~**PCG-64 cross-language divergence.**~~ **Resolved 2026-05-09 by client agent in 5.84.1.**
-   JS `Pcg64` is now bit-identical to `rand_pcg::Pcg64::seed_from_u64`;
-   both sides emit `[4178418447715145737, 4410739922618931473, …]` for
-   seed=42. The fix aligned the JS port to `rand_pcg`'s exact pattern
-   (three deviations from canonical PCG-XSH-RR — see CHANGELOG entry
-   for 5.84.1 and the `js/sim/rng.js` header comment). The
-   `rng_seed42_first_5_values` test is no longer `#[ignore]`d and runs
-   green by default. The diagnostic `pcg64_trace.rs` is left in place
-   for the next debugging session.
+5. **Harness worktree-isolation bug** (task #36). `isolation: "worktree"`
+   on the Agent tool does NOT actually create per-agent worktrees — three
+   parallel round-2 agents (D/E/F) all ran in the same physical tree and
+   raced on shared file writes (`js/sim/state.js`, `js/sim/index.js`).
+   F caught it via cherry-pick + reset; E recovered via atomic
+   Write+stage+verify-branch pattern; D bailed and the orchestrator did
+   serial salvage. **Until this is fixed, parallel agent dispatches must
+   avoid shared files** — schedule independent work that doesn't append
+   to `state.js` / `index.js` / `game-engine.js`. Future investigation:
+   trace the harness's worktree-creation path (look for `git worktree add`
+   in the harness Go source, or check whether the orchestrator falls back
+   to in-place when the worktree create fails).
 
 ## How to run
 
@@ -303,12 +312,18 @@ Don't silence them; fix them.
 
 - ✅ Weeks 4–6 — server scaffold (5.80.0–5.83.0)
 - ✅ Week 6 — Hello/Welcome round-trip from title screen (5.84.0)
-- ⬜ Phase 1 — engine refactor: extract `simulateTick` into `js/sim/`
-  (primitives landed in 5.84.0; PCG-64 cross-language parity closed in
-  5.84.1; full extraction TBD)
-- ⬜ Weeks 7–9 — port simulation into `server/src/sim/`, parity harness
-  in CI (rng vector pinned; fxp + trig vectors next, then ship/bullet)
-- ⬜ Phase 4 — co-op design (revive, shared wave-clear, drop attribution)
+- ✅ **Phase 1 — engine refactor: extract pure step functions into `js/sim/`.**
+  Primitives landed 5.84.0; PCG-64 parity closed 5.84.1; ship extracted +
+  wired 5.84.0; enemy/asteroid/bullet/wave/drops extracted via PRs #13–15;
+  enemy + wave wrappers wired via PRs #16/#17 (5.89.0). All six subsystems
+  drive their live entities through `js/sim/`.
+- ⬜ **Weeks 7–9 — port simulation into `server/src/sim/`** (task #30).
+  RNG + fxp + trig vectors pinned. Ship has full Rust mirror + parity
+  fixture. Five remaining ports: enemy → asteroid → bullet → wave → drops,
+  each with a parity fixture asserting f32 tolerance over 60 ticks.
+- ⬜ **Phase 3 — client prediction + interpolation wiring** (task #31).
+  Unblocked once enemy/asteroid/bullet Rust mirrors land (Phase 2).
+- ⬜ Phase 4 — co-op design (revive, shared wave-clear, drop attribution) — task #32.
 - ⬜ Phase 5 — matchmaking & lobby UX
 - ⬜ Phase 6 — drop-in/drop-out polish
 - ⬜ Phase 7 — operational hardening (metrics, admin endpoints, deploy)
