@@ -14,6 +14,8 @@ import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
 import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
+import { updateWave } from '../../sim/wave.js';
+import { freshWaveState } from '../../sim/state.js';
 
 // Local constant to avoid circular import with game-engine.js
 const PLAYER_STATES = { NORMAL: 'normal' };
@@ -408,25 +410,84 @@ function spawnSubWave(idx) {
 
 // Try to advance the active wave to the next sub-wave. Called from
 // updateWaveSystem. Returns true if a new sub-wave was spawned.
+//
+// 5.88.x — wired to the pure step in `js/sim/wave.js`. The trigger
+// logic (≤2-enemy advance, 12 s stale-fallback) and event emission
+// live there; this wrapper drives the pure step with a per-tick
+// `WaveUpdateContext`, drains the emitted `enemy_spawn` events into
+// the existing `spawnLeveledEnemies` helper, and replays the phase
+// toast that the legacy `spawnSubWave` used to emit. Behavioral
+// parity is pinned by tests/unit/sim/wave.test.js's `replay parity`
+// suite. The `wave_clear` event is intentionally ignored — the
+// wave-clear branch in `updateWaveSystem` (totalEnemies===0 +
+// allSubWavesSpawned()) owns that flow (XP/coins/powerups menu).
 export function tryAdvanceSubWave() {
     if (this.game.state !== GAME_STATES.PLAYING) return false;
     if (this.game.waveComplete) return false;
-    const waveConfig = getWaveConfig(this.game.currentWave);
-    const subWaves = waveConfig.subWaves
-        || (waveConfig.enemies ? [waveConfig.enemies] : []);
-    const idx = this.game.subWaveIndex || 0;
-    if (idx >= subWaves.length) return false; // all sub-waves spawned
 
-    const enemyCount = this.enemyPool.activeObjects.length;
-    const lastSpawn = this.game.lastSubWaveSpawnAt || 0;
-    const elapsed = Date.now() - lastSpawn;
-
-    // Advance when ≤2 enemies left (player has the field mostly cleared)
-    // OR after a 12s fallback so a defensive build doesn't stall the wave.
-    if (enemyCount <= 2 || elapsed > 12000) {
-        return spawnSubWave.call(this, idx);
+    // Lazy-initialize the WaveState the first tick after each
+    // wave start. spawnWaveEntities sets this.game.subWaveIndex=1
+    // (after spawning sub-wave 0 directly), so we mirror that.
+    if (!this._waveState || this._waveState.number !== this.game.currentWave) {
+        this._waveState = freshWaveState(this.game.currentWave, {
+            phase: 'spawning',
+            subWaveIndex: this.game.subWaveIndex | 0,
+            spawnTimer: 0,
+        });
     }
-    return false;
+
+    // Reuse one ctx + one events array per WaveManager instance.
+    const ctx = this._waveCtx || (this._waveCtx = {});
+    ctx.enemyCount = this.enemyPool.activeObjects.length;
+    ctx.dt = 1 / 60;
+    ctx.ships = this.player ? [this.player] : [];
+    ctx.rng = null;
+
+    const events = this._waveEvents || (this._waveEvents = []);
+    events.length = 0;
+
+    updateWave(this._waveState, ctx, events);
+
+    // Drain enemy_spawn events into the existing spawn helper. One
+    // phase-toast emission per sub-wave (sub-wave 0 toast is owned by
+    // spawnWaveEntities + WAVE INTRO splash, not us).
+    let spawnedThisTick = false;
+    let lastToastedSubWave = -1;
+    const cfg = getWaveConfig(this.game.currentWave);
+    const totalSubWaves = (cfg.subWaves
+        || (cfg.enemies ? [cfg.enemies] : [])).length;
+
+    for (let i = 0; i < events.length; i++) {
+        const ev = events[i];
+        if (ev.type !== 'enemy_spawn') continue;
+
+        const opts = { onScreen: true };
+        if (ev.bossTier) opts.bossTier = ev.bossTier | 0;
+        this.spawnLeveledEnemies(ev.enemyType, ev.count | 0, opts);
+        spawnedThisTick = true;
+
+        if (ev.subWaveIndex > 0
+            && ev.subWaveIndex !== lastToastedSubWave
+            && this.events?.emit) {
+            lastToastedSubWave = ev.subWaveIndex;
+            this.events.emit('ui:show-message', {
+                title: `WAVE ${this.game.currentWave} · PHASE ${ev.subWaveIndex + 1} of ${totalSubWaves}`,
+                subtitle: '',
+                duration: 1600,
+                position: 'top',
+            });
+        }
+    }
+
+    // Mirror to legacy bookkeeping fields so allSubWavesSpawned() and
+    // any persisted save-state reader stay consistent with the pure
+    // state.
+    this.game.subWaveIndex = this._waveState.subWaveIndex;
+    if (spawnedThisTick) {
+        this.game.lastSubWaveSpawnAt = Date.now();
+    }
+
+    return spawnedThisTick;
 }
 
 // Returns true once every sub-wave for the current wave has been spawned.

@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.89.0] - 2026-05-10
+
+### Changed — WaveManager.tryAdvanceSubWave wired to pure `js/sim/wave.js`
+Phase-1 multiplayer engine refactor wiring step. `tryAdvanceSubWave` now drives the pure `updateWave` step from `js/sim/wave.js` instead of inlining the trigger logic + `Date.now()` deltas:
+
+- Lazy-initializes a `WaveState` per wave (mirrors `this.game.subWaveIndex`).
+- Per tick: builds a reused `WaveUpdateContext` (`enemyCount`, `dt=1/60`, `ships`, `rng`), calls `updateWave`, drains emitted `enemy_spawn` events into the existing `spawnLeveledEnemies(type, count, opts)` helper.
+- Replays the legacy phase toast for sub-wave > 0 (one toast per sub-wave, not per group).
+- Mirrors `_waveState.subWaveIndex` → `this.game.subWaveIndex` after each tick so `allSubWavesSpawned()` and persisted save-state readers stay consistent.
+- `wave_clear` event is intentionally unhandled — the existing wave-clear branch in `updateWaveSystem` (`totalEnemies===0 && !waveComplete && allSubWavesSpawned()`) still owns XP/coins/powerups menu.
+
+Behavioral parity is pinned by `tests/unit/sim/wave.test.js`'s `replay parity` suite (7 tests covering ≤2-enemy advance, 12s stale-fallback, boss tier passthrough, multi-group ordering, past-final guard). The only intentional behavior shift: `spawnTimer` accumulates fixed `dt` instead of wallclock delta — backgrounded-tab lag no longer fast-forwards the 12s fallback. Acceptable per the deterministic-simulation goal.
+
+This is the final Phase-1 engine wrapper. All six pure functions (ship, enemy, asteroid, bullet, wave, drops) now drive their respective live entities through the shared `js/sim/` layer.
+
 ## [5.88.5] - 2026-05-09
 
 ### Changed — 3D health shapes now have proper 3-axis rotation (no atlas, no smearing)
