@@ -39,3 +39,5 @@ export {
     uuidStringToBytes,
     bufToView,
 } from './codec.js';
+
+export { Matchmaking } from './matchmaking.js';

@@ -68,3 +68,122 @@ fn welcome_44_byte_layout_pin() {
     let bytes = codec::encode(&msg).unwrap();
     assert_eq!(bytes.len(), 44, "Welcome must remain 44 bytes (wire-version 1)");
 }
+
+#[test]
+fn ship_basic_movement() {
+    // Cross-language parity vector for ship physics.
+    //
+    // Setup:
+    //   - Single ship at (200.0, 200.0), zero velocity, zero angle.
+    //   - 60 ticks of pure forward thrust: PackedInput { move_x = 127, move_y = 0,
+    //     aim_x = 32767, aim_y = 0, buttons = 0 }
+    //   - dt is unused by ship::update_all (per-tick model); we pass 1.0/60.0
+    //     for API symmetry.
+    //
+    // The expected tuple below is a placeholder of zeros — the test is
+    // currently `#[ignore]`d because sibling agent A (branch
+    // `mp/sim-ship-extract`) has not yet landed `js/sim/ship.js`. Once A
+    // merges, run the JS one-liner in the comment below to capture the
+    // reference values, drop them into `expected`, remove the
+    // `#[ignore]`, and re-run `cargo test`.
+    //
+    // Diagnostic output: `cargo test --test parity_vectors -- --ignored
+    // ship_basic_movement --nocapture` prints the Rust-side result on
+    // stderr (`RUST-EMITS:`). The JS parity harness should emit the same
+    // values from the same input sequence.
+    //
+    // JS one-liner to compute the reference (run from project root after
+    // A merges):
+    //   node --input-type=module -e "
+    //     import { updateAll } from './js/sim/ship.js';
+    //     const ship = { x: 200, y: 200, vx: 0, vy: 0, angle: 0 };
+    //     const input = { move_x: 127, move_y: 0, aim_x: 32767, aim_y: 0, buttons: 0 };
+    //     for (let i = 0; i < 60; i++) updateAll([ship], new Map([[0, input]]), 1/60, []);
+    //     console.log(JSON.stringify([ship.x, ship.y, ship.vx, ship.vy, ship.angle]));
+    //   "
+    // (Adjust to A's actual exported API — function name, input shape,
+    // and ship-list iteration may differ.)
+    use rainboids_server::protocol::ShipState;
+    use rainboids_server::sim::PlayerInput;
+    use rainboids_server::util::id::PlayerId;
+    use std::collections::HashMap;
+
+    let player = PlayerId(1);
+    let mut ships = vec![ShipState {
+        player,
+        x: 200.0,
+        y: 200.0,
+        vx: 0.0,
+        vy: 0.0,
+        angle: 0.0,
+        hp: 100.0,
+        shield: 0.0,
+    }];
+
+    // Pure forward thrust + aim along +x.
+    let input = PlayerInput {
+        move_x: 127.0 / 127.0,
+        move_y: 0.0,
+        aim_x: 32767.0 / 32767.0,
+        aim_y: 0.0,
+        shoot: false,
+        dash: false,
+        ability1: false,
+        ability2: false,
+    };
+    let mut inputs: HashMap<PlayerId, PlayerInput> = HashMap::new();
+    inputs.insert(player, input);
+
+    let dt = 1.0_f32 / 60.0;
+    let mut events = Vec::new();
+    for _ in 0..60 {
+        rainboids_server::sim::ship::update_all(&mut ships, &inputs, dt, &mut events);
+    }
+
+    let s = ships[0];
+    eprintln!(
+        "RUST-EMITS: {{\"x\":{},\"y\":{},\"vx\":{},\"vy\":{},\"angle\":{}}}",
+        s.x, s.y, s.vx, s.vy, s.angle
+    );
+
+    // JS reference values captured 2026-05-09 from sibling A's
+    // `js/sim/ship.js` (commit a587e2e on `mp/sim-ship-extract`):
+    //
+    //     {"x":339.02438662306776,"y":200,"vx":2.414213560124684,"vy":0,"angle":0}
+    //
+    // The terminal velocity 2.41421356… ≈ √0.5 / (1 − √0.5) is the
+    // analytic equilibrium for thrust = 1 per tick + friction = √0.5,
+    // which both sides converge to within ~10 ticks. The remaining
+    // movement is just (60 − settling) × terminal_v added to the
+    // initial position, plus the friction-damped settling tail.
+    //
+    // Tolerance: JS runs in f64, Rust in f32, so 60 ticks of accumulated
+    // thrust+friction multiplications drift by a handful of ULPs. The
+    // 0.01-pixel / 0.01-rad threshold is tight enough to catch real
+    // physics divergence (constant mismatches, ordering bugs, missing
+    // boundary handling) but loose enough to ride out the f64↔f32 noise.
+    // Once the fixed-point migration lands (deferred from this session),
+    // we can drop the tolerance to bit-exact `assert_eq!`.
+    let expected_x: f32 = 339.024_4;
+    let expected_y: f32 = 200.0;
+    let expected_vx: f32 = 2.414_213_5;
+    let expected_vy: f32 = 0.0;
+    let expected_angle: f32 = 0.0;
+
+    let close = |actual: f32, expected: f32, what: &str| {
+        let delta = (actual - expected).abs();
+        assert!(
+            delta < 0.01,
+            "{} diverged: rust={}, js={}, |Δ|={}",
+            what,
+            actual,
+            expected,
+            delta,
+        );
+    };
+    close(s.x, expected_x, "ship.x");
+    close(s.y, expected_y, "ship.y");
+    close(s.vx, expected_vx, "ship.vx");
+    close(s.vy, expected_vy, "ship.vy");
+    close(s.angle, expected_angle, "ship.angle");
+}

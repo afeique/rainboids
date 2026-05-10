@@ -131,10 +131,12 @@ export const S2C = Object.freeze({
 // ─── ClientMsg encoders ──────────────────────────────────────────────────────
 
 /**
- * Encode a `ClientMsg`. v1 only implements `Hello` since that's the only
- * variant the Week-6 handshake sends; later variants will be added as the
- * client engine grows. Throws `NotImplementedError` for unsupported tags
- * so a partial implementation fails loudly instead of writing garbage.
+ * Encode a `ClientMsg`. The v1 handshake only sends `Hello`, but the
+ * matchmaking layer (5.88.x) also needs to send `QuickMatch`,
+ * `BrowseRooms`, `CreateRoom`, `JoinRoom`, `JoinRoomByCode`, and
+ * `LeaveRoom`. Other variants (`Input`, `Ack`, `Pong`, `PowerupChoose`,
+ * `Revive`, `Chat`) still throw `NotImplementedError` so a partial
+ * implementation fails loudly instead of writing garbage.
  *
  * @param {object} msg
  * @returns {Uint8Array}
@@ -157,6 +159,34 @@ export function writeClientMsg(w, msg) {
             // `msg.session` may be a canonical-string UUID, a 16-byte
             // Uint8Array, or null/undefined for None.
             w.option(msg.session ?? null, (ww, v) => ww.uuid(v));
+            return;
+        case C2S.QUICK_MATCH:
+            w.variant(C2S.QUICK_MATCH);
+            return;
+        case C2S.BROWSE_ROOMS:
+            w.variant(C2S.BROWSE_ROOMS);
+            return;
+        case C2S.CREATE_ROOM:
+            // CreateRoom { name: String, public: bool, max_players: u8 }
+            w.variant(C2S.CREATE_ROOM);
+            w.str(msg.name);
+            w.bool(msg.public);
+            w.u8(msg.maxPlayers);
+            return;
+        case C2S.JOIN_ROOM:
+            // JoinRoom { room_id: u64 }
+            w.variant(C2S.JOIN_ROOM);
+            w.u64(msg.roomId);
+            return;
+        case C2S.JOIN_ROOM_BY_CODE:
+            // JoinRoomByCode { code: String }. The server normalizes to
+            // uppercase; we send it as the caller provided to keep the
+            // codec layer-agnostic — UI uppercases for cleaner UX.
+            w.variant(C2S.JOIN_ROOM_BY_CODE);
+            w.str(msg.code);
+            return;
+        case C2S.LEAVE_ROOM:
+            w.variant(C2S.LEAVE_ROOM);
             return;
         default:
             throw new NotImplementedError(
@@ -200,16 +230,47 @@ export function encodeHello({
  * Decode a single `ServerMsg` from a binary frame. Returns one of:
  *   { type: S2C.WELCOME, playerId: bigint, session: string, serverTMs: bigint }
  *   { type: S2C.ERROR,   code: number, codeName: string, msg: string }
+ *   { type: S2C.ROOM_LIST,   rooms: RoomSummary[] }
+ *   { type: S2C.ROOM_JOINED, roomId: bigint, code: string, slot: number,
+ *                            peers: PeerInfo[], wave: number, seed: bigint }
+ *   { type: S2C.ROOM_LEFT,   reason: number }
+ *   { type: S2C.PEER_JOINED, peer: PeerInfo, slot: number }
+ *   { type: S2C.PEER_LEFT,   slot: number, reason: number }
  *
- * Other variants throw `NotImplementedError`. The handshake only has to
- * understand Welcome and Error; anything else arriving as the first frame
- * is a protocol violation the caller can surface to the user.
+ * Snapshot/Event/Ping still throw `NotImplementedError` (they're simulation
+ * frames that the matchmaking layer never sees).
  *
  * @param {ArrayBuffer | ArrayBufferView | DataView} buf
  */
 export function decodeServerMsg(buf) {
     const r = new Reader(bufToView(buf));
     return readServerMsg(r);
+}
+
+/**
+ * Read a `PeerInfo` struct: `player_id (u64) + display_name (String) + slot (u8)`.
+ * Mirrors `server/src/protocol/mod.rs::PeerInfo`.
+ */
+function readPeerInfo(r) {
+    return {
+        playerId: r.u64(),
+        displayName: r.str(),
+        slot: r.u8(),
+    };
+}
+
+/**
+ * Read a `RoomSummary` struct: `room_id (u64) + name (String) + players (u8)
+ * + max_players (u8) + wave (u32)`. Mirrors `server/src/protocol/mod.rs::RoomSummary`.
+ */
+function readRoomSummary(r) {
+    return {
+        roomId: r.u64(),
+        name: r.str(),
+        players: r.u8(),
+        maxPlayers: r.u8(),
+        wave: r.u32(),
+    };
 }
 
 export function readServerMsg(r) {
@@ -233,10 +294,39 @@ export function readServerMsg(r) {
             };
         }
         case S2C.ROOM_LIST:
+            return {
+                type: S2C.ROOM_LIST,
+                rooms: r.vec(readRoomSummary),
+            };
         case S2C.ROOM_JOINED:
+            // RoomJoined { room_id: u64, code: String, slot: u8,
+            //              peers: Vec<PeerInfo>, wave: u32, seed: u64 }
+            return {
+                type: S2C.ROOM_JOINED,
+                roomId: r.u64(),
+                code: r.str(),
+                slot: r.u8(),
+                peers: r.vec(readPeerInfo),
+                wave: r.u32(),
+                seed: r.u64(),
+            };
         case S2C.ROOM_LEFT:
+            return {
+                type: S2C.ROOM_LEFT,
+                reason: r.u32(), // LeaveReason as u32 LE
+            };
         case S2C.PEER_JOINED:
+            return {
+                type: S2C.PEER_JOINED,
+                peer: readPeerInfo(r),
+                slot: r.u8(),
+            };
         case S2C.PEER_LEFT:
+            return {
+                type: S2C.PEER_LEFT,
+                slot: r.u8(),
+                reason: r.u32(), // LeaveReason as u32 LE
+            };
         case S2C.SNAPSHOT:
         case S2C.EVENT:
         case S2C.PING:

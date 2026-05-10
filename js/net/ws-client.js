@@ -40,12 +40,14 @@
 //     plug into `_onBinaryFrame` once they exist.
 
 import {
+    C2S,
     ErrCode,
     NotImplementedError,
     S2C,
     SIM_VERSION,
     WIRE_VERSION,
     decodeServerMsg,
+    encodeClientMsg,
     encodeHello,
 } from './protocol.js';
 
@@ -303,8 +305,118 @@ export class ConnectionTask {
             return;
         }
 
-        // Post-Welcome dispatch — left as a hook for later weeks. For now we
-        // just emit `frame` (already done above) and ignore.
+        // Post-Welcome dispatch — emit named events the matchmaking layer
+        // listens for. Snapshot/Event/Ping land here too once their codecs
+        // are filled in; for now we re-emit them as `frame` (already done in
+        // _onMessage above) and the matchmaking layer just ignores them.
+        switch (msg.type) {
+            case S2C.ERROR:
+                // Post-Welcome errors are NOT fatal — e.g. JoinRoomByCode
+                // returning Error::NotFound. We surface it on `error_msg`
+                // and keep the socket open so the user can retry.
+                this._emit('error_msg', { code: msg.code, codeName: msg.codeName, msg: msg.msg });
+                return;
+            case S2C.ROOM_LIST:
+                this._emit('room_list', { rooms: msg.rooms });
+                return;
+            case S2C.ROOM_JOINED:
+                this._emit('room_joined', {
+                    roomId: msg.roomId,
+                    code: msg.code,
+                    slot: msg.slot,
+                    peers: msg.peers,
+                    wave: msg.wave,
+                    seed: msg.seed,
+                });
+                return;
+            case S2C.ROOM_LEFT:
+                this._emit('room_left', { reason: msg.reason });
+                return;
+            case S2C.PEER_JOINED:
+                this._emit('peer_joined', { peer: msg.peer, slot: msg.slot });
+                return;
+            case S2C.PEER_LEFT:
+                this._emit('peer_left', { slot: msg.slot, reason: msg.reason });
+                return;
+            default:
+                // Snapshot/Event/Ping — let listeners pick them up off `frame`.
+                return;
+        }
+    }
+
+    // ─── outbound helpers (Hello already sent on _onOpen) ────────────────
+
+    /**
+     * Encode + send a `ClientMsg`. Throws if the socket isn't open. The
+     * matchmaking helpers below all funnel through this one method so the
+     * "is the socket alive?" check lives in one place.
+     *
+     * @param {object} msg  shape matches `writeClientMsg` in ./protocol.js
+     */
+    _sendClientMsg(msg) {
+        if (this.state !== 'open' && this.state !== 'welcomed') {
+            throw new Error(`ConnectionTask: cannot send while ${this.state}`);
+        }
+        const bytes = encodeClientMsg(msg);
+        try {
+            this.socket.send(bytes);
+        } catch (err) {
+            throw new Error(`ConnectionTask: socket.send failed: ${err?.message ?? err}`);
+        }
+    }
+
+    /** Send `ClientMsg::QuickMatch`. Server replies with `RoomJoined` or `Error`. */
+    sendQuickMatch() {
+        this._sendClientMsg({ type: C2S.QUICK_MATCH });
+    }
+
+    /** Send `ClientMsg::BrowseRooms`. Server replies with `RoomList`. */
+    sendBrowseRooms() {
+        this._sendClientMsg({ type: C2S.BROWSE_ROOMS });
+    }
+
+    /**
+     * Send `ClientMsg::CreateRoom { name, public, max_players }`.
+     * Server replies with `RoomJoined` (slot 0) or `Error`.
+     *
+     * @param {string} name        display name for the lobby
+     * @param {boolean} isPublic   true → visible in BrowseRooms
+     * @param {number} maxPlayers  2..4 typically
+     */
+    sendCreateRoom(name, isPublic, maxPlayers) {
+        this._sendClientMsg({
+            type: C2S.CREATE_ROOM,
+            name: String(name),
+            public: !!isPublic,
+            maxPlayers: maxPlayers | 0,
+        });
+    }
+
+    /**
+     * Send `ClientMsg::JoinRoomByCode { code }`. Server normalizes the
+     * code to uppercase server-side; we pre-uppercase here so the byte
+     * payload matches what the user typically expects on the wire.
+     *
+     * @param {string} code  6-char alphanumeric room code
+     */
+    sendJoinByCode(code) {
+        this._sendClientMsg({
+            type: C2S.JOIN_ROOM_BY_CODE,
+            code: String(code).toUpperCase(),
+        });
+    }
+
+    /** Send `ClientMsg::JoinRoom { room_id }`. */
+    sendJoinRoom(roomId) {
+        this._sendClientMsg({
+            type: C2S.JOIN_ROOM,
+            roomId: typeof roomId === 'bigint' ? roomId : BigInt(roomId),
+        });
+    }
+
+    /** Send `ClientMsg::LeaveRoom`. Server replies with `RoomLeft`. */
+    sendLeaveRoom() {
+        this._sendClientMsg({ type: C2S.LEAVE_ROOM });
     }
 
     _handleWelcome(msg) {

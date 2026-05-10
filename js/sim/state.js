@@ -106,6 +106,78 @@
  */
 
 /**
+ * Working ShipState used by the f32 ship sim (`js/sim/ship.js`).
+ *
+ * Distinct from the `Ship` typedef above: that one points at the eventual
+ * fixed-point design (`Fxp x/y/vx/vy`) which lands in a later session.
+ * This `ShipState` is the **current** plain-f32 shape that mirrors the
+ * wire `ShipState` in `js/sim/protocol-generated.js` field-for-field
+ * for the prediction-relevant subset (`player, x, y, vx, vy, angle, hp,
+ * shield`), with two locally-tracked extras for the physics step:
+ *
+ * - `maxHp` — kept here so the wrapper can carry it across the call;
+ *   not on the wire (server-authoritative HP cap).
+ * - `radius` — collision radius, used by the boundary-bounce step.
+ * - `field` — `{ width, height }` of the world the ship lives in;
+ *   per-ship rather than per-state because `updateShip` doesn't take
+ *   a GameState argument (matches the design contract in the
+ *   "Multiplayer Rust Client Engine" doc).
+ * - `active` — false when the ship is destroyed; `updateShip` early-exits.
+ *
+ * The wrapper in `Player.update` populates this struct from `Player`
+ * fields each tick, calls `updateShip`, and writes the result back.
+ *
+ * @typedef {Object} ShipState
+ * @property {PlayerId|number} player   - owning player id (Number for solo)
+ * @property {number} x                 - world x (f32 px)
+ * @property {number} y                 - world y (f32 px)
+ * @property {number} vx                - velocity x (f32 px/tick)
+ * @property {number} vy                - velocity y (f32 px/tick)
+ * @property {number} angle             - aim angle in radians
+ * @property {number} hp
+ * @property {number} maxHp
+ * @property {number} shield
+ * @property {number} radius            - collision radius for boundary clamp
+ * @property {Field}  field             - world bounds (per-ship copy)
+ * @property {boolean} active
+ */
+
+/**
+ * Snapshot of a single player's input for one simulation tick.
+ *
+ * Distinct from `PlayerInput` in `js/sim/input.js`: that one is the
+ * normalized form of the wire `PackedInput` (analog axes + button
+ * bitfield, used for online play). This `InputFrame` is the
+ * **simulation-friendly** form the local engine uses today —
+ * directional booleans + an absolute aim point in world coords +
+ * the powerup-derived knobs the ship physics need (effective thrust
+ * power, thrusters-disabled flag).
+ *
+ * The wrapper in `Player.update` populates this from the existing
+ * `inputHandler` plus a couple of player-state reads (powerup speed
+ * multiplier, thruster-disabled flag).
+ *
+ * @typedef {Object} InputFrame
+ * @property {boolean} up
+ * @property {boolean} down
+ * @property {boolean} left
+ * @property {boolean} right
+ * @property {number}  aimX               - absolute world coordinate
+ * @property {number}  aimY               - absolute world coordinate
+ * @property {number}  thrustPower        - per-tick velocity delta scalar
+ *                                         (typically GAME_CONFIG.SHIP_THRUST
+ *                                          equivalent: 2.0 * TICK_SCALE)
+ * @property {number}  speedMult          - powerup speed multiplier (1.0 baseline)
+ * @property {boolean} thrustersDisabled  - tractor / EMP / shop suppression
+ * @property {number}  maxV               - base max velocity cap
+ *                                         (`GAME_CONFIG.MAX_V`)
+ * @property {number}  friction           - per-tick velocity multiplier
+ *                                         (`Math.pow(0.50, TICK_SCALE)`)
+ * @property {number}  velEpsilon         - snap-to-zero threshold (0.05)
+ * @property {number}  bounceDamp         - boundary-bounce energy retention (0.8)
+ */
+
+/**
  * Canonical simulation state. Owned by the simulation; rendering reads
  * a snapshot of it; nothing outside the sim mutates these collections.
  *
@@ -356,5 +428,36 @@ export function freshBulletState(id, kind, overrides = {}) {
         expiredByRange: false,
         expiredByBounds: false,
         expiredByDistance: false,
+    };
+}
+
+/**
+ * Construct a fresh f32 ShipState anchored at the field center.
+ *
+ * Defaults match the live `Player` constructor so the wrapper can
+ * call this for round-trip parity tests without divergence.
+ *
+ * @param {PlayerId|number} playerId
+ * @param {Partial<ShipState>} [overrides]   - per-ship overrides (x, y, hp, etc.)
+ * @returns {ShipState}
+ */
+export function freshShipState(playerId, overrides = {}) {
+    const field = overrides.field || {
+        width: DEFAULT_FIELD_WIDTH,
+        height: DEFAULT_FIELD_HEIGHT,
+    };
+    return {
+        player: playerId,
+        x: overrides.x !== undefined ? overrides.x : field.width / 2,
+        y: overrides.y !== undefined ? overrides.y : field.height / 2,
+        vx: overrides.vx !== undefined ? overrides.vx : 0,
+        vy: overrides.vy !== undefined ? overrides.vy : 0,
+        angle: overrides.angle !== undefined ? overrides.angle : -Math.PI / 2,
+        hp: overrides.hp !== undefined ? overrides.hp : 40,
+        maxHp: overrides.maxHp !== undefined ? overrides.maxHp : 40,
+        shield: overrides.shield !== undefined ? overrides.shield : 15,
+        radius: overrides.radius !== undefined ? overrides.radius : 15,
+        field,
+        active: overrides.active !== undefined ? overrides.active : true,
     };
 }
