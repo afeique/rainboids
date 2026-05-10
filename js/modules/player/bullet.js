@@ -1,6 +1,12 @@
 // Bullet projectile entity
 import { GAME_CONFIG } from '../core/constants.js';
 import { wrap, random, bakedBulletSpriteCache } from '../core/utils.js';
+// Phase-1 multiplayer engine refactor: bullet ballistics extracted to
+// `js/sim/bullet.js`. The wrapper in `update()` below builds a plain-
+// data `BulletState` from `this`, calls `updatePlayerBullet`, and
+// writes the result back. Behavior is byte-for-byte equivalent to the
+// legacy inline code.
+import { updatePlayerBullet } from '../../sim/bullet.js';
 
 export class Bullet {
     constructor() {
@@ -76,34 +82,9 @@ export class Bullet {
     update(particlePool, asteroidPool, enemyPool = null, gameEngine = null, gameField = null) {
         if (!this.active) return;
 
-        this.life++;
-
-        // Lifetime expiry — shrink + puff when range is exhausted
-        const effectiveMaxLife = Math.round(this.maxLife * this.rangeMultiplier);
-        if (this.life >= effectiveMaxLife) {
-            this.createDisappearPuff(gameEngine);
-            this.active = false;
-            if (this.onOffScreen) this.onOffScreen();
-            return;
-        }
-
-        // Compute fade factor for final 35% of life (used by draw)
-        const remaining = 1 - this.life / effectiveMaxLife;
-        this.fadeFactor = remaining < 0.35 ? remaining / 0.35 : 1.0;
-        // Shrink radius during fade
-        this.radius = this.baseRadius * (0.3 + 0.7 * this.fadeFactor);
-
-        // Homing behavior - can target both enemies and asteroids
-        if (this.homing) {
-            this.applyHoming(enemyPool, asteroidPool, gameEngine);
-        }
-
-        // OPT: ring buffer trail — O(1) insert, no shifting.
-        // 5.79.4 — Reuse the existing slot's {x, y} object instead of
-        //   allocating a fresh one each frame. With ~150 player bullets
-        //   on heavy fights this saves ~9 000 short-lived objects/sec
-        //   off the GC's young generation. Same data layout downstream
-        //   (drawTrail still reads .x / .y).
+        // ── Trail ring-buffer (presentation; runs BEFORE physics so
+        // the trail captures the pre-move position, matching legacy
+        // ordering). Reuses the existing slot's {x,y} object.
         let slot = this.trail[this.trailHead];
         if (!slot) {
             slot = { x: 0, y: 0 };
@@ -114,37 +95,135 @@ export class Bullet {
         this.trailHead = (this.trailHead + 1) % this.maxTrailLength;
         if (this.trailCount < this.maxTrailLength) this.trailCount++;
 
-        // Movement
-        this.x += this.vel.x;
-        this.y += this.vel.y;
-
-        // Helix offset — Rail Driver double-helix bullets oscillate
-        // perpendicular to their rail axis. We apply the *delta* of the
-        // sine each frame so the underlying rail position still advances
-        // by `vel` exactly. A pair of bullets fired with phases 0 and π
-        // crosses over every half period.
-        if (this.helixActive) {
-            const speed = Math.hypot(this.vel.x, this.vel.y) || 1;
-            // Perpendicular unit vector (rotate vel by +90°).
-            const ux = -this.vel.y / speed;
-            const uy =  this.vel.x / speed;
-            const t = this.life;
-            const sNow  = Math.sin(t       * this.helixFreq + this.helixPhase);
-            const sPrev = Math.sin((t - 1) * this.helixFreq + this.helixPhase);
-            const delta = (sNow - sPrev) * this.helixAmplitude;
-            this.x += ux * delta;
-            this.y += uy * delta;
+        // ── Pre-physics homing-target pick (presentation-adjacent —
+        // it reads from entity pools and the input-handler cursor).
+        // Done in the wrapper so the pure sim stays free of pool /
+        // input-handler imports.
+        let homingTarget = null;
+        if (this.homing) {
+            homingTarget = this._pickHomingTarget(enemyPool, asteroidPool, gameEngine);
         }
 
-        // Boundary check (bullets disappear when off game field or screen)
-        const boundaryWidth = gameField ? gameField.width : this.width;
-        const boundaryHeight = gameField ? gameField.height : this.height;
+        // ── Pure-sim physics step (extracted to js/sim/bullet.js) ──
+        // Reusable scratch state — avoid per-tick allocation.
+        if (!this._bulletScratch) {
+            this._bulletScratch = {
+                id: 0, kind: 'player', shape: null, movementPattern: 'aimed',
+                x: 0, y: 0, vx: 0, vy: 0,
+                startX: 0, startY: 0, baseVx: 0, baseVy: 0,
+                angle: 0, rotation: 0, rotationSpeed: 0,
+                life: 0, maxLife: 0, fadeFactor: 1.0,
+                damage: 1, radius: 0, baseRadius: 0,
+                maxRange: 0, rangeMultiplier: 1.0,
+                active: true, owner: null,
+                homing: false, homingStrength: 0,
+                helixActive: false, helixFreq: 0, helixPhase: 0, helixAmplitude: 0,
+                piercing: 0, piercedEnemies: 0,
+                explosive: false, explosionRadius: 0,
+                expiredByRange: false, expiredByBounds: false, expiredByDistance: false,
+            };
+        }
+        if (!this._bulletCtx) {
+            this._bulletCtx = {
+                tickScale: GAME_CONFIG.TICK_SCALE,
+                logicTickSeconds: GAME_CONFIG.LOGIC_TICK_MS / 1000,
+                bulletSpeed: GAME_CONFIG.BULLET_SPEED,
+                boundaryWidth: 0, boundaryHeight: 0,
+                now: 0,
+                targetPlayer: null, homingTarget: null,
+                rngFloat: Math.random,
+            };
+        }
+        const sb = this._bulletScratch;
+        sb.x = this.x; sb.y = this.y;
+        sb.vx = this.vel.x; sb.vy = this.vel.y;
+        sb.life = this.life;
+        sb.maxLife = this.maxLife;
+        sb.fadeFactor = this.fadeFactor;
+        sb.radius = this.radius;
+        sb.baseRadius = this.baseRadius;
+        sb.rangeMultiplier = this.rangeMultiplier;
+        sb.active = this.active;
+        sb.homing = !!this.homing;
+        sb.homingStrength = this.homingStrength || 0;
+        sb.helixActive = !!this.helixActive;
+        sb.helixFreq = this.helixFreq || 0;
+        sb.helixPhase = this.helixPhase || 0;
+        sb.helixAmplitude = this.helixAmplitude || 0;
+        sb.expiredByRange = false;
+        sb.expiredByBounds = false;
 
-        if (this.x < -50 || this.x > boundaryWidth + 50 ||
-            this.y < -50 || this.y > boundaryHeight + 50) {
+        const ctx = this._bulletCtx;
+        ctx.boundaryWidth = gameField ? gameField.width : this.width;
+        ctx.boundaryHeight = gameField ? gameField.height : this.height;
+        ctx.homingTarget = homingTarget;
+
+        updatePlayerBullet(sb, ctx, null);
+
+        // Write outputs back.
+        this.x = sb.x; this.y = sb.y;
+        this.vel.x = sb.vx; this.vel.y = sb.vy;
+        this.life = sb.life;
+        this.fadeFactor = sb.fadeFactor;
+        this.radius = sb.radius;
+        if (!sb.active) {
             this.active = false;
+            // Translate sim-emitted despawn flags into legacy FX calls.
+            if (sb.expiredByRange) {
+                this.createDisappearPuff(gameEngine);
+            }
             if (this.onOffScreen) this.onOffScreen();
         }
+    }
+
+    /**
+     * Wrapper-side homing-target picker. Lifted out of the legacy
+     * `applyHoming()` so the pure sim takes only the chosen target,
+     * not the live pools.
+     */
+    _pickHomingTarget(enemyPool, asteroidPool, gameEngine) {
+        let bestTarget = null;
+        let bestDistance = Infinity;
+        let cursorX = null, cursorY = null;
+
+        if (gameEngine && gameEngine.inputHandler) {
+            cursorX = gameEngine.inputHandler.input.aimX;
+            cursorY = gameEngine.inputHandler.input.aimY;
+        }
+
+        const checkTargets = (targets, filter = null) => {
+            if (!targets) return;
+            for (const target of targets.activeObjects) {
+                if (!target.active) continue;
+                if (filter && !filter(target)) continue;
+
+                const dx = target.x - this.x;
+                const dy = target.y - this.y;
+                const bulletDistance = Math.hypot(dx, dy);
+                if (bulletDistance > 400) continue;
+
+                let priority = bulletDistance;
+                if (cursorX !== null && cursorY !== null) {
+                    const cdx = target.x - cursorX;
+                    const cdy = target.y - cursorY;
+                    priority = Math.hypot(cdx, cdy);
+                }
+                if (priority < bestDistance) {
+                    bestDistance = priority;
+                    bestTarget = target;
+                }
+            }
+        };
+
+        if (enemyPool) checkTargets(enemyPool);
+        // 5.73.0 — also home toward enemy mines (proximity bombs); not
+        // toward ordinary projectiles.
+        if (!bestTarget && gameEngine && gameEngine.enemyBulletPool) {
+            checkTargets(gameEngine.enemyBulletPool, t => t.shape === 'mine');
+        }
+        if (!bestTarget && asteroidPool) checkTargets(asteroidPool);
+
+        return bestTarget;
     }
     
     applyHoming(enemyPool, asteroidPool = null, gameEngine = null) {
