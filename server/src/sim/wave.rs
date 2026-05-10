@@ -46,7 +46,7 @@
 
 use rand_pcg::Pcg64;
 
-use crate::protocol::{EnemyState, GameEvent};
+use crate::protocol::{EnemyState, GameEvent, ShipState};
 
 use super::state::WaveState;
 
@@ -150,14 +150,39 @@ impl Wave {
 /// Per-tick context for `update_wave`. Mirrors the JS
 /// `WaveUpdateContext` typedef (state.js:316–327).
 ///
-/// Fields on the JS side that are not yet consumed by `updateWave`
-/// (`ships`, `rng`) are intentionally omitted here — they will be
-/// added when randomized scheduling lands. Adding them now would be
-/// dead weight on every call site.
-#[derive(Debug, Clone, Copy)]
-pub struct WaveContext {
+/// **Currently unread fields** (`ships`, `rng`):
+///
+/// The JS `WaveUpdateContext` typedef declares both `ships` and `rng`
+/// — see `js/sim/wave.js` lines 98–102 and the corresponding state
+/// typedef — but the JS `updateWave` body **does not read either**.
+/// `wave-data.js` is fully deterministic (zero `Math.random` /
+/// `ctx.rng` references; no randomized branches in the campaign
+/// schedule).
+///
+/// We carry the fields in the Rust shape anyway so:
+///   1. The wrapper / call sites already have somewhere to plug in
+///      ship snapshots and a seeded `Pcg64` (no signature churn when
+///      randomized scheduling lands).
+///   2. The parity fixture can prove that populating these fields
+///      with non-default values does NOT alter the spawn sequence
+///      (`parity_wave::wave1_with_populated_context`).
+///
+/// When randomized scheduling is introduced (e.g., a future
+/// "substitute one Hunter with a Wasp on Pcg64::gen_bool(0.3)"
+/// branch), `update_wave` will start reading these fields and the
+/// `#[allow(dead_code)]` attribute will be removed.
+#[allow(dead_code)] // ships + rng reserved for future randomized scheduling — see doc comment.
+pub struct WaveContext<'a> {
     pub enemy_count: u32,
     pub dt: f32,
+    /// Ship snapshots for any future "spawn enemies near the player"
+    /// scheduling. Empty slice = no ships (e.g., between rounds).
+    /// **Unread by `update_wave` today.**
+    pub ships: &'a [ShipState],
+    /// Seeded RNG for any future randomized branch. `None` = no RNG
+    /// available (also acceptable — the current implementation never
+    /// touches it). **Unread by `update_wave` today.**
+    pub rng: Option<&'a mut Pcg64>,
 }
 
 /// Side-effect events emitted by `update_wave`. Mirrors the JS event
@@ -535,7 +560,14 @@ pub fn is_boss_wave(wave: u32) -> bool {
 /// Order of operations is **load-bearing for parity** — see the
 /// matching block comments in `js/sim/wave.js::updateWave()`. Do not
 /// reorder without a matching change on the JS side.
-pub fn update_wave(wave: &mut Wave, ctx: &WaveContext, events: &mut Vec<WaveEvent>) {
+///
+/// **Note**: `ctx.ships` and `ctx.rng` are part of the context shape
+/// for forward-compat (see `WaveContext` doc comment) but are not
+/// read by this implementation — the JS counterpart does not read
+/// them either. The fixture
+/// `parity_wave::wave1_with_populated_context` exercises this
+/// no-op-on-extras invariant.
+pub fn update_wave(wave: &mut Wave, ctx: &WaveContext<'_>, events: &mut Vec<WaveEvent>) {
     // ── 'intro' or 'complete' phases: nothing to do ──
     // 'intro' is a brief overlay phase; the wrapper transitions to
     // 'spawning' once it spawns sub-wave 0. 'complete' is terminal.

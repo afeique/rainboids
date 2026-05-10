@@ -175,24 +175,62 @@ now drives the pure `updateWave` step. 7 replay-parity tests in
 the pure path and the legacy `tryAdvanceSubWave` through identical
 per-tick `enemyCount` vectors. **Phase 1 is now complete.**
 
-## Phase 2 plan (server sim port — task #30)
+## Phase 2 server sim port — COMPLETED (task #30)
 
-Each `js/sim/<subsystem>.js` needs a Rust mirror at `server/src/sim/<subsystem>.rs`
-plus a parity fixture in `server/tests/parity_vectors.rs`. Pattern from
-agent B's `ship.rs` + `ship_basic_movement` fixture:
+All five subsystems now have Rust mirrors + parity fixtures. Pattern was
+agent B's `ship.rs` + `ship_basic_movement` template:
 
-1. **Mirror the pure function signature** — Rust `pub fn update_<subsystem>(state: &mut <Subsystem>State, ctx: &<Subsystem>Context, events: &mut Vec<Event>)`. Constants must be byte-identical to the JS module (re-export from a shared `constants.rs` if any are reused across subsystems).
+1. Mirror the pure function signature.
+2. Capture JS golden values via `node --input-type=module -e "..."`.
+3. Bake goldens into `server/tests/parity_<subsystem>.rs` with f32↔f64 tolerance.
+4. Each PR self-contained — no shared file edits (no `state.rs` / `mod.rs` / `parity_vectors.rs` writes).
 
-2. **Capture JS golden values first** — run a 60-tick replay through the JS pure function with a fixed input sequence, dump `(x, y, vx, vy, …)` per tick, then bake those into the Rust fixture as `expected: &[…]`.
+Per-subsystem PRs landed in this order:
 
-3. **Parity tolerance** — `f64 ↔ f32` drift over 60 ticks tends to stay under `0.01` for linear physics, may need `0.05` for trig-heavy paths (atan2-based aim, bezier sweep). Use the `close = |actual, expected, what| { … }` helper pattern from `ship_basic_movement`.
+| PR | Subsystem | Author | Parity | Status |
+|---|---|---|---|---|
+| #19 | asteroid (linear-drift) | orchestrator (foreground, set the pattern) | 0.01 px tolerance | ✓ merged |
+| #20 | bullet (player straight-line) | subagent | bit-exact (delta=0) | ✓ merged |
+| #21 | drops (drift+friction) | subagent | 3e-5 px (300x tolerance headroom) | ✓ merged |
+| #22 | wave (all 20 waves + replay-parity) | subagent | bit-exact event tuples | ✓ merged |
+| #23 | enemy (HUNTER chase + single-shot) | subagent | 0.01 px + exact fire count | open |
 
-4. **Order of operations** — port asteroid first (simplest physics), then bullet (linear with helix offset for player bullets), then wave (small, no f32 math), then drops (friction + magnet pull), then enemy (AI is the most complex; movement strategies + firing decisions need the most parity scaffolding).
+**Parallel dispatch worked.** 4 of 5 ports came from subagents (drops + bullet
+in round 1, wave + enemy in round 2), with the orchestrator integrating
+sequentially. The harness's worktree-isolation bug (Open Q #5) was sidestepped
+by enforcing strict file-ownership: each subagent only modified its own
+`<subsystem>.rs` + a NEW `tests/parity_<subsystem>.rs`. No shared `state.rs`
+or `mod.rs` writes.
 
-**Out of scope for Phase 2**: the actual *event consumption* on the server
-side (who creates new entities when an `enemy_spawn` event fires, how the
-spatial grid index updates, how snapshots reflect the new state). That's
-Phase 3 (snapshot diff + client prediction wiring).
+### Known parity gaps (all documented in source)
+
+**Enemy (PR #23)**:
+- **HUNTER uses `chasePlayer` standard branch, NOT `hunterArcMovement`.** The production HUNTER goes through sticky random init (`_arcDirection`, `_arcRadius`, `_arcOmega` from `Math.random()`) + `frameClock`-driven lunge dice + music-paced vortex. Not parity-friendly without a deterministic clock + RNG plumbed through `EnemyContext`. Phase 2.1 needs to add `frame_clock_ms` + `Pcg64` to the context, then port `hunter_arc` verbatim.
+- **Cooldown timing diverges by ~1 tick due to f32↔f64 precision.** `1.0/60.0` rounds up in f32, drifts ~16 ppm/tick. Fire COUNT matches; post-fire residual differs. Two future fixes: (a) carry cooldown in fixed-point on both sides, (b) frame the fire decision around an integer tick counter. Defer until burst/predictive-lead makes this load-bearing.
+- **9 enemy types deferred** (Guardian, Wasp, Stalker, Drifter, Prowler, Weaver, Sentinel, Tangerine, Titan) — not in `EnemyKind` enum yet. Each needs its own movement strategy + per-kind fields.
+- **5 of 6 event types deferred** (`enemy_debris_burst`, `enemy_fire_continuous`, `enemy_fire_charging`, `enemy_fire_burst`, `enemy_death_recycle`).
+
+**Bullet (PR #20)**: helix offset, predictive homing, piercing, explosive,
+and ALL enemy-bullet patterns (17 movement modes) deferred. `update_enemy_bullet`
+is `unimplemented!()`.
+
+**Drops (PR #21)**: magnet pull (need ship within 320/120 px), tractor pull,
+lifetime expiry not exercised by current fixture. Code paths present but
+parity unverified.
+
+**Asteroid (PR #19)**: bounce-with-damp + death-flash branches present in
+code, untested. Split logic deferred to collision-system port (separate
+session).
+
+**Wave (PR #22)**: intro phase transition delegated to wrapper; `ships` +
+`rng` ctx fields not consumed (will be wired when randomized scheduling
+lands).
+
+### What Phase 2 deliberately did NOT do
+
+- Wire the new pure functions into `simulate_tick` in `mod.rs` — each `<subsystem>.rs` keeps its existing `update_all` stub at the bottom. The wire-state ↔ sim-state bridging happens in Phase 3.
+- Touch the codegen pipeline. WAVE_DATA + enemy constants were ported manually; consolidating into a shared schema is a follow-up.
+- Implement collision detection or pickup attribution. That's a separate Phase 2.5 session that will produce `update_collision` (taking all four subsystem state slices) and emit `bullet_hit_enemy` / `asteroid_hit_ship` / `pickup_drop` events.
 
 ## Hand-offs
 
