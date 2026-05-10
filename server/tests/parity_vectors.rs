@@ -70,7 +70,6 @@ fn welcome_44_byte_layout_pin() {
 }
 
 #[test]
-#[ignore = "open: needs js/sim/ship.js golden values from agent A (mp/sim-ship-extract)"]
 fn ship_basic_movement() {
     // Cross-language parity vector for ship physics.
     //
@@ -147,17 +146,44 @@ fn ship_basic_movement() {
         s.x, s.y, s.vx, s.vy, s.angle
     );
 
-    // TODO(agent-B): once sibling A merges js/sim/ship.js, run the JS
-    // one-liner above, paste the result here, and remove the #[ignore].
-    let expected_x: f32 = 0.0;
-    let expected_y: f32 = 0.0;
-    let expected_vx: f32 = 0.0;
+    // JS reference values captured 2026-05-09 from sibling A's
+    // `js/sim/ship.js` (commit a587e2e on `mp/sim-ship-extract`):
+    //
+    //     {"x":339.02438662306776,"y":200,"vx":2.414213560124684,"vy":0,"angle":0}
+    //
+    // The terminal velocity 2.41421356… ≈ √0.5 / (1 − √0.5) is the
+    // analytic equilibrium for thrust = 1 per tick + friction = √0.5,
+    // which both sides converge to within ~10 ticks. The remaining
+    // movement is just (60 − settling) × terminal_v added to the
+    // initial position, plus the friction-damped settling tail.
+    //
+    // Tolerance: JS runs in f64, Rust in f32, so 60 ticks of accumulated
+    // thrust+friction multiplications drift by a handful of ULPs. The
+    // 0.01-pixel / 0.01-rad threshold is tight enough to catch real
+    // physics divergence (constant mismatches, ordering bugs, missing
+    // boundary handling) but loose enough to ride out the f64↔f32 noise.
+    // Once the fixed-point migration lands (deferred from this session),
+    // we can drop the tolerance to bit-exact `assert_eq!`.
+    let expected_x: f32 = 339.024_4;
+    let expected_y: f32 = 200.0;
+    let expected_vx: f32 = 2.414_213_5;
     let expected_vy: f32 = 0.0;
     let expected_angle: f32 = 0.0;
 
-    assert_eq!(s.x, expected_x, "ship.x diverged");
-    assert_eq!(s.y, expected_y, "ship.y diverged");
-    assert_eq!(s.vx, expected_vx, "ship.vx diverged");
-    assert_eq!(s.vy, expected_vy, "ship.vy diverged");
-    assert_eq!(s.angle, expected_angle, "ship.angle diverged");
+    let close = |actual: f32, expected: f32, what: &str| {
+        let delta = (actual - expected).abs();
+        assert!(
+            delta < 0.01,
+            "{} diverged: rust={}, js={}, |Δ|={}",
+            what,
+            actual,
+            expected,
+            delta,
+        );
+    };
+    close(s.x, expected_x, "ship.x");
+    close(s.y, expected_y, "ship.y");
+    close(s.vx, expected_vx, "ship.vx");
+    close(s.vy, expected_vy, "ship.vy");
+    close(s.angle, expected_angle, "ship.angle");
 }
