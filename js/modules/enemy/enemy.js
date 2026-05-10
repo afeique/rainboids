@@ -9,6 +9,8 @@ import * as firing from './firing.js';
 import * as shapes from './shapes.js';
 import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
+// 5.88.5 Phase-1 wiring — pure-function step from agent D's mp/sim-enemy-extract.
+import { updateEnemy } from '../../sim/enemy.js';
 
 // Re-export for consumers that import from enemy.js
 export { ENEMY_TYPES };
@@ -267,217 +269,63 @@ export class Enemy {
 
     update(playerRef, gameEngine, gameField = null) {
         if (!this.active) return;
-        this.gameEngine = gameEngine; // Cache ref for draw/takeDamage (removes window.gameEngine dependency)
+        this.gameEngine = gameEngine; // cached for draw/takeDamage paths
 
-        // Death sequence — simplified to two beats:
-        //   ticks 0-11  — wreck drifts under inertia (silhouette visible,
-        //                  no popcorn). The drift gives the player a beat
-        //                  to register the kill before the big finale.
-        //   tick 12     — BIG final explosion, ship VANISHES, full debris
-        //                  cloud. _shipDestroyed = true.
-        //   ticks 13-23 — debris drifts via its own particle physics.
-        //                  No silhouette.
-        //   tick 24     — recycle (active=false).
-        //
-        // Removed the per-2-frame popcorn cookoffs — they were
-        // inconsistent (often clipped by pool eviction or hidden by the
-        // silhouette glow). Every enemy now gets a single guaranteed
-        // big explosion at the same beat.
-        if (this._deathFlash > 0) {
-            // Drift under inertia (slows gradually).
-            const drag = 0.97;
-            this.vel.x *= drag;
-            this.vel.y *= drag;
-            this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
-            this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
-            this.faceAngle = (this.faceAngle || 0) + 0.04;
+        // 5.88.6 wiring — pure step in `js/sim/enemy.js` does the orchestration
+        // (death drift / warp / boss rage / target / movement / heavy AI /
+        // shooting decision / rotation / shield pulse / micro-movements /
+        // position / trail / boundary). Side effects ride out via `events`.
+        // The wrapper translates each event back into the existing helper
+        // calls (firing.shoot, gameEngine.triggerEnemyDebrisBurst, …) so
+        // solo behavior is byte-equivalent to the pre-wiring version.
+        if (!this._enemyEvents) this._enemyEvents = [];
+        const events = this._enemyEvents;
+        events.length = 0;
 
-            const max = this._deathFlashMax || 24;
-            const tickIntoDeath = max - this._deathFlash;
+        if (!this._enemyCtx) this._enemyCtx = {};
+        const ctx = this._enemyCtx;
+        ctx.gameEngine = gameEngine;
+        ctx.ships = playerRef ? [playerRef] : [];
+        ctx.field = gameField;
+        ctx.dt = 1 / 60;
+        ctx.rng = null;
+        ctx.tick = frameClock.tick;
+        ctx.wave = (gameEngine && gameEngine.game && gameEngine.game.currentWave) | 0;
 
-            // ── Beat 2: debris flies ──
-            // Fires once 6 frames after the impact (the big-ring announce
-            // already fired synchronously in createEnemyDebris on tick 0).
-            // Shrapnel + classic dust + shape debris all spawn here, so
-            // the player sees them emerging through the still-expanding
-            // rings — clear visual delineation between wavefront and
-            // wreckage.
-            if (!this._debrisBurstFired && tickIntoDeath >= 6) {
-                this._debrisBurstFired = true;
-                if (gameEngine && typeof gameEngine.triggerEnemyDebrisBurst === 'function') {
-                    try { gameEngine.triggerEnemyDebrisBurst(this); }
-                    catch (err) { console.error('triggerEnemyDebrisBurst failed', err); }
-                }
+        updateEnemy(this, ctx, events);
+
+        for (let i = 0; i < events.length; i++) {
+            const ev = events[i];
+            switch (ev.type) {
+                case 'enemy_debris_burst':
+                    if (gameEngine && typeof gameEngine.triggerEnemyDebrisBurst === 'function') {
+                        try { gameEngine.triggerEnemyDebrisBurst(ev.enemy); }
+                        catch (err) { console.error('triggerEnemyDebrisBurst failed', err); }
+                    }
+                    break;
+                case 'enemy_fire_continuous':
+                    if (ev.kind === 'wasp_machinegun') this.updateWaspMachineGun(gameEngine);
+                    else if (ev.kind === 'sweep_laser') this.updateSweepLaserSystem(gameEngine);
+                    else if (ev.kind === 'sentinel_sweep') this.updateSentinelSweep(gameEngine);
+                    break;
+                case 'enemy_fire_burst':
+                    this.handleBurstShooting(gameEngine, ev.now);
+                    break;
+                case 'enemy_fire_charging':
+                case 'enemy_fire':
+                    this.shoot(gameEngine);
+                    break;
+                case 'enemy_death_recycle':
+                    if (typeof window !== 'undefined' && window._qaBotKillBuffer) {
+                        window._qaBotKillBuffer.push({
+                            type: ev.enemy.type,
+                            wave: this.gameEngine?.game?.currentWave,
+                            ts: Date.now(),
+                            maxHealth: ev.enemy.maxHealth,
+                        });
+                    }
+                    break;
             }
-
-            this._deathFlash--;
-            if (this._deathFlash <= 0) {
-                this.active = false;
-            }
-            return;
-        }
-
-        // Handle warp-in — skip normal AI during warp
-        if (this.warping) {
-            this.updateWarpIn();
-            return;
-        }
-
-        this.targetPlayer = playerRef;
-
-        // 5.77.0 — boss rage + per-tier mechanics. Telegraphs HP-threshold
-        // rage, activates the 1.5 s invuln + tantrum + screen FX, runs
-        // tier-4 phase cycling, and reads tier-2 partner-death flags.
-        if (this.isBoss) updateBossRage(this, gameEngine);
-
-        // Late-wave AI throttle: in waves 15+, run the heavy spatial
-        // scans (asteroid/enemy/bullet avoidance) on alternating frames
-        // per enemy. Each enemy has a random `_aiOffset` of 0/1 set at
-        // spawn — half tick on even frames, half on odd. Movement,
-        // facing, and shooting still update every frame so the action
-        // stays smooth. Saves ~50% of AI cost in dense late waves.
-        const wave = (gameEngine.game && gameEngine.game.currentWave) | 0;
-        const skipHeavyAI = wave >= 15 && (frameClock.tick & 1) !== this._aiOffset;
-
-        // Calculate distance to player
-        const playerDistance = Math.hypot(this.x - playerRef.x, this.y - playerRef.y);
-
-        // Distance-based behavior
-        this.updateTargetPriority(playerDistance, gameEngine);
-
-        // Update face direction to look at current target
-        this.updateFaceDirection();
-
-        // 5.77.0 — tier-3 (and tier-4 phase 0) formation orbit overrides
-        // the normal movement dispatch. Returns true if it handled the
-        // step; otherwise fall through to the regular pattern.
-        if (!this.isBoss || !bossFormationMovement(this)) {
-            this.updateMovement(gameEngine);
-        } else {
-            // Formation movement still benefits from the same boundary
-            // bouncing applied below; just the velocity assignment was
-            // owned by bossFormationMovement.
-        }
-
-        if (!skipHeavyAI) {
-            // Enhanced evasive maneuvers
-            this.updateEvasiveManeuvers(gameEngine);
-
-            // Asteroid avoidance — enemies actively steer away from rocks.
-            // Collision still registers on contact (non-damaging) — the AI
-            // just tries not to fly into them in the first place.
-            this.avoidAsteroids(gameEngine);
-
-            // Maintain distance from player when targeting them
-            if (this.currentTarget === 'player') {
-                this.maintainDistanceFromPlayer();
-            }
-
-            // Maintain distance from other enemies to prevent clustering
-            this.maintainDistanceFromEnemies(gameEngine.enemyPool.active);
-
-            // Handle patrol behavior when no targets available
-            if (this.currentTarget === 'patrol') {
-                this.patrolTerritory();
-            }
-
-            // Apply enemy bullet dodging
-            this.dodgeEnemyBullets(gameEngine);
-
-            // Dodge player bullets
-            this.dodgePlayerBullets(gameEngine);
-        }
-
-        // Shooting always runs — gating it on alt frames would jitter
-        // the firing cadence visibly.
-        this.updateShooting(gameEngine);
-        
-        // Update rotation with agility-based speed
-        this.rotation += this.rotationSpeed;
-        
-        // Update circulating shield with music sync
-        this.shield.rotation += this.shield.rotationSpeed;
-        
-        // Calculate music-synchronized pulse using different tempo assumptions
-        const musicPlayer = gameEngine.uiManager?.musicPlayer;
-        let musicTime = 0;
-        let musicIntensity = 0.5; // Default fallback
-        
-        if (musicPlayer && musicPlayer.isPlaying && musicPlayer.currentAudio) {
-            musicTime = musicPlayer.getCurrentTime();
-            // Assume average BPM of ~120-140 for electronic music, create beat frequency
-            const assumedBPM = 130; // beats per minute
-            const beatFrequency = assumedBPM / 60; // beats per second
-            const beatPhase = (musicTime * beatFrequency * Math.PI * 2) + this.shield.basePulsePhase;
-            
-            // Create layered sine waves for complex pulsing
-            const primaryBeat = Math.sin(beatPhase);
-            const harmonicBeat = Math.sin(beatPhase * 2) * 0.3; // Higher frequency harmonic
-            const subBeat = Math.sin(beatPhase * 0.5) * 0.2; // Lower frequency sub-beat
-            
-            musicIntensity = 0.5 + (primaryBeat + harmonicBeat + subBeat) * 0.5 * this.shield.musicSyncIntensity;
-            musicIntensity = Math.max(0.1, Math.min(1.0, musicIntensity)); // Clamp to reasonable range
-        } else {
-            // Fallback to time-based pulsing when no music
-            const time = frameClock.now * 0.001;
-            const fallbackPhase = (time * 2.2 * Math.PI) + this.shield.basePulsePhase; // ~132 BPM equivalent
-            musicIntensity = 0.5 + Math.sin(fallbackPhase) * 0.3;
-        }
-        
-        // Store music intensity for use in drawing
-        this.shield.currentIntensity = musicIntensity;
-        
-        // Add random micro-movements for agility
-        this.addMicroMovements();
-        
-        // Add fish-like swimming motion
-        this.addFishLikeMovement();
-        
-        // Update position (scaled for tick rate)
-        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
-        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
-        
-        // Update light trail
-        this.updateLightTrail();
-        
-        // Create colored trail particles to show movement patterns
-        this.createTrailParticles(gameEngine);
-        
-        // Boundary bouncing instead of wrapping
-        if (gameField) {
-            // Bounce off left/right boundaries
-            if (this.x - this.radius < 0) {
-                this.x = this.radius;
-                this.vel.x = Math.abs(this.vel.x) * 0.8; // Bounce with energy loss
-            } else if (this.x + this.radius > gameField.width) {
-                this.x = gameField.width - this.radius;
-                this.vel.x = -Math.abs(this.vel.x) * 0.8;
-            }
-            
-            // Bounce off top/bottom boundaries
-            if (this.y - this.radius < 0) {
-                this.y = this.radius;
-                this.vel.y = Math.abs(this.vel.y) * 0.8;
-            } else if (this.y + this.radius > gameField.height) {
-                this.y = gameField.height - this.radius;
-                this.vel.y = -Math.abs(this.vel.y) * 0.8;
-            }
-        } else {
-            // Fallback to wrapping using gameField dimensions if available
-            const fieldWidth = GameDimensions.width;
-            const fieldHeight = GameDimensions.height;
-            
-            if (this.x < -this.radius) this.x = fieldWidth + this.radius;
-            if (this.x > fieldWidth + this.radius) this.x = -this.radius;
-            if (this.y < -this.radius) this.y = fieldHeight + this.radius;
-            if (this.y > fieldHeight + this.radius) this.y = -this.radius;
-        }
-        
-        // Death check (use tolerance for floating-point precision)
-        if (this.health <= 0.001 && this.active) {
-            this.active = false;
-            // QA bot kill tracking — catch kills not routed through collision system
-            if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: this.type, wave: this.gameEngine?.game?.currentWave, ts: Date.now(), maxHealth: this.maxHealth });
         }
     }
     
