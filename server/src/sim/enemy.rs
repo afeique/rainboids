@@ -22,7 +22,9 @@
 //! ── What lives here ─────────────────────────────────────────────────
 //!   - `Enemy` struct (HUNTER-relevant fields only)
 //!   - `EnemyKind` enum (HUNTER only)
-//!   - `EnemyContext` per-tick context bag
+//!   - `EnemyContext<'a>` per-tick context bag (with `frame_clock_ms`
+//!     + `rng` plumbing reserved for `hunter_arc`; see "RNG / frameClock
+//!     plumbing" below)
 //!   - `ShipPosition` minimal ship slice (avoids dragging wire-format
 //!     `ShipState` into the sim)
 //!   - `EnemyEvent` / `BulletPattern` event surface (single-shot only)
@@ -31,6 +33,35 @@
 //!   - HUNTER constants (speed, hp, fire cooldown) verbatim from
 //!     `js/modules/enemy/enemy-data.js` and
 //!     `js/modules/core/constants.js`
+//!
+//! ── RNG / frameClock plumbing (2026-05-10) ───────────────────────────
+//!
+//! `EnemyContext` now carries `frame_clock_ms: u64` and
+//! `rng: Option<&'a mut Pcg64>` — the deterministic clock + RNG that the
+//! production HUNTER `hunter_arc` movement (`movement.js:806-901`) needs
+//! for its sticky per-spawn random init, lunge dice, and slingshot
+//! contractions. **Neither field is read by `update_enemy` today** —
+//! the simplified chase is the only branch that runs.
+//!
+//! The fields are wired now so:
+//!   1. The wrapper / call sites already have somewhere to plug in a
+//!      seeded `Pcg64` + ms-precision clock (no signature churn when
+//!      `hunter_arc` lands).
+//!   2. The parity fixture
+//!      `parity_enemy::hunter_chase_with_ctx_plumbing` proves that
+//!      populating these fields with non-default values does NOT alter
+//!      the chase output today (same invariant agent F established for
+//!      `wave::WaveContext` in PR #28).
+//!
+//! **JS-side limitation**: `hunter_arc` consumes `Math.random()` (the
+//! global, non-seedable JS RNG) and `frameClock.now` (a session-local
+//! ms counter). Cross-language byte-for-byte parity is **impossible
+//! without harmonizing JS-side onto a deterministic Pcg64 + injected
+//! clock**. The plumbing landing here is the Rust half of that
+//! contract; the JS half (a `ctx.rng` + `ctx.now` argument threaded
+//! into `hunterArcMovement` instead of the global reads) is deferred
+//! to a follow-up session — see `docs/Multiplayer Rust Client Engine
+//! – 2026-05-07.md` §"Phase 2.1 RNG harmonization".
 //!
 //! ── Deferred (Phase 2.1+) ───────────────────────────────────────────
 //!
@@ -249,11 +280,33 @@ pub struct ShipPosition {
 }
 
 /// Per-tick context for `update_enemy`. Mirrors the JS
-/// `EnemyUpdateContext` typedef (state.js:673–681) but scoped to the
-/// HUNTER simplified path — the `gameEngine` back-reference and the
-/// `Pcg64` RNG are deferred until the deferred branches need them.
-#[derive(Debug, Clone)]
-pub struct EnemyContext {
+/// `EnemyUpdateContext` typedef (state.js:673–681).
+///
+/// **Currently unread fields** (`frame_clock_ms`, `rng`):
+///
+/// The JS `hunterArcMovement` (`movement.js:806-901`) reads
+/// `frameClock.now` (a session-local ms counter) on every tick for its
+/// lunge / slingshot dice rolls, and consumes `Math.random()` on first
+/// call for the sticky per-spawn `_arcDirection` / `_arcRadius` /
+/// `_arcOmega` init. The Rust mirror needs both behind a deterministic
+/// contract before that branch can be ported — so the fields are wired
+/// now and the simplified chase ignores them.
+///
+/// We carry the fields in the Rust shape anyway so:
+///   1. The wrapper / call sites already have somewhere to plug in a
+///      seeded `Pcg64` + ms-precision clock (no signature churn when
+///      `hunter_arc` lands).
+///   2. The parity fixture `parity_enemy::hunter_chase_with_ctx_plumbing`
+///      proves that populating these fields with non-default values
+///      does NOT alter the chase output today (same invariant agent F
+///      established for `wave::WaveContext` in PR #28).
+///
+/// When `hunter_arc` is ported, `update_enemy` will start reading
+/// these fields and the `#[allow(dead_code)]` attribute on `rng` will
+/// be removed. See module docstring §"RNG / frameClock plumbing" for
+/// the cross-language harmonization story.
+#[allow(dead_code)] // `frame_clock_ms` + `rng` reserved for `hunter_arc` port — see doc comment.
+pub struct EnemyContext<'a> {
     /// Active player ships. The chase picks the nearest; if empty the
     /// enemy idles in place (no chase target). Stored as `Vec<ShipPosition>`
     /// rather than a borrow to avoid lifetime gymnastics — the caller
@@ -273,10 +326,20 @@ pub struct EnemyContext {
     pub field_width: f32,
     pub field_height: f32,
 
-    /// Wall-clock ms since session start. Reserved for the deferred
-    /// frameClock-driven branches (lunge dice, music-sync shield
-    /// rotation, fire timestamps).
-    pub now_ms: u64,
+    /// Wall-clock ms since session start. Mirrors `frameClock.now` on
+    /// the JS side. Reserved for `hunter_arc` (lunge / slingshot dice
+    /// rolls keyed off `now > arc_lunge_roll_at`), music-sync shield
+    /// rotation, and fire timestamps. **Unread by `update_enemy` today.**
+    pub frame_clock_ms: u64,
+
+    /// Seeded RNG. `None` = no RNG available (also acceptable — the
+    /// current implementation never touches it). When `hunter_arc`
+    /// lands, the first-call init will pull four values for
+    /// `_arcDirection`, `_arcRadius`, `_arcOmega`, `_arcLungeRollAt`,
+    /// `_arcSlingRollAt`, `_arcWeavePhase` — at which point this field
+    /// becomes load-bearing and the `#[allow(dead_code)]` goes away.
+    /// **Unread by `update_enemy` today.**
+    pub rng: Option<&'a mut Pcg64>,
 }
 
 /// Side-effect events emitted by `update_enemy`. Currently single-shot
@@ -347,7 +410,7 @@ fn nearest_ship(enemy: &Enemy, ships: &[ShipPosition]) -> Option<ShipPosition> {
 ///
 /// Boundary handling (enemy.js:242–264) is deferred — for the parity
 /// fixture the enemy stays well clear of the field bounds.
-pub fn update_enemy(enemy: &mut Enemy, ctx: &EnemyContext, events: &mut Vec<EnemyEvent>) {
+pub fn update_enemy(enemy: &mut Enemy, ctx: &EnemyContext<'_>, events: &mut Vec<EnemyEvent>) {
     if !enemy.active {
         return;
     }
@@ -360,7 +423,7 @@ pub fn update_enemy(enemy: &mut Enemy, ctx: &EnemyContext, events: &mut Vec<Enem
     }
 }
 
-fn update_hunter(enemy: &mut Enemy, ctx: &EnemyContext, events: &mut Vec<EnemyEvent>) {
+fn update_hunter(enemy: &mut Enemy, ctx: &EnemyContext<'_>, events: &mut Vec<EnemyEvent>) {
     // ── Step 2: target selection (movement.js:73 implicit; sim/enemy.js:97) ──
     // The target may be `None` if there are no ships — mirror JS
     // `if (!playerRef) return enemy;` (enemy.js:143).
@@ -423,7 +486,11 @@ fn update_hunter(enemy: &mut Enemy, ctx: &EnemyContext, events: &mut Vec<EnemyEv
 }
 
 /// Loop helper. Calls `update_enemy` over a slice with the same context.
-pub fn update_enemies(enemies: &mut [Enemy], ctx: &EnemyContext, events: &mut Vec<EnemyEvent>) {
+pub fn update_enemies(
+    enemies: &mut [Enemy],
+    ctx: &EnemyContext<'_>,
+    events: &mut Vec<EnemyEvent>,
+) {
     for enemy in enemies.iter_mut() {
         update_enemy(enemy, ctx, events);
     }

@@ -4,6 +4,16 @@
 //! (no boundary bounce, no death, no burst-fire) and asserts agreement
 //! with a JS reference computation within an f32 tolerance.
 //!
+//! Fixtures in this file:
+//!   - `hunter_basic_chase` — the original 30-tick chase + single-fire
+//!     parity vector. Uses an empty `rng` and `frame_clock_ms = 0`.
+//!   - `hunter_chase_with_ctx_plumbing` — same scenario, but populates
+//!     `EnemyContext::frame_clock_ms` and `EnemyContext::rng` with
+//!     non-default values. Asserts identical output to
+//!     `hunter_basic_chase` (the new fields are inert until
+//!     `hunter_arc` is ported). Mirrors agent F's
+//!     `parity_wave::wave1_with_populated_context` invariant.
+//!
 //! ## Scope
 //!
 //! HUNTER ONLY. The full `js/sim/enemy.js::updateEnemy()` dispatches
@@ -20,6 +30,26 @@
 //! uses sticky per-spawn random state + frameClock timestamps + vortex-
 //! paced angular speed, none of which is parity-friendly without a
 //! deterministic clock + RNG plumbed through the per-tick context.
+//!
+//! ## `hunter_arc` audit (2026-05-10)
+//!
+//! The JS HUNTER's `enemy-data.js` config declares
+//! `movePattern: 'hunter_arc'`, and `Enemy.updateMovement()` dispatches
+//! that key to `hunterArcMovement()` (movement.js:806-901) — which:
+//!   - Pulls 6 `Math.random()` values on first call (sticky per-spawn
+//!     `_arcDirection`, `_arcRadius`, `_arcOmega`, `_arcLungeRollAt`,
+//!     `_arcSlingRollAt`, `_arcWeavePhase`).
+//!   - Reads `frameClock.now` on every tick for the lunge / slingshot
+//!     dice gates.
+//!   - Pulls fresh `Math.random()` values on each subsequent lunge /
+//!     sling roll.
+//!
+//! Cross-language byte-for-byte parity is **impossible without
+//! harmonizing JS-side onto a deterministic Pcg64 + injected
+//! frameClock**. The plumbing landed here (`frame_clock_ms` + `rng` on
+//! `EnemyContext`) is the Rust half of that contract; the JS half (a
+//! `ctx.rng` + `ctx.now` argument threaded into `hunterArcMovement`
+//! instead of the global reads) is deferred to a follow-up session.
 //!
 //! ## Reference values
 //!
@@ -78,8 +108,9 @@
 //! `ship_basic_movement`). Fire event count: exact match — both sides
 //! count integer events, no rounding.
 
-use rainboids_server::sim::enemy::{
-    update_enemy, BulletPattern, Enemy, EnemyContext, EnemyEvent, ShipPosition,
+use rainboids_server::sim::{
+    enemy::{update_enemy, BulletPattern, Enemy, EnemyContext, EnemyEvent, ShipPosition},
+    rng,
 };
 
 #[test]
@@ -104,7 +135,8 @@ fn hunter_basic_chase() {
         tick_scale: 0.5,
         field_width: 1920.0,
         field_height: 1080.0,
-        now_ms: 0,
+        frame_clock_ms: 0,
+        rng: None,
     };
 
     let mut events: Vec<EnemyEvent> = Vec::new();
@@ -171,4 +203,124 @@ fn hunter_basic_chase() {
         expected_fire_events, fire_count
     );
     assert!(enemy.active, "enemy.active should remain true");
+}
+
+/// Same scenario as `hunter_basic_chase` but with the new
+/// `EnemyContext::frame_clock_ms` and `EnemyContext::rng` fields
+/// populated with non-default values. The simplified chase + countdown
+/// fire path **does not read either field today**, so the output must
+/// be identical to the baseline.
+///
+/// This fixture serves two purposes:
+///
+///   1. Backstop for the ctx-plumbing landing — if a future change
+///      starts reading `ctx.rng` or `ctx.frame_clock_ms` from the
+///      simplified chase path, this test diverges and the divergence
+///      points at the new dependency immediately.
+///
+///   2. Forward-compat surface for `hunter_arc` — once the production
+///      `hunter_arc` movement (`movement.js:806-901`) is ported,
+///      `update_hunter` will start consuming both fields. At that
+///      point this fixture will need a fresh JS golden (captured with
+///      a deterministic Pcg64 + injected frameClock on the JS side)
+///      and its expected values updated. Until then, the assertions
+///      below MUST match `hunter_basic_chase` exactly.
+///
+/// Mirrors agent F's `parity_wave::wave1_with_populated_context`
+/// invariant (PR #28).
+#[test]
+fn hunter_chase_with_ctx_plumbing() {
+    // ── Same baseline setup as `hunter_basic_chase` ──
+    let mut enemy = Enemy::fresh_hunter(1, 300.0, 300.0);
+    enemy.fire_cooldown_ms = 200.0;
+    enemy.fire_cooldown_reset_ms = 400.0;
+
+    // Seed 42 matches `parity_vectors::pcg64_seed_42` captures, so if
+    // a future `hunter_arc` port starts consuming the RNG the resulting
+    // golden can be cross-checked against existing PCG64 trace fixtures.
+    let mut rng = rng::from_seed(42);
+
+    // Non-zero `frame_clock_ms` — picked to exercise a value that would
+    // matter for `hunter_arc` lunge dice (`now > arc_lunge_roll_at`)
+    // but currently flows past untouched.
+    let frame_clock_ms: u64 = 1_234_567;
+
+    // Snapshot the RNG state via a parallel control stream — we
+    // verify post-run that the test RNG is byte-for-byte identical,
+    // proving `update_enemy` did not consume any values.
+    let mut control_rng = rng::from_seed(42);
+
+    let mut events: Vec<EnemyEvent> = Vec::new();
+    for tick in 0..30 {
+        let ctx = EnemyContext {
+            ships: vec![ShipPosition {
+                x: 500.0,
+                y: 500.0,
+                vx: 0.0,
+                vy: 0.0,
+            }],
+            dt: 1.0 / 60.0,
+            tick_scale: 0.5,
+            field_width: 1920.0,
+            field_height: 1080.0,
+            // Advance the clock by 16.67 ms per tick (60 Hz). When
+            // `hunter_arc` lands, this monotonic stream is what the
+            // lunge / sling dice will gate on.
+            frame_clock_ms: frame_clock_ms + (tick as u64) * 17,
+            rng: Some(&mut rng),
+        };
+        update_enemy(&mut enemy, &ctx, &mut events);
+    }
+
+    let fire_count = events
+        .iter()
+        .filter(|e| matches!(e, EnemyEvent::Fire { kind: BulletPattern::SingleShot, .. }))
+        .count();
+
+    eprintln!(
+        "RUST-EMITS (populated ctx): {{\"x\":{},\"y\":{},\"vx\":{},\"vy\":{},\"fireCooldownMs\":{},\"fireEvents\":{}}}",
+        enemy.x, enemy.y, enemy.vx, enemy.vy, enemy.fire_cooldown_ms, fire_count
+    );
+
+    // ── Identical golden to `hunter_basic_chase` ──
+    // The new ctx fields must not perturb the chase output.
+    let expected_x: f32 = 301.972_83;
+    let expected_y: f32 = 301.972_83;
+    let expected_vx: f32 = 0.254_558_44;
+    let expected_vy: f32 = 0.254_558_44;
+    let expected_fire_events: usize = 1;
+
+    let close = |actual: f32, expected: f32, what: &str| {
+        let delta = (actual - expected).abs();
+        assert!(
+            delta < 0.01,
+            "{} diverged: rust={}, js={}, |Δ|={}",
+            what,
+            actual,
+            expected,
+            delta,
+        );
+    };
+
+    close(enemy.x, expected_x, "enemy.x");
+    close(enemy.y, expected_y, "enemy.y");
+    close(enemy.vx, expected_vx, "enemy.vx");
+    close(enemy.vy, expected_vy, "enemy.vy");
+    assert_eq!(
+        fire_count, expected_fire_events,
+        "expected exactly {} fire event(s) (must match baseline), got {}",
+        expected_fire_events, fire_count
+    );
+    assert!(enemy.active, "enemy.active should remain true");
+
+    // ── Sanity: the RNG must be untouched ──
+    // If `update_enemy` ever starts consuming the RNG, this assertion
+    // will fail and the doc comment on `EnemyContext::rng` will need
+    // updating to reflect the new "consumed by update_enemy" semantics.
+    use rand::RngCore;
+    assert_eq!(
+        rng.next_u64(),
+        control_rng.next_u64(),
+        "ctx.rng state must be unchanged — update_enemy does not read it today"
+    );
 }
