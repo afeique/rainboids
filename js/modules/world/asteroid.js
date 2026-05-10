@@ -3,6 +3,12 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { random, GameDimensions, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 import { hsl } from '../core/color-cache.js';
+// Phase-1 multiplayer engine refactor: asteroid drift / boundary /
+// rotation extracted to `js/sim/asteroid.js`. The wrapper in `update()`
+// below builds a plain-data `AsteroidState` from `this`, calls
+// `updateAsteroid`, and writes the result back. Behavior is byte-for-
+// byte equivalent to the legacy inline code.
+import { updateAsteroid } from '../../sim/asteroid.js';
 const DEBRIS_COUNT = 5;
 
 // ── Shared sin/cos lookup table ──────────────────────────────────────────
@@ -325,69 +331,71 @@ export class Asteroid {
     update(gameField = null) {
         if (!this.active) return;
 
-        // Warp-in entry — skip motion / boundary logic until warp completes.
+        // Warp-in entry — presentation-side animation. Stays in the
+        // wrapper because it touches projection dirtiness and uses a
+        // 1.5x rotation multiplier specific to the warp-in feel.
         if (this.warping) {
             this.updateWarpIn();
             return;
         }
 
-        // Death flash countdown
-        if (this._deathFlash > 0) {
-            this._deathFlash--;
-            if (this._deathFlash <= 0) {
-                this.active = false;
-            }
+        // ── Pure-sim physics step (extracted to js/sim/asteroid.js) ──
+        // Reusable scratch object — avoid per-tick allocation.
+        if (!this._astScratch) {
+            this._astScratch = {
+                id: 0, size: 0,
+                x: 0, y: 0, vx: 0, vy: 0, radius: 0,
+                rotX: 0, rotY: 0, rotZ: 0,
+                rotVelX: 0, rotVelY: 0, rotVelZ: 0,
+                hp: 0, maxHp: 0, level: 1,
+                active: true, warping: false, deathFlash: 0,
+            };
+        }
+        if (!this._astCtx) {
+            this._astCtx = {
+                field: null,
+                tickScale: GAME_CONFIG.TICK_SCALE,
+                wrapWidth: 0, wrapHeight: 0,
+            };
+        }
+        const ast = this._astScratch;
+        ast.x = this.x;
+        ast.y = this.y;
+        ast.vx = this.vel.x;
+        ast.vy = this.vel.y;
+        ast.radius = this.radius;
+        ast.rotX = this.rot3D.x;
+        ast.rotY = this.rot3D.y;
+        ast.rotZ = this.rot3D.z;
+        ast.rotVelX = this.rotVel3D.x;
+        ast.rotVelY = this.rotVel3D.y;
+        ast.rotVelZ = this.rotVel3D.z;
+        ast.active = this.active;
+        ast.warping = false;
+        ast.deathFlash = this._deathFlash || 0;
+
+        const ctx = this._astCtx;
+        ctx.field = gameField || null;
+        ctx.wrapWidth = GameDimensions.width;
+        ctx.wrapHeight = GameDimensions.height;
+
+        updateAsteroid(ast, ctx, null);
+
+        // Write outputs back.
+        this.x = ast.x;
+        this.y = ast.y;
+        this.vel.x = ast.vx;
+        this.vel.y = ast.vy;
+        this.rot3D.x = ast.rotX;
+        this.rot3D.y = ast.rotY;
+        this.rot3D.z = ast.rotZ;
+        this._deathFlash = ast.deathFlash;
+        if (!ast.active) {
+            this.active = false;
             return;
         }
 
-        // Cap asteroid speed to keep them manageable to hit
-        const maxSpeed = 2.0; // Maximum speed for asteroids
-        const currentSpeed = Math.hypot(this.vel.x, this.vel.y);
-        if (currentSpeed > maxSpeed) {
-            this.vel.x = (this.vel.x / currentSpeed) * maxSpeed;
-            this.vel.y = (this.vel.y / currentSpeed) * maxSpeed;
-        }
-
-        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
-        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
-
-        // Boundary bouncing instead of wrapping
-        if (gameField) {
-            // Bounce off left/right boundaries
-            if (this.x - this.radius < 0) {
-                this.x = this.radius;
-                this.vel.x = Math.abs(this.vel.x) * 0.9; // Bounce with slight energy loss
-            } else if (this.x + this.radius > gameField.width) {
-                this.x = gameField.width - this.radius;
-                this.vel.x = -Math.abs(this.vel.x) * 0.9;
-            }
-
-            // Bounce off top/bottom boundaries
-            if (this.y - this.radius < 0) {
-                this.y = this.radius;
-                this.vel.y = Math.abs(this.vel.y) * 0.9;
-            } else if (this.y + this.radius > gameField.height) {
-                this.y = gameField.height - this.radius;
-                this.vel.y = -Math.abs(this.vel.y) * 0.9;
-            }
-        } else {
-            // Fallback to old wrapping if no game field provided
-            const wrapBuffer = this.radius * 2;
-            if (this.x < -wrapBuffer) this.x = GameDimensions.width + wrapBuffer;
-            if (this.x > GameDimensions.width + wrapBuffer) this.x = -wrapBuffer;
-            if (this.y < -wrapBuffer) this.y = GameDimensions.height + wrapBuffer;
-            if (this.y > GameDimensions.height + wrapBuffer) this.y = -wrapBuffer;
-        }
-
-        // Update rotation angles (always, for consistency)
-        this.rot3D.x += this.rotVel3D.x;
-        this.rot3D.y += this.rotVel3D.y;
-        this.rot3D.z += this.rotVel3D.z;
-
-        // Defer projection to draw — and stagger across frames so only
-        // half the field re-projects per tick. Cuts total projection cost
-        // in half. Rotations still advance every frame; the projected
-        // vertices just lag by at most one frame (16ms at 60fps).
+        // Presentation-only: stagger projection re-bake across frames.
         if (((frameClock.tick & 1) === this._projOffset) || this.warping) {
             this._projectionDirty = true;
         }
