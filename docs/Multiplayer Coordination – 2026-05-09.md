@@ -12,14 +12,14 @@ on commit. The user runs both terminals and hands the tree back and forth.
 
 | Field | Value |
 |-------|-------|
-| Branch | `master` (Phase-1 wiring all merged). Worktrees idle; future parallel work needs to avoid `state.js` / `index.js` / `game-engine.js` due to the harness worktree-isolation bug (see "Open questions"). |
-| Version | `5.89.0` on master (final Phase-1 wrapper landed via PR #17) |
-| Working tree | **Phase 1 engine refactor COMPLETE.** All six pure functions (`ship`, `enemy`, `asteroid`, `bullet`, `wave`, `drops`) live under `js/sim/` and drive their respective live entities through thin wrappers. Next phase: Rust mirror impls (Weeks 7–9 server sim port). |
-| Last touched | 2026-05-10 by **client agent** (orchestrator — Phase-1 wiring sessions complete, doc sync) |
-| Last commit | `216b54a` — Merge of PR #17 (5.89.0 wave-manager wiring). Phase-1 cap. |
+| Branch | `master` (Phase 1 ✓ + Phase 2 ✓ + Phase 2.1 ~95% + Phase 2.5 underway). Worktrees idle. |
+| Version | `5.89.0` on master (no version bump for Rust server work — runtime-affecting only when client prediction wires up in Phase 3) |
+| Working tree | **Phase 2 server sim port COMPLETE** (PRs #19–#23 merged). **Phase 2.1 follow-ups** (filling deferred branches): drops magnet/tractor/expiry ✓, asteroid bounce/death-flash ✓, bullet helix/homing ✓, wave context plumbing ✓, enemy bullet 7/17 patterns ✓, enemy context plumbing ✓. **Phase 2.5 collision extraction**: bullet-asteroid (JS + Rust) ✓, player-asteroid (JS) ✓ + Rust mirror in flight. |
+| Last touched | 2026-05-10 by **server agent** (orchestrator — Phase 2.1/2.5 parallel dispatches, doc sync) |
+| Last commit | merged head — see `git log --oneline -1`. PRs #32-#34 just landed (player-asteroid JS, enemy bullet +4 patterns, enemy ctx plumbing). |
 | Uncommitted | this doc update |
-| Parity status | **Schema → Rust → JS pipeline complete.** Wire layout pinned byte-for-byte. **Sim layer**: ship has full Rust mirror + parity fixture (`ship_basic_movement`, ≈2.41421356 equilibrium). Enemy/asteroid/bullet/wave/drops mirrors NOT yet ported — that's task #30 next. |
-| Critical path | **Server sim port (#30)** — port `js/sim/{enemy,asteroid,bullet,wave,drops}.js` into `server/src/sim/` mirroring agent B's pattern from ship. Each port needs a parity fixture (golden input → expected JS output, asserted on Rust side with f32 tolerance). Once enemy + asteroid + bullet land, client prediction (#31) becomes unblocked. |
+| Parity status | **Schema → Rust → JS pipeline complete.** All 6 pure-step subsystems (ship/enemy/asteroid/bullet/wave/drops) have Rust mirrors + parity fixtures. Phase 2.5 collision: 2 of ~9 pairs done on JS side (bullet-asteroid, player-asteroid); 1 of ~9 on Rust side (bullet-asteroid). |
+| Critical path | **Phase 2.5 collision pairs** (filling out remaining 7 pairs JS-side + 8 pairs Rust-side) + **JS-side `hunterArcMovement` ctx threading** (unblocks Rust hunter_arc full port). Once collision + hunter_arc land, Phase 3 (client prediction) is fully unblocked. |
 
 ## Ownership boundaries
 
@@ -94,16 +94,30 @@ Each agent updates their column on every session start.
     - **PR #17 (`mp/wiring-wave`, `12cde07`) — final Phase-1 wrapper.** `WaveManager.tryAdvanceSubWave` drives `updateWave`; 7 replay-parity tests pin behavioral equivalence.
 - **Currently working on**: Phase 1 cleanup + this doc sync. Then unblocking Phase 2.
 
-### Phase-1 status table
+### Subsystem status table (Phase 1 + Phase 2 + Phase 2.1 + Phase 2.5)
 
-| Subsystem | Pure function | Wrapper wired | Rust mirror | Rust parity fixture |
+| Subsystem | JS pure | JS wrapper | Rust mirror | Rust parity | Phase 2.1 expansion | Notes |
+|---|---|---|---|---|---|---|
+| ship | ✓ (5.84.0) | ✓ `Player.update` | ✓ | ✓ `ship_basic_movement` | n/a | Equilibrium 2.41421356, full impl |
+| enemy | ✓ PR #13 | ✓ PR #16 | ✓ PR #23 (HUNTER chase) | ✓ `hunter_basic_chase` | ◐ ctx plumbing (PR #34); hunter_arc blocked on JS-side surgery | 9 of 10 kinds + 5/6 event types deferred |
+| asteroid | ✓ PR #14 | ✓ PR #14 | ✓ PR #19 | ✓ `asteroid_basic_drift` | ✓ bounce + death-flash (PR #26) | Split logic → collision-extract |
+| bullet | ✓ PR #14 | ✓ PR #14 | ✓ PR #20 | ✓ `player_bullet_straight_line` | ✓ helix + homing (PR #27); enemy patterns 7/17 (PRs #29, #33) | piercing/explosive → Phase 2.5 |
+| wave | ✓ PR #15 | ✓ PR #17 | ✓ PR #22 | ✓ `wave1_advance_at_two_enemies` | ✓ ctx plumbing (PR #28) | All 20 waves baked, full WAVE_DATA |
+| drops | ✓ PR #15 | ✓ PR #15 | ✓ PR #21 | ✓ `drop_basic_drift_friction` | ✓ magnet/tractor/expiry (PR #25) | pickup → collision-extract |
+
+### Phase 2.5 collision-extract status table
+
+| Pair | JS pure | JS tests | Rust mirror | Rust parity |
 |---|---|---|---|---|
-| ship | ✓ PR (5.84.0) | ✓ (`Player.update`) | ✓ (`server/src/sim/ship.rs`) | ✓ `ship_basic_movement` |
-| enemy | ✓ PR #13 | ✓ PR #16 | ⬜ #30 | ⬜ #30 |
-| asteroid | ✓ PR #14 | ✓ PR #14 | ⬜ #30 | ⬜ #30 |
-| bullet | ✓ PR #14 | ✓ PR #14 | ⬜ #30 | ⬜ #30 |
-| wave | ✓ PR #15 | ✓ PR #17 | ⬜ #30 | ⬜ #30 |
-| drops | ✓ PR #15 | ✓ PR #15 | ⬜ #30 | ⬜ #30 |
+| bullet ↔ asteroid | ✓ PR #30 | ✓ 22 tests | ✓ PR #31 | ✓ 4 fixtures |
+| player ↔ asteroid | ✓ PR #32 (open) | ✓ 24 tests | ⏳ in flight | ⏳ in flight |
+| bullet ↔ enemy | ⬜ | ⬜ | ⬜ | ⬜ |
+| player ↔ enemy | ⬜ | ⬜ | ⬜ | ⬜ |
+| enemy ↔ asteroid | ⬜ | ⬜ | ⬜ | ⬜ |
+| player ↔ enemy_bullet | ⬜ | ⬜ | ⬜ | ⬜ |
+| drops pickup | ⬜ | ⬜ | ⬜ | ⬜ |
+| power-weapon (lance/mine/nova/lightning/missile) | ⬜ | ⬜ | ⬜ | ⬜ |
+| defense-skill (deflector/tractor) | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ## Subagent dispatch round 1 (2026-05-09) — COMPLETED
 
@@ -317,12 +331,33 @@ Don't silence them; fix them.
   wired 5.84.0; enemy/asteroid/bullet/wave/drops extracted via PRs #13–15;
   enemy + wave wrappers wired via PRs #16/#17 (5.89.0). All six subsystems
   drive their live entities through `js/sim/`.
-- ⬜ **Weeks 7–9 — port simulation into `server/src/sim/`** (task #30).
-  RNG + fxp + trig vectors pinned. Ship has full Rust mirror + parity
-  fixture. Five remaining ports: enemy → asteroid → bullet → wave → drops,
-  each with a parity fixture asserting f32 tolerance over 60 ticks.
+- ✅ **Weeks 7–9 — port simulation into `server/src/sim/`** (task #30).
+  All five subsystems landed via PRs #19–#23 (asteroid, bullet, drops,
+  wave, enemy-HUNTER). Each has a parity fixture pinning cross-language
+  behavior. Caveats: enemy is HUNTER-only (Phase 2.1 expands), cooldown
+  timing has a 1-tick f32↔f64 drift (deferred until load-bearing).
+- ◐ **Phase 2.1 — fill in deferred sim-port branches** (task #45,
+  ~95% done). Drops magnet/tractor/expiry ✓ (PR #25), asteroid
+  bounce/death-flash ✓ (PR #26), bullet helix/homing ✓ (PR #27),
+  wave context plumbing ✓ (PR #28), enemy bullet 7/17 patterns ✓
+  (PRs #29, #33), enemy context plumbing ✓ (PR #34). Remaining: full
+  hunter_arc port (blocked on JS-side ctx threading — `Math.random()`
+  and `frameClock.now` need to be replaced with `ctx.rng` + `ctx.now`
+  in `js/modules/enemy/movement.js`), 9 other enemy kinds, 10 more
+  enemy bullet patterns.
+- ◐ **Phase 2.5 — collision system extraction** (task #46, 2 of ~9
+  pairs done on JS side, 1 of ~9 on Rust side). Bullet-asteroid JS
+  (PR #30) + Rust (PR #31) landed. Player-asteroid JS (PR #32) +
+  Rust mirror (in flight). Remaining: bullet-enemy, player-enemy,
+  enemy-asteroid, player-enemy-bullet, drops pickup, power-weapon
+  collisions (lance/mine/nova/lightning/missile), defense-skill
+  collisions (deflector/tractor). Parallel implementation strategy
+  (NOT refactor) — legacy `collision-system.js` stays untouched;
+  pure-step versions in `js/sim/collision.js` for server / prediction
+  path.
 - ⬜ **Phase 3 — client prediction + interpolation wiring** (task #31).
-  Unblocked once enemy/asteroid/bullet Rust mirrors land (Phase 2).
+  Unblocked once collision pairs reach critical mass (bullet-enemy
+  + player-enemy are the next high-value targets).
 - ⬜ Phase 4 — co-op design (revive, shared wave-clear, drop attribution) — task #32.
 - ⬜ Phase 5 — matchmaking & lobby UX
 - ⬜ Phase 6 — drop-in/drop-out polish
