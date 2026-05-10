@@ -461,3 +461,64 @@ export function freshShipState(playerId, overrides = {}) {
         active: overrides.active !== undefined ? overrides.active : true,
     };
 }
+
+// ─── Enemy (Phase-1 round-2 extraction, agent D) ─────────────────────────────
+//
+// Minimal typedef set added by the orchestrator during salvage; the
+// upstream `Enemy` class still owns the per-tick state object today,
+// so `updateEnemy` operates over that object directly. When the wiring
+// session extracts the wrapper properly, this typedef will document
+// the canonical shape — for now it's a structural hint.
+
+/**
+ * @typedef {Object} EnemyState
+ * @property {*}      id
+ * @property {string} type   one of HUNTER, GUARDIAN, WASP, STALKER, DRIFTER,
+ *                           PROWLER, WEAVER, SENTINEL, TANGERINE, TITAN
+ * @property {number} x
+ * @property {number} y
+ * @property {number} vx
+ * @property {number} vy
+ * @property {number} angle
+ * @property {number} hp
+ * @property {number} maxHp
+ * @property {number} firingCooldown
+ * @property {number} lastShot
+ * @property {boolean} active
+ */
+
+/**
+ * @typedef {Object} EnemyUpdateContext
+ * @property {ShipState[]} ships
+ * @property {Field}       field
+ * @property {number}      dt
+ * @property {Pcg64}       rng
+ * @property {*}           gameEngine  back-reference for the wrapper-era
+ *                                     `firing.js` / `movement.js` helpers
+ *                                     that still live on the engine
+ */
+
+/**
+ * Factory for a fresh enemy state. The wiring session will replace this
+ * with a richer constructor; for now it's a thin convenience.
+ *
+ * @param {string} type
+ * @param {object} overrides
+ * @returns {EnemyState}
+ */
+export function freshEnemyState(type, overrides = {}) {
+    return {
+        id: overrides.id ?? null,
+        type,
+        x: overrides.x ?? 0,
+        y: overrides.y ?? 0,
+        vx: overrides.vx ?? 0,
+        vy: overrides.vy ?? 0,
+        angle: overrides.angle ?? 0,
+        hp: overrides.hp ?? 1,
+        maxHp: overrides.maxHp ?? 1,
+        firingCooldown: overrides.firingCooldown ?? 0,
+        lastShot: overrides.lastShot ?? 0,
+        active: overrides.active ?? true,
+    };
+}

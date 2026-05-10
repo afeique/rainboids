@@ -70,7 +70,8 @@ export {
     BTN_AB1,
     BTN_AB2,
 } from './input.js';
-export { freshGameState, freshShipState, freshAsteroidState, freshBulletState } from './state.js';
+export { freshGameState, freshShipState, freshEnemyState, freshAsteroidState, freshBulletState } from './state.js';
 export { updateShip, updateShips } from './ship.js';
+export { updateEnemy, updateEnemies } from './enemy.js';
 export { updateAsteroid, updateAsteroids, ASTEROID_MAX_SPEED, ASTEROID_BOUNCE_DAMP } from './asteroid.js';
 export { updateBullet, updateBullets, updatePlayerBullet, updateEnemyBullet, BULLET_EVENT_DESPAWN } from './bullet.js';
