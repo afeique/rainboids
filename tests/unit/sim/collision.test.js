@@ -21,10 +21,19 @@ import {
     detectBulletAsteroidHits,
     BULLET_ASTEROID_KNOCKBACK,
     BULLET_ASTEROID_HIT_FLASH_FRAMES,
+    detectPlayerAsteroidHits,
+    PLAYER_ASTEROID_COLLISION_DAMAGE,
+    BOUNCE_RESTITUTION,
+    BOUNCE_FORCE_MULTIPLIER,
+    OVERLAP_SEPARATION_RATIO,
+    ASTEROID_KNOCKBACK_MULTIPLIER,
+    SEPARATION_BUFFER,
+    OVERLAP_PUSH_FORCE,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
     freshBulletState,
+    freshShipState,
 } from '../../../js/sim/state.js';
 
 // ---------------------------------------------------------------------
@@ -303,5 +312,298 @@ describe('detectBulletAsteroidHits — skipped pairs', () => {
         const events = [];
         detectBulletAsteroidHits([b], [a], ctx, events);
         expect(events).toHaveLength(0);
+    });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// Player-vs-asteroid pair (Phase 2.5 — dispatch 2).
+// ═════════════════════════════════════════════════════════════════════
+//
+// `detectPlayerAsteroidHits` is the second pure-step pair extracted
+// from the legacy `handlePlayerAsteroidCollision` in
+// `js/modules/combat/collision-system.js` (lines 1946-2120). The legacy
+// path bundles damage + visuals + audio + camera kicks; the pure step
+// reports only the mechanical deltas — velocity impulses and a position
+// separation — that the wrapper applies to live state. Visuals / SFX /
+// XP stay on the wrapper side.
+//
+// The tests below pin:
+//   - the seven constants (verbatim values from COLLISION_CONFIG)
+//   - geometry overlap (circle-circle)
+//   - all event payload fields (impulse + separation deltas)
+//   - skip gates (inactive / warping / death-flash)
+//   - multiple hits per tick (player jammed between two rocks)
+//   - bounce direction (eastbound player off a westward rock ⇒ westbound impulse)
+//   - defensive empty / null inputs
+
+// ---------------------------------------------------------------------
+// Helpers — build minimal player/asteroid pairs.
+// ---------------------------------------------------------------------
+
+/** Build a player at (x, y). Defaults to a small radius=15 ship to
+ *  match the live `Player` constructor. */
+function makePlayer(playerId, x, y, overrides = {}) {
+    return freshShipState(playerId, {
+        x, y, radius: 15, ...overrides,
+    });
+}
+
+/** Build a heavier asteroid at (x, y) with explicit velocity so the
+ *  bounce math has nonzero relative velocity to chew on. */
+function makeAsteroid(id, x, y, overrides = {}) {
+    return freshAsteroidState(id, {
+        x, y, radius: 30, ...overrides,
+    });
+}
+
+// ---------------------------------------------------------------------
+// Constants — pinned to the legacy COLLISION_CONFIG block.
+// ---------------------------------------------------------------------
+
+describe('player-asteroid collision constants', () => {
+    test('PLAYER_ASTEROID_COLLISION_DAMAGE is 2 (verbatim)', () => {
+        expect(PLAYER_ASTEROID_COLLISION_DAMAGE).toBe(2);
+    });
+    test('BOUNCE_RESTITUTION is 0.9 (verbatim)', () => {
+        expect(BOUNCE_RESTITUTION).toBe(0.9);
+    });
+    test('BOUNCE_FORCE_MULTIPLIER is 12.0 (verbatim)', () => {
+        expect(BOUNCE_FORCE_MULTIPLIER).toBe(12.0);
+    });
+    test('OVERLAP_SEPARATION_RATIO is 0.6 (verbatim)', () => {
+        expect(OVERLAP_SEPARATION_RATIO).toBe(0.6);
+    });
+    test('ASTEROID_KNOCKBACK_MULTIPLIER is 22.0 (verbatim)', () => {
+        expect(ASTEROID_KNOCKBACK_MULTIPLIER).toBe(22.0);
+    });
+    test('SEPARATION_BUFFER is 6 (verbatim)', () => {
+        expect(SEPARATION_BUFFER).toBe(6);
+    });
+    test('OVERLAP_PUSH_FORCE is 5.0 (verbatim)', () => {
+        expect(OVERLAP_PUSH_FORCE).toBe(5.0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — single overlapping pair emits one fully-populated event.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerAsteroidHits — single hit', () => {
+    test('overlapping player + asteroid emits one event with all delta fields', () => {
+        // Player radius 15, asteroid radius 30 ⇒ sumR = 45.
+        // Place them 30 px apart on the x-axis ⇒ overlap = 15 (clear hit).
+        const p = makePlayer('p1', 100, 100, { vx: 5, vy: 0 });
+        const a = makeAsteroid(10, 130, 100, { vx: 0, vy: 0 });
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.type).toBe('player_hit_asteroid');
+        expect(ev.playerId).toBe('p1');
+        expect(ev.asteroidId).toBe(10);
+        expect(ev.damageToAsteroid).toBe(PLAYER_ASTEROID_COLLISION_DAMAGE);
+        // All six numeric delta fields must be defined and finite numbers.
+        expect(typeof ev.playerImpulseDx).toBe('number');
+        expect(typeof ev.playerImpulseDy).toBe('number');
+        expect(typeof ev.asteroidImpulseDx).toBe('number');
+        expect(typeof ev.asteroidImpulseDy).toBe('number');
+        expect(typeof ev.separationDx).toBe('number');
+        expect(typeof ev.separationDy).toBe('number');
+        expect(Number.isFinite(ev.playerImpulseDx)).toBe(true);
+        expect(Number.isFinite(ev.playerImpulseDy)).toBe(true);
+        expect(Number.isFinite(ev.asteroidImpulseDx)).toBe(true);
+        expect(Number.isFinite(ev.asteroidImpulseDy)).toBe(true);
+        expect(Number.isFinite(ev.separationDx)).toBe(true);
+        expect(Number.isFinite(ev.separationDy)).toBe(true);
+        // Geometry overlapped ⇒ separation must be nonzero on the
+        // collision axis (x here).
+        expect(ev.separationDx).not.toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — geometry miss (centers further than sumR apart).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerAsteroidHits — geometry miss', () => {
+    test('player outside (player.r + asteroid.r) emits no event', () => {
+        const p = makePlayer('p1', 0, 0);
+        const a = makeAsteroid(10, 200, 0); // 200 px ≫ sumR=45
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('player just outside boundary (sumR + 1) emits no event', () => {
+        const p = makePlayer('p1', 0, 0, { radius: 15 });
+        // sumR = 45; place asteroid center 46 px away ⇒ just outside.
+        const a = makeAsteroid(10, 46, 0, { radius: 30 });
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — one player overlapping multiple rocks ⇒ multiple events.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerAsteroidHits — multiple asteroids in one tick', () => {
+    test('player wedged between two asteroids emits two events', () => {
+        // Player at (100, 100), radius 15. Place rocks east + west, both
+        // close enough to overlap.
+        const p = makePlayer('p1', 100, 100, { vx: 0, vy: 0 });
+        const east = makeAsteroid(10, 130, 100); // dx=30, sumR=45 ⇒ overlap
+        const west = makeAsteroid(20,  70, 100); // dx=-30, sumR=45 ⇒ overlap
+        const events = [];
+        detectPlayerAsteroidHits([p], [east, west], ctx, events);
+        expect(events).toHaveLength(2);
+        const ids = events.map(e => e.asteroidId).sort((a, b) => a - b);
+        expect(ids).toEqual([10, 20]);
+        // Each event carries the player's id.
+        for (const ev of events) {
+            expect(ev.playerId).toBe('p1');
+            expect(ev.type).toBe('player_hit_asteroid');
+        }
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — skip gates (inactive / warping / death-flash).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerAsteroidHits — skipped pairs', () => {
+    test('inactive player → no event', () => {
+        const p = makePlayer('p1', 100, 100, { active: false });
+        const a = makeAsteroid(10, 130, 100);
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('inactive asteroid → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        const a = makeAsteroid(10, 130, 100, { active: false });
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping asteroid → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        const a = makeAsteroid(10, 130, 100, { warping: true });
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('asteroid mid death-flash (new field name) → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        const a = makeAsteroid(10, 130, 100, { deathFlash: 5 });
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('asteroid mid death-flash (legacy _deathFlash) → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        // Live Asteroid instances use the underscore-prefix name; the
+        // pure step honors both.
+        const a = { id: 10, x: 130, y: 100, radius: 30, active: true,
+                    warping: false, _deathFlash: 5 };
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — bounce direction. Player moving east into an asteroid east of
+// it should get deflected back west (negative dx on player impulse).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerAsteroidHits — bounce direction', () => {
+    test('eastbound player ramming a westward rock gets impulse pushing west', () => {
+        // Geometry:
+        //   - Player at (100, 100), radius 15, moving east (vx=10).
+        //   - Asteroid 30 px east at (130, 100), radius 30, moving
+        //     west (vx=-2). distance=30, sumR=45 ⇒ overlap=15.
+        //
+        // Expected delta directions:
+        //   - The separation normal points from asteroid → player,
+        //     which is westward → separationDx < 0.
+        //   - The OVERLAP_PUSH_FORCE term adds nx · 5 = -5 to
+        //     playerImpulseDx (westward).
+        //   - The knockback term is mass-dominated by the much heavier
+        //     asteroid (≈113k vs ≈353), making its contribution to
+        //     playerImpulseDx orders of magnitude smaller than the
+        //     OVERLAP_PUSH_FORCE term, so playerImpulseDx stays
+        //     strictly negative.
+        //
+        // Jitter is disabled by passing rngFloat() = 0.5 (centered).
+        const p = makePlayer('p1', 100, 100, { vx: 10, vy: 0 });
+        const a = makeAsteroid(10, 130, 100, { vx: -2, vy: 0 });
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], { rngFloat: () => 0.5 }, events);
+        expect(events).toHaveLength(1);
+        // Separation points westward (away from the east-of-player rock).
+        expect(events[0].separationDx).toBeLessThan(0);
+        expect(events[0].separationDy).toBe(0);
+        // Net player impulse is dominated by the westward overlap push.
+        expect(events[0].playerImpulseDx).toBeLessThan(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — empty / null inputs defensive guards.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerAsteroidHits — empty inputs', () => {
+    test('empty players → no events', () => {
+        const events = [];
+        detectPlayerAsteroidHits([], [makeAsteroid(10, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('empty asteroids → no events', () => {
+        const events = [];
+        detectPlayerAsteroidHits([makePlayer('p1', 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('both empty → no events', () => {
+        const events = [];
+        detectPlayerAsteroidHits([], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null players → no events (defensive)', () => {
+        const events = [];
+        detectPlayerAsteroidHits(null, [makeAsteroid(10, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null asteroids → no events (defensive)', () => {
+        const events = [];
+        detectPlayerAsteroidHits([makePlayer('p1', 0, 0)], null, ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — separation push fields are populated proportional to overlap.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerAsteroidHits — separation magnitude', () => {
+    test('separation distance = overlap + SEPARATION_BUFFER along (asteroid → player) normal', () => {
+        // Player at (100, 100), radius 15; asteroid at (130, 100),
+        // radius 30. distance = 30, sumR = 45 ⇒ overlap = 15.
+        // Normal points west (-1, 0). separation should be
+        // (-1, 0) · (15 + 6) = (-21, 0).
+        const p = makePlayer('p1', 100, 100);
+        const a = makeAsteroid(10, 130, 100);
+        const events = [];
+        detectPlayerAsteroidHits([p], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.separationDx).toBeCloseTo(-(15 + SEPARATION_BUFFER), 5);
+        expect(ev.separationDy).toBeCloseTo(0, 5);
     });
 });
