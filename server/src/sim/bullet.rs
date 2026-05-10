@@ -13,9 +13,20 @@
 //!   - Predictive-lead homing — js bullet.js:79–81 + applyPlayerHoming
 //!   - Piercing / piercedEnemies counter — collision-side, not in step()
 //!   - Explosive / explosionRadius — collision-side, not in step()
-//!   - Enemy bullets (movementPattern dispatch + per-pattern velocity, mine
-//!     HP, persistent timed lifetime, distance-based fade, boss-rage homing)
-//!     — js bullet.js:183–593. See `update_enemy_bullet` stub below.
+//!
+//! Enemy bullets: 3 of ~17 movement patterns implemented (Phase 2.1):
+//!
+//!   - `Straight` — js `aimed`/`crescent_beam`/`crescent_slice` (no-mod path).
+//!   - `Sine` — js `sine_wave_nospin` (perpendicular sine offset).
+//!   - `Decelerate` — js `missile_decelerate` (subtractive speed decay).
+//!
+//! Deferred enemy patterns (14+ remaining, js bullet.js:259–593):
+//! `mine`, `homing_mine`, `spread`, `rapid`, `spiral`, `burst`, `explosive`,
+//! `laser`, `laser_beam`, `missile`, `homing`, `titan_homing`, `titan_rocket`,
+//! `pulse`, `shield_burst`, `wave_energy`, `energy_slash`, `sine_wave` (with
+//! rotation), `missile_fast_slow`, plus boss-rage homing composition,
+//! mine HP-death, persistent timed lifetime (mines / lightning orbs),
+//! and `targetPlayer` lookups.
 //!
 //! Order of operations is **load-bearing for parity** — exactly mirrors the
 //! JS `updatePlayerBullet` body:
@@ -260,20 +271,328 @@ pub fn update_player_bullets(
     }
 }
 
-// ── Phase 2.1+: enemy-bullet step ───────────────────────────────────────
+// ── ENEMY BULLETS ───────────────────────────────────────────────────────
 //
 // `js/sim/bullet.js::updateEnemyBullet` switches on `movementPattern` and
-// has 17 distinct cases (aimed, mine, homing_mine, spread, rapid, spiral,
-// burst, explosive, laser, laser_beam, missile, homing, titan_homing,
-// titan_rocket, missile_decelerate, pulse, shield_burst, wave_energy,
-// energy_slash, crescent_*, sine_wave, sine_wave_nospin, missile_fast_slow)
-// plus boss-rage homing composition, mine HP-death, persistent timed
-// lifetime (mines / lightning orbs), and distance-based fade. That's a
-// session of its own — leaving an unimplemented marker so the wiring agent
-// gets a clear "not yet" instead of silent fallthrough.
-#[allow(dead_code)]
-pub fn update_enemy_bullet() {
-    // TODO Phase 2.1+: port js/sim/bullet.js::updateEnemyBullet.
-    // See module docstring for the full deferred-branches list.
-    unimplemented!("enemy bullets not yet ported — see module docstring");
+// has ~17 distinct cases. Phase 2.1 implements the 3 simplest:
+//
+//   - `Straight` (aimed / crescent_beam / crescent_slice — no-mod path).
+//   - `Sine` (sine_wave_nospin — perpendicular sin(phase)*amp offset).
+//   - `Decelerate` (missile_decelerate — subtract decel each tick, clamp
+//     at min_speed; expire when at floor).
+//
+// The remaining patterns are TODO; see module docstring for the full list.
+//
+// Order of operations is **load-bearing for parity** — exactly mirrors the
+// JS `updateEnemyBullet` body (js bullet.js:183–249):
+//
+//   1. Active-guard (early return if !active).
+//   2. `applyEnemyMovementPattern(b, ctx)` — pattern-specific velocity
+//      mutation. May set `active=false` + `expired_by_distance=true`
+//      (decelerate at min-speed floor).
+//   3. Position update: `x += vx * tick_scale; y += vy * tick_scale`.
+//      NOTE: enemy-bullet path **does** scale by tick_scale; player does not.
+//   4. Rotation tick — skipped here (cosmetic; not modeled).
+//   5. `pattern_timer += logic_tick_seconds`.
+//   6. Mine HP death — skipped (mine pattern not yet ported).
+//   7. Lifetime / fade:
+//        - Persistent (mines, lightning) — TODO; not implemented.
+//        - Distance-based: dist from (start_x, start_y); if progress >=
+//          1.0 → deactivate + `expired_by_range`; else fade `life`.
+//   8. Out-of-bounds despawn (50 px margin).
+
+// JS bullet.js:228 — distance-based lifetime fade knee (life is held at 1.0
+// until 65% of max_range is traveled, then ramps 1.0 → 0.5 over the final
+// 35%).
+const DISTANCE_FADE_KNEE: f32 = 0.65;
+const DISTANCE_FADE_RANGE: f32 = 0.35;
+const DISTANCE_FADE_FINAL: f32 = 0.5;
+
+/// Enemy-bullet movement pattern. Phase 2.1 covers the 3 simplest cases
+/// only. The full JS dispatcher has ~17 — see module docstring for the
+/// deferred list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BulletPattern {
+    /// JS `aimed` / `crescent_beam` / `crescent_slice` — straight-line drift,
+    /// no per-tick velocity adjustment.
+    Straight,
+    /// JS `sine_wave_nospin` — drift along base velocity plus perpendicular
+    /// `sin(sine_phase) * sine_amp` offset; advances `sine_phase` by
+    /// `sine_freq` each tick. (The `sine_wave` variant additionally aligns
+    /// rotation to travel direction; not modeled here.)
+    Sine,
+    /// JS `missile_decelerate` — subtractive speed decay each tick. When the
+    /// speed reaches `min_speed`, the bullet expires (`expired_by_distance`).
+    Decelerate,
+    // TODO Phase 2.1+: Helix, Homing, Ricochet, Rocket, Mine, Spiral,
+    // EnergySlash, Bezier, Charge, Spread, Rapid, Burst, Explosive, Laser,
+    // LaserBeam, Missile, TitanHoming, TitanRocket, Pulse, ShieldBurst,
+    // WaveEnergy, SineWave (with rotation), MissileFastSlow, HomingMine.
+}
+
+/// Minimal enemy-bullet state for the 3 patterns above.
+///
+/// Skips fields used only by deferred patterns (`shape`, `health`,
+/// `is_persistent`, `creation_time`, `target_player`, `boss_rage_homing`,
+/// `helix_*`, `rocket_speed`, `slash_progress`, etc.). See module docstring.
+#[derive(Debug, Clone, Copy)]
+pub struct EnemyBullet {
+    /// Stable identity for despawn events.
+    pub id: u32,
+    /// Dispatches per-tick velocity logic.
+    pub pattern: BulletPattern,
+
+    // ── Position / velocity (px / px-per-tick) ─────────────────────────
+    pub x: f32,
+    pub y: f32,
+    pub vx: f32,
+    pub vy: f32,
+
+    /// Origin — used for distance-based lifetime + fade. JS bullet.js:228.
+    pub start_x: f32,
+    pub start_y: f32,
+
+    /// Pre-pattern velocity baseline for Sine. JS state.js:430.
+    pub base_vx: f32,
+    pub base_vy: f32,
+
+    // ── Lifetime ───────────────────────────────────────────────────────
+    /// Distance-fade ratio (1.0 → DISTANCE_FADE_FINAL near max_range).
+    /// JS state.js:435 — **enemy** life is a 0..1 fade, not an int frame
+    /// counter (player path uses int frames).
+    pub life: f32,
+    /// Player-style frame cap (unused by these 3 patterns but kept for
+    /// parity with the JS struct). TODO Phase 2.1+ when persistent bullets
+    /// land.
+    #[allow(dead_code)]
+    pub max_life: u32,
+
+    // ── Combat (informational) ────────────────────────────────────────
+    pub damage: f32,
+    pub radius: f32,
+    pub base_radius: f32,
+
+    // ── Range / distance (px) ─────────────────────────────────────────
+    /// JS bullet.js:229 — distance-based fade horizon.
+    pub max_range: f32,
+    /// JS state.js:585 — LONG_RANGE upgrade (player only; enemy
+    /// bullets typically pass 1.0 here).
+    pub range_multiplier: f32,
+
+    // ── Pattern timing (seconds since spawn) ──────────────────────────
+    /// JS bullet.js:200 — incremented each tick by `logic_tick_seconds`.
+    pub pattern_timer: f32,
+    /// JS state.js:456 — pattern-specific phase offset (used by spread,
+    /// energy_slash, etc.). Reserved; not consumed by the 3 ported
+    /// patterns but kept on the struct for parity.
+    #[allow(dead_code)]
+    pub pattern_phase: f32,
+
+    // ── Sine pattern state ────────────────────────────────────────────
+    /// JS state.js:462. Advanced by `sine_freq` each tick.
+    pub sine_phase: f32,
+    pub sine_freq: f32,
+    pub sine_amp: f32,
+    /// Perpendicular axis (unit vector) along which the sine displaces
+    /// velocity. JS state.js:465–466.
+    pub sine_perp_x: f32,
+    pub sine_perp_y: f32,
+
+    // ── Decelerate pattern state ──────────────────────────────────────
+    /// JS state.js:472 — speed subtracted per tick (NOT a multiplier).
+    pub deceleration: f32,
+    /// JS state.js:473 — floor for the speed clamp.
+    pub min_speed: f32,
+
+    // ── Lifecycle flags ───────────────────────────────────────────────
+    pub active: bool,
+    /// JS state.js:475 — wrapper triggers disappear-puff FX.
+    pub expired_by_range: bool,
+    /// JS state.js:476 — wrapper skips FX (offscreen).
+    pub expired_by_bounds: bool,
+    /// JS state.js:477 — wrapper triggers explosion FX (decelerate hits
+    /// floor; titan_rocket out-of-distance).
+    pub expired_by_distance: bool,
+
+    // TODO Phase 2.1+: shape (mine vs needle vs ...) — drives mine HP
+    //   death + persistent-vs-distance lifetime branch.
+    // TODO Phase 2.1+: health, max_health (mine HP).
+    // TODO Phase 2.1+: is_persistent, max_lifetime_override, creation_time
+    //   (time-based lifetime for mines / lightning orbs).
+    // TODO Phase 2.1+: target_player (homing patterns).
+    // TODO Phase 2.1+: boss_rage_homing.
+    // TODO Phase 2.1+: rocket_speed, max_distance, distance_traveled
+    //   (titan_rocket).
+    // TODO Phase 2.1+: slash_progress (energy_slash).
+    // TODO Phase 2.1+: rotation, rotation_speed (sprite orientation).
+}
+
+/// Per-tick context for enemy-bullet updates. Mirrors the relevant subset
+/// of `BulletUpdateContext` in `js/sim/state.js`.
+#[derive(Debug, Clone, Copy)]
+pub struct EnemyBulletContext {
+    /// Render-rate scaler (`30 / 60 = 0.5`). JS bullet.js:190–191 — enemy
+    /// position update **does** consume this (player does not).
+    pub tick_scale: f32,
+    /// Seconds-per-logic-tick. JS bullet.js:200 — adds to `pattern_timer`.
+    pub logic_tick_seconds: f32,
+    /// World boundaries (px). JS bullet.js:242–243.
+    pub boundary_width: f32,
+    pub boundary_height: f32,
+    // TODO Phase 2.1+: now_ms (persistent bullet age — mines, lightning).
+    // TODO Phase 2.1+: bullet_speed (homing target velocity).
+    // TODO Phase 2.1+: target_player (homing patterns).
+    // TODO Phase 2.1+: rng (rapid-pattern jitter).
+}
+
+/// Pattern-specific velocity adjustment. Mirrors
+/// `applyEnemyMovementPattern` in js/sim/bullet.js, restricted to the 3
+/// patterns this module implements.
+fn apply_enemy_movement_pattern(b: &mut EnemyBullet, _ctx: &EnemyBulletContext) {
+    // JS bullet.js:260–263 — guard: when both base velocities are zero AND
+    // pattern is not `mine`, the legacy code early-returned. None of our 3
+    // patterns are `mine`, so we mirror the early-return. (`Straight` with
+    // base_vx/base_vy=0 means "stationary"; matches JS behavior.)
+    if b.base_vx == 0.0 && b.base_vy == 0.0 {
+        return;
+    }
+
+    match b.pattern {
+        // JS bullet.js:270–272 — `aimed` (and crescent_*): no velocity
+        // modification; the bullet drifts straight.
+        BulletPattern::Straight => {}
+
+        // JS bullet.js:536–543 — `sine_wave_nospin`. The `sine_wave` variant
+        // additionally aligns `rotation` with travel direction; we don't
+        // model rotation here.
+        BulletPattern::Sine => {
+            b.sine_phase += b.sine_freq;
+            let displacement = b.sine_phase.sin() * b.sine_amp;
+            b.vx = b.base_vx + b.sine_perp_x * displacement;
+            b.vy = b.base_vy + b.sine_perp_y * displacement;
+        }
+
+        // JS bullet.js:450–475 — `missile_decelerate`. Subtractive decay,
+        // clamped at min_speed. When the bullet is already at the floor, it
+        // expires with `expired_by_distance` set. The JS branch also has a
+        // max-distance check (lines 465–473); the wrapper sets
+        // `bullet.maxDistance` from constants — we don't model that field
+        // yet (it's a TODO above), so the deceleration-floor exit is the
+        // only despawn route from this case.
+        BulletPattern::Decelerate => {
+            let current_speed = (b.vx * b.vx + b.vy * b.vy).sqrt();
+            if current_speed > b.min_speed {
+                let direction = b.vy.atan2(b.vx);
+                let new_speed = (current_speed - b.deceleration).max(b.min_speed);
+                b.vx = direction.cos() * new_speed;
+                b.vy = direction.sin() * new_speed;
+            } else {
+                b.active = false;
+                b.expired_by_distance = true;
+            }
+        }
+    }
+}
+
+/// Single enemy-bullet step. Mirrors `js/sim/bullet.js::updateEnemyBullet`,
+/// restricted to the 3 patterns above.
+///
+/// Mutates `b` in place; appends despawn events to `events`.
+pub fn update_enemy_bullet(
+    b: &mut EnemyBullet,
+    ctx: &EnemyBulletContext,
+    events: &mut Vec<BulletEvent>,
+) {
+    // 1. Active-guard (JS bullet.js:184).
+    if !b.active {
+        return;
+    }
+
+    // 2. Apply movement pattern (JS bullet.js:187). May deactivate the bullet
+    //    (decelerate floor); the JS code does NOT early-return after this,
+    //    so the post-processing below still runs — including position update
+    //    and despawn-event emission via the lifetime branches.
+    apply_enemy_movement_pattern(b, ctx);
+
+    // 3. Position update — scaled for tick rate (JS bullet.js:190–191).
+    b.x += b.vx * ctx.tick_scale;
+    b.y += b.vy * ctx.tick_scale;
+
+    // 4. Rotation accumulator — skipped (cosmetic; not modeled).
+
+    // 5. Pattern timer (JS bullet.js:200).
+    b.pattern_timer += ctx.logic_tick_seconds;
+
+    // 6. Mine HP death — skipped (mine pattern is TODO).
+
+    // 7. Lifetime / fade. We only handle the distance-based branch here
+    //    (persistent bullets are TODO).
+    //
+    //    JS bullet.js:228–238: dist = hypot(x - startX, y - startY);
+    //    progress = dist / maxRange. If progress >= 1.0, deactivate +
+    //    `expiredByRange`. Otherwise life ramps 1.0 → 0.5 over the final
+    //    35% (held at 1.0 during the first 65%).
+    //
+    //    NOTE: `range_multiplier` is a player-bullet upgrade (LONG_RANGE);
+    //    enemy bullets typically pass 1.0. We multiply for parity in case
+    //    a future enemy-side modifier wants to use it.
+    let dx = b.x - b.start_x;
+    let dy = b.y - b.start_y;
+    let dist = (dx * dx + dy * dy).sqrt();
+    let effective_range = b.max_range * b.range_multiplier;
+    let progress = if effective_range > 0.0 {
+        dist / effective_range
+    } else {
+        0.0
+    };
+    if progress >= 1.0 {
+        // Only emit a single despawn event per bullet — if the pattern step
+        // already deactivated us (decelerate floor), don't double-emit.
+        if b.active {
+            events.push(BulletEvent::Despawn { bullet_id: b.id });
+        }
+        b.active = false;
+        b.expired_by_range = true;
+        return;
+    }
+    b.life = if progress < DISTANCE_FADE_KNEE {
+        1.0
+    } else {
+        1.0 - (progress - DISTANCE_FADE_KNEE) / DISTANCE_FADE_RANGE * DISTANCE_FADE_FINAL
+    };
+
+    // 8. Out-of-bounds despawn (JS bullet.js:241–246). 50 px margin.
+    let w = ctx.boundary_width;
+    let h = ctx.boundary_height;
+    if b.x < -BOUNDARY_MARGIN
+        || b.x > w + BOUNDARY_MARGIN
+        || b.y < -BOUNDARY_MARGIN
+        || b.y > h + BOUNDARY_MARGIN
+    {
+        if b.active {
+            events.push(BulletEvent::Despawn { bullet_id: b.id });
+        }
+        b.active = false;
+        b.expired_by_bounds = true;
+        return;
+    }
+
+    // If the pattern step deactivated us (e.g. decelerate floor) and we
+    // didn't otherwise emit a despawn above, do so now so the wrapper can
+    // release the slot.
+    if !b.active {
+        events.push(BulletEvent::Despawn { bullet_id: b.id });
+    }
+}
+
+/// Loop helper. Mirrors `js/sim/bullet.js::updateBullets` but specialized
+/// to enemy bullets.
+pub fn update_enemy_bullets(
+    bullets: &mut [EnemyBullet],
+    ctx: &EnemyBulletContext,
+    events: &mut Vec<BulletEvent>,
+) {
+    for b in bullets.iter_mut() {
+        update_enemy_bullet(b, ctx, events);
+    }
 }
