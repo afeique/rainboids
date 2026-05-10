@@ -8,21 +8,25 @@
 //! Mirrors `js/sim/bullet.js`. **Player bullets** (`update_player_bullet`)
 //! implement the linear drift + helix offset + predictive-lead homing
 //! branches (PR #27). **Enemy bullets** (`update_enemy_bullet`) implement
-//! 3 of ~17 movement patterns (PR #29):
+//! 7 of ~17 movement patterns:
 //!
-//!   - `Straight` — js `aimed`/`crescent_beam`/`crescent_slice` (no-mod path).
-//!   - `Sine` — js `sine_wave_nospin` (perpendicular sine offset).
-//!   - `Decelerate` — js `missile_decelerate` (subtractive speed decay).
+//!   - `Straight` — js `aimed`/`crescent_beam`/`crescent_slice` (no-mod path). (PR #29)
+//!   - `Sine` — js `sine_wave_nospin` (perpendicular sine offset). (PR #29)
+//!   - `Decelerate` — js `missile_decelerate` (subtractive speed decay). (PR #29)
+//!   - `Spread` — js `spread` (patternTimer-driven sine on a perp-of-base axis).
+//!   - `Spiral` — js `spiral` (rotating velocity vector + spreading radius).
+//!   - `WaveEnergy` — js `wave_energy` (large-amplitude sine on perp-of-base axis).
+//!   - `ShieldBurst` — js `shield_burst` (high-freq wobble on perp-of-base axis).
 //!
 //! Deferred to follow-up sessions:
 //!
 //!   - Piercing / piercedEnemies counter — collision-side, Phase 2.5
 //!   - Explosive / explosionRadius — collision-side, Phase 2.5
-//!   - 14+ remaining enemy patterns (js bullet.js:259–593): `mine`,
-//!     `homing_mine`, `spread`, `rapid`, `spiral`, `burst`, `explosive`,
-//!     `laser`, `laser_beam`, `missile`, `homing`, `titan_homing`,
-//!     `titan_rocket`, `pulse`, `shield_burst`, `wave_energy`,
-//!     `energy_slash`, `sine_wave` (with rotation), `missile_fast_slow`
+//!   - 10+ remaining enemy patterns (js bullet.js:259–593): `mine`,
+//!     `homing_mine`, `rapid`, `burst`, `explosive`, `laser`,
+//!     `laser_beam`, `missile`, `homing`, `titan_homing`, `titan_rocket`,
+//!     `pulse`, `energy_slash`, `sine_wave` (with rotation),
+//!     `missile_fast_slow`.
 //!   - Boss-rage homing composition, mine HP-death, persistent timed
 //!     lifetime (mines / lightning orbs), `targetPlayer` lookups.
 //!
@@ -415,12 +419,21 @@ pub fn update_player_bullets(
 // ── ENEMY BULLETS ───────────────────────────────────────────────────────
 //
 // `js/sim/bullet.js::updateEnemyBullet` switches on `movementPattern` and
-// has ~17 distinct cases. Phase 2.1 implements the 3 simplest:
+// has ~17 distinct cases. Implemented so far (7):
 //
 //   - `Straight` (aimed / crescent_beam / crescent_slice — no-mod path).
 //   - `Sine` (sine_wave_nospin — perpendicular sin(phase)*amp offset).
 //   - `Decelerate` (missile_decelerate — subtract decel each tick, clamp
 //     at min_speed; expire when at floor).
+//   - `Spread` (patternTimer-driven sin offset on baseAngle+π/2 axis;
+//     amplitude 0.5, frequency 3, plus a fixed patternPhase offset).
+//   - `Spiral` (per-tick rotation of velocity vector; speed taken from
+//     baseVx/baseVy magnitude, angle drifts at `spiral_rate * patternTimer`,
+//     with a centrifugal `patternTimer * 0.05` perpendicular term).
+//   - `WaveEnergy` (high-amplitude sin on baseAngle+π/2 axis with the
+//     0.1 attenuation factor; pattern timer ramp).
+//   - `ShieldBurst` (high-freq sin(patternTimer*8)*0.2 wobble on
+//     baseAngle+π/2 axis).
 //
 // The remaining patterns are TODO; see module docstring for the full list.
 //
@@ -449,9 +462,33 @@ const DISTANCE_FADE_KNEE: f32 = 0.65;
 const DISTANCE_FADE_RANGE: f32 = 0.35;
 const DISTANCE_FADE_FINAL: f32 = 0.5;
 
-/// Enemy-bullet movement pattern. Phase 2.1 covers the 3 simplest cases
-/// only. The full JS dispatcher has ~17 — see module docstring for the
-/// deferred list.
+// JS bullet.js:300–301 — `spread` pattern: per-tick sin frequency and
+// amplitude (px/tick equivalent units). The wave is applied on the
+// `baseAngle + π/2` axis with an additional fixed `patternPhase` offset.
+const SPREAD_WAVE_FREQ: f32 = 3.0;
+const SPREAD_WAVE_AMP: f32 = 0.5;
+
+// JS bullet.js:319–323 — `spiral` pattern: `spiralRate` controls how fast
+// the velocity vector rotates per second; `0.1` is the perpendicular
+// centrifugal contribution applied to a radius that grows as
+// `patternTimer * 0.5`. The final formula factors to `patternTimer * 0.05`
+// on the perpendicular axis.
+const SPIRAL_RATE: f32 = 2.0;
+const SPIRAL_RADIUS_RATE: f32 = 0.5;
+const SPIRAL_PERP_FACTOR: f32 = 0.1;
+
+// JS bullet.js:493–494 — `wave_energy`: large amplitude (15) gated by a
+// `0.1` factor, plus frequency 3. Same perp axis as `spread`.
+const WAVE_ENERGY_FREQ: f32 = 3.0;
+const WAVE_ENERGY_AMP: f32 = 15.0;
+const WAVE_ENERGY_VEL_SCALE: f32 = 0.1;
+
+// JS bullet.js:485 — `shield_burst`: sin(patternTimer*8)*0.2 wobble.
+const SHIELD_BURST_FREQ: f32 = 8.0;
+const SHIELD_BURST_AMP: f32 = 0.2;
+
+/// Enemy-bullet movement pattern. 7 of ~17 ported so far — see module
+/// docstring for the deferred list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BulletPattern {
     /// JS `aimed` / `crescent_beam` / `crescent_slice` — straight-line drift,
@@ -465,10 +502,25 @@ pub enum BulletPattern {
     /// JS `missile_decelerate` — subtractive speed decay each tick. When the
     /// speed reaches `min_speed`, the bullet expires (`expired_by_distance`).
     Decelerate,
-    // TODO Phase 2.1+: Helix, Homing, Ricochet, Rocket, Mine, Spiral,
-    // EnergySlash, Bezier, Charge, Spread, Rapid, Burst, Explosive, Laser,
-    // LaserBeam, Missile, TitanHoming, TitanRocket, Pulse, ShieldBurst,
-    // WaveEnergy, SineWave (with rotation), MissileFastSlow, HomingMine.
+    /// JS `spread` — patternTimer-driven sin offset on the `baseAngle+π/2`
+    /// axis. Frequency 3, amplitude 0.5, plus a fixed `pattern_phase`
+    /// offset that fans out a single volley.
+    Spread,
+    /// JS `spiral` — rotating velocity vector. Speed comes from the magnitude
+    /// of (base_vx, base_vy); the angle drifts at `SPIRAL_RATE * patternTimer`
+    /// relative to baseAngle, and the bullet also accumulates a centrifugal
+    /// perpendicular contribution that grows linearly with patternTimer.
+    Spiral,
+    /// JS `wave_energy` — large-amplitude sin offset on the `baseAngle+π/2`
+    /// axis. Frequency 3, amplitude 15, scaled down by 0.1 in velocity units.
+    WaveEnergy,
+    /// JS `shield_burst` — high-frequency `sin(patternTimer*8)*0.2` wobble
+    /// on the `baseAngle+π/2` axis. No pattern_phase or extra state.
+    ShieldBurst,
+    // TODO Phase 2.1+: Helix, Homing, Ricochet, Rocket, Mine, EnergySlash,
+    // Bezier, Charge, Rapid, Burst, Explosive, Laser, LaserBeam, Missile,
+    // TitanHoming, TitanRocket, Pulse, SineWave (with rotation),
+    // MissileFastSlow, HomingMine.
 }
 
 /// Minimal enemy-bullet state for the 3 patterns above.
@@ -523,10 +575,8 @@ pub struct EnemyBullet {
     // ── Pattern timing (seconds since spawn) ──────────────────────────
     /// JS bullet.js:200 — incremented each tick by `logic_tick_seconds`.
     pub pattern_timer: f32,
-    /// JS state.js:456 — pattern-specific phase offset (used by spread,
-    /// energy_slash, etc.). Reserved; not consumed by the 3 ported
-    /// patterns but kept on the struct for parity.
-    #[allow(dead_code)]
+    /// JS state.js:456 — pattern-specific phase offset (used by `Spread`
+    /// for fan-out; reserved for other future patterns like `energy_slash`).
     pub pattern_phase: f32,
 
     // ── Sine pattern state ────────────────────────────────────────────
@@ -631,6 +681,59 @@ fn apply_enemy_movement_pattern(b: &mut EnemyBullet, _ctx: &EnemyBulletContext) 
                 b.active = false;
                 b.expired_by_distance = true;
             }
+        }
+
+        // JS bullet.js:299–306 — `spread`. Sin wave on the perp axis of the
+        // base direction. Note the JS `speed` and `baseAngle` are computed
+        // from `bullet.baseVx/baseVy` at the TOP of `applyEnemyMovementPattern`
+        // (lines 265–266) — we recompute baseAngle locally where it's used.
+        BulletPattern::Spread => {
+            let base_angle = b.base_vy.atan2(b.base_vx);
+            let perp_angle = base_angle + std::f32::consts::FRAC_PI_2;
+            let wave_offset = (b.pattern_timer * SPREAD_WAVE_FREQ + b.pattern_phase).sin()
+                * SPREAD_WAVE_AMP;
+            b.vx = b.base_vx + perp_angle.cos() * wave_offset;
+            b.vy = b.base_vy + perp_angle.sin() * wave_offset;
+        }
+
+        // JS bullet.js:318–324 — `spiral`. Speed comes from the magnitude of
+        // the base velocity; angle rotates at `SPIRAL_RATE * patternTimer`.
+        // A perpendicular centrifugal term grows linearly with patternTimer
+        // (`patternTimer * SPIRAL_RADIUS_RATE * SPIRAL_PERP_FACTOR`, which
+        // is the JS `spiralRadius * 0.1` factored).
+        BulletPattern::Spiral => {
+            let speed = (b.base_vx * b.base_vx + b.base_vy * b.base_vy).sqrt();
+            let base_angle = b.base_vy.atan2(b.base_vx);
+            let spiral_angle = base_angle + b.pattern_timer * SPIRAL_RATE;
+            let spiral_radius = b.pattern_timer * SPIRAL_RADIUS_RATE;
+            let perp_angle = spiral_angle + std::f32::consts::FRAC_PI_2;
+            b.vx = spiral_angle.cos() * speed
+                + perp_angle.cos() * spiral_radius * SPIRAL_PERP_FACTOR;
+            b.vy = spiral_angle.sin() * speed
+                + perp_angle.sin() * spiral_radius * SPIRAL_PERP_FACTOR;
+        }
+
+        // JS bullet.js:492–502 — `wave_energy`. Large-amplitude (15)
+        // patternTimer-driven sin on the perp axis, scaled by 0.1 in
+        // velocity units.
+        BulletPattern::WaveEnergy => {
+            let base_angle = b.base_vy.atan2(b.base_vx);
+            let perp_angle = base_angle + std::f32::consts::FRAC_PI_2;
+            let energy_wave_offset =
+                (b.pattern_timer * WAVE_ENERGY_FREQ).sin() * WAVE_ENERGY_AMP;
+            let wave_vel_x = perp_angle.cos() * energy_wave_offset * WAVE_ENERGY_VEL_SCALE;
+            let wave_vel_y = perp_angle.sin() * energy_wave_offset * WAVE_ENERGY_VEL_SCALE;
+            b.vx = b.base_vx + wave_vel_x;
+            b.vy = b.base_vy + wave_vel_y;
+        }
+
+        // JS bullet.js:484–489 — `shield_burst`. High-frequency sin wobble
+        // on the perp axis.
+        BulletPattern::ShieldBurst => {
+            let wobble = (b.pattern_timer * SHIELD_BURST_FREQ).sin() * SHIELD_BURST_AMP;
+            let perp_angle = b.base_vy.atan2(b.base_vx) + std::f32::consts::FRAC_PI_2;
+            b.vx = b.base_vx + perp_angle.cos() * wobble;
+            b.vy = b.base_vy + perp_angle.sin() * wobble;
         }
     }
 }
