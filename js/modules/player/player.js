@@ -5,6 +5,11 @@ import * as weapons from './weapons.js';
 import * as skills from './skills.js';
 import * as progression from './progression.js';
 import * as playerRenderer from './renderer.js';
+// Phase-1 multiplayer engine refactor: ship physics extracted to
+// `js/sim/ship.js`. The wrapper in `update()` below builds a plain-data
+// `ShipState` from `this`, calls `updateShip`, and writes the result
+// back. Behavior is byte-for-byte equivalent to the legacy inline code.
+import { updateShip } from '../../sim/ship.js';
 
 export class Player {
     constructor() {
@@ -382,7 +387,7 @@ export class Player {
         // Store previous position to track movement
         const prevX = this.x;
         const prevY = this.y;
-        
+
         // Update invincibility timer (still used by deliberate-save skills:
         // REFLEXES, LAST_STAND, PHASE_DASH, plus the wave-start grace window).
         if (this.invincibilityTimer > 0) {
@@ -393,7 +398,7 @@ export class Player {
                 this.firingDisabled = false;
             }
         }
-        
+
         // Update level up animation
         if (this.levelUpAnimation.active) {
             const elapsed = Date.now() - this.levelUpAnimation.startTime;
@@ -446,10 +451,13 @@ export class Player {
             this._aimAngle = Math.atan2(input.aimY - this.y, input.aimX - this.x);
         }
 
-        // Mouse aiming
-        const dx = input.aimX - this.x;
-        const dy = input.aimY - this.y;
-        this.angle = Math.atan2(dy, dx);
+        // ── Aim angle (computed by the ship physics step below) ──
+        // The original code set `this.angle = atan2(aimY - x, aimX - x)`
+        // here, *before* the auto-fire check that reads `this.angle`.
+        // We compute the same value early so auto-fire still sees the
+        // correct angle, then the physics call below sets it again
+        // (idempotently, since position hasn't changed yet).
+        this.angle = Math.atan2(input.aimY - this.y, input.aimX - this.x);
 
         // Auto Fire — only triggers when there's actually a destructible
         // target within weapon range AND roughly in line with the current
@@ -492,7 +500,7 @@ export class Player {
                 }
             }
         }
-        
+
         // Debug player aiming occasionally
         if (Math.random() < 0.01) { // 1% chance
         }
@@ -500,6 +508,7 @@ export class Player {
         this.isMoving = input.up || input.down || input.left || input.right;
 
         // ── Thrust juice: ramp thrustLevel and detect startup ──
+        // FX-side state, not physics. Stays on Player.
         const now = Date.now();
         if (this.isMoving && !this.thrustersDisabled) {
             // Detect idle→thrust transition (startup shudder)
@@ -518,35 +527,14 @@ export class Player {
             this.engineStartup = Math.max(0, this.engineStartup - 0.06); // ~17 frames ≈ 0.28s
         }
 
-        // WASD movement with tight controls
-        if (this.isMoving && !this.thrustersDisabled) {
-            let moveX = 0, moveY = 0;
-            if (input.left) moveX -= 1;
-            if (input.right) moveX += 1;
-            if (input.up) moveY -= 1;
-            if (input.down) moveY += 1;
-
-            const moveAngle = Math.atan2(moveY, moveX);
-            const speedMultiplier = this.getMovementSpeedMultiplier();
-            const thrustForce = this.thrustPower * speedMultiplier;
-            this.vel.x += Math.cos(moveAngle) * thrustForce;
-            this.vel.y += Math.sin(moveAngle) * thrustForce;
-
-            // Thrust particles commented out
-            // const rear = moveAngle + Math.PI;
-            // const dist = this.radius * 1.2;
-            // const spread = this.radius * 0.8;
-
-            // for (let i = 0; i < 2; i++) {
-            //     const p_angle = rear + random(-0.3, 0.3);
-            //     const p_dist = random(0, spread);
-            //     const p_x = this.x + Math.cos(p_angle) * dist + Math.cos(p_angle + Math.PI / 2) * p_dist;
-            //     const p_y = this.y + Math.sin(p_angle) * dist + Math.sin(p_angle + Math.PI / 2) * p_dist;
-            //     particlePool.get(p_x, p_y, 'thrust', rear);
-            // }
-            
-            // Thruster sound removed for cleaner audio experience
-        }
+        // ── FX particle effects (must run BEFORE physics) ──
+        // These read this.x / this.y, which the physics step below
+        // mutates. The original update() emitted these particles between
+        // the velocity-integration step and the friction step (lines
+        // 552-575 of the pre-extraction player.js), so this.x / this.y
+        // were the pre-position-update values at that point. Running
+        // them here, before updateShip, preserves that exact pixel
+        // placement — byte-for-byte parity with the legacy ordering.
 
         // Spawn particles during invulnerability (renamed from tractor beam)
         if (this.invincible && Math.random() < 0.3) {
@@ -557,7 +545,7 @@ export class Player {
             const py = this.y + Math.sin(angle) * dist;
             particlePool.get(px, py, 'spawnParticle', this.x, this.y, this);
         }
-        
+
         // Shield boost visual effect - green shimmer around player
         const shieldBoostStacks = this.getPowerupStacks('SHIELD_BOOST');
         if (shieldBoostStacks > 0 && Math.random() < 0.3) {
@@ -574,59 +562,92 @@ export class Player {
             }
         }
 
-        // Apply friction — scaled for tick rate (equivalent to 0.50 at 30Hz).
-        // Even heavier drag than 5.39.5 (0.70) — coasting halflife @60Hz is
-        // now ~33ms, so the ship is essentially stopped within ~3 frames of
-        // release. Top speed is unaffected: with thrustPower 2.0 the velocity
-        // asymptote is ~3.41, almost touching the 3.5 MAX_V cap.
-        const friction = Math.pow(0.50, GAME_CONFIG.TICK_SCALE);
-        this.vel.x *= friction;
-        this.vel.y *= friction;
-
-        // Snap to zero once velocity is negligible — prevents endless drift.
-        // Kept at 0.05 because TICK_SCALE (0.5 @60Hz) shrinks the per-frame
-        // thrust delta to ~0.19; a higher threshold would clamp acceleration
-        // back to zero each tick and the ship couldn't move at all.
-        if (Math.abs(this.vel.x) < 0.05) this.vel.x = 0;
-        if (Math.abs(this.vel.y) < 0.05) this.vel.y = 0;
-
-        // Limit velocity — speed boost raises the cap so upgrades feel powerful
-        const speedMultCap = this.getMovementSpeedMultiplier();
-        const effectiveMaxV = GAME_CONFIG.MAX_V * (1 + (speedMultCap - 1) * 0.7);
-        const mag = Math.hypot(this.vel.x, this.vel.y);
-        if (mag > effectiveMaxV) {
-            this.vel.x = (this.vel.x / mag) * effectiveMaxV;
-            this.vel.y = (this.vel.y / mag) * effectiveMaxV;
+        // ── Physics step (extracted to js/sim/ship.js) ──
+        // The wrapper builds a plain-data ShipState from `this`, hands
+        // it to the pure `updateShip` function, and writes the result
+        // back. This is the Phase-1 deliverable for the multiplayer
+        // engine refactor; behavior is byte-for-byte equivalent to the
+        // legacy inline code (aim, thrust, friction, snap-to-zero,
+        // max-speed clamp, position update, boundary bounce).
+        //
+        // Reusable scratch objects to avoid per-tick allocation in the
+        // solo path. The pure sim doesn't need fresh objects each call.
+        if (!this._shipScratch) {
+            this._shipScratch = {
+                player: 0,
+                x: 0, y: 0, vx: 0, vy: 0,
+                angle: 0,
+                hp: 0, maxHp: 0, shield: 0,
+                radius: 0,
+                field: null,
+                active: true,
+            };
         }
+        if (!this._inputScratch) {
+            this._inputScratch = {
+                up: false, down: false, left: false, right: false,
+                aimX: 0, aimY: 0,
+                thrustPower: 0,
+                speedMult: 1,
+                thrustersDisabled: false,
+                maxV: GAME_CONFIG.MAX_V,
+                friction: Math.pow(0.50, GAME_CONFIG.TICK_SCALE),
+                velEpsilon: 0.05,
+                bounceDamp: 0.8,
+            };
+        }
+        const ship = this._shipScratch;
+        ship.x = this.x;
+        ship.y = this.y;
+        ship.vx = this.vel.x;
+        ship.vy = this.vel.y;
+        ship.angle = this.angle;
+        ship.hp = this.health;
+        ship.maxHp = this.maxHealth;
+        ship.shield = this.shield;
+        ship.radius = this.radius;
+        ship.active = this.active;
+        // Set ship.field only when the engine passes a gameField. When
+        // null (legacy fallback path), updateShip skips the boundary
+        // step entirely and the wrapper handles wraparound below —
+        // matching the original `wrap(this, this.width, this.height)`
+        // call exactly.
+        ship.field = gameField || null;
 
-        this.x += this.vel.x;
-        this.y += this.vel.y;
-        
-        // Boundary bouncing instead of wrapping
-        if (gameField) {
-            // Bounce off left/right boundaries
-            if (this.x - this.radius < 0) {
-                this.x = this.radius;
-                this.vel.x = Math.abs(this.vel.x) * 0.8; // Bounce with some energy loss
-            } else if (this.x + this.radius > gameField.width) {
-                this.x = gameField.width - this.radius;
-                this.vel.x = -Math.abs(this.vel.x) * 0.8;
-            }
-            
-            // Bounce off top/bottom boundaries
-            if (this.y - this.radius < 0) {
-                this.y = this.radius;
-                this.vel.y = Math.abs(this.vel.y) * 0.8;
-            } else if (this.y + this.radius > gameField.height) {
-                this.y = gameField.height - this.radius;
-                this.vel.y = -Math.abs(this.vel.y) * 0.8;
-            }
-        } else {
-            // Fallback to old wrapping if no game field provided
+        const sim = this._inputScratch;
+        sim.up = !!input.up;
+        sim.down = !!input.down;
+        sim.left = !!input.left;
+        sim.right = !!input.right;
+        sim.aimX = input.aimX;
+        sim.aimY = input.aimY;
+        sim.speedMult = this.getMovementSpeedMultiplier();
+        sim.thrustPower = this.thrustPower;
+        sim.thrustersDisabled = !!this.thrustersDisabled;
+        // maxV / friction / velEpsilon / bounceDamp are constants — set once.
+
+        updateShip(ship, sim, GAME_CONFIG.LOGIC_TICK_MS / 1000, null, null);
+
+        // Write physics back to Player.
+        this.x = ship.x;
+        this.y = ship.y;
+        this.vel.x = ship.vx;
+        this.vel.y = ship.vy;
+        this.angle = ship.angle;
+
+        // Legacy fallback: if no gameField was provided, the original
+        // code applied torus wraparound on this.width / this.height.
+        // updateShip skips the boundary step when ship.field is null,
+        // so we replicate that behavior here. Both live call sites in
+        // game-engine.js pass gameField, so this branch is effectively
+        // dead — kept for robustness against off-engine call sites.
+        if (!gameField) {
             wrap(this, this.width, this.height);
         }
-        
-        // Calculate movement delta and update aim coordinates if player moved
+
+        // Calculate movement delta and update aim coordinates if player moved.
+        // The legacy code did this after boundary-bounce; the new physics
+        // path produces the same final (x, y), so the delta is identical.
         const deltaX = this.x - prevX;
         const deltaY = this.y - prevY;
         if ((deltaX !== 0 || deltaY !== 0) && input.updateAimForPlayerMovement) {
