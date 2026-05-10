@@ -70,6 +70,7 @@ export {
     BTN_AB1,
     BTN_AB2,
 } from './input.js';
-export { freshGameState, freshWaveState, freshDropState } from './state.js';
+export { freshGameState, freshShipState, freshWaveState, freshDropState } from './state.js';
+export { updateShip, updateShips } from './ship.js';
 export { updateWave, getWaveConfig, getEnemyLevel, getAsteroidLevel, isBossWave } from './wave.js';
 export { updateDrop, updateDrops } from './drops.js';
