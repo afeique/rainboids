@@ -12,13 +12,14 @@ on commit. The user runs both terminals and hands the tree back and forth.
 
 | Field | Value |
 |-------|-------|
-| Branch | `master` (with worktrees — see "Workflow" below) |
-| Version | `5.87.0` (see `VERSION`) |
-| Working tree | **multi-worktree as of 2026-05-09** — server agent on `../rainboids-server-wt` (`mp/server-week7`), client agent on `../rainboids-worktrees/engine-driver` (`client-engine-driver`). Merge to master at hand-off points. |
-| Last touched | 2026-05-09 by **server agent** (merged 5.87.0 JS-side codegen onto master; pushing master to origin at this milestone) |
-| Last commit | merge of `mp/server-week7` (5.87.0 JS codegen) — `eaf0a3a` on the branch |
+| Branch | `master` (with worktrees — see "Workflow" below). Master is at the merged 5.87.1 state; the active feature branch is `feature/energy-tank-overhaul` (single-player gameplay work, not yet merged) |
+| Version | `5.88.5` on `feature/energy-tank-overhaul`; master sits behind at 5.87.1 |
+| Working tree | **5.88.5 single-player work has been the focus since the parity-loop merge.** Multiplayer is paused at the 5.87.0 milestone. About to fan out 3 parallel subagents to resume MP work. |
+| Last touched | 2026-05-09 by **server agent** (orchestrator — analyzing plan vs state, dispatching subagents) |
+| Last commit | `9fbc83e` — 5.88.5 single-player tune-up (energy-tank, healing, 3D rotation). Multiplayer code untouched since 5.87.0. |
 | Uncommitted | this doc update |
 | Parity status | **Schema → Rust → JS pipeline complete.** Both sides codegen'd; `npm run codegen:check` is the CI gate; byte-level cross-checks (Rust `wire_golden.rs` ↔ JS `protocol.test.js`) pass byte-for-byte. |
+| Critical path | **Phase 1 engine extraction** — `js/modules/game-engine.js` + `js/modules/player/player.js` need to spit out `js/sim/ship.js`, then `enemy.js`, etc. Until this lands, server-side `sim/*.rs` stubs can't be ported (no source-of-truth to mirror) and the client can't run prediction/interpolation. |
 
 ## Ownership boundaries
 
@@ -103,16 +104,68 @@ Each agent updates their column on every session start.
     `🟢 ONLINE` overlay in the top-right.
 - **Currently working on**: nothing in flight; deciding next queue item
   with the user.
-- **Queue (suggested)**:
-  - Wire the engine-driver `quit()` to GameEngine's "return to title"
-    transition so the socket gets cleaned up on game over (currently
-    leaks the connection until next page reload — acceptable for v1
-    but would be nice to close).
-  - Phase 1 simulation extraction: ship physics → `js/sim/ship.js`
-    (Phase 1 of the planning doc; touches `js/modules/` so coordinate
-    with server agent before starting).
-  - Room creation / browse / join-by-code UI (Phase 5 of the plan).
-  - Peer ship rendering once the server starts emitting Snapshot frames.
+
+## Subagent dispatch round 1 (2026-05-09) — COMPLETED
+
+Three parallel subagents (A/B/C) launched against `feature/energy-tank-overhaul`,
+all landed cleanly on their own branches with one commit each. Pushed to origin.
+
+| Agent | Branch | Commit | Result |
+|-------|--------|--------|--------|
+| **A — sim/ship-extract** | `mp/sim-ship-extract` | `a587e2e` | ship physics extracted to `js/sim/ship.js` (174 new + 26 tests + 247-line state.js expansion); 250/250 tests pass |
+| **B — server/ship-impl** | `mp/server-ship-impl` | `7a96bbb` + `0f91e81` | Rust `ship.rs` fleshed out from 47-line stub; parity fixture `ship_basic_movement` un-`#[ignore]`d after the orchestrator captured A's golden values (`x=339.024`, `vx=2.4142136`, both sides converge on √0.5/(1−√0.5) ≈ 2.41421356) |
+| **C — client/create-join** | `mp/client-create-join` | `ffcec11` | matchmaking modal fully wired (QuickMatch + CreateRoom + JoinByCode + browse); 7 new tests with FakeConnection asserting on-the-wire bytes |
+
+**Constants table — A and B verified identical:**
+- `THRUST_PER_TICK = 2.0 * TICK_SCALE = 1.0`
+- `FRICTION_BASE = 0.5`, applied as `Math.pow(0.5, TICK_SCALE) ≈ 0.7071068`
+- `TICK_SCALE = 30/60 = 0.5`
+- `MAX_V = 7.0 * TICK_SCALE = 3.5` (with 70%-boost rule for SPEED_BOOST)
+- `VEL_EPSILON = 0.05`
+- Physics order: thrust → friction → ε-snap → speed-cap → position → angle
+
+**Two known divergences for follow-up sessions:**
+1. Aim semantics: A's `js/sim/ship.js` accepts world-space cursor coords
+   (`atan2(aimY − shipY, aimX − shipX)`); B's Rust takes wire-format unit
+   vectors (`atan2(aim_y, aim_x)`). For the parity fixture they happen to
+   agree (input picked so both produce angle=0). The bridging belongs at
+   the input-pack layer once prediction wiring lands.
+2. A's `InputFrame` carries booleans + computed constants (thrustPower,
+   friction, …), while B's `PlayerInput` is the wire-format struct. The
+   wrapper in `Player.update` translates today; prediction will need a
+   pure wire-input → InputFrame converter.
+
+**Branch-flipping anomaly observed twice:** When `isolation: "worktree"`
+agents run in parallel, the worktree HEAD can shift between checkout and
+commit (B caught this and cherry-picked off C's branch back onto theirs;
+A simply didn't commit and the orchestrator recovered the work via
+`git switch` + selective `git add`). Future dispatches: agents should
+verify `git branch --show-current` immediately before commit.
+
+## Subagent dispatch round 2 (2026-05-09) — in flight
+
+Three more parallel subagents extracting the remaining Phase-1 subsystems.
+Each follows agent A's pattern: extract pure-function logic into a new
+`js/sim/<subsystem>.js`, leave a thin wrapper in the existing module that
+delegates to the pure function, do **not** touch `game-engine.js`'s top-level
+update loop (the orchestrator collapses the wrappers into a single
+`simulateTick()` in a follow-up).
+
+| Agent | Branch | Touches | Owns |
+|-------|--------|---------|------|
+| **D — sim/enemy-extract** | `mp/sim-enemy-extract` | `js/modules/enemy/**`, `js/sim/enemy.js` (new), `js/sim/state.js` (EnemyState typedef) | enemy AI, movement strategies, firing decisions; emits events for bullet spawn rather than calling fire() directly |
+| **E — sim/projectile-extract** | `mp/sim-projectile-extract` | `js/modules/world/asteroid.js`, `js/modules/player/bullet.js`, `js/modules/enemy/enemy-bullet.js`, `js/sim/asteroid.js` (new), `js/sim/bullet.js` (new), `js/sim/state.js` | asteroid drift + split, player+enemy bullet ballistics |
+| **F — sim/wave-drops-extract** | `mp/sim-wave-drops-extract` | `js/modules/wave/**`, `js/modules/world/color-star.js` (drop physics only), `js/sim/wave.js` (new), `js/sim/drops.js` (new), `js/sim/state.js` | wave spawn schedule, drop attraction physics (NOT pickup — that goes with collision in a future session) |
+
+**Shared file**: all three may add typedefs to `js/sim/state.js`. Each agent
+adds at the END of the file (no replace_all), so additions merge cleanly
+in append-order. None of them touch ship.js, collision.js, or each other's
+new sim files.
+
+**Out of scope for this round** (separate session): collision extraction
+(touches all three subsystems' entities + player.js), pickup attribution
+(needs collision), Rust mirror impls (will follow agent B's pattern after
+each JS extraction lands).
 
 ## Hand-offs
 
