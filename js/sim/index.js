@@ -70,4 +70,5 @@ export {
     BTN_AB1,
     BTN_AB2,
 } from './input.js';
-export { freshGameState } from './state.js';
+export { freshGameState, freshEnemyState } from './state.js';
+export { updateEnemy, updateEnemies } from './enemy.js';
