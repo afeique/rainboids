@@ -1,6 +1,6 @@
 //! Cross-language parity vectors for enemy-bullet ballistics (Phase 2.1).
 //!
-//! Mirrors `js/sim/bullet.js::updateEnemyBullet` for 11 movement patterns:
+//! Mirrors `js/sim/bullet.js::updateEnemyBullet` for 15 movement patterns:
 //!
 //!   - `Straight` ↔ JS `aimed` / `crescent_beam` / `crescent_slice` (no-mod
 //!     velocity path).
@@ -17,10 +17,15 @@
 //!     pulse intensity).
 //!   - `SineWaveRotation` ↔ JS `sine_wave` (Sine variant that aligns rotation
 //!     to travel direction via `rotation = atan2(vy, vx)`).
+//!   - `Laser` ↔ JS `laser` (renormalized 2× speed along base direction).
+//!   - `LaserBeam` ↔ JS `laser_beam` (3× speed + damage/radius mutation).
+//!   - `Explosive` ↔ JS `explosive` (two-phase timer accel: charge then ramp).
+//!   - `Rapid` ↔ JS `rapid` (per-tick RNG jitter; deterministic with rng=0.5).
 //!
 //! See `server/src/sim/bullet.rs` module docstring for the deferred list
-//! (helix, homing, ricochet, rocket, mine, bezier, charge, rapid, missile,
-//! laser, etc.).
+//! (homing, mine, homing_mine, missile, titan_homing, titan_rocket,
+//! missile_fast_slow — all require target_player or persistent-timed
+//! lifetime plumbing).
 //!
 //! Reference values were captured against the JS source by running the
 //! one-liner embedded in each fixture; both sides compute the same
@@ -28,7 +33,8 @@
 //! patterns like `Spiral`).
 
 use rainboids_server::sim::bullet::{
-    update_enemy_bullet, BulletEvent, BulletPattern, EnemyBullet, EnemyBulletContext,
+    default_rng_float, update_enemy_bullet, BulletEvent, BulletPattern, EnemyBullet,
+    EnemyBulletContext,
 };
 
 /// Helper — assert two f32 values are within 0.01 of each other.
@@ -89,6 +95,10 @@ fn default_ctx() -> EnemyBulletContext {
         logic_tick_seconds: 1.0 / 60.0,
         boundary_width: 9999.0,
         boundary_height: 9999.0,
+        // Matches the JS fixtures' `rngFloat: () => 0.5` — yields zero
+        // jitter for `Rapid` so the bullet flies straight, leaving other
+        // patterns (which ignore rng_float) unaffected.
+        rng_float: default_rng_float,
     }
 }
 
@@ -773,6 +783,325 @@ fn enemy_bullet_sine_wave_rotation() {
     close(b.vy, 2.822400161197362, "bullet.vy");
     close(b.sine_phase, 2.999999999999999, "bullet.sine_phase");
     close(b.rotation, 0.6394745011005886, "bullet.rotation");
+    close(b.life, 1.0, "bullet.life");
+    assert!(b.active, "bullet should still be active");
+
+    assert!(
+        events.is_empty(),
+        "unexpected despawn events for alive bullet: {:?}",
+        events,
+    );
+}
+
+// ── Fixture 12: laser (2× speed along base direction) ────────────────────
+//
+// JS reference values captured 2026-05-10 via:
+//
+//   node --input-type=module -e "
+//     import { updateEnemyBullet } from './js/sim/bullet.js';
+//     import { freshBulletState } from './js/sim/state.js';
+//     const b = freshBulletState(12, 'enemy', { movementPattern: 'laser',
+//         x: 200, y: 200, vx: 5, vy: 0, baseVx: 5, baseVy: 0,
+//         startX: 200, startY: 200,
+//         life: 0, maxLife: 180, damage: 10, radius: 4, baseRadius: 4,
+//         maxRange: 9999, rangeMultiplier: 1.0, active: true });
+//     const ctx = { tickScale: 0.5, logicTickSeconds: 1/60, bulletSpeed: 10,
+//         boundaryWidth: 9999, boundaryHeight: 9999, now: 0,
+//         targetPlayer: null, homingTarget: null, rngFloat: () => 0.5 };
+//     for (let i = 0; i < 20; i++) updateEnemyBullet(b, ctx, []);
+//     console.log(JSON.stringify({ x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+//         patternTimer: b.patternTimer, life: b.life, active: b.active }));
+//   "
+//   → {"x":300,"y":200,"vx":10,"vy":0,"patternTimer":0.3333333333333333,
+//      "life":1,"active":true}
+//
+// Per-tick: `vx = base_speed * 2 * cos(baseAngle) = 5 * 2 = 10`. After 20
+// ticks with tick_scale=0.5, position advances by `vx * 0.5 * 20 = 100`. So
+// x = 200 + 100 = 300. Confirms the 2× speed multiplier and direction
+// preservation.
+#[test]
+fn enemy_bullet_laser() {
+    let mut b = default_enemy_bullet(12, BulletPattern::Laser);
+    b.x = 200.0;
+    b.y = 200.0;
+    b.vx = 5.0;
+    b.vy = 0.0;
+    b.start_x = 200.0;
+    b.start_y = 200.0;
+    b.base_vx = 5.0;
+    b.base_vy = 0.0;
+    b.life = 0.0;
+
+    let ctx = default_ctx();
+    let mut events: Vec<BulletEvent> = Vec::new();
+    for _ in 0..20 {
+        update_enemy_bullet(&mut b, &ctx, &mut events);
+    }
+
+    close(b.x, 300.0, "bullet.x");
+    close(b.y, 200.0, "bullet.y");
+    close(b.vx, 10.0, "bullet.vx");
+    close(b.vy, 0.0, "bullet.vy");
+    close(b.pattern_timer, 0.3333333333333333, "bullet.pattern_timer");
+    close(b.life, 1.0, "bullet.life");
+    assert!(b.active, "bullet should still be active");
+
+    assert!(
+        events.is_empty(),
+        "unexpected despawn events for alive bullet: {:?}",
+        events,
+    );
+}
+
+// ── Fixture 13: laser_beam (3× speed + damage / radius mutation) ─────────
+//
+// JS reference values captured 2026-05-10 via:
+//
+//   node --input-type=module -e "
+//     import { updateEnemyBullet } from './js/sim/bullet.js';
+//     import { freshBulletState } from './js/sim/state.js';
+//     const b = freshBulletState(13, 'enemy', { movementPattern: 'laser_beam',
+//         x: 300, y: 300, vx: 3, vy: 4, baseVx: 3, baseVy: 4,
+//         startX: 300, startY: 300,
+//         life: 0, maxLife: 180, damage: 3, radius: 4, baseRadius: 4,
+//         maxRange: 9999, rangeMultiplier: 1.0, active: true });
+//     const ctx = { tickScale: 0.5, logicTickSeconds: 1/60, bulletSpeed: 10,
+//         boundaryWidth: 9999, boundaryHeight: 9999, now: 0,
+//         targetPlayer: null, homingTarget: null, rngFloat: () => 0.5 };
+//     for (let i = 0; i < 20; i++) updateEnemyBullet(b, ctx, []);
+//     console.log(JSON.stringify({ x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+//         damage: b.damage, radius: b.radius,
+//         patternTimer: b.patternTimer, life: b.life, active: b.active }));
+//   "
+//   → {"x":390,"y":420,"vx":9.000000000000002,"vy":11.999999999999998,
+//      "damage":3,"radius":8,"patternTimer":0.3333333333333333,
+//      "life":1,"active":true}
+//
+// base = (3, 4) → hypot = 5. After 3× multiplier and renormalization:
+// vx = 15 * (3/5) = 9, vy = 15 * (4/5) = 12. Position advances by
+// (vx*0.5, vy*0.5) per tick. Over 20 ticks: dx = 9*0.5*20 = 90 → x = 390;
+// dy = 12*0.5*20 = 120 → y = 420. Radius clamped from input 4 to floor 8.
+// Damage = 3 (input) * 1.0 multiplier = 3.
+#[test]
+fn enemy_bullet_laser_beam() {
+    let mut b = default_enemy_bullet(13, BulletPattern::LaserBeam);
+    b.x = 300.0;
+    b.y = 300.0;
+    b.vx = 3.0;
+    b.vy = 4.0;
+    b.start_x = 300.0;
+    b.start_y = 300.0;
+    b.base_vx = 3.0;
+    b.base_vy = 4.0;
+    b.damage = 3.0;
+    b.radius = 4.0;
+    b.life = 0.0;
+
+    let ctx = default_ctx();
+    let mut events: Vec<BulletEvent> = Vec::new();
+    for _ in 0..20 {
+        update_enemy_bullet(&mut b, &ctx, &mut events);
+    }
+
+    close(b.x, 390.0, "bullet.x");
+    close(b.y, 420.0, "bullet.y");
+    close(b.vx, 9.0, "bullet.vx");
+    close(b.vy, 12.0, "bullet.vy");
+    close(b.damage, 3.0, "bullet.damage");
+    close(b.radius, 8.0, "bullet.radius");
+    close(b.pattern_timer, 0.3333333333333333, "bullet.pattern_timer");
+    close(b.life, 1.0, "bullet.life");
+    assert!(b.active, "bullet should still be active");
+
+    assert!(
+        events.is_empty(),
+        "unexpected despawn events for alive bullet: {:?}",
+        events,
+    );
+}
+
+// ── Fixture 14a: explosive (charge phase — patternTimer < 0.5) ───────────
+//
+// JS reference values captured 2026-05-10 via:
+//
+//   node --input-type=module -e "
+//     import { updateEnemyBullet } from './js/sim/bullet.js';
+//     import { freshBulletState } from './js/sim/state.js';
+//     const b = freshBulletState(14, 'enemy', { movementPattern: 'explosive',
+//         x: 100, y: 100, vx: 4, vy: 0, baseVx: 4, baseVy: 0,
+//         startX: 100, startY: 100,
+//         life: 0, maxLife: 180, damage: 10, radius: 4, baseRadius: 4,
+//         maxRange: 9999, rangeMultiplier: 1.0, active: true });
+//     const ctx = { tickScale: 0.5, logicTickSeconds: 1/60, bulletSpeed: 10,
+//         boundaryWidth: 9999, boundaryHeight: 9999, now: 0,
+//         targetPlayer: null, homingTarget: null, rngFloat: () => 0.5 };
+//     for (let i = 0; i < 20; i++) updateEnemyBullet(b, ctx, []);
+//     console.log(JSON.stringify({ x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+//         patternTimer: b.patternTimer, life: b.life, active: b.active }));
+//   "
+//   → {"x":111.99999999999989,"y":100,"vx":1.2,"vy":0,
+//      "patternTimer":0.3333333333333333,"life":1,"active":true}
+//
+// 20 ticks: patternTimer ends at 20/60 ≈ 0.333, well under 0.5. Charge
+// factor = 0.3 → vx = 4 * 0.3 = 1.2 every tick. Position advances by
+// vx * tick_scale = 0.6 per tick → dx = 12 → x = 112.
+//
+// IMPORTANT: this fixture stays strictly within the charge phase to avoid
+// the f32-vs-f64 precision divergence at the `patternTimer < 0.5` boundary.
+// In f64 (JS), accumulated `1/60` rounds DOWN to `0.49999...` at tick 30,
+// keeping the charge branch alive for one extra tick; in f32 (Rust), the
+// same accumulation rounds UP to `0.50000004`, flipping early. Two narrowly-
+// scoped fixtures (charge-only here, accel-only in 14b) exercise both branches
+// without straddling the boundary.
+#[test]
+fn enemy_bullet_explosive_charge_phase() {
+    let mut b = default_enemy_bullet(14, BulletPattern::Explosive);
+    b.x = 100.0;
+    b.y = 100.0;
+    b.vx = 4.0;
+    b.vy = 0.0;
+    b.start_x = 100.0;
+    b.start_y = 100.0;
+    b.base_vx = 4.0;
+    b.base_vy = 0.0;
+    b.life = 0.0;
+
+    let ctx = default_ctx();
+    let mut events: Vec<BulletEvent> = Vec::new();
+    for _ in 0..20 {
+        update_enemy_bullet(&mut b, &ctx, &mut events);
+    }
+
+    close(b.x, 111.99999999999989, "bullet.x");
+    close(b.y, 100.0, "bullet.y");
+    close(b.vx, 1.2, "bullet.vx");
+    close(b.vy, 0.0, "bullet.vy");
+    close(b.pattern_timer, 0.3333333333333333, "bullet.pattern_timer");
+    close(b.life, 1.0, "bullet.life");
+    assert!(b.active, "bullet should still be active");
+
+    assert!(
+        events.is_empty(),
+        "unexpected despawn events for alive bullet: {:?}",
+        events,
+    );
+}
+
+// ── Fixture 14b: explosive (accel phase — patternTimer >= 0.5) ───────────
+//
+// JS reference values captured 2026-05-10 via (note: patternTimer pre-set
+// to 1.0 to start well past the boundary):
+//
+//   node --input-type=module -e "
+//     import { updateEnemyBullet } from './js/sim/bullet.js';
+//     import { freshBulletState } from './js/sim/state.js';
+//     const b = freshBulletState(14, 'enemy', { movementPattern: 'explosive',
+//         x: 100, y: 100, vx: 4, vy: 0, baseVx: 4, baseVy: 0,
+//         startX: 100, startY: 100,
+//         life: 0, maxLife: 180, damage: 10, radius: 4, baseRadius: 4,
+//         maxRange: 9999, rangeMultiplier: 1.0, active: true });
+//     b.patternTimer = 1.0;
+//     const ctx = { tickScale: 0.5, logicTickSeconds: 1/60, bulletSpeed: 10,
+//         boundaryWidth: 9999, boundaryHeight: 9999, now: 0,
+//         targetPlayer: null, homingTarget: null, rngFloat: () => 0.5 };
+//     for (let i = 0; i < 10; i++) updateEnemyBullet(b, ctx, []);
+//     console.log(JSON.stringify({ x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+//         patternTimer: b.patternTimer, life: b.life, active: b.active }));
+//   "
+//   → {"x":153,"y":100,"vx":11.199999999999996,"vy":0,
+//      "patternTimer":1.166666666666666,"life":1,"active":true}
+//
+// Final pattern eval uses pre-update patternTimer at tick 10. Starting from
+// 1.0, after 9 ticks the timer is 1.0 + 9/60 = 1.15. So:
+//   factor = 1.5 + (1.15 - 0.5) * 2 = 1.5 + 1.3 = 2.8
+//   vx = 4 * 2.8 = 11.2 ✓
+// Position dx accumulates the ramp over 10 ticks.
+#[test]
+fn enemy_bullet_explosive_accel_phase() {
+    let mut b = default_enemy_bullet(14, BulletPattern::Explosive);
+    b.x = 100.0;
+    b.y = 100.0;
+    b.vx = 4.0;
+    b.vy = 0.0;
+    b.start_x = 100.0;
+    b.start_y = 100.0;
+    b.base_vx = 4.0;
+    b.base_vy = 0.0;
+    b.pattern_timer = 1.0;
+    b.life = 0.0;
+
+    let ctx = default_ctx();
+    let mut events: Vec<BulletEvent> = Vec::new();
+    for _ in 0..10 {
+        update_enemy_bullet(&mut b, &ctx, &mut events);
+    }
+
+    close(b.x, 153.0, "bullet.x");
+    close(b.y, 100.0, "bullet.y");
+    close(b.vx, 11.199999999999996, "bullet.vx");
+    close(b.vy, 0.0, "bullet.vy");
+    close(b.pattern_timer, 1.166666666666666, "bullet.pattern_timer");
+    close(b.life, 1.0, "bullet.life");
+    assert!(b.active, "bullet should still be active");
+
+    assert!(
+        events.is_empty(),
+        "unexpected despawn events for alive bullet: {:?}",
+        events,
+    );
+}
+
+// ── Fixture 15: rapid (per-tick RNG jitter; deterministic with rng=0.5) ──
+//
+// JS reference values captured 2026-05-10 via:
+//
+//   node --input-type=module -e "
+//     import { updateEnemyBullet } from './js/sim/bullet.js';
+//     import { freshBulletState } from './js/sim/state.js';
+//     const b = freshBulletState(15, 'enemy', { movementPattern: 'rapid',
+//         x: 250, y: 250, vx: 4, vy: 0, baseVx: 4, baseVy: 0,
+//         startX: 250, startY: 250,
+//         life: 0, maxLife: 180, damage: 10, radius: 4, baseRadius: 4,
+//         maxRange: 9999, rangeMultiplier: 1.0, active: true });
+//     const ctx = { tickScale: 0.5, logicTickSeconds: 1/60, bulletSpeed: 10,
+//         boundaryWidth: 9999, boundaryHeight: 9999, now: 0,
+//         targetPlayer: null, homingTarget: null, rngFloat: () => 0.5 };
+//     for (let i = 0; i < 25; i++) updateEnemyBullet(b, ctx, []);
+//     console.log(JSON.stringify({ x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+//         patternTimer: b.patternTimer, life: b.life, active: b.active }));
+//   "
+//   → {"x":300,"y":250,"vx":4,"vy":0,"patternTimer":0.41666666666666663,
+//      "life":1,"active":true}
+//
+// With `rngFloat: () => 0.5`, jitter `(0.5 - 0.5) * 0.3 = 0` on both axes
+// each tick — i.e. equivalent to Straight. vx stays at base_vx = 4, vy = 0.
+// Position: dx = 4 * 0.5 * 25 = 50 → x = 300. This exercises the RNG plumbing
+// path without divergence; production-side random walks would still match
+// when both sides consume from the same seed.
+#[test]
+fn enemy_bullet_rapid() {
+    let mut b = default_enemy_bullet(15, BulletPattern::Rapid);
+    b.x = 250.0;
+    b.y = 250.0;
+    b.vx = 4.0;
+    b.vy = 0.0;
+    b.start_x = 250.0;
+    b.start_y = 250.0;
+    b.base_vx = 4.0;
+    b.base_vy = 0.0;
+    b.life = 0.0;
+
+    let ctx = default_ctx();
+    let mut events: Vec<BulletEvent> = Vec::new();
+    for _ in 0..25 {
+        update_enemy_bullet(&mut b, &ctx, &mut events);
+    }
+
+    close(b.x, 300.0, "bullet.x");
+    close(b.y, 250.0, "bullet.y");
+    close(b.vx, 4.0, "bullet.vx");
+    close(b.vy, 0.0, "bullet.vy");
+    close(b.pattern_timer, 0.41666666666666663, "bullet.pattern_timer");
     close(b.life, 1.0, "bullet.life");
     assert!(b.active, "bullet should still be active");
 
