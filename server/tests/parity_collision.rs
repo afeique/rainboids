@@ -39,9 +39,10 @@
 //! PR #32 for player-asteroid).
 
 use rainboids_server::sim::collision::{
-    detect_bullet_asteroid_hits, detect_player_asteroid_hits, CollisionAsteroid, CollisionBullet,
-    CollisionContext, CollisionEvent, CollisionPlayer, ASTEROID_KNOCKBACK_MULTIPLIER,
-    OVERLAP_PUSH_FORCE, PLAYER_ASTEROID_COLLISION_DAMAGE, SEPARATION_BUFFER,
+    detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_player_asteroid_hits,
+    CollisionAsteroid, CollisionBullet, CollisionContext, CollisionEnemy, CollisionEvent,
+    CollisionPlayer, ASTEROID_KNOCKBACK_MULTIPLIER, OVERLAP_PUSH_FORCE,
+    PLAYER_ASTEROID_COLLISION_DAMAGE, SEPARATION_BUFFER,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -679,5 +680,310 @@ fn player_asteroid_separation_magnitude() {
     assert!(
         (ASTEROID_KNOCKBACK_MULTIPLIER - 22.0).abs() < 1e-6,
         "ASTEROID_KNOCKBACK_MULTIPLIER must mirror JS verbatim"
+    );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Bullet-vs-enemy fixtures (dispatch 3 — this PR).
+// ═════════════════════════════════════════════════════════════════════
+//
+// Mirrors `js/sim/collision.js::detectBulletEnemyHits` and the Jest suite
+// at `tests/unit/sim/collision.test.js` (the bullet-enemy describe block
+// added in PR #38). Coverage:
+//
+//   11. `bullet_enemy_single_hit`
+//       — basic overlap → 1 event with all 9 fields.
+//   12. `bullet_enemy_piercing_within_tick`
+//       — piercing=2 → 3 events, last has will_despawn=true.
+//   13. `bullet_enemy_geometry_miss`
+//       — 200 px apart → 0 events.
+//   14. `bullet_enemy_pierced_set_distinct_from_asteroid`
+//       — bullet has pierced_asteroid_ids={42}; same bullet still hits
+//         enemy id=42 because the Sets are distinct (different id spaces).
+
+// ---------------------------------------------------------------------
+// Helpers — build minimal bullet/enemy pairs that overlap (or not).
+// ---------------------------------------------------------------------
+
+/// Build an enemy at (x, y) with the live HUNTER default radius of 18.
+fn make_enemy(id: u32, x: f32, y: f32) -> CollisionEnemy {
+    let mut e = CollisionEnemy::fresh(id);
+    e.x = x;
+    e.y = y;
+    e
+}
+
+// ---------------------------------------------------------------------
+// Fixture 11 — single bullet hits single enemy.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"overlapping bullet + enemy
+// emits one event with all 9 fields"`. JS asserts:
+//   - 1 event
+//   - bullet_id=1, enemy_id=101, damage=3
+//   - bullet velocity (vx=8, vy=-3) and position (100, 100) carried through
+//   - bullet_will_despawn=true, bullet_piercing_remaining=-1 (non-piercing)
+// ---------------------------------------------------------------------
+
+#[test]
+fn bullet_enemy_single_hit() {
+    // Bullet radius 4 + enemy radius 18 = sum_r 22. Place enemy 10 px east
+    // of bullet ⇒ overlap = 12 (clear hit).
+    let mut bullet = make_bullet(1, 100.0, 100.0);
+    bullet.vx = 8.0;
+    bullet.vy = -3.0;
+    bullet.damage = 3.0;
+
+    let enemy = make_enemy(101, 110.0, 100.0);
+
+    let mut bullets = vec![bullet];
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_bullet_enemy_hits(&mut bullets, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "expected exactly one bullet-hit-enemy event");
+
+    match events[0] {
+        CollisionEvent::BulletHitEnemy {
+            bullet_id,
+            enemy_id,
+            damage,
+            bullet_x,
+            bullet_y,
+            bullet_vx,
+            bullet_vy,
+            bullet_piercing_remaining,
+            bullet_will_despawn,
+        } => {
+            assert_eq!(bullet_id, 1, "bullet_id");
+            assert_eq!(enemy_id, 101, "enemy_id");
+            assert!((damage - 3.0).abs() < 1e-6, "damage carries through");
+            assert!((bullet_x - 100.0).abs() < 1e-6, "bullet_x");
+            assert!((bullet_y - 100.0).abs() < 1e-6, "bullet_y");
+            assert!((bullet_vx - 8.0).abs() < 1e-6, "bullet_vx");
+            assert!((bullet_vy - (-3.0)).abs() < 1e-6, "bullet_vy");
+            assert_eq!(
+                bullet_piercing_remaining, -1,
+                "non-piercing bullet → -1 remaining"
+            );
+            assert!(bullet_will_despawn, "non-piercing bullet despawns on hit");
+        }
+        ev => panic!("expected BulletHitEnemy, got {:?}", ev),
+    }
+
+    // Bullet should now remember the pierce — but only in the enemy Set,
+    // not the asteroid Set (distinct id spaces).
+    assert!(
+        bullets[0].pierced_enemy_ids.contains(&101),
+        "pierced_enemy_ids should include the hit enemy"
+    );
+    assert!(
+        bullets[0].pierced_asteroid_ids.is_empty(),
+        "pierced_asteroid_ids should remain untouched by an enemy hit"
+    );
+    assert_eq!(
+        bullets[0].pierced_enemies, 1,
+        "pierced_enemies counter incremented"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Fixture 12 — piercing=2 bullet hits 3 overlapping enemies in same tick.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"piercing=2 bullet hits 3
+// overlapping enemies in same tick"`.
+// ---------------------------------------------------------------------
+
+#[test]
+fn bullet_enemy_piercing_within_tick() {
+    let mut bullet = make_bullet(1, 100.0, 100.0);
+    bullet.piercing = 2;
+    bullet.damage = 1.0;
+
+    // All three enemies overlap (each radius 18, bullet radius 4 → sum_r
+    // 22; bullet at (100, 100), enemies within 15 px on the x-axis).
+    let e1 = make_enemy(101, 110.0, 100.0);
+    let e2 = make_enemy(102, 115.0, 100.0);
+    let e3 = make_enemy(103, 90.0, 100.0);
+
+    let mut bullets = vec![bullet];
+    let enemies = vec![e1, e2, e3];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_bullet_enemy_hits(&mut bullets, &enemies, &ctx, &mut events);
+
+    assert_eq!(
+        events.len(),
+        3,
+        "piercing=2 → 3 events (piercing + 1 targets)"
+    );
+
+    // Collect ids in event-emit order — should be array order: 101, 102, 103.
+    let ids: Vec<u32> = events
+        .iter()
+        .map(|e| match *e {
+            CollisionEvent::BulletHitEnemy { enemy_id, .. } => enemy_id,
+            ev => panic!("expected BulletHitEnemy, got {:?}", ev),
+        })
+        .collect();
+    assert_eq!(ids, vec![101, 102, 103], "enemies hit in array order");
+
+    // First two events: bullet still alive.
+    for (i, ev) in events.iter().take(2).enumerate() {
+        match *ev {
+            CollisionEvent::BulletHitEnemy {
+                bullet_will_despawn,
+                bullet_piercing_remaining,
+                ..
+            } => {
+                assert!(
+                    !bullet_will_despawn,
+                    "event[{}] should not despawn (budget remaining)",
+                    i
+                );
+                // After hit 1: remaining=1; after hit 2: remaining=0.
+                let expected = (2 - (i as i32 + 1)).max(0);
+                assert_eq!(
+                    bullet_piercing_remaining, expected,
+                    "event[{}] piercing_remaining",
+                    i
+                );
+            }
+            ev => panic!("expected BulletHitEnemy, got {:?}", ev),
+        }
+    }
+
+    // Last event: budget exhausted → despawn.
+    match events[2] {
+        CollisionEvent::BulletHitEnemy {
+            bullet_will_despawn,
+            bullet_piercing_remaining,
+            ..
+        } => {
+            assert!(bullet_will_despawn, "third hit exhausts piercing budget");
+            assert_eq!(
+                bullet_piercing_remaining, 0,
+                "piercing_remaining clamps to 0 on last hit"
+            );
+        }
+        ev => panic!("expected BulletHitEnemy, got {:?}", ev),
+    }
+
+    // All three enemy ids should now live in the bullet's pierced set.
+    assert_eq!(
+        bullets[0].pierced_enemy_ids.len(),
+        3,
+        "pierced_enemy_ids should have all three"
+    );
+    // Asteroid Set must remain untouched — distinct from enemy Set.
+    assert!(
+        bullets[0].pierced_asteroid_ids.is_empty(),
+        "pierced_asteroid_ids must NOT be modified by enemy hits"
+    );
+    assert_eq!(bullets[0].pierced_enemies, 3, "shared pierced_enemies counter");
+}
+
+// ---------------------------------------------------------------------
+// Fixture 13 — bullet outside sum-of-radii emits no event.
+// ---------------------------------------------------------------------
+
+#[test]
+fn bullet_enemy_geometry_miss() {
+    let bullet = make_bullet(1, 0.0, 0.0);
+    // dx=200, sum_r=4+18=22 → squared distance 40_000 ≫ 484 → no overlap.
+    let enemy = make_enemy(101, 200.0, 0.0);
+
+    let mut bullets = vec![bullet];
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_bullet_enemy_hits(&mut bullets, &enemies, &ctx, &mut events);
+
+    assert!(
+        events.is_empty(),
+        "bullet outside sum-of-radii should emit no event, got {:?}",
+        events
+    );
+    // Pierce-tracking Sets should still be empty — no hit recorded.
+    assert!(
+        bullets[0].pierced_enemy_ids.is_empty(),
+        "no enemy pierces recorded on miss"
+    );
+    assert!(
+        bullets[0].pierced_asteroid_ids.is_empty(),
+        "no asteroid pierces recorded on miss"
+    );
+    assert_eq!(bullets[0].pierced_enemies, 0, "no pierce-counter bump");
+}
+
+// ---------------------------------------------------------------------
+// Fixture 14 — pierced_enemy_ids is DISTINCT from pierced_asteroid_ids.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"a bullet that pierced
+// asteroid X can still hit enemy with same id"`. Bullet has already
+// pierced asteroid id=42 (seeded into pierced_asteroid_ids) earlier
+// this tick; an enemy with id=42 still gets hit because the Sets cover
+// different id spaces. The SHARED pierced_enemies counter increments,
+// however, because the budget is one counter for both pair types.
+// ---------------------------------------------------------------------
+
+#[test]
+fn bullet_enemy_pierced_set_distinct_from_asteroid() {
+    // Pre-seed the bullet as if it had already pierced asteroid 42 in the
+    // bullet-asteroid pass earlier this tick. The shared counter reflects
+    // that prior pierce.
+    let mut bullet = make_bullet(1, 100.0, 100.0);
+    bullet.piercing = 3;
+    bullet.damage = 1.0;
+    bullet.pierced_asteroid_ids.insert(42);
+    bullet.pierced_enemies = 1; // shared counter already at 1 from the asteroid pierce
+
+    // Enemy ALSO with id=42 (different id space, different target). The
+    // detector MUST hit this enemy — its id is in pierced_asteroid_ids
+    // but NOT in pierced_enemy_ids.
+    let enemy = make_enemy(42, 110.0, 100.0);
+
+    let mut bullets = vec![bullet];
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_bullet_enemy_hits(&mut bullets, &enemies, &ctx, &mut events);
+
+    assert_eq!(
+        events.len(),
+        1,
+        "enemy id=42 must be hit despite asteroid id=42 already pierced"
+    );
+
+    match events[0] {
+        CollisionEvent::BulletHitEnemy { enemy_id, .. } => {
+            assert_eq!(enemy_id, 42, "the hit enemy is id=42");
+        }
+        ev => panic!("expected BulletHitEnemy, got {:?}", ev),
+    }
+
+    // Now the bullet's enemy-pierce Set is populated.
+    assert!(
+        bullets[0].pierced_enemy_ids.contains(&42),
+        "pierced_enemy_ids should now contain 42"
+    );
+    // Asteroid-pierce Set still holds the original 42 entry — untouched.
+    assert!(
+        bullets[0].pierced_asteroid_ids.contains(&42),
+        "pierced_asteroid_ids should still contain 42 (untouched by enemy pair)"
+    );
+    assert_eq!(
+        bullets[0].pierced_asteroid_ids.len(),
+        1,
+        "pierced_asteroid_ids should still have exactly one entry (42)"
+    );
+    // Shared counter ticked up by 1 — now 2 (one ast + one enemy).
+    assert_eq!(
+        bullets[0].pierced_enemies, 2,
+        "shared pierced_enemies counter increments per pierce regardless of type"
     );
 }
