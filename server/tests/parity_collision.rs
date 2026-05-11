@@ -40,9 +40,10 @@
 
 use rainboids_server::sim::collision::{
     detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_player_asteroid_hits,
-    CollisionAsteroid, CollisionBullet, CollisionContext, CollisionEnemy, CollisionEvent,
-    CollisionPlayer, ASTEROID_KNOCKBACK_MULTIPLIER, OVERLAP_PUSH_FORCE,
-    PLAYER_ASTEROID_COLLISION_DAMAGE, SEPARATION_BUFFER,
+    detect_player_enemy_hits, CollisionAsteroid, CollisionBullet, CollisionContext, CollisionEnemy,
+    CollisionEvent, CollisionPlayer, ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER,
+    BOUNCE_RESTITUTION, OVERLAP_PUSH_FORCE, OVERLAP_SEPARATION_RATIO,
+    PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE, SEPARATION_BUFFER,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -985,5 +986,506 @@ fn bullet_enemy_pierced_set_distinct_from_asteroid() {
     assert_eq!(
         bullets[0].pierced_enemies, 2,
         "shared pierced_enemies counter increments per pierce regardless of type"
+    );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Player-vs-enemy fixtures (Phase 2.5 dispatch 4 — this PR).
+// ═════════════════════════════════════════════════════════════════════
+//
+// Mirrors `js/sim/collision.js::detectPlayerEnemyHits` and the Jest suite
+// at `tests/unit/sim/collision.test.js` (the player-enemy describe block).
+//
+// IMPORTANT: math model is DIFFERENT from the asteroid pair. The
+// player-vs-enemy path uses a textbook restitution-based impulse model
+// (`-(1 + R) · vN / totalMass`) gated on `velAlongNormal > 0`, with
+// `BOUNCE_FORCE_MULTIPLIER = 12.0`, separation =
+// `overlap × OVERLAP_SEPARATION_RATIO` SPLIT between both bodies, NO
+// `OVERLAP_PUSH_FORCE` velocity nudge, NO atan2 jitter — fully
+// deterministic. Damage is unconditional on overlap; bounce gates on
+// approach.
+//
+// Coverage:
+//   15. `player_enemy_single_hit_approaching`
+//       — both-body impulse + separation when approaching; damage=5.
+//   16. `player_enemy_geometry_miss`
+//       — 200 px gap → 0 events.
+//   17. `player_enemy_graze_separating`
+//       — overlapping with velAlongNormal > 0 → damage-only event
+//         (zero impulses, zero separations on the bounce; but separation
+//         still applies because overlap > 0). Actually the JS code applies
+//         separation independent of the bail-out — so impulses zero,
+//         separations nonzero. Pin this asymmetry exactly.
+//   18. `player_enemy_multiple_hits`
+//       — player overlapping 2 enemies → 2 events.
+//   19. `player_enemy_skip_gates`
+//       — inactive player/enemy, warping, death_flash → 0 events.
+//   20. `player_enemy_textbook_restitution_pin`
+//       — zero-velocity player + zero-velocity enemy at known positions
+//         → zero impulses (no jitter, no OVERLAP_PUSH_FORCE); damage
+//         still emitted; separation matches `overlap × ratio` formula.
+
+// ---------------------------------------------------------------------
+// Helpers — build minimal player/enemy pairs. `make_player` is already
+// defined for earlier dispatches; reuse it here. The enemy helper for
+// the player-enemy pair sets an explicit `mass` field (the JS test suite
+// pins mass=200 via `makeEnemy`).
+// ---------------------------------------------------------------------
+
+/// Build an enemy at (x, y) with explicit `mass = 200` (JS default in
+/// `makeEnemy`). The bullet-enemy `make_enemy` helper above leaves mass
+/// unset; the player-enemy pair needs mass explicit so the textbook
+/// impulse math has a stable reference point.
+fn make_enemy_with_mass(id: u32, x: f32, y: f32) -> CollisionEnemy {
+    let mut e = CollisionEnemy::fresh(id);
+    e.x = x;
+    e.y = y;
+    e.mass = Some(200.0);
+    e
+}
+
+// ---------------------------------------------------------------------
+// Fixture 15 — single overlapping player + enemy emits one event with
+// both-body impulses + separations populated when bodies are approaching.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"overlapping player + enemy
+// emits one event with all 12 fields"`.
+//
+// Geometry:
+//   - Player at (100, 100), radius 15, vx=8 (eastbound).
+//   - Enemy at (120, 100), radius 18, mass 200, vx=0 (still).
+//   - distance=20, sum_r=33 ⇒ overlap=13.
+//   - Normal (enemy → player) = (-1, 0).
+//   - relVx = 8 - 0 = 8, dot normal = -8 < 0 ⇒ APPROACHING ⇒ impulse fires.
+//
+// Expected sign / shape:
+//   - Player impulse pushes west (negative dx).
+//   - Enemy impulse pushes east (positive dx; mirror).
+//   - Separation pushes player west, enemy east, both with magnitude
+//     overlap × OVERLAP_SEPARATION_RATIO = 13 × 0.6 = 7.8.
+// ---------------------------------------------------------------------
+
+#[test]
+fn player_enemy_single_hit_approaching() {
+    let mut player = make_player(1, 100.0, 100.0);
+    player.vx = 8.0;
+    player.vy = 0.0;
+
+    let enemy = make_enemy_with_mass(10, 120.0, 100.0);
+
+    let players = vec![player];
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_player_enemy_hits(&players, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "expected exactly one player-hit-enemy event");
+
+    match events[0] {
+        CollisionEvent::PlayerHitEnemy {
+            player_id,
+            enemy_id,
+            damage_to_enemy,
+            player_impulse_dx,
+            player_impulse_dy,
+            enemy_impulse_dx,
+            enemy_impulse_dy,
+            separation_dx,
+            separation_dy,
+            enemy_separation_dx,
+            enemy_separation_dy,
+        } => {
+            assert_eq!(player_id, 1, "player_id");
+            assert_eq!(enemy_id, 10, "enemy_id");
+            assert!(
+                (damage_to_enemy - PLAYER_ENEMY_COLLISION_DAMAGE).abs() < 1e-6,
+                "damage_to_enemy = PLAYER_ENEMY_COLLISION_DAMAGE = 5"
+            );
+            assert!(
+                (damage_to_enemy - 5.0).abs() < 1e-6,
+                "damage_to_enemy = 5 (verbatim)"
+            );
+
+            // All eight numeric delta fields must be finite.
+            assert!(player_impulse_dx.is_finite(), "player_impulse_dx finite");
+            assert!(player_impulse_dy.is_finite(), "player_impulse_dy finite");
+            assert!(enemy_impulse_dx.is_finite(), "enemy_impulse_dx finite");
+            assert!(enemy_impulse_dy.is_finite(), "enemy_impulse_dy finite");
+            assert!(separation_dx.is_finite(), "separation_dx finite");
+            assert!(separation_dy.is_finite(), "separation_dy finite");
+            assert!(enemy_separation_dx.is_finite(), "enemy_separation_dx finite");
+            assert!(enemy_separation_dy.is_finite(), "enemy_separation_dy finite");
+
+            // Approaching bodies ⇒ impulses fire.
+            // Player gets pushed west (negative dx); enemy gets pushed east.
+            assert!(
+                player_impulse_dx < 0.0,
+                "player gets shoved west, got dx={}",
+                player_impulse_dx
+            );
+            assert!(
+                enemy_impulse_dx > 0.0,
+                "enemy gets shoved east, got dx={}",
+                enemy_impulse_dx
+            );
+            // Both on the x-axis ⇒ y-components ≈ 0.
+            approx_eq(player_impulse_dy, 0.0, "player_impulse_dy");
+            approx_eq(enemy_impulse_dy, 0.0, "enemy_impulse_dy");
+
+            // Separation:
+            //   overlap = 13, ratio = 0.6 ⇒ separationForce = 7.8.
+            //   Player goes west: separation_dx = -7.8.
+            //   Enemy goes east: enemy_separation_dx = +7.8.
+            let expected_sep_force = 13.0 * OVERLAP_SEPARATION_RATIO; // 7.8
+            approx_eq(separation_dx, -expected_sep_force, "separation_dx");
+            approx_eq(separation_dy, 0.0, "separation_dy");
+            approx_eq(
+                enemy_separation_dx,
+                expected_sep_force,
+                "enemy_separation_dx",
+            );
+            approx_eq(enemy_separation_dy, 0.0, "enemy_separation_dy");
+
+            // Newton's-law sanity: enemy separation mirrors player.
+            approx_eq(
+                enemy_separation_dx,
+                -separation_dx,
+                "enemy_separation_dx mirrors -separation_dx",
+            );
+        }
+        ev => panic!("expected PlayerHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 16 — geometry miss: centers further than sum_r apart emits no
+// event.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"player outside (player.r +
+// enemy.r) emits no event"`.
+// ---------------------------------------------------------------------
+
+#[test]
+fn player_enemy_geometry_miss() {
+    let player = make_player(1, 0.0, 0.0);
+    // 200 px ≫ sum_r=33 ⇒ no overlap.
+    let enemy = make_enemy_with_mass(10, 200.0, 0.0);
+
+    let players = vec![player];
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_player_enemy_hits(&players, &enemies, &ctx, &mut events);
+
+    assert!(
+        events.is_empty(),
+        "player outside sum-of-radii should emit no event, got {:?}",
+        events
+    );
+}
+
+// ---------------------------------------------------------------------
+// Fixture 17 — separating velocities (graze frame). Bodies overlap but
+// their relative velocity already points outward ⇒ bounce impulses must
+// be zero. Damage event STILL fires; separation STILL applies (overlap
+// > 0 path runs independent of the bail-out — matches legacy lines
+// 1796–1806).
+//
+// Mirrors `tests/unit/sim/collision.test.js::"player moving away from
+// enemy still overlaps: damage + separation fire, impulse is zero"`.
+//
+// Geometry: player + enemy overlap (distance=20, sum_r=33). But player
+// is moving AWAY now (player westbound vx=-5, enemy stationary). Normal
+// = (-1, 0); relVx = -5, velAlongNormal = (-5) · (-1) = +5 > 0 ⇒
+// separating ⇒ bail.
+// ---------------------------------------------------------------------
+
+#[test]
+fn player_enemy_graze_separating() {
+    let mut player = make_player(1, 100.0, 100.0);
+    player.vx = -5.0;
+    player.vy = 0.0;
+
+    let enemy = make_enemy_with_mass(10, 120.0, 100.0);
+
+    let players = vec![player];
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_player_enemy_hits(&players, &enemies, &ctx, &mut events);
+
+    assert_eq!(
+        events.len(),
+        1,
+        "graze still emits an event (damage path runs unconditionally on overlap)"
+    );
+
+    match events[0] {
+        CollisionEvent::PlayerHitEnemy {
+            damage_to_enemy,
+            player_impulse_dx,
+            player_impulse_dy,
+            enemy_impulse_dx,
+            enemy_impulse_dy,
+            separation_dx,
+            separation_dy,
+            enemy_separation_dx,
+            enemy_separation_dy,
+            ..
+        } => {
+            // Damage still applies on graze.
+            assert!(
+                (damage_to_enemy - 5.0).abs() < 1e-6,
+                "damage still applied on graze frame"
+            );
+            // Impulses zero on both bodies — the bail-out branch.
+            approx_eq(player_impulse_dx, 0.0, "player_impulse_dx (separating)");
+            approx_eq(player_impulse_dy, 0.0, "player_impulse_dy (separating)");
+            approx_eq(enemy_impulse_dx, 0.0, "enemy_impulse_dx (separating)");
+            approx_eq(enemy_impulse_dy, 0.0, "enemy_impulse_dy (separating)");
+            // But separation STILL applies — overlap > 0 path runs
+            // independent of the velAlongNormal bail-out. Pin
+            // the EXACT formula (overlap × ratio).
+            let expected_sep_force = 13.0 * OVERLAP_SEPARATION_RATIO; // 7.8
+            approx_eq(separation_dx, -expected_sep_force, "separation_dx (graze)");
+            approx_eq(separation_dy, 0.0, "separation_dy (graze)");
+            approx_eq(
+                enemy_separation_dx,
+                expected_sep_force,
+                "enemy_separation_dx (graze)",
+            );
+            approx_eq(enemy_separation_dy, 0.0, "enemy_separation_dy (graze)");
+        }
+        ev => panic!("expected PlayerHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 18 — one player overlapping two enemies in the same tick ⇒
+// two events.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"player caught between two
+// enemies emits two events"`.
+//
+// Geometry: player at (100, 100), enemies at east (120, 100) + west
+// (80, 100). sum_r=33, each enemy 20 px out ⇒ both overlap.
+// ---------------------------------------------------------------------
+
+#[test]
+fn player_enemy_multiple_hits() {
+    let player = make_player(1, 100.0, 100.0);
+
+    let east = make_enemy_with_mass(10, 120.0, 100.0);
+    let west = make_enemy_with_mass(20, 80.0, 100.0);
+
+    let players = vec![player];
+    let enemies = vec![east, west];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_player_enemy_hits(&players, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 2, "expected two events (one per overlapping enemy)");
+
+    // Both events should be for the same player.
+    let mut ids: Vec<u32> = events
+        .iter()
+        .map(|e| match *e {
+            CollisionEvent::PlayerHitEnemy {
+                player_id,
+                enemy_id,
+                damage_to_enemy,
+                ..
+            } => {
+                assert_eq!(player_id, 1, "all events should be for player 1");
+                assert!(
+                    (damage_to_enemy - 5.0).abs() < 1e-6,
+                    "damage_to_enemy must be 5 on each event"
+                );
+                enemy_id
+            }
+            ev => panic!("expected PlayerHitEnemy, got {:?}", ev),
+        })
+        .collect();
+    ids.sort();
+    assert_eq!(ids, vec![10, 20], "expected enemies 10 and 20");
+}
+
+// ---------------------------------------------------------------------
+// Fixture 19 — skip gates (inactive player / inactive enemy / warping /
+// death-flash) emit no event.
+//
+// Mirrors the four `tests/unit/sim/collision.test.js::"skip"` scenarios
+// in the player-enemy describe block. Combined into a single Rust test
+// for brevity; each sub-block constructs the smallest possible failing
+// state.
+// ---------------------------------------------------------------------
+
+#[test]
+fn player_enemy_skip_gates() {
+    let ctx = CollisionContext;
+
+    // Sub-test (a): inactive player → no event.
+    {
+        let mut player = make_player(1, 100.0, 100.0);
+        player.active = false;
+        let enemy = make_enemy_with_mass(10, 120.0, 100.0);
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_player_enemy_hits(&[player], &[enemy], &ctx, &mut events);
+        assert!(events.is_empty(), "inactive player must not emit event");
+    }
+
+    // Sub-test (b): inactive enemy → no event.
+    {
+        let player = make_player(1, 100.0, 100.0);
+        let mut enemy = make_enemy_with_mass(10, 120.0, 100.0);
+        enemy.active = false;
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_player_enemy_hits(&[player], &[enemy], &ctx, &mut events);
+        assert!(events.is_empty(), "inactive enemy must not emit event");
+    }
+
+    // Sub-test (c): warping enemy → no event.
+    {
+        let player = make_player(1, 100.0, 100.0);
+        let mut enemy = make_enemy_with_mass(10, 120.0, 100.0);
+        enemy.warping = true;
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_player_enemy_hits(&[player], &[enemy], &ctx, &mut events);
+        assert!(events.is_empty(), "warping enemy must not emit event");
+    }
+
+    // Sub-test (d): enemy mid-death-flash → no event.
+    {
+        let player = make_player(1, 100.0, 100.0);
+        let mut enemy = make_enemy_with_mass(10, 120.0, 100.0);
+        enemy.death_flash = 5;
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_player_enemy_hits(&[player], &[enemy], &ctx, &mut events);
+        assert!(
+            events.is_empty(),
+            "enemy mid-death-flash must not emit event"
+        );
+    }
+
+    // Sub-test (e): empty inputs (defensive) → no event.
+    {
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_player_enemy_hits(
+            &[],
+            &[make_enemy_with_mass(10, 0.0, 0.0)],
+            &ctx,
+            &mut events,
+        );
+        assert!(events.is_empty(), "empty players → no event");
+
+        let mut events2: Vec<CollisionEvent> = Vec::new();
+        detect_player_enemy_hits(&[make_player(1, 0.0, 0.0)], &[], &ctx, &mut events2);
+        assert!(events2.is_empty(), "empty enemies → no event");
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 20 — textbook restitution pin. Zero-velocity player + zero-
+// velocity enemy at known positions ⇒ velAlongNormal = 0 (the boundary
+// case, NOT separating). With both bodies stationary, the impulse path
+// fires with `vel_along_normal == 0`:
+//   impulseScalar = -(1 + 0.9) · 0 / totalMass = 0
+//   ⇒ all impulse deltas exactly zero.
+//
+// This is the asymmetry vs the asteroid pair: the asteroid path has
+// NO impulse gate AND adds OVERLAP_PUSH_FORCE × normal to the player
+// impulse. The enemy path has NEITHER — so with zero relative velocity
+// the player impulse is exactly (0, 0), not (-5, 0) like the asteroid
+// pair's separation fixture.
+//
+// Damage and separation still fire (overlap > 0 path runs
+// unconditionally). This is the "no jitter, no OVERLAP_PUSH_FORCE"
+// determinism pin.
+//
+// Geometry: player at (100, 100) r=15; enemy at (120, 100) r=18.
+//   distance = 20, sum_r = 33 ⇒ overlap = 13.
+//   Normal (enemy → player) = (-1, 0).
+//   separationForce = 13 · 0.6 = 7.8.
+//   Player separation: (-1, 0) · 7.8 = (-7.8, 0).
+//   Enemy separation:  (+1, 0) · 7.8 = (+7.8, 0).
+// ---------------------------------------------------------------------
+
+#[test]
+fn player_enemy_textbook_restitution_pin() {
+    let player = make_player(1, 100.0, 100.0);
+    let enemy = make_enemy_with_mass(10, 120.0, 100.0);
+
+    let players = vec![player];
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_player_enemy_hits(&players, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "expected exactly one event");
+
+    let expected_sep_force = 13.0 * OVERLAP_SEPARATION_RATIO; // 7.8
+
+    match events[0] {
+        CollisionEvent::PlayerHitEnemy {
+            damage_to_enemy,
+            player_impulse_dx,
+            player_impulse_dy,
+            enemy_impulse_dx,
+            enemy_impulse_dy,
+            separation_dx,
+            separation_dy,
+            enemy_separation_dx,
+            enemy_separation_dy,
+            ..
+        } => {
+            // Damage fires regardless.
+            assert!(
+                (damage_to_enemy - 5.0).abs() < 1e-6,
+                "damage_to_enemy = 5"
+            );
+            // Zero relative velocity ⇒ impulseScalar = 0 ⇒ all impulse
+            // deltas exactly zero. NO jitter, NO OVERLAP_PUSH_FORCE
+            // — the player-enemy pair lacks both terms.
+            approx_eq(player_impulse_dx, 0.0, "player_impulse_dx (zero v)");
+            approx_eq(player_impulse_dy, 0.0, "player_impulse_dy (zero v)");
+            approx_eq(enemy_impulse_dx, 0.0, "enemy_impulse_dx (zero v)");
+            approx_eq(enemy_impulse_dy, 0.0, "enemy_impulse_dy (zero v)");
+            // Separation still fires — overlap × ratio formula, split
+            // between both bodies.
+            approx_eq(separation_dx, -expected_sep_force, "separation_dx");
+            approx_eq(separation_dy, 0.0, "separation_dy");
+            approx_eq(
+                enemy_separation_dx,
+                expected_sep_force,
+                "enemy_separation_dx",
+            );
+            approx_eq(enemy_separation_dy, 0.0, "enemy_separation_dy");
+        }
+        ev => panic!("expected PlayerHitEnemy, got {:?}", ev),
+    }
+
+    // Constant-parity guard: the player-enemy pair consumes these three
+    // verbatim from `COLLISION_CONFIG` in the legacy module. Sanity-check
+    // they still match the JS values.
+    assert!(
+        (BOUNCE_RESTITUTION - 0.9).abs() < 1e-6,
+        "BOUNCE_RESTITUTION must mirror JS verbatim"
+    );
+    assert!(
+        (BOUNCE_FORCE_MULTIPLIER - 12.0).abs() < 1e-6,
+        "BOUNCE_FORCE_MULTIPLIER must mirror JS verbatim"
+    );
+    assert!(
+        (OVERLAP_SEPARATION_RATIO - 0.6).abs() < 1e-6,
+        "OVERLAP_SEPARATION_RATIO must mirror JS verbatim"
+    );
+    assert!(
+        (PLAYER_ENEMY_COLLISION_DAMAGE - 5.0).abs() < 1e-6,
+        "PLAYER_ENEMY_COLLISION_DAMAGE must mirror JS verbatim"
     );
 }
