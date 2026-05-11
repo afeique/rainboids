@@ -1458,3 +1458,185 @@ export function detectEnemyAsteroidHits(enemies, asteroids, ctx, events) {
         }
     }
 }
+
+// =====================================================================
+// PLAYER ↔ ENEMY-BULLET — Phase 2.5 dispatch (this PR)
+// =====================================================================
+//
+// Enemy bullets damage the player on overlap. Unlike the prior five
+// pairs, the pure step here is the SIMPLEST so far:
+//
+//   - NO bounce / restitution. Bullets are massless points relative to
+//     a ship; they don't push the player around. (Knockback / camera
+//     kick are wrapper-only FX concerns.)
+//   - NO position separation. The wrapper despawns the bullet anyway;
+//     there's nothing to push apart.
+//   - NO impulse to the player. Enemy bullets are presentation+damage
+//     only on the physics side.
+//   - NO mass-aware math.
+//
+// What the pure step DOES emit (per detected overlap):
+//   - A `player_hit_by_enemy_bullet` event with the bullet's damage
+//     value, the bullet's id (so the wrapper can despawn it), and the
+//     bullet's position + velocity (so the wrapper can localize the
+//     hit-flash and orient any shrapnel particles).
+//
+// What stays in the wrapper (legacy `handlePlayerEnemyBulletCollision`
+// at `js/modules/combat/collision-system.js:1821-1896`):
+//   - Player invincibility / phase-dash check (line 1832)
+//   - Effective-shield damage reduction (line 1825)
+//   - Bulwark damage reduction (lines 1827-1830)
+//   - Rounding + final damage application to `player.health` (1835-1836)
+//   - Hit-flash visuals, damage numbers, screen shake (1837-1843)
+//   - Stat tracking (`totalDamageTaken`) (line 1842)
+//   - Kill-streak break (line 1847)
+//   - XP grant for surviving a hit (line 1850)
+//   - Tank-based hit model (5.88.0 — line 1853)
+//   - Hitstop + screen shake juice (lines 1862-1864)
+//   - Per-pattern hit SFX (line 1866) — needs `bullet.firingPattern`
+//     which is presentation-only metadata
+//   - Explosion + hit particles (lines 1872-1892)
+//   - Hit-flash timer (`player._hitFlashTimer = 5`) (line 1895)
+//   - Despawning the bullet (`bullet.active = false`) — caller side
+//
+// The pure step intentionally reports ONLY the geometric hit. The
+// wrapper is the single place where the damage-reduction policy lives
+// (shield, bulwark, phase-dash, tanks) — keeping that out of the
+// detection step avoids baking gameplay tuning into the deterministic
+// sim/Rust mirror.
+//
+// Source-of-truth lines in `js/modules/combat/collision-system.js`:
+//   - Function:                              1821-1896
+//   - Damage application:                    1822-1836 (wrapper)
+//   - Default damage = 15:                   1823 (wrapper-side default;
+//                                                  this module uses 1 as
+//                                                  the safer geometric
+//                                                  default — tests pin it)
+//
+// What stays the same as prior pairs:
+//   - Circle-circle geometry check.
+//   - Inactive-side skip gates.
+//   - Pure-step discipline: emit one event per overlap, never mutate
+//     either side directly. The wrapper applies the reported damage and
+//     despawns the bullet.
+//
+// NOTE: There are NO `warping` / `deathFlash` gates on enemy bullets —
+// these are NOT entities in the warping-in/death-flash sense. A bullet
+// either is active (in flight, can hit) or inactive (despawned). The
+// player also has no warping/death-flash gate of its own (matches the
+// player-vs-enemy pair upstream).
+
+// ─── Player-vs-enemy-bullet pair detection ──────────────────────────
+
+/**
+ * Detect player-vs-enemy-bullet collisions for one tick.
+ *
+ * Pure step: reads player + enemy-bullet positions / radii, decides
+ * which pairs overlap, and emits one `player_hit_by_enemy_bullet`
+ * event per detected hit. Does NOT mutate player or bullet — every
+ * effect is reported in the event payload for the wrapper / Rust
+ * mirror to apply downstream.
+ *
+ * Co-op ready: takes an array of players. The solo wrapper passes
+ * `[player]`; future co-op sessions will pass the full ship roster.
+ * Each player is scanned against every active enemy bullet; a single
+ * player can emit multiple events per tick if it overlaps multiple
+ * bullets simultaneously (e.g. caught in a barrage).
+ *
+ * Geometry:
+ *   Circle-circle overlap: `hypot(dx, dy) < player.radius + bullet.radius`.
+ *   Identical to the legacy `collision()` helper.
+ *
+ * Damage passthrough:
+ *   Reports `bullet.damage` verbatim (defaults to 1 if falsy). The
+ *   wrapper applies all damage-reduction policy (shield, bulwark,
+ *   phase-dash, tanks) on top of this number — see the legacy
+ *   `handlePlayerEnemyBulletCollision` for the reduction pipeline.
+ *
+ * Skipped pairs (no event emitted):
+ *   - Inactive player    (`!player.active`)
+ *   - Inactive bullet    (`!bullet.active`)
+ *
+ * NO warping or death-flash gates on either side. Enemy bullets are
+ * simple flight-or-despawned entities; the player has no warping/death-
+ * flash state of its own (matches the player-vs-enemy pair upstream).
+ *
+ * NO invincibility / phase-dash / shield check — those are wrapper
+ * concerns. The pure step always emits on geometric overlap; the
+ * wrapper decides whether the damage actually lands.
+ *
+ * NO despawn flag in the event (`bulletWillDespawn`) — every enemy-
+ * bullet hit is a despawn-after-hit, so the wrapper always despawns
+ * unconditionally after consuming the event. We could redundantly
+ * report `bulletWillDespawn: true` but it adds no information.
+ *
+ * @param {Array<Object>} players   active player ships. Each treated as
+ *                                  having `{x, y, radius, active, id OR
+ *                                  player}`. Compatible with both the
+ *                                  `ShipState` typedef and the live
+ *                                  `Player` instance shape.
+ * @param {Array<Object>} bullets   active enemy bullets. Each treated as
+ *                                  having `{x, y, vx, vy, radius, damage,
+ *                                  active, id}`. Compatible with both
+ *                                  enemy-side `BulletState` (kind=enemy)
+ *                                  and the live `EnemyBullet` instance
+ *                                  shape.
+ * @param {Object} ctx              per-tick context bag (currently
+ *                                  unused; reserved for future use).
+ * @param {Array<Object>} events    out-buffer. Pushes objects with the
+ *                                  shape documented below.
+ *
+ * Event shape (one event per detected hit — exactly 7 fields):
+ *   {
+ *     type: 'player_hit_by_enemy_bullet',
+ *     playerId:               id of the hit ship
+ *     bulletId:               id of the bullet that hit
+ *     damage:                 bullet.damage (defaults to 1)
+ *     bulletX, bulletY:       impact point — used by the wrapper to
+ *                             localize hit-flash + spawn particles
+ *     bulletVx, bulletVy:     bullet velocity at impact — used by the
+ *                             wrapper to orient shrapnel / camera kick
+ *   }
+ */
+export function detectPlayerEnemyBulletHits(players, bullets, ctx, events) {
+    if (!players || !bullets) return;
+    if (players.length === 0 || bullets.length === 0) return;
+
+    for (let i = 0; i < players.length; i++) {
+        const player = players[i];
+        if (!player || !player.active) continue;
+
+        const playerRadius = player.radius || 0;
+        const pId = entityId(player);
+
+        for (let j = 0; j < bullets.length; j++) {
+            const bullet = bullets[j];
+            if (!bullet || !bullet.active) continue;
+
+            // Circle-circle overlap check.
+            const dx = player.x - bullet.x;
+            const dy = player.y - bullet.y;
+            const sumR = playerRadius + (bullet.radius || 0);
+            const distSq = dx * dx + dy * dy;
+            if (distSq >= sumR * sumR) continue;
+
+            // Damage passthrough — default 1 if the bullet has no
+            // damage attribute or it's zero/falsy. The wrapper applies
+            // its own default (15) at the legacy site, but we pick a
+            // safe geometric-default of 1 here so the event always
+            // carries a positive integer.
+            const damage = bullet.damage || 1;
+
+            events.push({
+                type: 'player_hit_by_enemy_bullet',
+                playerId: pId,
+                bulletId: bullet.id,
+                damage,
+                bulletX: bullet.x,
+                bulletY: bullet.y,
+                bulletVx: bullet.vx || 0,
+                bulletVy: bullet.vy || 0,
+            });
+        }
+    }
+}

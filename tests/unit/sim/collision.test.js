@@ -37,6 +37,7 @@ import {
     detectEnemyAsteroidHits,
     ENEMY_ASTEROID_PUSH,
     ASTEROID_ENEMY_PUSH,
+    detectPlayerEnemyBulletHits,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
@@ -1656,6 +1657,258 @@ describe('detectEnemyAsteroidHits — empty inputs', () => {
     test('null asteroids → no events (defensive)', () => {
         const events = [];
         detectEnemyAsteroidHits([enemyWithRadius(7, 0, 0)], null, ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// Player-vs-enemy-bullet pair (Phase 2.5 — dispatch 6).
+// ═════════════════════════════════════════════════════════════════════
+//
+// `detectPlayerEnemyBulletHits` is the sixth pure-step pair, extracted
+// from `handlePlayerEnemyBulletCollision` in
+// `js/modules/combat/collision-system.js` (lines 1821-1896). This pair
+// is the SIMPLEST so far:
+//
+//   - NO bounce / restitution / impulse on either side.
+//   - NO position separation.
+//   - NO mass-aware math.
+//   - The pure step only emits a damage event with bullet metadata
+//     (position + velocity) for the wrapper to localize FX. The wrapper
+//     applies damage (with shield / bulwark / phase-dash / tanks
+//     policy), despawns the bullet, and runs all the presentation /
+//     audio / particle effects.
+//
+// Event shape: exactly 7 fields including `type`. The wrapper consumes
+// `damage` + `playerId` to apply HP loss and `bulletId` to despawn.
+//
+// The tests below pin:
+//   - single hit happy path (all 7 fields populated correctly)
+//   - geometry miss (no event)
+//   - multiple bullets in one tick (one event per overlap)
+//   - skip gates (inactive player, inactive bullet)
+//   - damage passthrough (bullet.damage = 7 → event.damage = 7;
+//     bullet.damage = 0 → event.damage = 1 default)
+//   - defensive empty / null inputs
+
+// ---------------------------------------------------------------------
+// Helpers — reuse `makePlayer` from the player-asteroid block. Build
+// enemy bullets with `freshBulletState(id, 'enemy', ...)`. Default
+// radius=9 matches the live `EnemyBullet` constructor.
+// ---------------------------------------------------------------------
+
+function enemyBullet(id, x, y, overrides = {}) {
+    return freshBulletState(id, 'enemy', {
+        x, y, radius: 9, baseRadius: 9, damage: 2, ...overrides,
+    });
+}
+
+// ---------------------------------------------------------------------
+// (No new constants for this pair — damage value comes from the bullet.
+// The default-damage fallback of 1 is an implementation detail of
+// detectPlayerEnemyBulletHits and is verified directly by the damage
+// passthrough tests below.)
+// ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
+// Test — single hit happy path (all 7 event fields populated).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyBulletHits — single hit', () => {
+    test('overlapping player + enemy bullet emits one event with all 7 fields', () => {
+        // Player radius 15 + bullet radius 9 = sumR = 24. Place bullet
+        // 10 px east of player → overlap = 14 (clear hit).
+        const p = makePlayer('p1', 100, 100);
+        const b = enemyBullet(42, 110, 100, { vx: -3, vy: 1, damage: 4 });
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.type).toBe('player_hit_by_enemy_bullet');
+        expect(ev.playerId).toBe('p1');
+        expect(ev.bulletId).toBe(42);
+        expect(ev.damage).toBe(4);
+        expect(ev.bulletX).toBe(110);
+        expect(ev.bulletY).toBe(100);
+        expect(ev.bulletVx).toBe(-3);
+        expect(ev.bulletVy).toBe(1);
+
+        // Explicit field-count guard — exactly 8 keys (type + 7
+        // non-type fields). If a future change adds a separation /
+        // impulse field (bullets shouldn't push the player), this
+        // catches it.
+        expect(Object.keys(ev).sort()).toEqual([
+            'bulletId', 'bulletVx', 'bulletVy', 'bulletX', 'bulletY',
+            'damage', 'playerId', 'type',
+        ].sort());
+
+        // Defensive: confirm there is NO impulse / separation field on
+        // this pair. Bullets are massless on the physics side.
+        expect(ev.playerImpulseDx).toBeUndefined();
+        expect(ev.playerImpulseDy).toBeUndefined();
+        expect(ev.bulletImpulseDx).toBeUndefined();
+        expect(ev.bulletImpulseDy).toBeUndefined();
+        expect(ev.separationDx).toBeUndefined();
+        expect(ev.separationDy).toBeUndefined();
+        // Defensive: no despawn flag — enemy bullets always despawn on
+        // hit, so the wrapper handles it unconditionally.
+        expect(ev.bulletWillDespawn).toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — geometry miss.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyBulletHits — geometry miss', () => {
+    test('bullet outside (player.r + bullet.r) emits no event', () => {
+        const p = makePlayer('p1', 0, 0);
+        // 200 ≫ sumR=24 → clearly no overlap.
+        const b = enemyBullet(42, 200, 0);
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('bullet just outside boundary (sumR + 1) emits no event', () => {
+        const p = makePlayer('p1', 0, 0, { radius: 15 });
+        // sumR = 15 + 9 = 24; place bullet center 25 px away → just
+        // outside.
+        const b = enemyBullet(42, 25, 0, { radius: 9 });
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — multiple bullets in one tick.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyBulletHits — multiple bullets in one tick', () => {
+    test('player caught in a barrage emits one event per overlapping bullet', () => {
+        // Player at (100, 100). Place three bullets that all overlap
+        // (sumR=24): two close (east + west), and one further away
+        // that misses. Verify the two overlapping bullets emit events
+        // and the third does not.
+        const p = makePlayer('p1', 100, 100);
+        const east = enemyBullet(10, 115, 100); // dx=15, sumR=24 ⇒ overlap
+        const west = enemyBullet(20,  85, 100); // dx=-15, sumR=24 ⇒ overlap
+        const far  = enemyBullet(30, 200, 100); // dx=100 ≫ sumR ⇒ miss
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [east, west, far], ctx, events);
+        expect(events).toHaveLength(2);
+        const ids = events.map(e => e.bulletId).sort((a, b) => a - b);
+        expect(ids).toEqual([10, 20]);
+        for (const ev of events) {
+            expect(ev.playerId).toBe('p1');
+            expect(ev.type).toBe('player_hit_by_enemy_bullet');
+        }
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — skip gates (inactive player, inactive bullet).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyBulletHits — skipped pairs', () => {
+    test('inactive player → no event', () => {
+        const p = makePlayer('p1', 100, 100, { active: false });
+        const b = enemyBullet(42, 110, 100);
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('inactive bullet → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        const b = enemyBullet(42, 110, 100, { active: false });
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('both inactive → no event', () => {
+        const p = makePlayer('p1', 100, 100, { active: false });
+        const b = enemyBullet(42, 110, 100, { active: false });
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — damage passthrough. Bullet damage value is reported verbatim
+// in the event, with a default of 1 if the bullet has no damage or it's
+// falsy. The wrapper applies shield/bulwark/phase-dash on top.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyBulletHits — damage passthrough', () => {
+    test('bullet.damage = 7 → event.damage = 7 (verbatim)', () => {
+        const p = makePlayer('p1', 100, 100);
+        const b = enemyBullet(42, 110, 100, { damage: 7 });
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].damage).toBe(7);
+    });
+
+    test('bullet.damage = 0 → event.damage = 1 (default fallback)', () => {
+        // The pure step's geometric-default of 1 ensures the event
+        // always carries a positive integer when the wrapper consumes
+        // it. (The legacy wrapper has its own default of 15 if .damage
+        // is missing, but it applies that at the wrapper boundary — the
+        // pure step picks the safer geometric default.)
+        const p = makePlayer('p1', 100, 100);
+        const b = enemyBullet(42, 110, 100, { damage: 0 });
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].damage).toBe(1);
+    });
+
+    test('bullet.damage = 25 (explosive-style high damage) → event.damage = 25', () => {
+        // EnemyBullet sets damage=3 for explosive, but the wrapper may
+        // bump it higher per pattern. Verify the pure step passes any
+        // positive value through unchanged.
+        const p = makePlayer('p1', 100, 100);
+        const b = enemyBullet(42, 110, 100, { damage: 25 });
+        const events = [];
+        detectPlayerEnemyBulletHits([p], [b], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].damage).toBe(25);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — empty / null inputs defensive guards.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyBulletHits — empty inputs', () => {
+    test('empty players → no events', () => {
+        const events = [];
+        detectPlayerEnemyBulletHits([], [enemyBullet(42, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('empty bullets → no events', () => {
+        const events = [];
+        detectPlayerEnemyBulletHits([makePlayer('p1', 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('both empty → no events', () => {
+        const events = [];
+        detectPlayerEnemyBulletHits([], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null players → no events (defensive)', () => {
+        const events = [];
+        detectPlayerEnemyBulletHits(null, [enemyBullet(42, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null bullets → no events (defensive)', () => {
+        const events = [];
+        detectPlayerEnemyBulletHits([makePlayer('p1', 0, 0)], null, ctx, events);
         expect(events).toHaveLength(0);
     });
 });
