@@ -8,7 +8,7 @@
 //! Mirrors `js/sim/bullet.js`. **Player bullets** (`update_player_bullet`)
 //! implement the linear drift + helix offset + predictive-lead homing
 //! branches (PR #27). **Enemy bullets** (`update_enemy_bullet`) implement
-//! 7 of ~17 movement patterns:
+//! 11 of ~17 movement patterns:
 //!
 //!   - `Straight` — js `aimed`/`crescent_beam`/`crescent_slice` (no-mod path). (PR #29)
 //!   - `Sine` — js `sine_wave_nospin` (perpendicular sine offset). (PR #29)
@@ -17,16 +17,21 @@
 //!   - `Spiral` — js `spiral` (rotating velocity vector + spreading radius).
 //!   - `WaveEnergy` — js `wave_energy` (large-amplitude sine on perp-of-base axis).
 //!   - `ShieldBurst` — js `shield_burst` (high-freq wobble on perp-of-base axis).
+//!   - `Burst` — js `burst` (patternTimer-driven linear acceleration on base velocity).
+//!   - `Pulse` — js `pulse` (patternTimer-driven linear acceleration on base velocity, steeper).
+//!   - `EnergySlash` — js `energy_slash` (slashProgress curve + patternTimer pulse).
+//!   - `SineWaveRotation` — js `sine_wave` (Sine variant that aligns rotation
+//!     to travel direction; differs from `Sine` only via the `rotation` field).
 //!
 //! Deferred to follow-up sessions:
 //!
 //!   - Piercing / piercedEnemies counter — collision-side, Phase 2.5
 //!   - Explosive / explosionRadius — collision-side, Phase 2.5
-//!   - 10+ remaining enemy patterns (js bullet.js:259–593): `mine`,
-//!     `homing_mine`, `rapid`, `burst`, `explosive`, `laser`,
-//!     `laser_beam`, `missile`, `homing`, `titan_homing`, `titan_rocket`,
-//!     `pulse`, `energy_slash`, `sine_wave` (with rotation),
-//!     `missile_fast_slow`.
+//!   - 6 remaining enemy patterns (js bullet.js:259–593): `mine`,
+//!     `homing_mine`, `rapid`, `explosive`, `laser`, `laser_beam`,
+//!     `missile`, `homing`, `titan_homing`, `titan_rocket`,
+//!     `missile_fast_slow`. (Several require `target_player`, RNG, or
+//!     persistent-timed lifetime; gated on context-plumbing PRs.)
 //!   - Boss-rage homing composition, mine HP-death, persistent timed
 //!     lifetime (mines / lightning orbs), `targetPlayer` lookups.
 //!
@@ -419,7 +424,7 @@ pub fn update_player_bullets(
 // ── ENEMY BULLETS ───────────────────────────────────────────────────────
 //
 // `js/sim/bullet.js::updateEnemyBullet` switches on `movementPattern` and
-// has ~17 distinct cases. Implemented so far (7):
+// has ~17 distinct cases. Implemented so far (11):
 //
 //   - `Straight` (aimed / crescent_beam / crescent_slice — no-mod path).
 //   - `Sine` (sine_wave_nospin — perpendicular sin(phase)*amp offset).
@@ -434,6 +439,15 @@ pub fn update_player_bullets(
 //     0.1 attenuation factor; pattern timer ramp).
 //   - `ShieldBurst` (high-freq sin(patternTimer*8)*0.2 wobble on
 //     baseAngle+π/2 axis).
+//   - `Burst` (`baseVel *= 1 + patternTimer * 0.5` — pure timer-driven
+//     linear acceleration on base velocity).
+//   - `Pulse` (`baseVel *= 1 + patternTimer * 0.8` — same shape as `Burst`
+//     but steeper).
+//   - `EnergySlash` (slashProgress curve on perp axis + patternTimer pulse
+//     intensity scale; no RNG, no target).
+//   - `SineWaveRotation` (Sine variant that additionally aligns
+//     `bullet.rotation` to atan2(vy, vx) inside the pattern step; the
+//     post-step rotation accumulator then adds `rotation_speed * tick_scale`).
 //
 // The remaining patterns are TODO; see module docstring for the full list.
 //
@@ -443,10 +457,14 @@ pub fn update_player_bullets(
 //   1. Active-guard (early return if !active).
 //   2. `applyEnemyMovementPattern(b, ctx)` — pattern-specific velocity
 //      mutation. May set `active=false` + `expired_by_distance=true`
-//      (decelerate at min-speed floor).
+//      (decelerate at min-speed floor). For `SineWaveRotation` it also
+//      writes `bullet.rotation = atan2(vy, vx)`.
 //   3. Position update: `x += vx * tick_scale; y += vy * tick_scale`.
 //      NOTE: enemy-bullet path **does** scale by tick_scale; player does not.
-//   4. Rotation tick — skipped here (cosmetic; not modeled).
+//   4. Rotation accumulator: `rotation += rotation_speed * tick_scale`
+//      (JS bullet.js:197). Composes with any rotation written by the
+//      pattern step — e.g. `SineWaveRotation` overwrites rotation in step
+//      2, then step 4 adds the per-tick rotation_speed delta.
 //   5. `pattern_timer += logic_tick_seconds`.
 //   6. Mine HP death — skipped (mine pattern not yet ported).
 //   7. Lifetime / fade:
@@ -487,7 +505,25 @@ const WAVE_ENERGY_VEL_SCALE: f32 = 0.1;
 const SHIELD_BURST_FREQ: f32 = 8.0;
 const SHIELD_BURST_AMP: f32 = 0.2;
 
-/// Enemy-bullet movement pattern. 7 of ~17 ported so far — see module
+// JS bullet.js:328 — `burst`: linear timer-acceleration on base velocity.
+// `bullet.vx = bullet.baseVx * (1 + patternTimer * 0.5)`.
+const BURST_ACCEL_RATE: f32 = 0.5;
+
+// JS bullet.js:478 — `pulse`: linear timer-acceleration on base velocity.
+// Same shape as `burst` but steeper coefficient: `*(1 + patternTimer * 0.8)`.
+const PULSE_ACCEL_RATE: f32 = 0.8;
+
+// JS bullet.js:507–509 — `energy_slash`: perpendicular curve driven by
+// `sin(slashProgress * π)` with amplitude `0.3`. JS code:
+//   curveOffset = sin(slashProgress * π) * 0.3
+const ENERGY_SLASH_CURVE_INTENSITY: f32 = 0.3;
+
+// JS bullet.js:515 — `energy_slash`: post-curve velocity scale by
+// `1 + sin(patternTimer * 8) * 0.1`. High-freq pulse, low amplitude.
+const ENERGY_SLASH_PULSE_FREQ: f32 = 8.0;
+const ENERGY_SLASH_PULSE_AMP: f32 = 0.1;
+
+/// Enemy-bullet movement pattern. 11 of ~17 ported so far — see module
 /// docstring for the deferred list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BulletPattern {
@@ -496,8 +532,8 @@ pub enum BulletPattern {
     Straight,
     /// JS `sine_wave_nospin` — drift along base velocity plus perpendicular
     /// `sin(sine_phase) * sine_amp` offset; advances `sine_phase` by
-    /// `sine_freq` each tick. (The `sine_wave` variant additionally aligns
-    /// rotation to travel direction; not modeled here.)
+    /// `sine_freq` each tick. Does NOT modify rotation. (The `SineWaveRotation`
+    /// variant additionally aligns rotation to travel direction.)
     Sine,
     /// JS `missile_decelerate` — subtractive speed decay each tick. When the
     /// speed reaches `min_speed`, the bullet expires (`expired_by_distance`).
@@ -517,9 +553,26 @@ pub enum BulletPattern {
     /// JS `shield_burst` — high-frequency `sin(patternTimer*8)*0.2` wobble
     /// on the `baseAngle+π/2` axis. No pattern_phase or extra state.
     ShieldBurst,
-    // TODO Phase 2.1+: Helix, Homing, Ricochet, Rocket, Mine, EnergySlash,
-    // Bezier, Charge, Rapid, Burst, Explosive, Laser, LaserBeam, Missile,
-    // TitanHoming, TitanRocket, Pulse, SineWave (with rotation),
+    /// JS `burst` — `vx = baseVx * (1 + patternTimer * 0.5)`. Pure timer-driven
+    /// linear acceleration on the base velocity (both axes scaled identically).
+    Burst,
+    /// JS `pulse` — `vx = baseVx * (1 + patternTimer * 0.8)`. Same shape as
+    /// `Burst` with a steeper acceleration coefficient.
+    Pulse,
+    /// JS `energy_slash` — perpendicular curve from `sin(slashProgress * π)`
+    /// (amplitude `ENERGY_SLASH_CURVE_INTENSITY`) added to the base velocity,
+    /// then the whole vector is scaled by `1 + sin(patternTimer * 8) * 0.1`.
+    /// Reads `slash_progress` from the bullet; that field is treated as 0 if
+    /// unset (matches JS `bullet.slashProgress || 0`).
+    EnergySlash,
+    /// JS `sine_wave` — same as `Sine` (perpendicular sin offset) but also
+    /// writes `bullet.rotation = atan2(vy, vx)` inside the pattern step so
+    /// the bullet visually faces its travel direction. The post-step rotation
+    /// accumulator then adds `rotation_speed * tick_scale` to the overwritten
+    /// value, exactly matching the JS order of operations.
+    SineWaveRotation,
+    // TODO Phase 2.1+: Helix, Homing, Ricochet, Rocket, Mine, Bezier, Charge,
+    // Rapid, Explosive, Laser, LaserBeam, Missile, TitanHoming, TitanRocket,
     // MissileFastSlow, HomingMine.
 }
 
@@ -595,6 +648,24 @@ pub struct EnemyBullet {
     /// JS state.js:473 — floor for the speed clamp.
     pub min_speed: f32,
 
+    // ── EnergySlash pattern state ─────────────────────────────────────
+    /// JS state.js:474 — 0..1 progress used by `energy_slash` to drive the
+    /// `sin(slashProgress * π) * curveIntensity` perpendicular curve. JS
+    /// treats this as 0 if absent (`bullet.slashProgress || 0` at
+    /// bullet.js:508). The wrapper sets it from the spawning enemy's
+    /// slash animation; the pattern step does NOT advance it.
+    pub slash_progress: f32,
+
+    // ── Rotation (sprite orientation) ─────────────────────────────────
+    /// JS state.js:433 — bullet rotation in radians. Set per-tick by some
+    /// patterns (`SineWaveRotation`, `missile`, `missile_fast_slow`) and
+    /// also incremented by `rotation_speed * tick_scale` after the position
+    /// update (JS bullet.js:197). Default 0.
+    pub rotation: f32,
+    /// JS state.js:434 — per-tick rotation delta (radians). Added each tick
+    /// after the position update, regardless of pattern. Default 0.
+    pub rotation_speed: f32,
+
     // ── Lifecycle flags ───────────────────────────────────────────────
     pub active: bool,
     /// JS state.js:475 — wrapper triggers disappear-puff FX.
@@ -614,8 +685,6 @@ pub struct EnemyBullet {
     // TODO Phase 2.1+: boss_rage_homing.
     // TODO Phase 2.1+: rocket_speed, max_distance, distance_traveled
     //   (titan_rocket).
-    // TODO Phase 2.1+: slash_progress (energy_slash).
-    // TODO Phase 2.1+: rotation, rotation_speed (sprite orientation).
 }
 
 /// Per-tick context for enemy-bullet updates. Mirrors the relevant subset
@@ -735,6 +804,56 @@ fn apply_enemy_movement_pattern(b: &mut EnemyBullet, _ctx: &EnemyBulletContext) 
             b.vx = b.base_vx + perp_angle.cos() * wobble;
             b.vy = b.base_vy + perp_angle.sin() * wobble;
         }
+
+        // JS bullet.js:327–332 — `burst`. `accelFactor = 1 + patternTimer * 0.5`.
+        // Both axes scaled identically; same direction as base velocity.
+        BulletPattern::Burst => {
+            let accel_factor = 1.0 + b.pattern_timer * BURST_ACCEL_RATE;
+            b.vx = b.base_vx * accel_factor;
+            b.vy = b.base_vy * accel_factor;
+        }
+
+        // JS bullet.js:477–482 — `pulse`. Same shape as `Burst` but
+        // steeper acceleration (`* 0.8` vs `* 0.5`).
+        BulletPattern::Pulse => {
+            let pulse_accel = 1.0 + b.pattern_timer * PULSE_ACCEL_RATE;
+            b.vx = b.base_vx * pulse_accel;
+            b.vy = b.base_vy * pulse_accel;
+        }
+
+        // JS bullet.js:505–519 — `energy_slash`. Three-step velocity build:
+        //   1. Compute `curveOffset = sin(slashProgress * π) * 0.3`.
+        //   2. Add curve along the perp-of-slash-direction axis.
+        //   3. Multiply final velocity by `1 + sin(patternTimer * 8) * 0.1`.
+        // `slashProgress` is read from the bullet; JS treats absent as 0.
+        BulletPattern::EnergySlash => {
+            let slash_direction = b.base_vy.atan2(b.base_vx);
+            let curve_offset =
+                (b.slash_progress * std::f32::consts::PI).sin() * ENERGY_SLASH_CURVE_INTENSITY;
+            let perp_slash_direction = slash_direction + std::f32::consts::FRAC_PI_2;
+            let curve_vel_x = perp_slash_direction.cos() * curve_offset;
+            let curve_vel_y = perp_slash_direction.sin() * curve_offset;
+            b.vx = b.base_vx + curve_vel_x;
+            b.vy = b.base_vy + curve_vel_y;
+            let pulse_intensity =
+                1.0 + (b.pattern_timer * ENERGY_SLASH_PULSE_FREQ).sin() * ENERGY_SLASH_PULSE_AMP;
+            b.vx *= pulse_intensity;
+            b.vy *= pulse_intensity;
+        }
+
+        // JS bullet.js:526–534 — `sine_wave` (rotation variant of `Sine`).
+        // Same perpendicular sin displacement as `Sine`, but additionally
+        // writes `bullet.rotation = atan2(vy, vx)` so the needle visually
+        // points in its travel direction. The post-step rotation accumulator
+        // then adds `rotation_speed * tick_scale` to this value.
+        BulletPattern::SineWaveRotation => {
+            b.sine_phase += b.sine_freq;
+            let displacement = b.sine_phase.sin() * b.sine_amp;
+            b.vx = b.base_vx + b.sine_perp_x * displacement;
+            b.vy = b.base_vy + b.sine_perp_y * displacement;
+            // Align rotation with travel direction (JS bullet.js:532).
+            b.rotation = b.vy.atan2(b.vx);
+        }
     }
 }
 
@@ -762,7 +881,13 @@ pub fn update_enemy_bullet(
     b.x += b.vx * ctx.tick_scale;
     b.y += b.vy * ctx.tick_scale;
 
-    // 4. Rotation accumulator — skipped (cosmetic; not modeled).
+    // 4. Rotation accumulator (JS bullet.js:197). Adds `rotation_speed *
+    //    tick_scale` regardless of pattern. For patterns that overwrite
+    //    `rotation` inside step 2 (e.g. `SineWaveRotation`), this delta
+    //    composes on top of the just-written value — matching JS order
+    //    of operations exactly. For patterns whose `rotation_speed` is
+    //    0 (the default), this is a no-op.
+    b.rotation += b.rotation_speed * ctx.tick_scale;
 
     // 5. Pattern timer (JS bullet.js:200).
     b.pattern_timer += ctx.logic_tick_seconds;
