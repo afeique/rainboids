@@ -55,6 +55,7 @@ use std::collections::HashSet;
 
 use crate::protocol::GameEvent;
 
+use super::drops::DropKind;
 use super::state::GameState;
 
 // ─── Constants — Bullet-vs-asteroid pair ────────────────────────────
@@ -474,6 +475,30 @@ pub enum CollisionEvent {
         bullet_y: f32,
         bullet_vx: f32,
         bullet_vy: f32,
+    },
+    /// Mirrors `{ type: 'player_pickup_drop', ... }` in `js/sim/collision.js`.
+    ///
+    /// Smallest non-damaging event — pickups don't damage the player.
+    /// Field count: 6 non-type (7 total including the variant tag).
+    /// Intentionally NO `damage` field, NO impulse/separation/piercing fields.
+    /// The pure step reports the minimal geometric pickup; wrapper applies
+    /// the actual heal/coins/powerup effect (and any upgrade multipliers
+    /// like MEDPACK / PAYDAY / HIGH_ROLLER) on top.
+    ///
+    /// `drop_x` / `drop_y` are the drop's world coordinates at pickup time —
+    /// used by the wrapper to spawn the pickup sparkle ring and the
+    /// "+N gold" floating text at the drop's location.
+    ///
+    /// `value` is reported verbatim from `drop.value` (no upgrade scaling
+    /// applied pure-side). For powerup drops, `value` encodes the powerup
+    /// id the wrapper dispatches into `player.applyPowerup`.
+    PlayerPickupDrop {
+        player_id: u32,
+        drop_id: u32,
+        drop_kind: DropKind,
+        value: i32,
+        drop_x: f32,
+        drop_y: f32,
     },
 }
 
@@ -1647,6 +1672,140 @@ pub fn detect_player_enemy_bullet_hits(
                 bullet_y: bullet.y,
                 bullet_vx: bullet.vx,
                 bullet_vy: bullet.vy,
+            });
+        }
+    }
+}
+
+// ── PLAYER ↔ DROP PICKUP — Phase 2.5 ──────
+//
+// `detect_player_drop_pickups` is the 7th pure-step pair. Players pick up
+// drops (health orbs, money shapes, money pixels, powerup orbs) on
+// geometric overlap. Smallest non-damaging event — pickups don't damage
+// the player.
+//
+// What the pure step does NOT include:
+//   - NO impulse (drops don't bounce off the ship; they get consumed)
+//   - NO separation (consumed drops vanish)
+//   - NO piercing budget (drops aren't bullets)
+//   - NO warping/death-flash skip-gates (drops fade out via lifetime in
+//     drops.rs — `active` flips off when life expires)
+//
+// What the pure step DOES: circle-circle overlap + emit one
+// `PlayerPickupDrop` event per detected overlap, carrying `drop_id` for
+// wrapper-side despawn, `drop_kind` for wrapper-side effect dispatch
+// (health → heal, money_* → coins, powerup → applyPowerup), `value` for
+// the heal-amount / coin-count / powerup-id, and `drop_x` / `drop_y` for
+// the wrapper-side sparkle-ring particle spawn at the pickup site.
+//
+// What stays in the wrapper:
+//   - Actual HP / coins / powerup application
+//   - Upgrade multipliers (MEDPACK, DOCTOR, PAYDAY, HIGH_ROLLER)
+//   - Drop deactivation + pool release
+//   - Pickup sparkle FX + floating text
+//   - Stat tracking, sound effects
+//   - Two-player conflict resolution (pure step emits one event per
+//     (player, drop) overlap; wrapper picks the winner)
+//
+// Reference: `js/sim/collision.js::detectPlayerDropPickups` (PR #52).
+
+/// Minimal drop view for collision detection. Separate from the full
+/// `sim::drops::Drop` (which carries velocity / lifetime / opacity /
+/// parallax) — pickup detection only needs position, radius, and the
+/// per-pickup payload (kind + value).
+///
+/// Mirrors the `DropState` typedef in `js/sim/state.js` line 274+ but
+/// reduced to the collision-relevant subset.
+#[derive(Debug, Clone, Copy)]
+pub struct CollisionDrop {
+    pub id: u32,
+    pub x: f32,
+    pub y: f32,
+    pub radius: f32,
+    pub kind: DropKind,
+    /// Heal-amount (for `Health` drops), coin-count (for `Money*` drops),
+    /// or powerup-id (for `Powerup` drops). Reported verbatim in the
+    /// pickup event — wrapper applies upgrade multipliers downstream.
+    pub value: i32,
+    pub active: bool,
+}
+
+impl CollisionDrop {
+    /// Construct a fresh drop at the origin with live-game defaults.
+    /// `radius = 14` matches the JS test helper `dropOrb`'s default and
+    /// the live-game `Drop` class. `value = 1` is the minimal positive
+    /// integer (heal-amount or coin-count of 1).
+    pub fn fresh(id: u32, kind: DropKind) -> Self {
+        Self {
+            id,
+            x: 0.0,
+            y: 0.0,
+            radius: 14.0,
+            kind,
+            value: 1,
+            active: true,
+        }
+    }
+}
+
+/// Detect player-vs-drop pickup overlaps for one tick.
+///
+/// Pure step: emits one `PlayerPickupDrop` event per (player, drop)
+/// overlap. Co-op ready: scans every active player against every active
+/// drop, so a single drop near two ships emits TWO events (one per
+/// player); the wrapper resolves which player claims it.
+///
+/// Geometry: circle-circle overlap `(dx² + dy²) < (player.r + drop.r)²`.
+/// Squared form avoids the sqrt. JS line refs: `js/sim/collision.js:1810–1814`.
+///
+/// Skip-gates: `!player.active`, `!drop.active`. NO warping or
+/// death-flash gates — drops fade out via lifetime in `drops.rs`
+/// (`active` flips off when `life` reaches 0).
+///
+/// The function does NOT mutate `drop.active`, does NOT apply HP / coins /
+/// powerups, and does NOT release the drop back to its pool. All of that
+/// is wrapper-side work dispatched on `drop_kind`.
+pub fn detect_player_drop_pickups(
+    players: &[CollisionPlayer],
+    drops: &[CollisionDrop],
+    _ctx: &CollisionContext,
+    events: &mut Vec<CollisionEvent>,
+) {
+    if players.is_empty() || drops.is_empty() {
+        return;
+    }
+
+    for player in players.iter() {
+        // 1. Active-guard (JS collision.js:1798).
+        if !player.active {
+            continue;
+        }
+
+        let player_radius = player.radius;
+
+        for drop in drops.iter() {
+            // 2. Drop gating (JS collision.js:1805).
+            if !drop.active {
+                continue;
+            }
+
+            // 3. Circle-circle overlap (JS collision.js:1810–1814).
+            let dx = player.x - drop.x;
+            let dy = player.y - drop.y;
+            let sum_r = player_radius + drop.radius;
+            if dx * dx + dy * dy >= sum_r * sum_r {
+                continue;
+            }
+
+            // 4. Emit the pickup event (JS collision.js:1822–1830).
+            //    NO mutation of `drop.active` — wrapper handles that.
+            events.push(CollisionEvent::PlayerPickupDrop {
+                player_id: player.id,
+                drop_id: drop.id,
+                drop_kind: drop.kind,
+                value: drop.value,
+                drop_x: drop.x,
+                drop_y: drop.y,
             });
         }
     }
