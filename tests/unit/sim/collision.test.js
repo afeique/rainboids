@@ -34,6 +34,9 @@ import {
     BULLET_ENEMY_HIT_FLASH_FRAMES,
     detectPlayerEnemyHits,
     PLAYER_ENEMY_COLLISION_DAMAGE,
+    detectEnemyAsteroidHits,
+    ENEMY_ASTEROID_PUSH,
+    ASTEROID_ENEMY_PUSH,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
@@ -1332,6 +1335,327 @@ describe('detectPlayerEnemyHits — empty inputs', () => {
     test('null enemies → no events (defensive)', () => {
         const events = [];
         detectPlayerEnemyHits([makePlayer('p1', 0, 0)], null, ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// Enemy-vs-asteroid pair (Phase 2.5 — dispatch 5).
+// ═════════════════════════════════════════════════════════════════════
+//
+// `detectEnemyAsteroidHits` is the fifth pure-step pair, extracted from
+// `handleEnemyAsteroidCollision` in `js/modules/combat/collision-system.js`
+// (lines 1898-1944). This pair is DIFFERENT from every prior pair:
+//
+//   - NO damage to either side. Period. Enemies don't lose HP when they
+//     bump asteroids; asteroids don't lose HP either. The wrapper does
+//     not call `takeDamage` on either body. (Legacy explicit code comment
+//     at line 1943: "No enemy destruction from asteroid collisions".)
+//   - NO restitution / mass-aware impulse math. Just two fixed-force
+//     scalar pushes, one per body, along the collision normal.
+//   - NO position separation. The legacy path only modifies velocities;
+//     the next-tick simulation moves the bodies apart on its own.
+//   - NO jitter / RNG. Fully deterministic.
+//
+// Event shape: exactly 6 non-type fields (enemyId, asteroidId, and the
+// 2x2 impulse delta block). NO `damage` field. NO `separation` fields.
+// Total 7 keys with `type`.
+//
+// The tests below pin:
+//   - the two push-force constants (4 and 2, verbatim from COLLISION_CONFIG)
+//   - geometry overlap (circle-circle)
+//   - single-overlap event shape (exactly 6 non-type fields)
+//   - geometry miss (no event)
+//   - multiple overlaps in one tick (multiple events)
+//   - skip gates (inactive enemy/asteroid, warping enemy/asteroid, death-flash)
+//   - push direction (enemy west of asteroid ⇒ enemy gets pushed further west)
+//   - defensive empty / null inputs
+
+// ---------------------------------------------------------------------
+// Helpers — reuse `enemyWithRadius` and `makeAsteroid` from earlier
+// dispatches. Enemies don't need a `mass` field for this pair (no
+// mass-aware math) — just position + radius + skip-gate fields.
+// ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
+// Constants — pinned to the legacy COLLISION_CONFIG block.
+// ---------------------------------------------------------------------
+
+describe('enemy-asteroid collision constants', () => {
+    test('ENEMY_ASTEROID_PUSH is 4 (verbatim from collision-system.js:38)', () => {
+        expect(ENEMY_ASTEROID_PUSH).toBe(4);
+    });
+    test('ASTEROID_ENEMY_PUSH is 2 (verbatim from collision-system.js:40)', () => {
+        expect(ASTEROID_ENEMY_PUSH).toBe(2);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — single overlap emits one event with exactly 6 non-type fields.
+// ---------------------------------------------------------------------
+
+describe('detectEnemyAsteroidHits — single hit', () => {
+    test('overlapping enemy + asteroid emits one event with all 6 non-type fields', () => {
+        // Enemy radius 18 + asteroid radius 30 = sumR 48. Place asteroid
+        // 20 px east of enemy ⇒ overlap = 28 (clear hit).
+        const e = enemyWithRadius(7, 100, 100);
+        const a = makeAsteroid(42, 120, 100);
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.type).toBe('enemy_hit_asteroid');
+        expect(ev.enemyId).toBe(7);
+        expect(ev.asteroidId).toBe(42);
+        // All four numeric delta fields must be defined and finite.
+        const deltaFields = [
+            'enemyImpulseDx', 'enemyImpulseDy',
+            'asteroidImpulseDx', 'asteroidImpulseDy',
+        ];
+        for (const f of deltaFields) {
+            expect(typeof ev[f]).toBe('number');
+            expect(Number.isFinite(ev[f])).toBe(true);
+        }
+        // Explicit field-count guard: exactly 7 keys (type + 6
+        // non-type fields). NO `damage` field. NO `separation` fields.
+        // If the implementation ever adds damage or separation, this
+        // guard will catch it and force the test contract to be
+        // updated explicitly.
+        expect(Object.keys(ev).sort()).toEqual([
+            'asteroidId',
+            'asteroidImpulseDx', 'asteroidImpulseDy',
+            'enemyId',
+            'enemyImpulseDx', 'enemyImpulseDy',
+            'type',
+        ].sort());
+        // Defensive: confirm there is NO damage field of any name.
+        expect(ev.damage).toBeUndefined();
+        expect(ev.damageToEnemy).toBeUndefined();
+        expect(ev.damageToAsteroid).toBeUndefined();
+        // Defensive: confirm there are NO separation fields.
+        expect(ev.separationDx).toBeUndefined();
+        expect(ev.separationDy).toBeUndefined();
+        expect(ev.enemySeparationDx).toBeUndefined();
+        expect(ev.asteroidSeparationDx).toBeUndefined();
+    });
+
+    test('impulse magnitudes match the push-force constants verbatim', () => {
+        // Geometry: enemy at (100, 100), asteroid 20 px east at (120, 100).
+        // angle = atan2(0, 20) = 0 ⇒ cos=1, sin=0.
+        // Enemy gets (-cos·4, -sin·4) = (-4, 0).
+        // Asteroid gets (+cos·2, +sin·2) = (+2, 0).
+        const e = enemyWithRadius(7, 100, 100);
+        const a = makeAsteroid(42, 120, 100);
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.enemyImpulseDx).toBeCloseTo(-ENEMY_ASTEROID_PUSH, 10);
+        expect(ev.enemyImpulseDy).toBeCloseTo(0, 10);
+        expect(ev.asteroidImpulseDx).toBeCloseTo(ASTEROID_ENEMY_PUSH, 10);
+        expect(ev.asteroidImpulseDy).toBeCloseTo(0, 10);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — geometry miss (centers further than sumR apart).
+// ---------------------------------------------------------------------
+
+describe('detectEnemyAsteroidHits — geometry miss', () => {
+    test('enemy outside (enemy.r + asteroid.r) emits no event', () => {
+        const e = enemyWithRadius(7, 0, 0);
+        // 200 px ≫ sumR=48 → clearly no overlap.
+        const a = makeAsteroid(42, 200, 0);
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy just outside boundary (sumR + 1) emits no event', () => {
+        const e = enemyWithRadius(7, 0, 0, 18);
+        // sumR = 18 + 30 = 48; place asteroid center 49 px away → just
+        // outside.
+        const a = makeAsteroid(42, 49, 0, { radius: 30 });
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — multiple overlaps in one tick emit one event per pair.
+// ---------------------------------------------------------------------
+
+describe('detectEnemyAsteroidHits — multiple overlaps in one tick', () => {
+    test('one enemy overlapping two asteroids emits two events', () => {
+        // Enemy at (100, 100), radius 18. Two asteroids close enough on
+        // east + west to overlap (sumR=48; place 20 px out).
+        const e = enemyWithRadius(7, 100, 100);
+        const east = makeAsteroid(10, 120, 100); // dx=20, sumR=48 ⇒ overlap
+        const west = makeAsteroid(20,  80, 100); // dx=-20, sumR=48 ⇒ overlap
+        const events = [];
+        detectEnemyAsteroidHits([e], [east, west], ctx, events);
+        expect(events).toHaveLength(2);
+        const ids = events.map(ev => ev.asteroidId).sort((a, b) => a - b);
+        expect(ids).toEqual([10, 20]);
+        // Each event carries the enemy's id and the correct type.
+        for (const ev of events) {
+            expect(ev.enemyId).toBe(7);
+            expect(ev.type).toBe('enemy_hit_asteroid');
+        }
+    });
+
+    test('two enemies overlapping the same asteroid both emit events', () => {
+        // Enemies on east + west of one asteroid at (100, 100). Both
+        // close enough to overlap with sumR=48.
+        const eastEnemy = enemyWithRadius(7, 120, 100);
+        const westEnemy = enemyWithRadius(8,  80, 100);
+        const a = makeAsteroid(42, 100, 100);
+        const events = [];
+        detectEnemyAsteroidHits([eastEnemy, westEnemy], [a], ctx, events);
+        expect(events).toHaveLength(2);
+        // Both events reference the same asteroid but distinct enemies.
+        expect(events.map(ev => ev.asteroidId)).toEqual([42, 42]);
+        expect(events.map(ev => ev.enemyId).sort()).toEqual([7, 8]);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — skip gates (inactive enemy/asteroid, warping, death-flash).
+// ---------------------------------------------------------------------
+
+describe('detectEnemyAsteroidHits — skipped pairs', () => {
+    test('inactive enemy → no event', () => {
+        const e = enemyWithRadius(7, 100, 100, 18, { active: false });
+        const a = makeAsteroid(42, 120, 100);
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('inactive asteroid → no event', () => {
+        const e = enemyWithRadius(7, 100, 100);
+        const a = makeAsteroid(42, 120, 100, { active: false });
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping enemy → no event', () => {
+        const e = enemyWithRadius(7, 100, 100, 18, { warping: true });
+        const a = makeAsteroid(42, 120, 100);
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping asteroid → no event', () => {
+        const e = enemyWithRadius(7, 100, 100);
+        const a = makeAsteroid(42, 120, 100, { warping: true });
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('asteroid mid death-flash (new deathFlash field) → no event', () => {
+        const e = enemyWithRadius(7, 100, 100);
+        const a = makeAsteroid(42, 120, 100, { deathFlash: 5 });
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('asteroid mid death-flash (legacy _deathFlash) → no event', () => {
+        const e = enemyWithRadius(7, 100, 100);
+        // Live Asteroid instances use the underscore-prefix name; the
+        // pure step honors both for round-trip parity with the legacy
+        // module.
+        const a = { id: 42, x: 120, y: 100, radius: 30, active: true,
+                    warping: false, _deathFlash: 5 };
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — push direction. An enemy positioned WEST of an asteroid should
+// be pushed FURTHER WEST (negative dx), and the asteroid should be
+// pushed FURTHER EAST (positive dx).
+// ---------------------------------------------------------------------
+
+describe('detectEnemyAsteroidHits — push direction', () => {
+    test('enemy west of asteroid → enemy pushed west, asteroid pushed east', () => {
+        // Enemy at (100, 100); asteroid east at (120, 100). The enemy
+        // is therefore WEST of the asteroid.
+        //   dx = asteroid.x - enemy.x = +20 → angle = 0
+        //   cos(angle)=1, sin(angle)=0
+        //   enemyImpulseDx  = -1·4 = -4  (west — away from asteroid)
+        //   asteroidImpulseDx = +1·2 = +2 (east — away from enemy)
+        const e = enemyWithRadius(7, 100, 100);
+        const a = makeAsteroid(42, 120, 100);
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        // Enemy gets pushed west (negative x).
+        expect(ev.enemyImpulseDx).toBeLessThan(0);
+        expect(ev.enemyImpulseDy).toBeCloseTo(0, 10);
+        // Asteroid gets pushed east (positive x).
+        expect(ev.asteroidImpulseDx).toBeGreaterThan(0);
+        expect(ev.asteroidImpulseDy).toBeCloseTo(0, 10);
+        // The two impulses point in OPPOSITE directions along x.
+        expect(Math.sign(ev.enemyImpulseDx)).toBe(-Math.sign(ev.asteroidImpulseDx));
+    });
+
+    test('enemy north of asteroid → enemy pushed north, asteroid pushed south', () => {
+        // Enemy at (100, 80); asteroid at (100, 100). Enemy is north
+        // (smaller y in screen coords).
+        //   dx = 0, dy = +20 → angle = π/2 (pointing south)
+        //   cos=0, sin=1
+        //   enemyImpulseDy  = -1·4 = -4 (north — away from asteroid)
+        //   asteroidImpulseDy = +1·2 = +2 (south — away from enemy)
+        const e = enemyWithRadius(7, 100, 80);
+        const a = makeAsteroid(42, 100, 100);
+        const events = [];
+        detectEnemyAsteroidHits([e], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.enemyImpulseDx).toBeCloseTo(0, 10);
+        expect(ev.enemyImpulseDy).toBeLessThan(0); // pushed north
+        expect(ev.asteroidImpulseDx).toBeCloseTo(0, 10);
+        expect(ev.asteroidImpulseDy).toBeGreaterThan(0); // pushed south
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — empty / null inputs defensive guards.
+// ---------------------------------------------------------------------
+
+describe('detectEnemyAsteroidHits — empty inputs', () => {
+    test('empty enemies → no events', () => {
+        const events = [];
+        detectEnemyAsteroidHits([], [makeAsteroid(42, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('empty asteroids → no events', () => {
+        const events = [];
+        detectEnemyAsteroidHits([enemyWithRadius(7, 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('both empty → no events', () => {
+        const events = [];
+        detectEnemyAsteroidHits([], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null enemies → no events (defensive)', () => {
+        const events = [];
+        detectEnemyAsteroidHits(null, [makeAsteroid(42, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null asteroids → no events (defensive)', () => {
+        const events = [];
+        detectEnemyAsteroidHits([enemyWithRadius(7, 0, 0)], null, ctx, events);
         expect(events).toHaveLength(0);
     });
 });
