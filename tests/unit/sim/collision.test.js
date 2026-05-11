@@ -39,6 +39,7 @@ import {
     ASTEROID_ENEMY_PUSH,
     detectPlayerEnemyBulletHits,
     detectPlayerDropPickups,
+    detectNovaBlastHits,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
@@ -2175,5 +2176,349 @@ describe('detectPlayerDropPickups — empty inputs', () => {
         const events = [];
         detectPlayerDropPickups([playerShip(7, 0, 0)], null, ctx, events);
         expect(events).toHaveLength(0);
+    });
+});
+
+// =====================================================================
+// NOVA BLAST — point-vs-many AoE shockwave
+// =====================================================================
+//
+// Different from every prior pair: a single blast spec (centerX/centerY/
+// radius/damage) versus ALL enemies AND ALL asteroids. The pure step
+// emits one event per target whose CENTER lies inside the blast disc.
+// Damage is FLAT (no falloff) per legacy `checkNovaCollisions`.
+
+// ---------------------------------------------------------------------
+// Helpers — build minimal enemies, asteroids, and a blast spec.
+// ---------------------------------------------------------------------
+
+/** Build a minimal blast spec at (cx, cy) with a given radius / damage.
+ *  Defaults reflect a small mid-game ring (radius 100 px, damage 5). */
+function novaBlast(cx, cy, radius = 100, damage = 5) {
+    return { centerX: cx, centerY: cy, radius, damage };
+}
+
+/** Build a HUNTER-shaped enemy at (x, y). Reuses the same pattern as
+ *  the bullet-enemy tests (freshEnemyState whitelists fields, so we
+ *  attach `radius` + skip-gate fields manually). */
+function novaEnemy(id, x, y, overrides = {}) {
+    const base = freshEnemyState('HUNTER', {
+        id, x, y,
+        active: overrides.active,
+    });
+    base.radius = overrides.radius !== undefined ? overrides.radius : 18;
+    if (overrides.warping !== undefined) base.warping = overrides.warping;
+    if (overrides.deathFlash !== undefined) base.deathFlash = overrides.deathFlash;
+    if (overrides._deathFlash !== undefined) base._deathFlash = overrides._deathFlash;
+    return base;
+}
+
+/** Build a default-sized asteroid at (x, y). */
+function novaAsteroid(id, x, y, overrides = {}) {
+    return freshAsteroidState(id, {
+        x, y, radius: 30, hp: 10, maxHp: 10, ...overrides,
+    });
+}
+
+// ---------------------------------------------------------------------
+// Test 1 — single enemy inside the disc → one nova_hit_enemy event.
+// ---------------------------------------------------------------------
+
+describe('detectNovaBlastHits — single enemy hit', () => {
+    test('enemy inside radius emits one nova_hit_enemy event with all 6 fields', () => {
+        // Blast centered at (200, 200) radius 100; enemy at (250, 200)
+        // ⇒ dist 50 < 100. Inside the disc.
+        const blast = novaBlast(200, 200, 100, 7);
+        const e = novaEnemy(101, 250, 200);
+        const events = [];
+        detectNovaBlastHits(blast, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev).toMatchObject({
+            type: 'nova_hit_enemy',
+            enemyId: 101,
+            damage: 7,
+            enemyX: 250,
+            enemyY: 200,
+            distanceFromCenter: 50,
+        });
+        // Explicit field-count guard: exactly 6 keys (type + 5 non-type
+        // fields). NO centerX/centerY (wrapper has those already), NO
+        // impulse / knockback fields.
+        expect(Object.keys(ev).sort()).toEqual([
+            'damage', 'distanceFromCenter', 'enemyId',
+            'enemyX', 'enemyY', 'type',
+        ].sort());
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 2 — single asteroid inside the disc → one nova_hit_asteroid.
+// ---------------------------------------------------------------------
+
+describe('detectNovaBlastHits — single asteroid hit', () => {
+    test('asteroid inside radius emits one nova_hit_asteroid event with all 6 fields', () => {
+        // Blast centered at (0, 0) radius 50; asteroid at (30, 40)
+        // ⇒ dist = hypot(30, 40) = 50 — but the gate is STRICT `<` so
+        // dist === radius is OUTSIDE. Place at (24, 32) → dist 40 < 50.
+        const blast = novaBlast(0, 0, 50, 3);
+        const a = novaAsteroid(42, 24, 32);
+        const events = [];
+        detectNovaBlastHits(blast, [], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev).toMatchObject({
+            type: 'nova_hit_asteroid',
+            asteroidId: 42,
+            damage: 3,
+            asteroidX: 24,
+            asteroidY: 32,
+            distanceFromCenter: 40,
+        });
+        expect(Object.keys(ev).sort()).toEqual([
+            'asteroidId', 'asteroidX', 'asteroidY',
+            'damage', 'distanceFromCenter', 'type',
+        ].sort());
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 3 — mixed targets in a single blast (enemies + asteroids).
+// ---------------------------------------------------------------------
+
+describe('detectNovaBlastHits — mixed targets', () => {
+    test('one blast hits multiple enemies and asteroids in one tick', () => {
+        // Blast centered at (500, 500) radius 200.
+        // Two enemies inside, one outside; one asteroid inside, one
+        // outside. Expect 3 events total (2 enemy + 1 asteroid),
+        // ordered enemies-first per the documented iteration order.
+        const blast = novaBlast(500, 500, 200, 4);
+        const eIn1 = novaEnemy(101, 550, 500);    // dist 50, inside
+        const eIn2 = novaEnemy(102, 500, 600);    // dist 100, inside
+        const eOut = novaEnemy(103, 800, 500);    // dist 300, outside
+        const aIn  = novaAsteroid(201, 450, 450); // dist ~70.7, inside
+        const aOut = novaAsteroid(202, 500, 900); // dist 400, outside
+        const events = [];
+        detectNovaBlastHits(blast, [eIn1, eIn2, eOut], [aIn, aOut], ctx, events);
+        expect(events).toHaveLength(3);
+        // Enemies-first, in array order.
+        expect(events[0]).toMatchObject({ type: 'nova_hit_enemy', enemyId: 101 });
+        expect(events[1]).toMatchObject({ type: 'nova_hit_enemy', enemyId: 102 });
+        expect(events[2]).toMatchObject({ type: 'nova_hit_asteroid', asteroidId: 201 });
+        // Every event carries the SAME damage (flat damage model — no
+        // falloff). distanceFromCenter differs per target.
+        for (const ev of events) {
+            expect(ev.damage).toBe(4);
+        }
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 4 — targets outside the radius emit zero events.
+// ---------------------------------------------------------------------
+
+describe('detectNovaBlastHits — geometry miss', () => {
+    test('targets all outside radius produce zero events', () => {
+        const blast = novaBlast(0, 0, 50, 5);
+        const eFar = novaEnemy(101, 500, 0);     // dist 500 ≫ 50
+        const aFar = novaAsteroid(201, 0, 500);  // dist 500 ≫ 50
+        const events = [];
+        detectNovaBlastHits(blast, [eFar], [aFar], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('target exactly on the radius boundary is OUTSIDE (strict <)', () => {
+        // Blast radius 50 at origin; enemy at (50, 0) → dist === radius.
+        // The pure step uses STRICT `<` (distSq < radiusSq), so an
+        // entity sitting exactly on the rim is NOT hit. Pin this so we
+        // notice if the gate ever flips to `<=`.
+        const blast = novaBlast(0, 0, 50, 5);
+        const e = novaEnemy(101, 50, 0);
+        const events = [];
+        detectNovaBlastHits(blast, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 5 — skip-gates (inactive / warping / death-flash for both kinds).
+// ---------------------------------------------------------------------
+
+describe('detectNovaBlastHits — skipped pairs', () => {
+    test('inactive enemy is skipped even when inside the radius', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        const e = novaEnemy(101, 10, 0, { active: false });
+        const events = [];
+        detectNovaBlastHits(blast, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('inactive asteroid is skipped even when inside the radius', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        const a = novaAsteroid(201, 10, 0, { active: false });
+        const events = [];
+        detectNovaBlastHits(blast, [], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping asteroid is skipped (warping mid-spawn-animation)', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        const a = novaAsteroid(201, 10, 0, { warping: true });
+        const events = [];
+        detectNovaBlastHits(blast, [], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('asteroid in death-flash is skipped (legacy `_deathFlash` field)', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        // freshAsteroidState always defaults `deathFlash: 0`, which would
+        // short-circuit the dual-name skip-gate (the `!== undefined`
+        // branch wins, finds `0`, and the legacy fallback never runs).
+        // Live `Asteroid` instances are wrapper-side and only carry
+        // `_deathFlash`, NOT `deathFlash` — so to exercise the legacy
+        // fallback path we delete the new field on the test object.
+        const a = novaAsteroid(201, 10, 0);
+        delete a.deathFlash;
+        a._deathFlash = 4;
+        const events = [];
+        detectNovaBlastHits(blast, [], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('asteroid in death-flash is skipped (new `deathFlash` field)', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        const a = novaAsteroid(201, 10, 0, { deathFlash: 4 });
+        const events = [];
+        detectNovaBlastHits(blast, [], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy in death-flash is skipped (legacy `_deathFlash` field)', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        const e = novaEnemy(101, 10, 0, { _deathFlash: 4 });
+        const events = [];
+        detectNovaBlastHits(blast, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping enemy is skipped', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        const e = novaEnemy(101, 10, 0, { warping: true });
+        const events = [];
+        detectNovaBlastHits(blast, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 6 — distanceFromCenter field is accurate (used wrapper-side for
+// knockback direction recovery).
+// ---------------------------------------------------------------------
+
+describe('detectNovaBlastHits — distance field accuracy', () => {
+    test('distanceFromCenter equals hypot(dx, dy) per-target', () => {
+        const blast = novaBlast(100, 100, 500, 5);
+        // Pythagorean triple (3, 4, 5) scaled by 10: enemy at (130, 140)
+        // → dist 50. Asteroid at (160, 180) → dist hypot(60, 80) = 100.
+        const e = novaEnemy(101, 130, 140);
+        const a = novaAsteroid(201, 160, 180);
+        const events = [];
+        detectNovaBlastHits(blast, [e], [a], ctx, events);
+        expect(events).toHaveLength(2);
+        // Enemies-first per iteration order.
+        const enemyEv = events.find(ev => ev.type === 'nova_hit_enemy');
+        const astEv = events.find(ev => ev.type === 'nova_hit_asteroid');
+        expect(enemyEv.distanceFromCenter).toBeCloseTo(50, 6);
+        expect(astEv.distanceFromCenter).toBeCloseTo(100, 6);
+    });
+
+    test('target at exact blast center has distanceFromCenter === 0', () => {
+        // Edge case: an enemy that spawned at the same world position as
+        // the blast's origin. distSq is 0 → distance 0 → still INSIDE
+        // (0 < radius²) so an event fires with distanceFromCenter 0.
+        const blast = novaBlast(100, 100, 50, 5);
+        const e = novaEnemy(101, 100, 100);
+        const events = [];
+        detectNovaBlastHits(blast, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceFromCenter).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 7 — empty / null / degenerate inputs defensive guards.
+// ---------------------------------------------------------------------
+
+describe('detectNovaBlastHits — empty / degenerate inputs', () => {
+    test('null novaBlast → no events (no crash)', () => {
+        const events = [];
+        detectNovaBlastHits(null, [novaEnemy(101, 0, 0)], [novaAsteroid(201, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('zero radius → no events', () => {
+        const blast = novaBlast(0, 0, 0, 5);
+        const events = [];
+        detectNovaBlastHits(blast, [novaEnemy(101, 0, 0)], [novaAsteroid(201, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('negative radius → no events', () => {
+        const blast = novaBlast(0, 0, -10, 5);
+        const events = [];
+        detectNovaBlastHits(blast, [novaEnemy(101, 0, 0)], [novaAsteroid(201, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('empty enemy + empty asteroid arrays → no events', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        const events = [];
+        detectNovaBlastHits(blast, [], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('null enemies + asteroid hit → still emits the asteroid event', () => {
+        // Defensive: a missing enemies array should NOT prevent asteroid
+        // detection from running. Both target lists are independent.
+        const blast = novaBlast(0, 0, 100, 5);
+        const a = novaAsteroid(201, 10, 0);
+        const events = [];
+        detectNovaBlastHits(blast, null, [a], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('nova_hit_asteroid');
+    });
+
+    test('enemies hit + null asteroids → still emits the enemy event', () => {
+        const blast = novaBlast(0, 0, 100, 5);
+        const e = novaEnemy(101, 10, 0);
+        const events = [];
+        detectNovaBlastHits(blast, [e], null, ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('nova_hit_enemy');
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 8 — flat damage model (no falloff): every target inside the
+// disc takes the SAME damage regardless of distance from center.
+// ---------------------------------------------------------------------
+
+describe('detectNovaBlastHits — flat damage (no falloff)', () => {
+    test('near-center and near-rim targets take identical damage', () => {
+        const blast = novaBlast(0, 0, 100, 13);
+        // Near-center: dist 1.
+        const eNear = novaEnemy(101, 1, 0);
+        // Near-rim: dist 99 (inside, but just inside).
+        const eRim = novaEnemy(102, 99, 0);
+        const events = [];
+        detectNovaBlastHits(blast, [eNear, eRim], [], ctx, events);
+        expect(events).toHaveLength(2);
+        // Same damage on BOTH events — pin the flat-damage contract.
+        expect(events[0].damage).toBe(13);
+        expect(events[1].damage).toBe(13);
+        // Sanity: the distances are different so the targets really are
+        // at different rings inside the disc.
+        expect(events[0].distanceFromCenter).toBeCloseTo(1, 6);
+        expect(events[1].distanceFromCenter).toBeCloseTo(99, 6);
     });
 });

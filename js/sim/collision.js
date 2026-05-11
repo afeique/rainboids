@@ -1831,3 +1831,281 @@ export function detectPlayerDropPickups(players, drops, ctx, events) {
         }
     }
 }
+
+// =====================================================================
+// NOVA BLAST — Phase 2.5 dispatch (this PR, first power-weapon pair)
+// =====================================================================
+//
+// Nova Blast is the first POWER-weapon collision to be ported into the
+// pure sim. It is fundamentally different in shape from every prior
+// pair in this file:
+//
+//   - PRIOR pairs are entity-vs-entity (bullet⇿asteroid, player⇿enemy,
+//     etc.) — for each (A, B) we test circle-circle overlap.
+//   - NOVA BLAST is point-vs-many: one origin point + radius vs ALL
+//     active enemies AND ALL active asteroids in range. The "first"
+//     entity is not an entity at all; it's a region spec.
+//
+// The pure step accepts the blast specification as a single object
+// (`novaBlast`) and a candidate list for each target kind it can damage
+// (enemies, asteroids). Per overlapping target it emits one event with
+// the target's id, its current world coordinates, the damage applied,
+// and the distance from the blast center (useful to the wrapper if it
+// wants distance-based FX intensity, even though damage is uniform).
+//
+// ─── Damage model: NO falloff (verified against legacy) ──────────────
+//
+// The legacy `checkNovaCollisions` at
+//   js/modules/combat/collision-system.js:1055
+// applies a CONSTANT `ring.damage` (or `POWER_WEAPONS.NOVA_BLAST.ringDamage`
+// fallback) to every target inside the ring band:
+//
+//   this.damageEnemy(enemy, ring.damage || POWER_WEAPONS.NOVA_BLAST.ringDamage);
+//   ast.health = Math.max(0, (ast.health || 0) - dmg);
+//
+// There is NO distance-based falloff: a target at the center takes the
+// same damage as a target at the rim. We mirror that here — the pure
+// step emits a uniform `damage` value (passed in via `novaBlast.damage`)
+// regardless of `distanceFromCenter`. The wrapper / future
+// `POWER_WEAPONS.NOVA_BLAST` data shape may add falloff later, in which
+// case this pure step's contract will need to accept a falloff function
+// or curve. For now: simple, flat damage.
+//
+// ─── Single tick vs persistent (also verified) ───────────────────────
+//
+// The legacy nova is a SHOCKWAVE — it persists across multiple ticks as
+// `ring.currentRadius` grows, and uses `Math.abs(dist - currentRadius) <
+// RING_WIDTH` to test "is this target on the wavefront RIGHT NOW?". A
+// target is hit AT MOST ONCE per ring (legacy uses `ring.hitEnemies` /
+// `ring.hitAsteroids` Sets to dedupe).
+//
+// The pure step's contract here is the SIMPLER per-tick disc model:
+// "given a center + radius + damage, which entities are inside the
+// disc right now?". The wrapper is responsible for constructing the
+// right `novaBlast` per tick from its ring data. If the wrapper wants
+// the ring-band semantics (only entities on the EXPANDING wavefront,
+// not everything inside it), it can compute the difference of two
+// detectNovaBlastHits calls — outer-radius minus inner-radius — OR
+// switch to a ring-band variant of this detector in a future dispatch.
+// Per-ring dedup (a target gets hit AT MOST ONCE by a given ring across
+// the ring's lifetime) is a wrapper concern, not a pure-step one. The
+// pure step is stateless — it reports overlaps; the wrapper consults
+// its hit-set and ignores already-damaged events.
+//
+// ─── Skip-gates: same as every other pair ────────────────────────────
+//
+//   - Inactive enemy        (`!enemy.active`)
+//   - Warping enemy         (mid spawn-warp animation)
+//   - Enemy in death-flash  (legacy `_deathFlash` or new `deathFlash`)
+//   - Inactive asteroid     (`!asteroid.active`)
+//   - Warping asteroid      (mid warp-in animation)
+//   - Asteroid death-flash  (legacy `_deathFlash` or new `deathFlash`)
+//
+// NOTE: the legacy `checkNovaCollisions` does NOT skip on `_deathFlash`
+// for either enemies or asteroids (lines 1108-1109 + 1138-1139 gate on
+// `!active`, `warping`, and the per-ring hit-set only). The pure step
+// adds the death-flash gate for parity with every other pair in this
+// file — entities mid-destruction shouldn't be hit again. This is a
+// strict superset of legacy behavior; the wrapper can override by
+// passing entities with `deathFlash = 0` if it really wants the legacy
+// semantics, but the safer default is "do not double-hit a dying
+// entity".
+//
+// ─── What the pure step does NOT report (stays wrapper-only) ─────────
+//
+//   - Outward knockback on hit (`enemy.vel.x += (dx/dist) * KNOCK_ENEMY`)
+//     — this is impulse model, applied by the wrapper from the
+//     `distanceFromCenter` + `enemyX/Y` fields if it wants the legacy
+//     directional shove (the direction is recoverable from the event
+//     payload via `(enemyX - centerX, enemyY - centerY) / distance`).
+//   - Per-target impact sparks / particle FX (presentation)
+//   - First-frame "core flash" + perimeter sparkles at wavefront
+//     (presentation)
+//   - `ring.hitEnemies` / `ring.hitAsteroids` Set dedup (per-ring state,
+//     wrapper-owned)
+//   - `destroyAsteroid` cascade when an asteroid's HP drops to zero
+//     (the wrapper drains events into its damage helpers; lethal hits
+//     are detected wrapper-side from the resulting HP, same pattern as
+//     every other pair)
+//   - Audio / shockwave-ring rendering / hitstop (presentation)
+
+// ─── Nova-blast hit detection ────────────────────────────────────────
+
+/**
+ * Detect Nova-blast hits for one tick.
+ *
+ * Pure step: tests a single AoE disc (`novaBlast = {centerX, centerY,
+ * radius, damage}`) against every active enemy AND every active
+ * asteroid, and emits one event per target whose center lies inside the
+ * disc. Does NOT mutate enemies or asteroids — every effect (HP loss,
+ * knockback, drops, FX) is reported in the event payload for the
+ * wrapper / Rust mirror to apply downstream.
+ *
+ * Geometry:
+ *   Point-in-disc: `dx² + dy² < radius²`. We use the squared form to
+ *   avoid the sqrt during the gate test, then compute the actual
+ *   distance once per HIT for the `distanceFromCenter` field (so the
+ *   wrapper can recover a direction vector without re-doing the sqrt).
+ *
+ * Damage model:
+ *   FLAT — every target inside the disc takes `novaBlast.damage`
+ *   regardless of distance from center. Mirrors legacy `ring.damage`
+ *   semantics; see the section comment above for the rationale.
+ *
+ * Skip-gates (no event emitted):
+ *   Enemies:
+ *     - Inactive          (`!enemy.active`)
+ *     - Warping           (`enemy.warping`)
+ *     - Mid death-flash   (`enemy.deathFlash > 0` or legacy `_deathFlash`)
+ *   Asteroids:
+ *     - Inactive          (`!asteroid.active`)
+ *     - Warping           (`asteroid.warping`)
+ *     - Mid death-flash   (`asteroid.deathFlash > 0` or legacy `_deathFlash`)
+ *
+ * Iteration order:
+ *   Enemies first, then asteroids. The order is observable only via
+ *   `events` ordering — the wrapper should not depend on it for
+ *   correctness (it dispatches on `event.type`). Future spatial-grid
+ *   filtering can reorder freely.
+ *
+ * @param {{centerX:number, centerY:number, radius:number, damage:number}} novaBlast
+ *                                      blast spec. `centerX`/`centerY`
+ *                                      are world coords; `radius` is the
+ *                                      damage disc radius; `damage` is
+ *                                      the flat damage applied to every
+ *                                      target inside. The wrapper
+ *                                      constructs this from its live
+ *                                      `ring` data each tick.
+ * @param {Array<Object>} enemies       active enemies. Each is treated
+ *                                      as having `{x, y, active, warping,
+ *                                      deathFlash OR _deathFlash, id}`.
+ *                                      Note: radius is intentionally
+ *                                      NOT consulted — nova hits by
+ *                                      point-in-disc (target center
+ *                                      inside blast disc), mirroring
+ *                                      legacy line 1112 which uses the
+ *                                      enemy CENTER for the dist test.
+ * @param {Array<Object>} asteroids     active asteroids. Same shape as
+ *                                      `enemies` — center-only test.
+ * @param {Object} ctx                  per-tick context bag (currently
+ *                                      unused; reserved for future
+ *                                      extensions like a falloff curve
+ *                                      or a spatial-grid filter).
+ * @param {Array<Object>} events        out-buffer. Pushes objects with
+ *                                      the shapes documented below.
+ *
+ * Event shapes (one event per detected hit):
+ *
+ *   Enemy hit:
+ *     {
+ *       type: 'nova_hit_enemy',
+ *       enemyId:              enemy.id,
+ *       damage:               novaBlast.damage,
+ *       enemyX, enemyY:       world coords of the enemy (wrapper uses
+ *                             these + center for knockback direction
+ *                             and per-target impact sparks).
+ *       distanceFromCenter:   Math.hypot(enemyX-centerX, enemyY-centerY).
+ *                             Always finite + nonnegative; zero if the
+ *                             enemy is exactly at the blast center.
+ *     }
+ *
+ *   Asteroid hit:
+ *     {
+ *       type: 'nova_hit_asteroid',
+ *       asteroidId:           asteroid.id,
+ *       damage:               novaBlast.damage,
+ *       asteroidX, asteroidY: world coords of the asteroid.
+ *       distanceFromCenter:   same definition as enemy event.
+ *     }
+ *
+ * NOTE on field count (5 non-type for each variant, 6 total each):
+ *   Intentionally NO `centerX` / `centerY` in the event — the wrapper
+ *   already has the blast it passed in, so duplicating the center on
+ *   every event would be wasteful. The wrapper recovers direction via
+ *   `(enemyX - centerX) / distanceFromCenter`. Intentionally NO impulse
+ *   / knockback fields — those depend on per-enemy knockback multipliers
+ *   that are upgrade-state-dependent (wrapper-side).
+ */
+export function detectNovaBlastHits(novaBlast, enemies, asteroids, ctx, events) {
+    if (!novaBlast) return;
+    // Tolerate either or both target arrays being missing — a nova blast
+    // can legitimately fire into an empty field.
+    const hasEnemies = enemies && enemies.length > 0;
+    const hasAsteroids = asteroids && asteroids.length > 0;
+    if (!hasEnemies && !hasAsteroids) return;
+
+    const centerX = novaBlast.centerX;
+    const centerY = novaBlast.centerY;
+    const radius = novaBlast.radius;
+    const damage = novaBlast.damage;
+
+    // Defensive: zero or negative radius blast hits nothing.
+    if (!(radius > 0)) return;
+    const radiusSq = radius * radius;
+
+    // ── Enemies ────────────────────────────────────────────────────
+    if (hasEnemies) {
+        for (let i = 0; i < enemies.length; i++) {
+            const enemy = enemies[i];
+            if (!enemy || !enemy.active) continue;
+            if (enemy.warping) continue;
+
+            // Death-flash gate — accept either the new sim field name
+            // (`deathFlash`) or the legacy underscore-prefix
+            // (`_deathFlash`). Same semantic as every other pair above.
+            const dF = enemy.deathFlash !== undefined
+                ? enemy.deathFlash
+                : enemy._deathFlash;
+            if (dF && dF > 0) continue;
+
+            const dx = enemy.x - centerX;
+            const dy = enemy.y - centerY;
+            const distSq = dx * dx + dy * dy;
+            if (distSq >= radiusSq) continue;
+
+            // Compute the actual distance now (cheaper than sqrt-ing in
+            // the gate; we only pay this for hits, not for tested-but-
+            // missed pairs).
+            const distance = Math.sqrt(distSq);
+
+            events.push({
+                type: 'nova_hit_enemy',
+                enemyId: enemy.id,
+                damage,
+                enemyX: enemy.x,
+                enemyY: enemy.y,
+                distanceFromCenter: distance,
+            });
+        }
+    }
+
+    // ── Asteroids ──────────────────────────────────────────────────
+    if (hasAsteroids) {
+        for (let j = 0; j < asteroids.length; j++) {
+            const asteroid = asteroids[j];
+            if (!asteroid || !asteroid.active) continue;
+            if (asteroid.warping) continue;
+
+            const dF = asteroid.deathFlash !== undefined
+                ? asteroid.deathFlash
+                : asteroid._deathFlash;
+            if (dF && dF > 0) continue;
+
+            const dx = asteroid.x - centerX;
+            const dy = asteroid.y - centerY;
+            const distSq = dx * dx + dy * dy;
+            if (distSq >= radiusSq) continue;
+
+            const distance = Math.sqrt(distSq);
+
+            events.push({
+                type: 'nova_hit_asteroid',
+                asteroidId: asteroid.id,
+                damage,
+                asteroidX: asteroid.x,
+                asteroidY: asteroid.y,
+                distanceFromCenter: distance,
+            });
+        }
+    }
+}
