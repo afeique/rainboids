@@ -393,6 +393,47 @@ pub enum CollisionEvent {
         /// `true` ↔ wrapper should remove the bullet from the pool.
         bullet_will_despawn: bool,
     },
+    /// Mirrors `{ type: 'player_hit_enemy', ... }` in `js/sim/collision.js`.
+    ///
+    /// IMPORTANT: math model is DIFFERENT from `PlayerHitAsteroid`. The
+    /// player-vs-enemy path uses a textbook restitution-based impulse model
+    /// (mirrors lines 1753–1794 of `collision-system.js`):
+    ///
+    ///   impulseScalar  = -(1 + BOUNCE_RESTITUTION) · velAlongNormal
+    ///                    / (playerMass + enemyMass)
+    ///   playerImpulse  = impulseScalar · normal · enemyMass  · BOUNCE_FORCE_MULTIPLIER
+    ///   enemyImpulse   = -impulseScalar · normal · playerMass · BOUNCE_FORCE_MULTIPLIER
+    ///
+    /// The path BAILS on separating velocities (`velAlongNormal > 0`):
+    /// impulse deltas are zero on graze frames, but damage and separation
+    /// still fire. Separation is `overlap × OVERLAP_SEPARATION_RATIO` SPLIT
+    /// between both bodies (player + enemy each get a mirror-image push).
+    /// There is NO `OVERLAP_PUSH_FORCE` velocity nudge — that constant is
+    /// asteroid-pair only. There is NO atan2 jitter — fully deterministic.
+    ///
+    /// Velocity deltas the wrapper applies:
+    ///   - `player.vel.x += player_impulse_dx; player.vel.y += player_impulse_dy`
+    ///   - `enemy.vel.x  += enemy_impulse_dx;  enemy.vel.y  += enemy_impulse_dy`
+    /// Position deltas the wrapper applies:
+    ///   - `player.x += separation_dx;       player.y += separation_dy`
+    ///   - `enemy.x  += enemy_separation_dx; enemy.y  += enemy_separation_dy`
+    ///     (wrapper applies enemy-side only if the enemy wasn't destroyed
+    ///     by the damage application earlier in the legacy handler).
+    PlayerHitEnemy {
+        player_id: u32,
+        enemy_id: u32,
+        damage_to_enemy: f32,
+        player_impulse_dx: f32,
+        player_impulse_dy: f32,
+        enemy_impulse_dx: f32,
+        enemy_impulse_dy: f32,
+        /// Player-side position delta (mirror of enemy_separation_*).
+        separation_dx: f32,
+        separation_dy: f32,
+        /// Enemy-side position delta (mirror of player separation_*).
+        enemy_separation_dx: f32,
+        enemy_separation_dy: f32,
+    },
 }
 
 // ─── Bullet-vs-asteroid pair detection ──────────────────────────────
@@ -810,6 +851,15 @@ pub struct CollisionEnemy {
     pub vx: f32,
     pub vy: f32,
     pub radius: f32,
+    /// Optional explicit mass. Consumed by the player-vs-enemy pair to
+    /// scale impulse magnitudes via the textbook restitution formula.
+    /// When `None`, the JS code falls back to the same ship-disk formula
+    /// used for players (`π · r² · 0.5`), NOT the asteroid `(4/3)π r³`
+    /// formula — see `js/sim/collision.js:1131–1133`. The live `Enemy`
+    /// class assigns `mass` directly per type, so production code sets
+    /// this explicitly; the fallback is for tests and defensive coverage.
+    /// Bullet-vs-enemy ignores this field.
+    pub mass: Option<f32>,
     /// Current hit points. Unused by the pair-detection step (the wrapper
     /// applies damage); carried for parity.
     pub hp: f32,
@@ -834,6 +884,7 @@ impl CollisionEnemy {
             vx: 0.0,
             vy: 0.0,
             radius: 18.0,
+            mass: None,
             hp: 1.0,
             active: true,
             warping: false,
@@ -980,6 +1031,276 @@ pub fn detect_bullet_enemy_hits(
             if will_despawn {
                 break;
             }
+        }
+    }
+}
+
+// ── PLAYER ↔ ENEMY — Phase 2.5 ─────────
+//
+// IMPORTANT: This pair uses DIFFERENT math than `detect_player_asteroid_hits`.
+// The legacy `handlePlayerEnemyCollision` (collision-system.js:1657–1819)
+// does NOT use the heavier `ASTEROID_KNOCKBACK_MULTIPLIER` + jittered-atan2
+// path. Instead it runs a textbook restitution-based impulse model:
+//
+//   1. Normalize collision direction (player.x - enemy.x, ...) / distance
+//   2. relativeVel = player.vel - enemy.vel
+//   3. velAlongNormal = relativeVel · normal
+//   4. IF velAlongNormal > 0 (separating) → BAIL, no impulse applied
+//   5. impulseScalar = -(1 + BOUNCE_RESTITUTION) · velAlongNormal
+//                      / (playerMass + enemyMass)
+//   6. impulse = impulseScalar · normal
+//   7. player.vel += impulse · enemyMass · BOUNCE_FORCE_MULTIPLIER
+//   8. enemy.vel  -= impulse · playerMass · BOUNCE_FORCE_MULTIPLIER
+//
+// Separation uses `OVERLAP_SEPARATION_RATIO × overlap` SPLIT between the
+// two bodies (both move, ratio rather than full overlap + buffer); NO
+// `OVERLAP_PUSH_FORCE` velocity nudge is applied (asteroid-pair only).
+// NO atan2 jitter — fully deterministic.
+//
+// What stays the same as player-vs-asteroid:
+//   - Circle-circle geometry check.
+//   - Inactive-side / warping / death-flash skip gates (enemy-side
+//     `_deathFlash` is the legacy name; collapsed to `death_flash` in
+//     this mirror).
+//   - Pure-step discipline: emit one event per hit, never mutate either
+//     side's HP / vel / position directly. The wrapper applies the
+//     reported deltas.
+//
+// What does NOT live in this module at all (stays in the wrapper):
+//   - Damage application to player.hp / enemy.hp (legacy: takeDamage)
+//   - Shield / Bulwark / Phase-Dash damage reduction
+//   - Tank consumption / death handling on player HP ≤ 0
+//   - Enemy death-flash trigger (_deathFlash = 8) and drops / XP / kills
+//   - Boss-rage enrage trigger              (legacy: boss reactive logic)
+//   - Hit-flash visuals, hit-stop, camera kick, screen shake, audio
+//   - Damage numbers, sparks, post-hit invincibility
+//
+// Source-of-truth lines in `js/modules/combat/collision-system.js`:
+//   - Player-side damage block:      1658–1731
+//   - Enemy.takeDamage + death-flash:1733–1751
+//   - Bounce / impulse model:        1753–1794
+//   - Separation push:               1796–1806
+//   - Impact particles:              1809–1815  (presentation only)
+//
+// JS reference: `js/sim/collision.js::detectPlayerEnemyHits` (lines
+// 1089–1209 in PR #40 / current master).
+
+/// Damage dealt to enemy when player collides with it. Mirrors
+/// `PLAYER_ENEMY_COLLISION_DAMAGE = 5` in `js/sim/collision.js` (line 957)
+/// and `COLLISION_CONFIG.PLAYER_ENEMY_COLLISION_DAMAGE = 5` in
+/// `js/modules/combat/collision-system.js` (line 17).
+///
+/// Higher than the asteroid equivalent (2) but still tiny relative to enemy
+/// HP, by design: ramming enemies is intentionally a *bad* strategy — the
+/// player gets bounced off (see `BOUNCE_FORCE_MULTIPLIER`) while only
+/// chipping the enemy. Killing via collision takes many rams, each
+/// costing the player health.
+pub const PLAYER_ENEMY_COLLISION_DAMAGE: f32 = 5.0;
+
+// NOTE: `BOUNCE_RESTITUTION` (0.9), `BOUNCE_FORCE_MULTIPLIER` (12.0), and
+// `OVERLAP_SEPARATION_RATIO` (0.6) — all consumed by this pair — are
+// already declared as `pub const` in the player-vs-asteroid block above.
+// We reuse them directly rather than re-exporting under enemy-specific
+// aliases; the wrapper / JS mirror uses the same constant values for the
+// bounce-pair path regardless of which pair it dispatches. JS mirrors
+// this same scoping decision (`js/sim/collision.js` lines 959–964).
+
+/// Detect player-vs-enemy collisions for one tick.
+///
+/// Pure step: reads player + enemy positions / radii / velocities,
+/// decides which pairs overlap, and pushes one `PlayerHitEnemy` event per
+/// detected hit with the velocity + position *deltas* the wrapper applies
+/// to the live state. Does NOT mutate player or enemy — every effect is
+/// reported in the event payload for the wrapper / JS mirror to apply
+/// downstream.
+///
+/// Co-op ready: takes a slice of players. The solo wrapper passes a
+/// one-element slice; future co-op sessions will pass the full ship
+/// roster. Each player is scanned against every active enemy; one player
+/// can emit multiple events per tick if it overlaps multiple enemies
+/// simultaneously (e.g. caught in a swarm).
+///
+/// Geometry:
+///   Circle-circle overlap: `(dx² + dy²) < (player.r + enemy.r)²`.
+///   JS line refs: `js/sim/collision.js:1117–1121`.
+///
+/// Bounce / impulse model (mirrors JS lines 1149–1178):
+///
+///   nx, ny         = (player.x - enemy.x, player.y - enemy.y) / distance
+///   relVx, relVy   = (player.vx - enemy.vx, player.vy - enemy.vy)
+///   velAlongNormal = relVx · nx + relVy · ny
+///
+///   IF velAlongNormal > 0  (separating)  →  BAIL — geometry overlap is
+///      reported in the event but impulse deltas are all zero. The wrapper
+///      still applies damage on these "graze" frames; this matches the
+///      legacy behavior where the damage block runs unconditionally on
+///      overlap and the bounce block gates on `velAlongNormal > 0`.
+///
+///   impulseScalar  = -(1 + BOUNCE_RESTITUTION) · velAlongNormal
+///                    / (playerMass + enemyMass)
+///   impulseX, impulseY = impulseScalar · (nx, ny)
+///
+///   playerImpulseDx = impulseX · enemyMass  · BOUNCE_FORCE_MULTIPLIER
+///   playerImpulseDy = impulseY · enemyMass  · BOUNCE_FORCE_MULTIPLIER
+///   enemyImpulseDx  = -impulseX · playerMass · BOUNCE_FORCE_MULTIPLIER
+///   enemyImpulseDy  = -impulseY · playerMass · BOUNCE_FORCE_MULTIPLIER
+///
+/// Determinism:
+///   This pair is fully deterministic — NO atan2 jitter, NO RNG
+///   consumption, NO `OVERLAP_PUSH_FORCE` velocity nudge. The asteroid
+///   pair has all three of those; this pair has none.
+///
+/// Separation push (mirrors JS lines 1183–1190):
+///   If `overlap = sumR - distance > 0`:
+///     - separationForce = overlap · OVERLAP_SEPARATION_RATIO
+///     - Player position delta: +(nx, ny) · separationForce
+///     - Enemy  position delta: -(nx, ny) · separationForce  (mirror)
+///   Both bodies move; ratio rather than `overlap + SEPARATION_BUFFER`.
+///
+/// Enemy damage:
+///   Constant `PLAYER_ENEMY_COLLISION_DAMAGE = 5`. The wrapper subtracts
+///   this from `enemy.hp` and handles death-flash + drops + kill streak.
+///   The pure step just reports the number. Damage runs unconditionally
+///   on geometric overlap, even on graze frames (separating velocities).
+///
+/// Skipped pairs (no event emitted):
+///   - Inactive player    (`!player.active`)
+///   - Inactive enemy     (`!enemy.active`)
+///   - Warping enemy      (`enemy.warping`)
+///   - Enemy mid-death    (`enemy.death_flash > 0`)
+///
+/// NOTE: Unlike asteroids, players themselves have no `_deathFlash` /
+/// `warping` gate on the player side — the legacy path only checks
+/// `player.active` (and the wrapper handles `player.invincible` as a
+/// damage-reduction layer, not a collision skip). The pure step matches
+/// that: invincibility is a wrapper concern, not a geometry concern.
+pub fn detect_player_enemy_hits(
+    players: &[CollisionPlayer],
+    enemies: &[CollisionEnemy],
+    _ctx: &CollisionContext,
+    events: &mut Vec<CollisionEvent>,
+) {
+    if players.is_empty() || enemies.is_empty() {
+        return;
+    }
+
+    for player in players.iter() {
+        // 1. Active-guard (JS collision.js:1095).
+        if !player.active {
+            continue;
+        }
+
+        let player_radius = player.radius;
+        let player_vx = player.vx;
+        let player_vy = player.vy;
+        let player_mass = player
+            .mass
+            .unwrap_or_else(|| player_mass_fallback(player_radius));
+
+        for enemy in enemies.iter() {
+            // 2. Enemy gating (JS collision.js:1104–1114).
+            if !enemy.active {
+                continue;
+            }
+            if enemy.warping {
+                continue;
+            }
+            if enemy.death_flash > 0 {
+                continue;
+            }
+
+            // 3. Circle-circle overlap (JS collision.js:1117–1121).
+            let dx = player.x - enemy.x;
+            let dy = player.y - enemy.y;
+            let sum_r = player_radius + enemy.radius;
+            let dist_sq = dx * dx + dy * dy;
+            if dist_sq >= sum_r * sum_r {
+                continue;
+            }
+
+            // ── Hit detected — compute impulse + separation ──
+
+            // 4. Enemy mass — explicit when set, else the same ship-disk
+            //    formula used for players (JS collision.js:1131–1133).
+            //    Note that the JS code falls back to `entityMass(., 'player')`
+            //    for enemies without explicit mass, NOT the asteroid formula.
+            let enemy_mass = enemy
+                .mass
+                .unwrap_or_else(|| player_mass_fallback(enemy.radius));
+
+            let distance = dist_sq.sqrt();
+
+            // Default deltas to zero so a degenerate (distance == 0) hit
+            // still emits a well-formed event with the correct ids +
+            // damage but no nonsense math.
+            let mut player_impulse_dx: f32 = 0.0;
+            let mut player_impulse_dy: f32 = 0.0;
+            let mut enemy_impulse_dx: f32 = 0.0;
+            let mut enemy_impulse_dy: f32 = 0.0;
+            let mut separation_dx: f32 = 0.0;
+            let mut separation_dy: f32 = 0.0;
+            let mut enemy_separation_dx: f32 = 0.0;
+            let mut enemy_separation_dy: f32 = 0.0;
+
+            if distance > 0.0 {
+                // 5. Normalize the collision axis (enemy → player).
+                let nx = dx / distance;
+                let ny = dy / distance;
+
+                // 6. Relative velocity, projected onto the normal
+                //    (JS collision.js:1155–1157).
+                let rel_vx = player_vx - enemy.vx;
+                let rel_vy = player_vy - enemy.vy;
+                let vel_along_normal = rel_vx * nx + rel_vy * ny;
+
+                // 7. Only apply impulse when bodies are approaching (the
+                //    textbook "do not resolve separating velocities"
+                //    guard). Mirrors JS `if (velAlongNormal <= 0)` at
+                //    line 1165. NOTE the asymmetry with the asteroid
+                //    pair: the asteroid path NEVER gates here, it always
+                //    applies the jittered knockback.
+                if vel_along_normal <= 0.0 {
+                    let total_mass = player_mass + enemy_mass;
+                    if total_mass > 0.0 {
+                        let impulse_scalar =
+                            -(1.0 + BOUNCE_RESTITUTION) * vel_along_normal / total_mass;
+                        let impulse_x = impulse_scalar * nx;
+                        let impulse_y = impulse_scalar * ny;
+
+                        player_impulse_dx = impulse_x * enemy_mass * BOUNCE_FORCE_MULTIPLIER;
+                        player_impulse_dy = impulse_y * enemy_mass * BOUNCE_FORCE_MULTIPLIER;
+                        enemy_impulse_dx = -impulse_x * player_mass * BOUNCE_FORCE_MULTIPLIER;
+                        enemy_impulse_dy = -impulse_y * player_mass * BOUNCE_FORCE_MULTIPLIER;
+                    }
+                }
+
+                // 8. Separation push — applied independent of the
+                //    velAlongNormal gate (JS collision.js:1183–1190).
+                //    Both bodies move; ratio rather than overlap + buffer.
+                let overlap = sum_r - distance;
+                if overlap > 0.0 {
+                    let separation_force = overlap * OVERLAP_SEPARATION_RATIO;
+                    separation_dx = nx * separation_force;
+                    separation_dy = ny * separation_force;
+                    enemy_separation_dx = -nx * separation_force;
+                    enemy_separation_dy = -ny * separation_force;
+                }
+            }
+
+            // 9. Emit the event (JS collision.js:1193–1206).
+            events.push(CollisionEvent::PlayerHitEnemy {
+                player_id: player.id,
+                enemy_id: enemy.id,
+                damage_to_enemy: PLAYER_ENEMY_COLLISION_DAMAGE,
+                player_impulse_dx,
+                player_impulse_dy,
+                enemy_impulse_dx,
+                enemy_impulse_dy,
+                separation_dx,
+                separation_dy,
+                enemy_separation_dx,
+                enemy_separation_dy,
+            });
         }
     }
 }
