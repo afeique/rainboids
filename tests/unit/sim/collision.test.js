@@ -32,6 +32,8 @@ import {
     detectBulletEnemyHits,
     BULLET_ENEMY_KNOCKBACK,
     BULLET_ENEMY_HIT_FLASH_FRAMES,
+    detectPlayerEnemyHits,
+    PLAYER_ENEMY_COLLISION_DAMAGE,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
@@ -970,5 +972,366 @@ describe('detectBulletEnemyHits — damage propagation', () => {
         const events = [];
         detectBulletEnemyHits([b], [e], ctx, events);
         expect(events[0].damage).toBe(1);
+    });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// Player-vs-enemy pair (Phase 2.5 — dispatch 4).
+// ═════════════════════════════════════════════════════════════════════
+//
+// `detectPlayerEnemyHits` is the fourth pure-step pair extracted from the
+// legacy `handlePlayerEnemyCollision` in `js/modules/combat/collision-system.js`
+// (lines 1657-1819). The legacy path bundles damage + visuals + audio +
+// camera kicks + tank consumption + boss-rage triggers; the pure step
+// reports only the mechanical deltas — impulse + separation deltas for
+// BOTH bodies — that the wrapper applies to live state.
+//
+// IMPORTANT — math is DIFFERENT from the asteroid pair:
+//   - Asteroid pair: jittered atan2-knockback × ASTEROID_KNOCKBACK_MULTIPLIER
+//     (22.0), separation = overlap + SEPARATION_BUFFER, plus OVERLAP_PUSH_FORCE
+//     velocity nudge. The asteroid path ALWAYS applies the knockback.
+//   - Enemy pair: textbook restitution impulse model with `-(1 + R) · vN /
+//     totalMass`, BOUNCE_FORCE_MULTIPLIER (12.0), separation =
+//     overlap × OVERLAP_SEPARATION_RATIO split between both bodies, NO
+//     velocity push-force nudge. The enemy path BAILS on velAlongNormal > 0
+//     (separating velocities) — only the geometric overlap is emitted in
+//     that case (and the wrapper still applies damage).
+//
+// The tests below pin:
+//   - the damage constant (5, vs 2 for asteroids)
+//   - geometry overlap (circle-circle)
+//   - all event payload fields (impulse + separation for BOTH bodies)
+//   - skip gates (inactive / warping / death-flash on enemy side)
+//   - multiple enemies in one tick
+//   - bounce direction (eastbound player off a westward enemy ⇒ westbound impulse)
+//   - separating velocities bail-out (no impulse, but separation still applies)
+//   - defensive empty / null inputs
+
+// ---------------------------------------------------------------------
+// Helpers — build player + enemy pairs. `makePlayer` and `enemyWithRadius`
+// are already defined for earlier dispatches; reuse them here. Enemy
+// needs a `mass` field set for the impulse math (live `Enemy` instances
+// assign mass directly per type).
+// ---------------------------------------------------------------------
+
+/** Build an enemy with explicit radius + mass + velocity. Default mass=200
+ *  matches a small-to-medium enemy ship in the live game. */
+function makeEnemy(id, x, y, overrides = {}) {
+    const e = enemyWithRadius(id, x, y, overrides.radius || 18, {
+        active: overrides.active,
+        warping: overrides.warping,
+        deathFlash: overrides.deathFlash,
+        _deathFlash: overrides._deathFlash,
+        vx: overrides.vx,
+        vy: overrides.vy,
+    });
+    e.mass = overrides.mass !== undefined ? overrides.mass : 200;
+    return e;
+}
+
+// ---------------------------------------------------------------------
+// Constants — pinned to the legacy COLLISION_CONFIG block.
+// ---------------------------------------------------------------------
+
+describe('player-enemy collision constants', () => {
+    test('PLAYER_ENEMY_COLLISION_DAMAGE is 5 (verbatim from collision-system.js)', () => {
+        expect(PLAYER_ENEMY_COLLISION_DAMAGE).toBe(5);
+    });
+    // Reused constants — pinned here as a defensive parity guard for the
+    // enemy pair specifically. They were already pinned for the asteroid
+    // pair above, but if those constants ever drift the enemy pair tests
+    // will catch the breakage independently.
+    test('BOUNCE_RESTITUTION still 0.9 (consumed by player-enemy bounce)', () => {
+        expect(BOUNCE_RESTITUTION).toBe(0.9);
+    });
+    test('BOUNCE_FORCE_MULTIPLIER still 12.0 (consumed by player-enemy bounce)', () => {
+        expect(BOUNCE_FORCE_MULTIPLIER).toBe(12.0);
+    });
+    test('OVERLAP_SEPARATION_RATIO still 0.6 (consumed by player-enemy separation)', () => {
+        expect(OVERLAP_SEPARATION_RATIO).toBe(0.6);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — single overlapping pair emits one fully-populated event.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyHits — single hit', () => {
+    test('overlapping player + enemy emits one event with all 12 fields', () => {
+        // Player radius 15, enemy radius 18 ⇒ sumR = 33.
+        // Place player and enemy 20 px apart on x-axis ⇒ overlap = 13.
+        // Player moving east (vx=8), enemy still ⇒ approaching (vAN < 0).
+        const p = makePlayer('p1', 100, 100, { vx: 8, vy: 0 });
+        const e = makeEnemy(10, 120, 100, { vx: 0, vy: 0 });
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.type).toBe('player_hit_enemy');
+        expect(ev.playerId).toBe('p1');
+        expect(ev.enemyId).toBe(10);
+        expect(ev.damageToEnemy).toBe(PLAYER_ENEMY_COLLISION_DAMAGE);
+        expect(ev.damageToEnemy).toBe(5);
+        // All eight numeric delta fields must be defined and finite.
+        const deltaFields = [
+            'playerImpulseDx', 'playerImpulseDy',
+            'enemyImpulseDx', 'enemyImpulseDy',
+            'separationDx', 'separationDy',
+            'enemySeparationDx', 'enemySeparationDy',
+        ];
+        for (const f of deltaFields) {
+            expect(typeof ev[f]).toBe('number');
+            expect(Number.isFinite(ev[f])).toBe(true);
+        }
+        // Field-key guard — exactly 12 keys, none silently dropped.
+        expect(Object.keys(ev).sort()).toEqual([
+            'damageToEnemy', 'enemyId', 'enemyImpulseDx', 'enemyImpulseDy',
+            'enemySeparationDx', 'enemySeparationDy',
+            'playerId', 'playerImpulseDx', 'playerImpulseDy',
+            'separationDx', 'separationDy', 'type',
+        ].sort());
+        // Geometry overlapped ⇒ separation must be nonzero on the
+        // collision axis (x here). Player gets pushed west (negative).
+        expect(ev.separationDx).toBeLessThan(0);
+        expect(ev.separationDy).toBe(0);
+        // Enemy separation is the mirror image — enemy gets pushed east.
+        expect(ev.enemySeparationDx).toBeGreaterThan(0);
+        expect(ev.enemySeparationDx).toBeCloseTo(-ev.separationDx, 10);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — geometry miss.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyHits — geometry miss', () => {
+    test('player outside (player.r + enemy.r) emits no event', () => {
+        const p = makePlayer('p1', 0, 0);
+        // 200 ≫ sumR=33 → clearly no overlap.
+        const e = makeEnemy(10, 200, 0);
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('player just outside boundary (sumR + 1) emits no event', () => {
+        const p = makePlayer('p1', 0, 0, { radius: 15 });
+        // sumR = 33; place enemy center 34 px away → just outside.
+        const e = makeEnemy(10, 34, 0, { radius: 18 });
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — one player overlapping multiple enemies ⇒ multiple events.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyHits — multiple enemies in one tick', () => {
+    test('player caught between two enemies emits two events', () => {
+        const p = makePlayer('p1', 100, 100, { vx: 0, vy: 0 });
+        // Place enemies east + west, both close enough to overlap
+        // (sumR=33, place them 20 px out).
+        const east = makeEnemy(10, 120, 100);
+        const west = makeEnemy(20,  80, 100);
+        const events = [];
+        detectPlayerEnemyHits([p], [east, west], ctx, events);
+        expect(events).toHaveLength(2);
+        const ids = events.map(e => e.enemyId).sort((a, b) => a - b);
+        expect(ids).toEqual([10, 20]);
+        for (const ev of events) {
+            expect(ev.playerId).toBe('p1');
+            expect(ev.type).toBe('player_hit_enemy');
+            expect(ev.damageToEnemy).toBe(5);
+        }
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — skip gates (inactive / warping / death-flash on enemy side).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyHits — skipped pairs', () => {
+    test('inactive player → no event', () => {
+        const p = makePlayer('p1', 100, 100, { active: false });
+        const e = makeEnemy(10, 120, 100);
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('inactive enemy → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        const e = makeEnemy(10, 120, 100, { active: false });
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping enemy → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        const e = makeEnemy(10, 120, 100, { warping: true });
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy mid death-flash (new field name) → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        const e = makeEnemy(10, 120, 100, { deathFlash: 5 });
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy mid death-flash (legacy _deathFlash) → no event', () => {
+        const p = makePlayer('p1', 100, 100);
+        // Live Enemy instances use the underscore-prefix name; the pure
+        // step honors both for round-trip parity with the legacy module.
+        const e = { id: 10, x: 120, y: 100, radius: 18, mass: 200,
+                    active: true, warping: false, _deathFlash: 5,
+                    vx: 0, vy: 0 };
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — bounce direction. Player moving east into an enemy east of it
+// should get deflected back west (negative dx on player impulse).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyHits — bounce direction', () => {
+    test('eastbound player ramming a westward enemy gets impulse pushing west', () => {
+        // Geometry:
+        //   - Player at (100, 100), radius 15, moving east (vx=10).
+        //   - Enemy 20 px east at (120, 100), radius 18, moving west
+        //     (vx=-2). distance=20, sumR=33 ⇒ overlap=13.
+        //
+        // Normal (enemy → player) = (-1, 0).
+        // relVx = 10 - (-2) = 12, dot normal = -12 < 0 ⇒ APPROACHING
+        // (impulse fires).
+        //
+        // impulseScalar = -(1+0.9) · (-12) / (playerMass + enemyMass)
+        //               = +22.8 / totalMass     → POSITIVE
+        // impulseX      = +22.8 / totalMass · (-1) → NEGATIVE
+        // playerImpulseDx = impulseX · enemyMass · 12.0 → NEGATIVE
+        //                 = (player gets shoved WEST, away from enemy).
+        // enemyImpulseDx  = -impulseX · playerMass · 12.0 → POSITIVE
+        //                 = (enemy gets shoved EAST, away from player).
+        const p = makePlayer('p1', 100, 100, { vx: 10, vy: 0 });
+        const e = makeEnemy(10, 120, 100, { vx: -2, vy: 0 });
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        // Player gets pushed west.
+        expect(ev.playerImpulseDx).toBeLessThan(0);
+        expect(ev.playerImpulseDy).toBeCloseTo(0, 10);
+        // Enemy gets pushed east (opposite direction).
+        expect(ev.enemyImpulseDx).toBeGreaterThan(0);
+        expect(ev.enemyImpulseDy).toBeCloseTo(0, 10);
+        // Newton's third law (within the multiplier asymmetry): the
+        // ratio of impulses equals enemyMass/playerMass.
+        // |playerImpulseDx| · playerMass ≈ |enemyImpulseDx| · enemyMass.
+        const playerMass = Math.PI * 15 * 15 * 0.5; // entityMass fallback
+        const enemyMass = 200; // explicit
+        // Left side: |player Δv| · mP. Right side: |enemy Δv| · mE.
+        const lhs = Math.abs(ev.playerImpulseDx) * playerMass;
+        const rhs = Math.abs(ev.enemyImpulseDx) * enemyMass;
+        // These should be exactly equal under the bounce-force formula.
+        expect(lhs).toBeCloseTo(rhs, 6);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — separating velocities. Bodies overlap but their relative
+// velocity already points outward ⇒ impulse must be zero, but the
+// separation push and the damage event still fire (matches legacy
+// line 1771 bail-out behavior + the wrapper still damaging on graze).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyHits — separating velocities', () => {
+    test('player moving away from enemy still overlaps: damage + separation fire, impulse is zero', () => {
+        // Geometry: player + enemy still overlap (distance=20, sumR=33).
+        // But player is moving AWAY from the enemy now (player westbound,
+        // enemy stationary). Normal points (-1, 0); relVx = -5 (player
+        // westbound), velAlongNormal = (-5)·(-1) = +5 > 0 ⇒ separating.
+        const p = makePlayer('p1', 100, 100, { vx: -5, vy: 0 });
+        const e = makeEnemy(10, 120, 100, { vx: 0, vy: 0 });
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        // Damage still applies (graze frame).
+        expect(ev.damageToEnemy).toBe(5);
+        // Impulse is zero on both bodies (the bail-out branch).
+        expect(ev.playerImpulseDx).toBe(0);
+        expect(ev.playerImpulseDy).toBe(0);
+        expect(ev.enemyImpulseDx).toBe(0);
+        expect(ev.enemyImpulseDy).toBe(0);
+        // But separation still moves them apart (overlap > 0 path).
+        expect(ev.separationDx).toBeLessThan(0);
+        expect(ev.enemySeparationDx).toBeGreaterThan(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — separation magnitude follows OVERLAP_SEPARATION_RATIO.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyHits — separation magnitude', () => {
+    test('separation = overlap × OVERLAP_SEPARATION_RATIO along (enemy → player) normal', () => {
+        // Player at (100, 100), radius 15; enemy at (120, 100), radius 18.
+        // distance = 20, sumR = 33 ⇒ overlap = 13.
+        // Normal points west (-1, 0).
+        // separationForce = 13 · 0.6 = 7.8.
+        // separation = (-1, 0) · 7.8 = (-7.8, 0).
+        const p = makePlayer('p1', 100, 100);
+        const e = makeEnemy(10, 120, 100);
+        const events = [];
+        detectPlayerEnemyHits([p], [e], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.separationDx).toBeCloseTo(-13 * OVERLAP_SEPARATION_RATIO, 5);
+        expect(ev.separationDy).toBeCloseTo(0, 5);
+        // Enemy separation is the negative mirror.
+        expect(ev.enemySeparationDx).toBeCloseTo(13 * OVERLAP_SEPARATION_RATIO, 5);
+        expect(ev.enemySeparationDy).toBeCloseTo(0, 5);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — empty / null inputs defensive guards.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerEnemyHits — empty inputs', () => {
+    test('empty players → no events', () => {
+        const events = [];
+        detectPlayerEnemyHits([], [makeEnemy(10, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('empty enemies → no events', () => {
+        const events = [];
+        detectPlayerEnemyHits([makePlayer('p1', 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('both empty → no events', () => {
+        const events = [];
+        detectPlayerEnemyHits([], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null players → no events (defensive)', () => {
+        const events = [];
+        detectPlayerEnemyHits(null, [makeEnemy(10, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null enemies → no events (defensive)', () => {
+        const events = [];
+        detectPlayerEnemyHits([makePlayer('p1', 0, 0)], null, ctx, events);
+        expect(events).toHaveLength(0);
     });
 });

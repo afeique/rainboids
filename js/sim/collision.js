@@ -890,3 +890,320 @@ export function detectBulletEnemyHits(bullets, enemies, ctx, events) {
         }
     }
 }
+
+// =====================================================================
+// PLAYER ↔ ENEMY — Phase 2.5 dispatch 4
+// =====================================================================
+//
+// IMPORTANT: This pair uses DIFFERENT math than `detectPlayerAsteroidHits`.
+// The legacy `handlePlayerEnemyCollision` (collision-system.js:1657-1819)
+// does NOT use the heavier `ASTEROID_KNOCKBACK_MULTIPLIER` + jittered-atan2
+// path. Instead it runs a textbook restitution-based impulse model:
+//
+//   1. Normalize collision direction (player.x - enemy.x, ...) / distance
+//   2. relativeVel = player.vel - enemy.vel
+//   3. velAlongNormal = relativeVel · normal
+//   4. IF velAlongNormal > 0 (separating) → BAIL, no impulse applied
+//   5. impulseScalar = -(1 + BOUNCE_RESTITUTION) · velAlongNormal
+//                      / (playerMass + enemyMass)
+//   6. impulse = impulseScalar · normal
+//   7. player.vel += impulse · enemyMass · BOUNCE_FORCE_MULTIPLIER
+//   8. enemy.vel  -= impulse · playerMass · BOUNCE_FORCE_MULTIPLIER
+//
+// And separation uses `OVERLAP_SEPARATION_RATIO * overlap` SPLIT between
+// the two bodies (both move, ratio rather than full overlap + buffer);
+// NO `OVERLAP_PUSH_FORCE` velocity nudge is applied — that constant is
+// asteroid-pair only.
+//
+// What stays the same as player-vs-asteroid:
+//   - Circle-circle geometry check.
+//   - Inactive-side / warping / death-flash skip gates (enemy-side
+//     `_deathFlash` is the legacy name).
+//   - Pure-step discipline: emit one event per hit, never mutate either
+//     side's HP / vel / position directly. The wrapper applies the
+//     reported deltas.
+//
+// What does NOT live in this module at all (stays in the wrapper):
+//   - Damage application to player.hp / enemy.hp (legacy: takeDamage)
+//   - Shield / Bulwark / Phase-Dash damage reduction
+//   - Tank consumption / death handling on player HP ≤ 0
+//   - Enemy death-flash trigger (_deathFlash = 8) and drops / XP / kills
+//   - Boss-rage enrage trigger              (legacy: boss reactive logic)
+//   - Hit-flash visuals, hit-stop, camera kick, screen shake, audio
+//   - Damage numbers, sparks, post-hit invincibility
+//
+// Source-of-truth lines in `js/modules/combat/collision-system.js`:
+//   - Player-side damage block:      1658-1731
+//   - Enemy.takeDamage + death-flash:1733-1751
+//   - Bounce / impulse model:        1753-1794
+//   - Separation push:               1796-1806
+//   - Impact particles:              1809-1815  (presentation only)
+
+// ─── Constants — Player-vs-enemy pair ───────────────────────────────
+//
+// Mirror `COLLISION_CONFIG` entries from
+// `js/modules/combat/collision-system.js`. Numerical parity with the
+// legacy module is enforced by tests below.
+
+/**
+ * Damage dealt to enemy when player collides with it. Mirrors
+ * `COLLISION_CONFIG.PLAYER_ENEMY_COLLISION_DAMAGE = 5`. Higher than the
+ * asteroid equivalent (2) but still tiny relative to enemy HP, by
+ * design: ramming enemies is intentionally a *bad* strategy — the
+ * player gets bounced off (see `BOUNCE_FORCE_MULTIPLIER`) while only
+ * chipping the enemy. Killing via collision takes many rams, each
+ * costing the player health.
+ */
+export const PLAYER_ENEMY_COLLISION_DAMAGE = 5;
+
+// NOTE: BOUNCE_RESTITUTION (0.9), BOUNCE_FORCE_MULTIPLIER (12.0), and
+// OVERLAP_SEPARATION_RATIO (0.6) — all consumed by this pair — are
+// already exported from the player-vs-asteroid block above. We do NOT
+// re-export them under enemy-specific aliases; the wrapper / Rust mirror
+// uses the same constant values for the bounce-pair path regardless of
+// which pair it dispatches.
+
+// ─── Player-vs-enemy pair detection ─────────────────────────────────
+
+/**
+ * Detect player-vs-enemy collisions for one tick.
+ *
+ * Pure step: reads player + enemy positions / radii / velocities,
+ * decides which pairs overlap, and emits one `player_hit_enemy` event
+ * per detected hit with the velocity + position *deltas* the wrapper
+ * applies to the live state. Does NOT mutate player or enemy — every
+ * effect is reported in the event payload for the wrapper / Rust mirror
+ * to apply downstream.
+ *
+ * Co-op ready: takes an array of players. The solo wrapper passes
+ * `[player]`; future co-op sessions will pass the full ship roster.
+ * Each player is scanned against every active enemy; one player can
+ * emit multiple events per tick if it overlaps multiple enemies
+ * simultaneously (e.g. caught in a swarm).
+ *
+ * Geometry:
+ *   Circle-circle overlap: `hypot(dx, dy) < player.radius + enemy.radius`.
+ *   Identical to the legacy `collision()` helper.
+ *
+ * Bounce / impulse model (mirrors lines 1753-1794 of
+ * `collision-system.js::handlePlayerEnemyCollision`):
+ *
+ *   nx, ny         = (player.x - enemy.x, player.y - enemy.y) / distance
+ *   relVx, relVy   = (player.vx - enemy.vx, player.vy - enemy.vy)
+ *   velAlongNormal = relVx · nx + relVy · ny
+ *
+ *   IF velAlongNormal > 0  (separating)  →  BAIL — geometry overlap is
+ *      reported in the event but impulse and separation deltas are all
+ *      zero. The wrapper still applies damage on these "graze" frames;
+ *      this matches the legacy behavior (damage block at line 1658
+ *      runs unconditionally on overlap, the bounce block at line 1758
+ *      gates on `velAlongNormal > 0`).
+ *
+ *   impulseScalar  = -(1 + BOUNCE_RESTITUTION) · velAlongNormal
+ *                    / (playerMass + enemyMass)
+ *   impulseX       = impulseScalar · nx
+ *   impulseY       = impulseScalar · ny
+ *
+ *   playerImpulseDx = impulseX · enemyMass  · BOUNCE_FORCE_MULTIPLIER
+ *   playerImpulseDy = impulseY · enemyMass  · BOUNCE_FORCE_MULTIPLIER
+ *   enemyImpulseDx  = -impulseX · playerMass · BOUNCE_FORCE_MULTIPLIER
+ *   enemyImpulseDy  = -impulseY · playerMass · BOUNCE_FORCE_MULTIPLIER
+ *
+ * Separation push (mirrors lines 1796-1806):
+ *   If `overlap = (player.r + enemy.r) - distance > 0`:
+ *     - separationForce = overlap · OVERLAP_SEPARATION_RATIO
+ *     - Player position delta:  +(nx, ny) · separationForce
+ *     - Enemy  position delta:  -(nx, ny) · separationForce  (reported
+ *       via enemySeparationDx/Dy fields; wrapper applies if !destroyed)
+ *   No `OVERLAP_PUSH_FORCE` velocity nudge — that's asteroid-pair only.
+ *
+ * Enemy damage:
+ *   Constant `PLAYER_ENEMY_COLLISION_DAMAGE = 5`. The wrapper subtracts
+ *   this from `enemy.hp` and handles death-flash + drops + kill streak.
+ *   The pure step just reports the number.
+ *
+ * Skipped pairs (no event emitted):
+ *   - Inactive player    (`!player.active`)
+ *   - Inactive enemy     (`!enemy.active`)
+ *   - Warping enemy      (`enemy.warping`, mid warp-in animation)
+ *   - Enemy mid-death    (`enemy.deathFlash > 0` or legacy
+ *                         `enemy._deathFlash > 0`)
+ *
+ * NOTE: Unlike asteroids, players themselves have no `_deathFlash` /
+ * `warping` gate on the player side — the legacy path only checks
+ * `player.active` (and the wrapper handles `player.invincible` as a
+ * damage-reduction layer, not a collision skip). The pure step matches
+ * that: invincibility is a wrapper concern, not a geometry concern.
+ *
+ * Boss-rage trigger:
+ *   The legacy `enemy.takeDamage()` call inside `handlePlayerEnemyCollision`
+ *   can trigger boss-rage / enrage logic via `notifyBossDeath` and the
+ *   `onEnemyKill` chain. ALL of that stays in the wrapper. The pure step
+ *   reports only the geometric / mechanical hit; the wrapper decides
+ *   whether the damage triggers rage, enrage, drops, etc.
+ *
+ * @param {Array<Object>} players   active player ships. Each treated as
+ *                                  having `{x, y, vx OR vel.x, vy OR
+ *                                  vel.y, radius, mass?, active, id OR
+ *                                  player}`. Compatible with both the
+ *                                  `ShipState` typedef in
+ *                                  `js/sim/state.js` and the live
+ *                                  `Player` instance shape.
+ * @param {Array<Object>} enemies   active enemies. Each treated as having
+ *                                  `{x, y, vx OR vel.x, vy OR vel.y,
+ *                                  radius, mass?, active, warping,
+ *                                  deathFlash OR _deathFlash, id}`.
+ * @param {Object} ctx              per-tick context bag (currently
+ *                                  unused; reserved for future use, e.g.
+ *                                  a one-punch-man cheat flag or a
+ *                                  spatial-grid filter).
+ * @param {Array<Object>} events    out-buffer. Pushes objects with the
+ *                                  shape documented below.
+ *
+ * Event shape (one event per detected hit):
+ *   {
+ *     type: 'player_hit_enemy',
+ *     playerId:               id of the colliding ship
+ *     enemyId:                id of the colliding enemy
+ *     damageToEnemy:          constant 5 (see PLAYER_ENEMY_COLLISION_DAMAGE)
+ *     playerImpulseDx,
+ *     playerImpulseDy:        velocity delta the wrapper adds to
+ *                             `player.vel` (legacy) or `player.vx/vy`.
+ *                             Zero if velAlongNormal > 0 (separating).
+ *     enemyImpulseDx,
+ *     enemyImpulseDy:         velocity delta the wrapper adds to the
+ *                             enemy's velocity. Zero on separating-pair
+ *                             or if the wrapper destroyed the enemy
+ *                             (wrapper-side gate per legacy line 1791).
+ *     separationDx,
+ *     separationDy:           position delta the wrapper adds to
+ *                             `player.x` / `player.y` to move the ship
+ *                             clear of the enemy. Zero if no overlap.
+ *     enemySeparationDx,
+ *     enemySeparationDy:      position delta the wrapper adds to
+ *                             `enemy.x` / `enemy.y` (negative of the
+ *                             player separation — moves enemy AWAY from
+ *                             player). Wrapper applies if !destroyed.
+ *   }
+ */
+export function detectPlayerEnemyHits(players, enemies, ctx, events) {
+    if (!players || !enemies) return;
+    if (players.length === 0 || enemies.length === 0) return;
+
+    for (let i = 0; i < players.length; i++) {
+        const player = players[i];
+        if (!player || !player.active) continue;
+
+        const playerRadius = player.radius || 0;
+        const playerVel = entityVel(player);
+        const playerMass = entityMass(player, 'player');
+        const pId = entityId(player);
+
+        for (let j = 0; j < enemies.length; j++) {
+            const enemy = enemies[j];
+            if (!enemy || !enemy.active) continue;
+            if (enemy.warping) continue;
+
+            // Death-flash gate — accept either the new sim field name
+            // (`deathFlash`) or the legacy underscore-prefix
+            // (`_deathFlash`). Live `Enemy` instances use the legacy
+            // name; future `EnemyState` will use the new one.
+            const dF = enemy.deathFlash !== undefined
+                ? enemy.deathFlash
+                : enemy._deathFlash;
+            if (dF && dF > 0) continue;
+
+            // Circle-circle overlap check.
+            const dx = player.x - enemy.x;
+            const dy = player.y - enemy.y;
+            const sumR = playerRadius + (enemy.radius || 0);
+            const distSq = dx * dx + dy * dy;
+            if (distSq >= sumR * sumR) continue;
+
+            // ── Hit detected — compute impulse + separation ──
+
+            const enemyVel = entityVel(enemy);
+            // Enemies have no special radius-to-mass formula in the live
+            // game; the `Enemy` class assigns `mass` directly per type.
+            // When `mass` isn't set on the state object we fall back to
+            // the same circle-disk formula `entityMass(., 'player')`
+            // uses, which is a sane default for any ship-like body.
+            const enemyMass = (enemy.mass !== undefined && enemy.mass !== null)
+                ? enemy.mass
+                : entityMass(enemy, 'player');
+
+            const distance = Math.sqrt(distSq);
+
+            // Default deltas to zero so a degenerate (distance === 0)
+            // hit still emits a well-formed event with the correct
+            // ids + damage but no nonsense math.
+            let playerImpulseDx = 0;
+            let playerImpulseDy = 0;
+            let enemyImpulseDx = 0;
+            let enemyImpulseDy = 0;
+            let separationDx = 0;
+            let separationDy = 0;
+            let enemySeparationDx = 0;
+            let enemySeparationDy = 0;
+
+            if (distance > 0) {
+                // Normalize the collision axis (enemy → player).
+                const nx = dx / distance;
+                const ny = dy / distance;
+
+                // Relative velocity, projected onto the normal.
+                const relVx = playerVel.x - enemyVel.x;
+                const relVy = playerVel.y - enemyVel.y;
+                const velAlongNormal = relVx * nx + relVy * ny;
+
+                // Only apply impulse when bodies are approaching (the
+                // textbook "do not resolve separating velocities"
+                // guard). Mirrors legacy line 1771: `if
+                // (velAlongNormal > 0) return;`. NOTE the asymmetry
+                // with the asteroid pair: the asteroid path NEVER
+                // gates here, it always applies the jittered knockback.
+                if (velAlongNormal <= 0) {
+                    const totalMass = playerMass + enemyMass;
+                    if (totalMass > 0) {
+                        const impulseScalar =
+                            -(1 + BOUNCE_RESTITUTION) * velAlongNormal / totalMass;
+                        const impulseX = impulseScalar * nx;
+                        const impulseY = impulseScalar * ny;
+
+                        playerImpulseDx = impulseX * enemyMass * BOUNCE_FORCE_MULTIPLIER;
+                        playerImpulseDy = impulseY * enemyMass * BOUNCE_FORCE_MULTIPLIER;
+                        enemyImpulseDx = -impulseX * playerMass * BOUNCE_FORCE_MULTIPLIER;
+                        enemyImpulseDy = -impulseY * playerMass * BOUNCE_FORCE_MULTIPLIER;
+                    }
+                }
+
+                // Separation push — applied independent of the
+                // velAlongNormal gate (legacy splits the position
+                // resolution out from the bounce; see lines 1796-1806).
+                const overlap = sumR - distance;
+                if (overlap > 0) {
+                    const separationForce = overlap * OVERLAP_SEPARATION_RATIO;
+                    separationDx = nx * separationForce;
+                    separationDy = ny * separationForce;
+                    enemySeparationDx = -nx * separationForce;
+                    enemySeparationDy = -ny * separationForce;
+                }
+            }
+
+            events.push({
+                type: 'player_hit_enemy',
+                playerId: pId,
+                enemyId: enemy.id,
+                damageToEnemy: PLAYER_ENEMY_COLLISION_DAMAGE,
+                playerImpulseDx,
+                playerImpulseDy,
+                enemyImpulseDx,
+                enemyImpulseDy,
+                separationDx,
+                separationDy,
+                enemySeparationDx,
+                enemySeparationDy,
+            });
+        }
+    }
+}
