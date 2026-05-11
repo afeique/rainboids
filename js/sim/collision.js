@@ -1640,3 +1640,194 @@ export function detectPlayerEnemyBulletHits(players, bullets, ctx, events) {
         }
     }
 }
+
+// =====================================================================
+// PLAYER ↔ DROP (pickup) — Phase 2.5 dispatch 6
+// =====================================================================
+//
+// This pair is fundamentally different from every collision pair above:
+//
+//   - It is a PICKUP, not a collision in the physical sense. There is
+//     no impulse, no separation, no damage to either side. The "hit"
+//     IS the consumption.
+//   - The wrapper's downstream behavior is DROP-KIND dependent. The
+//     pure step does not know about heal amounts, money multipliers,
+//     powerup ids, or the player upgrade modifiers that scale the heal
+//     value (e.g. MEDPACK boosts health-orb heal). Those live in the
+//     wrapper and the legacy `Player` instance (see
+//     `getEffectiveHealthOrbHealing`, `addMoneyPickup`, etc.).
+//   - There is NO piercing — every drop is single-pickup. The wrapper
+//     deactivates the drop after consuming the event.
+//   - No magnet / tractor logic lives here. Those are in `drops.js`
+//     (the pure drop step) which has already pulled the drop toward
+//     the nearest ship before this scan runs. By the time the player-
+//     drop pickup detector executes, drops have already moved into
+//     pickup range under magnetism. We only test the final overlap.
+//
+// Source-of-truth lines in `js/modules/combat/collision-system.js`:
+//   - Player-collectible loop:                 lines 333-491
+//   - Health orb branch:                       lines 340-367
+//   - Money orb branch (legacy `colorStarPool`):    lines 368-386
+//   - Gold drop branch (`goldCoinPool` / `goldShapePool`):  lines 429-491
+//   - Effective heal modifier (wrapper-only):  player.getEffectiveHealthOrbHealing
+//   - Maximum-health cap (wrapper-only):       player.getEffectiveMaxHealth
+//   - Coin multiplier upgrades (wrapper-only): player.payday / player.highRoller
+//
+// What the pure step DOES emit (per detected overlap):
+//   - One `player_pickup_drop` event with the drop kind, the drop's
+//     raw `value` field, the dropping coordinates (for the wrapper's
+//     pickup-sparkle particles), and the (player, drop) ids.
+//
+// What the pure step does NOT report (stays in the wrapper / legacy):
+//   - HP add / max-HP cap                    (per-player upgrade math)
+//   - Coin add with payday/high-roller scale (per-player upgrade math)
+//   - Powerup id mapping & ability grant     (player.applyPowerup)
+//   - Tank overflow accumulation             (5.88.0 tanks system)
+//   - Audio (`audio:coin`, `audio:health-regen`)   (presentation)
+//   - Pickup particles, sparkle ring         (presentation)
+//   - Pool release                            (wrapper drives despawn)
+//   - Mission / kill-streak hooks            (game-state concerns)
+//
+// Geometry note:
+//   The pure step uses the SAME circle-circle overlap as every other
+//   pair here (`hypot(dx, dy) < player.radius + drop.radius`). The
+//   legacy `starCollision()` helper in `js/modules/core/utils.js` adds
+//   a 15 px `STAR_COLLECTION_BONUS` and a swept-path check for fast
+//   orbs. That bonus + sweep stays on the wrapper side for now — it's
+//   a presentation-layer "make it easier to grab" affordance that
+//   reaches across multiple ticks of motion, whereas the pure step
+//   only inspects positions at the current tick. The wrapper can apply
+//   the collection bonus by inflating `drop.radius` (or `player.radius`)
+//   in ctx before calling the pure step if it wants the same forgiving
+//   pickup feel; the server / Rust mirror picks its own pickup radius.
+
+// ─── Player-vs-drop pickup detection ────────────────────────────────
+
+/**
+ * Detect player-vs-drop pickups for one tick.
+ *
+ * Pure step: reads player + drop positions / radii, decides which
+ * pairs overlap, and emits one `player_pickup_drop` event per detected
+ * overlap. Does NOT mutate either side, does NOT apply HP / coins /
+ * powerups, does NOT deactivate the drop. The wrapper drains the
+ * event queue, dispatches on `dropKind`, applies the upgrade-scaled
+ * effect (HP add, coin add, powerup grant), then deactivates the drop.
+ *
+ * Co-op ready: takes an array of players. The solo wrapper passes
+ * `[player]`; future co-op sessions will pass the full ship roster.
+ * Each player is scanned against every active drop; one player can
+ * emit multiple events per tick if it overlaps multiple drops at once
+ * (e.g. flying through a tight cluster of gold pixels). One DROP can
+ * also be picked up by two players in the same tick on the pure-step
+ * side — the wrapper is responsible for picking a single winner via
+ * its game-state policy (e.g. first-emit-wins) when it consumes the
+ * events.
+ *
+ * Geometry:
+ *   Circle-circle overlap: `hypot(dx, dy) < player.radius + drop.radius`.
+ *   Mirrors the live `collision()` helper in `js/modules/core/utils.js`.
+ *   The legacy game adds a +15 px `STAR_COLLECTION_BONUS` plus a swept-
+ *   path check (`starCollision()`) — those affordances stay in the
+ *   wrapper layer for now; see the comment block above this function.
+ *
+ * Skipped pairs (no event emitted):
+ *   - Inactive player    (`!player.active`)
+ *   - Inactive drop      (`!drop.active`)
+ *
+ * Note on absent gates:
+ *   Drops don't have a `warping` flag (they spawn immediately on
+ *   enemy / asteroid death without an animation) and no `deathFlash`
+ *   (they fade out via the lifetime tick in `drops.js`). So the only
+ *   gates are the two active flags above. This mirrors the legacy
+ *   `if (this.player && this.player.active)` + `if (colorStar.isCollectible)`
+ *   guard chain in `collision-system.js` line 334-339.
+ *
+ * @param {Array<Object>} players       active player ships. Each is
+ *                                      treated as having `{x, y, radius,
+ *                                      active, id OR player}`. Compatible
+ *                                      with both the `ShipState` typedef
+ *                                      in `js/sim/state.js` and the live
+ *                                      `Player` instance shape.
+ * @param {Array<Object>} drops         active drops. Each is treated as
+ *                                      having `{x, y, radius, kind, value,
+ *                                      active, id}`. Compatible with both
+ *                                      the `DropState` typedef in
+ *                                      `js/sim/state.js` and the live
+ *                                      `ColorStar` / gold-pool drop shape.
+ * @param {Object} ctx                  per-tick context bag (currently
+ *                                      unused; reserved for future
+ *                                      extensions like a pickup-radius
+ *                                      bonus or a spatial-grid filter).
+ * @param {Array<Object>} events        out-buffer. Pushes objects with
+ *                                      the shape documented below.
+ *
+ * Event shape (one event per detected overlap — exactly 6 non-type fields):
+ *   {
+ *     type: 'player_pickup_drop',
+ *     playerId:   id of the player picking up the drop
+ *     dropId:     id of the drop being picked up
+ *     dropKind:   one of 'health' | 'money_shape' | 'money_pixel'
+ *                  | 'powerup' — the wrapper dispatches on this:
+ *                  - 'health'      → restore HP by `value` (capped at
+ *                                    effective max HP; overflow goes
+ *                                    toward energy tanks per 5.88.0)
+ *                  - 'money_shape' → add `value` × shape-multiplier coins
+ *                  - 'money_pixel' → add `value` × pixel-multiplier coins
+ *                  - 'powerup'     → grant powerup whose id is `value`
+ *     value:      raw heal-amount or money-value or powerup-id, copied
+ *                  verbatim from `drop.value`. The wrapper applies all
+ *                  per-player upgrade multipliers (MEDPACK, PAYDAY,
+ *                  HIGH_ROLLER) on top of this base.
+ *     dropX, dropY: world coordinates of the drop at pickup time, used
+ *                  by the wrapper to spawn the pickup sparkle ring and
+ *                  the "+N gold" floating text at the drop's location.
+ *   }
+ *
+ * NOTE on field count (6 non-type, 7 total):
+ *   Intentionally NO `damage` field (pickups don't damage), NO impulse /
+ *   separation / piercing fields. The pure step reports the minimal
+ *   geometric pickup event; everything else (effect, FX, deactivation)
+ *   is the wrapper's domain.
+ */
+export function detectPlayerDropPickups(players, drops, ctx, events) {
+    if (!players || !drops) return;
+    if (players.length === 0 || drops.length === 0) return;
+
+    for (let i = 0; i < players.length; i++) {
+        const player = players[i];
+        if (!player || !player.active) continue;
+
+        const playerRadius = player.radius || 0;
+        const pId = entityId(player);
+
+        for (let j = 0; j < drops.length; j++) {
+            const drop = drops[j];
+            if (!drop || !drop.active) continue;
+
+            // Circle-circle overlap check — same `hypot(dx, dy) <
+            // sum-of-radii` test every other pair uses. Squared form
+            // avoids the sqrt.
+            const dx = player.x - drop.x;
+            const dy = player.y - drop.y;
+            const sumR = playerRadius + (drop.radius || 0);
+            const distSq = dx * dx + dy * dy;
+            if (distSq >= sumR * sumR) continue;
+
+            // ── Pickup detected — emit the geometric event ──
+            //
+            // The pure step does NOT mutate `drop.active`, does NOT
+            // apply HP / coins / powerups, and does NOT release the
+            // drop back to its pool. All of that is wrapper-side work
+            // dispatched on `dropKind`. We only report the overlap.
+            events.push({
+                type: 'player_pickup_drop',
+                playerId: pId,
+                dropId: drop.id,
+                dropKind: drop.kind,
+                value: drop.value,
+                dropX: drop.x,
+                dropY: drop.y,
+            });
+        }
+    }
+}
