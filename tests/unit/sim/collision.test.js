@@ -37,10 +37,12 @@ import {
     detectEnemyAsteroidHits,
     ENEMY_ASTEROID_PUSH,
     ASTEROID_ENEMY_PUSH,
+    detectPlayerDropPickups,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
     freshBulletState,
+    freshDropState,
     freshEnemyState,
     freshShipState,
 } from '../../../js/sim/state.js';
@@ -1656,6 +1658,310 @@ describe('detectEnemyAsteroidHits — empty inputs', () => {
     test('null asteroids → no events (defensive)', () => {
         const events = [];
         detectEnemyAsteroidHits([enemyWithRadius(7, 0, 0)], null, ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// Player-vs-drop pickup (Phase 2.5 — dispatch 6).
+// ═════════════════════════════════════════════════════════════════════
+//
+// `detectPlayerDropPickups` is the sixth pure-step pair, extracted from
+// the player-collectible loop in `handleCollisions`
+// (`js/modules/combat/collision-system.js`, lines 333-491). This pair
+// is fundamentally DIFFERENT from every collision pair above:
+//
+//   - It's a PICKUP, not a physical collision. NO impulse, NO separation,
+//     NO damage to either side. The "hit" IS the consumption.
+//   - The wrapper's downstream behavior is DROP-KIND dependent: health
+//     restores HP, money-shape / money-pixel add coins (with upgrade
+//     multipliers), powerup grants the powerup. The pure step does NOT
+//     know any of that — it only reports the geometric overlap and the
+//     drop's discriminator + raw `value`.
+//   - NO piercing — every drop is single-pickup.
+//   - NO magnet / tractor logic here. Those are in `js/sim/drops.js`.
+//     By the time this scan runs, drops have already moved toward the
+//     player via magnetism. We only test the final overlap.
+//
+// Event shape: exactly 6 non-type fields (playerId, dropId, dropKind,
+// value, dropX, dropY). Total 7 keys with `type`. NO damage / impulse
+// / separation / piercing fields.
+//
+// The tests below pin:
+//   - single pickup happy path (all event fields present, correct)
+//   - geometry miss (no event)
+//   - multiple drops picked up in one tick (multiple events)
+//   - skip gates (inactive player, inactive drop)
+//   - each drop kind passes through correctly (health, money_shape,
+//     money_pixel, powerup)
+//   - `value` propagates verbatim (no upgrade multipliers applied
+//     pure-side)
+//   - defensive empty / null inputs
+
+// ---------------------------------------------------------------------
+// Helpers — make a player with a radius, and a drop at (x, y) using
+// `freshDropState`. Drops default to radius 14, value 1 for health and
+// 5 otherwise (see freshDropState defaults).
+// ---------------------------------------------------------------------
+
+function playerShip(id, x, y, overrides = {}) {
+    return freshShipState(id, {
+        x, y, radius: 15, ...overrides,
+    });
+}
+
+function dropOrb(id, kind, x, y, overrides = {}) {
+    return freshDropState(kind, {
+        id, x, y, radius: 14, ...overrides,
+    });
+}
+
+// ---------------------------------------------------------------------
+// Test — single pickup happy path. The event should contain exactly 6
+// non-type fields with the expected values.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerDropPickups — single pickup', () => {
+    test('overlapping player + drop emits one event with all 6 non-type fields', () => {
+        // Player radius 15 + drop radius 14 = sumR 29. Place drop 10 px
+        // east of player ⇒ overlap (10 < 29).
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'health', 110, 100, { value: 3 });
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev).toMatchObject({
+            type: 'player_pickup_drop',
+            playerId: 7,
+            dropId: 42,
+            dropKind: 'health',
+            value: 3,
+            dropX: 110,
+            dropY: 100,
+        });
+        // Explicit field-count guard: exactly 7 keys (type + 6 non-type
+        // fields). NO `damage` field, NO impulse / separation fields.
+        expect(Object.keys(ev).sort()).toEqual([
+            'dropId', 'dropKind', 'dropX', 'dropY',
+            'playerId', 'type', 'value',
+        ].sort());
+        // Defensive: confirm there is NO damage field of any name.
+        expect(ev.damage).toBeUndefined();
+        expect(ev.damageToPlayer).toBeUndefined();
+        expect(ev.damageToDrop).toBeUndefined();
+        // Defensive: confirm there are NO impulse / separation fields.
+        expect(ev.playerImpulseDx).toBeUndefined();
+        expect(ev.dropImpulseDx).toBeUndefined();
+        expect(ev.separationDx).toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — geometry miss (centers further than sumR apart).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerDropPickups — geometry miss', () => {
+    test('drop outside (player.r + drop.r) emits no event', () => {
+        const p = playerShip(7, 0, 0);
+        // 200 px ≫ sumR=29 → clearly no overlap.
+        const d = dropOrb(42, 'health', 200, 0);
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('drop just outside boundary (sumR + 1) emits no event', () => {
+        const p = playerShip(7, 0, 0, { radius: 15 });
+        // sumR = 15 + 14 = 29; place drop center 30 px away → just outside.
+        const d = dropOrb(42, 'health', 30, 0, { radius: 14 });
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — multiple drops picked up in one tick by one player.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerDropPickups — multiple pickups in one tick', () => {
+    test('one player overlapping three drops emits three events', () => {
+        // Player at (100, 100), radius 15. Three drops within sumR=29
+        // on east / west / north.
+        const p = playerShip(7, 100, 100);
+        const east  = dropOrb(10, 'money_pixel', 110, 100);
+        const west  = dropOrb(20, 'money_shape',  90, 100);
+        const north = dropOrb(30, 'health',      100,  90);
+        const events = [];
+        detectPlayerDropPickups([p], [east, west, north], ctx, events);
+        expect(events).toHaveLength(3);
+        // Each event references the same player but distinct drops.
+        const ids = events.map(ev => ev.dropId).sort((a, b) => a - b);
+        expect(ids).toEqual([10, 20, 30]);
+        for (const ev of events) {
+            expect(ev.playerId).toBe(7);
+            expect(ev.type).toBe('player_pickup_drop');
+        }
+    });
+
+    test('two players overlapping the same drop both emit events (wrapper picks winner)', () => {
+        // Both players close enough to overlap one drop. The pure step
+        // emits one event per (player, drop) overlap; the wrapper is
+        // responsible for resolving the conflict (e.g. first-emit-wins).
+        const p1 = playerShip(7, 95, 100);
+        const p2 = playerShip(8, 105, 100);
+        const d = dropOrb(42, 'health', 100, 100);
+        const events = [];
+        detectPlayerDropPickups([p1, p2], [d], ctx, events);
+        expect(events).toHaveLength(2);
+        expect(events.map(ev => ev.playerId).sort()).toEqual([7, 8]);
+        // Both events reference the same drop.
+        expect(events[0].dropId).toBe(42);
+        expect(events[1].dropId).toBe(42);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — skip gates (inactive player, inactive drop).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerDropPickups — skipped pairs', () => {
+    test('inactive player → no event', () => {
+        const p = playerShip(7, 100, 100, { active: false });
+        const d = dropOrb(42, 'health', 110, 100);
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('inactive drop → no event', () => {
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'health', 110, 100, { active: false });
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — each drop kind passes through correctly.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerDropPickups — drop kinds', () => {
+    test("'health' drop pickup event carries dropKind='health'", () => {
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'health', 110, 100);
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].dropKind).toBe('health');
+    });
+
+    test("'money_shape' drop pickup event carries dropKind='money_shape'", () => {
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'money_shape', 110, 100);
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].dropKind).toBe('money_shape');
+    });
+
+    test("'money_pixel' drop pickup event carries dropKind='money_pixel'", () => {
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'money_pixel', 110, 100);
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].dropKind).toBe('money_pixel');
+    });
+
+    test("'powerup' drop pickup event carries dropKind='powerup'", () => {
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'powerup', 110, 100);
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].dropKind).toBe('powerup');
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — `value` propagates verbatim (no upgrade multipliers applied).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerDropPickups — value propagation', () => {
+    test('event.value matches drop.value verbatim (no upgrade scaling pure-side)', () => {
+        // Drop value 7. The pure step must report this number AS-IS;
+        // wrapper-side upgrades (MEDPACK, PAYDAY, HIGH_ROLLER) are
+        // applied downstream — pure step never sees them.
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'money_shape', 110, 100, { value: 7 });
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].value).toBe(7);
+    });
+
+    test('powerup value (which encodes the powerup id) passes through', () => {
+        // For powerup drops, `value` is the powerup id the wrapper uses
+        // to dispatch into player.applyPowerup. The pure step does not
+        // care what the number means — it just copies it.
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'powerup', 110, 100, { value: 9001 });
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].value).toBe(9001);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — coordinates pass through verbatim (used by the wrapper for
+// sparkle-ring particle spawn at the pickup site).
+// ---------------------------------------------------------------------
+
+describe('detectPlayerDropPickups — pickup coordinates', () => {
+    test('event dropX/dropY match the drop position at the moment of overlap', () => {
+        // Place the drop at a non-zero, distinctive coordinate.
+        const p = playerShip(7, 100, 100);
+        const d = dropOrb(42, 'money_pixel', 117, 103);
+        const events = [];
+        detectPlayerDropPickups([p], [d], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].dropX).toBe(117);
+        expect(events[0].dropY).toBe(103);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — empty / null inputs defensive guards.
+// ---------------------------------------------------------------------
+
+describe('detectPlayerDropPickups — empty inputs', () => {
+    test('empty players → no events', () => {
+        const events = [];
+        detectPlayerDropPickups([], [dropOrb(42, 'health', 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('empty drops → no events', () => {
+        const events = [];
+        detectPlayerDropPickups([playerShip(7, 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('both empty → no events', () => {
+        const events = [];
+        detectPlayerDropPickups([], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null players → no events (defensive)', () => {
+        const events = [];
+        detectPlayerDropPickups(null, [dropOrb(42, 'health', 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null drops → no events (defensive)', () => {
+        const events = [];
+        detectPlayerDropPickups([playerShip(7, 0, 0)], null, ctx, events);
         expect(events).toHaveLength(0);
     });
 });
