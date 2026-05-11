@@ -8,7 +8,7 @@
 //! Mirrors `js/sim/bullet.js`. **Player bullets** (`update_player_bullet`)
 //! implement the linear drift + helix offset + predictive-lead homing
 //! branches (PR #27). **Enemy bullets** (`update_enemy_bullet`) implement
-//! 11 of ~17 movement patterns:
+//! 15 of ~17 movement patterns:
 //!
 //!   - `Straight` — js `aimed`/`crescent_beam`/`crescent_slice` (no-mod path). (PR #29)
 //!   - `Sine` — js `sine_wave_nospin` (perpendicular sine offset). (PR #29)
@@ -22,16 +22,26 @@
 //!   - `EnergySlash` — js `energy_slash` (slashProgress curve + patternTimer pulse).
 //!   - `SineWaveRotation` — js `sine_wave` (Sine variant that aligns rotation
 //!     to travel direction; differs from `Sine` only via the `rotation` field).
+//!   - `Laser` — js `laser` (velocity normalized to `2× speed` along base
+//!     direction; no per-tick state).
+//!   - `LaserBeam` — js `laser_beam` (velocity normalized to `3× speed` along
+//!     base direction; also sets damage = base_damage * 1.0 and clamps radius
+//!     to a floor of 8).
+//!   - `Explosive` — js `explosive` (two-phase timer-driven accel: 0.3× during
+//!     "charge" (`patternTimer < 0.5`), then `1.5 + (patternTimer - 0.5) * 2`).
+//!     Despite the name, the EXPLOSION effect is collision-side; here we only
+//!     model the velocity-pattern.
+//!   - `Rapid` — js `rapid` (per-tick velocity = base + small RNG jitter).
+//!     Uses `EnemyBulletContext.rng_float` for the [0,1) noise source.
 //!
 //! Deferred to follow-up sessions:
 //!
 //!   - Piercing / piercedEnemies counter — collision-side, Phase 2.5
-//!   - Explosive / explosionRadius — collision-side, Phase 2.5
-//!   - 6 remaining enemy patterns (js bullet.js:259–593): `mine`,
-//!     `homing_mine`, `rapid`, `explosive`, `laser`, `laser_beam`,
-//!     `missile`, `homing`, `titan_homing`, `titan_rocket`,
-//!     `missile_fast_slow`. (Several require `target_player`, RNG, or
-//!     persistent-timed lifetime; gated on context-plumbing PRs.)
+//!   - Explosion radius FX — collision-side, Phase 2.5
+//!   - 2 remaining enemy patterns (js bullet.js:259–593): `mine` /
+//!     `homing_mine` (persistent timed lifetime + HP-based death),
+//!     `homing` / `titan_homing` / `missile` / `titan_rocket` /
+//!     `missile_fast_slow` (target_player plumbing).
 //!   - Boss-rage homing composition, mine HP-death, persistent timed
 //!     lifetime (mines / lightning orbs), `targetPlayer` lookups.
 //!
@@ -523,6 +533,37 @@ const ENERGY_SLASH_CURVE_INTENSITY: f32 = 0.3;
 const ENERGY_SLASH_PULSE_FREQ: f32 = 8.0;
 const ENERGY_SLASH_PULSE_AMP: f32 = 0.1;
 
+// JS bullet.js:347 — `laser`: speed multiplier on the base velocity magnitude
+// (direction stays along baseAngle). The output velocity is renormalized so
+// the bullet flies in a perfectly straight line at `2× base_speed`.
+const LASER_SPEED_MULT: f32 = 2.0;
+
+// JS bullet.js:355–361 — `laser_beam`: 3× speed along base direction, plus a
+// damage / radius adjustment. The JS code does `damage = (damage || 3) * 1.0`,
+// which is a no-op multiplier kept as a placeholder for the legacy
+// `* 1.5` balance pass (now disabled). We mirror the literal so future tuning
+// hits the same code path. Radius is clamped to a floor.
+const LASER_BEAM_SPEED_MULT: f32 = 3.0;
+const LASER_BEAM_DAMAGE_DEFAULT: f32 = 3.0;
+const LASER_BEAM_DAMAGE_MULT: f32 = 1.0;
+const LASER_BEAM_RADIUS_FLOOR: f32 = 8.0;
+
+// JS bullet.js:335–343 — `explosive`: two-phase timer accel. The first 0.5 s
+// is a "charge" at 0.3× speed; after that the bullet accelerates linearly
+// at coefficient 2.0 starting from a base of 1.5. The named constants below
+// hard-code each piece so the parity branch is grep-able.
+const EXPLOSIVE_CHARGE_THRESHOLD: f32 = 0.5;
+const EXPLOSIVE_CHARGE_FACTOR: f32 = 0.3;
+const EXPLOSIVE_ACCEL_BASE: f32 = 1.5;
+const EXPLOSIVE_ACCEL_RATE: f32 = 2.0;
+
+// JS bullet.js:310 — `rapid`: amplitude of the uniform [-1, 1) jitter applied
+// independently to vx and vy each tick. JS computes:
+//   jitter = (ctx.rngFloat() - 0.5) * 0.3
+// so when rngFloat returns 0.5, jitter is exactly 0 and the bullet flies
+// straight — useful for deterministic parity fixtures.
+const RAPID_JITTER_STRENGTH: f32 = 0.3;
+
 /// Enemy-bullet movement pattern. 11 of ~17 ported so far — see module
 /// docstring for the deferred list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -571,9 +612,25 @@ pub enum BulletPattern {
     /// accumulator then adds `rotation_speed * tick_scale` to the overwritten
     /// value, exactly matching the JS order of operations.
     SineWaveRotation,
+    /// JS `laser` — velocity renormalized to `2× |base_v|` along the base
+    /// direction. Pure speed bump; no per-tick state. Same trajectory as
+    /// `Straight` with doubled velocity.
+    Laser,
+    /// JS `laser_beam` — variant of `Laser` at `3× |base_v|`. Also sets
+    /// `damage = (damage || LASER_BEAM_DAMAGE_DEFAULT) * LASER_BEAM_DAMAGE_MULT`
+    /// (the JS `|| 3` falls through to the default when damage is 0/undefined),
+    /// and clamps radius to a floor of `LASER_BEAM_RADIUS_FLOOR`.
+    LaserBeam,
+    /// JS `explosive` — two-phase timer accel. Pure timer-driven; no target,
+    /// no RNG, no persistent lifetime. The collision-side explosion radius
+    /// is NOT modeled here.
+    Explosive,
+    /// JS `rapid` — `vx = base_vx + (rng - 0.5) * 0.3` and same for `vy`,
+    /// independent samples each tick. Uses the `rng_float` closure on the
+    /// context. Deterministic fixture: pass `|| 0.5` to make jitter zero.
+    Rapid,
     // TODO Phase 2.1+: Helix, Homing, Ricochet, Rocket, Mine, Bezier, Charge,
-    // Rapid, Explosive, Laser, LaserBeam, Missile, TitanHoming, TitanRocket,
-    // MissileFastSlow, HomingMine.
+    // Missile, TitanHoming, TitanRocket, MissileFastSlow, HomingMine.
 }
 
 /// Minimal enemy-bullet state for the 3 patterns above.
@@ -689,6 +746,11 @@ pub struct EnemyBullet {
 
 /// Per-tick context for enemy-bullet updates. Mirrors the relevant subset
 /// of `BulletUpdateContext` in `js/sim/state.js`.
+///
+/// `Copy` is dropped here because `rng_float` is a function pointer — `fn()
+/// -> f32` is itself `Copy`, but keeping the trait list minimal avoids
+/// accidentally embedding it inside a `Copy` aggregate elsewhere. Wrappers
+/// pass this by reference.
 #[derive(Debug, Clone, Copy)]
 pub struct EnemyBulletContext {
     /// Render-rate scaler (`30 / 60 = 0.5`). JS bullet.js:190–191 — enemy
@@ -699,16 +761,30 @@ pub struct EnemyBulletContext {
     /// World boundaries (px). JS bullet.js:242–243.
     pub boundary_width: f32,
     pub boundary_height: f32,
+    /// JS `BulletUpdateContext.rngFloat` (state.js:490). Returns a value in
+    /// `[0, 1)`. Used by `Rapid` for per-tick jitter; other patterns ignore
+    /// it. For deterministic parity tests, pass `|| 0.5` so jitter cancels
+    /// to zero exactly. Defaults to that in `EnemyBulletContext::default`
+    /// via the `default_rng_float` helper.
+    pub rng_float: fn() -> f32,
     // TODO Phase 2.1+: now_ms (persistent bullet age — mines, lightning).
     // TODO Phase 2.1+: bullet_speed (homing target velocity).
     // TODO Phase 2.1+: target_player (homing patterns).
-    // TODO Phase 2.1+: rng (rapid-pattern jitter).
+}
+
+/// Default deterministic RNG closure for `EnemyBulletContext.rng_float`.
+///
+/// Returns `0.5` so the `Rapid` pattern's jitter `(rng - 0.5) * 0.3`
+/// collapses to zero — i.e. the bullet flies straight. Production callers
+/// should pass a real `fn() -> f32` seeded from the sim's PRNG.
+pub fn default_rng_float() -> f32 {
+    0.5
 }
 
 /// Pattern-specific velocity adjustment. Mirrors
-/// `applyEnemyMovementPattern` in js/sim/bullet.js, restricted to the 3
+/// `applyEnemyMovementPattern` in js/sim/bullet.js, restricted to the 15
 /// patterns this module implements.
-fn apply_enemy_movement_pattern(b: &mut EnemyBullet, _ctx: &EnemyBulletContext) {
+fn apply_enemy_movement_pattern(b: &mut EnemyBullet, ctx: &EnemyBulletContext) {
     // JS bullet.js:260–263 — guard: when both base velocities are zero AND
     // pattern is not `mine`, the legacy code early-returned. None of our 3
     // patterns are `mine`, so we mirror the early-return. (`Straight` with
@@ -853,6 +929,67 @@ fn apply_enemy_movement_pattern(b: &mut EnemyBullet, _ctx: &EnemyBulletContext) 
             b.vy = b.base_vy + b.sine_perp_y * displacement;
             // Align rotation with travel direction (JS bullet.js:532).
             b.rotation = b.vy.atan2(b.vx);
+        }
+
+        // JS bullet.js:346–352 — `laser`. Renormalize velocity to
+        // `LASER_SPEED_MULT × |base_v|` along the base direction. Hypot of
+        // base_v is the speed (already computed at the top of the JS
+        // function); we recompute locally to avoid coupling.
+        BulletPattern::Laser => {
+            let base_speed = (b.base_vx * b.base_vx + b.base_vy * b.base_vy).sqrt();
+            let laser_speed = base_speed * LASER_SPEED_MULT;
+            let laser_angle = b.base_vy.atan2(b.base_vx);
+            b.vx = laser_angle.cos() * laser_speed;
+            b.vy = laser_angle.sin() * laser_speed;
+        }
+
+        // JS bullet.js:354–363 — `laser_beam`. Same shape as `Laser` at
+        // `LASER_BEAM_SPEED_MULT × |base_v|`. Also mutates `damage` and
+        // clamps `radius` to a floor. The JS `(damage || 3) * 1.0` falls
+        // back to 3 when damage is 0/undefined — we mirror that explicitly
+        // since Rust's `0.0 * 1.0 == 0.0` doesn't fall through.
+        BulletPattern::LaserBeam => {
+            let base_speed = (b.base_vx * b.base_vx + b.base_vy * b.base_vy).sqrt();
+            let beam_speed = base_speed * LASER_BEAM_SPEED_MULT;
+            let beam_angle = b.base_vy.atan2(b.base_vx);
+            b.vx = beam_angle.cos() * beam_speed;
+            b.vy = beam_angle.sin() * beam_speed;
+            // JS `bullet.damage = (bullet.damage || 3) * 1.0` — falsy
+            // fallback for 0/undefined.
+            let damage_in = if b.damage == 0.0 {
+                LASER_BEAM_DAMAGE_DEFAULT
+            } else {
+                b.damage
+            };
+            b.damage = damage_in * LASER_BEAM_DAMAGE_MULT;
+            // JS `bullet.radius = Math.max(bullet.radius, 8)`.
+            if b.radius < LASER_BEAM_RADIUS_FLOOR {
+                b.radius = LASER_BEAM_RADIUS_FLOOR;
+            }
+        }
+
+        // JS bullet.js:334–344 — `explosive`. Two-phase timer accel: a
+        // "charge" phase at 0.3× speed (`patternTimer < 0.5`), then a
+        // linear ramp that starts at 1.5 and grows at coefficient 2.0.
+        BulletPattern::Explosive => {
+            let explosive_factor = if b.pattern_timer < EXPLOSIVE_CHARGE_THRESHOLD {
+                EXPLOSIVE_CHARGE_FACTOR
+            } else {
+                EXPLOSIVE_ACCEL_BASE
+                    + (b.pattern_timer - EXPLOSIVE_CHARGE_THRESHOLD) * EXPLOSIVE_ACCEL_RATE
+            };
+            b.vx = b.base_vx * explosive_factor;
+            b.vy = b.base_vy * explosive_factor;
+        }
+
+        // JS bullet.js:309–316 — `rapid`. Per-tick jitter on both axes.
+        // The closure on the context supplies the random source; passing
+        // `|| 0.5` collapses jitter to exactly zero (deterministic test).
+        BulletPattern::Rapid => {
+            let jitter_x = ((ctx.rng_float)() - 0.5) * RAPID_JITTER_STRENGTH;
+            let jitter_y = ((ctx.rng_float)() - 0.5) * RAPID_JITTER_STRENGTH;
+            b.vx = b.base_vx + jitter_x;
+            b.vy = b.base_vy + jitter_y;
         }
     }
 }
