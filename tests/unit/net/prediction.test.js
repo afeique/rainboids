@@ -436,3 +436,211 @@ describe('Predictor — custom updateShip callback', () => {
         expect(mockUpdate).toHaveBeenCalledTimes(3);
     });
 });
+
+// ── Snapshot history (TickBuffer integration) ───────────────────────────────
+//
+// `Predictor.onSnapshot` retains each authoritative server snapshot in a
+// `TickBuffer` keyed by server tick. The history is used for late-arrival
+// forensics, divergence post-mortems, and (eventually) reconciliation
+// lookups. These tests pin the integration: every snapshot is stored,
+// capacity caps at 64 by default, late-arrivals increment a counter while
+// still being recorded, and historical entries are detached from the
+// caller's ref (clone, not alias).
+describe('Predictor — snapshot history', () => {
+    test('onSnapshot stores snapshot in history', () => {
+        const baseline = freshShipState(0, { x: 500, y: 500, field: null });
+        const p = new Predictor({ dt: 1 / 60 });
+        p.setBaseline(baseline, 0);
+
+        const serverShip = freshShipState(0, { x: 600, y: 500, field: null });
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            p.onSnapshot(7, serverShip);
+        } finally {
+            warnSpy.mockRestore();
+        }
+
+        const entry = p.getSnapshotAtTick(7);
+        expect(entry).not.toBeNull();
+        expect(entry.tick).toBe(7);
+        expect(entry.state.x).toBe(600);
+        expect(entry.state.y).toBe(500);
+    });
+
+    test('multiple snapshots build history', () => {
+        const baseline = freshShipState(0, { x: 500, y: 500, field: null });
+        const p = new Predictor({ dt: 1 / 60 });
+        p.setBaseline(baseline, 0);
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            for (let i = 1; i <= 5; i++) {
+                p.onSnapshot(
+                    i,
+                    freshShipState(0, { x: 500 + i, y: 500, field: null }),
+                );
+            }
+        } finally {
+            warnSpy.mockRestore();
+        }
+
+        expect(p.getSnapshotHistorySize()).toBe(5);
+        // Sanity-check a few exact lookups.
+        expect(p.getSnapshotAtTick(1).state.x).toBe(501);
+        expect(p.getSnapshotAtTick(3).state.x).toBe(503);
+        expect(p.getSnapshotAtTick(5).state.x).toBe(505);
+    });
+
+    test('history capacity caps at 64 (default) — oldest evicted', () => {
+        const baseline = freshShipState(0, { x: 500, y: 500, field: null });
+        const p = new Predictor({ dt: 1 / 60 });
+        p.setBaseline(baseline, 0);
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            for (let i = 1; i <= 100; i++) {
+                p.onSnapshot(
+                    i,
+                    freshShipState(0, { x: 500 + i, y: 500, field: null }),
+                );
+            }
+        } finally {
+            warnSpy.mockRestore();
+        }
+
+        expect(p.getSnapshotHistorySize()).toBe(64);
+        // Oldest 36 ticks (1..36) should have been evicted.
+        expect(p.getSnapshotAtTick(1)).toBeNull();
+        expect(p.getSnapshotAtTick(36)).toBeNull();
+        // Most-recent 64 (37..100) should be retained.
+        expect(p.getSnapshotAtTick(37)).not.toBeNull();
+        expect(p.getSnapshotAtTick(100)).not.toBeNull();
+        expect(p.getLatestSnapshot().tick).toBe(100);
+    });
+
+    test('getSnapshotAtTick miss returns null', () => {
+        const baseline = freshShipState(0, { x: 500, y: 500, field: null });
+        const p = new Predictor({ dt: 1 / 60 });
+        p.setBaseline(baseline, 0);
+
+        // No snapshots received yet.
+        expect(p.getSnapshotAtTick(0)).toBeNull();
+        expect(p.getSnapshotAtTick(42)).toBeNull();
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            p.onSnapshot(10, freshShipState(0, { x: 600, field: null }));
+        } finally {
+            warnSpy.mockRestore();
+        }
+
+        // Tick we never received → still null.
+        expect(p.getSnapshotAtTick(11)).toBeNull();
+        expect(p.getSnapshotAtTick(9)).toBeNull();
+        // And NaN / non-finite is gracefully rejected.
+        expect(p.getSnapshotAtTick(NaN)).toBeNull();
+        expect(p.getSnapshotAtTick(Infinity)).toBeNull();
+    });
+
+    test('getLatestSnapshot returns most-recent entry (and null when empty)', () => {
+        const baseline = freshShipState(0, { x: 500, y: 500, field: null });
+        const p = new Predictor({ dt: 1 / 60 });
+        p.setBaseline(baseline, 0);
+
+        // Nothing received yet.
+        expect(p.getLatestSnapshot()).toBeNull();
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            p.onSnapshot(3, freshShipState(0, { x: 503, field: null }));
+            p.onSnapshot(8, freshShipState(0, { x: 508, field: null }));
+            p.onSnapshot(5, freshShipState(0, { x: 505, field: null })); // late
+        } finally {
+            warnSpy.mockRestore();
+        }
+
+        // Highest stored tick is still 8 (TickBuffer sorts internally).
+        const latest = p.getLatestSnapshot();
+        expect(latest).not.toBeNull();
+        expect(latest.tick).toBe(8);
+        expect(latest.state.x).toBe(508);
+    });
+
+    test('late-arrival snapshot increments lateArrivalCount', () => {
+        const baseline = freshShipState(0, { x: 500, y: 500, field: null });
+        const p = new Predictor({ dt: 1 / 60 });
+        p.setBaseline(baseline, 0);
+
+        expect(p.lateArrivalCount).toBe(0);
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            // Establish a baseline at tick 100.
+            p.onSnapshot(100, freshShipState(0, { x: 600, field: null }));
+            expect(p.lateArrivalCount).toBe(0);
+
+            // Out-of-order arrival for tick 50 — older than latest stored.
+            p.onSnapshot(50, freshShipState(0, { x: 550, field: null }));
+        } finally {
+            warnSpy.mockRestore();
+        }
+
+        expect(p.lateArrivalCount).toBe(1);
+    });
+
+    test('late-arrival snapshot still stored in history', () => {
+        const baseline = freshShipState(0, { x: 500, y: 500, field: null });
+        const p = new Predictor({ dt: 1 / 60 });
+        p.setBaseline(baseline, 0);
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            p.onSnapshot(100, freshShipState(0, { x: 600, field: null }));
+            p.onSnapshot(50, freshShipState(0, { x: 550, field: null })); // late
+        } finally {
+            warnSpy.mockRestore();
+        }
+
+        // Late snapshot is retained as historical evidence.
+        const entry = p.getSnapshotAtTick(50);
+        expect(entry).not.toBeNull();
+        expect(entry.tick).toBe(50);
+        expect(entry.state.x).toBe(550);
+        // Latest is still tick=100 (TickBuffer sorts by tick).
+        expect(p.getLatestSnapshot().tick).toBe(100);
+        // And size reflects both entries.
+        expect(p.getSnapshotHistorySize()).toBe(2);
+    });
+
+    test('history snapshots are cloned, not aliased', () => {
+        const baseline = freshShipState(0, { x: 500, y: 500, field: null });
+        const p = new Predictor({ dt: 1 / 60 });
+        p.setBaseline(baseline, 0);
+
+        const serverShip = freshShipState(0, {
+            x: 600,
+            y: 500,
+            vx: 0,
+            vy: 0,
+            field: null,
+        });
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            p.onSnapshot(11, serverShip);
+        } finally {
+            warnSpy.mockRestore();
+        }
+
+        // Mutate the caller's ref AFTER onSnapshot — the stored history
+        // must be unaffected (clone, not alias).
+        serverShip.x = -999;
+        serverShip.vx = -999;
+
+        const entry = p.getSnapshotAtTick(11);
+        expect(entry).not.toBeNull();
+        expect(entry.state.x).toBe(600);
+        expect(entry.state.vx).toBe(0);
+        // And the stored state is not the same object reference.
+        expect(entry.state).not.toBe(serverShip);
+    });
+});
