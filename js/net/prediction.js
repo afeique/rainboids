@@ -3,36 +3,63 @@
 // Every input frame we apply locally and remember in a pending buffer.
 // When a server snapshot arrives, we drop any pending inputs whose
 // tick is ≤ the snapshot's tick, then replay the remaining buffer
-// against the snapshot's authoritative ship state. With fixed-point
+// against the snapshot's authoritative ship state. With deterministic
 // physics on both sides, the replayed state should equal the locally
-// predicted state byte-for-byte.
+// predicted state byte-for-byte (today: f32; Fxp migration is a later
+// session, see `docs/Multiplayer Rust Client Engine – 2026-05-07.md`).
 //
 // Design contract (cf. `Multiplayer Rust Client Engine` plan §"Reconciliation
 // strategy"): if `predictionDivergence` ever fires in the field, the
 // parity harness has a hole. Log loudly and fix the harness.
+//
+// ── Wiring (2026-05-11) ─────────────────────────────────────────────────────
+// The default `updateShip` callback now delegates to the pure ship-physics
+// step at `js/sim/ship.js::updateShip`. That function has the signature
+//   updateShip(ship, input, dt, rng, events)
+// and **mutates `ship` in place**. The Predictor's internal contract was
+// 3-arg (`ship, input, dt`) and a returned ship value. To bridge:
+//
+//   1. The default callback supplies `null` for `rng` and a fresh array
+//      for `events` (the ship step emits no events today; the slot is
+//      reserved for future bullet-spawn migration).
+//   2. `applyLocalInput` calls the callback over the live `localShipState`
+//      object and accepts the (mutated) return — fine since `localShipState`
+//      is owned by the Predictor.
+//   3. `onSnapshot`'s replay path clones the server ship before the loop
+//      (so the server snapshot reference passed in by the caller is never
+//      mutated), then mutates that clone tick-by-tick through the callback.
+//
+// Callers that want to inject a different physics step (cross-language
+// parity harness, deterministic Fxp variant, mocked updates in tests) can
+// still pass `{ updateShip: myFn }` to the constructor — the only contract
+// is "(ship, input, dt, rng, events) → mutates and returns ship".
 
-import { Fxp } from '../sim/fxp.js';
+import { updateShip as pureUpdateShip } from '../sim/ship.js';
 
 /**
- * Pure ship-update step. Mirror of `server/src/sim/ship.rs::update_ship`.
- * For v1 this lives in this file as a placeholder; once the engine
- * refactor extracts ship physics into `js/sim/ship.js` we'll import
- * it from there.
+ * Default ship-update callback. Wraps the pure step in
+ * `js/sim/ship.js` with a no-op rng + empty events array. Mirrors
+ * `server/src/sim/ship.rs::update_ship` (modulo language).
  *
- * @param {{x: Fxp, y: Fxp, vx: Fxp, vy: Fxp, angle: number}} ship
- * @param {{moveX: number, moveY: number, aimX: number, aimY: number}} input
- * @param {Fxp} dt
- * @returns new ship state
+ * @param {import('../sim/state.js').ShipState} ship
+ * @param {import('../sim/state.js').InputFrame} input
+ * @param {number} dt   seconds (1/60 typical); current physics ignores dt
+ *                      but the slot is plumbed for forward compatibility.
+ * @returns {import('../sim/state.js').ShipState} the (mutated) ship
  */
 function defaultUpdateShip(ship, input, dt) {
-    // Stub: until `js/sim/ship.js` is extracted from game-engine.js, the
-    // predictor calls back into a wired-up update function. The default
-    // no-op keeps the predictor wireable in tests without depending on
-    // game-engine internals.
-    return ship;
+    return pureUpdateShip(ship, input, dt, null, []);
 }
 
 export class Predictor {
+    /**
+     * @param {object} [opts]
+     * @param {(ship, input, dt) => object} [opts.updateShip] - physics step;
+     *     defaults to `js/sim/ship.js::updateShip` wrapped with a null rng
+     *     and an empty events buffer.
+     * @param {number} [opts.dt] - seconds per tick (typically 1/60). Passed
+     *     to the physics step; today's `updateShip` ignores it.
+     */
     constructor({ updateShip = defaultUpdateShip, dt } = {}) {
         this.updateShip = updateShip;
         this.dt = dt;
@@ -41,46 +68,76 @@ export class Predictor {
         this.tick = 0;
         /** @type {object|null} Local predicted ship state. */
         this.localShipState = null;
-        /** Diagnostics counters. */
+        /** Diagnostics counter — incremented when a server snapshot
+         * disagrees with our locally-predicted state after replay. */
         this.divergenceCount = 0;
     }
 
-    /** Establish baseline ship state from the server's RoomJoined snapshot. */
+    /**
+     * Establish baseline ship state from the server's RoomJoined snapshot
+     * (or, in tests, from a known starting position). Replaces any prior
+     * local state and resets the tick counter.
+     *
+     * @param {object} ship - ShipState shape (see `js/sim/state.js`).
+     *     Cloned so subsequent mutation does not alias the caller's copy.
+     * @param {number} tick - server tick this baseline is anchored on.
+     */
     setBaseline(ship, tick) {
-        this.localShipState = ship;
+        this.localShipState = cloneShip(ship);
         this.tick = tick | 0;
     }
 
-    /** Apply one local input, advance prediction one tick. */
+    /**
+     * Apply one local input, advance prediction one tick. Mutates
+     * `localShipState` in place via the physics callback.
+     *
+     * @param {import('../sim/state.js').InputFrame} input
+     */
     applyLocalInput(input) {
         this.tick = (this.tick + 1) | 0;
         this.pending.push({ tick: this.tick, input });
         if (this.localShipState != null) {
-            this.localShipState = this.updateShip(this.localShipState, input, this.dt);
+            // `updateShip` mutates in place and returns the same ref. We
+            // re-assign defensively in case a custom callback returns a
+            // fresh object instead.
+            this.localShipState = this.updateShip(
+                this.localShipState,
+                input,
+                this.dt,
+            );
         }
     }
 
     /**
-     * Receive an authoritative ship state from the server. Replay any
-     * pending inputs whose tick > serverTick to derive the predicted
-     * state from this baseline; compare against our locally predicted
-     * state and warn loudly on divergence.
+     * Receive an authoritative ship state from the server. Drops any
+     * pending inputs whose tick ≤ serverTick, replays the remaining
+     * buffer against the snapshot's authoritative ship state to derive
+     * the predicted state from this baseline, compares against our
+     * locally-predicted state, and warns loudly on divergence.
+     *
+     * On divergence, the reconciled (server-anchored + replayed) state
+     * replaces the local prediction — i.e. the server wins, as it must
+     * for an authoritative-server topology.
      *
      * @param {number} serverTick
-     * @param {object} serverShip - authoritative ShipState
+     * @param {object} serverShip - authoritative ShipState. NOT mutated;
+     *     we clone before replay.
      */
     onSnapshot(serverTick, serverShip) {
         // Drop already-acknowledged inputs.
         while (this.pending.length && this.pending[0].tick <= serverTick) {
             this.pending.shift();
         }
-        // Replay pending inputs starting from the server's authoritative state.
+        // Replay pending inputs starting from the server's authoritative
+        // state. Clone first so the caller's `serverShip` ref stays
+        // untouched (the pure ship step mutates in place).
         let s = cloneShip(serverShip);
         for (const p of this.pending) {
             s = this.updateShip(s, p.input, this.dt);
         }
 
-        // Compare. Mismatch is a parity-harness escape; track it.
+        // Compare. Mismatch is a parity-harness escape; track it and
+        // snap local state to the server-anchored replay.
         if (this.localShipState && !shipsBitEqual(s, this.localShipState)) {
             this.divergenceCount++;
             // eslint-disable-next-line no-console
@@ -96,23 +153,35 @@ export class Predictor {
 }
 
 function cloneShip(s) {
-    // Shallow copy — fields are primitives or Fxp instances which are
-    // value-like (raw is i32). Fxp.add/sub/mul return fresh Fxps so
-    // mutating updateShip outputs won't alias.
+    // Shallow copy — prediction-relevant fields are primitives. The
+    // `field` reference is shared by design (immutable per-room bounds).
+    // If/when Fxp lands, `.raw` is still an i32 primitive so shallow
+    // copy stays correct.
+    if (s == null) return s;
     return { ...s };
 }
 
 function shipsBitEqual(a, b) {
     // Compare prediction-relevant fields bit-for-bit. f32 fields and the
-    // Fxp `.raw` int both compare via ===.
+    // future Fxp `.raw` int both compare via ===. Today `js/sim/ship.js`
+    // writes x, y, vx, vy, and angle each tick; all five participate in
+    // the parity check.
     if (a == null || b == null) return false;
+    // Fxp-backed shape (forward compat — not used today).
     if (a.x != null && a.x.raw !== undefined) {
         return (
             a.x.raw === b.x.raw &&
             a.y.raw === b.y.raw &&
             a.vx.raw === b.vx.raw &&
-            a.vy.raw === b.vy.raw
+            a.vy.raw === b.vy.raw &&
+            a.angle === b.angle
         );
     }
-    return a.x === b.x && a.y === b.y && a.vx === b.vx && a.vy === b.vy;
+    return (
+        a.x === b.x &&
+        a.y === b.y &&
+        a.vx === b.vx &&
+        a.vy === b.vy &&
+        a.angle === b.angle
+    );
 }
