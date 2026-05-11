@@ -40,13 +40,14 @@
 
 use rainboids_server::sim::collision::{
     detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_enemy_asteroid_hits,
-    detect_player_asteroid_hits, detect_player_enemy_bullet_hits, detect_player_enemy_hits,
-    CollisionAsteroid, CollisionBullet, CollisionContext, CollisionEnemy, CollisionEnemyBullet,
-    CollisionEvent, CollisionPlayer, ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER,
-    BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE,
-    OVERLAP_SEPARATION_RATIO, PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE,
-    SEPARATION_BUFFER,
+    detect_player_asteroid_hits, detect_player_drop_pickups, detect_player_enemy_bullet_hits,
+    detect_player_enemy_hits, CollisionAsteroid, CollisionBullet, CollisionContext, CollisionDrop,
+    CollisionEnemy, CollisionEnemyBullet, CollisionEvent, CollisionPlayer, ASTEROID_ENEMY_PUSH,
+    ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION,
+    ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE, OVERLAP_SEPARATION_RATIO,
+    PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE, SEPARATION_BUFFER,
 };
+use rainboids_server::sim::drops::DropKind;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -2118,4 +2119,314 @@ fn player_enemy_bullet_damage_default() {
     } else {
         panic!("expected PlayerHitByEnemyBullet");
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Player-vs-drop pickup fixtures (Phase 2.5 dispatch — this PR).
+//
+// Mirrors `tests/unit/sim/collision.test.js::detectPlayerDropPickups …`.
+// JS side uses string literals ('health', 'money_shape', 'money_pixel',
+// 'powerup') for `dropKind`; Rust side uses the `DropKind` enum from
+// `sim::drops`. The wrapper translates between them.
+//
+// Field count assertion: PlayerPickupDrop has exactly 6 non-type fields
+// (player_id, drop_id, drop_kind, value, drop_x, drop_y) — verified via
+// exhaustive destructuring in `player_drop_single_pickup`.
+// ═════════════════════════════════════════════════════════════════════
+
+/// Build a drop at (x, y) with the live game's default radius of 14 and
+/// the supplied kind. Mirrors the `dropOrb` helper in the JS Jest suite.
+fn make_drop(id: u32, kind: DropKind, x: f32, y: f32) -> CollisionDrop {
+    let mut d = CollisionDrop::fresh(id, kind);
+    d.x = x;
+    d.y = y;
+    d
+}
+
+// ---------------------------------------------------------------------
+// Fixture — single pickup with all 6 non-type fields populated.
+//
+// Mirrors `"overlapping player + drop emits one event with all 6 non-type fields"`.
+// Player radius 15 + drop radius 14 = sumR 29. Drop 10 px east of
+// player ⇒ overlap (10 < 29). Asserts exhaustive field set.
+// ---------------------------------------------------------------------
+#[test]
+fn player_drop_single_pickup() {
+    let players = vec![make_player(7, 100.0, 100.0)];
+    let drops = vec![CollisionDrop {
+        value: 3,
+        ..make_drop(42, DropKind::Health, 110.0, 100.0)
+    }];
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1);
+    // Exhaustive destructure pins the exact field set (6 non-type fields).
+    // If a future regression added e.g. a `damage` field, this would fail
+    // to compile.
+    match events[0] {
+        CollisionEvent::PlayerPickupDrop {
+            player_id,
+            drop_id,
+            drop_kind,
+            value,
+            drop_x,
+            drop_y,
+        } => {
+            assert_eq!(player_id, 7);
+            assert_eq!(drop_id, 42);
+            assert_eq!(drop_kind, DropKind::Health);
+            assert_eq!(value, 3);
+            approx_eq(drop_x, 110.0, "drop_x");
+            approx_eq(drop_y, 100.0, "drop_y");
+        }
+        _ => panic!("expected PlayerPickupDrop event"),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — geometry miss (drop far outside sum-of-radii).
+//
+// Mirrors `"drop outside (player.r + drop.r) emits no event"`.
+// Drop 200 px away ≫ sumR=29 → no overlap.
+// ---------------------------------------------------------------------
+#[test]
+fn player_drop_geometry_miss() {
+    let players = vec![make_player(7, 0.0, 0.0)];
+    let drops = vec![make_drop(42, DropKind::Health, 200.0, 0.0)];
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+
+    assert_eq!(events.len(), 0);
+
+    // Boundary case — drop just outside (sumR + 1 = 30 px). Player r=15,
+    // drop r=14, sumR=29; place drop 30 px away.
+    let drops_edge = vec![make_drop(43, DropKind::Health, 30.0, 0.0)];
+    let mut events = Vec::new();
+    detect_player_drop_pickups(&players, &drops_edge, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "drop exactly at sumR+1 should not pickup");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — one player overlapping multiple drops in one tick emits one
+// event per drop. No piercing budget, no "first hit wins" — drops are
+// independent pickups.
+//
+// Mirrors `"one player overlapping three drops emits three events"`.
+// ---------------------------------------------------------------------
+#[test]
+fn player_drop_multiple_pickups() {
+    let players = vec![make_player(7, 100.0, 100.0)];
+    let drops = vec![
+        make_drop(10, DropKind::MoneyPixel, 110.0, 100.0), // east
+        make_drop(20, DropKind::MoneyShape, 90.0, 100.0),  // west
+        make_drop(30, DropKind::Health, 100.0, 90.0),      // north
+    ];
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+
+    assert_eq!(events.len(), 3);
+    // Each event references the same player but distinct drops.
+    let mut ids: Vec<u32> = events
+        .iter()
+        .map(|ev| match ev {
+            CollisionEvent::PlayerPickupDrop { drop_id, .. } => *drop_id,
+            _ => panic!("expected PlayerPickupDrop"),
+        })
+        .collect();
+    ids.sort();
+    assert_eq!(ids, vec![10, 20, 30]);
+    for ev in &events {
+        if let CollisionEvent::PlayerPickupDrop { player_id, .. } = ev {
+            assert_eq!(*player_id, 7);
+        } else {
+            panic!("expected PlayerPickupDrop");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — skip-gates: inactive player or inactive drop → no event.
+//
+// Mirrors `"inactive player → no event"` and `"inactive drop → no event"`.
+// Also covers empty-input defensive guards.
+// ---------------------------------------------------------------------
+#[test]
+fn player_drop_skip_gates() {
+    let ctx = CollisionContext;
+
+    // Inactive player → no event.
+    let players = vec![CollisionPlayer {
+        active: false,
+        ..make_player(7, 100.0, 100.0)
+    }];
+    let drops = vec![make_drop(42, DropKind::Health, 110.0, 100.0)];
+    let mut events = Vec::new();
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "inactive player should skip");
+
+    // Inactive drop → no event.
+    let players = vec![make_player(7, 100.0, 100.0)];
+    let drops = vec![CollisionDrop {
+        active: false,
+        ..make_drop(42, DropKind::Health, 110.0, 100.0)
+    }];
+    let mut events = Vec::new();
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "inactive drop should skip");
+
+    // Empty players → no events.
+    let mut events = Vec::new();
+    detect_player_drop_pickups(&[], &drops, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "empty players should emit nothing");
+
+    // Empty drops → no events.
+    let mut events = Vec::new();
+    detect_player_drop_pickups(&players, &[], &ctx, &mut events);
+    assert_eq!(events.len(), 0, "empty drops should emit nothing");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — each DropKind variant round-trips through `drop_kind`.
+//
+// Mirrors the four `'health' / 'money_shape' / 'money_pixel' / 'powerup'
+// drop pickup event carries dropKind=…` tests on the JS side.
+// ---------------------------------------------------------------------
+#[test]
+fn player_drop_each_kind() {
+    let ctx = CollisionContext;
+    let kinds = [
+        DropKind::Health,
+        DropKind::MoneyShape,
+        DropKind::MoneyPixel,
+        DropKind::Powerup,
+    ];
+
+    for kind in kinds.iter().copied() {
+        let players = vec![make_player(7, 100.0, 100.0)];
+        let drops = vec![make_drop(42, kind, 110.0, 100.0)];
+
+        let mut events = Vec::new();
+        detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+
+        assert_eq!(events.len(), 1, "kind {:?} should emit one event", kind);
+        match events[0] {
+            CollisionEvent::PlayerPickupDrop { drop_kind, .. } => {
+                assert_eq!(drop_kind, kind, "drop_kind round-trip for {:?}", kind);
+            }
+            _ => panic!("expected PlayerPickupDrop for kind {:?}", kind),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — `value` propagates verbatim. No upgrade multipliers applied
+// pure-side (MEDPACK / DOCTOR / PAYDAY / HIGH_ROLLER stay wrapper-side).
+//
+// Mirrors `"event.value matches drop.value verbatim (no upgrade scaling
+// pure-side)"` and `"powerup value … passes through"`.
+// ---------------------------------------------------------------------
+#[test]
+fn player_drop_value_passthrough() {
+    let ctx = CollisionContext;
+
+    // value = 7 (e.g. a high-roller-multiplied gold drop) → verbatim.
+    let players = vec![make_player(7, 100.0, 100.0)];
+    let drops = vec![CollisionDrop {
+        value: 7,
+        ..make_drop(42, DropKind::MoneyShape, 110.0, 100.0)
+    }];
+    let mut events = Vec::new();
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+    assert_eq!(events.len(), 1);
+    if let CollisionEvent::PlayerPickupDrop { value, .. } = events[0] {
+        assert_eq!(value, 7, "value should be passthrough");
+    } else {
+        panic!("expected PlayerPickupDrop");
+    }
+
+    // Powerup value (encodes the powerup id) — pure step doesn't care
+    // what the number means, it just copies it.
+    let drops = vec![CollisionDrop {
+        value: 9001,
+        ..make_drop(43, DropKind::Powerup, 110.0, 100.0)
+    }];
+    let mut events = Vec::new();
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+    assert_eq!(events.len(), 1);
+    if let CollisionEvent::PlayerPickupDrop { value, .. } = events[0] {
+        assert_eq!(value, 9001, "powerup id passthrough");
+    } else {
+        panic!("expected PlayerPickupDrop");
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — `drop_x` / `drop_y` match the drop's position at the moment
+// of overlap. Used by the wrapper for the sparkle-ring particle spawn at
+// the pickup site.
+//
+// Mirrors `"event dropX/dropY match the drop position at the moment of
+// overlap"`.
+// ---------------------------------------------------------------------
+#[test]
+fn player_drop_position_passthrough() {
+    let players = vec![make_player(7, 100.0, 100.0)];
+    // Distinctive non-integer-y coordinates inside the overlap circle.
+    let drops = vec![make_drop(42, DropKind::MoneyPixel, 117.0, 103.0)];
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1);
+    if let CollisionEvent::PlayerPickupDrop { drop_x, drop_y, .. } = events[0] {
+        approx_eq(drop_x, 117.0, "drop_x position passthrough");
+        approx_eq(drop_y, 103.0, "drop_y position passthrough");
+    } else {
+        panic!("expected PlayerPickupDrop");
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — two players overlapping the same drop both emit events.
+// The pure step emits one event per (player, drop) overlap; the wrapper
+// is responsible for resolving the conflict (e.g. first-emit-wins).
+//
+// Mirrors `"two players overlapping the same drop both emit events
+// (wrapper picks winner)"`.
+// ---------------------------------------------------------------------
+#[test]
+fn player_drop_two_players_one_drop() {
+    let players = vec![
+        make_player(7, 95.0, 100.0),
+        make_player(8, 105.0, 100.0),
+    ];
+    let drops = vec![make_drop(42, DropKind::Health, 100.0, 100.0)];
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_drop_pickups(&players, &drops, &ctx, &mut events);
+
+    assert_eq!(events.len(), 2);
+    let mut player_ids: Vec<u32> = events
+        .iter()
+        .map(|ev| match ev {
+            CollisionEvent::PlayerPickupDrop {
+                player_id, drop_id, ..
+            } => {
+                assert_eq!(*drop_id, 42, "both events reference the same drop");
+                *player_id
+            }
+            _ => panic!("expected PlayerPickupDrop"),
+        })
+        .collect();
+    player_ids.sort();
+    assert_eq!(player_ids, vec![7, 8]);
 }
