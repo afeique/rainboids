@@ -434,6 +434,34 @@ pub enum CollisionEvent {
         enemy_separation_dx: f32,
         enemy_separation_dy: f32,
     },
+    /// Mirrors `{ type: 'enemy_hit_asteroid', ... }` in `js/sim/collision.js`.
+    ///
+    /// SMALLEST event in the collision module — exactly 6 fields. No damage
+    /// (`damage_*`) and no separation (`separation_*`) variants: this pair
+    /// is pure push-impulse along the collision normal, applied to BOTH
+    /// bodies' velocities. The legacy path only modifies velocities; the
+    /// next-tick simulation moves the bodies apart on its own.
+    ///
+    /// Velocity deltas the wrapper applies:
+    ///   - `enemy.vel.x    += enemy_impulse_dx;    enemy.vel.y    += enemy_impulse_dy`
+    ///   - `asteroid.vel.x += asteroid_impulse_dx; asteroid.vel.y += asteroid_impulse_dy`
+    ///
+    /// Magnitudes are fixed scalars from the legacy `COLLISION_CONFIG`:
+    /// `ENEMY_ASTEROID_PUSH = 4` (the enemy's bump, away from the rock) and
+    /// `ASTEROID_ENEMY_PUSH = 2` (the rock's bump, away from the enemy).
+    /// Direction is purely angular — `atan2(asteroid - enemy)` along the
+    /// (enemy → asteroid) collision normal, with the enemy receiving
+    /// `(-cos, -sin)` (pushed AWAY from the rock) and the asteroid
+    /// receiving `(+cos, +sin)` (pushed AWAY from the enemy). No
+    /// jitter / RNG.
+    EnemyHitAsteroid {
+        enemy_id: u32,
+        asteroid_id: u32,
+        enemy_impulse_dx: f32,
+        enemy_impulse_dy: f32,
+        asteroid_impulse_dx: f32,
+        asteroid_impulse_dy: f32,
+    },
 }
 
 // ─── Bullet-vs-asteroid pair detection ──────────────────────────────
@@ -1300,6 +1328,202 @@ pub fn detect_player_enemy_hits(
                 separation_dy,
                 enemy_separation_dx,
                 enemy_separation_dy,
+            });
+        }
+    }
+}
+
+// ── ENEMY ↔ ASTEROID — Phase 2.5 ──────
+//
+// `detect_enemy_asteroid_hits` is the fifth pure-step pair, extracted from
+// `handleEnemyAsteroidCollision` in `js/modules/combat/collision-system.js`
+// (lines 1898–1944). UNIQUE among the five pairs so far — every prior
+// pair either dealt damage, ran restitution math, applied position
+// separation, or jittered the impulse via RNG. This pair does NONE of
+// those things:
+//
+//   - NO damage to either side. Period. Enemies don't lose HP when they
+//     bump asteroids; asteroids don't lose HP either. The wrapper does
+//     not call `take_damage` on either body. (Legacy explicit code
+//     comment at line 1943: "No enemy destruction from asteroid
+//     collisions".)
+//   - NO restitution / mass-aware impulse math. Just two fixed-force
+//     scalar pushes, one per body, along the collision normal.
+//   - NO position separation. The legacy path only modifies velocities;
+//     the next-tick simulation will move the bodies apart on its own.
+//   - NO jitter / RNG. Fully deterministic.
+//
+// Event shape: exactly 6 fields (enemy_id, asteroid_id, and the 2×2
+// impulse delta block). NO `damage_*` fields. NO `separation_*` fields.
+// Smallest event in the collision module so far.
+//
+// What stays the same as the prior pairs:
+//   - Circle-circle geometry check (squared-distance compare).
+//   - Inactive-side / warping / death-flash skip gates (asteroid side
+//     only — enemies don't get a death-flash gate here; mirrors legacy).
+//   - Pure-step discipline: emit one event per overlap, never mutate
+//     either side directly. The wrapper applies the reported deltas.
+//
+// What does NOT live in this module at all (wrapper concerns):
+//   - Hit-flash visuals, audio, particles                (presentation)
+//   - Wave / boss / mission hooks                        (game-state)
+//   - Velocity application to enemy.vel / asteroid.vel   (wrapper)
+//
+// JS reference: `js/sim/collision.js::detectEnemyAsteroidHits` (lines
+// 1394–1460 in PR #44 / current master).
+
+/// Push force applied to the ENEMY in an enemy-asteroid collision.
+/// Mirrors `COLLISION_CONFIG.ENEMY_ASTEROID_PUSH = 4` (line 38 of
+/// `js/modules/combat/collision-system.js`) and the matching JS const
+/// in `js/sim/collision.js`. The enemy is bumped AWAY from the
+/// asteroid along the collision normal:
+///
+///   `enemy.vel += (asteroid → enemy unit) · ENEMY_ASTEROID_PUSH`
+///
+/// Larger than `ASTEROID_ENEMY_PUSH` (4 vs 2) because enemies are
+/// lighter than asteroids in the live game — to make the bump *visible*
+/// on the enemy side, the legacy tuning gives them a stronger kick.
+pub const ENEMY_ASTEROID_PUSH: f32 = 4.0;
+
+/// Push force applied to the ASTEROID in an enemy-asteroid collision.
+/// Mirrors `COLLISION_CONFIG.ASTEROID_ENEMY_PUSH = 2` (line 40 of
+/// `js/modules/combat/collision-system.js`) and the matching JS const
+/// in `js/sim/collision.js`. The asteroid is bumped AWAY from the
+/// enemy along the collision normal:
+///
+///   `asteroid.vel += (enemy → asteroid unit) · ASTEROID_ENEMY_PUSH`
+///
+/// Smaller than `ENEMY_ASTEROID_PUSH` (2 vs 4) because asteroids are
+/// heavier — the same momentum exchange yields a smaller velocity
+/// change on the massive rock side.
+pub const ASTEROID_ENEMY_PUSH: f32 = 2.0;
+
+/// Detect enemy-vs-asteroid collisions for one tick.
+///
+/// Pure step: reads enemy + asteroid positions / radii, decides which
+/// pairs overlap, and pushes one `EnemyHitAsteroid` event per detected
+/// hit with the velocity deltas the wrapper applies to the live state.
+/// Does NOT mutate enemy or asteroid — every effect is reported in the
+/// event payload for the wrapper / JS mirror to apply downstream.
+///
+/// Geometry:
+///   Circle-circle overlap: `(dx² + dy²) < (enemy.r + asteroid.r)²`.
+///   JS line refs: `js/sim/collision.js:1419–1424`.
+///
+/// Push direction (mirrors JS lines 1440–1447):
+///
+///   angle              = atan2(asteroid.y - enemy.y, asteroid.x - enemy.x)
+///   cosA, sinA         = cos(angle), sin(angle)
+///
+///   enemyImpulseDx     = -cosA · ENEMY_ASTEROID_PUSH
+///   enemyImpulseDy     = -sinA · ENEMY_ASTEROID_PUSH
+///     (enemy pushed AWAY from asteroid — negative direction)
+///
+///   asteroidImpulseDx  = +cosA · ASTEROID_ENEMY_PUSH
+///   asteroidImpulseDy  = +sinA · ASTEROID_ENEMY_PUSH
+///     (asteroid pushed AWAY from enemy — positive direction)
+///
+/// Determinism: fully deterministic — NO atan2 jitter, NO RNG, NO
+/// restitution model, NO mass-aware scaling.
+///
+/// Damage / separation: this pair emits NEITHER. The event has exactly
+/// 6 fields: two ids + four impulse components. Subsequent ticks of the
+/// sim move the bodies apart via the applied velocity deltas; no
+/// position correction is performed here.
+///
+/// Skipped pairs (no event emitted):
+///   - Inactive enemy        (`!enemy.active`)
+///   - Inactive asteroid     (`!asteroid.active`)
+///   - Warping enemy         (`enemy.warping`, mid warp-in animation)
+///   - Warping asteroid      (`asteroid.warping`, mid warp-in animation)
+///   - Asteroid mid-death    (`asteroid.death_flash > 0`)
+///   - Coincident centers    (`distance == 0`; defensive skip — atan2
+///                            would return 0 deterministically but the
+///                            push direction is undefined, so we mirror
+///                            the legacy `distance > 0` gate)
+///
+/// NOTE: There is NO `enemy.death_flash` gate on the enemy side. The
+/// legacy `handleEnemyAsteroidCollision` is only invoked when an enemy
+/// is mid-collision with an asteroid; an enemy mid-death-flash will
+/// already have `active = false` flipped elsewhere, so the active gate
+/// covers it. We stay faithful to legacy behavior and don't add a
+/// separate enemy-side death-flash gate.
+pub fn detect_enemy_asteroid_hits(
+    enemies: &[CollisionEnemy],
+    asteroids: &[CollisionAsteroid],
+    _ctx: &CollisionContext,
+    events: &mut Vec<CollisionEvent>,
+) {
+    if enemies.is_empty() || asteroids.is_empty() {
+        return;
+    }
+
+    for enemy in enemies.iter() {
+        // 1. Enemy gating (JS collision.js:1400–1401).
+        if !enemy.active {
+            continue;
+        }
+        if enemy.warping {
+            continue;
+        }
+
+        let enemy_radius = enemy.radius;
+
+        for asteroid in asteroids.iter() {
+            // 2. Asteroid gating (JS collision.js:1407–1417).
+            if !asteroid.active {
+                continue;
+            }
+            if asteroid.warping {
+                continue;
+            }
+            if asteroid.death_flash > 0 {
+                continue;
+            }
+
+            // 3. Circle-circle overlap (JS collision.js:1420–1424).
+            let dx = asteroid.x - enemy.x;
+            let dy = asteroid.y - enemy.y;
+            let sum_r = enemy_radius + asteroid.radius;
+            let dist_sq = dx * dx + dy * dy;
+            if dist_sq >= sum_r * sum_r {
+                continue;
+            }
+
+            // 4. Defensive coincident-center skip (JS collision.js:1431).
+            //    atan2(0, 0) returns 0 deterministically — not NaN — but
+            //    the push direction is meaningless, so we skip rather
+            //    than emit a degenerate east-pointing bump. Mirrors the
+            //    legacy `if (distance > 0)` gate at line 1906 of
+            //    collision-system.js.
+            if dist_sq == 0.0 {
+                continue;
+            }
+
+            // ── Hit detected — compute push impulse ──
+            //
+            // `angle` points from enemy → asteroid (the collision axis
+            // measured from the enemy's perspective). Enemy gets pushed
+            // along the NEGATIVE of this axis (away from asteroid);
+            // asteroid gets pushed along the POSITIVE axis (away from
+            // enemy).
+            let angle = dy.atan2(dx);
+            let cos_a = angle.cos();
+            let sin_a = angle.sin();
+
+            let enemy_impulse_dx = -cos_a * ENEMY_ASTEROID_PUSH;
+            let enemy_impulse_dy = -sin_a * ENEMY_ASTEROID_PUSH;
+            let asteroid_impulse_dx = cos_a * ASTEROID_ENEMY_PUSH;
+            let asteroid_impulse_dy = sin_a * ASTEROID_ENEMY_PUSH;
+
+            // 5. Emit the event (JS collision.js:1449–1457).
+            events.push(CollisionEvent::EnemyHitAsteroid {
+                enemy_id: enemy.id,
+                asteroid_id: asteroid.id,
+                enemy_impulse_dx,
+                enemy_impulse_dy,
+                asteroid_impulse_dx,
+                asteroid_impulse_dy,
             });
         }
     }
