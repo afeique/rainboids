@@ -39,10 +39,11 @@
 //! PR #32 for player-asteroid).
 
 use rainboids_server::sim::collision::{
-    detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_player_asteroid_hits,
-    detect_player_enemy_hits, CollisionAsteroid, CollisionBullet, CollisionContext, CollisionEnemy,
-    CollisionEvent, CollisionPlayer, ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER,
-    BOUNCE_RESTITUTION, OVERLAP_PUSH_FORCE, OVERLAP_SEPARATION_RATIO,
+    detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_enemy_asteroid_hits,
+    detect_player_asteroid_hits, detect_player_enemy_hits, CollisionAsteroid, CollisionBullet,
+    CollisionContext, CollisionEnemy, CollisionEvent, CollisionPlayer,
+    ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER,
+    BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE, OVERLAP_SEPARATION_RATIO,
     PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE, SEPARATION_BUFFER,
 };
 
@@ -1488,4 +1489,470 @@ fn player_enemy_textbook_restitution_pin() {
         (PLAYER_ENEMY_COLLISION_DAMAGE - 5.0).abs() < 1e-6,
         "PLAYER_ENEMY_COLLISION_DAMAGE must mirror JS verbatim"
     );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Enemy-vs-asteroid fixtures (Phase 2.5 dispatch 5 — this PR).
+// ═════════════════════════════════════════════════════════════════════
+//
+// Mirrors `js/sim/collision.js::detectEnemyAsteroidHits` and the Jest
+// suite at `tests/unit/sim/collision.test.js` (the enemy-asteroid
+// describe block added in PR #44).
+//
+// UNIQUE among the five pairs so far — pure push-impulse only:
+//   - NO damage to either side.
+//   - NO restitution / mass-aware impulse math (fixed-force scalar push).
+//   - NO position separation (only velocity deltas).
+//   - NO jitter / RNG (fully deterministic).
+//
+// Event shape: exactly 6 fields (enemy_id, asteroid_id, and the 2×2
+// impulse delta block). Smallest event in the collision module.
+//
+// Coverage:
+//   21. `enemy_asteroid_single_hit`
+//       — basic overlap → 1 event; push direction + magnitudes pin to
+//         (-ENEMY_ASTEROID_PUSH, 0) and (+ASTEROID_ENEMY_PUSH, 0).
+//   22. `enemy_asteroid_geometry_miss`
+//       — 200 px apart → 0 events.
+//   23. `enemy_asteroid_multiple_hits`
+//       — one enemy overlapping two asteroids → 2 events.
+//   24. `enemy_asteroid_skip_gates`
+//       — inactive enemy / inactive asteroid / warping enemy /
+//         warping asteroid / asteroid mid-death-flash → 0 events.
+//   25. `enemy_asteroid_push_direction_pin`
+//       — enemy WEST of asteroid (so dx > 0 to asteroid) ⇒ enemy
+//         impulse_dx < 0; asteroid impulse_dx > 0; signs opposite.
+//   26. `enemy_asteroid_no_damage_no_separation_pin`
+//       — verify event has EXACTLY 6 fields. No damage_*, no
+//         separation_*. Tested by destructuring all 6 fields out and
+//         confirming compile-time exhaustiveness (rustc will reject a
+//         destructuring pattern that doesn't list every variant field).
+
+// ---------------------------------------------------------------------
+// Helpers — reuse `make_asteroid` from earlier dispatches. The
+// bullet-enemy `make_enemy` helper above leaves mass unset, which is
+// fine for the enemy-asteroid pair: this pair doesn't read mass at all
+// (no mass-aware impulse math).
+// ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
+// Fixture 21 — single overlapping enemy + asteroid emits one event with
+// exactly 6 fields populated, and push magnitudes pin to the
+// constants verbatim.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"overlapping enemy +
+// asteroid emits one event with all 6 non-type fields"` and
+// `"impulse magnitudes match the push-force constants verbatim"`.
+//
+// Geometry:
+//   - Enemy at (100, 100), radius 18.
+//   - Asteroid 20 px east at (120, 100), radius 30.
+//   - sumR = 48, distance = 20 ⇒ overlap = 28 (clear hit).
+//   - angle = atan2(0, +20) = 0 ⇒ cos=1, sin=0.
+// Expected:
+//   - enemy_impulse_dx = -1·4 = -4 (west — away from asteroid)
+//   - enemy_impulse_dy = 0
+//   - asteroid_impulse_dx = +1·2 = +2 (east — away from enemy)
+//   - asteroid_impulse_dy = 0
+// ---------------------------------------------------------------------
+
+#[test]
+fn enemy_asteroid_single_hit() {
+    let enemy = make_enemy(7, 100.0, 100.0);
+    let asteroid = make_asteroid(42, 120.0, 100.0);
+
+    let enemies = vec![enemy];
+    let asteroids = vec![asteroid];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_enemy_asteroid_hits(&enemies, &asteroids, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "expected exactly one enemy-hit-asteroid event");
+
+    match events[0] {
+        CollisionEvent::EnemyHitAsteroid {
+            enemy_id,
+            asteroid_id,
+            enemy_impulse_dx,
+            enemy_impulse_dy,
+            asteroid_impulse_dx,
+            asteroid_impulse_dy,
+        } => {
+            assert_eq!(enemy_id, 7, "enemy_id");
+            assert_eq!(asteroid_id, 42, "asteroid_id");
+
+            // All four numeric delta fields must be finite.
+            assert!(enemy_impulse_dx.is_finite(), "enemy_impulse_dx finite");
+            assert!(enemy_impulse_dy.is_finite(), "enemy_impulse_dy finite");
+            assert!(asteroid_impulse_dx.is_finite(), "asteroid_impulse_dx finite");
+            assert!(asteroid_impulse_dy.is_finite(), "asteroid_impulse_dy finite");
+
+            // Push magnitudes pin to the constants verbatim.
+            //   angle = atan2(0, +20) = 0 ⇒ cos=1, sin=0.
+            //   enemy gets (-cos·4, -sin·4) = (-4, 0).
+            //   asteroid gets (+cos·2, +sin·2) = (+2, 0).
+            approx_eq(enemy_impulse_dx, -ENEMY_ASTEROID_PUSH, "enemy_impulse_dx");
+            approx_eq(enemy_impulse_dy, 0.0, "enemy_impulse_dy");
+            approx_eq(asteroid_impulse_dx, ASTEROID_ENEMY_PUSH, "asteroid_impulse_dx");
+            approx_eq(asteroid_impulse_dy, 0.0, "asteroid_impulse_dy");
+        }
+        ev => panic!("expected EnemyHitAsteroid, got {:?}", ev),
+    }
+
+    // Constant-parity sanity: pin the two push forces verbatim.
+    assert!(
+        (ENEMY_ASTEROID_PUSH - 4.0).abs() < 1e-6,
+        "ENEMY_ASTEROID_PUSH must mirror JS verbatim"
+    );
+    assert!(
+        (ASTEROID_ENEMY_PUSH - 2.0).abs() < 1e-6,
+        "ASTEROID_ENEMY_PUSH must mirror JS verbatim"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Fixture 22 — geometry miss: centers further than sumR apart emits
+// no event.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"enemy outside (enemy.r +
+// asteroid.r) emits no event"`.
+// ---------------------------------------------------------------------
+
+#[test]
+fn enemy_asteroid_geometry_miss() {
+    let enemy = make_enemy(7, 0.0, 0.0);
+    // 200 px ≫ sumR=48 ⇒ no overlap.
+    let asteroid = make_asteroid(42, 200.0, 0.0);
+
+    let enemies = vec![enemy];
+    let asteroids = vec![asteroid];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_enemy_asteroid_hits(&enemies, &asteroids, &ctx, &mut events);
+
+    assert!(
+        events.is_empty(),
+        "enemy outside sum-of-radii should emit no event, got {:?}",
+        events
+    );
+}
+
+// ---------------------------------------------------------------------
+// Fixture 23 — one enemy overlapping two asteroids in the same tick ⇒
+// two events.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"one enemy overlapping two
+// asteroids emits two events"`.
+//
+// Geometry: enemy at (100, 100); asteroids east (120, 100) + west
+// (80, 100). sumR=48; each rock 20 px out ⇒ both overlap.
+// ---------------------------------------------------------------------
+
+#[test]
+fn enemy_asteroid_multiple_hits() {
+    let enemy = make_enemy(7, 100.0, 100.0);
+
+    let east = make_asteroid(10, 120.0, 100.0);
+    let west = make_asteroid(20, 80.0, 100.0);
+
+    let enemies = vec![enemy];
+    let asteroids = vec![east, west];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_enemy_asteroid_hits(&enemies, &asteroids, &ctx, &mut events);
+
+    assert_eq!(events.len(), 2, "expected two events (one per overlapping asteroid)");
+
+    // Both events should be for the same enemy.
+    let mut ids: Vec<u32> = events
+        .iter()
+        .map(|e| match *e {
+            CollisionEvent::EnemyHitAsteroid {
+                enemy_id,
+                asteroid_id,
+                ..
+            } => {
+                assert_eq!(enemy_id, 7, "all events should be for enemy 7");
+                asteroid_id
+            }
+            ev => panic!("expected EnemyHitAsteroid, got {:?}", ev),
+        })
+        .collect();
+    ids.sort();
+    assert_eq!(ids, vec![10, 20], "expected asteroids 10 and 20");
+}
+
+// ---------------------------------------------------------------------
+// Fixture 24 — skip gates (inactive enemy / inactive asteroid / warping
+// enemy / warping asteroid / asteroid mid-death-flash) emit no event.
+//
+// Mirrors the six `tests/unit/sim/collision.test.js::"skipped pairs"`
+// scenarios in the enemy-asteroid describe block. Combined into a
+// single Rust test for brevity; each sub-block constructs the smallest
+// possible failing state.
+// ---------------------------------------------------------------------
+
+#[test]
+fn enemy_asteroid_skip_gates() {
+    let ctx = CollisionContext;
+
+    // Sub-test (a): inactive enemy → no event.
+    {
+        let mut enemy = make_enemy(7, 100.0, 100.0);
+        enemy.active = false;
+        let asteroid = make_asteroid(42, 120.0, 100.0);
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[enemy], &[asteroid], &ctx, &mut events);
+        assert!(events.is_empty(), "inactive enemy must not emit event");
+    }
+
+    // Sub-test (b): inactive asteroid → no event.
+    {
+        let enemy = make_enemy(7, 100.0, 100.0);
+        let mut asteroid = make_asteroid(42, 120.0, 100.0);
+        asteroid.active = false;
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[enemy], &[asteroid], &ctx, &mut events);
+        assert!(events.is_empty(), "inactive asteroid must not emit event");
+    }
+
+    // Sub-test (c): warping enemy → no event.
+    {
+        let mut enemy = make_enemy(7, 100.0, 100.0);
+        enemy.warping = true;
+        let asteroid = make_asteroid(42, 120.0, 100.0);
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[enemy], &[asteroid], &ctx, &mut events);
+        assert!(events.is_empty(), "warping enemy must not emit event");
+    }
+
+    // Sub-test (d): warping asteroid → no event.
+    {
+        let enemy = make_enemy(7, 100.0, 100.0);
+        let mut asteroid = make_asteroid(42, 120.0, 100.0);
+        asteroid.warping = true;
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[enemy], &[asteroid], &ctx, &mut events);
+        assert!(events.is_empty(), "warping asteroid must not emit event");
+    }
+
+    // Sub-test (e): asteroid mid death-flash → no event.
+    {
+        let enemy = make_enemy(7, 100.0, 100.0);
+        let mut asteroid = make_asteroid(42, 120.0, 100.0);
+        asteroid.death_flash = 5;
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[enemy], &[asteroid], &ctx, &mut events);
+        assert!(
+            events.is_empty(),
+            "asteroid mid-death-flash must not emit event"
+        );
+    }
+
+    // Sub-test (f): empty inputs (defensive) → no event.
+    {
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[], &[make_asteroid(42, 0.0, 0.0)], &ctx, &mut events);
+        assert!(events.is_empty(), "empty enemies → no event");
+
+        let mut events2: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[make_enemy(7, 0.0, 0.0)], &[], &ctx, &mut events2);
+        assert!(events2.is_empty(), "empty asteroids → no event");
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 25 — push direction pin. An enemy WEST of an asteroid should
+// be pushed FURTHER WEST (negative dx); the asteroid should be pushed
+// FURTHER EAST (positive dx). The two impulses must point in OPPOSITE
+// directions along x.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"enemy west of asteroid →
+// enemy pushed west, asteroid pushed east"` and
+// `"enemy north of asteroid → enemy pushed north, asteroid pushed
+// south"`. We pin both axes (x and y) here for stronger coverage.
+//
+// Geometry case 1 — east/west:
+//   Enemy at (100, 100); asteroid at (120, 100). Enemy is WEST of
+//   asteroid.
+//     dx = asteroid.x - enemy.x = +20 → angle = 0
+//     cos(angle) = 1, sin(angle) = 0
+//     enemy_impulse_dx = -1·4 = -4 (WEST)
+//     asteroid_impulse_dx = +1·2 = +2 (EAST)
+//
+// Geometry case 2 — north/south (screen-coords y grows downward):
+//   Enemy at (100, 80); asteroid at (100, 100). Enemy is NORTH (smaller
+//   y) of asteroid.
+//     dy = asteroid.y - enemy.y = +20 → angle = π/2
+//     cos = 0, sin = 1
+//     enemy_impulse_dy = -1·4 = -4 (NORTH)
+//     asteroid_impulse_dy = +1·2 = +2 (SOUTH)
+// ---------------------------------------------------------------------
+
+#[test]
+fn enemy_asteroid_push_direction_pin() {
+    let ctx = CollisionContext;
+
+    // Case 1: east/west.
+    {
+        let enemy = make_enemy(7, 100.0, 100.0);
+        let asteroid = make_asteroid(42, 120.0, 100.0);
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[enemy], &[asteroid], &ctx, &mut events);
+        assert_eq!(events.len(), 1, "case 1: expected one event");
+
+        match events[0] {
+            CollisionEvent::EnemyHitAsteroid {
+                enemy_impulse_dx,
+                enemy_impulse_dy,
+                asteroid_impulse_dx,
+                asteroid_impulse_dy,
+                ..
+            } => {
+                // Enemy gets pushed west (negative x).
+                assert!(
+                    enemy_impulse_dx < 0.0,
+                    "case 1: enemy_impulse_dx must be negative (westward), got {}",
+                    enemy_impulse_dx
+                );
+                approx_eq(enemy_impulse_dy, 0.0, "case 1: enemy_impulse_dy");
+                // Asteroid gets pushed east (positive x).
+                assert!(
+                    asteroid_impulse_dx > 0.0,
+                    "case 1: asteroid_impulse_dx must be positive (eastward), got {}",
+                    asteroid_impulse_dx
+                );
+                approx_eq(asteroid_impulse_dy, 0.0, "case 1: asteroid_impulse_dy");
+                // Opposite signs along x.
+                assert_eq!(
+                    enemy_impulse_dx.signum(),
+                    -asteroid_impulse_dx.signum(),
+                    "case 1: impulses must point opposite directions along x"
+                );
+            }
+            ev => panic!("case 1: expected EnemyHitAsteroid, got {:?}", ev),
+        }
+    }
+
+    // Case 2: north/south (screen-coords y grows downward).
+    {
+        let enemy = make_enemy(7, 100.0, 80.0);
+        let asteroid = make_asteroid(42, 100.0, 100.0);
+        let mut events: Vec<CollisionEvent> = Vec::new();
+        detect_enemy_asteroid_hits(&[enemy], &[asteroid], &ctx, &mut events);
+        assert_eq!(events.len(), 1, "case 2: expected one event");
+
+        match events[0] {
+            CollisionEvent::EnemyHitAsteroid {
+                enemy_impulse_dx,
+                enemy_impulse_dy,
+                asteroid_impulse_dx,
+                asteroid_impulse_dy,
+                ..
+            } => {
+                approx_eq(enemy_impulse_dx, 0.0, "case 2: enemy_impulse_dx");
+                // Enemy gets pushed north (negative y in screen coords).
+                assert!(
+                    enemy_impulse_dy < 0.0,
+                    "case 2: enemy_impulse_dy must be negative (northward), got {}",
+                    enemy_impulse_dy
+                );
+                approx_eq(asteroid_impulse_dx, 0.0, "case 2: asteroid_impulse_dx");
+                // Asteroid gets pushed south (positive y in screen coords).
+                assert!(
+                    asteroid_impulse_dy > 0.0,
+                    "case 2: asteroid_impulse_dy must be positive (southward), got {}",
+                    asteroid_impulse_dy
+                );
+                // Opposite signs along y.
+                assert_eq!(
+                    enemy_impulse_dy.signum(),
+                    -asteroid_impulse_dy.signum(),
+                    "case 2: impulses must point opposite directions along y"
+                );
+            }
+            ev => panic!("case 2: expected EnemyHitAsteroid, got {:?}", ev),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 26 — event-shape pin: NO damage, NO separation, exactly 6
+// fields.
+//
+// Mirrors `tests/unit/sim/collision.test.js::"overlapping enemy +
+// asteroid emits one event with all 6 non-type fields"` — specifically
+// the "explicit field-count guard" and the "defensive: no damage / no
+// separation fields" expectations.
+//
+// The Rust mirror enforces this via the type system: the
+// `CollisionEvent::EnemyHitAsteroid` variant is declared with EXACTLY
+// 6 fields (enemy_id, asteroid_id, and the 2×2 impulse delta block).
+// The destructuring pattern below lists all 6 fields by name — if a
+// future change added (say) `damage` or `separation_dx` to the variant,
+// rustc would either reject this destructuring as missing the new
+// field, or the pattern would still compile but the new field would be
+// silently shadowed under `..` — both situations produce test failures
+// (compile error or follow-up assertion mismatch) that flag the change.
+//
+// To strengthen this further, we use a *complete* destructuring pattern
+// with NO `..` rest binding — so rustc will fail compilation if a new
+// field is ever added to the variant without updating this fixture.
+// ---------------------------------------------------------------------
+
+#[test]
+fn enemy_asteroid_no_damage_no_separation_pin() {
+    let enemy = make_enemy(7, 100.0, 100.0);
+    let asteroid = make_asteroid(42, 120.0, 100.0);
+
+    let enemies = vec![enemy];
+    let asteroids = vec![asteroid];
+    let ctx = CollisionContext;
+    let mut events: Vec<CollisionEvent> = Vec::new();
+
+    detect_enemy_asteroid_hits(&enemies, &asteroids, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "expected exactly one event");
+
+    // Complete destructuring — NO `..` rest binding. If a new field is
+    // ever added to the EnemyHitAsteroid variant (e.g. someone adds a
+    // `damage` or `separation_dx`), rustc will reject this match and
+    // surface the contract change at compile time. This is the Rust
+    // equivalent of the JS test's `Object.keys(ev).sort()` field-count
+    // guard.
+    match events[0] {
+        CollisionEvent::EnemyHitAsteroid {
+            enemy_id,
+            asteroid_id,
+            enemy_impulse_dx,
+            enemy_impulse_dy,
+            asteroid_impulse_dx,
+            asteroid_impulse_dy,
+        } => {
+            // All 6 fields present; sanity-check the ids and that the
+            // impulse fields are finite.
+            assert_eq!(enemy_id, 7, "enemy_id");
+            assert_eq!(asteroid_id, 42, "asteroid_id");
+            assert!(enemy_impulse_dx.is_finite());
+            assert!(enemy_impulse_dy.is_finite());
+            assert!(asteroid_impulse_dx.is_finite());
+            assert!(asteroid_impulse_dy.is_finite());
+        }
+        ev => panic!("expected EnemyHitAsteroid, got {:?}", ev),
+    }
+
+    // Match-on-non-variants check: ensure this event is NOT being
+    // mis-emitted as a different variant (which would carry damage or
+    // separation fields). If a regression ever caused the detector to
+    // emit a PlayerHitAsteroid/PlayerHitEnemy/etc. by mistake, the
+    // strict-equality on the discriminant would catch it.
+    if !matches!(events[0], CollisionEvent::EnemyHitAsteroid { .. }) {
+        panic!(
+            "regression: enemy-asteroid path emitted a non-EnemyHitAsteroid event: {:?}",
+            events[0]
+        );
+    }
 }
