@@ -6,13 +6,13 @@
 //! solo-gameplay path — that stays the single source of truth for solo
 //! gameplay until the prediction wiring (Phase 3) flips over.
 //!
-//! ─── Scope (Phase 2.5, dispatch 1) ──────────────────────────────────
+//! ─── Scope (Phase 2.5, dispatch 1 + dispatch 2) ──────────────────────
 //!
 //! Ported here:
 //!   - Bullet-vs-asteroid pair detection (`detect_bullet_asteroid_hits`).
+//!   - Player-vs-asteroid pair detection (`detect_player_asteroid_hits`).
 //!
-//! Deferred to follow-up sessions (Phase 2.5, dispatch 2..N):
-//!   - Player-vs-asteroid    (needs ship velocity + bounce/restitution)
+//! Deferred to follow-up sessions (Phase 2.5, dispatch 3..N):
 //!   - Player-vs-enemy       (ramming damage, bounce, knockback)
 //!   - Enemy-vs-asteroid     (push forces both ways)
 //!   - Bullet-vs-enemy       (mirror of bullet-vs-asteroid, plus boss-rage)
@@ -36,18 +36,17 @@
 //!
 //! ─── Design note: minimal input types ──────────────────────────────
 //!
-//! The detector takes `CollisionBullet` / `CollisionAsteroid` rather than
-//! the full `PlayerBullet` / `Asteroid` structs defined in `bullet.rs` /
-//! `asteroid.rs`. Reasons:
+//! The detector takes `CollisionBullet` / `CollisionAsteroid` /
+//! `CollisionPlayer` rather than the full `PlayerBullet` / `Asteroid` /
+//! `ShipState` structs defined elsewhere. Reasons:
 //!
-//!   - Decouples the pure step from storage layout. When bullets/asteroids
-//!     migrate to SoA pools (plan §"Contiguous storage"), the collision
-//!     module won't have to change — the wrapper just maps the pool view
-//!     into these small structs.
-//!   - The collision check only needs `{id, x, y, vx, vy, radius, damage,
-//!     piercing, active, pierced_asteroid_ids}` from a bullet — not the
-//!     entire flight state, fade factor, max_range, etc.
-//!   - Enemy bullets and player bullets will share this struct, even
+//!   - Decouples the pure step from storage layout. When entities migrate
+//!     to SoA pools (plan §"Contiguous storage"), the collision module
+//!     won't have to change — the wrapper just maps the pool view into
+//!     these small structs.
+//!   - The collision check only needs the geometry-and-physics subset of
+//!     each entity, not the full lifecycle / FX / range / fade state.
+//!   - Enemy bullets and player bullets share `CollisionBullet`, even
 //!     though they're different Rust types in `bullet.rs`.
 //!
 //! Parity fixture: `server/tests/parity_collision.rs`.
@@ -58,7 +57,7 @@ use crate::protocol::GameEvent;
 
 use super::state::GameState;
 
-// ─── Constants — copied verbatim from JS ────────────────────────────
+// ─── Constants — Bullet-vs-asteroid pair ────────────────────────────
 //
 // Extracted from `COLLISION_CONFIG` in
 // `js/modules/combat/collision-system.js`. Mirrors the corresponding
@@ -82,6 +81,66 @@ pub const BULLET_ASTEROID_KNOCKBACK: f32 = 0.05;
 /// wrapper can set the asteroid's hit-flash from a single source of
 /// truth without re-deriving the count.
 pub const BULLET_ASTEROID_HIT_FLASH_FRAMES: u32 = 10;
+
+// ─── Constants — Player-vs-asteroid pair ────────────────────────────
+//
+// Extracted verbatim from `COLLISION_CONFIG` in
+// `js/modules/combat/collision-system.js`. Each constant is pinned here
+// so the pure step stays self-contained — no legacy-module imports
+// leaking into the server / prediction path. Numerical parity with the
+// legacy module is enforced by the parity tests.
+
+/// Damage dealt to asteroid when player collides with it. Mirrors
+/// `PLAYER_ASTEROID_COLLISION_DAMAGE = 2` in `js/sim/collision.js`.
+///
+/// Tiny by design: ramming asteroids is intentionally a *bad* strategy.
+/// The player gets deflected hard (see `ASTEROID_KNOCKBACK_MULTIPLIER`)
+/// and barely chips the rock.
+pub const PLAYER_ASTEROID_COLLISION_DAMAGE: f32 = 2.0;
+
+/// Bounce energy retention coefficient (0..1). Mirrors
+/// `BOUNCE_RESTITUTION = 0.9` in `js/sim/collision.js`. Used by the
+/// generic bounce path; not consumed directly by the player-asteroid
+/// pair (which uses the heavier `ASTEROID_KNOCKBACK_MULTIPLIER`).
+/// Exposed for parity + future enemy/asteroid-asteroid pair use.
+pub const BOUNCE_RESTITUTION: f32 = 0.9;
+
+/// Multiplier for bounce impulse force used by the generic bounce-pair
+/// path. Mirrors `BOUNCE_FORCE_MULTIPLIER = 12.0` in `js/sim/collision.js`.
+/// Not consumed directly by the player-asteroid pair; exposed for
+/// symmetry with the legacy config and upcoming pairs.
+pub const BOUNCE_FORCE_MULTIPLIER: f32 = 12.0;
+
+/// Fraction of computed overlap used by the generic bounce-pair
+/// separation push. Mirrors `OVERLAP_SEPARATION_RATIO = 0.6` in
+/// `js/sim/collision.js`. The player-asteroid pair uses the FULL
+/// overlap + `SEPARATION_BUFFER` rather than this ratio — exposed here
+/// for parity with the legacy config block.
+pub const OVERLAP_SEPARATION_RATIO: f32 = 0.6;
+
+/// Knockback multiplier for player-asteroid collisions. Mirrors
+/// `ASTEROID_KNOCKBACK_MULTIPLIER = 22.0` in `js/sim/collision.js`.
+///
+/// Applied to the normal-projected relative velocity (`dvn / totalMass`)
+/// to derive the impulse magnitude that flings the player off the rock.
+///
+///   player.vel += knockbackAngle * (dvn / (player.mass + asteroid.mass)) * 22.0
+pub const ASTEROID_KNOCKBACK_MULTIPLIER: f32 = 22.0;
+
+/// Extra pixels added to the separation distance after computing the
+/// overlap. Mirrors `SEPARATION_BUFFER = 6` in `js/sim/collision.js`.
+///
+/// Ensures the player is moved *past* the surface boundary so the very
+/// next tick doesn't re-overlap and re-trigger the collision event.
+pub const SEPARATION_BUFFER: f32 = 6.0;
+
+/// Additional velocity push applied to the player along the
+/// (asteroid → player) normal when an overlap was resolved. Mirrors
+/// `OVERLAP_PUSH_FORCE = 5.0` in `js/sim/collision.js`. Stacks on top
+/// of the knockback impulse — the knockback handles the "bounce off"
+/// reaction, while this provides a steady outward push to prevent
+/// slow-creep re-overlaps.
+pub const OVERLAP_PUSH_FORCE: f32 = 5.0;
 
 // ─── Collision-input types ──────────────────────────────────────────
 
@@ -149,8 +208,14 @@ impl CollisionBullet {
 
 /// Minimal asteroid view for collision detection.
 ///
-/// Mirrors the JS fields read by `detectBulletAsteroidHits`:
-///   `{ id, x, y, radius, active, warping, deathFlash }`.
+/// Mirrors the JS fields read by `detectBulletAsteroidHits` and
+/// `detectPlayerAsteroidHits`:
+///   `{ id, x, y, vx, vy, radius, active, warping, deathFlash }`.
+///
+/// `vx` / `vy` are read only by the player-vs-asteroid path (to compute
+/// the relative-velocity normal-projection `dvn` for the bounce
+/// impulse). The bullet-vs-asteroid path ignores them — asteroids are
+/// treated as static from the bullet's perspective.
 ///
 /// The JS guards `!asteroid.active`, `asteroid.warping`, and
 /// `asteroid.deathFlash > 0` collapse into the boolean / counter fields
@@ -161,7 +226,16 @@ pub struct CollisionAsteroid {
     pub id: u32,
     pub x: f32,
     pub y: f32,
+    /// Asteroid velocity. Used by the player-vs-asteroid pair to compute
+    /// the relative-velocity normal-projection (`dvn`). Bullet-vs-asteroid
+    /// ignores this field.
+    pub vx: f32,
+    pub vy: f32,
     pub radius: f32,
+    /// Optional explicit mass. When `None`, the player-vs-asteroid pair
+    /// falls back to the JS formula `(4/3) · π · r³` (matching the live
+    /// `Asteroid` class). Bullet-vs-asteroid ignores this field.
+    pub mass: Option<f32>,
     pub active: bool,
     pub warping: bool,
     /// Frames remaining of mid-death flash. Treated as "skip if > 0".
@@ -179,7 +253,10 @@ impl CollisionAsteroid {
             id,
             x: 0.0,
             y: 0.0,
+            vx: 0.0,
+            vy: 0.0,
             radius: 30.0,
+            mass: None,
             active: true,
             warping: false,
             death_flash: 0,
@@ -187,17 +264,69 @@ impl CollisionAsteroid {
     }
 }
 
-/// Per-tick context for `detect_bullet_asteroid_hits`. Currently empty —
-/// reserved for future extensions (e.g. spatial-grid filter, one-punch-man
-/// cheat flag). Matches the empty-object `ctx` in `js/sim/collision.js`.
+/// Minimal player view for collision detection.
+///
+/// Mirrors the relevant JS fields read by `detectPlayerAsteroidHits`:
+///   `{ id, x, y, vx, vy, radius, mass?, active }`.
+///
+/// The pure step does NOT read player state outside this struct — no
+/// `warping`, no `isDying`, no `_deathFlash` on players (those are
+/// enemy / asteroid concerns). The wrapper filters the active roster
+/// before handing it to the detector.
+///
+/// Mass is optional: when `None`, the JS formula `π · r² · 0.5`
+/// (matching the live `Player` class) is used as a fallback. The
+/// wrapper can override by setting `mass` explicitly to match
+/// powerup-modified ship mass on the live side.
+#[derive(Debug, Clone, Copy)]
+pub struct CollisionPlayer {
+    pub id: u32,
+    pub x: f32,
+    pub y: f32,
+    pub vx: f32,
+    pub vy: f32,
+    pub radius: f32,
+    /// Optional explicit mass. `None` ⇒ fallback to `π · r² · 0.5`.
+    pub mass: Option<f32>,
+    pub active: bool,
+}
+
+impl CollisionPlayer {
+    /// Construct a fresh player at the origin with a live-game ship
+    /// radius of 15 px. Test convenience.
+    pub fn fresh(id: u32) -> Self {
+        Self {
+            id,
+            x: 0.0,
+            y: 0.0,
+            vx: 0.0,
+            vy: 0.0,
+            radius: 15.0,
+            mass: None,
+            active: true,
+        }
+    }
+}
+
+/// Per-tick context for the collision-detection step. Currently empty —
+/// reserved for future extensions (e.g. spatial-grid filter,
+/// one-punch-man cheat flag, deterministic RNG handle). Matches the
+/// empty-object `ctx` in `js/sim/collision.js`.
+///
+/// Determinism note: the JS path uses `ctx.rngFloat()` for the
+/// player-asteroid bounce jitter; the Rust mirror is deterministic-by-
+/// default and treats `rngFloat()` as the centered value 0.5 (yielding
+/// zero jitter), matching the parity tests on the JS side which pass
+/// `{ rngFloat: () => 0.5 }`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CollisionContext;
 
 /// Events emitted by the collision pair-detection step.
 ///
-/// One variant per pair (currently just `BulletHitAsteroid`; further
-/// pairs land as additional variants when their dispatches port).
-/// Field names mirror the JS event keys with snake_case translation.
+/// One variant per pair (currently `BulletHitAsteroid` and
+/// `PlayerHitAsteroid`; further pairs land as additional variants when
+/// their dispatches port). Field names mirror the JS event keys with
+/// snake_case translation.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CollisionEvent {
     /// Mirrors `{ type: 'bullet_hit_asteroid', ... }` in `js/sim/collision.js`.
@@ -214,6 +343,26 @@ pub enum CollisionEvent {
         bullet_piercing_remaining: i32,
         /// `true` ↔ wrapper should remove the bullet from the pool.
         bullet_will_despawn: bool,
+    },
+    /// Mirrors `{ type: 'player_hit_asteroid', ... }` in `js/sim/collision.js`.
+    ///
+    /// Velocity deltas the wrapper applies:
+    ///   - `player.vel.x += player_impulse_dx; player.vel.y += player_impulse_dy`
+    ///   - `asteroid.vel.x += asteroid_impulse_dx; asteroid.vel.y += asteroid_impulse_dy`
+    /// Position deltas the wrapper applies:
+    ///   - `player.x += separation_dx; player.y += separation_dy`
+    ///
+    /// All deltas come from the pure step — no mutation happens here.
+    PlayerHitAsteroid {
+        player_id: u32,
+        asteroid_id: u32,
+        damage_to_asteroid: f32,
+        player_impulse_dx: f32,
+        player_impulse_dy: f32,
+        asteroid_impulse_dx: f32,
+        asteroid_impulse_dy: f32,
+        separation_dx: f32,
+        separation_dy: f32,
     },
 }
 
@@ -350,6 +499,207 @@ pub fn detect_bullet_asteroid_hits(
             if will_despawn {
                 break;
             }
+        }
+    }
+}
+
+// ─── Player-vs-asteroid pair detection ──────────────────────────────
+
+/// Player mass fallback formula — mirrors the live `Player` class:
+///   `mass = π · r² · 0.5`
+/// Called when `CollisionPlayer::mass` is `None`. JS line ref:
+/// `js/sim/collision.js:394–398`.
+#[inline]
+fn player_mass_fallback(radius: f32) -> f32 {
+    std::f32::consts::PI * radius * radius * 0.5
+}
+
+/// Asteroid mass fallback formula — mirrors the live `Asteroid` class:
+///   `mass = (4/3) · π · r³`
+/// Called when `CollisionAsteroid::mass` is `None`. JS line ref:
+/// `js/sim/collision.js:394–398`.
+#[inline]
+fn asteroid_mass_fallback(radius: f32) -> f32 {
+    (4.0 / 3.0) * std::f32::consts::PI * radius * radius * radius
+}
+
+/// Detect player-vs-asteroid collisions for one tick.
+///
+/// Pure step: reads player + asteroid positions / radii / velocities,
+/// decides which pairs overlap, and emits one `PlayerHitAsteroid` event
+/// per detected hit with the velocity + position *deltas* the wrapper
+/// applies to the live state. This function does NOT mutate player or
+/// asteroid — every effect is reported in the event payload for the
+/// wrapper / JS mirror to apply downstream.
+///
+/// Co-op ready: takes a slice of players. The solo wrapper passes a
+/// one-element slice; future co-op sessions will pass the full ship
+/// roster. Each player is scanned against every active asteroid; one
+/// player can emit multiple events per tick if it overlaps multiple
+/// rocks simultaneously (e.g. trapped between two boulders).
+///
+/// Geometry:
+///   Circle-circle overlap: `(dx² + dy²) < (player.r + ast.r)²`.
+///   JS line refs: `js/sim/collision.js:555–559`.
+///
+/// Bounce / impulse model (mirrors JS lines 562–593):
+///
+///   distance      = sqrt(dx² + dy²)         [dx = player.x - asteroid.x]
+///   angle         = atan2(dy, dx)           [asteroid → player normal]
+///   totalMass     = player.mass + asteroid.mass
+///   cosA, sinA    = cos(angle), sin(angle)
+///   dvn           = (player.vx - asteroid.vx) · cosA
+///                 + (player.vy - asteroid.vy) · sinA
+///   enhanced      = (2 · dvn) / totalMass   [0 if totalMass ≤ 0]
+///   knockback     = enhanced · ASTEROID_KNOCKBACK_MULTIPLIER
+///
+///   playerImpulseDx = cos(angle + jitter) · knockback
+///   playerImpulseDy = sin(angle + jitter) · knockback
+///   asteroidImpulseDx = -knockback · 0.3 · player.mass · cosA
+///   asteroidImpulseDy = -knockback · 0.3 · player.mass · sinA
+///
+/// Determinism / jitter:
+///   The JS path uses `ctx.rngFloat() ∈ [0,1)` to derive a jitter
+///   angle in `[-π/4, π/4]`. The Rust mirror is deterministic-by-
+///   default and uses `rngFloat = 0.5` (i.e. zero jitter), matching
+///   the JS tests which pass `{ rngFloat: () => 0.5 }`. When a real
+///   RNG is wired into `CollisionContext` later, the jitter formula
+///   reactivates without changing this function's signature.
+///
+/// Separation push (mirrors JS lines 596–607):
+///   If `overlap = sumR - distance > 0` and `distance > 0`:
+///     - Position delta: unit normal · (overlap + SEPARATION_BUFFER)
+///     - Velocity push:  unit normal · OVERLAP_PUSH_FORCE
+///     The normal is `(dx/distance, dy/distance)` — pointing from
+///     asteroid → player (away from the rock).
+///
+/// Asteroid damage:
+///   Constant `PLAYER_ASTEROID_COLLISION_DAMAGE = 2`. The wrapper
+///   subtracts this from `asteroid.hp` and handles death-flash + drops.
+///   The pure step just reports the number.
+///
+/// Skipped pairs (no event emitted):
+///   - Inactive player     (`!player.active`)
+///   - Inactive asteroid   (`!asteroid.active`)
+///   - Warping asteroid    (mid warp-in animation)
+///   - Asteroid mid-death  (`asteroid.death_flash > 0`)
+pub fn detect_player_asteroid_hits(
+    players: &[CollisionPlayer],
+    asteroids: &[CollisionAsteroid],
+    _ctx: &CollisionContext,
+    events: &mut Vec<CollisionEvent>,
+) {
+    if players.is_empty() || asteroids.is_empty() {
+        return;
+    }
+
+    for player in players.iter() {
+        // 1. Active-guard (JS collision.js:536).
+        if !player.active {
+            continue;
+        }
+
+        let player_radius = player.radius;
+        let player_mass = player
+            .mass
+            .unwrap_or_else(|| player_mass_fallback(player_radius));
+
+        for asteroid in asteroids.iter() {
+            // 2. Asteroid gating (JS collision.js:544–552).
+            if !asteroid.active {
+                continue;
+            }
+            if asteroid.warping {
+                continue;
+            }
+            if asteroid.death_flash > 0 {
+                continue;
+            }
+
+            // 3. Circle-circle overlap (JS collision.js:555–559).
+            let dx = player.x - asteroid.x;
+            let dy = player.y - asteroid.y;
+            let sum_r = player_radius + asteroid.radius;
+            let dist_sq = dx * dx + dy * dy;
+            if dist_sq >= sum_r * sum_r {
+                continue;
+            }
+
+            // ── Hit detected — compute impulse + separation ──
+
+            let asteroid_mass = asteroid
+                .mass
+                .unwrap_or_else(|| asteroid_mass_fallback(asteroid.radius));
+
+            // 4. Knockback angle: asteroid → player (JS collision.js:570–573).
+            //    Defensive: if centers exactly coincide, fall back to angle = 0.
+            let distance = dist_sq.sqrt();
+            let knockback_angle = if distance > 0.0 {
+                dy.atan2(dx)
+            } else {
+                0.0
+            };
+
+            // 5. Bounce impulse formula (JS collision.js:575–581).
+            let total_mass = player_mass + asteroid_mass;
+            let cos_a = knockback_angle.cos();
+            let sin_a = knockback_angle.sin();
+            let dvn = (player.vx - asteroid.vx) * cos_a + (player.vy - asteroid.vy) * sin_a;
+            let enhanced_impulse = if total_mass > 0.0 {
+                (2.0 * dvn) / total_mass
+            } else {
+                0.0
+            };
+            let knockback = enhanced_impulse * ASTEROID_KNOCKBACK_MULTIPLIER;
+
+            // 6. Jitter — deterministic-by-default (JS collision.js:584–587).
+            //    JS path: jitterFraction = ctx.rngFloat() OR 0.5;
+            //             jitter = (jitterFraction - 0.5) · π/2
+            //    Rust mirror has no RNG wired into CollisionContext yet,
+            //    so we mirror the "rngFloat = 0.5" centered case ⇒
+            //    jitter = 0. Future RNG plumbing fills this in without
+            //    changing the signature.
+            let jitter: f32 = 0.0;
+            let angle_with_jitter = knockback_angle + jitter;
+
+            let mut player_impulse_dx = angle_with_jitter.cos() * knockback;
+            let mut player_impulse_dy = angle_with_jitter.sin() * knockback;
+
+            // 7. Asteroid impulse — heavy mass scaler dampens the rock's
+            //    reaction (JS collision.js:592–593).
+            let asteroid_impulse_dx = -knockback * 0.3 * player_mass * cos_a;
+            let asteroid_impulse_dy = -knockback * 0.3 * player_mass * sin_a;
+
+            // 8. Separation push (JS collision.js:596–607).
+            //    Pushes the player along the (asteroid → player) unit normal
+            //    by (overlap + buffer); also adds OVERLAP_PUSH_FORCE to the
+            //    player velocity along the same normal to keep the ship
+            //    drifting outward.
+            let mut separation_dx = 0.0;
+            let mut separation_dy = 0.0;
+            let overlap = sum_r - distance;
+            if overlap > 0.0 && distance > 0.0 {
+                let nx = dx / distance;
+                let ny = dy / distance;
+                let total_separation = overlap + SEPARATION_BUFFER;
+                separation_dx = nx * total_separation;
+                separation_dy = ny * total_separation;
+                player_impulse_dx += nx * OVERLAP_PUSH_FORCE;
+                player_impulse_dy += ny * OVERLAP_PUSH_FORCE;
+            }
+
+            // 9. Emit the event (JS collision.js:609–620).
+            events.push(CollisionEvent::PlayerHitAsteroid {
+                player_id: player.id,
+                asteroid_id: asteroid.id,
+                damage_to_asteroid: PLAYER_ASTEROID_COLLISION_DAMAGE,
+                player_impulse_dx,
+                player_impulse_dy,
+                asteroid_impulse_dx,
+                asteroid_impulse_dy,
+                separation_dx,
+                separation_dy,
+            });
         }
     }
 }
