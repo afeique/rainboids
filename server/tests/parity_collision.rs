@@ -40,11 +40,12 @@
 
 use rainboids_server::sim::collision::{
     detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_enemy_asteroid_hits,
-    detect_player_asteroid_hits, detect_player_enemy_hits, CollisionAsteroid, CollisionBullet,
-    CollisionContext, CollisionEnemy, CollisionEvent, CollisionPlayer,
-    ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER,
-    BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE, OVERLAP_SEPARATION_RATIO,
-    PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE, SEPARATION_BUFFER,
+    detect_player_asteroid_hits, detect_player_enemy_bullet_hits, detect_player_enemy_hits,
+    CollisionAsteroid, CollisionBullet, CollisionContext, CollisionEnemy, CollisionEnemyBullet,
+    CollisionEvent, CollisionPlayer, ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER,
+    BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE,
+    OVERLAP_SEPARATION_RATIO, PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE,
+    SEPARATION_BUFFER,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -1954,5 +1955,167 @@ fn enemy_asteroid_no_damage_no_separation_pin() {
             "regression: enemy-asteroid path emitted a non-EnemyHitAsteroid event: {:?}",
             events[0]
         );
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Player-vs-enemy-bullet fixtures (Phase 2.5 dispatch — this PR).
+// ═════════════════════════════════════════════════════════════════════
+
+fn make_enemy_bullet(id: u32, x: f32, y: f32) -> CollisionEnemyBullet {
+    CollisionEnemyBullet {
+        id,
+        x,
+        y,
+        vx: 0.0,
+        vy: 0.0,
+        radius: 9.0,
+        damage: 2.0,
+        active: true,
+    }
+}
+
+#[test]
+fn player_enemy_bullet_single_hit() {
+    let players = vec![make_player(1, 100.0, 100.0)];
+    let bullets = vec![make_enemy_bullet(101, 105.0, 100.0)]; // overlap
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1);
+    match events[0] {
+        CollisionEvent::PlayerHitByEnemyBullet {
+            player_id,
+            bullet_id,
+            damage,
+            bullet_x,
+            bullet_y,
+            bullet_vx,
+            bullet_vy,
+        } => {
+            assert_eq!(player_id, 1);
+            assert_eq!(bullet_id, 101);
+            approx_eq(damage, 2.0, "damage");
+            approx_eq(bullet_x, 105.0, "bullet_x");
+            approx_eq(bullet_y, 100.0, "bullet_y");
+            approx_eq(bullet_vx, 0.0, "bullet_vx");
+            approx_eq(bullet_vy, 0.0, "bullet_vy");
+        }
+        _ => panic!("expected PlayerHitByEnemyBullet event"),
+    }
+}
+
+#[test]
+fn player_enemy_bullet_geometry_miss() {
+    let players = vec![make_player(1, 100.0, 100.0)];
+    let bullets = vec![make_enemy_bullet(101, 300.0, 100.0)]; // 200 px apart
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+
+    assert_eq!(events.len(), 0);
+}
+
+#[test]
+fn player_enemy_bullet_multiple_bullets() {
+    let players = vec![make_player(1, 100.0, 100.0)];
+    let bullets = vec![
+        make_enemy_bullet(101, 105.0, 100.0),  // hit
+        make_enemy_bullet(102, 95.0, 100.0),   // hit
+        make_enemy_bullet(103, 500.0, 500.0),  // miss
+    ];
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+
+    assert_eq!(events.len(), 2);
+}
+
+#[test]
+fn player_enemy_bullet_skip_gates() {
+    // inactive player
+    let players = vec![CollisionPlayer { active: false, ..make_player(1, 100.0, 100.0) }];
+    let bullets = vec![make_enemy_bullet(101, 105.0, 100.0)];
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "inactive player should skip");
+
+    // inactive bullet
+    let players = vec![make_player(1, 100.0, 100.0)];
+    let bullets = vec![CollisionEnemyBullet { active: false, ..make_enemy_bullet(101, 105.0, 100.0) }];
+    let mut events = Vec::new();
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "inactive bullet should skip");
+
+    // empty inputs
+    let mut events = Vec::new();
+    detect_player_enemy_bullet_hits(&[], &bullets, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "empty players should emit nothing");
+    detect_player_enemy_bullet_hits(&players, &[], &ctx, &mut events);
+    assert_eq!(events.len(), 0, "empty bullets should emit nothing");
+}
+
+#[test]
+fn player_enemy_bullet_damage_passthrough() {
+    let players = vec![make_player(1, 100.0, 100.0)];
+    // damage = 7 — pure passthrough
+    let bullets = vec![CollisionEnemyBullet { damage: 7.0, ..make_enemy_bullet(101, 105.0, 100.0) }];
+
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1);
+    if let CollisionEvent::PlayerHitByEnemyBullet { damage, .. } = events[0] {
+        approx_eq(damage, 7.0, "damage passthrough");
+    } else {
+        panic!("expected PlayerHitByEnemyBullet");
+    }
+
+    // damage = 25 — also pure passthrough
+    let bullets = vec![CollisionEnemyBullet { damage: 25.0, ..make_enemy_bullet(102, 105.0, 100.0) }];
+    let mut events = Vec::new();
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1);
+    if let CollisionEvent::PlayerHitByEnemyBullet { damage, .. } = events[0] {
+        approx_eq(damage, 25.0, "damage passthrough 25");
+    } else {
+        panic!("expected PlayerHitByEnemyBullet");
+    }
+}
+
+#[test]
+fn player_enemy_bullet_damage_default() {
+    let players = vec![make_player(1, 100.0, 100.0)];
+
+    // damage = 0 — defaults to 1
+    let bullets = vec![CollisionEnemyBullet { damage: 0.0, ..make_enemy_bullet(101, 105.0, 100.0) }];
+    let mut events = Vec::new();
+    let ctx = CollisionContext;
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1);
+    if let CollisionEvent::PlayerHitByEnemyBullet { damage, .. } = events[0] {
+        approx_eq(damage, 1.0, "damage 0 → default 1");
+    } else {
+        panic!("expected PlayerHitByEnemyBullet");
+    }
+
+    // damage = -3 — also defaults to 1
+    let bullets = vec![CollisionEnemyBullet { damage: -3.0, ..make_enemy_bullet(102, 105.0, 100.0) }];
+    let mut events = Vec::new();
+    detect_player_enemy_bullet_hits(&players, &bullets, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1);
+    if let CollisionEvent::PlayerHitByEnemyBullet { damage, .. } = events[0] {
+        approx_eq(damage, 1.0, "damage -3 → default 1");
+    } else {
+        panic!("expected PlayerHitByEnemyBullet");
     }
 }

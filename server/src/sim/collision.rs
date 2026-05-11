@@ -462,6 +462,19 @@ pub enum CollisionEvent {
         asteroid_impulse_dx: f32,
         asteroid_impulse_dy: f32,
     },
+    /// Mirrors `{ type: 'player_hit_by_enemy_bullet', ... }` in
+    /// `js/sim/collision.js`. Simplest pair — enemy bullets damage the
+    /// player on overlap only. No impulse, no separation, no piercing
+    /// budget. Damage default 1 if `bullet.damage <= 0`.
+    PlayerHitByEnemyBullet {
+        player_id: u32,
+        bullet_id: u32,
+        damage: f32,
+        bullet_x: f32,
+        bullet_y: f32,
+        bullet_vx: f32,
+        bullet_vy: f32,
+    },
 }
 
 // ─── Bullet-vs-asteroid pair detection ──────────────────────────────
@@ -1524,6 +1537,116 @@ pub fn detect_enemy_asteroid_hits(
                 enemy_impulse_dy,
                 asteroid_impulse_dx,
                 asteroid_impulse_dy,
+            });
+        }
+    }
+}
+
+// ── PLAYER ↔ ENEMY-BULLET — Phase 2.5 ──────
+//
+// `detect_player_enemy_bullet_hits` is the 6th pure-step pair. Enemy
+// bullets damage the player on geometric overlap. Simplest pair so far:
+//   - NO impulse to either side
+//   - NO separation
+//   - NO piercing budget (enemy bullets are never piercing)
+//   - NO warping/death-flash skip-gates (bullets are flight-or-despawned;
+//     players have no such state in the sim layer)
+//
+// What the pure step DOES: circle-circle overlap + emit one
+// `PlayerHitByEnemyBullet` event per detected hit, carrying `damage`
+// (default 1 if `bullet.damage <= 0`, mirroring JS `bullet.damage || 1`),
+// `bullet_id` for wrapper-side despawn, and bullet position + velocity
+// at impact for wrapper-side hit-flash localization + shrapnel.
+//
+// What stays in the wrapper:
+//   - Invincibility / phase-dash check
+//   - Effective-shield reduction (damage · (1 - shield/100))
+//   - Bulwark / IRON_WILL reduction (0.5× / 0.65×)
+//   - Final HP application + tank consumption
+//   - Damage numbers, hit-flash visuals, screen shake, hitstop
+//   - Stat tracking, kill-streak break, XP grant
+//   - Per-pattern hit SFX
+//   - Bullet despawn (every enemy-bullet hit despawns; no flag needed)
+//
+// Reference: `js/sim/collision.js::detectPlayerEnemyBulletHits` (PR #47).
+
+/// Minimal enemy-bullet view for collision detection. Separate from
+/// `CollisionBullet` (which represents player bullets with piercing
+/// state) — enemy bullets are simpler with no piercing.
+#[derive(Debug, Clone, Copy)]
+pub struct CollisionEnemyBullet {
+    pub id: u32,
+    pub x: f32,
+    pub y: f32,
+    pub vx: f32,
+    pub vy: f32,
+    pub radius: f32,
+    pub damage: f32,
+    pub active: bool,
+}
+
+impl CollisionEnemyBullet {
+    /// Construct a fresh enemy bullet at the origin with live-game defaults.
+    pub fn fresh(id: u32) -> Self {
+        Self {
+            id,
+            x: 0.0,
+            y: 0.0,
+            vx: 0.0,
+            vy: 0.0,
+            radius: 9.0,
+            damage: 2.0,
+            active: true,
+        }
+    }
+}
+
+/// Detect player-vs-enemy-bullet collisions for one tick.
+///
+/// Pure step: emits one `PlayerHitByEnemyBullet` event per overlap.
+/// Co-op ready: scans every active player against every active bullet.
+///
+/// Skip-gates: `!player.active`, `!bullet.active`. No warping or
+/// death-flash gates. Damage default = 1 if `bullet.damage <= 0`.
+pub fn detect_player_enemy_bullet_hits(
+    players: &[CollisionPlayer],
+    bullets: &[CollisionEnemyBullet],
+    _ctx: &CollisionContext,
+    events: &mut Vec<CollisionEvent>,
+) {
+    if players.is_empty() || bullets.is_empty() {
+        return;
+    }
+
+    for player in players.iter() {
+        if !player.active {
+            continue;
+        }
+
+        let player_radius = player.radius;
+
+        for bullet in bullets.iter() {
+            if !bullet.active {
+                continue;
+            }
+
+            let dx = player.x - bullet.x;
+            let dy = player.y - bullet.y;
+            let sum_r = player_radius + bullet.radius;
+            if dx * dx + dy * dy >= sum_r * sum_r {
+                continue;
+            }
+
+            let damage = if bullet.damage > 0.0 { bullet.damage } else { 1.0 };
+
+            events.push(CollisionEvent::PlayerHitByEnemyBullet {
+                player_id: player.id,
+                bullet_id: bullet.id,
+                damage,
+                bullet_x: bullet.x,
+                bullet_y: bullet.y,
+                bullet_vx: bullet.vx,
+                bullet_vy: bullet.vy,
             });
         }
     }
