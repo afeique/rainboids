@@ -29,10 +29,14 @@ import {
     ASTEROID_KNOCKBACK_MULTIPLIER,
     SEPARATION_BUFFER,
     OVERLAP_PUSH_FORCE,
+    detectBulletEnemyHits,
+    BULLET_ENEMY_KNOCKBACK,
+    BULLET_ENEMY_HIT_FLASH_FRAMES,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
     freshBulletState,
+    freshEnemyState,
     freshShipState,
 } from '../../../js/sim/state.js';
 
@@ -605,5 +609,366 @@ describe('detectPlayerAsteroidHits — separation magnitude', () => {
         const ev = events[0];
         expect(ev.separationDx).toBeCloseTo(-(15 + SEPARATION_BUFFER), 5);
         expect(ev.separationDy).toBeCloseTo(0, 5);
+    });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// Bullet-vs-enemy pair (Phase 2.5 — dispatch 3).
+// ═════════════════════════════════════════════════════════════════════
+//
+// `detectBulletEnemyHits` is the third pure-step pair extracted from the
+// legacy `handleCollisions` in `js/modules/combat/collision-system.js`
+// (lines 511-659). It's a near-mirror of `detectBulletAsteroidHits` —
+// same circle-circle geometry, same piercing-budget mechanics, same
+// event-emission discipline. Key differences:
+//
+//   - Emits `bullet_hit_enemy` events (not `bullet_hit_asteroid`).
+//   - Uses a separate `piercedEnemyIds` Set on the bullet so the same
+//     bullet can pierce both asteroids and enemies independently
+//     (different id spaces — an asteroid with id=10 and an enemy with
+//     id=10 are unrelated targets).
+//   - The shared piercing counter (`bullet.piercedEnemies`) IS shared
+//     across both Sets — mirrors the legacy `bullet.onHit()` semantics
+//     where the single counter increments on any pierce.
+//
+// All side effects (damage, death-flash, boss-rage triggers, drops, XP,
+// kill streak, hit-flash visuals, hit-stop, screen shake, audio) stay
+// in the wrapper. The pure step only answers "did bullet B overlap
+// enemy E? emit one event per yes".
+
+// ---------------------------------------------------------------------
+// Helpers — build minimal bullet/enemy pairs that overlap (or not).
+// ---------------------------------------------------------------------
+
+/** Build an enemy with an explicit radius. `freshEnemyState` is the
+ *  base shape (id/x/y/active/...); the pure step also needs `radius`,
+ *  and the collision skip-gates read `warping` and `deathFlash` /
+ *  `_deathFlash`. Those fields aren't part of the f32 EnemyState
+ *  typedef yet, so we attach them here so the tests stay self-contained.
+ *
+ *  Default radius=18 matches the live `Enemy` constructor for HUNTER. */
+function enemyWithRadius(id, x, y, radius = 18, overrides = {}) {
+    // freshEnemyState whitelists its fields (id, type, x, y, vx, vy,
+    // angle, hp, maxHp, firingCooldown, lastShot, active) — anything
+    // else in `overrides` is silently dropped. So we pass through only
+    // the fields the factory knows about, then attach the rest manually.
+    const base = freshEnemyState('HUNTER', {
+        id, x, y,
+        active: overrides.active,
+        vx: overrides.vx, vy: overrides.vy,
+    });
+    base.radius = radius;
+    // Skip-gate fields the pure step inspects but `freshEnemyState`
+    // doesn't yet model. The live `Enemy` class has both.
+    if (overrides.warping !== undefined) base.warping = overrides.warping;
+    if (overrides.deathFlash !== undefined) base.deathFlash = overrides.deathFlash;
+    if (overrides._deathFlash !== undefined) base._deathFlash = overrides._deathFlash;
+    return base;
+}
+
+// ---------------------------------------------------------------------
+// Constants — pinned to the legacy COLLISION_CONFIG block.
+// ---------------------------------------------------------------------
+
+describe('bullet-enemy collision constants', () => {
+    test('BULLET_ENEMY_KNOCKBACK is 0.05 (verbatim from collision-system.js)', () => {
+        expect(BULLET_ENEMY_KNOCKBACK).toBe(0.05);
+    });
+    test('BULLET_ENEMY_HIT_FLASH_FRAMES is 10 (verbatim from collision-system.js)', () => {
+        expect(BULLET_ENEMY_HIT_FLASH_FRAMES).toBe(10);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — single overlapping pair emits one fully-populated event.
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — single hit', () => {
+    test('overlapping bullet + enemy emits one event with all 9 fields', () => {
+        // Bullet radius 4 + enemy radius 18 = sumR 22. Place enemy 10 px
+        // east of bullet ⇒ overlap = 12 (clear hit).
+        const b = bullet(1, 100, 100, { vx: 8, vy: -3, damage: 3 });
+        const e = enemyWithRadius(101, 110, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+            type: 'bullet_hit_enemy',
+            bulletId: 1,
+            enemyId: 101,
+            damage: 3,
+            bulletX: 100,
+            bulletY: 100,
+            bulletVx: 8,
+            bulletVy: -3,
+            bulletWillDespawn: true,
+            bulletPiercingRemaining: -1, // non-piercing
+        });
+        // Explicit field count guard: ensure exactly 9 fields ship and
+        // none silently get dropped if the implementation evolves.
+        expect(Object.keys(events[0]).sort()).toEqual([
+            'bulletId', 'bulletPiercingRemaining', 'bulletVx', 'bulletVy',
+            'bulletWillDespawn', 'bulletX', 'bulletY', 'damage', 'enemyId',
+            'type',
+        ].sort());
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — geometry miss (centers further than sumR apart).
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — geometry miss', () => {
+    test('bullet outside (bullet.r + enemy.r) emits no event', () => {
+        const b = bullet(1, 0, 0);
+        // 200 px ≫ sumR=22 → clearly no overlap.
+        const e = enemyWithRadius(101, 200, 0);
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('bullet just outside boundary (sumR + 1) emits no event', () => {
+        const b = bullet(1, 0, 0, { radius: 4 });
+        // sumR = 4 + 18 = 22; place enemy center 23 px away → just outside.
+        const e = enemyWithRadius(101, 23, 0, 18);
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — piercing bullet hits multiple enemies in same tick.
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — piercing within a tick', () => {
+    test('piercing=2 bullet hits 3 overlapping enemies in same tick', () => {
+        const b = bullet(1, 100, 100, { piercing: 2, damage: 1 });
+        // All three enemies overlap the bullet's circle (radius 18 each,
+        // bullet radius 4 → sumR 22; bullet at (100, 100)).
+        const e1 = enemyWithRadius(101, 110, 100);
+        const e2 = enemyWithRadius(102, 115, 100);
+        const e3 = enemyWithRadius(103,  90, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e1, e2, e3], ctx, events);
+        // piercing=2 means it can hit piercing+1 = 3 targets.
+        expect(events).toHaveLength(3);
+        expect(events.map(e => e.enemyId).sort()).toEqual([101, 102, 103]);
+        // Last hit should mark the bullet for despawn (budget reached).
+        const lastEvent = events[events.length - 1];
+        expect(lastEvent.bulletWillDespawn).toBe(true);
+        // Earlier events should NOT despawn — the bullet is still alive.
+        expect(events[0].bulletWillDespawn).toBe(false);
+        expect(events[1].bulletWillDespawn).toBe(false);
+        // Piercing-remaining counter decrements: 1, 0, 0 (clamped).
+        expect(events[0].bulletPiercingRemaining).toBe(1);
+        expect(events[1].bulletPiercingRemaining).toBe(0);
+        expect(events[2].bulletPiercingRemaining).toBe(0);
+    });
+
+    test('piercing=1 bullet hits 2 enemies in same tick (piercing + 1)', () => {
+        const b = bullet(1, 100, 100, { piercing: 1 });
+        const e1 = enemyWithRadius(101, 110, 100);
+        const e2 = enemyWithRadius(102, 115, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e1, e2], ctx, events);
+        expect(events).toHaveLength(2);
+        expect(events[0].bulletWillDespawn).toBe(false);
+        expect(events[0].bulletPiercingRemaining).toBe(0);
+        expect(events[1].bulletWillDespawn).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — non-piercing bullet only hits ONE enemy.
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — non-piercing single-hit', () => {
+    test('non-piercing bullet emits exactly one event when 3 enemies overlap', () => {
+        const b = bullet(1, 100, 100, { piercing: 0 });
+        const e1 = enemyWithRadius(101, 110, 100);
+        const e2 = enemyWithRadius(102, 115, 100);
+        const e3 = enemyWithRadius(103,  90, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e1, e2, e3], ctx, events);
+        expect(events).toHaveLength(1);
+        // It should hit the FIRST overlapping enemy in array order.
+        expect(events[0].enemyId).toBe(101);
+        expect(events[0].bulletWillDespawn).toBe(true);
+        expect(events[0].bulletPiercingRemaining).toBe(-1);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — piercedEnemyIds Set carry-over across frames.
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — piercedEnemyIds across ticks', () => {
+    test('a piercing bullet that hit enemy X last frame does NOT re-hit it this frame', () => {
+        const b = bullet(1, 100, 100, { piercing: 5, damage: 1 });
+        const e = enemyWithRadius(101, 110, 100);
+
+        // ── Frame 1 ──
+        const frame1Events = [];
+        detectBulletEnemyHits([b], [e], ctx, frame1Events);
+        expect(frame1Events).toHaveLength(1);
+        // After frame 1, the bullet should remember it pierced this enemy.
+        expect(b.piercedEnemyIds).toBeDefined();
+        expect(b.piercedEnemyIds.has(101)).toBe(true);
+
+        // ── Frame 2 — same enemy, still overlapping ──
+        const frame2Events = [];
+        detectBulletEnemyHits([b], [e], ctx, frame2Events);
+        expect(frame2Events).toHaveLength(0);
+    });
+
+    test('piercedEnemyIds is lazily created (not pre-allocated)', () => {
+        // A bullet that never hits anything shouldn't carry a Set.
+        const b = bullet(1, 0, 0);
+        const e = enemyWithRadius(101, 999, 999); // Far away — no hit.
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(0);
+        expect(b.piercedEnemyIds).toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — piercedEnemyIds is DISTINCT from piercedAsteroidIds.
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — independent from piercedAsteroidIds', () => {
+    test('a bullet that pierced asteroid X can still hit enemy with same id', () => {
+        // Pre-seed the bullet as if it had already pierced asteroid 101
+        // in an earlier pair-dispatch this tick.
+        const b = bullet(1, 100, 100, { piercing: 3, damage: 1 });
+        b.piercedAsteroidIds = new Set([101]);
+        b.piercedEnemies = 1; // shared counter already shows one pierce
+
+        // Enemy ALSO with id=101 (different id space, different target).
+        const e = enemyWithRadius(101, 110, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        // The enemy must NOT be skipped — its id is in piercedAsteroidIds
+        // but NOT in piercedEnemyIds.
+        expect(events).toHaveLength(1);
+        expect(events[0].enemyId).toBe(101);
+        // Now the bullet's enemy-pierce set is populated, but the
+        // asteroid-pierce set should still hold the original id only.
+        expect(b.piercedEnemyIds.has(101)).toBe(true);
+        expect(b.piercedAsteroidIds.has(101)).toBe(true);
+        // Shared counter ticked up by 1 (now 2 — one ast + one enemy).
+        expect(b.piercedEnemies).toBe(2);
+    });
+
+    test('piercedEnemyIds does NOT leak into piercedAsteroidIds (one-direction)', () => {
+        const b = bullet(1, 100, 100, { piercing: 1 });
+        const e = enemyWithRadius(101, 110, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(b.piercedEnemyIds.has(101)).toBe(true);
+        // Asteroid-pierce set must NOT have been touched.
+        expect(b.piercedAsteroidIds).toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — skip gates.
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — skipped pairs', () => {
+    test('inactive bullet is skipped', () => {
+        const b = bullet(1, 100, 100, { active: false });
+        const e = enemyWithRadius(101, 110, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('inactive enemy is skipped', () => {
+        const b = bullet(1, 100, 100);
+        const e = enemyWithRadius(101, 110, 100, 18, { active: false });
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('warping enemy is skipped', () => {
+        const b = bullet(1, 100, 100);
+        const e = enemyWithRadius(101, 110, 100, 18, { warping: true });
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('enemy mid-death-flash (new deathFlash field) is skipped', () => {
+        const b = bullet(1, 100, 100);
+        const e = enemyWithRadius(101, 110, 100, 18, { deathFlash: 5 });
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('enemy mid-death-flash (legacy _deathFlash) is skipped', () => {
+        const b = bullet(1, 100, 100);
+        // Live Enemy instances use the underscore-prefix name.
+        const e = { id: 101, x: 110, y: 100, radius: 18, active: true,
+                    warping: false, _deathFlash: 5 };
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — empty / null inputs defensive guards.
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — empty inputs', () => {
+    test('empty bullets array → no events', () => {
+        const events = [];
+        detectBulletEnemyHits([], [enemyWithRadius(101, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('empty enemies array → no events', () => {
+        const events = [];
+        detectBulletEnemyHits([bullet(1, 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('both empty → no events', () => {
+        const events = [];
+        detectBulletEnemyHits([], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null bullets → no events (defensive)', () => {
+        const events = [];
+        detectBulletEnemyHits(null, [enemyWithRadius(101, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+    test('null enemies → no events (defensive)', () => {
+        const events = [];
+        detectBulletEnemyHits([bullet(1, 0, 0)], null, ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test — damage propagates through to the event.
+// ---------------------------------------------------------------------
+
+describe('detectBulletEnemyHits — damage propagation', () => {
+    test('event.damage matches bullet.damage', () => {
+        const b = bullet(1, 100, 100, { damage: 7 });
+        const e = enemyWithRadius(101, 110, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].damage).toBe(7);
+    });
+
+    test('event.damage defaults to 1 when bullet.damage is missing/zero', () => {
+        const b = bullet(1, 100, 100, { damage: 0 });
+        const e = enemyWithRadius(101, 110, 100);
+        const events = [];
+        detectBulletEnemyHits([b], [e], ctx, events);
+        expect(events[0].damage).toBe(1);
     });
 });

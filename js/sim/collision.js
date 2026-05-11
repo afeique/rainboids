@@ -621,3 +621,272 @@ export function detectPlayerAsteroidHits(players, asteroids, ctx, events) {
         }
     }
 }
+
+// =====================================================================
+// BULLET ↔ ENEMY — Phase 2.5 dispatch 3
+// =====================================================================
+//
+// Near-mirror of `detectBulletAsteroidHits` above. Same circle-circle
+// geometry, same piercing-budget mechanics, same event-emission pattern.
+// The only structural differences are the target array (enemies instead
+// of asteroids), the event type (`bullet_hit_enemy`), the per-bullet
+// pierced-id Set name (`piercedEnemyIds` instead of `piercedAsteroidIds`),
+// and the additional `enemy.warping` skip-gate (asteroids also have a
+// `warping` flag but enemies use it for mid-warp-in invulnerability while
+// the spawn animation finishes; either way we skip).
+//
+// Source-of-truth lines in `js/modules/combat/collision-system.js`:
+//   - Outer bullet/enemy loop:               lines 511-518
+//   - Piercing skip via `hasHitEnemy`:       lines 520-523
+//   - Geometry check + damage application:   lines 525-548
+//   - `bullet.onHit(enemy)` despawn logic:   line 651 → bullet.js:404-418
+//
+// What this module does NOT touch (stays in the wrapper):
+//   - Damage application to enemy HP             (legacy: enemy.takeDamage)
+//   - Enemy death-flash trigger                  (legacy: enemy._deathFlash = 8)
+//   - Drops / coins / experience / kill streak   (legacy: dropOrbsFromEntity et al.)
+//   - Boss-rage enrage trigger                   (legacy: boss reactive logic)
+//   - Hit-flash visuals, hit-stop, screen shake  (presentation)
+//   - Audio events                               (presentation)
+//   - Combo / mission hooks                      (game-state)
+//
+// The pure step's only job is: "for each (bullet, enemy) pair this tick,
+// does the bullet's circle overlap the enemy's circle? if so, emit the
+// hit with enough info for the wrapper to drive its side effects".
+
+/**
+ * Bullet → enemy knockback impulse multiplier. Mirrors
+ * `COLLISION_CONFIG.BULLET_KNOCKBACK = 0.05` from
+ * `js/modules/combat/collision-system.js` — the same constant the
+ * bullet-asteroid path uses (the legacy module has a single
+ * `BULLET_KNOCKBACK` constant shared across both pair-types).
+ *
+ * Exposed as a separate name here for two reasons:
+ *   - Symmetry with `BULLET_ASTEROID_KNOCKBACK` so future tuning can
+ *     diverge per-pair without renaming.
+ *   - Self-documenting at the call-site: `BULLET_ENEMY_KNOCKBACK`
+ *     reads more clearly than referring to the asteroid constant
+ *     when applying knockback to a Hunter or Titan.
+ *
+ * Numerical parity with the legacy module is enforced by tests.
+ */
+export const BULLET_ENEMY_KNOCKBACK = 0.05;
+
+/**
+ * Frames the enemy's hit-flash effect runs for after a bullet impact.
+ * Mirrors `COLLISION_CONFIG.HIT_FLASH_FRAMES = 10` from
+ * `js/modules/combat/collision-system.js` (same constant the
+ * bullet-asteroid path uses; see line 555:
+ * `enemy._hitFlashTimer = COLLISION_CONFIG.HIT_FLASH_FRAMES`).
+ *
+ * Presentation concern in the strict sense, but exposed here so the
+ * wrapper can set the timer directly from the event without consulting
+ * the legacy config block.
+ */
+export const BULLET_ENEMY_HIT_FLASH_FRAMES = 10;
+
+// ─── Bullet-vs-enemy pair detection ─────────────────────────────────
+
+/**
+ * Detect bullet-vs-enemy collisions for one tick.
+ *
+ * Pure step: reads bullet + enemy positions/radii, decides which pairs
+ * collided, and emits one `bullet_hit_enemy` event per detected hit.
+ * Does NOT mutate enemy state (no damage, no death-flash, no rage
+ * trigger) — every effect is reported through the event payload for the
+ * wrapper / Rust mirror to apply downstream.
+ *
+ * Mutation note — `bullet.piercedEnemyIds`:
+ *   The pure step DOES mutate one field on the bullet: a
+ *   `piercedEnemyIds: Set<EnemyId|number>` carrying the ids of enemies
+ *   this bullet has already pierced. This is allowed because the Set is
+ *   intrinsic to that single bullet's state — it's the bullet's "memory"
+ *   of which enemies it has already passed through.
+ *
+ *   The Set is DISTINCT from `piercedAsteroidIds`: a piercing bullet can
+ *   pass through one asteroid AND one enemy in the same frame, and each
+ *   Set tracks its own target type independently. Note however that the
+ *   piercing BUDGET (`bullet.piercedEnemies` counter) is SHARED across
+ *   both Sets — this matches the legacy `bullet.onHit()` behavior in
+ *   `js/modules/player/bullet.js:404-418`, where the single
+ *   `piercedEnemies` counter increments on any pierce regardless of
+ *   whether it was an asteroid or an enemy. So a piercing=1 bullet that
+ *   pierces 1 asteroid this tick has 0 enemy pierces left in this tick,
+ *   and vice versa.
+ *
+ *   Lifetime of the Set:
+ *     - Lazily created on first hit (no pre-allocation per bullet).
+ *     - Carried across ticks for as long as the bullet lives.
+ *     - The wrapper is responsible for destroying / pooling the bullet,
+ *       which clears the Set with it.
+ *
+ * Iteration order:
+ *   For each bullet, scan enemies in array order. The first hit a
+ *   non-piercing bullet detects becomes its only event for the tick;
+ *   any future call (this tick or next) will skip that enemy via the
+ *   pierced-id Set. A bullet with `piercing > 0` may emit up to
+ *   `piercing + 1` hit events per tick (matching `bullet.onHit` legacy
+ *   semantics where piercing=1 means it can hit 2 targets — the original
+ *   plus 1 more).
+ *
+ * Geometry:
+ *   Circle-circle overlap: `hypot(dx, dy) < bullet.radius + enemy.radius`.
+ *   Identical to the legacy `collision(bullet, enemy)` helper.
+ *
+ * Skipped pairs (no event emitted):
+ *   - Inactive bullet                  (`!bullet.active`)
+ *   - Inactive enemy                   (`!enemy.active`)
+ *   - Enemy mid-warp-in                (`enemy.warping`)
+ *   - Enemy mid-death                  (`enemy._deathFlash > 0` or
+ *                                       new-style `enemy.deathFlash > 0`)
+ *   - Enemy already pierced by this bullet (id in
+ *     `bullet.piercedEnemyIds`)
+ *   - Bullet's piercing budget exhausted
+ *     (`bullet.piercedEnemies > bullet.piercing`)
+ *
+ * @param {Array<Object>} bullets       active player bullets. Each is
+ *                                      treated as having `{x, y, vx, vy,
+ *                                      radius, damage, piercing,
+ *                                      piercedEnemies, piercedEnemyIds?,
+ *                                      piercedAsteroidIds?, active, id}`.
+ *                                      Compatible with both the
+ *                                      BulletState typedef in
+ *                                      `js/sim/state.js` and the live
+ *                                      `Bullet` instance shape.
+ * @param {Array<Object>} enemies       active enemies. Each is treated
+ *                                      as having `{x, y, radius, active,
+ *                                      warping, deathFlash OR
+ *                                      _deathFlash, id}`. Compatible
+ *                                      with both `EnemyState` and the
+ *                                      live `Enemy` instance shape.
+ * @param {Object} ctx                  per-tick context bag (currently
+ *                                      unused; reserved for future use,
+ *                                      e.g. a one-punch-man cheat flag
+ *                                      or spatial-grid filter).
+ * @param {Array<Object>} events        out-buffer. Pushes objects with
+ *                                      the shape documented below.
+ *
+ * Event shape (one event per detected hit):
+ *   {
+ *     type: 'bullet_hit_enemy',
+ *     bulletId:                bullet.id,
+ *     enemyId:                 enemy.id,
+ *     damage:                  bullet.damage (defaults to 1),
+ *     bulletX, bulletY:        impact point (used for hit-flash
+ *                              localization + shrapnel particles)
+ *     bulletVx, bulletVy:      bullet velocity, used by the wrapper to
+ *                              apply knockback via BULLET_ENEMY_KNOCKBACK
+ *                              and to compute the impact angle for
+ *                              localized sparks.
+ *     bulletPiercingRemaining: how many more piercing hits the bullet
+ *                              has after this one. -1 means non-piercing
+ *                              (bullet despawns now).
+ *     bulletWillDespawn:       true iff the bullet should be removed
+ *                              after this hit (non-piercing OR piercing
+ *                              budget reached).
+ *   }
+ */
+export function detectBulletEnemyHits(bullets, enemies, ctx, events) {
+    if (!bullets || !enemies) return;
+    if (bullets.length === 0 || enemies.length === 0) return;
+
+    for (let i = 0; i < bullets.length; i++) {
+        const bullet = bullets[i];
+        if (!bullet || !bullet.active) continue;
+
+        // Piercing budget already exhausted? Skip — mirrors the
+        // bullet-asteroid path. The wrapper hasn't despawned this bullet
+        // yet but it has no more hits in it.
+        const piercing = bullet.piercing | 0;
+        // Live-tracked counter — starts at the bullet's running total,
+        // bumps once per detected hit during this scan. Persisted back
+        // onto the bullet so subsequent ticks (and the bullet-asteroid
+        // pair, which shares the same counter) see the latest value.
+        let piercedSoFar = bullet.piercedEnemies | 0;
+        if (piercing > 0 && piercedSoFar > piercing) continue;
+        // Non-piercing bullet that's somehow still active despite already
+        // hitting something this scan: skip. Defensive guard — the
+        // wrapper should have flipped active=false, but the bullet-
+        // asteroid pair may have just consumed this bullet's single hit
+        // earlier in the same tick, so we need to honor the counter
+        // even if the wrapper hasn't run yet.
+        if (piercing === 0 && piercedSoFar > 0) continue;
+
+        const bulletRadius = bullet.radius || 0;
+
+        for (let j = 0; j < enemies.length; j++) {
+            const enemy = enemies[j];
+            if (!enemy || !enemy.active) continue;
+            if (enemy.warping) continue;
+
+            // Death flash gate — accept either the new sim field name
+            // (`deathFlash`) or the legacy underscore-prefix
+            // (`_deathFlash`). Live `Enemy` instances use the legacy
+            // name (see collision-system.js line 518); future
+            // `EnemyState` will use the new name.
+            const dF = enemy.deathFlash !== undefined
+                ? enemy.deathFlash
+                : enemy._deathFlash;
+            if (dF && dF > 0) continue;
+
+            // Has this bullet already pierced this enemy (this or a
+            // prior tick)? The Set lives on the bullet — see mutation
+            // note in the JSDoc above. Distinct from
+            // `piercedAsteroidIds`: a bullet that pierced asteroid X
+            // earlier can still hit enemy X (different id space).
+            const pierced = bullet.piercedEnemyIds;
+            if (pierced && pierced.has(enemy.id)) continue;
+
+            // Geometry check — circle-circle overlap. Mirrors
+            // `collision(bullet, enemy)` in `js/modules/core/utils.js`.
+            const dx = bullet.x - enemy.x;
+            const dy = bullet.y - enemy.y;
+            const sumR = bulletRadius + (enemy.radius || 0);
+            // Squared distance avoids the sqrt; equivalent test.
+            if (dx * dx + dy * dy >= sumR * sumR) continue;
+
+            // ── Hit detected ──
+
+            // Update the bullet's enemy-pierce Set. Lazy create. This is
+            // the one bullet-state mutation this pure step performs.
+            if (!bullet.piercedEnemyIds) {
+                bullet.piercedEnemyIds = new Set();
+            }
+            bullet.piercedEnemyIds.add(enemy.id);
+
+            // Bookkeeping: bump the live (shared) pierce counter and
+            // persist it onto the bullet so the outer "budget exhausted?"
+            // check sees the latest value next tick, and so the
+            // bullet-asteroid pair (if it runs after this one) sees the
+            // updated total too.
+            piercedSoFar += 1;
+            bullet.piercedEnemies = piercedSoFar;
+
+            // Despawn decision — matches legacy `onHit`:
+            //   - Non-piercing: dies on first hit.
+            //   - Piercing > 0: dies once piercedEnemies > piercing.
+            const willDespawn = piercing === 0
+                ? true
+                : (piercedSoFar > piercing);
+            const piercingRemaining = piercing === 0
+                ? -1
+                : Math.max(0, piercing - piercedSoFar);
+
+            events.push({
+                type: 'bullet_hit_enemy',
+                bulletId: bullet.id,
+                enemyId: enemy.id,
+                damage: (bullet.damage || 1),
+                bulletX: bullet.x,
+                bulletY: bullet.y,
+                bulletVx: bullet.vx,
+                bulletVy: bullet.vy,
+                bulletPiercingRemaining: piercingRemaining,
+                bulletWillDespawn: willDespawn,
+            });
+
+            // If the bullet despawned, stop scanning enemies for it.
+            if (willDespawn) break;
+        }
+    }
+}
