@@ -1,20 +1,63 @@
 // Render-time-shifted interpolation for remote entities.
 //
 // Snapshots arrive at 20 Hz. Rendering the most-recent snapshot directly
-// would jitter every 50 ms. Instead, we keep two snapshots in a small
-// ring and render at a delayed time `t = serverNow - renderDelayMs`.
-// Between two snapshots we lerp; when a third arrives we drop the oldest.
+// would jitter every 50 ms. Instead, we keep a small ring of recent
+// snapshots and render at a delayed time `t = serverNow - renderDelayMs`.
+// Between two snapshots we lerp; when the ring is full, the oldest is
+// evicted on the next ingest.
 //
 // Render delay defaults to 100 ms — enough headroom for typical
 // dropped-snapshot recovery without feeling laggy.
+//
+// ── Composition with TickBuffer (Phase 3 follow-up) ───────────────────
+// Internally the ring is now a `TickBuffer` (see `tick-buffer.js`), which
+// gives us shared storage / interpolation plumbing with the prediction
+// stack. The public API of `Interpolator` is unchanged:
+//
+//     ingest(serverT, snapshot)
+//     sample(t) -> snapshot | null
+//
+// TickBuffer is keyed by integer tick numbers and internally coerces keys
+// via `tick | 0` (int32 truncation). Wall-clock ms timestamps would
+// overflow, so this module converts server-time-in-ms to a fractional
+// tick number anchored at the first ingested snapshot:
+//
+//     tick = (serverT - epoch) / MS_PER_TICK
+//
+// where MS_PER_TICK = 50 (20 Hz snapshot cadence). The fractional tick is
+// rounded for storage (so `insert(tick, ...)` gets a stable integer key)
+// and used directly for `getInterpolated(tick)` lookups (TickBuffer
+// supports fractional sample positions).
+//
+// One small divergence vs. the previous hand-rolled ring: if `sample(t)`
+// is called when the buffer holds exactly one snapshot, the old code
+// returned that snapshot regardless of `t`; the TickBuffer-backed
+// implementation likewise returns it for any `t` (we layer that fallback
+// on top of `getInterpolated`, which would otherwise return null when the
+// requested tick falls outside the single-entry range).
+
+import { TickBuffer } from './tick-buffer.js';
 
 const DEFAULT_RENDER_DELAY_MS = 100;
+
+/** Snapshot cadence used to convert ms → tick number for TickBuffer. */
+const MS_PER_TICK = 50; // 20 Hz
+
+/** Ring capacity — 4 snapshots at 20 Hz = 200 ms of history. */
+const RING_CAPACITY = 4;
 
 export class Interpolator {
     constructor({ renderDelayMs = DEFAULT_RENDER_DELAY_MS } = {}) {
         this.renderDelayMs = renderDelayMs;
-        /** Ring: [{ serverT, snapshot }] sorted ascending by serverT. */
-        this.buf = [];
+        /** Server time of the first ingested snapshot — used as the
+         *  tick-number epoch so int32 coercion in TickBuffer doesn't
+         *  overflow on wall-clock millis. */
+        this._epochMs = null;
+        /** TickBuffer keyed by tick number = (serverT - epoch) / MS_PER_TICK. */
+        this._buf = new TickBuffer({
+            capacity: RING_CAPACITY,
+            interpolate: lerpSnapshot,
+        });
     }
 
     /**
@@ -24,9 +67,12 @@ export class Interpolator {
      * @param {{ships: object[], enemies: object[], asteroids: object[], drops: object[]}} snapshot
      */
     ingest(serverT, snapshot) {
-        this.buf.push({ serverT, snapshot });
-        // Keep the buffer trimmed: at most 4 snapshots = 200 ms ring at 20 Hz.
-        while (this.buf.length > 4) this.buf.shift();
+        if (this._epochMs == null) this._epochMs = serverT;
+        // Round to integer tick for stable storage key. Fractional precision
+        // is recovered on lookup since `sample(t)` computes a fractional
+        // tick directly.
+        const tick = Math.round((serverT - this._epochMs) / MS_PER_TICK);
+        this._buf.insert(tick, snapshot);
     }
 
     /**
@@ -38,21 +84,28 @@ export class Interpolator {
      * @returns {object|null} interpolated snapshot, or null if no data yet
      */
     sample(t) {
-        if (this.buf.length === 0) return null;
-        if (this.buf.length === 1) return this.buf[0].snapshot;
+        if (this._buf.size() === 0) return null;
+        const latest = this._buf.getLatest();
+        if (this._buf.size() === 1) return latest.state;
 
-        // Walk the ring. Find consecutive (a, b) such that a.serverT <= t <= b.serverT.
-        for (let i = 0; i < this.buf.length - 1; i++) {
-            const a = this.buf[i];
-            const b = this.buf[i + 1];
-            if (a.serverT <= t && t <= b.serverT) {
-                const span = b.serverT - a.serverT;
-                const u = span === 0 ? 0 : (t - a.serverT) / span;
-                return lerpSnapshot(a.snapshot, b.snapshot, u);
-            }
-        }
-        // t is past the newest snapshot — return newest unmodified.
-        return this.buf[this.buf.length - 1].snapshot;
+        // Convert request time to a fractional tick in the same frame as
+        // the stored snapshots.
+        const tickT = (t - this._epochMs) / MS_PER_TICK;
+
+        // Clamp past-newest to the newest snapshot (old behavior). Past
+        // older-than-oldest also falls back to the oldest snapshot — old
+        // code's `for` loop would simply not match and reach the trailing
+        // `return newest`, but conceptually clamping to the oldest is the
+        // closer match since `t` is below the buffered range.
+        if (tickT >= latest.tick) return latest.state;
+
+        const interpolated = this._buf.getInterpolated(tickT);
+        if (interpolated != null) return interpolated;
+
+        // tickT is older than the oldest buffered snapshot — fall back to
+        // the most-recent snapshot to preserve the old API's "never return
+        // null when data exists" contract.
+        return latest.state;
     }
 }
 
