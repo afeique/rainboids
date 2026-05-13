@@ -2797,3 +2797,348 @@ export function detectLanceBeamHits(lance, enemies, asteroids, ctx, events) {
         }
     }
 }
+// =====================================================================
+// MISSILE SALVO — directional projectile vs enemy/asteroid (first-hit)
+// =====================================================================
+//
+// Missiles are homing/seeking projectiles fired by the MISSILE_SALVO
+// power weapon. They impact either an enemy OR an asteroid — whichever
+// they touch first — and detonate on contact. Each missile is a
+// single-target weapon (no piercing, no AoE in the pure step) and
+// emits at most ONE event per tick. The pure step splits detection
+// from application: the wrapper drains the event and is responsible
+// for the visible explosion, audio, particles, screen shake, camera
+// kick, asteroid-cascade destruction, the `damageEnemy` call, the
+// asteroid `_hitFlashTimer` mutation, and flipping `missile.active =
+// false` on the source missile.
+//
+// Legacy reference: `js/modules/combat/collision-system.js::
+// checkMissileCollisions` (line 1369). The legacy function does both
+// detection AND damage/knockback/FX application in one pass, mutating
+// missiles + enemies + asteroids in place. The pure step splits these
+// concerns:
+//
+//   - This module ONLY detects which missiles hit which targets this
+//     tick. One `missile_hit_enemy` OR `missile_hit_asteroid` event
+//     per impacting missile. A missile fires at most ONCE per tick.
+//
+//   - The wrapper drains the event buffer and:
+//       - Calls `damageEnemy(enemy, event.damage)` for enemy hits.
+//       - Subtracts `event.damage` from asteroid HP and sets
+//         `_hitFlashTimer = 4` for the flash effect.
+//       - Triggers `destroyAsteroid(ast)` if asteroid HP drops to zero
+//         (asteroid death + child-asteroid spawn cascade).
+//       - Applies the knockback impulse: `target.vel.x += event.knockX;
+//         target.vel.y += event.knockY` (asteroid path is pre-scaled
+//         by 0.6 in the event so the wrapper applies it verbatim).
+//       - Calls `explode(missile.x, missile.y)` for FX (twin flash,
+//         shrapnel fan, embers, sparkle, screen shake, camera kick).
+//       - Sets `missile.active = false` so the projectile despawns.
+//
+// ─── First-hit-wins semantics ────────────────────────────────────────
+//
+// A missile detonates on contact — the first target it touches sets
+// it off. We mirror this with one event per missile per tick + an
+// early break inside the inner scan. Iteration order: enemies first,
+// then asteroids (mirroring legacy lines 1417 / 1435). If a missile
+// is in range of both an enemy and an asteroid in the same tick, the
+// enemy wins.
+//
+// ─── Knockback direction ─────────────────────────────────────────────
+//
+// Knockback is applied in the missile's direction of TRAVEL (not from
+// missile-position toward the target). The legacy computes a unit
+// vector from `missile.vel` and scales it by `MISSILE_KNOCK` (enemy)
+// or `MISSILE_KNOCK * 0.6` (asteroid). The pure step pre-computes
+// `knockX/knockY` in the event so the wrapper just adds them to the
+// target's velocity — no re-normalization required.
+//
+// Degenerate case: if `missile.vx == missile.vy == 0` (a stationary
+// missile, which shouldn't happen in live play but is defensible in
+// tests / replays), `mvLen = Math.hypot(0,0) || 1 = 1`, so
+// `kx = ky = 0`. The event still emits with zero knockback — no
+// crash, no NaN.
+//
+// ─── Skip-gates ──────────────────────────────────────────────────────
+//
+//   Missiles:
+//     - Inactive          (`!missile.active`)
+//
+//   Targets (enemies + asteroids), strict superset of legacy:
+//     - Inactive          (`!target.active`)
+//     - Warping           (`target.warping`)
+//     - Mid death-flash   (`deathFlash` or legacy `_deathFlash` > 0)
+//
+// NOTE: the legacy enemy-impact loop (line 1417) gates only on
+// `!active`. The legacy asteroid-impact loop (line 1435) gates on
+// `!active` and `warping`. The pure step adds death-flash skipping
+// for both (consistency with every other pair in this file —
+// mid-destruction targets shouldn't take a missile hit).
+//
+// ─── What the pure step does NOT do (stays wrapper-only) ─────────────
+//
+//   - Audio + particle FX (`starSparkle`, `explosionFlash`,
+//     `explosionRingColored`, `explosionShrapnel`, `explosionEmber`),
+//     screen shake (`triggerScreenShake(5, 3)`), camera kick
+//     (`triggerCameraKick(...)`) — presentation, wrapper-owned.
+//   - The `missile.active = false` mutation that despawns the
+//     projectile (wrapper applies on event drain).
+//   - The `damageEnemy(enemy, damage)` invocation for enemy hits —
+//     the wrapper calls its own helper so upgrade-state-dependent
+//     damage modifiers stack correctly.
+//   - The asteroid `_hitFlashTimer = 4` mutation (wrapper-side).
+//   - The `destroyAsteroid` cascade when an asteroid's HP drops to
+//     zero — emerges naturally from the wrapper's event drain via
+//     the asteroid's resulting HP.
+//   - HOMING / cluster-warhead split / extra-ordnance modifiers —
+//     those modify the missile state itself (count, behavior) and
+//     are not part of this pair.
+
+/**
+ * Missile → knockback magnitude default. Mirrors the legacy `const
+ * MISSILE_KNOCK = 9 * knockMul` at line 1373 of
+ * `collision-system.js`. The legacy expression scales by a per-player
+ * `getKnockbackMultiplier()` returned from the player upgrade state —
+ * the pure step does NOT consult that multiplier here. The wrapper is
+ * expected to pre-bake the multiplier into the missile's own knockback
+ * constant before invoking detection, or to scale the event payload
+ * after the fact. The default exported below is the raw 9 (no
+ * multiplier).
+ *
+ * Asteroid path uses `MISSILE_KNOCK * 0.6` — applied INSIDE this
+ * module to the event payload's `knockX`/`knockY`, so the wrapper
+ * adds the impulse to `asteroid.vel` verbatim with no further
+ * scaling.
+ */
+export const MISSILE_KNOCK = 9;
+
+/**
+ * Missile → default radius. Matches the legacy `+ 6` literal in the
+ * radius-sum test at lines 1420 and 1438 of `collision-system.js`. A
+ * missile that fails to provide an explicit `radius` is treated as a
+ * 6-pixel projectile.
+ */
+export const MISSILE_DEFAULT_RADIUS = 6;
+
+// ─── Missile Salvo collision detection ───────────────────────────────
+
+/**
+ * Detect Missile Salvo collisions for one tick.
+ *
+ * Pure step: for every active missile, scan enemies first (in array
+ * order) for a target whose center lies inside the missile + target
+ * radius sum. On first enemy hit, emit one `missile_hit_enemy` event
+ * and stop scanning that missile. If no enemy is hit, scan asteroids
+ * (in array order) — first asteroid hit emits one `missile_hit_asteroid`
+ * event (with knockback pre-scaled by 0.6×) and stops the scan. A
+ * missile detonates at most ONCE per tick.
+ *
+ * Geometry:
+ *   Circle-circle overlap: `Math.hypot(target.x - missile.x,
+ *   target.y - missile.y) < (target.radius + missile.radius)`. We use
+ *   `Math.hypot` (not the squared form) to exactly mirror the legacy
+ *   `dist = Math.hypot(...); if (dist < ...)` test — the strict-less-
+ *   than boundary is part of the legacy contract and is preserved.
+ *
+ * Iteration order:
+ *   Missiles outer-loop; for each missile, enemies first then
+ *   asteroids inner-loop. First hit wins per missile.
+ *
+ * Knockback:
+ *   Unit vector from `missile.vx, vy` scaled by `MISSILE_KNOCK`.
+ *   Asteroid path applies an additional `× 0.6` factor inside this
+ *   function (so the wrapper does NOT need to know the asteroid
+ *   discount — just adds `event.knockX`/`event.knockY` to target
+ *   velocity verbatim). Degenerate zero-velocity missile yields
+ *   `kx = ky = 0` (no NaN, no crash).
+ *
+ * What the pure step does NOT do:
+ *   - Apply damage (wrapper calls `damageEnemy(enemy, event.damage)`
+ *     or subtracts from `asteroid.hp`).
+ *   - Apply knockback impulse to the target velocity (wrapper adds
+ *     `event.knockX`/`knockY` to `target.vel.x/y`).
+ *   - Mutate the missile's `active` flag (wrapper sets `active =
+ *     false` on event drain).
+ *   - Set `asteroid._hitFlashTimer = 4` (wrapper-side, presentation).
+ *   - Trigger `destroyAsteroid` cascade on HP <= 0 (wrapper-side, see
+ *     section comment).
+ *   - Particle / explosion FX, screen shake, camera kick.
+ *
+ * Skip-gates (no event emitted):
+ *   Missiles:
+ *     - Inactive          (`!missile.active`)
+ *   Targets (both kinds):
+ *     - Inactive          (`!target.active`)
+ *     - Warping           (`target.warping`)
+ *     - Mid death-flash   (`deathFlash` or legacy `_deathFlash` > 0)
+ *
+ * @param {Array<Object>} missiles    active missiles. Each is treated
+ *                                    as having `{id, x, y, vx, vy,
+ *                                    radius, damage, active}`. `damage`
+ *                                    flows through into the event
+ *                                    payload verbatim; the wrapper
+ *                                    composes it from
+ *                                    POWER_WEAPONS.MISSILE_SALVO.missileDamage
+ *                                    + per-missile upgrade stacks.
+ * @param {Array<Object>} enemies     active enemies. Each is treated
+ *                                    as having `{id, x, y, active,
+ *                                    warping, deathFlash OR
+ *                                    _deathFlash, radius}`. `radius`
+ *                                    defaults to 15 (mirrors the
+ *                                    legacy `enemy.radius || 15`
+ *                                    fallback).
+ * @param {Array<Object>} asteroids   active asteroids. Each is treated
+ *                                    as having `{id, x, y, active,
+ *                                    warping, deathFlash OR
+ *                                    _deathFlash, baseRadius,
+ *                                    radius}`. The radius lookup is
+ *                                    `baseRadius || radius || 20`
+ *                                    (mirrors legacy `ast.baseRadius
+ *                                    || ast.radius || 20`).
+ * @param {Object} ctx                per-tick context bag (currently
+ *                                    unused; reserved for future
+ *                                    extensions like a spatial-grid
+ *                                    filter or per-missile upgrade
+ *                                    caches).
+ * @param {Array<Object>} events      out-buffer. Pushes one
+ *                                    `missile_hit_enemy` OR
+ *                                    `missile_hit_asteroid` event
+ *                                    per impacting missile.
+ *
+ * Event shapes (one event per impacting missile):
+ *
+ *   Enemy hit:
+ *     {
+ *       type: 'missile_hit_enemy',
+ *       missileId:        missile.id,
+ *       targetId:         enemy.id,
+ *       damage:           missile.damage,
+ *       knockX, knockY:   pre-scaled knockback impulse (unit-vector
+ *                         in missile direction × MISSILE_KNOCK).
+ *                         Wrapper adds to `enemy.vel.x/y` verbatim.
+ *     }
+ *
+ *   Asteroid hit:
+ *     {
+ *       type: 'missile_hit_asteroid',
+ *       missileId:        missile.id,
+ *       targetId:         asteroid.id,
+ *       damage:           missile.damage,
+ *       knockX, knockY:   pre-scaled knockback × 0.6 (asteroid
+ *                         discount applied INSIDE this function).
+ *                         Wrapper adds to `asteroid.vel.x/y`
+ *                         verbatim.
+ *     }
+ *
+ * NOTE on field count (5 non-type for each variant, 6 total each):
+ *   Both event shapes carry exactly the same 5 keys (missileId,
+ *   targetId, damage, knockX, knockY). The discriminator is `type`.
+ *   Pre-scaling the asteroid knockback by 0.6 here means the
+ *   wrapper's drain code is identical for both kinds — just add the
+ *   impulse to the target's velocity.
+ */
+export function detectMissileSalvoHits(missiles, enemies, asteroids, ctx, events) {
+    // Tolerate null/empty missile arrays — a frame with no missiles
+    // in flight is the common case.
+    if (!missiles || missiles.length === 0) return;
+    const hasEnemies = enemies && enemies.length > 0;
+    const hasAsteroids = asteroids && asteroids.length > 0;
+    // If there are no possible targets at all, nothing to detect.
+    if (!hasEnemies && !hasAsteroids) return;
+
+    for (let m = 0; m < missiles.length; m++) {
+        const missile = missiles[m];
+        if (!missile || !missile.active) continue;
+
+        // Knockback direction = unit vector in missile direction of
+        // travel. Mirrors legacy lines 1412-1416. Zero-velocity
+        // missile → `mvLen = 0 || 1 = 1`, so kx = ky = 0 (no crash).
+        const mvx = missile.vx || 0;
+        const mvy = missile.vy || 0;
+        const mvLen = Math.hypot(mvx, mvy) || 1;
+        const kx = mvx / mvLen;
+        const ky = mvy / mvLen;
+
+        const missileRadius = missile.radius || MISSILE_DEFAULT_RADIUS;
+        const missileX = missile.x;
+        const missileY = missile.y;
+
+        let hit = false;
+
+        // ── Enemies ────────────────────────────────────────────────
+        // First target inside the radius sum wins. Mirrors legacy
+        // lines 1417-1431 (enemies-first iteration order).
+        if (hasEnemies) {
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                if (!enemy || !enemy.active) continue;
+                if (enemy.warping) continue;
+
+                // Death-flash gate — dual-name support, same as every
+                // other pair in this file.
+                const eF = enemy.deathFlash !== undefined
+                    ? enemy.deathFlash
+                    : enemy._deathFlash;
+                if (eF && eF > 0) continue;
+
+                const enemyRadius = enemy.radius || 15;
+                const dx = enemy.x - missileX;
+                const dy = enemy.y - missileY;
+                // Use Math.hypot (not the squared form) to mirror the
+                // legacy `dist < ...` test exactly. Strict less-than
+                // boundary preserved.
+                const dist = Math.hypot(dx, dy);
+                if (dist >= enemyRadius + missileRadius) continue;
+
+                events.push({
+                    type: 'missile_hit_enemy',
+                    missileId: missile.id,
+                    targetId: enemy.id,
+                    damage: missile.damage,
+                    knockX: kx * MISSILE_KNOCK,
+                    knockY: ky * MISSILE_KNOCK,
+                });
+                hit = true;
+                break;
+            }
+        }
+
+        if (hit) continue;
+
+        // ── Asteroids ──────────────────────────────────────────────
+        // No enemy hit — try asteroids next. Mirrors legacy lines
+        // 1435-1452. Knockback is pre-scaled by 0.6 in the event so
+        // the wrapper's drain code is uniform across both target
+        // kinds.
+        if (hasAsteroids) {
+            for (let j = 0; j < asteroids.length; j++) {
+                const asteroid = asteroids[j];
+                if (!asteroid || !asteroid.active) continue;
+                if (asteroid.warping) continue;
+
+                const aF = asteroid.deathFlash !== undefined
+                    ? asteroid.deathFlash
+                    : asteroid._deathFlash;
+                if (aF && aF > 0) continue;
+
+                const asteroidRadius = asteroid.baseRadius
+                    || asteroid.radius
+                    || 20;
+                const dx = asteroid.x - missileX;
+                const dy = asteroid.y - missileY;
+                const dist = Math.hypot(dx, dy);
+                if (dist >= asteroidRadius + missileRadius) continue;
+
+                events.push({
+                    type: 'missile_hit_asteroid',
+                    missileId: missile.id,
+                    targetId: asteroid.id,
+                    damage: missile.damage,
+                    knockX: kx * MISSILE_KNOCK * 0.6,
+                    knockY: ky * MISSILE_KNOCK * 0.6,
+                });
+                break;
+            }
+        }
+    }
+}
