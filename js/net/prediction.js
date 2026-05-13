@@ -12,6 +12,20 @@
 // strategy"): if `predictionDivergence` ever fires in the field, the
 // parity harness has a hole. Log loudly and fix the harness.
 //
+// ── Reconciliation tolerance (2026-05-11) ───────────────────────────────────
+// The Rust authoritative server stores ship state in f32, while JS runs in
+// f64. Across the wire, snapshots come back as f32-magnitude values which,
+// after JS replay through the (f64) physics step, can drift by ~1e-6..1e-3
+// per tick relative to a strict bit-for-bit comparison. Strict equality
+// (`shipsBitEqual`) would flag this as divergence on every snapshot.
+//
+// The reconciliation path in `onSnapshot` therefore uses a tolerance-based
+// comparator (`shipsApproxEqual`, default tolerance 0.01 — same as the
+// cross-language Rust parity tests). The strict comparator stays available
+// for JS↔JS replay verification where a single ULP of drift IS a bug.
+// Tolerance is configurable per-Predictor via the `reconcileTolerance`
+// constructor option.
+//
 // ── Wiring (2026-05-11) ─────────────────────────────────────────────────────
 // The default `updateShip` callback now delegates to the pure ship-physics
 // step at `js/sim/ship.js::updateShip`. That function has the signature
@@ -49,6 +63,15 @@ import { TickBuffer } from './tick-buffer.js';
 const DEFAULT_SNAPSHOT_HISTORY_CAPACITY = 64;
 
 /**
+ * Default tolerance for `shipsApproxEqual` used during `onSnapshot`
+ * reconciliation. Matches the cross-language Rust parity-test tolerance
+ * (`server/tests/parity_*.rs`) — wide enough to absorb f32↔f64 drift
+ * across replay, narrow enough that any real physics divergence still
+ * trips the divergence counter and logs.
+ */
+const DEFAULT_RECONCILE_TOLERANCE = 0.01;
+
+/**
  * Default ship-update callback. Wraps the pure step in
  * `js/sim/ship.js` with a no-op rng + empty events array. Mirrors
  * `server/src/sim/ship.rs::update_ship` (modulo language).
@@ -74,14 +97,22 @@ export class Predictor {
      * @param {number} [opts.snapshotHistoryCapacity=64] - max number of
      *     authoritative server snapshots retained in the snapshot history
      *     TickBuffer. Defaults to ~1 second at 60 Hz.
+     * @param {number} [opts.reconcileTolerance=0.01] - per-field absolute
+     *     tolerance used by `onSnapshot` when comparing the locally-predicted
+     *     ship state against the server-anchored replay. Defaults to 0.01
+     *     to absorb f32↔f64 drift between the Rust authoritative server
+     *     and JS client. Set to 0 (or use `shipsBitEqual` directly) for
+     *     strict bit-equal JS↔JS replay verification.
      */
     constructor({
         updateShip = defaultUpdateShip,
         dt,
         snapshotHistoryCapacity = DEFAULT_SNAPSHOT_HISTORY_CAPACITY,
+        reconcileTolerance = DEFAULT_RECONCILE_TOLERANCE,
     } = {}) {
         this.updateShip = updateShip;
         this.dt = dt;
+        this.reconcileTolerance = reconcileTolerance;
         /** @type {Array<{tick: number, input: object}>} */
         this.pending = [];
         this.tick = 0;
@@ -194,8 +225,16 @@ export class Predictor {
         }
 
         // Compare. Mismatch is a parity-harness escape; track it and
-        // snap local state to the server-anchored replay.
-        if (this.localShipState && !shipsBitEqual(s, this.localShipState)) {
+        // snap local state to the server-anchored replay. We use the
+        // tolerance-based comparator here (default 0.01) rather than
+        // strict bit-equality, because the Rust authoritative server
+        // stores f32 ship state while JS runs f64; round-trip drift in
+        // the low ulps is expected and not a parity hole. See the
+        // module-level "Reconciliation tolerance" note for details.
+        if (
+            this.localShipState &&
+            !shipsApproxEqual(s, this.localShipState, this.reconcileTolerance)
+        ) {
             this.divergenceCount++;
             // eslint-disable-next-line no-console
             console.warn('[net/prediction] divergence', {
@@ -203,6 +242,7 @@ export class Predictor {
                 pending: this.pending.length,
                 replayed: s,
                 local: this.localShipState,
+                tolerance: this.reconcileTolerance,
             });
         }
         this.localShipState = s;
@@ -259,7 +299,22 @@ function cloneShip(s) {
     return { ...s };
 }
 
-function shipsBitEqual(a, b) {
+/**
+ * Strict bit-for-bit ship-state comparator. Five prediction-relevant
+ * scalar fields (`x`, `y`, `vx`, `vy`, `angle`) compared via `===`.
+ *
+ * Use this for JS↔JS replay verification, where any drift in the low
+ * bits IS a bug (deterministic physics on both sides should give
+ * identical output). For Rust↔JS cross-language reconciliation, prefer
+ * `shipsApproxEqual` — see the module-level "Reconciliation tolerance"
+ * note for why.
+ *
+ * @param {object|null|undefined} a
+ * @param {object|null|undefined} b
+ * @returns {boolean} true iff every field matches strictly; false if
+ *     either input is nullish.
+ */
+export function shipsBitEqual(a, b) {
     // Compare prediction-relevant fields bit-for-bit. f32 fields and the
     // future Fxp `.raw` int both compare via ===. Today `js/sim/ship.js`
     // writes x, y, vx, vy, and angle each tick; all five participate in
@@ -281,5 +336,56 @@ function shipsBitEqual(a, b) {
         a.vx === b.vx &&
         a.vy === b.vy &&
         a.angle === b.angle
+    );
+}
+
+/**
+ * Tolerance-based ship-state comparator. Each prediction-relevant field
+ * (`x`, `y`, `vx`, `vy`, `angle`) is compared with a per-field absolute
+ * tolerance: `|s1.field - s2.field| < tolerance`. ALL fields must
+ * satisfy the bound for the function to return true.
+ *
+ * Comparison is **strict less-than** (`< tolerance`, not `<=`). At
+ * exactly `tolerance`, the function returns false — this matches the
+ * convention used by the Rust parity tests in `server/tests/parity_*.rs`.
+ *
+ * Use this for Rust↔JS reconciliation in `onSnapshot`. The Rust server
+ * stores ship state in f32, JS runs in f64; round-trip drift in the
+ * low ulps (well below 0.01) is expected, not a parity hole. The
+ * default 0.01 matches the cross-language Rust parity-test tolerance.
+ *
+ * NaN handling: any NaN in either operand for any field makes the
+ * comparison fail (NaN never satisfies `< tolerance`); the function
+ * returns false. This is intentional — a NaN in the prediction state
+ * is itself a bug worth flagging via divergenceCount.
+ *
+ * @param {object|null|undefined} s1
+ * @param {object|null|undefined} s2
+ * @param {number} [tolerance=0.01] per-field absolute tolerance
+ * @returns {boolean} true iff every field is within tolerance of its
+ *     counterpart; false if either input is nullish or any field's
+ *     absolute diff is `>=` tolerance.
+ */
+export function shipsApproxEqual(s1, s2, tolerance = DEFAULT_RECONCILE_TOLERANCE) {
+    if (s1 == null || s2 == null) return false;
+    // Fxp-backed shape (forward compat — not used today). Fxp is
+    // integer-backed; the tolerance is in the same scaled units the
+    // caller chose. Today no shipping code path uses Fxp ships, so
+    // this branch is documentation more than runtime cost.
+    if (s1.x != null && s1.x.raw !== undefined) {
+        return (
+            Math.abs(s1.x.raw - s2.x.raw) < tolerance &&
+            Math.abs(s1.y.raw - s2.y.raw) < tolerance &&
+            Math.abs(s1.vx.raw - s2.vx.raw) < tolerance &&
+            Math.abs(s1.vy.raw - s2.vy.raw) < tolerance &&
+            Math.abs(s1.angle - s2.angle) < tolerance
+        );
+    }
+    return (
+        Math.abs(s1.x - s2.x) < tolerance &&
+        Math.abs(s1.y - s2.y) < tolerance &&
+        Math.abs(s1.vx - s2.vx) < tolerance &&
+        Math.abs(s1.vy - s2.vy) < tolerance &&
+        Math.abs(s1.angle - s2.angle) < tolerance
     );
 }
