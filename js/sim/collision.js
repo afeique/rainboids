@@ -2109,3 +2109,314 @@ export function detectNovaBlastHits(novaBlast, enemies, asteroids, ctx, events) 
         }
     }
 }
+
+// =====================================================================
+// MINE — proximity-triggered persistent AoE
+// =====================================================================
+//
+// Mines are persistent bullets placed in the world by the player. They
+// sit (or seek, depending on the variant) and detonate when an enemy or
+// asteroid crosses their trigger ring. On detonation they deal area
+// damage to everything inside the larger blast ring + knockback.
+//
+// Legacy reference: `js/modules/combat/collision-system.js::
+// checkMineCollisions` (line 873). The legacy function does both
+// detection AND damage/knockback application in one pass, mutating
+// enemies and asteroids in place. The pure step splits these concerns:
+//
+//   - This module ONLY detects which mines are triggered this tick and
+//     by what (enemy or asteroid). One `mine_detonated` event per
+//     triggered mine.
+//   - The WRAPPER applies AoE damage. The wrapper has two clean choices:
+//     (a) call `detectNovaBlastHits` with `{centerX:mineX, centerY:mineY,
+//         radius:explosionRadius, damage}` to re-use the disc-vs-targets
+//         detector and emit nova_hit_enemy / nova_hit_asteroid events,
+//         or (b) run its own per-mine scan with falloff + knockback.
+//     The legacy code uses (b) with linear falloff
+//     (`mineDamage * (1 - dist/blastR * 0.5)`) and outward knockback;
+//     the pure step intentionally does NOT bake that in, since the
+//     damage curve + knockback magnitudes are upgrade-state-dependent
+//     (KNOCKBACK powerup multipliers, etc.) and live wrapper-side.
+//
+// ─── What the pure step intentionally does NOT report ────────────────
+//
+//   - Per-target AoE damage events (use detectNovaBlastHits or a
+//     custom scan from the mine_detonated event)
+//   - Per-target knockback impulses (wrapper-owned, upgrade-dependent)
+//   - Lifetime-expiry self-detonations (`mine.expired = true` from the
+//     mine update step) — the wrapper detects this BEFORE calling the
+//     pure step and emits its own detonation event, OR sets a sentinel
+//     trigger entity. We document that path but keep this pure step
+//     focused on proximity triggers ONLY.
+//   - Daisy-chain cascades (DAISY_CHAIN upgrade: nearby mines detonate
+//     together) — emerges naturally if the wrapper re-runs detection
+//     after applying the first detonation's AoE to neighbor mines'
+//     HP. Not modelled here.
+//   - Mine HP / shoot-down (a mine being destroyed by a player bullet
+//     is handled by `detectBulletAsteroidHits`-style bullet-vs-mine
+//     pair, NOT here). The mine_detonated event reports proximity
+//     triggers only; the wrapper is responsible for detecting `mine.hp
+//     <= 0` from a separate bullet-mine pair and treating that as a
+//     destruction (without AoE) or chain-trigger (with AoE) per design.
+//
+// ─── Skip-gates ──────────────────────────────────────────────────────
+//
+//   Mines:
+//     - Inactive          (`!mine.active`)
+//     - Not armed         (`!mine.armed`) — legacy gate at line 877.
+//                         Mines have a 1s arm timer after placement
+//                         during which they don't trigger.
+//
+//   Targets (enemies + asteroids), legacy uses `!active` only, but the
+//   pure step adds the standard parity gates for consistency with
+//   every other pair in this file:
+//     - Inactive          (`!target.active`)
+//     - Warping           (`target.warping`)
+//     - Mid death-flash   (`deathFlash` or legacy `_deathFlash` > 0)
+//
+// NOTE: the legacy enemy-trigger loop (lines 885-889) only gates on
+// `!active`. The legacy asteroid-trigger loop (lines 891-895) gates on
+// `!active` and `warping`. The pure step adds death-flash skipping
+// for both (strict superset of legacy). Mid-destruction targets
+// shouldn't trigger mines.
+//
+// ─── First-trigger semantics ─────────────────────────────────────────
+//
+// A mine detonates exactly ONCE — the very first target that crosses
+// its trigger ring sets it off. We mirror this by emitting exactly one
+// `mine_detonated` event per mine per tick (early-return on first hit
+// inside the scan). The event's `triggerKind` and `triggerId` identify
+// which entity tripped the mine; the wrapper applies AoE to ALL
+// targets in the blast radius (not just the trigger). Iteration order:
+// enemies first, then asteroids, mirroring the legacy ordering.
+
+/**
+ * Mine → AoE blast radius default. Mirrors
+ * `POWER_WEAPONS.MINE_LAYER.blastRadius = 80`. Used by the wrapper to
+ * scale the per-mine blast disc when running its AoE pass; the pure
+ * step reads `mine.explosionRadius` directly from each mine state so
+ * the wrapper can apply BLAST_RADIUS upgrade stacks per-mine before
+ * the detection call.
+ */
+export const MINE_DEFAULT_BLAST_RADIUS = 80;
+
+/**
+ * Mine → trigger ring default. Mirrors
+ * `mine.triggerRadius || 60` legacy fallback at line 878. This is the
+ * range at which an enemy/asteroid CENTER inside the ring tips the
+ * mine; smaller than the blast disc.
+ */
+export const MINE_DEFAULT_TRIGGER_RADIUS = 60;
+
+/**
+ * Mine → flat damage default. Mirrors
+ * `POWER_WEAPONS.MINE_LAYER.mineDamage = 3`. Pure step copies whatever
+ * is on the mine state into the event; the wrapper resolves falloff +
+ * knockback magnitudes after the fact.
+ */
+export const MINE_DEFAULT_DAMAGE = 3;
+
+// ─── Mine collision detection ────────────────────────────────────────
+
+/**
+ * Detect Mine collisions for one tick.
+ *
+ * Pure step: for every active+armed mine, scan enemies + asteroids for
+ * a target whose center lies inside the mine's trigger ring. On the
+ * first detected target, emit one `mine_detonated` event and stop
+ * scanning that mine. A mine detonates at most ONCE.
+ *
+ * Geometry:
+ *   Point-in-disc: `dx² + dy² < triggerRadius²`. We use the squared
+ *   form for the gate (no sqrt), then compute the actual distance once
+ *   when emitting the event (for the `distanceFromCenter` field). This
+ *   matches the legacy `Math.hypot(...) < triggerR` test in the
+ *   `checkMineCollisions` loop.
+ *
+ * Trigger semantics:
+ *   First target wins. Iteration order is `enemies` (in array order),
+ *   then `asteroids` (in array order). The first one inside the
+ *   trigger ring sets off the mine; subsequent overlaps in the same
+ *   tick produce no additional events (and the wrapper observes the
+ *   mine going inactive between ticks via the detonation event).
+ *
+ * What the pure step does NOT do:
+ *   - Apply AoE damage to all enemies/asteroids inside the blast
+ *     radius (wrapper concern — see section comment above).
+ *   - Apply outward knockback impulses (wrapper concern — depends on
+ *     KNOCKBACK powerup multipliers).
+ *   - Mutate the mine's `active` flag (wrapper sets `active = false`
+ *     when it drains the mine_detonated event).
+ *   - Handle daisy-chain cascades or mine HP / shoot-down (separate
+ *     concerns, see section comment).
+ *
+ * Skip-gates (no event emitted):
+ *   Mines:
+ *     - Inactive          (`!mine.active`)
+ *     - Not armed         (`!mine.armed`)
+ *   Targets (both kinds):
+ *     - Inactive          (`!target.active`)
+ *     - Warping           (`target.warping`)
+ *     - Mid death-flash   (`deathFlash` or legacy `_deathFlash` > 0)
+ *
+ * @param {Array<Object>} mines       active mines. Each is treated as
+ *                                    having `{id, x, y, active, armed,
+ *                                    triggerRadius, explosionRadius,
+ *                                    damage}`. `triggerRadius` /
+ *                                    `explosionRadius` / `damage` flow
+ *                                    through into the event payload
+ *                                    verbatim; the wrapper composes
+ *                                    them from POWER_WEAPONS.MINE_LAYER
+ *                                    + per-mine upgrade stacks.
+ * @param {Array<Object>} enemies     active enemies. Each is treated
+ *                                    as having `{x, y, active, warping,
+ *                                    deathFlash OR _deathFlash, id}`.
+ *                                    Radius is NOT consulted — legacy
+ *                                    line 887 tests enemy CENTER vs
+ *                                    mine center.
+ * @param {Array<Object>} asteroids   active asteroids. Same shape as
+ *                                    `enemies` — center-only test.
+ * @param {Object} ctx                per-tick context bag (currently
+ *                                    unused; reserved for future
+ *                                    extensions like a spatial-grid
+ *                                    filter or per-mine upgrade caches).
+ * @param {Array<Object>} events      out-buffer. Pushes one
+ *                                    `mine_detonated` event per
+ *                                    triggered mine; see shape below.
+ *
+ * Event shape (one event per triggered mine):
+ *
+ *   {
+ *     type: 'mine_detonated',
+ *     mineId:               mine.id,
+ *     mineX, mineY:         world coords of the mine at detonation.
+ *                           Wrapper uses these as the AoE center
+ *                           (typically forwarded to
+ *                           `detectNovaBlastHits({centerX:mineX,
+ *                           centerY:mineY, radius:explosionRadius,
+ *                           damage})` to enumerate AoE targets).
+ *     explosionRadius:      blast disc radius (from mine state).
+ *     damage:               flat blast damage (from mine state). The
+ *                           wrapper applies any falloff curve.
+ *     triggerKind:          'enemy' | 'asteroid' — which kind of
+ *                           target tripped the mine.
+ *     triggerId:            id of the trigger target. Useful for
+ *                           wrapper-side telemetry / kill-feed
+ *                           attribution and for daisy-chain detection.
+ *     distanceFromCenter:   Math.hypot(triggerX-mineX, triggerY-mineY).
+ *                           Always finite + nonnegative. Useful for
+ *                           debug overlays + ensuring the trigger was
+ *                           actually inside the ring.
+ *   }
+ *
+ * NOTE on field count (7 non-type, 8 total):
+ *   Includes `explosionRadius` + `damage` so the wrapper does NOT have
+ *   to look up the mine state again to apply AoE — the event is
+ *   self-contained. This trades a small payload size for wrapper
+ *   simplicity (and matches the legacy "everything in one pass"
+ *   ergonomics, but split into detection + application phases).
+ */
+export function detectMineHits(mines, enemies, asteroids, ctx, events) {
+    // Tolerate null/empty mine arrays — a frame with no placed mines
+    // is the common case.
+    if (!mines || mines.length === 0) return;
+    const hasEnemies = enemies && enemies.length > 0;
+    const hasAsteroids = asteroids && asteroids.length > 0;
+    // If there are no possible triggers at all, nothing to detect.
+    if (!hasEnemies && !hasAsteroids) return;
+
+    for (let m = 0; m < mines.length; m++) {
+        const mine = mines[m];
+        if (!mine || !mine.active) continue;
+        // Arm-gate — newly placed mines have a ~1s arm delay during
+        // which they don't trigger. Mirrors legacy line 877.
+        if (!mine.armed) continue;
+
+        const mineX = mine.x;
+        const mineY = mine.y;
+        const triggerRadius = mine.triggerRadius;
+        // Defensive: zero or negative trigger radius can never fire.
+        if (!(triggerRadius > 0)) continue;
+        const triggerRadiusSq = triggerRadius * triggerRadius;
+
+        let triggered = false;
+
+        // ── Enemies ────────────────────────────────────────────────
+        // First target inside the trigger ring wins. Early-break so a
+        // mine sitting in the middle of a crowd reports just ONE
+        // trigger event per detonation.
+        if (hasEnemies) {
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                if (!enemy || !enemy.active) continue;
+                if (enemy.warping) continue;
+
+                // Death-flash gate — dual-name support, same as every
+                // other pair in this file.
+                const eF = enemy.deathFlash !== undefined
+                    ? enemy.deathFlash
+                    : enemy._deathFlash;
+                if (eF && eF > 0) continue;
+
+                const dx = enemy.x - mineX;
+                const dy = enemy.y - mineY;
+                const distSq = dx * dx + dy * dy;
+                if (distSq >= triggerRadiusSq) continue;
+
+                events.push({
+                    type: 'mine_detonated',
+                    mineId: mine.id,
+                    mineX,
+                    mineY,
+                    explosionRadius: mine.explosionRadius,
+                    damage: mine.damage,
+                    triggerKind: 'enemy',
+                    triggerId: enemy.id,
+                    distanceFromCenter: Math.sqrt(distSq),
+                });
+                triggered = true;
+                break;
+            }
+        }
+
+        if (triggered) continue;
+
+        // ── Asteroids ──────────────────────────────────────────────
+        if (hasAsteroids) {
+            for (let j = 0; j < asteroids.length; j++) {
+                const asteroid = asteroids[j];
+                if (!asteroid || !asteroid.active) continue;
+                if (asteroid.warping) continue;
+
+                const aF = asteroid.deathFlash !== undefined
+                    ? asteroid.deathFlash
+                    : asteroid._deathFlash;
+                if (aF && aF > 0) continue;
+
+                const dx = asteroid.x - mineX;
+                const dy = asteroid.y - mineY;
+                const distSq = dx * dx + dy * dy;
+                if (distSq >= triggerRadiusSq) continue;
+
+                events.push({
+                    type: 'mine_detonated',
+                    mineId: mine.id,
+                    mineX,
+                    mineY,
+                    explosionRadius: mine.explosionRadius,
+                    damage: mine.damage,
+                    triggerKind: 'asteroid',
+                    triggerId: asteroid.id,
+                    distanceFromCenter: Math.sqrt(distSq),
+                });
+                // No `break` needed here — we don't reach another mine
+                // until the outer loop iterates. The early-exit pattern
+                // above (set `triggered = true; break;`) avoids
+                // re-scanning asteroids when an enemy already tripped
+                // the mine; here we just naturally fall through to the
+                // next mine.
+                break;
+            }
+        }
+    }
+}
