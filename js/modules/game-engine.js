@@ -54,6 +54,9 @@ import * as weaponFx from './combat/weapon-effects-renderer.js';
 import * as events from './ui/event-setup.js';
 import { showHint, updateHintDimming } from './ui/hint-system.js';
 import { RadialMenu } from './ui/radial-menu.js';
+import { MobileTouchHandler } from './ui/mobile-touch.js';
+import { AutoPilot } from './player/auto-pilot.js';
+import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { hasSave, loadSave, writeSave, clearSave } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
 
@@ -299,6 +302,25 @@ export class GameEngine {
         // Hold-to-open radial menu for E (primary) / R (power) / F (skill).
         // Pauses gameplay; mouse picks the slice, click commits, key release cancels.
         this.radialMenu = new RadialMenu(this);
+
+        // ── Mobile-mode subsystems (5.91 — phone / tablet overhaul) ───
+        // Touch handler: tap-to-shoot + long-press radial. Installs its
+        // own listeners; no-op on desktop.
+        // Auto-pilot: dodges threats on mobile; idle on desktop. The
+        // engine drives `autoPilot.tick()` each logic step from update().
+        this.mobile = isMobile();
+        this.autoPilot = new AutoPilot(this);
+        this.mobileTouch = new MobileTouchHandler(this);
+        if (this.mobile) {
+            // Toggle the body classes that drive the CSS HUD adjustments.
+            // The portrait class is also re-evaluated on every resize /
+            // orientationchange — see updateMobileBodyClasses().
+            if (typeof document !== 'undefined' && document.body) {
+                document.body.classList.add('mobile-mode');
+            }
+            this._updateMobileBodyClasses();
+            this.mobileTouch.install();
+        }
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         this.canvas.width = this.width;
@@ -594,6 +616,31 @@ export class GameEngine {
        window.gameEngine.cheats.onePunchMan = true
        window.gameEngine.game.money += N
        window.gameEngine.player.skillPoints += N)`);
+    }
+
+    /**
+     * Recompute the `mobile-portrait` body class. Called on init + on
+     * every resize / orientationchange. The class drives the CSS rules
+     * that hide non-essential HUD chrome in portrait orientation.
+     */
+    _updateMobileBodyClasses() {
+        if (typeof document === 'undefined' || !document.body) return;
+        if (!this.mobile) {
+            document.body.classList.remove('mobile-portrait');
+            return;
+        }
+        const portrait = isPortrait();
+        document.body.classList.toggle('mobile-portrait', portrait);
+    }
+
+    /**
+     * Returns true when the top-of-screen HUD elements (target info,
+     * wave-info overlays, key hints) should be hidden. Mobile portrait
+     * mode hides them to free up screen real estate; entity health bars
+     * above each enemy / asteroid replace the global target info panel.
+     */
+    _shouldHideTopHud() {
+        return !!(this.mobile && isPortrait());
     }
     
     initializePools() {
@@ -1982,6 +2029,15 @@ export class GameEngine {
             // Add the update method to the input object so player can call it
             input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
 
+            // ── Mobile auto-pilot (5.91) ─────────────────────────────────
+            // Phones / tablets have no keyboard, so movement is driven by
+            // a reactive AI that dodges threats. The auto-pilot writes
+            // up/down/left/right onto `input` *before* player.update()
+            // consumes it — desktop runs early-return inside canRun().
+            if (this.mobile && this.autoPilot) {
+                this.autoPilot.tick();
+            }
+
             // Respawn is now instant - no animation needed
 
             // Safety: chargePaused should never be true during gameplay — it's only
@@ -2580,7 +2636,7 @@ export class GameEngine {
             // to skip drawTargetInfo — making the top-center enemy panel
             // pop out for the duration of the freeze, then back in. Now we
             // draw it during hitstop too, so the panel stays solid.
-            this.drawTargetInfo();
+            if (!this._shouldHideTopHud()) this.drawTargetInfo();
             // 5.72.3 — drawMoneyPickupDisplay disabled. It rendered a "+N"
         // text near the OLD top-left coin position, which is now empty
         // (gold moved to bottom-right in 5.72.0). The new goldPopups
@@ -2697,7 +2753,7 @@ export class GameEngine {
         this.drawHUD();
         
         // Top-center panel for the most recently hit enemy.
-        this.drawTargetInfo();
+        if (!this._shouldHideTopHud()) this.drawTargetInfo();
         
         // Draw money pickup display
         // 5.72.3 — drawMoneyPickupDisplay disabled. It rendered a "+N"

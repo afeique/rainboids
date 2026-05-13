@@ -8,15 +8,33 @@ import { VERSION } from './modules/core/version.js';
 import { EngineDriver } from './engine/engine-driver.js';
 import { openMultiplayerModal } from './net/multiplayer-modal.js';
 import { SESSION_STORAGE_KEY } from './net/ws-client.js';
+import { isMobile as _isMobilePlatform } from './modules/platform/platform-detect.js';
 
-// Rainboids is mouse-and-keyboard only. If the browser is a phone or tablet
-// (coarse pointer, no hover, OR small viewport), we show a "desktop only"
-// message and never initialize the game — so no audio download, no canvas
-// loop, no input handlers.
-function isMobileOrTabletDevice() {
-    if (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) return true;
-    if (window.innerWidth < 1024) return true;
-    return false;
+// 5.91.0 — Rainboids now supports a full mobile-mode overhaul (auto-
+// pilot + tap-to-shoot + long-press weapon radial). The desktop-only
+// gate now only fires for an in-between class of device that is touch-
+// capable but doesn't quite hit the mobile threshold (e.g. a hybrid
+// laptop with a touchscreen and a 1280px viewport) — those still
+// benefit from the mouse-and-keyboard experience.
+//
+// The order is:
+//   1. `?mobile=1` URL override → run the game with mobile mode.
+//   2. `?mobile=0` URL override → run the game with desktop mode.
+//   3. isMobile() (touch + small viewport) → run with mobile mode.
+//   4. Otherwise: desktop. Never blocked.
+function shouldBlockDesktopOnly() {
+    // Mobile-mode handles touch entirely, so it's never the blocked case.
+    if (_isMobilePlatform()) return false;
+    // Keep the legacy classification for the borderline "touch + small
+    // viewport but not quite a phone" case (which used to hit the 1024px
+    // breakpoint). We now widen the desktop bucket — only block when the
+    // viewport is genuinely tiny (<720px on the long axis) AND the device
+    // is touch-only. This is essentially "an older tablet that doesn't
+    // hit isMobile()'s 900px ceiling".
+    const veryNarrow = window.innerWidth < 720;
+    const touchOnly = window.matchMedia &&
+        window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    return touchOnly && veryNarrow;
 }
 
 function showDesktopOnlyMessage() {
@@ -42,7 +60,7 @@ class RainboidsGame {
             });
         }
 
-        if (isMobileOrTabletDevice()) {
+        if (shouldBlockDesktopOnly()) {
             showDesktopOnlyMessage();
             return;
         }
