@@ -20,18 +20,20 @@ Visit **[rainboids.cat.computer](https://rainboids.cat.computer)** in any modern
 
 ### Plays on desktop and mobile
 
-Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.91.0) ships a fundamentally different control scheme:
+Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.92.0) ships a fundamentally different control scheme:
 
 - **Movement is automatic** — a reactive auto-pilot dodges nearby threats and keeps the ship clear of walls so the player can focus on aiming and firing.
 - **Tap to shoot** — tap an enemy or asteroid and the primary weapon snaps to that target and fires. Taps on empty space fire toward the tap point.
 - **Long-press to swap weapons** — press and hold anywhere for ~300 ms to open the weapon radial; drag to highlight; release on a wedge to equip; release outside the ring to cancel.
-- **Portrait HUD** — non-essential top-screen overlays are suppressed in portrait orientation to free up screen real estate.
+- **Auto-fire power weapons** (5.92.0) — the equipped power weapon fires automatically the moment it's ready: cooldown weapons (Nova Blast, Mine Layer, etc.) on cooldown clear; the Charge Shot when fully charged. The player has only one finger free, so the game does the second-trigger work.
+- **Simplified HUD** (5.92.0) — only the top-left status cluster (health bar, triforce / energy tanks, XP bar) and the bottom-center action button bar (SHOP / STATS / PAUSE) are shown. The coins readout, survival timer, and equipped-weapon meters are hidden so the playfield gets the screen.
+- **Responsive layout** (5.92.0) — the title screen stacks NEW GAME / CONTINUE / MULTIPLAYER vertically in portrait and keeps the side-by-side layout (at a slightly smaller scale) in landscape. Title text auto-shrinks to fit phone-sized viewports.
 
 Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode on a desktop, `?mobile=0` disables it on a touch device.
 
 ## Version and History
 
-Current version: **5.91.0**
+Current version: **5.92.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -78,10 +80,12 @@ Rainboids is a supercharged asteroids game featuring:
 ### Mobile (touch)
 
 - **Movement**: Auto-pilot (no on-screen joystick) — the ship dodges threats automatically. The player never directly controls movement.
-- **Aim + fire (tap)**: Tap an enemy or asteroid to snap aim onto it and fire one shot. Taps on empty space fire toward the tap point. Taps within ~48 px of an entity's centre snap to that entity.
+- **Aim + fire primary (tap)**: Tap an enemy or asteroid to snap aim onto it and fire one shot. Taps on empty space fire toward the tap point. Taps within ~48 px of an entity's centre snap to that entity.
+- **Power weapon (auto-fire, 5.92.0)**: The equipped power weapon fires automatically as soon as it's ready — cooldown weapons (Nova Blast, Mine Layer, Missile Salvo, Lance Beam, Lightning Arc) the instant their cooldown clears; the Charge Shot the instant it's fully charged. No tap needed.
 - **Weapon radial (long-press)**: Press and hold anywhere on the canvas for ~300 ms to open the primary-weapon radial. Drag to highlight a wedge; release on the wedge to equip; release outside the ring to cancel.
-- **Pause / shop**: same top-right buttons as desktop.
-- **Portrait HUD**: top-screen target info panel and contextual hints are hidden to free up screen real estate; entity health bars above each enemy / asteroid take their place.
+- **Bottom button bar (5.92.0)**: SHOP / STATS / PAUSE buttons centered along the bottom of the screen. Direct tap routes to the matching action — they do not fall through to fire-a-shot.
+- **Simplified HUD (5.92.0)**: only the top-left status cluster (health bar, triforce / energy tanks, XP bar) is shown. The coins readout, survival timer, equipped-weapon squares (PRM / PWR / SKL), and the powerup-meter panel are all hidden in mobile mode to maximize playfield visibility.
+- **Responsive title (5.92.0)**: NEW GAME / CONTINUE / MULTIPLAYER stack vertically in portrait, sit inline in landscape. Title text shrinks to fit narrow viewports.
 
 ### Cheat Codes
 - **`[`**: +1000 Gold

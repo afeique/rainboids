@@ -21,11 +21,22 @@
 // (weapon picker). Keep it simple.
 
 import { isMobile } from '../platform/platform-detect.js';
+import { GAME_STATES } from '../core/constants.js';
 
 const TAP_MS = 220;              // release within this = tap
 const LONG_PRESS_MS = 300;       // hold past this = radial menu
 const DRAG_CANCEL_PX = 18;       // movement past this cancels long-press
 const SNAP_RADIUS_PX = 48;       // tap within this of entity centre snaps
+
+// 5.92.0 — touch hardening: gameplay touch gestures (tap-to-shoot,
+// long-press radial) only run during PLAYING / WAVE_TRANSITION. The
+// TITLE_SCREEN / PAUSED / SHOP / GAME_OVER / GAME_COMPLETE states have
+// their own touch handlers (DOM buttons / canvas-button bar) and the
+// gameplay handlers would interfere — e.g. opening the weapon radial
+// from inside the pause menu, or firing a shot through the game-over
+// screen and resuming play. Tracking this set up front makes the
+// guard a single `has()` call.
+const PLAYABLE_STATES = new Set([GAME_STATES.PLAYING, GAME_STATES.WAVE_TRANSITION]);
 
 export class MobileTouchHandler {
     constructor(gameEngine) {
@@ -78,6 +89,54 @@ export class MobileTouchHandler {
         const x = (touch.clientX - rect.left) * (this.engine.canvas.width  / rect.width);
         const y = (touch.clientY - rect.top)  * (this.engine.canvas.height / rect.height);
         return { x, y };
+    }
+
+    // 5.92.0 — true iff the engine is in a state where gameplay
+    // touch (tap-to-shoot, long-press radial) is meaningful. Falsey
+    // states include the title screen (its own button hit-test runs
+    // in event-setup), pause / shop / game-over (DOM overlays own
+    // input), and any transition where Player.update isn't ticking.
+    _isPlayableState() {
+        const state = this.engine && this.engine.game && this.engine.game.state;
+        return PLAYABLE_STATES.has(state);
+    }
+
+    // 5.92.0 — hit-test the bottom-center canvas HUD button bar
+    // (SHOP / STATS / PAUSE). On mobile this bar is the primary
+    // navigation surface, so taps that land on a button must NOT
+    // fall through to fire-a-shot. Returns the button id ('shop' /
+    // 'stats' / 'pause') or null. The rect map is populated by
+    // hud-buttons.js::drawHudButtons each frame.
+    _hitHudButton(canvasX, canvasY) {
+        const rects = this.engine && this.engine._hudButtonRects;
+        if (!rects) return null;
+        for (const k of Object.keys(rects)) {
+            const r = rects[k];
+            if (canvasX >= r.x && canvasX <= r.x + r.w &&
+                canvasY >= r.y && canvasY <= r.y + r.h) {
+                return r.id;
+            }
+        }
+        return null;
+    }
+
+    // Run the action wired to a HUD-button tap. Mirrors the desktop
+    // click handler in event-setup.js so SHOP/STATS/PAUSE behave
+    // identically on touch and mouse.
+    _runHudButtonAction(id) {
+        const ge = this.engine;
+        if (!ge) return;
+        if (id === 'shop') {
+            if (ge.game.state === GAME_STATES.SHOP) {
+                if (ge.closeShopAndReturn) ge.closeShopAndReturn();
+            } else if (ge.openShop) {
+                ge.openShop();
+            }
+        } else if (id === 'stats') {
+            if (ge.toggleStatsScreen) ge.toggleStatsScreen();
+        } else if (id === 'pause') {
+            if (ge.togglePause) ge.togglePause();
+        }
     }
 
     _worldCoords(canvasX, canvasY) {
@@ -155,6 +214,40 @@ export class MobileTouchHandler {
         if (!t) return;
         const { x, y } = this._canvasCoords(t);
 
+        // 5.92.0 — bottom-center HUD button bar gets first crack at the
+        // touch. The bar is drawn every frame during PLAYING /
+        // WAVE_TRANSITION / PAUSED (drawHudButtons in hud-buttons.js),
+        // and the desktop click handler routes these IDs explicitly. We
+        // mirror that on touch so SHOP/STATS/PAUSE never fall through
+        // to fire-a-shot.
+        const hudHit = this._hitHudButton(x, y);
+        if (hudHit) {
+            // Stash the press so the renderer can show a visible
+            // depression while the finger is held, and run the action
+            // on touchend (matches the desktop mousedown→mouseup
+            // commit flow).
+            this.engine._hudPressedButton = hudHit;
+            this._touchId = t.identifier;
+            this._startX = x;
+            this._startY = y;
+            this._startTime = Date.now();
+            this._dragged = false;
+            this._radialOpened = false;
+            this._hudPressedId = hudHit;
+            return;
+        }
+
+        // 5.92.0 — pause / shop / game-over have their own DOM-driven
+        // input surfaces. The canvas gameplay handlers below would
+        // either no-op (fire = false because Player.update isn't
+        // ticking) or actively interfere (a tap during pause opens the
+        // radial; a tap on the game-over screen fires a phantom shot
+        // through the world). Bail early so the touch reaches the DOM
+        // overlay underneath.
+        if (!this._isPlayableState()) {
+            return;
+        }
+
         // If the radial is already open from a previous gesture, treat
         // this touch as a hover update — the user is mid-selection.
         if (this.engine.radialMenu && this.engine.radialMenu.isOpen()) {
@@ -174,6 +267,7 @@ export class MobileTouchHandler {
         this._startTime = Date.now();
         this._dragged = false;
         this._radialOpened = false;
+        this._hudPressedId = null;
 
         // Pre-aim at the touch point so the very first frame of the auto-
         // pilot driving sees the intended facing. Helps when the user
@@ -210,6 +304,18 @@ export class MobileTouchHandler {
         e.preventDefault();
 
         const { x, y } = this._canvasCoords(t);
+
+        // 5.92.0 — HUD-button drag tracking. If the press started on a
+        // HUD button and the finger drifts off the button (or another
+        // button), clear the depressed visual state; the touchend
+        // commit-test will only run the action if the release lands
+        // back on the original button. Mirrors the desktop "drag-out
+        // cancels" pattern.
+        if (this._hudPressedId) {
+            const overHit = this._hitHudButton(x, y);
+            this.engine._hudPressedButton = (overHit === this._hudPressedId) ? this._hudPressedId : null;
+            return;
+        }
 
         // If the radial is open, every move is a hover update.
         if (this.engine.radialMenu && this.engine.radialMenu.isOpen()) {
@@ -253,6 +359,21 @@ export class MobileTouchHandler {
         const ge = this.engine;
         const input = ge.inputHandler && ge.inputHandler.input;
         this._clearLongPressTimer();
+
+        // 5.92.0 — HUD button commit. If the press started on a HUD
+        // button AND the release lands on the SAME button, run the
+        // action (matches desktop mousedown→mouseup pattern: drag-out
+        // cancels, drag-back-in commits).
+        if (this._hudPressedId) {
+            const releaseHit = this._hitHudButton(x, y);
+            ge._hudPressedButton = null;
+            if (releaseHit === this._hudPressedId) {
+                this._runHudButtonAction(releaseHit);
+            }
+            this._hudPressedId = null;
+            this._reset();
+            return;
+        }
 
         // Case 1: radial is open. Treat this release as the commit.
         if (ge.radialMenu && ge.radialMenu.isOpen()) {
@@ -305,6 +426,10 @@ export class MobileTouchHandler {
         if (this.engine.radialMenu && this.engine.radialMenu.isOpen()) {
             this.engine.radialMenu.cancel();
         }
+        // Clear any HUD button press state so the renderer stops
+        // showing a depressed button.
+        if (this.engine) this.engine._hudPressedButton = null;
+        this._hudPressedId = null;
         this._reset();
     }
 
@@ -312,6 +437,7 @@ export class MobileTouchHandler {
         this._touchId = null;
         this._dragged = false;
         this._radialOpened = false;
+        this._hudPressedId = null;
     }
 
     _fireAtTap(canvasX, canvasY) {

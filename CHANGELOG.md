@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.92.0] - 2026-05-13
+
+### Added — Mobile UX overhaul v2 (responsive layout, simplified HUD, auto-fire power weapons)
+The 5.91 pass shipped the core mobile-mode contract (auto-pilot, tap-to-shoot, long-press radial). 5.92 finishes the look-and-feel half: responsive title + game screens for both orientations, a streamlined HUD, auto-fired power weapons, and touch-event hardening. Desktop is byte-for-byte unchanged — every change sits behind the existing `isMobile()` gate from `js/modules/platform/platform-detect.js`.
+
+- **Touch hardening (`js/modules/ui/mobile-touch.js`)**: gameplay touch handlers (tap-to-shoot, long-press radial) now bail outside the `PLAYING` / `WAVE_TRANSITION` states so a tap during pause / shop / game-over no longer fires a phantom shot or opens the weapon radial. The bottom-center canvas HUD button bar (SHOP / STATS / PAUSE) gets a dedicated touch hit-test that mirrors the desktop mousedown→mouseup commit pattern — press shows a depressed visual, drag-out cancels, drag-back-in commits, release-on-button runs the action.
+- **Responsive title screen (`js/modules/hud/overlays.js`)**: NEW GAME / CONTINUE / MULTIPLAYER buttons stack vertically in mobile-portrait (full-width up to a 320 px cap, 56 px tall — comfortably above the 44 px Apple HIG tap-target floor); landscape mobile keeps the side-by-side layout but with a slightly smaller `buttonW` so the title clears. Title text auto-shrinks to `min(72, max(40, viewport / 8))` on mobile so a phone in portrait doesn't truncate the RAINBOIDS hero text.
+- **Simplified HUD (`js/modules/hud/status.js`, `css/styles.css`)**: mobile mode hides the coins readout, survival timer, equipped-weapon squares (PRM / PWR / SKL loadout), and the top-right DOM `#powerup-hud` panel. The top-left status cluster (triforce, healthbar, XP) keeps its exact desktop position and contents — the spec was "simplify around the survival essentials, drop everything else". Bottom-screen action button bar (SHOP / STATS / PAUSE) is preserved and reachable.
+- **Auto-fire charged power weapons (`js/modules/player/player.js`)**: mobile mode auto-triggers the equipped power weapon the moment it's ready. Cooldown-based weapons (NOVA_BLAST, MINE_LAYER, MISSILE_SALVO, LANCE_BEAM, LIGHTNING_ARC) fire on `isPowerReady()`; charge-based CHARGE_SHOT fires on `isFullyCharged`. The auto-fire path sets `input.fireSecondary = true` rather than calling `firePower()` directly, so the existing `updateChargingSystem` pipeline runs unchanged — and the MP feature-flag gate at `Player.firePower()` (PR #76) is honored implicitly. Gates: bails when no power is equipped (`activePower` null/empty), when `firingDisabled` is set (death/respawn), and when the weapon radial is open (mid-swap).
+- **CSS layout polish (`css/styles.css`)**: `body.mobile-mode` selectors set `overflow-x: hidden` to suppress iOS Safari's rotate-overshoot horizontal scroll, scale canvases to `100vw × 100dvh` (with `100vh` fallback for browsers without `dvh`), enforce a 48 × 48 px tap-target minimum on the top-right HUD buttons (above the HIG floor), hide `#powerup-hud` (the only DOM-rendered loadout chrome), and scale the pause / shop overlay panels down to 0.92 in portrait so the tabbed UIs fit phone-sized viewports.
+
+11 new unit tests (`tests/unit/player/mobile-auto-fire.test.js`) pin the auto-fire contract end-to-end: cooldown-based fires on ready, desktop does not fire, on-cooldown does not re-trigger, no power equipped is a no-op, firing-disabled is a no-op, radial-open is a no-op, MINE_LAYER spawns a mine + sets cooldown, CHARGE_SHOT mid-charge does not fire. All 809 unit tests pass.
+
 ## [5.91.0] - 2026-05-13
 
 ### Added — Mobile mode overhaul (auto-pilot, tap-to-shoot, long-press radial)

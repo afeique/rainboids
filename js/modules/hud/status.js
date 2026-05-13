@@ -8,6 +8,12 @@ import { DEFENSE_SKILLS } from '../combat/weapon-data.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
+// 5.92.0 — Mobile HUD simplification: hide the coins readout,
+// survival timer, and loadout/weapon meters in mobile mode so the
+// player has a clean top-left status panel (health + triforce + XP)
+// and the bottom-center action button bar — nothing else. Desktop
+// is unchanged.
+import { isMobile } from '../platform/platform-detect.js';
 
 export function drawHUD() {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
@@ -1084,12 +1090,25 @@ export function updateHUD() {
         // Draw level and coins beneath lives and health bar
         this.drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight);
 
+        // 5.92.0 — Mobile HUD simplification: hide the loadout squares,
+        // gold readout, and survival timer. The bottom-center action
+        // button bar (drawHudButtons) is the only HUD chrome we keep
+        // outside the top-left status cluster (triforce + healthbar +
+        // XP). Tap-to-shoot + auto-fire mean the player never needs to
+        // glance at a weapon meter; the simpler HUD makes more of the
+        // playfield usable on a phone-sized viewport.
+        const mobileSimplified = isMobile();
+
         // Equipped weapon squares (PRM / PWR / SKL) ABOVE the bar (5.72.0).
-        this.drawEquippedWeaponSquares(ctx, barX, barY, barHeight);
+        if (!mobileSimplified) {
+            this.drawEquippedWeaponSquares(ctx, barX, barY, barHeight);
+        }
 
         // Survival timer (bottom-right) + gold readout above it (5.72.0).
-        this.drawSurvivalTimer(ctx);
-        this.drawBottomRightGold(ctx);
+        if (!mobileSimplified) {
+            this.drawSurvivalTimer(ctx);
+            this.drawBottomRightGold(ctx);
+        }
 
         // 5.78.0 — defense indicators moved to drawHUD's outer scope so
         // they render during PAUSED / SHOP / WAVE_TRANSITION too.
