@@ -280,3 +280,216 @@ export async function holdKey(page, key, durationMs) {
     await page.waitForTimeout(durationMs);
     await page.keyboard.up(key);
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Additional helpers (post-MVD scenarios, 2026-05-13)
+//
+// The MVD smoke covers the happy-path "two clients see each other move".
+// The helpers below support follow-on scenarios that exercise:
+//   • LoopbackConnection Phase 2 (solo-via-loopback) — `startSoloLoopback`
+//   • MP feature-flag suppression — `getEngineDriverState`,
+//     `equipPowerAndForceFire`
+//   • Continuous-input ship sync — `sampleRemotePositions`
+//
+// All additions are NEW exports — existing helpers (above) are untouched so
+// the MVD smoke spec and its consumers don't shift under our feet.
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Drive the EngineDriver's hybrid solo↔loopback path directly via
+ * `engineDriver.startSolo({ useLoopback: true })`. There is no URL param
+ * for loopback yet (Phase 3 wiring concern noted in
+ * `js/engine/engine-driver.js`), so the test layer injects the call.
+ *
+ * The animation phase is skipped (`animateTitleStart: false`) so the run
+ * launches synchronously rather than waiting on the ~1s title-letter
+ * launch animation — keeps scenario timings tight.
+ *
+ * Returns the immediate `startSolo` boolean result so callers can assert
+ * the launch path actually fired. Use `getEngineDriverState(page)` for
+ * runtime state after snapshots have flowed.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {object} [opts]
+ * @param {boolean} [opts.continueRun=false]
+ * @returns {Promise<boolean>}
+ */
+export async function startSoloLoopback(page, { continueRun = false } = {}) {
+    return page.evaluate((args) => {
+        const drv = window.engineDriver;
+        if (!drv) throw new Error('engineDriver missing on window');
+        if (typeof drv.startSolo !== 'function') {
+            throw new Error('engineDriver.startSolo not a function');
+        }
+        return drv.startSolo({
+            useLoopback: true,
+            animateTitleStart: false,
+            continueRun: args.continueRun,
+        });
+    }, { continueRun });
+}
+
+/**
+ * Read a sanitized view of the EngineDriver's runtime state. Used by
+ * scenarios that need to assert on the prediction + interpolation
+ * pipeline without reaching into the predictor's internal mutable state
+ * from the test layer.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<{
+ *   present: boolean,
+ *   isOnline: boolean,
+ *   mode: string|null,
+ *   hasPredictor: boolean,
+ *   hasInterpolator: boolean,
+ *   localShipState: { x: number, y: number, vx: number, vy: number, angle: number }|null,
+ *   snapshotsReceived: number,
+ *   inputsSent: number,
+ * }>}
+ */
+export async function getEngineDriverState(page) {
+    return page.evaluate(() => {
+        const d = window.engineDriver;
+        if (!d) {
+            return {
+                present: false,
+                isOnline: false,
+                mode: null,
+                hasPredictor: false,
+                hasInterpolator: false,
+                localShipState: null,
+                snapshotsReceived: 0,
+                inputsSent: 0,
+            };
+        }
+        const lss = (d.getLocalShipState && d.getLocalShipState()) || null;
+        return {
+            present: true,
+            isOnline: !!d.isOnline,
+            mode: d.mode ?? null,
+            hasPredictor: !!d.predictor,
+            hasInterpolator: !!d.interpolator,
+            localShipState: lss
+                ? {
+                    x: lss.x,
+                    y: lss.y,
+                    vx: lss.vx ?? 0,
+                    vy: lss.vy ?? 0,
+                    angle: lss.angle ?? 0,
+                }
+                : null,
+            snapshotsReceived: d._snapshotsReceived ?? 0,
+            inputsSent: d._inputsSent ?? 0,
+        };
+    });
+}
+
+/**
+ * Equip a power weapon on the local player and immediately apply a
+ * `fireSecondary` input pulse for one logic tick. Returns a snapshot of
+ * the power-cooldown state + nova-ring count BEFORE the input was applied
+ * and AFTER one update step has had a chance to consume it.
+ *
+ * Why not just press a key? The fire-secondary key (`Space`) is held-state;
+ * pressing it via Playwright doesn't synchronously force a single fire
+ * attempt — the game loop has to pick it up. Driving the input handler's
+ * `input.fireSecondary` directly + spinning a few rAFs is the same
+ * mechanism the GameAI helper uses (see `tests/helpers/game-ai.js`).
+ *
+ * IMPORTANT — `buyPower` ALSO equips the weapon (see weapons.js:1377);
+ * calling it for a weapon the player already owns is a no-op. We always
+ * call `equipPower` afterward to be explicit that the test wants the
+ * given weapon active, regardless of `buyPower`'s short-circuit path.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} powerId   e.g. 'NOVA_BLAST'
+ * @param {number} [waitFrames=4]   rAF frames to spin after setting input
+ *                                  so the player's update loop has a
+ *                                  chance to consume `fireSecondary` and
+ *                                  reach the MP-gate inside `firePower`.
+ * @returns {Promise<{
+ *   before: { activePower: string, powerCooldown: number, novaRings: number, isPowerReady: boolean },
+ *   after:  { activePower: string, powerCooldown: number, novaRings: number, isPowerReady: boolean },
+ *   isOnline: boolean,
+ * }>}
+ */
+export async function equipPowerAndForceFire(page, powerId, waitFrames = 4) {
+    return page.evaluate(async ({ id, frames }) => {
+        const ge = window.gameEngine;
+        if (!ge) throw new Error('gameEngine missing');
+        const p = ge.player;
+        if (!p) throw new Error('player missing');
+
+        // Make sure the weapon is owned + equipped. buyPower also equips
+        // when the weapon isn't owned yet; equipPower is a no-op for
+        // already-equipped weapons but harmlessly safe.
+        if (typeof p.buyPower === 'function') {
+            try { p.buyPower(id); } catch {}
+        }
+        if (typeof p.equipPower === 'function') {
+            try { p.equipPower(id); } catch {}
+        }
+
+        const snap = () => ({
+            activePower: p.activePower,
+            powerCooldown: p.powerCooldown ?? 0,
+            novaRings: Array.isArray(p.novaRings) ? p.novaRings.length : 0,
+            isPowerReady: typeof p.isPowerReady === 'function' ? !!p.isPowerReady() : false,
+        });
+
+        const before = snap();
+
+        // Force a fire pulse. The input is a held-state boolean; the
+        // player.update loop consumes it (`weapons.js:163` checks
+        // fireSecondary && isPowerReady, calls firePower, then clears
+        // fireSecondary). Setting it inside this evaluate ensures it
+        // lands on the same tick as our `before` snapshot.
+        const input = ge.inputHandler?.input;
+        if (!input) throw new Error('inputHandler.input missing');
+        input.fireSecondary = true;
+
+        // Spin a few rAF frames so the game loop picks up the input. The
+        // game-engine update runs once per rAF; 3-4 frames is plenty for
+        // both PLAYING and WAVE_TRANSITION states.
+        for (let i = 0; i < frames; i++) {
+            await new Promise((r) => requestAnimationFrame(() => r()));
+        }
+
+        // Clear the input regardless of outcome — leaving it sticky would
+        // pollute follow-up assertions in the same test.
+        input.fireSecondary = false;
+
+        const after = snap();
+        return {
+            before,
+            after,
+            isOnline: !!window.engineDriver?.isOnline,
+        };
+    }, { id: powerId, frames: waitFrames });
+}
+
+/**
+ * Sample the remote ship's position N times at fixed intervals. Used by
+ * the "continuous movement under sustained input" scenario where we want
+ * to verify monotonic progress under the interpolator's render-delay
+ * window.
+ *
+ * Returns an array of `{ t, pos }` tuples in observation order. `pos` is
+ * `null` when the remote ship isn't yet rendered (typical on the first
+ * couple samples while the snapshot buffer fills).
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} remotePlayerId
+ * @param {number} samples
+ * @param {number} intervalMs
+ * @returns {Promise<Array<{ t: number, pos: { x: number, y: number }|null }>>}
+ */
+export async function sampleRemotePositions(page, remotePlayerId, samples, intervalMs) {
+    const out = [];
+    for (let i = 0; i < samples; i++) {
+        const pos = await getRemoteShipPosition(page, remotePlayerId);
+        out.push({ t: i * intervalMs, pos });
+        if (i < samples - 1) await page.waitForTimeout(intervalMs);
+    }
+    return out;
+}
