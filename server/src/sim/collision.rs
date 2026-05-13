@@ -539,6 +539,48 @@ pub enum CollisionEvent {
         asteroid_y: f32,
         distance_from_center: f32,
     },
+    /// Mirrors `{ type: 'mine_detonated', ... }` in `js/sim/collision.js`.
+    ///
+    /// Emitted exactly ONCE per triggered mine per tick. The first target
+    /// (enemy or asteroid) whose body overlaps the mine's trigger ring sets
+    /// the mine off; subsequent overlaps in the same tick produce no
+    /// additional events. The wrapper applies the AoE damage downstream
+    /// (typically by forwarding `mine_x` / `mine_y` / `explosion_radius` /
+    /// `damage` into `detect_nova_blast_hits`, or by running its own
+    /// falloff + knockback pass).
+    ///
+    /// Field-count rationale (7 non-type, 8 total with the tag):
+    ///   - `mine_id` lets the wrapper mark the source mine inactive.
+    ///   - `mine_x` / `mine_y` are the AoE center the wrapper feeds into
+    ///     a Nova-style downstream pass (or the legacy linear-falloff
+    ///     manual scan).
+    ///   - `explosion_radius` / `damage` flow through from the mine state
+    ///     so the wrapper does NOT have to look up the mine again.
+    ///   - `trigger_kind` + `trigger_id` identify the entity that tripped
+    ///     the mine, for kill-feed attribution / daisy-chain detection.
+    ///   - No `distance_from_center` field — the trigger lies inside the
+    ///     trigger ring by construction, and the wrapper does not need the
+    ///     trigger-distance to apply AoE. Mirrors the JS event minus the
+    ///     debug-only distance field.
+    MineDetonated {
+        mine_id: u32,
+        mine_x: f32,
+        mine_y: f32,
+        explosion_radius: f32,
+        damage: f32,
+        trigger_kind: TriggerKind,
+        trigger_id: u32,
+    },
+}
+
+/// Which kind of target tripped a mine. Mirrors the JS string-tagged
+/// `triggerKind: 'enemy' | 'asteroid'`. The Rust mirror uses an enum
+/// instead of a string so the variant-tag is checked at compile time —
+/// no typos, no case-mismatch bugs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TriggerKind {
+    Enemy,
+    Asteroid,
 }
 
 // ─── Bullet-vs-asteroid pair detection ──────────────────────────────
@@ -2091,3 +2133,311 @@ pub fn detect_nova_blast_hits(
 // now this is a no-op that satisfies the existing call site. Mirrors
 // the matching stub in `asteroid.rs::update_all`.
 pub fn detect_and_resolve(_state: &mut GameState, _events: &mut Vec<GameEvent>) {}
+
+// ═════════════════════════════════════════════════════════════════════
+// MINE — proximity-triggered persistent AoE (Phase 2.5, dispatch 8)
+// ═════════════════════════════════════════════════════════════════════
+//
+// Rust mirror of `js/sim/collision.js::detectMineHits` (PR #57). The
+// 8th power-weapon collision pair in this module.
+//
+// Mines are persistent bullets placed in the world by the player. They
+// sit (or seek, depending on the variant) and detonate when an enemy or
+// asteroid crosses their trigger ring. On detonation they deal area
+// damage to everything inside the larger blast ring + knockback.
+//
+// ─── What the pure step does and does NOT do ──────────────────────────
+//
+// THIS module ONLY detects which mines are triggered this tick and by
+// what (enemy or asteroid). One `MineDetonated` event per triggered
+// mine. The wrapper applies AoE damage downstream — typically by
+// forwarding `mine_x` / `mine_y` / `explosion_radius` / `damage` into
+// `detect_nova_blast_hits` to enumerate AoE targets, or by running its
+// own falloff + knockback pass per the legacy `mineDamage * (1 -
+// dist/blastR * 0.5)` curve.
+//
+// The pure step intentionally does NOT report:
+//   - Per-target AoE damage events (use `detect_nova_blast_hits` or a
+//     custom scan from the `MineDetonated` event center / radius).
+//   - Per-target knockback impulses (wrapper-owned, upgrade-dependent).
+//   - Lifetime-expiry self-detonations (`mine.expired = true` from the
+//     mine update step). The wrapper detects this BEFORE calling the
+//     pure step and emits its own detonation event, OR sets a sentinel
+//     trigger entity.
+//   - Daisy-chain cascades (DAISY_CHAIN upgrade: nearby mines detonate
+//     together). Emerges naturally if the wrapper re-runs detection
+//     after applying the first detonation's AoE to neighbor mines' HP.
+//     Not modelled here.
+//   - Mine HP / shoot-down (a mine being destroyed by a player bullet
+//     is handled by a bullet-vs-mine pair, NOT here).
+//
+// ─── Skip-gates ──────────────────────────────────────────────────────
+//
+//   Mines:
+//     - Inactive          (`!mine.active`)
+//
+//   Targets (enemies + asteroids):
+//     - Inactive          (`!target.active`)
+//     - Warping           (`target.warping`) — asteroids only in legacy,
+//                         applied to both kinds here for parity with
+//                         every other pair in this file.
+//     - Mid death-flash   (`target.death_flash > 0`) — strict superset
+//                         of legacy (which only gates on `!active`).
+//
+// NOTE on the `armed` gate: the JS code gates on `mine.armed` (a ~1s
+// arm timer after placement). The Rust mirror collapses this into the
+// `active` gate — the wrapper sets `mine.active = false` until the arm
+// timer fires, so a mine that isn't armed is treated as inactive from
+// the pure step's perspective. This keeps `CollisionMine` slim and
+// avoids carrying the armed flag through every pair-detection signature.
+//
+// ─── First-trigger semantics ─────────────────────────────────────────
+//
+// A mine detonates exactly ONCE — the very first target whose body
+// overlaps its trigger ring sets it off. We mirror this by emitting
+// exactly one `MineDetonated` event per mine per tick (early-return on
+// first hit inside the scan). The event's `trigger_kind` and
+// `trigger_id` identify which entity tripped the mine; the wrapper
+// applies AoE to ALL targets in the blast radius (not just the trigger).
+// Iteration order: enemies first, then asteroids, mirroring the legacy
+// JS ordering.
+//
+// ─── Geometry — divergence from JS ──────────────────────────────────
+//
+// The JS pure step uses a CENTER-vs-disc test: a target whose center
+// lies inside the mine's trigger ring trips the mine. The Rust mirror
+// uses a circle-vs-circle test: a target whose BODY overlaps the mine's
+// trigger ring trips the mine. The trigger radius is `mine.radius +
+// target.radius` rather than just `mine.radius`. This is slightly more
+// permissive (a big asteroid grazing the trigger ring with its edge
+// trips the mine even if the center is outside), and matches the
+// circle-circle overlap convention used by every other pair in this
+// Rust module (bullet-vs-asteroid, bullet-vs-enemy, etc.). Wrapper code
+// that wants exact JS parity can shrink the mine's `radius` field by
+// the appropriate target-radius constant before handing it to the
+// detector.
+
+/// Minimal mine view for collision detection.
+///
+/// Mirrors the JS fields read by `detectMineHits`:
+///   `{ id, x, y, radius, hp, explosionRadius, damage, active }`.
+///
+/// The `radius` field is the mine's TRIGGER ring radius (the legacy
+/// `triggerRadius`, default 60 from `MINE_DEFAULT_TRIGGER_RADIUS`). It
+/// is NOT the visual mine body radius. The wrapper composes this from
+/// `POWER_WEAPONS.MINE_LAYER.triggerRadius` + per-mine TRIGGER_RANGE
+/// upgrade stacks.
+///
+/// `hp` is carried for parity with the JS shape (bullet-vs-mine
+/// shoot-down handling lives in a separate pair); the pure step does
+/// not consult it.
+///
+/// `explosion_radius` is the blast disc radius (default 80 from
+/// `MINE_DEFAULT_BLAST_RADIUS`) — flows verbatim into the event so the
+/// wrapper can apply AoE without re-reading mine state.
+///
+/// `damage` is the flat blast damage (default 3 from
+/// `MINE_DEFAULT_DAMAGE`) — flows verbatim into the event.
+#[derive(Debug, Clone, Copy)]
+pub struct CollisionMine {
+    pub id: u32,
+    pub x: f32,
+    pub y: f32,
+    /// Trigger-ring radius (NOT visual body radius). Targets whose
+    /// body-circle overlaps this ring trip the mine.
+    pub radius: f32,
+    /// Current hit points. Unused by the pair-detection step (the
+    /// wrapper applies shoot-down damage via a separate bullet-vs-mine
+    /// pair); carried for parity with the JS shape.
+    pub hp: f32,
+    /// Blast disc radius — flows through into `MineDetonated.explosion_radius`.
+    pub explosion_radius: f32,
+    /// Flat blast damage — flows through into `MineDetonated.damage`.
+    /// The wrapper applies any distance-based falloff curve.
+    pub damage: f32,
+    pub active: bool,
+}
+
+impl CollisionMine {
+    /// Construct a fresh mine at the origin with the live game's
+    /// default trigger radius (60), blast radius (80), and damage (3).
+    /// Test convenience.
+    pub fn fresh(id: u32) -> Self {
+        Self {
+            id,
+            x: 0.0,
+            y: 0.0,
+            radius: 60.0,
+            hp: 1.0,
+            explosion_radius: 80.0,
+            damage: 3.0,
+            active: true,
+        }
+    }
+}
+
+// ─── Mine collision detection ────────────────────────────────────────
+
+/// Detect mine collisions for one tick.
+///
+/// Pure step: for every active mine, scan enemies + asteroids for a
+/// target whose body overlaps the mine's trigger ring. On the first
+/// detected target, emit one `MineDetonated` event and stop scanning
+/// that mine. A mine detonates at most ONCE per tick.
+///
+/// Geometry:
+///   Circle-circle overlap: `(dx² + dy²) < (mine.radius + target.radius)²`.
+///   We use the squared form for the gate to skip the sqrt. Mirrors the
+///   bullet-vs-asteroid / bullet-vs-enemy / enemy-vs-asteroid pairs'
+///   convention. See module comment above for divergence from JS
+///   (which uses a center-only test).
+///
+/// Trigger semantics:
+///   First target wins. Iteration order is `enemies` (in slice order),
+///   then `asteroids` (in slice order). The first one to overlap the
+///   trigger ring sets off the mine; subsequent overlaps in the same
+///   tick produce no additional events (and the wrapper observes the
+///   mine going inactive between ticks via the detonation event).
+///
+/// What the pure step does NOT do:
+///   - Apply AoE damage to all enemies / asteroids inside the blast
+///     radius (wrapper concern — typically forwarded to
+///     `detect_nova_blast_hits` with `(mine_x, mine_y, explosion_radius,
+///     damage)`).
+///   - Apply outward knockback impulses (wrapper concern — depends on
+///     KNOCKBACK powerup multipliers).
+///   - Mutate the mine's `active` flag (wrapper sets `active = false`
+///     when it drains the `MineDetonated` event).
+///   - Handle daisy-chain cascades or mine HP / shoot-down (separate
+///     concerns, see module comment).
+///
+/// Skip-gates (no event emitted):
+///   Mines:
+///     - Inactive          (`!mine.active`)
+///   Targets (both kinds):
+///     - Inactive          (`!target.active`)
+///     - Warping           (`target.warping`)
+///     - Mid death-flash   (`target.death_flash > 0`)
+///
+/// Defensive guards:
+///   - `mine.radius <= 0` → mine cannot trigger (`(r1 + r2)²` is still
+///     positive but the target must overlap the zero-extent trigger
+///     ring AT the mine center; in practice this is virtually
+///     unreachable for live mines but is harmless).
+///   - Empty mine slice → no events emitted.
+///   - Empty enemy + empty asteroid slices → no events emitted.
+///
+/// JS line refs: `js/sim/collision.js:2319–2422`.
+pub fn detect_mine_hits(
+    mines: &[CollisionMine],
+    enemies: &[CollisionEnemy],
+    asteroids: &[CollisionAsteroid],
+    _ctx: &CollisionContext,
+    events: &mut Vec<CollisionEvent>,
+) {
+    // 1. Tolerate an empty mine slice — a frame with no placed mines
+    //    is the common case (JS collision.js:2322).
+    if mines.is_empty() {
+        return;
+    }
+    let has_enemies = !enemies.is_empty();
+    let has_asteroids = !asteroids.is_empty();
+    // 2. If there are no possible triggers at all, nothing to detect
+    //    (JS collision.js:2323–2326).
+    if !has_enemies && !has_asteroids {
+        return;
+    }
+
+    for mine in mines.iter() {
+        // 3. Mine-active gate (JS collision.js:2330). The Rust mirror
+        //    collapses the JS `armed` gate into `active`; see module
+        //    comment above.
+        if !mine.active {
+            continue;
+        }
+
+        let mine_x = mine.x;
+        let mine_y = mine.y;
+        let mine_r = mine.radius;
+
+        let mut triggered = false;
+
+        // ── Enemies ────────────────────────────────────────────────
+        // First target whose body overlaps the trigger ring wins.
+        // Early-break so a mine sitting in the middle of a crowd
+        // reports just ONE trigger event per detonation (JS
+        // collision.js:2348–2380).
+        if has_enemies {
+            for enemy in enemies.iter() {
+                if !enemy.active {
+                    continue;
+                }
+                if enemy.warping {
+                    continue;
+                }
+                if enemy.death_flash > 0 {
+                    continue;
+                }
+
+                let dx = enemy.x - mine_x;
+                let dy = enemy.y - mine_y;
+                let sum_r = mine_r + enemy.radius;
+                if dx * dx + dy * dy >= sum_r * sum_r {
+                    continue;
+                }
+
+                events.push(CollisionEvent::MineDetonated {
+                    mine_id: mine.id,
+                    mine_x,
+                    mine_y,
+                    explosion_radius: mine.explosion_radius,
+                    damage: mine.damage,
+                    trigger_kind: TriggerKind::Enemy,
+                    trigger_id: enemy.id,
+                });
+                triggered = true;
+                break;
+            }
+        }
+
+        if triggered {
+            continue;
+        }
+
+        // ── Asteroids ──────────────────────────────────────────────
+        // Fall-through path when no enemy tripped the mine. Same
+        // first-hit-wins semantics, asteroid id space (JS
+        // collision.js:2385–2420).
+        if has_asteroids {
+            for asteroid in asteroids.iter() {
+                if !asteroid.active {
+                    continue;
+                }
+                if asteroid.warping {
+                    continue;
+                }
+                if asteroid.death_flash > 0 {
+                    continue;
+                }
+
+                let dx = asteroid.x - mine_x;
+                let dy = asteroid.y - mine_y;
+                let sum_r = mine_r + asteroid.radius;
+                if dx * dx + dy * dy >= sum_r * sum_r {
+                    continue;
+                }
+
+                events.push(CollisionEvent::MineDetonated {
+                    mine_id: mine.id,
+                    mine_x,
+                    mine_y,
+                    explosion_radius: mine.explosion_radius,
+                    damage: mine.damage,
+                    trigger_kind: TriggerKind::Asteroid,
+                    trigger_id: asteroid.id,
+                });
+                break;
+            }
+        }
+    }
+}

@@ -40,13 +40,13 @@
 
 use rainboids_server::sim::collision::{
     detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_enemy_asteroid_hits,
-    detect_nova_blast_hits, detect_player_asteroid_hits, detect_player_drop_pickups,
-    detect_player_enemy_bullet_hits, detect_player_enemy_hits, CollisionAsteroid, CollisionBullet,
-    CollisionContext, CollisionDrop, CollisionEnemy, CollisionEnemyBullet, CollisionEvent,
-    CollisionPlayer, NovaBlast, ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER,
-    BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE,
-    OVERLAP_SEPARATION_RATIO, PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE,
-    SEPARATION_BUFFER,
+    detect_mine_hits, detect_nova_blast_hits, detect_player_asteroid_hits,
+    detect_player_drop_pickups, detect_player_enemy_bullet_hits, detect_player_enemy_hits,
+    CollisionAsteroid, CollisionBullet, CollisionContext, CollisionDrop, CollisionEnemy,
+    CollisionEnemyBullet, CollisionEvent, CollisionMine, CollisionPlayer, NovaBlast, TriggerKind,
+    ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER,
+    BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE, OVERLAP_SEPARATION_RATIO,
+    PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE, SEPARATION_BUFFER,
 };
 use rainboids_server::sim::drops::DropKind;
 
@@ -2521,4 +2521,257 @@ fn nova_blast_zero_radius() {
     let mut events = Vec::new();
     detect_nova_blast_hits(&blast, &enemies, &asteroids, &ctx, &mut events);
     assert_eq!(events.len(), 0);
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Mine fixtures (Phase 2.5 — 8th power-weapon mirror, dispatch 8).
+//
+// Rust mirror of `js/sim/collision.js::detectMineHits` (PR #57).
+//
+// The Rust mirror uses circle-circle overlap (`mine.radius +
+// target.radius`) rather than the JS center-only test. Fixtures pick
+// distances that are clearly inside or outside the overlap to avoid
+// straddling the JS-vs-Rust boundary.
+// ═════════════════════════════════════════════════════════════════════
+
+/// Build a mine at (x, y) with the live game defaults (trigger
+/// radius 60, blast radius 80, damage 3).
+fn make_mine(id: u32, x: f32, y: f32) -> CollisionMine {
+    let mut m = CollisionMine::fresh(id);
+    m.x = x;
+    m.y = y;
+    m
+}
+
+// ---------------------------------------------------------------------
+// Fixture — mine triggered by single enemy.
+//
+// Mine at origin, trigger radius 60, enemy at (50, 0) with radius 18.
+// sum_r = 78; |dx| = 50 < 78 ⇒ overlap. One MineDetonated event with
+// trigger_kind = Enemy, trigger_id = the enemy id.
+// ---------------------------------------------------------------------
+
+#[test]
+fn mine_single_enemy_trigger() {
+    let mines = vec![make_mine(7, 0.0, 0.0)];
+    let enemies = vec![make_enemy(101, 50.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_mine_hits(&mines, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1);
+    match events[0] {
+        CollisionEvent::MineDetonated {
+            mine_id,
+            mine_x,
+            mine_y,
+            explosion_radius,
+            damage,
+            trigger_kind,
+            trigger_id,
+        } => {
+            assert_eq!(mine_id, 7);
+            approx_eq(mine_x, 0.0, "mine_x");
+            approx_eq(mine_y, 0.0, "mine_y");
+            approx_eq(explosion_radius, 80.0, "explosion_radius");
+            approx_eq(damage, 3.0, "damage");
+            assert_eq!(trigger_kind, TriggerKind::Enemy);
+            assert_eq!(trigger_id, 101);
+        }
+        _ => panic!("expected MineDetonated"),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — mine triggered by single asteroid (no enemies present).
+//
+// Mine at origin, trigger radius 60, asteroid at (70, 0) with radius
+// 30. sum_r = 90; |dx| = 70 < 90 ⇒ overlap. One MineDetonated event
+// with trigger_kind = Asteroid.
+// ---------------------------------------------------------------------
+
+#[test]
+fn mine_single_asteroid_trigger() {
+    let mines = vec![make_mine(7, 0.0, 0.0)];
+    let enemies: Vec<CollisionEnemy> = vec![];
+    let asteroids = vec![make_asteroid(201, 70.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_mine_hits(&mines, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1);
+    match events[0] {
+        CollisionEvent::MineDetonated {
+            mine_id,
+            trigger_kind,
+            trigger_id,
+            ..
+        } => {
+            assert_eq!(mine_id, 7);
+            assert_eq!(trigger_kind, TriggerKind::Asteroid);
+            assert_eq!(trigger_id, 201);
+        }
+        _ => panic!("expected MineDetonated"),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — mine has no overlapping targets ⇒ no events.
+//
+// Mine at origin, trigger radius 60. Place an enemy 500 px east
+// (clearly outside trigger ring even with radius 18) and an asteroid
+// 500 px north (clearly outside even with radius 30).
+// ---------------------------------------------------------------------
+
+#[test]
+fn mine_outside_all_targets() {
+    let mines = vec![make_mine(7, 0.0, 0.0)];
+    let enemies = vec![make_enemy(101, 500.0, 0.0)];
+    let asteroids = vec![make_asteroid(201, 0.0, 500.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_mine_hits(&mines, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "no overlapping targets ⇒ no events");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — multiple mines, only one overlapping.
+//
+// Three mines: mine A at origin (no overlap), mine B at (1000, 0)
+// (overlaps enemy 101), mine C at (0, 1000) (no overlap). Verify only
+// mine B's id appears in the event.
+// ---------------------------------------------------------------------
+
+#[test]
+fn mine_multiple_one_triggered() {
+    let mines = vec![
+        make_mine(1, 0.0, 0.0),     // far from enemy
+        make_mine(2, 1000.0, 0.0),  // overlaps enemy at (1050, 0)
+        make_mine(3, 0.0, 1000.0),  // far from enemy
+    ];
+    let enemies = vec![make_enemy(101, 1050.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_mine_hits(&mines, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "only mine 2 should trigger");
+    match events[0] {
+        CollisionEvent::MineDetonated { mine_id, trigger_id, trigger_kind, .. } => {
+            assert_eq!(mine_id, 2);
+            assert_eq!(trigger_id, 101);
+            assert_eq!(trigger_kind, TriggerKind::Enemy);
+        }
+        _ => panic!("expected MineDetonated"),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — skip-gates: inactive mine / inactive target / warping
+// target / death-flash target ⇒ 0 events.
+//
+// All target candidates would overlap the mine geometrically; the
+// gates must short-circuit every one.
+// ---------------------------------------------------------------------
+
+#[test]
+fn mine_skip_gates() {
+    // Inactive mine — even with a geometrically overlapping enemy,
+    // no event should fire.
+    let mut inactive_mine = make_mine(1, 0.0, 0.0);
+    inactive_mine.active = false;
+    let live_enemy = make_enemy(101, 30.0, 0.0); // would overlap
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_mine_hits(
+        &[inactive_mine],
+        &[live_enemy],
+        &[],
+        &ctx,
+        &mut events,
+    );
+    assert_eq!(events.len(), 0, "inactive mine must not trigger");
+
+    // Active mine, but every target skipped via a gate.
+    let mine = make_mine(1, 0.0, 0.0);
+    let mut inactive_enemy = make_enemy(101, 30.0, 0.0);
+    inactive_enemy.active = false;
+    let mut warping_enemy = make_enemy(102, 30.0, 5.0);
+    warping_enemy.warping = true;
+    let mut flash_enemy = make_enemy(103, 30.0, 10.0);
+    flash_enemy.death_flash = 1;
+    let mut inactive_ast = make_asteroid(201, -30.0, 0.0);
+    inactive_ast.active = false;
+    let mut warping_ast = make_asteroid(202, -30.0, 5.0);
+    warping_ast.warping = true;
+    let mut flash_ast = make_asteroid(203, -30.0, 10.0);
+    flash_ast.death_flash = 1;
+    let mut events = Vec::new();
+    detect_mine_hits(
+        &[mine],
+        &[inactive_enemy, warping_enemy, flash_enemy],
+        &[inactive_ast, warping_ast, flash_ast],
+        &ctx,
+        &mut events,
+    );
+    assert_eq!(
+        events.len(),
+        0,
+        "every target must be skipped: inactive/warping/death-flash"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Fixture — trigger-kind correctness when both kinds overlap.
+//
+// Two mines, each with exactly one overlapping target of a specific
+// kind. Verify that mine A reports TriggerKind::Enemy and mine B
+// reports TriggerKind::Asteroid. Also verify the enemy-first iteration
+// order: when BOTH an enemy and an asteroid overlap the same mine,
+// the enemy wins.
+// ---------------------------------------------------------------------
+
+#[test]
+fn mine_trigger_kind_correctness() {
+    // Mine 1 only has an overlapping enemy.
+    // Mine 2 only has an overlapping asteroid.
+    // Mine 3 has BOTH an enemy and asteroid overlapping — enemy must
+    // win (mirrors JS iteration order: enemies first, then asteroids).
+    let mines = vec![
+        make_mine(1, 0.0, 0.0),
+        make_mine(2, 500.0, 0.0),
+        make_mine(3, 0.0, 500.0),
+    ];
+    let enemies = vec![
+        make_enemy(101, 40.0, 0.0),   // overlaps mine 1
+        make_enemy(103, 40.0, 500.0), // overlaps mine 3
+    ];
+    let asteroids = vec![
+        make_asteroid(201, 540.0, 0.0), // overlaps mine 2
+        make_asteroid(203, -40.0, 500.0), // overlaps mine 3 (loses to enemy)
+    ];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_mine_hits(&mines, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 3, "all three mines should trigger");
+
+    // Index events by mine_id for kind verification.
+    let mut by_mine: std::collections::HashMap<u32, (TriggerKind, u32)> =
+        std::collections::HashMap::new();
+    for ev in &events {
+        if let CollisionEvent::MineDetonated {
+            mine_id,
+            trigger_kind,
+            trigger_id,
+            ..
+        } = *ev
+        {
+            by_mine.insert(mine_id, (trigger_kind, trigger_id));
+        }
+    }
+    assert_eq!(by_mine.get(&1), Some(&(TriggerKind::Enemy, 101)));
+    assert_eq!(by_mine.get(&2), Some(&(TriggerKind::Asteroid, 201)));
+    assert_eq!(
+        by_mine.get(&3),
+        Some(&(TriggerKind::Enemy, 103)),
+        "when enemy + asteroid both overlap a mine, enemy wins (iteration order)",
+    );
 }
