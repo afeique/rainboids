@@ -208,6 +208,19 @@ export class MobileTouchHandler {
     // ── Event handlers ──────────────────────────────────────────────────
 
     _onTouchStart(e) {
+        // 5.92.1 — Non-playable states (TITLE_SCREEN / PAUSED / SHOP /
+        // GAME_OVER / GAME_COMPLETE / ORIENTATION_LOCK / WAVE_TRANSITION
+        // intro) bail BEFORE preventDefault so the browser can still
+        // synthesize a click event for the window-level mousedown /
+        // mouseup / click listeners in main.js. Calling preventDefault
+        // here would suppress those synthesized clicks and the title
+        // screen / pause / shop / game-over canvas-rendered buttons
+        // would never receive input. Only gameplay touches (during
+        // PLAYING / WAVE_TRANSITION) need preventDefault to suppress
+        // the native double-tap-zoom + 300ms tap delay.
+        if (!this._isPlayableState()) {
+            return;
+        }
         e.preventDefault();
         if (this._touchId !== null) return; // already tracking a finger
         const t = e.changedTouches[0];
@@ -234,17 +247,6 @@ export class MobileTouchHandler {
             this._dragged = false;
             this._radialOpened = false;
             this._hudPressedId = hudHit;
-            return;
-        }
-
-        // 5.92.0 — pause / shop / game-over have their own DOM-driven
-        // input surfaces. The canvas gameplay handlers below would
-        // either no-op (fire = false because Player.update isn't
-        // ticking) or actively interfere (a tap during pause opens the
-        // radial; a tap on the game-over screen fires a phantom shot
-        // through the world). Bail early so the touch reaches the DOM
-        // overlay underneath.
-        if (!this._isPlayableState()) {
             return;
         }
 
@@ -295,6 +297,15 @@ export class MobileTouchHandler {
     }
 
     _onTouchMove(e) {
+        // 5.92.1 — Same guard as _onTouchStart: bail before
+        // preventDefault during non-playable states so synthesized
+        // click events still reach window-level handlers. The _touchId
+        // check below will also bail in non-playable states (since
+        // _onTouchStart didn't set _touchId), but checking state first
+        // is the explicit invariant.
+        if (!this._isPlayableState()) {
+            return;
+        }
         if (this._touchId === null) return;
         let t = null;
         for (const ct of e.changedTouches) {
@@ -347,6 +358,10 @@ export class MobileTouchHandler {
     }
 
     _onTouchEnd(e) {
+        // 5.92.1 — Bail before preventDefault if we never started
+        // tracking this touch (non-playable state at touchstart) so
+        // the browser still synthesizes a click event for the
+        // title/pause/shop/game-over button hit-tests on window.
         if (this._touchId === null) return;
         let t = null;
         for (const ct of e.changedTouches) {
@@ -417,6 +432,10 @@ export class MobileTouchHandler {
     }
 
     _onTouchCancel(e) {
+        // 5.92.1 — Same as _onTouchEnd: bail before preventDefault if
+        // we never started tracking this touch (non-playable state)
+        // so the browser doesn't suppress synthesized click events on
+        // the title / pause / shop / game-over canvas buttons.
         if (this._touchId === null) return;
         // Treat cancel like a release-without-commit. If the radial was
         // open we close it without changing the equipped weapon; tap

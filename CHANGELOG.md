@@ -26,6 +26,21 @@ iOS 16.4+ note: `AudioContext` must be CREATED inside a gesture (not just resume
 
 ---
 
+## [5.92.1] - 2026-05-13
+
+### Fixed — Mobile touch screen + title screen fit
+Critical bug fix for the mobile mode shipped in 5.91.0 / 5.92.0.
+
+- **Touch screen now works on title screen, pause, shop, game-over.** Bug: `mobile-touch.js` called `preventDefault()` on its very first line of `_onTouchStart` (and the other 3 touch handlers), BEFORE the `_isPlayableState()` check. On non-playable states (TITLE_SCREEN, PAUSED, SHOP, GAME_OVER, GAME_COMPLETE), the handler bailed out — but `preventDefault` had already suppressed the synthesized click event that `window`-level `mousedown`/`mouseup`/`click` handlers in `main.js` rely on for button activation. Fix: move the state guard BEFORE `preventDefault` in all four touch handlers (`_onTouchStart`, `_onTouchMove`, `_onTouchEnd`, `_onTouchCancel`). PLAYING-state functionality preserved byte-for-byte.
+
+- **Title screen layout fits in portrait and landscape.** Computed content-block layout replaces hardcoded `centerY ± N` offsets. Title font now `min(48, max(32, width/8))` in portrait mobile (was `min(72, max(40, width/8))`). Button width `min(280, max(200, width * 0.85))` (was 320 cap). Button height 48 with 12px gap (was 56 with 16px gap). Landscape mobile gets similar tightening. Desktop unchanged.
+
+26 new unit tests covering both the touch-event flow per state and the title-screen-fits-canvas invariant across 320×480 / 360×640 / 568×320 / 640×360 mobile viewports + 1280×720 desktop. Full unit suite 884/884.
+
+No touch library (Hammer.js / interact.js) was needed; the touch-handler bug was a 5-line fix.
+
+---
+
 ## [5.92.0] - 2026-05-13
 
 ### Added — Mobile UX overhaul v2 (responsive layout, simplified HUD, auto-fire power weapons)
