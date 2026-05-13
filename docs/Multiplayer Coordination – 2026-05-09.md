@@ -12,14 +12,14 @@ on commit. The user runs both terminals and hands the tree back and forth.
 
 | Field | Value |
 |-------|-------|
-| Branch | `master`. **MVD pivot in flight 2026-05-13.** Three parallel subagents wiring smallest-viable demo. |
-| Version | `5.89.0` on master (no bump for backend work — runtime-affecting only when MVD lands) |
-| Working tree | **MVD pivot day-1.** All foundational layers done: Phase 1 wrappers ✓, Phase 2 Rust sim ports ✓, Phase 2.1 deferred branches ~95% ✓, Phase 2.5 collision 9/12 JS + 8/12 Rust ✓, Phase 3 primitives (TickBuffer/Predictor/snapshot history/Interpolator/f32-tolerance) ✓. Wiring it together for two-player ship-only demo. |
-| Last touched | 2026-05-13 by **orchestrator** (MVD parallel dispatch + this doc sync) |
-| Last commit | see `git log --oneline -1`. PRs #56-#58 just landed (tolerance / Mine JS / Rust Nova). |
+| Branch | `master`. **MVD landed 2026-05-12 (PR #67, 5.90.0); Rounds 1–4 follow-on work merged 2026-05-13.** |
+| Version | `5.90.0` on master (MVD gameLoop wiring — remote ships visible on screen) |
+| Working tree | **Post-MVD parallel rollout complete.** Phase 1 wrappers ✓, Phase 2 Rust sim ports ✓, Phase 2.1 deferred branches ~95% ✓, Phase 2.5 collision 14/14 JS + 14/14 Rust ✓ (all 9 base pairs + 5 power weapons on both sides), Phase 3 primitives ✓, LoopbackConnection Phase 1 + Phase 2 ✓, MP feature-flag scaffold + input gate ✓. |
+| Last touched | 2026-05-13 by **orchestrator** (Rounds 1–4 doc sync) |
+| Last commit | see `git log --oneline -1`. PRs #61–#78 landed across the past four dispatch rounds. |
 | Uncommitted | this doc update |
-| Parity status | **Schema → Rust → JS pipeline complete.** Phase 2.5 collision: 9/12 JS (7 pure pairs + Nova + Mine); 8/12 Rust. |
-| Critical path | **Three MVD wiring PRs in flight**: (A) server tick + input intake + snapshot pub, (B) client EngineDriver MP mode wiring, (D) E2E smoke (skip-gated). Once A+B merge, **two-player ship movement works end-to-end**. |
+| Parity status | **Schema → Rust → JS pipeline complete.** Phase 2.5 collision: 14/14 JS + 14/14 Rust (all 9 base pairs + Nova / Mine / Lance / Missile Salvo / Lightning Arc). Server drains collision events into HP/damage/despawn. |
+| Critical path | **MVD shipped (PR #67).** Two browser tabs see each other's ships via `?multiplayer=1`. Outstanding: Phase 3 `useLoopback:true` flip at NEW GAME call site, bullet GameState plumbing so collision drain fires for bullets, mobile-mode auto-pilot work in flight. |
 
 ## MVD definition (2026-05-13)
 
@@ -127,15 +127,70 @@ Each agent updates their column on every session start.
 
 | Pair | JS pure | JS tests | Rust mirror | Rust parity |
 |---|---|---|---|---|
-| bullet ↔ asteroid | ✓ PR #30 | ✓ 22 tests | ✓ PR #31 | ✓ 4 fixtures |
-| player ↔ asteroid | ✓ PR #32 (open) | ✓ 24 tests | ⏳ in flight | ⏳ in flight |
-| bullet ↔ enemy | ⬜ | ⬜ | ⬜ | ⬜ |
-| player ↔ enemy | ⬜ | ⬜ | ⬜ | ⬜ |
-| enemy ↔ asteroid | ⬜ | ⬜ | ⬜ | ⬜ |
-| player ↔ enemy_bullet | ⬜ | ⬜ | ⬜ | ⬜ |
-| drops pickup | ⬜ | ⬜ | ⬜ | ⬜ |
-| power-weapon (lance/mine/nova/lightning/missile) | ⬜ | ⬜ | ⬜ | ⬜ |
+| bullet ↔ asteroid | ✅ PR #30 | ✅ 22 tests | ✅ PR #31 | ✅ 4 fixtures |
+| player ↔ asteroid | ✅ PR #32 | ✅ 24 tests | ✅ | ✅ |
+| bullet ↔ enemy | ✅ PR #38 | ✅ | ✅ PR #41 | ✅ |
+| player ↔ enemy | ✅ | ✅ | ✅ PR #45 | ✅ |
+| enemy ↔ asteroid | ✅ PR #44 | ✅ | ✅ | ✅ |
+| player ↔ enemy_bullet | ✅ PR #47 | ✅ | ✅ PR #51 | ✅ |
+| drops pickup | ✅ | ✅ | ✅ | ✅ |
+| power-weapon — Nova | ✅ PR #57 | ✅ | ✅ PR #58 | ✅ |
+| power-weapon — Mine | ✅ PR #57 | ✅ | ✅ PR #65 | ✅ |
+| power-weapon — Lance Beam | ✅ PR #64 | ✅ | ✅ PR #69 | ✅ |
+| power-weapon — Missile Salvo | ✅ PR #68 | ✅ | ✅ PR #74 | ✅ |
+| power-weapon — Lightning Arc | ✅ PR #72 | ✅ | ✅ PR #78 | ✅ |
 | defense-skill (deflector/tractor) | ⬜ | ⬜ | ⬜ | ⬜ |
+| **server collision drain** | n/a | n/a | ✅ PR #70 | n/a — server drains pair events → HP/damage/despawn |
+
+## Post-MVD progress (Rounds 1–4, 2026-05-12 → 2026-05-13)
+
+Four parallel-dispatch rounds after the MVD shipped. Each round respected
+strict file-ownership (each subagent's PR is self-contained, with only
+new files or appendable arms in tightly-scoped areas), so the
+worktree-isolation harness bug (Open Q #5) didn't bite. All 15 PRs below
+landed on master.
+
+### Round 1 — collision pair completion & MVD plumbing (PRs #61–#65, 2026-05-12)
+
+| PR | Subject | Notes |
+|---|---|---|
+| #61 | `mp/server` MVD integration test | Single-client ship-sync round-trip on the Rust server |
+| #62 | `mp/client` EngineDriver MP wiring | Predictor + Interpolator wired into the client driver |
+| #63 | `mp/net` MP feature-flag scaffold | Suppresses unported abilities (lance/mine/nova/lightning/missile/deflector/tractor) when MP active |
+| #64 | `mp/sim` Lance Beam JS collision pair | `detectLanceBeamHits` pure-step |
+| #65 | `mp/server` Rust Mine collision mirror | Parity with PR #57 (JS Mine) |
+
+### Round 2 — MVD ship-visibility & Phase 2.5 mirrors (PRs #67–#69, 2026-05-12)
+
+| PR | Subject | Notes |
+|---|---|---|
+| #67 | 5.90.0 MVD gameLoop wiring | **Two browser tabs see each other's ships on screen.** End-to-end ship-only demo validated. |
+| #68 | `mp/sim` Missile Salvo JS collision pair | `detectMissileSalvoHits` pure-step |
+| #69 | `mp/server` Rust Lance Beam collision mirror | Parity with PR #64 |
+
+(PR #66 was reverted; PR #70 below restores its content.)
+
+### Round 3 — LoopbackConnection scaffold, Lightning Arc JS, Missile Salvo Rust (PRs #70–#72, #74, 2026-05-12 → 2026-05-13)
+
+| PR | Subject | Notes |
+|---|---|---|
+| #70 | `mp/server` collision drain restore (F) | Re-applies the room-actor collision-event drain lost in PR #66 |
+| #71 | `mp/net` LoopbackConnection scaffold (Phase 1) | Hybrid adapter scaffold; same `EngineDriver` interface for solo + MP |
+| #72 | `mp/sim` Lightning Arc JS collision pair | `detectLightningArcHits` pure-step |
+| #74 | `mp/server` Rust Missile Salvo collision mirror (restore) | Parity with PR #68 |
+
+### Round 4 — Lightning Arc Rust mirror, LoopbackConnection Phase 2, MP feature-flag wiring (PRs #75–#76, #78, 2026-05-13)
+
+| PR | Subject | Notes |
+|---|---|---|
+| #75 | `mp/engine` LoopbackConnection Phase 2 — engine-driver integration | `startSolo({useLoopback:true})` plumbed; call site stays off (Phase 3 will flip the flag) |
+| #76 | `mp/player` MP feature-flag input gate | `Player.firePower` + `.activateSkill` gated on `mp/feature-flags.js` until the relevant power weapons / skills land server-side |
+| #78 | `mp/server` Rust Lightning Arc collision mirror | Parity with PR #72; closes Phase 2.5 power-weapon Rust column |
+
+**Result**: Phase 2.5 collision parity is now 14/14 JS + 14/14 Rust for the
+in-scope columns (all 9 base pairs + 5 power weapons). The only Phase 2.5
+hole left is the defense-skill pair (deflector + tractor); deferred until
+post-MVD bullet plumbing lands.
 
 ## Subagent dispatch round 1 (2026-05-09) — COMPLETED
 
@@ -401,23 +456,43 @@ Don't silence them; fix them.
   and `frameClock.now` need to be replaced with `ctx.rng` + `ctx.now`
   in `js/modules/enemy/movement.js`), 9 other enemy kinds, 10 more
   enemy bullet patterns.
-- ◐ **Phase 2.5 — collision system extraction** (task #46, 2 of ~9
-  pairs done on JS side, 1 of ~9 on Rust side). Bullet-asteroid JS
-  (PR #30) + Rust (PR #31) landed. Player-asteroid JS (PR #32) +
-  Rust mirror (in flight). Remaining: bullet-enemy, player-enemy,
-  enemy-asteroid, player-enemy-bullet, drops pickup, power-weapon
-  collisions (lance/mine/nova/lightning/missile), defense-skill
-  collisions (deflector/tractor). Parallel implementation strategy
-  (NOT refactor) — legacy `collision-system.js` stays untouched;
-  pure-step versions in `js/sim/collision.js` for server / prediction
-  path.
-- ⬜ **Phase 3 — client prediction + interpolation wiring** (task #31).
-  Unblocked once collision pairs reach critical mass (bullet-enemy
-  + player-enemy are the next high-value targets).
+- ✅ **Phase 2.5 — collision system extraction** (task #46). All 9 base
+  pairs landed on JS + Rust sides. All 5 power-weapon pairs landed on
+  JS + Rust sides (Nova / Mine / Lance / Missile Salvo / Lightning Arc).
+  Legacy `collision-system.js` stays untouched; pure-step versions in
+  `js/sim/collision.js` for server / prediction path. Defense-skill pair
+  (deflector + tractor) deferred until post-MVD bullet plumbing lands.
+- ✅ **MVD — two browser tabs see each other's ships** (PR #67, 5.90.0).
+  Server tick loop + input intake + snapshot publish wired end-to-end;
+  client EngineDriver MP mode (PR #62) drives Predictor + Interpolator;
+  server drains collision events into HP/damage/despawn (PR #70).
+- ✅ **Hybrid LoopbackConnection scaffold** (PRs #71 + #75). Phase 1
+  scaffold lets solo flow through the same `EngineDriver` as MP; Phase 2
+  threads `startSolo({useLoopback:true})` into the engine driver.
+  Call-site flag flip deferred to Phase 3.
+- ✅ **MP feature-flag suppression** (PRs #63 + #76). `js/net/feature-flags.js`
+  scaffold + `Player.firePower` / `.activateSkill` gated on the flag so
+  unported abilities silently no-op when MP is active.
+- ◐ **Phase 3 — client prediction + interpolation wiring** (task #31).
+  Pipeline now live for ships in MP. Remaining: flip `useLoopback:true`
+  at the NEW GAME call site so solo runs through the prediction pipeline
+  too (deferred — conflicts with mobile-mode work in flight). Bullet
+  GameState plumbing still needed before bullet-collision drain fires
+  (in flight from a parallel dispatch).
 - ⬜ Phase 4 — co-op design (revive, shared wave-clear, drop attribution) — task #32.
 - ⬜ Phase 5 — matchmaking & lobby UX
 - ⬜ Phase 6 — drop-in/drop-out polish
 - ⬜ Phase 7 — operational hardening (metrics, admin endpoints, deploy)
+
+## Next steps / open work (2026-05-13)
+
+| Item | State | Notes |
+|---|---|---|
+| **Phase 3 — flip `useLoopback:true` at NEW GAME call site** | deferred | Conflicts with mobile-mode work in flight; merge order matters. Once mobile-mode lands, flip the flag and route solo through the prediction pipeline. |
+| **Bullet GameState plumbing** | in flight (parallel dispatch) | Populate `state.bullets` so the server's collision drain actually fires for bullets. Necessary before MVD scope expands to "see each other's bullets". |
+| **Phase 2.1 enemy bullet patterns 16–17** (`mine` + `homing_mine`) | blocked | Requires `targetPlayer` plumbing through `EnemyContext`. |
+| **Mobile-mode** (auto-pilot + tap-to-shoot + portrait HUD) | in flight (separate concern) | Not MP work but contends for the same NEW GAME call site (see Phase 3 flip). |
+| **E2E MP test enrichment** | open | Playwright tests beyond the 2-tab MVD smoke — multi-tab matchmaking, drop-in/drop-out, packet-loss simulation. |
 
 When you finish a milestone, tick the box here and update the In-flight
 work column.
