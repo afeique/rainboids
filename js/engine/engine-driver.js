@@ -54,6 +54,7 @@
 import { OnlineStatusOverlay } from './online-status-overlay.js';
 import { Predictor } from '../net/prediction.js';
 import { Interpolator } from '../net/interpolation.js';
+import { LoopbackConnection } from '../net/loopback-connection.js';
 import { pack as packInput, emptyPlayerInput } from '../sim/input.js';
 
 /**
@@ -85,6 +86,7 @@ export class EngineDriver {
      *   document?: Document,
      *   Predictor?: typeof Predictor,
      *   Interpolator?: typeof Interpolator,
+     *   LoopbackConnection?: typeof LoopbackConnection,
      *   renderDelayMs?: number,
      *   dt?: number,
      *   now?: () => number,
@@ -112,6 +114,10 @@ export class EngineDriver {
         // bleed across runs).
         this._PredictorCtor = deps.Predictor ?? Predictor;
         this._InterpolatorCtor = deps.Interpolator ?? Interpolator;
+        // Loopback class is also injectable so the hybrid-solo path can be
+        // tested without spinning up a real timer interval. Solo mode that
+        // doesn't opt into loopback never touches this.
+        this._LoopbackCtor = deps.LoopbackConnection ?? LoopbackConnection;
         // 100 ms is the canonical render-delay window for 20 Hz snapshots
         // — enough headroom for one dropped packet without feeling laggy.
         // Matches `Interpolator`'s built-in default; override only for
@@ -158,10 +164,67 @@ export class EngineDriver {
      * starts a new one. Identical to clicking NEW GAME / CONTINUE on the
      * title screen — the driver is a thin pass-through.
      *
-     * @param {{ continueRun?: boolean, animateTitleStart?: boolean }} [opts]
+     * ── Hybrid solo↔MP (Phase 2, 2026-05-13) ─────────────────────────────
+     * When `useLoopback=true`, the driver constructs an in-process
+     * `LoopbackConnection`, synthesizes a welcome payload, and delegates
+     * to `startOnline()`. This drives the SAME Predictor + Interpolator
+     * pipeline used for real multiplayer — solo and online share the
+     * exact same per-frame code path, with the only difference being
+     * where the snapshot bytes originate. The default remains `false`
+     * (legacy solo, no Predictor / Interpolator) so existing call sites
+     * are unaffected; the next slice (game-engine wiring) flips the flag.
+     *
+     * @param {{
+     *   continueRun?: boolean,
+     *   animateTitleStart?: boolean,
+     *   useLoopback?: boolean,
+     *   baselineShip?: object|null,
+     * }} [opts]
      * @returns {boolean} true if the run actually launched
      */
-    startSolo({ continueRun = false, animateTitleStart = true } = {}) {
+    startSolo({
+        continueRun = false,
+        animateTitleStart = true,
+        useLoopback = false,
+        baselineShip = null,
+    } = {}) {
+        // Hybrid path: construct a loopback connection + synthetic welcome
+        // and reuse the existing online pipeline. We do this BEFORE
+        // `_teardownConnection()` because `startOnline()` already calls
+        // teardown internally — calling it twice would be wasted work.
+        if (useLoopback) {
+            const loopback = new this._LoopbackCtor({
+                playerId: 1,
+                sessionId: 'solo-loopback',
+                serverTimeMs: Date.now(),
+                // The Phase 1 scaffold's constructor accepts a `baselineShip`
+                // option; thread it through so callers can pin the ship's
+                // starting position. If the scaffold ever drops this option,
+                // the loopback simply seeds a default ship — both paths are
+                // safe.
+                ...(baselineShip ? { baselineShip } : null),
+            });
+            const welcome = {
+                playerId: loopback.playerId,
+                session: loopback.session ?? 'solo-loopback',
+                serverTimeMs: Date.now(),
+            };
+            // Start the loopback BEFORE startOnline subscribes — the
+            // scaffold emits its welcome on a microtask, so the
+            // engine-driver's snapshot listener (registered inside
+            // startOnline) is in place by the time the first snapshot
+            // arrives 50 ms later. Either ordering works since loopback's
+            // event emitter is sync; we choose this to match the real-MP
+            // sequence where ConnectionTask is already Welcomed by the
+            // time it's handed to the engine driver.
+            loopback.start();
+            return this.startOnline({
+                connection: loopback,
+                welcome,
+                baselineShip,
+            });
+        }
+
         this._teardownConnection();
         this.mode = ENGINE_MODE_SOLO;
 
