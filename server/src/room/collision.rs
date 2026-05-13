@@ -177,10 +177,11 @@ pub fn drain(state: &mut GameState, side: &mut CollisionSideState, wire_events: 
         apply_event(event, state, side, wire_events);
     }
 
-    // ── Despawn pass: remove asteroids/drops/enemies marked dead ──
+    // ── Despawn pass: remove asteroids/drops/enemies/bullets marked dead ──
     despawn_dead_asteroids(state, side, wire_events);
     despawn_dead_enemies(state, wire_events);
     despawn_consumed_drops(state, side);
+    despawn_dead_bullets(state, side);
 }
 
 /// Dispatch a single `CollisionEvent` to a `GameState` mutation. Each variant
@@ -208,10 +209,19 @@ pub fn apply_event(
             // Apply asteroid HP loss. Despawn pass will prune at hp <= 0.
             side.damage_asteroid(asteroid_id, damage);
 
-            // Bullet despawn — emit wire event so clients can release the FX.
+            // Bullet despawn — emit wire event so clients can release the FX,
+            // AND mark the bullet inactive in `state.bullets` so the sim-side
+            // collection reflects the despawn. The detect-step
+            // (sim/collision.rs::detect_bullet_asteroid_hits) only sets
+            // `bullet_will_despawn` in the event payload; propagating that
+            // back here keeps `state.bullets` in sync so the next-tick
+            // `build_bullets` filters it out before the pierce-budget guard
+            // misfires.
+            //
             // BulletId is a wire-format newtype around u64; the pure step
             // narrowed to u32 for storage. Restore by widening.
             if bullet_will_despawn {
+                deactivate_bullet(state, bullet_id);
                 wire_events.push(GameEvent::BulletDespawn {
                     id: crate::protocol::BulletId(bullet_id as u64),
                     reason: crate::protocol::DespawnReason::Hit,
@@ -247,7 +257,10 @@ pub fn apply_event(
             if let Some(enemy) = state.enemies.iter_mut().find(|e| e.id.0 as u32 == enemy_id) {
                 enemy.hp -= damage;
             }
+            // Mark the bullet inactive in `state.bullets` (parallel to the
+            // BulletHitAsteroid arm above; same rationale).
             if bullet_will_despawn {
+                deactivate_bullet(state, bullet_id);
                 wire_events.push(GameEvent::BulletDespawn {
                     id: crate::protocol::BulletId(bullet_id as u64),
                     reason: crate::protocol::DespawnReason::Hit,
@@ -426,12 +439,59 @@ pub fn apply_event(
 // produce empty Vecs today; subsequent PRs add the field plumbing as
 // each entity gets wired into the snapshot.
 
-fn build_bullets(_state: &GameState, _side: &mut CollisionSideState) -> Vec<CollisionBullet> {
-    // No player-bullet collection on GameState yet — the simulate_tick
-    // bullet update is stubbed in `sim/bullet.rs`. When bullets get
-    // their wire field set, this builder joins it with the
-    // side-table's pierced sets.
-    Vec::new()
+fn build_bullets(state: &GameState, side: &mut CollisionSideState) -> Vec<CollisionBullet> {
+    // Join the authoritative `state.bullets` collection with the wrapper's
+    // per-bullet side-state (pierced id sets + pierce counter carried
+    // across ticks). Inactive bullets are filtered out — the detect-steps
+    // skip them anyway, but excluding them up-front saves a per-pair
+    // active-guard and avoids leaking despawn-pending entities into the
+    // collision view.
+    state
+        .bullets
+        .iter()
+        .filter(|b| b.active)
+        .map(|b| {
+            let id = b.id.0;
+            // Carry persistent per-bullet pierce state across ticks.
+            // Bullets missing from these maps start fresh (empty set /
+            // zero counter) — matches the JS lazy-allocation semantics.
+            let pierced_asteroid_ids = side
+                .bullet_pierced_asteroid_ids
+                .get(&id)
+                .cloned()
+                .unwrap_or_default();
+            let pierced_enemy_ids = side
+                .bullet_pierced_enemy_ids
+                .get(&id)
+                .cloned()
+                .unwrap_or_default();
+            let pierced_enemies = side
+                .bullet_pierced_count
+                .get(&id)
+                .copied()
+                .unwrap_or(0);
+
+            CollisionBullet {
+                id,
+                x: b.x,
+                y: b.y,
+                vx: b.vx,
+                vy: b.vy,
+                radius: b.radius,
+                damage: b.damage,
+                // `BulletState.pierce_count: u32` → `CollisionBullet.piercing: i32`.
+                // `u32 as i32` is lossless for the practical range (we never
+                // spawn 2 billion-pierce bullets). See `CollisionBullet`
+                // semantics: 0 = non-piercing, N>0 = budget of additional
+                // targets before despawn.
+                piercing: b.pierce_count as i32,
+                pierced_enemies,
+                active: b.active,
+                pierced_asteroid_ids,
+                pierced_enemy_ids,
+            }
+        })
+        .collect()
 }
 
 fn build_asteroids(state: &GameState, side: &CollisionSideState) -> Vec<CollisionAsteroid> {
@@ -591,4 +651,42 @@ fn despawn_consumed_drops(state: &mut GameState, side: &mut CollisionSideState) 
     let live_ids: std::collections::HashSet<u32> =
         state.drops.iter().map(|d| d.id.0 as u32).collect();
     side.drop_active.retain(|id, _| live_ids.contains(id));
+}
+
+/// Mark the bullet with `id_u32` (the narrowed-to-u32 id used by the
+/// detect-step events) as `!active` in `state.bullets`. No-op if the
+/// bullet isn't in the collection — tests that drive `apply_event`
+/// directly without populating `state.bullets` rely on this no-op
+/// behavior.
+fn deactivate_bullet(state: &mut GameState, id_u32: u32) {
+    if let Some(b) = state.bullets.iter_mut().find(|b| b.id.0 == id_u32) {
+        b.active = false;
+    }
+}
+
+/// Drain dead bullets from `GameState.bullets` and clean up the per-bullet
+/// side-state (pierced id sets + pierce counter). Pragmatic v1: the drain
+/// (this function) prunes inactive bullets at the tail of the collision
+/// pass. Once bullets get a dedicated sim-side update loop, this can move
+/// alongside `sim::bullet::update_bullets`.
+///
+/// No wire event is emitted here — the `BulletDespawn` for collision hits
+/// is emitted in `apply_event`, and lifetime / off-screen despawns are
+/// emitted as `BulletEvent` values by `update_bullets` (which the
+/// wrapper translates separately). This function is the storage-side
+/// cleanup pass only.
+fn despawn_dead_bullets(state: &mut GameState, side: &mut CollisionSideState) {
+    // Retain only active bullets in the storage Vec.
+    state.bullets.retain(|b| b.active);
+    // Side-table cleanup: drop entries for bullets that no longer exist
+    // in `state.bullets`. Without this the per-bullet pierce-state maps
+    // grow unboundedly across long sessions.
+    let live_ids: std::collections::HashSet<u32> =
+        state.bullets.iter().map(|b| b.id.0).collect();
+    side.bullet_pierced_asteroid_ids
+        .retain(|id, _| live_ids.contains(id));
+    side.bullet_pierced_enemy_ids
+        .retain(|id, _| live_ids.contains(id));
+    side.bullet_pierced_count
+        .retain(|id, _| live_ids.contains(id));
 }
