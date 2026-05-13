@@ -64,6 +64,69 @@ export const PLAYER_STATES = {
     NORMAL: 'normal'
 };
 
+// ── Hybrid solo↔MP unification (Phase 3, 2026-05-13) ────────────────────
+//
+// Pure resolver for `engineDriver.startSolo()` options. Lives at module
+// scope so unit tests can import + exercise it without constructing a
+// full GameEngine. The corresponding `_resolveSoloOptions()` method below
+// is a thin wrapper that defaults the location source from the browser
+// `window.location` — production callers don't pass anything.
+//
+// Inputs:
+//   • `opts.continueRun`  user-facing "resume saved run" flag (NEW GAME
+//                         leaves this false; CONTINUE / RESTART WAVE set
+//                         it true).
+//   • `locSearch`         the `location.search` query string (e.g.
+//                         "?solo-classic=1"). Tests pass a synthetic
+//                         value; the method below reads `window.location`.
+//
+// Outputs:
+//   { useLoopback, continueRun }
+//
+// Contract:
+//   • `useLoopback` defaults to TRUE so a fresh NEW GAME run boots
+//     through the LoopbackConnection — the SAME Predictor + Interpolator
+//     pipeline as real MP. This is the unification point: solo and MP
+//     runs share one code path at the simulation/rendering layer,
+//     differing only in where snapshot bytes originate.
+//
+//   • `?solo-classic=1` URL escape hatch forces `useLoopback: false`.
+//     Useful when debugging if the loopback path masks a real-MP
+//     regression — flips back to the legacy direct-Engine solo path
+//     without rebuilding.
+//
+//   • `continueRun: true` ALSO forces `useLoopback: false` for now. Per
+//     Phase 2 notes, the hybrid pipeline always invokes `startNewRun()`
+//     server-side — the LoopbackConnection scaffold doesn't yet
+//     preserve the persisted baseline ship / wave / loadout. That's a
+//     Phase 4 concern; for now CONTINUE preserves the legacy direct path
+//     so resumed runs restore correctly.
+//
+// @param {{ continueRun?: boolean }} [opts]
+// @param {string} [locSearch]   location.search-shaped string (with or
+//                               without leading `?`). Default "" → no
+//                               classic-forced override.
+// @returns {{ useLoopback: boolean, continueRun: boolean }}
+export function resolveSoloOptions({ continueRun = false } = {}, locSearch = '') {
+    // URL-param escape hatch. URLSearchParams gracefully handles a
+    // missing leading `?` and unrecognized values (the `has()` check
+    // returns false for everything except an explicit key presence).
+    // Defensive try/catch covers obscure environments that lack
+    // URLSearchParams; we treat ANY error as "no override".
+    let classicForced = false;
+    try {
+        classicForced = new URLSearchParams(locSearch || '').has('solo-classic');
+    } catch {
+        classicForced = false;
+    }
+
+    // CONTINUE path can't safely use the loopback yet (Phase 4); force
+    // legacy. Otherwise default to loopback ON.
+    const useLoopback = !classicForced && !continueRun;
+
+    return { useLoopback, continueRun: !!continueRun };
+}
+
 /* ─── Health-shape 3D geometry (5.88.5) ─────────────────────────────────────
  *
  * Per shape: unit-radius vertex coordinates, a flat edge list, and a face
@@ -1079,6 +1142,30 @@ export class GameEngine {
             power:   pickKey(POWER_WEAPONS),
             skill:   pickKey(DEFENSE_SKILLS),
         };
+    }
+
+    /**
+     * Instance-method wrapper around the module-scope `resolveSoloOptions()`
+     * helper. Reads `location.search` from the browser environment by
+     * default so production callers (currently `main.js::launch`) can
+     * invoke `engine._resolveSoloOptions({ continueRun })` without
+     * threading a location object through the title-screen handler.
+     *
+     * Tests don't go through this wrapper — they import `resolveSoloOptions`
+     * at module scope and pass synthetic search strings directly.
+     *
+     * @param {{ continueRun?: boolean }} [opts]
+     * @param {{ search?: string }}        [winLoc]
+     * @returns {{ useLoopback: boolean, continueRun: boolean }}
+     */
+    _resolveSoloOptions(opts = {}, winLoc = null) {
+        let search = '';
+        if (winLoc && typeof winLoc.search === 'string') {
+            search = winLoc.search;
+        } else if (typeof window !== 'undefined' && window.location && typeof window.location.search === 'string') {
+            search = window.location.search;
+        }
+        return resolveSoloOptions(opts, search);
     }
 
     // Generate all initial color stars using purely generative method
