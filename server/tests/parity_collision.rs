@@ -40,12 +40,13 @@
 
 use rainboids_server::sim::collision::{
     detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_enemy_asteroid_hits,
-    detect_lance_beam_hits, detect_mine_hits, detect_nova_blast_hits, detect_player_asteroid_hits,
-    detect_player_drop_pickups, detect_player_enemy_bullet_hits, detect_player_enemy_hits,
-    CollisionAsteroid, CollisionBullet, CollisionContext, CollisionDrop, CollisionEnemy,
-    CollisionEnemyBullet, CollisionEvent, CollisionLance, CollisionMine, CollisionPlayer,
-    NovaBlast, TriggerKind, ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER,
-    BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE,
+    detect_lance_beam_hits, detect_mine_hits, detect_missile_salvo_hits, detect_nova_blast_hits,
+    detect_player_asteroid_hits, detect_player_drop_pickups, detect_player_enemy_bullet_hits,
+    detect_player_enemy_hits, CollisionAsteroid, CollisionBullet, CollisionContext, CollisionDrop,
+    CollisionEnemy, CollisionEnemyBullet, CollisionEvent, CollisionLance, CollisionMine,
+    CollisionMissile, CollisionPlayer, NovaBlast, TriggerKind, ASTEROID_ENEMY_PUSH,
+    ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION,
+    ENEMY_ASTEROID_PUSH, MISSILE_DEFAULT_RADIUS, MISSILE_KNOCK, OVERLAP_PUSH_FORCE,
     OVERLAP_SEPARATION_RATIO, PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE,
     SEPARATION_BUFFER,
 };
@@ -3120,4 +3121,396 @@ fn lance_boundary_pin_far_end() {
         }
         ev => panic!("expected LanceHitEnemy, got {:?}", ev),
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// MISSILE SALVO fixtures (dispatch — Rust mirror of PR #68).
+// ═════════════════════════════════════════════════════════════════════
+//
+// Coverage mirrors `js/sim/collision.js::detectMissileSalvoHits` —
+// directional projectile vs enemy/asteroid with first-hit-wins per
+// missile. Iteration order: missiles outer-loop; for each, enemies
+// first then asteroids. Knockback direction = unit(missile.vel) *
+// MISSILE_KNOCK (enemy) or * MISSILE_KNOCK * 0.6 (asteroid, pre-
+// scaled inside the event payload).
+//
+// Tolerance: 0.01 — pure linear physics, no trig (knockback is the
+// missile's own velocity normalized; no sin/cos involved). Matches
+// player-asteroid + mine fixture conventions.
+// ═════════════════════════════════════════════════════════════════════
+
+/// Missile-specific float-tolerance helper. Linear-physics path, no
+/// trig — 0.01 slack mirrors the player-asteroid + mine fixture
+/// convention.
+fn approx_eq_missile(actual: f32, expected: f32, what: &str) {
+    let delta = (actual - expected).abs();
+    assert!(
+        delta < 0.01,
+        "{} diverged: rust={}, expected={}, |Δ|={}",
+        what,
+        actual,
+        expected,
+        delta,
+    );
+}
+
+/// Build a missile at (x, y) moving along +X axis (vx=1, vy=0). Default
+/// damage 1, radius 6 (live-game default). Tests that need a specific
+/// direction can override `vx` / `vy` post-construction.
+fn make_missile(id: u32, x: f32, y: f32) -> CollisionMissile {
+    let mut m = CollisionMissile::fresh(id);
+    m.x = x;
+    m.y = y;
+    m.vx = 1.0;
+    m.vy = 0.0;
+    m
+}
+
+// ---------------------------------------------------------------------
+// Fixture — single missile vs single enemy in range.
+//
+// Missile at (0, 0) moving along +X (vx=1, vy=0). Enemy at (10, 0)
+// with default radius 18. Sum-of-radii = 6 + 18 = 24, distance = 10
+// → HIT. Expect 1 `MissileHitEnemy` event with knockback in +X axis
+// at full MISSILE_KNOCK magnitude.
+// ---------------------------------------------------------------------
+#[test]
+fn missile_single_enemy_hit() {
+    let mut missile = make_missile(1, 0.0, 0.0);
+    missile.damage = 4.0;
+    let missiles = vec![missile];
+    let enemies = vec![make_enemy(101, 10.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "in-range enemy → 1 event");
+    match events[0] {
+        CollisionEvent::MissileHitEnemy {
+            missile_id,
+            target_id,
+            damage,
+            knock_x,
+            knock_y,
+        } => {
+            assert_eq!(missile_id, 1);
+            assert_eq!(target_id, 101);
+            approx_eq_missile(damage, 4.0, "damage");
+            approx_eq_missile(knock_x, MISSILE_KNOCK, "knock_x = full +X knockback");
+            approx_eq_missile(knock_y, 0.0, "knock_y = 0");
+        }
+        ev => panic!("expected MissileHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — single missile vs single asteroid in range.
+//
+// Missile at (0, 0) moving along +X (vx=1, vy=0). Asteroid at (20, 0)
+// with default radius 30. Sum-of-radii = 6 + 30 = 36, distance = 20
+// → HIT. No enemies, so the asteroid branch fires. Expect 1
+// `MissileHitAsteroid` event with knockback PRE-SCALED by 0.6×.
+// ---------------------------------------------------------------------
+#[test]
+fn missile_single_asteroid_hit() {
+    let mut missile = make_missile(1, 0.0, 0.0);
+    missile.damage = 4.0;
+    let missiles = vec![missile];
+    let enemies: Vec<CollisionEnemy> = vec![];
+    let asteroids = vec![make_asteroid(101, 20.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "in-range asteroid → 1 event");
+    match events[0] {
+        CollisionEvent::MissileHitAsteroid {
+            missile_id,
+            target_id,
+            damage,
+            knock_x,
+            knock_y,
+        } => {
+            assert_eq!(missile_id, 1);
+            assert_eq!(target_id, 101);
+            approx_eq_missile(damage, 4.0, "damage");
+            // 0.6× discount applied INSIDE the event payload.
+            approx_eq_missile(knock_x, MISSILE_KNOCK * 0.6, "knock_x = 0.6× knock");
+            approx_eq_missile(knock_y, 0.0, "knock_y = 0");
+        }
+        ev => panic!("expected MissileHitAsteroid, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — enemies preferred over asteroids when both reachable.
+//
+// Missile at (0, 0) is in range of BOTH an enemy and an asteroid.
+// Iteration order enemies-first → enemy wins. Only 1 event, of the
+// enemy variant. The asteroid is NOT emitted for this missile this
+// tick.
+// ---------------------------------------------------------------------
+#[test]
+fn missile_iteration_enemy_preferred() {
+    let missile = make_missile(1, 0.0, 0.0);
+    let missiles = vec![missile];
+    let enemies = vec![make_enemy(101, 10.0, 0.0)];
+    let asteroids = vec![make_asteroid(102, 20.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "enemy-first → exactly 1 event");
+    match events[0] {
+        CollisionEvent::MissileHitEnemy { target_id, .. } => {
+            assert_eq!(target_id, 101, "enemy variant wins");
+        }
+        ev => panic!("expected MissileHitEnemy (enemies preferred), got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — geometry miss, target outside sum-of-radii.
+//
+// Missile at (0, 0), enemy at (100, 0), asteroid at (200, 0). Both
+// far outside missile_radius + target_radius. Expect 0 events.
+// ---------------------------------------------------------------------
+#[test]
+fn missile_geometry_miss() {
+    let missile = make_missile(1, 0.0, 0.0);
+    let missiles = vec![missile];
+    let enemies = vec![make_enemy(101, 100.0, 0.0)];
+    let asteroids = vec![make_asteroid(102, 200.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "out-of-range targets → no events");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — skip-gates cover all combinations.
+//
+// One inactive missile (geometrically in range — proves missile.active
+// gate fires). One active missile with three gated enemies (inactive,
+// warping, death_flash) and three gated asteroids (inactive, warping,
+// death_flash) all positioned in geometric range. Expect 0 events.
+// ---------------------------------------------------------------------
+#[test]
+fn missile_skip_gates() {
+    let mut inactive_missile = make_missile(1, 0.0, 0.0);
+    inactive_missile.active = false;
+    let active_missile = make_missile(2, 100.0, 0.0);
+    let missiles = vec![inactive_missile, active_missile];
+
+    let mut inactive_enemy = make_enemy(10, 100.0, 0.0);
+    inactive_enemy.active = false;
+    let mut warping_enemy = make_enemy(11, 100.0, 5.0);
+    warping_enemy.warping = true;
+    let mut flash_enemy = make_enemy(12, 100.0, 10.0);
+    flash_enemy.death_flash = 1;
+    let enemies = vec![inactive_enemy, warping_enemy, flash_enemy];
+
+    let mut inactive_ast = make_asteroid(20, 100.0, 0.0);
+    inactive_ast.active = false;
+    let mut warping_ast = make_asteroid(21, 100.0, 5.0);
+    warping_ast.warping = true;
+    let mut flash_ast = make_asteroid(22, 100.0, 10.0);
+    flash_ast.death_flash = 1;
+    let asteroids = vec![inactive_ast, warping_ast, flash_ast];
+
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "all gates active → no events");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — first-hit-wins per missile.
+//
+// One missile in geometric range of TWO enemies. Pure step emits at
+// most ONE event per missile per tick → exactly 1 event for the FIRST
+// in-range enemy (slice order), and the second enemy is NOT emitted.
+// Distinguishes from a per-target loop (would emit 2 events for the
+// same missile).
+// ---------------------------------------------------------------------
+#[test]
+fn missile_first_hit_wins_per_missile() {
+    let missile = make_missile(1, 0.0, 0.0);
+    let missiles = vec![missile];
+    // Both enemies are well inside the radius-sum (6 + 18 = 24).
+    let enemies = vec![make_enemy(101, 5.0, 0.0), make_enemy(102, 10.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "first-hit-wins per missile → exactly 1 event");
+    match events[0] {
+        CollisionEvent::MissileHitEnemy { target_id, .. } => {
+            assert_eq!(target_id, 101, "first enemy in slice order wins");
+        }
+        ev => panic!("expected MissileHitEnemy for first enemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — multiple missiles hit different targets independently.
+//
+// Two missiles, each in range of a distinct target. Pure step iterates
+// missiles outer-loop → each fires independently → 2 events total
+// (one per missile).
+// ---------------------------------------------------------------------
+#[test]
+fn missile_multiple_missiles_independent() {
+    let m1 = make_missile(1, 0.0, 0.0);
+    let m2 = make_missile(2, 100.0, 0.0);
+    let missiles = vec![m1, m2];
+    let enemies = vec![
+        make_enemy(101, 5.0, 0.0),   // in range of missile 1
+        make_enemy(102, 105.0, 0.0), // in range of missile 2
+    ];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 2, "2 missiles each hit distinct enemies → 2 events");
+
+    match events[0] {
+        CollisionEvent::MissileHitEnemy {
+            missile_id,
+            target_id,
+            ..
+        } => {
+            assert_eq!(missile_id, 1, "first event = missile 1");
+            assert_eq!(target_id, 101, "first event hits enemy 101");
+        }
+        ev => panic!("expected MissileHitEnemy first, got {:?}", ev),
+    }
+    match events[1] {
+        CollisionEvent::MissileHitEnemy {
+            missile_id,
+            target_id,
+            ..
+        } => {
+            assert_eq!(missile_id, 2, "second event = missile 2");
+            assert_eq!(target_id, 102, "second event hits enemy 102");
+        }
+        ev => panic!("expected MissileHitEnemy second, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — zero-velocity missile yields zero knockback (no NaN).
+//
+// Missile with vx = vy = 0. JS uses `Math.hypot(0,0) || 1 = 1`, Rust
+// uses an explicit `mv_len == 0.0 → mv_len = 1.0` fallback. Either
+// way: kx = ky = 0. The event still emits — geometry is independent
+// of velocity.
+// ---------------------------------------------------------------------
+#[test]
+fn missile_zero_velocity_knockback_zero() {
+    let mut missile = make_missile(1, 0.0, 0.0);
+    missile.vx = 0.0;
+    missile.vy = 0.0;
+    let missiles = vec![missile];
+    let enemies = vec![make_enemy(101, 10.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "zero-velocity missile still detects hit");
+    match events[0] {
+        CollisionEvent::MissileHitEnemy {
+            knock_x, knock_y, ..
+        } => {
+            approx_eq_missile(knock_x, 0.0, "zero-velocity → knock_x = 0");
+            approx_eq_missile(knock_y, 0.0, "zero-velocity → knock_y = 0");
+        }
+        ev => panic!("expected MissileHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — knockback direction is normalized unit-vector × magnitude.
+//
+// Missile moving at (3, 4) — `mv_len = sqrt(9 + 16) = 5`. Unit vector
+// is (0.6, 0.8). Expected enemy knock: (0.6 * 9, 0.8 * 9) = (5.4, 7.2).
+// For an asteroid hit (separate sub-case below): (0.6 * 9 * 0.6, 0.8 *
+// 9 * 0.6) = (3.24, 4.32). Confirms the knockback vector is unit-
+// normalized BEFORE scaling, and that the 0.6× discount is asteroid-
+// only.
+// ---------------------------------------------------------------------
+#[test]
+fn missile_knockback_direction_normalized() {
+    // Enemy branch — full MISSILE_KNOCK.
+    {
+        let mut missile = make_missile(1, 0.0, 0.0);
+        missile.vx = 3.0;
+        missile.vy = 4.0;
+        let missiles = vec![missile];
+        let enemies = vec![make_enemy(101, 10.0, 0.0)];
+        let asteroids: Vec<CollisionAsteroid> = vec![];
+        let ctx = CollisionContext;
+        let mut events = Vec::new();
+        detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+        assert_eq!(events.len(), 1);
+        match events[0] {
+            CollisionEvent::MissileHitEnemy {
+                knock_x, knock_y, ..
+            } => {
+                approx_eq_missile(knock_x, 0.6 * MISSILE_KNOCK, "enemy knock_x = ux * KNOCK");
+                approx_eq_missile(knock_y, 0.8 * MISSILE_KNOCK, "enemy knock_y = uy * KNOCK");
+            }
+            ev => panic!("expected MissileHitEnemy, got {:?}", ev),
+        }
+    }
+    // Asteroid branch — MISSILE_KNOCK × 0.6 discount.
+    {
+        let mut missile = make_missile(1, 0.0, 0.0);
+        missile.vx = 3.0;
+        missile.vy = 4.0;
+        let missiles = vec![missile];
+        let enemies: Vec<CollisionEnemy> = vec![];
+        let asteroids = vec![make_asteroid(101, 20.0, 0.0)];
+        let ctx = CollisionContext;
+        let mut events = Vec::new();
+        detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+        assert_eq!(events.len(), 1);
+        match events[0] {
+            CollisionEvent::MissileHitAsteroid {
+                knock_x, knock_y, ..
+            } => {
+                approx_eq_missile(
+                    knock_x,
+                    0.6 * MISSILE_KNOCK * 0.6,
+                    "asteroid knock_x = ux * KNOCK * 0.6",
+                );
+                approx_eq_missile(
+                    knock_y,
+                    0.8 * MISSILE_KNOCK * 0.6,
+                    "asteroid knock_y = uy * KNOCK * 0.6",
+                );
+            }
+            ev => panic!("expected MissileHitAsteroid, got {:?}", ev),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — strict-less-than boundary (dist == sum → MISS).
+//
+// Missile radius = 6 (MISSILE_DEFAULT_RADIUS). Enemy radius = 18.
+// Sum-of-radii = 24. Place enemy exactly 24 units away from the
+// missile → dist == sum → MISS. JS pure step gate is `dist < sum`
+// (strict). This fixture guards against drift to `<=` (inclusive).
+// ---------------------------------------------------------------------
+#[test]
+fn missile_boundary_strict_less_than() {
+    let missile = make_missile(1, 0.0, 0.0);
+    let missiles = vec![missile];
+    // Enemy radius 18 + missile radius 6 = 24. Place at (24, 0).
+    let sum = 18.0 + MISSILE_DEFAULT_RADIUS;
+    let enemies = vec![make_enemy(101, sum, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "dist == sum-of-radii → MISS (strict <)");
 }
