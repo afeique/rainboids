@@ -12,14 +12,32 @@ on commit. The user runs both terminals and hands the tree back and forth.
 
 | Field | Value |
 |-------|-------|
-| Branch | `master` (Phase 1 ✓ + Phase 2 ✓ + Phase 2.1 ~95% + Phase 2.5 underway). Worktrees idle. |
-| Version | `5.89.0` on master (no version bump for Rust server work — runtime-affecting only when client prediction wires up in Phase 3) |
-| Working tree | **Phase 2 server sim port COMPLETE** (PRs #19–#23 merged). **Phase 2.1 follow-ups** (filling deferred branches): drops magnet/tractor/expiry ✓, asteroid bounce/death-flash ✓, bullet helix/homing ✓, wave context plumbing ✓, enemy bullet 7/17 patterns ✓, enemy context plumbing ✓. **Phase 2.5 collision extraction**: bullet-asteroid (JS + Rust) ✓, player-asteroid (JS) ✓ + Rust mirror in flight. |
-| Last touched | 2026-05-10 by **server agent** (orchestrator — Phase 2.1/2.5 parallel dispatches, doc sync) |
-| Last commit | merged head — see `git log --oneline -1`. PRs #32-#34 just landed (player-asteroid JS, enemy bullet +4 patterns, enemy ctx plumbing). |
+| Branch | `master`. **MVD pivot in flight 2026-05-13.** Three parallel subagents wiring smallest-viable demo. |
+| Version | `5.89.0` on master (no bump for backend work — runtime-affecting only when MVD lands) |
+| Working tree | **MVD pivot day-1.** All foundational layers done: Phase 1 wrappers ✓, Phase 2 Rust sim ports ✓, Phase 2.1 deferred branches ~95% ✓, Phase 2.5 collision 9/12 JS + 8/12 Rust ✓, Phase 3 primitives (TickBuffer/Predictor/snapshot history/Interpolator/f32-tolerance) ✓. Wiring it together for two-player ship-only demo. |
+| Last touched | 2026-05-13 by **orchestrator** (MVD parallel dispatch + this doc sync) |
+| Last commit | see `git log --oneline -1`. PRs #56-#58 just landed (tolerance / Mine JS / Rust Nova). |
 | Uncommitted | this doc update |
-| Parity status | **Schema → Rust → JS pipeline complete.** All 6 pure-step subsystems (ship/enemy/asteroid/bullet/wave/drops) have Rust mirrors + parity fixtures. Phase 2.5 collision: 2 of ~9 pairs done on JS side (bullet-asteroid, player-asteroid); 1 of ~9 on Rust side (bullet-asteroid). |
-| Critical path | **Phase 2.5 collision pairs** (filling out remaining 7 pairs JS-side + 8 pairs Rust-side) + **JS-side `hunterArcMovement` ctx threading** (unblocks Rust hunter_arc full port). Once collision + hunter_arc land, Phase 3 (client prediction) is fully unblocked. |
+| Parity status | **Schema → Rust → JS pipeline complete.** Phase 2.5 collision: 9/12 JS (7 pure pairs + Nova + Mine); 8/12 Rust. |
+| Critical path | **Three MVD wiring PRs in flight**: (A) server tick + input intake + snapshot pub, (B) client EngineDriver MP mode wiring, (D) E2E smoke (skip-gated). Once A+B merge, **two-player ship movement works end-to-end**. |
+
+## MVD definition (2026-05-13)
+
+**Minimum-viable demo**: two players see each other's ships move. **Entire scope.** No enemies, no asteroids, no bullets, no collisions over the wire. Once two clients connect and see each other's positions converge in real time, the architecture is validated end-to-end and every subsequent feature is additive.
+
+**Why we pivoted here**: Phase 2.5 collision-pair PRs are now mechanical (we've done 8 of the same shape; architectural unknowns are gone). The remaining unknowns live in the wiring (snapshot rate, prediction convergence under packet loss, reconciliation timing). Information-per-PR is much higher in MVD wiring than in port boilerplate.
+
+**Post-MVD roadmap**:
+1. **MVD ships visible** ← in flight
+2. Collision wrappers: server drains pure-step collision events, applies HP/damage/despawn
+3. MP-feature-flag for unported abilities (suppress lance/mine/nova/lightning/missile/deflector/tractor in MP until parity catches up)
+4. Bullet wire format + projectile sync
+5. Enemy sync (server spawns enemies, clients render)
+6. Asteroid sync (server spawns asteroids, clients render)
+7. Drops sync (server emits drops on entity death; clients see them)
+8. Hybrid solo: solo reroutes through EngineDriver + Predictor + `LoopbackConnection`. Same code path as MP. Implementation deferred until after MVD proves the prediction pipeline.
+
+**Always-online vs hybrid (2026-05-13)**: rejected always-online (30-80ms input latency to solo, kills offline play, turns server outages into game outages). Going with **hybrid** — solo uses a `LoopbackConnection` adapter that calls the JS sim layer in-process. Same `EngineDriver` for both modes. Deferred until after MVD.
 
 ## Ownership boundaries
 
