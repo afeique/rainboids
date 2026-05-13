@@ -1102,3 +1102,144 @@ pub fn update_enemy_bullets(
         update_enemy_bullet(b, ctx, events);
     }
 }
+
+// ── Unified `BulletState` step (sim-storage path) ───────────────────────
+//
+// `update_bullets` advances the sim-internal `BulletState` collection that
+// lives on `GameState.bullets`. This is a SIMPLIFIED step that's distinct
+// from `update_player_bullet` (the JS-parity port).
+//
+// Why two paths?
+//   - `update_player_bullet` is the byte-for-byte JS port. It owns
+//     `PlayerBullet` (a richer field set including `fade_factor`,
+//     `base_radius`, range-multiplier, etc.) and produces parity-tested
+//     trajectories. Tests pin those numbers to JS reference vectors.
+//   - `update_bullets` is the simpler sim-step that the room actor calls
+//     each tick. It takes `BulletState` (the lean storage type), advances
+//     position + helix, ages the bullet, and culls on lifetime / off-screen.
+//
+// When the full parity port is wired into `simulate_tick`, this simplified
+// step gets retired in favor of dispatching to `update_player_bullet` /
+// `update_enemy_bullet` based on the bullet's owner. For now this is the
+// pragmatic v1 that makes `build_bullets` non-empty so collisions can fire.
+//
+// Order of operations matters and matches the spec in the task brief:
+//   1. Active-guard.
+//   2. Position update (vx * dt, vy * dt).
+//   3. Helix offset (if amplitude > 0).
+//   4. Age++.
+//   5. Lifetime check.
+//   6. Off-screen check (arena bounds).
+
+use crate::sim::state::BulletState;
+
+/// Per-tick context for `update_bullets`. Lean — only the fields the
+/// simplified step consumes today. The richer `PlayerBulletContext` /
+/// `EnemyBulletContext` types remain in service of the parity port.
+#[derive(Debug, Clone, Copy)]
+pub struct BulletStepContext {
+    /// Logic-tick delta in seconds. Mirrors `ctx.dt` on the JS side.
+    /// `update_bullets` falls back to `0.05` (≈ 20 Hz, matches the JS
+    /// solo-loop logic-tick rate) when this is zero so callers can pass
+    /// `Default::default()` and still get sensible motion.
+    pub dt: f32,
+    /// Arena half-extents (px). Bullets that drift outside `[-arena_*,
+    /// arena_*]` are culled. Defaults to 4000 × 4000 — large enough that
+    /// playfield-scale ballistics don't false-positive but tight enough
+    /// that runaway bullets eventually drop.
+    pub arena_width: f32,
+    pub arena_height: f32,
+}
+
+impl Default for BulletStepContext {
+    fn default() -> Self {
+        Self {
+            dt: 0.05,
+            arena_width: 4000.0,
+            arena_height: 4000.0,
+        }
+    }
+}
+
+/// Default `dt` used when callers pass `ctx.dt = 0.0`. Matches the JS
+/// solo-loop logic-tick rate (1 / 20 s).
+const BULLET_STEP_DEFAULT_DT: f32 = 0.05;
+
+/// Pure step that advances a single `BulletState` by one tick.
+///
+/// Mutates `b` in place; appends despawn events to `events` so the wrapper
+/// can release pool slots / emit wire-format `BulletDespawn`s.
+pub fn update_bullet(
+    b: &mut BulletState,
+    ctx: &BulletStepContext,
+    events: &mut Vec<BulletEvent>,
+) {
+    // 1. Active-guard.
+    if !b.active {
+        return;
+    }
+
+    // 2. Position update. Use ctx.dt; fall back to default when zero so
+    //    callers can pass `BulletStepContext::default()` and still get
+    //    motion. (Some tests pre-construct a ctx with dt=0 to assert the
+    //    fallback works.)
+    let dt = if ctx.dt == 0.0 {
+        BULLET_STEP_DEFAULT_DT
+    } else {
+        ctx.dt
+    };
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+
+    // 3. Helix offset. Add the **delta** of the perpendicular sine each
+    //    frame so the underlying rail position still advances by `vel`
+    //    exactly. Same shape as `update_player_bullet`'s helix branch.
+    if b.helix_amplitude > 0.0 {
+        let speed = b.vx.hypot(b.vy);
+        let speed = if speed == 0.0 { 1.0 } else { speed };
+        let ux = -b.vy / speed;
+        let uy = b.vx / speed;
+        let t = b.age_ticks as f32;
+        let s_now = (t * b.helix_freq).sin();
+        let s_prev = ((t - 1.0) * b.helix_freq).sin();
+        let delta = (s_now - s_prev) * b.helix_amplitude;
+        b.x += ux * delta;
+        b.y += uy * delta;
+    }
+
+    // 4. Age++.
+    b.age_ticks = b.age_ticks.saturating_add(1);
+
+    // 5. Lifetime check.
+    if b.age_ticks > b.max_age_ticks {
+        b.active = false;
+        events.push(BulletEvent::Despawn { bullet_id: b.id.0 });
+        return;
+    }
+
+    // 6. Off-screen check (arena bounds). Use signed half-extents so the
+    //    arena is centered on the origin — matches how JS bullet origins
+    //    are seeded from the player position (which can be anywhere on the
+    //    field).
+    if b.x < -ctx.arena_width
+        || b.x > ctx.arena_width
+        || b.y < -ctx.arena_height
+        || b.y > ctx.arena_height
+    {
+        b.active = false;
+        events.push(BulletEvent::Despawn { bullet_id: b.id.0 });
+    }
+}
+
+/// Loop helper. Advances every bullet in the slice and prunes the inactive
+/// entries from the slice's owning Vec is NOT done here (the room actor
+/// runs `despawn_dead_bullets` after the drain pass — see room/collision.rs).
+pub fn update_bullets(
+    bullets: &mut [BulletState],
+    ctx: &BulletStepContext,
+    events: &mut Vec<BulletEvent>,
+) {
+    for b in bullets.iter_mut() {
+        update_bullet(b, ctx, events);
+    }
+}

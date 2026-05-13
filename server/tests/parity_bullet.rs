@@ -326,3 +326,182 @@ fn player_bullet_homing() {
         events,
     );
 }
+
+// ── BulletState / update_bullets fixtures ───────────────────────────────
+//
+// These exercise the SIM-storage path (the simplified bullet step that
+// the room actor drives each tick — see `sim::bullet::update_bullets`).
+// Distinct from the `update_player_bullet` fixtures above, which pin the
+// byte-for-byte JS parity port.
+//
+// The room-actor path doesn't need to match JS bit-for-bit (clients
+// re-derive bullets from input + tick); it just needs reasonable physics
+// so the collision view-builder has non-empty input.
+
+use rainboids_server::sim::bullet::{update_bullet, BulletStepContext};
+use rainboids_server::sim::state::{BulletId, BulletState};
+
+#[test]
+fn bullet_state_constructor_defaults() {
+    // `BulletState::fresh` should produce a fully-initialized bullet ready
+    // for the room actor to consume. Spot-check the defaults that load-
+    // bearing fields rely on:
+    //   - `active=true` so the room actor's view-builder picks it up.
+    //   - `age_ticks=0` so a 30-tick fixture sees the lifetime ramp from
+    //     the top.
+    //   - `max_age_ticks > 0` so the cap-check doesn't trigger on tick 0.
+    //   - Velocity / position at zero so the call site can drop in
+    //     overrides without worrying about leftover state.
+    let b = BulletState::fresh(BulletId(42));
+
+    assert_eq!(b.id, BulletId(42));
+    assert!(b.active, "fresh bullet should be active");
+    assert_eq!(b.age_ticks, 0);
+    assert!(b.max_age_ticks > 0, "max_age_ticks must be positive");
+    assert_eq!(b.x, 0.0);
+    assert_eq!(b.y, 0.0);
+    assert_eq!(b.vx, 0.0);
+    assert_eq!(b.vy, 0.0);
+    assert_eq!(b.angle, 0.0);
+    assert_eq!(b.pierce_count, 0);
+    assert!(!b.homing);
+    assert_eq!(b.helix_amplitude, 0.0);
+    // damage / radius should be a positive default (so a fresh bullet is
+    // immediately usable as a "default test bullet" without overrides).
+    assert!(b.damage > 0.0);
+    assert!(b.radius > 0.0);
+}
+
+#[test]
+fn update_bullets_advances_position() {
+    // Setup: a bullet at (100, 200) drifting east at vx=10 px/s with the
+    // default dt of 0.05 s. After 1 tick: x should advance by exactly
+    // vx * dt = 10 * 0.05 = 0.5 px. (The room-actor step is dt-scaled,
+    // distinct from the JS parity port which uses raw vx/vy per frame.)
+    let mut b = BulletState::fresh(BulletId(1));
+    b.x = 100.0;
+    b.y = 200.0;
+    b.vx = 10.0;
+    b.vy = 0.0;
+
+    let ctx = BulletStepContext::default();
+    let mut events: Vec<BulletEvent> = Vec::new();
+
+    update_bullet(&mut b, &ctx, &mut events);
+
+    let expected_dx = 10.0 * 0.05;
+    close(b.x, 100.0 + expected_dx, "bullet.x after 1 tick");
+    close(b.y, 200.0, "bullet.y unchanged");
+    assert!(b.active, "bullet should still be active");
+    assert_eq!(b.age_ticks, 1, "age should increment to 1");
+    assert!(
+        events.is_empty(),
+        "no despawn events for an in-flight bullet"
+    );
+}
+
+#[test]
+fn update_bullets_ages_and_despawns() {
+    // Setup: a bullet with max_age_ticks=3 placed at the origin with zero
+    // velocity. After 4 ticks it should expire (age 4 > max 3 → !active +
+    // Despawn event). The active-guard on subsequent ticks means
+    // additional calls are no-ops.
+    let mut b = BulletState::fresh(BulletId(7));
+    b.max_age_ticks = 3;
+
+    let ctx = BulletStepContext::default();
+    let mut events: Vec<BulletEvent> = Vec::new();
+
+    // Ticks 1, 2, 3 — bullet still alive (age incremented but not yet > 3).
+    for tick in 1..=3 {
+        update_bullet(&mut b, &ctx, &mut events);
+        assert!(b.active, "bullet should be active at tick {}", tick);
+    }
+
+    // Tick 4 — age becomes 4, which is > max_age_ticks (3): despawn.
+    update_bullet(&mut b, &ctx, &mut events);
+    assert!(!b.active, "bullet should despawn after max_age_ticks");
+    assert_eq!(
+        events.len(),
+        1,
+        "exactly one Despawn event on lifetime expiry"
+    );
+    assert!(matches!(events[0], BulletEvent::Despawn { bullet_id: 7 }));
+
+    // Tick 5 — bullet already inactive; no further events.
+    update_bullet(&mut b, &ctx, &mut events);
+    assert_eq!(
+        events.len(),
+        1,
+        "no additional events for inactive bullet"
+    );
+}
+
+#[test]
+fn update_bullets_off_screen_despawns() {
+    // Setup: bullet at the right-arena boundary with eastward velocity
+    // and a small arena. One tick should push it outside `arena_width`,
+    // triggering the off-screen branch.
+    let mut b = BulletState::fresh(BulletId(99));
+    b.x = 100.0;
+    b.vx = 5000.0; // Huge velocity to guarantee off-screen in 1 tick.
+
+    let ctx = BulletStepContext {
+        dt: 0.1,
+        arena_width: 200.0,
+        arena_height: 200.0,
+    };
+    let mut events: Vec<BulletEvent> = Vec::new();
+
+    update_bullet(&mut b, &ctx, &mut events);
+
+    assert!(
+        !b.active,
+        "bullet should be deactivated when it leaves the arena"
+    );
+    assert_eq!(events.len(), 1, "exactly one Despawn event for off-screen");
+    assert!(matches!(events[0], BulletEvent::Despawn { bullet_id: 99 }));
+}
+
+#[test]
+fn update_bullets_helix_offset() {
+    // Setup: a bullet drifting east with helix enabled (amplitude=4,
+    // freq=0.3). The y-coordinate should oscillate within the amplitude
+    // band as the bullet advances; after several ticks y must measurably
+    // differ from its starting value (without helix it would stay at 0).
+    let mut b = BulletState::fresh(BulletId(2));
+    b.vx = 10.0;
+    b.helix_amplitude = 4.0;
+    b.helix_freq = 0.3;
+
+    let ctx = BulletStepContext::default();
+    let mut events: Vec<BulletEvent> = Vec::new();
+
+    let starting_y = b.y;
+    // Run enough ticks to see noticeable sine motion. The phase advances
+    // by `helix_freq` each tick; ~10 ticks covers a measurable fraction
+    // of a period.
+    for _ in 0..10 {
+        update_bullet(&mut b, &ctx, &mut events);
+    }
+
+    // y should have moved (helix adds delta-sin each tick).
+    assert!(
+        (b.y - starting_y).abs() > 1e-6,
+        "helix should produce non-zero y deviation; y={}, start={}",
+        b.y,
+        starting_y
+    );
+    // y must stay within the amplitude band (the helix adds the **delta**
+    // of the sine each frame, so the cumulative offset bounds by the
+    // amplitude itself — plus a small float tolerance).
+    assert!(
+        (b.y - starting_y).abs() <= b.helix_amplitude + 0.01,
+        "helix y drifted outside amplitude band: y={}, start={}, amp={}",
+        b.y,
+        starting_y,
+        b.helix_amplitude
+    );
+    assert!(b.active, "bullet should still be active mid-helix");
+    assert!(events.is_empty(), "no despawn while in-flight");
+}
