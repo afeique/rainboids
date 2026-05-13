@@ -40,13 +40,14 @@
 
 use rainboids_server::sim::collision::{
     detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_enemy_asteroid_hits,
-    detect_mine_hits, detect_nova_blast_hits, detect_player_asteroid_hits,
+    detect_lance_beam_hits, detect_mine_hits, detect_nova_blast_hits, detect_player_asteroid_hits,
     detect_player_drop_pickups, detect_player_enemy_bullet_hits, detect_player_enemy_hits,
     CollisionAsteroid, CollisionBullet, CollisionContext, CollisionDrop, CollisionEnemy,
-    CollisionEnemyBullet, CollisionEvent, CollisionMine, CollisionPlayer, NovaBlast, TriggerKind,
-    ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER,
-    BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE, OVERLAP_SEPARATION_RATIO,
-    PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE, SEPARATION_BUFFER,
+    CollisionEnemyBullet, CollisionEvent, CollisionLance, CollisionMine, CollisionPlayer,
+    NovaBlast, TriggerKind, ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER,
+    BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE,
+    OVERLAP_SEPARATION_RATIO, PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE,
+    SEPARATION_BUFFER,
 };
 use rainboids_server::sim::drops::DropKind;
 
@@ -2774,4 +2775,349 @@ fn mine_trigger_kind_correctness() {
         Some(&(TriggerKind::Enemy, 103)),
         "when enemy + asteroid both overlap a mine, enemy wins (iteration order)",
     );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Lance Beam fixtures (dispatch 9 — third power-weapon pair).
+//
+// Mirrors `js/sim/collision.js::detectLanceBeamHits` (PR #64). The
+// pure step is FULLY PIERCING — every in-strip target emits a hit
+// regardless of forward distance. Boundary semantics are INCLUSIVE on
+// both axes (`0 <= proj <= length`, `perp <= width + radius`). Skip-
+// gates are uniform across enemies and asteroids (active / warping /
+// death_flash). Iteration order: enemies first, then asteroids.
+//
+// Tolerance: 0.05 — trig-heavy path, matches Nova convention. The
+// expected `distance_along_beam` / `distance_from_beam` values are
+// computed by hand from the JS source formulas:
+//   proj = dx * cos(angle) + dy * sin(angle)
+//   perp = |dx * sin(angle) - dy * cos(angle)|
+// ═════════════════════════════════════════════════════════════════════
+
+/// Lance-specific float-tolerance helper (matches Nova's trig-heavy
+/// pattern). The 0.05 slack accommodates f32 sin/cos drift between JS
+/// (f64) and Rust (f32) at extreme angles.
+fn approx_eq_lance(actual: f32, expected: f32, what: &str) {
+    let delta = (actual - expected).abs();
+    assert!(
+        delta < 0.05,
+        "{} diverged: rust={}, expected={}, |Δ|={}",
+        what,
+        actual,
+        expected,
+        delta,
+    );
+}
+
+// ---------------------------------------------------------------------
+// Fixture 53 — single enemy on beam.
+//
+// Beam from (0, 0) at angle 0 (along +X axis), length 100. Enemy at
+// (50, 0). Hand-computed: proj = 50, perp = 0 → HIT.
+// ---------------------------------------------------------------------
+#[test]
+fn lance_single_enemy_on_beam() {
+    let lance = CollisionLance {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        angle: 0.0,
+        length: 100.0,
+        width: 3.0,
+        damage: 5.0,
+    };
+    let enemies = vec![make_enemy(1, 50.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lance_beam_hits(&lance, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "single in-strip enemy → one event");
+    match events[0] {
+        CollisionEvent::LanceHitEnemy {
+            target_id,
+            damage,
+            distance_along_beam,
+            distance_from_beam,
+        } => {
+            assert_eq!(target_id, 1, "target_id matches enemy id");
+            approx_eq_lance(damage, 5.0, "damage flat-passthrough");
+            approx_eq_lance(distance_along_beam, 50.0, "proj along +X");
+            approx_eq_lance(distance_from_beam, 0.0, "perp on axis");
+        }
+        ev => panic!("expected LanceHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 54 — single asteroid on beam.
+//
+// Same geometry as fixture 53 but the target is an asteroid (id space
+// is independent; iteration order is wrapper-side, not in-event).
+// ---------------------------------------------------------------------
+#[test]
+fn lance_single_asteroid_on_beam() {
+    let lance = CollisionLance {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        angle: 0.0,
+        length: 100.0,
+        width: 3.0,
+        damage: 5.0,
+    };
+    let enemies: Vec<CollisionEnemy> = vec![];
+    let asteroids = vec![make_asteroid(42, 50.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lance_beam_hits(&lance, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "single in-strip asteroid → one event");
+    match events[0] {
+        CollisionEvent::LanceHitAsteroid {
+            target_id,
+            damage,
+            distance_along_beam,
+            distance_from_beam,
+        } => {
+            assert_eq!(target_id, 42, "target_id matches asteroid id");
+            approx_eq_lance(damage, 5.0, "damage flat-passthrough");
+            approx_eq_lance(distance_along_beam, 50.0, "proj along +X");
+            approx_eq_lance(distance_from_beam, 0.0, "perp on axis");
+        }
+        ev => panic!("expected LanceHitAsteroid, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 55 — perpendicular miss (strip-edge clearance).
+//
+// Beam from (0, 0) angle 0, length 100, width 3. Default enemy radius
+// is 18 (HUNTER fresh), so the strip-edge threshold is `width + radius
+// = 3 + 18 = 21`. Target at perp = 21 + 5 = 26 → MISS.
+// Same arithmetic for an asteroid at radius 30 → threshold 33 → MISS
+// at perp = 38.
+// ---------------------------------------------------------------------
+#[test]
+fn lance_miss_perpendicular() {
+    let lance = CollisionLance {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        angle: 0.0,
+        length: 100.0,
+        width: 3.0,
+        damage: 5.0,
+    };
+    // Enemy radius 18, width 3 → threshold 21; place at perp 26 (overshoot 5).
+    let enemy = make_enemy(1, 50.0, 26.0);
+    // Asteroid radius 30, width 3 → threshold 33; place at perp 38 (overshoot 5).
+    let asteroid = make_asteroid(2, 50.0, 38.0);
+    let enemies = vec![enemy];
+    let asteroids = vec![asteroid];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lance_beam_hits(&lance, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "targets outside strip → no events");
+}
+
+// ---------------------------------------------------------------------
+// Fixture 56 — multiple targets, iteration order pin.
+//
+// 2 enemies + 1 asteroid all on the beam. Expect 3 events: enemy-1,
+// enemy-2, asteroid-101 — strictly enemies-first (matches JS).
+// ---------------------------------------------------------------------
+#[test]
+fn lance_multiple_targets_iteration_order() {
+    let lance = CollisionLance {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        angle: 0.0,
+        length: 300.0,
+        width: 3.0,
+        damage: 7.0,
+    };
+    // Three targets stacked along the +X axis at distinct forward
+    // distances. Note: the pure step is fully piercing — every in-strip
+    // target reports a hit regardless of forward distance.
+    let enemies = vec![make_enemy(1, 50.0, 0.0), make_enemy(2, 150.0, 0.0)];
+    let asteroids = vec![make_asteroid(101, 250.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lance_beam_hits(&lance, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 3, "3 in-strip targets → 3 events");
+
+    // Iteration order: enemies first (in slice order), then asteroids.
+    match events[0] {
+        CollisionEvent::LanceHitEnemy { target_id, .. } => {
+            assert_eq!(target_id, 1, "first event = first enemy (id=1)");
+        }
+        ev => panic!("expected LanceHitEnemy first, got {:?}", ev),
+    }
+    match events[1] {
+        CollisionEvent::LanceHitEnemy { target_id, .. } => {
+            assert_eq!(target_id, 2, "second event = second enemy (id=2)");
+        }
+        ev => panic!("expected LanceHitEnemy second, got {:?}", ev),
+    }
+    match events[2] {
+        CollisionEvent::LanceHitAsteroid { target_id, .. } => {
+            assert_eq!(target_id, 101, "third event = asteroid (id=101)");
+        }
+        ev => panic!("expected LanceHitAsteroid third, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 57 — non-axial angle (PI/4 = 45 deg).
+//
+// Beam from (0, 0) at angle PI/4, length 100. Target at (R, R) where
+// R = 50 / sqrt(2) ≈ 35.355 — i.e. the point exactly 50 units along
+// the beam axis. Hand-computed:
+//   dir = (cos(π/4), sin(π/4)) = (s, s) where s = 1/√2
+//   d   = (R, R), proj = R*s + R*s = 2*R*s = 2 * (50/√2) * (1/√2) = 50
+//   perp = |R*s - R*s| = 0
+// Expect 1 enemy hit with proj ≈ 50, perp ≈ 0.
+// ---------------------------------------------------------------------
+#[test]
+fn lance_non_axial_angle() {
+    use std::f32::consts::FRAC_1_SQRT_2;
+    let lance = CollisionLance {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        angle: std::f32::consts::FRAC_PI_4,
+        length: 100.0,
+        width: 3.0,
+        damage: 5.0,
+    };
+    let r = 50.0 * FRAC_1_SQRT_2; // ≈ 35.3553
+    let enemies = vec![make_enemy(1, r, r)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lance_beam_hits(&lance, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "on-axis diagonal target → one event");
+    match events[0] {
+        CollisionEvent::LanceHitEnemy {
+            target_id,
+            damage,
+            distance_along_beam,
+            distance_from_beam,
+        } => {
+            assert_eq!(target_id, 1);
+            approx_eq_lance(damage, 5.0, "damage");
+            approx_eq_lance(distance_along_beam, 50.0, "proj diagonal");
+            approx_eq_lance(distance_from_beam, 0.0, "perp diagonal");
+        }
+        ev => panic!("expected LanceHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 58 — skip-gates uniform across both target kinds.
+//
+// One enemy that's inactive, one that's warping, one with death_flash.
+// One asteroid that's inactive, one that's warping, one with
+// death_flash. All positioned ON the beam axis — geometry alone would
+// emit 6 events. With skip-gates → 0 events.
+// ---------------------------------------------------------------------
+#[test]
+fn lance_skip_gates() {
+    let lance = CollisionLance {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        angle: 0.0,
+        length: 300.0,
+        width: 3.0,
+        damage: 5.0,
+    };
+    let mut inactive_enemy = make_enemy(1, 30.0, 0.0);
+    inactive_enemy.active = false;
+    let mut warping_enemy = make_enemy(2, 60.0, 0.0);
+    warping_enemy.warping = true;
+    let mut flash_enemy = make_enemy(3, 90.0, 0.0);
+    flash_enemy.death_flash = 1;
+    let mut inactive_ast = make_asteroid(4, 120.0, 0.0);
+    inactive_ast.active = false;
+    let mut warping_ast = make_asteroid(5, 150.0, 0.0);
+    warping_ast.warping = true;
+    let mut flash_ast = make_asteroid(6, 180.0, 0.0);
+    flash_ast.death_flash = 1;
+    let enemies = vec![inactive_enemy, warping_enemy, flash_enemy];
+    let asteroids = vec![inactive_ast, warping_ast, flash_ast];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lance_beam_hits(&lance, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "all targets gated → no events");
+}
+
+// ---------------------------------------------------------------------
+// Fixture 59 — boundary pin at origin (proj == 0).
+//
+// Target exactly at the origin. Inclusive boundary → HIT.
+// Distinguishes from a strict `proj > 0` gate (which would emit 0).
+// JS pure step uses `proj < 0 || proj > length` → INCLUSIVE; this
+// fixture guards against drift back to strict.
+// ---------------------------------------------------------------------
+#[test]
+fn lance_boundary_pin_origin() {
+    let lance = CollisionLance {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        angle: 0.0,
+        length: 100.0,
+        width: 3.0,
+        damage: 5.0,
+    };
+    // Enemy exactly at origin → dx=0, dy=0 → proj=0, perp=0 → HIT.
+    let enemies = vec![make_enemy(1, 0.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lance_beam_hits(&lance, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "proj==0 is INCLUSIVE → HIT");
+    match events[0] {
+        CollisionEvent::LanceHitEnemy {
+            distance_along_beam,
+            distance_from_beam,
+            ..
+        } => {
+            approx_eq_lance(distance_along_beam, 0.0, "origin proj == 0");
+            approx_eq_lance(distance_from_beam, 0.0, "origin perp == 0");
+        }
+        ev => panic!("expected LanceHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture 60 — boundary pin at far end (proj == length).
+//
+// Target exactly at distance `length` along the beam. Inclusive
+// boundary → HIT. JS pure step gate is `proj > length` (strict greater
+// than) so `proj == length` passes; this guards against drift to a
+// strict `proj >= length` gate.
+// ---------------------------------------------------------------------
+#[test]
+fn lance_boundary_pin_far_end() {
+    let lance = CollisionLance {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        angle: 0.0,
+        length: 100.0,
+        width: 3.0,
+        damage: 5.0,
+    };
+    // Target at (length, 0) → proj = length, perp = 0 → INCLUSIVE HIT.
+    let enemies = vec![make_enemy(1, 100.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lance_beam_hits(&lance, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1, "proj==length is INCLUSIVE → HIT");
+    match events[0] {
+        CollisionEvent::LanceHitEnemy {
+            distance_along_beam,
+            distance_from_beam,
+            ..
+        } => {
+            approx_eq_lance(distance_along_beam, 100.0, "far-end proj == length");
+            approx_eq_lance(distance_from_beam, 0.0, "far-end perp == 0");
+        }
+        ev => panic!("expected LanceHitEnemy, got {:?}", ev),
+    }
 }
