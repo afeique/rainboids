@@ -35,6 +35,7 @@ import {
     ENGINE_MODE_SOLO,
     ENGINE_MODE_ONLINE,
 } from '../../../js/engine/engine-driver.js';
+import { resolveSoloOptions } from '../../../js/modules/game-engine.js';
 
 // ── Fakes ────────────────────────────────────────────────────────────────────
 
@@ -532,5 +533,243 @@ describe('EngineDriver solo — snapshot dispatch in loopback mode', () => {
         expect(driver.isOnline).toBe(false);
         expect(driver.predictor).toBeNull();
         expect(driver.interpolator).toBeNull();
+    });
+});
+
+// ── Test group 5: Phase-3 default-on wiring (resolveSoloOptions helper) ─────
+//
+// Phase 3 of the Hybrid solo↔MP unification (2026-05-13) flips
+// `useLoopback` ON by default at the actual NEW GAME / start-game handler
+// — solo runs now boot through the LoopbackConnection so the simulation
+// + rendering layer matches real MP exactly. The decision (`useLoopback`
+// true vs false) lives in `resolveSoloOptions()` in game-engine.js so it
+// can be tested in isolation without instantiating a full GameEngine
+// (which carries a heavy DOM/WebGL constructor chain).
+//
+// These tests pin the four contract corners:
+//   1. Plain NEW GAME    → useLoopback: true   (the Phase 3 flip)
+//   2. ?solo-classic=1   → useLoopback: false  (debugging escape hatch)
+//   3. continueRun: true → useLoopback: false  (Phase 4 concern — saved-
+//                                                run resume doesn't yet
+//                                                survive a loopback boot)
+//   4. ?solo-classic=1 + continueRun: true → useLoopback: false (both
+//                                                 reasons stack; legacy)
+//
+// Plus a "the loopback path actually engages auto-pilot eligibility"
+// behavioral check that walks the wiring end-to-end via the existing
+// EngineDriver + FakeLoopback fakes.
+
+describe('resolveSoloOptions — Phase 3 default-on wiring', () => {
+    test('plain NEW GAME defaults useLoopback to true', () => {
+        // The whole point of Phase 3: solo NEW GAME runs route through
+        // the loopback by default, so the renderer + simulation layer
+        // sees the SAME Predictor + Interpolator pipeline as real MP.
+        const out = resolveSoloOptions({}, '');
+        expect(out.useLoopback).toBe(true);
+        expect(out.continueRun).toBe(false);
+    });
+
+    test('NEW GAME with no opts (defaults) → useLoopback: true', () => {
+        // Calling with zero arguments — the launcher might pass `{}` or
+        // nothing. Either way the helper must default useLoopback to true.
+        const out = resolveSoloOptions();
+        expect(out.useLoopback).toBe(true);
+        expect(out.continueRun).toBe(false);
+    });
+
+    test('?solo-classic=1 URL param forces useLoopback: false', () => {
+        // Debugging escape hatch. If a regression surfaces only on the
+        // loopback path, the debugger appends `?solo-classic=1` to the URL
+        // and reloads — back to the legacy direct-Engine solo path
+        // without rebuilding.
+        const out = resolveSoloOptions({}, '?solo-classic=1');
+        expect(out.useLoopback).toBe(false);
+        expect(out.continueRun).toBe(false);
+    });
+
+    test('?solo-classic=1 works without a leading question mark', () => {
+        // URLSearchParams tolerates either form. We pin this so any future
+        // refactor that drops the leading `?` from `location.search` still
+        // works (e.g. a router that strips it before passing through).
+        const out = resolveSoloOptions({}, 'solo-classic=1');
+        expect(out.useLoopback).toBe(false);
+    });
+
+    test('?solo-classic with any value (or none) still forces legacy', () => {
+        // `has('solo-classic')` returns true for `?solo-classic`,
+        // `?solo-classic=` and `?solo-classic=0`. We DON'T want
+        // `solo-classic=0` to read as "OFF" — the param's presence is
+        // the signal, not its value. This matches how Vite-style flags
+        // behave throughout the codebase.
+        expect(resolveSoloOptions({}, '?solo-classic').useLoopback).toBe(false);
+        expect(resolveSoloOptions({}, '?solo-classic=').useLoopback).toBe(false);
+        expect(resolveSoloOptions({}, '?solo-classic=0').useLoopback).toBe(false);
+        expect(resolveSoloOptions({}, '?solo-classic=anything').useLoopback).toBe(false);
+    });
+
+    test('continueRun: true forces useLoopback: false (Phase 4 concern)', () => {
+        // Saved-run resume can't safely route through the loopback yet
+        // — the scaffold always invokes `startNewRun()` server-side,
+        // discarding the persisted wave/loadout. Until Phase 4 wires
+        // save-restore into the LoopbackConnection, CONTINUE stays on
+        // the legacy direct-Engine path. Pinned here so the contract
+        // doesn't quietly drift.
+        const out = resolveSoloOptions({ continueRun: true }, '');
+        expect(out.useLoopback).toBe(false);
+        expect(out.continueRun).toBe(true);
+    });
+
+    test('continueRun + ?solo-classic=1 → both reasons stack', () => {
+        // Belt and suspenders: if the debug flag and the resume path both
+        // request legacy, the result is still legacy (not double-negated
+        // back to loopback).
+        const out = resolveSoloOptions({ continueRun: true }, '?solo-classic=1');
+        expect(out.useLoopback).toBe(false);
+        expect(out.continueRun).toBe(true);
+    });
+
+    test('continueRun normalizes truthy values to a boolean', () => {
+        // The caller might pass `continueRun: 1` or `'yes'` from a stray
+        // coercion. The helper returns a stable boolean so downstream
+        // code doesn't have to re-normalize.
+        expect(resolveSoloOptions({ continueRun: 1 }, '').continueRun).toBe(true);
+        expect(resolveSoloOptions({ continueRun: 'yes' }, '').continueRun).toBe(true);
+        // Falsy → strict false (and useLoopback stays true).
+        expect(resolveSoloOptions({ continueRun: 0 }, '').continueRun).toBe(false);
+        expect(resolveSoloOptions({ continueRun: 0 }, '').useLoopback).toBe(true);
+    });
+
+    test('unknown URL params do not affect the result', () => {
+        // Sanity: only `solo-classic` is recognized. Other params (debug
+        // flags, mobile overrides, etc.) leave the loopback default
+        // untouched.
+        const out = resolveSoloOptions({}, '?mobile=1&debug=1&other=foo');
+        expect(out.useLoopback).toBe(true);
+    });
+
+    test('empty / null / undefined search string defaults to loopback ON', () => {
+        // Three flavors of "no URL params": empty string, missing
+        // parameter, and explicit empty `?`. All must produce the same
+        // Phase 3 default.
+        expect(resolveSoloOptions({}, '').useLoopback).toBe(true);
+        expect(resolveSoloOptions({}, '?').useLoopback).toBe(true);
+        expect(resolveSoloOptions({}).useLoopback).toBe(true);
+    });
+});
+
+// ── Test group 6: end-to-end wiring (resolved options → driver behavior) ────
+//
+// Validates that the resolved options, when handed to the EngineDriver,
+// produce the expected runtime behavior. Closes the loop on the Phase 3
+// contract: "the resolver decides + the driver executes".
+
+describe('startSolo wiring — resolved options drive driver behavior', () => {
+    test('default-resolved NEW GAME → isOnline becomes true after startSolo', () => {
+        // Walk the path a real launcher takes: resolve the options, then
+        // hand them to the driver. Default resolution → useLoopback:true
+        // → driver enters online mode (the loopback engages the Predictor
+        // + Interpolator pipeline).
+        const opts = resolveSoloOptions({}, '');
+        expect(opts.useLoopback).toBe(true);
+
+        const { driver } = makeSoloDriver();
+        driver.startSolo(opts);
+        expect(driver.isOnline).toBe(true);
+        expect(driver.mode).toBe(ENGINE_MODE_ONLINE);
+    });
+
+    test('?solo-classic=1 → driver stays in legacy solo (isOnline false)', () => {
+        // The escape hatch's job: bypass the loopback entirely. The
+        // driver's mode stays ENGINE_MODE_SOLO and no Predictor +
+        // Interpolator + LoopbackConnection get constructed.
+        const opts = resolveSoloOptions({}, '?solo-classic=1');
+        expect(opts.useLoopback).toBe(false);
+
+        const { driver, LoopbackCtor } = makeSoloDriver();
+        driver.startSolo(opts);
+        expect(driver.isOnline).toBe(false);
+        expect(driver.mode).toBe(ENGINE_MODE_SOLO);
+        expect(LoopbackCtor).not.toHaveBeenCalled();
+        expect(driver.predictor).toBeNull();
+        expect(driver.interpolator).toBeNull();
+    });
+
+    test('after default startSolo + a snapshot, getLocalShipState returns a ship', () => {
+        // Behavioral check: a fresh loopback solo run, after the loopback
+        // emits a snapshot, yields a non-null `getLocalShipState()` —
+        // i.e. the renderer can draw the local ship using the SAME code
+        // path it'd use in MP. This is the unification point at the
+        // rendering layer.
+        //
+        // (We don't sleep ~50ms because the fake loopback emits
+        // synchronously when we call `emit()`; tests in the
+        // "snapshot dispatch in loopback mode" describe block already
+        // pin the real-loopback timing. The real LoopbackConnection
+        // unit-tested at js/net/loopback-connection.js emits on a
+        // 20-Hz interval which the e2e suite covers.)
+        const opts = resolveSoloOptions({}, '');
+        const { driver, spyPred, latestLoopback } = makeSoloDriver();
+        driver.startSolo(opts);
+
+        // Driver in online mode → getLocalShipState() reads the
+        // predictor's localShipState (non-null reference).
+        expect(driver.getLocalShipState()).toBe(spyPred.instance.localShipState);
+
+        // Emit a snapshot to simulate the post-50ms server tick. The
+        // fake loopback's player id defaults to 1, matching the welcome
+        // payload's playerId so the ship is treated as local.
+        const localShip = {
+            player: 1, x: 100, y: 200, vx: 0, vy: 0, angle: 0, hp: 100,
+        };
+        latestLoopback().emit('snapshot', {
+            tick: 1,
+            baseTick: null,
+            payload: { ships: [localShip], enemies: [], asteroids: [], drops: [] },
+            recvTime: 0,
+        });
+
+        // Predictor.onSnapshot was called → reconciliation engaged.
+        expect(spyPred.instance.onSnapshot).toHaveBeenCalledWith(1, localShip);
+        // getLocalShipState() still returns the predictor's reference
+        // (unchanged identity, but now reconciled-with-server state).
+        expect(driver.getLocalShipState()).toBe(spyPred.instance.localShipState);
+    });
+
+    test('legacy-solo path is unchanged — no MP pipeline scaffolding', () => {
+        // Regression guard: when the user opts INTO the legacy path
+        // (?solo-classic=1), absolutely no MP scaffolding should engage.
+        // No LoopbackConnection ctor call, no Predictor, no Interpolator.
+        // This guarantees the escape hatch is a true byte-for-byte
+        // revert to pre-Phase-3 behavior.
+        const opts = resolveSoloOptions({}, '?solo-classic=1');
+
+        const { driver, LoopbackCtor, spyPred, spyInterp } = makeSoloDriver();
+        driver.startSolo(opts);
+
+        // Driver state mirrors pre-Phase-3.
+        expect(driver.mode).toBe(ENGINE_MODE_SOLO);
+        expect(driver.connection).toBeNull();
+        expect(driver.predictor).toBeNull();
+        expect(driver.interpolator).toBeNull();
+        // None of the spy classes was instantiated.
+        expect(LoopbackCtor).not.toHaveBeenCalled();
+        expect(spyPred.instance.setBaseline).not.toHaveBeenCalled();
+        expect(spyInterp.instance.ingest).not.toHaveBeenCalled();
+        // tick() still no-ops (legacy solo contract).
+        expect(() => driver.tick(FRESH_SIM_INPUT)).not.toThrow();
+    });
+
+    test('default solo-loopback wiring does not block GameEngine startNewRun', () => {
+        // The whole "solo and MP run identically" property relies on
+        // `startNewRun()` getting called on the GameEngine regardless of
+        // which path we take. Hybrid-solo should still trigger it (via
+        // `startOnline` → `ge.startNewRun()`), just through a different
+        // entry point. Verify by inspecting the stub GameEngine's call
+        // log.
+        const opts = resolveSoloOptions({}, '');
+        const { driver, ge } = makeSoloDriver();
+        driver.startSolo(opts);
+        // The stub records 'triggerTitleStart' followed by 'startNewRun'.
+        expect(ge.calls).toContain('startNewRun');
     });
 });

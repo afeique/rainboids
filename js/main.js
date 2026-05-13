@@ -161,7 +161,7 @@ class RainboidsGame {
 
             // 5.79.2 chime: NEW GAME → 'powerup', CONTINUE → 'coin'.
             consumeTitleScreen({ chime: wantContinue ? 'coin' : 'powerup' });
-            this.engineDriver.startSolo({ continueRun: wantContinue });
+            this.engineDriver.startSolo(ge._resolveSoloOptions({ continueRun: wantContinue }));
         };
 
         // Online entry. Called when the multiplayer modal hands off the
