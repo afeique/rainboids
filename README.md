@@ -476,6 +476,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
 ├── js/engine/                 # Mode-aware driver: solo & multiplayer share the same GameEngine (5.86.0)
 │   ├── engine-driver.js       #   EngineDriver: startSolo / startOnline / quit
+│   ├── mp-frame.js            #   pure helpers wiring EngineDriver into the gameLoop (MVD, 5.86.x)
 │   ├── online-status-overlay.js #  DOM badge for connection state in online mode
 │   └── index.js               #   public exports
 ├── js/net/                    # Multiplayer client networking (5.84.0)
