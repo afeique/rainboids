@@ -178,6 +178,27 @@ fields = [
   { name = "y",    type = "f32" },
 ]
 
+# Wire-format bullet — the minimal subset clients need to render
+# server-authoritative bullets. Distinct from `sim::state::BulletState`
+# which carries server-only fields (damage, pierce_count, homing,
+# helix_amplitude/freq, age_ticks, max_age_ticks, active) that don't
+# traverse the wire.
+#
+# `id` is `u32` (not `BulletId(u64)`) because the sim-internal id type
+# is `u32` and we keep the wire compact — see the docstring on
+# `sim::state::BulletId` for the rationale on narrowing.
+[[struct]]
+name = "BulletState"
+fields = [
+  { name = "id",     type = "u32" },
+  { name = "x",      type = "f32" },
+  { name = "y",      type = "f32" },
+  { name = "vx",     type = "f32" },
+  { name = "vy",     type = "f32" },
+  { name = "angle",  type = "f32" },
+  { name = "radius", type = "f32" },
+]
+
 [[struct]]
 name = "SnapshotPayload"
 fields = [
@@ -185,6 +206,7 @@ fields = [
   { name = "enemies",   type = "Vec<EnemyState>" },
   { name = "asteroids", type = "Vec<AsteroidState>" },
   { name = "drops",     type = "Vec<DropState>" },
+  { name = "bullets",   type = "Vec<BulletState>" },
 ]
 
 # ─── GameEvent (tagged union) ─────────────────────────────────────────────────
