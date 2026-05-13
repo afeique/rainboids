@@ -7,6 +7,12 @@ import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS } from '../combat/weapon-data.
 import { VERSION } from '../core/version.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 import { multiplayerEnabled } from '../../net/ws-client.js';
+// 5.92.0 — Title screen responsive layout: in mobile-portrait mode
+// the NEW GAME / CONTINUE / MULTIPLAYER buttons stack vertically so
+// they fit a phone-sized viewport without truncation; landscape mobile
+// keeps the desktop side-by-side layout but with slightly smaller
+// dimensions to leave room for the title text above. Desktop unchanged.
+import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
 export const _charWidthCache = new Map();
 
@@ -190,13 +196,26 @@ export function drawTitleScreen() {
         //   the animated letters render ON TOP of everything else.
         //   The static idle title still draws here at its normal
         //   z-order.
+        // 5.92.0 — Title + subtitle sizes scale down on narrow
+        // viewports so the 72 px hero text doesn't overflow the screen
+        // on a phone in portrait. Floor at 40 px so the title is still
+        // unmistakably the focal point. Desktop is unchanged because
+        // isMobile() is false off touch devices.
+        const _isMobile = isMobile();
+        const titleFontSize = _isMobile
+            ? Math.min(72, Math.max(40, Math.floor(this.width / 8)))
+            : 72;
+        const subtitleFontSize = _isMobile
+            ? Math.min(24, Math.max(14, Math.floor(titleFontSize / 3.2)))
+            : 24;
+
         if (!launching) {
             // Static idle title — RAINBOIDS centered, subtitle below.
             // 5.79.0 — outline:true adds a black stroke under each
             //   glyph so the title stays legible over the dynamic
             //   starfield/nebula.
             this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
-                fontSize: 72,
+                fontSize: titleFontSize,
                 colors: WAVY_PALETTES.title,
                 speed: 0.45,
                 colorSpeed: 0.18,
@@ -208,7 +227,7 @@ export function drawTitleScreen() {
         // ── Subtitle / Press Any Key / Record (visible during launch too) ──
         if (showSubtitle) {
             this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
-                fontSize: 24,
+                fontSize: subtitleFontSize,
                 colors: WAVY_PALETTES.whiteShimmer,
                 amplitude: 0,
                 colorSpeed: 0.1,
@@ -222,34 +241,79 @@ export function drawTitleScreen() {
             //   CONTINUE buttons. Continue is grayed out when no save
             //   exists. Bounds are stashed on the engine so the click
             //   listener in main.js can route mouse hits.
+            //
+            // 5.92.0 — Mobile-portrait stacks the buttons vertically
+            //   (one per row, full-screen-width minus padding) so a
+            //   narrow viewport never truncates the labels and each
+            //   button comfortably exceeds the 44×44 px tap-target
+            //   floor. Mobile-landscape keeps the side-by-side layout
+            //   but shrinks the button width to leave room for the
+            //   horizontal title. Desktop is byte-for-byte unchanged.
             const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
             const ctx = this.ctx;
             const labels = ['NEW GAME', 'CONTINUE'];
-            const buttonW = 220, buttonH = 46, gap = 36;
-            const totalW = buttonW * 2 + gap;
-            const yTop = centerY + 60;
-            const x0 = centerX - totalW / 2;
-            const rects = {
-                newGame: { id: 'newGame', x: x0,                       y: yTop, w: buttonW, h: buttonH, disabled: false },
-                continue:{ id: 'continue', x: x0 + buttonW + gap,      y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun },
-            };
+            const mobilePortrait = isMobile() && isPortrait();
+            const mobileLandscape = isMobile() && !isPortrait();
 
-            // 5.81+ — gated MULTIPLAYER button (Hello/Welcome handshake only,
-            // Week-6 deliverable). Hidden in production unless ?multiplayer=1
-            // or localStorage rainboidsMultiplayer='1' is set, so the WIP
-            // networking path doesn't reach players. Sits below NEW GAME /
-            // CONTINUE as a single full-width row that matches the existing
-            // canvas button styling.
-            if (multiplayerEnabled()) {
-                const mpY = yTop + buttonH + 18;
-                rects.multiplayer = {
-                    id: 'multiplayer',
-                    x: x0,
-                    y: mpY,
-                    w: totalW,
-                    h: buttonH,
-                    disabled: false,
-                };
+            // Tap-target minimums (Apple HIG / Material Design = 44 px).
+            // Portrait stretches each button to ~80% screen-width up to
+            // a 320 px cap so they read as full-width buttons; landscape
+            // shrinks to leave room for the title block.
+            let buttonW, buttonH, gap;
+            if (mobilePortrait) {
+                buttonW = Math.min(320, Math.max(220, this.width * 0.8));
+                buttonH = 56;
+                gap = 16;
+            } else if (mobileLandscape) {
+                buttonW = 180;
+                buttonH = 50;
+                gap = 24;
+            } else {
+                buttonW = 220;
+                buttonH = 46;
+                gap = 36;
+            }
+
+            const rects = {};
+            if (mobilePortrait) {
+                // Vertical stack. yTop is the TOP of the first button;
+                // each subsequent button stacks below with `gap`.
+                const yTop = centerY + 40;
+                const x0 = centerX - buttonW / 2;
+                rects.newGame  = { id: 'newGame',  x: x0, y: yTop,                          w: buttonW, h: buttonH, disabled: false };
+                rects.continue = { id: 'continue', x: x0, y: yTop + (buttonH + gap),         w: buttonW, h: buttonH, disabled: !hasSavedRun };
+                if (multiplayerEnabled()) {
+                    rects.multiplayer = {
+                        id: 'multiplayer',
+                        x: x0,
+                        y: yTop + 2 * (buttonH + gap),
+                        w: buttonW,
+                        h: buttonH,
+                        disabled: false,
+                    };
+                }
+            } else {
+                // Landscape / desktop — side-by-side NEW GAME + CONTINUE
+                // with optional MULTIPLAYER row beneath. This is the
+                // original pre-5.92 layout, just with the dimensions
+                // computed above (so landscape mobile gets a slightly
+                // smaller version of the same shape).
+                const totalW = buttonW * 2 + gap;
+                const yTop = centerY + 60;
+                const x0 = centerX - totalW / 2;
+                rects.newGame  = { id: 'newGame',  x: x0,                  y: yTop, w: buttonW, h: buttonH, disabled: false };
+                rects.continue = { id: 'continue', x: x0 + buttonW + gap,  y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun };
+                if (multiplayerEnabled()) {
+                    const mpY = yTop + buttonH + 18;
+                    rects.multiplayer = {
+                        id: 'multiplayer',
+                        x: x0,
+                        y: mpY,
+                        w: totalW,
+                        h: buttonH,
+                        disabled: false,
+                    };
+                }
             }
 
             this._titleButtonRects = rects;

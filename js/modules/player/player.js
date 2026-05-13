@@ -16,6 +16,13 @@ import { updateShip } from '../../sim/ship.js';
 // when no online driver is attached). See `js/net/mp-feature-flags.js`
 // for the per-ability allowlist.
 import { isAbilityMpSafe } from '../../net/mp-feature-flags.js';
+// Mobile auto-fire (5.92.0): when running in mobile mode the player
+// has no spare hand to tap a power-weapon button — the spec auto-
+// fires the equipped power weapon the moment it's ready (off
+// cooldown, or fully charged for CHARGE_SHOT). The desktop path is
+// unchanged; isMobile() returns false off touch devices unless the
+// `?mobile=1` URL param is set.
+import { isMobile } from '../platform/platform-detect.js';
 
 export class Player {
     constructor() {
@@ -515,6 +522,45 @@ export class Player {
             }
             if (canHit) {
                 input.fire = true;
+                const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
+                if (cfg) {
+                    if (cfg.isChargeBased) {
+                        if (this.isFullyCharged) input.fireSecondary = true;
+                    } else if (this.isPowerReady && this.isPowerReady()) {
+                        input.fireSecondary = true;
+                    }
+                }
+            }
+        }
+
+        // ── Mobile auto-fire — power weapon (5.92.0) ──
+        // Mobile mode has no spare hand for a power-fire button (tap
+        // fires primary, long-press opens the weapon radial). So the
+        // spec auto-triggers the equipped power weapon the moment it's
+        // ready: cooldown-based weapons fire on `isPowerReady()`,
+        // charge-based weapons (CHARGE_SHOT) fire on `isFullyCharged`.
+        //
+        // We set `input.fireSecondary = true` rather than calling
+        // `this.firePower(...)` directly so the existing pipeline runs
+        // unchanged:
+        //   • updateChargingSystem reads the flag, checks cooldown / charge
+        //     gates, and calls `this.firePower()` itself (which already
+        //     honors the MP feature-flag gate added in 5.84+).
+        //   • The flag is cleared in updateChargingSystem after the shot,
+        //     so we don't chain stream-fire a single rising edge.
+        //
+        // Gates (mirrors the gates the desktop assist path uses, plus a
+        // few mobile-specific ones the spec calls out):
+        //   • Don't fire if the radial menu is open (mid weapon-swap).
+        //   • Don't fire if no power weapon is equipped (activePower null/empty).
+        //   • Don't fire if the player is firing-disabled (death/respawn).
+        //   • Game-state gating (pause / shop / game-over / wave intro)
+        //     is implicit: Player.update is only called from gameLoop in
+        //     the active gameplay states; pause/shop short-circuit the
+        //     whole logic step upstream.
+        if (isMobile() && this.activePower && !this.firingDisabled) {
+            const radialOpen = !!(ge && ge.radialMenu && ge.radialMenu.isOpen && ge.radialMenu.isOpen());
+            if (!radialOpen) {
                 const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
                 if (cfg) {
                     if (cfg.isChargeBased) {

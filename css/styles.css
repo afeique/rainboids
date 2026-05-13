@@ -2944,3 +2944,71 @@ body.mobile-portrait #hud-shop-btn {
     transform-origin: top right;
 }
 
+/* ─── 5.92.0 — Mobile UX overhaul v2 ───────────────────────────────────
+   The 5.91 pass introduced auto-pilot + tap-to-shoot. 5.92 finishes the
+   visual half: collapse non-essential HUD chrome (powerup meters,
+   loadout squares, gold readout, survival timer — all canvas-drawn and
+   gated by isMobile() in hud/status.js) and make the title screen + game
+   layout responsive. Desktop CSS is untouched; everything below sits
+   under `body.mobile-mode` / `body.mobile-portrait` selectors.
+
+   The canvas itself is sized to the viewport by the resize listener in
+   js/modules/ui/event-setup.js, so no `width: 100vw` is needed here —
+   the rules below mostly tame DOM overlays + tap targets. */
+
+/* Top-right DOM powerup readout (loadout/meter — hidden per spec).
+   The 5.78+ pass left this as the only DOM-rendered loadout chrome;
+   everything else (PRM / PWR / SKL squares) is canvas. */
+body.mobile-mode #powerup-hud {
+    display: none !important;
+}
+
+/* Tap-target floor for the top-right HUD buttons. 44×44 px is the
+   Apple HIG / Material Design baseline for "comfortable thumb tap";
+   we go slightly larger so the visual button matches the hit rect.
+   The 5.91 portrait scale-down lives in the rule above this one;
+   this rule applies to both orientations. */
+body.mobile-mode #hud-shop-btn,
+body.mobile-mode #hud-pause-btn {
+    min-width: 48px;
+    min-height: 48px;
+    /* Ensure tap target is comfortably above the chin / safe-area
+       and clear of the bottom action button bar. */
+    z-index: 1000;
+}
+
+/* Suppress horizontal scroll on narrow viewports. iOS Safari will
+   sometimes overshoot the viewport on rotate; touch-action: none on
+   body.mobile-mode already locks the gesture surface, but a
+   defensive overflow-x rule keeps the layout pinned. */
+body.mobile-mode {
+    overflow-x: hidden;
+}
+
+/* Game canvases scale to viewport — the resize handler already sets
+   the backing-store dimensions on each canvas, so we just want CSS
+   to fill the viewport rect without leaving margins. The 5.91 rule
+   set touch-action: none; we add object-fit-style sizing here. */
+body.mobile-mode #gameCanvas,
+body.mobile-mode #glCanvas,
+body.mobile-mode #bulletCanvas {
+    width: 100vw;
+    height: 100vh;
+    /* iOS Safari's address-bar collapse can cause a transient
+       100vh > viewport-height gap; using dvh where available avoids
+       the jump. The browsers that don't understand dvh fall back to
+       the vh line above. */
+    height: 100dvh;
+}
+
+/* Pause overlay + shop overlay use position:fixed at full-screen.
+   In portrait orientation on a phone the pause-menu's tabbed UI can
+   overflow; scale the inner panels down a notch so they fit. We
+   stop short of a full responsive rebuild here — pause / shop still
+   work as scrollable lists, just with a smaller anchor. */
+body.mobile-portrait #pause-menu,
+body.mobile-portrait #shop-menu {
+    transform: scale(0.92);
+    transform-origin: center center;
+}
+
