@@ -405,6 +405,15 @@ pub fn apply_event(
         } => {
             side.damage_asteroid(target_id, damage);
         }
+        CollisionEvent::LightningArcHitEnemy {
+            target_id, damage, ..
+        } => {
+            if let Some(enemy) =
+                state.enemies.iter_mut().find(|e| e.id.0 as u32 == target_id)
+            {
+                enemy.hp -= damage;
+            }
+        }
     }
 }
 
