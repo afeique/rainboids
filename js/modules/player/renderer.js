@@ -5,6 +5,124 @@ import { glowSpriteCache } from '../core/utils.js';
 import { rgba } from '../core/color-cache.js';
 import { frameClock } from '../core/frame-clock.js';
 
+// ── Remote-peer ship draw (MVD multiplayer, 2026-05-13) ────────────────────
+//
+// Minimal silhouette renderer for remote-player ships in multiplayer mode.
+// Intentionally NOT a copy of the local `draw()` — we strip every local
+// feedback signal (thrust glow, shield shimmer, muzzle flash, hit flash)
+// because those are MY-ship status cues and rendering them for a peer
+// would misrepresent the simulation state. What's left is the hull outline
+// + central body + cockpit, tinted magenta/orange to visually distinguish
+// "that's another player" at a glance.
+//
+// This is also lighter on CPU (no live gradients, no glow sprites, no
+// composite-mode flips) so adding N remote ships costs roughly N × small.
+//
+// Signature mirrors `drawShip(ctx, x, y, angle, radius?)` so any future
+// renderer refactor that needs to draw the local ship at an external
+// position can route through here too — keeping the visual family aligned
+// is the only invariant.
+//
+// @param {CanvasRenderingContext2D} ctx
+// @param {number} x          world x
+// @param {number} y          world y
+// @param {number} angle      aim angle in radians
+// @param {number} [radius]   ship radius (defaults to local-player 12 px)
+export function drawRemoteShip(ctx, x, y, angle, radius = 12) {
+    if (!ctx) return;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(angle)) return;
+    const r = radius > 0 ? radius : 12;
+
+    ctx.save();
+    ctx.translate(x, y);
+    // Match local-ship orientation convention: angle + PI/2 because the
+    // ship art points "up" (negative-Y) in its local frame.
+    ctx.rotate(angle + Math.PI / 2);
+
+    // ── Black silhouette stroke pass (visibility against bright nebulae) ──
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = '#000';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3.5;
+
+    // Right wing
+    ctx.beginPath();
+    ctx.moveTo( r * 0.32, -r * 0.18);
+    ctx.lineTo( r * 1.12,  r * 0.28);
+    ctx.lineTo( r * 0.82,  r * 0.68);
+    ctx.lineTo( r * 0.28,  r * 0.58);
+    ctx.closePath();
+    ctx.stroke();
+    // Left wing
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.32, -r * 0.18);
+    ctx.lineTo(-r * 1.12,  r * 0.28);
+    ctx.lineTo(-r * 0.82,  r * 0.68);
+    ctx.lineTo(-r * 0.28,  r * 0.58);
+    ctx.closePath();
+    ctx.stroke();
+    // Central hull
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo( r * 0.32, -r * 0.18);
+    ctx.lineTo( r * 0.28,  r * 0.58);
+    ctx.lineTo(0,           r * 0.38);
+    ctx.lineTo(-r * 0.28,  r * 0.58);
+    ctx.lineTo(-r * 0.32, -r * 0.18);
+    ctx.closePath();
+    ctx.stroke();
+
+    // ── Wing fills — magenta-ish, distinct from local blue ──
+    ctx.fillStyle = 'rgba(180, 60, 200, 0.55)';
+    ctx.strokeStyle = '#ff66ff';
+    ctx.lineWidth = 1.4;
+    // Right wing
+    ctx.beginPath();
+    ctx.moveTo( r * 0.32, -r * 0.18);
+    ctx.lineTo( r * 1.12,  r * 0.28);
+    ctx.lineTo( r * 0.82,  r * 0.68);
+    ctx.lineTo( r * 0.28,  r * 0.58);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Left wing
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.32, -r * 0.18);
+    ctx.lineTo(-r * 1.12,  r * 0.28);
+    ctx.lineTo(-r * 0.82,  r * 0.68);
+    ctx.lineTo(-r * 0.28,  r * 0.58);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // ── Central hull — dark with magenta outline ──
+    ctx.fillStyle = 'rgba(40, 10, 50, 0.92)';
+    ctx.strokeStyle = '#ff88ff';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo( r * 0.32, -r * 0.18);
+    ctx.lineTo( r * 0.28,  r * 0.58);
+    ctx.lineTo(0,           r * 0.38);
+    ctx.lineTo(-r * 0.28,  r * 0.58);
+    ctx.lineTo(-r * 0.32, -r * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // ── Cockpit — small magenta dot to balance the silhouette ──
+    ctx.fillStyle = 'rgba(255, 180, 255, 0.85)';
+    ctx.strokeStyle = 'rgba(255, 200, 255, 0.6)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.42, r * 0.17, r * 0.21, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+}
+
 // ── Main draw ─────────────────────────────────────────────────────────────
 
 export function draw(ctx) {

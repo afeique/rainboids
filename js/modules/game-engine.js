@@ -8,6 +8,12 @@ import { SpatialGrid } from './performance/spatial-grid.js';
 import { PoolManager } from './core/pool-manager.js';
 import { frameClock } from './core/frame-clock.js';
 import { Player } from './player/player.js';
+import { drawRemoteShip } from './player/renderer.js';
+import {
+    mpBuildSimInput,
+    mpApplyPredictedShipToPlayer,
+    mpDrawRemoteShips,
+} from '../engine/mp-frame.js';
 import { Bullet } from './player/bullet.js';
 import { Asteroid } from './world/asteroid.js';
 import { Enemy } from './enemy/enemy.js';
@@ -1863,7 +1869,92 @@ export class GameEngine {
     handlePlayerEnemyCollision(player, enemy) { return col.handlePlayerEnemyCollision.call(this, player, enemy); }
     handlePlayerEnemyBulletCollision(player, bullet) { return col.handlePlayerEnemyBulletCollision.call(this, player, bullet); }
     handleEnemyAsteroidCollision(enemy, asteroid) { return col.handleEnemyAsteroidCollision.call(this, enemy, asteroid); }
-    
+
+    // ── Multiplayer wiring (MVD slice, 2026-05-13) ──────────────────────────
+    //
+    // Three thin hooks attach the EngineDriver's prediction + interpolation
+    // pipelines to the live gameLoop. In solo mode each one early-returns
+    // (the driver's `isOnline` flag is false), so solo gameplay is byte-for-
+    // byte identical to the pre-MVD path.
+    //
+    //   • `_mpTickIfOnline(input)` — once per logic tick, build a SimInput
+    //     from the same raw input Player will consume, then advance the
+    //     Predictor (and forward a PackedInput to the server). Called BEFORE
+    //     `player.update()` so the driver's tick counter stays in lockstep
+    //     with the simulation tick the local Player just produced.
+    //
+    //   • `_mpApplyPredictedShipIfOnline()` — after `player.update()`, mirror
+    //     the predicted ShipState into `this.player.x/y/vel/angle`. Camera,
+    //     HUD, FX, and collision continue to read the player object as usual;
+    //     they just see a server-authoritative + locally-predicted position
+    //     in MP mode.
+    //
+    //   • `_mpDrawRemoteShipsIfOnline()` — inside `draw()`, after the local
+    //     player renders, iterate `engineDriver.sampleRemoteShips()` and
+    //     paint each as a minimal-visual outline ship. FX (camera kick,
+    //     hitstop, particles) are intentionally NOT triggered for remote
+    //     peers — those are local feedback signals.
+    //
+    // EngineDriver lives on `window.engineDriver` (set in `main.js` after
+    // construction). Same lookup convention as `window.gameEngine`. If the
+    // driver isn't attached yet (very early init), the helpers no-op
+    // silently — they treat that the same as solo mode.
+
+    /** Returns the EngineDriver if currently in MP mode; null otherwise. */
+    _mpDriverIfOnline() {
+        const d = (typeof window !== 'undefined') ? window.engineDriver : null;
+        if (!d) return null;
+        return d.isOnline ? d : null;
+    }
+
+    /**
+     * Hook 1 — advance the EngineDriver one logic tick. Builds a SimInput
+     * (the same `InputFrame` shape Player.update synthesizes inline) and
+     * hands it to the driver, which packs it into a wire-form PackedInput,
+     * forwards to the server, and advances the local Predictor.
+     *
+     * @param {object} input  raw inputHandler.getInput() shape
+     */
+    _mpTickIfOnline(input) {
+        const driver = this._mpDriverIfOnline();
+        if (!driver) return;
+        try {
+            const simInput = mpBuildSimInput(input, this.player, GAME_CONFIG);
+            // wireInput defaults to derived (driver computes from simInput).
+            // Buttons aren't authoritatively processed yet (server-side
+            // weapons are out of MVD scope), so the derived path is fine.
+            driver.tick(simInput);
+        } catch (err) {
+            // Never let an MP wiring error tank the local game loop.
+            // eslint-disable-next-line no-console
+            console.warn('[game-engine] MP tick failed', err?.message ?? err);
+        }
+    }
+
+    /**
+     * Hook 2 — mirror the Predictor's localShipState into the live Player.
+     * After this runs, `this.player.x/y/vel/angle` reflect the server-
+     * authoritative + locally-predicted state; renderer/camera/FX/collision
+     * read those unchanged.
+     */
+    _mpApplyPredictedShipIfOnline() {
+        const driver = this._mpDriverIfOnline();
+        if (!driver) return;
+        mpApplyPredictedShipToPlayer(driver, this.player);
+    }
+
+    /**
+     * Hook 3 — paint remote-peer ships at their interpolated positions.
+     * Called from `draw()` inside the camera-transformed world space,
+     * right after `player.draw()`. Solo mode early-returns.
+     */
+    _mpDrawRemoteShipsIfOnline(ctx) {
+        const driver = this._mpDriverIfOnline();
+        if (!driver) return;
+        const fallbackRadius = (this.player && this.player.radius) || 12;
+        mpDrawRemoteShips(driver, ctx, drawRemoteShip, fallbackRadius);
+    }
+
     update() {
         // Radial menu (E/R/F held) freezes gameplay just like the pause menu —
         // particles still finish their lifetimes but no entity logic ticks.
@@ -1903,9 +1994,34 @@ export class GameEngine {
             // Calculate tractor beam state - active when not charging
             const tractorEngaged = !this.player.isCharging;
 
+            // ── MP HOOK 1: advance the EngineDriver predictor ──────────────
+            // In online mode, build a SimInput from the same raw input the
+            // local Player will consume, then hand it to the EngineDriver's
+            // 60Hz tick. The driver packs the wire-form PackedInput, sends
+            // it to the server, and advances the local Predictor one tick.
+            // Solo runs early-return inside EngineDriver.tick().
+            //
+            // The driver lives on `window.engineDriver` — same as how Player
+            // already reaches the engine via `window.gameEngine`. Stable v1
+            // wiring; if we want to inject it explicitly later, the gameLoop
+            // is the only call site to update.
+            this._mpTickIfOnline(input);
+
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged, this.gameField);
-            
+
+            // ── MP HOOK 2: mirror the predicted ship state into the local
+            // Player object. This way camera/FX/collision/HUD all keep
+            // reading `this.player.x/y/vel/angle` (unchanged), but those
+            // fields now reflect the server-authoritative + locally-
+            // predicted ship state instead of the pure-local simulation.
+            // Same physics on both sides (`js/sim/ship.js::updateShip`)
+            // means tick-to-tick parity until a server snapshot arrives
+            // and `Predictor.onSnapshot` reconciles.
+            //
+            // Solo runs early-return inside `_mpApplyPredictedShipIfOnline`.
+            this._mpApplyPredictedShipIfOnline();
+
             // Update camera to follow player
             this.updateCamera();
             
@@ -2268,6 +2384,14 @@ export class GameEngine {
                 this.bulletPool.drawActiveVisible(this.ctx, vL, vT, vR, vB, this);
 
                 this.player.draw(this.ctx);
+
+                // ── MP HOOK 3: paint remote-peer ships in world space ──
+                // Solo runs early-return inside the helper. Remote ships
+                // render with a minimal outline silhouette — no thrust,
+                // no shield shimmer, no FX (those are local feedback
+                // signals, inappropriate for an interpolated peer).
+                this._mpDrawRemoteShipsIfOnline(this.ctx);
+
                 this.drawWeaponEffects();
 
                 // Laser-pointer aim — subtle line from muzzle to bullet's
@@ -2428,9 +2552,15 @@ export class GameEngine {
                 (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION)) {
                 const input = this.inputHandler.getInput();
                 input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
+                // MP HOOK 1 (hitstop branch) — keep the predictor in lockstep
+                // with the local Player.update so the predicted-state mirror
+                // below stays accurate even during impact freeze frames.
+                this._mpTickIfOnline(input);
                 // Update player movement only (firing is suppressed by not running collisions)
                 this.player.update(input, this.particlePool, this.bulletPool, this.audioManager,
                     this.colorStarPool, !this.player.isCharging, this.gameField);
+                // MP HOOK 2 (hitstop branch) — mirror predicted ship → Player.
+                this._mpApplyPredictedShipIfOnline();
                 this.updateCamera();
             }
 

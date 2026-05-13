@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.90.0] - 2026-05-13
+
+### Added — Multiplayer gameLoop wiring: remote ships visible on screen
+Final MVD slice of the Phase-3 multiplayer engine refactor. Three thin per-frame hooks in `js/modules/game-engine.js` attach the existing `EngineDriver` prediction + interpolation pipelines (PR #62) to the live gameLoop — in online mode the local player's ship now uses server-authoritative + locally-predicted state, and remote players appear as additional ships on the field. Solo mode is byte-for-byte unchanged.
+
+- **Hook 1 (`_mpTickIfOnline`)**: each logic tick, build a SimInput (the same `InputFrame` Player.update synthesizes inline) and forward it to `EngineDriver.tick(simInput)`. The driver packs a wire-form PackedInput, sends it to the server, and advances the local Predictor.
+- **Hook 2 (`_mpApplyPredictedShipIfOnline`)**: after `player.update()`, mirror the predictor's `localShipState` into `this.player.x/y/vel/angle`. Camera, FX, HUD, and collision keep reading the player object as usual — they just see the predicted state in MP mode.
+- **Hook 3 (`_mpDrawRemoteShipsIfOnline`)**: after `player.draw()`, iterate `engineDriver.sampleRemoteShips()` and paint each at its interpolated position via a new minimal-silhouette renderer (`drawRemoteShip` in `js/modules/player/renderer.js`) — magenta tint to visually distinguish peer ships from the local cyan/blue.
+
+Pure logic extracted to `js/engine/mp-frame.js` (`mpBuildSimInput`, `mpApplyPredictedShipToPlayer`, `mpDrawRemoteShips`) so the wiring is unit-testable without spinning up Canvas2D or the full GameEngine. The hitstop branch of `gameLoop` also routes through hooks 1+2 so the predictor stays in lockstep with the local player during impact freeze frames.
+
+36 new unit tests (`tests/unit/engine/mp-frame.test.js` + `tests/unit/engine/draw-remote-ship.test.js`) cover the per-frame hook contract end-to-end; all 596 unit tests pass.
+
 ## [5.89.0] - 2026-05-10
 
 ### Changed — WaveManager.tryAdvanceSubWave wired to pure `js/sim/wave.js`
