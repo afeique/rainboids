@@ -146,29 +146,102 @@ export class AutoPilot {
         // The "away from each threat" direction is (-dx, -dy); the
         // 1/dist² weighting means a threat at 50px pushes 4× harder than
         // a threat at 100px, which matches the test playtester's feel.
+        //
+        // Tangent blending: in addition to the radial "away" push, each
+        // threat contributes a perpendicular slide direction also weighted
+        // by 1/dist². The summed tangent vector is then normalised back to
+        // a unit direction and scaled by a fixed TANGENT_WEIGHT (0.4).
+        // Why normalise? The radial 1/d² terms have magnitude ~weight/d
+        // which is small (≈0.01 at 100px) — relying on them alone keeps
+        // the ship under the input threshold. The pre-PR-#79 code used a
+        // single nearest-threat tangent at FIXED 0.4 magnitude to cross
+        // the threshold; we keep that fixed-magnitude behaviour but pick
+        // the DIRECTION from a 1/d²-weighted blend so multiple threats
+        // influence the slide.
+        //
+        // Sign convention: for each threat we have two perpendicular
+        // candidates (CCW vs CW relative to "toward threat"). We pick
+        // whichever has a positive dot product with a REFERENCE vector
+        // (rx, ry). The reference is chosen, in priority order:
+        //   1. Edge-aware: push toward the field interior. If the player
+        //      is closer to a screen edge, the reference picks the side
+        //      that slides the ship AWAY from that edge.
+        //   2. Player velocity: keep moving in the current direction so
+        //      the slide is consistent with the ship's recent motion.
+        //   3. Fixed diagonal (+x, +y) so behaviour is deterministic
+        //      even when far from edges and stationary. A diagonal —
+        //      rather than a single-axis fallback — avoids tangent
+        //      cancellation in the special case where two threats sit
+        //      exactly on the same axis as the reference.
         let sx = 0;
         let sy = 0;
-        for (let i = 0; i < this._threats.length; i++) {
-            const t = this._threats[i];
-            const d = Math.sqrt(t.d2) || 1;
-            const scale = (t.weight / d) * (1 / d); // inverse-square push
-            sx -= t.dx * scale;
-            sy -= t.dy * scale;
-        }
+        let tanX = 0;
+        let tanY = 0;
 
-        // ── Add a perpendicular slide so the ship doesn't head straight
-        //    at the threat it's "running from" (which can be a wall side).
         if (this._threats.length > 0) {
-            // Use the nearest threat's tangent direction.
-            let nearest = this._threats[0];
-            for (let i = 1; i < this._threats.length; i++) {
-                if (this._threats[i].d2 < nearest.d2) nearest = this._threats[i];
+            // Pick a reference direction (rx, ry) used to sign each
+            // tangent. This is what makes the slide direction stable
+            // across frames and across the opposite-threats case.
+            let rx = 0;
+            let ry = 0;
+            // Edge-aware bias: push toward the field interior.
+            const leftDist = px;
+            const rightDist = fw - px;
+            const topDist = py;
+            const botDist = fh - py;
+            // Use the smaller horizontal/vertical distance as the strongest
+            // edge signal; sign points AWAY from that edge.
+            const hSign = leftDist < rightDist ? 1 : -1;
+            const vSign = topDist  < botDist  ? 1 : -1;
+            // Weight by how close to that edge: 0 when far, 1 when on it.
+            const hEdge = 1 - Math.min(leftDist, rightDist) / (fw * 0.5);
+            const vEdge = 1 - Math.min(topDist, botDist) / (fh * 0.5);
+            rx = hSign * hEdge;
+            ry = vSign * vEdge;
+            // Fallback when far from all edges: use player velocity.
+            if (Math.abs(rx) + Math.abs(ry) < 0.05) {
+                const pvx = (player.vel && player.vel.x) || 0;
+                const pvy = (player.vel && player.vel.y) || 0;
+                const pm = Math.hypot(pvx, pvy);
+                if (pm > 0.1) {
+                    rx = pvx / pm;
+                    ry = pvy / pm;
+                } else {
+                    // Final fallback: a fixed DIAGONAL so any single-axis
+                    // tangent has a non-zero dot product with the reference
+                    // (prevents cancellation when two threats sit on the
+                    // same axis as the reference).
+                    rx = 0.7071;
+                    ry = 0.7071;
+                }
             }
-            const nd = Math.sqrt(nearest.d2) || 1;
-            const tx = nearest.dy / nd;     // 90° CCW from "toward threat"
-            const ty = -nearest.dx / nd;
-            sx += tx * 0.4;
-            sy += ty * 0.4;
+
+            const TANGENT_WEIGHT = 0.4;
+            for (let i = 0; i < this._threats.length; i++) {
+                const t = this._threats[i];
+                const d = Math.sqrt(t.d2) || 1;
+                const invD2 = (t.weight / d) * (1 / d); // 1/dist² (weighted)
+                // Radial danger contribution: away from threat.
+                sx -= t.dx * invD2;
+                sy -= t.dy * invD2;
+                // Tangent candidates (90° CCW vs CW of "toward threat").
+                const txCcw =  t.dy / d;
+                const tyCcw = -t.dx / d;
+                // Pick whichever side aligns better with the reference.
+                const dot = txCcw * rx + tyCcw * ry;
+                const sign = dot >= 0 ? 1 : -1;
+                tanX += sign * txCcw * invD2;
+                tanY += sign * tyCcw * invD2;
+            }
+
+            // Normalise the blended tangent direction and apply the
+            // fixed TANGENT_WEIGHT so single-threat magnitude matches the
+            // pre-blend behaviour (≈0.4 units along the slide axis).
+            const tanMag = Math.hypot(tanX, tanY);
+            if (tanMag > 0) {
+                sx += (tanX / tanMag) * TANGENT_WEIGHT;
+                sy += (tanY / tanMag) * TANGENT_WEIGHT;
+            }
         }
 
         // ── Wall push: keep the ship away from the boundary ───────────
