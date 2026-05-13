@@ -571,6 +571,52 @@ pub enum CollisionEvent {
         trigger_kind: TriggerKind,
         trigger_id: u32,
     },
+    /// Mirrors `{ type: 'lance_hit_enemy', ... }` in `js/sim/collision.js`.
+    ///
+    /// Lance Beam is a thin LINE SEGMENT projected forward from a player-
+    /// supplied origin point along the ship's aim direction for a fixed
+    /// `length`. Every enemy or asteroid whose CENTER lies inside the
+    /// rectangular strip swept by the beam emits one of these events.
+    ///
+    /// Field-count rationale (4 non-type fields, 5 total with the tag):
+    ///   - NO `origin_x` / `origin_y` / `angle` — the wrapper has the
+    ///     `CollisionLance` spec it passed in.
+    ///   - NO `target_x` / `target_y` — the wrapper can re-look-up the
+    ///     target by `target_id`, OR reconstruct the impact point as
+    ///     `origin + dir * distance_along_beam ± perp_dir * distance_from_beam`.
+    ///   - NO impulse / knockback fields — those depend on per-frame
+    ///     upgrade state (KNOCKBACK / BEAM_PUSH) and live wrapper-side.
+    ///   - NO `target_radius` — the wrapper looks it up by `target_id`.
+    ///
+    /// `target_id` is the enemy's id (this variant is the enemy half of
+    /// the pair). `damage` is FLAT (no falloff) — copied verbatim from
+    /// `CollisionLance.damage`.
+    /// `distance_along_beam` is the forward distance from the lance
+    /// origin to the enemy's center along the beam axis (the dot-product
+    /// projection); guaranteed in `[0, length]` by the detector's
+    /// inclusive boundary semantics. Wrapper uses this to clamp the
+    /// rendered beam to the nearest hit (legacy `p.beamHitDist`) and for
+    /// any per-distance attenuation.
+    /// `distance_from_beam` is the absolute perpendicular distance from
+    /// the beam axis to the enemy's center (zero if dead-on the axis).
+    /// Wrapper uses this for grazing-shot detection and VFX placement.
+    LanceHitEnemy {
+        target_id: u32,
+        damage: f32,
+        distance_along_beam: f32,
+        distance_from_beam: f32,
+    },
+    /// Mirrors `{ type: 'lance_hit_asteroid', ... }` in `js/sim/collision.js`.
+    ///
+    /// Sister variant to `LanceHitEnemy` — same field layout, asteroid
+    /// id space instead of enemy id space. See `LanceHitEnemy` docstring
+    /// for field-count rationale and field-by-field semantics.
+    LanceHitAsteroid {
+        target_id: u32,
+        damage: f32,
+        distance_along_beam: f32,
+        distance_from_beam: f32,
+    },
 }
 
 /// Which kind of target tripped a mine. Mirrors the JS string-tagged
@@ -2439,5 +2485,344 @@ pub fn detect_mine_hits(
                 break;
             }
         }
+    }
+}
+
+// =====================================================================
+// LANCE BEAM — line-segment piercing damage ray (Phase 2.5, dispatch 9)
+// =====================================================================
+//
+// Lance Beam is the third power-weapon collision pair after Nova (PR
+// #44/#56) and Mine (PR #57/#65). It mirrors the JS pure step in
+// `js/sim/collision.js::detectLanceBeamHits` (PR #64).
+//
+// Unlike Nova (a disc) or Mine (a triggered AoE ring), Lance is a thin
+// LINE SEGMENT projected forward from an origin point for a fixed
+// `length`. Every enemy or asteroid whose center lies inside the
+// rectangular strip swept by the beam takes damage. The pure step is
+// FULLY PIERCING — it reports EVERY in-strip target. First-hit clamp /
+// beam truncation, knockback, audio throttle, and FX are wrapper-side.
+//
+// Legacy reference: `js/modules/combat/collision-system.js::
+// checkLanceBeamCollisions` (line 756). The legacy function does both
+// detection AND damage/knockback application in one pass, and bakes in
+// a "first hit stops the beam" continuous-tether semantic (lance length
+// clamps to the nearest hit's forward distance so the rendered beam
+// terminates at the impact point). The pure step splits these concerns
+// for parity with the prior collision pairs.
+//
+// ─── Geometry: point-to-line-segment with width ──────────────────────
+//
+// The beam is a segment from `(origin_x, origin_y)` along the unit
+// direction `(cos(angle), sin(angle))` for `length` world units. Each
+// target is tested as follows:
+//
+//   1. Compute the offset vector from origin:  d = target - origin.
+//   2. Project onto the beam axis:             proj = d · dir.
+//      This is the FORWARD distance from origin (positive = ahead,
+//      negative = behind).
+//   3. Compute the perpendicular distance:     perp = |d × dir|.
+//      The 2-D cross product magnitude is `|d.x * dir.y - d.y * dir.x|`.
+//   4. Hit iff  0 <= proj <= length  AND  perp <= width + target.radius.
+//
+// Boundary semantics (deliberately INCLUSIVE on both axes, mirroring the
+// JS pure step's `[0, length]` closed interval and "within `width +
+// radius`" (≤) phrasing — in contrast to Nova's strict `<` disc gate):
+//   - `proj == 0` (target exactly at the origin): HIT. A point-blank
+//     target at the player's muzzle is intersected by the segment.
+//   - `proj == length` (target exactly at the far end): HIT. The
+//     segment "intersects" a point at its terminating endpoint.
+//   - `perp == width + radius` (target tangent to the strip edge): HIT.
+//     Matches the intuition that a target whose circular hull is JUST
+//     touching the beam's edge is in contact with it.
+//
+// Two boundary-pin tests in `parity_collision.rs` guard against drift.
+//
+// ─── Width semantic (IMPORTANT contract diff vs legacy) ──────────────
+//
+// The pure step treats `CollisionLance.width` as the EFFECTIVE half-
+// thickness of the beam strip — i.e. the perpendicular reach to which
+// we add the target's radius before testing. This means the strip's
+// TOTAL visible thickness is `2 * width`, and the radial slack against
+// a circular target is `width + target.radius`.
+//
+// The legacy `checkLanceBeamCollisions` uses `beamW / 2 + r` (halving
+// the full beam width before testing), and `POWER_WEAPONS.LANCE_BEAM
+// .beamWidth = 6` is the FULL strip thickness. To bridge: the wrapper
+// must pass `width = beamWidth / 2 * (1 + BEAM_WIDTH stacks * 0.3)`
+// (i.e. pre-halved) so the pure step's contract holds.
+//
+// ─── Damage model: FLAT (no falloff) ─────────────────────────────────
+//
+// Every target inside the strip takes `CollisionLance.damage` regardless
+// of `distance_along_beam` or `distance_from_beam`. Mirrors Nova's flat-
+// damage semantic and matches the legacy beam (no per-target falloff
+// curve). If a future tuning wants near-vs-far attenuation, the wrapper
+// can scale damage from the event's `distance_along_beam` field — the
+// pure step deliberately stays simple.
+//
+// ─── Skip-gates: uniform across enemies AND asteroids ────────────────
+//
+//   - Inactive enemy        (`!enemy.active`)
+//   - Warping enemy         (`enemy.warping`)
+//   - Enemy in death-flash  (`enemy.death_flash > 0`)
+//   - Inactive asteroid     (`!asteroid.active`)
+//   - Warping asteroid      (`asteroid.warping`)
+//   - Asteroid death-flash  (`asteroid.death_flash > 0`)
+//
+// The wrapper-side legacy enemy loop (line 781) skips `_deathFlash`
+// only; the legacy asteroid loop (line 797) skips `warping` AND
+// `_deathFlash`. Both the JS pure step (PR #64) and this Rust mirror
+// apply the full superset gate to BOTH target kinds for consistency
+// with every other pair in this file. Spawn-warp enemies typically
+// don't have `active = true` during their warp, so the added gate is a
+// strict superset of legacy behavior.
+//
+// ─── What the pure step intentionally does NOT report ────────────────
+//
+//   - First-hit clamping (`p.beamHitDist`) — the wrapper computes this
+//     from the emitted events by picking the event with the smallest
+//     `distance_along_beam`. The pure step always reports EVERY in-
+//     strip target so a future PIERCING / OVERLOAD upgrade that lets
+//     the beam punch through can be enabled by ignoring the clamp
+//     wrapper-side.
+//   - Outward push along the beam axis (`enemy.vel.x += dx * BEAM_PUSH`)
+//     — wrapper-owned, depends on KNOCKBACK upgrade stacks. The event's
+//     `distance_along_beam` plus the wrapper's known direction vector
+//     are sufficient to reconstruct the push impulse.
+//   - Per-target sizzle particles + impact sparks (presentation FX)
+//   - Audio (`audio:enemy-hit-by-bullet` throttled per-target) and the
+//     beam loop hum (presentation).
+//   - `destroyAsteroid` cascade when HP drops to zero — the wrapper
+//     drains events into its damage helpers; lethal hits are detected
+//     wrapper-side from the resulting HP.
+//   - Beam glitter / muzzle hotspot particles (presentation).
+
+/// Lance Beam specification — the oriented line-segment geometry +
+/// uniform damage.
+///
+/// Mirrors the JS shape `{ originX, originY, angle, length, width,
+/// damage }` passed into `detectLanceBeamHits`. The wrapper constructs
+/// this each tick from the player's live state (origin = gun mouth,
+/// angle = ship aim radians, length = scaled range, width = pre-halved
+/// effective half-thickness, damage = flat per-target value after
+/// OVERLOAD_BEAM scaling).
+///
+/// `damage` is FLAT — every target inside the strip takes this exact
+/// value regardless of `distance_along_beam` or `distance_from_beam`.
+/// See section comment above for the rationale.
+///
+/// `width` is the EFFECTIVE HALF-THICKNESS (legacy passes pre-halved
+/// `beamWidth / 2`). See "Width semantic" above for the bridge.
+///
+/// Defensive contract: a beam with `length <= 0` or `width < 0` hits
+/// nothing (the detector short-circuits before scanning targets).
+/// Negative damage is allowed but produces a no-op-ish "heal" event the
+/// wrapper can ignore; the pure step neither clamps nor validates
+/// damage values.
+#[derive(Debug, Clone, Copy)]
+pub struct CollisionLance {
+    pub origin_x: f32,
+    pub origin_y: f32,
+    /// Aim direction in radians. `0` ⇒ +X axis, `PI/2` ⇒ +Y axis (i.e.
+    /// the JS-canvas convention where +Y points downward).
+    pub angle: f32,
+    pub length: f32,
+    /// Effective HALF-thickness of the beam strip (the perpendicular
+    /// reach to which we add the target's radius). Wrapper must
+    /// pre-halve `beamWidth / 2` from the legacy `POWER_WEAPONS
+    /// .LANCE_BEAM.beamWidth = 6` tuning. See section comment for the
+    /// bridge.
+    pub width: f32,
+    pub damage: f32,
+}
+
+impl CollisionLance {
+    /// Construct a fresh lance at the origin firing along +X axis with
+    /// the live-game pre-halved beam width (3 = `beamWidth/2 = 6/2`),
+    /// the live-game default range (`range * 400 = 0.9 * 400 = 360`),
+    /// and the live-game per-frame flat damage (0.05). Test convenience.
+    pub fn fresh() -> Self {
+        Self {
+            origin_x: 0.0,
+            origin_y: 0.0,
+            angle: 0.0,
+            length: 360.0,
+            width: 3.0,
+            damage: 0.05,
+        }
+    }
+}
+
+// ─── Lance Beam hit detection ───────────────────────────────────────
+
+/// Detect Lance Beam hits for one tick.
+///
+/// Pure step: tests a single line-segment beam (`CollisionLance`)
+/// against every active enemy AND every active asteroid, and emits one
+/// event per target whose CENTER projects onto the beam segment within
+/// `width + target.radius` perpendicular slack. Does NOT mutate
+/// enemies or asteroids — every effect (HP loss, knockback, beam
+/// clamping, FX) is reported in the event payload for the wrapper to
+/// apply downstream.
+///
+/// Geometry:
+///   Point-to-segment with width. For each target with center `T`:
+///     d    = T - origin
+///     proj = d · dir         (forward distance along beam axis)
+///     perp = |d × dir|       (perpendicular distance to beam axis)
+///   Hit iff:
+///     0 <= proj <= length    (target is within the segment span)
+///     perp <= width + target.radius   (target overlaps the strip)
+///   Boundary semantics: INCLUSIVE on both axes (matches the JS pure
+///   step's `[0, length]` closed interval and `<= width + radius`
+///   phrasing). JS line refs: `js/sim/collision.js:2585–2604` (enemy
+///   branch) and `js/sim/collision.js:2618–2637` (asteroid branch).
+///
+/// Damage model:
+///   FLAT — every target inside the strip takes `lance.damage`
+///   regardless of `distance_along_beam`/`distance_from_beam`. Mirrors
+///   legacy `config.damage` semantics; see section comment above for
+///   the rationale.
+///
+/// Piercing semantics:
+///   FULLY PIERCING — reports EVERY target inside the beam strip. The
+///   legacy "first hit stops the beam" behavior is a wrapper concern:
+///   the wrapper picks the emitted event with the smallest
+///   `distance_along_beam`, clamps the rendered beam to that distance,
+///   and ignores the rest. A future PIERCING / OVERLOAD upgrade that
+///   lets the beam punch through targets is enabled here by default.
+///
+/// Skip-gates (no event emitted):
+///   Enemies:
+///     - Inactive          (`!enemy.active`)
+///     - Warping           (`enemy.warping`)
+///     - Mid death-flash   (`enemy.death_flash > 0`)
+///   Asteroids:
+///     - Inactive          (`!asteroid.active`)
+///     - Warping           (`asteroid.warping`)
+///     - Mid death-flash   (`asteroid.death_flash > 0`)
+///
+/// Iteration order:
+///   Enemies first, then asteroids. Order is observable only via
+///   `events` ordering — the wrapper dispatches on the event variant
+///   (`LanceHitEnemy` vs `LanceHitAsteroid`) and should not depend on
+///   order for correctness. Future spatial-grid filtering can reorder
+///   freely.
+///
+/// Defensive guards:
+///   - `length <= 0` → no targets scanned, no events emitted (a
+///     degenerate beam can't reach anything).
+///   - `width < 0` → no targets scanned, no events emitted (a strip
+///     with negative half-thickness is non-physical).
+///   - Empty enemy + empty asteroid slices → no events.
+///
+/// JS line refs: `js/sim/collision.js:2531–2654`.
+pub fn detect_lance_beam_hits(
+    lance: &CollisionLance,
+    enemies: &[CollisionEnemy],
+    asteroids: &[CollisionAsteroid],
+    _ctx: &CollisionContext,
+    events: &mut Vec<CollisionEvent>,
+) {
+    // 1. Defensive: degenerate strip hits nothing
+    //    (JS collision.js:2562 — `if (!(length > 0)) return`).
+    if !(lance.length > 0.0) {
+        return;
+    }
+    // 2. Defensive: negative half-thickness is non-physical
+    //    (JS collision.js:2563 — `if (!(width >= 0)) return`).
+    if !(lance.width >= 0.0) {
+        return;
+    }
+
+    // 3. Skip entirely if both target lists are empty (matches JS short-
+    //    circuit before pre-computing trig).
+    if enemies.is_empty() && asteroids.is_empty() {
+        return;
+    }
+
+    let origin_x = lance.origin_x;
+    let origin_y = lance.origin_y;
+    let length = lance.length;
+    let width = lance.width;
+    let damage = lance.damage;
+
+    // Pre-compute the unit direction once. JS line ref:
+    // `js/sim/collision.js:2566–2567`.
+    let dir_x = lance.angle.cos();
+    let dir_y = lance.angle.sin();
+
+    // ── Enemies ────────────────────────────────────────────────────
+    // (JS collision.js:2569–2607)
+    for enemy in enemies.iter() {
+        if !enemy.active {
+            continue;
+        }
+        if enemy.warping {
+            continue;
+        }
+        if enemy.death_flash > 0 {
+            continue;
+        }
+
+        // Offset from origin → forward (proj) and side (perp).
+        let dx = enemy.x - origin_x;
+        let dy = enemy.y - origin_y;
+        let proj = dx * dir_x + dy * dir_y;
+        // Segment-span gate — INCLUSIVE on both ends.
+        if proj < 0.0 || proj > length {
+            continue;
+        }
+        // 2-D cross-product magnitude == perpendicular distance because
+        // (dir_x, dir_y) is a unit vector.
+        let perp = (dx * dir_y - dy * dir_x).abs();
+        if perp > width + enemy.radius {
+            continue;
+        }
+
+        events.push(CollisionEvent::LanceHitEnemy {
+            target_id: enemy.id,
+            damage,
+            distance_along_beam: proj,
+            distance_from_beam: perp,
+        });
+    }
+
+    // ── Asteroids ──────────────────────────────────────────────────
+    // (JS collision.js:2609–2640)
+    for asteroid in asteroids.iter() {
+        if !asteroid.active {
+            continue;
+        }
+        if asteroid.warping {
+            continue;
+        }
+        if asteroid.death_flash > 0 {
+            continue;
+        }
+
+        let dx = asteroid.x - origin_x;
+        let dy = asteroid.y - origin_y;
+        let proj = dx * dir_x + dy * dir_y;
+        if proj < 0.0 || proj > length {
+            continue;
+        }
+        let perp = (dx * dir_y - dy * dir_x).abs();
+        // Note: the Rust `CollisionAsteroid` carries a single `radius`
+        // field; the JS code prefers `baseRadius` and falls back to
+        // `radius`. The wrapper is responsible for choosing the right
+        // value when populating `CollisionAsteroid.radius` for the
+        // detector. Same convention as every other Rust collision pair.
+        if perp > width + asteroid.radius {
+            continue;
+        }
+
+        events.push(CollisionEvent::LanceHitAsteroid {
+            target_id: asteroid.id,
+            damage,
+            distance_along_beam: proj,
+            distance_from_beam: perp,
+        });
     }
 }
