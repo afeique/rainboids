@@ -3142,3 +3142,239 @@ export function detectMissileSalvoHits(missiles, enemies, asteroids, ctx, events
         }
     }
 }
+// LIGHTNING ARC — continuous single-target tether (enemies only)
+// =====================================================================
+//
+// Lightning Arc is a beam-style continuous weapon. Each tick while
+// active, the pure step searches the enemy list and emits at most ONE
+// `lightning_arc_hit_enemy` event for the NEAREST in-range enemy. The
+// arc never targets asteroids (mirroring the player-facing semantics of
+// the 5th power weapon — it's a "fry the closest priority target" tool,
+// not a terrain-clearing tool).
+//
+// Legacy reference: `js/modules/combat/collision-system.js::
+// checkLightningCollisions` (line 1174). The legacy function does
+// continuous-tether target selection (with aim-cursor priority +
+// per-frame chain damage + AMPLIFIER stack scaling + knockback +
+// particle FX), then has a separate legacy chain-path code branch for
+// older `fireLightning()` entry points. The pure step extracts only
+// the per-tick "pick nearest target + emit one damage event" core.
+//
+// ─── Pure-step contract: aggressively simplified ─────────────────────
+//
+// The wrapper / parent module is responsible for everything stateful:
+//   - Whether the arc is firing this tick (`arc.active` toggle)
+//   - Target-latch persistence across frames (`p.lightningArcTarget`)
+//   - AMPLIFIER stack damage scaling (`dmg = damage * (1 + amp * 0.2)`
+//     — wrapper pre-applies before passing to this pure step)
+//   - ARC_OVERCHARGE 1.5× range / 1.3× damage / aim-cursor target
+//     priority (wrapper pre-applies range and damage; aim-cursor
+//     priority is a wrapper concern — the pure step picks geographic
+//     nearest)
+//   - Bullet-flavored powerup arc damage bumps (RAPID, MULTI, BIG,
+//     PIERCING, HOMING, EXPLOSIVE — wrapper pre-applies)
+//   - Per-frame audio throttling (sustained beam SFX)
+//   - Particle FX (lightning bolt path drawing + impact sparks)
+//   - `damageEnemy()` upgrade-aware damage application
+//   - Knockback / TETHER_PUSH impulse on the target
+//   - Legacy `p.lightningChains[]` chain logic (wrapper-only; the pure
+//     step does NOT participate in chain hops)
+//   - Defensive `p.lightningArcTarget = null` cleanup when no target
+//     is in range (the wrapper does this on its own; the pure step
+//     simply emits zero events for that tick)
+//
+// ─── Single-target nearest-wins ──────────────────────────────────────
+//
+// The pure step iterates enemies in array order and tracks the one
+// with the smallest distance whose distance is `<= arc.range`. On a
+// tie (two enemies at exactly the same distance), the FIRST iterated
+// one wins. This is deterministic given the input order — the wrapper
+// owns the iteration source (the enemy active-objects array).
+//
+// ─── Boundary semantics: INCLUSIVE ───────────────────────────────────
+//
+// `dist <= range` — an enemy at exactly `range` distance is HIT.
+// Mirrors the legacy `dxp * dxp + dyp * dyp > range * range` test
+// (the legacy `continue` runs only when STRICTLY greater than the
+// squared range, so equality is "still inside"). We use the
+// `Math.hypot` form because it's the one the spec asks for and we
+// emit `distanceToTarget` directly into the event payload.
+//
+// ─── Skip-gates ──────────────────────────────────────────────────────
+//
+//   Enemies:
+//     - Inactive          (`!enemy.active`)
+//     - Warping           (`enemy.warping`)
+//     - Mid death-flash   (`deathFlash` or legacy `_deathFlash` > 0)
+//
+// NOTE: the legacy enemy loop (line 1223) skips `!active` and
+// `_deathFlash > 0` but does NOT explicitly check `warping`. The pure
+// step adds the warping gate for consistency with every other pair in
+// this file — mid-spawn-warp enemies shouldn't take a continuous-
+// tether hit.
+//
+// ─── What the pure step does NOT do ──────────────────────────────────
+//
+//   - Asteroid targeting — Lightning Arc emits only `_enemy` events.
+//     The legacy `checkLightningCollisions` continuous-tether path
+//     also scans asteroids (line 1232), but per the spec, the pure
+//     step is enemies-only. If a future tuning re-enables asteroid
+//     targeting, add a parallel `lightning_arc_hit_asteroid` event
+//     branch.
+//   - Apply damage (`damageEnemy(enemy, event.damage)` is wrapper-side).
+//   - Apply knockback (`event.knockX`/`knockY` are NOT in this event
+//     shape — Lightning Arc's TETHER_PUSH is wrapper-owned because the
+//     direction depends on the LATCHED target, which is wrapper state).
+//   - Mutate the arc's `active` flag (wrapper toggles).
+//   - Throttle audio / spawn lightning-bolt particle paths (presentation).
+//   - Defensive `p.lightningArcTarget = null` cleanup on no-hit ticks
+//     (wrapper-side; emerges naturally from "zero events emitted").
+//   - Aim-cursor target priority (the legacy nearest-to-aim selection
+//     is a wrapper concern; the pure step uses geographic nearest).
+
+/**
+ * Detect Lightning Arc hit for one tick.
+ *
+ * Pure step: scan `enemies` for the nearest active enemy within
+ * `arc.range` of `(arc.originX, arc.originY)` and emit ONE
+ * `lightning_arc_hit_enemy` event for that enemy. If no enemy is in
+ * range (or the enemy list is empty / null), emit zero events.
+ *
+ * Geometry:
+ *   For each enemy with center `T = (ex, ey)`:
+ *     dist = Math.hypot(ex - arc.originX, ey - arc.originY)
+ *   Hit iff:
+ *     dist <= arc.range
+ *   Track the smallest-dist hit and emit at the end of the scan.
+ *
+ * Damage model:
+ *   FLAT — the single emitted event carries `arc.damage` verbatim.
+ *   AMPLIFIER stack scaling (`× (1 + stacks * 0.2)`) is pre-applied
+ *   by the wrapper before invoking this function — the pure step
+ *   copies the value through with no further modification.
+ *
+ * Target latching:
+ *   The pure step is STATELESS. The legacy continuous-tether stashes
+ *   the picked target on `p.lightningArcTarget` so the renderer can
+ *   keep drawing the same arc across frames if the target stays in
+ *   range — that latch is wrapper-side. The pure step picks fresh
+ *   geographic nearest every tick.
+ *
+ * Skip-gates (no event emitted):
+ *   Enemies:
+ *     - Inactive          (`!enemy.active`)
+ *     - Warping           (`enemy.warping`)
+ *     - Mid death-flash   (`enemy.deathFlash > 0` or legacy `_deathFlash`)
+ *
+ * @param {{originX:number, originY:number, range:number, damage:number}} arc
+ *                                      arc spec. `originX`/`originY`
+ *                                      are world coords (typically the
+ *                                      player position); `range` is the
+ *                                      search radius; `damage` is the
+ *                                      flat damage emitted in the event
+ *                                      (pre-scaled by the wrapper for
+ *                                      AMPLIFIER + ARC_OVERCHARGE +
+ *                                      bullet-flavored powerup stacks).
+ * @param {Array<Object>} enemies       active enemies. Each is treated
+ *                                      as having `{x, y, active,
+ *                                      warping, deathFlash OR
+ *                                      _deathFlash, id}`. Radius is NOT
+ *                                      consulted — Lightning Arc's range
+ *                                      gate is point-to-point from
+ *                                      origin to enemy center.
+ * @param {Object} ctx                  per-tick context bag (currently
+ *                                      unused; reserved for future
+ *                                      extensions like spatial-grid
+ *                                      filtering or aim-cursor priority).
+ * @param {Array<Object>} events        out-buffer. Pushes at most ONE
+ *                                      `lightning_arc_hit_enemy` event
+ *                                      per call.
+ *
+ * Event shape (4 keys total — `type` + 3 non-type fields):
+ *
+ *   {
+ *     type:             'lightning_arc_hit_enemy',
+ *     targetId:         enemy.id,
+ *     damage:           arc.damage,
+ *     distanceToTarget: hypot from origin to the picked enemy's center.
+ *                       Wrapper uses this for impact-spark placement,
+ *                       audio attenuation, or particle-density tuning.
+ *   }
+ *
+ * NOTE: NO asteroid variant — Lightning Arc emits only enemy hits in
+ * the pure step. NO knockback fields — TETHER_PUSH is wrapper-side
+ * because it depends on the wrapper-latched target. NO origin coords
+ * — the wrapper has the arc spec it passed in.
+ *
+ * Wrapper-side concerns (NOT handled here):
+ *   1. Target latching (`p.lightningArcTarget` across-frame persistence
+ *      + defensive `null` cleanup on no-hit ticks).
+ *   2. AMPLIFIER stack scaling: `damage * (1 + stacks * 0.2)` — wrapper
+ *      pre-applies before invoking; pure step doesn't see the multiplier.
+ *   3. Chain logic (`p.lightningChains[]`) — wrapper-owned; the pure
+ *      step is single-target and does not hop.
+ *   4. Per-frame audio throttling for the sustained beam loop SFX.
+ *   5. Lightning-bolt particle path drawing + impact-spark FX.
+ *   6. `damageEnemy(enemy, damage)` upgrade-aware damage application.
+ *   7. The `arc.active` toggle — the wrapper gates this call site; the
+ *      pure step does NOT check `arc.active` (so a wrapper can call
+ *      this with arc.active === false and still get geometry data, if
+ *      that's ever useful for a debug overlay).
+ */
+export function detectLightningArcHits(arc, enemies, ctx, events) {
+    // Tolerate null/missing arc spec — a wrapper that calls this with
+    // no arc to fire shouldn't crash.
+    if (!arc) return;
+    // Empty / missing enemy list → nothing to detect.
+    if (!enemies || enemies.length === 0) return;
+
+    const originX = arc.originX;
+    const originY = arc.originY;
+    const range = arc.range;
+    const damage = arc.damage;
+
+    // Track the nearest in-range enemy across the scan. First iterated
+    // wins on tied distance — deterministic given the wrapper's input
+    // order.
+    let bestEnemy = null;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        if (!enemy || !enemy.active) continue;
+        if (enemy.warping) continue;
+
+        // Death-flash gate — dual-name support, same pattern as every
+        // other pair in this file.
+        const eF = enemy.deathFlash !== undefined
+            ? enemy.deathFlash
+            : enemy._deathFlash;
+        if (eF && eF > 0) continue;
+
+        const dx = enemy.x - originX;
+        const dy = enemy.y - originY;
+        // Math.hypot mirrors the spec's stated geometry and feeds
+        // directly into the emitted `distanceToTarget` field. Boundary
+        // is INCLUSIVE (`<= range`) — see section comment for the
+        // legacy bridge.
+        const dist = Math.hypot(dx, dy);
+        if (dist > range) continue;
+
+        // Strict-less-than so a later enemy at identical distance does
+        // NOT displace the earlier-iterated one — preserves "first
+        // iterated wins on tie" semantics.
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestEnemy = enemy;
+        }
+    }
+
+    if (bestEnemy) {
+        events.push({
+            type: 'lightning_arc_hit_enemy',
+            targetId: bestEnemy.id,
+            damage,
+            distanceToTarget: bestDist,
+        });
+    }
+}

@@ -47,6 +47,7 @@ import {
     detectMissileSalvoHits,
     MISSILE_KNOCK,
     MISSILE_DEFAULT_RADIUS,
+    detectLightningArcHits,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
@@ -3369,5 +3370,305 @@ describe('detectMissileSalvoHits — first-hit-wins per missile', () => {
         detectMissileSalvoHits([m], [], [a1, a2], ctx, events);
         expect(events).toHaveLength(1);
         expect(events[0].targetId).toBe(201);
+    });
+});
+
+// LIGHTNING ARC — continuous single-target tether (enemies only)
+// =====================================================================
+//
+// Each call emits AT MOST one `lightning_arc_hit_enemy` event for the
+// NEAREST in-range enemy. No asteroid variant exists — Lightning Arc is
+// enemies-only in the pure step. Boundary is INCLUSIVE (`dist <= range`).
+// On a tie (two enemies at identical distance), the FIRST iterated wins.
+// The pure step is stateless — wrapper handles target latching, chain
+// logic, knockback, audio, FX, and AMPLIFIER stack scaling.
+
+// ---------------------------------------------------------------------
+// Helpers — build minimal arc spec + enemy shapes for the lightning-arc
+// pair. We follow the same pattern as the lance / missile helpers —
+// freshEnemyState for the canonical shape, then manually attach
+// radius + skip-gate fields after construction.
+// ---------------------------------------------------------------------
+
+/** Build a default Lightning Arc spec. Arc fires from `(ox, oy)` with
+ *  search radius `range` and flat damage `damage`. Default range mirrors
+ *  the legacy `POWER_WEAPONS.LIGHTNING_ARC.chainRange` (300) and damage
+ *  default 1 keeps damage-propagation assertions readable. */
+function arcSpec(ox, oy, range = 300, damage = 1) {
+    return { originX: ox, originY: oy, range, damage };
+}
+
+/** HUNTER-shaped enemy for arc tests. Same pattern as the nova / lance
+ *  / missile helpers — radius + skip-gate fields are attached after
+ *  freshEnemyState construction because the state factory whitelists
+ *  fields. Note: the pure-step Lightning Arc does NOT consult radius,
+ *  so the radius field is set for completeness but does not affect
+ *  detection. */
+function arcEnemy(id, x, y, overrides = {}) {
+    const base = freshEnemyState('HUNTER', {
+        id, x, y,
+        active: overrides.active,
+    });
+    base.radius = overrides.radius !== undefined ? overrides.radius : 15;
+    if (overrides.warping !== undefined) base.warping = overrides.warping;
+    if (overrides.deathFlash !== undefined) base.deathFlash = overrides.deathFlash;
+    if (overrides._deathFlash !== undefined) base._deathFlash = overrides._deathFlash;
+    return base;
+}
+
+// ---------------------------------------------------------------------
+// Geometry — single-target nearest-wins, range gate, tie-breaking.
+// ---------------------------------------------------------------------
+
+describe('detectLightningArcHits — geometry', () => {
+    test('single enemy in range emits ONE event with correct distance and 4 keys', () => {
+        // Arc at origin, range 300. Enemy at (100, 0) → dist 100 ≤ 300.
+        const arc = arcSpec(0, 0, 300, 7);
+        const e = arcEnemy(101, 100, 0);
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev).toMatchObject({
+            type: 'lightning_arc_hit_enemy',
+            targetId: 101,
+            damage: 7,
+            distanceToTarget: 100,
+        });
+        // Explicit field-count guard: exactly 4 keys (type + 3 non-type
+        // fields). No origin coords, no knockback, no target coords.
+        expect(Object.keys(ev).sort()).toEqual([
+            'damage', 'distanceToTarget', 'targetId', 'type',
+        ].sort());
+    });
+
+    test('single enemy out of range emits zero events', () => {
+        // Arc range 300; enemy at (400, 0) → dist 400 > 300.
+        const arc = arcSpec(0, 0, 300, 7);
+        const e = arcEnemy(101, 400, 0);
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('multiple enemies in range → emits ONE event for the NEAREST', () => {
+        // Three enemies at varying distances. (50, 0) → 50 wins.
+        // (100, 0) → 100. (150, 0) → 150.
+        const arc = arcSpec(0, 0, 300, 1);
+        const eNear = arcEnemy(101, 50, 0);
+        const eMid  = arcEnemy(102, 100, 0);
+        const eFar  = arcEnemy(103, 150, 0);
+        const events = [];
+        detectLightningArcHits(arc, [eMid, eFar, eNear], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].targetId).toBe(101);
+        expect(events[0].distanceToTarget).toBeCloseTo(50, 6);
+    });
+
+    test('two enemies at TIED distance → FIRST iterated wins', () => {
+        // Both enemies at distance 100 from origin. e1 listed first
+        // wins per the strict-less-than tie-break in the pure step.
+        const arc = arcSpec(0, 0, 300, 1);
+        const e1 = arcEnemy(101, 100, 0);
+        const e2 = arcEnemy(102, 0, 100);
+        const events = [];
+        detectLightningArcHits(arc, [e1, e2], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].targetId).toBe(101);
+
+        // Re-order: now e2 is first → e2 wins.
+        const events2 = [];
+        detectLightningArcHits(arc, [e2, e1], ctx, events2);
+        expect(events2).toHaveLength(1);
+        expect(events2[0].targetId).toBe(102);
+    });
+
+    test('arc at non-origin coords picks correctly relative to origin', () => {
+        // Arc at (500, 500). Enemy at (600, 500) → dist 100.
+        const arc = arcSpec(500, 500, 300, 1);
+        const e = arcEnemy(101, 600, 500);
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceToTarget).toBeCloseTo(100, 6);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Skip-gates — inactive / warping / death-flash enemies are ignored.
+// ---------------------------------------------------------------------
+
+describe('detectLightningArcHits — skip gates', () => {
+    test('inactive enemy in range is ignored (zero events)', () => {
+        const arc = arcSpec(0, 0, 300, 1);
+        const e = arcEnemy(101, 50, 0, { active: false });
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping enemy in range is ignored', () => {
+        const arc = arcSpec(0, 0, 300, 1);
+        const e = arcEnemy(101, 50, 0, { warping: true });
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy mid death-flash (legacy `_deathFlash > 0`) is ignored', () => {
+        const arc = arcSpec(0, 0, 300, 1);
+        const e = arcEnemy(101, 50, 0, { _deathFlash: 5 });
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy mid death-flash (new `deathFlash > 0`) is ignored', () => {
+        const arc = arcSpec(0, 0, 300, 1);
+        const e = arcEnemy(101, 50, 0, { deathFlash: 3 });
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('mixed list: only the active in-range enemy counts (others gated out)', () => {
+        // Build a list with: inactive at 30, warping at 40, death-flash
+        // at 50, active in-range at 80, active out-of-range at 400.
+        // Only the active 80 should emit.
+        const arc = arcSpec(0, 0, 300, 1);
+        const eInactive = arcEnemy(101, 30,  0, { active: false });
+        const eWarping  = arcEnemy(102, 40,  0, { warping: true });
+        const eDying    = arcEnemy(103, 50,  0, { _deathFlash: 7 });
+        const eAlive    = arcEnemy(104, 80,  0);
+        const eFar      = arcEnemy(105, 400, 0);
+        const events = [];
+        detectLightningArcHits(
+            arc,
+            [eInactive, eWarping, eDying, eAlive, eFar],
+            ctx, events,
+        );
+        expect(events).toHaveLength(1);
+        expect(events[0].targetId).toBe(104);
+        expect(events[0].distanceToTarget).toBeCloseTo(80, 6);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Damage propagation — `arc.damage` flows through to the event verbatim.
+// ---------------------------------------------------------------------
+
+describe('detectLightningArcHits — damage propagation', () => {
+    test('arc.damage = 0 still emits an event (with damage:0)', () => {
+        // Zero damage is a valid edge case — the wrapper may want the
+        // event for FX / audio even if no HP changes hands.
+        const arc = arcSpec(0, 0, 300, 0);
+        const e = arcEnemy(101, 50, 0);
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].damage).toBe(0);
+    });
+
+    test('various damage values flow through verbatim', () => {
+        // Wrapper pre-applies AMPLIFIER + ARC_OVERCHARGE + bullet-bumps;
+        // the pure step is opaque to the math and just copies the value.
+        for (const d of [0.05, 1, 3.7, 42, 1000]) {
+            const arc = arcSpec(0, 0, 300, d);
+            const e = arcEnemy(101, 50, 0);
+            const events = [];
+            detectLightningArcHits(arc, [e], ctx, events);
+            expect(events).toHaveLength(1);
+            expect(events[0].damage).toBe(d);
+        }
+    });
+});
+
+// ---------------------------------------------------------------------
+// Empty / null inputs — defensive contract: no crash, no spurious event.
+// ---------------------------------------------------------------------
+
+describe('detectLightningArcHits — empty / null inputs', () => {
+    test('empty enemies array → zero events, no crash', () => {
+        const arc = arcSpec(0, 0, 300, 1);
+        const events = [];
+        detectLightningArcHits(arc, [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('null enemies → zero events, no crash', () => {
+        const arc = arcSpec(0, 0, 300, 1);
+        const events = [];
+        expect(() => detectLightningArcHits(arc, null, ctx, events)).not.toThrow();
+        expect(events).toHaveLength(0);
+    });
+
+    test('undefined enemies → zero events, no crash', () => {
+        const arc = arcSpec(0, 0, 300, 1);
+        const events = [];
+        expect(() => detectLightningArcHits(arc, undefined, ctx, events)).not.toThrow();
+        expect(events).toHaveLength(0);
+    });
+
+    test('null arc → zero events, no crash', () => {
+        const events = [];
+        const e = arcEnemy(101, 50, 0);
+        expect(() => detectLightningArcHits(null, [e], ctx, events)).not.toThrow();
+        expect(events).toHaveLength(0);
+    });
+
+    test('undefined arc → zero events, no crash', () => {
+        const events = [];
+        const e = arcEnemy(101, 50, 0);
+        expect(() => detectLightningArcHits(undefined, [e], ctx, events)).not.toThrow();
+        expect(events).toHaveLength(0);
+    });
+
+    test('null entries inside enemies array are skipped without crashing', () => {
+        const arc = arcSpec(0, 0, 300, 1);
+        const eGood = arcEnemy(101, 50, 0);
+        const events = [];
+        // Mix in nulls — the pure step's `if (!enemy)` gate should skip
+        // them without throwing.
+        expect(() => detectLightningArcHits(arc, [null, eGood, null], ctx, events)).not.toThrow();
+        expect(events).toHaveLength(1);
+        expect(events[0].targetId).toBe(101);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Boundary — INCLUSIVE `dist <= range` semantics. Legacy uses the
+// squared form (`dist² > range²` to skip) which is equivalent to
+// `dist <= range` for the hit case. We pin that contract here.
+// ---------------------------------------------------------------------
+
+describe('detectLightningArcHits — boundary', () => {
+    test('enemy at dist === range is INCLUSIVE hit (legacy `<= cfg.range`)', () => {
+        // Range 300, enemy at (300, 0) → dist exactly 300. INCLUSIVE.
+        const arc = arcSpec(0, 0, 300, 1);
+        const e = arcEnemy(101, 300, 0);
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceToTarget).toBeCloseTo(300, 6);
+    });
+
+    test('enemy just past dist === range (dist = range + epsilon) is MISS', () => {
+        // Range 300, enemy at (300.0001, 0) → dist > 300. Out.
+        const arc = arcSpec(0, 0, 300, 1);
+        const e = arcEnemy(101, 300.0001, 0);
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy at dist = 0 (sitting on the origin) is a valid hit', () => {
+        // Degenerate but defensible — the wrapper may invoke with
+        // origin == player and an enemy that warped on top of it.
+        const arc = arcSpec(0, 0, 300, 1);
+        const e = arcEnemy(101, 0, 0);
+        const events = [];
+        detectLightningArcHits(arc, [e], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceToTarget).toBe(0);
     });
 });
