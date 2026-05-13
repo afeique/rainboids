@@ -667,6 +667,36 @@ pub enum CollisionEvent {
         knock_x: f32,
         knock_y: f32,
     },
+    /// Mirrors `{ type: 'lightning_arc_hit_enemy', ... }` in `js/sim/collision.js`.
+    ///
+    /// Lightning Arc is a continuous single-target tether power weapon
+    /// (the 5th and final power weapon Rust mirror). The pure step emits
+    /// AT MOST ONE event per call — the nearest active enemy within
+    /// `range`. There is intentionally NO asteroid variant: Lightning Arc
+    /// targets enemies only (mirrors the player-facing semantics of the
+    /// live weapon — "fry the closest priority target", not terrain-clearing).
+    ///
+    /// Field-count rationale (3 non-type fields, 4 total with the tag):
+    ///   - `target_id` is the enemy id of the latched-on target.
+    ///   - `damage` flows verbatim from `CollisionLightningArc.damage` so
+    ///     the wrapper does NOT have to look up the arc spec again. The
+    ///     wrapper pre-applies AMPLIFIER stack scaling (× (1 + stacks *
+    ///     0.2)) before passing the spec in — the pure step does NOT
+    ///     re-scale here.
+    ///   - `distance_to_target` is the geographic distance from the arc
+    ///     origin to the enemy's center. The wrapper uses this for
+    ///     impact-spark placement, audio attenuation, particle-density
+    ///     tuning, or a debug overlay.
+    ///
+    /// NO knockback fields — Lightning Arc's TETHER_PUSH is wrapper-side
+    /// because the direction depends on the LATCHED target (which is
+    /// wrapper state) and the wrapper already has both endpoints (origin
+    /// + target.x/y) at the application site.
+    LightningArcHitEnemy {
+        target_id: u32,
+        damage: f32,
+        distance_to_target: f32,
+    },
 }
 
 /// Which kind of target tripped a mine. Mirrors the JS string-tagged
@@ -3197,5 +3227,249 @@ pub fn detect_missile_salvo_hits(
                 break;
             }
         }
+    }
+}
+
+// =====================================================================
+// LIGHTNING ARC — continuous single-target tether (enemies only)
+// =====================================================================
+//
+// Rust mirror of `js/sim/collision.js::detectLightningArcHits` (PR #72).
+// Lightning Arc is the 5th and final power-weapon collision pair after
+// Nova (PR #44/#56), Mine (PR #57/#65), Lance (PR #64/#69), and Missile
+// Salvo (PR #68/#74).
+//
+// Each tick while active, the pure step searches the enemy list and
+// emits AT MOST ONE `LightningArcHitEnemy` event for the NEAREST in-range
+// enemy. The arc never targets asteroids — Lightning Arc emits only
+// enemy hits in the pure step (mirrors the player-facing semantics of
+// the live weapon: a "fry the closest priority target" tool, not a
+// terrain-clearing tool).
+//
+// ─── Pure-step contract: aggressively simplified ─────────────────────
+//
+// The wrapper / parent module is responsible for everything stateful:
+//   - Whether the arc is firing this tick (`arc.active` toggle)
+//   - Target-latch persistence across frames (`p.lightningArcTarget`)
+//   - AMPLIFIER stack damage scaling (× (1 + stacks * 0.2) — wrapper
+//     pre-applies before passing to this pure step)
+//   - ARC_OVERCHARGE range/damage multipliers + aim-cursor target priority
+//     (wrapper pre-applies; the pure step picks geographic nearest)
+//   - Bullet-flavored powerup arc damage bumps (RAPID, MULTI, BIG,
+//     PIERCING, HOMING, EXPLOSIVE — wrapper pre-applies)
+//   - Per-frame audio throttling (sustained beam SFX)
+//   - Particle FX (lightning bolt path drawing + impact sparks)
+//   - `damageEnemy()` upgrade-aware damage application
+//   - Knockback / TETHER_PUSH impulse on the target
+//   - Legacy `p.lightningChains[]` chain logic (wrapper-only; the pure
+//     step does NOT participate in chain hops)
+//   - Defensive `p.lightningArcTarget = null` cleanup when no target
+//     is in range (emerges naturally from "zero events emitted")
+//
+// ─── Single-target nearest-wins semantics ────────────────────────────
+//
+// The pure step iterates enemies in array order and tracks the one
+// with the smallest distance whose distance is `<= arc.range`. On a
+// tie (two enemies at exactly the same distance), the FIRST iterated
+// one wins. This is deterministic given the input order — the wrapper
+// owns the iteration source (the enemy active-objects array). The
+// tracker uses STRICT-LESS-THAN to update so a later-iterated enemy at
+// identical distance does NOT displace the earlier one.
+//
+// ─── Boundary semantics: INCLUSIVE ───────────────────────────────────
+//
+// `dist <= range` — an enemy at exactly `range` distance is HIT.
+// Mirrors the JS pure step's `if (dist > range) continue` gate (a
+// `>` test means equality falls through to the in-range branch) and
+// the legacy `dxp * dxp + dyp * dyp > range * range` test (the
+// `continue` runs only when STRICTLY greater than the squared range,
+// so equality is "still inside"). Two boundary-pin tests in
+// `parity_collision.rs` guard against drift to `<` (strict).
+//
+// ─── Skip-gates ──────────────────────────────────────────────────────
+//
+//   Enemies:
+//     - Inactive          (`!enemy.active`)
+//     - Warping           (`enemy.warping`)
+//     - Mid death-flash   (`enemy.death_flash > 0`)
+//
+// NOTE: the legacy enemy loop (collision-system.js:1223) skips
+// `!active` and `_deathFlash > 0` but does NOT explicitly check
+// `warping`. The pure step adds the warping gate for consistency with
+// every other pair in this file — mid-spawn-warp enemies shouldn't
+// take a continuous-tether hit. The Rust mirror follows the JS pure
+// step exactly.
+//
+// ─── What the pure step does NOT do (stays wrapper-only) ─────────────
+//
+//   - Asteroid targeting — Lightning Arc emits only `_enemy` events.
+//   - Apply damage (`damageEnemy(enemy, event.damage)` is wrapper-side).
+//   - Apply knockback (TETHER_PUSH is wrapper-owned because the
+//     direction depends on the LATCHED target).
+//   - Mutate the arc's `active` flag (wrapper toggles).
+//   - Throttle audio / spawn lightning-bolt particle paths.
+//   - Defensive `p.lightningArcTarget = null` cleanup on no-hit ticks.
+//   - Aim-cursor target priority (legacy nearest-to-aim selection is a
+//     wrapper concern; the pure step uses geographic nearest).
+
+/// Lightning Arc specification — the origin + range + flat damage.
+///
+/// Mirrors the JS shape `{ originX, originY, range, damage }` passed
+/// into `detectLightningArcHits`. The wrapper constructs this each tick
+/// from the player's live state:
+///   - `origin_x` / `origin_y`: world coords (typically the player position).
+///   - `range`: search radius (scaled for ARC_OVERCHARGE by the wrapper).
+///   - `damage`: flat damage emitted in the event (pre-scaled by the
+///     wrapper for AMPLIFIER stacks + ARC_OVERCHARGE + bullet-flavored
+///     powerup stacks).
+///
+/// `damage` is FLAT — the single emitted event carries `arc.damage`
+/// verbatim. AMPLIFIER stack scaling (× (1 + stacks * 0.2)) is
+/// pre-applied by the wrapper; the pure step copies the value through
+/// with no further modification.
+///
+/// Defensive contract: a `range < 0` arc hits nothing (no enemy can
+/// satisfy `dist <= range` for negative range since `dist >= 0`).
+/// A `range == 0` arc may hit a point-blank enemy at the exact origin
+/// (`dist == 0 == range`, INCLUSIVE boundary). The pure step neither
+/// clamps nor validates damage values — negative damage produces a
+/// no-op-ish "heal" event the wrapper can ignore.
+#[derive(Debug, Clone, Copy)]
+pub struct CollisionLightningArc {
+    pub origin_x: f32,
+    pub origin_y: f32,
+    /// Search radius for the nearest-enemy scan. Boundary is INCLUSIVE
+    /// — an enemy at exactly `range` distance is hit.
+    pub range: f32,
+    /// Flat damage emitted in the event. AMPLIFIER stack scaling
+    /// (× (1 + stacks * 0.2)) is pre-applied by the caller.
+    pub damage: f32,
+}
+
+impl CollisionLightningArc {
+    /// Construct a fresh arc at the origin with the live-game default
+    /// range (200) and per-frame flat damage (0.05). Test convenience.
+    pub fn fresh() -> Self {
+        Self {
+            origin_x: 0.0,
+            origin_y: 0.0,
+            range: 200.0,
+            damage: 0.05,
+        }
+    }
+}
+
+// ─── Lightning Arc hit detection ─────────────────────────────────────
+
+/// Detect Lightning Arc hit for one tick.
+///
+/// Pure step: scans `enemies` for the nearest active enemy within
+/// `arc.range` of `(arc.origin_x, arc.origin_y)` and emits ONE
+/// `LightningArcHitEnemy` event for that enemy. If no enemy is in
+/// range (or the enemy list is empty), emits zero events. Does NOT
+/// mutate enemies — every effect (HP loss, knockback, FX, audio) is
+/// reported in the event payload for the wrapper to apply downstream.
+///
+/// Geometry:
+///   For each enemy with center `T = (ex, ey)`:
+///     dist = sqrt((ex - origin_x)² + (ey - origin_y)²)
+///   Hit iff:
+///     dist <= arc.range
+///   Tracks the smallest-dist hit across the scan and emits at end.
+///   JS line ref: `js/sim/collision.js:3354–3370`.
+///
+/// Damage model:
+///   FLAT — the single emitted event carries `arc.damage` verbatim.
+///   AMPLIFIER stack scaling (× (1 + stacks * 0.2)) is pre-applied by
+///   the caller before invoking this function. JS line ref:
+///   `js/sim/collision.js:3251–3254`.
+///
+/// Single-target nearest-wins:
+///   Iterates enemies in slice order and tracks the smallest distance
+///   with STRICT-LESS-THAN updates. On tied distance, the FIRST
+///   iterated enemy wins (preserves deterministic outcome given
+///   wrapper-provided input order). JS line ref:
+///   `js/sim/collision.js:3363–3369`.
+///
+/// Boundary semantic:
+///   INCLUSIVE — `dist <= arc.range`. An enemy at exactly `range`
+///   distance is HIT. Mirrors the JS pure step's `if (dist > range)
+///   continue` gate (the `>` means equality falls through). JS line
+///   ref: `js/sim/collision.js:3360–3361`.
+///
+/// Skip-gates (no event emitted):
+///   Enemies:
+///     - Inactive          (`!enemy.active`)
+///     - Warping           (`enemy.warping`)
+///     - Mid death-flash   (`enemy.death_flash > 0`)
+///
+/// Defensive guards:
+///   - Empty enemy slice → no events.
+///   - `range < 0` → no events (no `dist >= 0` can satisfy `<= negative`).
+///
+/// JS line refs: `js/sim/collision.js:3324–3380`.
+pub fn detect_lightning_arc_hits(
+    arc: &CollisionLightningArc,
+    enemies: &[CollisionEnemy],
+    _ctx: &CollisionContext,
+    events: &mut Vec<CollisionEvent>,
+) {
+    // Defensive: empty enemy slice → nothing to detect.
+    // (JS collision.js:3329 — `if (!enemies || enemies.length === 0) return`).
+    if enemies.is_empty() {
+        return;
+    }
+
+    let origin_x = arc.origin_x;
+    let origin_y = arc.origin_y;
+    let range = arc.range;
+    let damage = arc.damage;
+
+    // Track the nearest in-range enemy across the scan. First iterated
+    // wins on tied distance — deterministic given the wrapper's input
+    // order. STRICT-LESS-THAN update preserves "first wins on tie".
+    // (JS collision.js:3339–3340).
+    let mut best_enemy_id: Option<u32> = None;
+    let mut best_dist: f32 = f32::INFINITY;
+
+    for enemy in enemies.iter() {
+        // Skip-gates: inactive / warping / death-flash.
+        // (JS collision.js:3344–3352).
+        if !enemy.active {
+            continue;
+        }
+        if enemy.warping {
+            continue;
+        }
+        if enemy.death_flash > 0 {
+            continue;
+        }
+
+        let dx = enemy.x - origin_x;
+        let dy = enemy.y - origin_y;
+        // `hypot`-equivalent sqrt feeds directly into the emitted
+        // `distance_to_target` field. INCLUSIVE boundary (`<= range`).
+        // (JS collision.js:3360 — `if (dist > range) continue`).
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist > range {
+            continue;
+        }
+
+        // Strict-less-than: a later enemy at identical distance does
+        // NOT displace the earlier-iterated one. Preserves "first
+        // iterated wins on tie" semantics.
+        // (JS collision.js:3366 — `if (dist < bestDist)`).
+        if dist < best_dist {
+            best_dist = dist;
+            best_enemy_id = Some(enemy.id);
+        }
+    }
+
+    if let Some(target_id) = best_enemy_id {
+        events.push(CollisionEvent::LightningArcHitEnemy {
+            target_id,
+            damage,
+            distance_to_target: best_dist,
+        });
     }
 }
