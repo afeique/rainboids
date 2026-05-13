@@ -40,12 +40,13 @@
 
 use rainboids_server::sim::collision::{
     detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_enemy_asteroid_hits,
-    detect_player_asteroid_hits, detect_player_drop_pickups, detect_player_enemy_bullet_hits,
-    detect_player_enemy_hits, CollisionAsteroid, CollisionBullet, CollisionContext, CollisionDrop,
-    CollisionEnemy, CollisionEnemyBullet, CollisionEvent, CollisionPlayer, ASTEROID_ENEMY_PUSH,
-    ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION,
-    ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE, OVERLAP_SEPARATION_RATIO,
-    PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE, SEPARATION_BUFFER,
+    detect_nova_blast_hits, detect_player_asteroid_hits, detect_player_drop_pickups,
+    detect_player_enemy_bullet_hits, detect_player_enemy_hits, CollisionAsteroid, CollisionBullet,
+    CollisionContext, CollisionDrop, CollisionEnemy, CollisionEnemyBullet, CollisionEvent,
+    CollisionPlayer, NovaBlast, ASTEROID_ENEMY_PUSH, ASTEROID_KNOCKBACK_MULTIPLIER,
+    BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION, ENEMY_ASTEROID_PUSH, OVERLAP_PUSH_FORCE,
+    OVERLAP_SEPARATION_RATIO, PLAYER_ASTEROID_COLLISION_DAMAGE, PLAYER_ENEMY_COLLISION_DAMAGE,
+    SEPARATION_BUFFER,
 };
 use rainboids_server::sim::drops::DropKind;
 
@@ -2429,4 +2430,95 @@ fn player_drop_two_players_one_drop() {
         .collect();
     player_ids.sort();
     assert_eq!(player_ids, vec![7, 8]);
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Nova-blast fixtures (Phase 2.5 — first power-weapon mirror).
+// ═════════════════════════════════════════════════════════════════════
+
+#[test]
+fn nova_blast_single_enemy_hit() {
+    let blast = NovaBlast { center_x: 100.0, center_y: 100.0, radius: 50.0, damage: 25.0 };
+    let enemies = vec![make_enemy(1, 120.0, 100.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_nova_blast_hits(&blast, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1);
+    match events[0] {
+        CollisionEvent::NovaHitEnemy { enemy_id, damage, distance_from_center, .. } => {
+            assert_eq!(enemy_id, 1);
+            approx_eq(damage, 25.0, "damage");
+            approx_eq(distance_from_center, 20.0, "distance");
+        }
+        _ => panic!("expected NovaHitEnemy"),
+    }
+}
+
+#[test]
+fn nova_blast_single_asteroid_hit() {
+    let blast = NovaBlast { center_x: 100.0, center_y: 100.0, radius: 60.0, damage: 10.0 };
+    let enemies: Vec<CollisionEnemy> = vec![];
+    let asteroids = vec![make_asteroid(42, 130.0, 100.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_nova_blast_hits(&blast, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 1);
+    match events[0] {
+        CollisionEvent::NovaHitAsteroid { asteroid_id, damage, distance_from_center, .. } => {
+            assert_eq!(asteroid_id, 42);
+            approx_eq(damage, 10.0, "damage");
+            approx_eq(distance_from_center, 30.0, "distance");
+        }
+        _ => panic!("expected NovaHitAsteroid"),
+    }
+}
+
+#[test]
+fn nova_blast_mixed_targets() {
+    let blast = NovaBlast { center_x: 0.0, center_y: 0.0, radius: 100.0, damage: 5.0 };
+    let enemies = vec![make_enemy(1, 30.0, 0.0), make_enemy(2, 0.0, 50.0)];
+    let asteroids = vec![make_asteroid(3, 60.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_nova_blast_hits(&blast, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 3);
+}
+
+#[test]
+fn nova_blast_geometry_miss() {
+    let blast = NovaBlast { center_x: 0.0, center_y: 0.0, radius: 50.0, damage: 5.0 };
+    let enemies = vec![make_enemy(1, 100.0, 100.0)];
+    let asteroids = vec![make_asteroid(2, 100.0, -100.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_nova_blast_hits(&blast, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0);
+}
+
+#[test]
+fn nova_blast_skip_gates() {
+    let blast = NovaBlast { center_x: 0.0, center_y: 0.0, radius: 100.0, damage: 5.0 };
+    let mut inactive_enemy = make_enemy(1, 10.0, 0.0); inactive_enemy.active = false;
+    let mut warping_enemy = make_enemy(2, 20.0, 0.0); warping_enemy.warping = true;
+    let mut inactive_ast = make_asteroid(3, 30.0, 0.0); inactive_ast.active = false;
+    let mut warping_ast = make_asteroid(4, 40.0, 0.0); warping_ast.warping = true;
+    let mut flash_ast = make_asteroid(5, 50.0, 0.0); flash_ast.death_flash = 1;
+    let enemies = vec![inactive_enemy, warping_enemy];
+    let asteroids = vec![inactive_ast, warping_ast, flash_ast];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_nova_blast_hits(&blast, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0, "all targets should be skipped");
+}
+
+#[test]
+fn nova_blast_zero_radius() {
+    let blast = NovaBlast { center_x: 0.0, center_y: 0.0, radius: 0.0, damage: 5.0 };
+    let enemies = vec![make_enemy(1, 1.0, 0.0)];
+    let asteroids: Vec<CollisionAsteroid> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_nova_blast_hits(&blast, &enemies, &asteroids, &ctx, &mut events);
+    assert_eq!(events.len(), 0);
 }
