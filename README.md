@@ -18,13 +18,20 @@ A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave s
 
 Visit **[rainboids.cat.computer](https://rainboids.cat.computer)** in any modern browser on a desktop or laptop.
 
-### Requires desktop or laptop
+### Plays on desktop and mobile
 
-Rainboids is **desktop / laptop only** — mouse and keyboard required. Phones and tablets see a "desktop only" splash and the game does not initialize.
+Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.91.0) ships a fundamentally different control scheme:
+
+- **Movement is automatic** — a reactive auto-pilot dodges nearby threats and keeps the ship clear of walls so the player can focus on aiming and firing.
+- **Tap to shoot** — tap an enemy or asteroid and the primary weapon snaps to that target and fires. Taps on empty space fire toward the tap point.
+- **Long-press to swap weapons** — press and hold anywhere for ~300 ms to open the weapon radial; drag to highlight; release on a wedge to equip; release outside the ring to cancel.
+- **Portrait HUD** — non-essential top-screen overlays are suppressed in portrait orientation to free up screen real estate.
+
+Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode on a desktop, `?mobile=0` disables it on a touch device.
 
 ## Version and History
 
-Current version: **5.73.0**
+Current version: **5.91.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -51,6 +58,8 @@ Rainboids is a supercharged asteroids game featuring:
 
 ## Controls
 
+### Desktop (mouse + keyboard)
+
 - **Movement**: WASD
 - **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate. A red laser-pointer beam shows where your next primary shot will land — with a tick at the bullet's max range, a reticle around the first enemy/asteroid in line, and fading reticles around any further targets piercing builds will punch through.
 - **Fire primary**: Hold left-click or ↑ arrow
@@ -65,6 +74,14 @@ Rainboids is a supercharged asteroids game featuring:
 - **Switch defense skill**: Pause menu → SKILLS tab (all 6 free, click to equip)
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
+
+### Mobile (touch)
+
+- **Movement**: Auto-pilot (no on-screen joystick) — the ship dodges threats automatically. The player never directly controls movement.
+- **Aim + fire (tap)**: Tap an enemy or asteroid to snap aim onto it and fire one shot. Taps on empty space fire toward the tap point. Taps within ~48 px of an entity's centre snap to that entity.
+- **Weapon radial (long-press)**: Press and hold anywhere on the canvas for ~300 ms to open the primary-weapon radial. Drag to highlight a wedge; release on the wedge to equip; release outside the ring to cancel.
+- **Pause / shop**: same top-right buttons as desktop.
+- **Portrait HUD**: top-screen target info panel and contextual hints are hidden to free up screen real estate; entity health bars above each enemy / asteroid take their place.
 
 ### Cheat Codes
 - **`[`**: +1000 Gold
@@ -415,6 +432,8 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── game-timer.js  #   Frame-counted timers (freeze during pause/shop)
 │       │   ├── version.js     #   VERSION export (single-source build tag)
 │       │   └── storage.js     #   localStorage helpers — settings + wave-start save (5.79.0)
+│       ├── platform/          # Device + viewport detection (5.91.0)
+│       │   └── platform-detect.js # isMobile / isPortrait / isTouchDevice + URL override
 │       ├── player/            # Player entity and subsystems
 │       │   ├── player.js      #   Player entity (movement, update, draw orchestration)
 │       │   ├── weapons.js     #   35 weapon methods (primary + power fire, charging, equip)
@@ -422,6 +441,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── progression.js #   18 leveling, powerup, stat methods
 │       │   ├── renderer.js    #   5 player draw methods
 │       │   ├── lifecycle.js   #   Damage, energy tanks, game-over (5.88.0)
+│       │   ├── auto-pilot.js  #   Reactive AI movement driver — mobile mode only (5.91.0)
 │       │   └── bullet.js      #   Player projectile entity
 │       ├── enemy/             # Enemy entity and subsystems
 │       │   ├── enemy.js       #   Enemy entity (10 types, update/draw orchestration)
@@ -466,7 +486,8 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   └── music-player.js #  Background music player with playlist
 │       ├── ui/                # DOM UI and input
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button)
-│       │   ├── input-handler.js # Keyboard + mouse input (desktop-only build)
+│       │   ├── input-handler.js # Keyboard + mouse input (desktop)
+│       │   ├── mobile-touch.js # Tap-to-shoot + long-press radial — touch devices (5.91.0)
 │       │   ├── event-setup.js #   All event listeners: input, shop, cheats, resize
 │       │   ├── radial-menu.js #   Held E/R/F radial picker for primary/power/skill
 │       │   ├── stats-overlay.js # Diablo-style stats screen (` key, 5.79.0)

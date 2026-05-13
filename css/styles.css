@@ -2886,3 +2886,61 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     pointer-events: none;
     z-index: 10000;
 }
+
+/* ─── 5.91.0 — Mobile-mode HUD adjustments ─────────────────────────────
+   `body.mobile-mode` is set on every mobile session; the additional
+   `body.mobile-portrait` class is toggled when the viewport is taller
+   than it is wide (re-evaluated on resize / orientationchange). All
+   rules here are gated by those classes so the desktop layout is
+   untouched.
+
+   Portrait rules: hide the contextual hint overlay (it overlaps
+   gameplay too much on a tall screen) and the DOM lives display
+   (energy tanks now render on canvas; the DOM mirror is redundant in
+   limited screen real estate). The on-canvas wave-info and timer
+   widgets are conditionally suppressed in `js/modules/hud/status.js`
+   for the same reason.
+*/
+body.mobile-mode {
+    /* Disable user-select + tap highlight so long-press doesn't pop the
+       system text-selection magnifier on iOS. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    /* Prevent rubber-band scrolling on touchmove. */
+    overscroll-behavior: none;
+    touch-action: none;
+}
+
+body.mobile-mode #gameCanvas,
+body.mobile-mode #glCanvas,
+body.mobile-mode #bulletCanvas {
+    touch-action: none;
+}
+
+body.mobile-portrait #hint-overlay {
+    display: none !important;
+}
+
+body.mobile-portrait #lives-display {
+    display: none !important;
+}
+
+/* Keyboard-control hint cluster in the pause menu — irrelevant on
+   touch. Hidden in mobile-mode regardless of orientation. */
+body.mobile-mode .kbd,
+body.mobile-mode .kbd-cluster,
+body.mobile-mode .kbd-sprite-text,
+body.mobile-mode .kbd-sprite-cluster,
+body.mobile-mode .kbd-mouse-svg {
+    display: none !important;
+}
+
+/* Shrink the top-right pause/shop chrome a notch so it doesn't crowd
+   the wave-info zone in portrait. */
+body.mobile-portrait #hud-pause-btn,
+body.mobile-portrait #hud-shop-btn {
+    transform: scale(0.85);
+    transform-origin: top right;
+}
+

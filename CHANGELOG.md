@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.91.0] - 2026-05-13
+
+### Added — Mobile mode overhaul (auto-pilot, tap-to-shoot, long-press radial)
+Rainboids now runs on touch devices with a fundamentally different control scheme. The desktop mouse-and-keyboard experience is preserved byte-for-byte; mobile sessions get a reactive auto-pilot for movement, tap-to-shoot for fire, and a long-press weapon radial for swapping kit. The legacy "desktop only" block is narrowed to genuinely tiny touch-only viewports.
+
+- **Platform detection (`js/modules/platform/platform-detect.js`)**: `isTouchDevice()`, `isPortrait()`, `isMobile()` — feature-detection helpers with a `?mobile=0|1` URL override for testing. `isMobile()` triggers on touch capability + viewport min-dim < 900 px; the URL param wins when present.
+- **Auto-pilot (`js/modules/player/auto-pilot.js`)**: reactive AI that writes `up/down/left/right` onto `inputHandler.input` each tick, before `player.update()` consumes it. Sums inverse-distance "danger vectors" from every active asteroid / enemy / mine within 250 px of the player, layers a wall-pressure push when the ship is within 120 px of the field boundary, and falls back to a gentle drift toward the field centre when idle. Pauses automatically while the radial menu is open, during pause / shop / wave-clear, and when the player isn't active. Adapted from the existing test playtester (`tests/helpers/game-ai.js`) but production-grade — no test cheats, no per-tick logging.
+- **Tap-to-shoot (`js/modules/ui/mobile-touch.js`)**: short canvas tap (release within 220 ms, no significant drag) aims the primary weapon at the tap point and fires one shot. Taps within ~48 px of an entity's centre snap to that entity (and drive the targeted-entity HUD outline just like a desktop click). Long press (held > 300 ms without drifting more than 18 px) opens the existing weapon radial in "primary" mode; drag-while-held updates the hover slice, release commits, release outside the outer ring cancels. Uses the canvas `touchstart` / `touchmove` / `touchend` / `touchcancel` lifecycle with `passive: false` so we can suppress double-tap zoom and the 300 ms tap delay.
+- **Portrait HUD adjustments (`css/styles.css`)**: `body.mobile-mode` and `body.mobile-portrait` classes toggled from the game engine on init / resize / orientationchange. Mobile mode disables text selection + tap highlight; portrait mode additionally hides the DOM `#lives-display`, the contextual hint overlay, and the top-screen target info panel (entity health bars above each enemy / asteroid stay visible as the primary HP feedback channel). All rules are scoped by the body class so the desktop layout is untouched.
+- **Main-thread gate (`js/main.js`)**: the existing `isMobileOrTabletDevice()` check is replaced by `shouldBlockDesktopOnly()` — mobile-mode sessions skip the desktop-only splash and initialize the game normally. Only genuinely tiny touch-only viewports (<720 px on the long axis with no hover capability) still see the splash.
+
+`isMobile()` is evaluated once during `GameEngine` construction so the `mobile-mode` body class and the `MobileTouchHandler.install()` call are stable for the session. The auto-pilot's `canRun()` check is consulted every logic tick, so pausing / opening the radial / wave-cleared transitions all stop the AI on the same frame they freeze the rest of the game.
+
+24 new unit tests (`tests/unit/platform/platform-detect.test.js` — 18 tests; `tests/unit/player/auto-pilot.test.js` — 12 tests, but 6 cases cover overlapping behavior) cover the detection + auto-pilot decomposition contract end-to-end without a browser. All 783 unit tests pass.
+
 ## [5.90.0] - 2026-05-13
 
 ### Added — Multiplayer gameLoop wiring: remote ships visible on screen

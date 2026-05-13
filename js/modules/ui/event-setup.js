@@ -26,11 +26,15 @@ export function setupEventListeners() {
         if (this.particleRenderer) this.particleRenderer.resize(this.width, this.height);
         if (this.bulletRenderer && this.bulletRenderer.resize) this.bulletRenderer.resize(this.width, this.height);
         this.events.emit('ui:check-orientation');
+        // 5.91 — re-evaluate the portrait body class so the CSS HUD
+        // adjustments track real-time rotation on mobile.
+        if (this._updateMobileBodyClasses) this._updateMobileBodyClasses();
     });
 
     // Handle orientation change
     window.addEventListener('orientationchange', () => {
         this.events.emit('ui:check-orientation');
+        if (this._updateMobileBodyClasses) this._updateMobileBodyClasses();
     });
 
     // Handle pause and test keys
