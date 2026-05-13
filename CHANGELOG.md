@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.93.0] - 2026-05-13
+
+### Changed — Shift-to-dash control replaces PHASE_DASH defense skill
+- Dash is now a core movement tool on the Shift key (1.5s cooldown), not a defense skill
+- Removed PHASE_DASH from DEFENSE_SKILLS and its upgrades (EXTENDED_PHASE, AFTERIMAGE, QUICK_PHASE) — orphaned upgrades deleted; future dash upgrades will live elsewhere if added
+- Removed PHASE_DASH from MP_UNSAFE_ABILITIES_LIST — dash now works in MP (pure player input + position kinematics, no server-side mirror needed)
+- Dash still grants brief i-frames during the dash burst (~250ms) — exposed via `player.isDashIFrameActive()` and checked at the two collision-system damage-zero sites plus the afterimage-ghost renderer
+- The `phaseDash.wav` sound still plays on every dash (the audio file and registration are unchanged)
+- Cheat-code interaction: SHIFT+digit no longer combines with anything game-side. The dashPulse fires once on Shift keydown; subsequent digit keys with shiftKey=true do not retrigger it. The legacy SHIFT+digit cheats had already been removed in 5.64.11
+- Mobile mode does not yet expose dash; a tap-gesture variant is deferred to a future iteration
+
 ## [5.92.0] - 2026-05-13
 
 ### Added — Mobile UX overhaul v2 (responsive layout, simplified HUD, auto-fire power weapons)

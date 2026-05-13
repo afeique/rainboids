@@ -226,30 +226,31 @@ describe('Player.activateSkill — MP feature-flag gate', () => {
         expect(player.activeSkillEffects.has('BULWARK')).toBe(true);
     });
 
-    test('PHASE_DASH + online → no state change (suppressed)', () => {
-        setOnline(true);
-        player.activeSkill = 'PHASE_DASH';
-        const before = snapshotState(player);
-        const result = player.activateSkill();
-        const after = snapshotState(player);
-        expect(result).toBe(false);
-        expect(stateUnchanged(before, after)).toBe(true);
-    });
-
-    test('PHASE_DASH + solo → state changes', () => {
+    // 5.93.0 — PHASE_DASH was removed from DEFENSE_SKILLS and is now
+    // a core SHIFT-key movement primitive on Player.update. The
+    // activateSkill path no longer has a PHASE_DASH branch — selecting
+    // it as `activeSkill` would fall through the DEFENSE_SKILLS lookup
+    // miss and return false. See the shift-dash test suite for the
+    // new dash trigger contract.
+    test('PHASE_DASH is no longer recognized by activateSkill (5.93.0)', () => {
         setOnline(false);
         player.activeSkill = 'PHASE_DASH';
         const result = player.activateSkill();
-        expect(result).toBe(true);
-        expect(player.activeSkillCooldown).toBeGreaterThan(0);
-        expect(player.activeSkillEffects.has('PHASE_DASH')).toBe(true);
+        // DEFENSE_SKILLS no longer contains PHASE_DASH, so activateSkill
+        // returns false at the lookup-miss branch even when solo. The
+        // important contract: no skill effect is set, no cooldown is
+        // burned. Dash is triggered via Player._triggerDash, not here.
+        expect(result).toBe(false);
+        expect(player.activeSkillCooldown).toBe(0);
+        expect(player.activeSkillEffects.has('PHASE_DASH')).toBe(false);
     });
 
-    test('every defense skill is suppressed when online', () => {
+    test('every remaining defense skill is suppressed when online', () => {
+        // 5.93.0 — PHASE_DASH removed from this list (now a SHIFT-key
+        // core movement primitive). Five skills remain MP-gated.
         const defenseSkills = [
             'BULWARK',
             'REPAIR_NANITES',
-            'PHASE_DASH',
             'DEFLECTOR_ORBS',
             'EMP_PULSE',
             'TRACTOR_SHIELD',
@@ -335,5 +336,14 @@ describe('Player._isAbilitySuppressedByMp — direct helper contract', () => {
         setOnline(true);
         expect(player._isAbilitySuppressedByMp('UNKNOWN_THING')).toBe(false);
         expect(player._isAbilitySuppressedByMp('')).toBe(false);
+    });
+
+    test('driver online + PHASE_DASH → returns false (no longer MP-unsafe in 5.93.0)', () => {
+        // PHASE_DASH was removed from MP_UNSAFE_ABILITIES_LIST when it
+        // was promoted to a core SHIFT-key movement primitive. The
+        // helper now treats it as an unknown id and falls through to
+        // the permissive default — i.e., the dash is allowed in MP.
+        setOnline(true);
+        expect(player._isAbilitySuppressedByMp('PHASE_DASH')).toBe(false);
     });
 });

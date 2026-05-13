@@ -396,19 +396,12 @@ export const DEFENSE_SKILLS = {
         unlockWave: 2,
         upgrades: ['POTENCY', 'EXTENDED_CARE', 'EMERGENCY_PROTOCOL'],
     },
-    PHASE_DASH: {
-        id: 'PHASE_DASH',
-        name: 'Phase Dash',
-        description: 'Invulnerable dash 150px',
-        icon: 'wind',
-        color: '#aa88ff',
-        cooldown: 8000,
-        duration: 300,
-        dashDistance: 150,
-        cost: 2,
-        unlockWave: 3,
-        upgrades: ['EXTENDED_PHASE', 'AFTERIMAGE', 'QUICK_PHASE'],
-    },
+    // 5.93.0 — PHASE_DASH removed from DEFENSE_SKILLS. Dash is now a
+    // core movement primitive on the SHIFT key (see Player._triggerDash
+    // and the SHIFT keymap in `js/modules/ui/input-handler.js`). The
+    // EXTENDED_PHASE / AFTERIMAGE / QUICK_PHASE upgrades were orphaned
+    // when the skill itself was removed and were deleted along with it;
+    // any future dash upgrades will live elsewhere if added.
     DEFLECTOR_ORBS: {
         id: 'DEFLECTOR_ORBS',
         name: 'Deflector Orbs',
@@ -465,10 +458,10 @@ export const SKILL_UPGRADES = {
     EXTENDED_CARE:    { id: 'EXTENDED_CARE',    name: 'Extended Care',    description: '+2s duration per stack',               cost: 2, maxStacks: 2, skill: 'REPAIR_NANITES', icon: 'stopwatch' },
     EMERGENCY_PROTOCOL:{ id:'EMERGENCY_PROTOCOL',name:'Emergency',        description: 'Auto-activates below 20% HP',         cost: 3, maxStacks: 1, skill: 'REPAIR_NANITES', icon: 'siren' },
 
-    // Phase Dash
-    EXTENDED_PHASE:   { id: 'EXTENDED_PHASE',   name: 'Extended Phase',   description: '+0.2s invulnerability per stack',      cost: 2, maxStacks: 2, skill: 'PHASE_DASH', icon: 'stopwatch' },
-    AFTERIMAGE:       { id: 'AFTERIMAGE',       name: 'Afterimage',       description: 'Leave a damaging trail',              cost: 3, maxStacks: 1, skill: 'PHASE_DASH', icon: 'ghost' },
-    QUICK_PHASE:      { id: 'QUICK_PHASE',      name: 'Quick Phase',      description: '-2s cooldown per stack',               cost: 2, maxStacks: 2, skill: 'PHASE_DASH', icon: 'fast-forward' },
+    // 5.93.0 — Phase Dash upgrades (EXTENDED_PHASE, AFTERIMAGE,
+    // QUICK_PHASE) deleted along with the PHASE_DASH defense skill.
+    // Dash is now a core SHIFT-key movement primitive with no
+    // skill-tree upgrades.
 
     // Deflector Orbs
     EXTRA_ORB:        { id: 'EXTRA_ORB',        name: 'Extra Orb',        description: '+1 orbiting orb per stack',            cost: 2, maxStacks: 2, skill: 'DEFLECTOR_ORBS', icon: 'crystal-ball' },

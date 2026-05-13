@@ -13,9 +13,13 @@
 //     hidden `_tankProgress` counter; each full max-HP-worth of
 //     overflow grants +1 spare, capped at 3.
 //
-// Defense skills that grant deliberate invuln (LAST_STAND, REFLEXES,
-// PHASE_DASH, wave-start grace) still call makeInvincible — those are
-// active-ability windows, not damage-aftermath grace.
+// Defense skills / movement primitives that grant deliberate invuln
+// (LAST_STAND, REFLEXES, the SHIFT-key dash burst, wave-start grace)
+// still call makeInvincible or rely on player.isDashIFrameActive() —
+// those are active-ability windows, not damage-aftermath grace.
+// (5.93.0 — PHASE_DASH was promoted from a defense skill to the
+// SHIFT-key core movement primitive; its i-frames now live in
+// player.isDashIFrameActive(), checked at the collision sites.)
 
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
