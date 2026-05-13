@@ -44,6 +44,9 @@ import {
     LANCE_DEFAULT_WIDTH,
     LANCE_DEFAULT_LENGTH,
     LANCE_DEFAULT_DAMAGE,
+    detectMissileSalvoHits,
+    MISSILE_KNOCK,
+    MISSILE_DEFAULT_RADIUS,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
@@ -2964,5 +2967,407 @@ describe('detectLanceBeamHits — empty / degenerate inputs', () => {
         detectLanceBeamHits(lance, [e], null, ctx, events);
         expect(events).toHaveLength(1);
         expect(events[0].type).toBe('lance_hit_enemy');
+    });
+});
+
+// MISSILE SALVO — directional projectile vs enemy/asteroid (first-hit)
+// =====================================================================
+//
+// Each missile fires at most once per tick. On hit it emits ONE event
+// of type `missile_hit_enemy` OR `missile_hit_asteroid`. Iteration
+// order is enemies-first then asteroids, mirroring legacy
+// `checkMissileCollisions`. Knockback is computed from the missile's
+// direction of travel and pre-scaled in the event payload — for
+// asteroid hits, the asteroid 0.6× discount is applied inside the
+// pure step so the wrapper just adds `knockX`/`knockY` to the
+// target's velocity with no further scaling.
+
+// ---------------------------------------------------------------------
+// Helpers — build minimal missile / enemy / asteroid shapes for the
+// missile-salvo pair. We intentionally do NOT lean on freshBulletState
+// because a missile is its own projectile kind with its own field set
+// (the legacy `activeMissiles` array holds bespoke objects, not
+// pooled bullets).
+// ---------------------------------------------------------------------
+
+/** Place a missile at (x, y) traveling in (+x, 0) by default. The
+ *  default damage 3 / radius 6 match the legacy `MISSILE_SALVO`
+ *  weapon-data values + the `+ 6` radius literal in the legacy
+ *  impact test. */
+function missile(id, x, y, overrides = {}) {
+    return {
+        id,
+        x, y,
+        vx: overrides.vx !== undefined ? overrides.vx : 5,
+        vy: overrides.vy !== undefined ? overrides.vy : 0,
+        radius: overrides.radius !== undefined ? overrides.radius : MISSILE_DEFAULT_RADIUS,
+        damage: overrides.damage !== undefined ? overrides.damage : 3,
+        active: overrides.active !== undefined ? overrides.active : true,
+    };
+}
+
+/** HUNTER-shaped enemy for missile tests. Same pattern as the nova
+ *  helper — fields not on the freshEnemyState whitelist (radius +
+ *  skip-gate fields) are attached after construction. */
+function missileEnemy(id, x, y, overrides = {}) {
+    const base = freshEnemyState('HUNTER', {
+        id, x, y,
+        active: overrides.active,
+    });
+    base.radius = overrides.radius !== undefined ? overrides.radius : 15;
+    if (overrides.warping !== undefined) base.warping = overrides.warping;
+    if (overrides.deathFlash !== undefined) base.deathFlash = overrides.deathFlash;
+    if (overrides._deathFlash !== undefined) base._deathFlash = overrides._deathFlash;
+    return base;
+}
+
+/** Default-sized asteroid for missile tests. */
+function missileAsteroid(id, x, y, overrides = {}) {
+    return freshAsteroidState(id, {
+        x, y, radius: 20, hp: 10, maxHp: 10, ...overrides,
+    });
+}
+
+// ---------------------------------------------------------------------
+// MISSILE_KNOCK constant — pin the legacy value so the wrapper can
+// safely import it for telemetry / replay comparisons.
+// ---------------------------------------------------------------------
+
+describe('missile-salvo collision constants', () => {
+    test('MISSILE_KNOCK matches legacy collision-system.js value', () => {
+        // Legacy `const MISSILE_KNOCK = 9 * knockMul` at line 1373.
+        // The pure-step export is the raw 9 (no per-player upgrade
+        // multiplier).
+        expect(MISSILE_KNOCK).toBe(9);
+    });
+    test('MISSILE_DEFAULT_RADIUS matches legacy `+ 6` literal', () => {
+        // Legacy radius-sum tests at lines 1420 and 1438 add `+ 6` to
+        // the target radius for the missile's own size.
+        expect(MISSILE_DEFAULT_RADIUS).toBe(6);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Geometry — basic single-target hits + the strict-less-than boundary.
+// ---------------------------------------------------------------------
+
+describe('detectMissileSalvoHits — geometry', () => {
+    test('single enemy hit emits one missile_hit_enemy event with all 5 non-type fields', () => {
+        // Missile at (0,0) moving +x at speed 5, enemy at (10, 0) with
+        // radius 15. Sum = 21, dist = 10 < 21 ⇒ hit.
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 10, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.type).toBe('missile_hit_enemy');
+        expect(ev.missileId).toBe(1);
+        expect(ev.targetId).toBe(101);
+        expect(ev.damage).toBe(3);
+        // Missile moving +x ⇒ knockX positive, knockY zero.
+        expect(ev.knockX).toBeCloseTo(MISSILE_KNOCK, 6);
+        expect(ev.knockY).toBeCloseTo(0, 6);
+        // Confirm no stray fields — the contract is 5 non-type keys.
+        expect(Object.keys(ev).sort()).toEqual(
+            ['damage', 'knockX', 'knockY', 'missileId', 'targetId', 'type'].sort()
+        );
+    });
+
+    test('single asteroid hit emits one missile_hit_asteroid event with 0.6× knockback', () => {
+        // No enemies, asteroid at (12, 0) radius 20 — dist 12 < 26 ⇒ hit.
+        const m = missile(1, 0, 0);
+        const a = missileAsteroid(201, 12, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev.type).toBe('missile_hit_asteroid');
+        expect(ev.missileId).toBe(1);
+        expect(ev.targetId).toBe(201);
+        expect(ev.damage).toBe(3);
+        // Asteroid path: knockX = kx * MISSILE_KNOCK * 0.6 with kx=1.
+        expect(ev.knockX).toBeCloseTo(MISSILE_KNOCK * 0.6, 6);
+        expect(ev.knockY).toBeCloseTo(0, 6);
+    });
+
+    test('missile far from all targets emits no event', () => {
+        // Missile at (0,0), enemy at (500, 500), asteroid at (-500,
+        // 500). Way outside the radius sum either way.
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 500, 500);
+        const a = missileAsteroid(201, -500, 500);
+        const events = [];
+        detectMissileSalvoHits([m], [e], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('dist EXACTLY equal to radius sum is a MISS (strict less-than boundary, matches legacy)', () => {
+        // Enemy radius 15 + missile radius 6 = 21. Place enemy at
+        // (21, 0) — dist 21 == 21. Legacy uses `<` strict, so this
+        // is a MISS by 0.
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 21, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+
+        // Sanity: just-inside (20.99) IS a hit, pinning the boundary.
+        const eIn = missileEnemy(102, 20.99, 0);
+        const events2 = [];
+        detectMissileSalvoHits([m], [eIn], [], ctx, events2);
+        expect(events2).toHaveLength(1);
+    });
+
+    test('asteroid baseRadius takes precedence over radius when both present', () => {
+        // baseRadius 30 — missile + asteroid sum = 36. Place at
+        // (35, 0). dist 35 < 36 ⇒ hit (even though `radius` is 20
+        // which would predict no hit at dist 35 > 26).
+        const m = missile(1, 0, 0);
+        const a = missileAsteroid(201, 35, 0, { radius: 20 });
+        a.baseRadius = 30;
+        const events = [];
+        detectMissileSalvoHits([m], [], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('missile_hit_asteroid');
+    });
+});
+
+// ---------------------------------------------------------------------
+// Iteration order — enemies-first, then asteroids; per-missile scan
+// independent.
+// ---------------------------------------------------------------------
+
+describe('detectMissileSalvoHits — iteration order', () => {
+    test('enemy is preferred over asteroid when both are reachable', () => {
+        // Both targets within range of a single missile at (0,0). The
+        // enemy should fire FIRST and the asteroid scan should never
+        // even start — exactly one event, of type missile_hit_enemy.
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 10, 0);          // dist 10 < 21
+        const a = missileAsteroid(201, 0, 10);       // dist 10 < 26
+        const events = [];
+        detectMissileSalvoHits([m], [e], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('missile_hit_enemy');
+        expect(events[0].targetId).toBe(101);
+    });
+
+    test('multiple missiles each fire independently against their own target', () => {
+        const m1 = missile(1, 0, 0);    // hits e
+        const m2 = missile(2, 1000, 0); // hits a (asteroid placed near m2)
+        const e = missileEnemy(101, 10, 0);
+        const a = missileAsteroid(201, 1010, 0);
+        const events = [];
+        detectMissileSalvoHits([m1, m2], [e], [a], ctx, events);
+        // One enemy event + one asteroid event. Order: m1 first, then m2.
+        expect(events).toHaveLength(2);
+        expect(events[0].type).toBe('missile_hit_enemy');
+        expect(events[0].missileId).toBe(1);
+        expect(events[1].type).toBe('missile_hit_asteroid');
+        expect(events[1].missileId).toBe(2);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Knockback math — direction is unit-vector of missile velocity;
+// asteroid path applies the 0.6× factor; zero velocity is safe.
+// ---------------------------------------------------------------------
+
+describe('detectMissileSalvoHits — knockback math', () => {
+    test('knockX/knockY are missile velocity normalized × MISSILE_KNOCK', () => {
+        // Missile moving (3, 4) — magnitude 5, unit vector (0.6, 0.8).
+        const m = missile(1, 0, 0, { vx: 3, vy: 4 });
+        const e = missileEnemy(101, 10, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].knockX).toBeCloseTo(0.6 * MISSILE_KNOCK, 6);
+        expect(events[0].knockY).toBeCloseTo(0.8 * MISSILE_KNOCK, 6);
+    });
+
+    test('asteroid knockback is scaled by 0.6 (asteroid discount applied inside pure step)', () => {
+        // Same (3, 4) missile, but hits an asteroid this time.
+        const m = missile(1, 0, 0, { vx: 3, vy: 4 });
+        const a = missileAsteroid(201, 10, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('missile_hit_asteroid');
+        expect(events[0].knockX).toBeCloseTo(0.6 * MISSILE_KNOCK * 0.6, 6);
+        expect(events[0].knockY).toBeCloseTo(0.8 * MISSILE_KNOCK * 0.6, 6);
+    });
+
+    test('zero-velocity missile yields zero knockback (no NaN, no crash)', () => {
+        // Stationary missile — `mvLen = hypot(0, 0) || 1 = 1`, so
+        // kx = ky = 0. The event STILL emits — the missile is still
+        // in contact range — just with no knockback impulse.
+        const m = missile(1, 0, 0, { vx: 0, vy: 0 });
+        const e = missileEnemy(101, 10, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].knockX).toBe(0);
+        expect(events[0].knockY).toBe(0);
+        // Defensive: ensure no NaN snuck in.
+        expect(Number.isNaN(events[0].knockX)).toBe(false);
+        expect(Number.isNaN(events[0].knockY)).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Skip-gates — inactive missile, warping target, mid-death-flash
+// enemy.
+// ---------------------------------------------------------------------
+
+describe('detectMissileSalvoHits — skip gates', () => {
+    test('inactive missile emits no event (even with target in range)', () => {
+        const m = missile(1, 0, 0, { active: false });
+        const e = missileEnemy(101, 10, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping enemy is skipped (not impacted)', () => {
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 10, 0, { warping: true });
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping asteroid is skipped (not impacted)', () => {
+        // No enemies — the missile would otherwise hit the asteroid.
+        const m = missile(1, 0, 0);
+        const a = missileAsteroid(201, 12, 0, { warping: true });
+        const events = [];
+        detectMissileSalvoHits([m], [], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('mid-death-flash enemy is skipped (`deathFlash > 0`)', () => {
+        // Strict superset of legacy — legacy line 1417 doesn't gate
+        // on death-flash, but the pure step adds this for parity with
+        // every other pair.
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 10, 0, { deathFlash: 5 });
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('mid-death-flash enemy is also skipped via legacy `_deathFlash`', () => {
+        // Dual-name support — legacy field still gates.
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 10, 0, { _deathFlash: 3 });
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('inactive enemy is skipped (no event)', () => {
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 10, 0, { active: false });
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Damage propagation — missile.damage flows verbatim into the event.
+// ---------------------------------------------------------------------
+
+describe('detectMissileSalvoHits — damage propagation', () => {
+    test('missile.damage is copied verbatim into the event payload', () => {
+        // Custom damage value flows through unchanged.
+        const m = missile(1, 0, 0, { damage: 17.5 });
+        const e = missileEnemy(101, 10, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].damage).toBe(17.5);
+    });
+
+    test('damage propagation is identical for the asteroid path', () => {
+        const m = missile(1, 0, 0, { damage: 9.25 });
+        const a = missileAsteroid(201, 12, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [], [a], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].damage).toBe(9.25);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Empty / null inputs — defensive coverage. The pure step must NEVER
+// throw on missing arrays.
+// ---------------------------------------------------------------------
+
+describe('detectMissileSalvoHits — empty/null inputs', () => {
+    test('empty missiles → no events, no crash', () => {
+        const events = [];
+        detectMissileSalvoHits([], [missileEnemy(101, 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('empty enemies + empty asteroids → no events, no crash', () => {
+        const events = [];
+        detectMissileSalvoHits([missile(1, 0, 0)], [], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('null missiles → no crash, no events', () => {
+        const events = [];
+        expect(() => detectMissileSalvoHits(null, [], [], ctx, events)).not.toThrow();
+        expect(events).toHaveLength(0);
+    });
+
+    test('null enemies + asteroid hit → still emits the asteroid event', () => {
+        // Defensive: missing enemies array shouldn't prevent the
+        // asteroid scan from running.
+        const m = missile(1, 0, 0);
+        const a = missileAsteroid(201, 12, 0);
+        const events = [];
+        detectMissileSalvoHits([m], null, [a], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('missile_hit_asteroid');
+    });
+
+    test('null asteroids + enemy hit → still emits the enemy event', () => {
+        const m = missile(1, 0, 0);
+        const e = missileEnemy(101, 10, 0);
+        const events = [];
+        detectMissileSalvoHits([m], [e], null, ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('missile_hit_enemy');
+    });
+});
+
+// ---------------------------------------------------------------------
+// First-hit-wins — a missile in range of multiple targets fires once.
+// ---------------------------------------------------------------------
+
+describe('detectMissileSalvoHits — first-hit-wins per missile', () => {
+    test('one missile in range of two enemies emits exactly ONE event (the first iterated)', () => {
+        const m = missile(1, 0, 0);
+        // BOTH enemies in range; e1 is iterated first.
+        const e1 = missileEnemy(101, 10, 0);
+        const e2 = missileEnemy(102, 0, 10);
+        const events = [];
+        detectMissileSalvoHits([m], [e1, e2], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].targetId).toBe(101);
+    });
+
+    test('one missile in range of two asteroids emits exactly ONE event (the first iterated)', () => {
+        const m = missile(1, 0, 0);
+        const a1 = missileAsteroid(201, 12, 0);
+        const a2 = missileAsteroid(202, 0, 12);
+        const events = [];
+        detectMissileSalvoHits([m], [], [a1, a2], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].targetId).toBe(201);
     });
 });
