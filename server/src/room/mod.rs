@@ -19,6 +19,7 @@ use crate::sim::input::PlayerInput;
 use crate::sim::{rng as sim_rng, simulate_tick, GameState, PlayerInputs};
 use crate::util::id::{PlayerId, RoomId};
 
+pub mod collision;
 pub mod handle;
 pub mod lifecycle;
 pub mod safe_spawn;
@@ -104,6 +105,10 @@ pub struct Room {
     players: Vec<Player>,
     cmd_rx: mpsc::Receiver<RoomInbound>,
     pending_events: Vec<GameEvent>,
+    /// Side-state bridging the gap between wire-format collections and the
+    /// pure collision detect-steps (asteroid HP, drop active-latch, bullet
+    /// pierce sets). See `room::collision::CollisionSideState`.
+    collision_side: collision::CollisionSideState,
     grace: HashMap<PlayerId, GraceTimer>,
     cfg: std::sync::Arc<Config>,
     encode_buf: Vec<u8>,
@@ -128,6 +133,7 @@ impl Room {
             players: Vec::new(),
             cmd_rx: rx,
             pending_events: Vec::new(),
+            collision_side: collision::CollisionSideState::new(),
             grace: HashMap::new(),
             cfg,
             encode_buf: Vec::with_capacity(8 * 1024),
@@ -347,6 +353,16 @@ impl Room {
             &inputs,
             dt,
             &mut self.rng,
+            &mut self.pending_events,
+        );
+        // Collision drain: build view-types from GameState, run pair-detection
+        // pure steps, drain `CollisionEvent`s into HP / despawn / wire-event
+        // mutations. MVD scope: bullets / enemies / asteroids / drops are
+        // empty Vecs on GameState, so the drain is a guaranteed no-op today
+        // and a fully-wired pipeline when later PRs populate the collections.
+        collision::drain(
+            &mut self.state,
+            &mut self.collision_side,
             &mut self.pending_events,
         );
         self.tick = self.tick.wrapping_add(1);
