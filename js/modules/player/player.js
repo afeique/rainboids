@@ -10,6 +10,12 @@ import * as playerRenderer from './renderer.js';
 // `ShipState` from `this`, calls `updateShip`, and writes the result
 // back. Behavior is byte-for-byte equivalent to the legacy inline code.
 import { updateShip } from '../../sim/ship.js';
+// MP feature-flag gate: in online mode, abilities that lack full
+// Rust-mirror parity are suppressed at the fire-site so they can't
+// desync gameplay. Solo runs are unaffected (the helper returns true
+// when no online driver is attached). See `js/net/mp-feature-flags.js`
+// for the per-ability allowlist.
+import { isAbilityMpSafe } from '../../net/mp-feature-flags.js';
 
 export class Player {
     constructor() {
@@ -310,7 +316,26 @@ export class Player {
     // ── Weapon bindings ──
     getBulletVelocityDamageMult(id)     { return weapons.getBulletVelocityDamageMult.call(this, id); }
 
+    // ── MP feature-flag suppression helper ─────────────────────────────────
+    // Returns true when an ability should be suppressed because the engine
+    // is online AND the ability lacks full Rust-mirror parity. The engine
+    // driver lives on `window.engineDriver` (set in `main.js`); the same
+    // lookup convention game-engine.js's `_mpDriverIfOnline()` uses. In
+    // solo runs (or before the driver is attached) this returns false and
+    // the gate is a no-op.
+    _isAbilitySuppressedByMp(abilityId) {
+        const driver = (typeof window !== 'undefined') ? window.engineDriver : null;
+        if (!driver || !driver.isOnline) return false;
+        return !isAbilityMpSafe(abilityId);
+    }
+
     firePower(bulletPool, audioManager, particlePool) {
+        // MP gate — suppress power weapons that don't yet have a Rust mirror.
+        // The cooldown gate is upstream in weapons.updateChargingSystem(),
+        // and the caller (weapons.js:163) clears `input.fireSecondary`
+        // unconditionally after calling us, so an early-return here cleanly
+        // no-ops: no entity spawn, no audio, no FX, no cooldown consumed.
+        if (this._isAbilitySuppressedByMp(this.activePower)) return;
         return weapons.firePower.call(this, bulletPool, audioManager, particlePool);
     }
 
@@ -812,6 +837,13 @@ export class Player {
     }
 
     activateSkill() {
+        // MP gate — all six defense skills mutate ship state in ways the
+        // server doesn't model yet, so they're suppressed in online mode.
+        // The Q-key one-shot pulse is consumed in update() regardless
+        // (see input.activateSkill = false right after the call site),
+        // so an early-return here means no cooldown, no FX, no audio,
+        // and the input stays consumed.
+        if (this._isAbilitySuppressedByMp(this.activeSkill)) return false;
         return skills.activateSkill.call(this);
     }
 
