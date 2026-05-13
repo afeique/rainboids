@@ -50,6 +50,18 @@ import {
     encodeClientMsg,
     encodeHello,
 } from './protocol.js';
+// Generated codec is the source of truth for the post-handshake variants
+// (Snapshot, Event, Input, Ack, Pong, …) — `protocol.js` still throws
+// `NotImplementedError` for those during decode. We import the generated
+// `decodeServerMsg` / `encodeClientMsg` under aliases and only fall back to
+// them when the hand-written codec hits the not-implemented branch. This
+// keeps the handshake path on the audited hand-written code while letting
+// the MP-mode engine driver receive decoded snapshots + send INPUT frames.
+import {
+    decodeServerMsg as decodeServerMsgGenerated,
+    encodeClientMsg as encodeClientMsgGenerated,
+    S2C as S2C_GENERATED,
+} from '../sim/protocol-generated.js';
 
 /** localStorage key for the persistent session UUID returned by Welcome. */
 export const SESSION_STORAGE_KEY = 'rainboids-session';
@@ -268,15 +280,22 @@ export class ConnectionTask {
             msg = decodeServerMsg(buf);
         } catch (err) {
             if (err instanceof NotImplementedError) {
-                // We received a v1+ variant the codec doesn't speak yet. Surface
-                // it as a soft `frame` event so the post-handshake layers can
-                // be filled in slice-by-slice; the handshake itself only
-                // cares about Welcome/Error.
-                this._emit('frame', { raw: buf, error: err });
+                // The hand-written codec doesn't speak this variant (Snapshot,
+                // Event, Ping live there). Try the generated codec which has
+                // full coverage. If it decodes cleanly we route through the
+                // post-Welcome dispatch like any other frame; if THAT also
+                // fails we keep the original "soft frame with error" behavior
+                // so the matchmaking layer is unaffected.
+                try {
+                    msg = decodeServerMsgGenerated(buf);
+                } catch {
+                    this._emit('frame', { raw: buf, error: err });
+                    return;
+                }
+            } else {
+                this._fail(new Error(`ConnectionTask: decodeServerMsg failed: ${err?.message ?? err}`));
                 return;
             }
-            this._fail(new Error(`ConnectionTask: decodeServerMsg failed: ${err?.message ?? err}`));
-            return;
         }
 
         this._emit('frame', { msg });
@@ -338,8 +357,27 @@ export class ConnectionTask {
             case S2C.PEER_LEFT:
                 this._emit('peer_left', { slot: msg.slot, reason: msg.reason });
                 return;
+            case S2C_GENERATED.SNAPSHOT:
+                // Decoded via the generated codec fallback in `_onMessage`.
+                // Emit a typed event so the engine driver can feed snapshots
+                // into Predictor + Interpolator without re-decoding. We stamp
+                // a client-side receive time (performance.now() when
+                // available, Date.now() in test/jsdom shims) so the
+                // interpolator has a stable monotonic clock to anchor its
+                // render-delay timeline against — the server tick alone
+                // doesn't carry wall-clock spacing.
+                this._emit('snapshot', {
+                    tick: msg.tick,
+                    baseTick: msg.baseTick,
+                    payload: msg.payload,
+                    recvTime: typeof performance !== 'undefined' && typeof performance.now === 'function'
+                        ? performance.now()
+                        : Date.now(),
+                });
+                return;
             default:
-                // Snapshot/Event/Ping — let listeners pick them up off `frame`.
+                // Event/Ping (and any future variants) — let listeners pick
+                // them up off `frame`.
                 return;
         }
     }
@@ -417,6 +455,33 @@ export class ConnectionTask {
     /** Send `ClientMsg::LeaveRoom`. Server replies with `RoomLeft`. */
     sendLeaveRoom() {
         this._sendClientMsg({ type: C2S.LEAVE_ROOM });
+    }
+
+    /**
+     * Send `ClientMsg::Input { tick, packed }`. The hand-written codec in
+     * `protocol.js` still throws `NotImplementedError` for Input; we route
+     * through the generated codec (`js/sim/protocol-generated.js`) which
+     * already has full coverage. The shape of `packed` matches the
+     * `PackedInput` struct: `{ moveX: i8, moveY: i8, aimX: i16, aimY: i16,
+     * buttons: u8 }` — see `js/sim/input.js::pack`.
+     *
+     * @param {number} tick
+     * @param {{moveX:number, moveY:number, aimX:number, aimY:number, buttons:number}} packed
+     */
+    sendInput(tick, packed) {
+        if (this.state !== 'open' && this.state !== 'welcomed') {
+            throw new Error(`ConnectionTask: cannot send while ${this.state}`);
+        }
+        const bytes = encodeClientMsgGenerated({
+            type: C2S.INPUT,
+            tick: tick >>> 0,
+            packed,
+        });
+        try {
+            this.socket.send(bytes);
+        } catch (err) {
+            throw new Error(`ConnectionTask: socket.send(Input) failed: ${err?.message ?? err}`);
+        }
     }
 
     _handleWelcome(msg) {
