@@ -40,6 +40,10 @@ import {
     detectPlayerEnemyBulletHits,
     detectPlayerDropPickups,
     detectNovaBlastHits,
+    detectLanceBeamHits,
+    LANCE_DEFAULT_WIDTH,
+    LANCE_DEFAULT_LENGTH,
+    LANCE_DEFAULT_DAMAGE,
 } from '../../../js/sim/collision.js';
 import {
     freshAsteroidState,
@@ -2520,5 +2524,445 @@ describe('detectNovaBlastHits — flat damage (no falloff)', () => {
         // at different rings inside the disc.
         expect(events[0].distanceFromCenter).toBeCloseTo(1, 6);
         expect(events[1].distanceFromCenter).toBeCloseTo(99, 6);
+    });
+});
+
+// =====================================================================
+// LANCE BEAM — line-segment piercing damage ray
+// =====================================================================
+//
+// Different from Nova (disc) and Mine (triggered AoE): a beam shoots a
+// THIN LINE-SEGMENT forward from the player's gun mouth along an aim
+// angle, for a fixed `length`, with a fixed perpendicular `width`. The
+// pure step emits one event per target whose CENTER lies inside the
+// rectangular strip swept by the beam.
+//
+// Boundary semantics are INCLUSIVE (`<= length`, `<= width + radius`),
+// in contrast to Nova's STRICT-`<` disc gate — see the section comment
+// in `js/sim/collision.js` for the rationale (matches the spec's
+// `[0, length]` closed interval and "within `width + radius`" phrasing).
+
+// ---------------------------------------------------------------------
+// Helpers — build minimal beam, enemies, asteroids.
+// ---------------------------------------------------------------------
+
+/** Build a default Lance Beam spec. Beam fires from `(ox, oy)` in
+ *  direction `angle` for `length` world units with effective half-
+ *  thickness `width`. Defaults reflect a mid-game shot pointing along
+ *  +x at the canonical legacy range (360) and pre-halved beam width (3).
+ *  Damage default is 1 so flat-damage assertions are easy to read. */
+function lanceSpec(ox, oy, angle = 0, length = 360, width = 3, damage = 1) {
+    return { originX: ox, originY: oy, angle, length, width, damage };
+}
+
+/** Build a HUNTER-shaped enemy at (x, y). Same field-attach pattern as
+ *  the nova-helper (radius + skip-gate fields manually applied because
+ *  freshEnemyState whitelists fields). */
+function lanceEnemy(id, x, y, overrides = {}) {
+    const base = freshEnemyState('HUNTER', {
+        id, x, y,
+        active: overrides.active,
+    });
+    base.radius = overrides.radius !== undefined ? overrides.radius : 18;
+    if (overrides.warping !== undefined) base.warping = overrides.warping;
+    if (overrides.deathFlash !== undefined) base.deathFlash = overrides.deathFlash;
+    if (overrides._deathFlash !== undefined) base._deathFlash = overrides._deathFlash;
+    return base;
+}
+
+/** Build a default-sized asteroid at (x, y). */
+function lanceAsteroid(id, x, y, overrides = {}) {
+    return freshAsteroidState(id, {
+        x, y, radius: 30, hp: 10, maxHp: 10, ...overrides,
+    });
+}
+
+// ---------------------------------------------------------------------
+// Constants — pin the default exports for the wrapper / Rust mirror.
+// ---------------------------------------------------------------------
+
+describe('lance-beam collision constants', () => {
+    test('LANCE_DEFAULT_WIDTH is 3 (pre-halved POWER_WEAPONS.LANCE_BEAM.beamWidth)', () => {
+        // Legacy beamWidth = 6 is the FULL strip thickness; the pure
+        // step uses half-thickness, so 3 is the default to pass in.
+        expect(LANCE_DEFAULT_WIDTH).toBe(3);
+    });
+    test('LANCE_DEFAULT_LENGTH is 360 (POWER_WEAPONS.LANCE_BEAM.range × 400 = 0.9 × 400)', () => {
+        expect(LANCE_DEFAULT_LENGTH).toBe(360);
+    });
+    test('LANCE_DEFAULT_DAMAGE is 0.05 (POWER_WEAPONS.LANCE_BEAM.damage)', () => {
+        expect(LANCE_DEFAULT_DAMAGE).toBe(0.05);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 1 — single enemy directly on the beam axis → hit.
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — enemy on beam axis', () => {
+    test('enemy dead-on axis within length emits one event with 5 fields', () => {
+        // Beam at origin, pointing +x for length 360. Enemy at (100, 0)
+        // → proj=100 (in span), perp=0 (dead-on). Hit.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 7);
+        const e = lanceEnemy(101, 100, 0);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        const ev = events[0];
+        expect(ev).toMatchObject({
+            type: 'lance_hit_enemy',
+            targetId: 101,
+            damage: 7,
+            distanceAlongBeam: 100,
+            distanceFromBeam: 0,
+        });
+        // Explicit field-count guard: exactly 5 keys (type + 4 non-type
+        // fields). No origin coords, no target coords, no impulse.
+        expect(Object.keys(ev).sort()).toEqual([
+            'damage', 'distanceAlongBeam', 'distanceFromBeam',
+            'targetId', 'type',
+        ].sort());
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 2 — enemy slightly off-axis but within `width + radius` → hit.
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — enemy off-axis within strip', () => {
+    test('enemy with perpDist <= width + radius is hit', () => {
+        // Width 3, enemy radius 18. Strip slack = 21 in perpendicular.
+        // Beam from origin along +x. Enemy at (100, 20) → proj=100,
+        // perp=20 <= 21. Hit; distanceFromBeam = 20.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 100, 20);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceFromBeam).toBeCloseTo(20, 6);
+        expect(events[0].distanceAlongBeam).toBeCloseTo(100, 6);
+    });
+
+    test('enemy exactly tangent to strip edge (perp === width + radius) is HIT (inclusive)', () => {
+        // Pin the inclusive-boundary contract. Width 3 + radius 18 = 21.
+        // Place enemy at (100, 21) so perp = 21 exactly.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 100, 21);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceFromBeam).toBeCloseTo(21, 6);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 3 — enemy off-axis beyond the strip → miss.
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — enemy off-axis beyond strip', () => {
+    test('enemy at perpDist just beyond width + radius is skipped', () => {
+        // Width 3 + radius 18 = 21. Place enemy at (100, 22) → perp 22
+        // exceeds the 21 threshold. Miss.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 100, 22);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy far off-axis produces no event regardless of forward distance', () => {
+        // perp = 500 ≫ any reasonable strip width.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 100, 500);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 4 — enemy past the beam length → miss.
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — enemy past beam length', () => {
+    test('enemy on axis but past length is skipped', () => {
+        // Beam length 100; enemy at (200, 0) → proj 200 > 100. Miss.
+        const lance = lanceSpec(0, 0, 0, 100, 3, 1);
+        const e = lanceEnemy(101, 200, 0);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy on axis exactly AT proj === length is HIT (inclusive far end)', () => {
+        // Pin the inclusive-`<=` contract for the far end. proj = 100
+        // exactly equals length 100 → INSIDE the segment span.
+        const lance = lanceSpec(0, 0, 0, 100, 3, 1);
+        const e = lanceEnemy(101, 100, 0);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceAlongBeam).toBeCloseTo(100, 6);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 5 — enemy behind the beam origin → miss.
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — enemy behind origin', () => {
+    test('enemy with proj < 0 (behind origin) is skipped', () => {
+        // Beam pointing +x; enemy at (-50, 0) → proj = -50 < 0. Miss.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, -50, 0);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy exactly at the origin (proj === 0) is HIT (inclusive near end)', () => {
+        // Pin the inclusive-`>=` contract for the near end. Point-blank
+        // target at the muzzle counts.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 0, 0);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceAlongBeam).toBe(0);
+        expect(events[0].distanceFromBeam).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 6 — mixed enemies + asteroids → both event types in one tick.
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — mixed enemy + asteroid hits', () => {
+    test('beam sweeps over enemies and asteroids, emitting both event types', () => {
+        // Beam from (0, 0) pointing +x, length 500, width 3.
+        //   Enemy 101 at (50, 0)   → proj=50, perp=0, HIT.
+        //   Enemy 102 at (200, 5)  → proj=200, perp=5 ≤ 3+18=21, HIT.
+        //   Enemy 103 at (300, 50) → perp=50 > 21, MISS.
+        //   Asteroid 201 at (100, 10)  → proj=100, perp=10 ≤ 3+30=33, HIT.
+        //   Asteroid 202 at (400, 200) → perp=200 > 33, MISS.
+        // Expect 3 events: 2 enemy + 1 asteroid, in iteration order
+        // (enemies first, then asteroids).
+        const lance = lanceSpec(0, 0, 0, 500, 3, 4);
+        const e1 = lanceEnemy(101, 50, 0);
+        const e2 = lanceEnemy(102, 200, 5);
+        const e3 = lanceEnemy(103, 300, 50);
+        const a1 = lanceAsteroid(201, 100, 10);
+        const a2 = lanceAsteroid(202, 400, 200);
+        const events = [];
+        detectLanceBeamHits(lance, [e1, e2, e3], [a1, a2], ctx, events);
+        expect(events).toHaveLength(3);
+        // Enemies first, in array order.
+        expect(events[0]).toMatchObject({ type: 'lance_hit_enemy', targetId: 101 });
+        expect(events[1]).toMatchObject({ type: 'lance_hit_enemy', targetId: 102 });
+        expect(events[2]).toMatchObject({ type: 'lance_hit_asteroid', targetId: 201 });
+        // Every event carries the SAME damage (flat damage, no falloff).
+        for (const ev of events) {
+            expect(ev.damage).toBe(4);
+        }
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 7 — skip-gates (inactive / warping / death-flash for both kinds).
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — skipped pairs', () => {
+    test('inactive enemy is skipped even when inside the strip', () => {
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 50, 0, { active: false });
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('inactive asteroid is skipped even when inside the strip', () => {
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const a = lanceAsteroid(201, 50, 0, { active: false });
+        const events = [];
+        detectLanceBeamHits(lance, [], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping enemy is skipped', () => {
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 50, 0, { warping: true });
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('warping asteroid is skipped', () => {
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const a = lanceAsteroid(201, 50, 0, { warping: true });
+        const events = [];
+        detectLanceBeamHits(lance, [], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy in death-flash is skipped (new `deathFlash` field)', () => {
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 50, 0, { deathFlash: 4 });
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('enemy in death-flash is skipped (legacy `_deathFlash` field)', () => {
+        // To exercise the legacy fallback path, delete the new field
+        // first — the dual-name probe prefers `deathFlash !== undefined`.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 50, 0);
+        delete e.deathFlash;
+        e._deathFlash = 4;
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('asteroid in death-flash is skipped (legacy `_deathFlash` field)', () => {
+        // `freshAsteroidState` defaults `deathFlash: 0` which would
+        // short-circuit the dual-name skip-gate (the `!== undefined`
+        // branch wins, finds `0`, the legacy fallback never runs).
+        // Delete it to exercise the `_deathFlash` path explicitly.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const a = lanceAsteroid(201, 50, 0);
+        delete a.deathFlash;
+        a._deathFlash = 4;
+        const events = [];
+        detectLanceBeamHits(lance, [], [a], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 8 — damage passes through verbatim from the lance spec.
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — damage propagation', () => {
+    test('lance.damage flows verbatim into every event payload', () => {
+        // Two enemies inside the strip, one asteroid inside. Each
+        // event should carry the SAME damage value (flat model).
+        const lance = lanceSpec(0, 0, 0, 500, 3, 99);
+        const e1 = lanceEnemy(101, 50, 0);
+        const e2 = lanceEnemy(102, 200, 0);
+        const a1 = lanceAsteroid(201, 100, 0);
+        const events = [];
+        detectLanceBeamHits(lance, [e1, e2], [a1], ctx, events);
+        expect(events).toHaveLength(3);
+        for (const ev of events) {
+            expect(ev.damage).toBe(99);
+        }
+    });
+
+    test('damage value of 0 still emits events (geometry hit, no HP delta)', () => {
+        // A 0-damage beam (e.g. a probe / overheated state) should still
+        // emit events — the pure step is purely geometric. The wrapper
+        // can decide to filter out 0-damage events.
+        const lance = lanceSpec(0, 0, 0, 360, 3, 0);
+        const e = lanceEnemy(101, 50, 0);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].damage).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 9 — beam angle works in all directions (not just +x).
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — non-axial beam directions', () => {
+    test('beam pointing +y hits a target at (0, length/2)', () => {
+        // Angle π/2 (90°) points along +y. Enemy at (0, 100) → proj=100,
+        // perp=0 → hit (assuming length >= 100).
+        const lance = lanceSpec(0, 0, Math.PI / 2, 200, 3, 1);
+        const e = lanceEnemy(101, 0, 100);
+        const events = [];
+        detectLanceBeamHits(lance, [e], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].distanceAlongBeam).toBeCloseTo(100, 6);
+        expect(events[0].distanceFromBeam).toBeCloseTo(0, 6);
+    });
+
+    test('beam pointing at 45° hits a target diagonally ahead, misses one perpendicular', () => {
+        // Angle π/4. Direction = (√2/2, √2/2). Enemy A at (50, 50) is
+        // dead-on the axis: proj = 50√2 ≈ 70.7, perp = 0.
+        // Enemy B at (50, -50) is perpendicular to the axis: proj = 0,
+        // perp = 50√2 ≈ 70.7 ≫ 3+18=21 → MISS.
+        const lance = lanceSpec(0, 0, Math.PI / 4, 200, 3, 1);
+        const onAxis = lanceEnemy(101, 50, 50);
+        const offAxis = lanceEnemy(102, 50, -50);
+        const events = [];
+        detectLanceBeamHits(lance, [onAxis, offAxis], [], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].targetId).toBe(101);
+        expect(events[0].distanceFromBeam).toBeCloseTo(0, 6);
+        expect(events[0].distanceAlongBeam).toBeCloseTo(Math.hypot(50, 50), 6);
+    });
+});
+
+// ---------------------------------------------------------------------
+// Test 10 — empty / null / degenerate inputs defensive guards.
+// ---------------------------------------------------------------------
+
+describe('detectLanceBeamHits — empty / degenerate inputs', () => {
+    test('null lance → no events (no crash)', () => {
+        const events = [];
+        detectLanceBeamHits(null, [lanceEnemy(101, 0, 0)], [lanceAsteroid(201, 0, 0)], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('zero length → no events', () => {
+        const lance = lanceSpec(0, 0, 0, 0, 3, 1);
+        const events = [];
+        detectLanceBeamHits(lance, [lanceEnemy(101, 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('negative length → no events', () => {
+        const lance = lanceSpec(0, 0, 0, -50, 3, 1);
+        const events = [];
+        detectLanceBeamHits(lance, [lanceEnemy(101, 0, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('negative width → no events (degenerate strip)', () => {
+        const lance = lanceSpec(0, 0, 0, 360, -1, 1);
+        const events = [];
+        detectLanceBeamHits(lance, [lanceEnemy(101, 50, 0)], [], ctx, events);
+        expect(events).toHaveLength(0);
+    });
+
+    test('empty + null target arrays produce no events', () => {
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const eventsA = [];
+        detectLanceBeamHits(lance, [], [], ctx, eventsA);
+        expect(eventsA).toHaveLength(0);
+        const eventsB = [];
+        detectLanceBeamHits(lance, null, null, ctx, eventsB);
+        expect(eventsB).toHaveLength(0);
+    });
+
+    test('null enemies + asteroid hit → still emits the asteroid event', () => {
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const a = lanceAsteroid(201, 50, 0);
+        const events = [];
+        detectLanceBeamHits(lance, null, [a], ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('lance_hit_asteroid');
+    });
+
+    test('enemy hit + null asteroids → still emits the enemy event', () => {
+        const lance = lanceSpec(0, 0, 0, 360, 3, 1);
+        const e = lanceEnemy(101, 50, 0);
+        const events = [];
+        detectLanceBeamHits(lance, [e], null, ctx, events);
+        expect(events).toHaveLength(1);
+        expect(events[0].type).toBe('lance_hit_enemy');
     });
 });
