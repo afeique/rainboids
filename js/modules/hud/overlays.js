@@ -201,38 +201,114 @@ export function drawTitleScreen() {
         // on a phone in portrait. Floor at 40 px so the title is still
         // unmistakably the focal point. Desktop is unchanged because
         // isMobile() is false off touch devices.
+        // 5.92.1 — Layout is now positioned RELATIVE to a computed
+        // total content block height so the chrome (title + subtitle +
+        // buttons + record + version) always fits within the canvas on
+        // any viewport, including narrow portrait phones (360x640) and
+        // squat landscape (640x360).
         const _isMobile = isMobile();
-        const titleFontSize = _isMobile
-            ? Math.min(72, Math.max(40, Math.floor(this.width / 8)))
-            : 72;
+        const _isPortrait = _isMobile && isPortrait();
+        const _isLandscape = _isMobile && !isPortrait();
+
+        // Sizing: tighter caps on portrait so a 360-wide phone shows a
+        // ~45px title (not the 72px overflow) and a 14-16px subtitle.
+        const titleFontSize = _isPortrait
+            ? Math.min(48, Math.max(32, Math.floor(this.width / 8)))
+            : (_isLandscape
+                ? Math.min(56, Math.max(36, Math.floor(this.height / 7)))
+                : 72);
         const subtitleFontSize = _isMobile
-            ? Math.min(24, Math.max(14, Math.floor(titleFontSize / 3.2)))
+            ? Math.min(20, Math.max(12, Math.floor(titleFontSize / 3.2)))
             : 24;
+
+        // ── Button + spacing budgets (computed up front so we can place
+        //    the title above the buttons rather than at a fixed offset).
+        const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
+        const _mpEnabled = multiplayerEnabled();
+        const mobilePortrait = _isPortrait;
+        const mobileLandscape = _isLandscape;
+        let buttonW, buttonH, buttonGap;
+        if (mobilePortrait) {
+            // 5.92.1 — narrower (≤280px) + shorter (48px) so the full
+            // stack of NEW GAME / CONTINUE / MULTIPLAYER plus the
+            // survival-record and version tag fits inside a 640px-tall
+            // portrait viewport.
+            buttonW = Math.min(280, Math.max(200, this.width * 0.85));
+            buttonH = 48;
+            buttonGap = 12;
+        } else if (mobileLandscape) {
+            // 5.92.1 — slimmer side-by-side buttons (≤180px) so the
+            // two-up row plus the optional MULTIPLAYER bar below fit
+            // under the title without overlap.
+            buttonW = Math.min(180, Math.max(140, this.width * 0.35));
+            buttonH = 44;
+            buttonGap = 16;
+        } else {
+            buttonW = 220;
+            buttonH = 46;
+            buttonGap = 36;
+        }
+
+        // Compute the buttons-block height so we can lay out the title
+        // ABOVE it (instead of the old `centerY - 100` magic number that
+        // pushed the title above the canvas on phones).
+        const mpRows = _mpEnabled ? 1 : 0;
+        let buttonsBlockH;
+        if (mobilePortrait) {
+            // Vertical stack: 2 rows + optional multiplayer.
+            buttonsBlockH = buttonH * (2 + mpRows) + buttonGap * (1 + mpRows);
+        } else {
+            // Side-by-side primary row + optional multiplayer row below.
+            buttonsBlockH = buttonH * (1 + mpRows) + (mpRows ? 18 : 0);
+        }
+        const recordH = (this.game.survivalRecord > 0) ? 32 : 0;
+        const subtitleH = subtitleFontSize + 8;
+        const titleH = titleFontSize + 8;
+        const titleSubtitleGap = mobilePortrait ? 20 : 28;
+        const subtitleButtonsGap = mobilePortrait ? 24 : 36;
+        const recordGap = recordH ? 24 : 0;
+
+        const contentH = titleH + titleSubtitleGap + subtitleH + subtitleButtonsGap + buttonsBlockH + recordGap + recordH;
+        // Anchor the content block so its vertical center sits at
+        // centerY, clamped so the top doesn't go above 16px (room for
+        // status-bar / notch) and the bottom doesn't drop below
+        // canvas.height - 32 (room for the version tag).
+        const minTop = 16;
+        const maxBottom = this.canvas.height - 32;
+        let contentTop = centerY - contentH / 2;
+        if (contentTop < minTop) contentTop = minTop;
+        if (contentTop + contentH > maxBottom) contentTop = maxBottom - contentH;
+        if (contentTop < minTop) contentTop = minTop; // tiny viewport: prefer top alignment
+
+        const titleY = contentTop + titleH / 2;
+        const subtitleY = titleY + titleH / 2 + titleSubtitleGap + subtitleH / 2;
+        const buttonsTop = subtitleY + subtitleH / 2 + subtitleButtonsGap;
+        const recordY = buttonsTop + buttonsBlockH + recordGap + recordH / 2;
 
         if (!launching) {
             // Static idle title — RAINBOIDS centered, subtitle below.
             // 5.79.0 — outline:true adds a black stroke under each
             //   glyph so the title stays legible over the dynamic
             //   starfield/nebula.
-            this.drawWavyText('RAINBOIDS', centerX + 10, centerY - 100, {
+            this.drawWavyText('RAINBOIDS', centerX + 10, titleY, {
                 fontSize: titleFontSize,
                 colors: WAVY_PALETTES.title,
                 speed: 0.45,
                 colorSpeed: 0.18,
                 outline: true,
-                outlineWidth: 6,
+                outlineWidth: Math.max(3, Math.floor(titleFontSize / 12)),
             });
         }
 
         // ── Subtitle / Press Any Key / Record (visible during launch too) ──
         if (showSubtitle) {
-            this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, centerY - 20, {
+            this.drawWavyText('SUPERCHARGED ASTEROIDS', centerX, subtitleY, {
                 fontSize: subtitleFontSize,
                 colors: WAVY_PALETTES.whiteShimmer,
                 amplitude: 0,
                 colorSpeed: 0.1,
                 outline: true,
-                outlineWidth: 4,
+                outlineWidth: Math.max(2, Math.floor(subtitleFontSize / 6)),
             });
         }
 
@@ -249,44 +325,21 @@ export function drawTitleScreen() {
             //   floor. Mobile-landscape keeps the side-by-side layout
             //   but shrinks the button width to leave room for the
             //   horizontal title. Desktop is byte-for-byte unchanged.
-            const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
             const ctx = this.ctx;
             const labels = ['NEW GAME', 'CONTINUE'];
-            const mobilePortrait = isMobile() && isPortrait();
-            const mobileLandscape = isMobile() && !isPortrait();
-
-            // Tap-target minimums (Apple HIG / Material Design = 44 px).
-            // Portrait stretches each button to ~80% screen-width up to
-            // a 320 px cap so they read as full-width buttons; landscape
-            // shrinks to leave room for the title block.
-            let buttonW, buttonH, gap;
-            if (mobilePortrait) {
-                buttonW = Math.min(320, Math.max(220, this.width * 0.8));
-                buttonH = 56;
-                gap = 16;
-            } else if (mobileLandscape) {
-                buttonW = 180;
-                buttonH = 50;
-                gap = 24;
-            } else {
-                buttonW = 220;
-                buttonH = 46;
-                gap = 36;
-            }
 
             const rects = {};
             if (mobilePortrait) {
-                // Vertical stack. yTop is the TOP of the first button;
-                // each subsequent button stacks below with `gap`.
-                const yTop = centerY + 40;
+                // Vertical stack anchored at the computed buttonsTop.
                 const x0 = centerX - buttonW / 2;
-                rects.newGame  = { id: 'newGame',  x: x0, y: yTop,                          w: buttonW, h: buttonH, disabled: false };
-                rects.continue = { id: 'continue', x: x0, y: yTop + (buttonH + gap),         w: buttonW, h: buttonH, disabled: !hasSavedRun };
-                if (multiplayerEnabled()) {
+                const yTop = buttonsTop;
+                rects.newGame  = { id: 'newGame',  x: x0, y: yTop,                                w: buttonW, h: buttonH, disabled: false };
+                rects.continue = { id: 'continue', x: x0, y: yTop + (buttonH + buttonGap),       w: buttonW, h: buttonH, disabled: !hasSavedRun };
+                if (_mpEnabled) {
                     rects.multiplayer = {
                         id: 'multiplayer',
                         x: x0,
-                        y: yTop + 2 * (buttonH + gap),
+                        y: yTop + 2 * (buttonH + buttonGap),
                         w: buttonW,
                         h: buttonH,
                         disabled: false,
@@ -298,12 +351,12 @@ export function drawTitleScreen() {
                 // original pre-5.92 layout, just with the dimensions
                 // computed above (so landscape mobile gets a slightly
                 // smaller version of the same shape).
-                const totalW = buttonW * 2 + gap;
-                const yTop = centerY + 60;
+                const totalW = buttonW * 2 + buttonGap;
+                const yTop = buttonsTop;
                 const x0 = centerX - totalW / 2;
-                rects.newGame  = { id: 'newGame',  x: x0,                  y: yTop, w: buttonW, h: buttonH, disabled: false };
-                rects.continue = { id: 'continue', x: x0 + buttonW + gap,  y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun };
-                if (multiplayerEnabled()) {
+                rects.newGame  = { id: 'newGame',  x: x0,                       y: yTop, w: buttonW, h: buttonH, disabled: false };
+                rects.continue = { id: 'continue', x: x0 + buttonW + buttonGap, y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun };
+                if (_mpEnabled) {
                     const mpY = yTop + buttonH + 18;
                     rects.multiplayer = {
                         id: 'multiplayer',
@@ -358,7 +411,13 @@ export function drawTitleScreen() {
                 // 5.79.0 — black text outline so labels stay legible
                 //   over the dynamic starfield/nebula. strokeText first,
                 //   then fillText.
-                ctx.font = "16px 'Press Start 2P', monospace";
+                // 5.92.1 — Shrink label font on narrow mobile portraits
+                //   so the longest label ("MULTIPLAYER") doesn't run
+                //   into the rounded button edges on a 320-wide phone.
+                const labelFontSize = mobilePortrait
+                    ? (buttonW < 240 ? 12 : 13)
+                    : (mobileLandscape ? 12 : 16);
+                ctx.font = `${labelFontSize}px 'Press Start 2P', monospace`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 const tx = x + w / 2;
@@ -383,8 +442,14 @@ export function drawTitleScreen() {
                 const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
                 // 5.79.0 — outline:true gives a black stroke under the
                 //   wavy gold text for legibility against starfields.
-                this.drawWavyText(recText, centerX, centerY + 140, {
-                    fontSize: 16,
+                // 5.92.1 — Use computed recordY (sits below the button
+                //   block) and shrink the font on narrow viewports so
+                //   the line fits the canvas width.
+                const recFontSize = mobilePortrait
+                    ? Math.min(14, Math.max(10, Math.floor(this.width / 26)))
+                    : 16;
+                this.drawWavyText(recText, centerX, recordY, {
+                    fontSize: recFontSize,
                     colors: WAVY_PALETTES.gold,
                     amplitude: 0,
                     colorSpeed: 0.14,
@@ -424,8 +489,12 @@ export function drawTitleScreen() {
             const seeds = anim.letterSeeds || [];
             const style = anim.style || 'twister';
             const titleX = centerX + 10;
-            const titleY = centerY - 100;
-            const staticPositions = _measureLetterPositions(this.ctx, text, 72, titleX, titleY);
+            // 5.92.1 — Use the responsive titleY computed above so the
+            // launch animation lines up with the static title on mobile
+            // (instead of a fixed `centerY - 100` that floats above the
+            // viewport on phones). Animation font scaling stays at the
+            // helper's 72 default so the dramatic swirl reads big.
+            const staticPositions = _measureLetterPositions(this.ctx, text, titleFontSize, titleX, titleY);
             switch (style) {
                 case 'explosion':
                     fadeAlpha = drawExplosionAnim.call(this, this.ctx, elapsed, total, text, seeds, centerX, centerY, staticPositions);
