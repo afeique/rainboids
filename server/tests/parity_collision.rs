@@ -40,10 +40,11 @@
 
 use rainboids_server::sim::collision::{
     detect_bullet_asteroid_hits, detect_bullet_enemy_hits, detect_enemy_asteroid_hits,
-    detect_lance_beam_hits, detect_mine_hits, detect_missile_salvo_hits, detect_nova_blast_hits,
-    detect_player_asteroid_hits, detect_player_drop_pickups, detect_player_enemy_bullet_hits,
-    detect_player_enemy_hits, CollisionAsteroid, CollisionBullet, CollisionContext, CollisionDrop,
-    CollisionEnemy, CollisionEnemyBullet, CollisionEvent, CollisionLance, CollisionMine,
+    detect_lance_beam_hits, detect_lightning_arc_hits, detect_mine_hits,
+    detect_missile_salvo_hits, detect_nova_blast_hits, detect_player_asteroid_hits,
+    detect_player_drop_pickups, detect_player_enemy_bullet_hits, detect_player_enemy_hits,
+    CollisionAsteroid, CollisionBullet, CollisionContext, CollisionDrop, CollisionEnemy,
+    CollisionEnemyBullet, CollisionEvent, CollisionLance, CollisionLightningArc, CollisionMine,
     CollisionMissile, CollisionPlayer, NovaBlast, TriggerKind, ASTEROID_ENEMY_PUSH,
     ASTEROID_KNOCKBACK_MULTIPLIER, BOUNCE_FORCE_MULTIPLIER, BOUNCE_RESTITUTION,
     ENEMY_ASTEROID_PUSH, MISSILE_DEFAULT_RADIUS, MISSILE_KNOCK, OVERLAP_PUSH_FORCE,
@@ -3513,4 +3514,376 @@ fn missile_boundary_strict_less_than() {
     let mut events = Vec::new();
     detect_missile_salvo_hits(&missiles, &enemies, &asteroids, &ctx, &mut events);
     assert_eq!(events.len(), 0, "dist == sum-of-radii → MISS (strict <)");
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Lightning Arc fixtures (dispatch 11) — single-target nearest-wins.
+//
+// Mirrors `js/sim/collision.js::detectLightningArcHits` (PR #72). The
+// pure step picks the nearest active enemy within `arc.range` and emits
+// AT MOST ONE `LightningArcHitEnemy` event. There is intentionally NO
+// asteroid variant — Lightning Arc emits enemy hits only.
+//
+// Tolerance: 0.01 (linear physics, no compounded multiplication).
+// ═════════════════════════════════════════════════════════════════════
+
+/// Build a default Lightning Arc spec at origin (0, 0) with range 100,
+/// damage 5. Tests override fields post-construction.
+fn make_arc(origin_x: f32, origin_y: f32, range: f32, damage: f32) -> CollisionLightningArc {
+    CollisionLightningArc {
+        origin_x,
+        origin_y,
+        range,
+        damage,
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — single enemy in range → 1 event with correct target id.
+//
+// Arc at (0, 0), range 100. Enemy at (50, 0) with default radius 18
+// (radius is NOT consulted — Lightning Arc uses point-to-point distance
+// from origin to enemy center). dist = 50 <= 100 → HIT.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_single_enemy_in_range_hit() {
+    let arc = make_arc(0.0, 0.0, 100.0, 5.0);
+    let enemies = vec![make_enemy(101, 50.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "single in-range enemy → 1 event");
+    match events[0] {
+        CollisionEvent::LightningArcHitEnemy {
+            target_id,
+            damage,
+            distance_to_target,
+        } => {
+            assert_eq!(target_id, 101, "target_id matches the lone enemy");
+            approx_eq(damage, 5.0, "damage flows through verbatim");
+            approx_eq(distance_to_target, 50.0, "distance == 50");
+        }
+        ev => panic!("expected LightningArcHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — single enemy out of range → 0 events.
+//
+// Arc at (0, 0), range 50. Enemy at (100, 0). dist = 100 > 50 → MISS.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_single_enemy_out_of_range_miss() {
+    let arc = make_arc(0.0, 0.0, 50.0, 5.0);
+    let enemies = vec![make_enemy(101, 100.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 0, "out-of-range enemy → 0 events");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — multiple enemies in range, nearest wins.
+//
+// Arc at (0, 0), range 200. Enemy 101 at (150, 0) [dist 150]; enemy 102
+// at (50, 0) [dist 50]. Both in range; the closer (102) wins, regardless
+// of slice order.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_multiple_enemies_nearest_wins() {
+    let arc = make_arc(0.0, 0.0, 200.0, 5.0);
+    // Far enemy first, near enemy second — verifies that the tracker
+    // updates strictly on smaller distance, not on iteration position.
+    let enemies = vec![
+        make_enemy(101, 150.0, 0.0),
+        make_enemy(102, 50.0, 0.0),
+    ];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "single-target weapon → at most 1 event");
+    match events[0] {
+        CollisionEvent::LightningArcHitEnemy {
+            target_id,
+            distance_to_target,
+            ..
+        } => {
+            assert_eq!(target_id, 102, "nearest enemy (id 102) wins");
+            approx_eq(distance_to_target, 50.0, "distance_to_target == 50");
+        }
+        ev => panic!("expected LightningArcHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — tied distance, first iterated wins.
+//
+// Arc at (0, 0), range 100. Two enemies at exactly the same distance
+// (one at (50, 0), one at (0, 50) — both dist = 50). The first-iterated
+// (101) wins because the tracker uses STRICT-LESS-THAN updates: a later
+// enemy at IDENTICAL distance does NOT displace the earlier one.
+//
+// This is the deterministic tie-break the JS pure step relies on. The
+// wrapper owns the iteration order (active-objects array order), so
+// this fixture pins the contract.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_tied_distance_first_iterated_wins() {
+    let arc = make_arc(0.0, 0.0, 100.0, 5.0);
+    let enemies = vec![
+        make_enemy(101, 50.0, 0.0), // first iterated, dist = 50
+        make_enemy(102, 0.0, 50.0), // second iterated, dist = 50 (tied)
+    ];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "single-target weapon → at most 1 event");
+    match events[0] {
+        CollisionEvent::LightningArcHitEnemy { target_id, .. } => {
+            assert_eq!(
+                target_id, 101,
+                "tied distance → first iterated (101) wins, not 102"
+            );
+        }
+        ev => panic!("expected LightningArcHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — arc NOT at origin: distance measured from arc origin.
+//
+// Arc at (100, 100), range 20. Enemy at (110, 100). dist = 10 < 20 →
+// HIT. Verifies the detector uses `arc.origin_*` as the distance basis,
+// not the world origin.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_non_origin_arc() {
+    let arc = make_arc(100.0, 100.0, 20.0, 5.0);
+    let enemies = vec![make_enemy(101, 110.0, 100.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "non-origin arc + in-range enemy → 1 event");
+    match events[0] {
+        CollisionEvent::LightningArcHitEnemy {
+            target_id,
+            distance_to_target,
+            ..
+        } => {
+            assert_eq!(target_id, 101);
+            approx_eq(
+                distance_to_target,
+                10.0,
+                "distance is measured from arc origin (100, 100), not world origin",
+            );
+        }
+        ev => panic!("expected LightningArcHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — inactive enemy is skipped.
+//
+// Arc at (0, 0), range 100. Enemy at (50, 0) with `active = false`.
+// Expect 0 events.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_skip_gates_inactive() {
+    let arc = make_arc(0.0, 0.0, 100.0, 5.0);
+    let mut enemy = make_enemy(101, 50.0, 0.0);
+    enemy.active = false;
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 0, "!active enemy → skipped");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — warping enemy is skipped.
+//
+// Arc at (0, 0), range 100. Enemy at (50, 0) with `warping = true`.
+// Expect 0 events. The Rust mirror follows the JS pure step in adding
+// the warping gate even though the legacy code does not check it —
+// mid-spawn-warp enemies shouldn't take a continuous-tether hit.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_skip_gates_warping() {
+    let arc = make_arc(0.0, 0.0, 100.0, 5.0);
+    let mut enemy = make_enemy(101, 50.0, 0.0);
+    enemy.warping = true;
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 0, "warping enemy → skipped");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — enemy mid death-flash is skipped.
+//
+// Arc at (0, 0), range 100. Enemy at (50, 0) with `death_flash = 1`
+// (> 0). Expect 0 events. Mirrors the legacy `_deathFlash > 0`
+// continue.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_skip_gates_deathflash() {
+    let arc = make_arc(0.0, 0.0, 100.0, 5.0);
+    let mut enemy = make_enemy(101, 50.0, 0.0);
+    enemy.death_flash = 1;
+    let enemies = vec![enemy];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 0, "death_flash > 0 enemy → skipped");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — boundary INCLUSIVE: dist == range → HIT.
+//
+// Arc at (0, 0), range 100. Enemy at (100, 0). dist = 100 == range
+// → HIT (the JS pure step uses `if (dist > range) continue` so
+// equality falls through). The Rust mirror MUST match this — guard
+// against drift to strict `<`.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_boundary_inclusive_at_range() {
+    let arc = make_arc(0.0, 0.0, 100.0, 5.0);
+    let enemies = vec![make_enemy(101, 100.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(
+        events.len(),
+        1,
+        "dist == range → HIT (INCLUSIVE boundary)"
+    );
+    match events[0] {
+        CollisionEvent::LightningArcHitEnemy {
+            distance_to_target,
+            ..
+        } => {
+            approx_eq(distance_to_target, 100.0, "distance == range");
+        }
+        ev => panic!("expected LightningArcHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — boundary: dist just past range → MISS.
+//
+// Arc at (0, 0), range 100. Enemy at (101, 0). dist = 101 > 100
+// → MISS. Pins the gate as `dist > range` (strict greater-than for the
+// continue).
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_boundary_just_past_range_miss() {
+    let arc = make_arc(0.0, 0.0, 100.0, 5.0);
+    // 101 > 100 → just past range. Use a clear margin so f32 quirks at
+    // the boundary can't accidentally flip the result.
+    let enemies = vec![make_enemy(101, 101.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 0, "dist > range → MISS");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — damage flows verbatim into the event payload.
+//
+// Arc damage 12.5 (representative of post-AMPLIFIER pre-scaled value).
+// The pure step does NOT re-scale — the event's `damage` field is the
+// exact spec value.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_damage_passthrough() {
+    let arc = make_arc(0.0, 0.0, 100.0, 12.5);
+    let enemies = vec![make_enemy(101, 50.0, 0.0)];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1);
+    match events[0] {
+        CollisionEvent::LightningArcHitEnemy { damage, .. } => {
+            approx_eq(damage, 12.5, "damage flows through with no re-scaling");
+        }
+        ev => panic!("expected LightningArcHitEnemy, got {:?}", ev),
+    }
+
+    // Second pass: damage = 0.05 (live-game per-frame flat damage default).
+    let arc2 = make_arc(0.0, 0.0, 100.0, 0.05);
+    let mut events2 = Vec::new();
+    detect_lightning_arc_hits(&arc2, &enemies, &ctx, &mut events2);
+    assert_eq!(events2.len(), 1);
+    match events2[0] {
+        CollisionEvent::LightningArcHitEnemy { damage, .. } => {
+            approx_eq(damage, 0.05, "small-damage variant flows through");
+        }
+        ev => panic!("expected LightningArcHitEnemy, got {:?}", ev),
+    }
+}
+
+// ---------------------------------------------------------------------
+// Fixture — empty enemy list → no events, no crash.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_empty_enemies() {
+    let arc = make_arc(0.0, 0.0, 100.0, 5.0);
+    let enemies: Vec<CollisionEnemy> = vec![];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 0, "empty enemy list → no events");
+}
+
+// ---------------------------------------------------------------------
+// Fixture — skip-gated enemies don't participate in nearest tracking.
+//
+// Three enemies: 101 inactive (the geographically nearest), 102 warping,
+// 103 active and in range. The detector should pick 103 because the
+// first two are gated out — they NEVER update the tracker.
+//
+// This guards against a subtle bug where a skipped enemy's distance
+// (which never gets computed) might still influence the result.
+// ---------------------------------------------------------------------
+#[test]
+fn lightning_skip_gates_do_not_block_other_enemies() {
+    let arc = make_arc(0.0, 0.0, 200.0, 5.0);
+    let mut e_inactive = make_enemy(101, 10.0, 0.0); // closest, but inactive
+    e_inactive.active = false;
+    let mut e_warping = make_enemy(102, 20.0, 0.0); // also close, but warping
+    e_warping.warping = true;
+    let e_active = make_enemy(103, 80.0, 0.0); // valid pick at dist 80
+    let enemies = vec![e_inactive, e_warping, e_active];
+    let ctx = CollisionContext;
+    let mut events = Vec::new();
+    detect_lightning_arc_hits(&arc, &enemies, &ctx, &mut events);
+
+    assert_eq!(events.len(), 1, "one valid enemy in range → 1 event");
+    match events[0] {
+        CollisionEvent::LightningArcHitEnemy {
+            target_id,
+            distance_to_target,
+            ..
+        } => {
+            assert_eq!(
+                target_id, 103,
+                "gated enemies (101, 102) are skipped → 103 wins"
+            );
+            approx_eq(distance_to_target, 80.0, "distance reflects 103's position");
+        }
+        ev => panic!("expected LightningArcHitEnemy, got {:?}", ev),
+    }
 }
