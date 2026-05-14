@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.96.0] - 2026-05-14
+
+### Changed — Mobile pivots back to a turret-defense RPG (revert 5.95.0 over-correction)
+
+The 5.95.0 fruit-ninja redesign over-corrected. User feedback: "the game should still be an RPG; upgrades should still mean something." This release walks back the two pieces that broke the RPG loop — the one-shot-kill cheat and the empty top-left HUD — and replaces the previous "shrink entities" workaround with a proper camera zoom-out so a phone-sized viewport actually shows more of the world.
+
+**Three deliverables:**
+
+- **Reverted `onePunchMan = true` on mobile** (`js/modules/game-engine.js`). Mobile fires normal-damage bullets again. Weapon upgrades, damage multipliers, crit chance/damage, and kill streaks all matter — that's the RPG promise. The cheat is still available for dev/testing via console (`gameEngine.cheats.onePunchMan = true`).
+- **Restored the top-left HUD on mobile** (`js/modules/hud/status.js`). Health bar, triforce (spare-tank visualization), and XP/level are visible again. An RPG without HP/XP visibility isn't an RPG. The 5.92.0 simplification still hides the secondary loadout squares, gold readout, and survival timer on mobile — those are nice-to-have, not essential.
+- **Camera zoom-out on mobile** (`js/modules/world/camera-manager.js`, `js/modules/game-engine.js`). New `camera.zoom` field. Portrait mobile = `0.65` (aggressive zoom-out), landscape mobile = `0.8` (moderate), desktop = `1.0` (unchanged). The world-rendering transform applies `scale(zoom, zoom)` around the canvas center, so the player stays roughly screen-centered while MORE of the field becomes visible per pixel. `screenToWorldCoordinates`, `isEntityOnScreen`, `getVisibleStars`, and `updateCamera` all account for the zoom — touch coords still snap to entities correctly, off-screen culling still works at the new wider window. Zoom is recomputed on every resize / orientationchange via `_refreshCameraZoom()` (called from `_updateMobileBodyClasses`).
+
+**Kept from 5.94.0–5.95.2 mobile rounds:** stationary player, tap-to-aim-and-fire, PRM/PWR side buttons, enemies don't fire, enemies kamikaze, auto-magnet drops, asteroid radius cap, aim assists force-disabled, laser pointer disabled, mouse handlers gated on `isMobile()`, touch reticle at last-tap. The asteroid-radius cap from 5.95.1 becomes a complementary mechanism alongside the new zoom (entities are smaller AND we see more world).
+
+**Known visual mismatch:** The WebGL bullet layer and WebGL starfield don't honour the Canvas2D zoom transform — their shaders compute screen position from world position without a zoom uniform. Bullets render at "true" pixel size in the zoomed-out world (slightly oversized relative to the shrunk ship/enemies). Background stars render at "true" density. Both are acceptable visual side-effects; gameplay (collision, aim, damage) is zoom-agnostic. Out of scope for this release; can be addressed in a follow-up via a `u_zoom` uniform on the two WebGL renderers.
+
+### Tests
+- Rewrote `tests/unit/engine/mobile-one-punch.test.js` to pin the new contract (`cheats.onePunchMan = false` on BOTH desktop and mobile).
+- Rewrote `tests/unit/hud/mobile-hud-empty.test.js` to pin the restored HUD (`updateHUD` now draws on mobile; `drawCanvasTriforce` / `drawXPBar` / `drawLevelAndCoinsDisplay` invoked on both desktop and mobile; loadout squares still hidden on mobile by `mobileSimplified`).
+- Added `tests/unit/engine/camera-zoom-init.test.js` — pins the `_refreshCameraZoom` formula (desktop=1, portrait=0.65, landscape=0.8, null-camera guard).
+- Added `tests/unit/engine/camera-zoom.test.js` — pins the zoom-aware `screenToWorldCoordinates` (with round-trip verification), `isEntityOnScreen`, `getVisibleStars`, and `updateCamera` clamp.
+- Net: **+21 tests** (951 → 972). Full unit suite **972/972 passing**.
+
+---
+
 ## [5.95.2] - 2026-05-14
 
 ### Fixed — Mobile ship rotation now matches touch direction

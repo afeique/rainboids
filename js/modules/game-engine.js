@@ -653,19 +653,25 @@ export class GameEngine {
             y: 0,
             targetX: 0,
             targetY: 0,
-            smoothing: 0.1 // Camera smoothing factor
+            smoothing: 0.1, // Camera smoothing factor
+            // 5.96.0 — Mobile-only zoom-out. Renders the world transform
+            //   scaled around the canvas center so MORE world fits on a
+            //   phone-sized viewport. Desktop stays at 1.0.
+            //   Portrait mobile: 0.65 (most aggressive zoom-out)
+            //   Landscape mobile: 0.8 (moderate)
+            //   See _refreshCameraZoom() for the runtime branch.
+            zoom: 1
         };
+        this._refreshCameraZoom();
         
         // Initialize cheat flags
-        // 5.95.0 — Mobile fruit-ninja redesign: every tap = one-shot kill.
-        //   The onePunchMan flag is the existing collision-system damage
-        //   multiplier (see collision-system.js lines 101 / 543 / 668)
-        //   that overrides bullet.damage with 99999 — exactly the
-        //   "tap to destroy" feel we want for slash-style mobile play.
-        //   Always-on on mobile so the player never has to discover or
-        //   enable it. Desktop default (false) is untouched.
+        // 5.96.0 — Reverted the 5.95.0 mobile-only `onePunchMan = true`
+        //   default. Mobile is a tower-defense RPG, not fruit-ninja:
+        //   weapon upgrades, damage multipliers, and kill streaks all
+        //   need to matter. The cheat stays available via the console
+        //   (`gameEngine.cheats.onePunchMan = true`) for dev work.
         this.cheats = {
-            onePunchMan: !!this.mobile,
+            onePunchMan: false,
         };
 
         // Powerup HUD DOM ref cache
@@ -701,10 +707,34 @@ export class GameEngine {
         if (typeof document === 'undefined' || !document.body) return;
         if (!this.mobile) {
             document.body.classList.remove('mobile-portrait');
+            // Re-evaluate camera zoom on a fresh desktop layout too (idempotent).
+            this._refreshCameraZoom();
             return;
         }
         const portrait = isPortrait();
         document.body.classList.toggle('mobile-portrait', portrait);
+        // 5.96.0 — keep the camera zoom in sync with orientation flips.
+        this._refreshCameraZoom();
+    }
+
+    /**
+     * 5.96.0 — Set `this.camera.zoom` based on platform + orientation.
+     *   Desktop: 1.0 (no zoom)
+     *   Mobile portrait: 0.65 (aggressive zoom-out — phone screens are
+     *     the most cramped; small ship + small enemies = more world
+     *     visible at once)
+     *   Mobile landscape: 0.8 (moderate zoom-out — wider viewport
+     *     already shows more, so a lighter scale keeps entities readable)
+     * Safe to call any time; reads the current `isMobile()` / `isPortrait()`
+     * state.
+     */
+    _refreshCameraZoom() {
+        if (!this.camera) return;
+        if (!this.mobile) {
+            this.camera.zoom = 1;
+            return;
+        }
+        this.camera.zoom = isPortrait() ? 0.65 : 0.8;
     }
 
     /**
@@ -2439,8 +2469,18 @@ export class GameEngine {
         // (with a synthetic camera drift driven by update()) so the menu
         // sits on top of an animated starfield instead of a black void.
         {
-            // Apply camera transformation for world objects
+            // Apply camera transformation for world objects.
+            // 5.96.0 — Zoom-around-canvas-center transform before the
+            //   camera translate. On mobile (portrait 0.65 / landscape
+            //   0.8) this shows MORE world per screen pixel; desktop
+            //   uses zoom=1 so the transform collapses to identity.
             this.ctx.save();
+            const zoom = (this.camera && this.camera.zoom) || 1;
+            if (zoom !== 1) {
+                this.ctx.translate(this.width / 2, this.height / 2);
+                this.ctx.scale(zoom, zoom);
+                this.ctx.translate(-this.width / 2, -this.height / 2);
+            }
             this.ctx.translate(-this.camera.x, -this.camera.y);
             
             // Nebula layer — deepest background, before all stars
@@ -2491,11 +2531,19 @@ export class GameEngine {
             
             // Viewport-culled rendering — off-screen objects skip draw() entirely.
             // Generous padding ensures particles/trails/glow don't pop in at edges.
+            // 5.96.0 — When `camera.zoom` < 1 the visible world window
+            //   expands by 1/zoom around the canvas center. The cull
+            //   bounds widen to match so zoomed-out players don't lose
+            //   entities at the screen edges.
             const pad = 120;
-            const vL = this.camera.x - pad;
-            const vT = this.camera.y - pad;
-            const vR = this.camera.x + this.width + pad;
-            const vB = this.camera.y + this.height + pad;
+            const visW = this.width / zoom;
+            const visH = this.height / zoom;
+            const cx = this.camera.x + this.width / 2;
+            const cy = this.camera.y + this.height / 2;
+            const vL = cx - visW / 2 - pad;
+            const vT = cy - visH / 2 - pad;
+            const vR = cx + visW / 2 + pad;
+            const vB = cy + visH / 2 + pad;
 
             // Entity / HUD rendering — skipped on the pre-init title screen
             // since pools are empty and the player ship would otherwise

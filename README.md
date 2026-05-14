@@ -20,14 +20,15 @@ Visit **[rainboids.cat.computer](https://rainboids.cat.computer)** in any modern
 
 ### Plays on desktop and mobile
 
-Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.95.0) is a **fruit-ninja slash-the-enemies experience** with a fundamentally different control loop from desktop:
+Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.96.0) is a **turret-defense RPG** — same RPG progression as desktop (weapon upgrades, damage multipliers, kill streaks, XP and level matter) but with a stationary ship and tap-to-aim controls:
 
-- **The player is stationary.** Movement input is gated off entirely — the ship holds position and the player only aims + fires. The viewport is stable since the camera tracks a fixed point.
-- **Tap to slice (5.95.0).** Tap anywhere on the canvas — the ship rotates to face the touch point and one-shot-kills the target asteroid or enemy with a single tap (a forced `cheats.onePunchMan` flag wires every bullet hit to instant destroy). Taps within 48 px of an entity snap to its centre. Touchstart triggers the shot for snappy feel; touchend does not re-fire.
+- **The player is stationary.** Movement input is gated off entirely — the ship holds position and the player only aims + fires. The viewport is stable since the camera tracks a fixed point at the field centre.
+- **Tap to aim and fire (5.94.0)**. Tap anywhere on the canvas — the ship rotates to face the touch point AND fires the primary weapon AND fires the equipped power weapon (if it's ready / fully charged). Taps within ~48 px of an entity's centre snap to that entity. Shots do **normal damage** (5.96.0 — RPG-revert from 5.95.0's one-shot-kill mode): weapon upgrades / crit chance / damage multipliers / kill streaks all matter.
+- **Camera zoom-out (5.96.0)**. The world transform scales by `0.65` in portrait and `0.8` in landscape, so a phone-sized viewport shows MORE of the playfield per pixel. Player ship + enemies appear smaller; the field is more navigable on a 400-px-wide screen. Desktop stays at `1.0` (no zoom).
+- **Top-left HUD restored (5.96.0)**. Health bar, triforce (spare-tank visualization), and XP/level are visible on mobile again — they're essential for an RPG. The 5.92.0 simplification still hides the secondary loadout squares, gold readout, and survival timer.
 - **Enemies kamikaze, don't shoot (5.95.0).** All 10 enemy types divebomb the player every tick. None of them fire bullets in mobile mode — the player never has projectiles to dodge. Contact damage still applies when an enemy reaches the ship.
 - **Auto-magnet drops (5.95.0).** Health orbs and gold coins fly to the player automatically with a generous attraction radius (~600 px for health, ~400 px for gold). No MAGNET upgrade required.
-- **Smaller asteroids (5.95.0).** Asteroid spawn radius is capped at 36 px on mobile so the playfield doesn't get crowded with giant rocks.
-- **No top-left HUD (5.95.0).** Health bar, triforce / energy tanks, and XP bar are all hidden. Only the bottom-button bar (SHOP / STATS / PAUSE / PRM / PWR) remains.
+- **Smaller asteroids (5.95.0 → 5.95.1).** Asteroid spawn radius is capped at 36 px on landscape-mobile and 28 px on portrait-mobile. Combined with the camera zoom-out the playfield reads much less cluttered.
 - **PRM and PWR side buttons (5.94.0).** Two square 64×64 buttons sit on the left and right edges of the canvas, vertically centred. Tap **PRM** (left) to open the primary-weapon radial; tap **PWR** (right) to open the power-weapon radial. The long-press radial gesture from 5.91–5.93 was removed in favor of these dedicated buttons.
 - **Responsive layout** (5.92.0) — the title screen stacks NEW GAME / CONTINUE / MULTIPLAYER vertically in portrait and keeps the side-by-side layout (at a slightly smaller scale) in landscape. Title text auto-shrinks to fit phone-sized viewports. The pause menu's tab/action-button text shrinks proportionally in portrait so labels fit within bounds (5.94.0). The Controls tab fits in narrow portrait viewports too (5.95.0).
 
@@ -35,7 +36,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **5.95.0**
+Current version: **5.96.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -80,17 +81,18 @@ Rainboids is a supercharged asteroids game featuring:
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
 
-### Mobile (touch) — fruit-ninja slash-the-enemies (5.95.0)
+### Mobile (touch) — turret-defense RPG (5.96.0)
 
 - **Movement**: None. The player ship is **stationary**. Position is locked at the Player.update level; velocity stays at 0.
-- **Aim + slice (tap)**: Tap anywhere on the canvas. The ship rotates to face the touch point AND fires the primary weapon AND fires the equipped power weapon (if it's ready / fully charged) — all on the same tick. **Every hit is a one-shot kill (5.95.0)**: the GameEngine force-enables the `cheats.onePunchMan` flag on mobile so a single tap destroys the asteroid / enemy outright. Taps within ~48 px of an entity's centre snap to that entity. Touchstart triggers the shot for snappy feel; touchend does not re-fire.
+- **Aim + fire (tap)**: Tap anywhere on the canvas. The ship rotates to face the touch point AND fires the primary weapon AND fires the equipped power weapon (if it's ready / fully charged) — all on the same tick. Shots do **normal damage** (5.96.0 RPG-revert): weapon upgrades, damage multipliers, crit chance/damage, and kill streaks all matter just like on desktop. Taps within ~48 px of an entity's centre snap to that entity. Touchstart triggers the shot for snappy feel; touchend does not re-fire.
+- **Camera zoom-out (5.96.0)**: The world transform applies `scale(zoom, zoom)` around the canvas centre — `0.65` in portrait, `0.8` in landscape, `1.0` on desktop. The visible window in world coords grows by `1/zoom`, so MORE of the field fits on a phone-sized viewport. `screenToWorldCoordinates`, `isEntityOnScreen`, `getVisibleStars`, and the camera clamp all honour the zoom, so tap-to-aim, collision, off-screen culling and snap-to-entity all still work. Zoom is recomputed on resize / orientation flip via `_refreshCameraZoom()`.
+- **Top-left HUD restored (5.96.0)**: Health bar, triforce (spare-tank visualization), and XP/level are visible on mobile again — they're essential for an RPG. The 5.92.0 simplification still hides the secondary loadout squares, gold readout, and survival timer.
 - **Enemies don't fire on mobile (5.95.0 → 5.95.1)**: All 10 enemy types have their firing branch suppressed in mobile mode — both the sim-layer `decideEnemyShooting` path and the legacy wrapper `Enemy.updateShooting` + inline Weaver spiral-laser paths. The player never has projectiles to dodge.
 - **Enemies divebomb + zigzag (5.95.0 → 5.95.1)**: Every non-boss enemy gets a strong velocity bias toward the player each tick (`MOBILE_KAMIKAZE_FORCE = 2.5` px / tick) plus a per-tick random-walk perturbation that reads as evasive motion. Velocity is hard-capped at `MOBILE_MAX_KAMIKAZE_SPEED = 6.0` px / tick so the cumulative pull doesn't fling enemies off-screen. Contact damage on collision destroys the ramming enemy.
 - **Aiming reticle at touch (5.95.1)**: A 24-px cyan crosshair tracks the last-touched canvas coordinate. The desktop laser-pointer aim trace is hidden on mobile (replaced by the reticle).
 - **Aim assists disabled (5.95.1)**: Auto Aim / Aim Assist / Auto Fire all force-off on mobile — the tap-to-aim input model is intentionally hands-on. (Desktop assists still work.)
-- **Asteroids are small (5.95.0 → 5.95.1)**: Spawn radius is capped at 36 px on landscape-mobile and **28 px on portrait-mobile** (vs 30–60 px on desktop). Split fragments use the same per-orientation cap. Enemy spawn radii also multiply by 0.7 in portrait-mobile so the playfield feels less crowded on narrow displays.
+- **Asteroids are small (5.95.0 → 5.95.1)**: Spawn radius is capped at 36 px on landscape-mobile and **28 px on portrait-mobile** (vs 30–60 px on desktop). Split fragments use the same per-orientation cap. Enemy spawn radii also multiply by 0.7 in portrait-mobile so the playfield feels less crowded on narrow displays. Combined with the 5.96.0 camera zoom-out, the playfield reads much less cluttered.
 - **Auto-magnet drops (5.95.0)**: Health orbs use a 600 / 240 px far/near magnet (vs 320 / 120 on desktop). Gold coins and gold shapes get a new 400 / 80 px mobile-only proximity pull on top of the desktop tractor-beam path. No MAGNET upgrade required.
-- **No top-left HUD (5.95.0)**: Health bar, triforce / energy tanks, XP bar, and level/coins display are all hidden. `updateHUD()` early-returns on mobile. The defense indicators (REFLEXES / LAST_STAND / STATIC_FIELD widgets) still render via `drawDefenseIndicators`.
 - **Power weapon (auto-fire, 5.92.0)**: Even without a tap, the equipped power weapon fires automatically as soon as it's ready — cooldown weapons the instant their cooldown clears; the Charge Shot the instant it's fully charged. Tap-fire and auto-fire pathways are idempotent.
 - **PRM and PWR side buttons (5.94.0)**: Two square 64×64 buttons flank the canvas — PRM (left) opens the primary-weapon radial; PWR (right) opens the power-weapon radial. The radials read the live touch position for wedge hover and commit on release.
 - **Bottom button bar (5.92.0)**: SHOP / STATS / PAUSE buttons centered along the bottom of the screen. Direct tap routes to the matching action — they do not fall through to fire-a-shot.
@@ -553,7 +555,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │   ├── parity-runner.mjs      #   Byte-level parity runner for schema/snapshots (5.84.0)
 │   └── juice-capture.mjs      #   Juice tuning screen capture
 ├── tests/
-│   ├── unit/                  # Jest unit tests (205 tests; +137 new sim tests in 5.84.0)
+│   ├── unit/                  # Jest unit tests (972 tests as of 5.96.0)
 │   │   ├── sim/               #   Engine-refactor primitives (rng, trig, fxp, codec, protocol)
 │   │   └── wire-codec.test.js #   Hello/Welcome golden-byte regression
 │   ├── qa/                    # Playwright smoke tests (95 tests)

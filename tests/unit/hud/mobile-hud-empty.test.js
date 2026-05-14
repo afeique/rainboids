@@ -1,19 +1,41 @@
 /**
- * tests/unit/hud/mobile-hud-empty.test.js — 5.95.0
+ * tests/unit/hud/mobile-hud-empty.test.js — 5.96.0
  *
- * Pins the mobile fruit-ninja HUD redesign: `updateHUD()` (the top-left
- * status cluster: triforce + health bar + XP bar + level/coins) is a
- * no-op on mobile. The bottom-button bar (SHOP/STATS/PAUSE/PRM/PWR) is
- * drawn outside this function by `drawHudButtons` so the player retains
- * the navigation surface.
+ * Pins the post-5.96.0 mobile HUD contract:
+ *   - `updateHUD()` is NOT a no-op on mobile anymore. The 5.95.0 early-
+ *     return that dropped the entire top-left status cluster (triforce
+ *     + healthbar + XP) has been reverted because mobile is an RPG
+ *     where HP / spare tanks / XP must remain visible.
+ *   - The 5.92.0 mobile-simplified branch still hides loadout squares,
+ *     gold readout, and the survival timer — those are nice-to-have,
+ *     not essential. That branch is verified in a separate test (or
+ *     manually) because it lives further down `updateHUD()`.
+ *
+ * History:
+ *   - 5.92.0: hide loadout/gold/timer on mobile (`mobileSimplified`).
+ *   - 5.95.0: hide entire top-left cluster on mobile (early return).
+ *   - 5.96.0: revert the early return. Top-left cluster comes back.
  *
  * Strategy: stub a minimal `this` context with a fake `ctx` (canvas
- * 2D context). Verify that on mobile no draw calls are issued; on
- * desktop the canvas ctx receives the expected `save()` and `fillText`
- * calls.
+ * 2D context). Verify that on mobile draw calls ARE issued (the
+ * top-left status cluster renders); on desktop the same calls
+ * happen.
  */
 
 // Browser shims — must happen before any game module import.
+// `createElement('canvas')` returns a richer stub: the icon sprite cache
+// inside `updateHUD` calls `canvas.getContext('2d')` and drives a real
+// 2D drawing path (save/scale/fillStyle/...). Return a chainable Proxy
+// that swallows every call so the cache code path doesn't crash.
+function _stubCanvasCtx() {
+    return new Proxy({}, {
+        get(_, prop) {
+            if (prop === 'canvas') return { width: 0, height: 0 };
+            return (...args) => undefined;
+        },
+    });
+}
+
 if (typeof globalThis.window === 'undefined') {
     globalThis.window = {
         innerWidth: 1920, innerHeight: 1080,
@@ -24,9 +46,10 @@ if (typeof globalThis.window === 'undefined') {
 }
 if (typeof globalThis.document === 'undefined') {
     globalThis.document = {
-        createElement: () => ({
-            getContext: () => ({}), style: {}, addEventListener: () => {},
-            id: '',
+        createElement: (tag) => ({
+            getContext: () => _stubCanvasCtx(),
+            style: {}, addEventListener: () => {},
+            id: '', width: 64, height: 64,
         }),
         getElementById: () => null,
         querySelector: () => null, querySelectorAll: () => [],
@@ -35,6 +58,12 @@ if (typeof globalThis.document === 'undefined') {
 }
 if (typeof globalThis.navigator === 'undefined') {
     globalThis.navigator = { vibrate: undefined, maxTouchPoints: 0 };
+}
+// Icon sprite cache uses `new Path2D(d)` to build SVG paths. Stub the
+// constructor so it returns an opaque object the chainable ctx mock can
+// swallow into its no-op call sink.
+if (typeof globalThis.Path2D === 'undefined') {
+    globalThis.Path2D = class { constructor() {} };
 }
 
 import { afterEach, describe, expect, test } from '@jest/globals';
@@ -46,7 +75,7 @@ afterEach(() => {
 });
 
 // Build a fake canvas 2D context that records every call into a log
-// so we can assert no-draw on the mobile path.
+// so we can assert the mobile path now DOES draw the top-left cluster.
 function makeFakeCtx() {
     const log = [];
     const ctx = new Proxy({}, {
@@ -81,17 +110,19 @@ function makeEngineThis(canvasCtx) {
     };
 }
 
-describe('updateHUD — mobile no-op (5.95.0)', () => {
-    test('mobile mode: updateHUD writes nothing to the canvas ctx', () => {
+describe('updateHUD — mobile restored (5.96.0 RPG-revert)', () => {
+    test('mobile mode: updateHUD writes to the canvas ctx (top-left cluster restored)', () => {
         _resetUrlOverrideForTests(true);
         const { ctx, log } = makeFakeCtx();
         const engine = makeEngineThis(ctx);
         updateHUD.call(engine);
-        // No save(), no fillText, no anything — early return.
-        expect(log).toEqual([]);
+        // Top-left cluster paints — at minimum a `save()` is issued
+        // by the health bar / triforce / XP draws. The 5.95.0 early-
+        // return blocked all of this; 5.96.0 lets it through.
+        expect(log.length).toBeGreaterThan(0);
     });
 
-    test('mobile mode: drawCanvasTriforce / drawXPBar / drawLevelAndCoinsDisplay are never invoked', () => {
+    test('mobile mode: drawCanvasTriforce + drawXPBar + drawLevelAndCoinsDisplay ARE invoked', () => {
         _resetUrlOverrideForTests(true);
         let triforceCalls = 0, xpCalls = 0, lvlCalls = 0;
         const { ctx } = makeFakeCtx();
@@ -100,8 +131,36 @@ describe('updateHUD — mobile no-op (5.95.0)', () => {
         engine.drawXPBar = () => xpCalls++;
         engine.drawLevelAndCoinsDisplay = () => lvlCalls++;
         updateHUD.call(engine);
-        expect(triforceCalls).toBe(0);
-        expect(xpCalls).toBe(0);
-        expect(lvlCalls).toBe(0);
+        // All three helpers run on mobile now — the player needs to see
+        // HP/spare tanks/XP in the RPG redesign.
+        expect(triforceCalls).toBe(1);
+        expect(xpCalls).toBe(1);
+        expect(lvlCalls).toBe(1);
+    });
+
+    test('mobile mode: drawEquippedWeaponSquares is NOT invoked (mobileSimplified branch still hides it)', () => {
+        _resetUrlOverrideForTests(true);
+        let loadoutCalls = 0;
+        const { ctx } = makeFakeCtx();
+        const engine = makeEngineThis(ctx);
+        engine.drawEquippedWeaponSquares = () => loadoutCalls++;
+        updateHUD.call(engine);
+        // 5.92.0's `mobileSimplified` gate still hides the loadout
+        // squares — they're decorative on a phone-sized viewport.
+        expect(loadoutCalls).toBe(0);
+    });
+
+    test('desktop mode: drawCanvasTriforce + drawXPBar + drawLevelAndCoinsDisplay all run', () => {
+        _resetUrlOverrideForTests(false);
+        let triforceCalls = 0, xpCalls = 0, lvlCalls = 0;
+        const { ctx } = makeFakeCtx();
+        const engine = makeEngineThis(ctx);
+        engine.drawCanvasTriforce = () => triforceCalls++;
+        engine.drawXPBar = () => xpCalls++;
+        engine.drawLevelAndCoinsDisplay = () => lvlCalls++;
+        updateHUD.call(engine);
+        expect(triforceCalls).toBe(1);
+        expect(xpCalls).toBe(1);
+        expect(lvlCalls).toBe(1);
     });
 });

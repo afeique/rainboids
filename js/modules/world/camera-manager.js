@@ -8,13 +8,42 @@
 export function updateCamera() {
     if (!this.player || !this.player.active) return;
 
-    // Set camera target to follow player
+    // Set camera target to follow player (so player stays at canvas center
+    // after the world transform, regardless of zoom — the zoom transform
+    // scales around the canvas center).
     this.camera.targetX = this.player.x - this.width / 2;
     this.camera.targetY = this.player.y - this.height / 2;
 
-    // Clamp camera to game field boundaries
-    this.camera.targetX = Math.max(0, Math.min(this.gameField.width - this.width, this.camera.targetX));
-    this.camera.targetY = Math.max(0, Math.min(this.gameField.height - this.height, this.camera.targetY));
+    // 5.96.0 — Clamp camera to game field boundaries with zoom awareness.
+    //   The visible world window has size `width/zoom × height/zoom`
+    //   centered on `camera.{x,y} + {width/2, height/2}` in world coords.
+    //   We want the visible window inside the field where possible.
+    //   When the visible window is LARGER than the field on an axis
+    //   (zoomed-out small field), centre the field on the screen.
+    const zoom = (this.camera && this.camera.zoom) || 1;
+    const visW = this.width / zoom;
+    const visH = this.height / zoom;
+    // Visible-window half-extent offset from camera.x/y (which is the
+    // top-left of the canvas in world coords). The visible window center
+    // sits at camera.x + width/2; its half-width is visW/2; so the
+    // window's left edge is at camera.x + width/2 - visW/2 in world.
+    const halfPadW = (visW - this.width) / 2; // negative when zoom > 1
+    const halfPadH = (visH - this.height) / 2;
+    const minX = -halfPadW;
+    const maxX = this.gameField.width - this.width + halfPadW;
+    const minY = -halfPadH;
+    const maxY = this.gameField.height - this.height + halfPadH;
+    if (maxX < minX) {
+        // visible window wider than the field — centre the field
+        this.camera.targetX = (this.gameField.width - this.width) / 2;
+    } else {
+        this.camera.targetX = Math.max(minX, Math.min(maxX, this.camera.targetX));
+    }
+    if (maxY < minY) {
+        this.camera.targetY = (this.gameField.height - this.height) / 2;
+    } else {
+        this.camera.targetY = Math.max(minY, Math.min(maxY, this.camera.targetY));
+    }
 
     // Smooth camera movement
     this.camera.x += (this.camera.targetX - this.camera.x) * this.camera.smoothing;
@@ -22,10 +51,20 @@ export function updateCamera() {
 }
 
 export function screenToWorldCoordinates(screenX, screenY) {
-    // Convert screen coordinates to world coordinates accounting for camera
+    // 5.96.0 — Inverse of the zoom-around-canvas-center + camera-translate
+    //   transform applied in game-engine.js draw():
+    //     world = (screen - center) / zoom + center + camera
+    //   At zoom=1 this collapses to `screen + camera` (desktop path).
+    //   Sanity: screen=(cx,cy) at the canvas center maps to
+    //     (cx + camera.x, cy + camera.y) — the world coord at screen
+    //     center, which matches the player target (camera.x = player.x -
+    //     width/2 means screen-center world.x = camera.x + width/2 = player.x).
+    const zoom = (this.camera && this.camera.zoom) || 1;
+    const cx = this.width / 2;
+    const cy = this.height / 2;
     return {
-        x: screenX + this.camera.x,
-        y: screenY + this.camera.y
+        x: (screenX - cx) / zoom + cx + this.camera.x,
+        y: (screenY - cy) / zoom + cy + this.camera.y,
     };
 }
 
@@ -38,11 +77,21 @@ export function isEntityOnScreen(entity, buffer = 50) {
     const entityTop = entity.y - entity.radius - buffer;
     const entityBottom = entity.y + entity.radius + buffer;
 
-    // Calculate screen bounds in world coordinates
-    const screenLeft = this.camera.x;
-    const screenRight = this.camera.x + this.canvas.width;
-    const screenTop = this.camera.y;
-    const screenBottom = this.camera.y + this.canvas.height;
+    // 5.96.0 — Visible screen bounds in world coords account for camera
+    //   zoom. At zoom < 1 the visible window is LARGER than the canvas
+    //   pixel size; entities outside the canvas-sized rect but inside the
+    //   zoomed-out rect ARE visible and should be considered on-screen.
+    const zoom = (this.camera && this.camera.zoom) || 1;
+    const cw = this.canvas.width;
+    const ch = this.canvas.height;
+    const visW = cw / zoom;
+    const visH = ch / zoom;
+    const halfPadW = (visW - cw) / 2;
+    const halfPadH = (visH - ch) / 2;
+    const screenLeft = this.camera.x - halfPadW;
+    const screenRight = this.camera.x + cw + halfPadW;
+    const screenTop = this.camera.y - halfPadH;
+    const screenBottom = this.camera.y + ch + halfPadH;
 
     // Check if entity overlaps with screen
     return !(entityRight < screenLeft ||
@@ -52,12 +101,19 @@ export function isEntityOnScreen(entity, buffer = 50) {
 }
 
 export function getVisibleStars(stars) {
-    // Calculate viewport bounds with some padding for smooth transitions
+    // Calculate viewport bounds with some padding for smooth transitions.
+    // 5.96.0 — Honour camera zoom: zoomed-out views see more world, so
+    //   the cull rect expands by 1/zoom around the canvas center.
     const padding = 100;
-    const viewLeft = this.camera.x - padding;
-    const viewRight = this.camera.x + this.width + padding;
-    const viewTop = this.camera.y - padding;
-    const viewBottom = this.camera.y + this.height + padding;
+    const zoom = (this.camera && this.camera.zoom) || 1;
+    const visW = this.width / zoom;
+    const visH = this.height / zoom;
+    const halfPadW = (visW - this.width) / 2;
+    const halfPadH = (visH - this.height) / 2;
+    const viewLeft = this.camera.x - halfPadW - padding;
+    const viewRight = this.camera.x + this.width + halfPadW + padding;
+    const viewTop = this.camera.y - halfPadH - padding;
+    const viewBottom = this.camera.y + this.height + halfPadH + padding;
 
     return stars.filter(star => {
         if (!star.active) return false;

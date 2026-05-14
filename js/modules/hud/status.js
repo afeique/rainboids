@@ -865,17 +865,12 @@ export function drawLevelUpText() {
 
 export function updateHUD() {
         const ctx = this.ctx;
-        // 5.95.0 — Mobile fruit-ninja redesign: drop the top-left status
-        //   cluster entirely (triforce + healthbar + XP). The bottom-
-        //   button bar (SHOP/STATS/PAUSE/PRM/PWR) is still drawn by
-        //   drawHudButtons() outside this function — and defense
-        //   indicators still render via drawDefenseIndicators() for the
-        //   reflex/last-stand widgets — so the playable surface remains
-        //   navigable. We DO NOT draw any text/bars/icons in the top-
-        //   left zone in mobile mode. Desktop is unchanged.
-        if (isMobile()) {
-            return;
-        }
+        // 5.96.0 — Reverted the 5.95.0 mobile-only early-return.
+        //   Mobile is an RPG; the player NEEDS to see HP, triforce (spare
+        //   tanks), and XP/level. The loadout / gold / survival-timer
+        //   widgets stay hidden on mobile (see the `mobileSimplified`
+        //   block below at the 5.92.0 simplification) but the core
+        //   top-left status cluster is shared between desktop and mobile.
         // 5.88.3 — top-left cluster:
         //   [triforce] [healthbar] [LV-shield] [level-num]
         //   All share the bar's vertical center (barCenterY = 35). The

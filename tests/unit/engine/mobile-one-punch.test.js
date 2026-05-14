@@ -1,21 +1,23 @@
 /**
- * tests/unit/engine/mobile-one-punch.test.js — 5.95.0
+ * tests/unit/engine/mobile-one-punch.test.js — 5.96.0
  *
- * Pins the GameEngine cheat-flag initialization contract:
- *   - On desktop the `cheats.onePunchMan` flag MUST default to false.
- *   - On mobile the `cheats.onePunchMan` flag MUST be true at construct
- *     time so every bullet hit is a one-shot kill (the fruit-ninja
- *     redesign's "tap to destroy" feel).
+ * Pins the GameEngine cheat-flag initialization contract after the
+ * 5.96.0 RPG-restoration revert:
+ *   - On BOTH desktop and mobile, `cheats.onePunchMan` MUST default to
+ *     false. Mobile is a tower-defense RPG; weapon upgrades, damage
+ *     multipliers, and kill streaks all need to matter, so the
+ *     one-shot-kill cheat is no longer auto-enabled on mobile.
+ *   - The cheat is still available via console for dev/testing.
+ *
+ * History:
+ *   - 5.95.0: introduced `cheats.onePunchMan = !!mobile` for the
+ *     fruit-ninja mobile redesign.
+ *   - 5.96.0: reverted — mobile is back to being an RPG.
  *
  * We don't spin up the full GameEngine here (it requires DOM canvases,
  * audio, input, music, etc.). Instead the test verifies the *formula*
- * that the constructor uses: `this.cheats.onePunchMan = !!this.mobile`,
- * with `this.mobile = isMobile()`. By driving the `?mobile=` URL
- * override we exercise the same boolean source the engine uses.
- *
- * This is the same testing strategy used by tests/unit/wave/mobile-
- * asteroid-size.test.js — mirror the production formula in the test
- * and assert it returns the right boolean for both modes.
+ * that the constructor uses: `this.cheats.onePunchMan = false`,
+ * independent of `this.mobile`.
  */
 
 // Browser shims must precede any imports.
@@ -45,17 +47,19 @@ afterEach(() => {
     _resetUrlOverrideForTests(null);
 });
 
-// Mirror the GameEngine constructor formula: `cheats.onePunchMan = !!mobile`.
+// Mirror the 5.96.0 GameEngine constructor formula:
+//   `cheats.onePunchMan = false` (no mobile branch).
 function freshCheatsForMode() {
-    const mobile = isMobile();
-    return { onePunchMan: !!mobile };
+    // Read isMobile() to assert the formula is independent of it.
+    void isMobile();
+    return { onePunchMan: false };
 }
 
-describe('GameEngine cheats — onePunchMan default (5.95.0)', () => {
-    test('mobile mode: cheats.onePunchMan defaults to TRUE', () => {
+describe('GameEngine cheats — onePunchMan default (5.96.0 RPG-revert)', () => {
+    test('mobile mode: cheats.onePunchMan defaults to FALSE (was TRUE in 5.95.0)', () => {
         _resetUrlOverrideForTests(true);
         const cheats = freshCheatsForMode();
-        expect(cheats.onePunchMan).toBe(true);
+        expect(cheats.onePunchMan).toBe(false);
     });
 
     test('desktop mode: cheats.onePunchMan defaults to FALSE', () => {
