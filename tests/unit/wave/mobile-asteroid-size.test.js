@@ -39,32 +39,44 @@ if (typeof globalThis.navigator === 'undefined') {
 }
 
 import { afterEach, describe, expect, test } from '@jest/globals';
-import { MOBILE_ASTEROID_MAX_RADIUS } from '../../../js/modules/wave/wave-manager.js';
-import { isMobile, _resetUrlOverrideForTests } from '../../../js/modules/platform/platform-detect.js';
+import {
+    MOBILE_ASTEROID_MAX_RADIUS,
+    MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS,
+} from '../../../js/modules/wave/wave-manager.js';
+import { isMobile, isPortrait, _resetUrlOverrideForTests } from '../../../js/modules/platform/platform-detect.js';
 
 afterEach(() => {
     _resetUrlOverrideForTests(null);
 });
 
 // Mirror initializeWaveAsteroid's radius pick. Kept in sync with the
-// real implementation; the constant cap is the SSOT.
+// real implementation; the constants act as SSOT for each branch.
 function pickRadius() {
-    return isMobile()
-        ? 20 + Math.random() * (MOBILE_ASTEROID_MAX_RADIUS - 20)
-        : 30 + Math.random() * 30;
+    if (isMobile()) {
+        return isPortrait()
+            ? 16 + Math.random() * (MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS - 16)
+            : 20 + Math.random() * (MOBILE_ASTEROID_MAX_RADIUS - 20);
+    }
+    return 30 + Math.random() * 30;
 }
 
-describe('mobile asteroid size cap (5.95.0)', () => {
-    test('MOBILE_ASTEROID_MAX_RADIUS is the pinned cap (36 px)', () => {
+describe('mobile asteroid size cap (5.95.0 → 5.95.1)', () => {
+    test('MOBILE_ASTEROID_MAX_RADIUS is the pinned cap (36 px) — landscape mobile', () => {
         expect(MOBILE_ASTEROID_MAX_RADIUS).toBe(36);
     });
 
-    test('mobile mode: spawn radius stays within [20, 36] across 1000 picks', () => {
+    test('MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS is the pinned cap (28 px) — portrait mobile', () => {
+        expect(MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS).toBe(28);
+    });
+
+    test('mobile portrait: spawn radius stays within [16, 28] across 1000 picks', () => {
         _resetUrlOverrideForTests(true);
+        // Confirm test window IS in portrait (400 < 800).
+        expect(isPortrait()).toBe(true);
         for (let i = 0; i < 1000; i++) {
             const r = pickRadius();
-            expect(r).toBeGreaterThanOrEqual(20);
-            expect(r).toBeLessThanOrEqual(MOBILE_ASTEROID_MAX_RADIUS);
+            expect(r).toBeGreaterThanOrEqual(16);
+            expect(r).toBeLessThanOrEqual(MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS);
         }
     });
 
@@ -77,9 +89,9 @@ describe('mobile asteroid size cap (5.95.0)', () => {
         }
     });
 
-    test('mobile cap is meaningfully smaller than desktop minimum spawn', () => {
-        // 36 (mobile max) < 60 (desktop max). Confirms a real difference
-        // in spawn size between the two modes.
+    test('mobile portrait cap is meaningfully smaller than landscape (and desktop minimum)', () => {
+        // 28 < 36 < 60.
+        expect(MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS).toBeLessThan(MOBILE_ASTEROID_MAX_RADIUS);
         expect(MOBILE_ASTEROID_MAX_RADIUS).toBeLessThan(60);
     });
 });

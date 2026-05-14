@@ -11,6 +11,13 @@ import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
 // 5.88.5 Phase-1 wiring — pure-function step from agent D's mp/sim-enemy-extract.
 import { updateEnemy } from '../../sim/enemy.js';
+// 5.95.1 — Mobile fire suppression defense-in-depth. The sim-layer
+// `decideEnemyShooting` already short-circuits on mobile, but the legacy
+// wrapper `updateShooting` path below and the inline spiral-laser shot
+// in `movement.js::weaverSpinupMovement` are second firing paths that
+// would bypass the sim gate. Re-gate them here at the call site.
+// `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait.
+import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
 // Re-export for consumers that import from enemy.js
 export { ENEMY_TYPES };
@@ -62,8 +69,16 @@ export class Enemy {
         }
 
         const sizeMultiplier = Math.min(2.2, 1 + (this.level - 1) * 0.13);
-        this.radius = this.config.size * sizeMultiplier;
-        this.baseRadius = this.config.size * sizeMultiplier;
+        // 5.95.1 — Phone-portrait shrink. On a narrow phone display the
+        // default enemy radii make the play area feel cramped at 1:1 scale.
+        // Multiply by 0.7 in mobile-portrait to free up visual room without
+        // changing damage / HP / speed (the enemies still hit just as hard,
+        // they just take up less screen). Mobile-landscape keeps the
+        // standard 1:1 size — wide viewports don't need the shrink. Desktop
+        // is untouched.
+        const portraitShrink = (isMobile() && isPortrait()) ? 0.7 : 1.0;
+        this.radius = this.config.size * sizeMultiplier * portraitShrink;
+        this.baseRadius = this.radius;
         this.color = this.config.color;
 
         // Calculate mass based on radius (for collision physics)
@@ -550,8 +565,16 @@ export class Enemy {
     updateShooting(gameEngine) {
         if (!gameEngine.enemyBulletPool) return;
         if (!this.targetPlayer) return;
-        
-        
+
+        // 5.95.1 — Mobile fire suppression defense-in-depth. The sim-layer
+        // `decideEnemyShooting` already gates the primary firing pipeline,
+        // but this legacy wrapper path (and the inline call sites it
+        // routes through: handleBurstShooting / shoot / updateWaspMachineGun
+        // / updateSweepLaserSystem / updateSentinelSweep) would bypass it
+        // if anything still calls `updateShooting`. Gate at the entry so
+        // all sub-paths stay inert on mobile.
+        if (isMobile()) return;
+
         // Arc movement enemies can only shoot when stopped
         if (this.config.movePattern === 'arc' && !this.canShoot) return;
         

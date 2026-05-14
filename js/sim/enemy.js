@@ -71,28 +71,42 @@ import { updateBossRage, bossFormationMovement } from '../modules/enemy/boss-rag
 import { isMobile } from '../modules/platform/platform-detect.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5.95.0 — Mobile fruit-ninja kamikaze rules.
+// 5.95.0 → 5.95.1 — Mobile fruit-ninja kamikaze rules.
 //
-// On mobile mode the enemy AI is overridden in two ways:
+// On mobile mode the enemy AI is overridden in three ways:
 //   1) Enemies NEVER fire bullets — `decideEnemyShooting` short-circuits
 //      before pushing any `enemy_fire*` events onto the wrapper drain
 //      buffer, so the firing pipeline (burst, charging, continuous,
 //      single-shot) all stays inert. The player never has projectiles
 //      to dodge.
-//   2) Enemies get a steady velocity bias toward the player every tick
-//      ("kamikaze pull"). This stacks on top of each per-enemy movement
-//      pattern (HUNTER chase, GUARDIAN orbit, etc.) so even patrol-only
-//      types divebomb the player. Contact damage still routes through
-//      the existing player-enemy collision path (collision-system.js
-//      line 1735) so the kamikaze kill behavior is already wired up.
+//   2) Enemies get a STRONG velocity bias toward the player every tick
+//      ("kamikaze pull / divebomb"). This stacks on top of each per-
+//      enemy movement pattern (HUNTER chase, GUARDIAN orbit, etc.) so
+//      even patrol-only types divebomb the player. Contact damage still
+//      routes through the existing player-enemy collision path
+//      (collision-system.js line 1735) so the kamikaze kill behavior is
+//      already wired up.
+//   3) Enemies get a small per-tick random velocity perturbation so they
+//      visibly zigzag/dodge ("evasive feel"). Important because the
+//      player has no projectiles for enemies to actually dodge from in
+//      mobile fruit-ninja mode, so the dodge is purely visual flavor
+//      that breaks up the dead-straight kamikaze line.
 //
-// Strength tuning: 0.6 px / tick (~36 px/s @60Hz) added to each velocity
-// component each tick. Friction in the per-enemy movement patterns
-// damps this back down, so steady-state pull stays generous-but-fair.
-// The 0.6 number is intentionally modest so a confident player still
-// has time to pick targets — the kamikaze is a bias, not an instant
-// closure. Tune by changing this constant if it feels off in playtest.
-const MOBILE_KAMIKAZE_FORCE = 0.6;
+// Strength tuning (5.95.1):
+//   • MOBILE_KAMIKAZE_FORCE = 2.5 (was 0.6) — bumped 4x so the dive feels
+//     purposeful instead of a gentle drift. Per-pattern friction still
+//     damps this back down each tick, so steady-state pull is generous
+//     but not instant. A confident player still has time to pick targets.
+//   • MOBILE_RANDOM_WALK = 0.5 — half-pixel-amplitude jitter per axis per
+//     tick. Enough to read as evasive motion at 60 Hz without overwhelming
+//     the kamikaze line of pursuit.
+//   • MOBILE_MAX_KAMIKAZE_SPEED = 6.0 — absolute cap on velocity magnitude
+//     post-kamikaze-and-jitter so an unlucky stack of pulls doesn't
+//     launch enemies off-screen. Per-pattern caps still run first; this
+//     is the safety net for the cumulative bias.
+const MOBILE_KAMIKAZE_FORCE = 2.5;
+const MOBILE_RANDOM_WALK = 0.5;
+const MOBILE_MAX_KAMIKAZE_SPEED = 6.0;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -198,13 +212,17 @@ export function updateEnemy(enemy, ctx, events) {
         enemy.updateMovement(gameEngine);
     }
 
-    // 5.95.0 — Mobile kamikaze pull. Bias velocity toward the player
-    // every tick on top of whatever per-enemy movement pattern just
-    // ran. Even patrol/circle/orbit AIs now bend toward the player
-    // (slow at long range as the inverse-distance contribution is
-    // unit-normalized — the bias is direction only, not strength
-    // falloff). Bosses are excluded so the tier-3+ formation-orbit
-    // mechanic still reads correctly; everyone else gets pulled in.
+    // 5.95.0 → 5.95.1 — Mobile kamikaze pull + random walk + cap.
+    // Bias velocity toward the player every tick on top of whatever
+    // per-enemy movement pattern just ran. Even patrol/circle/orbit AIs
+    // now bend toward the player (slow at long range as the inverse-
+    // distance contribution is unit-normalized — the bias is direction
+    // only, not strength falloff). A small random-walk term layers on
+    // top so the dive reads as evasive motion at 60 Hz. The final
+    // velocity is capped at MOBILE_MAX_KAMIKAZE_SPEED so an unlucky
+    // accumulation of pulls doesn't launch enemies off-screen. Bosses
+    // are excluded so the tier-3+ formation-orbit mechanic still reads
+    // correctly; everyone else gets pulled in.
     if (isMobile() && !enemy.isBoss) {
         const dx = playerRef.x - enemy.x;
         const dy = playerRef.y - enemy.y;
@@ -213,6 +231,19 @@ export function updateEnemy(enemy, ctx, events) {
             const inv = 1 / dist;
             enemy.vel.x += dx * inv * MOBILE_KAMIKAZE_FORCE;
             enemy.vel.y += dy * inv * MOBILE_KAMIKAZE_FORCE;
+        }
+        // Random-walk dodge — visible jitter that reads as evasive
+        // motion even with no projectiles to actually evade.
+        enemy.vel.x += (Math.random() - 0.5) * MOBILE_RANDOM_WALK;
+        enemy.vel.y += (Math.random() - 0.5) * MOBILE_RANDOM_WALK;
+        // Hard cap so cumulative kamikaze + jitter can't escape the
+        // per-pattern speed budgets indefinitely.
+        const sp2 = enemy.vel.x * enemy.vel.x + enemy.vel.y * enemy.vel.y;
+        if (sp2 > MOBILE_MAX_KAMIKAZE_SPEED * MOBILE_MAX_KAMIKAZE_SPEED) {
+            const sp = Math.sqrt(sp2);
+            const k = MOBILE_MAX_KAMIKAZE_SPEED / sp;
+            enemy.vel.x *= k;
+            enemy.vel.y *= k;
         }
     }
 

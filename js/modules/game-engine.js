@@ -38,6 +38,9 @@ import * as hudCombat from './hud/combat.js';
 import * as hudNav from './hud/navigation.js';
 import * as hudOverlays from './hud/overlays.js';
 import * as hudCursor from './hud/cursor.js';
+// 5.95.1 — Mobile touch-position reticle (replaces the desktop laser-
+// pointer aim trace on mobile / fruit-ninja mode).
+import * as hudMobileReticle from './hud/mobile-reticle.js';
 // 5.79.60 — `shop-renderer.js` import removed. The legacy canvas-
 //   based shop renderer was superseded by the HTML overlay
 //   (shop-dom.js); the file now has no live importers. Left on disk
@@ -2575,6 +2578,16 @@ export class GameEngine {
                 // Draw jitter circle to show bullet spread area
                 this.drawJitterCircle();
 
+                // 5.95.1 — Mobile reticle at the last-touched canvas
+                // coordinates. Drawn in screen space so it stays glued
+                // to the user's finger position regardless of camera
+                // movement. Desktop renders the laser-pointer trace
+                // earlier inside the camera transform; this is its
+                // mobile counterpart and ONLY draws on mobile sessions.
+                if (this.mobile) {
+                    this.drawMobileReticle();
+                }
+
                 // 5.88.0 — respawn / post-respawn invincibility countdown
                 // removed entirely. The tank-based hit model has no respawn
                 // window: hits cost a tank, hp refills, gameplay continues.
@@ -2673,6 +2686,9 @@ export class GameEngine {
     drawJitterCircle() { return hudCursor.drawJitterCircle.call(this); }
 
     drawLaserPointerAim() { return hudCursor.drawLaserPointerAim.call(this); }
+
+    // 5.95.1 — Mobile touch-position reticle dispatcher.
+    drawMobileReticle() { return hudMobileReticle.drawMobileReticle.call(this); }
     
     triggerHitstop(frames) { return cam.triggerHitstop.call(this, frames); }
     triggerCameraKick(dx, dy, magnitude) { return cam.triggerCameraKick.call(this, dx, dy, magnitude); }

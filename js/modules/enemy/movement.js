@@ -7,6 +7,10 @@
 
 import { random, GameDimensions } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
+// 5.95.1 — Mobile fire suppression for the Weaver inline spiral-laser
+// shot inside weaverSpinupMovement. Defense-in-depth alongside the sim
+// `decideEnemyShooting` gate.
+import { isMobile } from '../platform/platform-detect.js';
 
 export function chasePlayer() {
     if (!this.targetPlayer) return;
@@ -2138,7 +2142,10 @@ export function weaverSpinupMovement(gameEngine) {
                 this.vel.y = (tdy / dist) * arcSpeed;
             }
 
-            if (this.type !== 'SENTINEL') {
+            if (this.type !== 'SENTINEL' && !isMobile()) {
+                // 5.95.1 — Suppress Weaver inline spiral-laser shot on
+                // mobile. This is a third firing path not covered by the
+                // sim `decideEnemyShooting` gate.
                 // Weaver: fire spiral lasers — each shot fires in the CURRENT faceAngle direction,
                 // creating the spiral pattern as faceAngle rotates at weaverMaxSpinRate
                 if (now - this.weaverLastShot > this.weaverFireInterval) {

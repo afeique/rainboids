@@ -66,7 +66,7 @@ Rainboids is a supercharged asteroids game featuring:
 
 - **Movement**: WASD
 - **Dash**: Shift (5.93.0) — 135 px burst over 250 ms, 1.5 s cooldown, brief i-frames during the burst. Dashes in the current movement direction if you're thrusting, otherwise in the aim direction. Pure movement primitive — works in singleplayer and multiplayer.
-- **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate. A red laser-pointer beam shows where your next primary shot will land — with a tick at the bullet's max range, a reticle around the first enemy/asteroid in line, and fading reticles around any further targets piercing builds will punch through.
+- **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate. A red laser-pointer beam shows where your next primary shot will land — with a tick at the bullet's max range, a reticle around the first enemy/asteroid in line, and fading reticles around any further targets piercing builds will punch through. (Desktop-only since 5.95.1.)
 - **Fire primary**: Hold left-click or ↑ arrow
 - **Fire / charge power weapon**: Spacebar, right-click, or ↓ arrow
 - **Activate defense skill**: Q
@@ -84,9 +84,11 @@ Rainboids is a supercharged asteroids game featuring:
 
 - **Movement**: None. The player ship is **stationary**. Position is locked at the Player.update level; velocity stays at 0.
 - **Aim + slice (tap)**: Tap anywhere on the canvas. The ship rotates to face the touch point AND fires the primary weapon AND fires the equipped power weapon (if it's ready / fully charged) — all on the same tick. **Every hit is a one-shot kill (5.95.0)**: the GameEngine force-enables the `cheats.onePunchMan` flag on mobile so a single tap destroys the asteroid / enemy outright. Taps within ~48 px of an entity's centre snap to that entity. Touchstart triggers the shot for snappy feel; touchend does not re-fire.
-- **Enemies don't fire on mobile (5.95.0)**: All 10 enemy types have their `decideEnemyShooting` branch suppressed in mobile mode. The player never has projectiles to dodge.
-- **Enemies kamikaze toward the player (5.95.0)**: Every non-boss enemy gets a velocity bias toward the player each tick (`MOBILE_KAMIKAZE_FORCE = 0.6` px / tick). Contact damage on collision destroys the ramming enemy.
-- **Asteroids are small (5.95.0)**: Spawn radius is capped at 36 px on mobile (vs 30–60 px on desktop). Split fragments are clamped to the same cap so destroying a parent rock can't seed a giant child.
+- **Enemies don't fire on mobile (5.95.0 → 5.95.1)**: All 10 enemy types have their firing branch suppressed in mobile mode — both the sim-layer `decideEnemyShooting` path and the legacy wrapper `Enemy.updateShooting` + inline Weaver spiral-laser paths. The player never has projectiles to dodge.
+- **Enemies divebomb + zigzag (5.95.0 → 5.95.1)**: Every non-boss enemy gets a strong velocity bias toward the player each tick (`MOBILE_KAMIKAZE_FORCE = 2.5` px / tick) plus a per-tick random-walk perturbation that reads as evasive motion. Velocity is hard-capped at `MOBILE_MAX_KAMIKAZE_SPEED = 6.0` px / tick so the cumulative pull doesn't fling enemies off-screen. Contact damage on collision destroys the ramming enemy.
+- **Aiming reticle at touch (5.95.1)**: A 24-px cyan crosshair tracks the last-touched canvas coordinate. The desktop laser-pointer aim trace is hidden on mobile (replaced by the reticle).
+- **Aim assists disabled (5.95.1)**: Auto Aim / Aim Assist / Auto Fire all force-off on mobile — the tap-to-aim input model is intentionally hands-on. (Desktop assists still work.)
+- **Asteroids are small (5.95.0 → 5.95.1)**: Spawn radius is capped at 36 px on landscape-mobile and **28 px on portrait-mobile** (vs 30–60 px on desktop). Split fragments use the same per-orientation cap. Enemy spawn radii also multiply by 0.7 in portrait-mobile so the playfield feels less crowded on narrow displays.
 - **Auto-magnet drops (5.95.0)**: Health orbs use a 600 / 240 px far/near magnet (vs 320 / 120 on desktop). Gold coins and gold shapes get a new 400 / 80 px mobile-only proximity pull on top of the desktop tractor-beam path. No MAGNET upgrade required.
 - **No top-left HUD (5.95.0)**: Health bar, triforce / energy tanks, XP bar, and level/coins display are all hidden. `updateHUD()` early-returns on mobile. The defense indicators (REFLEXES / LAST_STAND / STATIC_FIELD widgets) still render via `drawDefenseIndicators`.
 - **Power weapon (auto-fire, 5.92.0)**: Even without a tap, the equipped power weapon fires automatically as soon as it's ready — cooldown weapons the instant their cooldown clears; the Charge Shot the instant it's fully charged. Tap-fire and auto-fire pathways are idempotent.
@@ -468,7 +470,8 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── combat.js      #   Damage numbers, target info, powerups, money pickup
 │       │   ├── navigation.js  #   Minimap, off-screen enemy indicators
 │       │   ├── overlays.js    #   Title screen, wavy text, timers, ghosts
-│       │   ├── cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer
+│       │   ├── cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer, laser-pointer aim (desktop-only since 5.95.1)
+│       │   ├── mobile-reticle.js #  Touch-position aiming reticle (5.95.1) — replaces desktop laser-pointer on mobile
 │       │   └── hud-buttons.js #   Canvas SHOP/STATS/PAUSE bar + mobile PRM/PWR side buttons (5.94.0)
 │       ├── world/             # Game world entities and environment
 │       │   ├── asteroid.js    #   Asteroid entity (3D wireframe, splitting)

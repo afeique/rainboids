@@ -11,6 +11,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.95.1] - 2026-05-14
+
+### Fixed — Mobile fruit-ninja polish: bug fixes + assists/aim cleanup
+Round-2 follow-ups to the 5.95.0 fruit-ninja redesign. Six fixes:
+
+- **Enemies still fired on mobile.** The 5.95.0 sim-layer gate
+  (`decideEnemyShooting` in `js/sim/enemy.js`) short-circuited the
+  events pipeline, but two sibling firing paths bypassed it: the legacy
+  `Enemy.updateShooting` wrapper in `js/modules/enemy/enemy.js` (dead-code
+  today but kept for defense-in-depth) and the inline Weaver
+  `shootSpiralLaser` call inside `weaverSpinupMovement` in
+  `js/modules/enemy/movement.js`. Both now gate on `isMobile()` before
+  invoking any firing helper.
+- **Stronger kamikaze + random-walk dodge.** Bumped
+  `MOBILE_KAMIKAZE_FORCE` from 0.6 → 2.5 (4×) so the divebomb feels
+  purposeful instead of a gentle drift. Added a per-tick random-walk
+  velocity perturbation (`MOBILE_RANDOM_WALK = 0.5`) so enemies visibly
+  zigzag — reads as evasive motion at 60 Hz. New
+  `MOBILE_MAX_KAMIKAZE_SPEED = 6.0` cap clamps the cumulative bias so
+  enemies don't fly off-screen.
+- **Aim assists force-disabled on mobile.** Auto Aim / Aim Assist / Auto
+  Fire are desktop-only in the fruit-ninja input model. `Player.update`
+  now treats `assists` as `null` on mobile, making every
+  `assists && assists.X` check fall through cleanly.
+- **Laser pointer aim trace hidden on mobile.** `drawLaserPointerAim` in
+  `js/modules/hud/cursor.js` early-returns on mobile so the desktop ray
+  doesn't compete with the new reticle.
+- **Touch-position reticle.** New `js/modules/hud/mobile-reticle.js`
+  renders a 24-px cyan crosshair at the last-touched canvas coordinate.
+  `MobileTouchHandler._fireAtTap` stashes the coordinate on
+  `engine._mobileLastTouchCanvasX/Y`. The reticle ticks every frame
+  during PLAYING / WAVE_TRANSITION; suppressed when a radial is open.
+- **Phone-portrait playfield shrink.** Cleaner injection point than the
+  camera/transform pipeline (46 call sites). New
+  `MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS = 28` caps asteroid spawn + split
+  radii in portrait mobile (was 36); enemy spawn radii multiply by 0.7
+  in portrait mobile. Landscape mobile keeps the 5.95.0 values; desktop
+  is untouched.
+
+### Tests
+- Added 2 new test files: `tests/unit/enemy/mobile-wrapper-fire-suppression.test.js`
+  (3 tests pinning the `updateShooting` wrapper gate) and
+  `tests/unit/player/mobile-assists-disabled.test.js` (3 tests pinning
+  Auto Aim / Aim Assist force-disable on mobile).
+- Updated `tests/unit/sim/mobile-enemy.test.js` for the new force value
+  (2.5 vs 0.6), random-walk variance, and the velocity cap branch.
+- Updated `tests/unit/wave/mobile-asteroid-size.test.js` for the new
+  portrait branch (28 px cap).
+- Net: +7 tests. Full unit suite **951/951 passing**.
+
+---
+
 ## [5.95.0] - 2026-05-13
 
 ### Changed — Mobile mode is now fruit-ninja slash-the-enemies

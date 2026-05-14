@@ -187,7 +187,7 @@ describe('updateEnemy — mobile fire suppression (5.95.0)', () => {
 
 // ─── 2) Enemies kamikaze toward player ───────────────────────────────
 
-describe('updateEnemy — mobile kamikaze pull (5.95.0)', () => {
+describe('updateEnemy — mobile kamikaze pull (5.95.0 → 5.95.1)', () => {
     test('mobile mode: enemy vel bends toward the player each tick', () => {
         _resetUrlOverrideForTests(true);
         // Player to the right of the enemy at (100, 0) offset.
@@ -201,13 +201,14 @@ describe('updateEnemy — mobile kamikaze pull (5.95.0)', () => {
         updateEnemy(enemy, ctx, events);
 
         // After one tick, vel.x should have gained a positive component
-        // (toward the player on the +x axis). vel.y unchanged because
-        // dy = 0 → contribution along y is 0.
-        expect(enemy.vel.x).toBeGreaterThan(0);
-        expect(enemy.vel.y).toBeCloseTo(0, 5);
+        // (toward the player on the +x axis). vel.y has only the random-
+        // walk component (kamikaze dy=0), so allow a small tolerance.
+        // Kamikaze force = 2.5, random walk = 0.5 → vel.x ≥ 2.0 worst case.
+        expect(enemy.vel.x).toBeGreaterThan(1.5);
+        expect(Math.abs(enemy.vel.y)).toBeLessThan(0.5);
     });
 
-    test('mobile mode: kamikaze pull is direction-only (unit normalized)', () => {
+    test('mobile mode: kamikaze pull is direction-dominant (4:3 bias toward player)', () => {
         _resetUrlOverrideForTests(true);
         // 3-4-5 triangle: dx=3, dy=4, dist=5
         const player = { x: 503, y: 404, active: true };
@@ -215,15 +216,46 @@ describe('updateEnemy — mobile kamikaze pull (5.95.0)', () => {
         enemy.lastShot = Date.now();
         const ctx = makeCtx(player);
         const events = [];
+
+        // Average many ticks so the random-walk component (mean=0)
+        // averages out and the kamikaze direction dominates the ratio.
+        let sumVx = 0, sumVy = 0;
+        const N = 200;
+        for (let i = 0; i < N; i++) {
+            const e = makeEnemy({ x: 500, y: 400 });
+            e.lastShot = Date.now();
+            const ev = [];
+            updateEnemy(e, ctx, ev);
+            sumVx += e.vel.x;
+            sumVy += e.vel.y;
+        }
+        const avgVx = sumVx / N;
+        const avgVy = sumVy / N;
+        // Force = 2.5 → vx += 2.5 * 0.6 = 1.5, vy += 2.5 * 0.8 = 2.0.
+        // Ratio = 2.0 / 1.5 = 4/3. Random walk averages to ~0.
+        // Allow loose tolerance (random walk has variance per N samples).
+        const ratio = avgVy / avgVx;
+        expect(ratio).toBeCloseTo(4 / 3, 1);
+    });
+
+    test('mobile mode: velocity is capped (MOBILE_MAX_KAMIKAZE_SPEED safety net)', () => {
+        _resetUrlOverrideForTests(true);
+        // Player far away so kamikaze normalized direction is stable.
+        const player = { x: 5000, y: 400, active: true };
+        const enemy = makeEnemy({ x: 500, y: 400 });
+        // Pre-load a huge velocity to trigger the cap branch.
+        enemy.vel.x = 100;
+        enemy.vel.y = 100;
+        enemy.lastShot = Date.now();
+        const ctx = makeCtx(player);
+        const events = [];
+
         updateEnemy(enemy, ctx, events);
 
-        // After unit normalize: dx/dist = 0.6, dy/dist = 0.8.
-        // Force = 0.6 → vx += 0.6 * 0.6 = 0.36, vy += 0.6 * 0.8 = 0.48.
-        // Position then integrates so x/y change too; we only assert
-        // direction on vel which is the bias source.
-        const ratio = enemy.vel.y / enemy.vel.x;
-        // ratio = 0.8 / 0.6 = 1.333...
-        expect(ratio).toBeCloseTo(4 / 3, 5);
+        // After one tick the cap should clamp the velocity magnitude.
+        // 6.0 is the cap, allow tiny floating-point slack.
+        const sp = Math.hypot(enemy.vel.x, enemy.vel.y);
+        expect(sp).toBeLessThanOrEqual(6.0 + 1e-6);
     });
 
     test('desktop mode: no kamikaze pull is applied', () => {
@@ -238,8 +270,9 @@ describe('updateEnemy — mobile kamikaze pull (5.95.0)', () => {
         updateEnemy(enemy, ctx, events);
 
         // No movement helper actually moves the enemy in this stub; vel
-        // should remain exactly 0 on desktop.
+        // should remain exactly 0 on desktop (no random walk either).
         expect(enemy.vel.x).toBe(beforeVx);
+        expect(enemy.vel.y).toBe(0);
     });
 
     test('mobile mode: bosses are EXEMPT from the kamikaze pull (formation/orbit AI takes priority)', () => {
@@ -252,7 +285,8 @@ describe('updateEnemy — mobile kamikaze pull (5.95.0)', () => {
 
         updateEnemy(enemy, ctx, events);
 
-        // Boss exempt: vel.x stays at 0 (no kamikaze contribution).
+        // Boss exempt: vel stays at 0 (no kamikaze and no random walk).
         expect(enemy.vel.x).toBe(0);
+        expect(enemy.vel.y).toBe(0);
     });
 });
