@@ -25,14 +25,17 @@ export function updateActiveSkills(dt) {
         this.tractorShieldAngle = this.angle;
     }
 
-    // Phase dash
+    // Dash motion (5.93.0 — was the PHASE_DASH defense skill; now a
+    // SHIFT-key core movement primitive triggered by Player._triggerDash).
+    // The per-frame kinematics + auto-exit logic live here because the
+    // dash position update has always been driven from updateActiveSkills.
+    // I-frames are signalled by `isDashing` itself (see player.isDashIFrameActive).
     if (this.isDashing) {
         this.dashTimer -= dt;
         this.x += this.dashVelX * (dt / 1000);
         this.y += this.dashVelY * (dt / 1000);
         if (this.dashTimer <= 0) {
             this.isDashing = false;
-            this.invulnerable = false;
         }
     }
 
@@ -291,10 +294,12 @@ export function cycleSkill() {
 
 // Maps DEFENSE_SKILLS id → audio MANIFEST sound name. 5.68.9 — was
 // silent; each skill now plays its accent on activation.
+// 5.93.0 — PHASE_DASH removed from defense skills (now a SHIFT-key
+// movement primitive). The `phaseDash` sound is still used — see
+// Player._triggerDash, which plays it directly via audioManager.
 const SKILL_ACTIVATE_SOUND = {
     BULWARK:        'bulwark',
     REPAIR_NANITES: 'repairNanites',
-    PHASE_DASH:     'phaseDash',
     DEFLECTOR_ORBS: 'deflectorOrbs',
     EMP_PULSE:      'empPulse',
     TRACTOR_SHIELD: 'tractorShield',
@@ -335,6 +340,13 @@ export function updateSkillCooldowns(dt) {
     // Update power weapon cooldown
     if (this.powerCooldown > 0) {
         this.powerCooldown = Math.max(0, this.powerCooldown - dt);
+    }
+
+    // 5.93.0 — dash cooldown (SHIFT-key core movement primitive).
+    // Decays each frame independently of the defense-skill cooldown so
+    // dashing doesn't interfere with the activeSkill cycle.
+    if (this.dashCooldown > 0) {
+        this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     }
 
     // Update active skill effects

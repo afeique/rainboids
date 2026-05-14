@@ -40,11 +40,13 @@ describe('mp-feature-flags', () => {
         expect(isAbilityMpSafe('definitely-unknown-id-xyz')).toBe(true);
     });
 
-    test('all six defense skills are in the unsafe list and return false', () => {
+    test('all five remaining defense skills are in the unsafe list and return false', () => {
+        // 5.93.0 — PHASE_DASH was removed from defense skills and is
+        // now a core SHIFT-key movement primitive (MP-safe — pure
+        // player input + position kinematics).
         const defenseSkills = [
             'BULWARK',
             'REPAIR_NANITES',
-            'PHASE_DASH',
             'DEFLECTOR_ORBS',
             'EMP_PULSE',
             'TRACTOR_SHIELD',
@@ -53,6 +55,17 @@ describe('mp-feature-flags', () => {
             expect(MP_UNSAFE_ABILITIES_LIST).toContain(id);
             expect(isAbilityMpSafe(id)).toBe(false);
         }
+    });
+
+    test('PHASE_DASH is no longer in the unsafe list (5.93.0 — promoted to core dash)', () => {
+        // The SHIFT-key dash is pure player input + position kinematics
+        // with no server-side mirror required. Confirmation that the
+        // MP gate doesn't suppress it in online mode.
+        expect(MP_UNSAFE_ABILITIES_LIST).not.toContain('PHASE_DASH');
+        // isAbilityMpSafe defaults unknown ids to true, so PHASE_DASH
+        // now returns true (it's not in either list — the helper falls
+        // through to the permissive default).
+        expect(isAbilityMpSafe('PHASE_DASH')).toBe(true);
     });
 
     test('all power weapons are in the unsafe list and return false', () => {

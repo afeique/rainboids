@@ -170,11 +170,20 @@ export class Player {
         // Deflector orbs state
         this.deflectorOrbs = [];
 
-        // Phase dash state
+        // Dash state (5.93.0 — was PHASE_DASH defense skill, now a
+        // SHIFT-key core movement primitive).
+        //   isDashing      — true during the active dash burst; doubles as
+        //                    the i-frame signal (see isDashIFrameActive()).
+        //   dashTimer      — ms remaining in the current dash burst.
+        //   dashVelX/VelY  — fixed-velocity vector for the dash (px/sec);
+        //                    integrated each frame in skills.updateActiveSkills.
+        //   dashCooldown   — ms until the next dash can be triggered; decays
+        //                    each frame in updateSkillCooldowns.
         this.isDashing = false;
         this.dashTimer = 0;
         this.dashVelX = 0;
         this.dashVelY = 0;
+        this.dashCooldown = 0;
 
         // Bulwark state
         this.bulwarkActive = false;
@@ -243,6 +252,7 @@ export class Player {
         this.deflectorOrbs = [];
         this.isDashing = false;
         this.dashTimer = 0;
+        this.dashCooldown = 0;
         this.bulwarkActive = false;
         this.regenActive = false;
         this.regenTimer = 0;
@@ -421,7 +431,10 @@ export class Player {
         const prevY = this.y;
 
         // Update invincibility timer (still used by deliberate-save skills:
-        // REFLEXES, LAST_STAND, PHASE_DASH, plus the wave-start grace window).
+        // REFLEXES, LAST_STAND, plus the wave-start grace window). The
+        // SHIFT-key dash i-frames live on `isDashing` / `dashTimer` and
+        // are checked via `isDashIFrameActive()` at the collision sites
+        // — they don't go through invincibilityTimer.
         if (this.invincibilityTimer > 0) {
             this.invincibilityTimer -= GAME_CONFIG.LOGIC_TICK_MS;
             if (this.invincibilityTimer <= 0) {
@@ -761,6 +774,15 @@ export class Player {
             input.activateSkill = false; // consume one-shot pulse
         }
 
+        // 5.93.0 — SHIFT-key dash. One-shot pulse from input-handler.js
+        // fires the dash through _triggerDash, which honors the cooldown
+        // / already-dashing guards itself. Pulse is consumed regardless
+        // so a press during cooldown doesn't queue up a later dash.
+        if (input.dashPulse) {
+            this._triggerDash(audioManager);
+            input.dashPulse = false; // consume one-shot pulse
+        }
+
         // 5.64.15 — beamTimer-based deactivation removed. Lance Beam is
         // now a continuous tether driven by `input.fire` directly in
         // the weapons.js update loop. The legacy timer is preserved but
@@ -903,14 +925,70 @@ export class Player {
     }
 
     activateSkill() {
-        // MP gate — all six defense skills mutate ship state in ways the
-        // server doesn't model yet, so they're suppressed in online mode.
+        // MP gate — the five remaining defense skills mutate ship state
+        // in ways the server doesn't model yet, so they're suppressed
+        // in online mode. (PHASE_DASH was the sixth, moved to the SHIFT
+        // key as a core MP-safe movement primitive in 5.93.0.)
         // The Q-key one-shot pulse is consumed in update() regardless
         // (see input.activateSkill = false right after the call site),
         // so an early-return here means no cooldown, no FX, no audio,
         // and the input stays consumed.
         if (this._isAbilitySuppressedByMp(this.activeSkill)) return false;
         return skills.activateSkill.call(this);
+    }
+
+    // ── SHIFT-key dash (5.93.0) ─────────────────────────────────────────
+    // Core movement primitive — no longer a defense skill. Pure player
+    // input + position kinematics, so it's MP-safe with no server-side
+    // mirror needed (position updates flow through the existing predicted-
+    // ship pipeline).
+    //
+    // Constants exposed as static so unit tests can read them without
+    // poking at hand-tuned magic numbers.
+    static DASH_DURATION_MS  = 250;
+    static DASH_COOLDOWN_MS  = 1500;
+    static DASH_DISTANCE_PX  = 135;  // matches the old PHASE_DASH 150px feel after duration tuning
+
+    /** Trigger a dash burst if available. Returns true on success. */
+    _triggerDash(audioManager = null) {
+        if (this.isDashing) return false;
+        if (this.dashCooldown > 0) return false;
+
+        // Direction: prefer the *aim* angle (this.angle is the live aim
+        // direction, set above in update() and by ship physics). This
+        // makes the dash feel like a thrust forward — same as charging
+        // movement uses. Falls back to the current velocity direction
+        // when the ship has significant momentum to keep the dash
+        // intuitive while sidestepping.
+        const speed = Math.hypot(this.vel.x, this.vel.y);
+        let angle = this.angle;
+        if (speed > 0.5) {
+            // Use the velocity-aligned angle when actively moving so a
+            // dash mid-strafe stays in the strafe direction.
+            angle = Math.atan2(this.vel.y, this.vel.x);
+        }
+
+        // px/sec speed needed to traverse DASH_DISTANCE_PX in DASH_DURATION_MS.
+        const dashSpeed = (Player.DASH_DISTANCE_PX * 1000) / Player.DASH_DURATION_MS;
+        this.isDashing    = true;
+        this.dashTimer    = Player.DASH_DURATION_MS;
+        this.dashVelX     = Math.cos(angle) * dashSpeed;
+        this.dashVelY     = Math.sin(angle) * dashSpeed;
+        this.dashCooldown = Player.DASH_COOLDOWN_MS;
+
+        // Audio — keep the existing phaseDash.wav (defense-skill removal
+        // doesn't kill the sound). audioManager may be null in test paths;
+        // also fall back to the live gameEngine reference if available.
+        const audio = audioManager || (this.gameEngine && this.gameEngine.audioManager) || null;
+        if (audio && typeof audio.playSound === 'function') {
+            audio.playSound('phaseDash');
+        }
+        return true;
+    }
+
+    /** I-frame helper — true while a dash burst is active. */
+    isDashIFrameActive() {
+        return !!this.isDashing && this.dashTimer > 0;
     }
 
     getActiveSkillConfig() {

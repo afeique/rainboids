@@ -1666,8 +1666,10 @@ export function handlePlayerEnemyCollision(player, enemy) {
             const bulwarkReduction = player.getPowerupStacks('IRON_WILL') > 0 ? 0.65 : 0.5;
             reducedDamage *= (1 - bulwarkReduction);
         }
-        // Phase dash invulnerability
-        if (player.activeSkillEffects && player.activeSkillEffects.has('PHASE_DASH')) {
+        // 5.93.0 — Dash i-frames. PHASE_DASH was promoted from a defense
+        // skill to a core SHIFT-key movement primitive; dashing through
+        // an enemy still zeroes damage during the burst window.
+        if (player.isDashIFrameActive && player.isDashIFrameActive()) {
             reducedDamage = 0;
         }
         const finalDamage = Math.round(reducedDamage);
@@ -1828,8 +1830,10 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
         const bulwarkReduction = player.getPowerupStacks('IRON_WILL') > 0 ? 0.65 : 0.5;
         reducedDamage *= (1 - bulwarkReduction);
     }
-    // Phase dash invulnerability
-    if (player.activeSkillEffects && player.activeSkillEffects.has('PHASE_DASH')) {
+    // 5.93.0 — Dash i-frames. PHASE_DASH was promoted from a defense
+    // skill to a core SHIFT-key movement primitive; dashing through
+    // an enemy bullet still zeroes damage during the burst window.
+    if (player.isDashIFrameActive && player.isDashIFrameActive()) {
         reducedDamage = 0;
     }
     const finalDamage = Math.round(reducedDamage);

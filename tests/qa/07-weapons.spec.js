@@ -199,19 +199,22 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     });
 
     test('buying a skill equips it (5.64.11 — was slot 0 assignment)', async ({ page }) => {
+        // 5.93.0 — PHASE_DASH removed from defense skills (now a SHIFT-
+        // key core movement primitive). DEFLECTOR_ORBS substitutes here
+        // as a representative defense skill for the equip-on-buy contract.
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openShop();
             ge.shopCategory = 'SKILLS';
             ge._rebuildShopCache();
-            ge.buyShopItem('PHASE_DASH');
+            ge.buyShopItem('DEFLECTOR_ORBS');
             return {
                 active: ge.player.activeSkill,
                 owned: [...ge.player.ownedSkills],
             };
         });
-        expect(result.owned).toContain('PHASE_DASH');
-        expect(result.active).toBe('PHASE_DASH');
+        expect(result.owned).toContain('DEFLECTOR_ORBS');
+        expect(result.active).toBe('DEFLECTOR_ORBS');
     });
 
     // ------------------------------------------------------------------
