@@ -11,6 +11,7 @@
 //   Wave  20    : FINAL BOSS — The Last Stand (4× TITAN bossTier 4)
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES } from '../core/constants.js';
+import { isMobile } from '../platform/platform-detect.js';
 
 // 5.75.0 — Each wave is now a SEQUENCE of sub-waves instead of a single
 // burst spawn. `subWaves` is an array of enemy-group arrays; the wave
@@ -159,9 +160,55 @@ export const WAVE_DATA = {
 // Helper function to get wave configuration. Past MAX_WAVES we just clamp
 // to the final boss wave — the run loop should transition to GAME_COMPLETE
 // before getWaveConfig is called for wave 21+.
+//
+// 5.99.1 — Mobile difficulty pass. The desktop wave roster is balanced
+// for keyboard + mouse precision; on mobile the player has one finger,
+// no movement, and a small viewport — having ~15 enemies in a sub-wave
+// (e.g. wave 13: 6 WASPs) is overwhelming. Apply a per-group multiplier
+// to thin the spawns so the mobile playfield reads as casual / clear.
+// Asteroid counts also drop. Bosses (count×bossTier) are preserved so
+// the campaign milestones still feel like milestones.
+//
+// Multipliers (mobile):
+//   - non-boss enemy counts × 0.45  (with a 1-floor)
+//   - asteroid counts × 0.40        (with a 1-floor on non-boss waves)
+//
+// Boss waves keep the boss spawn intact (count + bossTier untouched);
+// only their escort enemies get the reduction.
+function _scaleConfigForMobile(cfg) {
+    if (!cfg) return cfg;
+    const ENEMY_MULT = 0.45;
+    const ASTEROID_MULT = 0.40;
+    const scaleCount = (n) => Math.max(1, Math.round(n * ENEMY_MULT));
+
+    const scaledSubWaves = (cfg.subWaves || []).map((group) =>
+        group.map((entry) => {
+            // Don't thin the boss itself — only escort enemies.
+            if (entry.isBoss) return { ...entry };
+            return { ...entry, count: scaleCount(entry.count) };
+        })
+    );
+
+    const scaledAsteroids = cfg.isBossWave
+        ? Math.max(1, Math.round((cfg.asteroids || 0) * ASTEROID_MULT))
+        : Math.max(1, Math.round((cfg.asteroids || 0) * ASTEROID_MULT));
+
+    return { ...cfg, asteroids: scaledAsteroids, subWaves: scaledSubWaves };
+}
+
+// Per-wave cache so we don't deep-clone on every call. Keyed by wave
+// number; invalidated only by a full page reload (isMobile() reads URL
+// override + the live viewport state at module load).
+const _mobileWaveCache = new Map();
+
 export function getWaveConfig(waveNumber) {
     const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    return WAVE_DATA[w] || WAVE_DATA[1];
+    const base = WAVE_DATA[w] || WAVE_DATA[1];
+    if (!isMobile()) return base;
+    if (_mobileWaveCache.has(w)) return _mobileWaveCache.get(w);
+    const scaled = _scaleConfigForMobile(base);
+    _mobileWaveCache.set(w, scaled);
+    return scaled;
 }
 
 // Returns true when this wave is a scripted boss wave.

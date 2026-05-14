@@ -272,7 +272,13 @@ export function drawTitleScreen() {
             // Side-by-side primary row + optional multiplayer row below.
             buttonsBlockH = buttonH * (1 + mpRows) + (mpRows ? 18 : 0);
         }
-        const recordH = (this.game.survivalRecord > 0) ? 32 : 0;
+        // 5.99.1 — recordH shrinks on mobile to match the smaller record
+        // font (10/12 px) so the layout block computes the correct
+        // content height and the chrome doesn't end up bottom-clamped
+        // with extra whitespace below it on a 640-tall portrait phone.
+        const recordH = (this.game.survivalRecord > 0)
+            ? (_isPortrait ? 18 : (_isLandscape ? 22 : 32))
+            : 0;
         const subtitleH = subtitleFontSize + 8;
         const titleH = titleFontSize + 8;
         const titleSubtitleGap = mobilePortrait ? 20 : 28;
@@ -453,22 +459,40 @@ export function drawTitleScreen() {
             }
 
             if (this.game.survivalRecord > 0) {
-                const recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
+                // 5.99.1 — Mobile uses a compact HH:MM:SS / M:SS form so
+                // "Survival Record: 1 hours, 23 minutes" doesn't run off
+                // the canvas on a 360-wide phone. Desktop keeps the
+                // verbose phrase.
+                let recText;
+                if (_isMobile) {
+                    const totalSec = Math.max(0, Math.floor(this.game.survivalRecord / 1000));
+                    const hh = Math.floor(totalSec / 3600);
+                    const mm = Math.floor((totalSec % 3600) / 60);
+                    const ss = totalSec % 60;
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const tStr = hh > 0
+                        ? `${hh}:${pad(mm)}:${pad(ss)}`
+                        : `${mm}:${pad(ss)}`;
+                    recText = `RECORD ${tStr}`;
+                } else {
+                    recText = `Survival Record: ${this.formatSurvivalTime(this.game.survivalRecord)}`;
+                }
                 // 5.79.0 — outline:true gives a black stroke under the
                 //   wavy gold text for legibility against starfields.
-                // 5.92.1 — Use computed recordY (sits below the button
-                //   block) and shrink the font on narrow viewports so
-                //   the line fits the canvas width.
-                const recFontSize = mobilePortrait
-                    ? Math.min(14, Math.max(10, Math.floor(this.width / 26)))
-                    : 16;
+                // 5.99.1 — Tighter caps on mobile so the record always
+                //   fits in portrait AND landscape phone viewports.
+                const recFontSize = _isPortrait
+                    ? Math.min(10, Math.max(8, Math.floor(this.width / 38)))
+                    : (_isLandscape
+                        ? Math.min(12, Math.max(9, Math.floor(this.height / 50)))
+                        : 16);
                 this.drawWavyText(recText, centerX, recordY, {
                     fontSize: recFontSize,
                     colors: WAVY_PALETTES.gold,
                     amplitude: 0,
                     colorSpeed: 0.14,
                     outline: true,
-                    outlineWidth: 3,
+                    outlineWidth: Math.max(2, Math.floor(recFontSize / 5)),
                 });
             }
 

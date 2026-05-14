@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.99.1] - 2026-05-14
+
+### Changed — Mobile difficulty: 55% fewer enemies, 60% fewer asteroids
+
+Mobile waves felt overwhelming compared to the casual touch-controls
+pitch. `getWaveConfig` now applies per-group scaling on mobile only:
+
+- Non-boss enemy counts × 0.45 (rounded, 1-floor per group)
+- Asteroid counts × 0.40 (1-floor)
+- Boss enemies kept at full count (so the 5/10/15/20 milestones still
+  feel like milestones)
+
+Net effect by sample wave (mobile only):
+  - Wave 1: 7 enemies → 3 enemies, 4 asteroids → 2
+  - Wave 13 (was 14 enemies / 3 asteroids): 8 enemies / 1 asteroid
+  - Wave 20 (final boss): bosses preserved, escort thinned ~half
+
+Implemented via a tiny wave-scaling helper + a per-wave cache so
+subsequent reads are no-cost. Desktop is untouched (verified against
+the unscaled paths in tests/unit/wave.test.js — all green).
+
+### Fixed — Survival record text overflows on phone viewports
+
+The title-screen "Survival Record: X hours, Y minutes, Z seconds"
+line ran off the canvas on narrow phones, and the font was still ~14
+px portrait / 16 px desktop on mobile. Fixed:
+
+- On mobile, render `RECORD HH:MM:SS` (or `RECORD M:SS` for sub-hour
+  runs) instead of the verbose phrase.
+- Font caps cut: portrait ≤ 10 px (was 14), landscape ≤ 12 px (was
+  16). Desktop unchanged at 16 px.
+- The `recordH` layout reservation shrinks proportionally on mobile so
+  the title-block centering math doesn't leave a phantom gap.
+
+---
+
 ## [5.99.0] - 2026-05-14
 
 ### Fixed — Mobile pause stays paused after closing the menu
