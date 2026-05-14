@@ -192,7 +192,7 @@ describe('ServerMsg round-trips', () => {
             type: S2C.SNAPSHOT,
             tick: 100,
             baseTick: null,
-            payload: { ships: [], enemies: [], asteroids: [], drops: [] },
+            payload: { ships: [], enemies: [], asteroids: [], drops: [], bullets: [] },
         });
         expect(out.tick).toBe(100);
         expect(out.baseTick).toBe(null);
@@ -209,6 +209,7 @@ describe('ServerMsg round-trips', () => {
                 enemies: [],
                 asteroids: [],
                 drops: [],
+                bullets: [],
             },
         });
         expect(out.baseTick).toBe(99);

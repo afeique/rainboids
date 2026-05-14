@@ -232,11 +232,33 @@ export function readDropState(r) {
     };
 }
 
+export function writeBulletState(w, s) {
+    w.u32(s.id);
+    w.f32(s.x);
+    w.f32(s.y);
+    w.f32(s.vx);
+    w.f32(s.vy);
+    w.f32(s.angle);
+    w.f32(s.radius);
+}
+export function readBulletState(r) {
+    return {
+        id: r.u32(),
+        x: r.f32(),
+        y: r.f32(),
+        vx: r.f32(),
+        vy: r.f32(),
+        angle: r.f32(),
+        radius: r.f32(),
+    };
+}
+
 export function writeSnapshotPayload(w, s) {
     w.vec(s.ships, writeShipState);
     w.vec(s.enemies, writeEnemyState);
     w.vec(s.asteroids, writeAsteroidState);
     w.vec(s.drops, writeDropState);
+    w.vec(s.bullets, writeBulletState);
 }
 export function readSnapshotPayload(r) {
     return {
@@ -244,6 +266,7 @@ export function readSnapshotPayload(r) {
         enemies: r.vec(readEnemyState),
         asteroids: r.vec(readAsteroidState),
         drops: r.vec(readDropState),
+        bullets: r.vec(readBulletState),
     };
 }
 

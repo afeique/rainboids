@@ -149,12 +149,24 @@ pub struct DropState {
     pub y: f32,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub struct BulletState {
+    pub id: u32,
+    pub x: f32,
+    pub y: f32,
+    pub vx: f32,
+    pub vy: f32,
+    pub angle: f32,
+    pub radius: f32,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SnapshotPayload {
     pub ships: Vec<ShipState>,
     pub enemies: Vec<EnemyState>,
     pub asteroids: Vec<AsteroidState>,
     pub drops: Vec<DropState>,
+    pub bullets: Vec<BulletState>,
 }
 
 // ─── Tagged-union messages ──────────────────────────────────────

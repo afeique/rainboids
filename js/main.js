@@ -283,11 +283,29 @@ class RainboidsGame {
             launch(g.hasSavedRun?.() ? 'continue' : 'new');
         };
 
+        // 5.92.1 — Mobile audio fix. The mousemove/mousedown/keydown
+        //   warmers above never fire on touch devices (iOS Safari fires
+        //   touch events, not synthetic mouse events, until a tap is
+        //   completed). Without a touchstart-path warmer the AudioContext
+        //   stays suspended for the entire session and mobile players
+        //   hear nothing. This listener is dedicated and passive so it
+        //   never blocks scroll or interferes with the gameplay touch
+        //   handler in js/modules/ui/mobile-touch.js (which uses
+        //   { passive: false }) — they're independent listeners on the
+        //   same event.
+        const onTouchWarmAudio = (e) => {
+            if (!_audioWarmed) {
+                _audioWarmed = true;
+                try { this.audioManager.initializeAudio(); } catch {}
+            }
+        };
+
         window.addEventListener('keydown', onKey);
         window.addEventListener('mousedown', onMouseDown);
         window.addEventListener('mouseup',   onMouseUp);
         window.addEventListener('click',     onClick);
         window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchstart', onTouchWarmAudio, { passive: true });
     }
 
     start() {
