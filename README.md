@@ -20,10 +20,11 @@ Visit **[rainboids.cat.computer](https://rainboids.cat.computer)** in any modern
 
 ### Plays on desktop and mobile
 
-Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.96.0) is a **turret-defense RPG** — same RPG progression as desktop (weapon upgrades, damage multipliers, kill streaks, XP and level matter) but with a stationary ship and tap-to-aim controls:
+Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.97.0) is a **turret-defense RPG** — same RPG progression as desktop (weapon upgrades, damage multipliers, kill streaks, XP and level matter) but with a stationary ship and press-and-hold touch controls:
 
 - **The player is stationary.** Movement input is gated off entirely — the ship holds position and the player only aims + fires. The viewport is stable since the camera tracks a fixed point at the field centre.
-- **Tap to aim and fire (5.94.0)**. Tap anywhere on the canvas — the ship rotates to face the touch point AND fires the primary weapon AND fires the equipped power weapon (if it's ready / fully charged). Taps within ~48 px of an entity's centre snap to that entity. Shots do **normal damage** (5.96.0 — RPG-revert from 5.95.0's one-shot-kill mode): weapon upgrades / crit chance / damage multipliers / kill streaks all matter.
+- **Press-and-hold to fire, drag to aim (5.97.0)**. Press anywhere on the canvas to start continuous primary fire; **drag** the finger across the screen to retarget every frame as the ship rotates to track the touch; release to stop firing. The equipped power weapon auto-fires the instant it's ready / fully charged. Touches within ~48 px of an entity's centre snap aim to that entity. Shots do **normal damage** (RPG progression) with an early-wave damage ramp (3.0× on wave 1, decaying to 1.0× by wave 6) so the first couple of waves are killable in 1-2 shots while the player learns the controls.
+- **Dynamic parallax background (5.97.0).** The starfield drifts during play via a synthetic sum-of-sines so the world feels alive even though the ship is fixed.
 - **Camera zoom-out (5.96.0)**. The world transform scales by `0.65` in portrait and `0.8` in landscape, so a phone-sized viewport shows MORE of the playfield per pixel. Player ship + enemies appear smaller; the field is more navigable on a 400-px-wide screen. Desktop stays at `1.0` (no zoom).
 - **Top-left HUD restored (5.96.0)**. Health bar, triforce (spare-tank visualization), and XP/level are visible on mobile again — they're essential for an RPG. The 5.92.0 simplification still hides the secondary loadout squares, gold readout, and survival timer.
 - **Enemies kamikaze, don't shoot (5.95.0).** All 10 enemy types divebomb the player every tick. None of them fire bullets in mobile mode — the player never has projectiles to dodge. Contact damage still applies when an enemy reaches the ship.
@@ -36,7 +37,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **5.96.0**
+Current version: **5.97.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -81,10 +82,11 @@ Rainboids is a supercharged asteroids game featuring:
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
 
-### Mobile (touch) — turret-defense RPG (5.96.0)
+### Mobile (touch) — turret-defense RPG (5.97.0)
 
 - **Movement**: None. The player ship is **stationary**. Position is locked at the Player.update level; velocity stays at 0.
-- **Aim + fire (tap)**: Tap anywhere on the canvas. The ship rotates to face the touch point AND fires the primary weapon AND fires the equipped power weapon (if it's ready / fully charged) — all on the same tick. Shots do **normal damage** (5.96.0 RPG-revert): weapon upgrades, damage multipliers, crit chance/damage, and kill streaks all matter just like on desktop. Taps within ~48 px of an entity's centre snap to that entity. Touchstart triggers the shot for snappy feel; touchend does not re-fire.
+- **Aim + fire (press-and-hold, 5.97.0)**: Press anywhere on the canvas to start continuous primary fire — the ship rotates to face the finger and the primary weapon fires at its native rate while you hold. **Drag** the finger across the screen to retarget every frame; the ship tracks the finger like a turret. Release to stop firing. The equipped power weapon auto-fires the instant it's ready/fully charged. Touch points within ~48 px of an entity's centre snap to that entity. Shots do **normal damage** (RPG progression) plus a temporary **early-wave damage ramp** (5.97.0): wave 1 = 3.0×, wave 2 = 2.3×, wave 3 = 1.7×, ramping back to 1.0× by wave 6 so the first few waves are killable in 1-2 shots while the player learns the controls.
+- **Dynamic parallax background (5.97.0)**: Even though the ship is stationary, the starfield wanders during play via a synthetic drift (a tamer version of the title-screen sandstorm sum-of-sines). Near-depth stars drift more than far ones, so the playfield reads as alive instead of frozen.
 - **Camera zoom-out (5.96.0)**: The world transform applies `scale(zoom, zoom)` around the canvas centre — `0.65` in portrait, `0.8` in landscape, `1.0` on desktop. The visible window in world coords grows by `1/zoom`, so MORE of the field fits on a phone-sized viewport. `screenToWorldCoordinates`, `isEntityOnScreen`, `getVisibleStars`, and the camera clamp all honour the zoom, so tap-to-aim, collision, off-screen culling and snap-to-entity all still work. Zoom is recomputed on resize / orientation flip via `_refreshCameraZoom()`.
 - **Top-left HUD restored (5.96.0)**: Health bar, triforce (spare-tank visualization), and XP/level are visible on mobile again — they're essential for an RPG. The 5.92.0 simplification still hides the secondary loadout squares, gold readout, and survival timer.
 - **Enemies don't fire on mobile (5.95.0 → 5.95.1)**: All 10 enemy types have their firing branch suppressed in mobile mode — both the sim-layer `decideEnemyShooting` path and the legacy wrapper `Enemy.updateShooting` + inline Weaver spiral-laser paths. The player never has projectiles to dodge.
@@ -96,7 +98,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Power weapon (auto-fire, 5.92.0)**: Even without a tap, the equipped power weapon fires automatically as soon as it's ready — cooldown weapons the instant their cooldown clears; the Charge Shot the instant it's fully charged. Tap-fire and auto-fire pathways are idempotent.
 - **PRM and PWR side buttons (5.94.0)**: Two square 64×64 buttons flank the canvas — PRM (left) opens the primary-weapon radial; PWR (right) opens the power-weapon radial. The radials read the live touch position for wedge hover and commit on release.
 - **Bottom button bar (5.92.0)**: SHOP / STATS / PAUSE buttons centered along the bottom of the screen. Direct tap routes to the matching action — they do not fall through to fire-a-shot.
-- **Responsive title (5.92.0)**: NEW GAME / CONTINUE / MULTIPLAYER stack vertically in portrait, sit inline in landscape. Title text shrinks to fit narrow viewports. Pause menu tab + action-button labels shrink in portrait so they fit (5.94.0). The Controls tab also fits in portrait (5.95.0).
+- **Responsive title (5.92.0 → 5.97.0)**: NEW GAME / CONTINUE / MULTIPLAYER stack vertically in portrait, sit inline in landscape. **5.97.0** tightens font caps roughly a third across every full-screen overlay: title (RAINBOIDS) 48 → 36 px portrait cap, Game Over title 72 → 40 px portrait cap with vertical button stack, Wave Intro 120 → 46 px portrait cap, Game Complete responsive. Pause / shop DOM panels scale at 0.82 (was 0.92). Pause menu tab + action-button labels shrink in portrait (5.94.0); the Controls tab fits in portrait (5.95.0).
 
 ### Cheat Codes
 - **`[`**: +1000 Gold

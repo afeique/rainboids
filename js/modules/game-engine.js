@@ -2299,15 +2299,40 @@ export class GameEngine {
                 s.update(playerPos, tractorEngaged);
                 if (!s.active) this.goldShapePool.release(s);
             }
-            // Update background stars with just player velocity for parallax
-            this.backgroundStarPool.activeObjects.forEach(s => s.update(this.player.vel, this.gameField));
+            // Update background stars with player velocity for parallax.
+            // 5.97.0 — Mobile mode has a stationary ship, so player.vel is
+            // always zero and the starfield would freeze. Inject a gentle
+            // synthetic drift (similar palette to the title-screen
+            // sandstorm but tamer so it doesn't fight combat readability)
+            // so the world still feels alive while the player aims.
+            let bgDrift = this.player.vel;
+            if (this.mobile) {
+                const t = Date.now() * 0.001;
+                bgDrift = {
+                    x: Math.cos(t * 0.85) * 3.2
+                     + Math.sin(t * 0.31) * 1.8
+                     + Math.cos(t * 1.7)  * 0.9,
+                    y: Math.sin(t * 0.72) * 2.6
+                     + Math.cos(t * 0.43) * 1.6
+                     + Math.sin(t * 1.5)  * 0.9,
+                };
+            }
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(bgDrift, this.gameField));
 
             // 5.64.16 — feed cumulative ship drift to the WebGL star
             // renderer so its vertex shader applies parallax (the GPU
             // version replaces the per-star CPU mutation that BackgroundStar
             // and ColorStar do for their Canvas2D positions).
-            if (this.starfieldRenderer.accumulateDrift && this.player && this.player.vel) {
-                this.starfieldRenderer.accumulateDrift(this.player.vel.x, this.player.vel.y);
+            // 5.97.0 — On mobile, feed the synthetic drift here too so the
+            // GPU starfield gets the same wandering parallax as the CPU
+            // pool (otherwise the WebGL layer would sit static while the
+            // Canvas2D stars drift).
+            if (this.starfieldRenderer.accumulateDrift) {
+                if (this.mobile) {
+                    this.starfieldRenderer.accumulateDrift(bgDrift.x, bgDrift.y);
+                } else if (this.player && this.player.vel) {
+                    this.starfieldRenderer.accumulateDrift(this.player.vel.x, this.player.vel.y);
+                }
             }
 
             // 5.68.2 — fade the contextual hint overlay if the player ship

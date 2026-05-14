@@ -3,28 +3,20 @@
 // keyboard handlers in InputHandler (which are inert on a phone because
 // there's no keyboard).
 //
-// 5.94.0 — Mobile mode is now a stationary-ship tower-defense game.
-// Auto-pilot was removed and the player can't move. The only gameplay
-// inputs are:
+// 5.97.0 — Press-and-hold continuous fire. Touch-down starts continuous
+// primary fire (input.fire held true) at the tapped point; touchmove
+// updates the aim every frame so the ship tracks the finger across the
+// screen; touchend / touchcancel release fire. Power weapons keep
+// auto-firing whenever they're ready (the auto-fire gate in
+// Player.update already sets `input.fireSecondary` on a hot weapon).
 //
-//   • Tap anywhere on the canvas → aim at the touch point and fire one
-//     shot of the primary weapon AND the equipped power weapon (if it's
-//     ready / fully charged). The power weapon's existing auto-fire
-//     gate (Player.update) also continues to set fireSecondary the
-//     moment the weapon is ready — both pathways are idempotent.
-//   • HUD button taps (SHOP / STATS / PAUSE / PRM / PWR) route to the
-//     matching action and DO NOT fall through to fire-a-shot. The
-//     PRM and PWR buttons open the existing weapon radial in primary
-//     or power mode respectively (replacing the long-press radial
-//     gesture from 5.91–5.93).
-//
-// Long-press radial behaviour is REMOVED. Long presses on empty canvas
-// are a no-op (no fire on release; the tap window already passed).
-// Press-and-drag is also a no-op — the player can't move, so dragging
-// the aim before release doesn't help anything.
-//
-// Why no on-screen joystick: the player ship is stationary. There's
-// nothing to drive. Aim + fire is the only interaction loop.
+// Pre-5.97 (5.94.0) behavior was one tap → one shot via a 2-frame rAF
+// pulse. We retained the tap-snap behavior: a touch that lands on an
+// asteroid / enemy snaps the aim to its centre so the player can
+// "trace" targets with their finger and still hit dead-on. The radial
+// menu, HUD button bar, and PRM/PWR side-buttons all retain their
+// pre-existing tap semantics — only empty-canvas touches enter the
+// continuous-fire path.
 
 import { isMobile } from '../platform/platform-detect.js';
 import { GAME_STATES } from '../core/constants.js';
@@ -256,14 +248,11 @@ export class MobileTouchHandler {
         this._dragged = false;
         this._hudPressedId = null;
 
-        // 5.94.0 — Tap-to-aim-and-fire: the press itself is the fire
-        // event. Pre-aim immediately so even a finger that hovers gets
-        // the ship facing the target; release will not fire again
-        // (one-shot per touch). This deviates from 5.91-5.93 where
-        // touchend fired — but with a stationary ship there's no value
-        // to delaying the shot, and pressing-to-fire feels snappier on
-        // a tower-defense control loop.
-        this._fireAtTap(x, y);
+        // 5.97.0 — Press-and-hold continuous fire. Seed aim + start the
+        // continuous fire session. touchmove will retarget; touchend
+        // will release input.fire.
+        this._setAimFromTouch(x, y);
+        this._beginContinuousFire();
     }
 
     _onTouchMove(e) {
@@ -303,6 +292,12 @@ export class MobileTouchHandler {
         if (dx * dx + dy * dy > DRAG_CANCEL_PX * DRAG_CANCEL_PX) {
             this._dragged = true;
         }
+
+        // 5.97.0 — Drag-to-aim. Update aim every move so the ship
+        // tracks the finger while the player traces across the screen.
+        // Continuous fire was already set by touchstart; this just
+        // retargets it.
+        this._setAimFromTouch(x, y);
     }
 
     _onTouchEnd(e) {
@@ -358,9 +353,8 @@ export class MobileTouchHandler {
             return;
         }
 
-        // 5.94.0 — Tap-to-aim-and-fire already fired at touchstart.
-        // touchend is now a no-op for the firing pipeline; just clean
-        // up state so the next touch is fresh.
+        // 5.97.0 — Release continuous-fire and reset.
+        this._endContinuousFire();
         this._reset();
     }
 
@@ -374,6 +368,10 @@ export class MobileTouchHandler {
         }
         if (this.engine) this.engine._hudPressedButton = null;
         this._hudPressedId = null;
+        // 5.97.0 — Cancel must also release the held primary fire flag
+        // so an interrupted touch (call, system swipe) doesn't leave
+        // input.fire stuck on.
+        this._endContinuousFire();
         this._reset();
     }
 
@@ -384,75 +382,68 @@ export class MobileTouchHandler {
     }
 
     /**
-     * 5.94.0 — The tap action. Aim the ship at the tap point and pulse
-     * both `input.fire` and `input.fireSecondary` for one frame so the
-     * primary weapon fires immediately and any ready/charged power
-     * weapon fires too. Both flags are released on the next
-     * requestAnimationFrame so they don't chain a stream of bullets
-     * from a single tap.
+     * 5.97.0 — Aim from the touch point. Handles snap-to-entity and
+     * sets every aim-related field the rest of the engine consumes
+     * (world-space aimX/Y, canvas-space screenAimX/Y, the reticle
+     * cache, and the player's angle for immediate visual feedback).
      */
-    _fireAtTap(canvasX, canvasY) {
+    _setAimFromTouch(canvasX, canvasY) {
         const ge = this.engine;
         const input = ge.inputHandler && ge.inputHandler.input;
         if (!input) return;
         const player = ge.player;
 
-        // Convert canvas-space to world-space.
         const w = this._worldCoords(canvasX, canvasY);
-
-        // If the tap landed on (or near) an entity, snap the aim to its
-        // centre — "tap the asteroid, kill the asteroid" feels much
-        // better than "tap-near-asteroid, fire off into space".
         const hit = this._hitEntity(w.x, w.y);
         if (hit) {
             input.aimX = hit.x;
             input.aimY = hit.y;
-            input.screenAimX = canvasX;
-            input.screenAimY = canvasY;
             if (ge.handleEntityTargeting) {
                 ge.handleEntityTargeting(hit.x, hit.y);
             }
         } else {
             input.aimX = w.x;
             input.aimY = w.y;
-            input.screenAimX = canvasX;
-            input.screenAimY = canvasY;
         }
+        input.screenAimX = canvasX;
+        input.screenAimY = canvasY;
 
-        // 5.95.1 — Stash the last-touched canvas coordinates on the
-        // engine so the mobile reticle renderer (hud/mobile-reticle.js)
-        // can draw a crosshair at the touch point on every subsequent
-        // frame, independent of whether `input.screenAimX/Y` gets reset
-        // by other systems (the radial menu, for instance, recenters
-        // it). Persist forever after the first tap — the reticle is a
-        // "where you'll fire next" indicator, not a touch-active flash.
+        // Reticle cache (drawn AFTER the camera transform — see
+        // hud/mobile-reticle.js).
         ge._mobileLastTouchCanvasX = canvasX;
         ge._mobileLastTouchCanvasY = canvasY;
 
-        // 5.94.0 — Snap the player's facing immediately so visual
-        // feedback fires this frame instead of waiting for Player.update
-        // to recompute the angle from aimX/aimY. Player.update will set
-        // this.angle again from atan2(aimY, aimX) (same formula) so the
-        // double-write is byte-for-byte equivalent.
+        // Snap player facing right now so the move-and-aim trace shows
+        // the ship rotating with the finger without a 1-frame lag.
         if (player && typeof player.x === 'number' && typeof player.y === 'number') {
             player.angle = Math.atan2(input.aimY - player.y, input.aimX - player.x);
         }
+    }
 
-        // Pulse fire for ~1 logic tick. Both primary and (any ready /
-        // charged) power weapon will fire on this tick. The existing
-        // Mobile UX v2 auto-fire path also sets fireSecondary; both
-        // pathways converge on the same charging-system pipeline and
-        // setting the flag twice in a frame is idempotent.
+    /**
+     * 5.97.0 — Begin continuous fire. Holds `input.fire` true; the
+     * primary weapon's fire-rate gate in weapons.updateChargingSystem
+     * paces the bullets. `fireSecondary` is NOT held here — the mobile
+     * auto-fire path in Player.update already pulses it the frame any
+     * equipped power weapon becomes ready, which is the right rhythm
+     * for cooldown- and charge-based powers alike.
+     */
+    _beginContinuousFire() {
+        const ge = this.engine;
+        const input = ge.inputHandler && ge.inputHandler.input;
+        if (!input) return;
         input.fire = true;
-        input.fireSecondary = true;
-        const release = () => {
-            input.fire = false;
-            input.fireSecondary = false;
-        };
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => requestAnimationFrame(release));
-        } else {
-            setTimeout(release, 32);
-        }
+    }
+
+    /**
+     * 5.97.0 — Release the held primary-fire flag. Called from
+     * touchend / touchcancel and from any branch that needs to bail
+     * out of the firing path (HUD button commit, radial open).
+     */
+    _endContinuousFire() {
+        const ge = this.engine;
+        const input = ge && ge.inputHandler && ge.inputHandler.input;
+        if (!input) return;
+        input.fire = false;
     }
 }

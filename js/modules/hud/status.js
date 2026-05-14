@@ -13,7 +13,7 @@ import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 // player has a clean top-left status panel (health + triforce + XP)
 // and the bottom-center action button bar — nothing else. Desktop
 // is unchanged.
-import { isMobile } from '../platform/platform-detect.js';
+import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
 export function drawHUD() {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
@@ -134,16 +134,29 @@ export function drawGameComplete() {
     ctx.fillRect(0, 0, this.width, this.height);
 
     const cx = this.width / 2;
-    const titleY = Math.max(120, this.height * 0.18);
-    const subtitleY = titleY + 64;
-    const statsTop = subtitleY + 70;
+    // 5.97.0 — Mobile-responsive layout. Pull the title higher and use
+    // a smaller cap so portrait phones don't show a 64-px title eating
+    // the screen.
+    const _mob = isMobile();
+    const _port = _mob && isPortrait();
+    const titleFS = _port
+        ? Math.min(36, Math.max(22, Math.floor(this.width / 12)))
+        : (_mob
+            ? Math.min(44, Math.max(28, Math.floor(this.height / 10)))
+            : Math.min(64, Math.max(40, Math.floor(this.width / 22))));
+    const subtitleFS = _port
+        ? Math.max(14, Math.floor(titleFS * 0.65))
+        : (_mob
+            ? Math.max(16, Math.floor(titleFS * 0.6))
+            : Math.max(28, Math.floor(this.width / 36)));
+    const titleY = Math.max(_mob ? 60 : 120, this.height * (_port ? 0.10 : 0.18));
+    const subtitleGap = _mob ? Math.floor(titleFS * 0.9) : 64;
+    const subtitleY = titleY + subtitleGap;
+    const statsGap = _mob ? Math.floor(subtitleFS * 1.6) : 70;
+    const statsTop = subtitleY + statsGap;
 
-    // Title — wavy multicolor "GAME COMPLETE!"
-    // 5.72.0 — title size cut roughly 40% (110→64 cap, 64→40 floor,
-    // /14→/22 width-relative). Was overflowing on smaller viewports
-    // and dwarfing the stats below it.
     this.drawWavyText('GAME COMPLETE!', cx, titleY, {
-        fontSize: Math.min(64, Math.max(40, Math.floor(this.width / 22))),
+        fontSize: titleFS,
         colors: WAVY_PALETTES.waveTitle,
         speed: 0.45,
         colorSpeed: 0.18,
@@ -153,7 +166,7 @@ export function drawGameComplete() {
     const totalMs = stats.finalTimeMs || (Date.now() - (stats.gameStartTime || Date.now()));
     const timeStr = formatDuration(totalMs);
     ctx.fillStyle = '#cfeaff';
-    ctx.font = `bold ${Math.max(28, Math.floor(this.width / 36))}px monospace`;
+    ctx.font = `bold ${subtitleFS}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`TIME  ${timeStr}`, cx, subtitleY);
@@ -176,9 +189,17 @@ export function drawGameComplete() {
         ['Preferred Weapon',   preferredWeaponId || '—'],
     ];
 
-    const lineFS = Math.max(18, Math.floor(this.width / 60));
-    const lineH = lineFS + 12;
-    const colWidth = Math.min(560, this.width * 0.62);
+    // 5.97.0 — Smaller stat lines on portrait so the 10-row block fits
+    // inside the canvas under the title without overflowing.
+    const lineFS = _port
+        ? Math.max(11, Math.floor(this.width / 30))
+        : (_mob
+            ? Math.max(13, Math.floor(this.width / 50))
+            : Math.max(18, Math.floor(this.width / 60)));
+    const lineH = lineFS + (_mob ? 6 : 12);
+    const colWidth = _port
+        ? Math.min(this.width - 32, this.width * 0.92)
+        : Math.min(560, this.width * 0.62);
     const labelX = cx - colWidth / 2;
     const valueX = cx + colWidth / 2;
     ctx.font = `${lineFS}px monospace`;
@@ -268,8 +289,17 @@ export function drawWaveIntroOverlay() {
     this.ctx.globalAlpha = alpha;
     const centerX = this.width / 2;
     const centerY = this.height / 2;
-    const titleFS = Math.min(120, Math.max(64, Math.floor(this.width / 14)));
-    const subtitleFS = Math.max(20, Math.floor(titleFS / 4));
+    // 5.97.0 — Cap the wave-intro title much smaller on mobile. The
+    // 120/64 cap was eating most of a portrait phone viewport for a
+    // moment that the player can't even interact with.
+    const _mob = isMobile();
+    const _port = _mob && isPortrait();
+    const titleFS = _port
+        ? Math.min(46, Math.max(28, Math.floor(this.width / 10)))
+        : (_mob
+            ? Math.min(64, Math.max(38, Math.floor(this.height / 9)))
+            : Math.min(120, Math.max(64, Math.floor(this.width / 14))));
+    const subtitleFS = Math.max(_mob ? 12 : 20, Math.floor(titleFS / 4));
     const gap = Math.floor(titleFS * 0.85);
 
     this.drawWavyText(msg.title, centerX, centerY, {

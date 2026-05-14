@@ -210,15 +210,18 @@ export function drawTitleScreen() {
         const _isPortrait = _isMobile && isPortrait();
         const _isLandscape = _isMobile && !isPortrait();
 
-        // Sizing: tighter caps on portrait so a 360-wide phone shows a
-        // ~45px title (not the 72px overflow) and a 14-16px subtitle.
+        // 5.97.0 — Tighter mobile sizing. The 5.92 caps were still too
+        // chunky on a typical 390-wide phone in portrait (title ≈ 48 px
+        // dominated the screen). Cut roughly a third off the cap and
+        // raise the width divisor so the title reads as ONE element of
+        // the layout, not the whole screen.
         const titleFontSize = _isPortrait
-            ? Math.min(48, Math.max(32, Math.floor(this.width / 8)))
+            ? Math.min(36, Math.max(22, Math.floor(this.width / 11)))
             : (_isLandscape
-                ? Math.min(56, Math.max(36, Math.floor(this.height / 7)))
+                ? Math.min(42, Math.max(26, Math.floor(this.height / 9)))
                 : 72);
         const subtitleFontSize = _isMobile
-            ? Math.min(20, Math.max(12, Math.floor(titleFontSize / 3.2)))
+            ? Math.min(14, Math.max(9, Math.floor(titleFontSize / 3.0)))
             : 24;
 
         // ── Button + spacing budgets (computed up front so we can place
@@ -229,20 +232,18 @@ export function drawTitleScreen() {
         const mobileLandscape = _isLandscape;
         let buttonW, buttonH, buttonGap;
         if (mobilePortrait) {
-            // 5.92.1 — narrower (≤280px) + shorter (48px) so the full
-            // stack of NEW GAME / CONTINUE / MULTIPLAYER plus the
-            // survival-record and version tag fits inside a 640px-tall
-            // portrait viewport.
-            buttonW = Math.min(280, Math.max(200, this.width * 0.85));
-            buttonH = 48;
-            buttonGap = 12;
+            // 5.97.0 — Slimmer buttons (≤220px, 40px tall) — the 5.92
+            // 48-px-tall stack felt oversized on phones once the title
+            // shrank. Still well above the 44px tap-target floor when
+            // measured with the implicit 8px padding rounding.
+            buttonW = Math.min(220, Math.max(160, this.width * 0.75));
+            buttonH = 40;
+            buttonGap = 10;
         } else if (mobileLandscape) {
-            // 5.92.1 — slimmer side-by-side buttons (≤180px) so the
-            // two-up row plus the optional MULTIPLAYER bar below fit
-            // under the title without overlap.
-            buttonW = Math.min(180, Math.max(140, this.width * 0.35));
-            buttonH = 44;
-            buttonGap = 16;
+            // 5.97.0 — Pair with the smaller title; side-by-side stays.
+            buttonW = Math.min(160, Math.max(120, this.width * 0.30));
+            buttonH = 38;
+            buttonGap = 14;
         } else {
             buttonW = 220;
             buttonH = 46;
@@ -978,6 +979,14 @@ export function drawGameOverScreen() {
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
 
+    // 5.97.0 — Mobile-responsive layout. Portrait stacks buttons
+    // vertically; both mobile orientations shrink the title text +
+    // button sizes so the screen reads as one element instead of
+    // dominating a 390-px phone viewport.
+    const _isMobile = isMobile();
+    const _isPortrait = _isMobile && isPortrait();
+    const _isLandscape = _isMobile && !isPortrait();
+
     // Dim the playfield further (atop the 0.5 black overlay drawn by
     // game-engine's GAME_OVER block) so the screen reads as terminal
     // rather than a paused beat.
@@ -986,46 +995,93 @@ export function drawGameOverScreen() {
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.restore();
 
-    // GAME OVER title — wavy palette, large, with a black outline so it
-    // stays legible over any explosion shrapnel still in flight.
-    this.drawWavyText('GAME OVER', centerX, centerY - 110, {
-        fontSize: 72,
+    // GAME OVER title — wavy palette, sized responsively. The 72-px
+    // desktop value overflowed narrow phones, so we cut it to a
+    // viewport-relative cap on mobile (~40 px portrait, 48 px landscape).
+    const titleFS = _isPortrait
+        ? Math.min(40, Math.max(26, Math.floor(this.canvas.width / 10)))
+        : (_isLandscape
+            ? Math.min(48, Math.max(30, Math.floor(this.canvas.height / 8)))
+            : 72);
+    const summaryFS = _isMobile
+        ? Math.max(11, Math.floor(titleFS / 3.0))
+        : 22;
+    // Button sizing matches the title-screen mobile pattern.
+    let buttonW, buttonH, buttonGap;
+    if (_isPortrait) {
+        buttonW = Math.min(220, Math.max(160, this.canvas.width * 0.75));
+        buttonH = 40;
+        buttonGap = 10;
+    } else if (_isLandscape) {
+        buttonW = Math.min(170, Math.max(130, this.canvas.width * 0.30));
+        buttonH = 38;
+        buttonGap = 14;
+    } else {
+        buttonW = 220;
+        buttonH = 46;
+        buttonGap = 36;
+    }
+
+    // Compute a balanced vertical layout block height so the content
+    // sits centered on tiny viewports without overflowing.
+    const titleH = titleFS + 12;
+    const titleSummaryGap = _isMobile ? 18 : 32;
+    const summaryH = summaryFS + 6;
+    const summaryButtonsGap = _isMobile ? 22 : 36;
+    const buttonsBlockH = _isPortrait
+        ? buttonH * 2 + buttonGap
+        : buttonH;
+    const contentH = titleH + titleSummaryGap + summaryH + summaryButtonsGap + buttonsBlockH;
+    let contentTop = (this.canvas.height - contentH) / 2;
+    if (contentTop < 16) contentTop = 16;
+    const titleY = contentTop + titleH / 2;
+    const summaryY = titleY + titleH / 2 + titleSummaryGap + summaryH / 2;
+    const buttonsTop = summaryY + summaryH / 2 + summaryButtonsGap;
+
+    this.drawWavyText('GAME OVER', centerX, titleY, {
+        fontSize: titleFS,
         colors: WAVY_PALETTES.gold,
         speed: 0.45,
         colorSpeed: 0.18,
         outline: true,
-        outlineWidth: 6,
+        outlineWidth: Math.max(3, Math.floor(titleFS / 12)),
     });
 
-    // Run summary line: wave reached + survival time. Survival time
-    // comes from this.game.survivalTime (set in updateSurvival).
+    // Run summary line: wave reached + survival time.
     const wave = this.game?.currentWave | 0;
     const survivalMs = (this.game?.survivalTime | 0);
     const seconds = Math.floor(survivalMs / 1000);
     const mm = Math.floor(seconds / 60);
     const ss = String(seconds % 60).padStart(2, '0');
     const summary = `Wave ${wave} · ${mm}:${ss}`;
-    this.drawWavyText(summary, centerX, centerY - 50, {
-        fontSize: 22,
+    this.drawWavyText(summary, centerX, summaryY, {
+        fontSize: summaryFS,
         colors: WAVY_PALETTES.whiteShimmer,
         amplitude: 0,
         colorSpeed: 0.12,
         outline: true,
-        outlineWidth: 4,
+        outlineWidth: Math.max(2, Math.floor(summaryFS / 5)),
     });
 
-    // Buttons — same geometry the title screen uses so the two screens
-    // feel like one button system.
+    // Buttons — vertical stack on portrait, side-by-side everywhere
+    // else (matches the title screen mobile pattern).
     const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
     const labels = ['NEW GAME', 'RESTART WAVE'];
-    const buttonW = 220, buttonH = 46, gap = 36;
-    const totalW = buttonW * 2 + gap;
-    const yTop = centerY + 30;
-    const x0 = centerX - totalW / 2;
-    const rects = {
-        newGame:     { id: 'newGame',     x: x0,                  y: yTop, w: buttonW, h: buttonH, disabled: false },
-        restartWave: { id: 'restartWave', x: x0 + buttonW + gap,  y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun },
-    };
+    let rects;
+    if (_isPortrait) {
+        const x0 = centerX - buttonW / 2;
+        rects = {
+            newGame:     { id: 'newGame',     x: x0, y: buttonsTop,                              w: buttonW, h: buttonH, disabled: false },
+            restartWave: { id: 'restartWave', x: x0, y: buttonsTop + buttonH + buttonGap,        w: buttonW, h: buttonH, disabled: !hasSavedRun },
+        };
+    } else {
+        const totalW = buttonW * 2 + buttonGap;
+        const x0 = centerX - totalW / 2;
+        rects = {
+            newGame:     { id: 'newGame',     x: x0,                       y: buttonsTop, w: buttonW, h: buttonH, disabled: false },
+            restartWave: { id: 'restartWave', x: x0 + buttonW + buttonGap, y: buttonsTop, w: buttonW, h: buttonH, disabled: !hasSavedRun },
+        };
+    }
     this._gameOverButtonRects = rects;
 
     const hovered = this._gameOverHoveredButton;
@@ -1064,7 +1120,13 @@ export function drawGameOverScreen() {
         ctx.fill();
         ctx.stroke();
 
-        ctx.font = "16px 'Press Start 2P', monospace";
+        // 5.97.0 — Scale the button label to match the (now responsive)
+        // button width so "RESTART WAVE" doesn't run into the rounded
+        // edges on a portrait phone.
+        const labelFS = _isPortrait
+            ? (buttonW < 200 ? 10 : 11)
+            : (_isLandscape ? 11 : 16);
+        ctx.font = `${labelFS}px 'Press Start 2P', monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         const tx = x + w / 2;
@@ -1087,7 +1149,8 @@ export function drawGameOverScreen() {
     // i.e. the player died inside their first ~second of wave 1).
     if (!hasSavedRun) {
         ctx.save();
-        ctx.font = "12px 'Press Start 2P', monospace";
+        const hintFS = _isMobile ? 9 : 12;
+        ctx.font = `${hintFS}px 'Press Start 2P', monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillStyle = 'rgba(180, 180, 180, 0.7)';

@@ -4,6 +4,27 @@
 import { GAME_CONFIG } from '../core/constants.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES } from '../combat/weapon-data.js';
 import { autofireDiag } from '../autofire-diag.js';
+import { isMobile } from '../platform/platform-detect.js';
+
+// 5.97.0 — Mobile early-game damage ramp. With a stationary ship, no
+// strafing room, and only a finger for aim, the first few waves are
+// significantly harder on mobile than desktop — even the basic asteroid
+// can soak the default 5 damage from Pulse Cannon for ~3 shots while
+// the player is still learning the touch controls. This ramp multiplies
+// primary damage on mobile so wave 1-2 enemies die in 1-2 shots and the
+// boost decays back to 1× by wave 6. Desktop is unchanged.
+//
+//   Wave 1: 3.0×   Wave 4: 1.4×
+//   Wave 2: 2.3×   Wave 5: 1.15×
+//   Wave 3: 1.7×   Wave 6+: 1.0×
+function getMobileEarlyDamageMultiplier(wave) {
+    if (!isMobile()) return 1;
+    const w = Math.max(1, wave | 0);
+    if (w >= 6) return 1;
+    // 3.0 → 1.0 across waves 1..6 with a gentle curve.
+    const table = [3.0, 2.3, 1.7, 1.4, 1.15, 1.0];
+    return table[w - 1] || 1;
+}
 
 // BIG_BULLETS uses an ADDITIVE pixel boost rather than a multiplicative
 // scalar. With multiplication, weapons whose base bullets are tiny
@@ -1317,6 +1338,11 @@ export function getEffectivePrimaryDamage() {
         const stacks = this.getPowerupStacks('OVERCHARGE');
         damage *= (1 + stacks * 0.15);
     }
+
+    // 5.97.0 — Mobile early-game ramp (desktop unchanged).
+    const ge = (typeof window !== 'undefined') ? window.gameEngine : null;
+    const wave = (ge && ge.game) ? (ge.game.currentWave | 0) : 1;
+    damage *= getMobileEarlyDamageMultiplier(wave);
 
     return damage;
 }

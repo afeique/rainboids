@@ -11,6 +11,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.97.0] - 2026-05-14
+
+### Added — Mobile: press-and-hold continuous fire + drag-aim
+
+The 5.94.0 one-tap-one-shot model was a poor fit for sustained combat on
+mobile. Replaced with a **press-and-hold** control loop:
+
+- **Touch down on empty canvas** starts continuous primary fire — the
+  existing fire-rate gate in `weapons.updateChargingSystem` paces the
+  bullets, so the rhythm matches desktop left-mouse-held.
+- **Touchmove** retargets every frame. Drag the finger across the
+  screen and the ship rotates to track it; the reticle and aim line
+  follow under the finger.
+- **Touchend / touchcancel** release primary fire.
+- **Power weapon** keeps auto-firing the moment it's ready/charged
+  through the existing 5.92 mobile auto-fire path in `Player.update` —
+  no separate gesture needed.
+- HUD buttons (SHOP / STATS / PAUSE / PRM / PWR) and the radial menu
+  keep their pre-existing semantics — they short-circuit before the
+  firing path so a button tap never triggers a shot.
+
+### Added — Mobile: early-wave damage ramp
+
+With a stationary ship, no strafing room, and only a finger to aim,
+wave 1 on mobile previously took ~3 shots per asteroid while the player
+was still learning the controls. Added a mobile-only damage multiplier
+to `getEffectivePrimaryDamage` that tapers from 3.0× on wave 1 down to
+1.0× by wave 6 (`[3.0, 2.3, 1.7, 1.4, 1.15, 1.0]`). Desktop damage is
+unchanged.
+
+### Added — Mobile: dynamic parallax starfield during gameplay
+
+The stationary-ship invariant zeroed `player.vel`, which froze the
+parallax starfield while playing. Injected a synthetic drift (a tamer
+version of the title-screen sandstorm sinusoid sum) so the background
+keeps wandering during play — both the Canvas2D background-star pool
+and the WebGL starfield consume the same drift, so depth-parallax
+reads correctly across both layers.
+
+### Changed — Mobile/portrait UI: smaller text, vertical stacks
+
+User report: title and game-over text were oversized on phones. Cut
+font caps roughly a third across the title screen (RAINBOIDS title 48 →
+36 px portrait cap, subtitle 20 → 14 px), Game Over screen (72 → 40 px
+portrait cap with full responsive layout + portrait vertical button
+stack), wave-intro overlay (120 → 46 px portrait cap), and Game
+Complete screen. Title-screen and game-over buttons shrink to 40 px tall
+× 220 px wide on portrait. Pause / shop DOM panel scale tightened from
+0.92 → 0.82 on portrait. Desktop sizing is untouched.
+
+---
+
 ## [5.96.3] - 2026-05-14
 
 ### Fixed — Ship rotation broken in MP + loopback solo (predicted-angle mirror)

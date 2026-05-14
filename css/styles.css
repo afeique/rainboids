@@ -3008,7 +3008,10 @@ body.mobile-mode #bulletCanvas {
    work as scrollable lists, just with a smaller anchor. */
 body.mobile-portrait #pause-menu,
 body.mobile-portrait #shop-menu {
-    transform: scale(0.92);
+    /* 5.97.0 — Tighter scale (0.92 → 0.82) so the pause / shop panels
+       sit comfortably inside a typical phone viewport instead of
+       pressing against the top + bottom edges. */
+    transform: scale(0.82);
     transform-origin: center center;
 }
 

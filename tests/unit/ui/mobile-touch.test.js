@@ -283,35 +283,27 @@ describe('MobileTouchHandler — non-playable states do not track touches', () =
     });
 });
 
-// ── 5.94.0: Tap-to-aim-and-fire ───────────────────────────────────────────
+// ── 5.97.0: Press-and-hold continuous fire + drag-aim ─────────────────────
 
-describe('MobileTouchHandler — tap-to-aim-and-fire (5.94.0)', () => {
-    it('touchstart on empty canvas sets fire + fireSecondary input flags', () => {
+describe('MobileTouchHandler — press-and-hold continuous fire (5.97.0)', () => {
+    it('touchstart on empty canvas sets input.fire = true (held)', () => {
         const engine = makeEngineStub(GAME_STATES.PLAYING);
         const handler = new MobileTouchHandler(engine);
         const handlers = installAndCapture(handler);
         handlers.touchstart(makeFakeTouchEvent({ identifier: 1, clientX: 0, clientY: 0 }));
-        // Both flags should pulse on touchstart so the primary and any
-        // ready/charged power weapon fire on the same tick.
+        // Primary fire is held while the finger stays down. The fire-rate
+        // gate in Player.update paces the bullets.
         expect(engine.inputHandler.input.fire).toBe(true);
-        expect(engine.inputHandler.input.fireSecondary).toBe(true);
+        // fireSecondary is NOT set here — the mobile auto-fire path in
+        // Player.update pulses it when an equipped power weapon is ready.
     });
 
     it('touchstart sets player.angle to face the tap point', () => {
         const engine = makeEngineStub(GAME_STATES.PLAYING);
-        // Player is at (200, 150) — see makeEngineStub defaults.
-        // jsdom's getBoundingClientRect returns 0×0 so the canvas-coord
-        // multiplication yields (0, 0) for clientX/Y=0. After
-        // screenToWorldCoordinates (identity), the aim point becomes (0, 0)
-        // in world space. atan2(0 - 150, 0 - 200) = atan2(-150, -200) ≈
-        // -2.498 rad. The exact value is irrelevant — the test just
-        // checks the angle changed from its default of 0.
         const handler = new MobileTouchHandler(engine);
         const handlers = installAndCapture(handler);
         engine.player.angle = 0; // start neutral
         handlers.touchstart(makeFakeTouchEvent({ identifier: 1, clientX: 0, clientY: 0 }));
-        // The handler computed atan2 from the player to the touch point,
-        // so angle is no longer the initial 0.
         expect(engine.player.angle).not.toBe(0);
     });
 
@@ -320,23 +312,50 @@ describe('MobileTouchHandler — tap-to-aim-and-fire (5.94.0)', () => {
         const handler = new MobileTouchHandler(engine);
         const handlers = installAndCapture(handler);
         handlers.touchstart(makeFakeTouchEvent({ identifier: 1, clientX: 50, clientY: 50 }));
-        // No radial opened by the bare touch.
         expect(engine.radialMenu._calls.openFor.length).toBe(0);
     });
 
-    it('touchend after a successful tap does NOT re-fire (one shot per touch)', () => {
+    it('touchend releases input.fire so the ship stops firing', () => {
         const engine = makeEngineStub(GAME_STATES.PLAYING);
         const handler = new MobileTouchHandler(engine);
         const handlers = installAndCapture(handler);
         handlers.touchstart(makeFakeTouchEvent({ identifier: 1, clientX: 50, clientY: 50 }));
-        // Simulate the next-rAF release that the handler schedules.
-        // (We don't await rAF here; we instead manually clear and verify
-        // touchend doesn't set fire = true again.)
-        engine.inputHandler.input.fire = false;
-        engine.inputHandler.input.fireSecondary = false;
+        expect(engine.inputHandler.input.fire).toBe(true);
         handlers.touchend(makeFakeTouchEvent({ identifier: 1, clientX: 50, clientY: 50 }));
         expect(engine.inputHandler.input.fire).toBe(false);
-        expect(engine.inputHandler.input.fireSecondary).toBe(false);
+    });
+
+    it('touchmove during press updates aimX/aimY so aim tracks the finger', () => {
+        const engine = makeEngineStub(GAME_STATES.PLAYING);
+        const handler = new MobileTouchHandler(engine);
+        const handlers = installAndCapture(handler);
+        // Identity canvas-coord mapping so the test math is predictable.
+        handler._canvasCoords = (t) => ({ x: t.clientX, y: t.clientY });
+        handlers.touchstart(makeFakeTouchEvent({ identifier: 1, clientX: 50, clientY: 50 }));
+        const aimAfterStart = {
+            x: engine.inputHandler.input.aimX,
+            y: engine.inputHandler.input.aimY,
+        };
+        handlers.touchmove(makeFakeTouchEvent({ identifier: 1, clientX: 250, clientY: 250 }));
+        const aimAfterMove = {
+            x: engine.inputHandler.input.aimX,
+            y: engine.inputHandler.input.aimY,
+        };
+        // Aim must have changed when the finger moved.
+        expect(aimAfterMove.x).not.toBe(aimAfterStart.x);
+        expect(aimAfterMove.y).not.toBe(aimAfterStart.y);
+        // And fire is still held.
+        expect(engine.inputHandler.input.fire).toBe(true);
+    });
+
+    it('touchcancel releases input.fire so an interrupted touch does not stick', () => {
+        const engine = makeEngineStub(GAME_STATES.PLAYING);
+        const handler = new MobileTouchHandler(engine);
+        const handlers = installAndCapture(handler);
+        handlers.touchstart(makeFakeTouchEvent({ identifier: 1, clientX: 50, clientY: 50 }));
+        expect(engine.inputHandler.input.fire).toBe(true);
+        handlers.touchcancel(makeFakeTouchEvent({ identifier: 1, clientX: 50, clientY: 50 }));
+        expect(engine.inputHandler.input.fire).toBe(false);
     });
 });
 
