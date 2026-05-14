@@ -559,101 +559,91 @@ describe('EngineDriver solo — snapshot dispatch in loopback mode', () => {
 // behavioral check that walks the wiring end-to-end via the existing
 // EngineDriver + FakeLoopback fakes.
 
-describe('resolveSoloOptions — Phase 3 default-on wiring', () => {
-    test('plain NEW GAME defaults useLoopback to true', () => {
-        // The whole point of Phase 3: solo NEW GAME runs route through
-        // the loopback by default, so the renderer + simulation layer
-        // sees the SAME Predictor + Interpolator pipeline as real MP.
+describe('resolveSoloOptions — 5.96.2 revert to default-off wiring', () => {
+    test('plain NEW GAME defaults useLoopback to false', () => {
+        // 5.96.2 — Phase 3 reverted. Solo NEW GAME runs use the legacy
+        // direct-Engine path (no LoopbackConnection, no Predictor, no
+        // Interpolator). Pure local simulation. Loopback is opt-in via
+        // ?solo-loopback=1 URL param.
         const out = resolveSoloOptions({}, '');
-        expect(out.useLoopback).toBe(true);
-        expect(out.continueRun).toBe(false);
-    });
-
-    test('NEW GAME with no opts (defaults) → useLoopback: true', () => {
-        // Calling with zero arguments — the launcher might pass `{}` or
-        // nothing. Either way the helper must default useLoopback to true.
-        const out = resolveSoloOptions();
-        expect(out.useLoopback).toBe(true);
-        expect(out.continueRun).toBe(false);
-    });
-
-    test('?solo-classic=1 URL param forces useLoopback: false', () => {
-        // Debugging escape hatch. If a regression surfaces only on the
-        // loopback path, the debugger appends `?solo-classic=1` to the URL
-        // and reloads — back to the legacy direct-Engine solo path
-        // without rebuilding.
-        const out = resolveSoloOptions({}, '?solo-classic=1');
         expect(out.useLoopback).toBe(false);
         expect(out.continueRun).toBe(false);
     });
 
-    test('?solo-classic=1 works without a leading question mark', () => {
+    test('NEW GAME with no opts (defaults) → useLoopback: false', () => {
+        // Calling with zero arguments — the launcher might pass `{}` or
+        // nothing. Either way the helper must default useLoopback to false.
+        const out = resolveSoloOptions();
+        expect(out.useLoopback).toBe(false);
+        expect(out.continueRun).toBe(false);
+    });
+
+    test('?solo-loopback=1 URL param opts IN to the loopback path', () => {
+        // Inverse of the old 5.96.0 `?solo-classic=1` escape hatch. The
+        // loopback path is now opt-in for testing / dogfooding only.
+        const out = resolveSoloOptions({}, '?solo-loopback=1');
+        expect(out.useLoopback).toBe(true);
+        expect(out.continueRun).toBe(false);
+    });
+
+    test('?solo-loopback=1 works without a leading question mark', () => {
         // URLSearchParams tolerates either form. We pin this so any future
         // refactor that drops the leading `?` from `location.search` still
         // works (e.g. a router that strips it before passing through).
-        const out = resolveSoloOptions({}, 'solo-classic=1');
-        expect(out.useLoopback).toBe(false);
+        const out = resolveSoloOptions({}, 'solo-loopback=1');
+        expect(out.useLoopback).toBe(true);
     });
 
-    test('?solo-classic with any value (or none) still forces legacy', () => {
-        // `has('solo-classic')` returns true for `?solo-classic`,
-        // `?solo-classic=` and `?solo-classic=0`. We DON'T want
-        // `solo-classic=0` to read as "OFF" — the param's presence is
-        // the signal, not its value. This matches how Vite-style flags
-        // behave throughout the codebase.
-        expect(resolveSoloOptions({}, '?solo-classic').useLoopback).toBe(false);
-        expect(resolveSoloOptions({}, '?solo-classic=').useLoopback).toBe(false);
-        expect(resolveSoloOptions({}, '?solo-classic=0').useLoopback).toBe(false);
-        expect(resolveSoloOptions({}, '?solo-classic=anything').useLoopback).toBe(false);
+    test('?solo-loopback with any value (or none) still opts in', () => {
+        // `has('solo-loopback')` returns true for `?solo-loopback`,
+        // `?solo-loopback=` and `?solo-loopback=0`. The param's presence
+        // is the signal, not its value.
+        expect(resolveSoloOptions({}, '?solo-loopback').useLoopback).toBe(true);
+        expect(resolveSoloOptions({}, '?solo-loopback=').useLoopback).toBe(true);
+        expect(resolveSoloOptions({}, '?solo-loopback=0').useLoopback).toBe(true);
+        expect(resolveSoloOptions({}, '?solo-loopback=anything').useLoopback).toBe(true);
     });
 
     test('continueRun: true forces useLoopback: false (Phase 4 concern)', () => {
         // Saved-run resume can't safely route through the loopback yet
         // — the scaffold always invokes `startNewRun()` server-side,
-        // discarding the persisted wave/loadout. Until Phase 4 wires
-        // save-restore into the LoopbackConnection, CONTINUE stays on
-        // the legacy direct-Engine path. Pinned here so the contract
-        // doesn't quietly drift.
+        // discarding the persisted wave/loadout. Pinned here so the
+        // contract doesn't quietly drift if the loopback path is ever
+        // re-enabled by default.
         const out = resolveSoloOptions({ continueRun: true }, '');
         expect(out.useLoopback).toBe(false);
         expect(out.continueRun).toBe(true);
     });
 
-    test('continueRun + ?solo-classic=1 → both reasons stack', () => {
-        // Belt and suspenders: if the debug flag and the resume path both
-        // request legacy, the result is still legacy (not double-negated
-        // back to loopback).
-        const out = resolveSoloOptions({ continueRun: true }, '?solo-classic=1');
+    test('continueRun + ?solo-loopback=1 → continueRun wins (legacy)', () => {
+        // If the resume path and the opt-in flag both fire, continueRun's
+        // veto wins — we can't restore a saved baseline through the
+        // loopback yet.
+        const out = resolveSoloOptions({ continueRun: true }, '?solo-loopback=1');
         expect(out.useLoopback).toBe(false);
         expect(out.continueRun).toBe(true);
     });
 
     test('continueRun normalizes truthy values to a boolean', () => {
-        // The caller might pass `continueRun: 1` or `'yes'` from a stray
-        // coercion. The helper returns a stable boolean so downstream
-        // code doesn't have to re-normalize.
         expect(resolveSoloOptions({ continueRun: 1 }, '').continueRun).toBe(true);
         expect(resolveSoloOptions({ continueRun: 'yes' }, '').continueRun).toBe(true);
-        // Falsy → strict false (and useLoopback stays true).
+        // Falsy → strict false (and useLoopback stays false).
         expect(resolveSoloOptions({ continueRun: 0 }, '').continueRun).toBe(false);
-        expect(resolveSoloOptions({ continueRun: 0 }, '').useLoopback).toBe(true);
+        expect(resolveSoloOptions({ continueRun: 0 }, '').useLoopback).toBe(false);
     });
 
     test('unknown URL params do not affect the result', () => {
-        // Sanity: only `solo-classic` is recognized. Other params (debug
-        // flags, mobile overrides, etc.) leave the loopback default
-        // untouched.
+        // Sanity: only `solo-loopback` is recognized. Other params
+        // (debug flags, mobile overrides, etc.) leave the default off.
         const out = resolveSoloOptions({}, '?mobile=1&debug=1&other=foo');
-        expect(out.useLoopback).toBe(true);
+        expect(out.useLoopback).toBe(false);
     });
 
-    test('empty / null / undefined search string defaults to loopback ON', () => {
-        // Three flavors of "no URL params": empty string, missing
-        // parameter, and explicit empty `?`. All must produce the same
-        // Phase 3 default.
-        expect(resolveSoloOptions({}, '').useLoopback).toBe(true);
-        expect(resolveSoloOptions({}, '?').useLoopback).toBe(true);
-        expect(resolveSoloOptions({}).useLoopback).toBe(true);
+    test('empty / null / undefined search string defaults to loopback OFF', () => {
+        // 5.96.2 — default is OFF. No URL params → loopback stays off.
+        expect(resolveSoloOptions({}, '').useLoopback).toBe(false);
+        expect(resolveSoloOptions({}, '?').useLoopback).toBe(false);
+        expect(resolveSoloOptions({}).useLoopback).toBe(false);
     });
 });
 
@@ -664,25 +654,12 @@ describe('resolveSoloOptions — Phase 3 default-on wiring', () => {
 // contract: "the resolver decides + the driver executes".
 
 describe('startSolo wiring — resolved options drive driver behavior', () => {
-    test('default-resolved NEW GAME → isOnline becomes true after startSolo', () => {
-        // Walk the path a real launcher takes: resolve the options, then
-        // hand them to the driver. Default resolution → useLoopback:true
-        // → driver enters online mode (the loopback engages the Predictor
-        // + Interpolator pipeline).
+    test('default-resolved NEW GAME → driver stays in LEGACY solo (5.96.2)', () => {
+        // 5.96.2 reverted the Phase 3 default-on. Default resolution
+        // → useLoopback:false → driver stays in ENGINE_MODE_SOLO with
+        // no Predictor / Interpolator / LoopbackConnection. Pure local
+        // sim. The loopback path is opt-in via ?solo-loopback=1.
         const opts = resolveSoloOptions({}, '');
-        expect(opts.useLoopback).toBe(true);
-
-        const { driver } = makeSoloDriver();
-        driver.startSolo(opts);
-        expect(driver.isOnline).toBe(true);
-        expect(driver.mode).toBe(ENGINE_MODE_ONLINE);
-    });
-
-    test('?solo-classic=1 → driver stays in legacy solo (isOnline false)', () => {
-        // The escape hatch's job: bypass the loopback entirely. The
-        // driver's mode stays ENGINE_MODE_SOLO and no Predictor +
-        // Interpolator + LoopbackConnection get constructed.
-        const opts = resolveSoloOptions({}, '?solo-classic=1');
         expect(opts.useLoopback).toBe(false);
 
         const { driver, LoopbackCtor } = makeSoloDriver();
@@ -694,20 +671,26 @@ describe('startSolo wiring — resolved options drive driver behavior', () => {
         expect(driver.interpolator).toBeNull();
     });
 
-    test('after default startSolo + a snapshot, getLocalShipState returns a ship', () => {
-        // Behavioral check: a fresh loopback solo run, after the loopback
-        // emits a snapshot, yields a non-null `getLocalShipState()` —
-        // i.e. the renderer can draw the local ship using the SAME code
-        // path it'd use in MP. This is the unification point at the
-        // rendering layer.
-        //
-        // (We don't sleep ~50ms because the fake loopback emits
-        // synchronously when we call `emit()`; tests in the
-        // "snapshot dispatch in loopback mode" describe block already
-        // pin the real-loopback timing. The real LoopbackConnection
-        // unit-tested at js/net/loopback-connection.js emits on a
-        // 20-Hz interval which the e2e suite covers.)
-        const opts = resolveSoloOptions({}, '');
+    test('?solo-loopback=1 → driver enters online mode (loopback engages)', () => {
+        // Opt-in path: when the user adds ?solo-loopback=1 to the URL,
+        // the driver constructs the LoopbackConnection and enters
+        // ENGINE_MODE_ONLINE — the Predictor + Interpolator pipeline
+        // engages exactly like real MP.
+        const opts = resolveSoloOptions({}, '?solo-loopback=1');
+        expect(opts.useLoopback).toBe(true);
+
+        const { driver } = makeSoloDriver();
+        driver.startSolo(opts);
+        expect(driver.isOnline).toBe(true);
+        expect(driver.mode).toBe(ENGINE_MODE_ONLINE);
+    });
+
+    test('after opt-in startSolo + a snapshot, getLocalShipState returns a ship', () => {
+        // Behavioral check: with ?solo-loopback=1 the loopback engages,
+        // and after it emits a snapshot, getLocalShipState() yields a
+        // non-null reference. Validates the opt-in path still works for
+        // dogfooding the real-MP code path.
+        const opts = resolveSoloOptions({}, '?solo-loopback=1');
         const { driver, spyPred, latestLoopback } = makeSoloDriver();
         driver.startSolo(opts);
 

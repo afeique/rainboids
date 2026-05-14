@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.96.2] - 2026-05-14
+
+### Changed — Solo mode is now PURELY LOCAL (revert Phase 3 default-on)
+
+5.93.0 (PR #84) defaulted solo runs through the LoopbackConnection so solo and MP would share one code path at the simulation/rendering layer. The unification was elegant on paper but introduced a brittle wire-format interface (`_derivePlayerInput` normalized aim → unit vector → `updateShip` treated it as world coord) that produced 5.96.1's aim-direction bug. Even after 5.96.1 forced `simInput` through as `wireInput`, the path remained complex and was still masking subtler bugs.
+
+User feedback ("Aiming is still broken because of it") forced the call: **revert solo to the legacy direct-Engine path**. The LoopbackConnection no longer runs by default in solo. No Predictor, no Interpolator, no snapshot replay, no reconciliation. Pure local simulation, like before 5.93.0.
+
+The opt-in URL param flips from `?solo-classic=1` (legacy escape hatch) to `?solo-loopback=1` (loopback opt-in for testing / dogfooding the real-MP code path). The plumbing is intact — Phase 3 is just disabled by default.
+
+Multiplayer is unaffected (it never went through `resolveSoloOptions`). The LoopbackConnection scaffold, Predictor, Interpolator, and `engineDriver.startSolo({useLoopback: true})` opt-in path all still work for anyone running with `?solo-loopback=1`.
+
+Future re-engagement: the loopback path needs (a) wire-format aim semantics harmonized end-to-end (either always world coord or always unit-vector), (b) replay/reconciliation timing audited on initial spawn, and (c) a save-restore mechanism for the CONTINUE flow.
+
+Full unit suite 972/972 passing (40 `engine-driver-solo` tests updated to pin the new default-off contract).
+
+---
+
 ## [5.96.1] - 2026-05-14
 
 ### Fixed — CRITICAL: ship aim direction broken on both mobile and desktop
