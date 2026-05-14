@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.95.0] - 2026-05-13
+
+### Changed — Mobile mode is now fruit-ninja slash-the-enemies
+Fundamental gameplay redesign on mobile. Desktop unchanged.
+
+- **Top-left HUD removed.** Health bar, triforce/lives indicator, XP bar, and level/coins display are all hidden on mobile. `updateHUD()` early-returns when `isMobile()` is true. The bottom-button bar (SHOP / STATS / PAUSE / PRM / PWR) is still drawn by `drawHudButtons` outside this function and the defense indicators (REFLEXES / LAST_STAND / STATIC_FIELD widgets) are unchanged.
+- **Enemies don't fire bullets** on mobile. `decideEnemyShooting` in `js/sim/enemy.js` short-circuits before pushing any `enemy_fire*` events onto the wrapper drain buffer, suppressing burst, sweep, continuous, charging, and non-burst patterns alike for all 10 enemy types (HUNTER, GUARDIAN, WASP, STALKER, DRIFTER, PROWLER, WEAVER, SENTINEL, TANGERINE, TITAN).
+- **Enemies kamikaze toward the player.** Every tick (after the per-enemy movement pattern runs), each non-boss enemy gets a unit-direction-scaled velocity bias of `MOBILE_KAMIKAZE_FORCE = 0.6` px toward the player. Bosses are exempt so their formation/orbit AI keeps its choreography. Contact damage on collision is unchanged — the existing player-enemy collision path (collision-system.js line 1735) already destroys the ramming enemy.
+- **One-shot kills.** Every primary-weapon hit destroys the enemy or asteroid in a single tap. Implemented by force-enabling the existing `cheats.onePunchMan` flag at GameEngine construct time when `this.mobile` is true — the flag is already wired into the three bullet-vs-enemy / bullet-vs-asteroid damage sites in `collision-system.js` (lines 101 / 543 / 668), so this delivers the fruit-ninja slice feel with zero new collision code.
+- **Asteroids stay small.** Spawn radius is capped at `MOBILE_ASTEROID_MAX_RADIUS = 36` px on mobile (vs the desktop 30–60 px range). Split-fragment radii are also clamped to the same cap so destroying a parent rock can't seed a child above the readable size budget. Desktop spawn behavior is byte-for-byte unchanged.
+- **Drops auto-magnet to the player on mobile.** Health orbs use the mobile attraction radii `DROP_MAGNET_FAR_RADIUS_MOBILE = 600` / `DROP_MAGNET_NEAR_RADIUS_MOBILE = 240` (vs desktop 320 / 120). Gold coins and chunky gold shapes get a new mobile-only `MOBILE_MAGNET_RANGE = 400` / `MOBILE_MAGNET_NEAR_RANGE = 80` proximity pull on top of their existing tractor-beam path. No MAGNET upgrade is required — the wider radius engages automatically the moment the engine is in mobile mode.
+- **Controls screen portrait fit.** The Controls tab inside the pause menu now fits in narrow portrait viewports: section headers shrink from 18 px to 12 px, action labels from 18 px to 11 px, the kbd sprite tiles from 63 px to 44 px tall, with proportional padding/gap adjustments. Footer ("ESC to resume play") and the section icons also scale down. Lands at the `body.mobile-portrait` selector so desktop and landscape mobile keep their original spacious layout.
+
+### Tests
+- Added 5 new test files covering the mobile rules: enemy fire suppression + kamikaze pull (`tests/unit/sim/mobile-enemy.test.js`), drops auto-magnet on mobile (`tests/unit/sim/mobile-drops.test.js`), asteroid size cap (`tests/unit/wave/mobile-asteroid-size.test.js`), one-punch cheat default (`tests/unit/engine/mobile-one-punch.test.js`), HUD no-op on mobile (`tests/unit/hud/mobile-hud-empty.test.js`).
+- Net: +68 tests. Full unit suite **944/944 passing**.
+
+---
+
 ## [5.94.0] - 2026-05-13
 
 ### Changed — Mobile mode is now tower-defense

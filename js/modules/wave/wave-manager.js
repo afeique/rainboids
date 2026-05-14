@@ -16,6 +16,15 @@ import { ENEMY_TYPES } from '../enemy/enemy.js';
 import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 import { updateWave } from '../../sim/wave.js';
 import { freshWaveState } from '../../sim/state.js';
+import { isMobile } from '../platform/platform-detect.js';
+
+// 5.95.0 — Asteroid radius cap on mobile. The fruit-ninja redesign
+//   shrinks the playfield's footprint per-rock so the screen doesn't
+//   feel crowded on a phone-sized viewport. Cap chosen so the largest
+//   mobile rock (~36 px) reads as a "tap me" target without dwarfing
+//   the bottom-button bar. Desktop spawn keeps the original 30-60 px
+//   range untouched (see initializeWaveAsteroid below).
+export const MOBILE_ASTEROID_MAX_RADIUS = 36;
 
 // Local constant to avoid circular import with game-engine.js
 const PLAYER_STATES = { NORMAL: 'normal' };
@@ -747,7 +756,13 @@ export function initializeWaveAsteroid(asteroid, opts = {}) {
     // viewport so the field is "ready" the instant the intro overlay lifts;
     // continuous spawns warp in from outside the gameField edge to a point
     // inside the play area.
-    const r = random(30, 60);
+    //
+    // 5.95.0 — On mobile, cap the spawn radius at MOBILE_ASTEROID_MAX_RADIUS
+    // so the playfield stays readable on a small viewport. Desktop keeps
+    // the original 30-60 px range.
+    const r = isMobile()
+        ? random(20, MOBILE_ASTEROID_MAX_RADIUS)
+        : random(30, 60);
     const spawnBuffer = r * 4;
 
     let targetX, targetY, srcX, srcY;

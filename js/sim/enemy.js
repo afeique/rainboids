@@ -68,6 +68,32 @@ import { GAME_CONFIG, getEnemyFiringCooldown } from '../modules/core/constants.j
 import { GameDimensions } from '../modules/core/utils.js';
 import { frameClock } from '../modules/core/frame-clock.js';
 import { updateBossRage, bossFormationMovement } from '../modules/enemy/boss-rage.js';
+import { isMobile } from '../modules/platform/platform-detect.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5.95.0 — Mobile fruit-ninja kamikaze rules.
+//
+// On mobile mode the enemy AI is overridden in two ways:
+//   1) Enemies NEVER fire bullets — `decideEnemyShooting` short-circuits
+//      before pushing any `enemy_fire*` events onto the wrapper drain
+//      buffer, so the firing pipeline (burst, charging, continuous,
+//      single-shot) all stays inert. The player never has projectiles
+//      to dodge.
+//   2) Enemies get a steady velocity bias toward the player every tick
+//      ("kamikaze pull"). This stacks on top of each per-enemy movement
+//      pattern (HUNTER chase, GUARDIAN orbit, etc.) so even patrol-only
+//      types divebomb the player. Contact damage still routes through
+//      the existing player-enemy collision path (collision-system.js
+//      line 1735) so the kamikaze kill behavior is already wired up.
+//
+// Strength tuning: 0.6 px / tick (~36 px/s @60Hz) added to each velocity
+// component each tick. Friction in the per-enemy movement patterns
+// damps this back down, so steady-state pull stays generous-but-fair.
+// The 0.6 number is intentionally modest so a confident player still
+// has time to pick targets — the kamikaze is a bias, not an instant
+// closure. Tune by changing this constant if it feels off in playtest.
+const MOBILE_KAMIKAZE_FORCE = 0.6;
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Pure enemy-update step.
@@ -170,6 +196,24 @@ export function updateEnemy(enemy, ctx, events) {
     // movement dispatch. Mirrors `enemy.js` lines 354-360.
     if (!enemy.isBoss || !bossFormationMovement(enemy)) {
         enemy.updateMovement(gameEngine);
+    }
+
+    // 5.95.0 — Mobile kamikaze pull. Bias velocity toward the player
+    // every tick on top of whatever per-enemy movement pattern just
+    // ran. Even patrol/circle/orbit AIs now bend toward the player
+    // (slow at long range as the inverse-distance contribution is
+    // unit-normalized — the bias is direction only, not strength
+    // falloff). Bosses are excluded so the tier-3+ formation-orbit
+    // mechanic still reads correctly; everyone else gets pulled in.
+    if (isMobile() && !enemy.isBoss) {
+        const dx = playerRef.x - enemy.x;
+        const dy = playerRef.y - enemy.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 1) {
+            const inv = 1 / dist;
+            enemy.vel.x += dx * inv * MOBILE_KAMIKAZE_FORCE;
+            enemy.vel.y += dy * inv * MOBILE_KAMIKAZE_FORCE;
+        }
     }
 
     if (!skipHeavyAI) {
@@ -291,6 +335,15 @@ export function updateEnemy(enemy, ctx, events) {
 function decideEnemyShooting(enemy, gameEngine, events) {
     if (!gameEngine || !gameEngine.enemyBulletPool) return;
     if (!enemy.targetPlayer) return;
+
+    // 5.95.0 — On mobile, enemies never fire. The fruit-ninja redesign
+    // (see header) makes player bullets the only projectile in flight.
+    // Short-circuit before any `enemy_fire*` event is emitted so the
+    // wrapper-side firing helpers (`firing.shoot`, burst, sweep, etc.)
+    // all stay inert. Charging-state patterns (laser / arc_lightning)
+    // also stop advancing — they only progress when this function emits
+    // `enemy_fire_charging`, so suppression here halts them at idle.
+    if (isMobile()) return;
 
     // Arc movement enemies can only shoot when stopped. Line 708.
     if (enemy.config.movePattern === 'arc' && !enemy.canShoot) return;

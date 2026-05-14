@@ -654,8 +654,15 @@ export class GameEngine {
         };
         
         // Initialize cheat flags
+        // 5.95.0 — Mobile fruit-ninja redesign: every tap = one-shot kill.
+        //   The onePunchMan flag is the existing collision-system damage
+        //   multiplier (see collision-system.js lines 101 / 543 / 668)
+        //   that overrides bullet.damage with 99999 — exactly the
+        //   "tap to destroy" feel we want for slash-style mobile play.
+        //   Always-on on mobile so the player never has to discover or
+        //   enable it. Desktop default (false) is untouched.
         this.cheats = {
-            onePunchMan: false,    // Player destroys everything with one hit
+            onePunchMan: !!this.mobile,
         };
 
         // Powerup HUD DOM ref cache

@@ -4,6 +4,14 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { random, collision, starCollision, triggerHapticFeedback } from '../core/utils.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
+import { isMobile } from '../platform/platform-detect.js';
+
+// 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
+//   Duplicated here (rather than imported) because wave-manager.js bundles
+//   a lot of subsystems and pulling its symbol surface into collision-
+//   system.js would risk a future circular-import. Keep in sync with the
+//   source-of-truth value in wave-manager.js.
+const MOBILE_ASTEROID_SPLIT_MAX_RADIUS = 36;
 
 // ─── Collision Physics Config ────────────────────────────────────────────────
 export const COLLISION_CONFIG = {
@@ -214,7 +222,15 @@ export function handleCollisions() {
                         }
 
                         const count = (Math.random() < 0.5 ? 2 : 3) + 1; // 3 or 4
-                        const newR = ast.baseRadius / Math.sqrt(count);
+                        let newR = ast.baseRadius / Math.sqrt(count);
+                        // 5.95.0 — Mobile size cap also applies to split
+                        //   fragments so destroying a parent rock can't
+                        //   spawn pieces above the readable size cap on
+                        //   phones. Desktop branch keeps the natural
+                        //   √count divisor untouched.
+                        if (isMobile() && newR > MOBILE_ASTEROID_SPLIT_MAX_RADIUS) {
+                            newR = MOBILE_ASTEROID_SPLIT_MAX_RADIUS;
+                        }
 
                         // Distribute fragment trajectories evenly around 360° with
                         // small angular jitter — guarantees every pair diverges

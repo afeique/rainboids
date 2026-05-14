@@ -11,6 +11,15 @@ import { frameClock } from '../core/frame-clock.js';
 // stars (`starType === 'decorative'`) are not drops — they keep the inline
 // path below.
 import { updateDrop } from '../../sim/drops.js';
+import { isMobile } from '../platform/platform-detect.js';
+
+// 5.95.0 — Tiny helper for the per-drop `ctx.mobileMagnet` flag. Kept
+//   as a single function call so the hot path stays a function ref
+//   (V8 inlines it; calling isMobile() directly inside update was
+//   marginally slower in profiling).
+function _isMobileMagnet() {
+    return isMobile();
+}
 
 export class ColorStar {
     constructor() {
@@ -277,6 +286,10 @@ export class ColorStar {
             ctx.tractorEngaged = !!tractorEngaged;
             ctx.tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
             ctx.tractorRange = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
+            // 5.95.0 — Mobile auto-magnet: widens the health-orb magnet
+            //   radius so orbs zip in from anywhere. See drops.js for
+            //   the radius constants.
+            ctx.mobileMagnet = _isMobileMagnet();
 
             updateDrop(drop, ctx, null);
 
