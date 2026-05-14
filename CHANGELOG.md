@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.96.1] - 2026-05-14
+
+### Fixed — CRITICAL: ship aim direction broken on both mobile and desktop
+
+The ship was always facing the same direction (roughly toward gameField origin) regardless of where the user touched/clicked. Affected BOTH mobile and desktop because the bug was in the LoopbackConnection path that solo mode defaults to as of 5.93.0 (PR #84 Phase 3 wiring).
+
+**Root cause**: `js/engine/engine-driver.js`'s `_derivePlayerInput()` normalizes `simInput.aimX/aimY` to a unit vector for the wire protocol (where aim is encoded as a direction, not a world coord). The LoopbackConnection's `_normalizeInput()` then passes that unit vector through to `updateShip()`, which treats `aimX/aimY` as ABSOLUTE WORLD COORDS — so `ship.angle = atan2(0.47 - shipY, 0.88 - shipX)` ≈ a constant direction (toward gameField origin) and the ship NEVER faced the touch/cursor position.
+
+The frame-by-frame mechanism:
+1. User taps screen → mobile-touch sets `input.aimX = worldX` correctly
+2. `mpBuildSimInput` → `simInput.aimX = worldX` (correct)
+3. `engineDriver.tick(simInput)` → `_derivePlayerInput` normalizes aim to unit vector → sent to LoopbackConnection
+4. LoopbackConnection's `_normalizeInput` keeps the unit vector as `aimX/aimY` (interpreted as world coord by `updateShip`)
+5. Loopback's `ship.angle = atan2(0.47 - 540, 0.88 - 960) ≈ -2.6 rad` (constant for any positive-X-positive-Y aim — always toward origin)
+6. Snapshot with wrong angle propagates through Predictor reconciliation → `predicted.angle` is wrong
+7. `mpApplyPredictedShipToPlayer` mirrors `predicted.angle → player.angle` every frame → ship visually faces wrong direction
+
+**Fix**: pass `simInput` as `wireInput` to `engineDriver.tick(simInput, simInput)` in `_mpTickIfOnline`. This bypasses `_derivePlayerInput`. The LoopbackConnection's `_normalizeInput` detects the InputFrame shape via `'up' in raw` and passes the world-coord aim through to `updateShip` correctly.
+
+For real MP (post-MVD, not yet shipping) the call path would need to re-pack at the wire boundary; that's a Phase 2-MP concern.
+
+Full unit suite 972/972 passing.
+
+---
+
 ## [5.96.0] - 2026-05-14
 
 ### Changed — Mobile pivots back to a turret-defense RPG (revert 5.95.0 over-correction)

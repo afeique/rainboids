@@ -2095,10 +2095,26 @@ export class GameEngine {
         if (!driver) return;
         try {
             const simInput = mpBuildSimInput(input, this.player, GAME_CONFIG);
-            // wireInput defaults to derived (driver computes from simInput).
-            // Buttons aren't authoritatively processed yet (server-side
-            // weapons are out of MVD scope), so the derived path is fine.
-            driver.tick(simInput);
+            // 5.96.1 — CRITICAL BUG FIX. Pass simInput as wireInput so
+            // engineDriver.tick() skips the wire-format `_derivePlayerInput`
+            // which NORMALIZES `aimX/aimY` to a unit vector. The Loopback-
+            // Connection in solo mode then passed that unit vector through
+            // `_normalizeInput → updateShip`, which treats `aimX/Y` as
+            // ABSOLUTE WORLD COORDS — so `ship.angle = atan2(0.47 - shipY,
+            // 0.88 - shipX)` ≈ a constant direction (toward origin) and
+            // the ship NEVER FACED the touch/cursor position. The fix is to
+            // bypass the unit-vector normalization in solo mode by handing
+            // the raw simInput (with world-coord aim) directly to the
+            // driver as wireInput — LoopbackConnection's `_normalizeInput`
+            // detects the InputFrame shape via `'up' in raw` and keeps the
+            // world-coord aim as-is.
+            //
+            // For real MP this same call path would lose the wire-format
+            // unit-vector encoding; that's a Phase 2-MP concern (the real
+            // ConnectionTask should re-pack at the wire boundary). For now
+            // solo uses LoopbackConnection and benefits from world-coord
+            // pass-through; real MP is post-MVD and not yet shipping.
+            driver.tick(simInput, simInput);
         } catch (err) {
             // Never let an MP wiring error tank the local game loop.
             // eslint-disable-next-line no-console
