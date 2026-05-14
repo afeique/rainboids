@@ -46,11 +46,13 @@ export const MP_UNSAFE_ABILITIES_LIST = [
     'LANCE_BEAM',      // sustained beam + raycast collision unported
     'LIGHTNING_ARC',   // chain-target lookup + tether sim unported
 
-    // Defense skills (DEFENSE_SKILLS in weapon-data.js) — all six
-    // mutate ship state in ways the server doesn't model yet.
+    // Defense skills (DEFENSE_SKILLS in weapon-data.js) — the five
+    // remaining skills mutate ship state in ways the server doesn't
+    // model yet. PHASE_DASH was removed from DEFENSE_SKILLS in 5.93.0
+    // and is now a core SHIFT-key movement primitive (pure player
+    // input + position kinematics, MP-safe).
     'BULWARK',         // damage-reduction window
     'REPAIR_NANITES',  // HoT regen tick
-    'PHASE_DASH',      // invulnerable teleport + i-frames
     'DEFLECTOR_ORBS',  // orbiting bullet-blockers
     'EMP_PULSE',       // AoE stun on enemies
     'TRACTOR_SHIELD',  // forward bullet-absorb + coin redirect

@@ -17,6 +17,14 @@ export class InputHandler {
             fire: false,
             fireSecondary: false,
             activateSkill: false,
+            // 5.93.0 — SHIFT-key dash. `shift` is the continuous-state
+            // mirror of the Shift key (held → true). `dashPulse` is the
+            // one-shot rising-edge pulse consumed once per dash trigger
+            // by Player.update — set on Shift keydown (without auto-repeat),
+            // cleared after consumption. Mirrors the activateSkill pulse
+            // pattern so Player owns the cooldown / already-dashing guards.
+            shift: false,
+            dashPulse: false,
             aimX: window.innerWidth / 2,
             aimY: window.innerHeight / 2,
             screenAimX: window.innerWidth / 2,
@@ -89,9 +97,16 @@ export class InputHandler {
         });
 
         // Ensure fire stops if the cursor leaves the window mid-click.
+        // Also clear the Shift state so a window-blur mid-Shift-hold
+        // doesn't leave a stale `shift = true` — the user lifted (or
+        // alt-tabbed away) and any subsequent dash should be a fresh
+        // press, not a continuation. The dashPulse one-shot is cleared
+        // here too for the same reason.
         window.addEventListener('blur', () => {
             this.input.fire = false;
             this.input.fireSecondary = false;
+            this.input.shift = false;
+            this.input.dashPulse = false;
         });
     }
 
@@ -150,6 +165,20 @@ export class InputHandler {
                     this.input.activateSkill = true;
                 }
                 break;
+            // 5.93.0 — SHIFT triggers the core dash movement primitive.
+            // Set `shift` (continuous-state mirror) so callers can read
+            // the held state if needed, plus a one-shot `dashPulse` on
+            // the rising edge so Player.update can fire exactly one dash
+            // per Shift press (cooldown + already-dashing guards live in
+            // Player._triggerDash). Auto-repeat (e.repeat) is ignored so
+            // holding Shift doesn't spam dashes — one press, one dash.
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                this.input.shift = true;
+                if (!e.repeat) {
+                    this.input.dashPulse = true;
+                }
+                break;
         }
     }
 
@@ -181,6 +210,13 @@ export class InputHandler {
                 break;
             case 'Space':
                 this.input.fireSecondary = false;
+                break;
+            // 5.93.0 — SHIFT release clears the continuous-state mirror.
+            // The dashPulse one-shot is consumed by Player.update and
+            // cleared there, so no keyup-side reset is needed for it.
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                this.input.shift = false;
                 break;
             // Q is consumed as a one-shot activateSkill pulse by the
             // player update loop, so no keyup reset is needed.

@@ -33,7 +33,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **5.92.0**
+Current version: **5.93.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -42,7 +42,7 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 ## Game Overview
 
 Rainboids is a supercharged asteroids game featuring:
-- **6 primary weapons**, **4 power weapons**, and **6 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop
+- **6 primary weapons**, **4 power weapons**, and **5 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop. Phase Dash is no longer a defense skill (5.93.0); it's now a core **Shift-key** movement primitive available to every player at all times.
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs
 - **12 powerup types** with stacking mechanics and visual indicators — picks-only since 5.70.0 (earned 1/wave + 1/level-up, spent in the shop's POWERUPS tab for full build freedom). Drop rate, drop quantity, and per-orb amount now scale automatically with player level (5.78.2) instead of being bought as discrete picks.
 - **Kill-streak damage tiers** (EMPOWERED → UNSTOPPABLE → GODLIKE → LEGENDARY) — sustained kills without taking damage build up to +100% damage
@@ -63,6 +63,7 @@ Rainboids is a supercharged asteroids game featuring:
 ### Desktop (mouse + keyboard)
 
 - **Movement**: WASD
+- **Dash**: Shift (5.93.0) — 135 px burst over 250 ms, 1.5 s cooldown, brief i-frames during the burst. Dashes in the current movement direction if you're thrusting, otherwise in the aim direction. Pure movement primitive — works in singleplayer and multiplayer.
 - **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate. A red laser-pointer beam shows where your next primary shot will land — with a tick at the bullet's max range, a reticle around the first enemy/asteroid in line, and fading reticles around any further targets piercing builds will punch through.
 - **Fire primary**: Hold left-click or ↑ arrow
 - **Fire / charge power weapon**: Spacebar, right-click, or ↓ arrow
@@ -73,7 +74,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Pick power weapon (radial menu)**: Hold F — same flow
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
-- **Switch defense skill**: Pause menu → SKILLS tab (all 6 free, click to equip)
+- **Switch defense skill**: Pause menu → SKILLS tab (all 5 free, click to equip)
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
 
@@ -117,12 +118,13 @@ Primary weapons are free — they auto-unlock at wave milestones as you progress
 | 💫 | Nova Blast | Expanding damage ring |
 | 🚀 | Missile Salvo | Homing missiles seek targets |
 
-### Defense Skills (6)
+### Defense Skills (5)
+*5.93.0 — Phase Dash was promoted out of the defense-skill pool and is now a core movement primitive on the **Shift** key (see Controls above). Five defense skills remain.*
+
 | Icon | Skill | Description |
 |------|-------|-------------|
 | 🛡️ | Bulwark | 50% damage resistance for 4s |
 | 💚 | Repair Nanites | Regen 3 HP/s for 5s |
-| 💨 | Phase Dash | Invulnerable dash 150px |
 | 🔮 | Deflector Orbs | Orbiting orbs block bullets for 5s |
 | 📡 | EMP Pulse | Stun nearby enemies for 2s |
 | 🧲 | Tractor Shield | Forward shield absorbs bullets for coins |
@@ -209,7 +211,7 @@ Money and green orbs are size-capped (`HEALTH_ORB_SIZE_MAX = 1.4`, `MONEY_ORB_SI
 
 ## Kill Streak System
 
-Stack consecutive enemy kills without taking damage to climb a four-tier damage buff. The buff timer (4 s) refreshes on every new kill while alive; the streak count itself **only resets when the player takes damage**. Phase Dash invincibility frames preserve the streak; Bulwark damage reduction does not.
+Stack consecutive enemy kills without taking damage to climb a four-tier damage buff. The buff timer (4 s) refreshes on every new kill while alive; the streak count itself **only resets when the player takes damage**. Shift-key dash i-frames preserve the streak (5.93.0 — was Phase Dash); Bulwark damage reduction does not.
 
 | Streak | Tier         | Damage  |
 |--------|--------------|---------|

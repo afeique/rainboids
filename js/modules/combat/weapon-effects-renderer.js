@@ -933,11 +933,15 @@ export function drawWeaponEffects() {
         ctx.restore();
     }
 
-    // ─── Phase Dash Trail ───────────────────────────────────────────
-    if (p.activeSkillEffects && p.activeSkillEffects.has('PHASE_DASH')) {
+    // ─── Dash Trail (5.93.0) ────────────────────────────────────────
+    // Dash promoted from a defense skill (PHASE_DASH) to a core SHIFT-key
+    // movement primitive. The afterimage ghost is still rendered during
+    // the active dash burst; color is hardcoded to the old PHASE_DASH
+    // tint since DEFENSE_SKILLS no longer carries the entry.
+    if (p.isDashIFrameActive && p.isDashIFrameActive()) {
         ctx.save();
         ctx.globalAlpha = 0.4;
-        ctx.fillStyle = DEFENSE_SKILLS.PHASE_DASH.color;
+        ctx.fillStyle = '#aa88ff';
         ctx.beginPath();
         ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
         ctx.fill();
