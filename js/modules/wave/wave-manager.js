@@ -17,6 +17,11 @@ import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 import { updateWave } from '../../sim/wave.js';
 import { freshWaveState } from '../../sim/state.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
+// 5.98.0 — Wave-clear pick screen on mobile reads the master powerup
+// catalog so the 3 random offers are drawn from the same pool that
+// the desktop POWERUPS tab uses.
+import { POWERUP_TYPES } from '../world/powerup.js';
+import { renderIconHTML } from '../ui/icons.js';
 
 // 5.95.0 — Asteroid radius cap on mobile. The fruit-ninja redesign
 //   shrinks the playfield's footprint per-rock so the screen doesn't
@@ -112,13 +117,19 @@ export function updateWaveSystem() {
         const bonusCoins = 50 + clearedWave * 25;
         this.player.gainExperience(bonusXP);
         this.game.money += bonusCoins;
-        this.player.skillPoints = (this.player.skillPoints || 0) + 1;
+        // 5.98.0 — Mobile only earns SP via level-ups; wave-clear gives
+        // a 3-card powerup pick instead (see openWavePickOverlay). Desktop
+        // unchanged: still +1 SP per wave clear.
+        const _mob = isMobile();
+        if (!_mob) {
+            this.player.skillPoints = (this.player.skillPoints || 0) + 1;
+        }
 
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
         // the bonus gold + pick info to the message renderer.
         this._waveClearRecap = {
             bonusCoins,
-            picks: 1, // wave-clear pick; mission-pick adds in resolveMissionOnWaveClear
+            picks: _mob ? 0 : 1,
             mission: this.game.mission ? {
                 completed: !!this.game.mission.completed,
                 failed: !!this.game.mission.failed,
@@ -240,7 +251,13 @@ function completeMission() {
     const m = this.game.mission;
     if (!m || m.completed) return;
     m.completed = true;
-    if (this.player) this.player.skillPoints = (this.player.skillPoints || 0) + 1;
+    // 5.98.0 — Mobile SP only from level-ups. Mission still completes
+    // (so the HUD reads MISSION COMPLETE for the player), but the +1 SP
+    // reward is desktop-only. The mobile "win" for clearing the wave
+    // is the 3-card powerup pick that fires from the wave-clear path.
+    if (this.player && !isMobile()) {
+        this.player.skillPoints = (this.player.skillPoints || 0) + 1;
+    }
     if (this.events?.emit) {
         this.events.emit('ui:show-message', {
             title: 'MISSION COMPLETE',
@@ -269,6 +286,8 @@ export function showWaveComplete() {
     // pick count, and mission outcome on a single line so the player
     // sees their reward before the powerups menu pops. Pulls from
     // `_waveClearRecap` stash set by the wave-complete branch.
+    // 5.98.0 — Mobile suppresses the SP line (mobile gets the 3-card
+    // overlay instead of SP) and shows "POWERUP UP NEXT" instead.
     const nextWave = this.game.currentWave + 1;
     const r = this._waveClearRecap || { bonusCoins: 0, picks: 1, mission: null };
     const picks = r.picks + (r.mission && r.mission.completed ? 1 : 0);
@@ -279,7 +298,9 @@ export function showWaveComplete() {
             : r.mission.failed
                 ? ` · MISSION ✗`
                 : ` · MISSION —`;
-    const subtitle = `+${r.bonusCoins}G  ·  +${picks} SP${missionTag}`;
+    const subtitle = isMobile()
+        ? `+${r.bonusCoins}G  ·  POWERUP UP NEXT${missionTag}`
+        : `+${r.bonusCoins}G  ·  +${picks} SP${missionTag}`;
     this.waveMessage = {
         active: true,
         startTime: Date.now(),
@@ -1142,8 +1163,17 @@ export function spawnRandomEnemy() {
 // reward window. Sets `_pausedFromWaveClear` so togglePause's resume
 // branch routes back into startNextWave instead of straight to PLAYING,
 // preserving the wave-gating behavior the shop used to provide.
+//
+// 5.98.0 — On mobile this routes to `openWavePickOverlay` instead, which
+// shows a 3-card random-powerup pick screen. The mobile model doesn't
+// award SP on wave clear (see completeWave above), so the pause-menu
+// POWERUPS tab would be empty of currency to spend.
 export function openWaveClearPowerupsMenu() {
     if (!this.uiManager) return;
+    if (isMobile()) {
+        openWavePickOverlay.call(this);
+        return;
+    }
     this.events.emit('ui:hide-message');
     this._pausedFromWaveClear = true;
     this.game.state = GAME_STATES.PAUSED;
@@ -1165,4 +1195,134 @@ export function openWaveClearPowerupsMenu() {
             menu.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
         }
     });
+}
+
+// 5.98.0 — Mobile wave-clear powerup pick. Pauses gameplay, picks 3
+// random non-maxed POWERUP_TYPES entries, and shows the
+// #wave-pick-overlay DOM modal. Tapping a card adds a stack of that
+// powerup (free — no SP cost) and resumes into the next wave via the
+// same togglePause path the pause-menu uses.
+export function openWavePickOverlay() {
+    if (!this.player) return;
+    const player = this.player;
+
+    // ── Pick 3 random non-maxed powerups ──
+    const entries = Object.entries(POWERUP_TYPES).filter(([type, cfg]) => {
+        const cap = cfg.maxStacks || 99;
+        const stacks = player.getPowerupStacks ? player.getPowerupStacks(type) : 0;
+        return stacks < cap;
+    });
+    // Fisher-Yates shuffle (in place on a copy).
+    const pool = entries.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0;
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const picks = pool.slice(0, Math.min(3, pool.length));
+
+    // If the player has maxed EVERY powerup, fall through to the
+    // pre-5.98 pause-menu path so they at least see the wave-clear
+    // chrome and can resume into the next wave.
+    if (picks.length === 0) {
+        this.events.emit('ui:hide-message');
+        this._pausedFromWaveClear = true;
+        this.game.state = GAME_STATES.PAUSED;
+        if (this.player) this.player.pauseChargeShot();
+        // Resume directly via togglePause so the next-wave start fires.
+        if (typeof this.togglePause === 'function') this.togglePause();
+        return;
+    }
+
+    // ── State setup ──
+    this.events.emit('ui:hide-message');
+    this._pausedFromWaveClear = true;
+    this.game.state = GAME_STATES.PAUSED;
+    if (this.player) this.player.pauseChargeShot();
+
+    // ── Build the DOM ──
+    const overlay = document.getElementById('wave-pick-overlay');
+    const cardsContainer = document.getElementById('wave-pick-cards');
+    if (!overlay || !cardsContainer) {
+        // DOM missing — defensive fall-through. Resume immediately.
+        if (typeof this.togglePause === 'function') this.togglePause();
+        return;
+    }
+    overlay.style.display = 'flex';
+    cardsContainer.replaceChildren();
+
+    for (const [type, cfg] of picks) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'wave-pick-card';
+        card.style.setProperty('--wp-color', cfg.color || '#cccccc');
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'wave-pick-card-icon';
+        iconWrap.innerHTML = renderIconHTML(cfg.icon, { size: 36, fallback: '★' });
+        card.appendChild(iconWrap);
+
+        const body = document.createElement('div');
+        body.className = 'wave-pick-card-body';
+
+        const name = document.createElement('div');
+        name.className = 'wave-pick-card-name';
+        name.textContent = cfg.displayName || cfg.name || type;
+        body.appendChild(name);
+
+        const desc = document.createElement('div');
+        desc.className = 'wave-pick-card-desc';
+        desc.textContent = cfg.description || '';
+        body.appendChild(desc);
+
+        card.appendChild(body);
+
+        const stacksLbl = document.createElement('div');
+        stacksLbl.className = 'wave-pick-card-stacks';
+        const haveStacks = player.getPowerupStacks ? player.getPowerupStacks(type) : 0;
+        const cap = cfg.maxStacks || 99;
+        stacksLbl.textContent = `${haveStacks} / ${cap}`;
+        card.appendChild(stacksLbl);
+
+        card.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            // Apply the pick — free (no SP cost on mobile wave-clear).
+            player.addPowerup(type, { ...cfg, duration: Infinity }, true);
+            if (this.events?.emit) {
+                this.events.emit('audio:powerup');
+                this.events.emit('ui:show-message', {
+                    title: cfg.displayName || cfg.name || type,
+                    subtitle: `+1 STACK (${(player.getPowerupStacks(type) || 1)} / ${cap})`,
+                    duration: 1400,
+                    position: 'top',
+                });
+            }
+            closeWavePickOverlay.call(this);
+        });
+
+        cardsContainer.appendChild(card);
+    }
+}
+
+// 5.98.0 — Tear down the wave-pick overlay and route into the next
+// wave. We can't call togglePause directly because pause-overlay is
+// not open on this code path (we opened wave-pick-overlay instead) —
+// togglePause would flash the pause menu visible for a frame. Instead
+// we manually pop the resume frame and start the next wave, mirroring
+// the togglePause PAUSED-branch logic without touching the DOM.
+export function closeWavePickOverlay() {
+    const overlay = document.getElementById('wave-pick-overlay');
+    if (overlay) overlay.style.display = 'none';
+    if (this.player && typeof this.player.resumeChargeShot === 'function') {
+        this.player.resumeChargeShot();
+    }
+    const frame = this._popResumeFrame ? this._popResumeFrame() : null;
+    if (frame && frame.fromWaveClear) {
+        this.game.state = GAME_STATES.WAVE_TRANSITION;
+        if (typeof this.startNextWave === 'function') this.startNextWave();
+    } else {
+        // Defensive fallback — should not happen since openWavePickOverlay
+        // pushes the wave-clear frame. Restore to PLAYING.
+        this.game.state = GAME_STATES.PLAYING;
+    }
 }

@@ -26,6 +26,7 @@ import { STAR_SLOT_INDEX, WEBGL_STAR_SHAPES } from './performance/webgl-starfiel
 import { ColorStar } from './world/color-star.js';
 import { GoldCoin } from './world/gold-coin.js';
 import { GoldShape } from './world/gold-shape.js';
+import { StatPickup } from './world/stat-pickup.js';
 import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
@@ -770,6 +771,9 @@ export class GameEngine {
         //   drop), GoldShape = chunky shape orb (one per drop).
         this.goldCoinPool = new PoolManager(GoldCoin, 60);
         this.goldShapePool = new PoolManager(GoldShape, 20);
+        // 5.98.0 — Permanent stat-pickup pool (mobile-only drops). Small
+        // pool — these spawn at <2% rate per enemy kill, so 16 is plenty.
+        this.statPickupPool = new PoolManager(StatPickup, 16);
         this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 2);
         this.powerupPool = new PoolManager(Powerup, 5); // Reduced from 20
 
@@ -878,6 +882,7 @@ export class GameEngine {
         this.colorStarPool.activeObjects = [];
         this.goldCoinPool.activeObjects = [];
         this.goldShapePool.activeObjects = [];
+        this.statPickupPool.activeObjects = [];
         this.backgroundStarPool.activeObjects = [];
         this.powerupPool.activeObjects = [];
 
@@ -1897,6 +1902,9 @@ export class GameEngine {
     completeWave() { return wave.completeWave.call(this); }
     completeRun() { return wave.completeRun.call(this); }
     openWaveClearPowerupsMenu() { return wave.openWaveClearPowerupsMenu.call(this); }
+    // 5.98.0 — Mobile wave-clear 3-pick overlay.
+    openWavePickOverlay() { return wave.openWavePickOverlay.call(this); }
+    closeWavePickOverlay() { return wave.closeWavePickOverlay.call(this); }
     // 5.75.0 — mission system bindings.
     checkMissionOnKill() { return wave.checkMissionOnKill.call(this); }
     checkMissionOnCrit() { return wave.checkMissionOnCrit.call(this); }
@@ -2299,6 +2307,12 @@ export class GameEngine {
                 s.update(playerPos, tractorEngaged);
                 if (!s.active) this.goldShapePool.release(s);
             }
+            // 5.98.0 — Stat-pickup tick + cleanup. Same shape as gold.
+            for (let i = this.statPickupPool.activeObjects.length - 1; i >= 0; i--) {
+                const p = this.statPickupPool.activeObjects[i];
+                p.update(playerPos, tractorEngaged);
+                if (!p.active) this.statPickupPool.release(p);
+            }
             // Update background stars with player velocity for parallax.
             // 5.97.0 — Mobile mode has a stationary ship, so player.vel is
             // always zero and the starfield would freeze. Inject a gentle
@@ -2613,6 +2627,10 @@ export class GameEngine {
                 //   they read as crisp point-like collectibles.
                 this._drawGoldCoinsCanvas2D(this.ctx, vL, vT, vR, vB);
                 this._drawHealthShapesCanvas2D(this.ctx, vL, vT, vR, vB);
+                // 5.98.0 — Stat pickups render between gold/health and
+                // asteroids/enemies so they sit on top of the drop layer
+                // and never get hidden behind a passing rock.
+                for (const sp of this.statPickupPool.activeObjects) sp.draw(this.ctx);
                 this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
 

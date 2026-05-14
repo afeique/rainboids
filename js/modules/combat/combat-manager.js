@@ -4,6 +4,7 @@ import { random } from '../core/utils.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
+import { isMobile } from '../platform/platform-detect.js';
 
 // ── Asteroid Debris ──
 
@@ -678,6 +679,26 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         //   better than a cluster.
         this.createHealthOrb(x, y);
         this.lastHealthOrbDropAt = now;
+    }
+
+    // ── Mobile stat pickups (5.98.0) ──
+    // Rare permanent-stat drops. Mobile-only. Two kinds:
+    //   - HP_UP    (~0.8% per enemy kill — independent rolls)
+    //   - TOUGHNESS (~0.6% per enemy kill)
+    // Boss enemies bump both rates by ~3× so a tough fight has a
+    // visibly higher chance of yielding a permanent upgrade. Asteroids
+    // do NOT drop these (only enemy kills) so the player has to engage
+    // the threat pool to grow.
+    if (isMobile() && isEnemy && this.statPickupPool) {
+        const boss = !!(entity && entity.isBoss);
+        const hpRate = boss ? 0.024 : 0.008;
+        const toughRate = boss ? 0.018 : 0.006;
+        if (Math.random() < hpRate) {
+            this.statPickupPool.get(x, y, 'hpup');
+        }
+        if (Math.random() < toughRate) {
+            this.statPickupPool.get(x, y, 'toughness');
+        }
     }
 
     // ── Money orbs ── no cooldown; "few shape orbs + many pixel

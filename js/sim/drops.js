@@ -78,9 +78,16 @@ export const DROP_MAGNET_NEAR_FORCE = 22;
  * / engine-driver-mp). Pure-sim contract stays clean: this file owns
  * the tuning, the caller owns the policy.
  */
-export const DROP_MAGNET_FAR_RADIUS_MOBILE = 600;
+export const DROP_MAGNET_FAR_RADIUS_MOBILE = 3000;
 /** Mobile inner magnet radius — wider snap zone for finger taps. */
-export const DROP_MAGNET_NEAR_RADIUS_MOBILE = 240;
+export const DROP_MAGNET_NEAR_RADIUS_MOBILE = 600;
+/** 5.98.0 — Mobile pull-force overrides. The far/near formula in
+ *  `updateDrop` uses `DROP_MAGNET_*_FORCE` even on mobile; on mobile we
+ *  want a snappier pull from across the screen so the drops "fly" rather
+ *  than gently drift. These two override the desktop values when
+ *  `ctx.mobileMagnet === true`. */
+export const DROP_MAGNET_FAR_FORCE_MOBILE = 18;
+export const DROP_MAGNET_NEAR_FORCE_MOBILE = 40;
 
 /**
  * Opacity fade-in/fade-out window — the orb opacity is
@@ -202,15 +209,17 @@ export function updateDrop(drop, ctx, _events) {
     // don't move; only the engagement radius grows.
     const farR = ctx.mobileMagnet ? DROP_MAGNET_FAR_RADIUS_MOBILE : DROP_MAGNET_FAR_RADIUS;
     const nearR = ctx.mobileMagnet ? DROP_MAGNET_NEAR_RADIUS_MOBILE : DROP_MAGNET_NEAR_RADIUS;
+    const farF = ctx.mobileMagnet ? DROP_MAGNET_FAR_FORCE_MOBILE : DROP_MAGNET_FAR_FORCE;
+    const nearF = ctx.mobileMagnet ? DROP_MAGNET_NEAR_FORCE_MOBILE : DROP_MAGNET_NEAR_FORCE;
     if (isHealth && dist > 1 && dist < farR) {
         const inv = 1 / dist;
         const farFactor = (farR - dist) / farR;
-        drop.vx += nearestDx * inv * DROP_MAGNET_FAR_FORCE * farFactor;
-        drop.vy += nearestDy * inv * DROP_MAGNET_FAR_FORCE * farFactor;
+        drop.vx += nearestDx * inv * farF * farFactor;
+        drop.vy += nearestDy * inv * farF * farFactor;
         if (dist < nearR) {
             const nearFactor = (nearR - dist) / nearR;
-            drop.vx += nearestDx * inv * DROP_MAGNET_NEAR_FORCE * nearFactor;
-            drop.vy += nearestDy * inv * DROP_MAGNET_NEAR_FORCE * nearFactor;
+            drop.vx += nearestDx * inv * nearF * nearFactor;
+            drop.vy += nearestDy * inv * nearF * nearFactor;
         }
     }
 

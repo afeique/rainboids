@@ -236,6 +236,19 @@
         </div>
     </div>
     
+    <!-- 5.98.0 — Wave-clear powerup pick (mobile only). Shown after a
+         wave clear instead of opening the pause menu's POWERUPS tab.
+         Three random non-maxed powerup cards; tap one to claim a stack
+         and resume into the next wave. Populated dynamically by
+         openWavePickOverlay (see wave-manager.js). -->
+    <div id="wave-pick-overlay" class="ui-element" style="display: none;">
+        <div id="wave-pick-panel">
+            <h2 class="wave-pick-title">WAVE CLEAR</h2>
+            <p class="wave-pick-subtitle">PICK YOUR REWARD</p>
+            <div id="wave-pick-cards"></div>
+        </div>
+    </div>
+
     <div id="shop-overlay" class="ui-element" style="display: none; justify-content: center; align-items: center; width: 100%; height: 100%;">
         <div id="shop-menu">
             <button id="shop-close-button" class="shop-close" aria-label="Close shop">×</button>

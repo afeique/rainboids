@@ -11,6 +11,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.98.0] - 2026-05-14
+
+### Added — Mobile: 3-card random powerup pick on wave clear
+
+The mobile wave-clear reward is no longer "+1 SP to spend in a menu" —
+it's a full-screen `#wave-pick-overlay` showing **3 random non-maxed
+powerup cards**. Tap one to claim a free stack and resume into the next
+wave. Picks are drawn from the master `POWERUP_TYPES` catalog and
+filtered against `maxStacks` so the player never sees an unusable
+option. If every powerup is maxed, the overlay auto-falls-through to
+the next wave (no dead-end).
+
+Why: the previous flow opened the pause-menu POWERUPS tab and assumed
+the player would scan all 10 cards and spend their SP. On mobile that
+was a lot of UI for a wave-clear beat; randomized 3-card picks compress
+the choice and add deck-builder variety to the progression.
+
+### Added — Mobile: permanent HP / Toughness stat drops
+
+Two new pickup types drop rarely from enemy kills on mobile (boss kills
+~3× rarer-then-common rate):
+
+- **HP_UP** (cyan +heart, ~0.8% / 2.4% boss): permanent **+5 max HP**,
+  also heals +5 current HP.
+- **TOUGHNESS** (amber +sigil, ~0.6% / 1.8% boss): permanent **+3%
+  damage reduction** (capped with the rest of the shield formula at
+  75%).
+
+Spawn from `dropOrbsFromEntity`, render in their own canvas pool
+(`statPickupPool` — sibling to goldCoinPool / goldShapePool), magnet
+from anywhere on a mobile viewport, and apply their bump on contact.
+Desktop is unchanged (these drops never spawn off-mobile).
+
+### Added — Mobile: full-screen drop magnet
+
+The 5.95 mobile magnet (600 px health / 400 px gold) still left drops
+drifting off the edges on phones with the 0.65 portrait zoom. Bumped:
+
+- Health-orb mobile far radius: 600 → **3000 px** (full screen at any
+  zoom)
+- Health-orb mobile near radius: 240 → **600 px**
+- Health-orb mobile pull force: now 18 (far) / 40 (near) on mobile —
+  desktop still uses 8 / 22 so the desktop two-tier tests stay green.
+- Gold-coin / gold-shape mobile range: 400 → **3000 px**; strength
+  bumped 18 → **32** (far) and 28 → **60** (near). Stat-pickup uses the
+  same shape.
+
+Net effect: every drop on the visible screen flies straight at the
+stationary player and arrives in ~1 second instead of drifting.
+
+### Changed — Mobile: incoming damage reduced in early waves
+
+Pairs with the 5.97 outgoing-damage ramp so the early-game asymmetry
+goes both ways. Damage *taken* is multiplied by a wave-based curve on
+mobile (applied AFTER shield reduction so SHIELD_BOOST upgrades still
+stack on top):
+
+  Wave 1: **0.25×**   Wave 4: 0.65×
+  Wave 2: 0.35×       Wave 5: 0.80×
+  Wave 3: 0.50×       Wave 6+: 1.0× (no reduction)
+
+Desktop is unchanged.
+
+### Changed — Mobile: SP only from level-ups
+
+Wave clear and mission completion no longer award SP on mobile (the
+3-card pick is the reward). Level-ups still grant +1 SP. Desktop is
+unchanged. The "WAVE COMPLETE!" subtitle on mobile now reads
+"POWERUP UP NEXT" instead of "+N SP".
+
+### Tests
+
+Updated `tests/unit/sim/mobile-drops.test.js` to pin the new
+full-screen magnet contract (3000 / 600 radii, 18 / 40 mobile forces).
+Full unit suite 975/975 passing.
+
+---
+
 ## [5.97.0] - 2026-05-14
 
 ### Added — Mobile: press-and-hold continuous fire + drag-aim

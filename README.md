@@ -20,10 +20,14 @@ Visit **[rainboids.cat.computer](https://rainboids.cat.computer)** in any modern
 
 ### Plays on desktop and mobile
 
-Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.97.0) is a **turret-defense RPG** — same RPG progression as desktop (weapon upgrades, damage multipliers, kill streaks, XP and level matter) but with a stationary ship and press-and-hold touch controls:
+Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.98.0) is a **turret-defense RPG** — same RPG progression as desktop (weapon upgrades, damage multipliers, kill streaks, XP and level matter) but with a stationary ship and press-and-hold touch controls:
 
 - **The player is stationary.** Movement input is gated off entirely — the ship holds position and the player only aims + fires. The viewport is stable since the camera tracks a fixed point at the field centre.
 - **Press-and-hold to fire, drag to aim (5.97.0)**. Press anywhere on the canvas to start continuous primary fire; **drag** the finger across the screen to retarget every frame as the ship rotates to track the touch; release to stop firing. The equipped power weapon auto-fires the instant it's ready / fully charged. Touches within ~48 px of an entity's centre snap aim to that entity. Shots do **normal damage** (RPG progression) with an early-wave damage ramp (3.0× on wave 1, decaying to 1.0× by wave 6) so the first couple of waves are killable in 1-2 shots while the player learns the controls.
+- **Survivable early game (5.98.0).** Incoming damage on mobile is multiplied by a wave-based curve — 0.25× on wave 1, 0.35× wave 2, 0.50× wave 3, ramping back to 1.0× by wave 6. Pairs with the outgoing-damage ramp so the first few waves feel forgiving while the player adapts.
+- **Random powerup pick on wave clear (5.98.0).** Instead of opening the pause menu with +1 SP to spend, mobile wave-clear shows a 3-card random-powerup overlay. Tap a card to claim a free stack and continue to the next wave. SP only comes from level-ups on mobile.
+- **Permanent stat drops (5.98.0).** Mobile-only rare drops from enemy kills: **HP_UP** (cyan, permanent +5 max HP) and **TOUGHNESS** (amber, permanent +3% damage reduction). Boss kills triple the rates. Stack indefinitely (subject to the 75% shield cap).
+- **Full-screen drop magnet (5.98.0).** All drops — gold, health, stat pickups — fly to the stationary player from anywhere on the visible screen on mobile (3000 px radius, snappy pull force). Desktop magnet behavior is unchanged.
 - **Dynamic parallax background (5.97.0).** The starfield drifts during play via a synthetic sum-of-sines so the world feels alive even though the ship is fixed.
 - **Camera zoom-out (5.96.0)**. The world transform scales by `0.65` in portrait and `0.8` in landscape, so a phone-sized viewport shows MORE of the playfield per pixel. Player ship + enemies appear smaller; the field is more navigable on a 400-px-wide screen. Desktop stays at `1.0` (no zoom).
 - **Top-left HUD restored (5.96.0)**. Health bar, triforce (spare-tank visualization), and XP/level are visible on mobile again — they're essential for an RPG. The 5.92.0 simplification still hides the secondary loadout squares, gold readout, and survival timer.
@@ -37,7 +41,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **5.97.0**
+Current version: **5.98.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -82,10 +86,14 @@ Rainboids is a supercharged asteroids game featuring:
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
 
-### Mobile (touch) — turret-defense RPG (5.97.0)
+### Mobile (touch) — turret-defense RPG (5.98.0)
 
 - **Movement**: None. The player ship is **stationary**. Position is locked at the Player.update level; velocity stays at 0.
 - **Aim + fire (press-and-hold, 5.97.0)**: Press anywhere on the canvas to start continuous primary fire — the ship rotates to face the finger and the primary weapon fires at its native rate while you hold. **Drag** the finger across the screen to retarget every frame; the ship tracks the finger like a turret. Release to stop firing. The equipped power weapon auto-fires the instant it's ready/fully charged. Touch points within ~48 px of an entity's centre snap to that entity. Shots do **normal damage** (RPG progression) plus a temporary **early-wave damage ramp** (5.97.0): wave 1 = 3.0×, wave 2 = 2.3×, wave 3 = 1.7×, ramping back to 1.0× by wave 6 so the first few waves are killable in 1-2 shots while the player learns the controls.
+- **Survivable early game (5.98.0)**: Incoming damage is reduced on mobile by a wave-based curve — wave 1 = 0.25×, wave 2 = 0.35×, wave 3 = 0.50×, wave 4 = 0.65×, wave 5 = 0.80×, wave 6+ = 1.0× (no reduction). Applied AFTER shield% reduction so SHIELD_BOOST upgrades still scale on top.
+- **3-card wave-clear pick (5.98.0)**: On wave clear, instead of opening the pause-menu POWERUPS tab, a full-screen `#wave-pick-overlay` shows three random non-maxed powerup cards. Tap a card to claim a free stack and resume into the next wave. If every powerup is maxed, the overlay auto-falls-through (no dead-end). SP on mobile only comes from level-ups (wave clear and mission completion no longer award SP).
+- **Permanent stat drops (5.98.0)**: Two new rare pickup types drop from enemy kills (mobile only): **HP_UP** (cyan +heart, ~0.8% normal / 2.4% boss) gives permanent +5 max HP and +5 current HP; **TOUGHNESS** (amber +sigil, ~0.6% / 1.8%) gives permanent +3% damage reduction. Cap with the rest of the shield formula at 75%. Stat drops use the same full-screen magnet so they fly to the stationary player.
+- **Full-screen drop magnet (5.98.0)**: All drops — gold coins, gold shapes, health orbs, stat pickups — magnet from anywhere on the visible playfield. Mobile far radius bumped 600 → 3000 px (health) and 400 → 3000 px (gold). Pull force bumped to 18-40 (health) and 32-60 (gold) so drops actually *fly* rather than gently drift.
 - **Dynamic parallax background (5.97.0)**: Even though the ship is stationary, the starfield wanders during play via a synthetic drift (a tamer version of the title-screen sandstorm sum-of-sines). Near-depth stars drift more than far ones, so the playfield reads as alive instead of frozen.
 - **Camera zoom-out (5.96.0)**: The world transform applies `scale(zoom, zoom)` around the canvas centre — `0.65` in portrait, `0.8` in landscape, `1.0` on desktop. The visible window in world coords grows by `1/zoom`, so MORE of the field fits on a phone-sized viewport. `screenToWorldCoordinates`, `isEntityOnScreen`, `getVisibleStars`, and the camera clamp all honour the zoom, so tap-to-aim, collision, off-screen culling and snap-to-entity all still work. Zoom is recomputed on resize / orientation flip via `_refreshCameraZoom()`.
 - **Top-left HUD restored (5.96.0)**: Health bar, triforce (spare-tank visualization), and XP/level are visible on mobile again — they're essential for an RPG. The 5.92.0 simplification still hides the secondary loadout squares, gold readout, and survival timer.

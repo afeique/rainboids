@@ -39,10 +39,15 @@ const MAGNET_NEAR_STRENGTH = 25;
 //   from anywhere on a small viewport; matches the player's "stationary
 //   shooter, drops come to me" loop. Strength is bumped too so the pull
 //   feels confident rather than gentle drift.
-const MOBILE_MAGNET_RANGE = 400;
-const MOBILE_MAGNET_STRENGTH = 18;
-const MOBILE_MAGNET_NEAR_RANGE = 80;
-const MOBILE_MAGNET_NEAR_STRENGTH = 28;
+// 5.98.0 — Full-screen magnet on mobile. Players reported coins drifting
+// off the edges before the pull engaged; bumped to 3000 px so the entire
+// playfield is in range on any phone viewport. Force is also bumped so
+// the drops actually "fly" toward the stationary player instead of
+// nudging.
+const MOBILE_MAGNET_RANGE = 3000;
+const MOBILE_MAGNET_STRENGTH = 32;
+const MOBILE_MAGNET_NEAR_RANGE = 200;
+const MOBILE_MAGNET_NEAR_STRENGTH = 60;
 
 export class GoldCoin {
     constructor() {

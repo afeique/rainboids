@@ -30,13 +30,11 @@ const MAGNET_MID_RANGE = 100;
 const MAGNET_MID_STRENGTH = 15;
 const MAGNET_NEAR_RANGE = 40;
 const MAGNET_NEAR_STRENGTH = 25;
-// 5.95.0 — Mobile auto-collect range. See gold-coin.js for shared
-//   rationale; values mirror gold-coin.js exactly so the two pickup
-//   tiers feel identical on mobile.
-const MOBILE_MAGNET_RANGE = 400;
-const MOBILE_MAGNET_STRENGTH = 18;
-const MOBILE_MAGNET_NEAR_RANGE = 80;
-const MOBILE_MAGNET_NEAR_STRENGTH = 28;
+// 5.98.0 — Full-screen mobile magnet (mirrors gold-coin.js).
+const MOBILE_MAGNET_RANGE = 3000;
+const MOBILE_MAGNET_STRENGTH = 32;
+const MOBILE_MAGNET_NEAR_RANGE = 200;
+const MOBILE_MAGNET_NEAR_STRENGTH = 60;
 
 // 5.79.38 — Gold shapes are exclusively 2D silhouettes (stars,
 //   hexagon, diamond, triangle). Pairs with health orbs being all

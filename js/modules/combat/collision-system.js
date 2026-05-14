@@ -512,6 +512,66 @@ export function handleCollisions() {
                 collectGold(shape, this.goldShapePool);
             }
         }
+
+        // 5.98.0 — Stat pickups (mobile-only spawn, but the collision
+        // path is gated by `active` so a stray pickup on desktop would
+        // still collect cleanly if dev-spawned). On contact: apply the
+        // permanent stat bump, flash a confirmation toast, recycle.
+        if (this.statPickupPool) {
+            for (let i = this.statPickupPool.activeObjects.length - 1; i >= 0; i--) {
+                const pickup = this.statPickupPool.activeObjects[i];
+                if (!pickup.active || !starCollision(this.player, pickup)) continue;
+                if (pickup.kind === 'hpup') {
+                    // +5 max HP and +5 current HP (no overflow waste).
+                    this.player.maxHealth += 5;
+                    this.player.health = Math.min(
+                        this.player.getEffectiveMaxHealth ? this.player.getEffectiveMaxHealth() : this.player.maxHealth,
+                        this.player.health + 5
+                    );
+                    if (this.events?.emit) {
+                        this.events.emit('audio:health-regen');
+                        this.events.emit('ui:show-message', {
+                            title: 'HP UP', subtitle: '+5 MAX HEALTH', duration: 1400, position: 'top',
+                        });
+                    }
+                } else if (pickup.kind === 'toughness') {
+                    // +3 damage-reduction % (capped at 75 in getEffectiveShield).
+                    this.player.shield = Math.min(75, (this.player.shield || 0) + 3);
+                    if (this.events?.emit) {
+                        this.events.emit('audio:shield');
+                        this.events.emit('ui:show-message', {
+                            title: 'TOUGHNESS UP', subtitle: '+3% DEFENSE', duration: 1400, position: 'top',
+                        });
+                    }
+                }
+                // Pickup burst — color-matched to the kind.
+                const isHp = pickup.kind === 'hpup';
+                const burstColor = isHp ? '#33ddff' : '#ffae3a';
+                const blip = this.particlePool.get(pickup.x, pickup.y, 'starBlip');
+                if (blip) {
+                    blip.color = burstColor;
+                    blip.radius = 6;
+                    blip.life = 0.6;
+                    blip.fadeRate = 0.1;
+                    blip.growthRate = 0.25;
+                }
+                for (let s = 0; s < 12; s++) {
+                    const angle = (s / 12) * Math.PI * 2;
+                    const sparkle = this.particlePool.get(
+                        pickup.x + Math.cos(angle) * 14,
+                        pickup.y + Math.sin(angle) * 14,
+                        'starSparkle'
+                    );
+                    if (sparkle) {
+                        sparkle.color = burstColor;
+                        sparkle.radius = 2.5;
+                        sparkle.life = 0.9;
+                        sparkle.vel = { x: Math.cos(angle) * 2.2, y: Math.sin(angle) * 2.2 };
+                    }
+                }
+                this.statPickupPool.release(pickup);
+            }
+        }
     }
 
     // Player-powerup collisions

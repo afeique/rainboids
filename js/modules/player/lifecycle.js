@@ -23,8 +23,25 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
+import { isMobile } from '../platform/platform-detect.js';
 
 export const MAX_HEALTH_TANKS = 3;
+
+// 5.98.0 — Mobile early-game damage-taken multiplier. The stationary
+// ship + finger-only aim model makes the first few waves brutal on
+// mobile; pair it with the early-wave OUTGOING damage ramp from 5.97
+// so the asymmetry doesn't just go one direction. Multiplier applied
+// AFTER shield reduction, so SHIELD_BOOST upgrades still scale on top.
+//   Wave 1: 25% incoming damage     Wave 4: 65%
+//   Wave 2: 35%                     Wave 5: 80%
+//   Wave 3: 50%                     Wave 6+: 100% (no reduction)
+function getMobileIncomingDamageMultiplier(wave) {
+    if (!isMobile()) return 1;
+    const w = Math.max(1, wave | 0);
+    if (w >= 6) return 1;
+    const table = [0.25, 0.35, 0.50, 0.65, 0.80, 1.0];
+    return table[w - 1] || 1;
+}
 
 export function takeDamage(damageAmount = this.baseDamage) {
     if (this.player.invincible) return;
@@ -53,6 +70,12 @@ export function takeDamage(damageAmount = this.baseDamage) {
 
     const effectiveShield = this.player.getEffectiveShield();
     let reducedDamage = damageAmount * (1 - effectiveShield / 100);
+
+    // 5.98.0 — Mobile early-wave incoming damage reduction. Stacks with
+    // the shield/SHIELD_BOOST formula above. Cap-friendly (multiplier
+    // never exceeds 1.0 so it can't accidentally amplify damage).
+    const wave = (this.game && this.game.currentWave) ? (this.game.currentWave | 0) : 1;
+    reducedDamage *= getMobileIncomingDamageMultiplier(wave);
 
     // 5.75.0 — STATIC_FIELD: passive HP shield that regenerates after 8s.
     const staticStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('STATIC_FIELD') : 0;
