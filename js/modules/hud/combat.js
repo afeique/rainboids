@@ -39,28 +39,26 @@ export function drawDamageNumbers() {
                 ctx.strokeText(text, screenX, screenY);
                 ctx.fillText(text, screenX, screenY);
             } else if (dmgNum.isCrit) {
-                // 5.76.0 — CRIT damage zooms toward the camera. The font
-                // grows from 22 → 56 px over the lifetime of the floater
-                // (life starts at 1.0, decays toward 0). Pairs with a
-                // soft scale-pulse for the first ~80 ms (`zoomPunch`)
-                // so the impact reads as an immediate burst, then the
-                // number keeps growing as it floats up. White-hot edge
-                // glow on top of the existing hot-orange fill.
-                const lifeFrac = Math.max(0, Math.min(1, 1 - (dmgNum.life / 1.0)));
-                const zoomPunch = lifeFrac < 0.08 ? 1 + (1 - lifeFrac / 0.08) * 0.3 : 1;
-                const fontSize = (22 + lifeFrac * 34) * zoomPunch;
+                // 5.99.2 — CRIT screen-flash removed. The pre-5.99.2
+                // renderer grew the font from 22 → 56 px and added a
+                // 14-34 px white-hot shadow glow, which on small
+                // viewports (and even on a 27" monitor at high crit
+                // rates) read as a sustained full-screen flash that
+                // hurt readability and could be hostile to
+                // photosensitive players. Crits now render at a
+                // fixed-size orange + "CRIT!" tag — still clearly
+                // distinguishable from non-crit hits, but without the
+                // zoom/glow burst.
+                const fontSize = 22;
                 ctx.font = `bold ${fontSize}px 'Press Start 2P', monospace`;
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 3;
                 ctx.strokeStyle = rgba(0, 0, 0, alpha);
-                ctx.fillStyle = rgba(255, 80, 30, alpha);
-                ctx.shadowColor = `rgba(255, 240, 180, ${alpha * 0.85})`;
-                ctx.shadowBlur = 14 + lifeFrac * 20;
+                ctx.fillStyle = rgba(255, 120, 40, alpha);
                 const text = dmgNum.damage.toString();
                 ctx.strokeText(text, screenX, screenY);
                 ctx.fillText(text, screenX, screenY);
-                ctx.shadowBlur = 0;
 
-                ctx.font = `${Math.round(fontSize * 0.36)}px 'Press Start 2P', monospace`;
+                ctx.font = `10px 'Press Start 2P', monospace`;
                 ctx.fillStyle = rgba(255, 220, 80, alpha);
                 ctx.fillText('CRIT!', screenX, screenY - fontSize * 0.85);
             } else if (dmgNum.isEmpowered) {

@@ -113,10 +113,111 @@ export function drawHUD() {
             this.drawStreakIndicator();
         }
 
+        // 5.99.2 — Pickup toast (canvas-rendered). Renders during any
+        // in-game state so the player sees the confirmation even mid-
+        // wave-transition. See drawPickupToast for the rationale —
+        // showMessage / ui:show-message is a no-op because
+        // game-message-overlay is commented out in index.html.
+        if (this._pickupToast && this.game.state !== GAME_STATES.TITLE_SCREEN) {
+            this.drawPickupToast();
+        }
+
         // Draw title screen with wavy text
         if (this.game.state === GAME_STATES.TITLE_SCREEN) {
             this.drawTitleScreen();
         }
+}
+
+// 5.99.2 — Pickup toast. Tiny bottom-anchored banner with the pickup
+// name and bonus, fades in over 120 ms and out over the last 30% of
+// its lifetime. Lives outside the existing waveMessage flow so it
+// doesn't conflict with the WAVE COMPLETE chrome. Designed for
+// permanent stat pickups (HP_UP, TOUGHNESS) but generic enough that
+// any in-game event can fire one via engine.triggerPickupToast.
+export function drawPickupToast() {
+    const t = this._pickupToast;
+    if (!t) return;
+    const now = Date.now();
+    const elapsed = now - (t.startAt || now);
+    const duration = t.duration || 1800;
+    if (elapsed >= duration) {
+        this._pickupToast = null;
+        return;
+    }
+    // Fade-in over the first 120 ms, fade-out over the last 30%.
+    const fadeOutFrom = duration * 0.7;
+    const fadeIn = Math.min(1, elapsed / 120);
+    const fadeOut = elapsed < fadeOutFrom
+        ? 1
+        : Math.max(0, 1 - (elapsed - fadeOutFrom) / (duration - fadeOutFrom));
+    const alpha = fadeIn * fadeOut;
+
+    const ctx = this.ctx;
+    const canvasW = this.canvas.width;
+    const canvasH = this.canvas.height;
+    const _mob = isMobile();
+    const _port = _mob && isPortrait();
+
+    // Sizing — small bottom-anchored chip on portrait, slightly larger
+    // banner on landscape / desktop.
+    const titleFS = _port ? 14 : (_mob ? 16 : 18);
+    const subFS   = _port ? 9  : (_mob ? 10 : 12);
+    const padX    = _port ? 14 : 18;
+    const padY    = _port ? 8  : 10;
+    const gap     = _port ? 4  : 6;
+    // Position above the bottom button bar (HUD bar is 64+22+~10 ≈ 96 px tall).
+    const bottomY = canvasH - 110;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Measure title + subtitle to size the bg pill.
+    ctx.font = `bold ${titleFS}px 'Press Start 2P', monospace`;
+    const titleW = ctx.measureText(t.title || '').width;
+    ctx.font = `${subFS}px 'Press Start 2P', monospace`;
+    const subW = t.subtitle ? ctx.measureText(t.subtitle).width : 0;
+    const blockW = Math.max(titleW, subW) + padX * 2;
+    const blockH = titleFS + (t.subtitle ? gap + subFS : 0) + padY * 2;
+    const cx = canvasW / 2;
+    const x0 = cx - blockW / 2;
+    const y0 = bottomY - blockH / 2;
+
+    // Background pill — accent-tinted with a darker fill.
+    const accent = t.accentColor || '#33ddff';
+    ctx.fillStyle = 'rgba(8, 14, 24, 0.92)';
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x0, y0, blockW, blockH, 10);
+    else ctx.rect(x0, y0, blockW, blockH);
+    ctx.fill();
+    ctx.stroke();
+
+    // Title — accent color.
+    ctx.font = `bold ${titleFS}px 'Press Start 2P', monospace`;
+    ctx.fillStyle = accent;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const titleY = t.subtitle
+        ? y0 + padY + titleFS / 2
+        : y0 + blockH / 2;
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
+    ctx.strokeText(t.title || '', cx, titleY);
+    ctx.fillText(t.title || '', cx, titleY);
+
+    if (t.subtitle) {
+        ctx.font = `${subFS}px 'Press Start 2P', monospace`;
+        ctx.fillStyle = '#e8edf5';
+        const subY = y0 + padY + titleFS + gap + subFS / 2;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.strokeText(t.subtitle, cx, subY);
+        ctx.fillText(t.subtitle, cx, subY);
+    }
+
+    ctx.restore();
 }
 
 // ── Game Complete screen ──────────────────────────────────────────────────

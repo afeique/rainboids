@@ -161,25 +161,42 @@ export const WAVE_DATA = {
 // to the final boss wave — the run loop should transition to GAME_COMPLETE
 // before getWaveConfig is called for wave 21+.
 //
-// 5.99.1 — Mobile difficulty pass. The desktop wave roster is balanced
-// for keyboard + mouse precision; on mobile the player has one finger,
-// no movement, and a small viewport — having ~15 enemies in a sub-wave
-// (e.g. wave 13: 6 WASPs) is overwhelming. Apply a per-group multiplier
-// to thin the spawns so the mobile playfield reads as casual / clear.
-// Asteroid counts also drop. Bosses (count×bossTier) are preserved so
-// the campaign milestones still feel like milestones.
+// 5.99.1 → 5.99.2 — Mobile difficulty pass with a STEEPER early-wave
+// reduction. The flat 0.45 multiplier still made wave 1-3 feel frenetic
+// on mobile because each sub-wave dumps multiple enemy types at once.
+// Per-wave table now eases the player in:
+//   Wave 1: 0.20×  (e.g. wave 1's 7 enemies → 1-2 enemies)
+//   Wave 2: 0.25×
+//   Wave 3: 0.30×
+//   Wave 4: 0.40×
+//   Wave 5+: 0.45×  (rest of campaign keeps the previous tuning)
 //
-// Multipliers (mobile):
-//   - non-boss enemy counts × 0.45  (with a 1-floor)
-//   - asteroid counts × 0.40        (with a 1-floor on non-boss waves)
+// Asteroid count uses a parallel curve:
+//   Wave 1-3: 0.25×, Wave 4: 0.35×, Wave 5+: 0.40×
 //
-// Boss waves keep the boss spawn intact (count + bossTier untouched);
-// only their escort enemies get the reduction.
-function _scaleConfigForMobile(cfg) {
+// Bosses (count×bossTier) are preserved so the campaign milestones
+// (waves 5/10/15/20) still feel like milestones — only their escort
+// enemies thin out.
+const _MOBILE_ENEMY_MULT_BY_WAVE = {
+    1: 0.20,
+    2: 0.25,
+    3: 0.30,
+    4: 0.40,
+};
+const _MOBILE_ASTEROID_MULT_BY_WAVE = {
+    1: 0.25,
+    2: 0.25,
+    3: 0.25,
+    4: 0.35,
+};
+const _MOBILE_ENEMY_MULT_DEFAULT = 0.45;
+const _MOBILE_ASTEROID_MULT_DEFAULT = 0.40;
+
+function _scaleConfigForMobile(cfg, waveNumber) {
     if (!cfg) return cfg;
-    const ENEMY_MULT = 0.45;
-    const ASTEROID_MULT = 0.40;
-    const scaleCount = (n) => Math.max(1, Math.round(n * ENEMY_MULT));
+    const enemyMult = _MOBILE_ENEMY_MULT_BY_WAVE[waveNumber] ?? _MOBILE_ENEMY_MULT_DEFAULT;
+    const asteroidMult = _MOBILE_ASTEROID_MULT_BY_WAVE[waveNumber] ?? _MOBILE_ASTEROID_MULT_DEFAULT;
+    const scaleCount = (n) => Math.max(1, Math.round(n * enemyMult));
 
     const scaledSubWaves = (cfg.subWaves || []).map((group) =>
         group.map((entry) => {
@@ -189,9 +206,7 @@ function _scaleConfigForMobile(cfg) {
         })
     );
 
-    const scaledAsteroids = cfg.isBossWave
-        ? Math.max(1, Math.round((cfg.asteroids || 0) * ASTEROID_MULT))
-        : Math.max(1, Math.round((cfg.asteroids || 0) * ASTEROID_MULT));
+    const scaledAsteroids = Math.max(1, Math.round((cfg.asteroids || 0) * asteroidMult));
 
     return { ...cfg, asteroids: scaledAsteroids, subWaves: scaledSubWaves };
 }
@@ -206,7 +221,7 @@ export function getWaveConfig(waveNumber) {
     const base = WAVE_DATA[w] || WAVE_DATA[1];
     if (!isMobile()) return base;
     if (_mobileWaveCache.has(w)) return _mobileWaveCache.get(w);
-    const scaled = _scaleConfigForMobile(base);
+    const scaled = _scaleConfigForMobile(base, w);
     _mobileWaveCache.set(w, scaled);
     return scaled;
 }

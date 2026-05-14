@@ -2745,6 +2745,21 @@ export class GameEngine {
     drawWeaponEffects() { return weaponFx.drawWeaponEffects.call(this); }
 
     drawSkillCooldownHUD() { return hudStatus.drawSkillCooldownHUD.call(this); }
+
+    // 5.99.2 — Canvas-rendered pickup toast (replaces the dead
+    // showMessage / #game-message-overlay DOM path). Set by
+    // triggerPickupToast and rendered each frame in drawHUD until the
+    // duration expires.
+    drawPickupToast() { return hudStatus.drawPickupToast.call(this); }
+    triggerPickupToast({ title, subtitle, accentColor, duration = 1800 } = {}) {
+        this._pickupToast = {
+            title: title || '',
+            subtitle: subtitle || '',
+            accentColor: accentColor || '#33ddff',
+            startAt: Date.now(),
+            duration,
+        };
+    }
     
     drawCursorCooldownTimer() { return hudCursor.drawCursorCooldownTimer.call(this); }
     

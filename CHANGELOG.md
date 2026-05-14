@@ -11,6 +11,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.99.2] - 2026-05-14
+
+### Changed — Crit damage no longer flashes the screen (ALL platforms)
+
+The pre-5.99.2 crit damage renderer grew the font from 22 → 56 px over
+the lifetime of the floater and added a 14-34 px white-hot shadow
+glow. On small viewports — and even on a 27" monitor at high crit
+rates — this read as a sustained full-screen flash. Could hurt
+readability and was hostile to photosensitive players.
+
+Crits now render at a fixed 22 px size with a "CRIT!" tag in
+yellow above the orange damage number. Still clearly distinguishable
+from non-crit hits (orange vs gold, larger font, tag), but no zoom or
+glow burst.
+
+### Changed — Steeper early-wave reduction on mobile
+
+The 5.99.1 flat 0.45 multiplier still made waves 1-3 feel frenetic
+because each sub-wave dumps multiple enemy types at once. New
+per-wave table for mobile:
+
+  Wave 1: 0.20× enemies / 0.25× asteroids
+  Wave 2: 0.25× / 0.25×
+  Wave 3: 0.30× / 0.25×
+  Wave 4: 0.40× / 0.35×
+  Wave 5+: 0.45× / 0.40× (5.99.1 tuning preserved)
+
+Bosses still spawn at full count.
+
+### Changed — Mobile stat pickup frequency 3× and visibility +50%
+
+The 5.98.0 stat-pickup drop rates (HP_UP 0.8% / TOUGHNESS 0.6%, boss
+2.4 / 1.8) produced a permanent-upgrade roughly every 3-4 waves on
+mobile. 5.99.2 bumps to ~2.5% / 2.0% (boss 6% / 5%) so the player
+sees one roughly every wave. Pickup visual radius bumped 14 → 20 px
+so drops don't get lost in combat (also widens the auto-collect
+window since collision reads `this.radius`).
+
+### Fixed — Pickup feedback was silently dropped
+
+CRITICAL: `ui-manager.showMessage()` is a no-op because
+`#game-message-overlay` is commented out in `index.html`. Every
+`ui:show-message` event — including the stat-pickup "HP UP / +5 MAX
+HEALTH" confirmation added in 5.98.0 — was silently dropped. Players
+were getting permanent stat boosts with zero feedback.
+
+5.99.2 adds a new canvas-rendered toast (`drawPickupToast` +
+`triggerPickupToast` on the engine). Small bottom-anchored pill with
+the pickup name and bonus, fades in over 120 ms and out across the
+last 30% of its lifetime. Stat-pickup collision now calls
+`triggerPickupToast` instead of the dead `ui:show-message` path.
+
+Future work: audit the other `ui:show-message` call sites
+(mission complete, last-stand save, etc.) and route them through the
+new toast or re-enable `#game-message-overlay`.
+
+---
+
 ## [5.99.1] - 2026-05-14
 
 ### Changed — Mobile difficulty: 55% fewer enemies, 60% fewer asteroids

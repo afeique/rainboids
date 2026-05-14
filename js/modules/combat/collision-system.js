@@ -517,6 +517,11 @@ export function handleCollisions() {
         // path is gated by `active` so a stray pickup on desktop would
         // still collect cleanly if dev-spawned). On contact: apply the
         // permanent stat bump, flash a confirmation toast, recycle.
+        //
+        // 5.99.2 — Switched feedback from `ui:show-message` (which is a
+        // silent no-op — #game-message-overlay is commented out in
+        // index.html) to the new canvas-rendered pickup toast. Now the
+        // player actually sees that they got a permanent upgrade.
         if (this.statPickupPool) {
             for (let i = this.statPickupPool.activeObjects.length - 1; i >= 0; i--) {
                 const pickup = this.statPickupPool.activeObjects[i];
@@ -528,19 +533,25 @@ export function handleCollisions() {
                         this.player.getEffectiveMaxHealth ? this.player.getEffectiveMaxHealth() : this.player.maxHealth,
                         this.player.health + 5
                     );
-                    if (this.events?.emit) {
-                        this.events.emit('audio:health-regen');
-                        this.events.emit('ui:show-message', {
-                            title: 'HP UP', subtitle: '+5 MAX HEALTH', duration: 1400, position: 'top',
+                    if (this.events?.emit) this.events.emit('audio:health-regen');
+                    if (typeof this.triggerPickupToast === 'function') {
+                        this.triggerPickupToast({
+                            title: 'HP UP',
+                            subtitle: '+5 MAX HEALTH',
+                            accentColor: '#33ddff',
+                            duration: 1800,
                         });
                     }
                 } else if (pickup.kind === 'toughness') {
                     // +3 damage-reduction % (capped at 75 in getEffectiveShield).
                     this.player.shield = Math.min(75, (this.player.shield || 0) + 3);
-                    if (this.events?.emit) {
-                        this.events.emit('audio:shield');
-                        this.events.emit('ui:show-message', {
-                            title: 'TOUGHNESS UP', subtitle: '+3% DEFENSE', duration: 1400, position: 'top',
+                    if (this.events?.emit) this.events.emit('audio:shield');
+                    if (typeof this.triggerPickupToast === 'function') {
+                        this.triggerPickupToast({
+                            title: 'TOUGHNESS UP',
+                            subtitle: '+3% DEFENSE',
+                            accentColor: '#ffae3a',
+                            duration: 1800,
                         });
                     }
                 }

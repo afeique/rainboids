@@ -53,7 +53,11 @@ export class StatPickup {
         this.x = x;
         this.y = y;
         this.kind = (kind === 'toughness') ? 'toughness' : 'hpup';
-        this.radius = 14;
+        // 5.99.2 — Visual radius bumped 14 → 20 px so pickups are
+        // legible at the portrait 0.65 camera zoom (~9 → ~13 effective
+        // world-px). Hit radius (used in collision-system) reads
+        // `this.radius` so this also widens the auto-collect window.
+        this.radius = 20;
         this.life = LIFE_TICKS;
         this.active = true;
         this.opacity = 1;
