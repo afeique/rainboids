@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.95.2] - 2026-05-14
+
+### Fixed — Mobile ship rotation now matches touch direction
+
+The ship wasn't rotating to face the tap position on mobile, and shots were going in a different direction than the ship was facing. Root cause: `js/modules/ui/input-handler.js` registers a global `mousemove` handler that overwrites `input.aimX/Y`. On mobile, the browser **synthesizes mousemove events from touch events using PAGE coordinates** — those synthesized events fired AFTER the touch handler had correctly set the aim, and overwrote it with page-coord-based world coords that didn't match where the user actually tapped.
+
+The result was that the touch handler set aim → ship rotated to the correct direction for one frame → synthesized mousemove fired → aim was overwritten → ship rotated to a wrong direction → shots fired in that wrong direction.
+
+**Fix**: gate the `mousemove`, `mousedown`, and `mouseup` handlers on `isMobile()`. They all bail out unconditionally on mobile. Touch input owns aim + fire entirely; the touch handler in `mobile-touch.js` (`_fireAtTap`) correctly converts canvas coords → world coords via `screenToWorldCoordinates`.
+
+Also gated mousedown/mouseup so synthesized touch-to-mouse events can't race the touch handler's one-shot rAF release pattern (the touch handler sets `fire = true` then schedules `fire = false` 2 rAFs later; a synthesized mouseup mid-window would clear the flag early and cancel the shot).
+
+Combined with 5.95.1's `assists = null` on mobile, the player ship now rotates to face the touch position and fires in that exact direction. Touch input is the sole source of aim on mobile.
+
+---
+
 ## [5.95.1] - 2026-05-14
 
 ### Fixed — Mobile fruit-ninja polish: bug fixes + assists/aim cleanup
