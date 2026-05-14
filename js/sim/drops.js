@@ -67,6 +67,22 @@ export const DROP_MAGNET_FAR_FORCE = 8;
 export const DROP_MAGNET_NEAR_FORCE = 22;
 
 /**
+ * 5.95.0 — Mobile auto-collect radius for health orbs. Bumped well
+ * beyond the desktop 320 px so health flies to the stationary player
+ * from anywhere on a small viewport. The pull force stays at the
+ * desktop FAR_FORCE so existing tests pinning the desktop two-tier
+ * formula don't have to change — only the radius opens up.
+ *
+ * The wrapper switches between the desktop and mobile radius via the
+ * `ctx.mobileMagnet` boolean (see context plumbing in engine-driver-solo
+ * / engine-driver-mp). Pure-sim contract stays clean: this file owns
+ * the tuning, the caller owns the policy.
+ */
+export const DROP_MAGNET_FAR_RADIUS_MOBILE = 600;
+/** Mobile inner magnet radius — wider snap zone for finger taps. */
+export const DROP_MAGNET_NEAR_RADIUS_MOBILE = 240;
+
+/**
  * Opacity fade-in/fade-out window — the orb opacity is
  * `min(1, life / DROP_OPACITY_FADE_FRAMES)`. With `life` starting at
  * 7200 and decrementing per tick, opacity stays at 1.0 for the first
@@ -179,13 +195,20 @@ export function updateDrop(drop, ctx, _events) {
     // Mirrors `color-star.js` line 237-247. Health orbs only —
     // gold orbs (shape and pixel) drift freely until the player's
     // tractor beam scoops them.
-    if (isHealth && dist > 1 && dist < DROP_MAGNET_FAR_RADIUS) {
+    //
+    // 5.95.0 — On mobile (ctx.mobileMagnet=true), use the wider mobile
+    // radii so health orbs auto-collect from anywhere on the playfield.
+    // Force values stay the same so the desktop two-tier formula tests
+    // don't move; only the engagement radius grows.
+    const farR = ctx.mobileMagnet ? DROP_MAGNET_FAR_RADIUS_MOBILE : DROP_MAGNET_FAR_RADIUS;
+    const nearR = ctx.mobileMagnet ? DROP_MAGNET_NEAR_RADIUS_MOBILE : DROP_MAGNET_NEAR_RADIUS;
+    if (isHealth && dist > 1 && dist < farR) {
         const inv = 1 / dist;
-        const farFactor = (DROP_MAGNET_FAR_RADIUS - dist) / DROP_MAGNET_FAR_RADIUS;
+        const farFactor = (farR - dist) / farR;
         drop.vx += nearestDx * inv * DROP_MAGNET_FAR_FORCE * farFactor;
         drop.vy += nearestDy * inv * DROP_MAGNET_FAR_FORCE * farFactor;
-        if (dist < DROP_MAGNET_NEAR_RADIUS) {
-            const nearFactor = (DROP_MAGNET_NEAR_RADIUS - dist) / DROP_MAGNET_NEAR_RADIUS;
+        if (dist < nearR) {
+            const nearFactor = (nearR - dist) / nearR;
             drop.vx += nearestDx * inv * DROP_MAGNET_NEAR_FORCE * nearFactor;
             drop.vy += nearestDy * inv * DROP_MAGNET_NEAR_FORCE * nearFactor;
         }

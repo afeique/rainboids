@@ -419,6 +419,16 @@ export class MobileTouchHandler {
             input.screenAimY = canvasY;
         }
 
+        // 5.95.1 — Stash the last-touched canvas coordinates on the
+        // engine so the mobile reticle renderer (hud/mobile-reticle.js)
+        // can draw a crosshair at the touch point on every subsequent
+        // frame, independent of whether `input.screenAimX/Y` gets reset
+        // by other systems (the radial menu, for instance, recenters
+        // it). Persist forever after the first tap — the reticle is a
+        // "where you'll fire next" indicator, not a touch-active flash.
+        ge._mobileLastTouchCanvasX = canvasX;
+        ge._mobileLastTouchCanvasY = canvasY;
+
         // 5.94.0 — Snap the player's facing immediately so visual
         // feedback fires this frame instead of waiting for Player.update
         // to recompute the angle from aimX/aimY. Player.update will set

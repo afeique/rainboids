@@ -11,6 +11,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.95.2] - 2026-05-14
+
+### Fixed — Mobile ship rotation now matches touch direction
+
+The ship wasn't rotating to face the tap position on mobile, and shots were going in a different direction than the ship was facing. Root cause: `js/modules/ui/input-handler.js` registers a global `mousemove` handler that overwrites `input.aimX/Y`. On mobile, the browser **synthesizes mousemove events from touch events using PAGE coordinates** — those synthesized events fired AFTER the touch handler had correctly set the aim, and overwrote it with page-coord-based world coords that didn't match where the user actually tapped.
+
+The result was that the touch handler set aim → ship rotated to the correct direction for one frame → synthesized mousemove fired → aim was overwritten → ship rotated to a wrong direction → shots fired in that wrong direction.
+
+**Fix**: gate the `mousemove`, `mousedown`, and `mouseup` handlers on `isMobile()`. They all bail out unconditionally on mobile. Touch input owns aim + fire entirely; the touch handler in `mobile-touch.js` (`_fireAtTap`) correctly converts canvas coords → world coords via `screenToWorldCoordinates`.
+
+Also gated mousedown/mouseup so synthesized touch-to-mouse events can't race the touch handler's one-shot rAF release pattern (the touch handler sets `fire = true` then schedules `fire = false` 2 rAFs later; a synthesized mouseup mid-window would clear the flag early and cancel the shot).
+
+Combined with 5.95.1's `assists = null` on mobile, the player ship now rotates to face the touch position and fires in that exact direction. Touch input is the sole source of aim on mobile.
+
+---
+
+## [5.95.1] - 2026-05-14
+
+### Fixed — Mobile fruit-ninja polish: bug fixes + assists/aim cleanup
+Round-2 follow-ups to the 5.95.0 fruit-ninja redesign. Six fixes:
+
+- **Enemies still fired on mobile.** The 5.95.0 sim-layer gate
+  (`decideEnemyShooting` in `js/sim/enemy.js`) short-circuited the
+  events pipeline, but two sibling firing paths bypassed it: the legacy
+  `Enemy.updateShooting` wrapper in `js/modules/enemy/enemy.js` (dead-code
+  today but kept for defense-in-depth) and the inline Weaver
+  `shootSpiralLaser` call inside `weaverSpinupMovement` in
+  `js/modules/enemy/movement.js`. Both now gate on `isMobile()` before
+  invoking any firing helper.
+- **Stronger kamikaze + random-walk dodge.** Bumped
+  `MOBILE_KAMIKAZE_FORCE` from 0.6 → 2.5 (4×) so the divebomb feels
+  purposeful instead of a gentle drift. Added a per-tick random-walk
+  velocity perturbation (`MOBILE_RANDOM_WALK = 0.5`) so enemies visibly
+  zigzag — reads as evasive motion at 60 Hz. New
+  `MOBILE_MAX_KAMIKAZE_SPEED = 6.0` cap clamps the cumulative bias so
+  enemies don't fly off-screen.
+- **Aim assists force-disabled on mobile.** Auto Aim / Aim Assist / Auto
+  Fire are desktop-only in the fruit-ninja input model. `Player.update`
+  now treats `assists` as `null` on mobile, making every
+  `assists && assists.X` check fall through cleanly.
+- **Laser pointer aim trace hidden on mobile.** `drawLaserPointerAim` in
+  `js/modules/hud/cursor.js` early-returns on mobile so the desktop ray
+  doesn't compete with the new reticle.
+- **Touch-position reticle.** New `js/modules/hud/mobile-reticle.js`
+  renders a 24-px cyan crosshair at the last-touched canvas coordinate.
+  `MobileTouchHandler._fireAtTap` stashes the coordinate on
+  `engine._mobileLastTouchCanvasX/Y`. The reticle ticks every frame
+  during PLAYING / WAVE_TRANSITION; suppressed when a radial is open.
+- **Phone-portrait playfield shrink.** Cleaner injection point than the
+  camera/transform pipeline (46 call sites). New
+  `MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS = 28` caps asteroid spawn + split
+  radii in portrait mobile (was 36); enemy spawn radii multiply by 0.7
+  in portrait mobile. Landscape mobile keeps the 5.95.0 values; desktop
+  is untouched.
+
+### Tests
+- Added 2 new test files: `tests/unit/enemy/mobile-wrapper-fire-suppression.test.js`
+  (3 tests pinning the `updateShooting` wrapper gate) and
+  `tests/unit/player/mobile-assists-disabled.test.js` (3 tests pinning
+  Auto Aim / Aim Assist force-disable on mobile).
+- Updated `tests/unit/sim/mobile-enemy.test.js` for the new force value
+  (2.5 vs 0.6), random-walk variance, and the velocity cap branch.
+- Updated `tests/unit/wave/mobile-asteroid-size.test.js` for the new
+  portrait branch (28 px cap).
+- Net: +7 tests. Full unit suite **951/951 passing**.
+
+---
+
+## [5.95.0] - 2026-05-13
+
+### Changed — Mobile mode is now fruit-ninja slash-the-enemies
+Fundamental gameplay redesign on mobile. Desktop unchanged.
+
+- **Top-left HUD removed.** Health bar, triforce/lives indicator, XP bar, and level/coins display are all hidden on mobile. `updateHUD()` early-returns when `isMobile()` is true. The bottom-button bar (SHOP / STATS / PAUSE / PRM / PWR) is still drawn by `drawHudButtons` outside this function and the defense indicators (REFLEXES / LAST_STAND / STATIC_FIELD widgets) are unchanged.
+- **Enemies don't fire bullets** on mobile. `decideEnemyShooting` in `js/sim/enemy.js` short-circuits before pushing any `enemy_fire*` events onto the wrapper drain buffer, suppressing burst, sweep, continuous, charging, and non-burst patterns alike for all 10 enemy types (HUNTER, GUARDIAN, WASP, STALKER, DRIFTER, PROWLER, WEAVER, SENTINEL, TANGERINE, TITAN).
+- **Enemies kamikaze toward the player.** Every tick (after the per-enemy movement pattern runs), each non-boss enemy gets a unit-direction-scaled velocity bias of `MOBILE_KAMIKAZE_FORCE = 0.6` px toward the player. Bosses are exempt so their formation/orbit AI keeps its choreography. Contact damage on collision is unchanged — the existing player-enemy collision path (collision-system.js line 1735) already destroys the ramming enemy.
+- **One-shot kills.** Every primary-weapon hit destroys the enemy or asteroid in a single tap. Implemented by force-enabling the existing `cheats.onePunchMan` flag at GameEngine construct time when `this.mobile` is true — the flag is already wired into the three bullet-vs-enemy / bullet-vs-asteroid damage sites in `collision-system.js` (lines 101 / 543 / 668), so this delivers the fruit-ninja slice feel with zero new collision code.
+- **Asteroids stay small.** Spawn radius is capped at `MOBILE_ASTEROID_MAX_RADIUS = 36` px on mobile (vs the desktop 30–60 px range). Split-fragment radii are also clamped to the same cap so destroying a parent rock can't seed a child above the readable size budget. Desktop spawn behavior is byte-for-byte unchanged.
+- **Drops auto-magnet to the player on mobile.** Health orbs use the mobile attraction radii `DROP_MAGNET_FAR_RADIUS_MOBILE = 600` / `DROP_MAGNET_NEAR_RADIUS_MOBILE = 240` (vs desktop 320 / 120). Gold coins and chunky gold shapes get a new mobile-only `MOBILE_MAGNET_RANGE = 400` / `MOBILE_MAGNET_NEAR_RANGE = 80` proximity pull on top of their existing tractor-beam path. No MAGNET upgrade is required — the wider radius engages automatically the moment the engine is in mobile mode.
+- **Controls screen portrait fit.** The Controls tab inside the pause menu now fits in narrow portrait viewports: section headers shrink from 18 px to 12 px, action labels from 18 px to 11 px, the kbd sprite tiles from 63 px to 44 px tall, with proportional padding/gap adjustments. Footer ("ESC to resume play") and the section icons also scale down. Lands at the `body.mobile-portrait` selector so desktop and landscape mobile keep their original spacious layout.
+
+### Tests
+- Added 5 new test files covering the mobile rules: enemy fire suppression + kamikaze pull (`tests/unit/sim/mobile-enemy.test.js`), drops auto-magnet on mobile (`tests/unit/sim/mobile-drops.test.js`), asteroid size cap (`tests/unit/wave/mobile-asteroid-size.test.js`), one-punch cheat default (`tests/unit/engine/mobile-one-punch.test.js`), HUD no-op on mobile (`tests/unit/hud/mobile-hud-empty.test.js`).
+- Net: +68 tests. Full unit suite **944/944 passing**.
+
+---
+
 ## [5.94.0] - 2026-05-13
 
 ### Changed — Mobile mode is now tower-defense

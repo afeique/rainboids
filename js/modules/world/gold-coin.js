@@ -5,8 +5,14 @@
 // Render: simple gold dot (slot 'dot' in the WebGL star atlas).
 // Pickup: walked into by player or pulled in by tractor beam.
 // Lifetime: 120 seconds, with blink in last 5 seconds, fade in last 0.5s.
+//
+// 5.95.0 — Mobile fruit-ninja redesign: drops auto-magnet to the
+//   player on mobile mode regardless of upgrade state, with a much
+//   wider attraction radius so collection feels effortless on a phone.
+//   See the MOBILE_* constants below.
 import { GAME_CONFIG } from '../core/constants.js';
 import { random } from '../core/utils.js';
+import { isMobile } from '../platform/platform-detect.js';
 
 const LIFE_TICKS = 120 * 60;     // 120s @ 60Hz logic ticks.
 const BLINK_TICKS = 5 * 60;      // Last 5s alternate opacity.
@@ -29,6 +35,14 @@ const MAGNET_MID_RANGE = 100;    // medium-range proximity zone
 const MAGNET_MID_STRENGTH = 15;
 const MAGNET_NEAR_RANGE = 40;    // magnetic-snap (scoop) zone
 const MAGNET_NEAR_STRENGTH = 25;
+// 5.95.0 — Mobile auto-collect range. Generous radius so coins zip in
+//   from anywhere on a small viewport; matches the player's "stationary
+//   shooter, drops come to me" loop. Strength is bumped too so the pull
+//   feels confident rather than gentle drift.
+const MOBILE_MAGNET_RANGE = 400;
+const MOBILE_MAGNET_STRENGTH = 18;
+const MOBILE_MAGNET_NEAR_RANGE = 80;
+const MOBILE_MAGNET_NEAR_STRENGTH = 28;
 
 export class GoldCoin {
     constructor() {
@@ -119,9 +133,25 @@ export class GoldCoin {
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
 
-            // Proximity magnet only — drop drifts freely until the
-            //   player approaches. No homing-from-anywhere pull.
-            if (dist > 1 && dist < MAGNET_MID_RANGE) {
+            // 5.95.0 — Mobile auto-collect: wider, stronger pull at all
+            //   ranges, no upgrade required. Replaces the desktop two-tier
+            //   proximity magnet in mobile mode so coins fly to the player
+            //   from anywhere on the playfield. Desktop branch unchanged.
+            if (isMobile()) {
+                if (dist > 1 && dist < MOBILE_MAGNET_RANGE) {
+                    const invDist = 1 / dist;
+                    const mFar = (MOBILE_MAGNET_RANGE - dist) / MOBILE_MAGNET_RANGE;
+                    this.vel.x += dx * invDist * MOBILE_MAGNET_STRENGTH * mFar * MAGNET_Z;
+                    this.vel.y += dy * invDist * MOBILE_MAGNET_STRENGTH * mFar * MAGNET_Z;
+                    if (dist < MOBILE_MAGNET_NEAR_RANGE) {
+                        const mNear = (MOBILE_MAGNET_NEAR_RANGE - dist) / MOBILE_MAGNET_NEAR_RANGE;
+                        this.vel.x += dx * invDist * MOBILE_MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;
+                        this.vel.y += dy * invDist * MOBILE_MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;
+                    }
+                }
+            } else if (dist > 1 && dist < MAGNET_MID_RANGE) {
+                // Desktop proximity magnet — drop drifts freely until the
+                //   player approaches. No homing-from-anywhere pull.
                 const invDist = 1 / dist;
                 // Medium range (≤100 px): magnet ramps up as player nears.
                 const mMid = (MAGNET_MID_RANGE - dist) / MAGNET_MID_RANGE;

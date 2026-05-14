@@ -459,7 +459,14 @@ export class Player {
         // ── Aim resolution (5.74) ──
         // Priority: Auto Aim > Arrow-key rotation > Aim Assist (cursor snap) > Mouse.
         const ge = window.gameEngine;
-        const assists = ge && ge.assists ? ge.assists : null;
+        // 5.95.1 — Force-disable ALL assists on mobile. The fruit-ninja
+        // tap-to-aim-and-fire input model is intentionally hands-on: the
+        // player picks each target themselves. Auto Aim / Aim Assist /
+        // Auto Fire would all override the tap input and break that loop.
+        // We treat the assists block as if the user toggled everything
+        // off — null sentinel makes every `assists && assists.X` check
+        // fall through cleanly without needing per-branch gates.
+        const assists = (!isMobile() && ge && ge.assists) ? ge.assists : null;
 
         // Auto Aim — lock onto nearest threat. Overrides everything below.
         let autoAimed = false;

@@ -2,6 +2,8 @@
 // desktop-only gate in main.js stops the game from initializing on touch
 // devices, so this file does not need to handle them at all.
 
+import { isMobile } from '../platform/platform-detect.js';
+
 export class InputHandler {
     constructor() {
         this.input = {
@@ -45,6 +47,17 @@ export class InputHandler {
 
     setupMouseControls() {
         document.addEventListener('mousemove', e => {
+            // 5.95.x — On mobile (touch devices), browsers synthesize
+            // mousemove events from touch events using PAGE coords. Those
+            // synthesized events would overwrite the touch handler's
+            // correctly-computed `input.aimX/Y` (set in `_fireAtTap` in
+            // mobile-touch.js) with page-coord-based world coords that
+            // don't match where the user actually tapped. Result: the
+            // ship rotates to face the synthesized event's position, NOT
+            // the user's tap. Bail unconditionally on mobile — the touch
+            // handler owns aim there.
+            if (isMobile()) return;
+
             this.lastMouseMoveTime = Date.now();
 
             this.input.screenAimX = e.clientX;
@@ -72,6 +85,10 @@ export class InputHandler {
         });
 
         document.addEventListener('mousedown', e => {
+            // 5.95.x — Bail on mobile; the touch handler owns fire input.
+            // Synthesized mousedown/mouseup from touch events would race
+            // the touch handler's one-shot rAF release pattern.
+            if (isMobile()) return;
             // Suppress fire while a radial menu (E/R/F held) is open — that
             // click is the user committing a radial selection, not a fire.
             const radialOpen = this.gameEngine && this.gameEngine.radialMenu && this.gameEngine.radialMenu.isOpen();
@@ -88,6 +105,7 @@ export class InputHandler {
         });
 
         document.addEventListener('mouseup', e => {
+            if (isMobile()) return;
             if (e.button === 0) {
                 this.input.fire = false;
             }

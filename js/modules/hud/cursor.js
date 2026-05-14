@@ -4,6 +4,10 @@
 
 import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 import { GAME_CONFIG, GAME_STATES } from '../core/constants.js';
+// 5.95.1 — Mobile mode disables the laser-pointer aim trace (replaced by
+// the touch-position reticle drawn in mobile-reticle.js). Desktop and
+// touchscreen-laptops still get the full laser trace.
+import { isMobile } from '../platform/platform-detect.js';
 
 export function drawCustomCursor() {
         if (!this.cursor.x && !this.cursor.y) return; // Don't draw if no mouse position
@@ -458,6 +462,8 @@ export function drawLaserPointerAim() {
     if (!this.player || !this.player.active) return;
     if (this.game.state !== GAME_STATES.PLAYING && this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
     if (this.radialMenu && this.radialMenu.isOpen && this.radialMenu.isOpen()) return;
+    // 5.95.1 — Suppress on mobile (replaced by touch-position reticle).
+    if (isMobile()) return;
 
     const player = this.player;
     const ctx = this.ctx;
