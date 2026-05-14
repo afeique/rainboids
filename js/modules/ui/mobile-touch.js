@@ -3,39 +3,42 @@
 // keyboard handlers in InputHandler (which are inert on a phone because
 // there's no keyboard).
 //
-// Two gestures matter:
+// 5.94.0 — Mobile mode is now a stationary-ship tower-defense game.
+// Auto-pilot was removed and the player can't move. The only gameplay
+// inputs are:
 //
-//   • Short tap (release within TAP_MS, no significant drag) → aim the
-//     primary weapon at the tap point and fire one shot. If the tap lands
-//     on an active asteroid or enemy, snap the aim to that entity's
-//     centre for a satisfying "I tapped the thing → it died" feel.
+//   • Tap anywhere on the canvas → aim at the touch point and fire one
+//     shot of the primary weapon AND the equipped power weapon (if it's
+//     ready / fully charged). The power weapon's existing auto-fire
+//     gate (Player.update) also continues to set fireSecondary the
+//     moment the weapon is ready — both pathways are idempotent.
+//   • HUD button taps (SHOP / STATS / PAUSE / PRM / PWR) route to the
+//     matching action and DO NOT fall through to fire-a-shot. The
+//     PRM and PWR buttons open the existing weapon radial in primary
+//     or power mode respectively (replacing the long-press radial
+//     gesture from 5.91–5.93).
 //
-//   • Long press (held > LONG_PRESS_MS without drifting) → open the
-//     existing RadialMenu in "primary weapon" mode. Drag while held to
-//     hover a wedge; release on the wedge to select; release outside the
-//     radial to cancel. We reuse the existing RadialMenu drawing + slice
-//     math — only the input pipeline differs.
+// Long-press radial behaviour is REMOVED. Long presses on empty canvas
+// are a no-op (no fire on release; the tap window already passed).
+// Press-and-drag is also a no-op — the player can't move, so dragging
+// the aim before release doesn't help anything.
 //
-// Why no on-screen joystick: spec deliberately uses an auto-pilot for
-// movement. The player's only inputs are tap (aim/fire) and long-press
-// (weapon picker). Keep it simple.
+// Why no on-screen joystick: the player ship is stationary. There's
+// nothing to drive. Aim + fire is the only interaction loop.
 
 import { isMobile } from '../platform/platform-detect.js';
 import { GAME_STATES } from '../core/constants.js';
 
-const TAP_MS = 220;              // release within this = tap
-const LONG_PRESS_MS = 300;       // hold past this = radial menu
-const DRAG_CANCEL_PX = 18;       // movement past this cancels long-press
+const TAP_MS = 400;              // release within this = tap (generous)
+const DRAG_CANCEL_PX = 24;       // drift past this = treat as drag, not tap
 const SNAP_RADIUS_PX = 48;       // tap within this of entity centre snaps
 
-// 5.92.0 — touch hardening: gameplay touch gestures (tap-to-shoot,
-// long-press radial) only run during PLAYING / WAVE_TRANSITION. The
-// TITLE_SCREEN / PAUSED / SHOP / GAME_OVER / GAME_COMPLETE states have
-// their own touch handlers (DOM buttons / canvas-button bar) and the
-// gameplay handlers would interfere — e.g. opening the weapon radial
-// from inside the pause menu, or firing a shot through the game-over
-// screen and resuming play. Tracking this set up front makes the
-// guard a single `has()` call.
+// 5.92.0 — touch hardening: gameplay touch gestures (tap-to-fire) only
+// run during PLAYING / WAVE_TRANSITION. The TITLE_SCREEN / PAUSED /
+// SHOP / GAME_OVER / GAME_COMPLETE states have their own touch handlers
+// (DOM buttons / canvas-button bar) and the gameplay handlers would
+// interfere. Tracking this set up front makes the guard a single
+// `has()` call.
 const PLAYABLE_STATES = new Set([GAME_STATES.PLAYING, GAME_STATES.WAVE_TRANSITION]);
 
 export class MobileTouchHandler {
@@ -44,15 +47,13 @@ export class MobileTouchHandler {
         this.enabled = false;
 
         // Active-touch state. Only the first finger that hits the canvas
-        // drives input; secondary fingers are ignored. Multi-touch
-        // gestures (pinch / two-finger) are reserved for future use.
+        // drives input; secondary fingers are ignored.
         this._touchId = null;
         this._startX = 0;            // canvas-space start coordinates
         this._startY = 0;
         this._startTime = 0;
         this._dragged = false;
-        this._longPressTimer = null; // setTimeout handle
-        this._radialOpened = false;  // did this touch open the radial?
+        this._hudPressedId = null;
 
         this._onTouchStart = this._onTouchStart.bind(this);
         this._onTouchMove  = this._onTouchMove.bind(this);
@@ -92,20 +93,19 @@ export class MobileTouchHandler {
     }
 
     // 5.92.0 — true iff the engine is in a state where gameplay
-    // touch (tap-to-shoot, long-press radial) is meaningful. Falsey
-    // states include the title screen (its own button hit-test runs
-    // in event-setup), pause / shop / game-over (DOM overlays own
-    // input), and any transition where Player.update isn't ticking.
+    // touch is meaningful. Falsey states include the title screen,
+    // pause / shop / game-over, and any transition where Player.update
+    // isn't ticking.
     _isPlayableState() {
         const state = this.engine && this.engine.game && this.engine.game.state;
         return PLAYABLE_STATES.has(state);
     }
 
-    // 5.92.0 — hit-test the bottom-center canvas HUD button bar
-    // (SHOP / STATS / PAUSE). On mobile this bar is the primary
-    // navigation surface, so taps that land on a button must NOT
-    // fall through to fire-a-shot. Returns the button id ('shop' /
-    // 'stats' / 'pause') or null. The rect map is populated by
+    // Hit-test ALL canvas HUD buttons (SHOP / STATS / PAUSE / PRM /
+    // PWR). On mobile this is the primary navigation surface, so taps
+    // that land on a button must NOT fall through to fire-a-shot.
+    // Returns the button id (one of 'shop' / 'stats' / 'pause' /
+    // 'prm' / 'pwr') or null. The rect map is populated by
     // hud-buttons.js::drawHudButtons each frame.
     _hitHudButton(canvasX, canvasY) {
         const rects = this.engine && this.engine._hudButtonRects;
@@ -122,7 +122,8 @@ export class MobileTouchHandler {
 
     // Run the action wired to a HUD-button tap. Mirrors the desktop
     // click handler in event-setup.js so SHOP/STATS/PAUSE behave
-    // identically on touch and mouse.
+    // identically on touch and mouse. PRM/PWR (5.94.0) open the
+    // existing radial menu in primary / power mode respectively.
     _runHudButtonAction(id) {
         const ge = this.engine;
         if (!ge) return;
@@ -136,6 +137,29 @@ export class MobileTouchHandler {
             if (ge.toggleStatsScreen) ge.toggleStatsScreen();
         } else if (id === 'pause') {
             if (ge.togglePause) ge.togglePause();
+        } else if (id === 'prm') {
+            // 5.94.0 — open primary-weapon radial.
+            if (ge.radialMenu && ge.radialMenu.openFor) {
+                ge.radialMenu.openFor('primary');
+                // Park screen aim at centre so the dead zone is the
+                // initial hover state — user drags out to highlight a
+                // wedge.
+                const input = ge.inputHandler && ge.inputHandler.input;
+                if (input) {
+                    input.screenAimX = ge.width / 2;
+                    input.screenAimY = ge.height / 2;
+                }
+            }
+        } else if (id === 'pwr') {
+            // 5.94.0 — open power-weapon radial.
+            if (ge.radialMenu && ge.radialMenu.openFor) {
+                ge.radialMenu.openFor('power');
+                const input = ge.inputHandler && ge.inputHandler.input;
+                if (input) {
+                    input.screenAimX = ge.width / 2;
+                    input.screenAimY = ge.height / 2;
+                }
+            }
         }
     }
 
@@ -171,32 +195,9 @@ export class MobileTouchHandler {
         return best;
     }
 
-    _clearLongPressTimer() {
-        if (this._longPressTimer !== null) {
-            clearTimeout(this._longPressTimer);
-            this._longPressTimer = null;
-        }
-    }
-
-    _openRadial() {
-        const ge = this.engine;
-        if (!ge.radialMenu || ge.radialMenu.isOpen()) return;
-        ge.radialMenu.openFor('primary');
-        this._radialOpened = true;
-        // Park the screen aim at the centre of the screen so the inner
-        // dead-zone is the initial hover state — the user must drag a
-        // wedge to highlight it, matching the desktop "click to select"
-        // affordance.
-        const input = ge.inputHandler && ge.inputHandler.input;
-        if (input) {
-            input.screenAimX = ge.width / 2;
-            input.screenAimY = ge.height / 2;
-        }
-    }
-
     // Update the radial's hover position from a finger location while a
-    // long-press radial is open. The radial reads `input.screenAimX/Y`
-    // for its hit-test, so we forward the live coords each frame.
+    // radial is open. The radial reads `input.screenAimX/Y` for its
+    // hit-test, so we forward the live coords each frame.
     _updateRadialHover(canvasX, canvasY) {
         const ge = this.engine;
         const input = ge.inputHandler && ge.inputHandler.input;
@@ -212,12 +213,7 @@ export class MobileTouchHandler {
         // GAME_OVER / GAME_COMPLETE / ORIENTATION_LOCK / WAVE_TRANSITION
         // intro) bail BEFORE preventDefault so the browser can still
         // synthesize a click event for the window-level mousedown /
-        // mouseup / click listeners in main.js. Calling preventDefault
-        // here would suppress those synthesized clicks and the title
-        // screen / pause / shop / game-over canvas-rendered buttons
-        // would never receive input. Only gameplay touches (during
-        // PLAYING / WAVE_TRANSITION) need preventDefault to suppress
-        // the native double-tap-zoom + 300ms tap delay.
+        // mouseup / click listeners in main.js.
         if (!this._isPlayableState()) {
             return;
         }
@@ -227,38 +223,28 @@ export class MobileTouchHandler {
         if (!t) return;
         const { x, y } = this._canvasCoords(t);
 
-        // 5.92.0 — bottom-center HUD button bar gets first crack at the
-        // touch. The bar is drawn every frame during PLAYING /
-        // WAVE_TRANSITION / PAUSED (drawHudButtons in hud-buttons.js),
-        // and the desktop click handler routes these IDs explicitly. We
-        // mirror that on touch so SHOP/STATS/PAUSE never fall through
-        // to fire-a-shot.
+        // HUD button bar gets first crack at the touch. Includes
+        // SHOP/STATS/PAUSE and the 5.94.0 PRM/PWR side-buttons.
         const hudHit = this._hitHudButton(x, y);
         if (hudHit) {
-            // Stash the press so the renderer can show a visible
-            // depression while the finger is held, and run the action
-            // on touchend (matches the desktop mousedown→mouseup
-            // commit flow).
             this.engine._hudPressedButton = hudHit;
             this._touchId = t.identifier;
             this._startX = x;
             this._startY = y;
             this._startTime = Date.now();
             this._dragged = false;
-            this._radialOpened = false;
             this._hudPressedId = hudHit;
             return;
         }
 
-        // If the radial is already open from a previous gesture, treat
-        // this touch as a hover update — the user is mid-selection.
+        // If a radial is already open (user pressed PRM or PWR a moment
+        // ago), this touch is a hover update — user is mid-selection.
         if (this.engine.radialMenu && this.engine.radialMenu.isOpen()) {
             this._touchId = t.identifier;
             this._startX = x;
             this._startY = y;
             this._startTime = Date.now();
-            this._dragged = true; // skip tap path on release
-            this._radialOpened = true;
+            this._dragged = true; // skip tap-to-fire on release
             this._updateRadialHover(x, y);
             return;
         }
@@ -268,41 +254,20 @@ export class MobileTouchHandler {
         this._startY = y;
         this._startTime = Date.now();
         this._dragged = false;
-        this._radialOpened = false;
         this._hudPressedId = null;
 
-        // Pre-aim at the touch point so the very first frame of the auto-
-        // pilot driving sees the intended facing. Helps when the user
-        // taps slightly behind the ship — by the time the release fires,
-        // the ship has rotated to point at the target.
-        const input = this.engine.inputHandler && this.engine.inputHandler.input;
-        if (input) {
-            input.screenAimX = x;
-            input.screenAimY = y;
-            const w = this._worldCoords(x, y);
-            input.aimX = w.x;
-            input.aimY = w.y;
-        }
-
-        // Schedule the long-press promotion. Cleared if the finger moves
-        // too far OR releases first.
-        this._clearLongPressTimer();
-        this._longPressTimer = setTimeout(() => {
-            this._longPressTimer = null;
-            // Only promote if the same finger is still down + hasn't drifted.
-            if (this._touchId !== t.identifier) return;
-            if (this._dragged) return;
-            this._openRadial();
-        }, LONG_PRESS_MS);
+        // 5.94.0 — Tap-to-aim-and-fire: the press itself is the fire
+        // event. Pre-aim immediately so even a finger that hovers gets
+        // the ship facing the target; release will not fire again
+        // (one-shot per touch). This deviates from 5.91-5.93 where
+        // touchend fired — but with a stationary ship there's no value
+        // to delaying the shot, and pressing-to-fire feels snappier on
+        // a tower-defense control loop.
+        this._fireAtTap(x, y);
     }
 
     _onTouchMove(e) {
-        // 5.92.1 — Same guard as _onTouchStart: bail before
-        // preventDefault during non-playable states so synthesized
-        // click events still reach window-level handlers. The _touchId
-        // check below will also bail in non-playable states (since
-        // _onTouchStart didn't set _touchId), but checking state first
-        // is the explicit invariant.
+        // Bail before preventDefault during non-playable states.
         if (!this._isPlayableState()) {
             return;
         }
@@ -316,12 +281,11 @@ export class MobileTouchHandler {
 
         const { x, y } = this._canvasCoords(t);
 
-        // 5.92.0 — HUD-button drag tracking. If the press started on a
-        // HUD button and the finger drifts off the button (or another
+        // HUD-button drag tracking. If the press started on a HUD
+        // button and the finger drifts off the button (or another
         // button), clear the depressed visual state; the touchend
         // commit-test will only run the action if the release lands
-        // back on the original button. Mirrors the desktop "drag-out
-        // cancels" pattern.
+        // back on the original button.
         if (this._hudPressedId) {
             const overHit = this._hitHudButton(x, y);
             this.engine._hudPressedButton = (overHit === this._hudPressedId) ? this._hudPressedId : null;
@@ -338,30 +302,12 @@ export class MobileTouchHandler {
         const dy = y - this._startY;
         if (dx * dx + dy * dy > DRAG_CANCEL_PX * DRAG_CANCEL_PX) {
             this._dragged = true;
-            // Drag cancels the pending long-press. The release will be
-            // treated as a no-op (not a tap, not a radial commit).
-            this._clearLongPressTimer();
-        }
-
-        // Keep the aim pointer following the finger during a drag — this
-        // way if the player keeps the finger down (e.g. tracking a moving
-        // target before releasing) the ship faces correctly. The release
-        // itself is the fire event.
-        const input = this.engine.inputHandler && this.engine.inputHandler.input;
-        if (input) {
-            input.screenAimX = x;
-            input.screenAimY = y;
-            const w = this._worldCoords(x, y);
-            input.aimX = w.x;
-            input.aimY = w.y;
         }
     }
 
     _onTouchEnd(e) {
-        // 5.92.1 — Bail before preventDefault if we never started
-        // tracking this touch (non-playable state at touchstart) so
-        // the browser still synthesizes a click event for the
-        // title/pause/shop/game-over button hit-tests on window.
+        // Bail before preventDefault if we never started tracking this
+        // touch (non-playable state at touchstart).
         if (this._touchId === null) return;
         let t = null;
         for (const ct of e.changedTouches) {
@@ -373,7 +319,6 @@ export class MobileTouchHandler {
         const { x, y } = this._canvasCoords(t);
         const ge = this.engine;
         const input = ge.inputHandler && ge.inputHandler.input;
-        this._clearLongPressTimer();
 
         // 5.92.0 — HUD button commit. If the press started on a HUD
         // button AND the release lands on the SAME button, run the
@@ -390,28 +335,19 @@ export class MobileTouchHandler {
             return;
         }
 
-        // Case 1: radial is open. Treat this release as the commit.
+        // Radial commit / cancel. If a radial is open and the user
+        // releases their finger, hit-test the wedge and either commit
+        // (handleClick) or cancel (outside the ring).
         if (ge.radialMenu && ge.radialMenu.isOpen()) {
             if (input) {
                 input.screenAimX = x;
                 input.screenAimY = y;
             }
-            // Mobile rule (5.91 spec): release outside the radial's
-            // outer ring cancels without changing equipment. The desktop
-            // click handler allows clicks "anywhere outside the dead
-            // zone" to commit, which is a reasonable mouse default but
-            // surprising on touch (any stray finger off the radial would
-            // change equipment). Hit-test against the visible ring
-            // before forwarding to handleClick().
             const cx = ge.width / 2;
             const cy = ge.height / 2;
             const dx = x - cx;
             const dy = y - cy;
             const d2 = dx * dx + dy * dy;
-            // _outerRadius() is internal; mirror its formula here. If the
-            // RadialMenu refactors its sizing we'll have one place to
-            // adjust (and the same constant is also used by the radial
-            // when it draws the ring).
             const outer = Math.min(ge.width, ge.height) * 0.24;
             if (d2 > outer * outer) {
                 ge.radialMenu.cancel();
@@ -422,31 +358,20 @@ export class MobileTouchHandler {
             return;
         }
 
-        // Case 2: short tap. Aim + fire one shot.
-        const now = Date.now();
-        const heldMs = now - this._startTime;
-        if (!this._dragged && heldMs < TAP_MS) {
-            this._fireAtTap(x, y);
-        }
+        // 5.94.0 — Tap-to-aim-and-fire already fired at touchstart.
+        // touchend is now a no-op for the firing pipeline; just clean
+        // up state so the next touch is fresh.
         this._reset();
     }
 
     _onTouchCancel(e) {
-        // 5.92.1 — Same as _onTouchEnd: bail before preventDefault if
-        // we never started tracking this touch (non-playable state)
-        // so the browser doesn't suppress synthesized click events on
-        // the title / pause / shop / game-over canvas buttons.
+        // Bail before preventDefault if we never started tracking this
+        // touch (non-playable state).
         if (this._touchId === null) return;
-        // Treat cancel like a release-without-commit. If the radial was
-        // open we close it without changing the equipped weapon; tap
-        // gestures are simply abandoned.
         e.preventDefault();
-        this._clearLongPressTimer();
         if (this.engine.radialMenu && this.engine.radialMenu.isOpen()) {
             this.engine.radialMenu.cancel();
         }
-        // Clear any HUD button press state so the renderer stops
-        // showing a depressed button.
         if (this.engine) this.engine._hudPressedButton = null;
         this._hudPressedId = null;
         this._reset();
@@ -455,14 +380,23 @@ export class MobileTouchHandler {
     _reset() {
         this._touchId = null;
         this._dragged = false;
-        this._radialOpened = false;
         this._hudPressedId = null;
     }
 
+    /**
+     * 5.94.0 — The tap action. Aim the ship at the tap point and pulse
+     * both `input.fire` and `input.fireSecondary` for one frame so the
+     * primary weapon fires immediately and any ready/charged power
+     * weapon fires too. Both flags are released on the next
+     * requestAnimationFrame so they don't chain a stream of bullets
+     * from a single tap.
+     */
     _fireAtTap(canvasX, canvasY) {
         const ge = this.engine;
         const input = ge.inputHandler && ge.inputHandler.input;
         if (!input) return;
+        const player = ge.player;
+
         // Convert canvas-space to world-space.
         const w = this._worldCoords(canvasX, canvasY);
 
@@ -475,9 +409,6 @@ export class MobileTouchHandler {
             input.aimY = hit.y;
             input.screenAimX = canvasX;
             input.screenAimY = canvasY;
-            // Drive the targeted-entity HUD the same way the desktop
-            // click handler does, so the target outline + info panel
-            // light up after a tap.
             if (ge.handleEntityTargeting) {
                 ge.handleEntityTargeting(hit.x, hit.y);
             }
@@ -488,17 +419,26 @@ export class MobileTouchHandler {
             input.screenAimY = canvasY;
         }
 
-        // Pulse fire for ~1 logic tick — long enough for weapons.js's
-        // edge-detector to register a shot but short enough not to chain
-        // a stream of bullets from a single tap. The Player.update path
-        // reads input.fire at the start of each tick; setting true here
-        // and clearing it on the next requestAnimationFrame matches the
-        // "single shot per tap" contract from the spec.
+        // 5.94.0 — Snap the player's facing immediately so visual
+        // feedback fires this frame instead of waiting for Player.update
+        // to recompute the angle from aimX/aimY. Player.update will set
+        // this.angle again from atan2(aimY, aimX) (same formula) so the
+        // double-write is byte-for-byte equivalent.
+        if (player && typeof player.x === 'number' && typeof player.y === 'number') {
+            player.angle = Math.atan2(input.aimY - player.y, input.aimX - player.x);
+        }
+
+        // Pulse fire for ~1 logic tick. Both primary and (any ready /
+        // charged) power weapon will fire on this tick. The existing
+        // Mobile UX v2 auto-fire path also sets fireSecondary; both
+        // pathways converge on the same charging-system pipeline and
+        // setting the flag twice in a frame is idempotent.
         input.fire = true;
-        // Schedule the release. We can't simply clear it in this handler
-        // because Player.update may not have run yet for this frame.
-        // Two rAF frames is safely past one logic tick.
-        const release = () => { input.fire = false; };
+        input.fireSecondary = true;
+        const release = () => {
+            input.fire = false;
+            input.fireSecondary = false;
+        };
         if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(() => requestAnimationFrame(release));
         } else {

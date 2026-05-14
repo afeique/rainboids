@@ -1,5 +1,7 @@
 // Platform / device detection — single source of truth for "is this a
-// mobile session" used across the input + auto-pilot + HUD subsystems.
+// mobile session" used across the input + Player movement gate + HUD
+// subsystems. (Auto-pilot was retired in 5.94.0; the player is now
+// stationary on mobile.)
 //
 // Detection is intentionally simple: a touch-capable device with a small
 // viewport is mobile. Anything else is desktop. The `?mobile=0|1` URL
@@ -52,8 +54,9 @@ function _readUrlOverride() {
 _urlOverride = _readUrlOverride();
 
 /**
- * Returns true if the game should run in mobile mode (auto-pilot,
- * tap-to-shoot, long-press radial, portrait HUD adjustments).
+ * Returns true if the game should run in mobile mode (stationary-ship
+ * tower-defense controls: tap-to-aim-and-fire, PRM/PWR HUD buttons,
+ * portrait HUD adjustments — see 5.94.0).
  *
  * Order of precedence:
  *   1. `?mobile=1` URL param forces true

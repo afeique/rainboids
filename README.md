@@ -20,20 +20,20 @@ Visit **[rainboids.cat.computer](https://rainboids.cat.computer)** in any modern
 
 ### Plays on desktop and mobile
 
-Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.92.0) ships a fundamentally different control scheme:
+Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / tablet** (touch). The mobile build (5.94.0) is a **stationary-ship tower-defense experience** with a fundamentally different control loop from desktop:
 
-- **Movement is automatic** — a reactive auto-pilot dodges nearby threats and keeps the ship clear of walls so the player can focus on aiming and firing.
-- **Tap to shoot** — tap an enemy or asteroid and the primary weapon snaps to that target and fires. Taps on empty space fire toward the tap point.
-- **Long-press to swap weapons** — press and hold anywhere for ~300 ms to open the weapon radial; drag to highlight; release on a wedge to equip; release outside the ring to cancel.
-- **Auto-fire power weapons** (5.92.0) — the equipped power weapon fires automatically the moment it's ready: cooldown weapons (Nova Blast, Mine Layer, etc.) on cooldown clear; the Charge Shot when fully charged. The player has only one finger free, so the game does the second-trigger work.
-- **Simplified HUD** (5.92.0) — only the top-left status cluster (health bar, triforce / energy tanks, XP bar) and the bottom-center action button bar (SHOP / STATS / PAUSE) are shown. The coins readout, survival timer, and equipped-weapon meters are hidden so the playfield gets the screen.
-- **Responsive layout** (5.92.0) — the title screen stacks NEW GAME / CONTINUE / MULTIPLAYER vertically in portrait and keeps the side-by-side layout (at a slightly smaller scale) in landscape. Title text auto-shrinks to fit phone-sized viewports.
+- **The player is stationary.** Movement input is gated off entirely — the ship holds position and the player only aims + fires. The viewport is stable since the camera tracks a fixed point.
+- **Tap to aim + fire.** Tap anywhere on the canvas and the ship rotates to face the touch point and fires its primary weapon + any ready/charged power weapon on the same tick. Taps within 48 px of an asteroid / enemy snap to that entity's centre.
+- **PRM and PWR side buttons (5.94.0).** Two square 64×64 buttons sit on the left and right edges of the canvas, vertically centred. Tap **PRM** (left) to open the primary-weapon radial; tap **PWR** (right) to open the power-weapon radial. The long-press radial gesture from 5.91–5.93 was removed in favor of these dedicated buttons.
+- **Auto-fire power weapons** (5.92.0) — the equipped power weapon also fires automatically the moment it's ready, even without a tap: cooldown weapons (Nova Blast, Mine Layer, etc.) when cooldown clears; the Charge Shot when fully charged. The tap and auto-fire pathways are idempotent and converge on the same firing pipeline.
+- **Simplified HUD** (5.92.0) — only the top-left status cluster (health bar, triforce / energy tanks, XP bar) and the bottom-center action button bar (SHOP / STATS / PAUSE) plus the 5.94.0 PRM/PWR side buttons are shown. The coins readout, survival timer, and equipped-weapon meters are hidden so the playfield gets the screen.
+- **Responsive layout** (5.92.0) — the title screen stacks NEW GAME / CONTINUE / MULTIPLAYER vertically in portrait and keeps the side-by-side layout (at a slightly smaller scale) in landscape. Title text auto-shrinks to fit phone-sized viewports. The pause menu's tab/action-button text shrinks proportionally in portrait so labels fit within bounds (5.94.0).
 
 Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode on a desktop, `?mobile=0` disables it on a touch device.
 
 ## Version and History
 
-Current version: **5.92.0**
+Current version: **5.94.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -77,15 +77,15 @@ Rainboids is a supercharged asteroids game featuring:
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
 
-### Mobile (touch)
+### Mobile (touch) — tower-defense mode (5.94.0)
 
-- **Movement**: Auto-pilot (no on-screen joystick) — the ship dodges threats automatically. The player never directly controls movement.
-- **Aim + fire primary (tap)**: Tap an enemy or asteroid to snap aim onto it and fire one shot. Taps on empty space fire toward the tap point. Taps within ~48 px of an entity's centre snap to that entity.
-- **Power weapon (auto-fire, 5.92.0)**: The equipped power weapon fires automatically as soon as it's ready — cooldown weapons (Nova Blast, Mine Layer, Missile Salvo, Lance Beam, Lightning Arc) the instant their cooldown clears; the Charge Shot the instant it's fully charged. No tap needed.
-- **Weapon radial (long-press)**: Press and hold anywhere on the canvas for ~300 ms to open the primary-weapon radial. Drag to highlight a wedge; release on the wedge to equip; release outside the ring to cancel.
+- **Movement**: None. The player ship is **stationary**. Position is locked at the Player.update level; velocity stays at 0. The 5.91–5.93 auto-pilot was removed in 5.94.0 — the player now has total control of when (and what) to fire, but no positional agency over the playfield.
+- **Aim + fire (tap)**: Tap anywhere on the canvas. The ship rotates to face the touch point AND fires the primary weapon AND fires the equipped power weapon (if it's ready / fully charged) — all on the same tick. Taps within ~48 px of an entity's centre snap to that entity. Touchstart triggers the shot for snappy feel; touchend does not re-fire.
+- **Power weapon (auto-fire, 5.92.0)**: Even without a tap, the equipped power weapon fires automatically as soon as it's ready — cooldown weapons (Nova Blast, Mine Layer, Missile Salvo, Lance Beam, Lightning Arc) the instant their cooldown clears; the Charge Shot the instant it's fully charged. Tap-fire and auto-fire pathways are idempotent.
+- **PRM and PWR side buttons (5.94.0)**: Replaces the long-press radial. Two square 64×64 buttons flank the canvas — PRM (left) opens the primary-weapon radial; PWR (right) opens the power-weapon radial. The radials read the live touch position for wedge hover and commit on release.
 - **Bottom button bar (5.92.0)**: SHOP / STATS / PAUSE buttons centered along the bottom of the screen. Direct tap routes to the matching action — they do not fall through to fire-a-shot.
-- **Simplified HUD (5.92.0)**: only the top-left status cluster (health bar, triforce / energy tanks, XP bar) is shown. The coins readout, survival timer, equipped-weapon squares (PRM / PWR / SKL), and the powerup-meter panel are all hidden in mobile mode to maximize playfield visibility.
-- **Responsive title (5.92.0)**: NEW GAME / CONTINUE / MULTIPLAYER stack vertically in portrait, sit inline in landscape. Title text shrinks to fit narrow viewports.
+- **Simplified HUD (5.92.0)**: only the top-left status cluster (health bar, triforce / energy tanks, XP bar) is shown. The coins readout, survival timer, equipped-weapon squares (PRM / PWR / SKL), and the powerup-meter panel are all hidden in mobile mode to maximize playfield visibility. The PRM and PWR side buttons (5.94.0) supersede the deleted equipped-weapon squares.
+- **Responsive title (5.92.0)**: NEW GAME / CONTINUE / MULTIPLAYER stack vertically in portrait, sit inline in landscape. Title text shrinks to fit narrow viewports. Pause menu tab + action-button labels shrink in portrait so they fit (5.94.0).
 
 ### Cheat Codes
 - **`[`**: +1000 Gold
@@ -445,7 +445,6 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── progression.js #   18 leveling, powerup, stat methods
 │       │   ├── renderer.js    #   5 player draw methods
 │       │   ├── lifecycle.js   #   Damage, energy tanks, game-over (5.88.0)
-│       │   ├── auto-pilot.js  #   Reactive AI movement driver — mobile mode only (5.91.0)
 │       │   └── bullet.js      #   Player projectile entity
 │       ├── enemy/             # Enemy entity and subsystems
 │       │   ├── enemy.js       #   Enemy entity (10 types, update/draw orchestration)
@@ -461,7 +460,8 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── combat.js      #   Damage numbers, target info, powerups, money pickup
 │       │   ├── navigation.js  #   Minimap, off-screen enemy indicators
 │       │   ├── overlays.js    #   Title screen, wavy text, timers, ghosts
-│       │   └── cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer
+│       │   ├── cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer
+│       │   └── hud-buttons.js #   Canvas SHOP/STATS/PAUSE bar + mobile PRM/PWR side buttons (5.94.0)
 │       ├── world/             # Game world entities and environment
 │       │   ├── asteroid.js    #   Asteroid entity (3D wireframe, splitting)
 │       │   ├── particle.js    #   Particle entity (explosions, sparks, etc.)
@@ -491,7 +491,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       ├── ui/                # DOM UI and input
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button)
 │       │   ├── input-handler.js # Keyboard + mouse input (desktop)
-│       │   ├── mobile-touch.js # Tap-to-shoot + long-press radial — touch devices (5.91.0)
+│       │   ├── mobile-touch.js # Tap-to-aim-and-fire + PRM/PWR HUD routing — tower-defense mode (5.94.0)
 │       │   ├── event-setup.js #   All event listeners: input, shop, cheats, resize
 │       │   ├── radial-menu.js #   Held E/R/F radial picker for primary/power/skill
 │       │   ├── stats-overlay.js # Diablo-style stats screen (` key, 5.79.0)

@@ -3012,3 +3012,38 @@ body.mobile-portrait #shop-menu {
     transform-origin: center center;
 }
 
+/* 5.94.0 — Pause menu portrait text fit.
+   In narrow portrait viewports (phones held vertically) the 9 pause-tab
+   labels (CONTROLS / PRIMARY / POWER / SKILLS / POWERUPS / ASSISTS /
+   TIMER / MUSIC / SFX) overflow their 3-column grid cells at the default
+   18-px Press Start 2P. The SHOP / RESUME action buttons also clip with
+   their 14-px label + 26-px icon. Shrink both font sizes and tighten the
+   button padding so the text fits inside its box in portrait. The
+   pause-tab cells use `white-space: nowrap` (already set) so without this
+   the labels would otherwise be clipped to ellipsis-or-overflow. */
+body.mobile-portrait .pause-tab {
+    font-size: 11px;
+    padding: 10px 6px;
+    letter-spacing: 0.5px;
+}
+
+body.mobile-portrait .pause-tabs {
+    gap: 6px;
+    width: 100%;
+}
+
+body.mobile-portrait .pause-action-btn {
+    font-size: 11px;
+    padding: 8px 12px;
+    letter-spacing: 0.5px;
+    gap: 6px;
+}
+
+body.mobile-portrait .pause-btn-icon {
+    font-size: 20px;
+}
+
+body.mobile-portrait .pause-menu-actions {
+    gap: 10px;
+}
+

@@ -55,7 +55,6 @@ import * as events from './ui/event-setup.js';
 import { showHint, updateHintDimming } from './ui/hint-system.js';
 import { RadialMenu } from './ui/radial-menu.js';
 import { MobileTouchHandler } from './ui/mobile-touch.js';
-import { AutoPilot } from './player/auto-pilot.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { hasSave, loadSave, writeSave, clearSave } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
@@ -366,13 +365,15 @@ export class GameEngine {
         // Pauses gameplay; mouse picks the slice, click commits, key release cancels.
         this.radialMenu = new RadialMenu(this);
 
-        // ── Mobile-mode subsystems (5.91 — phone / tablet overhaul) ───
-        // Touch handler: tap-to-shoot + long-press radial. Installs its
-        // own listeners; no-op on desktop.
-        // Auto-pilot: dodges threats on mobile; idle on desktop. The
-        // engine drives `autoPilot.tick()` each logic step from update().
+        // ── Mobile-mode subsystems (5.94.0 — tower-defense pivot) ─────
+        // Touch handler: tap-to-aim-and-fire + PRM/PWR HUD button hit-
+        // tests. Installs its own listeners; no-op on desktop.
+        //
+        // Auto-pilot was removed in 5.94.0. Mobile mode is now a stationary-
+        // ship tower-defense experience: the player can't move, only
+        // aim + fire via tap. See js/modules/ui/mobile-touch.js and the
+        // movement gate in js/modules/player/player.js.
         this.mobile = isMobile();
-        this.autoPilot = new AutoPilot(this);
         this.mobileTouch = new MobileTouchHandler(this);
         if (this.mobile) {
             // Toggle the body classes that drive the CSS HUD adjustments.
@@ -2116,14 +2117,11 @@ export class GameEngine {
             // Add the update method to the input object so player can call it
             input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
 
-            // ── Mobile auto-pilot (5.91) ─────────────────────────────────
-            // Phones / tablets have no keyboard, so movement is driven by
-            // a reactive AI that dodges threats. The auto-pilot writes
-            // up/down/left/right onto `input` *before* player.update()
-            // consumes it — desktop runs early-return inside canRun().
-            if (this.mobile && this.autoPilot) {
-                this.autoPilot.tick();
-            }
+            // ── Mobile tower-defense mode (5.94.0) ───────────────────────
+            // No auto-pilot — the player is stationary on mobile. Movement
+            // input is gated off at the Player.update level via isMobile().
+            // The only inputs are tap-to-aim-and-fire and the PRM/PWR HUD
+            // buttons, both handled by js/modules/ui/mobile-touch.js.
 
             // Respawn is now instant - no animation needed
 

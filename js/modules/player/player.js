@@ -686,10 +686,19 @@ export class Player {
         ship.field = gameField || null;
 
         const sim = this._inputScratch;
-        sim.up = !!input.up;
-        sim.down = !!input.down;
-        sim.left = !!input.left;
-        sim.right = !!input.right;
+        // 5.94.0 — Mobile tower-defense mode: gate movement input so the
+        // ship is stationary. Aim still flows through (so atan2 inside
+        // updateShip sets this.angle to face the tap point), and primary /
+        // power fire still occur — but up/down/left/right are forced
+        // false so the velocity-integration step adds zero thrust. The
+        // post-physics velocity zero-out below clears any tiny residue
+        // (friction snap-to-zero is already 0.05 px/tick, but belt +
+        // suspenders so vel.x/y are exactly 0 in mobile mode).
+        const mobileLock = isMobile();
+        sim.up = !mobileLock && !!input.up;
+        sim.down = !mobileLock && !!input.down;
+        sim.left = !mobileLock && !!input.left;
+        sim.right = !mobileLock && !!input.right;
         sim.aimX = input.aimX;
         sim.aimY = input.aimY;
         sim.speedMult = this.getMovementSpeedMultiplier();
@@ -705,6 +714,17 @@ export class Player {
         this.vel.x = ship.vx;
         this.vel.y = ship.vy;
         this.angle = ship.angle;
+
+        // 5.94.0 — Stationary-player invariant on mobile. After the
+        // physics step zero out velocity + restore the original position
+        // so even dash / external velocity sources can't displace the
+        // ship. Dash on mobile is a no-op (no movement = no dash burst).
+        if (mobileLock) {
+            this.x = prevX;
+            this.y = prevY;
+            this.vel.x = 0;
+            this.vel.y = 0;
+        }
 
         // Legacy fallback: if no gameField was provided, the original
         // code applied torus wraparound on this.width / this.height.

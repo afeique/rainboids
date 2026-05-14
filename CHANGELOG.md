@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.94.0] - 2026-05-13
+
+### Changed — Mobile mode is now tower-defense
+Fundamental gameplay redesign on mobile. Desktop unchanged.
+
+- **Player can't move on mobile.** Position is locked; only rotation/firing respond to input. The velocity-integration step in `Player.update` is gated on `!isMobile()`, and the post-physics velocity is zeroed out belt-and-suspenders so dash / external velocity sources can't displace the ship either.
+- **Tap to aim + fire.** Tap anywhere on the canvas → player rotates to face the touch point + fires primary + fires the equipped power weapon if ready / fully charged. The fire pulse happens on touchstart (one-shot per touch — touchend doesn't re-fire), and the snap-to-entity behavior from 5.91 is preserved (taps within 48 px of an asteroid / enemy snap to its centre).
+- **Auto-pilot removed.** The 5.91/5.92 reactive dodge AI didn't play well — the ship dodging on its own felt out of the player's control, and the player wanted positional agency over the playfield. `js/modules/player/auto-pilot.js` was deleted along with its 10 unit tests and the engine driver. The 5.92.0 Mobile UX v2 auto-fire-when-ready path for power weapons is preserved (it's idempotent with the tap-fire path — both set `input.fireSecondary = true`).
+- **Long-press radial removed.** Replaced with two on-canvas HUD buttons:
+  - **Left side (PRM)**: square showing the equipped primary weapon's icon → tap to open the primary radial menu.
+  - **Right side (PWR)**: square showing the equipped power weapon's icon → tap to open the power radial menu.
+- **Pause menu portrait fit.** Tab/button text inside `#pause-menu` now fits within bounds in portrait viewports — pause-tab labels shrink from 18 px → 11 px, action-button labels from 14 px → 11 px, with proportional padding/gap adjustments. Lands at the `body.mobile-portrait` selector so desktop and landscape mobile are unchanged.
+
+### Removed
+- `js/modules/player/auto-pilot.js` and `tests/unit/player/auto-pilot.test.js` (auto-pilot retired).
+
+### Tests
+- Removed: 10 `AutoPilot` unit tests (file deleted).
+- Added: 13 new tests covering tap-to-aim-and-fire, HUD-button hit-test routing for PRM/PWR, the stationary-player invariant, and the PRM/PWR layout (60-px min, square, vertically centred).
+- Net: +3 tests. Full unit suite **921/921 passing**.
+
+---
+
+## [5.93.0] - 2026-05-13
+
+### Changed — Shift-to-dash control replaces PHASE_DASH defense skill
+- Dash is now a core movement tool on the Shift key (1.5s cooldown), not a defense skill
+- Removed PHASE_DASH from DEFENSE_SKILLS and its upgrades (EXTENDED_PHASE, AFTERIMAGE, QUICK_PHASE) — orphaned upgrades deleted; future dash upgrades will live elsewhere if added
+- Removed PHASE_DASH from MP_UNSAFE_ABILITIES_LIST — dash now works in MP (pure player input + position kinematics, no server-side mirror needed)
+- Dash still grants brief i-frames during the dash burst (~250ms) — exposed via `player.isDashIFrameActive()` and checked at the two collision-system damage-zero sites plus the afterimage-ghost renderer
+- The `phaseDash.wav` sound still plays on every dash (the audio file and registration are unchanged)
+- Cheat-code interaction: SHIFT+digit no longer combines with anything game-side. The dashPulse fires once on Shift keydown; subsequent digit keys with shiftKey=true do not retrigger it. The legacy SHIFT+digit cheats had already been removed in 5.64.11
+- Mobile mode does not yet expose dash; a tap-gesture variant is deferred to a future iteration
+
+---
+
 ## [5.92.2] - 2026-05-13
 
 ### Fixed — Mobile audio context unlock on touchstart
