@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.96.3] - 2026-05-14
+
+### Fixed — Ship rotation broken in MP + loopback solo (predicted-angle mirror)
+
+5.96.2 disabled the LoopbackConnection by default for solo, but the
+**ship-rotation bug still surfaced** for:
+- Real MP runs (always go through `startOnline`, which engages the predicted-state mirror)
+- Solo runs opted into loopback via `?solo-loopback=1`
+
+User feedback: *"The player always faces towards the lower-right corner... although firing is done in the correct direction. The player never rotates. This problem runs deep and affects multiplayer."*
+
+That description nailed the actual mechanism: **`Player.update` was setting `player.angle` correctly** from the live aim input (which is also what the bullet-spawn code reads, so firing direction was right), but **`mpApplyPredictedShipToPlayer` was overwriting `player.angle = predicted.angle`** every frame AFTER Player.update — and the predicted angle was corrupted upstream by the wire-format aim normalization (`_derivePlayerInput` produces a unit vector that `updateShip` then misinterprets as world coords).
+
+The fix: **stop mirroring `predicted.angle` to `player.angle` entirely**. The local Player.update angle is the source of truth for rotation. Position (`x/y`) and velocity (`vx/vy`) are still mirrored so MP latency-hiding works as designed; only the angle field is left alone.
+
+This is the right call regardless of the wire-format bug — the player's own ship visual should track THEIR live input without round-tripping through the prediction pipeline. The MP server's authoritative angle update is only meaningful for OTHER players' ships (which go through `sampleRemoteShips`, untouched by this fix).
+
+Long-term: the wire-format aim semantics still need harmonizing end-to-end so the LoopbackConnection / real-MP server-side `updateShip` produces a sensible reconciled angle. But that's a Phase 4 concern. For now this surgical fix unblocks both real MP and loopback-opt-in solo.
+
+Full unit suite 972/972 passing. Two test assertions in `mp-frame.test.js` updated to pin the new "local angle wins" contract.
+
+---
+
 ## [5.96.2] - 2026-05-14
 
 ### Changed — Solo mode is now PURELY LOCAL (revert Phase 3 default-on)

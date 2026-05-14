@@ -218,12 +218,13 @@ describe('mpBuildSimInput — pure builder', () => {
 // ── mpApplyPredictedShipToPlayer — mirroring contract ──────────────────────
 
 describe('mpApplyPredictedShipToPlayer — mirrors predictor state', () => {
-    test('mirrors x/y/vx/vy/angle from predictor.localShipState', () => {
+    test('mirrors x/y/vx/vy from predictor.localShipState (angle stays local, 5.96.3)', () => {
         const { driver, spyPred } = makeMpDriver();
         driver.startOnline({ connection: new FakeConnection(), welcome: WELCOME });
         spyPred._setLocal(742, 311, 2.1, -1.3, 1.7);
 
-        const player = makePlayer({ x: 0, y: 0, vx: 0, vy: 0, angle: 0 });
+        const localAngle = 0.4242; // distinct from predicted.angle (1.7)
+        const player = makePlayer({ x: 0, y: 0, vx: 0, vy: 0, angle: localAngle });
         const ok = mpApplyPredictedShipToPlayer(driver, player);
 
         expect(ok).toBe(true);
@@ -231,7 +232,11 @@ describe('mpApplyPredictedShipToPlayer — mirrors predictor state', () => {
         expect(player.y).toBe(311);
         expect(player.vel.x).toBe(2.1);
         expect(player.vel.y).toBe(-1.3);
-        expect(player.angle).toBe(1.7);
+        // 5.96.3 — angle is NOT mirrored from predicted state. Player.update
+        // already computed `this.angle` from the live input aim; the
+        // wire-format aim normalization upstream corrupts predicted.angle
+        // so we keep the local value as the source of truth.
+        expect(player.angle).toBe(localAngle);
     });
 
     test('does NOT touch local-only fields (hp, shield, radius, …)', () => {
@@ -389,7 +394,8 @@ describe('mp-frame — end-to-end per-frame cycle', () => {
         // Pin the predicted state to a known value.
         spyPred._setLocal(123, 456, 0.5, -0.5, 1.0);
 
-        const player = makePlayer({ x: 0, y: 0 });
+        const localAngle = 0.4242; // distinct from predicted.angle (1.0)
+        const player = makePlayer({ x: 0, y: 0, angle: localAngle });
         const ctx = {};
         const drawFn = jest.fn();
 
@@ -407,13 +413,14 @@ describe('mp-frame — end-to-end per-frame cycle', () => {
             buttons: expect.any(Number),
         }));
 
-        // ── Hook 2: mirror ──
+        // ── Hook 2: mirror (position/velocity only — angle stays local in 5.96.3) ──
         mpApplyPredictedShipToPlayer(driver, player);
         expect(player.x).toBe(123);
         expect(player.y).toBe(456);
         expect(player.vel.x).toBe(0.5);
         expect(player.vel.y).toBe(-0.5);
-        expect(player.angle).toBe(1.0);
+        // 5.96.3 — angle is NOT mirrored; local Player.update value wins.
+        expect(player.angle).toBe(localAngle);
 
         // ── Hook 3: render ──
         const drawn = mpDrawRemoteShips(driver, ctx, drawFn, player.radius);

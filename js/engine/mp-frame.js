@@ -110,7 +110,28 @@ export function mpApplyPredictedShipToPlayer(driver, player) {
         player.vel.x = predicted.vx;
         player.vel.y = predicted.vy;
     }
-    player.angle = predicted.angle;
+    // 5.96.3 — DO NOT mirror `predicted.angle` to `player.angle`.
+    //
+    // Player.update already computes `this.angle = atan2(input.aimY -
+    // this.y, input.aimX - this.x)` from the LIVE input aim — the same
+    // source the bullet-fire code reads at the same Player.update tick.
+    // Mirroring `predicted.angle` here overwrites that correct value
+    // with the Predictor's reconciled state, which is broken upstream:
+    // engine-driver `_derivePlayerInput` normalizes `aimX/aimY` to a
+    // unit vector before sending to the wire, and the LoopbackConnection
+    // / real-MP server then interprets that unit vector as ABSOLUTE world
+    // coords in `updateShip` — producing a constant angle pointing toward
+    // gameField origin regardless of where the user actually aims.
+    //
+    // The visible symptom was: bullets fire in the correct direction
+    // (computed before this line ran) but the ship's VISUAL rotation
+    // froze to a fixed angle. By skipping the mirror, the local angle
+    // wins and the ship rotates correctly. Position + velocity are still
+    // mirrored so MP latency-hiding works.
+    //
+    // Long-term fix is to harmonize the wire-format aim semantics
+    // end-to-end (always world coord OR always unit-vector); until then
+    // the local Player.update angle is the source of truth.
     return true;
 }
 
