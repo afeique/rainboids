@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.92.2] - 2026-05-13
+
+### Fixed — Mobile audio context unlock on touchstart
+On iOS Safari (and several Android browsers) the audio context stays suspended until a user gesture handler resumes it. Mouse-based warmers (mousemove / mousedown / keydown) in `main.js` never fired on touch devices, so mobile users heard nothing.
+
+Added a dedicated `touchstart` warmer alongside the existing ones — `{ passive: true }` so it never blocks scroll OR interferes with mobile-touch.js's `{ passive: false }` gameplay handlers (separate listeners on the same event, fully compatible).
+
+`audioManager.initializeAudio()` is idempotent and is also gated by the `_audioWarmed` latch in main.js — belt-and-suspenders coverage. The latch sits before the `try`/`catch` so a thrown init never re-triggers warming.
+
+iOS 16.4+ note: `AudioContext` must be CREATED inside a gesture (not just resumed). `_ensureAudioContext()` is called from `initializeAudio()` which now fires inside the touchstart stack — satisfies both requirements.
+
++5 unit tests in `tests/unit/main/audio-warm.test.js` covering passive flag, idempotent latch, exception swallowing, and latch-before-try invariant. Full unit suite 863/863.
+
+---
+
 ## [5.92.1] - 2026-05-13
 
 ### Fixed — Mobile touch screen + title screen fit
