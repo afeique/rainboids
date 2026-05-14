@@ -6,6 +6,17 @@
 //                 shortcut still works in parallel)
 //   • PAUSE  — ⏸  toggles pause (Esc keyboard shortcut still works)
 //
+// 5.94.0 — In mobile tower-defense mode, two additional canvas buttons
+// flank the playfield:
+//   • PRM    — left-side, mid-height: opens primary-weapon radial
+//   • PWR    — right-side, mid-height: opens power-weapon radial
+//
+// These replace the long-press radial gesture (deleted in 5.94 with the
+// auto-pilot pivot). The buttons are square (60×60), drawn directly on
+// canvas like the bottom bar, and live in the same _hudButtonRects map
+// so mobile-touch.js's existing hit-test pattern picks them up first
+// (before falling through to tap-to-aim-and-fire).
+//
 // Why canvas:
 //   The reticule cursor is a custom canvas-drawn crosshair. DOM
 //   buttons sat above the canvas, so the reticule disappeared when
@@ -20,6 +31,8 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
+import { isMobile } from '../platform/platform-detect.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS } from '../combat/weapon-data.js';
 
 // 5.79.39 — Button height bumped 56 → 64 and label slot reworked so
 //   the text fits cleanly inside the rounded square. Was overlapping
@@ -33,6 +46,13 @@ const ICON_FONT = "26px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji
 const LABEL_FONT = "9px 'Press Start 2P', monospace";
 const ICON_PX = 26;
 
+// 5.94.0 — Mobile side-buttons (PRM / PWR). 60×60 minimum touch
+// target. Square. Sits in the side margin, vertically centred.
+const SIDE_BUTTON_SIZE = 64;          // square; meets 60-px touch-target floor
+const SIDE_BUTTON_MARGIN = 12;        // gap from the canvas edge
+const SIDE_ICON_PX = 28;
+const SIDE_LABEL_FONT = "8px 'Press Start 2P', monospace";
+
 export function getHudButtonRects(canvasW, canvasH) {
     // Layout: SHOP, STATS, PAUSE centered at bottom. Total width =
     //   3 × BUTTON_W + 2 × BUTTON_GAP. Buttons share a baseline.
@@ -41,11 +61,39 @@ export function getHudButtonRects(canvasW, canvasH) {
     const startX = Math.round((canvasW - totalW) / 2);
     const y = canvasH - BOTTOM_MARGIN - BUTTON_H;
     const slot = (i) => startX + i * (BUTTON_W + BUTTON_GAP);
-    return {
+    const rects = {
         shop:  { id: 'shop',  x: slot(0), y, w: BUTTON_W, h: BUTTON_H, icon: 'cart',  label: 'SHOP'  },
         stats: { id: 'stats', x: slot(1), y, w: BUTTON_W, h: BUTTON_H, icon: 'chart', label: 'STATS' },
         pause: { id: 'pause', x: slot(2), y, w: BUTTON_W, h: BUTTON_H, icon: 'pause', label: 'PAUSE' },
     };
+
+    // 5.94.0 — PRM / PWR side-buttons (mobile only). Vertically centred
+    // along the left/right edges of the canvas. Square 64×64.
+    if (isMobile()) {
+        const sideY = Math.round((canvasH - SIDE_BUTTON_SIZE) / 2);
+        rects.prm = {
+            id: 'prm',
+            x: SIDE_BUTTON_MARGIN,
+            y: sideY,
+            w: SIDE_BUTTON_SIZE,
+            h: SIDE_BUTTON_SIZE,
+            icon: null,        // filled in at draw-time from player.activePrimary
+            label: 'PRM',
+            kind: 'primary',
+        };
+        rects.pwr = {
+            id: 'pwr',
+            x: canvasW - SIDE_BUTTON_MARGIN - SIDE_BUTTON_SIZE,
+            y: sideY,
+            w: SIDE_BUTTON_SIZE,
+            h: SIDE_BUTTON_SIZE,
+            icon: null,
+            label: 'PWR',
+            kind: 'power',
+        };
+    }
+
+    return rects;
 }
 
 /**
@@ -95,6 +143,42 @@ export function drawHudButtons(ctx, engine) {
         else ctx.rect(x, y, w, h);
         ctx.fill();
         ctx.stroke();
+
+        // ── PRM / PWR side-buttons (5.94.0) ──
+        // Icon comes from the currently-equipped weapon; label sits at
+        // the bottom of the square like the bottom-row buttons.
+        if (r.kind === 'primary' || r.kind === 'power') {
+            const player = engine.player;
+            const id = player && (r.kind === 'primary' ? player.activePrimary : player.activePower);
+            const cfg = r.kind === 'primary' ? PRIMARY_WEAPONS[id] : POWER_WEAPONS[id];
+            const slug = cfg ? resolveIconSlug(cfg.icon) : null;
+            const ix = x + w / 2;
+            const iy = y + Math.round(h * 0.36);
+            if (slug) {
+                const img = getIconImage(slug, SIDE_ICON_PX, cfg.color || '#ffffff');
+                if (img) ctx.drawImage(img, ix - SIDE_ICON_PX / 2, iy - SIDE_ICON_PX / 2, SIDE_ICON_PX, SIDE_ICON_PX);
+            } else {
+                // Fall back to first 3-4 letters of the weapon id.
+                ctx.font = SIDE_LABEL_FONT;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#fff';
+                const abbr = (id || '????').slice(0, 4);
+                ctx.fillText(abbr, ix, iy);
+            }
+
+            ctx.font = SIDE_LABEL_FONT;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
+            ctx.lineJoin = 'round';
+            const labelY = y + h - 6;
+            ctx.strokeText(r.label, x + w / 2, labelY);
+            ctx.fillStyle = isPress ? '#fffadf' : (isHover ? '#fff' : 'rgba(230, 240, 250, 0.95)');
+            ctx.fillText(r.label, x + w / 2, labelY);
+            continue;
+        }
 
         // 5.79.39 — Icon sits in the top portion of the button so the
         //   label has a dedicated bottom strip with no overlap. Icon

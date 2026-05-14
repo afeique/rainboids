@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.94.0] - 2026-05-13
+
+### Changed — Mobile mode is now tower-defense
+Fundamental gameplay redesign on mobile. Desktop unchanged.
+
+- **Player can't move on mobile.** Position is locked; only rotation/firing respond to input. The velocity-integration step in `Player.update` is gated on `!isMobile()`, and the post-physics velocity is zeroed out belt-and-suspenders so dash / external velocity sources can't displace the ship either.
+- **Tap to aim + fire.** Tap anywhere on the canvas → player rotates to face the touch point + fires primary + fires the equipped power weapon if ready / fully charged. The fire pulse happens on touchstart (one-shot per touch — touchend doesn't re-fire), and the snap-to-entity behavior from 5.91 is preserved (taps within 48 px of an asteroid / enemy snap to its centre).
+- **Auto-pilot removed.** The 5.91/5.92 reactive dodge AI didn't play well — the ship dodging on its own felt out of the player's control, and the player wanted positional agency over the playfield. `js/modules/player/auto-pilot.js` was deleted along with its 10 unit tests and the engine driver. The 5.92.0 Mobile UX v2 auto-fire-when-ready path for power weapons is preserved (it's idempotent with the tap-fire path — both set `input.fireSecondary = true`).
+- **Long-press radial removed.** Replaced with two on-canvas HUD buttons:
+  - **Left side (PRM)**: square showing the equipped primary weapon's icon → tap to open the primary radial menu.
+  - **Right side (PWR)**: square showing the equipped power weapon's icon → tap to open the power radial menu.
+- **Pause menu portrait fit.** Tab/button text inside `#pause-menu` now fits within bounds in portrait viewports — pause-tab labels shrink from 18 px → 11 px, action-button labels from 14 px → 11 px, with proportional padding/gap adjustments. Lands at the `body.mobile-portrait` selector so desktop and landscape mobile are unchanged.
+
+### Removed
+- `js/modules/player/auto-pilot.js` and `tests/unit/player/auto-pilot.test.js` (auto-pilot retired).
+
+### Tests
+- Removed: 10 `AutoPilot` unit tests (file deleted).
+- Added: 13 new tests covering tap-to-aim-and-fire, HUD-button hit-test routing for PRM/PWR, the stationary-player invariant, and the PRM/PWR layout (60-px min, square, vertically centred).
+- Net: +3 tests. Full unit suite **921/921 passing**.
+
+---
+
 ## [5.93.0] - 2026-05-13
 
 ### Changed — Shift-to-dash control replaces PHASE_DASH defense skill
