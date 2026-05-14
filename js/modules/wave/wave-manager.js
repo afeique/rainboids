@@ -1313,6 +1313,15 @@ export function openWavePickOverlay() {
 export function closeWavePickOverlay() {
     const overlay = document.getElementById('wave-pick-overlay');
     if (overlay) overlay.style.display = 'none';
+    // 5.99.0 — Defensively hide the pause-overlay too. If the player
+    // had paused mid-wave-clear (during the 2.7s gap before wave-pick
+    // fires), the pause overlay is also showing UNDERNEATH the wave-
+    // pick modal. Without this clear, picking a card hid wave-pick but
+    // left pause-overlay 'flex', and the game's first Resume tap would
+    // re-pause instead of resuming (the togglePause state machine
+    // assumed PLAYING when called).
+    const pauseOverlay = document.getElementById('pause-overlay');
+    if (pauseOverlay) pauseOverlay.style.display = 'none';
     if (this.player && typeof this.player.resumeChargeShot === 'function') {
         this.player.resumeChargeShot();
     }

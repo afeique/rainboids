@@ -3125,6 +3125,15 @@ export class GameEngine {
     isStatsScreenOpen() { return !!(this._statsOverlay && this._statsOverlay.isOpen()); }
 
     togglePause() {
+        // 5.99.0 — Explicit show/hide of the pause overlay (not via
+        // uiManager.togglePause()'s display-string toggle). Pre-5.99 the
+        // toggle relied on `style.display === 'flex'` round-tripping,
+        // which broke when the wave-pick overlay opened on top of an
+        // already-shown pause-overlay (closing wave-pick left pause-
+        // overlay 'flex' but state PLAYING, so the next togglePause flip
+        // re-paused the game). Direct setStyle calls keep DOM ↔ state in
+        // sync regardless of which order overlays opened/closed.
+        const overlay = document.getElementById('pause-overlay');
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
             // Playing/WaveTransition → Paused. Push the prior state so
             // resume can restore it. (For wave-clear pauses, the
@@ -3136,11 +3145,19 @@ export class GameEngine {
                 this._pushResumeFrame({ state: this.game.state });
             }
             this.game.state = GAME_STATES.PAUSED;
-            this.uiManager.togglePause();
+            if (overlay) overlay.style.display = 'flex';
+            // Mirror the post-show side-effects of uiManager.togglePause()
+            // (powerups list refresh, music sync, weapon-tab refresh).
+            if (this.uiManager) {
+                this.uiManager.updatePowerupsList && this.uiManager.updatePowerupsList();
+                this.uiManager.syncMusicPlayerState && this.uiManager.syncMusicPlayerState();
+                this.uiManager.updatePrimaryTab && this.uiManager.updatePrimaryTab();
+                this.uiManager.updatePowerTab && this.uiManager.updatePowerTab();
+            }
             if (this.player) this.player.pauseChargeShot();
         } else if (this.game.state === GAME_STATES.PAUSED) {
             // Paused → resume. Pop the frame and route accordingly.
-            this.uiManager.togglePause();
+            if (overlay) overlay.style.display = 'none';
             if (this.player) this.player.resumeChargeShot();
             const frame = this._popResumeFrame();
             if (frame && frame.fromWaveClear) {

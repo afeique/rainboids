@@ -2142,10 +2142,9 @@ export function weaverSpinupMovement(gameEngine) {
                 this.vel.y = (tdy / dist) * arcSpeed;
             }
 
-            if (this.type !== 'SENTINEL' && !isMobile()) {
-                // 5.95.1 — Suppress Weaver inline spiral-laser shot on
-                // mobile. This is a third firing path not covered by the
-                // sim `decideEnemyShooting` gate.
+            if (this.type !== 'SENTINEL') {
+                // 5.99.0 — Mobile spiral-laser suppression removed. Mobile
+                // enemies fire again (see sim/enemy.js redesign header).
                 // Weaver: fire spiral lasers — each shot fires in the CURRENT faceAngle direction,
                 // creating the spiral pattern as faceAngle rotates at weaverMaxSpinRate
                 if (now - this.weaverLastShot > this.weaverFireInterval) {

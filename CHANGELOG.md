@@ -11,6 +11,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.99.0] - 2026-05-14
+
+### Fixed — Mobile pause stays paused after closing the menu
+
+The pause overlay refused to release on mobile: tap pause, tap resume,
+overlay hides but the game stayed frozen. Two compounding bugs:
+
+1. The canvas `click` listener in `event-setup.js` was still firing on
+   mobile alongside the dedicated `mobile-touch.js` touchend handler.
+   iOS Safari synthesizes a `click` after `touchend` even when
+   `touchstart` calls `preventDefault()`, so a single tap on the HUD
+   PAUSE button was firing `togglePause()` twice — visually it looked
+   like nothing happened. Added `if (isMobile()) return;` at the top
+   of the canvas click handler so mobile-touch.js owns the surface.
+2. When the wave-pick overlay opened on top of an already-paused
+   game (player paused during the 2.7s gap before wave-clear), picking
+   a card hid wave-pick but left the pause overlay's `display: 'flex'`
+   inline style. The next Resume tap took the player BACK to PAUSED
+   because the toggle assumed the overlay was already showing AND
+   togglePause's `style.display === 'flex'` round-trip logic was
+   fragile. Made `togglePause` set `style.display` explicitly (no
+   toggle), and made `closeWavePickOverlay` defensively hide the
+   pause overlay too.
+
+### Changed — Enemy AI: shoot + weave (no more kamikaze divebombing)
+
+The 5.95.x "fruit-ninja kamikaze" rules retired. Mobile enemies now
+behave like classic shmup enemies:
+
+- They **shoot** (the `decideEnemyShooting` + `updateShooting` mobile
+  short-circuits are removed; same firing pipeline as desktop).
+- They **weave** laterally — a per-tick sin-phased side-step
+  perpendicular to the player-line. Each enemy carries a unique
+  `_weavePhase` so the field doesn't pulse in lockstep.
+- They **dodge** active player bullets (existing `dodgePlayerBullets`
+  already runs every tick — now with player bullets actually flying
+  their way, the swerve reads as intentional evasion).
+- Bosses still exempt; their tier-3+ formation-orbit AI takes priority.
+
+### Fixed — Wavy text now centers correctly
+
+`drawWavyText` (the title-screen and game-over wavy renderer) had a
+half-glyph-width centering bug: with `textAlign='center'` and rendering
+glyph-by-glyph at `currentX` (the cumulative left-edge cursor), every
+glyph's center landed at currentX — shifting the whole text block left
+by ~glyphWidth/2 of the first character. The title screen had a manual
+`centerX + 10` workaround that broke on different font sizes and on
+mobile. Fixed by placing each glyph's center at
+`currentX + glyphWidth/2` instead. RAINBOIDS and GAME OVER are now
+perfectly centered in portrait AND landscape (and on desktop).
+
+### Changed — Shop: gold-only currency display, weapon-colored buttons
+
+- The shop currency row no longer shows SP or "+SP" picks badges — only
+  the gold readout. SP is exclusively for the pause-menu Powerups tab
+  per the 5.98 SP-economy split, so showing SP in the shop was
+  misleading. Hidden via inline `style="display: none"`.
+- Every per-weapon tab (PULSE / NEEDLES / SCATTER / RAIL / CHARGE /
+  MINES / NOVA / MISSILES / LANCE / ARC) and every upgrade row inside
+  is now tinted with that weapon's canonical color, via new
+  `.shop-tab[data-tab="X"]` and `.shop-item--weaponed` CSS rules and a
+  `--item-color` CSS var set by `shop-dom.js::shopItemAccentColor`.
+- Weapon colors that overlapped (`STORM_NEEDLES` and `PULSE_CANNON`
+  were both cyan; `CHARGE_SHOT` matched; `LIGHTNING_ARC` collided with
+  the EMP skill) are now distinct:
+    - `STORM_NEEDLES`: `#88ffff` → `#b3ff44` (chartreuse)
+    - `CHARGE_SHOT`:   `#00ffff` → `#00e6aa` (teal-aqua)
+    - `MINE_LAYER`:    `#ff6600` → `#ff3300` (crimson-orange)
+    - `LIGHTNING_ARC`: `#8888ff` → `#a855ff` (electric purple)
+
+### Changed — Mobile shop text scaled down
+
+The 5.79.57 ten-tab strip in the shop didn't fit a phone viewport at
+the desktop 18 px Press Start 2P. Cut tab font to 10 px on mobile and
+9 px on portrait phones, with proportional padding / gap reductions.
+Shop title and item rows scale to match (22 → 18 px title,
+icon column 56 → 40 px, body fonts 16 → 11 px portrait).
+
+### Tests
+
+`tests/unit/sim/mobile-enemy.test.js` rewritten to pin the new contract
+(enemies fire, lateral weave instead of kamikaze pull, bosses still
+exempt). `tests/unit/enemy/mobile-wrapper-fire-suppression.test.js`
+inverted to assert that the legacy wrapper path now ALSO permits firing
+on mobile. Full unit suite 972/972 passing.
+
+---
+
 ## [5.98.0] - 2026-05-14
 
 ### Added — Mobile: 3-card random powerup pick on wave clear

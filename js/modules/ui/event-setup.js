@@ -2,6 +2,7 @@
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { hideHint } from './hint-system.js';
+import { isMobile } from '../platform/platform-detect.js';
 
 // 5.79.2 — Hit-test the bottom-center HUD button bar. Mirrors
 // hudButtonHitTest in hud-buttons.js but kept inline here to avoid a
@@ -243,6 +244,17 @@ export function setupEventListeners() {
 
     // Entity targeting click handling (for gameplay)
     this.canvas.addEventListener('click', (e) => {
+        // 5.99.0 — On mobile, ALL canvas interaction is owned by
+        // mobile-touch.js (touchstart → preventDefault → custom logic).
+        // The browser may STILL synthesize a `click` event after the
+        // touch even though preventDefault was called (especially on
+        // iOS Safari with `touch-action: none`). Without bailing here,
+        // a single HUD-button tap fires togglePause TWICE — once via
+        // mobile-touch.js and once via this click handler — which
+        // leaves the user's pause toggle effectively a no-op and can
+        // double-toggle wave-pick / shop hits too.
+        if (isMobile()) return;
+
         // Swallow the click if the matching mousedown was a radial-menu
         // commit — the radial closed inside mousedown so isOpen() is now
         // false, but the canvas click handler must not fall through to

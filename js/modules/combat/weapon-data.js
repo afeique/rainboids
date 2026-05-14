@@ -31,7 +31,11 @@ export const PRIMARY_WEAPONS = {
         name: 'Storm Needles',
         description: 'Rapid tiny shots that saturate targets',
         icon: 'rain',
-        color: '#88ffff',
+        // 5.99.0 — Was #88ffff (cyan, too close to Pulse Cannon's #00ccff
+        // and Charge Shot's #00ffff). Pivoted to chartreuse so the ten
+        // weapons are visually distinct across the shop tab strip and in
+        // every effect downstream (bullets, muzzle, shop accent).
+        color: '#b3ff44',
         // 5.68.1 — bumped damage 0.3 → 0.4 (DPS 2.31 → 3.08).
         fireRate: 130,
         damage: 0.4,
@@ -212,7 +216,10 @@ export const POWER_WEAPONS = {
         name: 'Charge Shot',
         description: 'Hold to charge, release to fire',
         icon: 'battery',
-        color: '#00ffff',
+        // 5.99.0 — Was #00ffff (cyan, too close to Pulse Cannon's #00ccff).
+        // Shifted to teal-aqua so the charge weapon reads distinct in the
+        // shop tab strip and downstream visuals.
+        color: '#00e6aa',
         cooldown: 0,          // charge-based, not cooldown-based
         isChargeBased: true,
         cost: 0,
@@ -225,7 +232,9 @@ export const POWER_WEAPONS = {
         name: 'Seeker Mines',
         description: 'Magnetic seekers that hunt and detonate',
         icon: 'bomb',
-        color: '#ff6600',
+        // 5.99.0 — Was #ff6600 (close to Scatter Shot's #ff8844). Shifted
+        // to deep crimson-orange so the two stay visually distinct.
+        color: '#ff3300',
         cooldown: 4000,
         isChargeBased: false,
         maxMines: 3,
@@ -303,7 +312,9 @@ export const POWER_WEAPONS = {
         name: 'Arc Lightning',
         description: 'Continuous lightning tether — power weapon, fires for 3s',
         icon: 'bolt',
-        color: '#8888ff',
+        // 5.99.0 — Was #8888ff (same as EMP_PULSE skill). Shifted to vivid
+        // electric purple for distinct identity.
+        color: '#a855ff',
         cooldown: 8000,
         isChargeBased: false,
         damage: 0.05,

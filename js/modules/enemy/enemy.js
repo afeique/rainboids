@@ -566,14 +566,8 @@ export class Enemy {
         if (!gameEngine.enemyBulletPool) return;
         if (!this.targetPlayer) return;
 
-        // 5.95.1 — Mobile fire suppression defense-in-depth. The sim-layer
-        // `decideEnemyShooting` already gates the primary firing pipeline,
-        // but this legacy wrapper path (and the inline call sites it
-        // routes through: handleBurstShooting / shoot / updateWaspMachineGun
-        // / updateSweepLaserSystem / updateSentinelSweep) would bypass it
-        // if anything still calls `updateShooting`. Gate at the entry so
-        // all sub-paths stay inert on mobile.
-        if (isMobile()) return;
+        // 5.99.0 — Mobile enemies fire now (the 5.95 short-circuit
+        // is removed). See sim/enemy.js header for the redesign.
 
         // Arc movement enemies can only shoot when stopped
         if (this.config.movePattern === 'arc' && !this.canShoot) return;

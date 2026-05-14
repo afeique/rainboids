@@ -1,4 +1,23 @@
 import { renderIconHTML } from '../ui/icons.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS } from '../combat/weapon-data.js';
+
+// 5.99.0 — Resolve a weapon-tinted accent color for a shop item. Used to
+// border / accent each row with the parent weapon's canonical color so
+// rows in PULSE / NEEDLES / etc. tabs read as belonging to that weapon
+// rather than the previous uniform green palette.
+function shopItemAccentColor(item) {
+    if (!item) return null;
+    const weaponId = item.parentWeapon;
+    if (weaponId) {
+        if (PRIMARY_WEAPONS[weaponId]) return PRIMARY_WEAPONS[weaponId].color;
+        if (POWER_WEAPONS[weaponId]) return POWER_WEAPONS[weaponId].color;
+    }
+    if (item.isWeapon) {
+        if (PRIMARY_WEAPONS[item.id]) return PRIMARY_WEAPONS[item.id].color;
+        if (POWER_WEAPONS[item.id]) return POWER_WEAPONS[item.id].color;
+    }
+    return null;
+}
 
 // Shop DOM overlay — replaces canvas-rendered shop with HTML elements.
 // All rendering, hit-testing, and scrolling is delegated to the browser.
@@ -415,6 +434,16 @@ function buildItemRow(item, player, game) {
     else if (isOwned)      row.classList.add('shop-item--owned');
     else if (maxedOut)     row.classList.add('shop-item--maxed');
     else if (!canAfford)   row.classList.add('shop-item--cant-afford');
+
+    // 5.99.0 — Weapon-tint accent. Each row exposes `--item-color` set to
+    // the parent weapon's canonical color so the row border / icon / hover
+    // glow track the weapon identity. CSS picks it up via the new
+    // `.shop-item[style*="--item-color"]` rules in styles.css.
+    const accent = shopItemAccentColor(item);
+    if (accent) {
+        row.style.setProperty('--item-color', accent);
+        row.classList.add('shop-item--weaponed');
+    }
 
     if (maxedOut) row.disabled = true;
 

@@ -1236,6 +1236,23 @@ button:not([disabled]),
 .shop-tab[data-tab="POWER"]   { --tab-color: #ff4444; --tab-glow: rgba(255,  68,  68, 0.40); }
 .shop-tab[data-tab="SKILLS"]  { --tab-color: #aa66ff; --tab-glow: rgba(170, 102, 255, 0.40); }
 
+/* 5.99.0 — Per-WEAPON shop tab colors. The 5.79.57 per-weapon tab strip
+   (PULSE / NEEDLES / SCATTER / RAIL / CHARGE / MINES / NOVA / MISSILES /
+   LANCE / ARC) inherited the default `--tab-color: #cccccc` which made
+   the whole strip read as grey. Now every weapon tab is tinted with its
+   weapon's canonical color (same hex value as `PRIMARY_WEAPONS[id].color`
+   / `POWER_WEAPONS[id].color` in weapon-data.js). */
+.shop-tab[data-tab="PULSE_CANNON"]   { --tab-color: #00ccff; --tab-glow: rgba(  0, 204, 255, 0.40); }
+.shop-tab[data-tab="STORM_NEEDLES"]  { --tab-color: #b3ff44; --tab-glow: rgba(179, 255,  68, 0.40); }
+.shop-tab[data-tab="SCATTER_GUN"]    { --tab-color: #ff8844; --tab-glow: rgba(255, 136,  68, 0.40); }
+.shop-tab[data-tab="RAIL_DRIVER"]    { --tab-color: #ff44ff; --tab-glow: rgba(255,  68, 255, 0.40); }
+.shop-tab[data-tab="CHARGE_SHOT"]    { --tab-color: #00e6aa; --tab-glow: rgba(  0, 230, 170, 0.40); }
+.shop-tab[data-tab="MINE_LAYER"]     { --tab-color: #ff3300; --tab-glow: rgba(255,  51,   0, 0.40); }
+.shop-tab[data-tab="NOVA_BLAST"]     { --tab-color: #ffaa00; --tab-glow: rgba(255, 170,   0, 0.40); }
+.shop-tab[data-tab="MISSILE_SALVO"]  { --tab-color: #ff4444; --tab-glow: rgba(255,  68,  68, 0.40); }
+.shop-tab[data-tab="LANCE_BEAM"]     { --tab-color: #44ff44; --tab-glow: rgba( 68, 255,  68, 0.40); }
+.shop-tab[data-tab="LIGHTNING_ARC"]  { --tab-color: #a855ff; --tab-glow: rgba(168,  85, 255, 0.40); }
+
 .shop-content {
     width: min(900px, 100%);
     flex: 1;
@@ -1273,6 +1290,25 @@ button:not([disabled]),
 .shop-item--owned:hover { background: rgba(0, 200, 100, 0.30); box-shadow: 0 0 14px rgba(68, 255, 136, 0.45); }
 .shop-item--equipped { background: rgba(0, 140, 200, 0.30); border-color: #44ddff; }
 .shop-item--equipped:hover { background: rgba(0, 180, 255, 0.40); box-shadow: 0 0 14px rgba(68, 221, 255, 0.50); }
+
+/* 5.99.0 — Weapon-tinted shop items. Every row inside a per-weapon tab
+   (PULSE / NEEDLES / SCATTER / RAIL / CHARGE / MINES / NOVA / MISSILES /
+   LANCE / ARC) carries `.shop-item--weaponed` plus `--item-color` set in
+   shop-dom.js. The accent color borders the row, tints the icon, and
+   colors the hover glow so the upgrade list reads as belonging to that
+   weapon. Owned / equipped / cant-afford state classes still take
+   precedence (their selectors are later in the cascade). */
+.shop-item--weaponed {
+    background: color-mix(in srgb, var(--item-color) 12%, transparent);
+    border-color: color-mix(in srgb, var(--item-color) 65%, transparent);
+}
+.shop-item--weaponed:hover:not(.shop-item--maxed) {
+    background: color-mix(in srgb, var(--item-color) 22%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--item-color) 50%, transparent);
+    border-color: var(--item-color);
+}
+.shop-item--weaponed .shop-item-icon { color: var(--item-color); }
+.shop-item--weaponed .shop-item-name { color: var(--item-color); }
 
 .shop-item-icon { font-size: 32px; text-align: center; }
 .shop-item-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -3257,5 +3293,65 @@ body.mobile-portrait .wave-pick-card-desc {
 }
 body.mobile-portrait .wave-pick-card-stacks {
     font-size: 9px;
+}
+
+/* ─── 5.99.0 — Mobile shop text scaling ────────────────────────────────
+   The 5.79.57 per-weapon tab strip (10 tabs at 18-px Press Start 2P)
+   overflows narrow phone viewports. Shrink the tab font + padding on
+   mobile so all 10 fit, and tighten the SHOP title + currency badge so
+   the shop header doesn't dominate the screen. Same intent as the
+   pause-menu / Game Over scale-downs from 5.97. */
+body.mobile-mode .shop-title {
+    font-size: 22px;
+    margin: 8px 0 6px;
+}
+body.mobile-mode .shop-tab {
+    font-size: 10px;
+    padding: 8px 8px;
+    letter-spacing: 0.5px;
+}
+body.mobile-mode .shop-tabs {
+    gap: 6px;
+}
+body.mobile-mode .shop-currency-row {
+    font-size: 14px;
+}
+body.mobile-mode .shop-item {
+    padding: 10px 12px;
+    gap: 10px;
+    grid-template-columns: 40px 1fr auto;
+}
+body.mobile-mode .shop-item-icon {
+    font-size: 22px;
+}
+body.mobile-mode .shop-item-name {
+    font-size: 11px;
+}
+body.mobile-mode .shop-item-desc {
+    font-size: 11px;
+    line-height: 1.3;
+}
+body.mobile-mode .shop-item-price {
+    font-size: 12px;
+}
+body.mobile-mode .shop-item-cost {
+    min-width: 76px;
+}
+
+/* Portrait gets a further squeeze — 360-wide phones in portrait can't
+   fit all 10 tabs at 10px without a horizontal scroll. The tab strip is
+   already `flex-wrap` so we just tighten the font and let it wrap. */
+body.mobile-portrait .shop-tab {
+    font-size: 9px;
+    padding: 6px 6px;
+}
+body.mobile-portrait .shop-title {
+    font-size: 18px;
+}
+body.mobile-portrait .shop-item-name {
+    font-size: 10px;
+}
+body.mobile-portrait .shop-item-desc {
+    font-size: 10px;
 }
 

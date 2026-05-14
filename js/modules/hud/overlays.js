@@ -116,8 +116,16 @@ export function drawWavyText(text, x, y, options = {}) {
         }
         grad.addColorStop(1, palette[0]);
 
-        // Same gradient instance is used for every glyph — sampling happens by
-        // canvas-space x, so each letter blends continuously into its neighbors.
+        // 5.99.0 — Centering fix. Pre-5.99 drew each glyph with
+        // textAlign='center' at `currentX` (the cumulative left-edge
+        // position) — which shifted the whole text block LEFT by
+        // ~glyphWidth/2 (the first glyph's center landed at startX
+        // instead of startX + glyphWidth/2). Title screens worked
+        // around this with a manual `centerX + 10` nudge in the call
+        // site, but landscape / different fonts broke that hack. Fix
+        // the renderer instead: every glyph's center is placed at
+        // `currentX + glyphWidth/2`, which matches left-align spacing
+        // and centers the whole block on `x` correctly.
         chars.forEach((char, index) => {
             if (char === ' ') {
                 currentX += effectiveFontSize * 0.5;
@@ -125,6 +133,9 @@ export function drawWavyText(text, x, y, options = {}) {
             }
 
             const waveOffset = halfAmp === 0 ? 0 : Math.sin(time * waveOmega + index * 0.8) * halfAmp;
+            this.ctx.font = `${effectiveFontSize}px 'Press Start 2P', monospace`;
+            const charWidth = this.ctx.measureText(char).width;
+            const glyphCenterX = currentX + charWidth / 2;
 
             // 5.79.0 — black stroke pass under each glyph (when opted
             //   in). Drawn FIRST so the gradient fill stays on top.
@@ -132,22 +143,21 @@ export function drawWavyText(text, x, y, options = {}) {
                 this.ctx.lineWidth = outlineWidth;
                 this.ctx.lineJoin = 'round';
                 this.ctx.strokeStyle = outlineColor;
-                this.ctx.font = `${effectiveFontSize}px 'Press Start 2P', monospace`;
                 this.ctx.globalAlpha = baseAlpha;
-                this.ctx.strokeText(char, currentX, y + waveOffset);
+                this.ctx.strokeText(char, glyphCenterX, y + waveOffset);
             }
 
             // Glow via double-draw: larger translucent pass + crisp pass.
             this.ctx.fillStyle = grad;
             this.ctx.globalAlpha = baseAlpha * 0.35;
             this.ctx.font = `${effectiveFontSize + 2}px 'Press Start 2P', monospace`;
-            this.ctx.fillText(char, currentX, y + waveOffset);
+            this.ctx.fillText(char, glyphCenterX, y + waveOffset);
 
             this.ctx.globalAlpha = baseAlpha;
             this.ctx.font = `${effectiveFontSize}px 'Press Start 2P', monospace`;
-            this.ctx.fillText(char, currentX, y + waveOffset);
+            this.ctx.fillText(char, glyphCenterX, y + waveOffset);
 
-            currentX += this.ctx.measureText(char).width;
+            currentX += charWidth;
         });
 
         this.ctx.restore();
@@ -291,7 +301,10 @@ export function drawTitleScreen() {
             // 5.79.0 — outline:true adds a black stroke under each
             //   glyph so the title stays legible over the dynamic
             //   starfield/nebula.
-            this.drawWavyText('RAINBOIDS', centerX + 10, titleY, {
+            // 5.99.0 — Was `centerX + 10` to nudge the title right and
+            // compensate for the now-fixed drawWavyText centering bug.
+            // Now `centerX` is correct.
+            this.drawWavyText('RAINBOIDS', centerX, titleY, {
                 fontSize: titleFontSize,
                 colors: WAVY_PALETTES.title,
                 speed: 0.45,
@@ -489,7 +502,7 @@ export function drawTitleScreen() {
             const text = 'RAINBOIDS';
             const seeds = anim.letterSeeds || [];
             const style = anim.style || 'twister';
-            const titleX = centerX + 10;
+            const titleX = centerX; // 5.99.0 — drawWavyText centering fixed
             // 5.92.1 — Use the responsive titleY computed above so the
             // launch animation lines up with the static title on mobile
             // (instead of a fixed `centerY - 100` that floats above the

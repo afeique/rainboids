@@ -71,42 +71,31 @@ import { updateBossRage, bossFormationMovement } from '../modules/enemy/boss-rag
 import { isMobile } from '../modules/platform/platform-detect.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5.95.0 → 5.95.1 — Mobile fruit-ninja kamikaze rules.
+// 5.99.0 — Mobile combat redesign (replaces the 5.95 kamikaze model).
 //
-// On mobile mode the enemy AI is overridden in three ways:
-//   1) Enemies NEVER fire bullets — `decideEnemyShooting` short-circuits
-//      before pushing any `enemy_fire*` events onto the wrapper drain
-//      buffer, so the firing pipeline (burst, charging, continuous,
-//      single-shot) all stays inert. The player never has projectiles
-//      to dodge.
-//   2) Enemies get a STRONG velocity bias toward the player every tick
-//      ("kamikaze pull / divebomb"). This stacks on top of each per-
-//      enemy movement pattern (HUNTER chase, GUARDIAN orbit, etc.) so
-//      even patrol-only types divebomb the player. Contact damage still
-//      routes through the existing player-enemy collision path
-//      (collision-system.js line 1735) so the kamikaze kill behavior is
-//      already wired up.
-//   3) Enemies get a small per-tick random velocity perturbation so they
-//      visibly zigzag/dodge ("evasive feel"). Important because the
-//      player has no projectiles for enemies to actually dodge from in
-//      mobile fruit-ninja mode, so the dodge is purely visual flavor
-//      that breaks up the dead-straight kamikaze line.
+// The 5.95.x "fruit-ninja kamikaze" rules — all enemies divebomb the
+// player, none of them shoot — produced a one-note experience where
+// the only threat was contact damage. 5.99 restores the shmup loop:
 //
-// Strength tuning (5.95.1):
-//   • MOBILE_KAMIKAZE_FORCE = 2.5 (was 0.6) — bumped 4x so the dive feels
-//     purposeful instead of a gentle drift. Per-pattern friction still
-//     damps this back down each tick, so steady-state pull is generous
-//     but not instant. A confident player still has time to pick targets.
-//   • MOBILE_RANDOM_WALK = 0.5 — half-pixel-amplitude jitter per axis per
-//     tick. Enough to read as evasive motion at 60 Hz without overwhelming
-//     the kamikaze line of pursuit.
-//   • MOBILE_MAX_KAMIKAZE_SPEED = 6.0 — absolute cap on velocity magnitude
-//     post-kamikaze-and-jitter so an unlucky stack of pulls doesn't
-//     launch enemies off-screen. Per-pattern caps still run first; this
-//     is the safety net for the cumulative bias.
-const MOBILE_KAMIKAZE_FORCE = 2.5;
-const MOBILE_RANDOM_WALK = 0.5;
-const MOBILE_MAX_KAMIKAZE_SPEED = 6.0;
+//   1) Enemies SHOOT on mobile. The `decideEnemyShooting` short-circuit
+//      is removed so the existing per-pattern firing helpers run the
+//      same way they do on desktop.
+//   2) Enemies WEAVE laterally instead of diving. A small per-tick
+//      side-step (perpendicular to the line-of-sight to the player)
+//      modulated by a per-enemy sin phase makes them strafe across the
+//      shooting line so they read as evading.
+//   3) The dodge logic (`dodgePlayerBullets` in ai.js) ALREADY runs
+//      every tick — enemies actively swerve out of bullet paths. No
+//      change needed there; with player bullets now flying their way
+//      AND a sideways weave layered on top, the AI reads as active
+//      evasive motion.
+//
+// MOBILE_WEAVE_FORCE: peak amplitude (px/tick) of the lateral side-step.
+// Small enough that the per-pattern movement (HUNTER chase, GUARDIAN
+// orbit, etc.) still dominates the macro motion — this is decoration
+// that breaks up otherwise dead-straight trajectories.
+const MOBILE_WEAVE_FORCE = 0.85;
+const MOBILE_WEAVE_FREQ_HZ = 1.4;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -212,38 +201,30 @@ export function updateEnemy(enemy, ctx, events) {
         enemy.updateMovement(gameEngine);
     }
 
-    // 5.95.0 → 5.95.1 — Mobile kamikaze pull + random walk + cap.
-    // Bias velocity toward the player every tick on top of whatever
-    // per-enemy movement pattern just ran. Even patrol/circle/orbit AIs
-    // now bend toward the player (slow at long range as the inverse-
-    // distance contribution is unit-normalized — the bias is direction
-    // only, not strength falloff). A small random-walk term layers on
-    // top so the dive reads as evasive motion at 60 Hz. The final
-    // velocity is capped at MOBILE_MAX_KAMIKAZE_SPEED so an unlucky
-    // accumulation of pulls doesn't launch enemies off-screen. Bosses
-    // are excluded so the tier-3+ formation-orbit mechanic still reads
-    // correctly; everyone else gets pulled in.
+    // 5.99.0 — Mobile lateral weave (replaces the 5.95 kamikaze pull).
+    // A small sin-phased side-step perpendicular to the line-of-sight to
+    // the player. Each enemy carries its own _weavePhase so the field
+    // doesn't pulse in lockstep. The per-pattern velocity output is
+    // preserved underneath; weave is a 60-Hz decoration that breaks up
+    // dead-straight trajectories so enemies READ as actively moving
+    // while they shoot. Active `dodgePlayerBullets` (called below)
+    // overrides this with a harder swerve whenever a bullet is on path.
+    // Bosses keep the formation-orbit mechanic.
     if (isMobile() && !enemy.isBoss) {
+        if (typeof enemy._weavePhase !== 'number') {
+            enemy._weavePhase = Math.random() * Math.PI * 2;
+        }
+        enemy._weavePhase += (MOBILE_WEAVE_FREQ_HZ * Math.PI * 2) / 60;
         const dx = playerRef.x - enemy.x;
         const dy = playerRef.y - enemy.y;
         const dist = Math.hypot(dx, dy);
         if (dist > 1) {
-            const inv = 1 / dist;
-            enemy.vel.x += dx * inv * MOBILE_KAMIKAZE_FORCE;
-            enemy.vel.y += dy * inv * MOBILE_KAMIKAZE_FORCE;
-        }
-        // Random-walk dodge — visible jitter that reads as evasive
-        // motion even with no projectiles to actually evade.
-        enemy.vel.x += (Math.random() - 0.5) * MOBILE_RANDOM_WALK;
-        enemy.vel.y += (Math.random() - 0.5) * MOBILE_RANDOM_WALK;
-        // Hard cap so cumulative kamikaze + jitter can't escape the
-        // per-pattern speed budgets indefinitely.
-        const sp2 = enemy.vel.x * enemy.vel.x + enemy.vel.y * enemy.vel.y;
-        if (sp2 > MOBILE_MAX_KAMIKAZE_SPEED * MOBILE_MAX_KAMIKAZE_SPEED) {
-            const sp = Math.sqrt(sp2);
-            const k = MOBILE_MAX_KAMIKAZE_SPEED / sp;
-            enemy.vel.x *= k;
-            enemy.vel.y *= k;
+            // Perpendicular unit vector to the player-line.
+            const px = -dy / dist;
+            const py =  dx / dist;
+            const swing = Math.sin(enemy._weavePhase) * MOBILE_WEAVE_FORCE;
+            enemy.vel.x += px * swing;
+            enemy.vel.y += py * swing;
         }
     }
 
@@ -367,14 +348,10 @@ function decideEnemyShooting(enemy, gameEngine, events) {
     if (!gameEngine || !gameEngine.enemyBulletPool) return;
     if (!enemy.targetPlayer) return;
 
-    // 5.95.0 — On mobile, enemies never fire. The fruit-ninja redesign
-    // (see header) makes player bullets the only projectile in flight.
-    // Short-circuit before any `enemy_fire*` event is emitted so the
-    // wrapper-side firing helpers (`firing.shoot`, burst, sweep, etc.)
-    // all stay inert. Charging-state patterns (laser / arc_lightning)
-    // also stop advancing — they only progress when this function emits
-    // `enemy_fire_charging`, so suppression here halts them at idle.
-    if (isMobile()) return;
+    // 5.99.0 — Mobile enemies SHOOT now (the 5.95 short-circuit is
+    // removed). The redesign restores the shmup loop: enemies stand
+    // their ground, shoot the player, and weave/dodge to evade return
+    // fire. See the file header for the full rationale.
 
     // Arc movement enemies can only shoot when stopped. Line 708.
     if (enemy.config.movePattern === 'arc' && !enemy.canShoot) return;

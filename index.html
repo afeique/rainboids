@@ -253,6 +253,10 @@
         <div id="shop-menu">
             <button id="shop-close-button" class="shop-close" aria-label="Close shop">×</button>
             <h2 class="shop-title">SHOP</h2>
+            <!-- 5.99.0 — Shop only displays GOLD now. SP is used only in
+                 the Powerups tab (pause menu), not in the shop. Both the
+                 SP and picks badges are hidden so the shop header reads
+                 as a single currency block. -->
             <div class="shop-currency-row">
                 <span class="shop-currency shop-currency--coins">
                     <span class="shop-currency-icon">💰</span>
@@ -262,7 +266,7 @@
                     <span id="shop-sp-amount">0</span>
                     <span class="shop-currency-label">SP</span>
                 </span>
-                <span class="shop-currency shop-currency--picks">
+                <span class="shop-currency shop-currency--picks" style="display: none;">
                     <span class="shop-currency-icon shop-picks-icon">+</span>
                     <span id="shop-picks-amount">0</span>
                     <span class="shop-currency-label">SP</span>
