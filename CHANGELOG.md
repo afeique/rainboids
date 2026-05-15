@@ -11,6 +11,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.108.0] - 2026-05-15
+
+### Added — Six new powerups
+
+**EXECUTIONER (offensive, 5 stacks @ +20% each)**
+Bullets deal +20% per stack to enemies AND asteroids currently below
+25% HP. Computed at damage-application time so the bonus naturally
+ramps as targets get wounded by sustained fire. Wired into both
+asteroid-hit and enemy-hit branches in `collision-system.js`.
+
+**MOMENTUM (offensive, 4 stacks @ +5%/sec each, +15% cap per stack)**
+Damage ramps up while the player holds primary fire. `_fireHoldTime`
+(ms) ticks up in `player.update` while `input.fire` is true, resets
+to 0 on release. `applyGlobalBulletUpgrades` reads it and multiplies
+bullet.damage by `1 + stacks × 0.05 × min(3, seconds)`. Linear ramp
+peaking at 3 seconds of sustained trigger-hold.
+
+**OVERCHARGE ROUNDS (offensive, 4 stacks)**
+Every Nth bullet does 3× damage and renders as a fatter, brighter
+"BIG SHOT". Threshold shrinks with stacks (1→every 12 shots,
+4→every 5 shots). Per-bullet `bullet.overcharged` flag survives
+through `getBulletVisuals` so the overcharged shot reads as a
+distinct gold-star projectile. Counter cleared on bullet pool reset
+so recycled bullets don't carry the visual.
+
+**GUARDIAN (defensive, 3 stacks)**
+Once per wave: a hit that WOULD reduce the player to 0 HP instead
+clamps to 1 HP and grants 2s + stacks × 0.5s of invulnerability.
+`tryConsumeGuardian()` helper in `combat-manager.js` is called from
+every lethal-damage branch (enemy contact, enemy bullet, asteroid
+contact) BEFORE the tank-consume / death fallback. Per-wave tracking
+via `player._guardianUsedWave === game.currentWave`.
+
+**STATIC DISCHARGE (offensive, 5 stacks)**
+Periodic AoE pulse from the ship. Cooldown / radius / damage scale
+per stack (1: 4.5s / 90px / 1 → 5: 1.2s / 220px / 3). Hits enemies,
+asteroids, AND mines within the radius. Spawns an expanding electric
+ring particle for visual confirmation. Driven by `tickStaticDischarge()`
+called from the engine update loop after `player.update`.
+
+**WHIRLWIND (offensive, 4 stacks)**
+Six teal particles orbit the player at a stack-scaled radius
+(1: 80px → 4: 170px); every 333ms, every enemy/asteroid/mine inside
+the orbit takes stack-scaled damage (1.0 → 2.5). Visuals spawned
+every frame for continuous orbit; damage applies on the discrete
+tick. Pairs naturally with close-range builds (Scatter Gun, Charge
+Shot). Driven by `tickWhirlwind()` alongside the static discharge.
+
+### Implementation notes
+
+- All six powerups follow the existing `POWERUP_TYPES` shape (DEFENSE
+  / OFFENSE category, maxStacks, spCost, gradientColors, icon).
+- Per-tick AoE powerups (STATIC_DISCHARGE, WHIRLWIND) early-return
+  cheaply when stack count is zero — safe to call unconditionally.
+- New helpers exported by `combat-manager.js` and bound on the
+  engine: `tryConsumeGuardian`, `tickStaticDischarge`, `tickWhirlwind`.
+- 950/950 unit tests pass with the new content.
+
 ## [5.107.0] - 2026-05-15
 
 ### Added — VAMPIRISM powerup (lifesteal)

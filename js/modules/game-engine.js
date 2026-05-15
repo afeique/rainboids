@@ -2180,6 +2180,10 @@ export class GameEngine {
     // no-ops when the corresponding powerup has zero stacks.
     applyVampirism(damageDealt) { return combat.applyVampirism.call(this, damageDealt); }
     applyThorns(damageTaken, source) { return combat.applyThorns.call(this, damageTaken, source); }
+    // 5.108.0 — Guardian / Static Discharge / Whirlwind hooks.
+    tryConsumeGuardian() { return combat.tryConsumeGuardian.call(this); }
+    tickStaticDischarge() { return combat.tickStaticDischarge.call(this); }
+    tickWhirlwind() { return combat.tickWhirlwind.call(this); }
 
     drawDamageNumbers() { return hudCombat.drawDamageNumbers.call(this); }
 
@@ -2388,6 +2392,13 @@ export class GameEngine {
 
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged, this.gameField);
+
+            // 5.108.0 — Passive AoE powerups tick AFTER the player has
+            // moved this frame so their positions key off the latest
+            // ship coords. Both early-return cheaply when their
+            // powerup has zero stacks; safe to call unconditionally.
+            this.tickStaticDischarge();
+            this.tickWhirlwind();
 
             // ── MP HOOK 2: mirror the predicted ship state into the local
             // Player object. This way camera/FX/collision/HUD all keep

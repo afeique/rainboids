@@ -346,6 +346,134 @@ export const POWERUP_TYPES = {
         spCostIncrement: 2,
         description: 'Reflect +25% of damage taken per stack',
     },
+
+    // 5.108.0 — Executioner. Bullets deal +20% damage per stack to
+    // enemies (and asteroids) currently below 25% HP. Lets the player
+    // close out wounded targets faster — crit-adjacent feel but tied
+    // to target state rather than RNG.
+    EXECUTIONER: {
+        name: 'Executor',
+        displayName: 'Executioner',
+        abbr: 'EXEC',
+        color: '#cc0044',
+        gradientColors: ['#ff4477', '#660022'],
+        icon: 'dagger',
+        duration: 30000,
+        effect: 'executioner',
+        rarity: 0.12,
+        category: 'OFFENSE',
+        maxStacks: 5,
+        spCost: 3,
+        spCostIncrement: 2,
+        description: '+20% damage to enemies below 25% HP per stack',
+    },
+
+    // 5.108.0 — Momentum. Damage ramps up by +5% per second of
+    // sustained primary fire per stack, capping at +15% per stack
+    // (3-second ramp). Resets the moment the player releases fire.
+    // Rewards holding the trigger through a wave.
+    MOMENTUM: {
+        name: 'Momentum',
+        displayName: 'Momentum',
+        abbr: 'MOM',
+        color: '#ffaa33',
+        gradientColors: ['#ffd066', '#cc6600'],
+        icon: 'wind',
+        duration: 30000,
+        effect: 'momentum',
+        rarity: 0.12,
+        category: 'OFFENSE',
+        maxStacks: 4,
+        spCost: 3,
+        spCostIncrement: 2,
+        description: '+5%/s sustained-fire damage per stack (cap +15%/stack)',
+    },
+
+    // 5.108.0 — Overcharge Rounds. Every Nth bullet does 3× damage and
+    // renders as a fatter, brighter projectile. N decreases per stack
+    // (stacks=1 → every 12 shots; stacks=4 → every 5 shots), so the
+    // upgrade reads as "more frequent BIG shots" rather than a damage
+    // multiplier.
+    OVERCHARGE_ROUNDS: {
+        name: 'Overcharge',
+        displayName: 'Overcharge Rounds',
+        abbr: 'OVCH',
+        color: '#ffcc00',
+        gradientColors: ['#ffee66', '#cc9900'],
+        icon: 'battery',
+        duration: 30000,
+        effect: 'overchargeRounds',
+        rarity: 0.10,
+        category: 'OFFENSE',
+        maxStacks: 4,
+        spCost: 3,
+        spCostIncrement: 2,
+        description: 'Every Nth bullet hits 3× (more frequent per stack)',
+    },
+
+    // 5.108.0 — Guardian. On a hit that WOULD kill the player, clamp
+    // HP to 1 and grant invuln for 2s + stacks×0.5s. One charge per
+    // wave; resets at wave start. Mirrors LAST_STAND but per-wave
+    // rather than per-run.
+    GUARDIAN: {
+        name: 'Guardian',
+        displayName: 'Guardian',
+        abbr: 'GUARD',
+        color: '#ffeb44',
+        gradientColors: ['#fff088', '#aa7700'],
+        icon: 'shield',
+        duration: 30000,
+        effect: 'guardian',
+        rarity: 0.08,
+        category: 'DEFENSE',
+        maxStacks: 3,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Survive lethal hit at 1 HP + invuln (once per wave)',
+    },
+
+    // 5.108.0 — Static Discharge. Periodic AoE pulse from the player
+    // ship. Each stack shortens cooldown, widens radius, and bumps
+    // damage. Provides passive area control while the player focuses
+    // on aimed fire.
+    STATIC_DISCHARGE: {
+        name: 'Discharge',
+        displayName: 'Static Discharge',
+        abbr: 'STDS',
+        color: '#88aaff',
+        gradientColors: ['#bbccff', '#3344aa'],
+        icon: 'bolt',
+        duration: 30000,
+        effect: 'staticDischarge',
+        rarity: 0.10,
+        category: 'OFFENSE',
+        maxStacks: 5,
+        spCost: 3,
+        spCostIncrement: 2,
+        description: 'Periodic AoE pulse — faster + bigger per stack',
+    },
+
+    // 5.108.0 — Whirlwind. Six particles orbit the player ship at a
+    // damaging radius. Every ~333ms, any enemy / asteroid / mine
+    // within the radius takes damage. Stacks add damage AND widen the
+    // orbit. A constant area-of-effect that pairs naturally with
+    // close-range builds (Scatter Gun, Charge Shot melee).
+    WHIRLWIND: {
+        name: 'Whirlwind',
+        displayName: 'Whirlwind',
+        abbr: 'WIND',
+        color: '#88ffcc',
+        gradientColors: ['#aaffe0', '#229988'],
+        icon: 'tornado',
+        duration: 30000,
+        effect: 'whirlwind',
+        rarity: 0.10,
+        category: 'OFFENSE',
+        maxStacks: 4,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Orbital damage zone — +0.5 dmg & +30px radius per stack',
+    },
 };
 
 export class Powerup {

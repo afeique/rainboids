@@ -111,7 +111,17 @@ export function handleCollisions() {
                 this.player.registerHit();
 
                 // Damage the asteroid (One Punch Man cheat: instant kill)
-                const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
+                // 5.108.0 — Executioner: +20% per stack vs targets at
+                // <25% HP. Computed against the target's CURRENT health
+                // ratio so the bonus naturally ramps as the asteroid
+                // gets wounded by sustained fire.
+                let damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || 1);
+                if (this.player && ast.maxHealth > 0 && (ast.health / ast.maxHealth) < 0.25) {
+                    const execStacks = this.player.getPowerupStacks
+                        ? this.player.getPowerupStacks('EXECUTIONER')
+                        : 0;
+                    if (execStacks > 0) damage *= (1 + execStacks * 0.2);
+                }
                 if (this.game.stats) {
                     this.game.stats.shotsHit++;
                     this.game.stats.totalDamageDealt += damage;
@@ -670,7 +680,15 @@ export function handleCollisions() {
                 this.player.registerHit();
 
                 // Damage the enemy (One Punch Man cheat: instant kill)
-                const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
+                // 5.108.0 — Executioner: +20% per stack vs targets at
+                // <25% HP. Same shape as the asteroid branch above.
+                let damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
+                if (this.player && enemy.maxHealth > 0 && (enemy.health / enemy.maxHealth) < 0.25) {
+                    const execStacks = this.player.getPowerupStacks
+                        ? this.player.getPowerupStacks('EXECUTIONER')
+                        : 0;
+                    if (execStacks > 0) damage *= (1 + execStacks * 0.2);
+                }
                 if (this.game.stats) this.game.stats.shotsHit++;
                 const enemyHpBefore = enemy.health;
                 const destroyed = enemy.takeDamage(damage, {
@@ -1834,8 +1852,12 @@ export function handlePlayerEnemyCollision(player, enemy) {
 
         // 5.88.0 — tank-based hit model: HP→0 consumes a tank (vaporize
         // FX + HP refill, no invuln); the only "lives" left are tanks.
+        // 5.108.0 — GUARDIAN gets first dibs: if it fires it clamps to
+        // 1 HP + grants invuln (one save per wave), bypassing the tank.
         if (player.health <= 0) {
-            if (this.healthTanks > 0) {
+            if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
+                // Guardian save — skip the tank/death branch entirely.
+            } else if (this.healthTanks > 0) {
                 this._consumeTank();
             } else {
                 this.handlePlayerDeath();
@@ -2005,8 +2027,11 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     this.player.gainExperience(3);
 
     // 5.88.0 — tank-based hit model.
+    // 5.108.0 — GUARDIAN intercept (see handlePlayerEnemyCollision).
     if (player.health <= 0) {
-        if (this.healthTanks > 0) {
+        if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
+            // saved
+        } else if (this.healthTanks > 0) {
             this._consumeTank();
         } else {
             this.handlePlayerDeath();
@@ -2140,8 +2165,11 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         this.player.gainExperience(4);
 
         // 5.88.0 — tank-based hit model.
+        // 5.108.0 — GUARDIAN intercept (see handlePlayerEnemyCollision).
         if (this.player.health <= 0) {
-            if (this.healthTanks > 0) {
+            if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
+                // saved
+            } else if (this.healthTanks > 0) {
                 this._consumeTank();
             } else {
                 this.handlePlayerDeath();

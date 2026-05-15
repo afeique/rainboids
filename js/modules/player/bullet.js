@@ -65,6 +65,9 @@ export class Bullet {
         this.hitTargets = new Set(); // Track which targets (enemies/asteroids) this bullet has already hit
         this.explosive = false;
         this.explosionRadius = 30;
+        // 5.108.0 — Clear the OVERCHARGE_ROUNDS marker so a recycled
+        // bullet doesn't carry the BIG-SHOT visual into its next life.
+        this.overcharged = false;
         // Reset ring buffer trail
         this.trailHead = 0;
         this.trailCount = 0;
@@ -558,7 +561,19 @@ export class Bullet {
                 size = this.radius * 1.1;
             }
         }
-        
+
+        // 5.108.0 — Per-bullet overrides win. OVERCHARGE_ROUNDS tags
+        // every Nth bullet with `bullet.overcharged = true` and bumps
+        // size + color at fire time; reflect that here so the visual
+        // reads as a discrete BIG SHOT among the regular spray.
+        if (this.overcharged) {
+            color = '#ffeb44';
+            glowColor = '#ffcc00';
+            shape = 'star';
+            glowIntensity = 24;
+            size = this.radius;
+        }
+
         return { color, glowColor, glowIntensity, shape, size };
     }
     

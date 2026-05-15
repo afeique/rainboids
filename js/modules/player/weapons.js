@@ -67,6 +67,15 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
     const cooldownReady = timeSinceLastShot >= effectiveFireRate;
     const fireHeld = !!(input && input.fire);
 
+    // 5.108.0 — Track sustained-fire hold time for MOMENTUM. Tick up
+    // while the player holds primary fire; reset to 0 the moment they
+    // release. applyGlobalBulletUpgrades reads this on the next shot.
+    if (fireHeld) {
+        this._fireHoldTime = (this._fireHoldTime || 0) + dt;
+    } else {
+        this._fireHoldTime = 0;
+    }
+
     // ── Beam time-out — beams are now power weapons (5.79.23). The
     //   beam stays active for `beamMaxDuration` ms after activation,
     //   then auto-shuts off. Strike audio for the lightning arc is
@@ -609,6 +618,38 @@ export function applyGlobalBulletUpgrades(bullet) {
     if (this.streakTierLabel && _streakSplashTiers.has(this.streakTierLabel)) {
         bullet.explosive = true;
         bullet.explosionRadius = (bullet.explosionRadius || 0) + 22;
+    }
+
+    // 5.108.0 — Momentum. Damage ramps up the longer the player holds
+    // fire. `this._fireHoldTime` (ms) is incremented in player.update
+    // while fireHeld AND zeroed on release. Per-stack: +5%/s, capped
+    // at +15%/stack so 4 stacks = +60% at the 3-second cap. Linear
+    // ramp lets the player feel the damage growing without an
+    // explosion that breaks tuning.
+    const momentumStacks = this.getPowerupStacks('MOMENTUM');
+    if (momentumStacks > 0 && this._fireHoldTime > 0) {
+        const seconds = Math.min(3, this._fireHoldTime / 1000);
+        const mult = 1 + momentumStacks * 0.05 * seconds;
+        bullet.damage *= mult;
+    }
+
+    // 5.108.0 — Overcharge Rounds. Periodic super-damage bullet every
+    // Nth shot. N shrinks with stacks: 1→12, 2→9, 3→7, 4→5. The
+    // overcharged bullet renders fatter + brighter and deals 3×
+    // damage. Tag bullet so the renderer (and collision-sim if any)
+    // can pick up the visual difference.
+    const overchargeStacks = this.getPowerupStacks('OVERCHARGE_ROUNDS');
+    if (overchargeStacks > 0) {
+        const threshold = Math.max(4, 13 - overchargeStacks * 2);
+        this._overchargeCounter = (this._overchargeCounter || 0) + 1;
+        if (this._overchargeCounter >= threshold) {
+            this._overchargeCounter = 0;
+            bullet.overcharged = true;
+            bullet.damage *= 3;
+            bullet.radius = (bullet.radius || 4) * 1.6;
+            bullet.baseRadius = bullet.radius;
+            bullet.color = '#ffeb44';
+        }
     }
 }
 

@@ -1198,6 +1198,231 @@ export function applyThorns(damageTaken, source) {
     return reflected;
 }
 
+// 5.108.0 — Guardian save. Called from each lethal-damage branch in
+// collision-system BEFORE the tank/death fallback. If the player owns
+// GUARDIAN stacks AND hasn't burned the save this wave, clamp health
+// to 1 and grant 2s + stacks×0.5s of invuln. Returns true if the save
+// fired so the caller skips the tank-consume / death branch.
+export function tryConsumeGuardian() {
+    if (!this.player) return false;
+    const stacks = this.player.getPowerupStacks
+        ? this.player.getPowerupStacks('GUARDIAN')
+        : 0;
+    if (stacks <= 0) return false;
+    if (this.player._guardianUsedWave === this.game.currentWave) return false;
+    this.player._guardianUsedWave = this.game.currentWave;
+    this.player.health = 1;
+    const invulnMs = 2000 + stacks * 500;
+    if (typeof this.player.makeInvincible === 'function') {
+        this.player.makeInvincible(invulnMs);
+    } else {
+        this.player.invincible = true;
+        this.player.invincibleTimer = invulnMs;
+    }
+    if (this.events?.emit) {
+        this.events.emit('audio:shield');
+        this.events.emit('ui:show-message', {
+            title: 'GUARDIAN',
+            subtitle: `Saved at 1 HP · ${(invulnMs / 1000).toFixed(1)}s invuln`,
+            duration: 1500,
+        });
+    }
+    if (typeof this.triggerScreenFlash === 'function') {
+        this.triggerScreenFlash(0.3, 8);
+    }
+    if (this.particlePool) {
+        for (let i = 0; i < 24; i++) {
+            const a = (i / 24) * Math.PI * 2;
+            const p = this.particlePool.get(this.player.x, this.player.y, 'starSparkle');
+            if (p) {
+                p.color = '#ffeb44';
+                p.vel.x = Math.cos(a) * 5;
+                p.vel.y = Math.sin(a) * 5;
+                p.life = 0.8;
+            }
+        }
+    }
+    if (typeof this.createDamageNumber === 'function') {
+        this.createDamageNumber(
+            this.player.x,
+            this.player.y - (this.player.radius || 14) - 4,
+            1,
+            { isHeal: true },
+        );
+    }
+    return true;
+}
+
+// 5.108.0 — Static Discharge tick. Called every frame from the engine
+// update loop. Tracks `_dischargeNextAt` per-player; on cooldown
+// expire, damages every enemy/asteroid/mine within a stack-scaled
+// radius and spawns a NOVA-blast style expanding ring.
+//   Stacks → cooldown(ms) / radius(px) / damage:
+//     1 → 4500ms /  90 / 1
+//     2 → 3500ms / 120 / 1.5
+//     3 → 2500ms / 150 / 2
+//     4 → 1800ms / 180 / 2.5
+//     5 → 1200ms / 220 / 3
+export function tickStaticDischarge() {
+    if (!this.player || !this.player.active) return;
+    const stacks = this.player.getPowerupStacks
+        ? this.player.getPowerupStacks('STATIC_DISCHARGE')
+        : 0;
+    if (stacks <= 0) return;
+    if (this.game.state !== 'playing') return;
+    const cdTable    = [4500, 3500, 2500, 1800, 1200];
+    const radiusTable = [  90,  120,  150,  180,  220];
+    const dmgTable    = [   1,  1.5,    2,  2.5,    3];
+    const idx = Math.min(stacks - 1, cdTable.length - 1);
+    const cooldown = cdTable[idx];
+    const radius   = radiusTable[idx];
+    const damage   = dmgTable[idx];
+
+    const now = Date.now();
+    if (!this._dischargeNextAt) this._dischargeNextAt = now + cooldown;
+    if (now < this._dischargeNextAt) return;
+    this._dischargeNextAt = now + cooldown;
+
+    const px = this.player.x;
+    const py = this.player.y;
+    const r2 = radius * radius;
+
+    // Damage enemies in radius.
+    if (this.enemyPool) {
+        for (const e of this.enemyPool.activeObjects) {
+            if (!e.active || e.warping) continue;
+            const dx = e.x - px;
+            const dy = e.y - py;
+            if (dx * dx + dy * dy > r2) continue;
+            const destroyed = e.takeDamage(damage);
+            if (destroyed && typeof this.onEnemyKill === 'function') {
+                this.onEnemyKill(e);
+            }
+        }
+    }
+    // Damage asteroids in radius.
+    if (this.asteroidPool) {
+        for (const a of this.asteroidPool.activeObjects) {
+            if (!a.active) continue;
+            const dx = a.x - px;
+            const dy = a.y - py;
+            if (dx * dx + dy * dy > r2) continue;
+            a.health = Math.max(0, (a.health || 0) - damage);
+        }
+    }
+    // Damage mines.
+    if (this.enemyBulletPool) {
+        for (const m of this.enemyBulletPool.activeObjects) {
+            if (!m.active || m.shape !== 'mine' || m.health === undefined) continue;
+            const dx = m.x - px;
+            const dy = m.y - py;
+            if (dx * dx + dy * dy > r2) continue;
+            m.health = Math.max(0, m.health - damage);
+            if (m.health <= 0) m.active = false;
+        }
+    }
+
+    // Visual: expanding electric ring at the player position.
+    if (this.particlePool) {
+        this.particlePool.get(px, py, 'explosionRingColored', radius, '#88aaff');
+        for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2;
+            const p = this.particlePool.get(px, py, 'starSparkle');
+            if (p) {
+                p.color = '#aaccff';
+                p.vel.x = Math.cos(a) * 4;
+                p.vel.y = Math.sin(a) * 4;
+                p.life = 0.6;
+            }
+        }
+    }
+    if (this.events?.emit) this.events.emit('audio:explosion');
+}
+
+// 5.108.0 — Whirlwind tick. Six particles orbit the player at a
+// stack-scaled radius; every WW_DAMAGE_TICK_MS the powerup damages
+// every enemy/asteroid/mine inside the orbit radius. Visuals are
+// spawned every frame so the orbit reads continuously; damage only
+// applies on the discrete tick.
+//   Stacks → radius / damage-per-tick (3 ticks/sec):
+//     1 →  80 / 1.0
+//     2 → 110 / 1.5
+//     3 → 140 / 2.0
+//     4 → 170 / 2.5
+export function tickWhirlwind() {
+    if (!this.player || !this.player.active) return;
+    const stacks = this.player.getPowerupStacks
+        ? this.player.getPowerupStacks('WHIRLWIND')
+        : 0;
+    if (stacks <= 0) return;
+    if (this.game.state !== 'playing') return;
+    const idx = Math.min(stacks - 1, 3);
+    const radius = [80, 110, 140, 170][idx];
+    const damage = [1.0, 1.5, 2.0, 2.5][idx];
+
+    const px = this.player.x;
+    const py = this.player.y;
+    const t  = Date.now();
+
+    // Visual orbit — six twinkle motes rotating at ~0.6 rev/s. Spawned
+    // every frame as short-lived particles so they paint a continuous
+    // ring without a dedicated entity class.
+    if (this.particlePool) {
+        const moteCount = 6;
+        const spinHz = 0.6;
+        const baseAngle = (t / 1000) * Math.PI * 2 * spinHz;
+        for (let i = 0; i < moteCount; i++) {
+            const a = baseAngle + (i * Math.PI * 2 / moteCount);
+            const sx = px + Math.cos(a) * radius;
+            const sy = py + Math.sin(a) * radius;
+            const p = this.particlePool.get(sx, sy, 'starSparkle');
+            if (p) {
+                p.color = '#aaffe0';
+                p.life = 0.18;          // brief — overlap next frame's motes
+                p.vel.x = 0; p.vel.y = 0;
+            }
+        }
+    }
+
+    // Damage tick — every WW_DAMAGE_TICK_MS (333 ms).
+    if (!this._whirlwindNextDmgAt) this._whirlwindNextDmgAt = t + 333;
+    if (t < this._whirlwindNextDmgAt) return;
+    this._whirlwindNextDmgAt = t + 333;
+
+    const r2 = radius * radius;
+    if (this.enemyPool) {
+        for (const e of this.enemyPool.activeObjects) {
+            if (!e.active || e.warping) continue;
+            const dx = e.x - px;
+            const dy = e.y - py;
+            if (dx * dx + dy * dy > r2) continue;
+            const destroyed = e.takeDamage(damage);
+            if (destroyed && typeof this.onEnemyKill === 'function') {
+                this.onEnemyKill(e);
+            }
+        }
+    }
+    if (this.asteroidPool) {
+        for (const a of this.asteroidPool.activeObjects) {
+            if (!a.active) continue;
+            const dx = a.x - px;
+            const dy = a.y - py;
+            if (dx * dx + dy * dy > r2) continue;
+            a.health = Math.max(0, (a.health || 0) - damage);
+        }
+    }
+    if (this.enemyBulletPool) {
+        for (const m of this.enemyBulletPool.activeObjects) {
+            if (!m.active || m.shape !== 'mine' || m.health === undefined) continue;
+            const dx = m.x - px;
+            const dy = m.y - py;
+            if (dx * dx + dy * dy > r2) continue;
+            m.health = Math.max(0, m.health - damage);
+            if (m.health <= 0) m.active = false;
+        }
+    }
+}
+
 export function updateDamageNumbers(deltaTime) {
     for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
         const dmgNum = this.damageNumbers[i];
