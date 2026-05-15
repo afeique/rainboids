@@ -1435,6 +1435,38 @@ export function drawStreakIndicator() {
     // their next kill or the streak resets.
     if (k < 1) return;
 
+    // 5.99.3 — Mobile gets a stripped-down version: just a big
+    // transparent NUMBER, no glow, no tier label, no progress bars, no
+    // countdown timer. The verbose desktop block ate ~110 px of vertical
+    // space and obscured enemies; mobile players need to SEE THROUGH the
+    // HUD chrome. Show from k>=2 (single kill isn't worth the visual
+    // weight). Auto-pulses to slightly-higher alpha when the streak buff
+    // is active to give a subtle "you're in a tier" cue.
+    if (isMobile()) {
+        if (k < 2) return;
+        const ctx = this.ctx;
+        const player = this.player;
+        const buffActive = player.streakDamageMult > 1;
+        // Top-center, just below the healthbar row.
+        const x = this.width / 2;
+        const y = 84;
+        const alpha = buffActive ? 0.55 : 0.32;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = "bold 36px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const text = `${k}`;
+        ctx.strokeText(text, x, y);
+        ctx.fillText(text, x, y);
+        ctx.restore();
+        return;
+    }
+
     const ctx = this.ctx;
     const player = this.player;
     const tiers = WEAPON_DATA_STREAK_TIERS;

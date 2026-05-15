@@ -46,31 +46,48 @@ const ICON_FONT = "26px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji
 const LABEL_FONT = "9px 'Press Start 2P', monospace";
 const ICON_PX = 26;
 
-// 5.94.0 — Mobile side-buttons (PRM / PWR). 60×60 minimum touch
-// target. Square. Sits in the side margin, vertically centred.
-const SIDE_BUTTON_SIZE = 64;          // square; meets 60-px touch-target floor
-const SIDE_BUTTON_MARGIN = 12;        // gap from the canvas edge
-const SIDE_ICON_PX = 28;
+// 5.94.0 — Mobile side-buttons (PRM / PWR). 5.99.3 — relocated from
+// the vertical-center edges to the bottom-LEFT and bottom-RIGHT
+// corners, sharing the same baseline as the central SHOP/STATS/PAUSE
+// row. Frees the entire left + right edges of the canvas for tap-to-
+// aim and stops the side buttons from collecting accidental drags
+// during continuous-fire gestures.
+const SIDE_BUTTON_SIZE = 60;          // square; meets 60-px touch-target floor
+const SIDE_BUTTON_MARGIN = 10;        // gap from the canvas edge
+const SIDE_ICON_PX = 26;
 const SIDE_LABEL_FONT = "8px 'Press Start 2P', monospace";
 
+// 5.99.3 — Mobile uses narrower central buttons so PRM + the 3 central
+// buttons + PWR all fit on a 360-wide phone in one row. Desktop keeps
+// the original 72×64.
+const MOBILE_BUTTON_W = 56;
+const MOBILE_BUTTON_H = 60;
+const MOBILE_BUTTON_GAP = 8;
+
 export function getHudButtonRects(canvasW, canvasH) {
+    const mobile = isMobile();
+    const bw = mobile ? MOBILE_BUTTON_W : BUTTON_W;
+    const bh = mobile ? MOBILE_BUTTON_H : BUTTON_H;
+    const bg = mobile ? MOBILE_BUTTON_GAP : BUTTON_GAP;
+
     // Layout: SHOP, STATS, PAUSE centered at bottom. Total width =
-    //   3 × BUTTON_W + 2 × BUTTON_GAP. Buttons share a baseline.
+    //   3 × bw + 2 × bg. Buttons share a baseline.
     // 5.79.14 — added PAUSE as the third canvas button.
-    const totalW = 3 * BUTTON_W + 2 * BUTTON_GAP;
+    const totalW = 3 * bw + 2 * bg;
     const startX = Math.round((canvasW - totalW) / 2);
-    const y = canvasH - BOTTOM_MARGIN - BUTTON_H;
-    const slot = (i) => startX + i * (BUTTON_W + BUTTON_GAP);
+    const y = canvasH - BOTTOM_MARGIN - bh;
+    const slot = (i) => startX + i * (bw + bg);
     const rects = {
-        shop:  { id: 'shop',  x: slot(0), y, w: BUTTON_W, h: BUTTON_H, icon: 'cart',  label: 'SHOP'  },
-        stats: { id: 'stats', x: slot(1), y, w: BUTTON_W, h: BUTTON_H, icon: 'chart', label: 'STATS' },
-        pause: { id: 'pause', x: slot(2), y, w: BUTTON_W, h: BUTTON_H, icon: 'pause', label: 'PAUSE' },
+        shop:  { id: 'shop',  x: slot(0), y, w: bw, h: bh, icon: 'cart',  label: 'SHOP'  },
+        stats: { id: 'stats', x: slot(1), y, w: bw, h: bh, icon: 'chart', label: 'STATS' },
+        pause: { id: 'pause', x: slot(2), y, w: bw, h: bh, icon: 'pause', label: 'PAUSE' },
     };
 
-    // 5.94.0 — PRM / PWR side-buttons (mobile only). Vertically centred
-    // along the left/right edges of the canvas. Square 64×64.
-    if (isMobile()) {
-        const sideY = Math.round((canvasH - SIDE_BUTTON_SIZE) / 2);
+    // 5.99.3 — PRM at bottom-LEFT corner; PWR at bottom-RIGHT corner.
+    // Both share the same baseline as the central bar so the bottom of
+    // the screen reads as one HUD row: [PRM] [SHOP STATS PAUSE] [PWR].
+    if (mobile) {
+        const sideY = canvasH - BOTTOM_MARGIN - SIDE_BUTTON_SIZE;
         rects.prm = {
             id: 'prm',
             x: SIDE_BUTTON_MARGIN,

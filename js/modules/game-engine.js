@@ -750,6 +750,55 @@ export class GameEngine {
     _shouldHideTopHud() {
         return !!(this.mobile && isPortrait());
     }
+
+    /**
+     * 5.99.3 — Mobile background-drift generator. Sum of sinusoids at
+     * distinct frequencies + slight DC bias so the field reads as
+     * always wandering. Amplitudes are tuned to feel ALIVE (slightly
+     * stronger than the 5.97 tuning) without being dizzy. Called from
+     * the PLAYING / WAVE_TRANSITION / PAUSED / SHOP / GAME_OVER paths
+     * on mobile — never on desktop (desktop reads player.vel directly).
+     */
+    _mobileBackgroundDrift() {
+        const t = Date.now() * 0.001;
+        return {
+            x: Math.cos(t * 0.85) * 4.0
+             + Math.sin(t * 0.31) * 2.4
+             + Math.cos(t * 1.7)  * 1.2
+             + Math.sin(t * 0.18) * 1.0,
+            y: Math.sin(t * 0.72) * 3.4
+             + Math.cos(t * 0.43) * 2.0
+             + Math.sin(t * 1.5)  * 1.2
+             + Math.cos(t * 0.21) * 1.0,
+        };
+    }
+
+    /**
+     * 5.99.3 — Feed the mobile drift into the nebula's drift accumulator.
+     * The nebula renderer reads `_titleNebulaDriftX/Y` and
+     * `_titleNebulaRotation` (originally set on the title screen) to
+     * apply parallax to its lens-flare layers. We re-use those fields
+     * for in-game / paused mobile drift so the nebula visibly evolves
+     * with the starfield, not just sit static behind it.
+     */
+    _accumulateMobileNebulaDrift(drift) {
+        const NEB_DRIFT_MUL = 0.18;
+        const NEB_DRIFT_LIMIT = 8000;
+        let nx = (this._titleNebulaDriftX || 0) - drift.x * NEB_DRIFT_MUL;
+        let ny = (this._titleNebulaDriftY || 0) - drift.y * NEB_DRIFT_MUL;
+        if (nx >  NEB_DRIFT_LIMIT) nx =  NEB_DRIFT_LIMIT;
+        if (nx < -NEB_DRIFT_LIMIT) nx = -NEB_DRIFT_LIMIT;
+        if (ny >  NEB_DRIFT_LIMIT) ny =  NEB_DRIFT_LIMIT;
+        if (ny < -NEB_DRIFT_LIMIT) ny = -NEB_DRIFT_LIMIT;
+        this._titleNebulaDriftX = nx;
+        this._titleNebulaDriftY = ny;
+        // Slow combined-frequency rotation drift so the lens-flare
+        // layers visibly turn too. Same shape as the title-screen
+        // formula, just always active on mobile.
+        const t = Date.now() * 0.001;
+        this._titleNebulaRotation =
+            Math.sin(t * 0.18) * 0.13 + Math.cos(t * 0.07) * 0.06;
+    }
     
     initializePools() {
         this.player = new Player();
@@ -2316,20 +2365,13 @@ export class GameEngine {
             // Update background stars with player velocity for parallax.
             // 5.97.0 — Mobile mode has a stationary ship, so player.vel is
             // always zero and the starfield would freeze. Inject a gentle
-            // synthetic drift (similar palette to the title-screen
-            // sandstorm but tamer so it doesn't fight combat readability)
-            // so the world still feels alive while the player aims.
+            // synthetic drift so the world still feels alive while the
+            // player aims. 5.99.3 — bumped amplitudes + added nebula
+            // drift so the background reads as constantly evolving.
             let bgDrift = this.player.vel;
             if (this.mobile) {
-                const t = Date.now() * 0.001;
-                bgDrift = {
-                    x: Math.cos(t * 0.85) * 3.2
-                     + Math.sin(t * 0.31) * 1.8
-                     + Math.cos(t * 1.7)  * 0.9,
-                    y: Math.sin(t * 0.72) * 2.6
-                     + Math.cos(t * 0.43) * 1.6
-                     + Math.sin(t * 1.5)  * 0.9,
-                };
+                bgDrift = this._mobileBackgroundDrift();
+                this._accumulateMobileNebulaDrift(bgDrift);
             }
             this.backgroundStarPool.activeObjects.forEach(s => s.update(bgDrift, this.gameField));
 
@@ -2396,12 +2438,31 @@ export class GameEngine {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             // Stars twinkle but don't drift when paused — player can't move in these states
-            const zeroVel = { x: 0, y: 0 };
-            this.backgroundStarPool.activeObjects.forEach(s => s.update(zeroVel, this.gameField));
+            // 5.99.3 — Mobile keeps the synthetic drift running through
+            // PAUSED / GAME_OVER so the background never freezes (the
+            // user explicitly asked for constant background motion on
+            // mobile). Desktop stays frozen so a paused game reads as
+            // paused. Same for SHOP below.
+            let driftPaused = { x: 0, y: 0 };
+            if (this.mobile) {
+                driftPaused = this._mobileBackgroundDrift();
+                this._accumulateMobileNebulaDrift(driftPaused);
+                if (this.starfieldRenderer.accumulateDrift) {
+                    this.starfieldRenderer.accumulateDrift(driftPaused.x, driftPaused.y);
+                }
+            }
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(driftPaused, this.gameField));
         } else if (this.game.state === GAME_STATES.SHOP) {
-            // When in shop, only update background stars for ambiance (no parallax)
-            const zeroVel = { x: 0, y: 0 };
-            this.backgroundStarPool.activeObjects.forEach(s => s.update(zeroVel, this.gameField));
+            // When in shop, only update background stars for ambiance.
+            let driftShop = { x: 0, y: 0 };
+            if (this.mobile) {
+                driftShop = this._mobileBackgroundDrift();
+                this._accumulateMobileNebulaDrift(driftShop);
+                if (this.starfieldRenderer.accumulateDrift) {
+                    this.starfieldRenderer.accumulateDrift(driftShop.x, driftShop.y);
+                }
+            }
+            this.backgroundStarPool.activeObjects.forEach(s => s.update(driftShop, this.gameField));
             // Keep existing particles moving but don't create new ones
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();

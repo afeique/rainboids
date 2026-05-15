@@ -84,14 +84,15 @@ describe('getHudButtonRects — mobile mode (5.94.0)', () => {
         expect(rects.pwr.x + rects.pwr.w).toBeGreaterThan(350);
     });
 
-    test('PRM and PWR are vertically centred (within a few px of mid-height)', () => {
+    test('5.99.3 — PRM and PWR sit at the BOTTOM of the canvas (corners)', () => {
         _resetUrlOverrideForTests(true);
         const canvasH = 800;
         const rects = getHudButtonRects(400, canvasH);
-        const prmMidY = rects.prm.y + rects.prm.h / 2;
-        const pwrMidY = rects.pwr.y + rects.pwr.h / 2;
-        expect(prmMidY).toBeCloseTo(canvasH / 2, 0);
-        expect(pwrMidY).toBeCloseTo(canvasH / 2, 0);
+        // Both bottom-anchored: y + h should land within ~30 px of the
+        // bottom edge (accounts for BOTTOM_MARGIN). Pre-5.99.3 they sat
+        // at canvasH/2; 5.99.3 moves them to bottom corners.
+        expect(rects.prm.y + rects.prm.h).toBeGreaterThan(canvasH - 40);
+        expect(rects.pwr.y + rects.pwr.h).toBeGreaterThan(canvasH - 40);
     });
 
     test('PRM and PWR meet the 60-px touch-target minimum (w and h ≥ 60)', () => {

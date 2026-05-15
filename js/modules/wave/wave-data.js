@@ -192,11 +192,27 @@ const _MOBILE_ASTEROID_MULT_BY_WAVE = {
 const _MOBILE_ENEMY_MULT_DEFAULT = 0.45;
 const _MOBILE_ASTEROID_MULT_DEFAULT = 0.40;
 
+// 5.99.3 — Per-entry SUBWAVE cap on mobile. Even after the per-wave
+// multiplier thins counts, a subwave like `[GUARDIAN 2, SENTINEL 1,
+// STALKER 3]` still dumps 6 enemies into the field at once after
+// scaling (3 × 0.45 ≈ 1-2 each), which feels frenetic to a casual
+// touch-controls player. Cap each ENTRY to 1-2 enemies in early waves,
+// 2 in mid-waves, 2-3 in late waves. Caller still gets the original
+// number of entries per subwave, but each entry is small.
+const _MOBILE_PER_ENTRY_CAP_BY_WAVE = {
+    1: 1,
+    2: 1,
+    3: 2,
+    4: 2,
+};
+const _MOBILE_PER_ENTRY_CAP_DEFAULT = 2;
+
 function _scaleConfigForMobile(cfg, waveNumber) {
     if (!cfg) return cfg;
     const enemyMult = _MOBILE_ENEMY_MULT_BY_WAVE[waveNumber] ?? _MOBILE_ENEMY_MULT_DEFAULT;
     const asteroidMult = _MOBILE_ASTEROID_MULT_BY_WAVE[waveNumber] ?? _MOBILE_ASTEROID_MULT_DEFAULT;
-    const scaleCount = (n) => Math.max(1, Math.round(n * enemyMult));
+    const perEntryCap = _MOBILE_PER_ENTRY_CAP_BY_WAVE[waveNumber] ?? _MOBILE_PER_ENTRY_CAP_DEFAULT;
+    const scaleCount = (n) => Math.max(1, Math.min(perEntryCap, Math.round(n * enemyMult)));
 
     const scaledSubWaves = (cfg.subWaves || []).map((group) =>
         group.map((entry) => {

@@ -11,6 +11,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.99.3] - 2026-05-14
+
+### Changed — Mobile HUD: PRM/PWR side buttons moved to bottom corners
+
+Pre-5.99.3 the PRM and PWR weapon-swap buttons sat vertically centred
+on the left and right edges of the canvas. They blocked aim taps on
+the edges and collected accidental drags during continuous-fire
+gestures. Moved to the bottom-LEFT and bottom-RIGHT corners, sharing
+the same baseline as the central SHOP/STATS/PAUSE row. The bottom of
+the screen now reads as one HUD row: `[PRM] [SHOP STATS PAUSE] [PWR]`.
+
+Mobile button widths shrunk slightly so all 5 buttons fit a 360-wide
+phone (central 72→56 wide, side 64→60). Test
+`tests/unit/hud/hud-buttons.test.js` updated to pin the new
+bottom-corner layout.
+
+### Changed — Mobile killstreak: simple transparent number
+
+Pre-5.99.3 mobile inherited the desktop killstreak indicator which
+rendered "N KILLS" big number + tier label + two progress bars + idle
+countdown — about 110 px of vertical screen real estate, glowy, and
+opaque enough to hide enemies behind it. Replaced on mobile with a
+single transparent `36 px` number rendered at low opacity (32% idle,
+55% when streak buff is active) at the top-center. No glow, no
+shadow, no tier labels, no bars. Player can see enemies through it.
+
+Desktop is unchanged.
+
+### Changed — Mobile: constant background + nebula motion in all states
+
+Pre-5.99.3 the mobile starfield drift only ran in PLAYING /
+WAVE_TRANSITION; PAUSED / SHOP / GAME_OVER froze the background. Plus
+the nebula didn't drift in-game on mobile — only on the title screen.
+
+Now ALL non-title-screen mobile states feed a synthetic sum-of-sines
+drift into:
+- The Canvas2D BackgroundStar pool
+- The WebGL starfield renderer (`accumulateDrift`)
+- The nebula renderer (`_titleNebulaDriftX/Y` + `_titleNebulaRotation`)
+
+Drift amplitude bumped ~25% vs the 5.97 mobile tuning so the
+background reads as constantly evolving instead of "barely moving."
+Extracted into two helpers on the engine: `_mobileBackgroundDrift()`
+and `_accumulateMobileNebulaDrift(drift)` so the formula lives in one
+place.
+
+### Changed — Mobile: 1-2 enemies per subwave cap
+
+The per-wave multiplier (5.99.1/2) already thinned counts, but a
+sub-wave entry list like `[GUARDIAN 2, SENTINEL 2, STALKER 3]` still
+dumped 6 enemies into the field per sub-wave after scaling.
+
+Added a per-entry cap on mobile:
+- Wave 1-2: max 1 enemy per entry
+- Wave 3-4: max 2
+- Wave 5+: max 2
+
+So a sub-wave with 4 entries gives at most 4-8 simultaneous enemies
+on mobile (used to be 8-16). The casual touch-controls pitch finally
+lands.
+
+### Note
+
+The Diablo-style item system (random names, slot-based gear,
+inventory display in stats overlay) groundwork started in 5.99.3:
+`js/modules/world/item-names.js` is committed with the name/base/slot
+tables. The runtime system that consumes those tables is deferred —
+this release focuses on the mobile UX wins the user asked for.
+
+---
+
 ## [5.99.2] - 2026-05-14
 
 ### Changed — Crit damage no longer flashes the screen (ALL platforms)
