@@ -313,30 +313,27 @@ export function firePulseCannon(bulletPool, audioManager, config) {
 
 export function fireStormNeedles(bulletPool, audioManager, config) {
     const damage = this.getEffectivePrimaryDamage();
-    // 5.112.0 — Storm Needles now fires a cone of needles the same way
-    // Scatter Shot does: N needles fanned across `config.spreadAngle`,
-    // with a small per-needle jitter on top so the cone reads as
-    // "rapid saturation" rather than a clean fan. MULTI_SHOT and
-    // HAILSTORM add needles WITHIN the same cone width (density goes
-    // up; the cone doesn't widen).
+    const spreadAngle = config.spreadAngle;
+    // 5.113.1 — Reverted to single-needle-per-shot. The "cone of fire"
+    // is the RANDOMIZED jitter on each shot, not a fan. MULTI_SHOT
+    // and HAILSTORM still stack additional needles into the cone (so
+    // the powerup paths still grow the per-shot density), but the
+    // base weapon is one jittered needle.
     const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
     const hailstormBonus = this.getPowerupStacks('HAILSTORM') > 0 ? 1 : 0;
-    const needleCount = config.bulletCount + multiShotStacks + hailstormBonus;
-    const spread = config.spreadAngle;
-    const startAngle = this.angle - spread / 2;
+    const bulletCount = 1 + multiShotStacks + hailstormBonus;
+    const fanSpread = bulletCount > 1 ? Math.min(0.5, 0.10 * (bulletCount - 1)) : 0;
 
-    for (let i = 0; i < needleCount; i++) {
+    for (let i = 0; i < bulletCount; i++) {
         this.needleCount++;
-        // Even fan across the cone. Single-needle edge case keeps the
-        // shot perfectly centered on `this.angle`.
-        const baseAngle = needleCount > 1
-            ? startAngle + (spread * i / (needleCount - 1))
-            : this.angle;
-        // Small per-needle jitter (±0.02 rad ≈ ±1.1°) so consecutive
-        // shots don't land on identical lines — keeps the saturation
-        // feel.
-        const jitter = (Math.random() - 0.5) * 0.04;
-        const bullet = bulletPool.get(this.x, this.y, baseAngle + jitter);
+        const fanOffset = bulletCount > 1
+            ? (i - (bulletCount - 1) / 2) * (fanSpread / Math.max(1, bulletCount - 1))
+            : 0;
+        // Per-shot jitter across the full spreadAngle so the needle's
+        // exact angle varies shot-to-shot — visible "cone of fire" feel
+        // on the laser-pointer aim (see hud/cursor.js).
+        const jitter = (Math.random() - 0.5) * spreadAngle;
+        const bullet = bulletPool.get(this.x, this.y, this.angle + fanOffset + jitter);
         if (bullet) {
             bullet.damage = damage;
             bullet.radius *= config.bulletSize;

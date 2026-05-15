@@ -299,17 +299,23 @@ function _predictPrimaryPiercing(player) {
     return p;
 }
 
-// Render the Scatter Shot cone of fire — a wedge from the muzzle
-// spanning the active spread (after TIGHT_CHOKE), with a faint red
-// gas fill, two stacked-stroke edge lasers, an arc at the max-range
-// boundary, and a reticle around every entity that falls inside the
-// cone. Branched out of drawLaserPointerAim so the line/cone paths
-// don't crowd each other.
-function _drawScatterCone(engine, player, ox, oy, angle, maxRange) {
+// Render a cone-of-fire wedge from the muzzle spanning the weapon's
+// spreadAngle. Used by Scatter Shot (predictable pellet fan) AND
+// Storm Needles (single needle with randomized jitter within the
+// cone). The wedge has a faint red gas fill, two stacked-stroke edge
+// lasers, an arc at the max-range boundary, and a reticle around
+// every entity inside the cone. Branched out of drawLaserPointerAim
+// so the line/cone paths don't crowd each other.
+//
+// 5.113.1 — Renamed from _drawScatterCone to _drawSpreadCone. Now
+//   reads spread directly from `cfg.spreadAngle` (the legacy
+//   TIGHT_CHOKE multiplier was removed in 5.111.0). Any weapon with
+//   spreadAngle > 0 routes through this path.
+function _drawSpreadCone(engine, player, ox, oy, angle, maxRange) {
     const ctx = engine.ctx;
     const cfg = player.getActivePrimaryConfig();
-    const tightChoke = player.getPowerupStacks ? player.getPowerupStacks('TIGHT_CHOKE') : 0;
-    const spread = (cfg.spreadAngle || 0.6) * Math.pow(0.85, tightChoke);
+    const spread = cfg.spreadAngle || 0;
+    if (!(spread > 0)) return;
     const halfSpread = spread / 2;
 
     const a1 = angle - halfSpread;
@@ -479,11 +485,14 @@ export function drawLaserPointerAim() {
     const maxRange = _predictPrimaryBulletRange(player);
     if (!(maxRange > 0)) return;
 
-    // Scatter Shot fires a fan of pellets — show the cone of fire instead
-    // of a single laser ray so the player can read the spread and choke
-    // upgrades at a glance.
-    if (player.activePrimary === 'SCATTER_GUN') {
-        _drawScatterCone(this, player, ox, oy, angle, maxRange);
+    // 5.113.1 — Cone-of-fire visualization for ANY weapon with
+    // spreadAngle > 0. Scatter Shot (predictable pellet fan) AND
+    // Storm Needles (single needle with randomized jitter within
+    // the cone) both route here so the player can read the spread
+    // at a glance instead of seeing a misleading single-line laser.
+    const primaryCfg = player.getActivePrimaryConfig && player.getActivePrimaryConfig();
+    if (primaryCfg && (primaryCfg.spreadAngle || 0) > 0) {
+        _drawSpreadCone(this, player, ox, oy, angle, maxRange);
         return;
     }
 

@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.113.1] - 2026-05-15
+
+### Reverted — Storm Needles back to single-needle + jitter
+
+5.112.0 turned Storm Needles into a 3-needle fan; that wasn't the
+intent. Reverted to the original single-needle-per-shot weapon with
+per-shot randomized jitter across `spreadAngle` (0.20). Numbers
+restored: bulletCount 1, damage 0.4, ~3.08 DPS. MULTI_SHOT and
+HAILSTORM still stack additional needles into the cone via the
+existing fan-spread path.
+
+### Added — Cone-of-fire visualization on the aim laser
+
+The laser-pointer aim guide (desktop only) now draws a cone wedge
+for ANY weapon with `spreadAngle > 0`, not just Scatter Shot. Storm
+Needles' 11.5° randomized cone is now visible as a translucent
+red-gas wedge with edge lasers and a max-range arc — same visual
+language Scatter Shot has used since 5.111.0. The renderer reads
+`cfg.spreadAngle` directly so future weapons with spread just need
+to set the value in `weapon-data.js`.
+
+Implementation:
+- `_drawScatterCone` → renamed to `_drawSpreadCone`. TIGHT_CHOKE
+  multiplier removed (retired in 5.111.0); spread now reads
+  directly from `cfg.spreadAngle`.
+- `drawLaserPointerAim` routes to the cone path when
+  `primaryCfg.spreadAngle > 0`, replacing the hardcoded
+  `activePrimary === 'SCATTER_GUN'` check.
+
 ## [5.113.0] - 2026-05-15
 
 ### Fixed — Auto Power assist now gates ALL mobile power-weapon fire

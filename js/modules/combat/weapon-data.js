@@ -29,22 +29,20 @@ export const PRIMARY_WEAPONS = {
     STORM_NEEDLES: {
         id: 'STORM_NEEDLES',
         name: 'Storm Needles',
-        description: 'Rapid needles in a cone of fire',
+        description: 'Rapid needles with a randomized cone of fire',
         icon: 'rain',
         color: '#b3ff44',
         fireRate: 130,
-        // 5.112.0 — Now a 3-needle cone (was 1 needle + jitter).
-        // Per-needle damage cut 0.4 → 0.15 so DPS at full saturation
-        // (all 3 hitting at point-blank) stays in the same ballpark
-        // (≈ 3.46 DPS, was 3.08). At range, only 1-2 needles connect
-        // — natural falloff that matches the new Scatter Shot tuning.
-        damage: 0.15,
+        damage: 0.4,
         bulletSpeed: 1.1,
         bulletSize: 0.5,
-        // 3 needles per shot fanned across `spreadAngle`. MULTI_SHOT
-        // and HAILSTORM add needles WITHIN the same cone width, so
-        // density grows but the cone doesn't.
-        bulletCount: 3,
+        // 5.113.1 — Reverted to 1 needle per shot (5.112.0 turned this
+        // into a 3-needle fan; rolled back). The "cone of fire" is the
+        // per-shot RANDOMIZED jitter on a single needle — consecutive
+        // shots don't trace identical lines. The aim laser draws a
+        // cone matching `spreadAngle` so the player can SEE the spread
+        // (see hud/cursor.js).
+        bulletCount: 1,
         spreadAngle: 0.20,
         piercing: 0,
         range: 1.0,
