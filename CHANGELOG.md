@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.113.0] - 2026-05-15
+
+### Fixed — Auto Power assist now gates ALL mobile power-weapon fire
+
+Pre-5.113.0, mobile auto-fired charge-based power weapons (CHARGE_SHOT)
+the moment the charge filled, regardless of the Auto Power assist
+toggle. The legacy comment justified it ("a single tap can't represent
+press-and-hold-and-release") but that was wrong — the normal
+`updateChargingSystem` path already supports tap-to-fire for any
+charged shot past `minChargeTime` (3-second floor pre-gates spam).
+
+The unconditional charge auto-fire branch in `player.update` is now
+gated behind `assists.autoPower`. Behavior:
+
+- **Auto Power OFF (mobile default):** the player must tap the canvas
+  (outside the analog stick + HUD button bar) to fire any power
+  weapon. Charge-based weapons require chargeTime ≥ 3s before a tap
+  fires; cooldown-based weapons fire immediately on tap if ready.
+- **Auto Power ON:** charge-based fires when fully charged AND a
+  target is in cone+range. Cooldown-based fires when ready AND a
+  target is in cone+range.
+
+Auto Fire and Auto Power are independent toggles (since 5.100.1) —
+toggling Auto Fire no longer drags Auto Power along with it on any
+platform.
+
 ## [5.112.0] - 2026-05-15
 
 ### Changed — Storm Needles now fires a cone of 3 needles

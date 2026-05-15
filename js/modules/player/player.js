@@ -622,15 +622,20 @@ export class Player {
             }
         }
 
-        // ── Mobile auto-fire — power weapon (5.92.0 → 5.100.0) ──
-        // 5.100.0 — Narrowed to CHARGE-based weapons only. The mobile
-        // tap-for-power gesture (mobile-touch.js fires
-        // `input.fireSecondary` on a quick canvas tap) handles all
-        // cooldown-based power weapons (NOVA_BLAST, MISSILE_SALVO,
-        // MINE_LAYER, LANCE_BEAM, LIGHTNING_ARC). Charge weapons
-        // (CHARGE_SHOT) still auto-fire on full charge because a single
-        // tap can't represent the press-and-hold-and-release gesture.
-        if (isMobile() && this.activePower && !this.firingDisabled) {
+        // ── Mobile auto-fire — power weapon (5.92.0 → 5.100.0 → 5.113.0) ──
+        // 5.100.0 — Narrowed to CHARGE-based weapons only because a
+        // brief tap can't represent press-and-hold-and-release, so
+        // CHARGE_SHOT on mobile needed an always-on auto-fire to be
+        // usable.
+        // 5.113.0 — Gated behind `assists.autoPower`. Per spec, the
+        // player must tap the canvas to fire ANY power weapon on
+        // mobile UNLESS Auto Power assist is enabled. Tap-to-fire for
+        // charge weapons works fine through the normal updateChargingSystem
+        // path: a tap with chargeTime ≥ minChargeTime fires immediately.
+        // The 3-second minimum charge floor pre-gates the tap so spam-
+        // tapping doesn't trivialize the charge mechanic.
+        if (isMobile() && this.activePower && !this.firingDisabled
+                && assists && assists.autoPower) {
             const radialOpen = !!(ge && ge.radialMenu && ge.radialMenu.isOpen && ge.radialMenu.isOpen());
             if (!radialOpen) {
                 const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
