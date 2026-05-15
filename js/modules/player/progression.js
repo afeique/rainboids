@@ -77,10 +77,11 @@ export function levelUp() {
 }
 
 export function grantLevelUpBonus() {
-    // Pick 2 random upgrades to grant as temporary buffs (45 seconds)
+    // Pick 2 random upgrades to grant as temporary buffs (45 seconds).
+    // 5.110.0 — LONG_RANGE removed from the pool (powerup retired).
     const bonusPool = [
         'RAPID_FIRE', 'MULTI_SHOT', 'HOMING', 'SPEED_BOOST',
-        'PIERCING', 'CRIT_CHANCE', 'CRIT_DAMAGE', 'LONG_RANGE',
+        'PIERCING', 'CRIT_CHANCE', 'CRIT_DAMAGE',
         'SHIELD_BOOST', 'BIG_BULLETS', 'EXPLOSIVE'
     ];
 
@@ -320,8 +321,14 @@ export function getGoldFindMultiplier() {
 }
 
 export function getRangeMultiplier() {
-    const rangeStacks = this.getPowerupStacks('LONG_RANGE');
-    return 1 + rangeStacks * 0.55; // +55% range per stack (was +40%)
+    // 5.110.0 — Range upgrade path retired. Base bullet flight covers
+    // the full playfield (since 5.100.3); LONG_RANGE was hidden then,
+    // and now PENETRATOR / LANCE_VELOCITY-range / TRIPLE_BEAM-range /
+    // ARC_OVERCHARGE-chain-range have all been replaced with damage
+    // or behavioral upgrades. Always returns 1 so per-weapon
+    // `config.range` modifiers (e.g. Rail Driver 0.85) are the only
+    // remaining axis affecting bullet flight distance.
+    return 1;
 }
 
 export function getEffectiveShield() {

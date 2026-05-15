@@ -415,8 +415,12 @@ export function fireScatterGun(bulletPool, audioManager, config) {
 
 export function fireRailDriver(bulletPool, audioManager, config) {
     const damage = this.getEffectivePrimaryDamage();
-    const penetratorStacks = this.getPowerupStacks('PENETRATOR');
-    const rangeBonus = 1 + penetratorStacks * 0.5;
+    // 5.110.0 — PENETRATOR retired; replaced by MASS_DRIVER which
+    // grants +25% damage AND +20% knockback per stack instead of the
+    // old +50% range/stack. Range path is gone entirely.
+    const massDriverStacks = this.getPowerupStacks('MASS_DRIVER');
+    const massDriverDamage = 1 + massDriverStacks * 0.25;
+    const massDriverKnockback = massDriverStacks * 0.20;
     const capacitorStacks = this.getPowerupStacks('RAILGUN_CAPACITOR');
     // Rail Driver fires a helix pair — two bullets spiraling around each
     // other on a shared rail. MULTI_SHOT adds extra pairs, fanned narrowly
@@ -425,7 +429,7 @@ export function fireRailDriver(bulletPool, audioManager, config) {
     const pairCount = 1 + multiShotStacks;
     const pairFan = pairCount > 1 ? Math.min(0.3, 0.06 * (pairCount - 1)) : 0;
 
-    let finalDamage = damage;
+    let finalDamage = damage * massDriverDamage;
     if (capacitorStacks > 0) {
         const idleTime = Date.now() - this.lastPrimaryFireTime;
         if (idleTime > 2000) {
@@ -452,11 +456,22 @@ export function fireRailDriver(bulletPool, audioManager, config) {
             bullet.radius *= config.bulletSize;
             bullet.baseRadius = bullet.radius;
             bullet.piercing = config.piercing;
-            bullet.rangeMultiplier = this.getRangeMultiplier() * config.range * rangeBonus;
-            bullet.maxLife = Math.round(bullet.maxLife * config.range * rangeBonus);
+            bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+            bullet.maxLife = Math.round(bullet.maxLife * config.range);
             bullet.color = config.color;
 
-            if (this.getPowerupStacks('KINETIC_IMPACT') > 0) bullet.knockback = 8;
+            // 5.110.0 — Knockback now layers MASS_DRIVER on top of
+            // KINETIC_IMPACT's flat trigger. KINETIC_IMPACT is the
+            // single-stack on/off knockback flag (8 px impulse);
+            // MASS_DRIVER adds +20% per stack on top, capped naturally
+            // by the player's knockback multiplier downstream.
+            if (this.getPowerupStacks('KINETIC_IMPACT') > 0) {
+                bullet.knockback = 8 * (1 + massDriverKnockback);
+            } else if (massDriverKnockback > 0) {
+                // Even without KINETIC_IMPACT, MASS_DRIVER stacks give
+                // some knockback so the upgrade reads as kinetic.
+                bullet.knockback = 4 * massDriverKnockback;
+            }
             if (this.getPowerupStacks('THROUGH_AND_THROUGH') > 0) bullet.damageTrail = true;
             // 5.75.1 — RAIL_PENETRATOR_PLUS capstone: effectively unlimited
             // piercing (99). Decaying-damage-per-hit is hard to thread
@@ -498,21 +513,23 @@ export function startLanceBeam(audioManager, config) {
     let damageMul = 1;
     let rangeMul = 1;
 
-    // 5.75.1 — TRIPLE_BEAM (Overcharged Beam) capstone: +120% damage,
-    // +50% beam width, +50% range. Compounds with stacked tier-1.
+    // 5.75.1 — TRIPLE_BEAM (Overcharged Beam) capstone.
+    // 5.110.0 — Range bump dropped; damage bumped 2.2× → 2.5× to
+    // compensate (matches the new "+150% damage" description in
+    // PRIMARY_UPGRADES). Beam width bonus unchanged.
     if (this.getPowerupStacks('TRIPLE_BEAM') > 0) {
         widthMul *= 1.5;
-        damageMul *= 2.2;
-        rangeMul *= 1.5;
+        damageMul *= 2.5;
     }
 
     // 5.79.23 — LANCE_VELOCITY now applied directly here. The beam no
     //   longer routes through getBulletVelocityDamageMult since it's a
-    //   power weapon. Each stack: +12% damage and +12% range.
+    //   power weapon.
+    // 5.110.0 — Range bonus dropped; pure damage now (+15% per stack,
+    //   was 12% damage + 12% range).
     const lanceVelStacks = this.getPowerupStacks('LANCE_VELOCITY');
     if (lanceVelStacks > 0) {
-        damageMul *= 1 + lanceVelStacks * 0.12;
-        rangeMul  *= 1 + lanceVelStacks * 0.12;
+        damageMul *= 1 + lanceVelStacks * 0.15;
     }
 
     this.beamCurrentWidth = config.beamWidth * widthMul;

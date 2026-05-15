@@ -197,30 +197,13 @@ export const POWERUP_TYPES = {
     //   economy only now (DEFENSE tab, COINS currency). The
     //   combat-manager.js getPowerupConfig fallback keeps the shop's
     //   addPowerup('SHIELD_BOOST', …) path resolving correctly.
-    // 5.100.3 — LONG_RANGE retired. Default bullet range now reaches
-    // the edge of the screen (see bullet.js maxLife bump), so the
-    // powerup is redundant. Marked `hidden: true` so the shop / wave-
-    // pick / powerups list skip it. Definition stays so any existing
-    // save with LONG_RANGE stacks still loads cleanly (the stacks just
-    // add bullet-flight margin on top of the already-screen-covering
-    // base range — harmless).
-    LONG_RANGE: {
-        name: 'Range',
-        displayName: 'Long Range',
-        abbr: 'RNG',
-        color: '#88cc44',
-        gradientColors: ['#bbff66', '#448800'],
-        icon: 'bow-arrow',
-        duration: 30000,
-        effect: 'longRange',
-        rarity: 0.22,
-        category: 'OFFENSE',
-        maxStacks: 3,
-        spCost: 3,
-        spCostIncrement: 2,
-        description: '+55% bullet range per stack',
-        hidden: true,
-    },
+    // 5.100.3 — LONG_RANGE retired (default bullet range covers the
+    // full playfield via the bullet.js maxLife bump). Was hidden in
+    // 5.100.3.
+    // 5.110.0 — Fully removed from POWERUP_TYPES alongside the broader
+    // range-upgrade cleanup. Old saves carrying LONG_RANGE stacks
+    // load fine — getPowerupStacks('LONG_RANGE') just returns the
+    // stored count and getRangeMultiplier ignores it (returns 1).
     KNOCKBACK: {
         name: 'Knockback',
         displayName: 'Knockback',

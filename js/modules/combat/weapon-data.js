@@ -94,7 +94,7 @@ export const PRIMARY_WEAPONS = {
         cost: 0,
         spCost: 0,
         unlockWave: 8,
-        upgrades: ['PENETRATOR', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH', 'RAIL_VELOCITY'],
+        upgrades: ['MASS_DRIVER', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH', 'RAIL_VELOCITY'],
     },
     // 5.79.23 — LANCE_BEAM and LIGHTNING_ARC moved to POWER_WEAPONS
     //   below. They're now cooldown-based power weapons: press the
@@ -203,7 +203,13 @@ export const PRIMARY_UPGRADES = {
     SLUG_ROUND:      { id: 'SLUG_ROUND',      name: 'Slug Round',     description: 'Every 4th shot is a single big slug',    cost: 3000, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: 'circle-fill' },
 
     // Rail Driver
-    PENETRATOR:      { id: 'PENETRATOR',      name: 'Penetrator',     description: '+50% range per stack',                   cost: 1200, maxStacks: 3,  weapon: 'RAIL_DRIVER', icon: 'bow-arrow' },
+    // 5.110.0 — PENETRATOR (+50% range/stack) replaced with MASS_DRIVER.
+    // Range upgrades are gone (base bullet flight covers the full
+    // playfield since 5.100.3); the upgrade slot now pumps the rail's
+    // kinetic identity instead: +25% damage AND +20% knockback per
+    // stack. Stacks with KINETIC_IMPACT (the on/off knockback trigger)
+    // and the KNOCKBACK powerup for big-hit builds.
+    MASS_DRIVER:     { id: 'MASS_DRIVER',     name: 'Mass Driver',    description: '+25% damage & +20% knockback per stack', cost: 1200, maxStacks: 3,  weapon: 'RAIL_DRIVER', icon: 'bullet-train', knockbackBonus: 0.20, damageBonus: 0.25 },
     KINETIC_IMPACT:  { id: 'KINETIC_IMPACT',  name: 'Kinetic Impact', description: 'Enemies hit are knocked back',           cost: 1500, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: 'wind' },
     RAILGUN_CAPACITOR:{ id: 'RAILGUN_CAPACITOR',name:'Capacitor',     description: '2x damage after 2s idle',                cost: 2300, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: 'battery' },
     THROUGH_AND_THROUGH:{ id: 'THROUGH_AND_THROUGH',name:'Through',   description: 'Leaves a lingering damage trail',        cost: 3700, maxStacks: 1,  weapon: 'RAIL_DRIVER', icon: 'sparkle' },
@@ -259,7 +265,10 @@ export const PRIMARY_UPGRADES = {
         id: 'RAIL_PENETRATOR_PLUS', name: 'Resonance Drive',
         description: 'MASTERY · Unlimited pierce on every rail',
         cost: 8500, maxStacks: 1, weapon: 'RAIL_DRIVER', icon: 'medal',
-        tier: 2, requires: { id: 'PENETRATOR', stacks: 3 },
+        // 5.110.0 — PENETRATOR was retired (replaced by MASS_DRIVER).
+        // Prereq retargeted to MASS_DRIVER so the capstone still gates
+        // behind a full Rail Driver investment.
+        tier: 2, requires: { id: 'MASS_DRIVER', stacks: 3 },
     },
     // 5.79.23 — TRIPLE_BEAM + ARC_OVERCHARGE moved to POWER_UPGRADES.
 };
@@ -416,10 +425,17 @@ export const POWER_UPGRADES = {
     LINGER:          { id: 'LINGER',          name: 'Linger',         description: '+0.1s beam duration per stack',           cost: 1500, maxStacks: 3,  weapon: 'LANCE_BEAM', icon: 'stopwatch' },
     REFRACTION:      { id: 'REFRACTION',      name: 'Refraction',     description: 'Beam splits on hitting enemy',           cost: 2700, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: 'shuffle' },
     OVERLOAD_BEAM:   { id: 'OVERLOAD_BEAM',   name: 'Overload',       description: 'Final 0.1s deals 3x damage',             cost: 2300, maxStacks: 1,  weapon: 'LANCE_BEAM', icon: 'fire' },
-    LANCE_VELOCITY:  { id: 'LANCE_VELOCITY',  name: 'Focused Lens',   description: '+12% beam range & damage per stack (Lance Beam)', cost: 1700, maxStacks: 3, weapon: 'LANCE_BEAM',    icon: 'bullet-train', velocityBonus: 0.12 },
+    // 5.110.0 — LANCE_VELOCITY was "+12% range & damage"; range
+    // component dropped along with the rest of the range-upgrade
+    // cleanup. Renamed "Overcharge Cells" — pure damage focus.
+    LANCE_VELOCITY:  { id: 'LANCE_VELOCITY',  name: 'Overcharge Cells', description: '+15% beam damage per stack (Lance Beam)',          cost: 1700, maxStacks: 3, weapon: 'LANCE_BEAM',    icon: 'bullet-train', velocityBonus: 0.15 },
     TRIPLE_BEAM: {
         id: 'TRIPLE_BEAM', name: 'Overcharged Beam',
-        description: 'MASTERY · +120% beam damage, +50% width, +50% range',
+        // 5.110.0 — Range component dropped; damage bumped 120 → 150
+        // to compensate. Mastery still feels like a damage explosion
+        // without leaning on a range bonus the player can't see now
+        // that base bullet flight covers the full playfield.
+        description: 'MASTERY · +150% beam damage, +50% width',
         cost: 9000, maxStacks: 1, weapon: 'LANCE_BEAM', icon: 'medal',
         tier: 2, requires: { id: 'BEAM_WIDTH', stacks: 3 },
     },
@@ -428,7 +444,13 @@ export const POWER_UPGRADES = {
     AMPLIFIER:       { id: 'AMPLIFIER',       name: 'Amplifier',      description: '+20% arc damage per stack',                            cost: 1500, maxStacks: 3, weapon: 'LIGHTNING_ARC', icon: 'satellite' },
     ARC_OVERCHARGE: {
         id: 'ARC_OVERCHARGE', name: 'Tesla Overcharge',
-        description: 'MASTERY · +30% arc damage AND +50% chain range',
+        // 5.110.0 — Chain RANGE bump dropped. The current arc is a
+        // single-target continuous tether (chain hops were retired
+        // earlier); the mastery now doubles down on damage instead of
+        // mixing in a range bump the renderer can no longer use.
+        // Damage bonus 30% → 60% to keep the mastery feeling like a
+        // payoff for fully maxing AMPLIFIER.
+        description: 'MASTERY · +60% arc damage',
         cost: 7500, maxStacks: 1, weapon: 'LIGHTNING_ARC', icon: 'medal',
         tier: 2, requires: { id: 'AMPLIFIER', stacks: 3 },
     },

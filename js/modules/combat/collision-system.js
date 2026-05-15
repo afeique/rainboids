@@ -1336,10 +1336,13 @@ export function checkLightningCollisions() {
     // ── Continuous-tether path ──
     if (p.lightningArcActive) {
         const cfg = POWER_WEAPONS.LIGHTNING_ARC;
-        // 5.75.1 — ARC_OVERCHARGE capstone extends chain range by 50%.
+        // 5.75.1 — ARC_OVERCHARGE capstone used to extend chain range
+        //   by 50% on top of the +30% damage bump.
+        // 5.110.0 — Range bump dropped; mastery is now PURE damage
+        //   (60% bump applied below). Tether range is the weapon's
+        //   base chainRange unchanged regardless of mastery.
         const overchargeStacks = p.getPowerupStacks('ARC_OVERCHARGE');
-        const rangeMul = overchargeStacks > 0 ? 1.5 : 1;
-        const range = cfg.chainRange * rangeMul;
+        const range = cfg.chainRange;
         const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
         const TETHER_PUSH = 0.5 * knockMul;
         // Per-frame damage; tuned to match Lance Beam DPS (~2.04 dps at 60Hz).
@@ -1364,7 +1367,10 @@ export function checkLightningCollisions() {
             if (s > 0) bulletBumpMul *= (1 + s * perStack);
         }
         const dmgBase = cfg.damage * (1 + p.getPowerupStacks('AMPLIFIER') * 0.2) * bulletBumpMul;
-        const dmg = overchargeStacks > 0 ? dmgBase * 1.3 : dmgBase;
+        // 5.110.0 — Mastery damage bump 1.3× → 1.6× (the +30% from
+        // the legacy combo split is rolled into pure damage now that
+        // the chain-range component is gone).
+        const dmg = overchargeStacks > 0 ? dmgBase * 1.6 : dmgBase;
 
         // 5.79.5 — Target selection now picks the entity nearest to
         //   the AIMING CURSOR (not the player). Range-gated by the

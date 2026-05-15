@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.110.0] - 2026-05-15
+
+### Removed — Range-only upgrades + LONG_RANGE powerup
+
+Range as a separate upgrade axis is gone. Base bullet flight covers
+the full playfield (since 5.100.3) so range upgrades just stacked
+margin past the screen edge — invisible to the player and cluttering
+the upgrade trees.
+
+- `PENETRATOR` (Rail Driver, +50% range/stack) → replaced by
+  `MASS_DRIVER` ("+25% damage & +20% knockback per stack"). Stacks
+  with KINETIC_IMPACT and the KNOCKBACK powerup for kinetic builds.
+- `LANCE_VELOCITY` (Lance Beam, "+12% range & damage/stack") → renamed
+  "Overcharge Cells", pure +15% damage/stack.
+- `TRIPLE_BEAM` (Lance mastery, "+120% damage, +50% width, +50%
+  range") → "+150% damage, +50% width". Range part removed; damage
+  bumped to compensate.
+- `ARC_OVERCHARGE` (Lightning Arc mastery, "+30% damage AND +50%
+  chain range") → "+60% arc damage". Chain-range bump dropped; the
+  arc is a single-target continuous tether (chain hops retired
+  earlier) so the range component had nothing left to multiply.
+- `LONG_RANGE` powerup definition deleted from POWERUP_TYPES.
+- `RAIL_PENETRATOR_PLUS` capstone prereq retargeted PENETRATOR →
+  MASS_DRIVER.
+- `getRangeMultiplier()` simplified to `return 1` so per-weapon
+  `config.range` modifiers (Rail Driver 0.85, Lance Beam 0.9) are
+  the only axis still affecting bullet flight.
+
+### Suggestions for engaging upgrades (deferred — not implemented)
+
+Sketched in the project notes / chat; the deeper "make upgrades
+distinct, not numerical" pass is held for a future commit so this
+release stays focused on the range-only cleanup.
+
 ## [5.109.0] - 2026-05-15
 
 ### Changed — Unified + gentled drop magnetism (no more mobile branch)
