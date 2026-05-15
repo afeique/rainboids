@@ -42,45 +42,24 @@
         <p class="desktop-only-sub">Please open this page on a computer to play.</p>
     </div>
 
-    <!-- <div id="shield-tanks"></div> -->
-    <div id="lives-display" class="ui-element">▲<br>▲▲</div>
-    <!-- <div id="score" class="ui-element">0</div>
-    <div id="shop-button" class="ui-element">SHOP</div> -->
-    
-    <!-- <div id="game-message-overlay" class="ui-element">
-        <h1 id="message-title" class="message-title" style="display: none;"></h1>
-        <p id="message-subtitle" class="message-subtitle" style="display: none;"></p>
-    </div> -->
+    <!-- 5.102.0 — Every HUD/overlay element below is a pure empty stub.
+         Children are built by js/modules/ui/static-dom.js::buildStaticDom()
+         at boot, BEFORE the engine / UIManager / StatsOverlay look up
+         these DOM ids. Centralizing markup in JS removes static-vs-
+         dynamic drift that produced flash-of-stale-content on first
+         open (especially the ASSISTS tab which previously rendered
+         desktop rows before being replaced with the mobile-trimmed
+         set). -->
+    <div id="lives-display" class="ui-element"></div>
+    <button id="hud-shop-btn" aria-label="Shop"></button>
+    <button id="hud-pause-btn" aria-label="Pause"></button>
 
-    <button id="hud-shop-btn" aria-label="Shop">🛒</button>
-
-    <button id="hud-pause-btn" aria-label="Pause">
-        <span class="hud-pause-bar"></span>
-        <span class="hud-pause-bar"></span>
-    </button>
-
-    <!-- 5.100.2 — Stats / Pause / Wave-pick / Shop overlays are now
-         pure stubs. Every child element is built by
-         js/modules/ui/static-dom.js::buildStaticDom() at boot
-         (called from main.js BEFORE UIManager / StatsOverlay
-         constructors look up DOM ids). Centralizing the markup in
-         JS removes the static-vs-dynamic drift that produced
-         flash-of-stale-content on first open. -->
     <div id="stats-overlay"></div>
-
     <div id="pause-overlay"></div>
-
     <div id="wave-pick-overlay"></div>
-
     <div id="shop-suggest-overlay"></div>
-
     <div id="shop-overlay"></div>
-
-<div id="customization-overlay">
-        <h2>Control Layout</h2>
-        <p>Drag the controls to your desired positions, then press Save.</p>
-        <button id="save-layout-button">Save & Close</button>
-    </div>
+    <div id="customization-overlay"></div>
 
     <div id="powerup-hud" class="ui-element"></div>
 
@@ -96,10 +75,9 @@
          with glCanvas but has its own context. -->
     <canvas id="bulletCanvas"></canvas>
 
-    <!-- Contextual hint overlay (driven by js/modules/ui/hint-system.js) -->
-    <div id="hint-overlay">
-        <div class="hint-text"></div>
-    </div>
+    <!-- Contextual hint overlay (built by static-dom.js; driven at
+         runtime by js/modules/ui/hint-system.js). -->
+    <div id="hint-overlay"></div>
 
     <!-- Load the modular JavaScript after external libraries -->
     <script type="module" src="js/main.js"></script>

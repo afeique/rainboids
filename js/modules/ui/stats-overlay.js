@@ -25,18 +25,10 @@ function buildStatsModel(player, gameEngine) {
     const maxHp = player.getEffectiveMaxHealth?.() ?? player.maxHealth;
     const dmgRed = player.getEffectiveShield?.() ?? player.shield;
     const critC = player.getEffectiveCritChance?.() ?? 0;
-    // Crit damage is randomized (200%..max) per shot. Show min/max range.
     const critDStacks = player.getPowerupStacks?.('CRIT_DAMAGE') | 0;
-    const critDMin = player.baseCritDamage;
     const critDMax = Math.min(550, 300 + critDStacks * 15);
-    const range = player.getRangeMultiplier?.() ?? 1;
     const goldFind = player.getGoldFindMultiplier?.() ?? 1;
-    const knockback = player.getKnockbackMultiplier?.() ?? 1;
     const streakMul = player.getHitStreakMultiplier?.() ?? 1;
-    const dropRateBonus = (lvl - 1) * 0.015;
-    const dropQtyBonus = Math.floor((lvl - 1) / 5);
-
-    // Powerup stacks summary
     const stacks = (id) => player.getPowerupStacks ? player.getPowerupStacks(id) : 0;
 
     // Primary fire rate (ms between shots) — lower is faster.
@@ -47,182 +39,67 @@ function buildStatsModel(player, gameEngine) {
 
     const sections = [];
 
-    // ── Hero / vitals ─────────────────────────────────────────────────
+    // ── Vitals ─────────────────────────────────────────────────────────
+    // 5.102.0 — Trimmed to two actionable rows. Shield Tanks (triforce)
+    // and Lives (retired in 5.88.0) are reflected in the HUD and don't
+    // need duplication here.
     sections.push({
         title: 'VITALS',
         rows: [
             {
                 key: 'Max HP',
                 value: `${maxHp}`,
-                tip:
-                    `Max health pool.\n` +
-                    `Base: 25 HP.\n` +
-                    `+ HEALTH_BOOST stacks (×${stacks('HEALTH_BOOST')}) → +35 each.\n` +
-                    `Hard cap: 600.\n` +
-                    `Does NOT scale with player level — invest in HEALTH_BOOST to raise.`,
+                tip: `+35 per HEALTH_BOOST stack (×${stacks('HEALTH_BOOST')}). Cap 600.`,
             },
             {
-                key: 'Shield (DR)',
+                key: 'Damage Reduction',
                 value: `${dmgRed.toFixed(0)}%`,
-                tip:
-                    `Damage reduction applied to incoming damage.\n` +
-                    `Base: 15% (starting armor).\n` +
-                    `+ SHIELD_BOOST stacks (×${stacks('SHIELD_BOOST')}) → +8% each.\n` +
-                    `Hard cap: 75%.`,
-            },
-            {
-                key: 'Shield Tanks',
-                value: `${player.healthTanks || 0}`,
-                tip:
-                    `Number of full HP-bar tanks. When HP hits 0, one tank is\n` +
-                    `consumed and HP refills. Earned via the Defense shop tab.`,
-            },
-            {
-                key: 'Lives',
-                value: `${gameEngine?.game?.lives ?? '—'}`,
-                tip:
-                    `Lives left. When all tanks AND HP run out, you lose a life\n` +
-                    `and respawn at the field's edge. Out of lives = run over.`,
+                tip: `Base 15% + 8% per SHIELD_BOOST stack (×${stacks('SHIELD_BOOST')}). Cap 75%.`,
             },
         ],
     });
 
-    // ── Offense ───────────────────────────────────────────────────────
+    // ── Offense ────────────────────────────────────────────────────────
+    // 5.102.0 — Primary / Power rows dropped — the HUD loadout squares
+    // already show what's equipped. Range / Knockback dropped — Range
+    // is always 1.0 since 5.100.3 (LONG_RANGE retired) and Knockback
+    // isn't a number the player references mid-run.
     sections.push({
         title: 'OFFENSE',
         rows: [
             {
-                key: 'Primary',
-                value: `${player.activePrimary || '—'}`,
-                tip:
-                    `Equipped primary weapon. Cycle with R (hold for radial menu).\n` +
-                    `Each primary has its own per-weapon upgrade tree in the shop.`,
-            },
-            {
-                key: 'Power',
-                value: `${player.activePower || '—'}`,
-                tip:
-                    `Equipped power weapon (R-click / SPACE / DOWN). Cycle with F.\n` +
-                    `Each power weapon has its own upgrade tree in the shop.`,
-            },
-            // 5.101.0 — Defense Skill row hidden along with the rest
-            // of the defensive skill system. Inventory + defensive
-            // powerups are the survival levers now.
-            // {
-            //     key: 'Defense Skill',
-            //     value: `${player.activeSkill || '—'}`,
-            //     tip:
-            //         `Equipped defensive skill (Q to activate). Cycle with E.\n` +
-            //         `Skill upgrades are SP-priced in the shop's Defense tab.`,
-            // },
-            {
                 key: 'Fire Rate',
                 value: `${effFireRateHz.toFixed(2)} /s`,
-                tip:
-                    `Effective auto-fire rate.\n` +
-                    `Base interval: ${baseFireMs}ms (${(1000/baseFireMs).toFixed(2)}/s).\n` +
-                    `RAPID_FIRE stacks (×${rapidStacks}) → ×0.78 interval each.\n` +
-                    `Effective interval: ${Math.round(effFireMs)}ms.`,
+                tip: `Base ${(1000/baseFireMs).toFixed(2)}/s. RAPID_FIRE ×${rapidStacks} → ×0.78 each.`,
             },
             {
                 key: 'Crit Chance',
                 value: `${critC.toFixed(0)}%`,
-                tip:
-                    `Probability each shot crits.\n` +
-                    `Base: 8%.\n` +
-                    `+ CRIT_CHANCE stacks (×${stacks('CRIT_CHANCE')}) → +7% each.\n` +
-                    `Hard cap: 60%.`,
+                tip: `Base 8% + 7% per CRIT_CHANCE stack (×${stacks('CRIT_CHANCE')}). Cap 60%.`,
             },
             {
                 key: 'Crit Damage',
-                value: `${critDMin.toFixed(0)}–${critDMax.toFixed(0)}%`,
-                tip:
-                    `Crit damage roll range. Each crit picks a random multiplier in\n` +
-                    `this range and applies it to base damage.\n` +
-                    `Base range: 200%–300%.\n` +
-                    `+ CRIT_DAMAGE stacks (×${critDStacks}) → +15% on the ceiling each.\n` +
-                    `Hard cap: 550%.`,
-            },
-            {
-                key: 'Range Mult',
-                value: `${mult(range)}`,
-                tip:
-                    `Bullet travel-distance multiplier.\n` +
-                    `Base: 1.00× — covers the full game field as of 5.100.3.\n` +
-                    `Per-weapon \`config.range\` scales relative to this base.`,
-            },
-            {
-                key: 'Knockback',
-                value: `${mult(knockback)}`,
-                tip:
-                    `Power-weapon knockback impulse multiplier (Mine, Nova,\n` +
-                    `Lightning, Missile).\n` +
-                    `Base: 1.00×.\n` +
-                    `+ KNOCKBACK stacks (×${stacks('KNOCKBACK')}) → +40% each, cap 3.50×.`,
+                value: `200–${critDMax.toFixed(0)}%`,
+                tip: `Random per crit. +15% ceiling per CRIT_DAMAGE stack (×${critDStacks}). Cap 550%.`,
             },
             {
                 key: 'Streak Buff',
                 value: `${mult(streakMul)}`,
-                tip:
-                    `Active kill-streak damage multiplier.\n` +
-                    `Tiers — 3+ kills EMPOWERED 1.25×, 6+ UNSTOPPABLE 1.50×,\n` +
-                    `10+ GODLIKE 1.75×, 15+ LEGENDARY 2.00× (cap).\n` +
-                    `Resets when you take damage.`,
+                tip: `Active kill-streak damage. Resets on damage.`,
             },
         ],
     });
 
-    // ── Economy / drops (5.79.0 — scales with player level) ──────────
+    // ── Economy ────────────────────────────────────────────────────────
+    // 5.102.0 — Per-level orb/drop scaling rows dropped — they're
+    // invisible to the player in-game and never inform a decision.
     sections.push({
-        title: 'ECONOMY & DROPS',
+        title: 'ECONOMY',
         rows: [
             {
                 key: 'Gold Find',
                 value: `${mult(goldFind)}`,
-                tip:
-                    `Gold-amount AND money-drop-rate multiplier.\n` +
-                    `Formula: 1 + (level - 1) × 0.10.\n` +
-                    `Stacks multiplicatively with kill-streak gold bonus.\n` +
-                    `Level ${lvl} → ${mult(goldFind)}.`,
-            },
-            {
-                key: 'Drop Rate Bonus',
-                value: `+${(dropRateBonus * 100).toFixed(1)}%`,
-                tip:
-                    `Extra orb-drop probability granted by player level.\n` +
-                    `Formula: (level - 1) × 1.5%, applied to BOTH health and\n` +
-                    `money base drop rates. Stacks additively with the\n` +
-                    `entity-level / enemy bonuses.\n` +
-                    `Level ${lvl} → +${(dropRateBonus * 100).toFixed(1)}%.`,
-            },
-            {
-                key: 'Drop Qty Bonus',
-                value: `+${dropQtyBonus} max orbs`,
-                tip:
-                    `Extra max-orbs-per-drop granted by player level.\n` +
-                    `Formula: floor((level - 1) / 5).\n` +
-                    `L5 → +1, L10 → +2, L15 → +3, L20 → +4.\n` +
-                    `Level ${lvl} → +${dropQtyBonus}.`,
-            },
-            {
-                key: 'Health Orb',
-                value: `+${(lvl - 1) >= 0 ? Math.floor((lvl - 1) * 0.6) : 0}–${Math.floor((lvl - 1) * 0.6) + Math.floor((lvl - 1) * 0.15)} HP`,
-                tip:
-                    `Per-orb heal bonus from player level.\n` +
-                    `Floor: +0.6 HP/level. Ceiling: +0.75 HP/level.\n` +
-                    `Combined with the base orb amount (1–4 HP) and split\n` +
-                    `into multiple small orbs when budget exceeds the\n` +
-                    `per-orb cap. Level ${lvl}.`,
-            },
-            {
-                key: 'Money Orb',
-                value: `+${(lvl - 1) * 3}–${(lvl - 1) * 5}¢`,
-                tip:
-                    `Per-orb gold bonus from player level.\n` +
-                    `Min: +3/level. Max: +5/level.\n` +
-                    `Stacks on top of Gold Find and the kill-streak gold\n` +
-                    `multiplier (which lift the combined budget).\n` +
-                    `Level ${lvl}.`,
+                tip: `+10% per player level (level ${lvl}).`,
             },
         ],
     });
@@ -238,29 +115,23 @@ function buildStatsModel(player, gameEngine) {
     }
     ownedPowerups.sort((a, b) => b.stacks - a.stacks);
 
+    // 5.102.0 — Powerups list: one short tip line per row. Hide the
+    // section entirely when none are held instead of printing "— none —".
     if (ownedPowerups.length > 0) {
         sections.push({
-            title: 'POWERUPS HELD',
+            title: 'POWERUPS',
             rows: ownedPowerups.map((p) => ({
                 key: p.name,
                 value: `×${p.stacks} / ${p.cap}`,
-                tip:
-                    `Stacks: ${p.stacks} (cap ${p.cap}).\n` +
-                    `Spend +1 SP in the POWERUPS pause-tab to add another stack.\n` +
-                    `Powerups are permanent for the run.`,
+                tip: `Permanent for the run.`,
             })),
-        });
-    } else {
-        sections.push({
-            title: 'POWERUPS HELD',
-            rows: [{ key: '— none —', value: '', tip: 'Spend SP in the POWERUPS pause-tab to buy powerups.' }],
         });
     }
 
     // ── Diablo-style defensive INVENTORY (5.99.4) ────────────────────
-    // One slot per row. Empty slots render `— none —` so the player
-    // sees the 4 slots they're filling toward. New pickups replace a
-    // slot's item only when the new bonus > current bonus.
+    // 5.102.0 — One line per slot. Value collapsed to `Lx +N TYPE` so
+    // the inventory fits on a phone width. Empty slots render `—`. No
+    // tooltip noise; the rule (auto-equip if better) is implicit.
     const inventoryRows = [];
     const equipped = (player && player.equippedItems) || null;
     for (const slot of SLOT_ORDER) {
@@ -269,80 +140,25 @@ function buildStatsModel(player, gameEngine) {
         if (it) {
             inventoryRows.push({
                 key: slotName,
-                value: `${it.name} · L${it.level} (${it.bonusLabel})`,
-                tip:
-                    `Slot: ${slotName}\n` +
-                    `Item: ${it.name}\n` +
-                    `Level: ${it.level} (drops level = the wave it dropped on)\n` +
-                    `Bonus: ${it.bonusLabel}\n` +
-                    `New pickups for this slot replace this item only if\n` +
-                    `their bonus is higher.`,
+                value: `L${it.level} ${it.bonusLabel}`,
+                tip: it.name,
             });
         } else {
             inventoryRows.push({
                 key: slotName,
-                value: '— none —',
-                tip:
-                    `Slot: ${slotName} — currently empty.\n` +
-                    `Kill enemies to find a ${slotName} item; it auto-equips\n` +
-                    `on pickup if it's a strict upgrade over the current item.`,
+                value: '—',
+                tip: '',
             });
         }
     }
     sections.push({
-        title: 'INVENTORY (DEFENSE)',
+        title: 'INVENTORY',
         rows: inventoryRows,
     });
 
-    // ── Scaling info card ────────────────────────────────────────────
-    sections.push({
-        title: 'WORLD SCALING',
-        rows: [
-            {
-                key: 'Enemy HP',
-                value: `${mult(1 + (gameEngine?.game?.enemyLevel - 1 || 0) * 0.22)}`,
-                tip:
-                    `Wave's enemy HP multiplier.\n` +
-                    `Formula: 1 + (enemyLevel - 1) × 0.22.\n` +
-                    `Level ${gameEngine?.game?.enemyLevel ?? 1}.`,
-            },
-            {
-                key: 'Enemy Damage',
-                value: `${mult(1 + (gameEngine?.game?.enemyLevel - 1 || 0) * 0.30)}`,
-                tip:
-                    `Wave's enemy damage output multiplier.\n` +
-                    `Formula: 1 + (enemyLevel - 1) × 0.30 (5.79.0 — was 0.18).\n` +
-                    `Steepened because PLAYER damage no longer scales with\n` +
-                    `level — you must invest in shop upgrades + powerups\n` +
-                    `to keep up.`,
-            },
-            {
-                key: 'Asteroid HP',
-                value: `${mult(1 + (gameEngine?.game?.asteroidLevel - 1 || 0) * 0.35)}`,
-                tip:
-                    `Wave's asteroid HP multiplier.\n` +
-                    `Formula: 1 + (asteroidLevel - 1) × 0.35.\n` +
-                    `Level ${gameEngine?.game?.asteroidLevel ?? 1}.`,
-            },
-            {
-                key: 'Asteroid Collision',
-                value: `${mult(1 + (gameEngine?.game?.asteroidLevel - 1 || 0) * 0.30)}`,
-                tip:
-                    `Asteroid collision damage multiplier.\n` +
-                    `Formula: 1 + (asteroidLevel - 1) × 0.30.\n` +
-                    `Higher waves = chunkier rocks that hit harder.`,
-            },
-            {
-                key: 'Player Damage',
-                value: '× 1.00',
-                tip:
-                    `5.79.0 — Player base damage does NOT scale with level.\n` +
-                    `Use shop upgrades (per-weapon trees), CRIT_CHANCE,\n` +
-                    `CRIT_DAMAGE, and damage-relevant powerups to grow DPS.\n` +
-                    `Kill-streak provides a temporary in-fight multiplier.`,
-            },
-        ],
-    });
+    // 5.102.0 — WORLD SCALING section removed. The numbers were
+    // dev-flavored and never informed player decisions; difficulty
+    // reads through gameplay (HP bars, damage taken) without it.
 
     return {
         level: lvl,

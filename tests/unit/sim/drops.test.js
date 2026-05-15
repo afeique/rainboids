@@ -50,11 +50,14 @@ describe('drop tuning constants — verbatim from color-star.js', () => {
     test('DROP_FRICTION_DEFAULT is 0.985', () => {
         expect(DROP_FRICTION_DEFAULT).toBe(0.985);
     });
-    test('DROP_MAGNET_FAR_RADIUS is 320 px', () => {
-        expect(DROP_MAGNET_FAR_RADIUS).toBe(320);
+    // 5.102.0 — Magnet radii tightened (320→140, 120→55) so the player
+    // has to fly closer for the orb to pull. The two-tier formula and
+    // force constants stay the same.
+    test('DROP_MAGNET_FAR_RADIUS is 140 px', () => {
+        expect(DROP_MAGNET_FAR_RADIUS).toBe(140);
     });
-    test('DROP_MAGNET_NEAR_RADIUS is 120 px', () => {
-        expect(DROP_MAGNET_NEAR_RADIUS).toBe(120);
+    test('DROP_MAGNET_NEAR_RADIUS is 55 px', () => {
+        expect(DROP_MAGNET_NEAR_RADIUS).toBe(55);
     });
     test('DROP_MAGNET_FAR_FORCE is 8 (5.80.x gentle pull)', () => {
         expect(DROP_MAGNET_FAR_FORCE).toBe(8);
@@ -100,14 +103,18 @@ describe('freshDropState() factory', () => {
 // ---------------------------------------------------------------------------
 
 describe('updateDrop() — lifetime', () => {
-    test('decrements life by 1 per tick', () => {
-        const drop = freshDropState('health', { life: 100 });
+    // 5.102.0 — Health drops are now PERMANENT (life is not decremented,
+    // opacity stays at 1.0). Gold/money drops still tick and fade as
+    // before; the lifetime suite now uses `money_shape` to exercise the
+    // legacy decrement / fade path.
+    test('decrements life by 1 per tick (money drops)', () => {
+        const drop = freshDropState('money_shape', { life: 100 });
         updateDrop(drop, ctx(), null);
         expect(drop.life).toBe(99);
     });
 
-    test('deactivates when life reaches 0', () => {
-        const drop = freshDropState('health', { life: 1 });
+    test('deactivates when life reaches 0 (money drops)', () => {
+        const drop = freshDropState('money_shape', { life: 1 });
         updateDrop(drop, ctx(), null);
         expect(drop.life).toBe(0);
         expect(drop.active).toBe(false);
@@ -119,16 +126,24 @@ describe('updateDrop() — lifetime', () => {
         expect(drop.x).toBe(50); // not touched
     });
 
-    test('opacity = min(1, life / 120) — fades out in last 120 ticks', () => {
-        const drop = freshDropState('health', { life: 60 });
+    test('money opacity = min(1, life / 120) — fades out in last 120 ticks', () => {
+        const drop = freshDropState('money_shape', { life: 60 });
         updateDrop(drop, ctx(), null);
         // life dropped to 59 → opacity = 59/120 ≈ 0.4917
         expect(drop.opacity).toBeCloseTo(59 / 120, 5);
     });
 
-    test('opacity stays at 1.0 while life > 120', () => {
-        const drop = freshDropState('health', { life: 1000 });
+    test('money opacity stays at 1.0 while life > 120', () => {
+        const drop = freshDropState('money_shape', { life: 1000 });
         updateDrop(drop, ctx(), null);
+        expect(drop.opacity).toBe(1);
+    });
+
+    test('health drops are permanent — life never decrements', () => {
+        const drop = freshDropState('health', { life: 100 });
+        for (let i = 0; i < 500; i++) updateDrop(drop, ctx(), null);
+        expect(drop.life).toBe(100);
+        expect(drop.active).toBe(true);
         expect(drop.opacity).toBe(1);
     });
 });
@@ -166,37 +181,40 @@ describe('updateDrop() — friction', () => {
 // ---------------------------------------------------------------------------
 
 describe('updateDrop() — health-orb two-tier magnet', () => {
-    test('no magnet pull when dist >= 320 px', () => {
+    // 5.102.0 — Radii tightened: FAR 140, NEAR 55. Force constants
+    // unchanged. Tests below recalculated against the new radii.
+    test('no magnet pull when dist >= 140 px', () => {
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 400, y: 0, active: true }]; // dist=400 > 320
+        const ships = [{ x: 200, y: 0, active: true }]; // dist=200 > 140
         updateDrop(drop, ctx({ ships }), null);
         expect(drop.vx).toBe(0);
         expect(drop.vy).toBe(0);
     });
 
-    test('far magnet (between 120 and 320) pulls toward ship', () => {
+    test('far magnet (between 55 and 140) pulls toward ship', () => {
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 200, y: 0, active: true }]; // dist=200 (in far zone, outside near)
+        const ships = [{ x: 100, y: 0, active: true }]; // dist=100 (in far zone, outside near)
         updateDrop(drop, ctx({ ships }), null);
         // Order: friction first (vx=0 → vx=0), then magnet adds force.
-        // farFactor = (320 - 200) / 320 = 0.375
-        // vx += dx * inv * 8 * 0.375 = 200 * (1/200) * 8 * 0.375 = 3.0
-        // Final vx = 3.0 (friction was applied to vx=0 first, did nothing).
-        expect(drop.vx).toBeCloseTo(3.0, 5);
+        // farFactor = (140 - 100) / 140 = 0.2857142857
+        // vx += dx * inv * 8 * 0.285714 = 100 * (1/100) * 8 * 0.285714 ≈ 2.2857
+        expect(drop.vx).toBeCloseTo((40 / 140) * 8, 5);
         expect(drop.vy).toBe(0);
     });
 
-    test('near magnet (< 120) adds the snap force on top of far force', () => {
+    test('near magnet (< 55) adds the snap force on top of far force', () => {
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 60, y: 0, active: true }]; // dist=60 (deep in near zone)
+        const ships = [{ x: 30, y: 0, active: true }]; // dist=30 (deep in near zone)
         updateDrop(drop, ctx({ ships }), null);
         // Order: friction first (vx=0), then magnet stacks far + near.
-        // farFactor = (320 - 60) / 320 = 0.8125
-        // farForce = dx * inv * 8 * 0.8125 = 60 * (1/60) * 8 * 0.8125 = 6.5
-        // nearFactor = (120 - 60) / 120 = 0.5
-        // nearForce = dx * inv * 22 * 0.5 = 60 * (1/60) * 22 * 0.5 = 11.0
-        // total = 6.5 + 11.0 = 17.5
-        expect(drop.vx).toBeCloseTo(6.5 + 11.0, 4);
+        // farFactor  = (140 - 30) / 140 = 0.7857142857
+        // farForce   = dx * inv * 8 * 0.785714 ≈ 6.2857
+        // nearFactor = (55 - 30) / 55 = 0.4545454545
+        // nearForce  = dx * inv * 22 * 0.454545 = 10.0
+        // total ≈ 16.2857
+        const farForce = (110 / 140) * 8;
+        const nearForce = (25 / 55) * 22;
+        expect(drop.vx).toBeCloseTo(farForce + nearForce, 4);
     });
 
     test('non-health drops are NOT magnet-attractive', () => {
@@ -285,16 +303,17 @@ describe('updateDrop() — nearest-ship selection', () => {
 
     test('skips inactive ships', () => {
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
+        // 5.102.0 — new FAR_RADIUS = 140. Active ship at dist=100 sits
+        // in the far zone; inactive ship at dist=30 must be skipped or
+        // the snap force would dominate.
         const ships = [
-            { x: 50, y: 0, active: false },   // inactive — skip
-            { x: 200, y: 0, active: true },   // this one is the only valid ship
+            { x: 30, y: 0, active: false },   // inactive — skip
+            { x: 100, y: 0, active: true },   // this one is the only valid ship
         ];
         updateDrop(drop, ctx({ ships }), null);
-        // Confirm the magnet picked the active ship (200), not the inactive (50).
-        // Order: friction first (vx=0), then magnet adds force.
-        // farFactor = (320 - 200) / 320 = 0.375
-        // farForce = 200*(1/200)*8*0.375 = 3.0
-        expect(drop.vx).toBeCloseTo(3.0, 5);
+        // farFactor = (140 - 100) / 140 = 0.285714
+        // farForce  = 100*(1/100)*8*0.285714 ≈ 2.2857
+        expect(drop.vx).toBeCloseTo((40 / 140) * 8, 5);
     });
 
     test('empty ships array is a no-op for magnet/tractor', () => {
@@ -312,16 +331,18 @@ describe('updateDrop() — nearest-ship selection', () => {
 // ---------------------------------------------------------------------------
 
 describe('updateDrops() — bulk loop helper', () => {
+    // 5.102.0 — Health drops are permanent now (life doesn't tick).
+    // Use money_shape so the bulk-loop life decrement is observable.
     test('updates each active drop in the array', () => {
         const drops = [
-            freshDropState('health', { life: 100 }),
-            freshDropState('health', { life: 200 }),
-            freshDropState('health', { life: 300, active: false }), // inactive — skip
+            freshDropState('money_shape', { life: 100 }),
+            freshDropState('money_shape', { life: 200 }),
+            freshDropState('money_shape', { life: 300, active: false }),
         ];
         updateDrops(drops, ctx(), null);
         expect(drops[0].life).toBe(99);
         expect(drops[1].life).toBe(199);
-        expect(drops[2].life).toBe(300); // not touched
+        expect(drops[2].life).toBe(300); // inactive — skipped
     });
 
     test('handles null/undefined drops list gracefully', () => {

@@ -20,17 +20,84 @@
 // Each builder uses createElement (no innerHTML) so XSS-style escapes
 // aren't an issue and the structure is auditable.
 
+import { isMobile } from '../platform/platform-detect.js';
+
 /**
  * Public entry point. Walks the document and populates every empty
  * stub. Safe to call multiple times — idempotent on each section
  * (we check for a child sentinel before rebuilding).
  */
 export function buildStaticDom() {
+    _buildLivesDisplay();
+    _buildHudShopBtn();
+    _buildHudPauseBtn();
     _buildPauseMenu();
     _buildWavePickOverlay();
     _buildShopSuggestOverlay();
     _buildShopOverlay();
     _buildStatsOverlay();
+    _buildCustomizationOverlay();
+    _buildHintOverlay();
+}
+
+// ── HUD buttons + lives display ────────────────────────────────────
+// 5.102.0 — Previously inline in index.html. Lives-display has
+// triforce content driven from JS, and the two HUD buttons need
+// their children + aria attrs built without flash.
+
+function _buildLivesDisplay() {
+    const el0 = document.getElementById('lives-display');
+    if (!el0 || !markBuilt(el0, 'lives-v1')) return;
+    el0.replaceChildren();
+    // Default triforce content — engine overwrites textContent at
+    // runtime, but a sensible default keeps first-paint identical to
+    // the legacy inline markup.
+    el0.appendChild(document.createTextNode('▲'));
+    el0.appendChild(el('br'));
+    el0.appendChild(document.createTextNode('▲▲'));
+}
+
+function _buildHudShopBtn() {
+    const btn = document.getElementById('hud-shop-btn');
+    if (!btn || !markBuilt(btn, 'hud-shop-v1')) return;
+    btn.replaceChildren();
+    btn.textContent = '🛒';
+}
+
+function _buildHudPauseBtn() {
+    const btn = document.getElementById('hud-pause-btn');
+    if (!btn || !markBuilt(btn, 'hud-pause-v1')) return;
+    btn.replaceChildren();
+    btn.appendChild(el('span', { className: 'hud-pause-bar' }));
+    btn.appendChild(el('span', { className: 'hud-pause-bar' }));
+}
+
+// ── Customization overlay ──────────────────────────────────────────
+// 5.102.0 — Stub now empty in index.html; builder owns the markup.
+
+function _buildCustomizationOverlay() {
+    const overlay = document.getElementById('customization-overlay');
+    if (!overlay || !markBuilt(overlay, 'customization-v1')) return;
+    overlay.replaceChildren();
+    overlay.appendChild(el('h2', { text: 'Control Layout' }));
+    overlay.appendChild(el('p', {
+        text: 'Drag the controls to your desired positions, then press Save.',
+    }));
+    overlay.appendChild(el('button', {
+        id: 'save-layout-button',
+        text: 'Save & Close',
+    }));
+}
+
+// ── Hint overlay ───────────────────────────────────────────────────
+// 5.102.0 — `.hint-text` child built here so hint-system can find it
+// at module init without inline markup in index.html.
+
+function _buildHintOverlay() {
+    const overlay = document.getElementById('hint-overlay');
+    if (!overlay || !markBuilt(overlay, 'hint-v1')) return;
+    overlay.replaceChildren();
+    overlay.appendChild(el('div', { className: 'hint-text' }));
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -155,8 +222,18 @@ function _buildSkillsTab() {
 }
 
 function _buildAssistsTab() {
-    const list = el('div', { className: 'assists-list' });
-    const rows = [
+    // 5.102.0 — Platform-specific assist set. On mobile the player
+    // ship is stationary and Aim Assist / Auto Aim / Auto Fire are
+    // BAKED INTO the press-and-hold tap-to-shoot input (the touch
+    // handler routes the press to a snapped target and fires while
+    // held). Exposing them as toggles is misleading because they're
+    // not really opt-out on mobile. The only assist that's still
+    // user-controllable on mobile is AUTO POWER (the power weapon
+    // can be tap-fired manually OR auto-fired the moment it's ready).
+    // Desktop keeps the full set since the player has fine-grained
+    // mouse/keyboard input and benefits from per-feature toggles.
+    const mobile = isMobile();
+    const desktopRows = [
         { id: 'assist-aim-assist', title: 'Aim Assist',
           desc: 'When the cursor is near an enemy, asteroid, or bomb, the reticle snaps onto the target.' },
         { id: 'assist-auto-aim', title: 'Auto Aim',
@@ -164,8 +241,15 @@ function _buildAssistsTab() {
         { id: 'assist-auto-fire', title: 'Auto Fire',
           desc: 'Fire the primary weapon automatically whenever a target is in range.' },
         { id: 'assist-auto-power', title: 'Auto Power',
-          desc: "Fire the power weapon automatically when it's off cooldown or fully charged. Mobile: also overrides the tap-to-fire control." },
+          desc: "Fire the power weapon automatically when it's off cooldown or fully charged." },
     ];
+    const mobileRows = [
+        { id: 'assist-auto-power', title: 'Auto Power',
+          desc: "Fire the power weapon automatically when it's ready. Overrides tap-to-fire when on." },
+    ];
+    const rows = mobile ? mobileRows : desktopRows;
+
+    const list = el('div', { className: 'assists-list' });
     for (const r of rows) {
         const checkbox = el('input', { id: r.id, attrs: { type: 'checkbox' } });
         const label = el('label', {
@@ -183,6 +267,9 @@ function _buildAssistsTab() {
         });
         list.appendChild(label);
     }
+    const helperText = mobile
+        ? 'Aim Assist, Auto Aim, and Auto Fire are built into tap-to-shoot on mobile and always on.'
+        : 'Optional aim and fire helpers. Settings persist between runs.';
     return el('div', {
         id: 'assists-tab',
         className: 'pause-tab-content',
@@ -190,7 +277,7 @@ function _buildAssistsTab() {
             el('h2', { text: 'ASSISTS' }),
             el('div', {
                 style: { marginBottom: '15px', color: '#aaa', fontSize: '12px', textAlign: 'center' },
-                text: 'Optional aim and fire helpers. Settings persist between runs.',
+                text: helperText,
             }),
             list,
         ],

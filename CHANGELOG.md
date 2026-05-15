@@ -11,6 +11,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.102.0] - 2026-05-15
+
+### Added — Epic 13-tier killstreak ladder
+
+The streak system now covers all the way to 200 kills with thirteen
+distinct labels (each in its own color so the streak HUD reads as a
+phase change, not a generic gold flash):
+
+3 EMPOWERED · 6 UNSTOPPABLE · 10 GODLIKE · 15 LEGENDARY · 20 HERCULEAN ·
+30 INDOMITABLE · 45 OUTRAGEOUS · 60 IMMORTAL · 80 APOCALYPTIC · 100
+ASTRONOMICAL · 130 TRANSCENDENT · 165 ETERNAL · 200 RAINBOIDS GOD.
+
+Damage multipliers climb in +0.20–0.25 steps to LEGENDARY (2.00×) and
+then flatten to ~0.10 / 0.05 / 0.025 per tier — the high tiers are
+*cosmetic* flexes; the 200-kill cap stays at 3.00× so balance doesn't
+break. The auto-explosive-splash bonus that used to kick in only at
+LEGENDARY now triggers at LEGENDARY and every tier above it.
+
+### Changed — Health orbs slower magnet, permanent on field
+
+- Magnet radii tightened from 320 → **140 px** (far) and 120 → **55 px**
+  (near). Player still scoops orbs on a flyby but has to commit to the
+  position; the old wide pull made health pickups feel trivial.
+- Health drops are now PERMANENT. The 7200-tick lifetime decrement is
+  skipped for `kind === 'health'` so orbs sit on the field forever
+  until collected. Opacity stays pinned at 1.0 (no fade-out tail).
+
+### Added — Shiny health-orb rendering
+
+Three new visual layers in `_drawHealthShapesCanvas2D` (canvas-2D path,
+runs for the `is3DShape` orbs):
+
+1. Outer pink-blue radial glow with pulsing radius keyed off the
+   twinkle wave.
+2. Sparkle ring — four small twinkle motes orbiting at radius ~1.45 r,
+   rotating with the orb.
+3. Top-left specular highlight clipped to the orb silhouette so the
+   sphere reads as polished / "wet".
+
+Result: health orbs pop off bright nebulae and combat FX instead of
+blending in.
+
+### Added — 13-tier streak HUD now drives splash AoE
+
+The `streakTierLabel === 'LEGENDARY'` check in `player/weapons.js` that
+forced explosive splash on every shot now matches the LEGENDARY and
+nine higher tiers, so the splash perk holds all the way to RAINBOIDS
+GOD.
+
+### Changed — Stats overlay slimmed dramatically
+
+- VITALS: trimmed to Max HP + Damage Reduction (Shield Tanks + Lives
+  rows dropped — already shown by HUD chrome).
+- OFFENSE: dropped Primary/Power name rows (HUD loadout squares own
+  this), dropped Range Mult (always 1.0 post-5.100.3) and Knockback
+  (not a number the player references). Tooltip text on remaining
+  rows trimmed to one short line.
+- ECONOMY: collapsed to Gold Find only. The four per-level drop
+  scaling rows were dev-flavored and never informed a decision.
+- WORLD SCALING section removed entirely.
+- INVENTORY: each slot now shows `Lx +N TYPE` on one line; the
+  multi-line tip block is gone. Empty slots show `—`.
+- POWERUPS HELD: hidden when none are held (no `— none —` row);
+  tip text reduced to a single line.
+
+### Changed — Mobile ASSISTS tab only exposes AUTO POWER
+
+On mobile, Aim Assist / Auto Aim / Auto Fire are baked into the
+tap-to-shoot input — the press-and-hold handler routes to a snapped
+target and fires while held. The three toggles can't actually be
+turned off, so they're now hidden from the ASSISTS tab. AUTO POWER
+stays user-controllable. Desktop keeps the full set.
+
+`_loadAssists()` force-merges `{ aimAssist: true, autoAim: true,
+autoFire: true }` on mobile regardless of localStorage so an older
+save can't carry forward a `false` value the player can't see or
+change.
+
+### Changed — index.html fully stubbed; static-dom is the SSOT
+
+Every HUD/overlay element in `index.html` is now an empty stub.
+`static-dom.js::buildStaticDom()` builds the children at boot, BEFORE
+any module looks up DOM ids. New builders:
+
+- `_buildLivesDisplay()` — triforce default content
+- `_buildHudShopBtn()` — 🛒 emoji + aria
+- `_buildHudPauseBtn()` — two `.hud-pause-bar` spans
+- `_buildCustomizationOverlay()` — Control Layout header + save button
+- `_buildHintOverlay()` — `.hint-text` child
+
+Removes the flash-of-stale-content that the legacy ASSISTS markup
+caused on first paint (previously rendered the desktop rows for a
+frame before being replaced with the mobile-trimmed set).
+
 ## [5.101.0] - 2026-05-15
 
 ### Changed — Defensive skill system retired

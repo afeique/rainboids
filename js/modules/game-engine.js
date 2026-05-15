@@ -1629,6 +1629,8 @@ export class GameEngine {
             const geom = HEALTH_SHAPE_GEOMETRY[orb.shape];
             if (!geom) continue;
 
+            const isHealth = orb.starType === 'health';
+
             ctx.save();
             // Integer-aligned translate so the pixel grid is consistent
             // across the whole orb. The 3D rotation produces sub-pixel
@@ -1636,6 +1638,54 @@ export class GameEngine {
             // crisply — no minification aliasing because there's no
             // texture being sampled.
             ctx.translate(Math.round(orb.x), Math.round(orb.y));
+
+            // 5.102.0 — "Shiny" pass for health orbs only. Three layers
+            // stack underneath the 3D shape to make the orb pop off the
+            // playfield instead of blending into nebulae and combat FX:
+            //   1. Outer glow ring — soft pink-blue halo with a pulsing
+            //      radius keyed off the twinkle wave.
+            //   2. Sparkle ring — four small twinkle motes orbiting at
+            //      radius ~r*1.4, rotating slowly with the orb so they
+            //      read as a halo of light.
+            //   3. (After the body) specular highlight — small bright
+            //      wash near the top-left of the silhouette, clipped to
+            //      the orb's circular bounding circle so it doesn't
+            //      bleed past the silhouette.
+            if (isHealth) {
+                const glowR = r * (2.4 + 0.35 * wave);
+                const glow = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, glowR);
+                if (glow && typeof glow.addColorStop === 'function') {
+                    glow.addColorStop(0.00, `rgba(150, 220, 255, ${alpha * 0.55})`);
+                    glow.addColorStop(0.45, `rgba(120, 180, 255, ${alpha * 0.28})`);
+                    glow.addColorStop(1.00, 'rgba(120, 180, 255, 0)');
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = glow;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, glowR, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Sparkle ring — four motes, rotating with the orb.
+                const sparkA = t * 0.9 + (orb.twinklePhase || 0);
+                const sparkR = r * 1.45;
+                for (let s = 0; s < 4; s++) {
+                    const a = sparkA + (s * Math.PI / 2);
+                    const sx = Math.cos(a) * sparkR;
+                    const sy = Math.sin(a) * sparkR;
+                    const spark = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 0.35);
+                    if (spark && typeof spark.addColorStop === 'function') {
+                        const sAlpha = alpha * (0.55 + 0.45 * Math.sin(t * 4 + s * 1.3));
+                        spark.addColorStop(0.00, `rgba(255, 255, 255, ${Math.max(0, sAlpha) * 0.95})`);
+                        spark.addColorStop(0.55, `rgba(200, 230, 255, ${Math.max(0, sAlpha) * 0.35})`);
+                        spark.addColorStop(1.00, 'rgba(200, 230, 255, 0)');
+                        ctx.fillStyle = spark;
+                        ctx.beginPath();
+                        ctx.arc(sx, sy, r * 0.35, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+
             ctx.globalAlpha = alpha;
             ctx.fillStyle = orb.color;
             ctx.lineJoin = 'miter';
@@ -1644,6 +1694,29 @@ export class GameEngine {
             this._drawHealthShape3D(
                 ctx, r, orb.borderColor || '#000', geom, rotX, rotY, rotZ,
             );
+
+            // 5.102.0 — Specular highlight on top, clipped to a circle
+            // matching the orb's bounding silhouette. Gives the orb a
+            // glossy, "wet" sheen so it reads as a polished collectible
+            // instead of a flat colored polygon.
+            if (isHealth) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 0.95, 0, Math.PI * 2);
+                ctx.clip();
+                const sheenX = -r * 0.35, sheenY = -r * 0.4;
+                const sheen = ctx.createRadialGradient(sheenX, sheenY, 0, sheenX, sheenY, r * 0.85);
+                if (sheen && typeof sheen.addColorStop === 'function') {
+                    sheen.addColorStop(0.00, `rgba(255, 255, 255, ${alpha * 0.85})`);
+                    sheen.addColorStop(0.45, `rgba(220, 240, 255, ${alpha * 0.32})`);
+                    sheen.addColorStop(1.00, 'rgba(220, 240, 255, 0)');
+                    ctx.fillStyle = sheen;
+                    ctx.beginPath();
+                    ctx.arc(sheenX, sheenY, r * 0.85, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
             ctx.restore();
         }
     }
@@ -3514,11 +3587,28 @@ export class GameEngine {
         // controls the power weapon via Model F tap; players who want
         // full auto can opt in via the Assists pause-menu tab. Desktop
         // default is off too — the autoFire toggle is enough.
-        const defaults = { aimAssist: false, autoAim: false, autoFire: false, autoPower: false };
+        //
+        // 5.102.0 — On mobile, Aim Assist / Auto Aim / Auto Fire are
+        // BAKED INTO the tap-to-shoot input (no UI toggle on the
+        // ASSISTS tab). Force them ON regardless of localStorage so
+        // older saves don't carry forward a "false" value the player
+        // can't see or change. Auto Power stays user-controllable.
+        const mobile = isMobile();
+        const defaults = mobile
+            ? { aimAssist: true, autoAim: true, autoFire: true, autoPower: false }
+            : { aimAssist: false, autoAim: false, autoFire: false, autoPower: false };
         try {
             const raw = localStorage.getItem('rainboidsAssists');
-            if (!raw) return defaults;
-            return Object.assign(defaults, JSON.parse(raw));
+            const stored = raw ? JSON.parse(raw) : null;
+            const merged = stored ? Object.assign({}, defaults, stored) : defaults;
+            if (mobile) {
+                // Re-force the three baked-in toggles ON. Stored value
+                // might have flipped them off from a desktop session.
+                merged.aimAssist = true;
+                merged.autoAim   = true;
+                merged.autoFire  = true;
+            }
+            return merged;
         } catch (e) {
             return defaults;
         }

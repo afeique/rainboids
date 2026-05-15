@@ -54,11 +54,16 @@ export const DROP_FRICTION_HEALTH = 0.92;
 /** Friction multiplier for non-health orbs (gold, pixel). */
 export const DROP_FRICTION_DEFAULT = 0.985;
 
-/** Outer magnet radius — gentle pull starts here. */
-export const DROP_MAGNET_FAR_RADIUS = 320;
+/** Outer magnet radius — gentle pull starts here.
+ *  5.102.0 — Tightened 320 → 140 so the player has to fly close enough
+ *  for the orb to "see" them. Trivializing the pickup is what made
+ *  health feel cheap; now it's a real positional commitment. */
+export const DROP_MAGNET_FAR_RADIUS = 140;
 
-/** Inner magnet radius — strong snap kicks in here. */
-export const DROP_MAGNET_NEAR_RADIUS = 120;
+/** Inner magnet radius — strong snap kicks in here.
+ *  5.102.0 — Tightened 120 → 55 so the snap only fires when the ship is
+ *  basically touching the orb. */
+export const DROP_MAGNET_NEAR_RADIUS = 55;
 
 /** Gentle-pull force constant (matches the 8 in the original code). */
 export const DROP_MAGNET_FAR_FORCE = 8;
@@ -135,15 +140,23 @@ export const DROP_OPACITY_FADE_FRAMES = 120;
 export function updateDrop(drop, ctx, _events) {
     if (!drop || !drop.active) return drop;
 
+    const isHealth = drop.kind === 'health';
+
     // ── Lifetime tick ──
     // Mirrors `color-star.js` line 181-185. Once the drop's life
     // counter reaches 0 it deactivates and the wrapper removes it
-    // from the active pool on the next cleanup pass. (The wrapper
-    // is responsible for the cleanup.)
-    drop.life--;
-    if (drop.life <= 0) {
-        drop.active = false;
-        return drop;
+    // from the active pool on the next cleanup pass.
+    // 5.102.0 — Health drops are PERMANENT. The player only gets a
+    // few health pickups per wave; despawning them on a 2-minute timer
+    // punished players who couldn't safely route to the orb. Skip the
+    // life decrement entirely for health drops so they sit on the
+    // field forever (until collected via collision).
+    if (!isHealth) {
+        drop.life--;
+        if (drop.life <= 0) {
+            drop.active = false;
+            return drop;
+        }
     }
 
     // ── Friction ──
@@ -151,7 +164,6 @@ export function updateDrop(drop, ctx, _events) {
     // per-tick force pump doesn't accelerate them to absurd speeds —
     // steady-state v ≈ F/(1−f). Other orbs (gold shape, gold pixel)
     // drift more freely (0.985) because they're tractor-only.
-    const isHealth = drop.kind === 'health';
     const friction = isHealth ? DROP_FRICTION_HEALTH : DROP_FRICTION_DEFAULT;
     drop.vx *= friction;
     drop.vy *= friction;
@@ -167,7 +179,8 @@ export function updateDrop(drop, ctx, _events) {
     // tail and fades out over the last `DROP_OPACITY_FADE_FRAMES`
     // ticks. Stored on the drop because the renderer reads it
     // directly (no separate "fade-state" component).
-    drop.opacity = Math.min(1, drop.life / DROP_OPACITY_FADE_FRAMES);
+    // 5.102.0 — Health drops are permanent, so pin opacity at 1.0.
+    drop.opacity = isHealth ? 1 : Math.min(1, drop.life / DROP_OPACITY_FADE_FRAMES);
 
     // ── Find the closest ship for magnet/tractor calculations ──
     // The legacy code reads off `playerPos` (a single ship). For

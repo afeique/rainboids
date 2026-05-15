@@ -105,18 +105,43 @@ export const PRIMARY_WEAPONS = {
     //   already displays as a ring around the player.
 };
 
-// Streak damage tiers. Each tier adds +0.25× damage. Capped at LEGENDARY
-// (15 kills, +100%) so high streaks don't break the difficulty curve.
-// Higher streaks beyond the cap just refresh the buff timer.
-//   - 3  kills → 1.25× (EMPOWERED)
-//   - 6  kills → 1.50× (UNSTOPPABLE)
-//   - 10 kills → 1.75× (GODLIKE)
-//   - 15 kills → 2.00× (LEGENDARY — cap)
+// Streak damage tiers — 5.102.0 epic ladder.
+//   Tiers spread across 3 → 200 kills with thirteen distinct labels.
+//   The damage multiplier grows in +0.20–0.25 steps through tier 5
+//   (LEGENDARY) and then flattens to ~0.10 / 0.05 / 0.025 per tier so
+//   the top end is a *cosmetic* flex rather than a balance breaker —
+//   the cap (TRANSCENDENT) caps damage at 3.0× even at a 200-kill run.
+//   Each tier carries a unique color so the streak HUD reads as a
+//   distinct phase change instead of "everything is gold past 15".
+//
+//   kills  mult   label          notes
+//      3   1.25×  EMPOWERED      first taste
+//      6   1.50×  UNSTOPPABLE    sustained pressure
+//     10   1.75×  GODLIKE        the old peak
+//     15   2.00×  LEGENDARY      former cap
+//     20   2.15×  HERCULEAN      stretch goal
+//     30   2.30×  INDOMITABLE    immune to bad runs
+//     45   2.45×  OUTRAGEOUS     this is ridiculous
+//     60   2.60×  IMMORTAL       death-stop level
+//     80   2.75×  APOCALYPTIC    end-of-world tier
+//    100   2.85×  ASTRONOMICAL   triple-digits
+//    130   2.92×  TRANSCENDENT   beyond reason
+//    165   2.97×  ETERNAL        nothing left to prove
+//    200   3.00×  RAINBOIDS GOD  hard cap, the final word
 export const STREAK_TIERS = [
-    { kills: 3,  mult: 1.25, label: 'EMPOWERED',  color: '#7FE7FF' }, // cyan
-    { kills: 6,  mult: 1.50, label: 'UNSTOPPABLE', color: '#FFA844' }, // orange
-    { kills: 10, mult: 1.75, label: 'GODLIKE',     color: '#FF6688' }, // pink-red
-    { kills: 15, mult: 2.00, label: 'LEGENDARY',   color: '#FFD700' }, // gold
+    { kills:   3, mult: 1.25, label: 'EMPOWERED',     color: '#7FE7FF' }, // pale cyan
+    { kills:   6, mult: 1.50, label: 'UNSTOPPABLE',   color: '#FFA844' }, // orange
+    { kills:  10, mult: 1.75, label: 'GODLIKE',       color: '#FF6688' }, // pink-red
+    { kills:  15, mult: 2.00, label: 'LEGENDARY',     color: '#FFD700' }, // gold
+    { kills:  20, mult: 2.15, label: 'HERCULEAN',     color: '#B0FF55' }, // bright lime
+    { kills:  30, mult: 2.30, label: 'INDOMITABLE',   color: '#55D6FF' }, // electric blue
+    { kills:  45, mult: 2.45, label: 'OUTRAGEOUS',    color: '#FF55FF' }, // magenta
+    { kills:  60, mult: 2.60, label: 'IMMORTAL',      color: '#FFD0FF' }, // pale violet
+    { kills:  80, mult: 2.75, label: 'APOCALYPTIC',   color: '#FF4444' }, // blood red
+    { kills: 100, mult: 2.85, label: 'ASTRONOMICAL',  color: '#AA88FF' }, // royal purple
+    { kills: 130, mult: 2.92, label: 'TRANSCENDENT',  color: '#88FFEE' }, // teal-mint
+    { kills: 165, mult: 2.97, label: 'ETERNAL',       color: '#FFFFFF' }, // pure white
+    { kills: 200, mult: 3.00, label: 'RAINBOIDS GOD', color: '#FFD700' }, // gold (cap)
 ];
 export const STREAK_BUFF_DURATION = 4000; // ms — buff lasts 4s, refreshes on each new kill while active.
 // NOTE: there is NO time-based streak reset. The streak only resets when the
