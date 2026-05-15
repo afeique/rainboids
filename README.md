@@ -41,7 +41,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **5.106.0**
+Current version: **5.107.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 

@@ -11,6 +11,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.107.0] - 2026-05-15
+
+### Added — VAMPIRISM powerup (lifesteal)
+
+Defensive powerup that heals a fraction of damage DEALT back to the
+player. Each stack contributes +5%; max 5 stacks → 25% lifesteal at
+full investment. Wires into bullet hits on enemies AND asteroids
+(both clamped to actual damage applied so overkill doesn't over-heal).
+Heal fires a green "+N" floater via the existing 5.106.0 heal-popup
+path, aggregated so a sustained barrage reads as one growing number
+above the ship.
+
+Implementation: `engine.applyVampirism(damageDealt)` in
+`combat-manager.js` — pulls VAMPIRISM stacks off the player, heals
+the lifesteal-clamped amount, fires the floater. Call sites in
+`collision-system.js` (asteroid hit + enemy hit branches) compute
+`hpBefore − hpAfter` and pass that exact amount so over-kill caps.
+
+### Added — THORNS powerup (damage reflection)
+
+Defensive powerup that reflects a fraction of damage TAKEN back at
+the source. Each stack contributes +25%; max 4 stacks → 100%
+reflection at full investment. Reflects to:
+
+- **Enemy** on contact → `enemy.takeDamage(reflected, { isThorns: true })`
+  routes through the normal kill pipeline (flash, streak, etc.)
+- **Asteroid** on contact → decrements `asteroid.health` directly
+- **Mine** (enemy bullet with health, shape='mine') → decrements
+  `mine.health` directly
+- **Plain enemy bullet** → no shooter reference exists; falls back
+  to damaging the NEAREST active enemy as a proxy "source" so
+  thorns still has something to act on
+
+Spawns an orange sparkle burst + a gold damage-number at the
+reflection target. Implementation: `engine.applyThorns(damageTaken,
+source)` in `combat-manager.js`.
+
+### Suggested follow-up powerups (deferred — not implemented)
+
+Brainstorm in the commit message and project notes; six concepts
+sketched in CLAUDE-notes / chat for future passes.
+
 ## [5.106.0] - 2026-05-15
 
 ### Added — Green "+N" heal popups

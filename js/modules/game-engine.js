@@ -2175,6 +2175,11 @@ export class GameEngine {
     createDamageNumber(x, y, damage, opts) { return combat.createDamageNumber.call(this, x, y, damage, opts); }
     triggerPlayerHitFX(ix, iy, damage) { return combat.triggerPlayerHitFX.call(this, ix, iy, damage); }
     updateDamageNumbers(deltaTime) { return combat.updateDamageNumbers.call(this, deltaTime); }
+    // 5.107.0 — Vampirism + Thorns helpers. Called by the damage-
+    // dealing / damage-taking sites in collision-system.js. Both are
+    // no-ops when the corresponding powerup has zero stacks.
+    applyVampirism(damageDealt) { return combat.applyVampirism.call(this, damageDealt); }
+    applyThorns(damageTaken, source) { return combat.applyThorns.call(this, damageTaken, source); }
 
     drawDamageNumbers() { return hudCombat.drawDamageNumbers.call(this); }
 

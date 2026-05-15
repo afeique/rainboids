@@ -302,6 +302,50 @@ export const POWERUP_TYPES = {
         spCostIncrement: 2,
         description: '+0.5 HP/s passive regen per stack'
     },
+
+    // 5.107.0 — Vampirism. Each stack converts +5% of damage DEALT
+    // into HP for the player. Caps at 5 stacks (25% lifesteal). Heal
+    // only fires when the player has room to grow — overflow is
+    // discarded (no progress to tanks, that's overflow-only on the
+    // direct health-orb path).
+    VAMPIRISM: {
+        name: 'Vampirism',
+        displayName: 'Vampirism',
+        abbr: 'VAMP',
+        color: '#cc0033',
+        gradientColors: ['#ff3366', '#660011'],
+        icon: 'skull',
+        duration: 30000,
+        effect: 'vampirism',
+        rarity: 0.10,
+        category: 'DEFENSE',
+        maxStacks: 5,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Heal +5% of damage dealt per stack',
+    },
+
+    // 5.107.0 — Thorns. Each stack reflects +25% of damage TAKEN back
+    // to the source — works for enemy bullets (damages the bullet's
+    // shooter when identifiable), enemy contact (damages the enemy),
+    // asteroid contact (damages the asteroid), and mines (damages
+    // the mine). 4 stacks max = 100% reflection at full investment.
+    THORNS: {
+        name: 'Thorns',
+        displayName: 'Thorns',
+        abbr: 'THRN',
+        color: '#ff7733',
+        gradientColors: ['#ff9966', '#cc3300'],
+        icon: 'anger',
+        duration: 30000,
+        effect: 'thorns',
+        rarity: 0.10,
+        category: 'DEFENSE',
+        maxStacks: 4,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Reflect +25% of damage taken per stack',
+    },
 };
 
 export class Powerup {

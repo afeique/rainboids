@@ -116,7 +116,12 @@ export function handleCollisions() {
                     this.game.stats.shotsHit++;
                     this.game.stats.totalDamageDealt += damage;
                 }
+                const hpBefore = ast.health;
                 ast.health = Math.max(0, ast.health - damage);
+                // 5.107.0 — Vampirism lifesteal based on actual damage
+                // applied (clamped so over-kill doesn't over-heal).
+                const applied = hpBefore - ast.health;
+                if (typeof this.applyVampirism === 'function') this.applyVampirism(applied);
 
                 // Hit flash — localized at bullet impact point
                 ast._hitFlashTimer = COLLISION_CONFIG.HIT_FLASH_FRAMES;
@@ -667,10 +672,16 @@ export function handleCollisions() {
                 // Damage the enemy (One Punch Man cheat: instant kill)
                 const damage = this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage);
                 if (this.game.stats) this.game.stats.shotsHit++;
+                const enemyHpBefore = enemy.health;
                 const destroyed = enemy.takeDamage(damage, {
                     isCrit: !!(bullet.isCrit || bullet.isCritical),
                     isEmpowered: !!bullet.isEmpowered,
                 });
+                // 5.107.0 — Vampirism lifesteal on the damage actually
+                // applied to the enemy (clamps overkill so we don't
+                // heal more than we'd dealt to a full-HP target).
+                const enemyApplied = Math.max(0, enemyHpBefore - enemy.health);
+                if (typeof this.applyVampirism === 'function') this.applyVampirism(enemyApplied);
 
                 if (bullet.isCrit || bullet.isCritical) {
                     if (typeof this.checkMissionOnCrit === 'function') this.checkMissionOnCrit();
@@ -1808,6 +1819,10 @@ export function handlePlayerEnemyCollision(player, enemy) {
         if (finalDamage > 0) {
             this.createDamageNumber(player.x, player.y - (player.radius || 14), finalDamage, { isPlayerHit: true });
             this.triggerPlayerHitFX(enemy.x, enemy.y, finalDamage);
+            // 5.107.0 — Thorns: reflect a fraction of damage back to
+            // the colliding enemy. Skip if dashing-through (no
+            // damage was taken) — finalDamage>0 guards that.
+            if (typeof this.applyThorns === 'function') this.applyThorns(finalDamage, enemy);
         }
 
         // Break the kill streak on actual HP loss (Phase Dash zeroes
@@ -1974,6 +1989,12 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
         // location for the camera kick + shrapnel direction.
         this.triggerPlayerHitFX(bullet.x, bullet.y, finalDamage);
         if (this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
+        // 5.107.0 — Thorns: reflect a fraction of damage back to the
+        // bullet. Mines (bullet.shape === 'mine') have health and
+        // take damage directly; regular enemy bullets don't have a
+        // shooter reference, so applyThorns falls back to the nearest
+        // enemy as a proxy source.
+        if (typeof this.applyThorns === 'function') this.applyThorns(finalDamage, bullet);
     }
 
     // Break the kill streak on actual HP loss (see also player↔enemy
@@ -2109,6 +2130,10 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
             this.createDamageNumber(this.player.x, this.player.y - (this.player.radius || 14), finalDamage, { isPlayerHit: true });
             this.triggerPlayerHitFX(asteroid.x, asteroid.y, finalDamage);
             if (this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
+            // 5.107.0 — Thorns reflects damage back into the asteroid.
+            // Asteroids don't have a takeDamage method; applyThorns
+            // detects that and decrements `asteroid.health` directly.
+            if (typeof this.applyThorns === 'function') this.applyThorns(finalDamage, asteroid);
         }
 
         // Award XP for surviving asteroid collision

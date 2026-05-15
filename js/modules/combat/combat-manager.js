@@ -1085,6 +1085,119 @@ export function createDamageNumber(x, y, damage, opts = {}) {
     }
 }
 
+// 5.107.0 — Vampirism: lifesteal a fraction of damage dealt.
+//   Called by every site that successfully damages an enemy or
+//   asteroid with a player bullet. Pulls the stack count off the
+//   player's VAMPIRISM powerup; no-op if zero stacks. The healed
+//   amount is clamped to the player's effective max HP, so overflow
+//   (e.g. hitting boss enemies for 50 damage while near full HP) is
+//   silently discarded — vampirism is a sustain tool, not a tank-
+//   progress shortcut. Fires a green "+N" floater via createDamageNumber
+//   so the player sees the heal land.
+export function applyVampirism(damageDealt) {
+    if (!this.player || !(damageDealt > 0)) return 0;
+    const stacks = this.player.getPowerupStacks
+        ? this.player.getPowerupStacks('VAMPIRISM')
+        : 0;
+    if (stacks <= 0) return 0;
+    const lifestealFrac = stacks * 0.05; // 5% per stack
+    const wouldHeal = damageDealt * lifestealFrac;
+    if (!(wouldHeal > 0)) return 0;
+    const cap = this.player.getEffectiveMaxHealth();
+    const oldHp = this.player.health;
+    this.player.health = Math.min(cap, oldHp + wouldHeal);
+    const actualHeal = this.player.health - oldHp;
+    if (actualHeal > 0 && typeof this.createDamageNumber === 'function') {
+        this.createDamageNumber(
+            this.player.x,
+            this.player.y - (this.player.radius || 14) - 4,
+            actualHeal,
+            { isHeal: true },
+        );
+    }
+    return actualHeal;
+}
+
+// 5.107.0 — Thorns: reflect a fraction of damage taken back to the
+//   source. `source` is the entity that dealt the damage:
+//     - enemy ship   → has .takeDamage(amount, opts) + .health
+//     - asteroid     → has .health (no takeDamage method)
+//     - mine bullet  → enemy-bullet with .health (shape === 'mine')
+//     - enemy bullet → no direct shooter, no health. We damage the
+//                      nearest active enemy as a proxy "source" so
+//                      thorns still has SOMETHING to act on.
+//   No-op when stacks=0 or damageTaken<=0. Fires a small reflective
+//   sparkle at the source for visual confirmation.
+export function applyThorns(damageTaken, source) {
+    if (!this.player || !(damageTaken > 0)) return 0;
+    const stacks = this.player.getPowerupStacks
+        ? this.player.getPowerupStacks('THORNS')
+        : 0;
+    if (stacks <= 0) return 0;
+    const reflectFrac = stacks * 0.25; // 25% per stack
+    const reflected = damageTaken * reflectFrac;
+    if (!(reflected > 0)) return 0;
+
+    // Resolve a target object that has health/takeDamage. If `source`
+    // is an enemy bullet (no health, no shooter), fall back to the
+    // nearest enemy so thorns still does something visible.
+    let target = source;
+    if (target && target.shape === 'bullet' && target.health === undefined) {
+        // Enemy bullet — find nearest enemy as proxy source.
+        let best = null;
+        let bestD = Infinity;
+        if (this.enemyPool) {
+            for (const e of this.enemyPool.activeObjects) {
+                if (!e.active || e.warping) continue;
+                const dx = e.x - this.player.x;
+                const dy = e.y - this.player.y;
+                const d = dx * dx + dy * dy;
+                if (d < bestD) { bestD = d; best = e; }
+            }
+        }
+        target = best;
+    }
+    if (!target) return 0;
+
+    // Apply damage. enemy.takeDamage owns the death pipeline (flash,
+    // streak, etc.) so we prefer it; asteroid + mine just decrement
+    // their `health` field and let the next collision tick clean up.
+    let didDamage = false;
+    if (typeof target.takeDamage === 'function') {
+        const destroyed = target.takeDamage(reflected, { isThorns: true });
+        didDamage = true;
+        if (destroyed && typeof this.onEnemyKill === 'function') {
+            this.onEnemyKill(target);
+        }
+    } else if (target.health !== undefined) {
+        target.health = Math.max(0, target.health - reflected);
+        didDamage = true;
+    }
+    if (!didDamage) return 0;
+
+    // Sparkle at the source so the reflection reads visually.
+    if (this.particlePool) {
+        const sx = target.x ?? this.player.x;
+        const sy = target.y ?? this.player.y;
+        for (let p = 0; p < 5; p++) {
+            const sparkle = this.particlePool.get(sx, sy, 'starSparkle');
+            if (sparkle) {
+                sparkle.color = '#ff8844';
+                sparkle.life = 0.5;
+            }
+        }
+    }
+    if (typeof this.createDamageNumber === 'function' && target.x !== undefined) {
+        this.createDamageNumber(
+            target.x,
+            target.y - ((target.radius || target.baseRadius || 14) + 4),
+            reflected,
+            { target },
+        );
+    }
+    return reflected;
+}
+
 export function updateDamageNumbers(deltaTime) {
     for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
         const dmgNum = this.damageNumbers[i];
