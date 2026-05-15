@@ -3393,3 +3393,57 @@ body.mobile-portrait .controls-mobile-chip-icon {
     font-size: 14px;
 }
 
+/* ─── 5.100.3 — Shop HELP panel mobile scale-down ─────────────────
+   The HELP tab's long text blurbs (gold / SP / XP explanations) used
+   Press Start 2P at 13-16 px, which overflowed phone viewports and
+   produced ugly mid-word breaks. Cut roughly a third on mobile so
+   the same content stays readable without a horizontal scroll. */
+body.mobile-mode .shop-help {
+    gap: 12px;
+    padding: 12px 14px;
+}
+body.mobile-mode .shop-help-intro,
+body.mobile-mode .shop-help-footer {
+    font-size: 10px;
+    line-height: 1.6;
+}
+body.mobile-mode .shop-help-title {
+    font-size: 12px;
+    letter-spacing: 0.5px;
+}
+body.mobile-mode .shop-help-body {
+    font-size: 10px;
+    line-height: 1.6;
+}
+body.mobile-mode .shop-help-icon {
+    /* Smaller currency badge so the gap to the text column tightens. */
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+}
+body.mobile-mode .shop-help-icon--picks {
+    font-size: 10px;
+}
+
+body.mobile-portrait .shop-help {
+    gap: 10px;
+    padding: 10px 12px;
+}
+body.mobile-portrait .shop-help-intro,
+body.mobile-portrait .shop-help-footer {
+    font-size: 9px;
+    line-height: 1.5;
+}
+body.mobile-portrait .shop-help-title {
+    font-size: 10px;
+}
+body.mobile-portrait .shop-help-body {
+    font-size: 9px;
+    line-height: 1.5;
+}
+body.mobile-portrait .shop-help-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 10px;
+}
+

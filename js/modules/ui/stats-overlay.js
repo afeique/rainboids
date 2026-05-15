@@ -145,8 +145,8 @@ function buildStatsModel(player, gameEngine) {
                 value: `${mult(range)}`,
                 tip:
                     `Bullet travel-distance multiplier.\n` +
-                    `Base: 1.00×.\n` +
-                    `+ LONG_RANGE stacks (×${stacks('LONG_RANGE')}) → +55% each.`,
+                    `Base: 1.00× — covers the full game field as of 5.100.3.\n` +
+                    `Per-weapon \`config.range\` scales relative to this base.`,
             },
             {
                 key: 'Knockback',

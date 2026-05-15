@@ -1064,7 +1064,11 @@ export class UIManager {
         banner.appendChild(bannerLabel);
         list.appendChild(banner);
 
-        const entries = Object.entries(POWERUP_TYPES);
+        // 5.100.3 — Filter out powerups with `hidden: true`. LONG_RANGE
+        // was retired now that default bullet flight covers the screen;
+        // its config stays in POWERUP_TYPES for save-compat but it's
+        // dropped from the visible Powerups list.
+        const entries = Object.entries(POWERUP_TYPES).filter(([, cfg]) => !cfg.hidden);
 
         if (entries.length === 0) {
             const empty = document.createElement('div');

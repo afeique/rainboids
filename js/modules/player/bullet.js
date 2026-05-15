@@ -37,9 +37,22 @@ export class Bullet {
         this.active = true;
         this.mass = 1;
 
-        // Range/lifetime — base range ≈ 24% screen width (~460px at BULLET_SPEED)
-        // Each LONG_RANGE stack adds +40%; ~4 stacks for full screen
-        this.maxLife = Math.round(30 / GAME_CONFIG.TICK_SCALE);
+        // Range/lifetime — 5.100.3 — base range now covers the full
+        // game field (1920×1080) so the player's shots always reach the
+        // edge of the screen regardless of viewport / camera zoom. The
+        // pre-5.100.3 base of 30/TICK_SCALE produced ~460 px (~24% of
+        // the field) which forced players to invest LONG_RANGE stacks
+        // just to be effective at typical engagement ranges. The
+        // LONG_RANGE powerup is now retired (hidden from shop + wave-
+        // pick); per-weapon `config.range` modifiers in weapon-data.js
+        // still scale relative to this new larger baseline.
+        //
+        // Math: BULLET_SPEED = 16 × TICK_SCALE = 8 px/tick. To cover
+        // 1920 px we need 1920 / 8 = 240 ticks. We round to 240 / TICK_SCALE
+        // = 480 frames at 60 Hz @ TICK_SCALE=0.5, so ~8 s of flight —
+        // generous margin so any weapon's `config.range` (0.85-1.5×)
+        // still reaches the edge of the screen.
+        this.maxLife = Math.round(240 / GAME_CONFIG.TICK_SCALE);
         this.rangeMultiplier = 1.0; // Set by player before firing
         this.fadeFactor = 1.0;
 

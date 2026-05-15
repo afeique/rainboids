@@ -339,7 +339,7 @@ function buildHelpPanel() {
         iconNode: makeCoinIconSvg(28),
         title: 'GOLD',
         titleClass: 'shop-help-title--gold',
-        body: 'Dropped as money orbs from kills. The orbs drift in space; fly close (or use the tractor beam) to scoop them. Spend on the weapon-specific tabs above — each weapon has its own tab listing that weapon\'s offensive upgrade tree.',
+        body: 'Spend on WEAPONS above.',
     }));
 
     wrap.appendChild(buildHelpEntry({
@@ -347,7 +347,7 @@ function buildHelpPanel() {
         iconClass: 'shop-help-icon--sp',
         title: 'SKILL POINTS',
         titleClass: 'shop-help-title--sp',
-        body: 'Earned +1 per wave clear and +1 per level-up. Spend in the pause-menu POWERUPS tab — every powerup is purchasable, so you build a custom kit each run. Initial buy costs 3 SP; each additional stack costs 2 SP more than the last.',
+        body: 'Spend on POWERUPS in the pause menu. +1 SP awarded per level up.',
     }));
 
     wrap.appendChild(buildHelpEntry({
@@ -355,12 +355,12 @@ function buildHelpPanel() {
         iconClass: 'shop-help-icon--xp',
         title: 'EXPERIENCE',
         titleClass: 'shop-help-title--xp',
-        body: 'Awarded for every hit you land — including asteroid kills. Tracked by the red bar under your health. Filling the bar levels you up, granting +1 SP.',
+        body: 'Awarded for every hit you land. Tracked by the red bar under your health.',
     }));
 
     const footer = document.createElement('p');
     footer.className = 'shop-help-footer';
-    footer.textContent = 'Tip: powerups don\'t drop from kills — they\'re purchased exclusively via the pause-menu POWERUPS tab using SP. The shop here is for gold-priced offensive upgrades, one tab per weapon. Killing asteroids levels you up faster, which gives you more SP. Build with intent.';
+    footer.textContent = 'Tip: ';
     wrap.appendChild(footer);
 
     return wrap;

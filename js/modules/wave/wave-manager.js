@@ -1207,7 +1207,9 @@ export function openWavePickOverlay() {
     const player = this.player;
 
     // ── Pick 3 random non-maxed powerups ──
+    // 5.100.3 — Also skip `hidden` powerups (LONG_RANGE retired).
     const entries = Object.entries(POWERUP_TYPES).filter(([type, cfg]) => {
+        if (cfg.hidden) return false;
         const cap = cfg.maxStacks || 99;
         const stacks = player.getPowerupStacks ? player.getPowerupStacks(type) : 0;
         return stacks < cap;

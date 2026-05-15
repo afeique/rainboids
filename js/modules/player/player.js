@@ -580,7 +580,14 @@ export class Player {
         // tap-for-power works while primary still auto-holds.
         if (assists && (assists.autoFire || assists.autoPower)) {
             const primaryCfg = this.getActivePrimaryConfig && this.getActivePrimaryConfig();
-            const baseRange = primaryCfg ? (primaryCfg.range || 1) * 400 : 400;
+            // 5.100.3 — Auto-fire range was scaled around a 400-px base
+            // bullet flight (24% of the playfield). 5.100.3 bumps the
+            // default bullet flight to cover the entire 1920-px field,
+            // so the auto-fire trigger should also see almost every
+            // on-screen enemy. Bumped base to 2000 — a confident
+            // "anything reachable by a bullet is a valid auto-fire
+            // target" cap.
+            const baseRange = primaryCfg ? (primaryCfg.range || 1) * 2000 : 2000;
             const rangeMult = this.getRangeMultiplier ? this.getRangeMultiplier() : 1;
             const maxRange = baseRange * rangeMult;
             // Angular tolerance: ±25° cone around the aim. Tight enough
