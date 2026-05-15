@@ -9,6 +9,7 @@ import { EngineDriver } from './engine/engine-driver.js';
 import { openMultiplayerModal } from './net/multiplayer-modal.js';
 import { SESSION_STORAGE_KEY } from './net/ws-client.js';
 import { isMobile as _isMobilePlatform } from './modules/platform/platform-detect.js';
+import { buildStaticDom } from './modules/ui/static-dom.js';
 
 // 5.91.0 — Rainboids now supports a full mobile-mode overhaul (auto-
 // pilot + tap-to-shoot + long-press weapon radial). The desktop-only
@@ -64,6 +65,14 @@ class RainboidsGame {
             showDesktopOnlyMessage();
             return;
         }
+
+        // 5.100.2 — Populate the stubbed overlay containers before
+        // any UI module's constructor walks the DOM. Without this,
+        // UIManager / StatsOverlay would find empty <div> stubs and
+        // every getElementById('music-play-pause' etc.) would return
+        // null. See js/modules/ui/static-dom.js for the markup
+        // builders that own this previously-static content.
+        buildStaticDom();
 
         this.setupCanvas();
         await this.setupAudio();

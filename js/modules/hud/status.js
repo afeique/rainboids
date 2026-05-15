@@ -86,11 +86,21 @@ export function drawHUD() {
 
                 // Draw title (larger, centered horizontally, well below the
                 // top-center enemy-info band which now occupies y≈24-84).
+                // 5.100.2 — Cap font sizes hard on mobile; the 48 px /
+                // 24 px desktop values overflowed phone viewports. Use
+                // the same Math.min/max/floor pattern that title-screen
+                // and game-over already use.
                 const centerX = this.width / 2;
-                const titleFS = 48;
-                const subtitleFS = 24;
-                const topY = 200;  // pushed further down to clear enemy info comfortably
-                const gap = 60;
+                const _mob = isMobile();
+                const _port = _mob && isPortrait();
+                const titleFS = _port
+                    ? Math.min(28, Math.max(20, Math.floor(this.width / 13)))
+                    : (_mob
+                        ? Math.min(36, Math.max(24, Math.floor(this.height / 12)))
+                        : 48);
+                const subtitleFS = _mob ? Math.max(12, Math.floor(titleFS * 0.55)) : 24;
+                const topY = _port ? 130 : (_mob ? 150 : 200);
+                const gap = _mob ? Math.floor(titleFS * 0.85) : 60;
                 this.drawWavyText(this.waveMessage.title, centerX, topY, {
                     fontSize: titleFS,
                     colors: WAVY_PALETTES.waveTitle,
@@ -981,9 +991,16 @@ export function drawLevelUpText() {
         this.ctx.translate(centerX, textY);
         this.ctx.scale(scale, scale);
 
+        // 5.100.2 — Mobile cap on level-up text. The desktop 32 / 16
+        // pair overflows portrait phones; cut to fit the viewport.
+        const _mobLU = isMobile();
+        const _portLU = _mobLU && isPortrait();
+        const lvlFS = _portLU ? 20 : (_mobLU ? 24 : 32);
+        const subFS = _portLU ? 11 : (_mobLU ? 13 : 16);
+
         // Wavy gold "LEVEL X!" — palette pulses around the original #FFD700.
         this.drawWavyText(`LEVEL ${level}!`, 0, -15, {
-            fontSize: 32,
+            fontSize: lvlFS,
             colors: WAVY_PALETTES.gold,
             amplitude: 6,
             speed: 0.6,
@@ -992,7 +1009,7 @@ export function drawLevelUpText() {
 
         // Wavy orange subtitle around the original #FFA500.
         this.drawWavyText('Skill Point Gained!', 0, 15, {
-            fontSize: 16,
+            fontSize: subFS,
             colors: WAVY_PALETTES.orange,
             amplitude: 3,
             speed: 0.45,

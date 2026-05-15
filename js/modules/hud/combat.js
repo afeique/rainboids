@@ -6,6 +6,7 @@ import { GAME_STATES } from '../core/constants.js';
 import { rgba } from '../core/color-cache.js';
 import { pulsePalette } from './overlays.js';
 import { getIconImage, resolveIconSlug, renderIconHTML } from '../ui/icons.js';
+import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
 export function drawDamageNumbers() {
         const ctx = this.ctx;
@@ -236,8 +237,13 @@ export function drawPowerupDisplay() {
         // Wavy text with a gradient pulse around the powerup's identifying
         // color — preserves the "this is the X powerup" visual while adding
         // shimmer. pulsePalette is cached per base color.
+        // 5.100.2 — Mobile cap on the powerup-pickup label so it fits
+        // a portrait phone viewport.
+        const _mob = isMobile();
+        const _port = _mob && isPortrait();
+        const puFS = _port ? 18 : (_mob ? 22 : 32);
         this.drawWavyText(this.powerupDisplay.text, centerX, topY, {
-            fontSize: 32,
+            fontSize: puFS,
             colors: pulsePalette(this.powerupDisplay.color),
             amplitude: 8,
             speed: 0.55,
@@ -253,11 +259,13 @@ export function drawPowerupDisplay() {
             // size that keeps long blurbs on one line while still being
             // legibly chunky-pixel. Soft black halo + thick stroke keep
             // it readable against busy backgrounds.
-            ctx.font = "14px 'Press Start 2P', monospace";
+            // 5.100.2 — Mobile cap to match the title scale-down.
+            const descFS = _port ? 9 : (_mob ? 10 : 14);
+            ctx.font = `${descFS}px 'Press Start 2P', monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
             ctx.lineJoin = 'round';
-            const descY = topY + 38;
+            const descY = topY + Math.floor(puFS * 1.25);
             ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
             ctx.shadowBlur = 6;
             ctx.lineWidth = 4;
