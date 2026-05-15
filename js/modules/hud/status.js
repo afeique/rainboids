@@ -38,6 +38,14 @@ export function drawHUD() {
             || this.game.state === GAME_STATES.WAVE_TRANSITION
             || this.game.state === GAME_STATES.PAUSED) {
             drawHudButtons(this.ctx, this);
+            // 5.100.0 — Virtual analog stick (mobile only). Drawn AFTER
+            // the canvas HUD buttons so its handle floats above the
+            // bottom bar's visual layer. The stick reads input from
+            // mobile-touch.js and writes its deflection vector to
+            // engine.inputHandler.input.stickInput via the touch handler.
+            if (this.mobile && this.analogStick && this.game.state !== GAME_STATES.TITLE_SCREEN) {
+                this.analogStick.draw(this.ctx);
+            }
         } else {
             // Clear stale rects so input handlers don't act on them.
             this._hudButtonRects = null;

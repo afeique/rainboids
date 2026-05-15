@@ -11,6 +11,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.100.0] - 2026-05-14
+
+### Added — Mobile: virtual analog stick + Sky-force-style controls (Model A + F)
+
+Mobile gameplay pivots from the 5.94/5.97 press-and-hold-to-aim model
+to the Sky-force / Galaxy-Attack template players already know:
+
+- **Virtual analog stick** at a bottom corner (configurable LEFT or
+  RIGHT for handedness). Drag the handle inside the base to drive
+  ship velocity. Released stick = ship decelerates and stops.
+- **Auto-aim** picks the nearest target every frame.
+- **Auto-fire primary** holds the primary weapon while alive.
+- **Tap anywhere not on the stick or HUD** → fires the equipped
+  **power weapon** (Model F overlay — preserves the only meaningful
+  decision-point that pure auto-fire would flatten).
+- **CHARGE_SHOT** still auto-fires on full charge because a single
+  tap can't represent the press-and-hold-and-release gesture.
+
+The player no longer aims manually on mobile. The whole input loop
+is "drive the ship to dodge."
+
+### Changed — Camera zoom + assist gates
+
+- Portrait camera zoom 0.65 → **0.78**; landscape 0.8 → **0.88**. A
+  moving ship needs more world visible than a stationary one; the
+  pre-5.100 values were tuned for the parked-camera model.
+- 5.95.1's "mobile force-disables all assists" patch is REVERSED.
+  Player.update now builds a mobile-specific assists block with
+  `autoAim: true, autoFire: true` so the AI handles aiming and firing
+  while the player drives the stick.
+- 5.92's "mobile auto-fires ALL power weapons" path is NARROWED to
+  CHARGE-based weapons only. Cooldown weapons fire via the tap
+  pulse from mobile-touch.js.
+
+### Removed — PRM/PWR side buttons on mobile
+
+The 5.99.3 PRM/PWR side buttons at bottom corners are dropped on
+mobile to free the corner for the stick. Weapon swap moves to the
+pause menu's PRIMARY / POWER tabs — not action-critical when
+auto-fire and auto-aim handle the moment-to-moment combat. Desktop
+is unaffected (PRM/PWR were always mobile-only).
+
+### Stick side preference
+
+The stick defaults to bottom-LEFT (right-handed thumb). A
+`localStorage` key `rainboids:mobile-stick-side` persists the
+preference across sessions. Engine method `flipAnalogStickSide()`
+toggles between LEFT and RIGHT; UI hook (pause-menu toggle) is a
+follow-up.
+
+### Files
+
+- `js/modules/ui/analog-stick.js` (new): `AnalogStick` class with
+  base/handle render + touch state machine.
+- `js/modules/game-engine.js`: instantiates the stick, persists
+  side preference, draws it in the HUD pass, exposes
+  `flipAnalogStickSide()`.
+- `js/modules/ui/event-setup.js`: re-anchors the stick on every
+  resize / orientationchange.
+- `js/modules/ui/mobile-touch.js`: rewritten for the new contract —
+  classifies each touch as HUD / radial / stick / tap-for-power.
+- `js/modules/player/player.js`: drops the 5.94 velocity-zero patch,
+  drives ship velocity from `input.stickInput`, clamps to the game
+  field. Re-enables mobile assists. Narrows mobile auto-fire to
+  CHARGE-based power weapons only.
+- `js/modules/hud/hud-buttons.js`: drops PRM/PWR side rects on
+  mobile.
+- `js/modules/hud/status.js`: invokes `analogStick.draw()` after
+  the canvas HUD buttons.
+
+### Tests
+
+- `tests/unit/ui/mobile-touch.test.js`: full rewrite for the stick +
+  tap-for-power contract. Old 5.97 press-and-hold tests removed.
+- `tests/unit/player/mobile-stationary.test.js`: rewrote to pin the
+  new drag-to-move model.
+- `tests/unit/player/mobile-auto-fire.test.js`: rewrote to pin the
+  narrowed mobile auto-fire (CHARGE-only).
+- `tests/unit/player/mobile-assists-disabled.test.js`: rewrote to
+  pin the re-enabled mobile assists.
+- `tests/unit/hud/hud-buttons.test.js`: updated for PRM/PWR removal.
+
+944/944 unit tests passing.
+
+### Migration note for players
+
+The Classic Aim model (5.94-5.99.x: press-and-hold to aim) is hard-
+switched out. No in-game toggle in 5.100.0; if the community asks for
+it, a settings option can come in 5.100.x.
+
+---
+
 ## [5.99.4] - 2026-05-14
 
 ### Added — Diablo-style defensive item system

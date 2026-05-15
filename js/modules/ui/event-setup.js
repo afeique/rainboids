@@ -26,6 +26,10 @@ export function setupEventListeners() {
         this.canvas.height = this.height;
         if (this.particleRenderer) this.particleRenderer.resize(this.width, this.height);
         if (this.bulletRenderer && this.bulletRenderer.resize) this.bulletRenderer.resize(this.width, this.height);
+        // 5.100.0 — Re-anchor the analog stick on any resize / orient.
+        if (this.analogStick && this.analogStick.resize) {
+            this.analogStick.resize(this.width, this.height);
+        }
         this.events.emit('ui:check-orientation');
         // 5.91 — re-evaluate the portrait body class so the CSS HUD
         // adjustments track real-time rotation on mobile.

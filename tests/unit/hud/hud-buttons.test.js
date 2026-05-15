@@ -62,95 +62,36 @@ describe('getHudButtonRects — desktop mode (5.94.0)', () => {
     });
 });
 
-describe('getHudButtonRects — mobile mode (5.94.0)', () => {
-    test('returns 5 buttons in mobile mode (SHOP/STATS/PAUSE + PRM + PWR)', () => {
+describe('getHudButtonRects — mobile mode (5.100.0)', () => {
+    test('mobile mode returns 3 bottom-bar buttons (SHOP/STATS/PAUSE only — PRM/PWR removed in 5.100.0)', () => {
         _resetUrlOverrideForTests(true);
         const rects = getHudButtonRects(400, 800);
         const keys = Object.keys(rects).sort();
-        expect(keys).toEqual(['pause', 'prm', 'pwr', 'shop', 'stats']);
+        expect(keys).toEqual(['pause', 'shop', 'stats']);
     });
 
-    test('PRM button sits on the LEFT side of the canvas', () => {
+    test('mobile: PRM and PWR rects do not exist (weapon swap moved to pause menu in 5.100.0)', () => {
         _resetUrlOverrideForTests(true);
         const rects = getHudButtonRects(400, 800);
-        // PRM x should be near the left edge (small).
-        expect(rects.prm.x).toBeLessThan(50);
-    });
-
-    test('PWR button sits on the RIGHT side of the canvas', () => {
-        _resetUrlOverrideForTests(true);
-        const rects = getHudButtonRects(400, 800);
-        // PWR x + w should be near the right edge.
-        expect(rects.pwr.x + rects.pwr.w).toBeGreaterThan(350);
-    });
-
-    test('5.99.3 — PRM and PWR sit at the BOTTOM of the canvas (corners)', () => {
-        _resetUrlOverrideForTests(true);
-        const canvasH = 800;
-        const rects = getHudButtonRects(400, canvasH);
-        // Both bottom-anchored: y + h should land within ~30 px of the
-        // bottom edge (accounts for BOTTOM_MARGIN). Pre-5.99.3 they sat
-        // at canvasH/2; 5.99.3 moves them to bottom corners.
-        expect(rects.prm.y + rects.prm.h).toBeGreaterThan(canvasH - 40);
-        expect(rects.pwr.y + rects.pwr.h).toBeGreaterThan(canvasH - 40);
-    });
-
-    test('PRM and PWR meet the 60-px touch-target minimum (w and h ≥ 60)', () => {
-        _resetUrlOverrideForTests(true);
-        const rects = getHudButtonRects(400, 800);
-        expect(rects.prm.w).toBeGreaterThanOrEqual(60);
-        expect(rects.prm.h).toBeGreaterThanOrEqual(60);
-        expect(rects.pwr.w).toBeGreaterThanOrEqual(60);
-        expect(rects.pwr.h).toBeGreaterThanOrEqual(60);
-    });
-
-    test('PRM and PWR are square', () => {
-        _resetUrlOverrideForTests(true);
-        const rects = getHudButtonRects(400, 800);
-        expect(rects.prm.w).toBe(rects.prm.h);
-        expect(rects.pwr.w).toBe(rects.pwr.h);
-    });
-
-    test('PRM rect.kind is "primary"; PWR rect.kind is "power"', () => {
-        _resetUrlOverrideForTests(true);
-        const rects = getHudButtonRects(400, 800);
-        expect(rects.prm.kind).toBe('primary');
-        expect(rects.pwr.kind).toBe('power');
-    });
-
-    test('PRM rect.label is "PRM"; PWR rect.label is "PWR"', () => {
-        _resetUrlOverrideForTests(true);
-        const rects = getHudButtonRects(400, 800);
-        expect(rects.prm.label).toBe('PRM');
-        expect(rects.pwr.label).toBe('PWR');
+        expect(rects.prm).toBeUndefined();
+        expect(rects.pwr).toBeUndefined();
     });
 });
 
-describe('hudButtonHitTest — mobile mode (5.94.0)', () => {
-    test('returns "prm" when point falls inside the PRM rect', () => {
-        _resetUrlOverrideForTests(true);
-        const rects = getHudButtonRects(400, 800);
-        // Hit the centre of PRM.
-        const cx = rects.prm.x + rects.prm.w / 2;
-        const cy = rects.prm.y + rects.prm.h / 2;
-        const engine = { _hudButtonRects: rects };
-        expect(hudButtonHitTest(engine, cx, cy)).toBe('prm');
-    });
-
-    test('returns "pwr" when point falls inside the PWR rect', () => {
-        _resetUrlOverrideForTests(true);
-        const rects = getHudButtonRects(400, 800);
-        const cx = rects.pwr.x + rects.pwr.w / 2;
-        const cy = rects.pwr.y + rects.pwr.h / 2;
-        const engine = { _hudButtonRects: rects };
-        expect(hudButtonHitTest(engine, cx, cy)).toBe('pwr');
-    });
-
+describe('hudButtonHitTest — mobile mode (5.100.0)', () => {
     test('returns null when point lands in open canvas (no button)', () => {
         _resetUrlOverrideForTests(true);
         const rects = getHudButtonRects(400, 800);
-        // Open centre of the canvas — well clear of bottom bar AND side buttons.
         const engine = { _hudButtonRects: rects };
         expect(hudButtonHitTest(engine, 200, 100)).toBe(null);
+    });
+
+    test('returns "shop" when point falls inside the SHOP rect', () => {
+        _resetUrlOverrideForTests(true);
+        const rects = getHudButtonRects(400, 800);
+        const cx = rects.shop.x + rects.shop.w / 2;
+        const cy = rects.shop.y + rects.shop.h / 2;
+        const engine = { _hudButtonRects: rects };
+        expect(hudButtonHitTest(engine, cx, cy)).toBe('shop');
     });
 });

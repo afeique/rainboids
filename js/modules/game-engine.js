@@ -62,6 +62,10 @@ import { MobileTouchHandler } from './ui/mobile-touch.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { hasSave, loadSave, writeSave, clearSave } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
+import { AnalogStick } from './ui/analog-stick.js';
+
+// 5.100.0 — localStorage key for the analog-stick side preference.
+const STICK_SIDE_STORAGE_KEY = 'rainboids:mobile-stick-side';
 
 export const PLAYER_STATES = {
     NORMAL: 'normal'
@@ -382,6 +386,17 @@ export class GameEngine {
         // movement gate in js/modules/player/player.js.
         this.mobile = isMobile();
         this.mobileTouch = new MobileTouchHandler(this);
+        // 5.100.0 — Virtual analog stick (Sky-force-style drag-to-move).
+        // Drives ship velocity on mobile; tap-anywhere-not-on-stick fires
+        // the power weapon. Side preference (LEFT for right-handed,
+        // RIGHT for left-handed) persists in localStorage.
+        let stickSide = 'left';
+        try {
+            const saved = (typeof localStorage !== 'undefined')
+                ? localStorage.getItem(STICK_SIDE_STORAGE_KEY) : null;
+            if (saved === 'right') stickSide = 'right';
+        } catch (_) { /* localStorage may be disabled */ }
+        this.analogStick = new AnalogStick({ side: stickSide });
         if (this.mobile) {
             // Toggle the body classes that drive the CSS HUD adjustments.
             // The portrait class is also re-evaluated on every resize /
@@ -400,7 +415,11 @@ export class GameEngine {
         if (this.bulletRenderer && this.bulletRenderer.resize) {
             this.bulletRenderer.resize(this.width, this.height);
         }
-        
+        // 5.100.0 — Position the analog stick now that the canvas
+        // dimensions are known. Any resize / orientation flip later
+        // re-runs through the same path (see the resize handler hook).
+        this.analogStick.resize(this.width, this.height);
+
         // State machine — owns all game state transitions with validation + epoch guards
         this.stateMachine = new GameStateMachine(GAME_STATES.TITLE_SCREEN);
 
@@ -738,7 +757,29 @@ export class GameEngine {
             this.camera.zoom = 1;
             return;
         }
-        this.camera.zoom = isPortrait() ? 0.65 : 0.8;
+        // 5.100.0 — Slightly less aggressive zoom-out now that the ship
+        // MOVES on mobile (5.94's stationary-ship pivot is reversed for
+        // 5.100). A moving ship needs more world visible so the player
+        // can plan dodges; the pre-5.100 values were tuned for a fixed
+        // camera. Portrait 0.65 → 0.78, landscape 0.8 → 0.88.
+        this.camera.zoom = isPortrait() ? 0.78 : 0.88;
+    }
+
+    /**
+     * 5.100.0 — Flip the analog stick to the opposite side and persist
+     * the preference to localStorage. Callable from a debug toggle or a
+     * future pause-menu setting.
+     */
+    flipAnalogStickSide() {
+        if (!this.analogStick) return;
+        const next = this.analogStick.side === 'left' ? 'right' : 'left';
+        this.analogStick.setSide(next);
+        this.analogStick.resize(this.width, this.height);
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(STICK_SIDE_STORAGE_KEY, next);
+            }
+        } catch (_) { /* localStorage disabled */ }
     }
 
     /**

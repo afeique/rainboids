@@ -499,14 +499,17 @@ export class Player {
         // ── Aim resolution (5.74) ──
         // Priority: Auto Aim > Arrow-key rotation > Aim Assist (cursor snap) > Mouse.
         const ge = window.gameEngine;
-        // 5.95.1 — Force-disable ALL assists on mobile. The fruit-ninja
-        // tap-to-aim-and-fire input model is intentionally hands-on: the
-        // player picks each target themselves. Auto Aim / Aim Assist /
-        // Auto Fire would all override the tap input and break that loop.
-        // We treat the assists block as if the user toggled everything
-        // off — null sentinel makes every `assists && assists.X` check
-        // fall through cleanly without needing per-branch gates.
-        const assists = (!isMobile() && ge && ge.assists) ? ge.assists : null;
+        // 5.100.0 — Mobile uses the drag-to-move + auto-fire/auto-aim
+        // pattern (Sky Force / Galaxy Attack model). Re-enable assists
+        // on mobile (auto-aim + auto-fire) so the player just dodges
+        // while the AI picks targets and holds primary. The 5.95.1
+        // "force-disable on mobile" patch is reversed.
+        let assists;
+        if (isMobile()) {
+            assists = { autoAim: true, autoFire: true, aimAssist: false };
+        } else {
+            assists = (ge && ge.assists) ? ge.assists : null;
+        }
 
         // Auto Aim — lock onto nearest threat. Overrides everything below.
         let autoAimed = false;
@@ -593,41 +596,20 @@ export class Player {
             }
         }
 
-        // ── Mobile auto-fire — power weapon (5.92.0) ──
-        // Mobile mode has no spare hand for a power-fire button (tap
-        // fires primary, long-press opens the weapon radial). So the
-        // spec auto-triggers the equipped power weapon the moment it's
-        // ready: cooldown-based weapons fire on `isPowerReady()`,
-        // charge-based weapons (CHARGE_SHOT) fire on `isFullyCharged`.
-        //
-        // We set `input.fireSecondary = true` rather than calling
-        // `this.firePower(...)` directly so the existing pipeline runs
-        // unchanged:
-        //   • updateChargingSystem reads the flag, checks cooldown / charge
-        //     gates, and calls `this.firePower()` itself (which already
-        //     honors the MP feature-flag gate added in 5.84+).
-        //   • The flag is cleared in updateChargingSystem after the shot,
-        //     so we don't chain stream-fire a single rising edge.
-        //
-        // Gates (mirrors the gates the desktop assist path uses, plus a
-        // few mobile-specific ones the spec calls out):
-        //   • Don't fire if the radial menu is open (mid weapon-swap).
-        //   • Don't fire if no power weapon is equipped (activePower null/empty).
-        //   • Don't fire if the player is firing-disabled (death/respawn).
-        //   • Game-state gating (pause / shop / game-over / wave intro)
-        //     is implicit: Player.update is only called from gameLoop in
-        //     the active gameplay states; pause/shop short-circuit the
-        //     whole logic step upstream.
+        // ── Mobile auto-fire — power weapon (5.92.0 → 5.100.0) ──
+        // 5.100.0 — Narrowed to CHARGE-based weapons only. The mobile
+        // tap-for-power gesture (mobile-touch.js fires
+        // `input.fireSecondary` on a quick canvas tap) handles all
+        // cooldown-based power weapons (NOVA_BLAST, MISSILE_SALVO,
+        // MINE_LAYER, LANCE_BEAM, LIGHTNING_ARC). Charge weapons
+        // (CHARGE_SHOT) still auto-fire on full charge because a single
+        // tap can't represent the press-and-hold-and-release gesture.
         if (isMobile() && this.activePower && !this.firingDisabled) {
             const radialOpen = !!(ge && ge.radialMenu && ge.radialMenu.isOpen && ge.radialMenu.isOpen());
             if (!radialOpen) {
                 const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
-                if (cfg) {
-                    if (cfg.isChargeBased) {
-                        if (this.isFullyCharged) input.fireSecondary = true;
-                    } else if (this.isPowerReady && this.isPowerReady()) {
-                        input.fireSecondary = true;
-                    }
+                if (cfg && cfg.isChargeBased && this.isFullyCharged) {
+                    input.fireSecondary = true;
                 }
             }
         }
@@ -746,19 +728,15 @@ export class Player {
         ship.field = gameField || null;
 
         const sim = this._inputScratch;
-        // 5.94.0 — Mobile tower-defense mode: gate movement input so the
-        // ship is stationary. Aim still flows through (so atan2 inside
-        // updateShip sets this.angle to face the tap point), and primary /
-        // power fire still occur — but up/down/left/right are forced
-        // false so the velocity-integration step adds zero thrust. The
-        // post-physics velocity zero-out below clears any tiny residue
-        // (friction snap-to-zero is already 0.05 px/tick, but belt +
-        // suspenders so vel.x/y are exactly 0 in mobile mode).
-        const mobileLock = isMobile();
-        sim.up = !mobileLock && !!input.up;
-        sim.down = !mobileLock && !!input.down;
-        sim.left = !mobileLock && !!input.left;
-        sim.right = !mobileLock && !!input.right;
+        // 5.100.0 — Mobile movement comes from the analog stick, not
+        // keyboard up/down/left/right. Zero out the boolean thrust
+        // inputs so updateShip doesn't add a competing legacy thrust.
+        // The stick path below overrides velocity + position cleanly.
+        const _mobile = isMobile();
+        sim.up = !_mobile && !!input.up;
+        sim.down = !_mobile && !!input.down;
+        sim.left = !_mobile && !!input.left;
+        sim.right = !_mobile && !!input.right;
         sim.aimX = input.aimX;
         sim.aimY = input.aimY;
         sim.speedMult = this.getMovementSpeedMultiplier();
@@ -775,15 +753,53 @@ export class Player {
         this.vel.y = ship.vy;
         this.angle = ship.angle;
 
-        // 5.94.0 — Stationary-player invariant on mobile. After the
-        // physics step zero out velocity + restore the original position
-        // so even dash / external velocity sources can't displace the
-        // ship. Dash on mobile is a no-op (no movement = no dash burst).
-        if (mobileLock) {
-            this.x = prevX;
-            this.y = prevY;
-            this.vel.x = 0;
-            this.vel.y = 0;
+        // 5.100.0 — Mobile drag-to-move (Sky-force-style). Reverses
+        // the 5.94 stationary-ship pivot. Reads the virtual analog
+        // stick's normalized vector from `input.stickInput` (set each
+        // frame by mobile-touch.js) and overrides the physics step's
+        // velocity with a lerp toward (stick × MAX_V × mult).
+        //
+        // We override AFTER updateShip rather than gating its input so
+        // existing per-frame side effects (angle from atan2, friction
+        // snap-to-zero) still run unchanged for any state we don't
+        // want to disturb. The position is reset to prevX + new vel
+        // so the player's actual movement comes from the stick alone.
+        if (isMobile()) {
+            const stickIn = (input && input.stickInput) || { x: 0, y: 0, magnitude: 0 };
+            const speedMult = this.getMovementSpeedMultiplier();
+            const MAX_V_MOBILE = GAME_CONFIG.MAX_V * 1.5 * speedMult;
+            const targetVx = stickIn.x * MAX_V_MOBILE;
+            const targetVy = stickIn.y * MAX_V_MOBILE;
+            // Smooth lerp — 0.22 / frame ≈ 70% in 90 ms (responsive
+            // without feeling snappy/twitchy).
+            const LERP = 0.22;
+            this.vel.x += (targetVx - this.vel.x) * LERP;
+            this.vel.y += (targetVy - this.vel.y) * LERP;
+            // Decay residue when stick is released (helps the ship
+            // come to rest crisply instead of drifting).
+            if (stickIn.magnitude < 0.05) {
+                this.vel.x *= 0.82;
+                this.vel.y *= 0.82;
+                if (Math.abs(this.vel.x) < 0.05) this.vel.x = 0;
+                if (Math.abs(this.vel.y) < 0.05) this.vel.y = 0;
+            }
+            // Apply movement from prevX/Y so the physics step's
+            // position update doesn't double up.
+            this.x = prevX + this.vel.x;
+            this.y = prevY + this.vel.y;
+            // Clamp to the game field bounds so the ship can't escape.
+            if (gameField) {
+                const padX = this.radius || 12;
+                const padY = this.radius || 12;
+                const minX = (gameField.x || 0) + padX;
+                const maxX = (gameField.x || 0) + gameField.width - padX;
+                const minY = (gameField.y || 0) + padY;
+                const maxY = (gameField.y || 0) + gameField.height - padY;
+                if (this.x < minX) { this.x = minX; this.vel.x = 0; }
+                if (this.x > maxX) { this.x = maxX; this.vel.x = 0; }
+                if (this.y < minY) { this.y = minY; this.vel.y = 0; }
+                if (this.y > maxY) { this.y = maxY; this.vel.y = 0; }
+            }
         }
 
         // Legacy fallback: if no gameField was provided, the original

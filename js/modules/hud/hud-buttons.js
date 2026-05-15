@@ -83,32 +83,12 @@ export function getHudButtonRects(canvasW, canvasH) {
         pause: { id: 'pause', x: slot(2), y, w: bw, h: bh, icon: 'pause', label: 'PAUSE' },
     };
 
-    // 5.99.3 — PRM at bottom-LEFT corner; PWR at bottom-RIGHT corner.
-    // Both share the same baseline as the central bar so the bottom of
-    // the screen reads as one HUD row: [PRM] [SHOP STATS PAUSE] [PWR].
-    if (mobile) {
-        const sideY = canvasH - BOTTOM_MARGIN - SIDE_BUTTON_SIZE;
-        rects.prm = {
-            id: 'prm',
-            x: SIDE_BUTTON_MARGIN,
-            y: sideY,
-            w: SIDE_BUTTON_SIZE,
-            h: SIDE_BUTTON_SIZE,
-            icon: null,        // filled in at draw-time from player.activePrimary
-            label: 'PRM',
-            kind: 'primary',
-        };
-        rects.pwr = {
-            id: 'pwr',
-            x: canvasW - SIDE_BUTTON_MARGIN - SIDE_BUTTON_SIZE,
-            y: sideY,
-            w: SIDE_BUTTON_SIZE,
-            h: SIDE_BUTTON_SIZE,
-            icon: null,
-            label: 'PWR',
-            kind: 'power',
-        };
-    }
+    // 5.100.0 — PRM / PWR side buttons retired on mobile. The new
+    // drag-to-move + auto-fire + auto-aim + tap-for-power input model
+    // doesn't need real-time weapon swap during action; players swap
+    // via the pause menu's PRIMARY / POWER tabs between waves. Dropping
+    // the side buttons also frees the bottom-LEFT / bottom-RIGHT
+    // corners for the analog stick (configurable side).
 
     return rects;
 }
