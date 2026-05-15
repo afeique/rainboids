@@ -681,29 +681,34 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         this.lastHealthOrbDropAt = now;
     }
 
-    // ── Mobile stat pickups (5.98.0 → 5.99.2) ──
-    // Permanent-stat drops on mobile. Two kinds:
-    //   - HP_UP    (~2.5% per enemy kill — independent rolls)
-    //   - TOUGHNESS (~2.0% per enemy kill)
-    // Boss enemies roll at much higher rates so a tough fight has a
-    // very high chance of yielding upgrades. Asteroids do NOT drop
-    // these (only enemy kills) so the player has to engage the threat
-    // pool to grow.
+    // ── Mobile stat pickups (5.98.0 → 5.99.4) ──
+    // Diablo-style defensive item drops on mobile. Four slots:
+    //   HP:        helm,  armor    (each roll picks one of these)
+    //   Toughness: shield, plating (each roll picks one of these)
     //
-    // 5.99.2 — Drop rates bumped ~3× (0.8 → 2.5, 0.6 → 2.0, boss
-    // 2.4 → 6.0, 1.8 → 5.0). The previous numbers produced a permanent-
-    // upgrade roughly every 3-4 waves on mobile; 5.99.2 puts one in
-    // the player's hands every ~1 wave, which is the right cadence for
-    // the casual mobile pitch.
+    // Two independent rolls per kill — one for HP, one for toughness.
+    // Boss enemies roll at much higher rates so milestones feel
+    // rewarding. Asteroids do NOT drop these (only enemy kills) so the
+    // player has to engage the threat pool to grow.
+    //
+    // 5.99.4 — Each pickup now carries its slot id AND the current
+    // wave as the item LEVEL. Higher-level items have proportionally
+    // bigger bonuses (see item-system.js for formulas). The pickup
+    // collision in collision-system.js calls `createItem` with these
+    // values, then `player.equipItem(item)` for the replace-if-better
+    // logic. So the player builds up a "best so far" set of 4 items.
     if (isMobile() && isEnemy && this.statPickupPool) {
         const boss = !!(entity && entity.isBoss);
         const hpRate = boss ? 0.060 : 0.025;
         const toughRate = boss ? 0.050 : 0.020;
+        const wave = Math.max(1, this.game?.currentWave | 0);
         if (Math.random() < hpRate) {
-            this.statPickupPool.get(x, y, 'hpup');
+            const slot = Math.random() < 0.5 ? 'helm' : 'armor';
+            this.statPickupPool.get(x, y, slot, wave);
         }
         if (Math.random() < toughRate) {
-            this.statPickupPool.get(x, y, 'toughness');
+            const slot = Math.random() < 0.5 ? 'shield' : 'plating';
+            this.statPickupPool.get(x, y, slot, wave);
         }
     }
 

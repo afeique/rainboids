@@ -49,10 +49,18 @@ export class StatPickup {
         this.active = false;
     }
 
-    reset(x, y, kind = 'hpup') {
+    reset(x, y, kind = 'hpup', level = 1) {
         this.x = x;
         this.y = y;
-        this.kind = (kind === 'toughness') ? 'toughness' : 'hpup';
+        // 5.99.4 — `kind` is now a slot id ('helm' / 'armor' / 'shield'
+        // / 'plating') OR the legacy aliases 'hpup' / 'toughness' for
+        // backward compatibility. The dropOrbsFromEntity caller picks
+        // a specific slot from {helm, armor} / {shield, plating} at
+        // spawn time so the StatPickup carries its slot identity all
+        // the way to the collision-system equip path.
+        const SLOT_KIND_LEGACY = { hpup: 'helm', toughness: 'shield' };
+        this.kind = SLOT_KIND_LEGACY[kind] || kind;
+        this.level = Math.max(1, level | 0);
         // 5.99.2 — Visual radius bumped 14 → 20 px so pickups are
         // legible at the portrait 0.65 camera zoom (~9 → ~13 effective
         // world-px). Hit radius (used in collision-system) reads
@@ -133,7 +141,10 @@ export class StatPickup {
 
     draw(ctx) {
         if (!this.active) return;
-        const isHp = this.kind === 'hpup';
+        // 5.99.4 — `this.kind` is now a slot id. HP slots (helm, armor)
+        // share the cyan treatment; toughness slots (shield, plating)
+        // share amber.
+        const isHp = this.kind === 'helm' || this.kind === 'armor' || this.kind === 'hpup';
 
         ctx.save();
         ctx.globalAlpha = this.opacity;

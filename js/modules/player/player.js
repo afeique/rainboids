@@ -199,6 +199,13 @@ export class Player {
         this.tractorShieldActive = false;
         this.tractorShieldAngle = 0;
 
+        // 5.99.4 — Diablo-style equippedItems table. One item per slot
+        // (helm, armor, shield, plating). Each item is the object
+        // returned by `createItem` in world/item-system.js. New
+        // pickups call `equipItem` below which replaces only when the
+        // new bonus exceeds the current item's bonus.
+        this.equippedItems = { helm: null, armor: null, shield: null, plating: null };
+
         this.initializePlayer();
     }
     
@@ -270,6 +277,39 @@ export class Player {
     }
     
     // Player leveling system methods
+    /**
+     * 5.99.4 — Equip a new Diablo-style item if its bonus exceeds the
+     * currently-equipped item's bonus in the same slot. Returns:
+     *   { equipped: true,  replaced: prevItemOrNull }  on successful equip
+     *   { equipped: false, current: currentItem }      when not an upgrade
+     *
+     * Side effects on equip:
+     *   - HP items grow getEffectiveMaxHealth → bump current health by
+     *     the bonus delta so the player feels the upgrade immediately
+     *     (rather than just seeing a wider bar).
+     *   - Toughness items just need the equip — getEffectiveShield
+     *     already reads the equipped table.
+     */
+    equipItem(item) {
+        if (!item || !item.slot) return { equipped: false, current: null };
+        if (!this.equippedItems) {
+            this.equippedItems = { helm: null, armor: null, shield: null, plating: null };
+        }
+        const prev = this.equippedItems[item.slot] || null;
+        const prevBonus = prev ? prev.bonus : 0;
+        if (item.bonus <= prevBonus) {
+            return { equipped: false, current: prev };
+        }
+        this.equippedItems[item.slot] = item;
+        if (item.bonusType === 'hp') {
+            // Bump current HP by the gain so the wider bar isn't empty.
+            const gain = item.bonus - prevBonus;
+            const newMax = this.getEffectiveMaxHealth();
+            this.health = Math.min(newMax, this.health + gain);
+        }
+        return { equipped: true, replaced: prev };
+    }
+
     gainExperience(amount) {
         return progression.gainExperience.call(this, amount);
     }

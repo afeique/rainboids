@@ -8,6 +8,7 @@
 
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { iconSpriteCache } from '../core/utils.js';
+import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 
 // Helper: percent-format with 1 decimal of headroom for tiny gains.
 function pct(v) { return `${(v * 100).toFixed(1)}%`; }
@@ -252,6 +253,43 @@ function buildStatsModel(player, gameEngine) {
             rows: [{ key: '— none —', value: '', tip: 'Spend SP in the POWERUPS pause-tab to buy powerups.' }],
         });
     }
+
+    // ── Diablo-style defensive INVENTORY (5.99.4) ────────────────────
+    // One slot per row. Empty slots render `— none —` so the player
+    // sees the 4 slots they're filling toward. New pickups replace a
+    // slot's item only when the new bonus > current bonus.
+    const inventoryRows = [];
+    const equipped = (player && player.equippedItems) || null;
+    for (const slot of SLOT_ORDER) {
+        const it = equipped ? equipped[slot] : null;
+        const slotName = SLOT_LABEL[slot] || slot.toUpperCase();
+        if (it) {
+            inventoryRows.push({
+                key: slotName,
+                value: `${it.name} · L${it.level} (${it.bonusLabel})`,
+                tip:
+                    `Slot: ${slotName}\n` +
+                    `Item: ${it.name}\n` +
+                    `Level: ${it.level} (drops level = the wave it dropped on)\n` +
+                    `Bonus: ${it.bonusLabel}\n` +
+                    `New pickups for this slot replace this item only if\n` +
+                    `their bonus is higher.`,
+            });
+        } else {
+            inventoryRows.push({
+                key: slotName,
+                value: '— none —',
+                tip:
+                    `Slot: ${slotName} — currently empty.\n` +
+                    `Kill enemies on mobile to find a ${slotName} item; it\n` +
+                    `auto-equips on pickup.`,
+            });
+        }
+    }
+    sections.push({
+        title: 'INVENTORY (DEFENSE)',
+        rows: inventoryRows,
+    });
 
     // ── Scaling info card ────────────────────────────────────────────
     sections.push({

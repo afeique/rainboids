@@ -5,6 +5,8 @@ import { random, collision, starCollision, triggerHapticFeedback } from '../core
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
+import { createItem } from '../world/item-system.js';
+import { SLOT_LABEL } from '../world/item-names.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -513,51 +515,58 @@ export function handleCollisions() {
             }
         }
 
-        // 5.98.0 — Stat pickups (mobile-only spawn, but the collision
-        // path is gated by `active` so a stray pickup on desktop would
-        // still collect cleanly if dev-spawned). On contact: apply the
-        // permanent stat bump, flash a confirmation toast, recycle.
+        // 5.98.0 → 5.99.4 — Diablo-style defensive item pickups.
+        // Mobile-only spawn (combat-manager.dropOrbsFromEntity gates),
+        // but the collision path stays generic so a dev-spawned drop
+        // still collects on desktop.
         //
-        // 5.99.2 — Switched feedback from `ui:show-message` (which is a
-        // silent no-op — #game-message-overlay is commented out in
-        // index.html) to the new canvas-rendered pickup toast. Now the
-        // player actually sees that they got a permanent upgrade.
+        // On contact:
+        //   1. createItem(slot, level) generates a randomly-named,
+        //      wave-scaled item.
+        //   2. player.equipItem(item) replaces the slot's current item
+        //      iff the new bonus exceeds the current bonus.
+        //   3. Toast confirms either EQUIPPED (item name + bonus) or
+        //      FOUND (no upgrade) so the player understands the outcome.
         if (this.statPickupPool) {
             for (let i = this.statPickupPool.activeObjects.length - 1; i >= 0; i--) {
                 const pickup = this.statPickupPool.activeObjects[i];
                 if (!pickup.active || !starCollision(this.player, pickup)) continue;
-                if (pickup.kind === 'hpup') {
-                    // +5 max HP and +5 current HP (no overflow waste).
-                    this.player.maxHealth += 5;
-                    this.player.health = Math.min(
-                        this.player.getEffectiveMaxHealth ? this.player.getEffectiveMaxHealth() : this.player.maxHealth,
-                        this.player.health + 5
-                    );
-                    if (this.events?.emit) this.events.emit('audio:health-regen');
-                    if (typeof this.triggerPickupToast === 'function') {
+
+                const slot = pickup.kind;
+                const level = pickup.level || 1;
+                const item = createItem(slot, level);
+                const result = (typeof this.player.equipItem === 'function')
+                    ? this.player.equipItem(item)
+                    : { equipped: false, current: null };
+
+                // Slot category drives the toast accent + audio cue.
+                const isHp = item.bonusType === 'hp';
+                const accent = item.accentColor || (isHp ? '#33ddff' : '#ffae3a');
+                if (this.events?.emit) {
+                    this.events.emit(isHp ? 'audio:health-regen' : 'audio:shield');
+                }
+
+                if (typeof this.triggerPickupToast === 'function') {
+                    if (result.equipped) {
                         this.triggerPickupToast({
-                            title: 'HP UP',
-                            subtitle: '+5 MAX HEALTH',
-                            accentColor: '#33ddff',
-                            duration: 1800,
+                            title: item.name,
+                            subtitle: `${SLOT_LABEL[slot] || slot} · ${item.bonusLabel}`,
+                            accentColor: accent,
+                            duration: 2400,
                         });
-                    }
-                } else if (pickup.kind === 'toughness') {
-                    // +3 damage-reduction % (capped at 75 in getEffectiveShield).
-                    this.player.shield = Math.min(75, (this.player.shield || 0) + 3);
-                    if (this.events?.emit) this.events.emit('audio:shield');
-                    if (typeof this.triggerPickupToast === 'function') {
+                    } else {
+                        // "Found but no upgrade" — shorter / dimmer toast.
                         this.triggerPickupToast({
-                            title: 'TOUGHNESS UP',
-                            subtitle: '+3% DEFENSE',
-                            accentColor: '#ffae3a',
-                            duration: 1800,
+                            title: item.name,
+                            subtitle: 'NO UPGRADE',
+                            accentColor: 'rgba(160, 170, 190, 0.85)',
+                            duration: 1200,
                         });
                     }
                 }
-                // Pickup burst — color-matched to the kind.
-                const isHp = pickup.kind === 'hpup';
-                const burstColor = isHp ? '#33ddff' : '#ffae3a';
+
+                // Pickup burst — color-matched to the slot's accent.
+                const burstColor = accent;
                 const blip = this.particlePool.get(pickup.x, pickup.y, 'starBlip');
                 if (blip) {
                     blip.color = burstColor;

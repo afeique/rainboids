@@ -11,6 +11,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.99.4] - 2026-05-14
+
+### Added — Diablo-style defensive item system
+
+Replaces the flat `+5 MAX HP` / `+3% DEFENSE` pickups from 5.98 with
+a slot-based item system. Four equipment slots:
+
+  HP slots:        helm,  armor
+  Toughness slots: shield, plating
+
+Each pickup carries:
+  - A SLOT (assigned at spawn time — one HP roll picks helm OR armor,
+    one toughness roll picks shield OR plating)
+  - A LEVEL = the current wave number
+  - A randomly-generated NAME from the template
+    `[Prefix] [Base] of [Suffix]`. Prefix/suffix pools are tone-typed
+    (HP: Sturdy/Hardened/of the Bear/of Endurance; Toughness:
+    Bristling/Tempered/of Iron/of the Tortoise). Bases are per-slot
+    so the language stays believable ("Sturdy Helm of the Bear",
+    "Bristling Bracers of Iron"). Combinatorics: **1152 possible
+    distinct names** across all four slots.
+  - A scaled bonus value:
+      HP:        `5 + (level - 1) × 2`         L1=5, L10=23, L20=43
+      Toughness: `3 + (level - 1) × 0.4`       L1=3, L10=6.6, L20=10.6
+
+**Replacement logic:** on pickup, the new item's bonus is compared to
+the currently-equipped item in that slot. If higher, it replaces;
+otherwise the item is discarded with a "NO UPGRADE" toast so the
+player understands why nothing happened. HP items also bump current
+HP by the bonus delta on equip so the wider bar isn't empty.
+
+**Bonus aggregation:** extends `getEffectiveMaxHealth` and
+`getEffectiveShield` in `progression.js`. HP items stack on top of
+HEALTH_BOOST powerup stacks; toughness items stack on top of
+SHIELD_BOOST. The existing 600 HP and 75% shield caps still hold.
+
+**Inventory display:** new INVENTORY (DEFENSE) section in the stats
+overlay (open with the STATS HUD button or backtick key on desktop).
+Shows all 4 slots with the equipped item's name, level, and bonus.
+Empty slots labeled `— none —`. Each row has a tooltip explaining the
+slot.
+
+**Pickup feedback:** the canvas toast (added 5.99.2) shows the item's
+random name + slot + bonus. Example: "Sturdy Helm of the Bear /
+HELM · +13 MAX HP".
+
+### Files
+
+- `js/modules/world/item-names.js` — prefix/base/suffix tables
+  (committed in 5.99.3 as data-only; now consumed by the runtime).
+- `js/modules/world/item-system.js` — new file: `createItem(slot,
+  level)`, `getHpBonusForLevel`, `getToughnessBonusForLevel`,
+  `isUpgrade`.
+- `js/modules/player/player.js` — `equippedItems` table +
+  `equipItem(item)` replace-if-better.
+- `js/modules/player/progression.js` — extended bonus aggregation.
+- `js/modules/world/stat-pickup.js` — accepts slot + level.
+- `js/modules/combat/combat-manager.js` — drop spawn picks a specific
+  slot per roll.
+- `js/modules/combat/collision-system.js` — on pickup, generate item,
+  call player.equipItem, route toast.
+- `js/modules/ui/stats-overlay.js` — INVENTORY section.
+
+Full unit suite 972/972 passing.
+
+---
+
 ## [5.99.3] - 2026-05-14
 
 ### Changed — Mobile HUD: PRM/PWR side buttons moved to bottom corners
