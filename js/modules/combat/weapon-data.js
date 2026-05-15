@@ -33,14 +33,18 @@ export const PRIMARY_WEAPONS = {
         icon: 'rain',
         color: '#b3ff44',
         fireRate: 130,
-        damage: 0.4,
+        // 5.112.0 — Now a 3-needle cone (was 1 needle + jitter).
+        // Per-needle damage cut 0.4 → 0.15 so DPS at full saturation
+        // (all 3 hitting at point-blank) stays in the same ballpark
+        // (≈ 3.46 DPS, was 3.08). At range, only 1-2 needles connect
+        // — natural falloff that matches the new Scatter Shot tuning.
+        damage: 0.15,
         bulletSpeed: 1.1,
         bulletSize: 0.5,
-        bulletCount: 1,
-        // 5.111.0 — Cone-of-fire identity made explicit. Slight
-        // randomized per-shot jitter (±0.10 rad ≈ ±5.7°) reads as a
-        // saturation weapon by design — no spread-reduction upgrade,
-        // accuracy is baked into the weapon. Was 0.15.
+        // 3 needles per shot fanned across `spreadAngle`. MULTI_SHOT
+        // and HAILSTORM add needles WITHIN the same cone width, so
+        // density grows but the cone doesn't.
+        bulletCount: 3,
         spreadAngle: 0.20,
         piercing: 0,
         range: 1.0,

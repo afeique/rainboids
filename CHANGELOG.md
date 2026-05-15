@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.112.0] - 2026-05-15
+
+### Changed — Storm Needles now fires a cone of 3 needles
+
+Storm Needles was a single-needle weapon with per-shot jitter — a
+"cone of fire" in name only. 5.112.0 makes the cone literal: every
+shot now fans **3 needles across `spreadAngle`** (11.5°), the same
+fan-math Scatter Shot uses. Each needle still has a small ±1.1°
+per-shot jitter so consecutive bursts don't trace identical lines.
+
+Damage rebalanced to keep DPS roughly stable at point-blank
+saturation:
+
+|                      | before | after  |
+|----------------------|-------:|-------:|
+| Needles per shot     |     1  |     3  |
+| Damage per needle    |   0.4  |   0.15 |
+| DPS, all needles hit | 3.08   | 3.46   |
+| DPS, 1 needle hits   | 3.08   | 1.15   |
+
+Natural falloff: point-blank lands all three for a saturating
+~3.5 DPS; mid-range typically lands 1-2 needles and reads as
+chip damage. MULTI_SHOT and HAILSTORM continue to add needles
+within the same cone width, so density grows without the cone
+spreading visually wider.
+
+Implementation mirrors `fireScatterGun`: even-fan distribution +
+per-needle jitter. No new upgrades; no breaking changes to the
+existing Storm Needles upgrade tree (NEEDLE_STORM, POISON_TIP,
+STATIC_CHARGE, SUPPRESSION, NEEDLE_VELOCITY, HAILSTORM).
+
 ## [5.111.0] - 2026-05-15
 
 ### Removed — Spread-reduction upgrades
