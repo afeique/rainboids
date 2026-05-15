@@ -105,42 +105,57 @@ export const PRIMARY_WEAPONS = {
     //   already displays as a ring around the player.
 };
 
-// Streak damage tiers — 5.102.0 epic ladder.
-//   Tiers spread across 3 → 200 kills with thirteen distinct labels.
-//   The damage multiplier grows in +0.20–0.25 steps through tier 5
-//   (LEGENDARY) and then flattens to ~0.10 / 0.05 / 0.025 per tier so
-//   the top end is a *cosmetic* flex rather than a balance breaker —
-//   the cap (TRANSCENDENT) caps damage at 3.0× even at a 200-kill run.
+// Streak damage tiers — 5.103.0 every-10-kills ladder.
+//   Twenty distinct tiers at kills 10, 20, 30, ..., 200 so the player
+//   sees a phase change every 10 confirmed kills. Damage climbs in
+//   +0.15 steps through LEGENDARY (50 kills, 2.00×) and then tapers
+//   into the high tiers so the top end stays a cosmetic flex without
+//   breaking balance. Hard cap at 3.00× (RAINBOIDS GOD, 200 kills).
+//
 //   Each tier carries a unique color so the streak HUD reads as a
 //   distinct phase change instead of "everything is gold past 15".
 //
 //   kills  mult   label          notes
-//      3   1.25×  EMPOWERED      first taste
-//      6   1.50×  UNSTOPPABLE    sustained pressure
-//     10   1.75×  GODLIKE        the old peak
-//     15   2.00×  LEGENDARY      former cap
-//     20   2.15×  HERCULEAN      stretch goal
-//     30   2.30×  INDOMITABLE    immune to bad runs
-//     45   2.45×  OUTRAGEOUS     this is ridiculous
-//     60   2.60×  IMMORTAL       death-stop level
-//     80   2.75×  APOCALYPTIC    end-of-world tier
-//    100   2.85×  ASTRONOMICAL   triple-digits
-//    130   2.92×  TRANSCENDENT   beyond reason
-//    165   2.97×  ETERNAL        nothing left to prove
+//     10   1.25×  EMPOWERED      first taste
+//     20   1.40×  UNSTOPPABLE    sustained pressure
+//     30   1.55×  RELENTLESS     no breaks
+//     40   1.70×  GODLIKE        the classic peak
+//     50   1.85×  LEGENDARY      auto-splash unlocked here ↓
+//     60   2.00×  HERCULEAN      "feats of strength" tier
+//     70   2.12×  INDOMITABLE    immune to bad runs
+//     80   2.23×  OUTRAGEOUS     this is ridiculous
+//     90   2.33×  IMMORTAL       death-stop level
+//    100   2.42×  APOCALYPTIC    triple-digit milestone
+//    110   2.50×  ASTRONOMICAL   off the charts
+//    120   2.58×  GALACTIC       beyond planet-scale
+//    130   2.65×  COSMIC         beyond galaxy-scale
+//    140   2.72×  TRANSCENDENT   beyond reason
+//    150   2.78×  OMNIPOTENT     untouchable
+//    160   2.84×  MYTHIC         storybook material
+//    170   2.89×  INVINCIBLE     cannot be stopped
+//    180   2.93×  ETERNAL        will never end
+//    190   2.97×  INFINITE       no upper bound
 //    200   3.00×  RAINBOIDS GOD  hard cap, the final word
 export const STREAK_TIERS = [
-    { kills:   3, mult: 1.25, label: 'EMPOWERED',     color: '#7FE7FF' }, // pale cyan
-    { kills:   6, mult: 1.50, label: 'UNSTOPPABLE',   color: '#FFA844' }, // orange
-    { kills:  10, mult: 1.75, label: 'GODLIKE',       color: '#FF6688' }, // pink-red
-    { kills:  15, mult: 2.00, label: 'LEGENDARY',     color: '#FFD700' }, // gold
-    { kills:  20, mult: 2.15, label: 'HERCULEAN',     color: '#B0FF55' }, // bright lime
-    { kills:  30, mult: 2.30, label: 'INDOMITABLE',   color: '#55D6FF' }, // electric blue
-    { kills:  45, mult: 2.45, label: 'OUTRAGEOUS',    color: '#FF55FF' }, // magenta
-    { kills:  60, mult: 2.60, label: 'IMMORTAL',      color: '#FFD0FF' }, // pale violet
-    { kills:  80, mult: 2.75, label: 'APOCALYPTIC',   color: '#FF4444' }, // blood red
-    { kills: 100, mult: 2.85, label: 'ASTRONOMICAL',  color: '#AA88FF' }, // royal purple
-    { kills: 130, mult: 2.92, label: 'TRANSCENDENT',  color: '#88FFEE' }, // teal-mint
-    { kills: 165, mult: 2.97, label: 'ETERNAL',       color: '#FFFFFF' }, // pure white
+    { kills:  10, mult: 1.25, label: 'EMPOWERED',     color: '#7FE7FF' }, // pale cyan
+    { kills:  20, mult: 1.40, label: 'UNSTOPPABLE',   color: '#FFA844' }, // orange
+    { kills:  30, mult: 1.55, label: 'RELENTLESS',    color: '#FF7733' }, // red-orange
+    { kills:  40, mult: 1.70, label: 'GODLIKE',       color: '#FF6688' }, // pink-red
+    { kills:  50, mult: 1.85, label: 'LEGENDARY',     color: '#FFD700' }, // gold
+    { kills:  60, mult: 2.00, label: 'HERCULEAN',     color: '#B0FF55' }, // bright lime
+    { kills:  70, mult: 2.12, label: 'INDOMITABLE',   color: '#55D6FF' }, // electric blue
+    { kills:  80, mult: 2.23, label: 'OUTRAGEOUS',    color: '#FF55FF' }, // magenta
+    { kills:  90, mult: 2.33, label: 'IMMORTAL',      color: '#FFD0FF' }, // pale violet
+    { kills: 100, mult: 2.42, label: 'APOCALYPTIC',   color: '#FF4444' }, // blood red
+    { kills: 110, mult: 2.50, label: 'ASTRONOMICAL',  color: '#AA88FF' }, // royal purple
+    { kills: 120, mult: 2.58, label: 'GALACTIC',      color: '#4466FF' }, // deep blue
+    { kills: 130, mult: 2.65, label: 'COSMIC',        color: '#9933FF' }, // purple
+    { kills: 140, mult: 2.72, label: 'TRANSCENDENT',  color: '#88FFEE' }, // teal-mint
+    { kills: 150, mult: 2.78, label: 'OMNIPOTENT',    color: '#FF44AA' }, // hot pink
+    { kills: 160, mult: 2.84, label: 'MYTHIC',        color: '#DC143C' }, // crimson
+    { kills: 170, mult: 2.89, label: 'INVINCIBLE',    color: '#FFFFFF' }, // bright white
+    { kills: 180, mult: 2.93, label: 'ETERNAL',       color: '#FFF8DC' }, // ivory
+    { kills: 190, mult: 2.97, label: 'INFINITE',      color: '#FFEC8B' }, // pale gold
     { kills: 200, mult: 3.00, label: 'RAINBOIDS GOD', color: '#FFD700' }, // gold (cap)
 ];
 export const STREAK_BUFF_DURATION = 4000; // ms — buff lasts 4s, refreshes on each new kill while active.

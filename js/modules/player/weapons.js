@@ -596,13 +596,15 @@ export function applyGlobalBulletUpgrades(bullet) {
     // 5.75.0 — LEGENDARY streak qualitative bonus. Every bullet gains
     // a small explosion radius even without the EXPLOSIVE powerup —
     // visual payoff for sustained dominance.
-    // 5.102.0 — Expanded streak ladder. The bonus now triggers at
-    // LEGENDARY (15 kills) and every tier above it, so the player
-    // keeps the splash perk all the way to RAINBOIDS GOD.
+    // 5.103.0 — Tiers moved to increments of 10; LEGENDARY now sits at
+    // 50 kills. Splash gates on LEGENDARY and every tier above so the
+    // player who grinds to 50+ keeps the perk all the way to the
+    // RAINBOIDS GOD cap.
     const _streakSplashTiers = new Set([
         'LEGENDARY', 'HERCULEAN', 'INDOMITABLE', 'OUTRAGEOUS',
-        'IMMORTAL', 'APOCALYPTIC', 'ASTRONOMICAL',
-        'TRANSCENDENT', 'ETERNAL', 'RAINBOIDS GOD',
+        'IMMORTAL', 'APOCALYPTIC', 'ASTRONOMICAL', 'GALACTIC',
+        'COSMIC', 'TRANSCENDENT', 'OMNIPOTENT', 'MYTHIC',
+        'INVINCIBLE', 'ETERNAL', 'INFINITE', 'RAINBOIDS GOD',
     ]);
     if (this.streakTierLabel && _streakSplashTiers.has(this.streakTierLabel)) {
         bullet.explosive = true;

@@ -41,7 +41,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **5.102.0**
+Current version: **5.103.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -55,7 +55,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Offensive + defensive powerups** with stacking mechanics and visual indicators — offense (Rapid Fire, Multi Shot, Homing, Big Bullets, Piercing, Explosive, Crit Chance, Crit Damage, Knockback) and defense (Health Boost / Toughness / Regen, restored 5.101.0). Buy with SP in the pause-menu POWERUPS tab any time.
 - **Survivor cards every 3rd wave (5.101.0)** — wave-clear opens a 3-card overlay (2 offense + 1 defense) for a free pick. Followed by a 3-card QUICK BUY overlay listing weapon upgrades tailored to the equipped primary + power. 30 waves ÷ 3 = exactly 10 free picks per playthrough.
 - **Diablo-style defensive inventory (5.99.4 / 5.101.0)** — four slots (helm, armor, shield, plating). Items drop from enemy kills on **both desktop and mobile** (was mobile-only) and auto-equip if their bonus beats the currently-equipped item.
-- **Kill-streak damage tiers** — 13-tier ladder from EMPOWERED (3 kills, +25%) to RAINBOIDS GOD (200 kills, +200%) with epic intermediate labels (HERCULEAN, INDOMITABLE, OUTRAGEOUS, IMMORTAL, APOCALYPTIC, ASTRONOMICAL, TRANSCENDENT, ETERNAL). Streak resets when you take damage. LEGENDARY (15 kills) and every tier above also grants auto-explosive splash on every shot.
+- **Kill-streak damage tiers** — 20-tier ladder firing every 10 kills, from EMPOWERED (10 kills, +25%) to RAINBOIDS GOD (200 kills, +200%) with epic intermediate labels (RELENTLESS, GODLIKE, LEGENDARY, HERCULEAN, INDOMITABLE, OUTRAGEOUS, IMMORTAL, APOCALYPTIC, ASTRONOMICAL, GALACTIC, COSMIC, TRANSCENDENT, OMNIPOTENT, MYTHIC, INVINCIBLE, ETERNAL, INFINITE). Streak resets when you take damage. LEGENDARY (50 kills) and every tier above also grants auto-explosive splash on every shot.
 - **30-wave speedrun campaign (5.101.0)** with six scripted boss waves (waves 5/10/15/20/25/30) and a Game Complete stats screen — finish the run as fast as possible
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Save / Continue** (5.79.0): wave-start auto-save lets the player resume from the title screen's **CONTINUE** button. **NEW GAME** rolls a randomized starting loadout (primary, power, skill) and clears the save.

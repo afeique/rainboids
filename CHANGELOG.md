@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.103.0] - 2026-05-15
+
+### Changed — Killstreak ladder rescaled to every-10-kills, 20 tiers
+
+The streak system now fires a phase change every 10 confirmed kills,
+covering all the way to 200 with twenty distinct labels:
+
+10 EMPOWERED · 20 UNSTOPPABLE · 30 RELENTLESS · 40 GODLIKE ·
+50 LEGENDARY · 60 HERCULEAN · 70 INDOMITABLE · 80 OUTRAGEOUS ·
+90 IMMORTAL · 100 APOCALYPTIC · 110 ASTRONOMICAL · 120 GALACTIC ·
+130 COSMIC · 140 TRANSCENDENT · 150 OMNIPOTENT · 160 MYTHIC ·
+170 INVINCIBLE · 180 ETERNAL · 190 INFINITE · 200 RAINBOIDS GOD.
+
+Damage multipliers climb in +0.15 steps through LEGENDARY (50 kills,
+1.85×) then taper into the high tiers — wave 200 lands at the 3.00×
+hard cap. Each tier carries its own color so the streak HUD reads as
+a distinct ramp rather than "everything is gold past the first peak".
+
+### Changed — Auto-explosive splash unlocks at LEGENDARY (50)
+
+The auto-splash bullet bonus that fired at LEGENDARY (15) in 5.102.0
+now triggers at the new LEGENDARY (50 kills) and every tier above —
+sixteen tiers in total. A bigger lift to earn, but it carries all the
+way through to the RAINBOIDS GOD cap.
+
 ## [5.102.0] - 2026-05-15
 
 ### Added — Epic 13-tier killstreak ladder
