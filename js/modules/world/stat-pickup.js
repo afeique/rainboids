@@ -19,21 +19,24 @@
 
 import { GAME_CONFIG } from '../core/constants.js';
 import { random } from '../core/utils.js';
-import { isMobile } from '../platform/platform-detect.js';
+// 5.109.0 — isMobile() no longer referenced; unified proximity
+// magnet runs on both platforms.
 
 const FRICTION = 0.92;
 const LIFE_TICKS = 7200;       // ~120s @ 60Hz
 const BLINK_TICKS = 300;       // blink in the last ~5s
 const FADE_TICKS = 30;         // hard fade in the last ~0.5s
 
-// Full-screen mobile magnet to match the rest of the 5.98 drop tuning.
-// 5.105.0 — Cut DRAMATICALLY (was 38/70) so inventory items visibly
-// fly toward the stationary player instead of teleporting on pickup.
-const MOBILE_MAGNET_RANGE = 3000;
-const MOBILE_MAGNET_STRENGTH = 1.2;
-const MOBILE_MAGNET_NEAR_RANGE = 80;
-const MOBILE_MAGNET_NEAR_STRENGTH = 5;
+// 5.109.0 — Unified proximity magnet. Inventory items sit CLOSEST in
+// the range hierarchy: gold (180) > health (110) > inventory (90).
+// Items are the rarest drop and the highest-impact pickup, so they
+// demand the most positional commitment from the player. Strengths
+// kept gentle so the scoop reads as a satisfying arc.
 const MAGNET_Z = 2.5;
+const MAGNET_MID_RANGE = 90;     // medium proximity zone
+const MAGNET_MID_STRENGTH = 4;   // gentle (effective ~10/tick with MAGNET_Z)
+const MAGNET_NEAR_RANGE = 40;    // snap zone
+const MAGNET_NEAR_STRENGTH = 12; // moderate snap
 
 export class StatPickup {
     constructor() {
@@ -100,23 +103,22 @@ export class StatPickup {
         this.vel.x += Math.cos(this._driftPhase) * 0.018;
         this.vel.y += Math.sin(this._driftPhase * 1.3) * 0.018;
 
-        // Magnet — mobile only. On desktop, the pickup just sits and
-        // drifts; the player has to fly close to it. Mobile gets the
-        // full-screen pull so the stationary ship can collect from
-        // anywhere.
-        if (playerPos && isMobile()) {
+        // 5.109.0 — Unified proximity magnet (mobile + desktop). The
+        // tightest range of any drop type — items are the rarest and
+        // the player has to commit to a close approach to scoop.
+        if (playerPos) {
             const dx = playerPos.x - this.x;
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
-            if (dist > 1 && dist < MOBILE_MAGNET_RANGE) {
+            if (dist > 1 && dist < MAGNET_MID_RANGE) {
                 const invDist = 1 / dist;
-                const mFar = (MOBILE_MAGNET_RANGE - dist) / MOBILE_MAGNET_RANGE;
-                this.vel.x += dx * invDist * MOBILE_MAGNET_STRENGTH * mFar * MAGNET_Z;
-                this.vel.y += dy * invDist * MOBILE_MAGNET_STRENGTH * mFar * MAGNET_Z;
-                if (dist < MOBILE_MAGNET_NEAR_RANGE) {
-                    const mNear = (MOBILE_MAGNET_NEAR_RANGE - dist) / MOBILE_MAGNET_NEAR_RANGE;
-                    this.vel.x += dx * invDist * MOBILE_MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;
-                    this.vel.y += dy * invDist * MOBILE_MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;
+                const mMid = (MAGNET_MID_RANGE - dist) / MAGNET_MID_RANGE;
+                this.vel.x += dx * invDist * MAGNET_MID_STRENGTH * mMid * MAGNET_Z;
+                this.vel.y += dy * invDist * MAGNET_MID_STRENGTH * mMid * MAGNET_Z;
+                if (dist < MAGNET_NEAR_RANGE) {
+                    const mNear = (MAGNET_NEAR_RANGE - dist) / MAGNET_NEAR_RANGE;
+                    this.vel.x += dx * invDist * MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;
+                    this.vel.y += dy * invDist * MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;
                 }
             }
         }

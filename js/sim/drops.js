@@ -55,50 +55,39 @@ export const DROP_FRICTION_HEALTH = 0.92;
 export const DROP_FRICTION_DEFAULT = 0.985;
 
 /** Outer magnet radius — gentle pull starts here.
- *  5.102.0 — Tightened 320 → 140 so the player has to fly close enough
- *  for the orb to "see" them. Trivializing the pickup is what made
- *  health feel cheap; now it's a real positional commitment. */
-export const DROP_MAGNET_FAR_RADIUS = 140;
+ *  5.109.0 — Health orbs sit MID in the range hierarchy:
+ *    gold (180px) > health (110px) > inventory (90px).
+ *  Tighter than the previous 140 so the player has to commit to a
+ *  closer approach for the heal — health is the highest-value drop
+ *  and demands the positional risk. */
+export const DROP_MAGNET_FAR_RADIUS = 110;
 
 /** Inner magnet radius — strong snap kicks in here.
- *  5.102.0 — Tightened 120 → 55 so the snap only fires when the ship is
- *  basically touching the orb. */
-export const DROP_MAGNET_NEAR_RADIUS = 55;
+ *  5.109.0 — Tightened to 45 to match the new gentle / committed
+ *  feel; snap only fires when the ship is essentially on top. */
+export const DROP_MAGNET_NEAR_RADIUS = 45;
 
-/** Gentle-pull force constant (matches the 8 in the original code). */
-export const DROP_MAGNET_FAR_FORCE = 8;
+/** Gentle-pull force constant. 5.109.0 — 8 → 5 so the orb's
+ *  approach reads as a scoop rather than a yank. */
+export const DROP_MAGNET_FAR_FORCE = 5;
 
-/** Snap-pull force constant (matches the 22 in the original code). */
-export const DROP_MAGNET_NEAR_FORCE = 22;
+/** Snap-pull force constant. 5.109.0 — 22 → 14, same rationale. */
+export const DROP_MAGNET_NEAR_FORCE = 14;
 
-/**
- * 5.95.0 — Mobile auto-collect radius for health orbs. Bumped well
- * beyond the desktop 320 px so health flies to the stationary player
- * from anywhere on a small viewport. The pull force stays at the
- * desktop FAR_FORCE so existing tests pinning the desktop two-tier
- * formula don't have to change — only the radius opens up.
- *
- * The wrapper switches between the desktop and mobile radius via the
- * `ctx.mobileMagnet` boolean (see context plumbing in engine-driver-solo
- * / engine-driver-mp). Pure-sim contract stays clean: this file owns
- * the tuning, the caller owns the policy.
- */
-export const DROP_MAGNET_FAR_RADIUS_MOBILE = 3000;
-/** Mobile inner magnet radius — tighter snap zone (5.105.0).
- *  Was 600; reduced to 200 so the orb spends more frames in the
- *  visible-flight portion of its travel and the snap only fires
- *  when it's basically at the player. */
-export const DROP_MAGNET_NEAR_RADIUS_MOBILE = 200;
-/** 5.98.0 — Mobile pull-force overrides.
- *  5.105.0 — Cut DRAMATICALLY (FAR 18→2, NEAR 40→6). The old values
- *  produced ~100+ px/tick steady-state velocity on mobile, which made
- *  drops teleport to the stationary player instead of flying visibly.
- *  New values give a satisfying ~0.8-1.2s visible flight from
- *  anywhere on the screen — the reward loop the player needs to
- *  SEE. Math: with friction 0.92, v_ss = force/0.08, so FAR=2 →
- *  v_ss ≈ 20-25 px/tick (about 0.5-1s across a phone-sized field). */
-export const DROP_MAGNET_FAR_FORCE_MOBILE = 2;
-export const DROP_MAGNET_NEAR_FORCE_MOBILE = 6;
+// 5.109.0 — Mobile-only magnet overrides REMOVED. The platform-
+// agnostic FAR / NEAR values above apply on every platform now. On
+// mobile the player is stationary but enemies routinely engage
+// within the magnet's 110-px radius (turret-defense pattern), so
+// drops from those kills naturally reach the player without the
+// "full-screen pull" hack that previously made drops teleport.
+// Existing import sites referencing the legacy *_MOBILE constants
+// are kept as aliases (same values as the desktop constants) so
+// `engine-driver-solo` / `engine-driver-mp` keep linking even if
+// they pass the now-irrelevant `ctx.mobileMagnet` flag.
+export const DROP_MAGNET_FAR_RADIUS_MOBILE = DROP_MAGNET_FAR_RADIUS;
+export const DROP_MAGNET_NEAR_RADIUS_MOBILE = DROP_MAGNET_NEAR_RADIUS;
+export const DROP_MAGNET_FAR_FORCE_MOBILE = DROP_MAGNET_FAR_FORCE;
+export const DROP_MAGNET_NEAR_FORCE_MOBILE = DROP_MAGNET_NEAR_FORCE;
 
 /**
  * Opacity fade-in/fade-out window — the orb opacity is
@@ -222,14 +211,17 @@ export function updateDrop(drop, ctx, _events) {
     // gold orbs (shape and pixel) drift freely until the player's
     // tractor beam scoops them.
     //
-    // 5.95.0 — On mobile (ctx.mobileMagnet=true), use the wider mobile
-    // radii so health orbs auto-collect from anywhere on the playfield.
-    // Force values stay the same so the desktop two-tier formula tests
-    // don't move; only the engagement radius grows.
-    const farR = ctx.mobileMagnet ? DROP_MAGNET_FAR_RADIUS_MOBILE : DROP_MAGNET_FAR_RADIUS;
-    const nearR = ctx.mobileMagnet ? DROP_MAGNET_NEAR_RADIUS_MOBILE : DROP_MAGNET_NEAR_RADIUS;
-    const farF = ctx.mobileMagnet ? DROP_MAGNET_FAR_FORCE_MOBILE : DROP_MAGNET_FAR_FORCE;
-    const nearF = ctx.mobileMagnet ? DROP_MAGNET_NEAR_FORCE_MOBILE : DROP_MAGNET_NEAR_FORCE;
+    // 5.109.0 — Mobile and desktop now share the same two-tier
+    // formula. The legacy `ctx.mobileMagnet` branch (3000-px far
+    // radius / 200-px snap zone) is gone — its full-screen pull
+    // produced teleporting drops on mobile and felt nothing like a
+    // reward arc. Drops now require positional engagement on both
+    // platforms; mobile players collect via enemies that come close
+    // to attack the stationary ship.
+    const farR = DROP_MAGNET_FAR_RADIUS;
+    const nearR = DROP_MAGNET_NEAR_RADIUS;
+    const farF = DROP_MAGNET_FAR_FORCE;
+    const nearF = DROP_MAGNET_NEAR_FORCE;
     if (isHealth && dist > 1 && dist < farR) {
         const inv = 1 / dist;
         const farFactor = (farR - dist) / farR;

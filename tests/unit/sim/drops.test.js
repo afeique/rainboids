@@ -50,20 +50,21 @@ describe('drop tuning constants — verbatim from color-star.js', () => {
     test('DROP_FRICTION_DEFAULT is 0.985', () => {
         expect(DROP_FRICTION_DEFAULT).toBe(0.985);
     });
-    // 5.102.0 — Magnet radii tightened (320→140, 120→55) so the player
-    // has to fly closer for the orb to pull. The two-tier formula and
-    // force constants stay the same.
-    test('DROP_MAGNET_FAR_RADIUS is 140 px', () => {
-        expect(DROP_MAGNET_FAR_RADIUS).toBe(140);
+    // 5.109.0 — Range hierarchy tightened so the player has to commit
+    // to a closer approach. Health sits MID (110/45) between gold
+    // (180/60) and inventory (90/40). Forces gentled so the scoop
+    // reads as an arc rather than a yank.
+    test('DROP_MAGNET_FAR_RADIUS is 110 px (5.109.0 — mid-range health)', () => {
+        expect(DROP_MAGNET_FAR_RADIUS).toBe(110);
     });
-    test('DROP_MAGNET_NEAR_RADIUS is 55 px', () => {
-        expect(DROP_MAGNET_NEAR_RADIUS).toBe(55);
+    test('DROP_MAGNET_NEAR_RADIUS is 45 px (5.109.0)', () => {
+        expect(DROP_MAGNET_NEAR_RADIUS).toBe(45);
     });
-    test('DROP_MAGNET_FAR_FORCE is 8 (5.80.x gentle pull)', () => {
-        expect(DROP_MAGNET_FAR_FORCE).toBe(8);
+    test('DROP_MAGNET_FAR_FORCE is 5 (5.109.0 — gentler pull)', () => {
+        expect(DROP_MAGNET_FAR_FORCE).toBe(5);
     });
-    test('DROP_MAGNET_NEAR_FORCE is 22 (5.80.x snap pull)', () => {
-        expect(DROP_MAGNET_NEAR_FORCE).toBe(22);
+    test('DROP_MAGNET_NEAR_FORCE is 14 (5.109.0 — gentler snap)', () => {
+        expect(DROP_MAGNET_NEAR_FORCE).toBe(14);
     });
     test('DROP_OPACITY_FADE_FRAMES is 120 (~2 s @60Hz)', () => {
         expect(DROP_OPACITY_FADE_FRAMES).toBe(120);
@@ -181,39 +182,37 @@ describe('updateDrop() — friction', () => {
 // ---------------------------------------------------------------------------
 
 describe('updateDrop() — health-orb two-tier magnet', () => {
-    // 5.102.0 — Radii tightened: FAR 140, NEAR 55. Force constants
-    // unchanged. Tests below recalculated against the new radii.
-    test('no magnet pull when dist >= 140 px', () => {
+    // 5.109.0 — Radii tightened (FAR 110, NEAR 45) and forces gentled
+    // (FAR 5, NEAR 14). Tests recalculated against the new tuning.
+    test('no magnet pull when dist >= 110 px', () => {
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 200, y: 0, active: true }]; // dist=200 > 140
+        const ships = [{ x: 150, y: 0, active: true }]; // dist=150 > 110
         updateDrop(drop, ctx({ ships }), null);
         expect(drop.vx).toBe(0);
         expect(drop.vy).toBe(0);
     });
 
-    test('far magnet (between 55 and 140) pulls toward ship', () => {
+    test('far magnet (between 45 and 110) pulls toward ship', () => {
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 100, y: 0, active: true }]; // dist=100 (in far zone, outside near)
+        const ships = [{ x: 80, y: 0, active: true }]; // dist=80 (in far zone, outside near)
         updateDrop(drop, ctx({ ships }), null);
-        // Order: friction first (vx=0 → vx=0), then magnet adds force.
-        // farFactor = (140 - 100) / 140 = 0.2857142857
-        // vx += dx * inv * 8 * 0.285714 = 100 * (1/100) * 8 * 0.285714 ≈ 2.2857
-        expect(drop.vx).toBeCloseTo((40 / 140) * 8, 5);
+        // farFactor = (110 - 80) / 110 = 0.2727
+        // vx += dx * inv * 5 * 0.2727 = 80 * (1/80) * 5 * 0.2727 ≈ 1.364
+        expect(drop.vx).toBeCloseTo((30 / 110) * 5, 5);
         expect(drop.vy).toBe(0);
     });
 
-    test('near magnet (< 55) adds the snap force on top of far force', () => {
+    test('near magnet (< 45) adds the snap force on top of far force', () => {
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 30, y: 0, active: true }]; // dist=30 (deep in near zone)
+        const ships = [{ x: 25, y: 0, active: true }]; // dist=25 (deep in near zone)
         updateDrop(drop, ctx({ ships }), null);
-        // Order: friction first (vx=0), then magnet stacks far + near.
-        // farFactor  = (140 - 30) / 140 = 0.7857142857
-        // farForce   = dx * inv * 8 * 0.785714 ≈ 6.2857
-        // nearFactor = (55 - 30) / 55 = 0.4545454545
-        // nearForce  = dx * inv * 22 * 0.454545 = 10.0
-        // total ≈ 16.2857
-        const farForce = (110 / 140) * 8;
-        const nearForce = (25 / 55) * 22;
+        // farFactor  = (110 - 25) / 110 ≈ 0.7727
+        // farForce   = 1 * 5 * 0.7727 ≈ 3.864
+        // nearFactor = (45 - 25) / 45 ≈ 0.4444
+        // nearForce  = 1 * 14 * 0.4444 ≈ 6.222
+        // total ≈ 10.086
+        const farForce = (85 / 110) * 5;
+        const nearForce = (20 / 45) * 14;
         expect(drop.vx).toBeCloseTo(farForce + nearForce, 4);
     });
 
@@ -303,17 +302,17 @@ describe('updateDrop() — nearest-ship selection', () => {
 
     test('skips inactive ships', () => {
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        // 5.102.0 — new FAR_RADIUS = 140. Active ship at dist=100 sits
-        // in the far zone; inactive ship at dist=30 must be skipped or
+        // 5.109.0 — new FAR_RADIUS = 110. Active ship at dist=80 sits
+        // in the far zone; inactive ship at dist=20 must be skipped or
         // the snap force would dominate.
         const ships = [
-            { x: 30, y: 0, active: false },   // inactive — skip
-            { x: 100, y: 0, active: true },   // this one is the only valid ship
+            { x: 20, y: 0, active: false },   // inactive — skip
+            { x: 80, y: 0, active: true },    // only valid ship
         ];
         updateDrop(drop, ctx({ ships }), null);
-        // farFactor = (140 - 100) / 140 = 0.285714
-        // farForce  = 100*(1/100)*8*0.285714 ≈ 2.2857
-        expect(drop.vx).toBeCloseTo((40 / 140) * 8, 5);
+        // farFactor = (110 - 80) / 110 ≈ 0.2727
+        // farForce  = 1 * 5 * 0.2727 ≈ 1.364
+        expect(drop.vx).toBeCloseTo((30 / 110) * 5, 5);
     });
 
     test('empty ships array is a no-op for magnet/tractor', () => {

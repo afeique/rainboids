@@ -12,7 +12,8 @@
 //   See the MOBILE_* constants below.
 import { GAME_CONFIG } from '../core/constants.js';
 import { random } from '../core/utils.js';
-import { isMobile } from '../platform/platform-detect.js';
+// 5.109.0 — isMobile() no longer referenced; the mobile-only magnet
+// branch was removed in favor of a single unified proximity magnet.
 
 const LIFE_TICKS = 120 * 60;     // 120s @ 60Hz logic ticks.
 const BLINK_TICKS = 5 * 60;      // Last 5s alternate opacity.
@@ -27,29 +28,18 @@ const TRACTOR_RANGE = 240;       // Tractor-beam pull radius (px).
 const TRACTOR_PULL = 0.7;
 // 5.79.36 — Proximity-only magnet. Tier 1 (constant base pull at any
 //   distance — the homing-from-anywhere behavior) removed per user
-//   request. Drops now drift on their scatter velocity until the
-//   player gets within MAGNET_MID_RANGE; only then does the magnet
-//   pull them in.
+//   request. Drops drift on their scatter velocity until the player
+//   gets within MAGNET_MID_RANGE; only then does the magnet pull.
+// 5.109.0 — Gold sits FARTHEST in the magnet range hierarchy:
+//   gold (180px) > health (110px) > inventory (90px).
+//   Strengths are kept gentle so the scoop reads as a satisfying
+//   arc rather than a yank. Same values on mobile and desktop —
+//   the legacy isMobile() branch is gone.
 const MAGNET_Z = 2.5;
-const MAGNET_MID_RANGE = 100;    // medium-range proximity zone
-const MAGNET_MID_STRENGTH = 15;
-const MAGNET_NEAR_RANGE = 40;    // magnetic-snap (scoop) zone
-const MAGNET_NEAR_STRENGTH = 25;
-// 5.95.0 — Mobile auto-collect range. Generous radius so coins zip in
-//   from anywhere on a small viewport; matches the player's "stationary
-//   shooter, drops come to me" loop. Strength is bumped too so the pull
-//   feels confident rather than gentle drift.
-// 5.98.0 — Full-screen magnet on mobile. Players reported coins drifting
-// off the edges before the pull engaged; bumped to 3000 px so the entire
-// playfield is in range on any phone viewport.
-// 5.105.0 — Strengths cut DRAMATICALLY so the drop visibly FLIES toward
-// the player over ~1s instead of teleporting. The reward loop depends
-// on seeing the coin travel; the old 32/60 produced 100+ px/tick
-// velocity which crossed the screen in 2-3 frames.
-const MOBILE_MAGNET_RANGE = 3000;
-const MOBILE_MAGNET_STRENGTH = 1;
-const MOBILE_MAGNET_NEAR_RANGE = 80;
-const MOBILE_MAGNET_NEAR_STRENGTH = 4;
+const MAGNET_MID_RANGE = 180;    // medium-range proximity zone (was 100)
+const MAGNET_MID_STRENGTH = 6;   // gentle pull (was 15)
+const MAGNET_NEAR_RANGE = 60;    // magnetic-snap (scoop) zone (was 40)
+const MAGNET_NEAR_STRENGTH = 14; // moderate snap (was 25)
 
 export class GoldCoin {
     constructor() {
@@ -140,31 +130,15 @@ export class GoldCoin {
             const dy = playerPos.y - this.y;
             const dist = Math.hypot(dx, dy);
 
-            // 5.95.0 — Mobile auto-collect: wider, stronger pull at all
-            //   ranges, no upgrade required. Replaces the desktop two-tier
-            //   proximity magnet in mobile mode so coins fly to the player
-            //   from anywhere on the playfield. Desktop branch unchanged.
-            if (isMobile()) {
-                if (dist > 1 && dist < MOBILE_MAGNET_RANGE) {
-                    const invDist = 1 / dist;
-                    const mFar = (MOBILE_MAGNET_RANGE - dist) / MOBILE_MAGNET_RANGE;
-                    this.vel.x += dx * invDist * MOBILE_MAGNET_STRENGTH * mFar * MAGNET_Z;
-                    this.vel.y += dy * invDist * MOBILE_MAGNET_STRENGTH * mFar * MAGNET_Z;
-                    if (dist < MOBILE_MAGNET_NEAR_RANGE) {
-                        const mNear = (MOBILE_MAGNET_NEAR_RANGE - dist) / MOBILE_MAGNET_NEAR_RANGE;
-                        this.vel.x += dx * invDist * MOBILE_MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;
-                        this.vel.y += dy * invDist * MOBILE_MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;
-                    }
-                }
-            } else if (dist > 1 && dist < MAGNET_MID_RANGE) {
-                // Desktop proximity magnet — drop drifts freely until the
-                //   player approaches. No homing-from-anywhere pull.
+            // 5.109.0 — Unified proximity magnet. Same two-tier
+            // formula on mobile + desktop (the mobile full-screen
+            // override is retired). Mid zone (≤180 px) starts a
+            // gentle pull; snap zone (≤60 px) scoops the player.
+            if (dist > 1 && dist < MAGNET_MID_RANGE) {
                 const invDist = 1 / dist;
-                // Medium range (≤100 px): magnet ramps up as player nears.
                 const mMid = (MAGNET_MID_RANGE - dist) / MAGNET_MID_RANGE;
                 this.vel.x += dx * invDist * MAGNET_MID_STRENGTH * mMid * MAGNET_Z;
                 this.vel.y += dy * invDist * MAGNET_MID_STRENGTH * mMid * MAGNET_Z;
-                // Snap (≤40 px): scoop into the player.
                 if (dist < MAGNET_NEAR_RANGE) {
                     const mNear = (MAGNET_NEAR_RANGE - dist) / MAGNET_NEAR_RANGE;
                     this.vel.x += dx * invDist * MAGNET_NEAR_STRENGTH * mNear * MAGNET_Z;

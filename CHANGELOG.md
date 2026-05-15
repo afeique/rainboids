@@ -11,6 +11,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.109.0] - 2026-05-15
+
+### Changed — Unified + gentled drop magnetism (no more mobile branch)
+
+The mobile-only full-screen magnet was retired across all drop types.
+Mobile and desktop now share the same proximity magnet with a
+3-tier RANGE HIERARCHY that lets the player commit to a position
+to choose what they're scooping:
+
+|              | mid range | snap range | mid str | snap str |
+|--------------|----------:|-----------:|--------:|---------:|
+| **Gold**     |   180 px  |     60 px  |    6    |   14     |
+| **Health**   |   110 px  |     45 px  |    5    |   14     |
+| **Inventory**|    90 px  |     40 px  |    4    |   12     |
+
+Gold reaches farthest (it's plentiful and reads as the bread-and-
+butter pickup); health and inventory require closer approaches
+(higher impact per pickup = more positional commitment).
+
+Strengths cut across the board so the scoop reads as a satisfying
+arc instead of a yank. Pre-5.109.0 desktop values (gold 15/25,
+health 8/22) were too aggressive once the radii were tightened.
+
+The legacy mobile-only magnets are GONE: `gold-coin.js` /
+`gold-shape.js` no longer reference `isMobile()`, and
+`stat-pickup.js` (which was mobile-only) now magnets on both
+platforms. `drops.js` keeps `DROP_MAGNET_*_MOBILE` exports as
+aliases pointing at the desktop values for back-compat with
+import sites that may still reference them.
+
+Mobile players still collect — enemies in the turret-defense
+loop reliably engage within the magnet's 110-180 px radius, so
+drops from those kills naturally come within reach. Tests
+updated; 948/948 pass.
+
 ## [5.108.0] - 2026-05-15
 
 ### Added — Six new powerups

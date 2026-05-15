@@ -1,16 +1,15 @@
 /**
- * tests/unit/sim/mobile-drops.test.js — 5.98.0 update
+ * tests/unit/sim/mobile-drops.test.js — 5.109.0 update.
  *
- * Pins the FULL-SCREEN mobile magnet for health orbs. The pure-sim
- * drop step (js/sim/drops.js) accepts `ctx.mobileMagnet=true` to switch
- * to the wider mobile radii (3000 px far / 600 px near vs the desktop
- * 320 / 120) AND stronger mobile-only forces (18 far / 40 near vs the
- * desktop 8 / 22) so drops fly to the stationary player from across the
- * screen.
+ * The mobile-only full-screen magnet branch was removed in 5.109.0.
+ * Mobile and desktop now share the SAME proximity magnet for every
+ * drop type (range hierarchy: gold > health > inventory). The legacy
+ * DROP_MAGNET_*_MOBILE constants are kept as aliases pointing at the
+ * desktop values so import sites that still reference them stay
+ * link-compatible without changing behavior.
  *
- * Strategy mirrors tests/unit/sim/drops.test.js — same DropUpdateContext
- * shape, same freshDropState factory, just flipping the mobileMagnet
- * flag and verifying the engagement.
+ * The tests below pin that aliasing — any future re-introduction of
+ * a mobile-only branch has to update these assertions explicitly.
  */
 
 import { describe, test, expect } from '@jest/globals';
@@ -18,6 +17,8 @@ import {
     updateDrop,
     DROP_MAGNET_FAR_RADIUS,
     DROP_MAGNET_NEAR_RADIUS,
+    DROP_MAGNET_FAR_FORCE,
+    DROP_MAGNET_NEAR_FORCE,
     DROP_MAGNET_FAR_RADIUS_MOBILE,
     DROP_MAGNET_NEAR_RADIUS_MOBILE,
     DROP_MAGNET_FAR_FORCE_MOBILE,
@@ -37,72 +38,39 @@ function ctx({
     return { ships, field, dt, tractorEngaged, tractorAttraction, tractorRange, mobileMagnet };
 }
 
-describe('drop tuning constants — mobile full-screen magnet (5.98.0)', () => {
-    test('DROP_MAGNET_FAR_RADIUS_MOBILE covers the full screen (3000 px)', () => {
-        expect(DROP_MAGNET_FAR_RADIUS_MOBILE).toBe(3000);
-        expect(DROP_MAGNET_FAR_RADIUS_MOBILE).toBeGreaterThan(DROP_MAGNET_FAR_RADIUS);
+describe('drop tuning constants — mobile alias is desktop (5.109.0)', () => {
+    test('FAR_RADIUS_MOBILE equals FAR_RADIUS (no more mobile override)', () => {
+        expect(DROP_MAGNET_FAR_RADIUS_MOBILE).toBe(DROP_MAGNET_FAR_RADIUS);
     });
-    // 5.105.0 — Snap radius tightened (600 → 200) so the orb spends
-    // more frames flying visibly instead of immediately snapping to
-    // the player. Still wider than the desktop 55 px since the mobile
-    // player is stationary and needs the orb to actually reach them.
-    test('DROP_MAGNET_NEAR_RADIUS_MOBILE is 200 px', () => {
-        expect(DROP_MAGNET_NEAR_RADIUS_MOBILE).toBe(200);
-        expect(DROP_MAGNET_NEAR_RADIUS_MOBILE).toBeGreaterThan(DROP_MAGNET_NEAR_RADIUS);
+    test('NEAR_RADIUS_MOBILE equals NEAR_RADIUS', () => {
+        expect(DROP_MAGNET_NEAR_RADIUS_MOBILE).toBe(DROP_MAGNET_NEAR_RADIUS);
     });
-    // 5.105.0 — Forces cut DRAMATICALLY (18→2, 40→6). The old values
-    // produced ~100+ px/tick steady-state velocity which made drops
-    // teleport. New values give visible flight over ~0.8-1.2s.
-    test('mobile forces are tuned for VISIBLE flight (5.105.0)', () => {
-        expect(DROP_MAGNET_FAR_FORCE_MOBILE).toBe(2);
-        expect(DROP_MAGNET_NEAR_FORCE_MOBILE).toBe(6);
+    test('FAR_FORCE_MOBILE equals FAR_FORCE', () => {
+        expect(DROP_MAGNET_FAR_FORCE_MOBILE).toBe(DROP_MAGNET_FAR_FORCE);
+    });
+    test('NEAR_FORCE_MOBILE equals NEAR_FORCE', () => {
+        expect(DROP_MAGNET_NEAR_FORCE_MOBILE).toBe(DROP_MAGNET_NEAR_FORCE);
     });
 });
 
-describe('updateDrop() — health-orb magnet on mobile', () => {
-    test('mobile mode: a health orb at dist=1000 px IS pulled (far-only tier, well inside the 3000 cap)', () => {
-        const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 1000, y: 0, active: true }];
-        updateDrop(drop, ctx({ ships, mobileMagnet: true }), null);
-        // dist=1000 is OUTSIDE the 600 near range so only the far tier fires.
-        // farFactor = (3000-1000)/3000 = 0.667 → +18 * 0.667 = 12
-        expect(drop.vx).toBeGreaterThan(0);
-        expect(drop.vx).toBeCloseTo(DROP_MAGNET_FAR_FORCE_MOBILE * ((3000 - 1000) / 3000), 3);
+describe('updateDrop() — mobileMagnet flag is a no-op (5.109.0)', () => {
+    test('mobileMagnet=true produces SAME forces as mobileMagnet=false', () => {
+        const dropA = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
+        const dropB = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
+        const ships = [{ x: 80, y: 0, active: true }];
+        updateDrop(dropA, ctx({ ships, mobileMagnet: false }), null);
+        updateDrop(dropB, ctx({ ships, mobileMagnet: true  }), null);
+        expect(dropA.vx).toBeCloseTo(dropB.vx, 6);
+        expect(dropA.vy).toBeCloseTo(dropB.vy, 6);
     });
 
-    test('desktop mode: a health orb at dist=400 px is NOT pulled (outside 320)', () => {
-        const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 400, y: 0, active: true }];
-        updateDrop(drop, ctx({ ships, mobileMagnet: false }), null);
-        expect(drop.vx).toBe(0);
-        expect(drop.vy).toBe(0);
-    });
-
-    test('mobile mode: a health orb at dist=500 px is pulled', () => {
-        const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 500, y: 0, active: true }];
-        updateDrop(drop, ctx({ ships, mobileMagnet: true }), null);
-        expect(drop.vx).toBeGreaterThan(0);
-    });
-
-    test('mobile mode: a health orb at dist=100 (inside mobile near=200) gets BOTH far + near forces', () => {
-        // 5.105.0 — Near radius reduced 600 → 200. Drive a closer test
-        // position so we stay inside the new near zone.
-        const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 100, y: 0, active: true }];
-        updateDrop(drop, ctx({ ships, mobileMagnet: true }), null);
-        // Both far AND near tiers engage at 100 px (near = 200).
-        // farFactor  = (3000-100)/3000 ≈ 0.967 → +2 * 0.967 ≈ 1.93
-        // nearFactor = (200-100)/200 = 0.5    → +6 * 0.5 = 3.0
-        // total ≈ 4.93
-        expect(drop.vx).toBeGreaterThan(DROP_MAGNET_FAR_FORCE_MOBILE);
-    });
-
-    test('mobile mode: an orb past 3000 px does NOT pull (beyond the screen-spanning cap)', () => {
-        const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 3500, y: 0, active: true }];
-        updateDrop(drop, ctx({ ships, mobileMagnet: true }), null);
-        expect(drop.vx).toBe(0);
-        expect(drop.vy).toBe(0);
+    test('a health orb past 110 px does NOT pull regardless of mobileMagnet', () => {
+        const dropA = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
+        const dropB = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
+        const ships = [{ x: 200, y: 0, active: true }];
+        updateDrop(dropA, ctx({ ships, mobileMagnet: false }), null);
+        updateDrop(dropB, ctx({ ships, mobileMagnet: true  }), null);
+        expect(dropA.vx).toBe(0);
+        expect(dropB.vx).toBe(0);
     });
 });
