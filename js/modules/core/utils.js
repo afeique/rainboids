@@ -633,22 +633,63 @@ class IconSpriteCache {
      * Renders a heart icon to a sprite canvas
      */
     renderHeartToSprite(ctx, size, fillColor, strokeColor) {
+        // 5.101.0 — Heart is now a filled, glowing, gradient sprite.
+        // The fillColor/strokeColor params are kept for back-compat but
+        // ignored — the heart paints itself with a coral→crimson body,
+        // a soft outer glow, and an inner specular highlight so it pops
+        // against any backdrop. No more hollow pale heart.
         ctx.save();
-        
+
         const scale = size / 24; // Original SVG viewBox is 24x24
         ctx.scale(scale, scale);
-        
-        ctx.fillStyle = fillColor || '#800000';
-        ctx.strokeStyle = strokeColor || '#DC143C';
-        ctx.lineWidth = 1.5 / scale;
-        
-        // Draw the heart path
+
         const pathData = "M8.10627 18.2468C5.29819 16.0833 2 13.5422 2 9.1371C2 4.27416 7.50016 0.825464 12 5.50063L14 7.49928C14.2929 7.79212 14.7678 7.79203 15.0607 7.49908C15.3535 7.20614 15.3534 6.73127 15.0605 6.43843L13.1285 4.50712C17.3685 1.40309 22 4.67465 22 9.1371C22 13.5422 18.7018 16.0833 15.8937 18.2468C15.6019 18.4717 15.3153 18.6925 15.0383 18.9109C14 19.7294 13 20.5 12 20.5C11 20.5 10 19.7294 8.96173 18.9109C8.68471 18.6925 8.39814 18.4717 8.10627 18.2468Z";
-        
         const path = new Path2D(pathData);
+
+        // Outer pink glow — wide, soft, halos through the inventory bar.
+        ctx.shadowColor = 'rgba(255, 90, 140, 0.95)';
+        ctx.shadowBlur = 8;
+
+        // Main body gradient: hot pink top → crimson bottom.
+        // Headless test environments stub createLinearGradient to return
+        // undefined; in that case fall back to a flat fill so the cache
+        // can still build a sprite without crashing.
+        const bodyGrad = ctx.createLinearGradient(12, 4, 12, 21);
+        if (bodyGrad && typeof bodyGrad.addColorStop === 'function') {
+            bodyGrad.addColorStop(0.00, '#ff9bb7');  // light pink top
+            bodyGrad.addColorStop(0.45, '#ff3d76');  // hot pink midbody
+            bodyGrad.addColorStop(1.00, '#b8002e');  // deep crimson bottom
+            ctx.fillStyle = bodyGrad;
+        } else {
+            ctx.fillStyle = '#ff3d76';
+        }
         ctx.fill(path);
+
+        // Drop the glow before the inner pass so the highlight stays crisp.
+        ctx.shadowBlur = 0;
+
+        // Crisp inner outline so the silhouette reads at small sizes.
+        ctx.lineWidth = 1.2 / scale;
+        ctx.strokeStyle = 'rgba(120, 0, 30, 0.9)';
         ctx.stroke(path);
-        
+
+        // Specular highlight (top-left) — small bright wash that gives the
+        // heart a glossy, candy-like sheen. Clip to the heart so the
+        // highlight never bleeds past the silhouette.
+        ctx.save();
+        ctx.clip(path);
+        const sheen = ctx.createRadialGradient(8.5, 6.5, 0.5, 8.5, 6.5, 6);
+        if (sheen && typeof sheen.addColorStop === 'function') {
+            sheen.addColorStop(0.00, 'rgba(255, 230, 240, 0.95)');
+            sheen.addColorStop(0.50, 'rgba(255, 200, 220, 0.45)');
+            sheen.addColorStop(1.00, 'rgba(255, 200, 220, 0)');
+            ctx.fillStyle = sheen;
+            ctx.beginPath();
+            ctx.arc(8.5, 6.5, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+
         ctx.restore();
     }
     

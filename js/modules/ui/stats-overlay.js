@@ -105,13 +105,16 @@ function buildStatsModel(player, gameEngine) {
                     `Equipped power weapon (R-click / SPACE / DOWN). Cycle with F.\n` +
                     `Each power weapon has its own upgrade tree in the shop.`,
             },
-            {
-                key: 'Defense Skill',
-                value: `${player.activeSkill || '—'}`,
-                tip:
-                    `Equipped defensive skill (Q to activate). Cycle with E.\n` +
-                    `Skill upgrades are SP-priced in the shop's Defense tab.`,
-            },
+            // 5.101.0 — Defense Skill row hidden along with the rest
+            // of the defensive skill system. Inventory + defensive
+            // powerups are the survival levers now.
+            // {
+            //     key: 'Defense Skill',
+            //     value: `${player.activeSkill || '—'}`,
+            //     tip:
+            //         `Equipped defensive skill (Q to activate). Cycle with E.\n` +
+            //         `Skill upgrades are SP-priced in the shop's Defense tab.`,
+            // },
             {
                 key: 'Fire Rate',
                 value: `${effFireRateHz.toFixed(2)} /s`,
@@ -281,8 +284,8 @@ function buildStatsModel(player, gameEngine) {
                 value: '— none —',
                 tip:
                     `Slot: ${slotName} — currently empty.\n` +
-                    `Kill enemies on mobile to find a ${slotName} item; it\n` +
-                    `auto-equips on pickup.`,
+                    `Kill enemies to find a ${slotName} item; it auto-equips\n` +
+                    `on pickup if it's a strict upgrade over the current item.`,
             });
         }
     }

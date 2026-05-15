@@ -207,8 +207,14 @@ export function handleCollisions() {
                         // They're earned via shop picks (one per wave + one
                         // per level-up). Asteroid kills still grant XP, which
                         // levels up the player → another pick.
+                        // 5.101.0 — Dampen shake for explosive-bullet kills.
+                        // Each pellet's AoE chain-kills neighbors; the
+                        // original size-scaled shake compounded into a
+                        // brutal camera wobble. Halved magnitude + duration.
                         if (this.isEntityOnScreen(ast)) {
-                            this.triggerScreenShake(12, ast.baseRadius * 0.5, ast.baseRadius);
+                            const mag = bullet.explosive ? ast.baseRadius * 0.22 : ast.baseRadius * 0.5;
+                            const dur = bullet.explosive ? 6 : 12;
+                            this.triggerScreenShake(dur, mag, ast.baseRadius);
                         }
                     } else {
                         // Large asteroid splits — death flash + bigger explosion
@@ -221,9 +227,13 @@ export function handleCollisions() {
                         this.createDebris(ast);
                         this.dropOrbsFromEntity(ast.x, ast.y, ast);
 
-                        // Massive screen shake for large asteroid destruction (only if on screen)
+                        // Massive screen shake for large asteroid destruction (only if on screen).
+                        // 5.101.0 — Halved for explosive-bullet kills (same
+                        // rationale as the small-asteroid branch above).
                         if (this.isEntityOnScreen(ast)) {
-                            this.triggerScreenShake(25, ast.baseRadius * 0.8, ast.baseRadius);
+                            const mag = bullet.explosive ? ast.baseRadius * 0.35 : ast.baseRadius * 0.8;
+                            const dur = bullet.explosive ? 12 : 25;
+                            this.triggerScreenShake(dur, mag, ast.baseRadius);
                         }
 
                         const count = (Math.random() < 0.5 ? 2 : 3) + 1; // 3 or 4
@@ -700,7 +710,12 @@ export function handleCollisions() {
                     // Asteroids get no hit-shake (they're inert rocks);
                     // this delineation gives the player a tactile read on
                     // what they're shooting at.
-                    if (this.isEntityOnScreen(enemy)) {
+                    // 5.101.0 — Skip hit-shake for explosive bullets. The
+                    // EXPLOSIVE powerup adds an AoE on every shot; the
+                    // cumulative shake (one per pellet × spread × explode)
+                    // was an order of magnitude too punchy. The explosion
+                    // particle effect alone reads as impact.
+                    if (this.isEntityOnScreen(enemy) && !bullet.explosive) {
                         this.triggerScreenShake(5, Math.max(2, (enemy.radius || 15) * 0.15), enemy.radius || 15);
                     }
                 }

@@ -1,6 +1,6 @@
 # Rainboids — Supercharged Asteroids
 
-A modern space combat game with deep weapon systems, 10 enemy types, a 20-wave speedrun campaign with four boss waves, and a full upgrade economy. Built on Canvas 2D with a WebGL2 particle layer for bright/glowing effects.
+A modern space combat game with deep weapon systems, 10 enemy types, a 30-wave speedrun campaign with six boss waves, survivor-card powerup picks every 3rd wave, a Diablo-style defensive inventory, and a full upgrade economy. Built on Canvas 2D with a WebGL2 particle layer for bright/glowing effects.
 
 ## Screenshots
 
@@ -41,7 +41,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **5.98.0**
+Current version: **5.101.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -50,11 +50,13 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 ## Game Overview
 
 Rainboids is a supercharged asteroids game featuring:
-- **6 primary weapons**, **4 power weapons**, and **5 defense skills** — all free, all selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop. Phase Dash is no longer a defense skill (5.93.0); it's now a core **Shift-key** movement primitive available to every player at all times.
-- **10 unique enemy types** with distinct movement, attack patterns, and visual designs
-- **12 powerup types** with stacking mechanics and visual indicators — picks-only since 5.70.0 (earned 1/wave + 1/level-up, spent in the shop's POWERUPS tab for full build freedom). Drop rate, drop quantity, and per-orb amount now scale automatically with player level (5.78.2) instead of being bought as discrete picks.
+- **5 primary weapons** and **5 power weapons** — both free, both selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop. Phase Dash is a core **Shift-key** movement primitive available to every player at all times. *(5.101.0 — the defensive skill system was retired; defensive progression now flows through powerups + survivor cards + the inventory.)*
+- **10 unique enemy types** with distinct movement, attack patterns, and visual designs. Enemy visuals stay at base size at every wave (5.101.0) — only HP / damage / speed scale.
+- **Offensive + defensive powerups** with stacking mechanics and visual indicators — offense (Rapid Fire, Multi Shot, Homing, Big Bullets, Piercing, Explosive, Crit Chance, Crit Damage, Knockback) and defense (Health Boost / Toughness / Regen, restored 5.101.0). Buy with SP in the pause-menu POWERUPS tab any time.
+- **Survivor cards every 3rd wave (5.101.0)** — wave-clear opens a 3-card overlay (2 offense + 1 defense) for a free pick. Followed by a 3-card QUICK BUY overlay listing weapon upgrades tailored to the equipped primary + power. 30 waves ÷ 3 = exactly 10 free picks per playthrough.
+- **Diablo-style defensive inventory (5.99.4 / 5.101.0)** — four slots (helm, armor, shield, plating). Items drop from enemy kills on **both desktop and mobile** (was mobile-only) and auto-equip if their bonus beats the currently-equipped item.
 - **Kill-streak damage tiers** (EMPOWERED → UNSTOPPABLE → GODLIKE → LEGENDARY) — sustained kills without taking damage build up to +100% damage
-- **20-wave speedrun campaign** with four scripted boss waves (waves 5/10/15/20) and a Game Complete stats screen — finish the run as fast as possible
+- **30-wave speedrun campaign (5.101.0)** with six scripted boss waves (waves 5/10/15/20/25/30) and a Game Complete stats screen — finish the run as fast as possible
 - **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
 - **Save / Continue** (5.79.0): wave-start auto-save lets the player resume from the title screen's **CONTINUE** button. **NEW GAME** rolls a randomized starting loadout (primary, power, skill) and clears the save.
 - **Diablo-style stats screen** (5.79.0): press \` to pause and inspect level / XP / vitals / offense / economy / world-scaling with hover tooltips explaining every formula.
@@ -75,14 +77,12 @@ Rainboids is a supercharged asteroids game featuring:
 - **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate. A red laser-pointer beam shows where your next primary shot will land — with a tick at the bullet's max range, a reticle around the first enemy/asteroid in line, and fading reticles around any further targets piercing builds will punch through. (Desktop-only since 5.95.1.)
 - **Fire primary**: Hold left-click or ↑ arrow
 - **Fire / charge power weapon**: Spacebar, right-click, or ↓ arrow
-- **Activate defense skill**: Q
+- **Pick primary weapon (radial menu)**: Hold F — aim with mouse, click to equip, release to cancel
+- **Pick power weapon (radial menu)**: Hold E — same flow
 - **Assists** (pause menu → ASSISTS tab — persisted): Aim Assist (cursor snap to nearest target), Auto Aim (lock onto nearest threat), Auto Fire (auto-trigger primary + power)
-- **Pick defense skill (radial menu)**: Hold E — aim with mouse, click to equip, release to cancel
-- **Pick primary weapon (radial menu)**: Hold R — same flow
-- **Pick power weapon (radial menu)**: Hold F — same flow
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
-- **Switch defense skill**: Pause menu → SKILLS tab (all 5 free, click to equip)
+- **Defensive progression**: pause-menu POWERUPS tab (Health Boost / Toughness / Regen + the offensive lineup), inventory (auto-equip from drops), and the every-3rd-wave survivor card overlay. *(5.101.0 — defensive skills retired; the SKILLS tab and Q/R key bindings are no-ops.)*
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
 
@@ -260,8 +260,8 @@ The shop is fullscreen with a transparent backdrop matching the pause menu — g
 
 ## Wave System
 
-### 20-wave speedrun campaign
-The campaign is a single 20-wave run with four scripted boss waves. The meta-goal is finishing as fast as possible — total time, accuracy, damage dealt, and preferred weapon are tallied on a Game Complete screen when wave 20 falls.
+### 30-wave speedrun campaign (5.101.0)
+The campaign is a single 30-wave run with six scripted boss waves. The meta-goal is finishing as fast as possible — total time, accuracy, damage dealt, and preferred weapon are tallied on a Game Complete screen when wave 30 falls.
 
 | Act | Waves | Theme |
 |-----|-------|-------|
@@ -272,15 +272,20 @@ The campaign is a single 20-wave run with four scripted boss waves. The meta-goa
 | III — The Gauntlet    | 11-14 | Full type roster, dense |
 | **Boss — Triple Threat** | **15** | **3× TITAN bossTier 3** |
 | IV — Endgame Approach | 16-19 | Everything at once |
-| **FINAL BOSS — The Last Stand** | **20** | **4× TITAN bossTier 4 + escort** |
+| **MID BOSS — Iron Quartet** | **20** | **4× TITAN bossTier 3 + escort** |
+| V — The Long Walk     | 21-24 | Compounding pressure |
+| **BOSS — Iron Crown** | **25** | **4× TITAN bossTier 4 + escort** |
+| VI — Edge of Doom     | 26-29 | Everything, longer |
+| **FINAL BOSS — The Last Stand** | **30** | **4× TITAN bossTier 4 + heavier escort** |
 
-Each wave features:
+Each wave features 3-4 sub-waves (each wave is ~50% longer than pre-5.101.0). Other features:
 - Wave-start full-screen dark intro overlay with the wave title — entities warp in during the dark hold and settle as the overlay fades
 - Asteroids and enemies both warp in (with scale + streak animation)
 - Asteroid count capped at 12 (MAX_WAVE_ASTEROIDS)
-- Shop opens automatically after each non-final wave; the final wave routes directly to the Game Complete screen
+- **Survivor cards (5.101.0)**: wave clear on a wave divisible by 3 opens a 3-card overlay (2 offense + 1 defense) for a FREE pick, then a 3-card QUICK BUY overlay listing weapon upgrades tailored to your equipped primary + power. 30 ÷ 3 = exactly 10 free picks per playthrough.
+- Off-cadence wave clears (waves 1/2/4/5/7/…) slide straight into the next wave. The pause-menu POWERUPS tab is always reachable for SP spending.
 
-Boss-tier TITANs at waves 5/10/15/20 receive an HP/size/speed multiplier on top of normal level scaling (4×–8× HP, 1.35×–1.75× size, +0–15% speed). Enemy speed and bullet speed scale across the campaign — wave 1 ≈ 0.65× base speed (gentle), wave 20 ≈ 2.17× base.
+Boss-tier TITANs at waves 5/10/15/20/25/30 receive an HP/speed multiplier on top of normal level scaling (4×–8× HP, +0–15% speed). Visual size no longer scales with level (5.101.0). Enemy speed and bullet speed scale across the campaign — wave 1 ≈ 0.65× base speed (gentle), wave 30 ≈ 2.17× base.
 
 ---
 
@@ -502,7 +507,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   └── weapon-effects-renderer.js # Weapon/skill visual effects
 │       ├── wave/              # Wave system
 │       │   ├── wave-manager.js #  Wave lifecycle, spawning, notifications
-│       │   └── wave-data.js   #   20-wave campaign + boss tier scaling
+│       │   └── wave-data.js   #   30-wave campaign + boss tier scaling
 │       ├── shop/              # Shop system
 │       │   ├── shop-manager.js #  Shop logic, purchases, tab builders
 │       │   ├── shop-dom.js     #  HTML overlay renderer (active)

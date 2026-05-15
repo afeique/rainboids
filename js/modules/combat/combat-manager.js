@@ -681,8 +681,8 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         this.lastHealthOrbDropAt = now;
     }
 
-    // ── Mobile stat pickups (5.98.0 → 5.99.4) ──
-    // Diablo-style defensive item drops on mobile. Four slots:
+    // ── Stat pickups (5.98.0 → 5.99.4 → 5.101.0) ──
+    // Diablo-style defensive item drops. Four slots:
     //   HP:        helm,  armor    (each roll picks one of these)
     //   Toughness: shield, plating (each roll picks one of these)
     //
@@ -691,13 +691,17 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     // rewarding. Asteroids do NOT drop these (only enemy kills) so the
     // player has to engage the threat pool to grow.
     //
-    // 5.99.4 — Each pickup now carries its slot id AND the current
-    // wave as the item LEVEL. Higher-level items have proportionally
-    // bigger bonuses (see item-system.js for formulas). The pickup
-    // collision in collision-system.js calls `createItem` with these
-    // values, then `player.equipItem(item)` for the replace-if-better
-    // logic. So the player builds up a "best so far" set of 4 items.
-    if (isMobile() && isEnemy && this.statPickupPool) {
+    // 5.99.4 — Each pickup carries its slot id AND the current wave
+    // as the item LEVEL. Higher-level items have proportionally bigger
+    // bonuses (see item-system.js). The pickup collision in
+    // collision-system.js calls `createItem` with these values, then
+    // `player.equipItem(item)` for the replace-if-better logic. The
+    // player builds up a "best so far" set of 4 items.
+    //
+    // 5.101.0 — Drops are now BOTH mobile AND desktop. Defensive
+    // skills retired; inventory is the primary survival lever
+    // alongside the new defensive powerups + survivor cards.
+    if (isEnemy && this.statPickupPool) {
         const boss = !!(entity && entity.isBoss);
         const hpRate = boss ? 0.060 : 0.025;
         const toughRate = boss ? 0.050 : 0.020;

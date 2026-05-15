@@ -1,6 +1,8 @@
 // Wave configuration data for enemy and asteroid spawning.
 //
-// 20-wave campaign — meta-goal is finishing the run as fast as possible.
+// 30-wave campaign (5.101.0 — expanded from 20).
+// Meta-goal: finish the run while spending 10 survivor-card picks
+// (one free pick every 3rd wave clear).
 //   Waves  1– 4 : First Contact     (gentle intro, low threat density)
 //   Wave   5    : BOSS — Iron Giant (TITAN bossTier 1 + escort)
 //   Waves  6– 9 : Escalation        (combined arms, type variety)
@@ -8,7 +10,11 @@
 //   Waves 11–14 : The Gauntlet      (full type roster, dense)
 //   Wave  15    : BOSS — Triple Threat (3× TITAN bossTier 3)
 //   Waves 16–19 : Endgame Approach  (everything at once)
-//   Wave  20    : FINAL BOSS — The Last Stand (4× TITAN bossTier 4)
+//   Wave  20    : MID BOSS — Iron Quartet (4× TITAN bossTier 3)
+//   Waves 21–24 : The Long Walk     (compounding pressure)
+//   Wave  25    : BOSS — Iron Crown (4× TITAN bossTier 4 + STALKER escort)
+//   Waves 26–29 : Edge of Doom      (everything at once, longer)
+//   Wave  30    : FINAL BOSS — The Last Stand (4× TITAN bossTier 4)
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -31,23 +37,31 @@ export const WAVE_DATA = {
     //   wave. See docs/XP_BALANCE_REWORK_5.79.md for the analysis.
 
     // ── Act I: First Contact ──
-    1: { asteroids: 4, subWaves: [
+    // 5.101.0 — Each wave now has 3-4 sub-waves (was 2-3) so waves last
+    // ~50% longer. Per-subwave counts unchanged to keep moment-to-moment
+    // density steady — the player just gets more sub-waves before WAVE
+    // COMPLETE fires.
+    1: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 3 }],
         [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
-    ] },
-    2: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
         [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
     ] },
-    3: { asteroids: 4, subWaves: [
+    2: { asteroids: 5, subWaves: [
+        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 3 }],
+    ] },
+    3: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 4 }],
         [{ type: 'WASP', count: 4 }],
         [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 3 }],
     ] },
-    4: { asteroids: 4, subWaves: [
+    4: { asteroids: 5, subWaves: [
         [{ type: 'GUARDIAN', count: 3 }],
         [{ type: 'WASP', count: 4 }, { type: 'HUNTER', count: 1 }],
         [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 4 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 3 }],
     ] },
 
     // ── Boss 1: Iron Giant — escort softens, then boss arrives. ──
@@ -61,25 +75,29 @@ export const WAVE_DATA = {
     },
 
     // ── Act II: Escalation ──
-    6: { asteroids: 4, subWaves: [
+    6: { asteroids: 5, subWaves: [
         [{ type: 'STALKER', count: 3 }],
         [{ type: 'HUNTER', count: 4 }, { type: 'WASP', count: 1 }],
         [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'WASP', count: 3 }],
     ] },
-    7: { asteroids: 4, subWaves: [
+    7: { asteroids: 5, subWaves: [
         [{ type: 'DRIFTER', count: 3 }],
         [{ type: 'TANGERINE', count: 3 }, { type: 'HUNTER', count: 3 }],
         [{ type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 4 }, { type: 'WASP', count: 1 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }],
     ] },
-    8: { asteroids: 4, subWaves: [
+    8: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 3 }, { type: 'STALKER', count: 2 }],
         [{ type: 'STALKER', count: 3 }, { type: 'SENTINEL', count: 1 }],
         [{ type: 'SENTINEL', count: 2 }, { type: 'HUNTER', count: 4 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }],
     ] },
-    9: { asteroids: 3, subWaves: [
+    9: { asteroids: 4, subWaves: [
         [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
         [{ type: 'PROWLER', count: 3 }],
         [{ type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 1 }, { type: 'WASP', count: 2 }, { type: 'HUNTER', count: 1 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'WASP', count: 2 }],
     ] },
 
     // ── Boss 2: Twin Iron — three escort waves, then twin bosses. ──
@@ -93,25 +111,29 @@ export const WAVE_DATA = {
     },
 
     // ── Act III: The Gauntlet ──
-    11: { asteroids: 3, subWaves: [
+    11: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 5 }, { type: 'WASP', count: 2 }],
         [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 3 }],
         [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
     ] },
-    12: { asteroids: 3, subWaves: [
+    12: { asteroids: 4, subWaves: [
         [{ type: 'STALKER', count: 3 }, { type: 'WASP', count: 2 }],
         [{ type: 'PROWLER', count: 3 }, { type: 'DRIFTER', count: 2 }],
         [{ type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 1 }],
     ] },
-    13: { asteroids: 3, subWaves: [
+    13: { asteroids: 4, subWaves: [
         [{ type: 'WASP', count: 6 }],
         [{ type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
         [{ type: 'WASP', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'WEAVER', count: 3 }, { type: 'WASP', count: 3 }],
     ] },
-    14: { asteroids: 3, subWaves: [
+    14: { asteroids: 4, subWaves: [
         [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }],
         [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }],
         [{ type: 'GUARDIAN', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 3 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }],
     ] },
 
     // ── Boss 3: Triple Threat — three escort waves before triple TITAN. ──
@@ -125,34 +147,110 @@ export const WAVE_DATA = {
     },
 
     // ── Act IV: Endgame Approach ──
-    16: { asteroids: 3, subWaves: [
+    16: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 3 }],
         [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
         [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }],
     ] },
-    17: { asteroids: 3, subWaves: [
+    17: { asteroids: 4, subWaves: [
         [{ type: 'WEAVER', count: 3 }],
         [{ type: 'WASP', count: 5 }, { type: 'DRIFTER', count: 2 }],
         [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 1 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }, { type: 'HUNTER', count: 2 }],
     ] },
-    18: { asteroids: 3, subWaves: [
+    18: { asteroids: 4, subWaves: [
         [{ type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 3 }],
         [{ type: 'SENTINEL', count: 3 }, { type: 'STALKER', count: 2 }],
         [{ type: 'TITAN', count: 1 }, { type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'SENTINEL', count: 1 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
     ] },
-    19: { asteroids: 3, subWaves: [
+    19: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
         [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'WEAVER', count: 2 }],
         [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 3 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }],
     ] },
 
-    // ── Final Boss: The Last Stand. ──
+    // ── Mid Boss: Iron Quartet. ──
     20: {
+        asteroids: 2, isBossWave: true, bossTier: 3,
+        subWaves: [
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
+            [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }],
+            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
+        ],
+    },
+
+    // ── Act V: The Long Walk (5.101.0 — new) ──
+    21: { asteroids: 4, subWaves: [
+        [{ type: 'STALKER', count: 3 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 3 }],
+    ] },
+    22: { asteroids: 4, subWaves: [
+        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'WASP', count: 3 }],
+    ] },
+    23: { asteroids: 4, subWaves: [
+        [{ type: 'HUNTER', count: 5 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }],
+        [{ type: 'WEAVER', count: 3 }, { type: 'WASP', count: 3 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }],
+    ] },
+    24: { asteroids: 4, subWaves: [
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'TITAN', count: 1 }, { type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 2 }],
+    ] },
+
+    // ── Boss 5: Iron Crown. ──
+    25: {
+        asteroids: 2, isBossWave: true, bossTier: 4,
+        subWaves: [
+            [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
+            [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }],
+            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 1 }],
+        ],
+    },
+
+    // ── Act VI: Edge of Doom ──
+    26: { asteroids: 4, subWaves: [
+        [{ type: 'TANGERINE', count: 3 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'STALKER', count: 3 }],
+        [{ type: 'PROWLER', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }],
+    ] },
+    27: { asteroids: 4, subWaves: [
+        [{ type: 'WEAVER', count: 3 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'TITAN', count: 1 }, { type: 'WASP', count: 4 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'WEAVER', count: 2 }],
+    ] },
+    28: { asteroids: 4, subWaves: [
+        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'TANGERINE', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'TITAN', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
+    ] },
+    29: { asteroids: 4, subWaves: [
+        [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 3 }],
+        [{ type: 'STALKER', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 2 }],
+        [{ type: 'TANGERINE', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'TITAN', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }],
+    ] },
+
+    // ── Final Boss: The Last Stand (now wave 30). ──
+    30: {
         asteroids: 2, isBossWave: true, bossTier: 4, isFinalBoss: true,
         subWaves: [
             [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
             [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }],
-            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 1 }],
         ],
     },
 };
@@ -247,13 +345,16 @@ export function isBossWave(waveNumber) {
     return BOSS_WAVES.includes(waveNumber);
 }
 
-// 1 → 20 across the campaign so per-wave scaling formulas can use the wave
-// number directly. Each wave is a distinct level — no plateaus.
+// 1 → MAX_WAVES across the campaign so per-wave scaling formulas can
+// use the wave number directly. Each wave is a distinct level — no
+// plateaus. (5.101.0 — MAX_WAVES is 30 now; the underlying stat
+// curves in getLevelScaledEnemyStats use the live MAX_WAVES so the
+// per-level deltas stretch to fit.)
 export function getEnemyLevel(waveNumber) {
     return Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
 }
 
-// Asteroid level lifts every other wave (1,1,2,2,3,3,...,10,10) so rocks
+// Asteroid level lifts every other wave (1,1,2,2,3,3,...) so rocks
 // don't outpace the player's weapon scaling.
 export function getAsteroidLevel(waveNumber) {
     const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
@@ -261,37 +362,29 @@ export function getAsteroidLevel(waveNumber) {
 }
 
 // Enemy speed multiplier — POWER CURVE so early waves are gentle and the
-// late waves climb fast. 5.72.0 — ceiling cut from 2.55 → 1.75 because
-// stacked with the per-level multiplier (now 1.40 at L20) the late-wave
-// speed used to compound to 4.3× base, making enemies appear to "warp"
-// across the screen between frames. New compound max: ~2.45× base.
-//   formula: 0.55 + ((w-1)/19)^1.5 * 1.2
-//   w=1: 0.55   w=5: 0.66   w=10: 0.94   w=15: 1.31   w=20: 1.75
+// late waves climb fast. 5.101.0 — denominator now MAX_WAVES-1 so the
+// curve stretches across the full 30-wave campaign instead of saturating
+// by wave 20. Endpoints unchanged: wave 1 = 0.55×, final wave = 1.75×.
 export function getEnemySpeedMultiplier(waveNumber) {
     const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    const t = (w - 1) / (MAX_WAVES - 1);
+    const t = (w - 1) / Math.max(1, MAX_WAVES - 1);
     return 0.55 + Math.pow(t, 1.5) * 1.2;
 }
 
 // Enemy bullet speed multiplier — DECOUPLED from enemy movement so the
-// floor can be raised. Wave 1 enemies still MOVE gently (helps the
-// player learn) but their bullets fly at 1.15× base — considerably
-// faster than the old 0.55× wave-1 floor. Late waves climb to 3.05×.
-//
-//   formula: 1.15 + ((w-1)/19)^1.4 * 1.9
-//   w=1: 1.15   w=5: 1.37   w=10: 1.83   w=15: 2.40   w=20: 3.05
-//
-// (Was: same curve as enemy movement, 0.55..2.55. Wave 1 bullets now
-// roughly 2× faster, wave 20 ~20% faster.)
+// floor can be raised. Wave 1 enemies still MOVE gently but their
+// bullets fly at 1.15× base. Final wave climbs to 3.05×.
+// 5.101.0 — Same stretch as getEnemySpeedMultiplier — denominator is
+// now MAX_WAVES-1.
 export function getEnemyBulletSpeedMultiplier(waveNumber) {
     const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    const t = (w - 1) / (MAX_WAVES - 1);
+    const t = (w - 1) / Math.max(1, MAX_WAVES - 1);
     return 1.15 + Math.pow(t, 1.4) * 1.9;
 }
 
 // ── Wave Subtitles ──────────────────────────────────────────────────────
 // Pithy one-liners displayed during wave intros (one per wave for the
-// 20-wave run, plus generic backups in case a wave is added later).
+// 30-wave run, plus generic backups in case a wave is added later).
 export const WAVE_SUBTITLES = {
     1:  "Don't worry, they die easy.",
     2:  "Okay maybe worry a little.",
@@ -311,8 +404,18 @@ export const WAVE_SUBTITLES = {
     16: "All-star roster. They're showing off.",
     17: "Bullet hell sample platter.",
     18: "Apocalypse. The light at the end is a missile.",
-    19: "Final frontier. Everyone wants a piece.",
-    20: "FINAL BOSS — The Last Stand.",
+    19: "Final frontier — for now.",
+    20: "MID BOSS — Iron Quartet. Four for the price of three.",
+    21: "Aftershocks. They aren't done.",
+    22: "Reinforcements arrived. They are angry.",
+    23: "The walls are closing in. Probably figuratively.",
+    24: "Heavy weather. Bring a coat.",
+    25: "BOSS — Iron Crown. The throne is overdue.",
+    26: "Everything you remember, but more.",
+    27: "There is no off-switch.",
+    28: "Tactical chaos. Untactical results.",
+    29: "Final approach. One more good day at the office.",
+    30: "FINAL BOSS — The Last Stand.",
 };
 
 // Generic subtitles, only used if WAVE_SUBTITLES is missing an entry.
@@ -336,7 +439,10 @@ export const WAVE_SUBTITLES_GENERIC = [
 //   spd   1 + ((L-1)/19)^1.4 · 0.4      L1: 1.00 L5: 1.03  L10: 1.11  L15: 1.22  L20: 1.40
 export function getLevelScaledEnemyStats(baseStats, level) {
     const L = Math.max(1, level | 0);
-    const t = (L - 1) / 19;
+    // 5.101.0 — denominator widened from 19 → MAX_WAVES-1 so the stat
+    // curve stretches over the 30-wave campaign. End-points unchanged
+    // (final-wave multipliers match the old wave-20 values).
+    const t = (L - 1) / Math.max(1, MAX_WAVES - 1);
     // 5.76.0 — HP curve scaled up to match the post-5.75 player power
     // budget (Twin Cannon / Hailstorm / +120% Lance + crit-rush + Gold
     // Find compounding all stack DPS faster than the old curve handled).

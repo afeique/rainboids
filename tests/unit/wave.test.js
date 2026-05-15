@@ -119,7 +119,9 @@ describe('getAsteroidLevel()', () => {
     expect(getAsteroidLevel(2)).toBe(1);
     expect(getAsteroidLevel(3)).toBe(2);
     expect(getAsteroidLevel(10)).toBe(5);
-    expect(getAsteroidLevel(MAX_WAVES)).toBe(10);
+    // 5.101.0 — campaign expanded to 30 waves; ceil(w/2) keeps the
+    // every-other-wave climb so the peak level is now 15 not 10.
+    expect(getAsteroidLevel(MAX_WAVES)).toBe(Math.ceil(MAX_WAVES / 2));
   });
 
   test('always >= 1, integer-valued', () => {
@@ -147,35 +149,37 @@ describe('getLevelScaledEnemyStats()', () => {
   });
 
   // 5.75.0 — HP curve recalibrated: linear base + steep tail
-  // (`pow(t, 2.5) * 4`). Wave 5 ~2.5×, wave 10 ~4.5×, wave 20 ~11.5×.
+  // (`pow(t, 2.5) * 4`). Wave 5 ~2.5×, wave 10 ~4.5×, peak ~11.5×.
+  // 5.101.0 — curve now stretched across MAX_WAVES; peak is at level
+  // MAX_WAVES (30), not 20.
   test('HP follows a power curve — gentle early, steep late', () => {
-    const l1  = getLevelScaledEnemyStats(BASE, 1).health;
-    const l5  = getLevelScaledEnemyStats(BASE, 5).health;
-    const l20 = getLevelScaledEnemyStats(BASE, 20).health;
+    const l1   = getLevelScaledEnemyStats(BASE, 1).health;
+    const l5   = getLevelScaledEnemyStats(BASE, 5).health;
+    const lEnd = getLevelScaledEnemyStats(BASE, MAX_WAVES).health;
     expect(l1).toBe(BASE.health);
     expect(l5).toBeLessThan(BASE.health * 4);           // early waves still climbable
-    expect(l20).toBeGreaterThan(BASE.health * 13);      // wave 20 is brutal
+    expect(lEnd).toBeGreaterThan(BASE.health * 13);     // final-wave HP is brutal
     // Curve must be monotonic
     expect(getLevelScaledEnemyStats(BASE, 10).health).toBeGreaterThan(l5);
-    expect(l20).toBeGreaterThan(getLevelScaledEnemyStats(BASE, 10).health);
+    expect(lEnd).toBeGreaterThan(getLevelScaledEnemyStats(BASE, 10).health);
   });
 
   test('speed level mult is gentle (curve, not linear)', () => {
     expect(getLevelScaledEnemyStats(BASE, 1).speed).toBeCloseTo(BASE.speed);
-    // Speed curve unchanged in 5.75 (only HP got the tail bump).
-    expect(getLevelScaledEnemyStats(BASE, 20).speed).toBeGreaterThan(BASE.speed * 1.3);
-    expect(getLevelScaledEnemyStats(BASE, 20).speed).toBeLessThan(BASE.speed * 1.5);
+    // Speed curve peaks at MAX_WAVES with the widened 5.101.0 spread.
+    expect(getLevelScaledEnemyStats(BASE, MAX_WAVES).speed).toBeGreaterThan(BASE.speed * 1.3);
+    expect(getLevelScaledEnemyStats(BASE, MAX_WAVES).speed).toBeLessThan(BASE.speed * 1.5);
   });
 
   test('size stays constant across levels', () => {
-    for (const lvl of [1, 5, 10, 20]) {
+    for (const lvl of [1, 5, 10, 20, MAX_WAVES]) {
       expect(getLevelScaledEnemyStats(BASE, lvl).size).toBe(BASE.size);
     }
   });
 
   test('points follow a power curve (gentle early, big late)', () => {
     expect(getLevelScaledEnemyStats(BASE, 1).points).toBe(BASE.points);
-    expect(getLevelScaledEnemyStats(BASE, 20).points).toBeGreaterThan(BASE.points * 6);
+    expect(getLevelScaledEnemyStats(BASE, MAX_WAVES).points).toBeGreaterThan(BASE.points * 6);
     expect(getLevelScaledEnemyStats(BASE, 5).points).toBeLessThan(BASE.points * 1.7);
   });
 
@@ -210,11 +214,13 @@ describe('getEnemySpeedMultiplier()', () => {
   test('starts low at wave 1 and climbs sharply at the end', () => {
     const w1 = getEnemySpeedMultiplier(1);
     const w5 = getEnemySpeedMultiplier(5);
-    const w20 = getEnemySpeedMultiplier(20);
+    const wEnd = getEnemySpeedMultiplier(MAX_WAVES);
     expect(w1).toBeLessThan(0.6);              // gentle intro
     expect(w5).toBeLessThan(0.85);             // wave 5 is still easy
-    expect(w20).toBeGreaterThan(1.6);          // wave 20 ceiling is 1.75 per 5.72 cap
-    expect(w20).toBeGreaterThan(w5);
+    // 5.101.0 — final wave (now MAX_WAVES, not 20) is the peak; the
+    // ceiling stays 1.75 per the 5.72 cap regardless of campaign length.
+    expect(wEnd).toBeGreaterThan(1.6);
+    expect(wEnd).toBeGreaterThan(w5);
   });
 
   test('clamps below 1 / above MAX_WAVES', () => {

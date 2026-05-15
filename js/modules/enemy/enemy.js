@@ -58,7 +58,10 @@ export class Enemy {
         //   HP:    +0.15/lvl → +0.22/lvl   (L20 = 5.18×, was 3.85×)
         //   Size:  +0.10/lvl → +0.13/lvl, capped at 2.2× (was 2.0×)
         //   Speed: +0.15/lvl → +0.20/lvl   (L20 = 4.80×, was 3.85×)
-        const levelMultiplier = 1 + (this.level - 1) * 0.22;
+        // 5.101.0 — Campaign now runs to wave 30. Slowed per-level rate
+        // 0.22 → 0.147 so the wave-30 HP multiplier lands near the old
+        // wave-20 ceiling (5.18× → 5.26×) instead of compounding to 7.5×.
+        const levelMultiplier = 1 + (this.level - 1) * 0.147;
         this.maxHealth = Math.round(this.config.health * levelMultiplier);
         this.health = this.maxHealth;
 
@@ -68,7 +71,13 @@ export class Enemy {
             this.health = this.maxHealth;
         }
 
-        const sizeMultiplier = Math.min(2.2, 1 + (this.level - 1) * 0.13);
+        // 5.101.0 — Enemy visual size no longer scales with level. Higher
+        // waves still increase HP / damage / speed, but the silhouette
+        // stays at base size so late-wave enemies don't visually dominate
+        // the screen. The legacy size-multiplier curve is preserved as a
+        // comment for reference.
+        //   const sizeMultiplier = Math.min(2.2, 1 + (this.level - 1) * 0.13);
+        const sizeMultiplier = 1;
         // 5.95.1 — Phone-portrait shrink. On a narrow phone display the
         // default enemy radii make the play area feel cramped at 1:1 scale.
         // Multiply by 0.7 in mobile-portrait to free up visual room without
@@ -84,7 +93,9 @@ export class Enemy {
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
 
-        const speedMultiplier = 1 + (this.level - 1) * 0.20;
+        // 5.101.0 — 0.20 → 0.134 to match the widened 30-wave campaign;
+        // wave-30 speed multiplier lands near the old wave-20 ceiling.
+        const speedMultiplier = 1 + (this.level - 1) * 0.134;
         const scaledSpeed = this.config.speed * speedMultiplier;
         
         // Initialize movement

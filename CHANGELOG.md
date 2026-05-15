@@ -11,6 +11,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.101.0] - 2026-05-15
+
+### Changed — Defensive skill system retired
+
+The defensive skill system (BULWARK / REPAIR_NANITES / DEFLECTOR_ORBS /
+EMP_PULSE / TRACTOR_SHIELD) and its HUD chrome are commented out. The
+game is now primary + power weapons only on the loadout. Defensive
+progression flows through three channels instead:
+
+- Defensive powerups restored to `POWERUP_TYPES` (HEALTH_BOOST,
+  SHIELD_BOOST as "Toughness", and a new REGEN passive `+0.5 HP/s`
+  per stack). All three appear in the pause-menu POWERUPS tab and
+  in the survivor-card pool.
+- Diablo-style inventory (helm/armor/shield/plating) now drops on
+  desktop too — was mobile-only.
+- HEALTH_BOOST now grants a full heal on pick (was `+25 HP`).
+
+HUD: the third loadout square (SKILL), the REFLEXES / LAST_STAND /
+STATIC_FIELD widget cluster, the SKILLS pause-menu tab, the R-key
+radial menu, and the Q-key skill-activate are all commented out (not
+deleted) so the system can be resurrected verbatim if needed.
+
+### Added — Survivor cards on desktop with 2 + 1 balance
+
+The wave-clear powerup pick (formerly mobile-only) now fires on
+desktop too. The pick offers **2 offensive + 1 defensive** cards
+every time, drawn from the new POWERUP_TYPES categories. Picks are
+free (no SP cost) and route through the same overlay both platforms
+already used.
+
+### Added — Shop-suggest overlay after each pick
+
+After claiming a survivor card the player sees a 3-card "QUICK BUY"
+overlay listing weapon upgrades tailored to the equipped primary +
+power weapon (filtered by ownership, prereq gates, and current
+gold). Click to buy; the overlay re-renders so the player can chain
+buys, then CONTINUE skips into the next wave.
+
+### Changed — 30-wave campaign with survivor cards every 3rd wave
+
+`MAX_WAVES` bumped 20 → 30. Each wave gains a sub-wave so the run
+is roughly 50% longer wave-to-wave. Survivor cards now fire only on
+waves divisible by 3 (waves 3 / 6 / 9 / … / 30) for a total of 10
+free picks per playthrough. Off-cadence waves slide straight into
+the next wave without an interruption; players can still spend SP
+on the pause-menu POWERUPS tab any time. New WAVE_DATA / boss
+tier 5 / waves 21-30 / wave subtitles added. Enemy level / speed
+formulas re-keyed so the stat curve clamps at the previous L20
+ceiling instead of compounding into wave 30.
+
+### Changed — Enemies no longer scale in visual size
+
+The `1 + (level − 1) × 0.13` size multiplier in `enemy.js` was
+making late-wave enemies dominate the screen visually. Removed:
+silhouette stays at base size at every wave; HP / damage / speed
+scaling unchanged.
+
+### Changed — Reduced screen shake from explosive bullets
+
+EXPLOSIVE-flagged bullets no longer fire the per-hit screen shake
+on enemies, and their asteroid-destruction shake is halved (mag +
+duration). The cumulative wobble from spread-pellet EXPLOSIVE
+builds is gone; the explosion particle effect alone carries the
+impact read.
+
+### Changed — Heart icon in HP readout pops
+
+The cached `heart` sprite now paints a coral-to-crimson body
+gradient with an outer pink glow and a top-left specular highlight
+clipped to the silhouette. Replaces the hollow `#800000` fill that
+read as a flat outline.
+
 ## [5.100.3] - 2026-05-15
 
 ### Changed — Default bullet range covers the full screen

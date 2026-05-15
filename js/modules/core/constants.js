@@ -295,10 +295,12 @@ export const GAME_STATES = {
 };
 
 // Total waves required to win the run. Boss waves at every BOSS_WAVE_INTERVAL
-// produce four bosses across the campaign (waves 5 / 10 / 15 / 20).
-export const MAX_WAVES = 20;
+// produce six bosses across the campaign (waves 5 / 10 / 15 / 20 / 25 / 30).
+// 5.101.0 — Expanded from 20 → 30 waves so the survivor-card economy
+// (one free pick every 3rd wave) totals 10 picks per playthrough.
+export const MAX_WAVES = 30;
 export const BOSS_WAVE_INTERVAL = 5;
-export const BOSS_WAVES = [5, 10, 15, 20];
+export const BOSS_WAVES = [5, 10, 15, 20, 25, 30];
 
 // 5.71.0 — Speedrun completion tiers. Finishing the 20-wave campaign
 // faster awards a bigger score multiplier on the Game Complete stats

@@ -87,13 +87,18 @@ export function setupEventListeners() {
         // 5.79.3 — keybind reshuffle (per user request):
         //   F → primary weapon cycle
         //   E → power weapon cycle
-        //   R → defense skill cycle
+        //   R → defense skill cycle (5.101.0 — DISABLED)
         // The radial-menu types stay 'primary' / 'power' / 'skill';
         // only the keys that open each are remapped.
         const radialKey =
             e.code === 'KeyF' ? 'primary' :
             e.code === 'KeyE' ? 'power'   :
-            e.code === 'KeyR' ? 'skill'   : null;
+            // 5.101.0 — Defensive skills suspended. R-key no longer
+            // opens the skill radial; the radial menu's 'skill' branch
+            // is unreachable from gameplay until the skill system
+            // returns.
+            // e.code === 'KeyR' ? 'skill'   :
+            null;
         if (radialKey && !e.shiftKey && cycleAllowed && !e.repeat) {
             this.radialMenu.openFor(radialKey);
             hideHint();
@@ -142,8 +147,9 @@ export function setupEventListeners() {
         if (!this.radialMenu || !this.radialMenu.isOpen()) return;
         const t = this.radialMenu.type;
         if ((e.code === 'KeyF' && t === 'primary') ||
-            (e.code === 'KeyE' && t === 'power')   ||
-            (e.code === 'KeyR' && t === 'skill')) {
+            (e.code === 'KeyE' && t === 'power')) {
+            // 5.101.0 — Skill radial branch disabled with the rest of
+            // the defensive skill system.
             this.radialMenu.cancel();
         }
     });

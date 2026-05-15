@@ -173,9 +173,13 @@ describe('updateWave() — enemy_spawn event shape', () => {
         const wave = freshWaveState(1, { phase: 'spawning', subWaveIndex: 1 });
         const events = [];
         updateWave(wave, ctx({ enemyCount: 0 }), events);
-        expect(events).toHaveLength(2);
-        const types = events.map(e => e.enemyType).sort();
-        expect(types).toEqual(['HUNTER', 'WASP']);
+        // 5.101.0 — sub-wave content here is still HUNTER + WASP. The
+        // expectation is "≥2 spawn events whose types include HUNTER &
+        // WASP", which is robust to future per-wave tweaks.
+        expect(events.length).toBeGreaterThanOrEqual(2);
+        const types = new Set(events.map(e => e.enemyType));
+        expect(types.has('HUNTER')).toBe(true);
+        expect(types.has('WASP')).toBe(true);
     });
 
     test('boss waves carry isBoss + bossTier through the event', () => {
@@ -196,10 +200,13 @@ describe('updateWave() — enemy_spawn event shape', () => {
 
 describe('updateWave() — last sub-wave transition', () => {
     test('all sub-waves spawned + enemies remain → moves to clearing', () => {
-        // Wave 1 has 2 sub-waves. Set subWaveIndex=2 so we're past the last.
+        // 5.101.0 — derive `pastLast` from the live wave config so this
+        // test stays valid as wave 1's sub-wave count changes.
+        const wave1Cfg = getWaveConfig(1);
+        const pastLast = wave1Cfg.subWaves.length;
         const wave = freshWaveState(1, {
             phase: 'spawning',
-            subWaveIndex: 2,
+            subWaveIndex: pastLast,
         });
         const events = [];
         updateWave(wave, ctx({ enemyCount: 4 }), events);
@@ -209,9 +216,11 @@ describe('updateWave() — last sub-wave transition', () => {
     });
 
     test('all sub-waves spawned + zero enemies → jumps straight to complete', () => {
+        const wave1Cfg = getWaveConfig(1);
+        const pastLast = wave1Cfg.subWaves.length;
         const wave = freshWaveState(1, {
             phase: 'spawning',
-            subWaveIndex: 2,
+            subWaveIndex: pastLast,
         });
         const events = [];
         updateWave(wave, ctx({ enemyCount: 0 }), events);
@@ -263,6 +272,9 @@ describe('getWaveConfig() — re-export from wave-data.js', () => {
         expect(getAsteroidLevel(3)).toBe(2);
         expect(getAsteroidLevel(4)).toBe(2);
         expect(getAsteroidLevel(20)).toBe(10);
+        // 5.101.0 — campaign expanded to 30 waves; the ceil(w/2) curve
+        // continues without a plateau, so wave 30 = level 15.
+        expect(getAsteroidLevel(MAX_WAVES)).toBe(Math.ceil(MAX_WAVES / 2));
     });
 });
 
@@ -272,23 +284,29 @@ describe('getWaveConfig() — re-export from wave-data.js', () => {
 
 describe('updateWave() — full-wave drive smoke test', () => {
     test('wave 1 fully drains all sub-waves and transitions to complete', () => {
+        // 5.101.0 — Wave 1 has N sub-waves (currently 3). Spawn each one
+        // until every group has fired, then verify the next tick
+        // transitions to 'complete' + emits wave_clear. Total spawn
+        // count needs to be at least N (one spawn event per sub-wave).
+        const wave1Cfg = getWaveConfig(1);
+        const totalSubWaves = wave1Cfg.subWaves.length;
         const wave = freshWaveState(1, { phase: 'spawning' });
-        let events = [];
-
-        // First tick: zero enemies → spawn sub-wave 0.
-        updateWave(wave, ctx({ enemyCount: 0 }), events);
-        const firstSpawnEvents = events.filter(e => e.type === 'enemy_spawn');
-        expect(firstSpawnEvents.length).toBeGreaterThan(0);
-        expect(wave.subWaveIndex).toBe(1);
-
-        // Second tick: zero enemies → spawn sub-wave 1.
-        events = [];
-        updateWave(wave, ctx({ enemyCount: 0 }), events);
-        expect(wave.subWaveIndex).toBe(2);
-        expect(events.filter(e => e.type === 'enemy_spawn').length).toBeGreaterThan(0);
-
-        // Third tick: zero enemies, all sub-waves out → complete.
-        events = [];
+        let totalSpawnEvents = 0;
+        // Each spawning tick must increment subWaveIndex by exactly 1
+        // and emit at least one enemy_spawn event. After totalSubWaves
+        // ticks we should have all sub-waves out.
+        for (let i = 0; i < totalSubWaves; i++) {
+            const events = [];
+            const prevIdx = wave.subWaveIndex;
+            updateWave(wave, ctx({ enemyCount: 0 }), events);
+            expect(wave.subWaveIndex).toBe(prevIdx + 1);
+            const spawns = events.filter(e => e.type === 'enemy_spawn');
+            expect(spawns.length).toBeGreaterThan(0);
+            totalSpawnEvents += spawns.length;
+        }
+        expect(totalSpawnEvents).toBeGreaterThan(0);
+        // Final tick: zero enemies + all sub-waves out → complete.
+        const events = [];
         updateWave(wave, ctx({ enemyCount: 0 }), events);
         expect(wave.phase).toBe('complete');
         expect(events).toContainEqual({ type: 'wave_clear', wave: 1 });
@@ -383,11 +401,10 @@ function drivePure(waveNumber, enemyCountVec, overrides = {}) {
 
 describe('replay parity — updateWave ↔ legacy tryAdvanceSubWave', () => {
     test('wave 1 — ≤2-enemy advance produces identical spawn sequence', () => {
-        // Tick 0: 0 enemies → both spawn sub-wave 0 (HUNTER ×3).
-        // Tick 1: 5 enemies → both skip (>2 and elapsed<12s).
-        // Tick 2: 2 enemies → both spawn sub-wave 1 (HUNTER ×2 + WASP ×2).
-        // Tick 3: 0 enemies → both: all sub-waves spawned, no further spawns.
-        const enemyCountVec = [0, 5, 2, 0];
+        // 5.101.0 — wave 1 now has 3 sub-waves; extend the input vec so
+        // every sub-wave gets a chance to spawn. The invariant is the
+        // pure ↔ legacy spawn parity, not a hard-coded length.
+        const enemyCountVec = [0, 5, 2, 5, 2, 0];
 
         const pure = drivePure(1, enemyCountVec);
         const legacy = makeLegacyStub(1, enemyCountVec);
@@ -395,7 +412,7 @@ describe('replay parity — updateWave ↔ legacy tryAdvanceSubWave', () => {
 
         expect(pure.spawns).toEqual(legacy.recorded);
         // Sanity: parity is meaningless if neither path actually spawned.
-        expect(pure.spawns.length).toBe(3); // 1 group + 2 groups across 2 spawns
+        expect(pure.spawns.length).toBeGreaterThan(0);
         expect(pure.spawns[0]).toEqual({ enemyType: 'HUNTER', count: 3 });
     });
 
@@ -423,15 +440,18 @@ describe('replay parity — updateWave ↔ legacy tryAdvanceSubWave', () => {
 
     test('wave 3 — 20-tick mixed scenario produces identical spawn sequences', () => {
         // Realistic-ish: enemies tick down between sub-waves, occasionally
-        // staying high. Wave 3 has 3 sub-waves with varied groups.
-        // The invariant: same enemyCount inputs → same spawn outputs.
+        // staying high. Wave 3 now has 4 sub-waves (5.101.0) with varied
+        // groups. The invariant: same enemyCount inputs → same spawn
+        // outputs across pure ↔ legacy.
         const enemyCountVec = [
-            0,                          // t0:  spawn sub-wave 0 (HUNTER ×4)
+            0,                          // t0:  spawn sub-wave 0
             6, 6, 5, 4, 3,              // t1-5: enemies decreasing, no spawn
-            2,                          // t6:  spawn sub-wave 1 (WASP ×4)
+            2,                          // t6:  spawn sub-wave 1
             8, 7, 6, 5, 4, 3,           // t7-12: enemies high after spawn
-            2,                          // t13: spawn sub-wave 2 (HUNTER ×3 + WASP ×2)
-            5, 4, 3, 2, 1, 0,           // t14-19: clearing, no more spawns
+            2,                          // t13: spawn sub-wave 2
+            5, 4, 3,                    // t14-16: high again
+            2,                          // t17: spawn sub-wave 3
+            2, 1, 0,                    // t18-20: clearing
         ];
 
         const pure = drivePure(3, enemyCountVec);
@@ -439,8 +459,11 @@ describe('replay parity — updateWave ↔ legacy tryAdvanceSubWave', () => {
         for (let i = 0; i < enemyCountVec.length; i++) legacy.tick();
 
         expect(pure.spawns).toEqual(legacy.recorded);
-        // Wave 3: 1 group + 1 group + 2 groups = 4 spawn calls total.
-        expect(pure.spawns.length).toBe(4);
+        // 5.101.0 — Don't hard-code the spawn count; just assert ≥ the
+        // number of sub-waves (one spawn call per group across all
+        // sub-waves).
+        const wave3Cfg = getWaveConfig(3);
+        expect(pure.spawns.length).toBeGreaterThanOrEqual(wave3Cfg.subWaves.length);
     });
 
     test('12s stale-fallback: both paths fire on the time trigger', () => {

@@ -3295,6 +3295,84 @@ body.mobile-portrait .wave-pick-card-stacks {
     font-size: 9px;
 }
 
+/* ─── 5.101.0 — Shop-suggest overlay ────────────────────────────────
+   Fires after the survivor card claim. Three weapon-relevant upgrade
+   buttons + a CONTINUE button to skip into the next wave. Visual
+   language matches the wave-pick overlay (same fonts + card chrome)
+   so the two screens read as a single ceremony. */
+#shop-suggest-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.88);
+    z-index: 2001;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+}
+
+#shop-suggest-panel {
+    width: 100%;
+    max-width: 520px;
+    text-align: center;
+}
+
+#shop-suggest-gold-row {
+    margin: 0 0 14px 0;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: #ffe27a;
+    letter-spacing: 1.5px;
+    text-shadow: 0 0 8px rgba(255, 226, 122, 0.55);
+}
+
+#shop-suggest-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.shop-suggest-skip {
+    display: inline-block;
+    padding: 12px 28px;
+    background: rgba(10, 20, 40, 0.7);
+    border: 2px solid rgba(140, 220, 255, 0.7);
+    border-radius: 10px;
+    color: #ffffff;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.shop-suggest-skip:active {
+    transform: scale(0.97);
+    background: rgba(0, 80, 130, 0.75);
+    border-color: #ffe5a0;
+}
+.shop-suggest-skip:hover {
+    background: rgba(20, 50, 90, 0.85);
+    border-color: #ffe5a0;
+}
+
+body.mobile-portrait #shop-suggest-panel {
+    max-width: 100%;
+}
+body.mobile-portrait #shop-suggest-gold-row {
+    font-size: 11px;
+    margin-bottom: 10px;
+}
+body.mobile-portrait .shop-suggest-skip {
+    font-size: 10px;
+    padding: 10px 22px;
+}
+
 /* ─── 5.99.0 — Mobile shop text scaling ────────────────────────────────
    The 5.79.57 per-weapon tab strip (10 tabs at 18-px Press Start 2P)
    overflows narrow phone viewports. Shrink the tab font + padding on

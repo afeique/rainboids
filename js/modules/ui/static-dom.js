@@ -28,6 +28,7 @@
 export function buildStaticDom() {
     _buildPauseMenu();
     _buildWavePickOverlay();
+    _buildShopSuggestOverlay();
     _buildShopOverlay();
     _buildStatsOverlay();
 }
@@ -90,7 +91,9 @@ function _buildPauseMenu() {
         { key: 'controls', label: 'CONTROLS', active: true },
         { key: 'primary',  label: 'PRIMARY' },
         { key: 'power',    label: 'POWER' },
-        { key: 'skills',   label: 'SKILLS' },
+        // 5.101.0 — SKILLS tab suspended. Defensive skill system retired
+        // in favor of inventory + defensive powerups + survivor cards.
+        // { key: 'skills',   label: 'SKILLS' },
         { key: 'powerups', label: 'POWERUPS' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'timer',    label: 'TIMER' },
@@ -112,7 +115,9 @@ function _buildPauseMenu() {
     menu.appendChild(el('div', { id: 'controls-tab', className: 'pause-tab-content active' }));
     menu.appendChild(el('div', { id: 'primary-tab',  className: 'pause-tab-content' }));
     menu.appendChild(el('div', { id: 'power-tab',    className: 'pause-tab-content' }));
-    menu.appendChild(_buildSkillsTab());
+    // 5.101.0 — Skills tab content suspended along with the tab strip
+    // entry above. Re-enable by uncommenting both edits.
+    // menu.appendChild(_buildSkillsTab());
     menu.appendChild(el('div', { id: 'powerups-tab', className: 'pause-tab-content' }));
     menu.appendChild(_buildAssistsTab());
     menu.appendChild(_buildTimerTab());
@@ -404,6 +409,55 @@ function _buildWavePickOverlay() {
         ],
     });
     overlay.appendChild(panel);
+}
+
+// ── Shop-suggest overlay (5.101.0) ─────────────────────────────────
+// Fires after the survivor-card pick. Three weapon-relevant upgrades
+// the player can buy with gold; CONTINUE button skips into the next
+// wave. Re-renders in place after each purchase so the player can
+// chain multiple buys without re-opening anything.
+function _buildShopSuggestOverlay() {
+    const overlay = document.getElementById('shop-suggest-overlay');
+    if (!overlay || !markBuilt(overlay, 'shop-suggest-v1')) return;
+    overlay.replaceChildren();
+    overlay.className = 'ui-element';
+    overlay.style.display = 'none';
+
+    const panel = el('div', {
+        id: 'shop-suggest-panel',
+        children: [
+            el('h2', { className: 'wave-pick-title', text: 'QUICK BUY' }),
+            el('p',  { className: 'wave-pick-subtitle', text: 'WEAPON UPGRADES FOR YOUR LOADOUT' }),
+            el('div', { id: 'shop-suggest-gold-row', children: [
+                el('span', { id: 'shop-suggest-gold', text: '0 G' }),
+            ]}),
+            el('div', { id: 'shop-suggest-cards' }),
+            el('button', {
+                id: 'shop-suggest-skip',
+                className: 'shop-suggest-skip',
+                text: 'CONTINUE',
+                attrs: { type: 'button' },
+            }),
+        ],
+    });
+    overlay.appendChild(panel);
+
+    // Hook up the continue/skip button to close the overlay and start
+    // the next wave. We resolve the engine via window.gameEngine so
+    // the listener doesn't capture a stale reference at build time.
+    const skipBtn = panel.querySelector('#shop-suggest-skip');
+    if (skipBtn) {
+        skipBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const ge = window.gameEngine;
+            if (ge && typeof ge.closeWavePickOverlay === 'function') {
+                ge.closeWavePickOverlay();
+            } else {
+                overlay.style.display = 'none';
+            }
+        });
+    }
 }
 
 // ── Shop overlay ───────────────────────────────────────────────────

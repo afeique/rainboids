@@ -13,7 +13,7 @@ import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStat
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
-import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades } from '../combat/weapon-data.js';
 import { updateWave } from '../../sim/wave.js';
 import { freshWaveState } from '../../sim/state.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
@@ -117,19 +117,20 @@ export function updateWaveSystem() {
         const bonusCoins = 50 + clearedWave * 25;
         this.player.gainExperience(bonusXP);
         this.game.money += bonusCoins;
-        // 5.98.0 — Mobile only earns SP via level-ups; wave-clear gives
-        // a 3-card powerup pick instead (see openWavePickOverlay). Desktop
-        // unchanged: still +1 SP per wave clear.
+        // 5.101.0 — Survivor cards fire on BOTH platforms now, but only
+        // every 3rd wave (waves 3 / 6 / 9 / …). 30 waves ÷ 3 = exactly
+        // 10 free picks per playthrough. Off-cadence waves clear with
+        // gold + XP only (no powerup pick, no shop-suggest overlay).
+        // The player can still spend SP on the pause-menu POWERUPS tab
+        // at any time, so a slow wave still gives them a way to grow.
         const _mob = isMobile();
-        if (!_mob) {
-            this.player.skillPoints = (this.player.skillPoints || 0) + 1;
-        }
+        const survivorWave = (clearedWave % 3) === 0;
 
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
         // the bonus gold + pick info to the message renderer.
         this._waveClearRecap = {
             bonusCoins,
-            picks: _mob ? 0 : 1,
+            picks: survivorWave ? 1 : 0,
             mission: this.game.mission ? {
                 completed: !!this.game.mission.completed,
                 failed: !!this.game.mission.failed,
@@ -145,13 +146,24 @@ export function updateWaveSystem() {
         this.showWaveComplete();
 
         // 5.74.2 — wave clear no longer auto-opens the shop. Instead the
-        // pause menu opens to its POWERUPS tab so the player can spend
-        // the +1 pick they just earned. Resuming the game starts the
-        // next wave (see GameEngine.togglePause WAVE_TRANSITION → PAUSED
-        // bridging logic).
+        // survivor-card overlay (every 3rd wave, 5.101.0) opens for the
+        // pick. 2.7s gap lets the WAVE COMPLETE banner read first.
+        // 5.101.0 — Off-cadence waves auto-advance into the next wave
+        // without interrupting the player. The pause-menu POWERUPS tab
+        // is still reachable any time via ESC for SP spending.
+        const fireSurvivorOverlay = survivorWave;
         setTimeout(() => {
-            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
+            if (this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
+            if (fireSurvivorOverlay) {
                 this.openWaveClearPowerupsMenu();
+            } else {
+                // No survivor card this wave — slide straight into the
+                // next one. Mimic the resume-from-wave-clear path that
+                // closeWavePickOverlay normally takes.
+                this._pausedFromWaveClear = false;
+                if (typeof this.startNextWave === 'function') {
+                    this.startNextWave();
+                }
             }
         }, 2700);
     }
@@ -1159,42 +1171,15 @@ export function spawnRandomEnemy() {
     }
 }
 
-// 5.74.2 — opens the pause menu on the POWERUPS tab as the wave-clear
-// reward window. Sets `_pausedFromWaveClear` so togglePause's resume
-// branch routes back into startNextWave instead of straight to PLAYING,
-// preserving the wave-gating behavior the shop used to provide.
-//
-// 5.98.0 — On mobile this routes to `openWavePickOverlay` instead, which
-// shows a 3-card random-powerup pick screen. The mobile model doesn't
-// award SP on wave clear (see completeWave above), so the pause-menu
-// POWERUPS tab would be empty of currency to spend.
+// 5.101.0 — Survivor cards are the universal wave-clear reward, on
+// BOTH desktop and mobile. The old desktop path (pause menu on the
+// POWERUPS tab) was replaced now that defensive powerups are back in
+// POWERUP_TYPES and the 3-card pick is balanced as 2 offense + 1
+// defense. After the pick lands, the shop-suggestion overlay fires
+// (3 weapon-relevant upgrades) so the player can spend gold quickly.
 export function openWaveClearPowerupsMenu() {
     if (!this.uiManager) return;
-    if (isMobile()) {
-        openWavePickOverlay.call(this);
-        return;
-    }
-    this.events.emit('ui:hide-message');
-    this._pausedFromWaveClear = true;
-    this.game.state = GAME_STATES.PAUSED;
-    if (this.player) this.player.pauseChargeShot();
-    // Show the pause overlay and switch to the POWERUPS tab.
-    const overlay = document.getElementById('pause-overlay');
-    if (overlay) overlay.style.display = 'flex';
-    this.uiManager.updatePowerupsList && this.uiManager.updatePowerupsList();
-    this.uiManager.switchTab && this.uiManager.switchTab('powerups');
-    // 5.74.11 — auto-scroll the pause-menu so the POWERUPS list is the
-    // first thing the player sees instead of the tab strip / CONTROLS
-    // text. requestAnimationFrame defers one frame so the freshly-
-    // activated tab content has been laid out before we scroll into it.
-    requestAnimationFrame(() => {
-        const tab = document.getElementById('powerups-tab');
-        const menu = document.getElementById('pause-menu');
-        if (tab && menu) {
-            const offset = tab.offsetTop - 12; // small breathing-room margin
-            menu.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
-        }
-    });
+    openWavePickOverlay.call(this);
 }
 
 // 5.98.0 — Mobile wave-clear powerup pick. Pauses gameplay, picks 3
@@ -1206,21 +1191,42 @@ export function openWavePickOverlay() {
     if (!this.player) return;
     const player = this.player;
 
-    // ── Pick 3 random non-maxed powerups ──
-    // 5.100.3 — Also skip `hidden` powerups (LONG_RANGE retired).
-    const entries = Object.entries(POWERUP_TYPES).filter(([type, cfg]) => {
+    // 5.101.0 — Survivor cards balance: 2 OFFENSE + 1 DEFENSE per pick.
+    //   Filter all eligible (non-maxed, non-hidden) entries by category
+    //   and draw 2 from OFFENSE + 1 from DEFENSE. If a category is short
+    //   (e.g. all DEFENSE powerups maxed) we fall back to filling from
+    //   whichever pool still has entries so the player still gets 3.
+    const eligible = Object.entries(POWERUP_TYPES).filter(([type, cfg]) => {
         if (cfg.hidden) return false;
         const cap = cfg.maxStacks || 99;
         const stacks = player.getPowerupStacks ? player.getPowerupStacks(type) : 0;
         return stacks < cap;
     });
-    // Fisher-Yates shuffle (in place on a copy).
-    const pool = entries.slice();
-    for (let i = pool.length - 1; i > 0; i--) {
-        const j = (Math.random() * (i + 1)) | 0;
-        [pool[i], pool[j]] = [pool[j], pool[i]];
+    const offensePool = eligible.filter(([, cfg]) => cfg.category !== 'DEFENSE');
+    const defensePool = eligible.filter(([, cfg]) => cfg.category === 'DEFENSE');
+
+    const shuffle = (arr) => {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = (Math.random() * (i + 1)) | 0;
+            [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+    };
+
+    const offenseShuf = shuffle(offensePool);
+    const defenseShuf = shuffle(defensePool);
+    const picks = [];
+    for (let i = 0; i < 2 && i < offenseShuf.length; i++) picks.push(offenseShuf[i]);
+    if (defenseShuf.length > 0) picks.push(defenseShuf[0]);
+    // Backfill from leftovers if either pool was short — keep the
+    // 3-card promise even if the player has maxed most picks.
+    let oi = 2, di = 1;
+    while (picks.length < 3) {
+        if (oi < offenseShuf.length) picks.push(offenseShuf[oi++]);
+        else if (di < defenseShuf.length) picks.push(defenseShuf[di++]);
+        else break;
     }
-    const picks = pool.slice(0, Math.min(3, pool.length));
 
     // If the player has maxed EVERY powerup, fall through to the
     // pre-5.98 pause-menu path so they at least see the wave-clear
@@ -1288,7 +1294,7 @@ export function openWavePickOverlay() {
         card.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
-            // Apply the pick — free (no SP cost on mobile wave-clear).
+            // Apply the pick — free (no SP cost on wave-clear).
             player.addPowerup(type, { ...cfg, duration: Infinity }, true);
             if (this.events?.emit) {
                 this.events.emit('audio:powerup');
@@ -1299,7 +1305,13 @@ export function openWavePickOverlay() {
                     position: 'top',
                 });
             }
-            closeWavePickOverlay.call(this);
+            // 5.101.0 — chain into the shop-suggest overlay (3 picks
+            // tailored to the equipped weapons) before starting the
+            // next wave. If the player has no gold or no eligible
+            // upgrades, that overlay auto-skips into startNextWave.
+            const overlay = document.getElementById('wave-pick-overlay');
+            if (overlay) overlay.style.display = 'none';
+            openShopSuggestOverlay.call(this);
         });
 
         cardsContainer.appendChild(card);
@@ -1315,6 +1327,8 @@ export function openWavePickOverlay() {
 export function closeWavePickOverlay() {
     const overlay = document.getElementById('wave-pick-overlay');
     if (overlay) overlay.style.display = 'none';
+    const suggest = document.getElementById('shop-suggest-overlay');
+    if (suggest) suggest.style.display = 'none';
     // 5.99.0 — Defensively hide the pause-overlay too. If the player
     // had paused mid-wave-clear (during the 2.7s gap before wave-pick
     // fires), the pause overlay is also showing UNDERNEATH the wave-
@@ -1335,5 +1349,152 @@ export function closeWavePickOverlay() {
         // Defensive fallback — should not happen since openWavePickOverlay
         // pushes the wave-clear frame. Restore to PLAYING.
         this.game.state = GAME_STATES.PLAYING;
+    }
+}
+
+// 5.101.0 — Shop-suggest overlay. Fires immediately after the player
+// claims a survivor card. Picks up to 3 upgrades that are
+//   1) attached to the equipped primary OR power weapon
+//   2) not yet maxed for the player
+//   3) affordable at current gold
+// and renders them as quick-buy cards. Clicking a card purchases the
+// upgrade, deducts gold, and re-renders the remaining options. A SKIP
+// button closes into startNextWave when the player is done. If there
+// are zero eligible suggestions the overlay auto-skips so the player
+// is never blocked behind an empty modal.
+export function openShopSuggestOverlay() {
+    if (!this.player) {
+        closeWavePickOverlay.call(this);
+        return;
+    }
+    const overlay = document.getElementById('shop-suggest-overlay');
+    if (!overlay) {
+        closeWavePickOverlay.call(this);
+        return;
+    }
+    overlay.style.display = 'flex';
+    renderShopSuggestOverlay.call(this);
+}
+
+function _collectSuggestions() {
+    const player = this.player;
+    if (!player) return [];
+    const gold = (this.game && this.game.money) || 0;
+    const primary = player.activePrimary;
+    const power = player.activePower;
+    const suggestions = [];
+
+    const considerList = (upgrades, kind) => {
+        for (const upg of upgrades) {
+            // Cost (handle costOverrides for staged upgrades).
+            const stacks = player.getPowerupStacks ? player.getPowerupStacks(upg.id) : 0;
+            const maxStacks = upg.maxStacks || 1;
+            if (stacks >= maxStacks) continue;
+            // Tier-2 / mastery upgrades hide behind a prereq.
+            if (upg.requires) {
+                const reqStacks = player.getPowerupStacks
+                    ? player.getPowerupStacks(upg.requires.id)
+                    : 0;
+                if (reqStacks < (upg.requires.stacks || 1)) continue;
+            }
+            let cost = upg.cost;
+            if (upg.costOverrides && upg.costOverrides[stacks] != null) {
+                cost = upg.costOverrides[stacks];
+            }
+            if (cost > gold) continue; // affordability gate
+            suggestions.push({ upg, cost, kind });
+        }
+    };
+
+    if (primary) considerList(getPrimaryUpgrades(primary), 'primary');
+    if (power)   considerList(getPowerUpgrades(power),   'power');
+
+    // Mix primary + power so the player sees a variety. Stable sort
+    // by cost ascending so the first card is the cheapest entry.
+    suggestions.sort((a, b) => a.cost - b.cost);
+    return suggestions.slice(0, 3);
+}
+
+export function renderShopSuggestOverlay() {
+    const overlay = document.getElementById('shop-suggest-overlay');
+    const cards = document.getElementById('shop-suggest-cards');
+    const goldEl = document.getElementById('shop-suggest-gold');
+    if (!overlay || !cards) {
+        closeWavePickOverlay.call(this);
+        return;
+    }
+    const suggestions = _collectSuggestions.call(this);
+    if (suggestions.length === 0) {
+        // Nothing to suggest (maxed out or no gold) — skip immediately.
+        closeWavePickOverlay.call(this);
+        return;
+    }
+    cards.replaceChildren();
+    if (goldEl) goldEl.textContent = `${(this.game && this.game.money) | 0} G`;
+
+    const primaryCfg = this.player && this.player.activePrimary
+        ? PRIMARY_WEAPONS[this.player.activePrimary] : null;
+    const powerCfg = this.player && this.player.activePower
+        ? POWER_WEAPONS[this.player.activePower] : null;
+
+    for (const { upg, cost, kind } of suggestions) {
+        const parentCfg = kind === 'primary' ? primaryCfg : powerCfg;
+        const accent = parentCfg?.color || '#ffd54a';
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'wave-pick-card';
+        card.style.setProperty('--wp-color', accent);
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'wave-pick-card-icon';
+        iconWrap.innerHTML = renderIconHTML(upg.icon, { size: 36, fallback: '★' });
+        card.appendChild(iconWrap);
+
+        const body = document.createElement('div');
+        body.className = 'wave-pick-card-body';
+        const name = document.createElement('div');
+        name.className = 'wave-pick-card-name';
+        name.textContent = upg.name;
+        body.appendChild(name);
+        const desc = document.createElement('div');
+        desc.className = 'wave-pick-card-desc';
+        const parentName = parentCfg?.name || (kind === 'primary' ? 'PRIMARY' : 'POWER');
+        desc.textContent = `${parentName} · ${upg.description}`;
+        body.appendChild(desc);
+        card.appendChild(body);
+
+        const costLbl = document.createElement('div');
+        costLbl.className = 'wave-pick-card-stacks';
+        costLbl.textContent = `${cost} G`;
+        card.appendChild(costLbl);
+
+        card.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if ((this.game.money || 0) < cost) return;
+            this.game.money -= cost;
+            this.player.addPowerup(upg.id, {
+                name: upg.name,
+                description: upg.description,
+                color: accent,
+                gradientColors: parentCfg?.gradientColors || [accent, accent],
+                icon: upg.icon,
+                maxStacks: upg.maxStacks,
+                duration: Infinity,
+            }, true);
+            if (this.events?.emit) {
+                this.events.emit('audio:coin');
+                this.events.emit('ui:show-message', {
+                    title: upg.name,
+                    subtitle: `-${cost} G`,
+                    duration: 1100,
+                    position: 'top',
+                });
+            }
+            // Re-render so the player can buy another suggestion or skip.
+            renderShopSuggestOverlay.call(this);
+        });
+
+        cards.appendChild(card);
     }
 }

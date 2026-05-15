@@ -222,11 +222,12 @@ export function addPowerup(type, config, isShopItem = false) {
         });
     }
 
-    // Special handling for health boost - increase current health when purchased
-    if (type === 'HEALTH_BOOST' && isShopItem) {
-        const newMaxHealth = this.getEffectiveMaxHealth();
-        // Increase current health by 25, but don't exceed new max
-        this.health = Math.min(this.health + 25, newMaxHealth);
+    // Special handling for health boost - full heal on pick (5.101.0).
+    // The displayName/description now both promise "full heal on pick",
+    // so honor it regardless of isShopItem (wave-pick / shop / debug all
+    // restore HP). The +35 max-HP bump comes from getEffectiveMaxHealth.
+    if (type === 'HEALTH_BOOST') {
+        this.health = this.getEffectiveMaxHealth();
     }
 
     if (isShopItem) {
@@ -242,6 +243,23 @@ export function updatePowerups() {
             if (powerup.timeRemaining <= 0) {
                 this.powerups.delete(type);
             }
+        }
+    }
+
+    // 5.101.0 — REGEN powerup. Passive +0.5 HP/s per stack, capped at
+    // the player's effective max HP. Accumulator pattern keeps the
+    // regen frame-rate independent.
+    const regenStacks = this.getPowerupStacks('REGEN');
+    if (regenStacks > 0 && this.active && this.health > 0) {
+        const cap = this.getEffectiveMaxHealth();
+        if (this.health < cap) {
+            this._regenAcc = (this._regenAcc || 0) + (regenStacks * 0.5) * (16 / 1000);
+            while (this._regenAcc >= 1 && this.health < cap) {
+                this.health = Math.min(cap, this.health + 1);
+                this._regenAcc -= 1;
+            }
+        } else {
+            this._regenAcc = 0;
         }
     }
 

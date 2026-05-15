@@ -245,6 +245,63 @@ export const POWERUP_TYPES = {
     // economy into a single per-level curve. Less currency-flavored
     // friction; more deterministic progression. The OFFENSE category
     // still gates around player choice (damage shape per build).
+
+    // 5.101.0 — Defensive powerups restored to POWERUP_TYPES. With
+    // defense skills retired, these become the player's main defensive
+    // levers alongside the Diablo-style inventory. All three appear in
+    // the pause-menu POWERUPS tab AND the survivor-card wave-clear pick
+    // (one defensive slot per pick, see openWavePickOverlay).
+    //   HEALTH_BOOST  — +35 max HP per stack (mirrors getEffectiveMaxHealth)
+    //   SHIELD_BOOST  — +8% damage reduction (mirrors getEffectiveShield, capped 75%)
+    //   REGEN         — passive HP/s regen (5.101.0 — new entry)
+    HEALTH_BOOST: {
+        name: 'Health',
+        displayName: 'Health Boost',
+        abbr: 'HP+',
+        color: '#ff5555',
+        gradientColors: ['#ff8888', '#cc0000'],
+        icon: 'heart',
+        duration: 30000,
+        effect: 'healthBoost',
+        rarity: 0.18,
+        category: 'DEFENSE',
+        maxStacks: 10,
+        spCost: 3,
+        spCostIncrement: 2,
+        description: '+35 max HP per stack (full heal on pick)'
+    },
+    SHIELD_BOOST: {
+        name: 'Toughness',
+        displayName: 'Toughness',
+        abbr: 'DEF',
+        color: '#33ff99',
+        gradientColors: ['#66ffaa', '#006644'],
+        icon: 'shield',
+        duration: 30000,
+        effect: 'shieldBoost',
+        rarity: 0.15,
+        category: 'DEFENSE',
+        maxStacks: 8,
+        spCost: 3,
+        spCostIncrement: 2,
+        description: '+8% damage reduction per stack (cap 75%)'
+    },
+    REGEN: {
+        name: 'Regen',
+        displayName: 'Health Regen',
+        abbr: 'RGN',
+        color: '#66ffaa',
+        gradientColors: ['#aaffcc', '#229966'],
+        icon: 'pill',
+        duration: 30000,
+        effect: 'regen',
+        rarity: 0.14,
+        category: 'DEFENSE',
+        maxStacks: 5,
+        spCost: 3,
+        spCostIncrement: 2,
+        description: '+0.5 HP/s passive regen per stack'
+    },
 };
 
 export class Powerup {

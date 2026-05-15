@@ -51,15 +51,16 @@ export function drawHUD() {
             this._hudButtonRects = null;
         }
 
-        // 5.78.0 — defense indicators render in EVERY non-title state,
-        // including PAUSED / WAVE_TRANSITION / SHOP. Players reflexively
-        // open the pause menu to check whether Reflexes is off cooldown;
-        // the widgets need to be visible there too. Title screen still
-        // suppresses them since the player has no kit yet.
-        if (this.game.state !== GAME_STATES.TITLE_SCREEN
-            && typeof this.drawDefenseIndicators === 'function') {
-            this.drawDefenseIndicators(this.ctx);
-        }
+        // 5.101.0 — Defensive skill HUD suspended along with the
+        // defensive skill system. REFLEXES / LAST_STAND / STATIC_FIELD
+        // are no longer offered as picks; if a save still carries
+        // stacks the underlying effects still run, but no HUD chrome
+        // surfaces them. Re-enable along with the skill system if
+        // resurrected.
+        // if (this.game.state !== GAME_STATES.TITLE_SCREEN
+        //     && typeof this.drawDefenseIndicators === 'function') {
+        //     this.drawDefenseIndicators(this.ctx);
+        // }
 
         // Draw level up text if active
         if (this.player && this.player.levelUpTextInfo && this.player.levelUpTextInfo.active) {
@@ -1454,61 +1455,60 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         powerGlow,
     );
 
-    // ── Skill square ────────────────────────────────────────────────
-    // On the SAME row as PRM and PWR, sitting to the right of PWR with
-    // the same horizontal `gap`. Three squares in a single horizontal
-    // strip: [PRM][PWR][SKILL].
-    const skillRowY = groupY;
-    const skillCx = groupX + 2 * (squareSize + gap) + squareSize / 2;
-    drawWeaponSquare.call(
-        this, ctx,
-        skillCx, skillRowY + squareSize / 2,
-        squareSize, cornerRadius,
-        skillCfg.icon || '?',
-        skillCfg.color || '#ff88dd',
-        'SKILL',
-        skillScale,
-        skillGlow,
-    );
-
-    // Cooldown overlay + active-effect ring on the skill square. Drawn
-    // inside the same square coords; no scale animation interaction.
-    const cdRemaining = this.player.activeSkillCooldown || 0;
-    const cdTotal = skillCfg.cooldown || 1;
-    const cdRatio = cdRemaining > 0 ? cdRemaining / cdTotal : 0;
-    if (cdRatio > 0) {
-        const half = squareSize / 2;
-        ctx.save();
-        ctx.beginPath();
-        _roundedRectPath(ctx, skillCx - half, skillRowY, squareSize, squareSize, cornerRadius);
-        ctx.clip();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(
-            skillCx - half,
-            skillRowY + squareSize * (1 - cdRatio),
-            squareSize,
-            squareSize * cdRatio,
-        );
-        ctx.restore();
-        // Cooldown seconds remaining
-        const secs = Math.ceil(cdRemaining / 1000);
-        ctx.font = 'bold 10px "Press Start 2P", monospace';
-        ctx.fillStyle = '#FF8888';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(`${secs}s`, skillCx, skillRowY + squareSize - 4);
-    }
-    if (this.player.activeSkillEffects && this.player.activeSkillEffects.has(this.player.activeSkill)) {
-        const half = squareSize / 2;
-        ctx.save();
-        ctx.shadowColor = skillCfg.color || '#ff88dd';
-        ctx.shadowBlur = 14;
-        ctx.strokeStyle = skillCfg.color || '#ff88dd';
-        ctx.lineWidth = 2;
-        _roundedRectPath(ctx, skillCx - half, skillRowY, squareSize, squareSize, cornerRadius);
-        ctx.stroke();
-        ctx.restore();
-    }
+    // 5.101.0 — Defensive SKILL square suspended. Defensive skills are
+    // retired (game is primary + power weapons only); defensive picks
+    // now live in the pause-menu POWERUPS tab + survivor cards +
+    // Diablo-style inventory. The square + cooldown + active-effect
+    // ring stay commented for reference if the skill system ever
+    // returns.
+    // const skillRowY = groupY;
+    // const skillCx = groupX + 2 * (squareSize + gap) + squareSize / 2;
+    // drawWeaponSquare.call(
+    //     this, ctx,
+    //     skillCx, skillRowY + squareSize / 2,
+    //     squareSize, cornerRadius,
+    //     skillCfg.icon || '?',
+    //     skillCfg.color || '#ff88dd',
+    //     'SKILL',
+    //     skillScale,
+    //     skillGlow,
+    // );
+    //
+    // const cdRemaining = this.player.activeSkillCooldown || 0;
+    // const cdTotal = skillCfg.cooldown || 1;
+    // const cdRatio = cdRemaining > 0 ? cdRemaining / cdTotal : 0;
+    // if (cdRatio > 0) {
+    //     const half = squareSize / 2;
+    //     ctx.save();
+    //     ctx.beginPath();
+    //     _roundedRectPath(ctx, skillCx - half, skillRowY, squareSize, squareSize, cornerRadius);
+    //     ctx.clip();
+    //     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    //     ctx.fillRect(
+    //         skillCx - half,
+    //         skillRowY + squareSize * (1 - cdRatio),
+    //         squareSize,
+    //         squareSize * cdRatio,
+    //     );
+    //     ctx.restore();
+    //     const secs = Math.ceil(cdRemaining / 1000);
+    //     ctx.font = 'bold 10px "Press Start 2P", monospace';
+    //     ctx.fillStyle = '#FF8888';
+    //     ctx.textAlign = 'center';
+    //     ctx.textBaseline = 'bottom';
+    //     ctx.fillText(`${secs}s`, skillCx, skillRowY + squareSize - 4);
+    // }
+    // if (this.player.activeSkillEffects && this.player.activeSkillEffects.has(this.player.activeSkill)) {
+    //     const half = squareSize / 2;
+    //     ctx.save();
+    //     ctx.shadowColor = skillCfg.color || '#ff88dd';
+    //     ctx.shadowBlur = 14;
+    //     ctx.strokeStyle = skillCfg.color || '#ff88dd';
+    //     ctx.lineWidth = 2;
+    //     _roundedRectPath(ctx, skillCx - half, skillRowY, squareSize, squareSize, cornerRadius);
+    //     ctx.stroke();
+    //     ctx.restore();
+    // }
 }
 
 function _roundedRectPath(ctx, x, y, w, h, r) {

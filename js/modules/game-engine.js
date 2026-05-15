@@ -1995,6 +1995,9 @@ export class GameEngine {
     // 5.98.0 — Mobile wave-clear 3-pick overlay.
     openWavePickOverlay() { return wave.openWavePickOverlay.call(this); }
     closeWavePickOverlay() { return wave.closeWavePickOverlay.call(this); }
+    // 5.101.0 — shop-suggestion overlay (3 weapon-relevant upgrades).
+    openShopSuggestOverlay() { return wave.openShopSuggestOverlay.call(this); }
+    renderShopSuggestOverlay() { return wave.renderShopSuggestOverlay.call(this); }
     // 5.75.0 — mission system bindings.
     checkMissionOnKill() { return wave.checkMissionOnKill.call(this); }
     checkMissionOnCrit() { return wave.checkMissionOnCrit.call(this); }
