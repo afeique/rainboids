@@ -105,56 +105,72 @@ export const PRIMARY_WEAPONS = {
     //   already displays as a ring around the player.
 };
 
-// Streak damage tiers — 5.103.0 every-10-kills ladder.
+// Streak damage tiers — 5.104.0 epicness-ordered ladder.
 //   Twenty distinct tiers at kills 10, 20, 30, ..., 200 so the player
-//   sees a phase change every 10 confirmed kills. Damage climbs in
-//   +0.15 steps through LEGENDARY (50 kills, 2.00×) and then tapers
-//   into the high tiers so the top end stays a cosmetic flex without
-//   breaking balance. Hard cap at 3.00× (RAINBOIDS GOD, 200 kills).
+//   sees a phase change every 10 confirmed kills. Labels are sorted
+//   strictly by perceived epicness so each tier feels bigger than the
+//   last — momentum tier → mortal-grade → mythic → cosmic → beyond.
 //
-//   Each tier carries a unique color so the streak HUD reads as a
-//   distinct phase change instead of "everything is gold past 15".
+//   Damage multipliers climb in +0.15 steps through LEGENDARY (70
+//   kills, 2.12×) and then taper. The 200-kill cap (RAINBOIDS GOD)
+//   stays at 3.00× so the late-game flex doesn't break balance.
 //
-//   kills  mult   label          notes
-//     10   1.25×  EMPOWERED      first taste
-//     20   1.40×  UNSTOPPABLE    sustained pressure
-//     30   1.55×  RELENTLESS     no breaks
-//     40   1.70×  GODLIKE        the classic peak
-//     50   1.85×  LEGENDARY      auto-splash unlocked here ↓
-//     60   2.00×  HERCULEAN      "feats of strength" tier
-//     70   2.12×  INDOMITABLE    immune to bad runs
-//     80   2.23×  OUTRAGEOUS     this is ridiculous
-//     90   2.33×  IMMORTAL       death-stop level
-//    100   2.42×  APOCALYPTIC    triple-digit milestone
-//    110   2.50×  ASTRONOMICAL   off the charts
-//    120   2.58×  GALACTIC       beyond planet-scale
-//    130   2.65×  COSMIC         beyond galaxy-scale
-//    140   2.72×  TRANSCENDENT   beyond reason
-//    150   2.78×  OMNIPOTENT     untouchable
-//    160   2.84×  MYTHIC         storybook material
-//    170   2.89×  INVINCIBLE     cannot be stopped
-//    180   2.93×  ETERNAL        will never end
-//    190   2.97×  INFINITE       no upper bound
-//    200   3.00×  RAINBOIDS GOD  hard cap, the final word
+//   Each tier keeps its original color so the visual fingerprint of
+//   each label persists across re-orderings.
+//
+//   ── Momentum tier (you've got it going) ──
+//      10   1.25×  EMPOWERED      first taste
+//      20   1.40×  RELENTLESS     keeping pressure
+//      30   1.55×  UNSTOPPABLE    nothing can stop you
+//      40   1.70×  INDOMITABLE    cannot be subdued
+//
+//   ── Mortal-extraordinary (heroic) ──
+//      50   1.85×  OUTRAGEOUS     ridiculous performance
+//      60   2.00×  HERCULEAN      demigod strength
+//      70   2.12×  LEGENDARY      auto-splash unlocks ↓
+//      80   2.23×  MYTHIC         storybook material
+//
+//   ── Divine / immortal ──
+//      90   2.33×  IMMORTAL       beyond death
+//     100   2.42×  GODLIKE        approximately divine
+//     110   2.50×  INVINCIBLE     cannot be defeated
+//     120   2.58×  ETERNAL        beyond time
+//
+//   ── Cosmic / universe-scale ──
+//     130   2.65×  APOCALYPTIC    end-of-world power
+//     140   2.72×  ASTRONOMICAL   star-scale
+//     150   2.78×  GALACTIC       galaxy-scale
+//     160   2.84×  COSMIC         universe-scale
+//
+//   ── Beyond physical ──
+//     170   2.89×  TRANSCENDENT   beyond reality
+//     180   2.93×  OMNIPOTENT     all-powerful
+//     190   2.97×  INFINITE       no upper bound
+//     200   3.00×  RAINBOIDS GOD  hard cap, the final word
 export const STREAK_TIERS = [
+    // Momentum tier
     { kills:  10, mult: 1.25, label: 'EMPOWERED',     color: '#7FE7FF' }, // pale cyan
-    { kills:  20, mult: 1.40, label: 'UNSTOPPABLE',   color: '#FFA844' }, // orange
-    { kills:  30, mult: 1.55, label: 'RELENTLESS',    color: '#FF7733' }, // red-orange
-    { kills:  40, mult: 1.70, label: 'GODLIKE',       color: '#FF6688' }, // pink-red
-    { kills:  50, mult: 1.85, label: 'LEGENDARY',     color: '#FFD700' }, // gold
+    { kills:  20, mult: 1.40, label: 'RELENTLESS',    color: '#FF7733' }, // red-orange
+    { kills:  30, mult: 1.55, label: 'UNSTOPPABLE',   color: '#FFA844' }, // orange
+    { kills:  40, mult: 1.70, label: 'INDOMITABLE',   color: '#55D6FF' }, // electric blue
+    // Mortal-extraordinary
+    { kills:  50, mult: 1.85, label: 'OUTRAGEOUS',    color: '#FF55FF' }, // magenta
     { kills:  60, mult: 2.00, label: 'HERCULEAN',     color: '#B0FF55' }, // bright lime
-    { kills:  70, mult: 2.12, label: 'INDOMITABLE',   color: '#55D6FF' }, // electric blue
-    { kills:  80, mult: 2.23, label: 'OUTRAGEOUS',    color: '#FF55FF' }, // magenta
+    { kills:  70, mult: 2.12, label: 'LEGENDARY',     color: '#FFD700' }, // gold
+    { kills:  80, mult: 2.23, label: 'MYTHIC',        color: '#DC143C' }, // crimson
+    // Divine / immortal
     { kills:  90, mult: 2.33, label: 'IMMORTAL',      color: '#FFD0FF' }, // pale violet
-    { kills: 100, mult: 2.42, label: 'APOCALYPTIC',   color: '#FF4444' }, // blood red
-    { kills: 110, mult: 2.50, label: 'ASTRONOMICAL',  color: '#AA88FF' }, // royal purple
-    { kills: 120, mult: 2.58, label: 'GALACTIC',      color: '#4466FF' }, // deep blue
-    { kills: 130, mult: 2.65, label: 'COSMIC',        color: '#9933FF' }, // purple
-    { kills: 140, mult: 2.72, label: 'TRANSCENDENT',  color: '#88FFEE' }, // teal-mint
-    { kills: 150, mult: 2.78, label: 'OMNIPOTENT',    color: '#FF44AA' }, // hot pink
-    { kills: 160, mult: 2.84, label: 'MYTHIC',        color: '#DC143C' }, // crimson
-    { kills: 170, mult: 2.89, label: 'INVINCIBLE',    color: '#FFFFFF' }, // bright white
-    { kills: 180, mult: 2.93, label: 'ETERNAL',       color: '#FFF8DC' }, // ivory
+    { kills: 100, mult: 2.42, label: 'GODLIKE',       color: '#FF6688' }, // pink-red
+    { kills: 110, mult: 2.50, label: 'INVINCIBLE',    color: '#FFFFFF' }, // bright white
+    { kills: 120, mult: 2.58, label: 'ETERNAL',       color: '#FFF8DC' }, // ivory
+    // Cosmic / universe-scale
+    { kills: 130, mult: 2.65, label: 'APOCALYPTIC',   color: '#FF4444' }, // blood red
+    { kills: 140, mult: 2.72, label: 'ASTRONOMICAL',  color: '#AA88FF' }, // royal purple
+    { kills: 150, mult: 2.78, label: 'GALACTIC',      color: '#4466FF' }, // deep blue
+    { kills: 160, mult: 2.84, label: 'COSMIC',        color: '#9933FF' }, // purple
+    // Beyond physical
+    { kills: 170, mult: 2.89, label: 'TRANSCENDENT',  color: '#88FFEE' }, // teal-mint
+    { kills: 180, mult: 2.93, label: 'OMNIPOTENT',    color: '#FF44AA' }, // hot pink
     { kills: 190, mult: 2.97, label: 'INFINITE',      color: '#FFEC8B' }, // pale gold
     { kills: 200, mult: 3.00, label: 'RAINBOIDS GOD', color: '#FFD700' }, // gold (cap)
 ];

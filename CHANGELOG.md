@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.104.0] - 2026-05-15
+
+### Changed — Killstreak tier labels reordered by epicness
+
+The kill thresholds stay at every 10 (10, 20, …, 200) but the labels
+were reshuffled so each tier feels strictly bigger than the last.
+The ladder now reads as five distinct narrative bands:
+
+- **Momentum** (10–40): EMPOWERED → RELENTLESS → UNSTOPPABLE → INDOMITABLE
+- **Mortal-extraordinary** (50–80): OUTRAGEOUS → HERCULEAN → LEGENDARY → MYTHIC
+- **Divine / immortal** (90–120): IMMORTAL → GODLIKE → INVINCIBLE → ETERNAL
+- **Cosmic / universe-scale** (130–160): APOCALYPTIC → ASTRONOMICAL → GALACTIC → COSMIC
+- **Beyond physical** (170–200): TRANSCENDENT → OMNIPOTENT → INFINITE → RAINBOIDS GOD
+
+LEGENDARY moved from 50 → 70 kills as part of the reorder; the
+auto-explosive-splash gate still keys on LEGENDARY by name, so the
+splash bonus now unlocks at 70 kills instead of 50 (still carries
+through every tier above to RAINBOIDS GOD).
+
+Each label keeps its original color so the visual fingerprint of
+LEGENDARY (gold), HERCULEAN (lime), COSMIC (purple), etc. persists.
+Damage multipliers stay on the +0.15-per-tier → taper → 3.00× cap
+curve from 5.103.0.
+
 ## [5.103.0] - 2026-05-15
 
 ### Changed — Killstreak ladder rescaled to every-10-kills, 20 tiers
