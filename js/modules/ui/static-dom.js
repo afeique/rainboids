@@ -235,13 +235,13 @@ function _buildAssistsTab() {
     const mobile = isMobile();
     const desktopRows = [
         { id: 'assist-aim-assist', title: 'Aim Assist',
-          desc: 'When the cursor is near an enemy, asteroid, or bomb, the reticle snaps onto the target.' },
+          desc: 'When the reticle is near a target, it snaps onto the target.' },
         { id: 'assist-auto-aim', title: 'Auto Aim',
-          desc: 'Aim automatically tracks the nearest enemy, asteroid, or bomb. Overrides mouse and arrow-key aim.' },
+          desc: 'Automatically tracks the nearest target. Overrides mouse aim.' },
         { id: 'assist-auto-fire', title: 'Auto Fire',
-          desc: 'Fire the primary weapon automatically whenever a target is in range.' },
+          desc: 'Fires the primary weapon automatically.' },
         { id: 'assist-auto-power', title: 'Auto Power',
-          desc: "Fire the power weapon automatically when it's off cooldown or fully charged." },
+          desc: "Fire the power weapon automatically when it's fully charged." },
     ];
     const mobileRows = [
         { id: 'assist-auto-power', title: 'Auto Power',
