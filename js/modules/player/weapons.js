@@ -273,16 +273,26 @@ function spawnMuzzleFlare(particlePool, intensity, color) {
 }
 
 export function firePulseCannon(bulletPool, audioManager, config) {
-    const damage = this.getEffectivePrimaryDamage();
+    let damage = this.getEffectivePrimaryDamage();
+    // 5.111.0 — DEAD_EYE replaces the old STEADY_AIM spread reducer.
+    // +10% damage per stack + a small crit-chance bump (3% per stack)
+    // routed through createChargedBullets' `critChanceBonus` parameter.
+    // Pulse Cannon's identity is "precision" — these reinforce that
+    // without leaning on spread (Pulse Cannon already has 0 spread).
+    const deadEyeStacks = this.getPowerupStacks('DEAD_EYE');
+    if (deadEyeStacks > 0) {
+        damage *= 1 + deadEyeStacks * 0.1;
+    }
+    const deadEyeCritFrac = deadEyeStacks * 0.03; // 0.03 = +3% per stack
     const echoStacks = this.getPowerupStacks('ECHO_ROUND');
     // Pass config.range so Pulse Cannon's reach is governed by
     // weapon-data.js like every other primary.
-    this.createChargedBullets(bulletPool, 1, 1, damage, 0, 0, config.range);
+    this.createChargedBullets(bulletPool, 1, 1, damage, deadEyeCritFrac, 0, config.range);
     audioManager.playShoot();
 
     // Echo Round: chance to fire a bonus bullet
     if (echoStacks > 0 && Math.random() < echoStacks * 0.1) {
-        this.createChargedBullets(bulletPool, 0.8, 1, damage * 0.7, 0, 0, config.range);
+        this.createChargedBullets(bulletPool, 0.8, 1, damage * 0.7, deadEyeCritFrac, 0, config.range);
     }
 
     // 5.75.1 — TWIN_CANNON capstone: fires two additional bullets at ±8°
@@ -352,9 +362,16 @@ export function fireStormNeedles(bulletPool, audioManager, config) {
 
 export function fireScatterGun(bulletPool, audioManager, config) {
     this.scatterShotCount++;
-    const damage = this.getEffectivePrimaryDamage();
+    let damage = this.getEffectivePrimaryDamage();
+    // 5.111.0 — HEAVY_LOAD replaces the old TIGHT_CHOKE spread reducer.
+    // +15% per stack to every pellet's damage. Pairs with the now-
+    // tighter base spread (0.4) and longer range (1.2) — Scatter Shot
+    // becomes a credible mid-range pick instead of point-blank-only.
+    const heavyLoadStacks = this.getPowerupStacks('HEAVY_LOAD');
+    if (heavyLoadStacks > 0) {
+        damage *= 1 + heavyLoadStacks * 0.15;
+    }
     const buckshotStacks = this.getPowerupStacks('BUCKSHOT');
-    const tightChokeStacks = this.getPowerupStacks('TIGHT_CHOKE');
     // MULTI_SHOT carry-over: +1 pellet per stack on top of BUCKSHOT.
     const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
     const slugRound = this.getPowerupStacks('SLUG_ROUND') > 0 && this.scatterShotCount % 4 === 0;
@@ -385,7 +402,9 @@ export function fireScatterGun(bulletPool, audioManager, config) {
         // pellet pierces 1 enemy. Saturating sweep.
         const coneFireBonus = this.getPowerupStacks('CONE_OF_FIRE') > 0 ? 2 : 0;
         const pelletCount = config.bulletCount + buckshotStacks + multiShotStacks + coneFireBonus;
-        const spread = config.spreadAngle * Math.pow(0.85, tightChokeStacks);
+        // 5.111.0 — TIGHT_CHOKE removed. Spread is the weapon's baked
+        // identity now (0.4 in weapon-data.js). No per-stack reducer.
+        const spread = config.spreadAngle;
         const startAngle = this.angle - spread / 2;
 
         for (let i = 0; i < pelletCount; i++) {

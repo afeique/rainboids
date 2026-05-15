@@ -24,25 +24,24 @@ export const PRIMARY_WEAPONS = {
         cost: 0,
         spCost: 0,
         unlockWave: 0,
-        upgrades: ['STEADY_AIM', 'OVERCHARGE', 'ECHO_ROUND', 'PULSE_VELOCITY'],
+        upgrades: ['DEAD_EYE', 'OVERCHARGE', 'ECHO_ROUND', 'PULSE_VELOCITY'],
     },
     STORM_NEEDLES: {
         id: 'STORM_NEEDLES',
         name: 'Storm Needles',
-        description: 'Rapid tiny shots that saturate targets',
+        description: 'Rapid needles in a cone of fire',
         icon: 'rain',
-        // 5.99.0 — Was #88ffff (cyan, too close to Pulse Cannon's #00ccff
-        // and Charge Shot's #00ffff). Pivoted to chartreuse so the ten
-        // weapons are visually distinct across the shop tab strip and in
-        // every effect downstream (bullets, muzzle, shop accent).
         color: '#b3ff44',
-        // 5.68.1 — bumped damage 0.3 → 0.4 (DPS 2.31 → 3.08).
         fireRate: 130,
         damage: 0.4,
         bulletSpeed: 1.1,
         bulletSize: 0.5,
         bulletCount: 1,
-        spreadAngle: 0.15,
+        // 5.111.0 — Cone-of-fire identity made explicit. Slight
+        // randomized per-shot jitter (±0.10 rad ≈ ±5.7°) reads as a
+        // saturation weapon by design — no spread-reduction upgrade,
+        // accuracy is baked into the weapon. Was 0.15.
+        spreadAngle: 0.20,
         piercing: 0,
         range: 1.0,
         cost: 0,
@@ -56,26 +55,28 @@ export const PRIMARY_WEAPONS = {
         //   (existing saves reference activePrimary: 'SCATTER_GUN').
         id: 'SCATTER_GUN',
         name: 'Scatter Shot',
-        description: 'Shotgun burst — devastating up close',
+        description: 'Focused shotgun burst with extended reach',
         icon: 'explosion',
         color: '#ff8844',
-        // 5.68.1 — damage tuned for 3.0 DPS at point-blank (5 pellets
-        // hitting). Single-pellet glancing hits naturally fall below
-        // the bracket since fewer pellets connect at range.
-        //   per-shot 0.4 × 5 / 0.7s = 2.86 DPS
-        //   per-shot 0.42 × 5 / 0.7s = 3.00 DPS
         fireRate: 700,
         damage: 0.42,
         bulletSpeed: 0.9,
         bulletSize: 0.6,
         bulletCount: 5,
-        spreadAngle: 0.6,
+        // 5.111.0 — Spread tightened 0.6 → 0.4 (≈ 34° → 23°). The
+        // weapon was falling off too hard at distance because pellets
+        // diverged before reaching the target. Tighter cone keeps the
+        // shotgun feel up close but lands more pellets at range.
+        spreadAngle: 0.4,
         piercing: 0,
-        range: 1.0,
+        // 5.111.0 — Range bumped 1.0 → 1.2 so pellets carry further
+        // before expiring. With the tighter spread, mid-range volleys
+        // are now a viable option instead of point-blank only.
+        range: 1.2,
         cost: 0,
         spCost: 0,
         unlockWave: 5,
-        upgrades: ['TIGHT_CHOKE', 'BUCKSHOT', 'SHRAPNEL', 'SLUG_ROUND', 'SCATTER_VELOCITY'],
+        upgrades: ['HEAVY_LOAD', 'BUCKSHOT', 'SHRAPNEL', 'SLUG_ROUND', 'SCATTER_VELOCITY'],
     },
     RAIL_DRIVER: {
         id: 'RAIL_DRIVER',
@@ -186,7 +187,11 @@ export const STREAK_BUFF_DURATION = 4000; // ms — buff lasts 4s, refreshes on 
 // purchase rather than a fistful-of-gold dump.
 export const PRIMARY_UPGRADES = {
     // Pulse Cannon
-    STEADY_AIM:     { id: 'STEADY_AIM',     name: 'Steady Aim',     description: '-8% spread per stack',                    cost: 900,  maxStacks: 3,  weapon: 'PULSE_CANNON', icon: 'target' },
+    // 5.111.0 — STEADY_AIM (-8% spread/stack) retired. Pulse Cannon
+    // has spreadAngle=0 already, so the upgrade was a no-op dressed
+    // up as a stat bump. Replaced with DEAD_EYE: pure damage + crit
+    // chance, reinforcing Pulse Cannon's "precision" identity.
+    DEAD_EYE:       { id: 'DEAD_EYE',       name: 'Dead Eye',       description: '+10% damage & +3% crit chance per stack', cost: 900,  maxStacks: 3,  weapon: 'PULSE_CANNON', icon: 'target' },
     OVERCHARGE:     { id: 'OVERCHARGE',      name: 'Overcharge',     description: '+15% auto-fire damage per stack',         cost: 1200, maxStacks: 4,  weapon: 'PULSE_CANNON', icon: 'bolt' },
     ECHO_ROUND:     { id: 'ECHO_ROUND',      name: 'Echo Round',     description: '10% chance to fire a bonus bullet',      cost: 1900, maxStacks: 3,  weapon: 'PULSE_CANNON', icon: 'loop' },
 
@@ -197,7 +202,12 @@ export const PRIMARY_UPGRADES = {
     SUPPRESSION:    { id: 'SUPPRESSION',     name: 'Suppression',    description: 'Hit enemies fire 15% slower for 1.5s',   cost: 2300, maxStacks: 1,  weapon: 'STORM_NEEDLES', icon: 'mute' },
 
     // Scatter Gun
-    TIGHT_CHOKE:    { id: 'TIGHT_CHOKE',     name: 'Tight Choke',    description: '-15% spread angle per stack',             cost: 1100, maxStacks: 3,  weapon: 'SCATTER_GUN', icon: 'wrench' },
+    // 5.111.0 — TIGHT_CHOKE (-15% spread/stack) retired. Scatter Shot
+    // now ships with a tighter base spread (0.4) so the upgrade was
+    // doing work we'd rather bake into the weapon itself. Replaced
+    // with HEAVY_LOAD: pure pellet damage so the shotgun build can
+    // still pursue raw damage without an aim-tightening kludge.
+    HEAVY_LOAD:     { id: 'HEAVY_LOAD',      name: 'Heavy Load',     description: '+15% pellet damage per stack',            cost: 1100, maxStacks: 3,  weapon: 'SCATTER_GUN', icon: 'bomb' },
     BUCKSHOT:        { id: 'BUCKSHOT',        name: 'Buckshot',       description: '+1 pellet per stack',                     cost: 1500, maxStacks: 2,  weapon: 'SCATTER_GUN', icon: 'bomb' },
     SHRAPNEL:        { id: 'SHRAPNEL',        name: 'Shrapnel',       description: 'Pellets fragment at max range',           cost: 2300, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: 'explosion' },
     SLUG_ROUND:      { id: 'SLUG_ROUND',      name: 'Slug Round',     description: 'Every 4th shot is a single big slug',    cost: 3000, maxStacks: 1,  weapon: 'SCATTER_GUN', icon: 'circle-fill' },

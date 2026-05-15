@@ -11,6 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.111.0] - 2026-05-15
+
+### Removed — Spread-reduction upgrades
+
+`STEADY_AIM` (Pulse Cannon, -8% spread/stack) and `TIGHT_CHOKE`
+(Scatter Shot, -15% spread/stack) are gone. Spread was effectively
+dead content on Pulse Cannon (base spread was already 0) and a
+crutch on Scatter Shot. Each weapon now ships with the spread it's
+meant to have — accuracy is the weapon's identity, not an upgrade
+tax.
+
+- **Pulse Cannon**: spread stays 0 (perfectly accurate).
+- **Storm Needles**: spread bumped 0.15 → 0.20 (~11.5°) so the cone-
+  of-fire identity reads more clearly. Per-shot jitter is still
+  randomized so a sustained burst saturates the area in front of
+  the ship.
+- **Scatter Shot**: spread tightened 0.6 → 0.4 (≈ 34° → 23°). The
+  weapon was falling off too hard at distance because pellets
+  diverged before reaching the target. Tighter cone keeps the
+  shotgun feel close up but lands more pellets at range.
+- **Rail Driver**: spread stays 0.
+
+### Changed — Scatter Shot now carries further
+
+Range bumped 1.0 → 1.2 alongside the spread tighten so the pellets
+keep momentum to the edge of the screen. The combined effect:
+Scatter Shot is no longer just a close-range bully — it's a
+credible mid-range option that still rewards point-blank play
+through pellet density.
+
+### Added — Replacement upgrades
+
+- `STEADY_AIM` → **DEAD_EYE**: +10% damage AND +3% crit chance per
+  stack (max 3). Reinforces Pulse Cannon's "precision" identity
+  without leaning on a spread reducer.
+- `TIGHT_CHOKE` → **HEAVY_LOAD**: +15% pellet damage per stack
+  (max 3). Pure pellet damage so the shotgun build can pursue raw
+  punch instead of an aim-tightening kludge that no longer fits
+  the weapon's tuned base spread.
+
 ## [5.110.0] - 2026-05-15
 
 ### Removed — Range-only upgrades + LONG_RANGE powerup
