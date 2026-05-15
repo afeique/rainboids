@@ -389,6 +389,18 @@ export function handleCollisions() {
                             healParticle.radius = 6;
                             healParticle.life = 0.6;
                         }
+                        // 5.106.0 — Green "+N" popup mirroring the red
+                        // damage-taken floater so the player can SEE the
+                        // heal land. Spawn slightly above the player so
+                        // it doesn't overlap their ship sprite.
+                        if (typeof this.createDamageNumber === 'function') {
+                            this.createDamageNumber(
+                                this.player.x,
+                                this.player.y - (this.player.radius || 14) - 4,
+                                actualHeal,
+                                { isHeal: true },
+                            );
+                        }
                     } else {
                         this.events.emit('audio:coin'); // Normal sound if already at max health
                     }

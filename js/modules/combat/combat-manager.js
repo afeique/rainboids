@@ -993,7 +993,7 @@ export function triggerPlayerHitFX(impactX, impactY, damage = 1) {
 // ── Damage Numbers ──
 
 export function createDamageNumber(x, y, damage, opts = {}) {
-    // opts: { isCrit?: bool, isEmpowered?: bool, isPlayerHit?: bool, target? }
+    // opts: { isCrit?, isEmpowered?, isPlayerHit?, isHeal?, target? }
     //
     // 5.76.0 — damage numbers are AGGREGATED per-target on a 1s window
     //   so 30 hits in a second show as ONE growing number instead of
@@ -1010,10 +1010,30 @@ export function createDamageNumber(x, y, damage, opts = {}) {
     //   hud/combat.drawDamageNumbers).
     //   Player-hit floaters still bypass — those are explicit
     //   "you got hit" feedback the player wants discrete.
+    //
+    // 5.106.0 — `isHeal` floaters render as a green "+N" so the
+    //   player can SEE the heal land. REGEN powerup ticks reuse this
+    //   path with damage=1, aggregating per-player so a continuous
+    //   regen reads as a single growing number, not a +1 spam.
     const isCrit = !!opts.isCrit;
     const isPlayerHit = !!opts.isPlayerHit;
+    const isHeal = !!opts.isHeal;
     const target = opts.target || null;
     const now = Date.now();
+
+    // Heal aggregation — passive REGEN fires once per tick and would
+    // spam a +1 floater every ~33ms. Aggregate per-player into a
+    // single floater that grows while regen is active.
+    if (isHeal) {
+        if (this._healAggRef && this._healAggRef.life > 0
+                && (now - this._healAggStart) < 800) {
+            this._healAggRef.damage += Math.round(damage);
+            this._healAggRef.x = x;
+            this._healAggRef.y = y;
+            this._healAggRef.life = Math.max(this._healAggRef.life, 0.7);
+            return;
+        }
+    }
 
     if (target && !isPlayerHit) {
         if (!this._enemyDmgAggs) this._enemyDmgAggs = new Map();
@@ -1043,6 +1063,7 @@ export function createDamageNumber(x, y, damage, opts = {}) {
         isCrit,
         isEmpowered: !!opts.isEmpowered,
         isPlayerHit,
+        isHeal,
         vel: {
             x: (Math.random() - 0.5) * 2,
             y: -2 - Math.random() * 2
@@ -1053,7 +1074,10 @@ export function createDamageNumber(x, y, damage, opts = {}) {
 
     this.damageNumbers.push(damageNumber);
 
-    if (target && !isPlayerHit) {
+    if (isHeal) {
+        this._healAggRef = damageNumber;
+        this._healAggStart = now;
+    } else if (target && !isPlayerHit) {
         this._enemyDmgAggs.set(target, {
             dmgRef: damageNumber,
             startTime: now,

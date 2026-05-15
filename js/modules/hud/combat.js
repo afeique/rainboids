@@ -27,7 +27,21 @@ export function drawDamageNumbers() {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            if (dmgNum.isPlayerHit) {
+            if (dmgNum.isHeal) {
+                // 5.106.0 — Heal floater: green, bold, leading "+" so
+                // it reads as the inverse of the red "-N" damage hit.
+                // Used by health-orb pickups AND the REGEN powerup tick
+                // (aggregated per-player so passive regen reads as a
+                // single growing number).
+                const fontSize = 18;
+                ctx.font = `bold ${fontSize}px 'Press Start 2P', monospace`;
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = rgba(0, 0, 0, alpha);
+                ctx.fillStyle = rgba(70, 230, 90, alpha);
+                const text = '+' + dmgNum.damage.toString();
+                ctx.strokeText(text, screenX, screenY);
+                ctx.fillText(text, screenX, screenY);
+            } else if (dmgNum.isPlayerHit) {
                 // Damage TO the player: red, bold, with a leading "-" so
                 // it's instantly distinguishable from enemy/asteroid hit
                 // numbers (which are gold). Slightly bigger than standard.

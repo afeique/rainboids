@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.106.0] - 2026-05-15
+
+### Added — Green "+N" heal popups
+
+Two new floating-number paths, both green, both prefixed with "+", so
+the player can SEE healing land:
+
+- **Health pickups** — when a health orb / shape is collected and
+  actually restores HP (i.e. the player wasn't already at max),
+  `createDamageNumber(player.x, player.y - radius - 4, actualHeal,
+  { isHeal: true })` fires a bold green "+N" above the ship.
+- **REGEN powerup ticks** — each granted HP fires the same popup,
+  aggregated per-player into a single growing number on an 800 ms
+  window so a continuous regen reads as "+1 → +2 → +5" instead of
+  spamming a new floater every 33 ms.
+
+Renderer (`drawDamageNumbers` in `hud/combat.js`) gets a new branch:
+green (70,230,90) bold 18 px, leading "+", same outline + fade
+behavior as the red player-hit damage floater so the two read as
+clear positive/negative mirrors. Aggregation lives in
+`createDamageNumber` keyed on `this._healAggRef` / `_healAggStart`
+so the existing per-enemy aggregation isn't disturbed.
+
 ## [5.105.0] - 2026-05-15
 
 ### Changed — Mobile drops visibly fly to the player

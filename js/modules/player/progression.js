@@ -249,14 +249,28 @@ export function updatePowerups() {
     // 5.101.0 — REGEN powerup. Passive +0.5 HP/s per stack, capped at
     // the player's effective max HP. Accumulator pattern keeps the
     // regen frame-rate independent.
+    // 5.106.0 — Each granted HP fires a green "+N" floater (aggregated
+    // per-player in createDamageNumber so a continuous regen reads as
+    // a single growing number, not +1 spam).
     const regenStacks = this.getPowerupStacks('REGEN');
     if (regenStacks > 0 && this.active && this.health > 0) {
         const cap = this.getEffectiveMaxHealth();
         if (this.health < cap) {
             this._regenAcc = (this._regenAcc || 0) + (regenStacks * 0.5) * (16 / 1000);
+            let regenTickGained = 0;
             while (this._regenAcc >= 1 && this.health < cap) {
                 this.health = Math.min(cap, this.health + 1);
                 this._regenAcc -= 1;
+                regenTickGained++;
+            }
+            if (regenTickGained > 0 && this.gameEngine
+                    && typeof this.gameEngine.createDamageNumber === 'function') {
+                this.gameEngine.createDamageNumber(
+                    this.x,
+                    this.y - (this.radius || 14) - 4,
+                    regenTickGained,
+                    { isHeal: true },
+                );
             }
         } else {
             this._regenAcc = 0;
