@@ -3355,3 +3355,41 @@ body.mobile-portrait .shop-item-desc {
     font-size: 10px;
 }
 
+/* ─── 5.100.1 — Mobile Controls tab chips ─────────────────────────
+   The mobile renderer in ui-manager._renderMobileControlsTab uses a
+   `.controls-mobile-chip` for each binding (rather than the WASD /
+   mouse key tiles the desktop view uses). Chip = small icon + short
+   description. Keep it readable on a narrow portrait phone. */
+.controls-mobile-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(10, 22, 40, 0.55);
+    border: 1px solid rgba(140, 200, 255, 0.45);
+    border-radius: 6px;
+    color: #cfeaff;
+    font-family: 'Silkscreen', 'Press Start 2P', monospace;
+    font-size: 12px;
+    line-height: 1.25;
+    max-width: 100%;
+}
+.controls-mobile-chip-icon {
+    font-size: 16px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+}
+.controls-mobile-chip-text {
+    flex: 1 1 auto;
+    word-break: break-word;
+}
+body.mobile-portrait .controls-mobile-chip {
+    font-size: 10px;
+    padding: 5px 8px;
+    gap: 6px;
+}
+body.mobile-portrait .controls-mobile-chip-icon {
+    font-size: 14px;
+}
+

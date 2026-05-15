@@ -4,6 +4,7 @@ import { POWERUP_TYPES } from '../world/powerup.js';
 import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
 import { loadSettings, saveSettings } from '../core/storage.js';
 import { renderIconHTML } from './icons.js';
+import { isMobile } from '../platform/platform-detect.js';
 
 // Format an elapsed-time milliseconds value as M:SS for the pause-menu
 // TIMER tab. Mirrors the same formatter that lives in shop-dom.js for
@@ -96,6 +97,7 @@ export class UIManager {
             assistAimAssist: document.getElementById('assist-aim-assist'),
             assistAutoAim: document.getElementById('assist-auto-aim'),
             assistAutoFire: document.getElementById('assist-auto-fire'),
+            assistAutoPower: document.getElementById('assist-auto-power'),
             // HUD pause button (top-left)
             hudPauseBtn: document.getElementById('hud-pause-btn'),
             hudShopBtn: document.getElementById('hud-shop-btn')
@@ -346,6 +348,15 @@ export class UIManager {
         const controlsTab = document.getElementById('controls-tab');
         if (!controlsTab) return;
 
+        // 5.100.1 — Mobile devices get a wholly different Controls page
+        // that documents the analog stick + tap-for-power model. The
+        // desktop / keyboard build below assumes WASD + mouse and is
+        // useless to a mobile player.
+        if (isMobile()) {
+            this._renderMobileControlsTab(controlsTab);
+            return;
+        }
+
         const SPRITE_DIR = 'sprites/keys/';
 
         // Section icons reuse the SVG icon registry so the section
@@ -501,6 +512,110 @@ export class UIManager {
         const hint = document.createElement('span');
         hint.className = 'controls-footer-text';
         hint.textContent = 'to resume play';
+        footer.appendChild(hint);
+        controlsTab.appendChild(footer);
+    }
+
+    // 5.100.1 — Mobile-specific Controls page. The desktop renderer
+    // above assumes WASD + mouse and is meaningless to a mobile player.
+    // This version documents the 5.100 stick + tap-for-power loop.
+    _renderMobileControlsTab(controlsTab) {
+        controlsTab.replaceChildren();
+
+        const heading = document.createElement('h2');
+        heading.textContent = 'CONTROLS';
+        controlsTab.appendChild(heading);
+
+        const sections = [
+            {
+                name: 'Movement',
+                accent: 'cyan',
+                rows: [
+                    { action: 'Move ship', glyph: '🎮', detail: 'Drag the analog stick at the bottom corner' },
+                ],
+            },
+            {
+                name: 'Combat',
+                accent: 'orange',
+                rows: [
+                    { action: 'Aim',                 glyph: '🎯', detail: 'AUTO — locks onto nearest target' },
+                    { action: 'Fire primary',        glyph: '🔫', detail: 'AUTO — holds while a target is in range' },
+                    { action: 'Fire power weapon',   glyph: '⚡', detail: 'TAP anywhere outside the stick' },
+                ],
+            },
+            {
+                name: 'System',
+                accent: 'gold',
+                rows: [
+                    { action: 'Shop / Stats / Pause', glyph: '⏸', detail: 'Tap the buttons at the bottom of the screen' },
+                    { action: 'Swap primary weapon',  glyph: '🔄', detail: 'Pause menu → PRIMARY tab' },
+                    { action: 'Swap power weapon',    glyph: '🔄', detail: 'Pause menu → POWER tab' },
+                    { action: 'Spend SP on powerups', glyph: '✨', detail: 'Pause menu → POWERUPS tab' },
+                ],
+            },
+            {
+                name: 'Tips',
+                accent: 'pink',
+                rows: [
+                    { action: 'Move the stick to the other side', glyph: '↔', detail: 'Open Assists to toggle stick side (LEFT/RIGHT)' },
+                    { action: 'Make power weapon auto-fire',      glyph: '🤖', detail: 'Open Assists → enable AUTO POWER' },
+                    { action: 'Pick up items',                    glyph: '💎', detail: 'Items magnet to you automatically. They auto-equip if they\'re an upgrade' },
+                ],
+            },
+        ];
+
+        const table = document.createElement('table');
+        table.className = 'controls-table';
+
+        for (const section of sections) {
+            const headerRow = document.createElement('tr');
+            headerRow.className = 'controls-section-row';
+            headerRow.dataset.accent = section.accent;
+            const headerCell = document.createElement('td');
+            headerCell.colSpan = 2;
+            headerCell.className = 'controls-section-cell';
+            const headerTitle = document.createElement('span');
+            headerTitle.className = 'controls-section-title';
+            headerTitle.textContent = section.name;
+            headerCell.appendChild(headerTitle);
+            headerRow.appendChild(headerCell);
+            table.appendChild(headerRow);
+
+            for (const row of section.rows) {
+                const tr = document.createElement('tr');
+                tr.className = 'controls-row';
+
+                const actionCell = document.createElement('td');
+                actionCell.className = 'controls-action';
+                actionCell.textContent = row.action;
+                tr.appendChild(actionCell);
+
+                const keysCell = document.createElement('td');
+                keysCell.className = 'controls-keys';
+                const chip = document.createElement('span');
+                chip.className = 'controls-mobile-chip';
+                if (row.glyph) {
+                    const g = document.createElement('span');
+                    g.className = 'controls-mobile-chip-icon';
+                    g.textContent = row.glyph;
+                    chip.appendChild(g);
+                }
+                const text = document.createElement('span');
+                text.className = 'controls-mobile-chip-text';
+                text.textContent = row.detail;
+                chip.appendChild(text);
+                keysCell.appendChild(chip);
+                tr.appendChild(keysCell);
+                table.appendChild(tr);
+            }
+        }
+        controlsTab.appendChild(table);
+
+        const footer = document.createElement('div');
+        footer.className = 'controls-footer';
+        const hint = document.createElement('span');
+        hint.className = 'controls-footer-text';
+        hint.textContent = 'Tap RESUME (top) to return to play';
         footer.appendChild(hint);
         controlsTab.appendChild(footer);
     }
@@ -1086,18 +1201,25 @@ export class UIManager {
     
     setGameEngine(gameEngine) {
         this.gameEngine = gameEngine;
+        // 5.79.58/59 → 5.100.1 — Pre-render every dynamic pause-menu
+        //   tab ONCE at boot, before the pause overlay can ever be
+        //   opened. The pause-menu first open finds every tab already
+        //   populated; no flash of empty-then-rebuilt content. The
+        //   per-pause refresh calls in togglePauseMenu still fire so
+        //   live state (equipped weapon, money/SP balance, owned
+        //   powerups, elapsed timer) stays accurate, but the FIRST
+        //   paint of any tab is never empty.
+        //
+        //   5.100.1 — added Skills + Timer pre-renders and the
+        //   assists-tab sync so the user-reported flash on first-open
+        //   is gone across ALL dynamic pause tabs.
         this.syncAssistsTab();
-        // 5.79.58/59 — Pre-render every dynamic pause-menu tab ONCE
-        //   at boot, before the pause overlay can ever be opened. The
-        //   pause-menu first open finds every tab already populated;
-        //   no flash of empty-then-rebuilt content. The per-pause
-        //   refresh calls in togglePauseMenu still fire so live state
-        //   (equipped weapon, money/SP balance, owned powerups) stays
-        //   accurate, but the FIRST paint of any tab is never empty.
         this.updateControlsTab();
         this.updatePrimaryTab();
         this.updatePowerTab();
         this.renderPowerupsOverlay();
+        if (this.updateSkillsTab) this.updateSkillsTab();
+        if (this.updateTimerTab) this.updateTimerTab();
     }
 
     // Reflect engine-side assists state in the tab checkboxes.
@@ -1107,6 +1229,7 @@ export class UIManager {
         if (this.elements.assistAimAssist) this.elements.assistAimAssist.checked = !!a.aimAssist;
         if (this.elements.assistAutoAim) this.elements.assistAutoAim.checked = !!a.autoAim;
         if (this.elements.assistAutoFire) this.elements.assistAutoFire.checked = !!a.autoFire;
+        if (this.elements.assistAutoPower) this.elements.assistAutoPower.checked = !!a.autoPower;
     }
 
     setAudioManager(audioManager) {
@@ -1365,6 +1488,7 @@ export class UIManager {
         wireAssist(this.elements.assistAimAssist, 'aimAssist');
         wireAssist(this.elements.assistAutoAim, 'autoAim');
         wireAssist(this.elements.assistAutoFire, 'autoFire');
+        wireAssist(this.elements.assistAutoPower, 'autoPower');
         
         // Music controls
         this.elements.musicPlayPause.addEventListener('click', () => {

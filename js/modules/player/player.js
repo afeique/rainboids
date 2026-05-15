@@ -504,9 +504,22 @@ export class Player {
         // on mobile (auto-aim + auto-fire) so the player just dodges
         // while the AI picks targets and holds primary. The 5.95.1
         // "force-disable on mobile" patch is reversed.
+        //
+        // 5.100.1 — Mobile defaults autoPower=false so the tap-for-power
+        // model works. The Assists pause-menu tab lets players opt into
+        // autoPower if they want fully-automated firing. We MERGE the
+        // engine's persisted assists toggles on top of the mobile
+        // defaults so the player's autoPower preference takes effect
+        // while the autoAim/autoFire defaults stay forced.
         let assists;
         if (isMobile()) {
-            assists = { autoAim: true, autoFire: true, aimAssist: false };
+            const stored = (ge && ge.assists) || {};
+            assists = {
+                autoAim: true,
+                autoFire: true,
+                aimAssist: false,
+                autoPower: !!stored.autoPower,
+            };
         } else {
             assists = (ge && ge.assists) ? ge.assists : null;
         }
@@ -558,10 +571,14 @@ export class Player {
         // target within weapon range AND roughly in line with the current
         // aim. Holding fire when nothing's hittable wastes ammo (visually,
         // and for charged weapons it interrupts charging) and feels noisy.
-        // Charge-based power weapons still charge passively (weapons.js
-        // starts the charge unconditionally); we only flip fireSecondary
-        // on once a target is hittable AND charging is full.
-        if (assists && assists.autoFire) {
+        //
+        // 5.100.1 — Split: `assists.autoFire` controls PRIMARY only;
+        // `assists.autoPower` controls POWER weapon. Pre-5.100.1 they
+        // shared one toggle, which forced mobile (default autoFire=true)
+        // to auto-fire power too — defeating Model F tap-for-power.
+        // Now mobile defaults to `autoFire: true, autoPower: false` so
+        // tap-for-power works while primary still auto-holds.
+        if (assists && (assists.autoFire || assists.autoPower)) {
             const primaryCfg = this.getActivePrimaryConfig && this.getActivePrimaryConfig();
             const baseRange = primaryCfg ? (primaryCfg.range || 1) * 400 : 400;
             const rangeMult = this.getRangeMultiplier ? this.getRangeMultiplier() : 1;
@@ -584,13 +601,15 @@ export class Player {
                 }
             }
             if (canHit) {
-                input.fire = true;
-                const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
-                if (cfg) {
-                    if (cfg.isChargeBased) {
-                        if (this.isFullyCharged) input.fireSecondary = true;
-                    } else if (this.isPowerReady && this.isPowerReady()) {
-                        input.fireSecondary = true;
+                if (assists.autoFire) input.fire = true;
+                if (assists.autoPower) {
+                    const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
+                    if (cfg) {
+                        if (cfg.isChargeBased) {
+                            if (this.isFullyCharged) input.fireSecondary = true;
+                        } else if (this.isPowerReady && this.isPowerReady()) {
+                            input.fireSecondary = true;
+                        }
                     }
                 }
             }

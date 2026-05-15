@@ -135,7 +135,18 @@
                         <input type="checkbox" id="assist-auto-fire">
                         <div class="assist-row-text">
                             <div class="assist-row-title">Auto Fire</div>
-                            <div class="assist-row-desc">Fire the primary weapon automatically. Power weapon fires when fully charged or off cooldown.</div>
+                            <div class="assist-row-desc">Fire the primary weapon automatically whenever a target is in range.</div>
+                        </div>
+                    </label>
+                    <!-- 5.100.1 — Auto Power split out from Auto Fire so
+                         mobile's tap-for-power can stay player-driven by
+                         default while still letting players opt into
+                         fully-automated power-weapon firing. -->
+                    <label class="assist-row">
+                        <input type="checkbox" id="assist-auto-power">
+                        <div class="assist-row-text">
+                            <div class="assist-row-title">Auto Power</div>
+                            <div class="assist-row-desc">Fire the power weapon automatically when it's off cooldown or fully charged. Mobile: also overrides the tap-to-fire control.</div>
                         </div>
                     </label>
                 </div>

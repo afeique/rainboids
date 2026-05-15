@@ -2790,15 +2790,13 @@ export class GameEngine {
                 // Draw jitter circle to show bullet spread area
                 this.drawJitterCircle();
 
-                // 5.95.1 — Mobile reticle at the last-touched canvas
-                // coordinates. Drawn in screen space so it stays glued
-                // to the user's finger position regardless of camera
-                // movement. Desktop renders the laser-pointer trace
-                // earlier inside the camera transform; this is its
-                // mobile counterpart and ONLY draws on mobile sessions.
-                if (this.mobile) {
-                    this.drawMobileReticle();
-                }
+                // 5.95.1 — Mobile reticle DISABLED in 5.100.1. The
+                // 5.100.0 pivot to drag-to-move + auto-aim means the
+                // player never aims manually on mobile, so a reticle
+                // following the auto-aim target (or stale touch coords)
+                // is visual noise. The auto-aim target's identity is
+                // communicated via the bullets flying that way and the
+                // enemy's own hit-flash feedback.
 
                 // 5.88.0 — respawn / post-respawn invincibility countdown
                 // removed entirely. The tank-based hit model has no respawn
@@ -3509,7 +3507,11 @@ export class GameEngine {
     // nearest), and Auto Fire (auto-trigger primary + power). Read by
     // player.update each tick.
     _loadAssists() {
-        const defaults = { aimAssist: false, autoAim: false, autoFire: false };
+        // 5.100.1 — Added `autoPower` (separate from `autoFire`). Mobile
+        // controls the power weapon via Model F tap; players who want
+        // full auto can opt in via the Assists pause-menu tab. Desktop
+        // default is off too — the autoFire toggle is enough.
+        const defaults = { aimAssist: false, autoAim: false, autoFire: false, autoPower: false };
         try {
             const raw = localStorage.getItem('rainboidsAssists');
             if (!raw) return defaults;

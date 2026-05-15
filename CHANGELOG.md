@@ -11,6 +11,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.100.1] - 2026-05-15
+
+### Removed — Mobile reticle
+
+The screen-space reticle that followed `_mobileLastTouchCanvasX/Y` (or
+`input.screenAimX/Y` as fallback) is disabled on mobile. In the 5.100
+drag-to-move + auto-aim model the player never aims manually, so the
+crosshair just followed the auto-aim target and felt distracting.
+
+### Fixed — Power weapon was auto-firing on mobile (Model F broken)
+
+5.100.0 set `assists.autoFire = true` for mobile, which routed through
+the player.js auto-fire block and pulsed `input.fireSecondary` too —
+so cooldown power weapons fired automatically the moment they were
+ready, defeating the tap-for-power Model F overlay.
+
+Split the gate: `autoFire` now controls PRIMARY only;
+`autoPower` is a new separate assist that controls the power weapon.
+Mobile defaults to `autoFire: true, autoPower: false` — tap-for-power
+works as intended; players who want full auto can opt in.
+
+### Added — Auto Power assist
+
+New checkbox in the pause-menu Assists tab. When enabled, the power
+weapon fires automatically the moment it's off cooldown (cooldown
+weapons) or fully charged (CHARGE_SHOT). Disabled by default so the
+mobile tap-for-power loop stays player-driven. Persists via the
+existing `rainboidsAssists` localStorage key.
+
+### Added — Mobile-specific Controls tab
+
+The pause-menu CONTROLS tab now renders a wholly different page on
+mobile devices that documents the 5.100 stick + tap-for-power model:
+
+  Movement   🎮  Drag the analog stick at the bottom corner
+  Aim       🎯  AUTO — locks onto nearest target
+  Fire       🔫  AUTO — holds while a target is in range
+  Power     ⚡  TAP anywhere outside the stick
+  System    ⏸  Bottom HUD buttons; swap weapons via pause menu
+  Tips      ↔  Toggle stick side, enable AUTO POWER, etc.
+
+Desktop keeps the existing WASD + mouse + key-sprite renderer.
+
+### Changed — Pre-render every pause tab to avoid first-open flash
+
+The Skills tab and Timer tab were not pre-rendered at boot; opening
+them for the first time showed an empty container for one frame before
+the dynamic renderer filled it in. Added both to the boot pre-render
+list alongside Controls / Primary / Power / Powerups / Assists. Every
+pause tab is now populated before the first time the pause menu can
+be opened.
+
+### Files
+
+- `js/modules/game-engine.js`: `_loadAssists` default + reticle draw
+  call retired.
+- `js/modules/player/player.js`: split auto-fire gate, mobile
+  defaults `autoPower=false` (mergeable with stored prefs).
+- `js/modules/ui/ui-manager.js`: mobile Controls renderer
+  (`_renderMobileControlsTab`); autoPower wiring; pre-render Skills
+  + Timer at boot.
+- `index.html`: new `#assist-auto-power` checkbox.
+- `css/styles.css`: `.controls-mobile-chip` styling for the new
+  mobile Controls page.
+
+944/944 unit tests passing.
+
+---
+
 ## [5.100.0] - 2026-05-14
 
 ### Added — Mobile: virtual analog stick + Sky-force-style controls (Model A + F)
