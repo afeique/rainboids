@@ -27,10 +27,12 @@ const BLINK_TICKS = 300;       // blink in the last ~5s
 const FADE_TICKS = 30;         // hard fade in the last ~0.5s
 
 // Full-screen mobile magnet to match the rest of the 5.98 drop tuning.
+// 5.105.0 — Cut DRAMATICALLY (was 38/70) so inventory items visibly
+// fly toward the stationary player instead of teleporting on pickup.
 const MOBILE_MAGNET_RANGE = 3000;
-const MOBILE_MAGNET_STRENGTH = 38;
-const MOBILE_MAGNET_NEAR_RANGE = 200;
-const MOBILE_MAGNET_NEAR_STRENGTH = 70;
+const MOBILE_MAGNET_STRENGTH = 1.2;
+const MOBILE_MAGNET_NEAR_RANGE = 80;
+const MOBILE_MAGNET_NEAR_STRENGTH = 5;
 const MAGNET_Z = 2.5;
 
 export class StatPickup {

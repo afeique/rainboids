@@ -188,6 +188,13 @@ export function triggerEnemyFinalExplosion(enemy) {
     const r  = enemy.radius || 18;
 
     // ── Main screen punch lands HERE, not on impact. ──
+    // 5.105.0 — Shake tuned WAY down (38 → 14, 22 → 8, r×3 → r×1.4).
+    // Previously every kill produced a ~600ms wobble that compounded
+    // with adjacent kills into an unreadable cam. The new values still
+    // register as a satisfying "punch" but the camera settles fast
+    // enough that the next kill's shake reads as a distinct event.
+    // Hitstop + camera kick + screen flash stay the same — those are
+    // the read-as-impact channels; shake is just the cherry on top.
     if (onScreen) {
         this.triggerHitstop(7);
         this.triggerScreenFlash(0.12, 6);
@@ -196,7 +203,7 @@ export function triggerEnemyFinalExplosion(enemy) {
             const kdy = this.player.y - ey;
             this.triggerCameraKick(kdx, kdy, 18);
         }
-        this.triggerScreenShake(38, 22, r * 3.0);
+        this.triggerScreenShake(14, 8, r * 1.4);
     }
 
     // 1. Bright core flash.

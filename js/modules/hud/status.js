@@ -1165,15 +1165,36 @@ export function updateHUD() {
             const tier = healthPercentage > 0.6 ? 'high' : healthPercentage > 0.3 ? 'mid' : 'low';
             const gradient = this._hpGradients[tier];
 
-            createHealthBarPath(filledWidth);
+            // 5.105.0 — Healthbar geometry has angled bevel corners on
+            // both ends. The previous `createHealthBarPath(filledWidth)`
+            // call malformed at low HP: when filledWidth < 2 * bevelSize,
+            // the top-right corner `barX + width - bevelSize*0.5` slid
+            // LEFT of `barX`, producing a self-intersecting polygon whose
+            // fill bled past the left edge of the bar silhouette.
+            //
+            // Fix: clip to the FULL-WIDTH bar silhouette, then fill a
+            // simple rectangle from barX to barX+filledWidth. The clip
+            // crops the rectangle to the bevel silhouette automatically,
+            // so the angled left edge is preserved AND the fill can
+            // never extend past the bar's outer shape.
+            ctx.save();
+            createHealthBarPath(barWidth);
+            ctx.clip();
             ctx.fillStyle = gradient;
-            ctx.fill();
+            ctx.fillRect(barX, barY, Math.max(0, filledWidth), barHeight);
+            ctx.restore();
 
-            // Add subtle inner glow
-            createHealthBarPath(filledWidth);
+            // Subtle inner glow stroke along the filled portion. Use the
+            // simple rect inside the clip too so the stroke doesn't
+            // double-trace the bevel left edge at low HP (the malformed
+            // polygon stroke was extending past barX in the legacy code).
+            ctx.save();
+            createHealthBarPath(barWidth);
+            ctx.clip();
             ctx.strokeStyle = 'rgba(200, 240, 255, 0.6)';
             ctx.lineWidth = 1;
-            ctx.stroke();
+            ctx.strokeRect(barX, barY, Math.max(0, filledWidth), barHeight);
+            ctx.restore();
         }
 
         // Remove segmentation lines for cleaner look

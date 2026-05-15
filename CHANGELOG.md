@@ -11,6 +11,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.105.0] - 2026-05-15
+
+### Changed — Mobile drops visibly fly to the player
+
+Pre-5.105.0 the mobile magnet forces (FAR=18, NEAR=40 for health;
+STRENGTH=32, NEAR=60 for gold; STRENGTH=38, NEAR=70 for stat
+pickups) produced ~100+ px/tick steady-state velocity. Drops
+teleported to the stationary mobile player instead of flying
+visibly — destroying the reward loop. New tuning:
+
+- **Health orbs** (`js/sim/drops.js`): FAR force 18 → 2, NEAR 40 → 6,
+  NEAR radius 600 → 200.
+- **Gold coins / gold shapes** (`world/gold-coin.js`, `world/gold-shape.js`):
+  STRENGTH 32 → 1, NEAR 60 → 4, NEAR_RANGE 200 → 80.
+- **Inventory items** (`world/stat-pickup.js`): STRENGTH 38 → 1.2,
+  NEAR 70 → 5, NEAR_RANGE 200 → 80.
+
+With friction 0.92, the new forces give v_ss ≈ 25 px/tick at mid-
+screen and a satisfying ~0.5–1.0 s visible flight from anywhere on
+a phone viewport. The screen-spanning 3000 px radius stays so drops
+remain eligible from anywhere; only the per-tick force changes.
+
+### Changed — Enemy destruction screen shake toned down 60%
+
+`triggerEnemyFinalExplosion` was firing `triggerScreenShake(38, 22,
+r × 3.0)` per kill — a ~600 ms wobble that compounded into an
+unreadable camera when multiple enemies died near each other. Cut
+to `triggerScreenShake(14, 8, r × 1.4)`. Hitstop + camera kick +
+screen flash are unchanged (those are the load-bearing impact
+channels); shake is now a cherry on top instead of dominating the
+HUD readability.
+
+### Fixed — Healthbar fill overflow at low HP
+
+When player HP dropped below ~11% of max, the bar's filledWidth
+fell below 2 × bevelSize (24 px). The legacy
+`createHealthBarPath(filledWidth)` call then produced a
+self-intersecting polygon whose top-right control point
+(`barX + width − bevelSize × 0.5`) slid LEFT of `barX`, causing
+the fill gradient to bleed past the bar's left silhouette.
+
+Fix: clip to the FULL-WIDTH bar silhouette and `fillRect()` inside
+the clip. The clip mask preserves the angled bevel corners while
+mathematically guaranteeing the fill can't escape the bar's outer
+shape. The inner-glow stroke gets the same clip-and-strokeRect
+treatment so it also stops tracing past barX. New regression test
+`tests/unit/hud/healthbar-low-hp.test.js` (5 tests, all passing)
+asserts no draw call writes to an x-coordinate left of `barX = 70`
+at 1 / 5 / 11 / 100 HP.
+
+### Fixed — Title-screen version display drifted to 5.100.3
+
+`js/modules/core/version.js` carried `VERSION = '5.100.3'` while
+the live build shipped 5.101.0 → 5.102.0 → 5.103.0 → 5.104.0. The
+title screen rendered the stale value in its bottom-right build
+tag. Synced to 5.105.0 now.
+
 ## [5.104.0] - 2026-05-15
 
 ### Changed — Killstreak tier labels reordered by epicness

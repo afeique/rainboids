@@ -42,13 +42,20 @@ describe('drop tuning constants — mobile full-screen magnet (5.98.0)', () => {
         expect(DROP_MAGNET_FAR_RADIUS_MOBILE).toBe(3000);
         expect(DROP_MAGNET_FAR_RADIUS_MOBILE).toBeGreaterThan(DROP_MAGNET_FAR_RADIUS);
     });
-    test('DROP_MAGNET_NEAR_RADIUS_MOBILE is 600 px (wide snap zone)', () => {
-        expect(DROP_MAGNET_NEAR_RADIUS_MOBILE).toBe(600);
+    // 5.105.0 — Snap radius tightened (600 → 200) so the orb spends
+    // more frames flying visibly instead of immediately snapping to
+    // the player. Still wider than the desktop 55 px since the mobile
+    // player is stationary and needs the orb to actually reach them.
+    test('DROP_MAGNET_NEAR_RADIUS_MOBILE is 200 px', () => {
+        expect(DROP_MAGNET_NEAR_RADIUS_MOBILE).toBe(200);
         expect(DROP_MAGNET_NEAR_RADIUS_MOBILE).toBeGreaterThan(DROP_MAGNET_NEAR_RADIUS);
     });
-    test('mobile far force is stronger than desktop so drops actually fly', () => {
-        expect(DROP_MAGNET_FAR_FORCE_MOBILE).toBe(18);
-        expect(DROP_MAGNET_NEAR_FORCE_MOBILE).toBe(40);
+    // 5.105.0 — Forces cut DRAMATICALLY (18→2, 40→6). The old values
+    // produced ~100+ px/tick steady-state velocity which made drops
+    // teleport. New values give visible flight over ~0.8-1.2s.
+    test('mobile forces are tuned for VISIBLE flight (5.105.0)', () => {
+        expect(DROP_MAGNET_FAR_FORCE_MOBILE).toBe(2);
+        expect(DROP_MAGNET_NEAR_FORCE_MOBILE).toBe(6);
     });
 });
 
@@ -78,14 +85,16 @@ describe('updateDrop() — health-orb magnet on mobile', () => {
         expect(drop.vx).toBeGreaterThan(0);
     });
 
-    test('mobile mode: a health orb at dist=300 (inside mobile near=600) gets BOTH far + near forces', () => {
+    test('mobile mode: a health orb at dist=100 (inside mobile near=200) gets BOTH far + near forces', () => {
+        // 5.105.0 — Near radius reduced 600 → 200. Drive a closer test
+        // position so we stay inside the new near zone.
         const drop = freshDropState('health', { x: 0, y: 0, vx: 0, vy: 0 });
-        const ships = [{ x: 300, y: 0, active: true }];
+        const ships = [{ x: 100, y: 0, active: true }];
         updateDrop(drop, ctx({ ships, mobileMagnet: true }), null);
-        // Both far AND near tiers engage at 300 px (near = 600).
-        // farFactor = (3000-300)/3000 = 0.9 → +18 * 0.9 = 16.2
-        // nearFactor = (600-300)/600 = 0.5 → +40 * 0.5 = 20
-        // total ≈ 36
+        // Both far AND near tiers engage at 100 px (near = 200).
+        // farFactor  = (3000-100)/3000 ≈ 0.967 → +2 * 0.967 ≈ 1.93
+        // nearFactor = (200-100)/200 = 0.5    → +6 * 0.5 = 3.0
+        // total ≈ 4.93
         expect(drop.vx).toBeGreaterThan(DROP_MAGNET_FAR_FORCE_MOBILE);
     });
 

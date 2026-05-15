@@ -31,10 +31,12 @@ const MAGNET_MID_STRENGTH = 15;
 const MAGNET_NEAR_RANGE = 40;
 const MAGNET_NEAR_STRENGTH = 25;
 // 5.98.0 — Full-screen mobile magnet (mirrors gold-coin.js).
+// 5.105.0 — Cut DRAMATICALLY so the gold shape visibly FLIES toward
+// the player over ~1s instead of teleporting (reward-loop visibility).
 const MOBILE_MAGNET_RANGE = 3000;
-const MOBILE_MAGNET_STRENGTH = 32;
-const MOBILE_MAGNET_NEAR_RANGE = 200;
-const MOBILE_MAGNET_NEAR_STRENGTH = 60;
+const MOBILE_MAGNET_STRENGTH = 1;
+const MOBILE_MAGNET_NEAR_RANGE = 80;
+const MOBILE_MAGNET_NEAR_STRENGTH = 4;
 
 // 5.79.38 — Gold shapes are exclusively 2D silhouettes (stars,
 //   hexagon, diamond, triangle). Pairs with health orbs being all

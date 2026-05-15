@@ -84,15 +84,21 @@ export const DROP_MAGNET_NEAR_FORCE = 22;
  * the tuning, the caller owns the policy.
  */
 export const DROP_MAGNET_FAR_RADIUS_MOBILE = 3000;
-/** Mobile inner magnet radius — wider snap zone for finger taps. */
-export const DROP_MAGNET_NEAR_RADIUS_MOBILE = 600;
-/** 5.98.0 — Mobile pull-force overrides. The far/near formula in
- *  `updateDrop` uses `DROP_MAGNET_*_FORCE` even on mobile; on mobile we
- *  want a snappier pull from across the screen so the drops "fly" rather
- *  than gently drift. These two override the desktop values when
- *  `ctx.mobileMagnet === true`. */
-export const DROP_MAGNET_FAR_FORCE_MOBILE = 18;
-export const DROP_MAGNET_NEAR_FORCE_MOBILE = 40;
+/** Mobile inner magnet radius — tighter snap zone (5.105.0).
+ *  Was 600; reduced to 200 so the orb spends more frames in the
+ *  visible-flight portion of its travel and the snap only fires
+ *  when it's basically at the player. */
+export const DROP_MAGNET_NEAR_RADIUS_MOBILE = 200;
+/** 5.98.0 — Mobile pull-force overrides.
+ *  5.105.0 — Cut DRAMATICALLY (FAR 18→2, NEAR 40→6). The old values
+ *  produced ~100+ px/tick steady-state velocity on mobile, which made
+ *  drops teleport to the stationary player instead of flying visibly.
+ *  New values give a satisfying ~0.8-1.2s visible flight from
+ *  anywhere on the screen — the reward loop the player needs to
+ *  SEE. Math: with friction 0.92, v_ss = force/0.08, so FAR=2 →
+ *  v_ss ≈ 20-25 px/tick (about 0.5-1s across a phone-sized field). */
+export const DROP_MAGNET_FAR_FORCE_MOBILE = 2;
+export const DROP_MAGNET_NEAR_FORCE_MOBILE = 6;
 
 /**
  * Opacity fade-in/fade-out window — the orb opacity is
