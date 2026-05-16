@@ -514,11 +514,17 @@ export class Player {
         let assists;
         if (isMobile()) {
             const stored = (ge && ge.assists) || {};
+            // 5.115.0 — autoPower defaults TRUE on mobile. Brand-new
+            // players (no stored key) get auto-fire; players who
+            // explicitly toggled it off (stored.autoPower === false)
+            // keep their setting via the explicit `=== false` check.
+            const autoPowerStored = stored.autoPower;
+            const autoPower = (autoPowerStored === false) ? false : true;
             assists = {
                 autoAim: true,
                 autoFire: true,
                 aimAssist: false,
-                autoPower: !!stored.autoPower,
+                autoPower,
             };
         } else {
             assists = (ge && ge.assists) ? ge.assists : null;

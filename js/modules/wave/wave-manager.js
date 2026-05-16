@@ -22,6 +22,7 @@ import { isMobile, isPortrait } from '../platform/platform-detect.js';
 // the desktop POWERUPS tab uses.
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { renderIconHTML } from '../ui/icons.js';
+import { pickFormation } from '../enemy/formations.js';
 
 // 5.95.0 — Asteroid radius cap on mobile. The fruit-ninja redesign
 //   shrinks the playfield's footprint per-rock so the screen doesn't
@@ -602,6 +603,11 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
     // (tier 3+). Linking happens after the spawn loop so every
     // boss exists before back-references are written.
     const spawnedBosses = [];
+    // 5.115.0 — collect non-boss members so the formation manager
+    // can bundle this sub-wave group into a choreographed routine
+    // (orbit / weave / flank / cross / figure8). Bosses + mini-
+    // bosses are excluded — they have their own scripted positions.
+    const formationCandidates = [];
     for (let i = 0; i < count; i++) {
         const enemy = this.enemyPool.get();
         if (enemy) {
@@ -616,7 +622,11 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
                 if (enemy.config) enemy.config.points = (enemy.config.points || 100) * 2;
             }
             enemy.startWarpIn(sp.targetX, sp.targetY);
-            if (enemy.isBoss) spawnedBosses.push(enemy);
+            if (enemy.isBoss) {
+                spawnedBosses.push(enemy);
+            } else if (!enemy.isMiniBoss) {
+                formationCandidates.push(enemy);
+            }
         }
     }
     // Link bosses spawned together (tier 2 pair, tier 3 formation,
@@ -624,6 +634,24 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
     // solo tier-4 still gets formation seeding but skips pair link.
     if (spawnedBosses.length >= 2 || (spawnedBosses[0] && spawnedBosses[0].bossTier === 4)) {
         linkBosses(spawnedBosses, this.gameField);
+    }
+
+    // 5.115.0 — Bundle non-boss group into a choreographed formation.
+    //   Chance scales with group size: 3 enemies = 55%, 4 = 70%,
+    //   5+ = 85%. Late-game waves see more formations.
+    //   The formation manager picks the slot positions; each enemy's
+    //   movement AI still drives rotation / aiming / shooting, but
+    //   the formation tick overrides position toward the slot
+    //   target each frame.
+    if (this.formationManager && formationCandidates.length >= 3) {
+        const n = formationCandidates.length;
+        const chance = Math.min(0.85, 0.40 + (n - 3) * 0.15);
+        if (Math.random() < chance) {
+            const choice = pickFormation(n, this.game.currentWave);
+            if (choice) {
+                this.formationManager.create(choice.type, formationCandidates, choice.params);
+            }
+        }
     }
 }
 

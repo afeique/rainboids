@@ -11,6 +11,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.115.0] - 2026-05-15
+
+### Added — Choreographed enemy formations
+
+New `FormationManager` (`js/modules/enemy/formations.js`) bundles
+freshly-spawned enemy groups into coordinated movement plans. The
+visual goal: enemies fly together as a CREW instead of every grunt
+individually chasing the player.
+
+Five formation types, picked at spawn time per group:
+- **orbit** — N enemies evenly spaced on a circle around the player,
+  rotating at a steady angular speed.
+- **weave** — members trace horizontal sine waves with staggered
+  y-offsets and alternating phases so they visibly criss-cross.
+- **flank** — two halves arc in from opposite sides simultaneously.
+- **cross** — pairs travel along X-shaped trajectories, converging,
+  passing through each other, then diverging on a loop.
+- **figure8** — Lissajous figure-8 around the player at offset
+  phases so members form a moving ribbon.
+
+Spawn-time bundling: any 3+ non-boss group has a 40-85% chance
+(scaled by group size) to become a formation. Bosses + mini-bosses
+skip — they have scripted positions already. Duration is 6-12s,
+radius 180-300px, angular speed 0.45-0.85 rad/s — late-game waves
+get bigger / slower formations so the choreography reads.
+
+Lifecycle: per-frame tick computes each member's slot target and
+lerps them toward it (formation movement overrides individual AI's
+position output; AI still drives rotation, aiming, shooting). When
+half the members die OR duration expires, members are released back
+to individual AI.
+
+### Added — Soft enemy-enemy separation
+
+Every frame, overlapping enemy pairs push each other apart along
+the line between centers. NO damage applied — enemies don't hurt
+each other, they just avoid overlap. Keeps formations from
+collapsing into a single point and reads as natural "they avoid
+each other" behavior. Warping enemies + bosses skip (warping is
+the invuln/positioning window; bosses have scripted positions that
+shouldn't get nudged).
+
+O(n²) over active enemies; fine for typical counts.
+
+### Changed — Mobile autoPower defaults ON
+
+Previously mobile defaulted to `autoPower: false` (player had to
+tap canvas to fire power weapons). With the stationary mobile ship
+the player is already busy aiming with a finger; making them tap
+to fire too added friction. Default ON; player can opt OUT via
+the ASSISTS pause-menu tab. Existing players who explicitly
+toggled it OFF keep their setting.
+
+### Changed — Every upgrade + powerup description tersified
+
+All POWERUP_TYPES + PRIMARY_UPGRADES + POWER_UPGRADES descriptions
+audited and rewritten:
+- Dropped the "per stack" boilerplate (every stackable upgrade has
+  it implicitly).
+- Use `+` for additive, `×` for multipliers, `/s` for per-second.
+- Cut weapon-name suffixes ("(Pulse Cannon)", "(Lance Beam)") since
+  the upgrade is shown inside the weapon's tab.
+- Examples: "22% faster shooting per stack" → "+22% fire rate";
+  "Heal +5% of damage dealt per stack" → "Heal 5% of damage dealt";
+  "Survive lethal hit at 1 HP + invuln (once per wave)" →
+  "Survive lethal hit at 1 HP, 1/wave".
+
 ## [5.114.0] - 2026-05-15
 
 ### Changed — REGEN is now combat-gated

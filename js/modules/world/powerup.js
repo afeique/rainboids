@@ -71,7 +71,7 @@ export const POWERUP_TYPES = {
         maxStacks: 5,
         spCost: 3,
         spCostIncrement: 2,
-        description: '22% faster shooting per stack'
+        description: '+22% fire rate'
     },
     MULTI_SHOT: {
         name: 'Multi',
@@ -87,7 +87,7 @@ export const POWERUP_TYPES = {
         maxStacks: 4,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+1 bullet in a spread per stack'
+        description: '+1 bullet per shot'
     },
     HOMING: {
         name: 'Homing',
@@ -103,7 +103,7 @@ export const POWERUP_TYPES = {
         maxStacks: 3,
         spCost: 3,
         spCostIncrement: 2,
-        description: 'Bullets track nearest enemy per stack'
+        description: 'Bullets seek nearest enemy'
     },
     BIG_BULLETS: {
         name: 'Big',
@@ -122,7 +122,7 @@ export const POWERUP_TYPES = {
         maxStacks: 3,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+2.2px bullet radius per stack'
+        description: '+2.2px bullet radius'
     },
     // 5.79.56 — SPEED_BOOST removed from POWERUP_TYPES. It's now a
     //   defense-economy purchase only (DEFENSE tab, COINS currency).
@@ -143,7 +143,7 @@ export const POWERUP_TYPES = {
         maxStacks: 4,
         spCost: 3,
         spCostIncrement: 2,
-        description: 'Bullets pass through +1 enemy per stack'
+        description: '+1 pierce'
     },
     EXPLOSIVE: {
         name: 'Explode',
@@ -159,7 +159,7 @@ export const POWERUP_TYPES = {
         maxStacks: 3,
         spCost: 3,
         spCostIncrement: 2,
-        description: 'AoE blast on bullet impact (+10px radius per stack)'
+        description: 'AoE blast on impact (+10px radius)'
     },
     CRIT_CHANCE: {
         name: 'Crit %',
@@ -175,7 +175,7 @@ export const POWERUP_TYPES = {
         maxStacks: 6,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+7% critical hit chance per stack'
+        description: '+7% crit chance'
     },
     CRIT_DAMAGE: {
         name: 'Crit Dmg',
@@ -191,7 +191,7 @@ export const POWERUP_TYPES = {
         maxStacks: 6,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+15% critical hit damage per stack'
+        description: '+15% crit damage'
     },
     // 5.79.56 — SHIELD_BOOST removed from POWERUP_TYPES. Defense-
     //   economy only now (DEFENSE tab, COINS currency). The
@@ -218,7 +218,7 @@ export const POWERUP_TYPES = {
         maxStacks: 3,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+40% knockback on all power weapons per stack'
+        description: '+40% power-weapon knockback'
     },
     // 5.78.2 — DROPS-category powerups removed. Drop rates, drop
     // amounts, heal amounts, and money amounts now scale uniformly
@@ -251,7 +251,7 @@ export const POWERUP_TYPES = {
         maxStacks: 10,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+35 max HP per stack (full heal on pick)'
+        description: '+35 max HP, full heal'
     },
     SHIELD_BOOST: {
         name: 'Toughness',
@@ -267,7 +267,7 @@ export const POWERUP_TYPES = {
         maxStacks: 8,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+8% damage reduction per stack (cap 75%)'
+        description: '+8% damage reduction (cap 75%)'
     },
     REGEN: {
         name: 'Regen',
@@ -287,7 +287,7 @@ export const POWERUP_TYPES = {
         // no damage; taking a hit pauses it. Description updated to
         // make the conditional clear so players understand the
         // out-of-combat-only nature.
-        description: '+0.5 HP/s out of combat per stack (4s after last hit)'
+        description: '+0.5 HP/s out of combat (4s after hit)'
     },
 
     // 5.107.0 — Vampirism. Each stack converts +5% of damage DEALT
@@ -309,7 +309,7 @@ export const POWERUP_TYPES = {
         maxStacks: 5,
         spCost: 4,
         spCostIncrement: 2,
-        description: 'Heal +5% of damage dealt per stack',
+        description: 'Heal 5% of damage dealt',
     },
 
     // 5.107.0 — Thorns. Each stack reflects +25% of damage TAKEN back
@@ -331,7 +331,7 @@ export const POWERUP_TYPES = {
         maxStacks: 4,
         spCost: 4,
         spCostIncrement: 2,
-        description: 'Reflect +25% of damage taken per stack',
+        description: 'Reflect 25% of damage taken',
     },
 
     // 5.108.0 — Executioner. Bullets deal +20% damage per stack to
@@ -352,7 +352,7 @@ export const POWERUP_TYPES = {
         maxStacks: 5,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+20% damage to enemies below 25% HP per stack',
+        description: '+20% damage vs enemies under 25% HP',
     },
 
     // 5.108.0 — Momentum. Damage ramps up by +5% per second of
@@ -373,7 +373,7 @@ export const POWERUP_TYPES = {
         maxStacks: 4,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+5%/s sustained-fire damage per stack (cap +15%/stack)',
+        description: '+5%/s sustained-fire damage (cap +15%)',
     },
 
     // 5.108.0 — Overcharge Rounds. Every Nth bullet does 3× damage and
@@ -395,7 +395,7 @@ export const POWERUP_TYPES = {
         maxStacks: 4,
         spCost: 3,
         spCostIncrement: 2,
-        description: 'Every Nth bullet hits 3× (more frequent per stack)',
+        description: 'Every Nth bullet hits 3×',
     },
 
     // 5.108.0 — Guardian. On a hit that WOULD kill the player, clamp
@@ -416,7 +416,7 @@ export const POWERUP_TYPES = {
         maxStacks: 3,
         spCost: 4,
         spCostIncrement: 2,
-        description: 'Survive lethal hit at 1 HP + invuln (once per wave)',
+        description: 'Survive lethal hit at 1 HP, 1/wave',
     },
 
     // 5.108.0 — Static Discharge. Periodic AoE pulse from the player
@@ -437,7 +437,7 @@ export const POWERUP_TYPES = {
         maxStacks: 5,
         spCost: 3,
         spCostIncrement: 2,
-        description: 'Periodic AoE pulse — faster + bigger per stack',
+        description: 'Periodic AoE pulse around ship',
     },
 
     // 5.108.0 — Whirlwind. Six particles orbit the player ship at a
@@ -459,7 +459,7 @@ export const POWERUP_TYPES = {
         maxStacks: 4,
         spCost: 4,
         spCostIncrement: 2,
-        description: 'Orbital damage zone — +0.5 dmg & +30px radius per stack',
+        description: 'Orbiting damage zone',
     },
 };
 

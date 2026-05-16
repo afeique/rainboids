@@ -18,6 +18,7 @@ import { Bullet } from './player/bullet.js';
 import { Asteroid } from './world/asteroid.js';
 import { Enemy } from './enemy/enemy.js';
 import { EnemyBullet } from './enemy/enemy-bullet.js';
+import { FormationManager } from './enemy/formations.js';
 import { Particle, drawParticlesBatched } from './world/particle.js';
 import { WebGLParticleRenderer } from './performance/webgl-particle-renderer.js';
 import { WebGLStarfieldRenderer } from './performance/webgl-starfield-renderer.js';
@@ -854,6 +855,11 @@ export class GameEngine {
         this.asteroidPool = new PoolManager(Asteroid, 5);  // Reduced from 20
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
         this.enemyBulletPool = new PoolManager(EnemyBullet, 20); // Reduced from 50
+        // 5.115.0 — Choreographed enemy formations (orbit / weave /
+        // flank / cross / figure8). Bundled by wave-manager at spawn;
+        // ticked each frame BEFORE individual enemy AI so per-slot
+        // target positions are fresh.
+        this.formationManager = new FormationManager(this);
         this.colorStarPool = new PoolManager(ColorStar, GAME_CONFIG.COLOR_STAR_COUNT + 10);
         // 5.79.32 — Gold drops live in their own pools (separate from
         //   colorStarPool's collectible-orb path so they don't share the
@@ -968,6 +974,9 @@ export class GameEngine {
         this.lineDebrisPool.activeObjects = [];
         this.asteroidPool.activeObjects = [];
         this.enemyPool.activeObjects = [];
+        // 5.115.0 — drop any active formations on reset so stale
+        // _formation refs don't point to dead enemies after pool wipe.
+        if (this.formationManager) this.formationManager.clear();
         this.enemyBulletPool.activeObjects = [];
         this.colorStarPool.activeObjects = [];
         this.goldCoinPool.activeObjects = [];
@@ -2464,9 +2473,22 @@ export class GameEngine {
             this.asteroidPool.updateActive(this.gameField);
             this.asteroidPool.cleanupInactive();
 
+            // 5.115.0 — Tick formations BEFORE individual enemy AI so
+            // each member's position is formation-adjusted before its
+            // own AI runs (the AI may still rotate / aim / shoot, but
+            // its movement output gets overridden by the lerp toward
+            // the formation slot target). Ended formations are
+            // released here too.
+            if (this.formationManager) this.formationManager.update();
+
             // Update enemies and enemy bullets (only during active gameplay)
             this.enemyPool.activeObjects.forEach(enemy => enemy.update(this.player, this, this.gameField));
             this.enemyPool.cleanupInactive();
+            // 5.115.0 — Soft separation pass: overlapping enemies push
+            // each other apart with no damage. Keeps formations from
+            // collapsing into a single point and reads as natural
+            // "they avoid each other" behavior.
+            _separateEnemies(this.enemyPool.activeObjects);
             // Inject gameEngine ref for enemy bullets (needed for particle effects on death)
             for (const eb of this.enemyBulletPool.activeObjects) eb.gameEngine = this;
             this.enemyBulletPool.updateActive();
@@ -3610,8 +3632,14 @@ export class GameEngine {
         // older saves don't carry forward a "false" value the player
         // can't see or change. Auto Power stays user-controllable.
         const mobile = isMobile();
+        // 5.115.0 — Flipped mobile autoPower default ON. With the
+        // stationary mobile ship the player is already busy aiming with
+        // a finger; making them tap to fire power weapons too added
+        // friction. Default ON; player can opt OUT via the ASSISTS
+        // pause-menu tab. Existing players who explicitly turned it OFF
+        // (stored = false) keep their setting via the merge below.
         const defaults = mobile
-            ? { aimAssist: true, autoAim: true, autoFire: true, autoPower: false }
+            ? { aimAssist: true, autoAim: true, autoFire: true, autoPower: true }
             : { aimAssist: false, autoAim: false, autoFire: false, autoPower: false };
         try {
             const raw = localStorage.getItem('rainboidsAssists');
@@ -3741,4 +3769,47 @@ export class GameEngine {
     
     drawGhostEnemy(progress) { return hudOverlays.drawGhostEnemy.call(this, progress); }
     drawGhostAsteroid(progress) { return hudOverlays.drawGhostAsteroid.call(this, progress); }
+}
+
+// 5.115.0 — Soft enemy-enemy separation. Each frame, for every
+// overlapping pair, push them apart along the line between centers.
+// Strength is half-and-half (each enemy moves the same delta) so
+// neither dominates. No damage applied — enemies don't hurt each
+// other, they just avoid overlap. O(n²) over active enemies which
+// is fine for typical counts (10-20).
+//
+// Warping enemies + bosses skip the push: warping is the
+// invuln/positioning window and bosses have scripted positions that
+// should never get nudged off-script.
+function _separateEnemies(enemies) {
+    const n = enemies.length;
+    if (n < 2) return;
+    for (let i = 0; i < n; i++) {
+        const a = enemies[i];
+        if (!a || !a.active || a.warping || a.isBoss) continue;
+        const ra = a.radius || 14;
+        for (let j = i + 1; j < n; j++) {
+            const b = enemies[j];
+            if (!b || !b.active || b.warping || b.isBoss) continue;
+            const rb = b.radius || 14;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const r = ra + rb;
+            const distSq = dx * dx + dy * dy;
+            if (distSq <= 0 || distSq >= r * r) continue;
+            const dist = Math.sqrt(distSq);
+            const overlap = r - dist;
+            // Equal split — each enemy moves overlap/2 along the
+            // axis of separation. The 0.55 factor is a touch more
+            // than 0.5 so overlapping pairs separate in a single
+            // tick instead of skating along each other for several.
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const push = overlap * 0.55;
+            a.x -= nx * push * 0.5;
+            a.y -= ny * push * 0.5;
+            b.x += nx * push * 0.5;
+            b.y += ny * push * 0.5;
+        }
+    }
 } 
