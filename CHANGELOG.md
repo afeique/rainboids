@@ -11,6 +11,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.117.0] - 2026-05-16
+
+### Fixed — Health drops are now solid, not see-through
+
+Pre-5.117 health orbs used a convex-hull silhouette + front-facing
+edge overlay. Two problems:
+1. The body fill was a single hull polygon with interior edges drawn
+   on top — visible interior lines on a body fill read as "you can
+   see through the orb" / "glass polyhedron".
+2. For the Stella Octangula (added 5.116.0), the convex hull is a
+   cube — so the star's actual silhouette was wrong; the renderer
+   drew a cube outline with star-edge lines inside.
+
+5.117.0 rewrites `_drawHealthShape3D` with **painter's algorithm**:
+
+- Project every vertex
+- For each face: front-facing test + centroid Z depth
+- Sort front-facing faces back-to-front
+- Fill + stroke each face individually
+
+Front faces overpaint back faces of the same body color, so the orb
+reads as a solid rotating polyhedron. Works correctly for ALL
+polyhedra (convex tet / cube / dodecahedron AND the concave Stella
+Octangula).
+
+### Changed — Gold shapes are now jewel-colored gems
+
+Gold shapes used to all be `#ffd700` with a dark amber border. They
+now roll a random color from a **jewel palette** each spawn:
+
+`#ff44aa` hot pink · `#ff3366` ruby red · `#cc44ff` violet ·
+`#9933ee` purple · `#ff44dd` magenta · `#ff5577` rose
+
+Black border (was dark amber) makes the gem read against bright
+nebulae AND dark voids. A 3-shape burst from a kill now looks like
+SPILLED TREASURE — varied jewel colors scattering — rather than a
+wall of identical yellow shapes. The palette deliberately excludes
+blue/cyan so health orbs stay instantly type-readable by color.
+
+### Changed — Gold shapes render on Canvas2D (not WebGL atlas)
+
+Pulled `goldShapePool` off the WebGL starfield atlas push because
+the atlas couldn't express per-instance borders or per-shape colors
+cleanly (silhouettes were pre-baked, tinted globally). New
+`_drawGoldShapesCanvas2D` walks the active list and renders each as
+a polygon (`_gemPath` helper handles `star4/5/6/8/hexagon/diamond/
+triangle`) with the jewel fill + black stroke. An additive top-left
+white sheen adds polished gem polish.
+
+Perf: typical 1-10 active gold shapes; per-frame budget well under
+0.5ms. Gold coins (the tiny pixel-dot drops) stay on their existing
+Canvas2D path unchanged.
+
 ## [5.116.0] - 2026-05-16
 
 ### Changed — Health drops: pyramid / 3D star / dodecahedron

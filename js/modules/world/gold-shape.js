@@ -43,6 +43,20 @@ const SHAPE_POOL = [
     'hexagon', 'diamond', 'triangle',
 ];
 
+// 5.117.0 — Jewel palette. Gold drops are now color-varied gems
+// (pink / red / violet / purple / magenta) so they feel like
+// TREASURE scattering rather than a wall of identical yellow.
+// Excludes blue/cyan since those belong to health orbs and we want
+// pickups to be instantly type-readable by color alone.
+const JEWEL_COLORS = [
+    '#ff44aa',   // hot pink
+    '#ff3366',   // ruby red
+    '#cc44ff',   // violet
+    '#9933ee',   // purple
+    '#ff44dd',   // magenta
+    '#ff5577',   // rose
+];
+
 export class GoldShape {
     constructor() {
         this.x = 0;
@@ -74,8 +88,13 @@ export class GoldShape {
         this.life = LIFE_TICKS;
         this.active = true;
         this.opacity = 1;
-        this.color = '#ffd700';
-        this.borderColor = '#5a3d00';
+        // 5.117.0 — Jewel palette + thick black stroke for background
+        // contrast. Each spawn rolls a random color so a 3-shape
+        // burst feels like spilled treasure rather than one giant
+        // gold ingot. Black border (was dark amber) keeps the shape
+        // legible against bright nebulae AND dark voids.
+        this.color = JEWEL_COLORS[(Math.random() * JEWEL_COLORS.length) | 0];
+        this.borderColor = '#000000';
 
         // Pick from the geometric shape pool (5.79.38 — 2D only).
         this.shape = SHAPE_POOL[Math.floor(Math.random() * SHAPE_POOL.length)];

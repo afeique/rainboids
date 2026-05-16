@@ -1640,15 +1640,84 @@ export class GameEngine {
             if (orb.is3DShape) continue;
             this._pushOrbInstance(orb);
         }
-        // 5.79.32 — Gold shapes ride the WebGL starfield pipeline (atlas
-        //   silhouettes for cubes / octahedra / stars / etc.).
         // 5.79.33 — Gold coins are NOT pushed here. They render on
         //   Canvas2D via _drawGoldCoinsCanvas2D() below as hard
         //   fillRect pixels, giving the user the crisp point-like look
         //   that the Gaussian-falloff atlas slot couldn't deliver.
+        // 5.117.0 — Gold SHAPES (gems) also dropped from the WebGL
+        //   atlas push. They now render on Canvas2D via
+        //   _drawGoldShapesCanvas2D() with per-shape jewel colors +
+        //   black stroke that the atlas couldn't express.
+    }
+
+    /**
+     * 5.117.0 — Gold shapes rendered as 2D jewel polygons with a
+     * thick black stroke. Pulled off the WebGL atlas (which couldn't
+     * support per-shape borders) so each drop reads as a polished
+     * treasure gem against any background.
+     *
+     * Per shape per frame:
+     *   • viewport cull
+     *   • build the silhouette vertices (star / hexagon / diamond /
+     *     triangle) with rotation
+     *   • fill with the jewel color (pink/red/violet/purple/magenta)
+     *   • stroke with black for background contrast
+     *   • subtle inner highlight (top-center sheen) so the gem looks
+     *     polished without breaking the flat-shape aesthetic
+     *
+     * Cost is dominated by Canvas2D polygon fills. Typical active
+     * gold-shape count is 1-10; per-frame budget well under 0.5ms.
+     */
+    _drawGoldShapesCanvas2D(ctx, vL, vT, vR, vB) {
         const shapes = this.goldShapePool.activeObjects;
+        if (shapes.length === 0) return;
+        const t = frameClock.now * 0.001;
         for (let i = 0; i < shapes.length; i++) {
-            if (shapes[i].active) this._pushOrbInstance(shapes[i]);
+            const s = shapes[i];
+            if (!s.active) continue;
+            if (s.x < vL || s.x > vR || s.y < vT || s.y > vB) continue;
+            const alpha = (s.opacity ?? 1);
+            if (alpha <= 0) continue;
+            const sizeMul = s.sizeVariation || 1;
+            const wave = 0.5 + 0.5 * Math.sin(
+                t * (s.twinkleSpeed || 3.5) + (s.twinklePhase || 0),
+            );
+            const r = Math.max(3, s.radius * sizeMul * (0.95 + 0.10 * wave));
+            const rot = (s.rotation || 0) + t * (s.rotationSpeed || 0) * 60;
+
+            ctx.save();
+            ctx.translate(Math.round(s.x), Math.round(s.y));
+            ctx.rotate(rot);
+            ctx.globalAlpha = alpha;
+
+            // Path for the shape silhouette.
+            _gemPath(ctx, s.shape, r);
+
+            // Fill with jewel color.
+            ctx.fillStyle = s.color || '#ff44aa';
+            ctx.fill();
+            // Black stroke for background contrast — thicker than
+            // health drops so the gem reads as a distinct collectible
+            // against busy backdrops.
+            ctx.strokeStyle = s.borderColor || '#000000';
+            ctx.lineWidth = Math.max(1.5, r * 0.14);
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            // Inner highlight: a small white sheen near the top so the
+            // gem reads as polished/reflective. Drawn with `lighter`
+            // composite so it brightens the jewel color underneath
+            // without washing it out.
+            ctx.globalCompositeOperation = 'lighter';
+            const sheen = ctx.createRadialGradient(-r * 0.25, -r * 0.4, 0, -r * 0.25, -r * 0.4, r * 0.7);
+            if (sheen && typeof sheen.addColorStop === 'function') {
+                sheen.addColorStop(0.00, `rgba(255, 255, 255, ${alpha * 0.55})`);
+                sheen.addColorStop(0.50, `rgba(255, 240, 255, ${alpha * 0.18})`);
+                sheen.addColorStop(1.00, 'rgba(255, 240, 255, 0)');
+                ctx.fillStyle = sheen;
+                ctx.fill();
+            }
+            ctx.restore();
         }
     }
 
@@ -1870,6 +1939,19 @@ export class GameEngine {
      * faces (CCW from outside).
      */
     _drawHealthShape3D(ctx, r, borderCol, geom, rotX, rotY, rotZ) {
+        // 5.117.0 — Painter's algorithm rewrite. Pre-5.117 used a
+        // convex-hull silhouette + front-facing edge overlay, which
+        // (a) made the body look see-through (only the silhouette
+        //     was filled; the interior edges revealed both front AND
+        //     back-facing edges visible against the body fill, giving
+        //     a "glass polyhedron" look), and (b) was wrong for the
+        //     Stella Octangula since its convex hull is a cube, not
+        //     the 8-pointed star.
+        // New approach: project verts, compute per-face front-facing
+        // + depth, sort front-facing faces back-to-front, fill each
+        // face with the body color and stroke its edges in the
+        // border color. Works correctly for ALL polyhedra (convex
+        // or concave) and the body reads as a SOLID object.
         const cx = Math.cos(rotX), sx = Math.sin(rotX);
         const cy = Math.cos(rotY), sy = Math.sin(rotY);
         const cz = Math.cos(rotZ), sz = Math.sin(rotZ);
@@ -1881,69 +1963,57 @@ export class GameEngine {
         for (let i = 0; i < n; i++) {
             const v = verts[i];
             const vx = v[0], vy = v[1], vz = v[2];
-            // Rx
             const y1 = vy * cx - vz * sx;
             const z1 = vy * sx + vz * cx;
-            // Ry
             const x2 = vx * cy + z1 * sy;
             const z2 = -vx * sy + z1 * cy;
-            // Rz
             const x3 = x2 * cz - y1 * sz;
             const y3 = x2 * sz + y1 * cz;
-            // Project (drop z2 — orthographic) and scale to radius.
-            // Y is negated because canvas Y grows downward.
             const p = projected[i] || (projected[i] = [0, 0, 0]);
             p[0] = x3 * r;
-            p[1] = -y3 * r;
+            p[1] = -y3 * r;  // canvas Y grows downward
             p[2] = z2;
         }
 
-        // Convex hull of the projected (x, y) — exact silhouette for a
-        // convex polyhedron. Indices into `projected`.
-        const hullIdxs = HEALTH_SHAPE_HULL_BUF;
-        hullIdxs.length = 0;
-        _convexHull2D(projected, n, hullIdxs);
-
-        // Fill silhouette polygon.
-        ctx.beginPath();
-        for (let i = 0; i < hullIdxs.length; i++) {
-            const p = projected[hullIdxs[i]];
-            if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = borderCol;
-        ctx.stroke();
-
-        // Front-facing edges: an edge is drawn iff at least one of its
-        // adjacent faces is front-facing (face normal's z component > 0
-        // after rotation; we test via the 2D cross product of the first
-        // 3 projected vertices, with faces defined CCW from outside).
+        // Pre-compute front-facing + centroid depth for every face.
+        // Front-facing test: 2D cross of (b-a) × (c-a) with the face
+        // defined CCW from outside; negative cross in screen space
+        // (canvas Y down) means the face faces us.
         const faces = geom.faces;
-        const faceFront = HEALTH_SHAPE_FACE_BUF;
+        const meta = HEALTH_SHAPE_FACE_BUF;
+        meta.length = 0;
         for (let f = 0; f < faces.length; f++) {
             const face = faces[f];
             const a = projected[face[0]], b = projected[face[1]], c = projected[face[2]];
-            // 2D cross of (b-a) × (c-a). Negative → CCW in screen-space
-            // (canvas Y down) → front-facing.
             const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-            faceFront[f] = cross < 0;
+            if (cross >= 0) continue; // back-facing — skip
+            // Centroid depth = average vert z. Smaller = further back.
+            let sumZ = 0;
+            const fl = face.length;
+            for (let k = 0; k < fl; k++) sumZ += projected[face[k]][2];
+            meta.push({ idx: f, depth: sumZ / fl });
         }
+        // Back-to-front sort so foreground faces overpaint background.
+        meta.sort((a, b) => a.depth - b.depth);
 
-        const innerW = Math.max(1, Math.round(r * 0.12));
-        ctx.lineWidth = innerW;
-        ctx.beginPath();
-        const edges = geom.edges;
-        for (let e = 0; e < edges.length; e++) {
-            const edge = edges[e];
-            const fA = edge[2], fB = edge[3]; // adjacent face indices
-            if (!faceFront[fA] && !faceFront[fB]) continue;
-            const pa = projected[edge[0]], pb = projected[edge[1]];
-            ctx.moveTo(pa[0], pa[1]);
-            ctx.lineTo(pb[0], pb[1]);
+        // Fill + stroke each face. Body fillStyle was set by caller;
+        // borderCol drives the stroke (orb's dark navy / gold-amber).
+        const stroke = Math.max(1, Math.round(r * 0.10));
+        ctx.lineWidth = stroke;
+        ctx.strokeStyle = borderCol;
+        for (let i = 0; i < meta.length; i++) {
+            const face = faces[meta[i].idx];
+            ctx.beginPath();
+            const p0 = projected[face[0]];
+            ctx.moveTo(p0[0], p0[1]);
+            for (let k = 1; k < face.length; k++) {
+                const p = projected[face[k]];
+                ctx.lineTo(p[0], p[1]);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
         }
-        ctx.stroke();
     }
 
     _pushOrbInstance(orb) {
@@ -2975,6 +3045,11 @@ export class GameEngine {
                 //   pixels (above the world layer, below entities) so
                 //   they read as crisp point-like collectibles.
                 this._drawGoldCoinsCanvas2D(this.ctx, vL, vT, vR, vB);
+                // 5.117.0 — Gold SHAPES (gems) render on Canvas2D too
+                // so they can carry per-shape colors + a thick black
+                // stroke. Pulled off the WebGL atlas (which couldn't
+                // express per-instance borders).
+                this._drawGoldShapesCanvas2D(this.ctx, vL, vT, vR, vB);
                 this._drawHealthShapesCanvas2D(this.ctx, vL, vT, vR, vB);
                 // 5.98.0 — Stat pickups render between gold/health and
                 // asteroids/enemies so they sit on top of the drop layer
@@ -3902,6 +3977,69 @@ export class GameEngine {
     
     drawGhostEnemy(progress) { return hudOverlays.drawGhostEnemy.call(this, progress); }
     drawGhostAsteroid(progress) { return hudOverlays.drawGhostAsteroid.call(this, progress); }
+}
+
+// 5.117.0 — Gold-shape silhouette path. Called inside a rotated
+// canvas transform (origin at the gem center). Each shape gets
+// hardcoded math instead of going through a switch with branches
+// per draw — JIT inlines the math nicely and avoids object alloc.
+//
+// Shapes (matching SHAPE_POOL in world/gold-shape.js):
+//   star4 / star5 / star6 / star8 — N-pointed stars with inner
+//                                   ratio ~0.45 so the points read.
+//   hexagon — regular 6-gon.
+//   diamond — square rotated 45° (4 verts).
+//   triangle — pointed-up equilateral.
+function _gemPath(ctx, shape, r) {
+    ctx.beginPath();
+    switch (shape) {
+        case 'star4': _nStarPath(ctx, r, 4, 0.45); break;
+        case 'star5': _nStarPath(ctx, r, 5, 0.42); break;
+        case 'star6': _nStarPath(ctx, r, 6, 0.50); break;
+        case 'star8': _nStarPath(ctx, r, 8, 0.50); break;
+        case 'hexagon': _polyPath(ctx, r, 6); break;
+        case 'diamond': {
+            ctx.moveTo(0, -r);
+            ctx.lineTo(r * 0.85, 0);
+            ctx.lineTo(0, r);
+            ctx.lineTo(-r * 0.85, 0);
+            ctx.closePath();
+            break;
+        }
+        case 'triangle': {
+            ctx.moveTo(0, -r);
+            ctx.lineTo(r * 0.866, r * 0.5);
+            ctx.lineTo(-r * 0.866, r * 0.5);
+            ctx.closePath();
+            break;
+        }
+        default: ctx.arc(0, 0, r, 0, Math.PI * 2);
+    }
+}
+
+// N-pointed star — `points` outer tips alternating with `points`
+// inner verts at `innerRatio * r`. Starts pointing up.
+function _nStarPath(ctx, r, points, innerRatio) {
+    const verts = points * 2;
+    for (let i = 0; i < verts; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / points;
+        const rr = (i % 2 === 0) ? r : r * innerRatio;
+        const x = Math.cos(a) * rr;
+        const y = Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+}
+
+// Regular convex polygon — `points` evenly spaced verts.
+function _polyPath(ctx, r, points) {
+    for (let i = 0; i < points; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI * 2) / points;
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
 }
 
 // 5.115.0 — Soft enemy-enemy separation. Each frame, for every
