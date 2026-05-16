@@ -11,6 +11,160 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.1.1] - 2026-05-16
+
+### Fixed — Overflow → energy tank actually does something now
+
+The player was starting with `healthTanks = 3`, which was already at
+`MAX_HEALTH_TANKS = 3` (the cap). So the entire "overflow healing
+fills a new tank" mechanic was inert from move 1 — credits would
+accumulate in `_tankProgress` but the while-loop never fired because
+the cap was already hit. Lowered starting count to **1 spare tank**
+so the player visibly fills the triforce from 1 → 2 → 3 triangles
+over the course of a run via overflow. Cap stays at 3 (matches the
+visible triforce HUD).
+
+### Removed — Auto Power assist
+
+`assists.autoPower` is retired. `assists.autoFire` now drives BOTH
+primary AND power weapon auto-firing — one toggle, both barrels. The
+charge-based / cooldown-based power-weapon dispatch logic moved into
+the same canHit branch as primary fire. The Assists pause-tab
+checkbox + ui-manager wiring + `_loadAssists` defaults all updated;
+legacy `autoPower: true/false` keys in localStorage are stripped on
+load.
+
+### Changed — Mobile is now a pure dodging game (tap to dash)
+
+Mobile's `tap-anywhere-fires-power` model (5.100.0–6.1.0) is
+replaced with `tap-anywhere-DASHES`. With power weapon auto-fire
+included in the unified `autoFire` assist (forced ON for mobile),
+the player's job collapses to a single delightful action: tap to
+dodge. Auto-aim picks targets, auto-fire hammers them, dash-tap
+saves you from bullets.
+
+- `mobile-touch.js` — `_firePowerWeapon()` renamed to `_triggerDash()`,
+  pulses `input.dashPulse = true` (same one-shot signal the desktop
+  SHIFT key uses, consumed by `player.update()` → `_triggerDash()`
+  with cooldown + i-frames).
+- Touch end's 'tap' branch dispatches dash instead of fire.
+- Mobile assists locked to `{ aimAssist: true, autoAim: true,
+  autoFire: true }` (no autoPower since it's gone).
+
+### Added — SHIFT dash tooltip popup
+
+First wave start fires a 5.5s tooltip toast:
+- Desktop: **"★ PRESS SHIFT TO DASH ★ — Short burst with i-frames,
+  your dodge button. Cooldown 1.5s."**
+- Mobile: **"★ TAP TO DASH ★ — Tap anywhere on the canvas to dodge
+  (i-frames during the burst)"**
+
+Fires once per session via `_shownDashHint` flag on the wave manager.
+
+### Changed — Hide empty ASSISTS tab on mobile
+
+With autoPower retired and the other mobile assists baked into the
+input model (forced on, no toggles), the ASSISTS pause-tab is empty
+on mobile. The tab strip now skips it on mobile (desktop unchanged).
+
+### Notes
+
+- All 948 unit tests pass; `tests/unit/ui/mobile-touch.test.js`
+  describe block renamed `tap-for-power (5.100.0)` →
+  `tap-to-dash (6.1.1)` and assertions updated from
+  `input.fireSecondary === true` to `input.dashPulse === true`.
+
+---
+
+## [6.1.0] - 2026-05-16
+
+### Added — Stage system (1-1 / 1-2 / 1-3 → 2-1 …)
+
+The 30-wave campaign is now structured as **10 STAGES of 3 waves
+each**. Wave is still the source of truth internally; stage and
+sub-wave are derived. Display format: `1-1`, `1-2`, `1-3`, `2-1`, …
+`10-3`. The HUD shield now reads `STG` + stage label (was `LV` then
+`WV` in 6.0.x). Wave-intro toast says `STAGE 4-2` not `WAVE 11`.
+
+Reward cadence shifted: mid-stage wave clears (1-1 / 1-2 / 2-1 / etc.)
+now give just a brisk `WAVE 1-2 CLEAR` toast plus a smaller gold bonus
+(0.6× base). **Stage clears (1-3 / 2-3 / …) give 2× gold AND the free
+survivor-card powerup pick.** 10 stages × 1 card = 10 picks per
+playthrough (same total budget as the pre-6.1.0 every-3rd-wave
+cadence, just renamed and aligned with stage finals).
+
+New helpers in `js/modules/core/constants.js`: `WAVES_PER_STAGE = 3`,
+`MAX_STAGES = 10`, `getStage(wave)`, `getSubWaveIndex(wave)`,
+`isStageClear(wave)`, `getStageLabel(wave)`.
+
+### Changed — Bosses on stage finals (10 bosses, was 6)
+
+`BOSS_WAVES = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]` (was
+`[5, 10, 15, 20, 25, 30]`). Every stage now ends with a boss. +67%
+boss density vs 6.0.x. Boss-bonus pick (auto-granted random powerup
+on top of the survivor card) fires on every stage final under the
+new layout.
+
+### Changed — Wave content reorganized for stage identity
+
+`wave-data.js` rewritten so each stage has a thematic identity:
+
+| Stage | Wave range | Identity                                      | Boss                                    |
+|-------|------------|-----------------------------------------------|-----------------------------------------|
+|  1    | 1-1..1-3   | First Contact (HUNTER + WASP)                 | Iron Scout (TITAN T1)                   |
+|  2    | 2-1..2-3   | Iron Sentinel (adds GUARDIAN heavy)           | Iron Sentinel (TITAN T1 + GUARDIAN)     |
+|  3    | 3-1..3-3   | Iron Vanguard (adds STALKER sniper)           | Iron Vanguard (TITAN T2 + STALKER)      |
+|  4    | 4-1..4-3   | Twin Iron (adds DRIFTER + TANGERINE)          | Twin Iron (2× TITAN T2)                 |
+|  5    | 5-1..5-3   | Triple Threat (adds WEAVER + SENTINEL)        | Triple Threat (3× TITAN T3)             |
+|  6    | 6-1..6-3   | Iron Quartet (adds PROWLER — full roster)     | Iron Quartet (3× TITAN T3 + PROWLER)    |
+|  7    | 7-1..7-3   | Iron Crown (combined arms, dense)             | Iron Crown (4× TITAN T4 + STALKER)      |
+|  8    | 8-1..8-3   | The Long Walk (compounding pressure)          | Iron Quintet (4× TITAN T4 + TANGERINE)  |
+|  9    | 9-1..9-3   | Apocalypse (peak density)                     | Iron Tide (5× TITAN T4 + WEAVER)        |
+| 10    | 10-1..10-3 | The Last Stand (finale)                       | The Last Stand (5× TITAN T4 + escort)   |
+
+Each stage typically introduces one new enemy type, with the boss +
+escort showcasing the stage's headliners. Sub-waves shrunk from 3-4
+to 2-3 per wave (with boss waves at 2 sub-waves) so each wave reads
+as a discrete combat beat rather than a marathon.
+
+### Added — Unified shop with POWERUPS + INVENTORY tabs
+
+The pause-menu POWERUPS tab is gone. Everything spendable now lives
+in **one shop** opened by the prominent SHOP button at the top of
+the pause menu (also bound to the 🛒 HUD button). New tab structure:
+
+```
+[POWERUPS] [INVENTORY] [PULSE] [NEEDLES] [SCATTER] [RAIL]
+[CHARGE] [MINES] [NOVA] [MISSILES] [LANCE] [ARC] [HELP]
+```
+
+- **POWERUPS** (landing tab): every entry in `POWERUP_TYPES` as a
+  gold-priced row. Stack-aware cost via `powerupGoldCost`.
+- **INVENTORY**: read-only display of the 5 equipped items with
+  rarity tint + bonus label. Rarity tag prefix on item names.
+- **per-weapon tabs**: existing upgrade trees, unchanged.
+- **HELP**: instructional panel (gold-only economy).
+
+The pause-menu SHOP button gets a `--primary` CSS modifier so it
+reads as the louder of the two pause actions (SHOP / RESUME).
+Pause menu now: SHOP/RESUME action row + CONTROLS / PRIMARY / POWER
+/ ASSISTS / TIMER / MUSIC / SFX tabs. PRIMARY + POWER are quick-equip
+surfaces (no upgrades there — those moved to the per-weapon shop
+tabs in 5.79.57).
+
+### Notes
+
+- Wave-clear shop-suggest overlay (3 quick-buy weapon upgrades after
+  a stage card) preserved.
+- Boss-bonus pick fires on every stage final now (was every 5th wave
+  in 6.0.x), so the player gets +10 free powerups per run from boss
+  bonuses on top of the 10 survivor cards.
+- Tests `tests/unit/sim/wave.test.js` updated for the new boss-wave
+  positions (3 / 12 instead of 5 / 10) and stage-3 enemy lineup.
+- All 948 unit tests pass.
+
+---
+
 ## [6.0.1] - 2026-05-16
 
 ### Changed — Healing balance pass

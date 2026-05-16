@@ -176,10 +176,14 @@ describe('MobileTouchHandler — analog stick (5.100.0)', () => {
     });
 });
 
-// ── 5.100.0: tap-for-power weapon ────────────────────────────────────
+// ── 6.1.1: tap-to-DASH ────────────────────────────────────────────────
+// Behavior change: pre-6.1.1 a quick tap fired the power weapon. Now
+// power-weapon auto-fire is part of the unified `autoFire` assist (forced
+// on for mobile), so the tap input is freed up for DASHING. The pulse
+// goes to `input.dashPulse` instead of `input.fireSecondary`.
 
-describe('MobileTouchHandler — tap-for-power (5.100.0)', () => {
-    test('a quick tap outside the stick zone pulses input.fireSecondary', () => {
+describe('MobileTouchHandler — tap-to-dash (6.1.1)', () => {
+    test('a quick tap outside the stick zone pulses input.dashPulse', () => {
         const engine = makeEngineStub(GAME_STATES.PLAYING);
         const handler = new MobileTouchHandler(engine);
         const handlers = installAndCapture(handler);
@@ -190,10 +194,13 @@ describe('MobileTouchHandler — tap-for-power (5.100.0)', () => {
         // Quick release in the same spot.
         handlers.touchend(makeFakeTouchEvent({ clientX: 300, clientY: 80 }));
 
-        expect(engine.inputHandler.input.fireSecondary).toBe(true);
+        expect(engine.inputHandler.input.dashPulse).toBe(true);
+        // Sanity: tap does NOT fire the power weapon anymore — autoFire
+        // handles that automatically.
+        expect(engine.inputHandler.input.fireSecondary).toBeFalsy();
     });
 
-    test('a dragged touch outside the stick zone does NOT fire the power weapon', () => {
+    test('a dragged touch outside the stick zone does NOT dash', () => {
         const engine = makeEngineStub(GAME_STATES.PLAYING);
         const handler = new MobileTouchHandler(engine);
         const handlers = installAndCapture(handler);
@@ -204,10 +211,10 @@ describe('MobileTouchHandler — tap-for-power (5.100.0)', () => {
         handlers.touchmove(makeFakeTouchEvent({ clientX: 360, clientY: 200 }));
         handlers.touchend(makeFakeTouchEvent({ clientX: 360, clientY: 200 }));
 
-        expect(engine.inputHandler.input.fireSecondary).toBe(false);
+        expect(engine.inputHandler.input.dashPulse).toBeFalsy();
     });
 
-    test('touch on the stick zone does NOT fire the power weapon', () => {
+    test('touch on the stick zone does NOT dash', () => {
         const engine = makeEngineStub(GAME_STATES.PLAYING);
         const handler = new MobileTouchHandler(engine);
         const handlers = installAndCapture(handler);
@@ -217,7 +224,7 @@ describe('MobileTouchHandler — tap-for-power (5.100.0)', () => {
         handlers.touchstart(makeFakeTouchEvent({ clientX: 80, clientY: 220 }));
         handlers.touchend(makeFakeTouchEvent({ clientX: 80, clientY: 220 }));
 
-        expect(engine.inputHandler.input.fireSecondary).toBe(false);
+        expect(engine.inputHandler.input.dashPulse).toBeFalsy();
     });
 });
 

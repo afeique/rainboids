@@ -147,22 +147,30 @@ function _buildPauseMenu() {
     overlay.appendChild(menu);
 
     // ── Action row: SHOP / RESUME ──
+    // 6.1.0 — SHOP button gets a `--primary` modifier so styles.css can
+    // give it a brighter gold tint vs the plain RESUME button. The
+    // unified shop (POWERUPS / INVENTORY / weapon upgrades) is the main
+    // spending surface; making it the visually-louder option steers
+    // players into the new flow.
     const actions = el('div', { className: 'pause-menu-actions' });
-    actions.appendChild(_pauseActionBtn('pause-shop-button', '🛒', 'SHOP'));
+    const shopBtn = _pauseActionBtn('pause-shop-button', '🛒', 'SHOP');
+    shopBtn.classList.add('pause-action-btn--primary');
+    actions.appendChild(shopBtn);
     actions.appendChild(_pauseActionBtn('pause-resume-button', '►', 'RESUME'));
     menu.appendChild(actions);
 
     // ── Tab strip ──
+    // 6.1.1 — ASSISTS tab hidden on mobile (all mobile assists are
+    // baked into the input model: auto-aim/auto-fire forced on, tap
+    // dashes). Desktop keeps the tab for the one remaining toggle set
+    // (Aim Assist / Auto Aim / Auto Fire).
+    const mobile = isMobile();
     const tabs = el('div', { className: 'pause-tabs' });
     const tabDefs = [
         { key: 'controls', label: 'CONTROLS', active: true },
         { key: 'primary',  label: 'PRIMARY' },
         { key: 'power',    label: 'POWER' },
-        // 5.101.0 — SKILLS tab suspended. Defensive skill system retired
-        // in favor of inventory + defensive powerups + survivor cards.
-        // { key: 'skills',   label: 'SKILLS' },
-        { key: 'powerups', label: 'POWERUPS' },
-        { key: 'assists',  label: 'ASSISTS' },
+        ...(mobile ? [] : [{ key: 'assists', label: 'ASSISTS' }]),
         { key: 'timer',    label: 'TIMER' },
         { key: 'music',    label: 'MUSIC' },
         { key: 'sfx',      label: 'SFX' },
@@ -175,18 +183,12 @@ function _buildPauseMenu() {
     menu.appendChild(tabs);
 
     // ── Tab content stubs ──
-    // Controls / Primary / Power / Powerups / Skills / Timer are filled
-    // by ui-manager render functions at boot. We leave their stubs
-    // empty here. Assists / Music / SFX get their initial markup
-    // populated below.
     menu.appendChild(el('div', { id: 'controls-tab', className: 'pause-tab-content active' }));
     menu.appendChild(el('div', { id: 'primary-tab',  className: 'pause-tab-content' }));
     menu.appendChild(el('div', { id: 'power-tab',    className: 'pause-tab-content' }));
-    // 5.101.0 — Skills tab content suspended along with the tab strip
-    // entry above. Re-enable by uncommenting both edits.
-    // menu.appendChild(_buildSkillsTab());
-    menu.appendChild(el('div', { id: 'powerups-tab', className: 'pause-tab-content' }));
-    menu.appendChild(_buildAssistsTab());
+    // Assists tab content only appended on desktop; mobile has no
+    // user-facing assist toggles (all baked into the input model).
+    if (!mobile) menu.appendChild(_buildAssistsTab());
     menu.appendChild(_buildTimerTab());
     menu.appendChild(_buildMusicTab());
     menu.appendChild(_buildSfxTab());
@@ -222,16 +224,11 @@ function _buildSkillsTab() {
 }
 
 function _buildAssistsTab() {
-    // 5.102.0 — Platform-specific assist set. On mobile the player
-    // ship is stationary and Aim Assist / Auto Aim / Auto Fire are
-    // BAKED INTO the press-and-hold tap-to-shoot input (the touch
-    // handler routes the press to a snapped target and fires while
-    // held). Exposing them as toggles is misleading because they're
-    // not really opt-out on mobile. The only assist that's still
-    // user-controllable on mobile is AUTO POWER (the power weapon
-    // can be tap-fired manually OR auto-fired the moment it's ready).
-    // Desktop keeps the full set since the player has fine-grained
-    // mouse/keyboard input and benefits from per-feature toggles.
+    // 6.1.1 — Auto Power assist retired. Auto Fire now drives BOTH
+    // primary and power weapon firing — one toggle, both barrels.
+    // Mobile bakes Auto Aim + Auto Fire into the input model (tap to
+    // dash, auto-fire handles all shooting); no user-facing toggles
+    // remain on mobile so the assists tab is empty there.
     const mobile = isMobile();
     const desktopRows = [
         { id: 'assist-aim-assist', title: 'Aim Assist',
@@ -239,14 +236,9 @@ function _buildAssistsTab() {
         { id: 'assist-auto-aim', title: 'Auto Aim',
           desc: 'Automatically aim at the nearest target.' },
         { id: 'assist-auto-fire', title: 'Auto Fire',
-          desc: 'Fire primary weapon automatically.' },
-        { id: 'assist-auto-power', title: 'Auto Power',
-          desc: "Fire power weapon automatically when it's charged." },
+          desc: 'Fire primary AND power weapon automatically.' },
     ];
-    const mobileRows = [
-        { id: 'assist-auto-power', title: 'Auto Power',
-          desc: "Fire the power weapon automatically when it's ready. Overrides tap-to-fire when on." },
-    ];
+    const mobileRows = [];
     const rows = mobile ? mobileRows : desktopRows;
 
     const list = el('div', { className: 'assists-list' });
@@ -571,7 +563,8 @@ function _buildShopOverlay() {
     menu.appendChild(closeBtn);
     menu.appendChild(el('h2', { className: 'shop-title', text: 'SHOP' }));
 
-    // Currency row. 5.99.0 — only Gold visible; SP/picks hidden.
+    // 6.1.0 — Gold-only currency row (SP / picks DOM removed; were hidden
+    // since 5.99.0 and the SP system was fully retired in 6.0.0).
     const currencyRow = el('div', { className: 'shop-currency-row' });
     currencyRow.appendChild(el('span', {
         className: 'shop-currency shop-currency--coins',
@@ -580,29 +573,14 @@ function _buildShopOverlay() {
             el('span', { id: 'shop-coins-amount', text: '0' }),
         ],
     }));
-    currencyRow.appendChild(el('span', {
-        className: 'shop-currency shop-currency--sp',
-        style: { display: 'none' },
-        children: [
-            el('span', { id: 'shop-sp-amount', text: '0' }),
-            el('span', { className: 'shop-currency-label', text: 'SP' }),
-        ],
-    }));
-    currencyRow.appendChild(el('span', {
-        className: 'shop-currency shop-currency--picks',
-        style: { display: 'none' },
-        children: [
-            el('span', { className: 'shop-currency-icon shop-picks-icon', text: '+' }),
-            el('span', { id: 'shop-picks-amount', text: '0' }),
-            el('span', { className: 'shop-currency-label', text: 'SP' }),
-        ],
-    }));
     menu.appendChild(currencyRow);
 
-    // Tab strip.
+    // 6.1.0 — Unified shop tabs: POWERUPS + INVENTORY promoted from
+    // the pause menu, followed by the per-weapon upgrade trees.
     const tabs = el('div', { className: 'shop-tabs' });
     const tabDefs = [
-        { key: 'HELP',          label: 'HELP', active: true },
+        { key: 'POWERUPS',      label: 'POWERUPS', active: true },
+        { key: 'INVENTORY',     label: 'INVENTORY' },
         { key: 'PULSE_CANNON',  label: 'PULSE' },
         { key: 'STORM_NEEDLES', label: 'NEEDLES' },
         { key: 'SCATTER_GUN',   label: 'SCATTER' },
@@ -613,6 +591,7 @@ function _buildShopOverlay() {
         { key: 'MISSILE_SALVO', label: 'MISSILES' },
         { key: 'LANCE_BEAM',    label: 'LANCE' },
         { key: 'LIGHTNING_ARC', label: 'ARC' },
+        { key: 'HELP',          label: 'HELP' },
     ];
     for (const t of tabDefs) {
         const b = el('button', { className: 'shop-tab' + (t.active ? ' active' : ''), text: t.label });

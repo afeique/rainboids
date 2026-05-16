@@ -183,8 +183,10 @@ describe('updateWave() — enemy_spawn event shape', () => {
     });
 
     test('boss waves carry isBoss + bossTier through the event', () => {
-        // Wave 5 is the first boss wave; sub-wave 2 contains the TITAN boss.
-        const wave = freshWaveState(5, { phase: 'spawning', subWaveIndex: 2 });
+        // 6.1.0 — Wave 3 (stage 1-3) is the first boss wave now; the
+        // final sub-wave (index 1, since wave 3 has 2 sub-waves)
+        // contains the TITAN boss with bossTier=1.
+        const wave = freshWaveState(3, { phase: 'spawning', subWaveIndex: 1 });
         const events = [];
         updateWave(wave, ctx({ enemyCount: 0 }), events);
         const bossEvent = events.find(e => e.enemyType === 'TITAN');
@@ -416,20 +418,17 @@ describe('replay parity — updateWave ↔ legacy tryAdvanceSubWave', () => {
         expect(pure.spawns[0]).toEqual({ enemyType: 'HUNTER', count: 3 });
     });
 
-    test('wave 5 — boss sub-wave preserves bossTier on both paths', () => {
-        // 4 ticks of clean sweep: every tick has 0 enemies, so every
-        // sub-wave fires immediately. Wave 5 has 3 sub-waves, the last
-        // contains the TITAN bossTier=1 escort.
-        const enemyCountVec = [0, 0, 0, 0];
+    test('wave 3 (stage 1-3) — boss sub-wave preserves bossTier on both paths', () => {
+        // 6.1.0 — Wave 3 is the first boss wave under the stage system
+        // (stage 1-3). 2 sub-waves: escort, then TITAN bossTier=1.
+        const enemyCountVec = [0, 0, 0];
 
-        const pure = drivePure(5, enemyCountVec);
-        const legacy = makeLegacyStub(5, enemyCountVec);
+        const pure = drivePure(3, enemyCountVec);
+        const legacy = makeLegacyStub(3, enemyCountVec);
         for (let i = 0; i < enemyCountVec.length; i++) legacy.tick();
 
         expect(pure.spawns).toEqual(legacy.recorded);
 
-        // TITAN with bossTier=1 must show up in both — that's the
-        // load-bearing field for boss instantiation downstream.
         const pureBoss = pure.spawns.find(e => e.enemyType === 'TITAN');
         const legacyBoss = legacy.recorded.find(e => e.enemyType === 'TITAN');
         expect(pureBoss).toBeDefined();
@@ -511,14 +510,13 @@ describe('replay parity — updateWave ↔ legacy tryAdvanceSubWave', () => {
         // gate at wave-manager.js:64). Out of scope for this parity check.
     });
 
-    test('wave 10 — twin-boss: bossTier=2 carries through both paths', () => {
-        // Wave 10 has 3 sub-waves; the last contains TITAN ×2 with
-        // bossTier=2. Drives a clean sweep so both paths emit every
-        // sub-wave back-to-back.
-        const enemyCountVec = [0, 0, 0, 0];
+    test('wave 12 (stage 4-3) — twin-boss: bossTier=2 carries through both paths', () => {
+        // 6.1.0 — Wave 12 is the new twin-boss stage final (was wave 10).
+        // 2 sub-waves: escort, then TITAN ×2 bossTier=2.
+        const enemyCountVec = [0, 0, 0];
 
-        const pure = drivePure(10, enemyCountVec);
-        const legacy = makeLegacyStub(10, enemyCountVec);
+        const pure = drivePure(12, enemyCountVec);
+        const legacy = makeLegacyStub(12, enemyCountVec);
         for (let i = 0; i < enemyCountVec.length; i++) legacy.tick();
 
         expect(pure.spawns).toEqual(legacy.recorded);
@@ -526,11 +524,12 @@ describe('replay parity — updateWave ↔ legacy tryAdvanceSubWave', () => {
         expect(titan).toEqual({ enemyType: 'TITAN', count: 2, bossTier: 2 });
     });
 
-    test('wave 7 — multi-type sub-waves preserve group ordering', () => {
-        // Wave 7 sub-waves have 1, 2, and 3 groups respectively. Spawn
-        // ordering within a sub-wave is significant (downstream code
-        // assumes the FIRST group's enemy is the "lead" for the wave),
-        // so we lock that the per-group order matches between paths.
+    test('wave 7 (stage 3-1) — multi-type sub-waves preserve group ordering', () => {
+        // 6.1.0 — Wave 7 (stage 3-1) introduces STALKER. Sub-waves:
+        //   0: [STALKER 2]
+        //   1: [STALKER 2, HUNTER 3]
+        //   2: [STALKER 2, GUARDIAN 2, WASP 2]
+        // Verify per-group ordering matches between pure and legacy.
         const enemyCountVec = [0, 0, 0, 0];
 
         const pure = drivePure(7, enemyCountVec);
@@ -538,12 +537,13 @@ describe('replay parity — updateWave ↔ legacy tryAdvanceSubWave', () => {
         for (let i = 0; i < enemyCountVec.length; i++) legacy.tick();
 
         expect(pure.spawns).toEqual(legacy.recorded);
-        // Wave 7 sub-wave 1 starts with TANGERINE (per wave-data.js:70).
-        // Its first spawn after sub-wave 0 is exactly that.
+        // Sub-wave 1's first spawn is STALKER (count: 2) — same enemy
+        // as sub-wave 0 (since stage 3 introduces STALKER) but the
+        // grouping test is about ordering, not type variety.
         const subWave0Groups = getWaveConfig(7).subWaves[0].length;
         expect(pure.spawns[subWave0Groups]).toEqual({
-            enemyType: 'TANGERINE',
-            count: 3,
+            enemyType: 'STALKER',
+            count: 2,
         });
     });
 });

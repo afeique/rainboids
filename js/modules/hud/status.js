@@ -2,7 +2,7 @@
 // Each function is called with `.call(this)` where `this` is the GameEngine instance,
 // so all `this.*` references work exactly as they did as class methods.
 
-import { GAME_STATES } from '../core/constants.js';
+import { GAME_STATES, getStageLabel } from '../core/constants.js';
 import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
 import { DEFENSE_SKILLS } from '../combat/weapon-data.js';
 import { WAVY_PALETTES } from './overlays.js';
@@ -725,7 +725,9 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
 
         drawCachedShieldIcon(ctx, shieldCenterX, shieldCenterY, shieldIconSize);
 
-        // "WV" inside the shield (was "LV"). Wave number to the right.
+        // 6.1.0 — "STG" inside the shield, "S-W" label to the right
+        // (was "WV" + bare wave number in 6.0.1). Stage label gives
+        // the player intra-stage pacing without taking more space.
         ctx.save();
         ctx.font = "10px 'Press Start 2P', monospace";
         ctx.fillStyle = '#102342';
@@ -733,20 +735,20 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
         ctx.lineWidth = 1;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.strokeText('WV', shieldCenterX, shieldCenterY);
-        ctx.fillText('WV', shieldCenterX, shieldCenterY);
+        ctx.strokeText('STG', shieldCenterX, shieldCenterY);
+        ctx.fillText('STG', shieldCenterX, shieldCenterY);
         ctx.restore();
 
-        const waveNumberX = shieldCenterX + shieldIconSize / 2 + 8;
+        const stageLabelX = shieldCenterX + shieldIconSize / 2 + 8;
         ctx.font = "14px 'Press Start 2P', monospace";
         ctx.fillStyle = '#4A90E2';
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 1;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        const waveText = `${wave}`;
-        ctx.strokeText(waveText, waveNumberX, shieldCenterY);
-        ctx.fillText(waveText, waveNumberX, shieldCenterY);
+        const stageText = getStageLabel(wave);
+        ctx.strokeText(stageText, stageLabelX, shieldCenterY);
+        ctx.fillText(stageText, stageLabelX, shieldCenterY);
 
         ctx.restore();
 }

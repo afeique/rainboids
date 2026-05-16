@@ -491,33 +491,14 @@ export class Player {
         // ── Aim resolution (5.74) ──
         // Priority: Auto Aim > Arrow-key rotation > Aim Assist (cursor snap) > Mouse.
         const ge = window.gameEngine;
-        // 5.100.0 — Mobile uses the drag-to-move + auto-fire/auto-aim
-        // pattern (Sky Force / Galaxy Attack model). Re-enable assists
-        // on mobile (auto-aim + auto-fire) so the player just dodges
-        // while the AI picks targets and holds primary. The 5.95.1
-        // "force-disable on mobile" patch is reversed.
-        //
-        // 5.100.1 — Mobile defaults autoPower=false so the tap-for-power
-        // model works. The Assists pause-menu tab lets players opt into
-        // autoPower if they want fully-automated firing. We MERGE the
-        // engine's persisted assists toggles on top of the mobile
-        // defaults so the player's autoPower preference takes effect
-        // while the autoAim/autoFire defaults stay forced.
+        // 6.1.1 — autoPower assist retired. autoFire now controls BOTH
+        // primary and power weapon firing — one toggle, both barrels.
+        // Mobile FORCES autoFire=true (no toggle) so the player only
+        // has to dodge; auto-aim picks targets, auto-fire hammers them,
+        // and tapping the canvas triggers a DASH (see mobile-touch.js).
         let assists;
         if (isMobile()) {
-            const stored = (ge && ge.assists) || {};
-            // 5.115.0 — autoPower defaults TRUE on mobile. Brand-new
-            // players (no stored key) get auto-fire; players who
-            // explicitly toggled it off (stored.autoPower === false)
-            // keep their setting via the explicit `=== false` check.
-            const autoPowerStored = stored.autoPower;
-            const autoPower = (autoPowerStored === false) ? false : true;
-            assists = {
-                autoAim: true,
-                autoFire: true,
-                aimAssist: false,
-                autoPower,
-            };
+            assists = { autoAim: true, autoFire: true, aimAssist: false };
         } else {
             assists = (ge && ge.assists) ? ge.assists : null;
         }
@@ -570,27 +551,16 @@ export class Player {
         // aim. Holding fire when nothing's hittable wastes ammo (visually,
         // and for charged weapons it interrupts charging) and feels noisy.
         //
-        // 5.100.1 — Split: `assists.autoFire` controls PRIMARY only;
-        // `assists.autoPower` controls POWER weapon. Pre-5.100.1 they
-        // shared one toggle, which forced mobile (default autoFire=true)
-        // to auto-fire power too — defeating Model F tap-for-power.
-        // Now mobile defaults to `autoFire: true, autoPower: false` so
-        // tap-for-power works while primary still auto-holds.
-        if (assists && (assists.autoFire || assists.autoPower)) {
+        // 6.1.1 — Unified assist. autoFire now drives BOTH primary AND
+        // power weapon firing (was split via autoPower pre-6.1.1).
+        // One toggle, both barrels. Mobile forces this true so the
+        // player only has to dodge; auto-aim picks targets, auto-fire
+        // hammers them, and tapping the canvas triggers a dash.
+        if (assists && assists.autoFire) {
             const primaryCfg = this.getActivePrimaryConfig && this.getActivePrimaryConfig();
-            // 5.100.3 — Auto-fire range was scaled around a 400-px base
-            // bullet flight (24% of the playfield). 5.100.3 bumps the
-            // default bullet flight to cover the entire 1920-px field,
-            // so the auto-fire trigger should also see almost every
-            // on-screen enemy. Bumped base to 2000 — a confident
-            // "anything reachable by a bullet is a valid auto-fire
-            // target" cap.
             const baseRange = primaryCfg ? (primaryCfg.range || 1) * 2000 : 2000;
             const rangeMult = this.getRangeMultiplier ? this.getRangeMultiplier() : 1;
             const maxRange = baseRange * rangeMult;
-            // Angular tolerance: ±25° cone around the aim. Tight enough
-            // to avoid firing at off-screen targets, loose enough that
-            // small auto-aim correction lag doesn't choke fire.
             const cone = 25 * Math.PI / 180;
             let canHit = false;
             if (ge && ge.findNearestTarget) {
@@ -606,39 +576,18 @@ export class Player {
                 }
             }
             if (canHit) {
-                if (assists.autoFire) input.fire = true;
-                if (assists.autoPower) {
-                    const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
-                    if (cfg) {
-                        if (cfg.isChargeBased) {
-                            if (this.isFullyCharged) input.fireSecondary = true;
-                        } else if (this.isPowerReady && this.isPowerReady()) {
-                            input.fireSecondary = true;
-                        }
+                input.fire = true;
+                // 6.1.1 — Power weapon auto-fire is now part of the same
+                // autoFire toggle. Charge-based powers fire on full
+                // charge; cooldown-based powers fire as soon as they're
+                // ready and a valid target is acquired.
+                const pcfg = this.getActivePowerConfig && this.getActivePowerConfig();
+                if (pcfg) {
+                    if (pcfg.isChargeBased) {
+                        if (this.isFullyCharged) input.fireSecondary = true;
+                    } else if (this.isPowerReady && this.isPowerReady()) {
+                        input.fireSecondary = true;
                     }
-                }
-            }
-        }
-
-        // ── Mobile auto-fire — power weapon (5.92.0 → 5.100.0 → 5.113.0) ──
-        // 5.100.0 — Narrowed to CHARGE-based weapons only because a
-        // brief tap can't represent press-and-hold-and-release, so
-        // CHARGE_SHOT on mobile needed an always-on auto-fire to be
-        // usable.
-        // 5.113.0 — Gated behind `assists.autoPower`. Per spec, the
-        // player must tap the canvas to fire ANY power weapon on
-        // mobile UNLESS Auto Power assist is enabled. Tap-to-fire for
-        // charge weapons works fine through the normal updateChargingSystem
-        // path: a tap with chargeTime ≥ minChargeTime fires immediately.
-        // The 3-second minimum charge floor pre-gates the tap so spam-
-        // tapping doesn't trivialize the charge mechanic.
-        if (isMobile() && this.activePower && !this.firingDisabled
-                && assists && assists.autoPower) {
-            const radialOpen = !!(ge && ge.radialMenu && ge.radialMenu.isOpen && ge.radialMenu.isOpen());
-            if (!radialOpen) {
-                const cfg = this.getActivePowerConfig && this.getActivePowerConfig();
-                if (cfg && cfg.isChargeBased && this.isFullyCharged) {
-                    input.fireSecondary = true;
                 }
             }
         }

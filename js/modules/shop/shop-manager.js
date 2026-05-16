@@ -7,7 +7,8 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS, getPrimaryUpgrades, getPowerUpgrades, getSkillUpgrades } from '../combat/weapon-data.js';
-import { POWERUP_TYPES } from '../world/powerup.js';
+import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
+import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { showShopDom, hideShopDom, renderShopDom, updateShopCurrencyDom } from './shop-dom.js';
 
 
@@ -102,11 +103,11 @@ export function openShop() {
         }
 
 
-        // 5.73.0 — POWERUPS tab moved to the pause menu. Shop now lands
-        // on HELP by default; the tabs that remain are HELP / PRIMARY /
-        // POWER / DEFENSE (gold + SP economies). Picks are spent in
-        // pause-menu POWERUPS instead.
-        this.shopCategory = 'HELP';
+        // 6.1.0 — Shop lands on POWERUPS by default (was HELP). Unified
+        // shop now hosts POWERUPS + INVENTORY + per-weapon upgrade
+        // trees + HELP. POWERUPS is the most-used tab so it's the
+        // landing surface.
+        this.shopCategory = 'POWERUPS';
 
         // 5.79.57 — Shop is now exclusively offensive: one tab per
         //   weapon, each tab listing that weapon's offensive upgrades
@@ -142,16 +143,28 @@ export function openShop() {
 
 export function _rebuildShopCache() {
         if (this.shopCategory === 'HELP') {
-            // HELP tab has no purchasable items — the renderer paints
-            // an instructions panel. (TIMER + POWERUPS both moved to
-            // the pause menu in 5.72.1 / 5.73.0.)
+            // HELP tab has no purchasable items — renderer paints
+            // an instructions panel.
             this.shopFilteredItems = [];
             return;
         }
-        // 5.79.57 — Per-weapon shop tabs. Each weapon ID is a valid
-        //   shopCategory value; route to the appropriate generalized
-        //   builder. PRIMARY_WEAPONS / POWER_WEAPONS objects are the
-        //   single source of truth for weapon IDs (no hardcoded list).
+        // 6.1.0 — POWERUPS tab: gold-priced list of every entry in
+        // POWERUP_TYPES. Pricing comes from powerupGoldCost (cost grows
+        // with current stack count). Renderer reads from
+        // shopFilteredItems just like the weapon tabs.
+        if (this.shopCategory === 'POWERUPS') {
+            this._buildPowerupsTabItems();
+            return;
+        }
+        // 6.1.0 — INVENTORY tab: read-only view of the player's 5
+        // equipped items. No purchasable items; renderer paints item
+        // rows from player.equippedItems directly.
+        if (this.shopCategory === 'INVENTORY') {
+            this.shopFilteredItems = [];
+            return;
+        }
+        // Per-weapon shop tabs. Each weapon ID is a valid shopCategory
+        // value; route to the appropriate generalized builder.
         if (PRIMARY_WEAPONS[this.shopCategory]) {
             this._buildPrimaryTabItems(this.shopCategory);
             return;
@@ -160,12 +173,33 @@ export function _rebuildShopCache() {
             this._buildPowerTabItems(this.shopCategory);
             return;
         }
-        // Legacy 'PRIMARY' / 'POWER' / 'SKILLS' / 'DEFENSE' values
-        //   from older save state or third-party callers — degrade
-        //   gracefully to an empty list. The DEFENSE economy is
-        //   suspended (5.79.57) and skill purchasing was removed from
-        //   the shop in the same patch.
         this.shopFilteredItems = [];
+}
+
+// 6.1.0 — Builds the POWERUPS shop tab. Walks POWERUP_TYPES, skips
+// hidden entries, and produces a shop item per powerup with a
+// stack-aware gold cost. Items use `currency: 'COINS'` so the existing
+// shop-dom render path treats them as gold-priced.
+export function _buildPowerupsTabItems() {
+    const items = [];
+    for (const [type, cfg] of Object.entries(POWERUP_TYPES)) {
+        if (cfg.hidden) continue;
+        const stacks = this.player?.getPowerupStacks
+            ? this.player.getPowerupStacks(type) : 0;
+        const cost = powerupGoldCost(cfg, stacks);
+        items.push({
+            id: type,
+            name: cfg.displayName || cfg.name || type,
+            description: cfg.description || '',
+            icon: cfg.icon,
+            cost,
+            maxStacks: cfg.maxStacks || 99,
+            category: 'POWERUPS',
+            currency: 'COINS',
+            isPowerup: true,
+        });
+    }
+    this.shopFilteredItems = items;
 }
 
 // 5.79.62 — `_buildPowerupsTabItems` fully removed. The 5.79.55
@@ -343,14 +377,25 @@ export function buyShopItem(itemId) {
             //   `_buildPowerTabItems`).
             const filteredItem = this.shopFilteredItems && this.shopFilteredItems.find(i => i.id === itemId);
 
-            // 5.79.62 — Skill / weapon buy-or-equip branches dropped.
-            //   The shop's SKILLS tab and weapon-selection rows were
-            //   removed in 5.79.57 (skills moved to the pause-menu
-            //   SKILLS tab, weapon switching moved to the pause-menu
-            //   PRIMARY/POWER tabs). Items reaching `buyShopItem` are
-            //   now exclusively weapon upgrades from the per-weapon
-            //   shop tabs, so the only live branch is the upgrade
-            //   handler below.
+            // 6.1.0 — POWERUPS shop tab. Each row has `isPowerup: true`
+            // with a stack-aware gold cost computed at row-build time.
+            // Recompute the current cost from current stacks so the
+            // deduction matches what the player just clicked.
+            if (filteredItem && filteredItem.isPowerup) {
+                const cfg = POWERUP_TYPES[itemId];
+                if (!cfg) return false;
+                const stacks = this.player.getPowerupStacks(itemId);
+                if (stacks >= (cfg.maxStacks || 99)) return false;
+                const cost = powerupGoldCost(cfg, stacks);
+                if (this.game.money < cost) return false;
+                this.game.money -= cost;
+                this.player.addPowerup(itemId, { ...cfg, duration: Infinity }, true);
+                this.events.emit('audio:coin');
+                this._rebuildShopCache();
+                return true;
+            }
+
+            // Weapon upgrades from the per-weapon shop tabs.
             if (filteredItem && (filteredItem.isWeaponUpgrade || filteredItem.isSkillUpgrade)) {
                 return this._handleUpgradeBuy(filteredItem);
             }

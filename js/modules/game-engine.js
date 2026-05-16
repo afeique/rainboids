@@ -990,10 +990,15 @@ export class GameEngine {
         // animation; values are overwritten later anyway, so the
         // initial number just needs to match the player's start HP.
         this.playerShields = 40;
-        this.healthTanks = 3;
+        // 6.1.1 — Player now STARTS with 1 spare tank (was 3, which was
+        // already at the MAX_HEALTH_TANKS=3 cap, so overflow had nowhere
+        // to go and the "earn tanks via overflow" mechanic was inert).
+        // Player can now earn 2 more spares via overflow healing,
+        // visually filling the triforce from 1 → 2 → 3 triangles.
+        this.healthTanks = 1;
         if (this.player) this.player._tankProgress = 0;
         this.displayShields = 40;
-        this.displayTanks = 3;
+        this.displayTanks = 1;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
         
@@ -2309,15 +2314,9 @@ export class GameEngine {
 
     _buildPowerTabItems(weaponId = null) { return shop._buildPowerTabItems.call(this, weaponId); }
 
-    // 5.79.62 — Removed wrappers for shop functions that were deleted
-    //   alongside the 5.79.57 SKILLS / DEFENSE / POWERUPS tab cleanups
-    //   and the 5.79.55 _buildPowerupsTabItems stub:
-    //     _buildSkillsTabItems       (skills moved to pause menu)
-    //     _buildPowerupsTabItems     (powerups moved to pause menu)
-    //     _handleWeaponBuyOrEquip    (weapon switching moved to pause menu)
-    //     _handleSkillBuy            (skill equip moved to pause menu)
-    //   The remaining live wrappers (close*, buyShopItem,
-    //   _handleUpgradeBuy) cover the per-weapon offensive-upgrade path.
+    // 6.1.0 — POWERUPS tab restored. Builds a gold-priced list from
+    // POWERUP_TYPES (see shop-manager._buildPowerupsTabItems).
+    _buildPowerupsTabItems() { return shop._buildPowerupsTabItems.call(this); }
     closeShop() { return shop.closeShop.call(this); }
     closeShopToPlaying() { return shop.closeShopToPlaying.call(this); }
     closeShopAndReturn() { return shop.closeShopAndReturn.call(this); }
@@ -3840,33 +3839,24 @@ export class GameEngine {
     // nearest), and Auto Fire (auto-trigger primary + power). Read by
     // player.update each tick.
     _loadAssists() {
-        // 5.100.1 — Added `autoPower` (separate from `autoFire`). Mobile
-        // controls the power weapon via Model F tap; players who want
-        // full auto can opt in via the Assists pause-menu tab. Desktop
-        // default is off too — the autoFire toggle is enough.
-        //
-        // 5.102.0 — On mobile, Aim Assist / Auto Aim / Auto Fire are
-        // BAKED INTO the tap-to-shoot input (no UI toggle on the
-        // ASSISTS tab). Force them ON regardless of localStorage so
-        // older saves don't carry forward a "false" value the player
-        // can't see or change. Auto Power stays user-controllable.
+        // 6.1.1 — `autoPower` retired. `autoFire` now drives BOTH
+        // primary AND power weapon firing — one toggle, both barrels.
+        // Mobile bakes Aim Assist / Auto Aim / Auto Fire all ON (tap
+        // anywhere on the canvas DASHES, auto-fire handles all shooting).
+        // Desktop defaults: all off; user opts in via ASSISTS tab.
         const mobile = isMobile();
-        // 5.115.0 — Flipped mobile autoPower default ON. With the
-        // stationary mobile ship the player is already busy aiming with
-        // a finger; making them tap to fire power weapons too added
-        // friction. Default ON; player can opt OUT via the ASSISTS
-        // pause-menu tab. Existing players who explicitly turned it OFF
-        // (stored = false) keep their setting via the merge below.
         const defaults = mobile
-            ? { aimAssist: true, autoAim: true, autoFire: true, autoPower: true }
-            : { aimAssist: false, autoAim: false, autoFire: false, autoPower: false };
+            ? { aimAssist: true, autoAim: true, autoFire: true }
+            : { aimAssist: false, autoAim: false, autoFire: false };
         try {
             const raw = localStorage.getItem('rainboidsAssists');
             const stored = raw ? JSON.parse(raw) : null;
             const merged = stored ? Object.assign({}, defaults, stored) : defaults;
+            // Strip the retired `autoPower` field if present in stored.
+            delete merged.autoPower;
             if (mobile) {
-                // Re-force the three baked-in toggles ON. Stored value
-                // might have flipped them off from a desktop session.
+                // Re-force baked-in toggles ON. Stored value might have
+                // flipped them off from a previous desktop session.
                 merged.aimAssist = true;
                 merged.autoAim   = true;
                 merged.autoFire  = true;

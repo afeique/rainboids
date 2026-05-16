@@ -1,9 +1,16 @@
 // Player damage, tank consumption, and game-over.
 //
-// 5.88.3 — energy tanks fully unified with the triforce:
-//   - healthTanks ∈ [0, 3] is the SPARE count. Each triangle = 1 spare.
-//   - The healthbar represents the *active* tank (the implicit "+1").
-//     Total effective tanks = healthTanks + 1, capped at 4.
+// 6.1.1 — healthTanks ∈ [0, MAX_HEALTH_TANKS=3] is the SPARE count.
+// Each triangle = 1 spare. The healthbar represents the *active* tank
+// (the implicit "+1"). Total effective tanks = healthTanks + 1,
+// capped at 4 (3 triangle slots + active healthbar). Player STARTS
+// with healthTanks=1 (engine init) so the overflow → +1 spare
+// mechanic has somewhere to go from move 1 — earns up to 2 more spares
+// via overflow healing (taking the triforce from 1 → 2 → 3 triangles
+// over the course of a run).
+//
+// Previously (6.1.0 and earlier): started at 3 with cap 3 → already
+// at cap → overflow inert. Fixed by lowering the starting count.
 //   - Hits reduce HP. When HP hits 0:
 //       * spares > 0: consume one spare → vaporize a triangle (top →
 //         btm-right → btm-left in that loss order), refill HP, keep
@@ -25,6 +32,10 @@ import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { isMobile } from '../platform/platform-detect.js';
 
+// 6.1.1 — Cap stays at 3 (matches the visible triforce HUD slots).
+// The starting count was lowered from 3 → 1 in game-engine.js so the
+// overflow → +1 spare mechanic actually fires (was inert when the
+// player started at the cap). See the updated module header comment.
 export const MAX_HEALTH_TANKS = 3;
 
 // 5.98.0 — Mobile early-game damage-taken multiplier. The stationary

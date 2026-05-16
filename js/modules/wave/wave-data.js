@@ -1,20 +1,21 @@
 // Wave configuration data for enemy and asteroid spawning.
 //
-// 30-wave campaign (5.101.0 — expanded from 20).
-// Meta-goal: finish the run while spending 10 survivor-card picks
-// (one free pick every 3rd wave clear).
-//   Waves  1– 4 : First Contact     (gentle intro, low threat density)
-//   Wave   5    : BOSS — Iron Giant (TITAN bossTier 1 + escort)
-//   Waves  6– 9 : Escalation        (combined arms, type variety)
-//   Wave  10    : BOSS — Twin Iron  (2× TITAN bossTier 2)
-//   Waves 11–14 : The Gauntlet      (full type roster, dense)
-//   Wave  15    : BOSS — Triple Threat (3× TITAN bossTier 3)
-//   Waves 16–19 : Endgame Approach  (everything at once)
-//   Wave  20    : MID BOSS — Iron Quartet (4× TITAN bossTier 3)
-//   Waves 21–24 : The Long Walk     (compounding pressure)
-//   Wave  25    : BOSS — Iron Crown (4× TITAN bossTier 4 + STALKER escort)
-//   Waves 26–29 : Edge of Doom      (everything at once, longer)
-//   Wave  30    : FINAL BOSS — The Last Stand (4× TITAN bossTier 4)
+// 6.1.0 — 30 waves restructured as 10 STAGES × 3 waves. Every stage
+// final (wave 3, 6, 9, …, 30) is a BOSS. Each stage typically
+// introduces a new enemy type, with the boss + escort showcasing the
+// stage's headliners. Meta-goal: 10 survivor-card picks (one per stage
+// clear, free) across the campaign.
+//
+//   Stage  1 (1-1..1-3)  : Iron Scout      — HUNTER + WASP, boss TITAN T1
+//   Stage  2 (2-1..2-3)  : Iron Sentinel   — adds GUARDIAN
+//   Stage  3 (3-1..3-3)  : Iron Vanguard   — adds STALKER (sniper line)
+//   Stage  4 (4-1..4-3)  : Twin Iron       — adds DRIFTER + TANGERINE
+//   Stage  5 (5-1..5-3)  : Triple Threat   — adds WEAVER + SENTINEL
+//   Stage  6 (6-1..6-3)  : Iron Quartet    — adds PROWLER (full roster)
+//   Stage  7 (7-1..7-3)  : Iron Crown      — combined arms, dense
+//   Stage  8 (8-1..8-3)  : The Long Walk   — compounding pressure
+//   Stage  9 (9-1..9-3)  : Apocalypse      — peak density
+//   Stage 10 (10-1..10-3): The Last Stand  — finale; 10-3 = FINAL BOSS
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -31,16 +32,7 @@ import { isMobile } from '../platform/platform-detect.js';
 // (see wave-manager.spawnLeveledEnemies — the chance is wave-scaled).
 export const WAVE_DATA = {
 
-    // 5.79.16 — Enemy + asteroid counts scaled up across the campaign
-    //   (~+60% enemies, ~+33% asteroids) so per-wave XP yields keep
-    //   pace with the new linear XP curve targeting ~1.5 levels per
-    //   wave. See docs/XP_BALANCE_REWORK_5.79.md for the analysis.
-
-    // ── Act I: First Contact ──
-    // 5.101.0 — Each wave now has 3-4 sub-waves (was 2-3) so waves last
-    // ~50% longer. Per-subwave counts unchanged to keep moment-to-moment
-    // density steady — the player just gets more sub-waves before WAVE
-    // COMPLETE fires.
+    // ── Stage 1: First Contact (HUNTER + WASP) ──
     1: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 3 }],
         [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
@@ -48,209 +40,196 @@ export const WAVE_DATA = {
     ] },
     2: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 3 }],
-    ] },
-    3: { asteroids: 5, subWaves: [
-        [{ type: 'HUNTER', count: 4 }],
         [{ type: 'WASP', count: 4 }],
-        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 3 }],
     ] },
-    4: { asteroids: 5, subWaves: [
-        [{ type: 'GUARDIAN', count: 3 }],
-        [{ type: 'WASP', count: 4 }, { type: 'HUNTER', count: 1 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 4 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 3 }],
-    ] },
-
-    // ── Boss 1: Iron Giant — escort softens, then boss arrives. ──
-    5: {
+    // 1-3 BOSS — Iron Scout: introductory TITAN, light escort.
+    3: {
         asteroids: 3, isBossWave: true, bossTier: 1,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 4 }, { type: 'HUNTER', count: 3 }],
-            [{ type: 'WASP', count: 3 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
+        ],
+    },
+
+    // ── Stage 2: Iron Sentinel (adds GUARDIAN heavy) ──
+    4: { asteroids: 5, subWaves: [
+        [{ type: 'GUARDIAN', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 3 }],
+    ] },
+    5: { asteroids: 5, subWaves: [
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'WASP', count: 4 }, { type: 'GUARDIAN', count: 1 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+    ] },
+    // 2-3 BOSS — Iron Sentinel: TITAN T1 with heavy GUARDIAN escort.
+    6: {
+        asteroids: 3, isBossWave: true, bossTier: 1,
+        subWaves: [
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
             [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 2 }],
         ],
     },
 
-    // ── Act II: Escalation ──
-    6: { asteroids: 5, subWaves: [
-        [{ type: 'STALKER', count: 3 }],
-        [{ type: 'HUNTER', count: 4 }, { type: 'WASP', count: 1 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'WASP', count: 3 }],
-    ] },
+    // ── Stage 3: Iron Vanguard (adds STALKER sniper) ──
     7: { asteroids: 5, subWaves: [
-        [{ type: 'DRIFTER', count: 3 }],
-        [{ type: 'TANGERINE', count: 3 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 4 }, { type: 'WASP', count: 1 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'STALKER', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
     ] },
     8: { asteroids: 5, subWaves: [
-        [{ type: 'HUNTER', count: 3 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'STALKER', count: 3 }, { type: 'SENTINEL', count: 1 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'HUNTER', count: 4 }, { type: 'STALKER', count: 1 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'STALKER', count: 3 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }],
     ] },
-    9: { asteroids: 4, subWaves: [
-        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
-        [{ type: 'PROWLER', count: 3 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 1 }, { type: 'WASP', count: 2 }, { type: 'HUNTER', count: 1 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'WASP', count: 2 }],
-    ] },
-
-    // ── Boss 2: Twin Iron — three escort waves, then twin bosses. ──
-    10: {
-        asteroids: 2, isBossWave: true, bossTier: 2,
+    // 3-3 BOSS — Iron Vanguard: TITAN T2 with STALKER escort.
+    9: {
+        asteroids: 3, isBossWave: true, bossTier: 2,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 3 }],
-            [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
-            [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }],
         ],
     },
 
-    // ── Act III: The Gauntlet ──
+    // ── Stage 4: Twin Iron (adds DRIFTER + TANGERINE) ──
+    10: { asteroids: 4, subWaves: [
+        [{ type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 2 }],
+    ] },
     11: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 5 }, { type: 'WASP', count: 2 }],
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 3 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 1 }],
     ] },
-    12: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'PROWLER', count: 3 }, { type: 'DRIFTER', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 1 }],
-    ] },
+    // 4-3 BOSS — Twin Iron: 2× TITAN T2.
+    12: {
+        asteroids: 3, isBossWave: true, bossTier: 2,
+        subWaves: [
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
+            [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'STALKER', count: 2 }, { type: 'TANGERINE', count: 1 }],
+        ],
+    },
+
+    // ── Stage 5: Triple Threat (adds WEAVER + SENTINEL) ──
     13: { asteroids: 4, subWaves: [
-        [{ type: 'WASP', count: 6 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
         [{ type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'WASP', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'WEAVER', count: 3 }, { type: 'WASP', count: 3 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
     ] },
     14: { asteroids: 4, subWaves: [
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 3 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 1 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }],
     ] },
-
-    // ── Boss 3: Triple Threat — three escort waves before triple TITAN. ──
+    // 5-3 BOSS — Triple Threat: 3× TITAN T3.
     15: {
         asteroids: 2, isBossWave: true, bossTier: 3,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
-            [{ type: 'SENTINEL', count: 3 }, { type: 'WASP', count: 3 }],
-            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'GUARDIAN', count: 1 }],
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 1 }],
+            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
         ],
     },
 
-    // ── Act IV: Endgame Approach ──
+    // ── Stage 6: Iron Quartet (adds PROWLER — full roster) ──
     16: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 3 }],
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 2 }],
     ] },
     17: { asteroids: 4, subWaves: [
-        [{ type: 'WEAVER', count: 3 }],
-        [{ type: 'WASP', count: 5 }, { type: 'DRIFTER', count: 2 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 1 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 3 }],
     ] },
-    18: { asteroids: 4, subWaves: [
-        [{ type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'TITAN', count: 1 }, { type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'SENTINEL', count: 1 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
-    ] },
-    19: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'WEAVER', count: 2 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 3 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }],
-    ] },
-
-    // ── Mid Boss: Iron Quartet. ──
-    20: {
+    // 6-3 BOSS — Iron Quartet: 3× TITAN T3 + PROWLER escort.
+    18: {
         asteroids: 2, isBossWave: true, bossTier: 3,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
-            [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }],
-            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'PROWLER', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
+            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
         ],
     },
 
-    // ── Act V: The Long Walk (5.101.0 — new) ──
-    21: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 3 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 3 }],
+    // ── Stage 7: Iron Crown (combined arms, dense) ──
+    19: { asteroids: 4, subWaves: [
+        [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'TANGERINE', count: 2 }],
     ] },
+    20: { asteroids: 4, subWaves: [
+        [{ type: 'STALKER', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }],
+    ] },
+    // 7-3 BOSS — Iron Crown: 4× TITAN T4 + STALKER escort.
+    21: {
+        asteroids: 2, isBossWave: true, bossTier: 4,
+        subWaves: [
+            [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WEAVER', count: 1 }],
+            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 2 }],
+        ],
+    },
+
+    // ── Stage 8: The Long Walk (compounding pressure) ──
     22: { asteroids: 4, subWaves: [
-        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 3 }],
     ] },
     23: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 5 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }],
-        [{ type: 'WEAVER', count: 3 }, { type: 'WASP', count: 3 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 1 }],
     ] },
-    24: { asteroids: 4, subWaves: [
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'TITAN', count: 1 }, { type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 2 }],
-    ] },
-
-    // ── Boss 5: Iron Crown. ──
-    25: {
+    // 8-3 BOSS — Iron Quintet: 4× TITAN T4 + TANGERINE.
+    24: {
         asteroids: 2, isBossWave: true, bossTier: 4,
         subWaves: [
-            [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
-            [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }],
-            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 1 }],
+            [{ type: 'TANGERINE', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
+            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'TANGERINE', count: 2 }, { type: 'PROWLER', count: 2 }],
         ],
     },
 
-    // ── Act VI: Edge of Doom ──
-    26: { asteroids: 4, subWaves: [
-        [{ type: 'TANGERINE', count: 3 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'STALKER', count: 3 }],
-        [{ type: 'PROWLER', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }],
-    ] },
-    27: { asteroids: 4, subWaves: [
-        [{ type: 'WEAVER', count: 3 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'TITAN', count: 1 }, { type: 'WASP', count: 4 }, { type: 'DRIFTER', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'WEAVER', count: 2 }],
-    ] },
-    28: { asteroids: 4, subWaves: [
+    // ── Stage 9: Apocalypse (peak density) ──
+    25: { asteroids: 4, subWaves: [
         [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'TANGERINE', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }],
-        [{ type: 'TITAN', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'TANGERINE', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 3 }],
+    ] },
+    26: { asteroids: 4, subWaves: [
+        [{ type: 'PROWLER', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'TANGERINE', count: 2 }],
+        [{ type: 'WEAVER', count: 3 }, { type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+        [{ type: 'HUNTER', count: 4 }, { type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 2 }],
+    ] },
+    // 9-3 BOSS — Iron Tide: 5× TITAN T4 + WEAVER escort.
+    27: {
+        asteroids: 2, isBossWave: true, bossTier: 4,
+        subWaves: [
+            [{ type: 'WEAVER', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }],
+            [{ type: 'TITAN', count: 5, isBoss: true, bossTier: 4 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
+        ],
+    },
+
+    // ── Stage 10: The Last Stand (finale) ──
+    28: { asteroids: 4, subWaves: [
+        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 3 }],
+        [{ type: 'TANGERINE', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'WEAVER', count: 3 }, { type: 'DRIFTER', count: 2 }],
     ] },
     29: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 3 }],
-        [{ type: 'STALKER', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'PROWLER', count: 2 }],
-        [{ type: 'TANGERINE', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'DRIFTER', count: 2 }],
-        [{ type: 'TITAN', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'STALKER', count: 3 }, { type: 'WEAVER', count: 3 }, { type: 'PROWLER', count: 2 }],
+        [{ type: 'TITAN', count: 1 }, { type: 'SENTINEL', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }],
     ] },
-
-    // ── Final Boss: The Last Stand (now wave 30). ──
+    // 10-3 FINAL BOSS — The Last Stand: 5× TITAN T4 + full escort.
     30: {
         asteroids: 2, isBossWave: true, bossTier: 4, isFinalBoss: true,
         subWaves: [
             [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
             [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }],
-            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 1 }],
+            [{ type: 'TITAN', count: 5, isBoss: true, bossTier: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 1 }],
         ],
     },
 };
@@ -385,36 +364,39 @@ export function getEnemyBulletSpeedMultiplier(waveNumber) {
 // ── Wave Subtitles ──────────────────────────────────────────────────────
 // Pithy one-liners displayed during wave intros (one per wave for the
 // 30-wave run, plus generic backups in case a wave is added later).
+// 6.1.0 — Wave subtitles re-keyed for the 10-stage / 3-wave layout.
+// Stage finals (3, 6, 9, 12, ...) call out the boss; mid-stage waves
+// (1-1 / 1-2 / 2-1 / 2-2 / etc.) get pithy combat one-liners.
 export const WAVE_SUBTITLES = {
     1:  "Don't worry, they die easy.",
     2:  "Okay maybe worry a little.",
-    3:  "They brought friends.",
-    4:  "These ones are chonky.",
-    5:  "BOSS — Iron Giant. Aim for the bolts.",
-    6:  "Laser tag, but unfair.",
-    7:  "Storms in space — who knew?",
-    8:  "They learned teamwork. Rude.",
-    9:  "Webs in space. Sure, why not.",
-    10: "BOSS — Twin Iron. Doubled, redoubled.",
-    11: "Combined arms. Pick your poison.",
-    12: "Sniper alley. Don't stand still.",
-    13: "Speed demons. Don't blink.",
+    3:  "BOSS — Iron Scout. Aim for the bolts.",
+    4:  "Heavies on deck.",
+    5:  "Combined arms. Pick your poison.",
+    6:  "BOSS — Iron Sentinel. Walking armor.",
+    7:  "Sniper line. Don't stand still.",
+    8:  "Hold position? No. Move.",
+    9:  "BOSS — Iron Vanguard. Bring a hammer.",
+    10: "Stragglers and squadrons.",
+    11: "Heavy weather. Bring a coat.",
+    12: "BOSS — Twin Iron. Doubled, redoubled.",
+    13: "Storms in space — who knew?",
     14: "Defense wall. Bring a hammer.",
     15: "BOSS — Triple Threat. Three. Of. Them.",
-    16: "All-star roster. They're showing off.",
-    17: "Bullet hell sample platter.",
-    18: "Apocalypse. The light at the end is a missile.",
-    19: "Final frontier — for now.",
-    20: "MID BOSS — Iron Quartet. Four for the price of three.",
-    21: "Aftershocks. They aren't done.",
-    22: "Reinforcements arrived. They are angry.",
-    23: "The walls are closing in. Probably figuratively.",
-    24: "Heavy weather. Bring a coat.",
-    25: "BOSS — Iron Crown. The throne is overdue.",
-    26: "Everything you remember, but more.",
-    27: "There is no off-switch.",
-    28: "Tactical chaos. Untactical results.",
-    29: "Final approach. One more good day at the office.",
+    16: "Predators inbound. Pack hunters.",
+    17: "All-star roster. They're showing off.",
+    18: "BOSS — Iron Quartet. Four for the price of three.",
+    19: "Combined arms — every type, every angle.",
+    20: "Bullet hell sample platter.",
+    21: "BOSS — Iron Crown. The throne is overdue.",
+    22: "Aftershocks. They aren't done.",
+    23: "The walls are closing in.",
+    24: "BOSS — Iron Quintet. Five-tier salute.",
+    25: "Apocalypse. Light at the end is a missile.",
+    26: "There is no off-switch.",
+    27: "BOSS — Iron Tide. Endless onslaught.",
+    28: "Edge of doom. One more push.",
+    29: "Final approach. Steady hands.",
     30: "FINAL BOSS — The Last Stand.",
 };
 

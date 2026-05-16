@@ -97,7 +97,7 @@ export class UIManager {
             assistAimAssist: document.getElementById('assist-aim-assist'),
             assistAutoAim: document.getElementById('assist-auto-aim'),
             assistAutoFire: document.getElementById('assist-auto-fire'),
-            assistAutoPower: document.getElementById('assist-auto-power'),
+            // 6.1.1 — assistAutoPower removed; autoFire drives power too.
             // HUD pause button (top-left)
             hudPauseBtn: document.getElementById('hud-pause-btn'),
             hudShopBtn: document.getElementById('hud-shop-btn')
@@ -1203,7 +1203,8 @@ export class UIManager {
         this.updateControlsTab();
         this.updatePrimaryTab();
         this.updatePowerTab();
-        this.renderPowerupsOverlay();
+        // 6.1.0 — Powerups pre-render removed (POWERUPS tab moved to
+        // the shop; pause-menu powerups-tab DOM was deleted).
         if (this.updateSkillsTab) this.updateSkillsTab();
         if (this.updateTimerTab) this.updateTimerTab();
     }
@@ -1215,7 +1216,7 @@ export class UIManager {
         if (this.elements.assistAimAssist) this.elements.assistAimAssist.checked = !!a.aimAssist;
         if (this.elements.assistAutoAim) this.elements.assistAutoAim.checked = !!a.autoAim;
         if (this.elements.assistAutoFire) this.elements.assistAutoFire.checked = !!a.autoFire;
-        if (this.elements.assistAutoPower) this.elements.assistAutoPower.checked = !!a.autoPower;
+        // 6.1.1 — autoPower retired; autoFire drives both barrels.
     }
 
     setAudioManager(audioManager) {
@@ -1474,7 +1475,7 @@ export class UIManager {
         wireAssist(this.elements.assistAimAssist, 'aimAssist');
         wireAssist(this.elements.assistAutoAim, 'autoAim');
         wireAssist(this.elements.assistAutoFire, 'autoFire');
-        wireAssist(this.elements.assistAutoPower, 'autoPower');
+        // 6.1.1 — autoPower wiring removed; merged into autoFire.
         
         // Music controls
         this.elements.musicPlayPause.addEventListener('click', () => {
@@ -1656,9 +1657,8 @@ export class UIManager {
         if (tabName === 'skills') this.updateSkillsTab();
         if (tabName === 'assists') this.syncAssistsTab();
 
-        // Re-render the Powerups card list whenever the tab is opened
-        // so stack counts reflect current state.
-        if (tabName === 'powerups') this.renderPowerupsOverlay();
+        // 6.1.0 — Powerups tab moved to the shop overlay; no
+        // pause-menu powerups-tab to re-render.
 
         // 5.72.1 — TIMER tab moved from shop to pause menu. Render
         // the speedrun-tier card on tab open. Don't poll-refresh here;

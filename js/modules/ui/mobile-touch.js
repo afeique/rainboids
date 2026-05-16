@@ -1,28 +1,30 @@
-// MobileTouchHandler — touch input for the 5.100.0 mobile control
-// model: virtual analog stick (drag-to-move) + tap-anywhere for the
-// power weapon. Auto-aim and auto-fire run continuously on the player
-// side (see `js/modules/player/player.js`).
+// MobileTouchHandler — touch input for the 6.1.1 mobile control
+// model: virtual analog stick (drag-to-move) + tap-anywhere-to-DASH.
+// Auto-aim + auto-fire run continuously (unified `autoFire` assist,
+// forced true on mobile, covers BOTH primary AND power weapons), so
+// the player's job on mobile is purely DODGING. Tap to dash through
+// danger; the game handles everything else.
 //
 // Touch classification on each new touch:
-//   1. HUD button hit → button action (unchanged from 5.94/5.99 model).
-//   2. Radial menu open → wedge hover (unchanged).
+//   1. HUD button hit → button action.
+//   2. Radial menu open → wedge hover.
 //   3. Inside the analog stick base zone → start a stick session.
 //   4. Otherwise → "tap candidate" — if it ends within TAP_MS with
-//      drift < DRAG_CANCEL_PX, fires the power weapon (Model F).
+//      drift < DRAG_CANCEL_PX, triggers a DASH (i-frame burst, same
+//      mechanism the desktop SHIFT key uses).
 //
-// Auto-aim handles primary firing — the player never has to tell the
-// game what to shoot at. They just dodge.
-//
-// Pre-5.100 behavior:
+// Pre-6.1.1 behavior:
 //   - 5.94: tap-to-aim-and-fire (one shot per tap)
 //   - 5.97: press-and-hold continuous fire + drag-to-aim
-//   These are removed. The 5.100 model is a clean break: the player
-//   never aims manually on mobile.
+//   - 5.100–6.1.0: tap to fire power weapon (autoPower toggle for
+//     fully-automated power firing)
+//   - 6.1.1: tap to DASH. Power weapon auto-fires via the unified
+//     autoFire assist (autoPower was retired).
 
 import { isMobile } from '../platform/platform-detect.js';
 import { GAME_STATES } from '../core/constants.js';
 
-const TAP_MS = 350;              // release within this = tap (Model F power)
+const TAP_MS = 350;              // release within this = tap (triggers dash)
 const DRAG_CANCEL_PX = 16;       // drift past this = not a tap
 
 // 5.100.0 — Gameplay touch only runs in PLAYING / WAVE_TRANSITION. The
@@ -145,19 +147,23 @@ export class MobileTouchHandler {
     }
 
     /**
-     * 5.100.0 — Pulse the power-weapon fire flag for one tick. Mirrors
-     * the desktop right-click / Space behavior. The weapons update
-     * loop (`updateChargingSystem`) reads `input.fireSecondary` and
-     * dispatches the cooldown-based power weapon. Charge-based weapons
-     * auto-fire on full charge from the Player.update side (see the
-     * 5.92 mobile auto-fire path, narrowed in 5.100 to charge-only).
+     * 6.1.1 — Tap-to-DASH (replaces tap-to-fire-power from 5.100.0).
+     * Mobile auto-fire is always on (covers both primary and power
+     * weapons via the unified autoFire assist), so the tap input is
+     * freed up for dodging. Sets `input.dashPulse = true` for one tick
+     * — the same one-shot signal the desktop SHIFT key uses, consumed
+     * by player.update() which routes it through _triggerDash() with
+     * the standard cooldown + i-frame logic.
      */
-    _firePowerWeapon() {
+    _triggerDash() {
         const ge = this.engine;
         const input = ge && ge.inputHandler && ge.inputHandler.input;
         if (!input) return;
-        input.fireSecondary = true;
-        const release = () => { input.fireSecondary = false; };
+        input.dashPulse = true;
+        // Player.update consumes the pulse on the very next tick, but
+        // double-rAF the clear in case the input is read before
+        // player.update fires (defensive against tick ordering).
+        const release = () => { input.dashPulse = false; };
         if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(() => requestAnimationFrame(release));
         } else {
@@ -315,11 +321,14 @@ export class MobileTouchHandler {
             return;
         }
 
-        // 'tap' branch — fire the power weapon iff this was a quick
-        // release with minimal drift. Otherwise discard (failed drag).
+        // 6.1.1 — 'tap' branch DASHES instead of firing power. Power
+        // weapon auto-fires via the unified autoFire assist now (which
+        // is forced true on mobile in player.js). The player's job on
+        // mobile is purely dodging: tap to dash, drag stick to move,
+        // auto-aim + auto-fire handle the shooting.
         const elapsed = Date.now() - this._startTime;
         if (!this._dragged && elapsed <= TAP_MS) {
-            this._firePowerWeapon();
+            this._triggerDash();
         }
         this._reset();
     }

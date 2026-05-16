@@ -304,13 +304,39 @@ export const GAME_STATES = {
     SHOP: 'SHOP'
 };
 
-// Total waves required to win the run. Boss waves at every BOSS_WAVE_INTERVAL
-// produce six bosses across the campaign (waves 5 / 10 / 15 / 20 / 25 / 30).
-// 5.101.0 — Expanded from 20 → 30 waves so the survivor-card economy
-// (one free pick every 3rd wave) totals 10 picks per playthrough.
+// 6.1.0 — Stage system. The 30-wave campaign is now structured as
+// 10 STAGES of 3 waves each. Wave is the source of truth internally;
+// stage + sub-wave are derived. Stage final = boss = free survivor
+// card on clear. Mid-stage waves get just a brisk WAVE CLEAR toast.
+//
+// Display format: "1-1", "1-2", "1-3", "2-1", ... "10-3".
+//
+// Survivor-card economy: 1 free pick per stage clear × 10 stages = 10
+// picks per playthrough (same total budget as the pre-6.1.0 "every 3rd
+// wave" cadence, just renamed and aligned with the boss waves).
 export const MAX_WAVES = 30;
-export const BOSS_WAVE_INTERVAL = 5;
-export const BOSS_WAVES = [5, 10, 15, 20, 25, 30];
+export const WAVES_PER_STAGE = 3;
+export const MAX_STAGES = MAX_WAVES / WAVES_PER_STAGE; // 10
+// Bosses live on stage finals (was [5,10,15,20,25,30] in 6.0.x).
+// Every stage now ends with a boss; +67% boss density vs pre-6.1.0.
+export const BOSS_WAVES = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30];
+// Kept as 3 (was 5) so any legacy consumers reading this constant
+// produce sensible defaults under the new cadence.
+export const BOSS_WAVE_INTERVAL = WAVES_PER_STAGE;
+
+// Stage / sub-wave helpers — pure functions on wave number.
+export function getStage(wave) {
+    return Math.ceil(Math.max(1, wave | 0) / WAVES_PER_STAGE);
+}
+export function getSubWaveIndex(wave) {
+    return ((Math.max(1, wave | 0) - 1) % WAVES_PER_STAGE) + 1; // 1..3
+}
+export function isStageClear(wave) {
+    return (wave | 0) > 0 && ((wave | 0) % WAVES_PER_STAGE) === 0;
+}
+export function getStageLabel(wave) {
+    return `${getStage(wave)}-${getSubWaveIndex(wave)}`;
+}
 
 // 5.71.0 — Speedrun completion tiers. Finishing the 20-wave campaign
 // faster awards a bigger score multiplier on the Game Complete stats

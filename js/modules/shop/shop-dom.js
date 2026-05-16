@@ -1,5 +1,6 @@
 import { renderIconHTML } from '../ui/icons.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS } from '../combat/weapon-data.js';
+import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 
 // 5.99.0 — Resolve a weapon-tinted accent color for a shop item. Used to
 // border / accent each row with the parent weapon's canonical color so
@@ -201,18 +202,23 @@ export function renderShopDom() {
         return;
     }
 
-    // (TIMER tab moved to the pause menu in 5.72.1.)
+    // 6.1.0 — INVENTORY tab: read-only display of the 5 equipped items.
+    // No purchase rows; just shows what's slotted with rarity color.
+    if (_engine.shopCategory === 'INVENTORY') {
+        list.appendChild(buildInventoryPanel(_engine.player));
+        return;
+    }
 
     const items = _engine.shopFilteredItems || [];
 
-    // Header banner for the PRIMARY / POWER tabs that shows the player which
-    // weapon's upgrade tree they're looking at. Updated whenever the tab
-    // is rebuilt (so equipping a different weapon and reopening the shop
-    // — or rebuilding via switchTab — reflects the new equip immediately).
+    // Header banner for weapon-tab upgrade lists.
     const player = _engine.player;
     const game = _engine.game;
     const cat = _engine.shopCategory;
-    if (cat === 'PRIMARY' || cat === 'POWER') {
+    if (cat === 'POWERUPS') {
+        const banner = buildCategoryBanner('POWERUPS');
+        if (banner) list.appendChild(banner);
+    } else if (cat === 'PRIMARY' || cat === 'POWER') {
         const banner = buildEquippedBanner(cat, player);
         if (banner) list.appendChild(banner);
     } else if (cat === 'DEFENSE' || cat === 'SKILLS') {
@@ -282,15 +288,17 @@ function buildEquippedBanner(category, player) {
     return banner;
 }
 
-// Banner shown above the upgrade list on the DEFENSE / SKILLS tabs.
-// Mirrors `buildEquippedBanner` visually but titles the category instead
-// of naming a weapon. Gives all four purchasable tabs a consistent
-// header so the shop layout doesn't reflow when switching between
-// PRIMARY/POWER and DEFENSE/SKILLS.
+// Banner shown above the list on category tabs (no weapon name).
+// 6.1.0 — POWERUPS variant added.
 function buildCategoryBanner(category) {
-    const meta = category === 'DEFENSE'
-        ? { label: 'Defense Upgrades', name: 'Defense', icon: 'shield', color: '#44ff88' }
-        : { label: 'Skill Loadout',    name: 'Skills',  icon: 'bolt',  color: '#ff88dd' };
+    let meta;
+    if (category === 'POWERUPS') {
+        meta = { label: 'Powerups', name: 'Permanent Stacking Upgrades', icon: 'heart', color: '#66ffaa' };
+    } else if (category === 'DEFENSE') {
+        meta = { label: 'Defense Upgrades', name: 'Defense', icon: 'shield', color: '#44ff88' };
+    } else {
+        meta = { label: 'Skill Loadout', name: 'Skills', icon: 'bolt', color: '#ff88dd' };
+    }
 
     const banner = document.createElement('div');
     banner.className = 'shop-equipped-banner';
@@ -316,6 +324,55 @@ function buildCategoryBanner(category) {
     banner.appendChild(labelEl);
     banner.appendChild(titleEl);
     return banner;
+}
+
+// 6.1.0 — INVENTORY tab body. Read-only display of all 5 equipped
+// slots with rarity tint + bonus label. Empty slots render dim "—".
+function buildInventoryPanel(player) {
+    const wrap = document.createElement('div');
+    wrap.className = 'shop-inventory';
+
+    const intro = document.createElement('p');
+    intro.className = 'shop-help-intro';
+    intro.textContent = 'Items drop from enemy kills (especially bosses). New drops auto-equip if they beat the current slot. Drops that would not upgrade you are suppressed — so anything you see on the field is worth chasing.';
+    wrap.appendChild(intro);
+
+    const equipped = (player && player.equippedItems) || null;
+    for (const slot of SLOT_ORDER) {
+        const it = equipped ? equipped[slot] : null;
+        const row = document.createElement('div');
+        row.className = 'shop-inventory-row';
+        if (it && it.rarityColor) row.style.setProperty('--item-color', it.rarityColor);
+
+        const slotLbl = document.createElement('div');
+        slotLbl.className = 'shop-inventory-slot';
+        slotLbl.textContent = SLOT_LABEL[slot] || slot.toUpperCase();
+        row.appendChild(slotLbl);
+
+        const body = document.createElement('div');
+        body.className = 'shop-inventory-body';
+        if (it) {
+            const name = document.createElement('div');
+            name.className = 'shop-inventory-name';
+            const rarityTag = it.rarityLabel ? `[${it.rarityLabel}] ` : '';
+            name.textContent = rarityTag + (it.name || 'Unknown');
+            if (it.rarityColor) name.style.color = it.rarityColor;
+            body.appendChild(name);
+            const desc = document.createElement('div');
+            desc.className = 'shop-inventory-desc';
+            desc.textContent = `L${it.level} · ${it.bonusLabel || ''}`;
+            body.appendChild(desc);
+        } else {
+            const empty = document.createElement('div');
+            empty.className = 'shop-inventory-empty';
+            empty.textContent = '—';
+            body.appendChild(empty);
+        }
+        row.appendChild(body);
+
+        wrap.appendChild(row);
+    }
+    return wrap;
 }
 
 // 6.0.1 — HELP panel slimmed to the single live resource (gold).

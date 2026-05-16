@@ -9,6 +9,7 @@
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { iconSpriteCache } from '../core/utils.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
+import { getStageLabel as stageLabelFor } from '../core/constants.js';
 
 // Helper: percent-format with 1 decimal of headroom for tiny gains.
 function pct(v) { return `${(v * 100).toFixed(1)}%`; }
@@ -252,11 +253,11 @@ export class StatsOverlay {
         const summary = this.elements.summary;
         if (summary) {
             summary.replaceChildren();
-            // 6.0.1 — LEVEL + XP cells removed (leveling retired in
-            // 6.0.0). Wave is the new progression axis; promoted to
-            // the leftmost cell.
+            // 6.1.0 — STAGE label (S-W format like the HUD shield)
+            // replaces the bare wave number. Gold stays as-is.
+            const wave = ge.game?.currentWave ?? 1;
             const cells = [
-                { label: 'WAVE', value: `${ge.game?.currentWave ?? 1}` },
+                { label: 'STAGE', value: stageLabelFor(wave) },
                 {
                     label: 'GOLD', value: `${ge.game?.money ?? 0}`, icon: 'coin',
                 },

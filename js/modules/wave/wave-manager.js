@@ -5,7 +5,7 @@
  * via `.call(gameEngine)`. This is Phase 3 strangler-fig extraction.
  */
 
-import { GAME_CONFIG, GAME_STATES, MAX_WAVES, getEnemyFiringCooldown } from '../core/constants.js';
+import { GAME_CONFIG, GAME_STATES, MAX_WAVES, WAVES_PER_STAGE, getEnemyFiringCooldown, getStage, getSubWaveIndex, isStageClear, getStageLabel } from '../core/constants.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
 import { linkBosses } from '../enemy/boss-rage.js';
@@ -110,22 +110,17 @@ export function updateWaveSystem() {
         // never actually fired in-game. Now it always does, on every
         // wave clear, before the shop opens.
         const clearedWave = this.game.currentWave;
-        // 5.79.16 — Wave-clear XP bonus scales harder with wave number
-        //   so late waves keep up with the steeper enemy/asteroid
-        //   counts. Was 20 + w×10 (~30 XP wave 1, 220 wave 20). Now
-        //   40 + w×15 (~55 XP wave 1, 340 wave 20).
-        const bonusXP = 40 + clearedWave * 15;
-        const bonusCoins = 50 + clearedWave * 25;
+        // 6.1.0 — Stage clears (every 3rd wave) get a meaty gold bonus
+        // AND the survivor card. Mid-stage waves get a smaller bonus
+        // and no card so the stage clear feels meaningfully bigger.
+        const stageClear = isStageClear(clearedWave);
+        const bonusXP = 40 + clearedWave * 15; // gainExperience is a no-op since 6.0.0; kept for back-compat
+        const baseCoins = 50 + clearedWave * 25;
+        const bonusCoins = stageClear ? baseCoins * 2 : Math.round(baseCoins * 0.6);
         this.player.gainExperience(bonusXP);
         this.game.money += bonusCoins;
-        // 5.101.0 — Survivor cards fire on BOTH platforms now, but only
-        // every 3rd wave (waves 3 / 6 / 9 / …). 30 waves ÷ 3 = exactly
-        // 10 free picks per playthrough. Off-cadence waves clear with
-        // gold + XP only (no powerup pick, no shop-suggest overlay).
-        // The player can still spend SP on the pause-menu POWERUPS tab
-        // at any time, so a slow wave still gives them a way to grow.
         const _mob = isMobile();
-        const survivorWave = (clearedWave % 3) === 0;
+        const survivorWave = stageClear;
 
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
         // the bonus gold + pick info to the message renderer.
@@ -295,15 +290,13 @@ export function resolveMissionOnWaveClear() {
 }
 
 export function showWaveComplete() {
-    // 5.76.1 — wave-clear recap. The subtitle shows the gold earned,
-    // pick count, and mission outcome on a single line so the player
-    // sees their reward before the powerups menu pops. Pulls from
-    // `_waveClearRecap` stash set by the wave-complete branch.
-    // 5.98.0 — Mobile suppresses the SP line (mobile gets the 3-card
-    // overlay instead of SP) and shows "POWERUP UP NEXT" instead.
-    const nextWave = this.game.currentWave + 1;
-    const r = this._waveClearRecap || { bonusCoins: 0, picks: 1, mission: null };
-    const picks = r.picks + (r.mission && r.mission.completed ? 1 : 0);
+    // 6.1.0 — Stage-aware wave-clear banner. Mid-stage clears (1-1 /
+    // 1-2 / 2-1 / etc.) say "WAVE 1-1 CLEAR" with the gold bonus.
+    // Stage clears (1-3 / 2-3 / …) say "STAGE 1 CLEAR" with the
+    // bigger gold bonus + survivor card hint. Mission ✓ / ✗ tag stays.
+    const cleared = this.game.currentWave;
+    const isStage = isStageClear(cleared);
+    const r = this._waveClearRecap || { bonusCoins: 0, picks: 0, mission: null };
     const missionTag = !r.mission
         ? ''
         : r.mission.completed
@@ -311,14 +304,17 @@ export function showWaveComplete() {
             : r.mission.failed
                 ? ` · MISSION ✗`
                 : ` · MISSION —`;
-    const subtitle = isMobile()
-        ? `+${r.bonusCoins}G  ·  POWERUP UP NEXT${missionTag}`
-        : `+${r.bonusCoins}G  ·  +${picks} SP${missionTag}`;
+    const title = isStage
+        ? `STAGE ${getStage(cleared)} CLEAR!`
+        : `WAVE ${getStageLabel(cleared)} CLEAR`;
+    const subtitle = isStage
+        ? `+${r.bonusCoins}G  ·  POWERUP INCOMING${missionTag}`
+        : `+${r.bonusCoins}G${missionTag}`;
     this.waveMessage = {
         active: true,
         startTime: Date.now(),
         duration: 2400,
-        title: 'WAVE COMPLETE!',
+        title,
         subtitle,
     };
 }
@@ -356,13 +352,14 @@ export function startNextWave() {
     const cap = this.player.getEffectiveMaxHealth();
     if (this.player.health > cap) this.player.health = cap;
 
-    // Wave intro: full-screen dark overlay with "WAVE N" — entities warp
-    // in during the dark hold, settling into place as the overlay fades.
+    // Wave intro: full-screen dark overlay with "STAGE X-Y" — entities
+    // warp in during the dark hold, settling into place as the overlay
+    // fades. 6.1.0 — stage-labeled (was just `WAVE N`).
     this.waveMessage = {
         active: true,
         startTime: Date.now(),
         duration: 2800,
-        title: `WAVE ${this.game.currentWave}`,
+        title: `STAGE ${getStageLabel(this.game.currentWave)}`,
         subtitle: this.getWaveSubtitle(this.game.currentWave),
         phase: 'intro',
     };
@@ -389,6 +386,28 @@ export function startNextWave() {
             this.game.state = GAME_STATES.PLAYING;
         }
     }));
+
+    // 6.1.1 — SHIFT dash hint. Fires once per run on wave 1 only,
+    // ~3.5s after the wave-intro splash starts (so the splash text
+    // reads first, then the tip slides in). Mobile gets a different
+    // tip (tap to dash) since mobile doesn't have a keyboard.
+    if (this.game.currentWave === 1 && !this._shownDashHint) {
+        this._shownDashHint = true;
+        const tipTitle = isMobile() ? '★ TAP TO DASH ★' : '★ PRESS SHIFT TO DASH ★';
+        const tipSub = isMobile()
+            ? 'Tap anywhere on the canvas to dodge (i-frames during the burst)'
+            : 'Short burst with i-frames — your dodge button. Cooldown 1.5s.';
+        this._gameTimers.push(new GameTimer(3500, () => {
+            if (this.events?.emit) {
+                this.events.emit('ui:show-message', {
+                    title: tipTitle,
+                    subtitle: tipSub,
+                    duration: 5500,
+                    position: 'top',
+                });
+            }
+        }));
+    }
 }
 
 // 5.75.0 — sub-wave system. Waves are now sequences of enemy groups,
@@ -448,7 +467,7 @@ function spawnSubWave(idx) {
     if (idx > 0 && this.events?.emit) {
         const total = subWaves.length;
         this.events.emit('ui:show-message', {
-            title: `WAVE ${this.game.currentWave} · PHASE ${idx + 1} of ${total}`,
+            title: `STAGE ${getStageLabel(this.game.currentWave)} · PHASE ${idx + 1} of ${total}`,
             subtitle: '',
             duration: 1600,
             position: 'top',
@@ -520,7 +539,7 @@ export function tryAdvanceSubWave() {
             && this.events?.emit) {
             lastToastedSubWave = ev.subWaveIndex;
             this.events.emit('ui:show-message', {
-                title: `WAVE ${this.game.currentWave} · PHASE ${ev.subWaveIndex + 1} of ${totalSubWaves}`,
+                title: `STAGE ${getStageLabel(this.game.currentWave)} · PHASE ${ev.subWaveIndex + 1} of ${totalSubWaves}`,
                 subtitle: '',
                 duration: 1600,
                 position: 'top',
@@ -750,8 +769,8 @@ export function completeWave() {
     this.player.gainExperience(bonusXP);
     this.game.money += bonusCoins;
     this.player.skillPoints += 1;
-    this.queueNotification(`WAVE ${clearedWave} CLEARED`,
-        `+${bonusXP} XP  +${bonusCoins} coins  +1 powerup pick`, 2500);
+    this.queueNotification(`STAGE ${getStageLabel(clearedWave)} CLEARED`,
+        `+${bonusCoins} gold`, 2500);
 
     // Auto-unlock primary weapons at wave milestones
     for (const [id, weapon] of Object.entries(PRIMARY_WEAPONS)) {
@@ -809,7 +828,7 @@ export function startNewWave() {
     this.spawnWaveAsteroids();
 
     // Show wave notification
-        this.events.emit('ui:show-message', { title: `WAVE ${this.game.currentWave}`, subtitle: '', duration: 7000, position: 'top' });
+        this.events.emit('ui:show-message', { title: `STAGE ${getStageLabel(this.game.currentWave)}`, subtitle: '', duration: 7000, position: 'top' });
 
 
     } catch (error) {
