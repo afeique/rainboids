@@ -11,6 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.118.0] - 2026-05-16
+
+### Added — Restored gold pixel scatter, now SPARKLING
+
+The tiny-gold-pixel scatter that flew alongside every gold drop was
+removed in 5.81.1 because the old 30-pixel chaos was visually noisy.
+It's back as a **bounded cosmetic sparkle**:
+
+- 4 + (2 × shapeN) pixels per drop = 6 pixels on small kills, 8 on
+  mid kills, 10 on big multi-kills.
+- Each pixel is worth 1g flat — sparkle is the point, not value.
+  Total drop value still flows through the shape budget (50-300g);
+  pixels add a negligible +6 to +10g per kill.
+
+### Changed — `_drawGoldCoinsCanvas2D` → `_drawGoldSparklesCanvas2D`
+
+Renamed to better describe intent — this is the treasure-dust
+sparkle layer, not just coins.
+
+Two passes per frame now:
+
+**Pass 1 — pixel bodies** (no composite change, fast loop):
+- Each coin picks a shape on reset: **square** (45%), **circle**
+  (40%), **dot** (15% — 1×1 pixel). A burst of 8-10 coins reads as
+  varied glittering treasure dust instead of identical squares.
+- Twinkle modulation: alpha oscillates 0.65 → 1.0 from each coin's
+  own `twinklePhase` + `twinkleSpeed`, so coins SPARKLE in place.
+
+**Pass 2 — additive sparkle pulse** (single composite switch):
+- Only coins currently in the bright window of their twinkle wave
+  (top 30%) draw the additive halo, so typical pass-2 cost is
+  roughly half the active coins.
+- Each pulse is one small `arc` fill in pale gold (`#fff8b0`) at
+  2.5× the coin's pixel size with composite `lighter`.
+
+**Perf**: pass-1 is the existing pixel-art draw; pass-2 adds ~one
+arc per half-coin. Typical 6-20 active pixels per kill burst,
+fading within seconds → per-frame budget well under 0.5ms.
+
 ## [5.117.0] - 2026-05-16
 
 ### Fixed — Health drops are now solid, not see-through

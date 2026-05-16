@@ -553,19 +553,22 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false
 }
 
 // 5.81.1 — Money drops are now a HARD CAP of 3 chunky shape orbs per
-//   drop event, with no pixel-coin swarm. The previous "1 shape + up
-//   to 30 pixel coins" layout (5.79.31) was too visually noisy across
-//   stacked kills — pixel coins read as ambient sparkle and the
-//   distinct geometric shape was lost in the pile. Now each drop is
-//   1-3 distinct geometric pieces that scatter outward (see
-//   gold-shape.js reset() — initial velocity bumped so they fan out
-//   visibly instead of clustering). Shape count is value-driven:
-//     ≤ SHAPE_VALUE_MAX            → 1 shape  (small kill)
-//     ≤ 2 × SHAPE_VALUE_MAX        → 2 shapes (mid kill / boss part)
-//     >  2 × SHAPE_VALUE_MAX       → 3 shapes (big kill / streak)
-//   Total is capped by MONEY_ORB_DROP_BUDGET_MAX. Splitter returns
-//   { shapes, pixels: [] } — pixels stays empty so existing call sites
-//   keep working (the for-of over pixels just no-ops).
+//   drop event. The 5.79.31 "1 shape + up to 30 pixel coins" layout
+//   was too noisy; we capped to 1-3 shapes only.
+// 5.118.0 — Pixel scatter restored as COSMETIC sparkle. Each drop
+//   now also spits 4 + (2 × shapeN) tiny gold pieces at 1g each
+//   (6 pieces on a small kill, up to 10 on a big multi-kill). The
+//   total bonus value per drop is +6 to +10g, negligible vs the
+//   shape budget (50-300g) but the visual flair of "treasure dust
+//   sparkling out alongside the jewels" is what makes a kill feel
+//   like LOOT. The renderer (_drawGoldSparklesCanvas2D) gives each
+//   piece a square/circle/dot shape + sparkle pulse so the scatter
+//   reads as glittering pixels, not just static specks.
+//
+//   Shape count is value-driven:
+//     ≤ SHAPE_VALUE_MAX            → 1 shape  (small kill)  →  6 pixels
+//     ≤ 2 × SHAPE_VALUE_MAX        → 2 shapes (mid kill)    →  8 pixels
+//     >  2 × SHAPE_VALUE_MAX       → 3 shapes (big kill)    → 10 pixels
 function _splitMoneyDrop(total) {
     if (total <= 0) return { shapes: [], pixels: [] };
 
@@ -580,14 +583,15 @@ function _splitMoneyDrop(total) {
     else if (total <= shapeCap * 2)   shapeN = 2;
     else                              shapeN = 3;
 
-    // Distribute the full budget across the chosen shapes; per-shape
-    //   value is clamped to SHAPE_VALUE_MAX inside _evenSplitClamped
-    //   so a 250g drop spreads as 80+80+80+leftover (leftover is just
-    //   dropped — the cap is intentional so no single piece grows
-    //   grotesquely large).
+    // Full budget into shapes (per-shape value capped at SHAPE_VALUE_MAX).
     const shapes = _evenSplitClamped(total, shapeN, shapeCap);
 
-    return { shapes, pixels: [] };
+    // 5.118.0 — Cosmetic pixel scatter: 4 + 2N pieces at 1g each.
+    //   Always 1g per piece so the scatter is "sparkle" not value.
+    const pixelCount = 4 + shapeN * 2;
+    const pixels = new Array(pixelCount).fill(1);
+
+    return { shapes, pixels };
 }
 
 // Like _evenSplit but each slot is hard-capped at `cap`. Any leftover

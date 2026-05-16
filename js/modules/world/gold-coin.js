@@ -79,7 +79,15 @@ export class GoldCoin {
         this.life = LIFE_TICKS;
         this.active = true;
         this.opacity = 1;
-        this.shape = 'dot';
+        // 5.118.0 — Sparkle scatter variety. Each coin picks one of
+        // three pixel-art primitives so a burst of 8-10 coins reads as
+        // glittering treasure dust instead of identical squares. The
+        // renderer (_drawGoldSparklesCanvas2D) draws each per shape.
+        //   square — crisp 1-3px fillRect (the legacy default)
+        //   circle — small filled arc, soft round dot
+        //   dot    — single 1×1 pixel, smallest sparkle
+        const r = Math.random();
+        this.shape = r < 0.45 ? 'square' : r < 0.85 ? 'circle' : 'dot';
         this.color = '#ffd700';
         this.rotation = 0;
         this.rotationSpeed = 0;

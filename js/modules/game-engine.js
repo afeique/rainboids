@@ -1641,9 +1641,10 @@ export class GameEngine {
             this._pushOrbInstance(orb);
         }
         // 5.79.33 — Gold coins are NOT pushed here. They render on
-        //   Canvas2D via _drawGoldCoinsCanvas2D() below as hard
-        //   fillRect pixels, giving the user the crisp point-like look
-        //   that the Gaussian-falloff atlas slot couldn't deliver.
+        //   Canvas2D via _drawGoldSparklesCanvas2D() below (renamed in
+        //   5.118.0) as pixel-perfect squares/circles/dots with a
+        //   twinkle + additive sparkle pulse — the "treasure dust"
+        //   scatter that accompanies every gem drop.
         // 5.117.0 — Gold SHAPES (gems) also dropped from the WebGL
         //   atlas push. They now render on Canvas2D via
         //   _drawGoldShapesCanvas2D() with per-shape jewel colors +
@@ -1727,27 +1728,90 @@ export class GameEngine {
      * silhouette which made them look like soft glowy specks. Hard
      * `fillRect` gives the user "sharp and point-like pixels" they
      * asked for — no halo, no AA, no Gaussian falloff.
+     *
+     * 5.118.0 — Renamed from _drawGoldCoinsCanvas2D to better describe
+     * intent: this is the "treasure dust sparkle" layer. Three shape
+     * variants per coin (square / circle / single pixel) + twinkle
+     * modulation + an additive sparkle pulse during the bright phase
+     * of each coin's twinkle wave. Cheap: the pulse only fires when
+     * sin(twinkle) > 0.7 so most coins skip the extra gradient on any
+     * given frame.
      */
-    _drawGoldCoinsCanvas2D(ctx, vL, vT, vR, vB) {
+    _drawGoldSparklesCanvas2D(ctx, vL, vT, vR, vB) {
         const coins = this.goldCoinPool.activeObjects;
         if (coins.length === 0) return;
+        const t = frameClock.now * 0.001;
         ctx.save();
         ctx.imageSmoothingEnabled = false;
+        // PASS 1 — flat pixel-art bodies. Fast loop, no composite changes.
         for (let i = 0; i < coins.length; i++) {
             const c = coins[i];
             if (!c.active) continue;
             // Viewport cull.
             if (c.x < vL || c.x > vR || c.y < vT || c.y > vB) continue;
-            const alpha = c.opacity ?? 1;
-            if (alpha <= 0) continue;
-            // Hard pixel render — 1×1 at radius<2, 2×2 at radius<2.5,
+            const baseAlpha = c.opacity ?? 1;
+            if (baseAlpha <= 0) continue;
+            // Twinkle: scale alpha by a sine wave from each coin's own
+            // phase + speed (assigned in reset). Brightness oscillates
+            // ~0.55 → 1.0 so coins SPARKLE in place rather than
+            // sitting at constant brightness.
+            const twink = Math.sin(t * (c.twinkleSpeed || 3) + (c.twinklePhase || 0));
+            const flicker = 0.65 + 0.35 * (0.5 + 0.5 * twink);
+            const alpha = baseAlpha * flicker;
+            // Hard pixel render — 1×1 at radius<1.8, 2×2 at radius<2.5,
             // 3×3 at the upper bound. Keeps coins crisp regardless of
-            // the underlying float radius.
-            const size = c.radius >= 2.5 ? 3 : c.radius >= 1.8 ? 2 : 1;
-            const half = size / 2;
+            // float radius. Same size budget for square / circle / dot
+            // so the three shapes feel consistent in scale.
+            const px = c.radius >= 2.5 ? 3 : c.radius >= 1.8 ? 2 : 1;
+            const half = px / 2;
             ctx.globalAlpha = alpha;
             ctx.fillStyle = c.color || '#ffd700';
-            ctx.fillRect(c.x - half, c.y - half, size, size);
+            switch (c.shape) {
+                case 'circle': {
+                    // Tiny filled disk — soft round contrast to the
+                    // square coins.
+                    ctx.beginPath();
+                    ctx.arc(c.x, c.y, Math.max(0.6, px * 0.55), 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                }
+                case 'dot': {
+                    // Smallest sparkle — always 1×1 regardless of
+                    // underlying radius so the variety reads.
+                    ctx.fillRect(c.x | 0, c.y | 0, 1, 1);
+                    break;
+                }
+                case 'square':
+                default: {
+                    ctx.fillRect(c.x - half, c.y - half, px, px);
+                    break;
+                }
+            }
+        }
+        // PASS 2 — additive sparkle pulse. ONE composite switch for the
+        // whole pass, then a quick second loop. Only coins currently
+        // in the bright half of their twinkle wave get the pulse, so
+        // typical pass-2 count is roughly half the active coins.
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < coins.length; i++) {
+            const c = coins[i];
+            if (!c.active) continue;
+            if (c.x < vL || c.x > vR || c.y < vT || c.y > vB) continue;
+            const baseAlpha = c.opacity ?? 1;
+            if (baseAlpha <= 0) continue;
+            const twink = Math.sin(t * (c.twinkleSpeed || 3) + (c.twinklePhase || 0));
+            // Pulse fires only when twinkle is in its bright window
+            // (top 30% of the wave). Most coins skip on any given
+            // frame so the cost is bounded.
+            const pulse = Math.max(0, twink - 0.7) / 0.3;
+            if (pulse <= 0) continue;
+            const px = c.radius >= 2.5 ? 3 : c.radius >= 1.8 ? 2 : 1;
+            const haloR = px * 2.5;
+            ctx.globalAlpha = baseAlpha * pulse * 0.55;
+            ctx.fillStyle = '#fff8b0';
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, haloR, 0, Math.PI * 2);
+            ctx.fill();
         }
         ctx.restore();
     }
@@ -3044,7 +3108,10 @@ export class GameEngine {
                 // 5.79.33 — Gold coins render here as hard fillRect
                 //   pixels (above the world layer, below entities) so
                 //   they read as crisp point-like collectibles.
-                this._drawGoldCoinsCanvas2D(this.ctx, vL, vT, vR, vB);
+                // 5.118.0 — Renamed to _drawGoldSparklesCanvas2D; the
+                //   tiny pieces now sparkle/twinkle with shape variety
+                //   (square / circle / dot) to feel like treasure dust.
+                this._drawGoldSparklesCanvas2D(this.ctx, vL, vT, vR, vB);
                 // 5.117.0 — Gold SHAPES (gems) render on Canvas2D too
                 // so they can carry per-shape colors + a thick black
                 // stroke. Pulled off the WebGL atlas (which couldn't
