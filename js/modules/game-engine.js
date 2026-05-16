@@ -253,47 +253,14 @@ const HEALTH_SHAPE_GEOMETRY = (() => {
         [0, 3, 2, 4], [1, 4, 2, 3], [2, 5, 3, 4], // verticals
     ];
 
-    // 5.116.0 — Stellated octahedron (Stella Octangula). Two
-    // interpenetrating tetrahedra forming an 8-pointed 3D star.
-    // 5.119.0 — BUG FIX. The 5.116 face indices mixed vertices from
-    // both inscribed tetrahedra (e.g. [1, 4, 2] used parity-+ verts
-    // 1, 4 and parity-− vert 2), producing intersecting paper-
-    // windmill cross-sections instead of outward tetrahedral spikes.
-    //
-    // Correct inscribed tetrahedra (cube vertex indices):
-    //   Tet A (even parity, product of signs > 0): { 1, 3, 4, 6 }
-    //   Tet B (odd parity,  product of signs < 0): { 0, 2, 5, 7 }
-    //
-    // Per tet, 4 triangular faces (each opposite one vertex), CCW
-    // when viewed from OUTSIDE. Each face's outward normal points
-    // from its centroid AWAY from the opposite vertex; the CCW
-    // ordering below was derived by cross-product check.
-    const stellaVerts = [
-        [-_CUBE_S, -_CUBE_S, -_CUBE_S], // 0  (−,−,−)  Tet B
-        [ _CUBE_S, -_CUBE_S, -_CUBE_S], // 1  (+,−,−)  Tet A
-        [ _CUBE_S,  _CUBE_S, -_CUBE_S], // 2  (+,+,−)  Tet B
-        [-_CUBE_S,  _CUBE_S, -_CUBE_S], // 3  (−,+,−)  Tet A
-        [-_CUBE_S, -_CUBE_S,  _CUBE_S], // 4  (−,−,+)  Tet A
-        [ _CUBE_S, -_CUBE_S,  _CUBE_S], // 5  (+,−,+)  Tet B
-        [ _CUBE_S,  _CUBE_S,  _CUBE_S], // 6  (+,+,+)  Tet A
-        [-_CUBE_S,  _CUBE_S,  _CUBE_S], // 7  (−,+,+)  Tet B
-    ];
-    const stellaFaces = [
-        // Tet A faces — verts {1, 3, 4, 6}
-        [3, 4, 6],   // opposite 1
-        [1, 6, 4],   // opposite 3
-        [1, 3, 6],   // opposite 4
-        [1, 4, 3],   // opposite 6
-        // Tet B faces — verts {0, 2, 5, 7}
-        [2, 7, 5],   // opposite 0
-        [0, 5, 7],   // opposite 2
-        [0, 7, 2],   // opposite 5
-        [0, 2, 5],   // opposite 7
-    ];
-    // Edges are no longer used by the painter's-algorithm renderer
-    // (5.117.0); each face strokes its own outline. Kept as an empty
-    // array so the geometry shape matches the other entries.
-    const stellaEdges = [];
+    // 5.116.0 — Stellated octahedron was added here as a "3D star".
+    // 5.120.0 — Retired. Even after the 5.119.0 vertex-parity fix
+    // produced a correct stella (two interpenetrating tetrahedra),
+    // the painter's-algorithm renderer drew it as a rotating cube
+    // with star-shaped face cuts rather than the clean outward
+    // 8-point silhouette the design wanted. The pool now keeps only
+    // platonic-style solids that read cleanly under the current
+    // renderer: tetrahedron (pyramid) + dodecahedron.
 
     // 5.116.0 — Regular dodecahedron. 20 vertices, 30 edges, 12
     // pentagonal faces. Vertex layout uses golden ratio coordinates
@@ -359,7 +326,6 @@ const HEALTH_SHAPE_GEOMETRY = (() => {
         octahedron:   { verts: octVerts,     edges: octEdges,    faces: octFaces    },
         tetrahedron:  { verts: tetVerts,     edges: tetEdges,    faces: tetFaces    },
         prism:        { verts: _PRISM_VS,    edges: prismEdges,  faces: prismFaces  },
-        stella:       { verts: stellaVerts,  edges: stellaEdges, faces: stellaFaces },
         dodecahedron: { verts: dodecaVerts,  edges: dodecaEdges, faces: dodecaFaces },
     };
 })();

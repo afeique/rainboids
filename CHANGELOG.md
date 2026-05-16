@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.120.0] - 2026-05-16
+
+### Removed — Stella octangula health-drop shape
+
+The 3D-star shape (stellated octahedron) is gone. Even after the
+5.119.0 vertex-parity fix produced a correct stella geometrically,
+the painter's-algorithm renderer drew it as a rotating cube with
+star-shaped face cuts — not the clean outward 8-point silhouette
+the design wanted. Concave polyhedra need either depth-sorted face
+intersection or per-spike rendering to read cleanly, and either
+approach is too much complexity for a single drop visual.
+
+Health drop pool tightened to two well-known platonic-style
+solids the renderer handles cleanly:
+
+- **pyramid** (tetrahedron)
+- **dodecahedron**
+
+Stella verts / faces / edges and the `stella:` registry entry in
+`HEALTH_SHAPE_GEOMETRY` deleted. The geometry data for cube /
+octahedron / prism stays in the registry — those shapes are
+unused by the current pool but cheap to keep around as inert data
+in case a future pool revival uses them.
+
 ## [5.119.0] - 2026-05-16
 
 ### Fixed — Stella octangula "paper-windmill" glitch

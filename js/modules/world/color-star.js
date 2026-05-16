@@ -113,14 +113,15 @@ export class ColorStar {
             this.density = 0.8;
 
             // 5.79.38 — Health orbs are exclusively 3D solids.
-            // 5.116.0 — Pool tightened to three distinct silhouettes:
-            //   pyramid (tetrahedron), 3D star (stellated octahedron —
-            //   two interpenetrating tetrahedra forming an 8-point star),
-            //   and dodecahedron (12-pentagon polyhedron). All three
-            //   read as "valuable artifact" — pretty, geometric, and
-            //   visually distinct from gold (which is exclusively flat
-            //   shapes) and asteroids (organic blobs).
-            const HEALTH_3D_SHAPES = ['tetrahedron', 'stella', 'dodecahedron'];
+            // 5.116.0 — Pool tightened to three distinct silhouettes.
+            // 5.120.0 — Stella octangula retired. Even with the
+            //   correct vertex parities, the convex-hull silhouette
+            //   reads as a rotating cube with star-shaped face cuts —
+            //   not the clean 8-point star we wanted. Keeping only
+            //   well-known platonic-style solids that the painter's-
+            //   algorithm renderer handles cleanly:
+            //   pyramid (tetrahedron) + dodecahedron.
+            const HEALTH_3D_SHAPES = ['tetrahedron', 'dodecahedron'];
             this.shape = HEALTH_3D_SHAPES[Math.floor(Math.random() * HEALTH_3D_SHAPES.length)];
             this.is3DShape = true;
 
