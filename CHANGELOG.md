@@ -11,6 +11,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.119.0] - 2026-05-16
+
+### Fixed — Stella octangula "paper-windmill" glitch
+
+The 5.116.0 stella geometry had MIXED-PARITY face indices: each
+face used vertices from both inscribed tetrahedra instead of one
+or the other. That produced X-shaped intersecting cross-sections
+(the "two pieces of paper through each other" the player saw)
+instead of two cleanly interpenetrating tetrahedra forming an
+8-pointed star.
+
+Diagnosis: a regular dodecahedron inscribed in a cube uses the 4
+corners with positive sign-product as one tet, the 4 with negative
+as the other. Tet A = {1, 3, 4, 6} (parity +), Tet B = {0, 2, 5, 7}
+(parity −). The 5.116 face list mixed verts across the two sets
+(e.g. `[1, 4, 2]` paired parity-+ verts 1, 4 with parity-− vert 2).
+
+Fix: rebuilt all 8 stella faces with each face's 3 verts drawn from
+ONE tet only. Winding derived per-face by checking that the
+cross-product outward normal points AWAY from the opposite vertex.
+
+Stella edges array zeroed too — unused since the painter's-
+algorithm renderer landed in 5.117.0 (each face strokes its own
+outline).
+
+### Changed — Gold drops mostly gold, jewels rare and worth more
+
+In 5.117.0 every gold shape rolled a random jewel color, which made
+the playfield read as "no gold, just gems" and lost the gold-rush
+treasure feeling.
+
+Reworked as RARE drop variants:
+
+- **85% gold-colored** (`#ffd700`) — the standard piece.
+- **15% jewel** — picks from the 6-color palette (hot pink, ruby
+  red, violet, purple, magenta, rose) AND pays out **3× the
+  normal gold piece's value**. Rarity has REAL meaning now —
+  spotting a jewel in your drop pile is a "yes!" moment.
+
+The 3× value also scales the gem's render radius (radius is
+value-driven in gold-shape.js), so jewels read as visibly bigger
++ brighter on the playfield. Average net gold value per drop:
+~30% above baseline — meaningful but not gameplay-breaking.
+
+Black border applies to both gold and jewel shapes equally for
+consistent background contrast.
+
 ## [5.118.0] - 2026-05-16
 
 ### Added — Restored gold pixel scatter, now SPARKLING

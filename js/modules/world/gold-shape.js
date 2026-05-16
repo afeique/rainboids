@@ -43,11 +43,11 @@ const SHAPE_POOL = [
     'hexagon', 'diamond', 'triangle',
 ];
 
-// 5.117.0 — Jewel palette. Gold drops are now color-varied gems
-// (pink / red / violet / purple / magenta) so they feel like
-// TREASURE scattering rather than a wall of identical yellow.
-// Excludes blue/cyan since those belong to health orbs and we want
-// pickups to be instantly type-readable by color alone.
+// 5.117.0 — Jewel palette. Six rare gem colors that the player sees
+// occasionally alongside the standard gold pieces.
+// 5.119.0 — Reworked as RARE drop variants (was every shape). Gold
+// is the default; jewels roll on ~15% of shapes and are worth 3×.
+// Excludes blue/cyan so health orbs stay type-readable by color.
 const JEWEL_COLORS = [
     '#ff44aa',   // hot pink
     '#ff3366',   // ruby red
@@ -56,6 +56,13 @@ const JEWEL_COLORS = [
     '#ff44dd',   // magenta
     '#ff5577',   // rose
 ];
+
+// 5.119.0 — Jewel drop chance and value multiplier. 15% of gold
+// shapes roll as a jewel and pay out 3× the normal gold piece's
+// value, giving rarity actual MEANING — seeing a jewel hit the
+// pile is a "yes!" moment.
+const JEWEL_ROLL_CHANCE = 0.15;
+const JEWEL_VALUE_MULT = 3;
 
 export class GoldShape {
     constructor() {
@@ -84,16 +91,26 @@ export class GoldShape {
     reset(x, y, value = 10) {
         this.x = x;
         this.y = y;
-        this.value = Math.max(1, value | 0);
+        // 5.119.0 — Jewel rarity roll. 85% of shapes are gold; 15%
+        // roll a jewel color AND get a 3× value bump so picking one
+        // up is a real reward, not just visual decoration. The
+        // value bump scales the size too (radius is value-driven
+        // below) so jewels read as bigger + brighter on the
+        // playfield.
+        const baseValue = Math.max(1, value | 0);
+        this.isJewel = Math.random() < JEWEL_ROLL_CHANCE;
+        if (this.isJewel) {
+            this.value = baseValue * JEWEL_VALUE_MULT;
+            this.color = JEWEL_COLORS[(Math.random() * JEWEL_COLORS.length) | 0];
+        } else {
+            this.value = baseValue;
+            this.color = '#ffd700'; // standard treasure gold
+        }
         this.life = LIFE_TICKS;
         this.active = true;
         this.opacity = 1;
-        // 5.117.0 — Jewel palette + thick black stroke for background
-        // contrast. Each spawn rolls a random color so a 3-shape
-        // burst feels like spilled treasure rather than one giant
-        // gold ingot. Black border (was dark amber) keeps the shape
-        // legible against bright nebulae AND dark voids.
-        this.color = JEWEL_COLORS[(Math.random() * JEWEL_COLORS.length) | 0];
+        // Black border keeps the shape legible against bright
+        // nebulae AND dark voids regardless of fill color.
         this.borderColor = '#000000';
 
         // Pick from the geometric shape pool (5.79.38 — 2D only).

@@ -254,40 +254,46 @@ const HEALTH_SHAPE_GEOMETRY = (() => {
     ];
 
     // 5.116.0 — Stellated octahedron (Stella Octangula). Two
-    // interpenetrating tetrahedra forming an 8-pointed 3D star. All
-    // 8 cube corners are vertices; tet A uses verts 0,3,5,6 and tet
-    // B uses verts 1,2,4,7. Eight triangular faces total (4 from
-    // each tet), each pointing outward — the convex hull silhouette
-    // is a cube but the front-facing edges trace the star points.
+    // interpenetrating tetrahedra forming an 8-pointed 3D star.
+    // 5.119.0 — BUG FIX. The 5.116 face indices mixed vertices from
+    // both inscribed tetrahedra (e.g. [1, 4, 2] used parity-+ verts
+    // 1, 4 and parity-− vert 2), producing intersecting paper-
+    // windmill cross-sections instead of outward tetrahedral spikes.
+    //
+    // Correct inscribed tetrahedra (cube vertex indices):
+    //   Tet A (even parity, product of signs > 0): { 1, 3, 4, 6 }
+    //   Tet B (odd parity,  product of signs < 0): { 0, 2, 5, 7 }
+    //
+    // Per tet, 4 triangular faces (each opposite one vertex), CCW
+    // when viewed from OUTSIDE. Each face's outward normal points
+    // from its centroid AWAY from the opposite vertex; the CCW
+    // ordering below was derived by cross-product check.
     const stellaVerts = [
-        [-_CUBE_S, -_CUBE_S, -_CUBE_S], // 0
-        [ _CUBE_S, -_CUBE_S, -_CUBE_S], // 1
-        [ _CUBE_S,  _CUBE_S, -_CUBE_S], // 2
-        [-_CUBE_S,  _CUBE_S, -_CUBE_S], // 3
-        [-_CUBE_S, -_CUBE_S,  _CUBE_S], // 4
-        [ _CUBE_S, -_CUBE_S,  _CUBE_S], // 5
-        [ _CUBE_S,  _CUBE_S,  _CUBE_S], // 6
-        [-_CUBE_S,  _CUBE_S,  _CUBE_S], // 7
+        [-_CUBE_S, -_CUBE_S, -_CUBE_S], // 0  (−,−,−)  Tet B
+        [ _CUBE_S, -_CUBE_S, -_CUBE_S], // 1  (+,−,−)  Tet A
+        [ _CUBE_S,  _CUBE_S, -_CUBE_S], // 2  (+,+,−)  Tet B
+        [-_CUBE_S,  _CUBE_S, -_CUBE_S], // 3  (−,+,−)  Tet A
+        [-_CUBE_S, -_CUBE_S,  _CUBE_S], // 4  (−,−,+)  Tet A
+        [ _CUBE_S, -_CUBE_S,  _CUBE_S], // 5  (+,−,+)  Tet B
+        [ _CUBE_S,  _CUBE_S,  _CUBE_S], // 6  (+,+,+)  Tet A
+        [-_CUBE_S,  _CUBE_S,  _CUBE_S], // 7  (−,+,+)  Tet B
     ];
-    // Tet A: verts 1, 2, 4, 7 (alternate corners); 4 faces CCW outward.
-    // Tet B: verts 0, 3, 5, 6 (other alternates); 4 faces CCW outward.
     const stellaFaces = [
-        [1, 4, 2], [1, 2, 7], [1, 7, 4], [2, 4, 7], // tet A
-        [0, 5, 3], [0, 3, 6], [0, 6, 5], [3, 5, 6], // tet B
+        // Tet A faces — verts {1, 3, 4, 6}
+        [3, 4, 6],   // opposite 1
+        [1, 6, 4],   // opposite 3
+        [1, 3, 6],   // opposite 4
+        [1, 4, 3],   // opposite 6
+        // Tet B faces — verts {0, 2, 5, 7}
+        [2, 7, 5],   // opposite 0
+        [0, 5, 7],   // opposite 2
+        [0, 7, 2],   // opposite 5
+        [0, 2, 5],   // opposite 7
     ];
-    // Each face is a triangle so edges are the 3 sides per face.
-    // For face-culling correctness, edges only need adjacent face IDs;
-    // for the stella the inner tet structure means most edges are
-    // internal (between two faces of the same tet). We approximate
-    // adjacency by giving each edge two arbitrary face refs from its
-    // own tet — the front-facing test still produces a star-like
-    // edge map because half the faces front-face per orientation.
-    const stellaEdges = [
-        [1, 4, 0, 2], [4, 2, 0, 3], [2, 1, 0, 1], // tet A face 0 edges
-        [1, 7, 1, 2], [7, 4, 1, 2], [2, 7, 1, 3], // tet A remaining
-        [0, 5, 4, 6], [5, 3, 4, 5], [3, 0, 4, 5], // tet B face 4 edges
-        [0, 6, 5, 6], [6, 5, 6, 7], [3, 6, 5, 7], // tet B remaining
-    ];
+    // Edges are no longer used by the painter's-algorithm renderer
+    // (5.117.0); each face strokes its own outline. Kept as an empty
+    // array so the geometry shape matches the other entries.
+    const stellaEdges = [];
 
     // 5.116.0 — Regular dodecahedron. 20 vertices, 30 edges, 12
     // pentagonal faces. Vertex layout uses golden ratio coordinates
