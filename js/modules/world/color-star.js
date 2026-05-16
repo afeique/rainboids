@@ -112,13 +112,15 @@ export class ColorStar {
             this.z = random(1.5, 3.0); // Close and bright
             this.density = 0.8;
 
-            // 5.79.38 — Health orbs are exclusively 3D solids (cube,
-            //   octahedron, tetrahedron, prism). Gold drops moved to
-            //   their own pools in 5.79.32, so this branch only ever
-            //   runs for health pickups now; restricting to 3D shapes
-            //   makes every health orb read as a "solid pickup" with
-            //   a tumbling silhouette.
-            const HEALTH_3D_SHAPES = ['cube', 'octahedron', 'tetrahedron', 'prism'];
+            // 5.79.38 — Health orbs are exclusively 3D solids.
+            // 5.116.0 — Pool tightened to three distinct silhouettes:
+            //   pyramid (tetrahedron), 3D star (stellated octahedron —
+            //   two interpenetrating tetrahedra forming an 8-point star),
+            //   and dodecahedron (12-pentagon polyhedron). All three
+            //   read as "valuable artifact" — pretty, geometric, and
+            //   visually distinct from gold (which is exclusively flat
+            //   shapes) and asteroids (organic blobs).
+            const HEALTH_3D_SHAPES = ['tetrahedron', 'stella', 'dodecahedron'];
             this.shape = HEALTH_3D_SHAPES[Math.floor(Math.random() * HEALTH_3D_SHAPES.length)];
             this.is3DShape = true;
 

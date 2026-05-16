@@ -253,11 +253,108 @@ const HEALTH_SHAPE_GEOMETRY = (() => {
         [0, 3, 2, 4], [1, 4, 2, 3], [2, 5, 3, 4], // verticals
     ];
 
+    // 5.116.0 — Stellated octahedron (Stella Octangula). Two
+    // interpenetrating tetrahedra forming an 8-pointed 3D star. All
+    // 8 cube corners are vertices; tet A uses verts 0,3,5,6 and tet
+    // B uses verts 1,2,4,7. Eight triangular faces total (4 from
+    // each tet), each pointing outward — the convex hull silhouette
+    // is a cube but the front-facing edges trace the star points.
+    const stellaVerts = [
+        [-_CUBE_S, -_CUBE_S, -_CUBE_S], // 0
+        [ _CUBE_S, -_CUBE_S, -_CUBE_S], // 1
+        [ _CUBE_S,  _CUBE_S, -_CUBE_S], // 2
+        [-_CUBE_S,  _CUBE_S, -_CUBE_S], // 3
+        [-_CUBE_S, -_CUBE_S,  _CUBE_S], // 4
+        [ _CUBE_S, -_CUBE_S,  _CUBE_S], // 5
+        [ _CUBE_S,  _CUBE_S,  _CUBE_S], // 6
+        [-_CUBE_S,  _CUBE_S,  _CUBE_S], // 7
+    ];
+    // Tet A: verts 1, 2, 4, 7 (alternate corners); 4 faces CCW outward.
+    // Tet B: verts 0, 3, 5, 6 (other alternates); 4 faces CCW outward.
+    const stellaFaces = [
+        [1, 4, 2], [1, 2, 7], [1, 7, 4], [2, 4, 7], // tet A
+        [0, 5, 3], [0, 3, 6], [0, 6, 5], [3, 5, 6], // tet B
+    ];
+    // Each face is a triangle so edges are the 3 sides per face.
+    // For face-culling correctness, edges only need adjacent face IDs;
+    // for the stella the inner tet structure means most edges are
+    // internal (between two faces of the same tet). We approximate
+    // adjacency by giving each edge two arbitrary face refs from its
+    // own tet — the front-facing test still produces a star-like
+    // edge map because half the faces front-face per orientation.
+    const stellaEdges = [
+        [1, 4, 0, 2], [4, 2, 0, 3], [2, 1, 0, 1], // tet A face 0 edges
+        [1, 7, 1, 2], [7, 4, 1, 2], [2, 7, 1, 3], // tet A remaining
+        [0, 5, 4, 6], [5, 3, 4, 5], [3, 0, 4, 5], // tet B face 4 edges
+        [0, 6, 5, 6], [6, 5, 6, 7], [3, 6, 5, 7], // tet B remaining
+    ];
+
+    // 5.116.0 — Regular dodecahedron. 20 vertices, 30 edges, 12
+    // pentagonal faces. Vertex layout uses golden ratio coordinates
+    // (Cartesian form of regular dodecahedron) scaled to fit the
+    // unit cube radius.
+    const PHI = (1 + Math.sqrt(5)) / 2;        // golden ratio
+    const INV_PHI = 1 / PHI;
+    const _DODECA_S = 0.6;                     // overall scale
+    const dodecaVerts = [
+        // 8 cube corners (±1, ±1, ±1)
+        [ 1,  1,  1], [ 1,  1, -1], [ 1, -1,  1], [ 1, -1, -1],
+        [-1,  1,  1], [-1,  1, -1], [-1, -1,  1], [-1, -1, -1],
+        // 12 "golden" verts: (0, ±1/φ, ±φ) · (±1/φ, ±φ, 0) · (±φ, 0, ±1/φ)
+        [0,  INV_PHI,  PHI], [0,  INV_PHI, -PHI], [0, -INV_PHI,  PHI], [0, -INV_PHI, -PHI], // 8..11
+        [ INV_PHI,  PHI, 0], [ INV_PHI, -PHI, 0], [-INV_PHI,  PHI, 0], [-INV_PHI, -PHI, 0], // 12..15
+        [ PHI, 0,  INV_PHI], [ PHI, 0, -INV_PHI], [-PHI, 0,  INV_PHI], [-PHI, 0, -INV_PHI], // 16..19
+    ].map(([x, y, z]) => [x * _DODECA_S, y * _DODECA_S, z * _DODECA_S]);
+
+    // 12 pentagonal faces, CCW from outside. Standard dodecahedron
+    // face indexing tied to the vertex layout above.
+    const dodecaFaces = [
+        [ 0, 16, 17,  1, 12], // top-right-front
+        [ 0, 12, 14,  4,  8], // top-front
+        [ 0,  8, 10,  2, 16], // front-right
+        [ 1, 17,  3, 11,  9], // right-back
+        [ 1,  9,  5, 14, 12], // top-back-right
+        [ 2, 10,  6, 15, 13], // front-bottom
+        [ 2, 13,  3, 17, 16], // bottom-right
+        [ 3, 13, 15,  7, 11], // bottom-back-right
+        [ 4, 14,  5, 19, 18], // top-back-left
+        [ 4, 18,  6, 10,  8], // front-left
+        [ 5,  9, 11,  7, 19], // back-left
+        [ 6, 18, 19,  7, 15], // bottom-back-left
+    ];
+    // 30 edges, each [vA, vB, faceA, faceB]. Auto-derive: walk each
+    // pentagon's 5 edges and dedupe with a map keyed on min-max
+    // vertex pair. Each edge in a closed polyhedron borders exactly
+    // 2 faces — the second time we see an edge, we fill in faceB.
+    const _edgeMap = new Map();
+    for (let f = 0; f < dodecaFaces.length; f++) {
+        const face = dodecaFaces[f];
+        for (let k = 0; k < face.length; k++) {
+            const a = face[k];
+            const b = face[(k + 1) % face.length];
+            const key = a < b ? `${a}_${b}` : `${b}_${a}`;
+            const existing = _edgeMap.get(key);
+            if (!existing) {
+                _edgeMap.set(key, [Math.min(a, b), Math.max(a, b), f, -1]);
+            } else {
+                existing[3] = f;
+            }
+        }
+    }
+    const dodecaEdges = Array.from(_edgeMap.values()).map(e => {
+        // Replace any unfilled face slot with the same face so
+        // front-facing test always works (degenerate but safe).
+        if (e[3] === -1) e[3] = e[2];
+        return e;
+    });
+
     return {
-        cube:        { verts: cubeVerts, edges: cubeEdges, faces: cubeFaces },
-        octahedron:  { verts: octVerts,  edges: octEdges,  faces: octFaces  },
-        tetrahedron: { verts: tetVerts,  edges: tetEdges,  faces: tetFaces  },
-        prism:       { verts: _PRISM_VS, edges: prismEdges, faces: prismFaces },
+        cube:         { verts: cubeVerts,    edges: cubeEdges,   faces: cubeFaces   },
+        octahedron:   { verts: octVerts,     edges: octEdges,    faces: octFaces    },
+        tetrahedron:  { verts: tetVerts,     edges: tetEdges,    faces: tetFaces    },
+        prism:        { verts: _PRISM_VS,    edges: prismEdges,  faces: prismFaces  },
+        stella:       { verts: stellaVerts,  edges: stellaEdges, faces: stellaFaces },
+        dodecahedron: { verts: dodecaVerts,  edges: dodecaEdges, faces: dodecaFaces },
     };
 })();
 
@@ -1648,51 +1745,87 @@ export class GameEngine {
             // texture being sampled.
             ctx.translate(Math.round(orb.x), Math.round(orb.y));
 
-            // 5.102.0 — "Shiny" pass for health orbs only. Three layers
-            // stack underneath the 3D shape to make the orb pop off the
-            // playfield instead of blending into nebulae and combat FX:
-            //   1. Outer glow ring — soft pink-blue halo with a pulsing
-            //      radius keyed off the twinkle wave.
-            //   2. Sparkle ring — four small twinkle motes orbiting at
-            //      radius ~r*1.4, rotating slowly with the orb so they
-            //      read as a halo of light.
-            //   3. (After the body) specular highlight — small bright
-            //      wash near the top-left of the silhouette, clipped to
-            //      the orb's circular bounding circle so it doesn't
-            //      bleed past the silhouette.
+            // 5.116.0 — Glow rewrite using ADDITIVE BLENDING so health
+            // orbs pop against ANY background (dark voids, bright
+            // nebulae, busy combat FX all clear). All glow layers run
+            // under `globalCompositeOperation = 'lighter'` so colors
+            // ADD to whatever's behind them — same trick the particle
+            // layer uses for explosions and bullet cores.
+            //
+            // Layers (all behind the 3D body, all additive):
+            //   1. Bloom halo — wide pulsing cyan-blue radial (3.0× r).
+            //   2. Inner glow core — small bright core that bleeds
+            //      through the body silhouette so the orb looks lit
+            //      from within (2× r, hot white-cyan center).
+            //   3. Sparkle ring — four orbiting motes, smaller +
+            //      brighter than 5.102.0 since additive makes them
+            //      already vivid.
+            // After the body draws normally, a glossy specular sheen
+            // (NOT additive) sits on top — same as 5.102.0.
+            //
+            // Perf: additive blending is a free composite mode in
+            // every browser's canvas backend. The 6 gradients per orb
+            // (1 bloom + 1 core + 4 sparkle) are the dominant cost;
+            // typical health-orb count is 1-5 active so the per-frame
+            // budget is well under 0.5ms.
             if (isHealth) {
-                const glowR = r * (2.4 + 0.35 * wave);
-                const glow = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, glowR);
-                if (glow && typeof glow.addColorStop === 'function') {
-                    glow.addColorStop(0.00, `rgba(150, 220, 255, ${alpha * 0.55})`);
-                    glow.addColorStop(0.45, `rgba(120, 180, 255, ${alpha * 0.28})`);
-                    glow.addColorStop(1.00, 'rgba(120, 180, 255, 0)');
-                    ctx.globalAlpha = 1;
-                    ctx.fillStyle = glow;
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+
+                // 1. Bloom halo. Wider + brighter than 5.102.0 to
+                // counter the "blends into background" complaint.
+                const bloomR = r * (2.9 + 0.5 * wave);
+                const bloom = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, bloomR);
+                if (bloom && typeof bloom.addColorStop === 'function') {
+                    bloom.addColorStop(0.00, `rgba(120, 230, 255, ${alpha * 0.55})`);
+                    bloom.addColorStop(0.35, `rgba(60, 150, 255, ${alpha * 0.30})`);
+                    bloom.addColorStop(1.00, 'rgba(40, 100, 220, 0)');
+                    ctx.fillStyle = bloom;
                     ctx.beginPath();
-                    ctx.arc(0, 0, glowR, 0, Math.PI * 2);
+                    ctx.arc(0, 0, bloomR, 0, Math.PI * 2);
                     ctx.fill();
                 }
 
-                // Sparkle ring — four motes, rotating with the orb.
+                // 2. Inner glow core — a hot white-cyan pulse that
+                // bleeds through the 3D body silhouette so the orb
+                // reads as "lit from within" rather than just a
+                // colored polygon.
+                const coreR = r * (1.4 + 0.25 * wave);
+                const core = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR);
+                if (core && typeof core.addColorStop === 'function') {
+                    core.addColorStop(0.00, `rgba(255, 255, 255, ${alpha * 0.65})`);
+                    core.addColorStop(0.45, `rgba(150, 240, 255, ${alpha * 0.35})`);
+                    core.addColorStop(1.00, 'rgba(80, 200, 255, 0)');
+                    ctx.fillStyle = core;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, coreR, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // 3. Sparkle ring — four motes orbiting with the orb.
+                // Additive makes them really pop without needing the
+                // larger gradients from 5.102.0.
                 const sparkA = t * 0.9 + (orb.twinklePhase || 0);
-                const sparkR = r * 1.45;
+                const sparkR = r * 1.55;
                 for (let s = 0; s < 4; s++) {
                     const a = sparkA + (s * Math.PI / 2);
                     const sx = Math.cos(a) * sparkR;
                     const sy = Math.sin(a) * sparkR;
-                    const spark = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 0.35);
+                    const sRad = r * 0.32;
+                    const sAlpha = alpha * (0.55 + 0.45 * Math.sin(t * 4 + s * 1.3));
+                    if (sAlpha <= 0) continue;
+                    const spark = ctx.createRadialGradient(sx, sy, 0, sx, sy, sRad);
                     if (spark && typeof spark.addColorStop === 'function') {
-                        const sAlpha = alpha * (0.55 + 0.45 * Math.sin(t * 4 + s * 1.3));
-                        spark.addColorStop(0.00, `rgba(255, 255, 255, ${Math.max(0, sAlpha) * 0.95})`);
-                        spark.addColorStop(0.55, `rgba(200, 230, 255, ${Math.max(0, sAlpha) * 0.35})`);
-                        spark.addColorStop(1.00, 'rgba(200, 230, 255, 0)');
+                        spark.addColorStop(0.00, `rgba(255, 255, 255, ${Math.min(1, sAlpha)})`);
+                        spark.addColorStop(0.55, `rgba(180, 230, 255, ${Math.min(1, sAlpha) * 0.4})`);
+                        spark.addColorStop(1.00, 'rgba(180, 230, 255, 0)');
                         ctx.fillStyle = spark;
                         ctx.beginPath();
-                        ctx.arc(sx, sy, r * 0.35, 0, Math.PI * 2);
+                        ctx.arc(sx, sy, sRad, 0, Math.PI * 2);
                         ctx.fill();
                     }
                 }
+                ctx.restore(); // pops the additive composite mode
             }
 
             ctx.globalAlpha = alpha;

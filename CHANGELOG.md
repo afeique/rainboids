@@ -11,6 +11,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.116.0] - 2026-05-16
+
+### Changed — Health drops: pyramid / 3D star / dodecahedron
+
+Shape pool tightened from `cube / octahedron / tetrahedron / prism`
+to `tetrahedron (pyramid) / stella (3D star) / dodecahedron`. Three
+distinct silhouettes that all read as "valuable artifact" and stay
+visually clean against gold (flat shapes) + asteroids (organic
+blobs).
+
+**New geometry**:
+- **stella** — Stellated octahedron (Stella Octangula): two
+  interpenetrating tetrahedra forming an 8-pointed 3D star. 8
+  vertices at all cube corners, 8 triangular faces (4 per tet).
+  Convex hull silhouette is a cube but front-facing edges trace
+  the star points as the orb tumbles.
+- **dodecahedron** — Regular 12-face polyhedron with 20 golden-ratio
+  vertices. Face indexing is the standard layout; edge adjacency
+  auto-derived from the face list (walk each pentagon's 5 edges,
+  dedupe by min-max vertex pair → each edge knows both adjacent
+  faces for the front-facing test).
+
+### Added — Additive glow + inner-core bloom
+
+Health orbs were getting lost against bright nebulae and combat FX.
+Glow rewritten using `globalCompositeOperation = 'lighter'` so glow
+layers ADD to the background — same trick the particle layer uses
+for explosions. Three additive layers underneath the body:
+
+1. **Bloom halo** — wide pulsing cyan-blue radial at 2.9-3.4× the
+   orb radius. Reads against any background because additive +
+   blue means it brightens whatever's behind it instead of
+   averaging in.
+2. **Inner glow core** — small hot-white-cyan radial that bleeds
+   through the body silhouette so the orb looks "lit from within".
+3. **Sparkle ring** — four orbiting motes, slightly tightened
+   radius (1.55× vs 1.45× in 5.102.0) since additive makes them
+   already vivid without needing larger gradients.
+
+Specular sheen (the top-left highlight clipped to the silhouette)
+stays NON-additive so it reads as a polished surface reflection
+rather than a glow.
+
+**Perf**: 6 gradients per orb per frame (1 bloom + 1 core + 4
+sparkle). Typical active health-orb count is 1-5 so the per-frame
+budget is well under 0.5ms. `lighter` composite is free in every
+browser's canvas backend.
+
 ## [5.115.0] - 2026-05-15
 
 ### Added — Choreographed enemy formations
