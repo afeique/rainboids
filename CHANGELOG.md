@@ -11,6 +11,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.1.2] - 2026-05-16
+
+### Fixed — ESC during powerup-pick / shop-suggest no longer resumes in background
+
+When the survivor-card overlay or post-card shop-suggest overlay was
+visible, pressing ESC popped the wave-clear resume frame and called
+`startNextWave()` while the modal was still on screen — gameplay
+resumed invisibly behind the cards. `togglePause()` in `game-engine.js`
+now short-circuits when either `#wave-pick-overlay` or
+`#shop-suggest-overlay` has `display === 'flex'`. ESC is a no-op
+during the must-pick moment; the player completes the card flow
+the way it was designed.
+
+### Changed — CONTROLS tab cleaned up
+
+Mobile CONTROLS tab had a stale Tips row pointing at the retired
+Auto Power assist ("Open Assists → enable AUTO POWER") and a Combat
+row saying "Fire power weapon — TAP anywhere outside the stick".
+Both updated:
+
+- Mobile Combat: **Fire power → AUTO — fires the moment it's ready /
+  fully charged**.
+- Mobile Movement: new **Dash (i-frames) → TAP anywhere outside the
+  stick. 1.5s cooldown** row.
+- Mobile System: **Buy powerups → Open Shop → POWERUPS tab (gold)**
+  (replaces the SP/pause-menu pointer).
+- Mobile Tips: Auto Power row deleted; new dash-through-bullets tip.
+- Desktop Movement: new **Dash (i-frames) → SHIFT** row.
+
+Shop HELP panel intro text updated: was "powerups in the pause-menu
+POWERUPS tab" (stale since 6.1.0); now "POWERUPS, per-weapon upgrades,
+or browse your equipped INVENTORY" — matches the unified shop layout.
+
+### Changed — Music library: drop 4 tracks, restore 10 Karl Casey tracks
+
+Dropped from the playlist (4 tracks): **Longia**, **Tetrapyramid**,
+**Chipper to Meet You**, **Jewel of Light**.
+
+Restored from `b3a4f61^` (pre-5.40.0 state) — **10 royalty-free tracks
+by Karl Casey @ White Bat Audio**: Aura, Beyond the Shadows,
+Dangerous, Inferno, Iridium, Legend, Midnight, Out for Blood,
+Salvation, World Eater.
+
+Net: playlist grows 64 → 73 tracks. Karl Casey credits restored to
+README in three places (top features list, Audio section detail, new
+**Music Credits** section near the bottom with all 10 track names and
+support links).
+
+`playlist-data.js` regenerated via `npm run generate-playlist` —
+artist attribution (`"artist": "Karl Casey"` vs `"afeique"`) comes
+from ID3 tags so the metadata is correct without manual fixup.
+
+---
+
 ## [6.1.1] - 2026-05-16
 
 ### Fixed — Overflow → energy tank actually does something now

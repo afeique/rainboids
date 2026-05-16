@@ -1,5 +1,5 @@
 // Auto-generated playlist data
-// Generated on 2026-05-02T22:51:54.584Z
+// Generated on 2026-05-16T21:51:10.572Z
 
 export const PLAYLIST_DATA = [
   {
@@ -23,6 +23,11 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
+    "path": "music/aura.mp3",
+    "name": "Aura",
+    "artist": "Karl Casey"
+  },
+  {
     "path": "music/bat-caves-icy-glades.mp3",
     "name": "Bat Caves, Icy Glades",
     "artist": "afeique"
@@ -31,6 +36,11 @@ export const PLAYLIST_DATA = [
     "path": "music/between-four-seasons.mp3",
     "name": "Between Four Seasons",
     "artist": "afeique"
+  },
+  {
+    "path": "music/beyond-shadows.mp3",
+    "name": "Beyond the Shadows",
+    "artist": "Karl Casey"
   },
   {
     "path": "music/blood-ties.mp3",
@@ -50,11 +60,6 @@ export const PLAYLIST_DATA = [
   {
     "path": "music/china-doll.mp3",
     "name": "China Doll",
-    "artist": "afeique"
-  },
-  {
-    "path": "music/chipper-to-meet-you.mp3",
-    "name": "Chipper to Meet You",
     "artist": "afeique"
   },
   {
@@ -86,6 +91,11 @@ export const PLAYLIST_DATA = [
     "path": "music/cyber-fox.mp3",
     "name": "Cyber Fox",
     "artist": "afeique"
+  },
+  {
+    "path": "music/dangerous.mp3",
+    "name": "Dangerous",
+    "artist": "Karl Casey"
   },
   {
     "path": "music/dark-lightning.mp3",
@@ -173,9 +183,19 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/jewel-of-light.mp3",
-    "name": "Jewel of Light",
-    "artist": "afeique"
+    "path": "music/inferno.mp3",
+    "name": "Inferno",
+    "artist": "Karl Casey"
+  },
+  {
+    "path": "music/iridium.mp3",
+    "name": "Iridium",
+    "artist": "Karl Casey"
+  },
+  {
+    "path": "music/legends.mp3",
+    "name": "Legend",
+    "artist": "Karl Casey"
   },
   {
     "path": "music/lightning-step.mp3",
@@ -198,11 +218,6 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/longia.mp3",
-    "name": "Longia",
-    "artist": "afeique"
-  },
-  {
     "path": "music/make-it-be.mp3",
     "name": "Make It Be",
     "artist": "afeique"
@@ -211,6 +226,11 @@ export const PLAYLIST_DATA = [
     "path": "music/melodia-nostalgíque.mp3",
     "name": "Melodia Nostalgíque",
     "artist": "afeique"
+  },
+  {
+    "path": "music/midnight.mp3",
+    "name": "Midnight",
+    "artist": "Karl Casey"
   },
   {
     "path": "music/never-enough.mp3",
@@ -226,6 +246,11 @@ export const PLAYLIST_DATA = [
     "path": "music/not-here-nor-there.mp3",
     "name": "Not Here nor There",
     "artist": "afeique"
+  },
+  {
+    "path": "music/out-for-blood.mp3",
+    "name": "Out for Blood",
+    "artist": "Karl Casey"
   },
   {
     "path": "music/over-the-horizon.mp3",
@@ -246,6 +271,11 @@ export const PLAYLIST_DATA = [
     "path": "music/rainbow-vision.mp3",
     "name": "Rainbow Vision",
     "artist": "afeique"
+  },
+  {
+    "path": "music/salvation.mp3",
+    "name": "Salvation",
+    "artist": "Karl Casey"
   },
   {
     "path": "music/sigma-tau.mp3",
@@ -298,11 +328,6 @@ export const PLAYLIST_DATA = [
     "artist": "afeique"
   },
   {
-    "path": "music/tetrapyramid.mp3",
-    "name": "Tetrapyramid",
-    "artist": "afeique"
-  },
-  {
     "path": "music/thats-not-samus.mp3",
     "name": "That's Not Samus",
     "artist": "afeique"
@@ -326,6 +351,11 @@ export const PLAYLIST_DATA = [
     "path": "music/voices-in-my-head.mp3",
     "name": "Voices in My Head",
     "artist": "afeique"
+  },
+  {
+    "path": "music/world-eater.mp3",
+    "name": "World Eater",
+    "artist": "Karl Casey"
   },
   {
     "path": "music/zeta-nine.mp3",

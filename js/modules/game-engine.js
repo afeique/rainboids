@@ -3572,6 +3572,20 @@ export class GameEngine {
     isStatsScreenOpen() { return !!(this._statsOverlay && this._statsOverlay.isOpen()); }
 
     togglePause() {
+        // 6.1.2 — Guard against ESC resuming while a modal "must-pick"
+        // overlay is still on screen. The survivor-card overlay (wave-
+        // pick) and the post-card shop-suggest overlay BOTH leave the
+        // game in GAME_STATES.PAUSED until the player picks / skips —
+        // pressing ESC during either would pop the resume frame and
+        // call startNextWave() with the overlay still visible, which
+        // resumed gameplay invisibly in the background. Short-circuit
+        // the toggle when either overlay is visible.
+        const wavePickOverlay = document.getElementById('wave-pick-overlay');
+        const shopSuggestOverlay = document.getElementById('shop-suggest-overlay');
+        const wavePickOpen = wavePickOverlay && wavePickOverlay.style.display === 'flex';
+        const shopSuggestOpen = shopSuggestOverlay && shopSuggestOverlay.style.display === 'flex';
+        if (wavePickOpen || shopSuggestOpen) return;
+
         // 5.99.0 — Explicit show/hide of the pause overlay (not via
         // uiManager.togglePause()'s display-string toggle). Pre-5.99 the
         // toggle relied on `style.display === 'flex'` round-tripping,

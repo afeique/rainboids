@@ -383,7 +383,7 @@ function buildHelpPanel() {
 
     const intro = document.createElement('p');
     intro.className = 'shop-help-intro';
-    intro.textContent = 'Earn gold during waves, then spend it on weapon upgrades here and powerups in the pause-menu POWERUPS tab. The shop opens automatically after each wave clears — or hit the SHOP button at any time.';
+    intro.textContent = 'Earn gold during waves, then spend it here on POWERUPS, per-weapon upgrades, or browse your equipped INVENTORY. The shop opens automatically after each stage clears — or hit the SHOP button at any time.';
     wrap.appendChild(intro);
 
     wrap.appendChild(buildHelpEntry({

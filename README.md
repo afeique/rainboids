@@ -63,7 +63,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Diablo-style stats screen** (5.79.0): press \` to pause and inspect vitals / offense / economy / world-scaling with hover tooltips explaining every formula. (6.0.0 — level / XP rows removed since leveling is retired.)
 - **Persistent volume settings** (5.79.0): music + SFX sliders save to localStorage.
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
-- **68 background music tracks** spanning chiptune, synthwave, and electronic
+- **73 background music tracks** spanning chiptune, synthwave, and electronic — including 10 royalty-free tracks graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/) ([YouTube](https://www.youtube.com/@WhiteBatAudio))
 - **Curated futuristic SFX library** — every sound is a 2–3 layer SFXR composition (sub-bass + mid carrier + HPF transient), pre-rendered to 47 WAVs; granular hit sounds per enemy bullet pattern, per player primary weapon, and per enemy-type destruction (10 ships, each with a unique destruction signature), plus per-skill activation accents and a UI click tick
 - **Modular ES6 architecture** — domain managers, extracted renderers, state machine, event bus, and frame-counted timers, built with Vite
 
@@ -313,7 +313,7 @@ Boss-tier TITANs at waves 5/10/15/20/25/30 receive an HP/speed multiplier on top
 - Powerup indicators with remaining time, stack count, and name
 
 ### Audio
-- **68 background music tracks** spanning chiptune, synthwave, and electronic
+- **73 background music tracks** spanning chiptune, synthwave, and electronic — including 10 royalty-free tracks graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/) ([YouTube](https://www.youtube.com/@WhiteBatAudio))
 - **Curated futuristic SFX library** — 47 hand-tuned multi-layer WAVs (~1.5 MB), pre-rendered offline from stacked SFXR voices (sub-bass body + mid carrier + HPF brightness layer) and decoded once via WebAudio. Covers fire, hits, pickups, destructions (one per enemy type), defense-skill activations, and UI clicks — every sound in the game is SFXR-generated, no third-party sample packs.
 - Built-in music player with playlist support
 - Individual sound effect toggles and volume control
@@ -604,6 +604,32 @@ For a quick summary of recent changes, see the latest entries in [CHANGELOG.md](
 
 ---
 
+## Music Credits
+
+Most tracks are original compositions by **afeique**. The remaining 10 tracks are royalty-free music graciously provided by **Karl Casey @ White Bat Audio**:
+
+- Aura
+- Beyond the Shadows
+- Dangerous
+- Inferno
+- Iridium
+- Legend
+- Midnight
+- Out for Blood
+- Salvation
+- World Eater
+
+Support White Bat Audio:
+
+- [Bandcamp](https://karlcasey.bandcamp.com/)
+- [YouTube](https://www.youtube.com/@WhiteBatAudio)
+
+Karl Casey's music is used under the royalty-free license documented on the White Bat Audio channel.
+
+---
+
 ## License
 
 This project builds upon the original [Monolithic Rainboids](https://github.com/afeique/rainboids-monolithic) with extensive enhancements and modularization.
+
+Music by Karl Casey @ White Bat Audio is included under his royalty-free license.
