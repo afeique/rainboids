@@ -5,4 +5,4 @@
 // 5.105.0 — Version drifted (was 5.100.3 while the build was at 5.104.0).
 // Now kept in sync with /VERSION on every release; see the bump section
 // in CLAUDE.md.
-export const VERSION = '5.121.0';
+export const VERSION = '6.1.1';
