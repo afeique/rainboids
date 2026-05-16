@@ -222,36 +222,9 @@ const HEALTH_SHAPE_GEOMETRY = (() => {
         [1, 2, 0, 3], [1, 3, 1, 3], [2, 3, 2, 3],
     ];
 
-    // Triangular prism — top + bottom equilateral triangles, 3 rect sides.
-    //   Top triangle: v0, v1, v2 at y = -h
-    //   Bottom triangle: v3, v4, v5 at y = +h
-    const _PRISM_H = 0.85;
-    const _PRISM_R = 0.65;
-    const _PRISM_VS = [];
-    for (let i = 0; i < 3; i++) {
-        const a = -Math.PI / 2 + (i * 2 * Math.PI) / 3;
-        _PRISM_VS.push([Math.cos(a) * _PRISM_R, -_PRISM_H, Math.sin(a) * _PRISM_R]);
-    }
-    for (let i = 0; i < 3; i++) {
-        const a = -Math.PI / 2 + (i * 2 * Math.PI) / 3;
-        _PRISM_VS.push([Math.cos(a) * _PRISM_R,  _PRISM_H, Math.sin(a) * _PRISM_R]);
-    }
-    // Faces: top, bottom, 3 sides. CCW from outside.
-    //   face 0: top   (y=-h, viewed from -y)
-    //   face 1: bot   (y=+h, viewed from +y)
-    //   faces 2/3/4: sides (between vertical edges 0-3, 1-4, 2-5)
-    const prismFaces = [
-        [0, 2, 1],         // top (CCW viewed from -y)
-        [3, 4, 5],         // bottom (CCW viewed from +y)
-        [0, 1, 4, 3],      // side between v0/v1 (and below v3/v4)
-        [1, 2, 5, 4],      // side between v1/v2
-        [2, 0, 3, 5],      // side between v2/v0
-    ];
-    const prismEdges = [
-        [0, 1, 0, 2], [1, 2, 0, 3], [2, 0, 0, 4], // top tri
-        [3, 4, 1, 2], [4, 5, 1, 3], [5, 3, 1, 4], // bottom tri
-        [0, 3, 2, 4], [1, 4, 2, 3], [2, 5, 3, 4], // verticals
-    ];
+    // 5.121.0 — Triangular prism geometry retired (never used; pool
+    // doesn't need an elongated "battery" silhouette alongside the
+    // four platonic-style solids).
 
     // 5.116.0 — Stellated octahedron was added here as a "3D star".
     // 5.120.0 — Retired. Even after the 5.119.0 vertex-parity fix
@@ -325,7 +298,6 @@ const HEALTH_SHAPE_GEOMETRY = (() => {
         cube:         { verts: cubeVerts,    edges: cubeEdges,   faces: cubeFaces   },
         octahedron:   { verts: octVerts,     edges: octEdges,    faces: octFaces    },
         tetrahedron:  { verts: tetVerts,     edges: tetEdges,    faces: tetFaces    },
-        prism:        { verts: _PRISM_VS,    edges: prismEdges,  faces: prismFaces  },
         dodecahedron: { verts: dodecaVerts,  edges: dodecaEdges, faces: dodecaFaces },
     };
 })();

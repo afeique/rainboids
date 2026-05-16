@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.121.0] - 2026-05-16
+
+### Changed — Health drop pool expanded to four solids
+
+Added cube + octahedron back to the rotation. They were already
+defined in `HEALTH_SHAPE_GEOMETRY` as inert data and render cleanly
+under the painter's-algorithm path. Prism (the triangular battery-
+shape) deleted entirely — never wanted for this pool.
+
+Final health drop pool — 4 well-known platonic-style solids:
+
+- **tetrahedron** (pyramid)
+- **cube**
+- **octahedron**
+- **dodecahedron**
+
+Prism geometry data (`_PRISM_VS`, `prismFaces`, `prismEdges`) +
+registry entry removed from `HEALTH_SHAPE_GEOMETRY`. The
+background-star renderer's atlas still lists `prism` since it
+serves decorative parallax stars — that's a separate consumer
+and stays untouched.
+
 ## [5.120.0] - 2026-05-16
 
 ### Removed — Stella octangula health-drop shape
