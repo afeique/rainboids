@@ -235,13 +235,13 @@ function _buildAssistsTab() {
     const mobile = isMobile();
     const desktopRows = [
         { id: 'assist-aim-assist', title: 'Aim Assist',
-          desc: 'When the reticle is near a target, it snaps onto the target.' },
+          desc: 'Reticle snaps onto nearby targets.' },
         { id: 'assist-auto-aim', title: 'Auto Aim',
-          desc: 'Automatically tracks the nearest target. Overrides mouse aim.' },
+          desc: 'Automatically aim at the nearest target.' },
         { id: 'assist-auto-fire', title: 'Auto Fire',
-          desc: 'Fires the primary weapon automatically.' },
+          desc: 'Fire primary weapon automatically.' },
         { id: 'assist-auto-power', title: 'Auto Power',
-          desc: "Fire the power weapon automatically when it's fully charged." },
+          desc: "Fire power weapon automatically when it's charged." },
     ];
     const mobileRows = [
         { id: 'assist-auto-power', title: 'Auto Power',
