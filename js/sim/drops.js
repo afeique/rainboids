@@ -218,10 +218,14 @@ export function updateDrop(drop, ctx, _events) {
     // reward arc. Drops now require positional engagement on both
     // platforms; mobile players collect via enemies that come close
     // to attack the stationary ship.
-    const farR = DROP_MAGNET_FAR_RADIUS;
-    const nearR = DROP_MAGNET_NEAR_RADIUS;
-    const farF = DROP_MAGNET_FAR_FORCE;
-    const nearF = DROP_MAGNET_NEAR_FORCE;
+    // 6.0.0 — TRIAGE_NET powerup widens the health-orb magnet by
+    // ctx.healthMagnetScale (set by color-star.js from the player's
+    // powerup stacks). 1.0 = no powerup, 2.0 = full TRIAGE_NET.
+    const magScale = (isHealth && ctx.healthMagnetScale) ? ctx.healthMagnetScale : 1;
+    const farR = DROP_MAGNET_FAR_RADIUS * magScale;
+    const nearR = DROP_MAGNET_NEAR_RADIUS * magScale;
+    const farF = DROP_MAGNET_FAR_FORCE * magScale;
+    const nearF = DROP_MAGNET_NEAR_FORCE * magScale;
     if (isHealth && dist > 1 && dist < farR) {
         const inv = 1 / dist;
         const farFactor = (farR - dist) / farR;

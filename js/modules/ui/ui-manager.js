@@ -1,6 +1,6 @@
 // UI management for overlays, messages, and interface elements
 import { MusicPlayer } from '../audio/music-player.js';
-import { POWERUP_TYPES } from '../world/powerup.js';
+import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
 import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
 import { loadSettings, saveSettings } from '../core/storage.js';
 import { renderIconHTML } from './icons.js';
@@ -1042,25 +1042,22 @@ export class UIManager {
         this.elements.powerupsItemsList = list;
 
         const player = this.gameEngine.player;
-        // 5.79.0 — sub-tab UI removed; show every powerup in one list.
-
-        // 5.73.0 — POWERUPS tab moved out of the shop into here. Top
-        // banner shows the player's unspent Pick budget; each card
-        // gets a "+1 Pick" button that spends a pick and adds a stack.
-        const picks = player.skillPoints || 0;
+        // 6.0.0 — Powerups are bought with GOLD. SP retired alongside
+        // player leveling. Top banner shows the player's gold balance.
+        const gold = (this.gameEngine.game && this.gameEngine.game.money) | 0;
         const banner = document.createElement('div');
         banner.className = 'powerups-pick-banner';
         const bannerSigil = document.createElement('span');
         bannerSigil.className = 'powerups-pick-sigil';
-        bannerSigil.textContent = '+';
+        bannerSigil.textContent = '$';
         banner.appendChild(bannerSigil);
         const bannerCount = document.createElement('span');
         bannerCount.className = 'powerups-pick-count';
-        bannerCount.textContent = `${picks}`;
+        bannerCount.textContent = `${gold}`;
         banner.appendChild(bannerCount);
         const bannerLabel = document.createElement('span');
         bannerLabel.className = 'powerups-pick-label';
-        bannerLabel.textContent = picks === 1 ? 'SP AVAILABLE' : 'SP AVAILABLE';
+        bannerLabel.textContent = 'GOLD AVAILABLE';
         banner.appendChild(bannerLabel);
         list.appendChild(banner);
 
@@ -1093,20 +1090,15 @@ export class UIManager {
                 card.style.borderColor = '#00ccff';
                 card.style.boxShadow = '0 0 14px rgba(0, 204, 255, 0.45)';
             }
-            // Card-wide click behaves like the +1 button. Disabled at cap
-            // so maxed cards don't accept clicks.
+            // Card-wide click behaves like the buy button. Disabled at
+            // cap so maxed cards don't accept clicks.
             const cardCap = cfg.maxStacks || 99;
             const cardAtCap = stacks >= cardCap;
-            // 5.79.54 — Stack-aware SP cost. cost = base + stacks × inc.
-            //   Initial buy is `spCost` (3 for everything in the
-            //   refreshed POWERUP_TYPES); each subsequent stack adds
-            //   `spCostIncrement` (default 2). Mirrors the shop-side
-            //   formula in shop-manager.buyShopItem so the two
-            //   pricing surfaces agree.
-            const cardSpCostBase = cfg.spCost || 1;
-            const cardSpCostInc  = cfg.spCostIncrement || 0;
-            const cardSpCost     = cardSpCostBase + stacks * cardSpCostInc;
-            const cardCanAfford = picks >= cardSpCost;
+            // 6.0.0 — Stack-aware GOLD cost via powerupGoldCost (see
+            // world/powerup.js). Same formula the buyer + button label
+            // use so the displayed price matches what gets deducted.
+            const cardGoldCost  = powerupGoldCost(cfg, stacks);
+            const cardCanAfford = gold >= cardGoldCost;
             if (cardCanAfford && !cardAtCap) {
                 card.classList.add('powerup-card--interactive');
                 card.addEventListener('click', (e) => {
@@ -1152,17 +1144,14 @@ export class UIManager {
             right.textContent = owned ? `×${stacks} / ${cap}` : `0 / ${cap}`;
             card.appendChild(right);
 
-            // Buy button — shows the stack-aware cost (e.g. "3 SP" at
-            //   stack 0, "5 SP" at stack 1, etc.). Disabled at cap or
-            //   when the player can't afford.
+            // Buy button — shows the stack-aware gold cost (e.g.
+            //   "1500 G" at stack 0, "2350 G" at stack 1, etc.).
+            //   Disabled at cap or when the player can't afford.
             const buyBtn = document.createElement('button');
             buyBtn.type = 'button';
             buyBtn.className = 'powerup-card-buy';
-            // 5.79.54 — Reuses the cardSpCost computed above so the
-            //   button label and the affordability check both share
-            //   the same scaled value.
-            buyBtn.textContent = atCap ? 'MAX' : `${cardSpCost} SP`;
-            buyBtn.disabled = atCap || picks < cardSpCost;
+            buyBtn.textContent = atCap ? 'MAX' : `${cardGoldCost} G`;
+            buyBtn.disabled = atCap || gold < cardGoldCost;
             buyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
@@ -1174,27 +1163,19 @@ export class UIManager {
         }
     }
 
-    // 5.73.0 — Buy a powerup by spending one Pick. Mirrors the shop
-    // PICKS-currency path (see shop-manager.buyShopItem) but lives on
-    // the pause menu's POWERUPS tab. Re-renders the list after success.
+    // 6.0.0 — Buy a powerup by spending GOLD. SP retired alongside
+    //   player leveling. Re-renders the list after success.
     purchasePowerup(type) {
         const ge = this.gameEngine;
-        if (!ge || !ge.player) return false;
-        const have = ge.player.skillPoints || 0;
+        if (!ge || !ge.player || !ge.game) return false;
         const cfg = POWERUP_TYPES[type];
         if (!cfg) return false;
-        // Read stacks BEFORE the cost calculation — the cost we charge
-        //   is for buying the *next* stack on top of what's already owned.
         const cap = cfg.maxStacks || 99;
         const stacks = ge.player.getPowerupStacks ? ge.player.getPowerupStacks(type) : 0;
         if (stacks >= cap) return false;
-        // 5.79.54 — Stack-aware SP cost. Same formula the render path
-        //   uses; deducted amount matches the displayed amount.
-        const baseCost = cfg.spCost || 1;
-        const incCost  = cfg.spCostIncrement || 0;
-        const cost = baseCost + stacks * incCost;
-        if (have < cost) return false;
-        ge.player.skillPoints = have - cost;
+        const cost = powerupGoldCost(cfg, stacks);
+        if ((ge.game.money | 0) < cost) return false;
+        ge.game.money -= cost;
         ge.player.addPowerup(type, { ...cfg, duration: Infinity }, true);
         if (ge.events) ge.events.emit('audio:coin');
         this.renderPowerupsOverlay();

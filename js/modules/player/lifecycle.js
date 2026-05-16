@@ -191,6 +191,15 @@ export function _consumeTank() {
     this.player.health = this.player.getEffectiveMaxHealth();
     this.events.emit('audio:coin');
     this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
+
+    // 6.0.0 — SALVAGE_PLATING. When a tank pops, salvage spawns a
+    // bonus health orb at the player's position so the player can
+    // recover faster from the dramatic moment.
+    const salvageStacks = this.player.getPowerupStacks
+        ? this.player.getPowerupStacks('SALVAGE_PLATING') : 0;
+    if (salvageStacks > 0 && typeof this.createHealthOrb === 'function') {
+        this.createHealthOrb(this.player.x, this.player.y);
+    }
     return true;
 }
 
@@ -230,7 +239,11 @@ export function applyHealthOrbToTanks(orbAmount, amountHealed) {
 export function accumulateOverflowToTank(credit) {
     if (!(credit > 0) || !this.player) return;
     if (this.player._tankProgress === undefined) this.player._tankProgress = 0;
-    this.player._tankProgress += credit / TANK_OVERFLOW_HP;
+    // 6.0.0 — BLOOD_BANK doubles overflow→tank credit.
+    const bloodBankStacks = this.player.getPowerupStacks
+        ? this.player.getPowerupStacks('BLOOD_BANK') : 0;
+    const effectiveCredit = bloodBankStacks > 0 ? credit * 2 : credit;
+    this.player._tankProgress += effectiveCredit / TANK_OVERFLOW_HP;
 
     while (this.player._tankProgress >= 1 && this.healthTanks < MAX_HEALTH_TANKS) {
         this.healthTanks++;

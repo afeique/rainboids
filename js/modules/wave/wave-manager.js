@@ -1322,7 +1322,7 @@ export function openWavePickOverlay() {
         card.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
-            // Apply the pick — free (no SP cost on wave-clear).
+            // Apply the pick — free (no gold cost on wave-clear).
             player.addPowerup(type, { ...cfg, duration: Infinity }, true);
             if (this.events?.emit) {
                 this.events.emit('audio:powerup');
@@ -1333,6 +1333,33 @@ export function openWavePickOverlay() {
                     position: 'top',
                 });
             }
+
+            // 6.0.0 — Boss-wave bonus: on top of the survivor card the
+            // player just picked, auto-grant ONE additional random
+            // non-maxed powerup. The pick is silent (no second overlay)
+            // so the flow stays brisk; the toast advertises the bonus.
+            const justCleared = (this.game && this.game.currentWave) | 0;
+            if (justCleared > 0 && isBossWave(justCleared)) {
+                const remaining = Object.entries(POWERUP_TYPES).filter(([t2, c2]) => {
+                    if (c2.hidden) return false;
+                    const cap2 = c2.maxStacks || 99;
+                    const stk = player.getPowerupStacks ? player.getPowerupStacks(t2) : 0;
+                    return stk < cap2;
+                });
+                if (remaining.length > 0) {
+                    const [bonusType, bonusCfg] = remaining[(Math.random() * remaining.length) | 0];
+                    player.addPowerup(bonusType, { ...bonusCfg, duration: Infinity }, true);
+                    if (this.events?.emit) {
+                        this.events.emit('ui:show-message', {
+                            title: '★ BOSS BONUS ★',
+                            subtitle: `+1 ${bonusCfg.displayName || bonusCfg.name || bonusType}`,
+                            duration: 1800,
+                            position: 'top',
+                        });
+                    }
+                }
+            }
+
             // 5.101.0 — chain into the shop-suggest overlay (3 picks
             // tailored to the equipped weapons) before starting the
             // next wave. If the player has no gold or no eligible

@@ -157,7 +157,6 @@ export function handleCollisions() {
                 //   inflation; STORM_NEEDLES on a single rock used to
                 //   yield 200+ XP/sec just from hit-tick spam). Per-
                 //   destroy XP bumped to compensate (see destroyAsteroid).
-                this.player.gainExperience(1);
 
                 // Impart momentum from bullet
                 ast.vel.x += bullet.vel.x * COLLISION_CONFIG.BULLET_KNOCKBACK;
@@ -207,7 +206,6 @@ export function handleCollisions() {
                     // 5.79.16 — Asteroid destroy XP +12 (was implicitly 0
                     //   on this inlined bullet path; AOE paths route
                     //   through destroyAsteroid which now grants the same).
-                    this.player.gainExperience(12);
                     if (ast.baseRadius <= (GAME_CONFIG.MIN_AST_RAD + 5)) {
                         // Small asteroid destroyed — death flash then cleanup
                         ast._deathFlash = 6;
@@ -388,12 +386,50 @@ export function handleCollisions() {
             // Uses larger radius + predictive collision to prevent fast orbs from passing through player
             if (colorStar.isCollectible && starCollision(this.player, colorStar)) {
                 if (colorStar.starType === 'health') {
-                    // Health orb collected - use the orb's individual heal amount
-                    const baseHealAmount = colorStar.healAmount || GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN; // Fallback for legacy orbs
-                    const healAmount = this.player.getEffectiveHealthOrbHealing(baseHealAmount);
+                    // Health orb collected - use the orb's individual heal amount.
+                    const baseHealAmount = colorStar.healAmount || GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN;
+                    let healAmount = this.player.getEffectiveHealthOrbHealing(baseHealAmount);
+                    // 6.0.1 — FIELD_SURGEON: +50% heal per orb, ADDITIVE
+                    // with FIELD_RATIONS (was multiplicative pre-6.0.1).
+                    // Combined ceiling 2.5× the raw orb value — RATIONS
+                    // ×3 = +90%, SURGEON = +50%, additive total 2.4×,
+                    // cap leaves a sliver of headroom so the additive
+                    // max actually lands.
+                    const surgeonStacks = this.player.getPowerupStacks
+                        ? this.player.getPowerupStacks('FIELD_SURGEON') : 0;
+                    if (surgeonStacks > 0) {
+                        const baseUnscaled = colorStar.healAmount || GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN;
+                        const surgeonBonus = Math.round(baseUnscaled * 0.5);
+                        healAmount = Math.min(
+                            Math.round(baseUnscaled * 2.5),
+                            healAmount + surgeonBonus,
+                        );
+                    }
                     const oldHealth = this.player.health;
                     this.player.health = Math.min(this.player.getEffectiveMaxHealth(), this.player.health + healAmount);
                     const actualHeal = this.player.health - oldHealth;
+
+                    // 6.0.1 — ADRENAL_RESERVE: refills one energy tank
+                    // when collected at ≤25% HP. Internal cooldown
+                    // (15s) prevents the powerup from refilling every
+                    // single orb during a desperation drop surge.
+                    const adrStacks = this.player.getPowerupStacks
+                        ? this.player.getPowerupStacks('ADRENAL_RESERVE') : 0;
+                    if (adrStacks > 0 && (oldHealth / Math.max(1, this.player.getEffectiveMaxHealth())) <= 0.25) {
+                        const MAX_TANKS = 4;
+                        const now = Date.now();
+                        const ADRENAL_COOLDOWN_MS = 15000;
+                        const last = this._lastAdrenalRefillAt || 0;
+                        if (this.healthTanks < MAX_TANKS && (now - last) >= ADRENAL_COOLDOWN_MS) {
+                            this.healthTanks += 1;
+                            this._lastAdrenalRefillAt = now;
+                            this.events.emit('audio:powerup');
+                            this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
+                            if (typeof this.spawnTankRecharge === 'function') {
+                                this.spawnTankRecharge(this.healthTanks);
+                            }
+                        }
+                    }
 
                     if (actualHeal > 0) {
                         this.events.emit('audio:health-regen'); // Play healing sound
@@ -571,7 +607,11 @@ export function handleCollisions() {
 
                 const slot = pickup.kind;
                 const level = pickup.level || 1;
-                const item = createItem(slot, level);
+                // 6.0.0 — Prefer the pre-rolled item stamped on the pickup
+                // at drop time (so the rarity glow matches what the player
+                // gets). Legacy path stays as a fallback for any caller
+                // that still spawns pickups without an item attached.
+                const item = pickup.item || createItem(slot, level);
                 const result = (typeof this.player.equipItem === 'function')
                     ? this.player.equipItem(item)
                     : { equipped: false, current: null };
@@ -584,17 +624,25 @@ export function handleCollisions() {
                 }
 
                 if (typeof this.triggerPickupToast === 'function') {
+                    // 6.0.1 — Rarity tag prefix so the player reads
+                    // tier at a glance. Toast accent picks the rarity
+                    // color over the slot accent when an item rolled
+                    // a rarity (rare+) — common stays slot-accent so
+                    // the strip isn't all-grey.
+                    const rarityLabel = item.rarityLabel || 'COMMON';
+                    const isPremium = rarityLabel === 'RARE' || rarityLabel === 'EPIC';
+                    const toastAccent = isPremium ? (item.rarityColor || accent) : accent;
                     if (result.equipped) {
                         this.triggerPickupToast({
-                            title: item.name,
+                            title: `[${rarityLabel}] ${item.name}`,
                             subtitle: `${SLOT_LABEL[slot] || slot} · ${item.bonusLabel}`,
-                            accentColor: accent,
+                            accentColor: toastAccent,
                             duration: 2400,
                         });
                     } else {
                         // "Found but no upgrade" — shorter / dimmer toast.
                         this.triggerPickupToast({
-                            title: item.name,
+                            title: `[${rarityLabel}] ${item.name}`,
                             subtitle: 'NO UPGRADE',
                             accentColor: 'rgba(160, 170, 190, 0.85)',
                             duration: 1200,
@@ -722,7 +770,6 @@ export function handleCollisions() {
 
                 // 5.79.16 — Enemy bullet-hit XP 6 → 2 (kills become
                 //   the dominant XP source instead of hit ticks).
-                this.player.gainExperience(2);
 
                 // Localized hit sparks at bullet impact point
                 {
@@ -768,7 +815,6 @@ export function handleCollisions() {
                     // must pick up the dropped money orbs (dropOrbsFromEntity)
                     // to gain gold. XP still drops on kill.
                     const reward = enemy.getDestructionReward();
-                    this.player.gainExperience(Math.ceil(reward.points / 3));
 
                     // Track kill streak
                     this.onEnemyKill(enemy);
@@ -1689,7 +1735,6 @@ export function destroyAsteroid(ast) {
     //   "kill" the real XP event, mirroring enemies. Routes through
     //   here so EVERY asteroid-kill path (bullet, mine, lightning,
     //   missile, charged shot, AOE ring) awards equally.
-    if (this.player) this.player.gainExperience(12);
     // 5.74.18 — asteroids now feed the kill streak counter alongside enemy
     // kills. Routes through onEnemyKill (which doesn't reference the type
     // beyond the milestone notification), so streak tier buffs and idle
@@ -1808,7 +1853,6 @@ export function damageEnemy(enemy, damage) {
             this.game.stats.enemiesKilled++;
             if (enemy.isBoss) this.game.stats.bossesKilled++;
         }
-        this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {
             this.events.emit('audio:enemy-destroy', enemy.type);
@@ -1854,7 +1898,6 @@ export function handlePlayerEnemyCollision(player, enemy) {
         if (finalDamage > 0) this._breakKillStreak();
 
         // Award XP for surviving enemy collision
-        this.player.gainExperience(5);
 
         // 5.88.0 — tank-based hit model: HP→0 consumes a tank (vaporize
         // FX + HP refill, no invuln); the only "lives" left are tanks.
@@ -1916,7 +1959,6 @@ export function handlePlayerEnemyCollision(player, enemy) {
         if (window._qaBotKillBuffer) window._qaBotKillBuffer.push({ type: enemy.type, wave: this.game.currentWave, ts: Date.now(), maxHealth: enemy.maxHealth });
         // 5.74.3 — gold no longer auto-awarded on kill (pickup-only).
         const reward = enemy.getDestructionReward();
-        this.player.gainExperience(Math.ceil(reward.points / 3));
         this.onEnemyKill(enemy);
 
         // Create colored explosion effects (includes screen shake)
@@ -2030,7 +2072,6 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     if (finalDamage > 0) this._breakKillStreak();
 
     // Award XP for surviving enemy bullet hit
-    this.player.gainExperience(3);
 
     // 5.88.0 — tank-based hit model.
     // 5.108.0 — GUARDIAN intercept (see handlePlayerEnemyCollision).
@@ -2168,7 +2209,6 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         }
 
         // Award XP for surviving asteroid collision
-        this.player.gainExperience(4);
 
         // 5.88.0 — tank-based hit model.
         // 5.108.0 — GUARDIAN intercept (see handlePlayerEnemyCollision).
@@ -2226,7 +2266,6 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         // 5.74.3 — gold no longer auto-awarded on kill (pickup-only).
         // 5.74.31 — counts toward the kill streak.
         if (typeof this.onEnemyKill === 'function') this.onEnemyKill(asteroid);
-        this.player.gainExperience(8);
 
         // Screen shake for collision destruction (only if on screen)
         if (this.isEntityOnScreen(asteroid)) {

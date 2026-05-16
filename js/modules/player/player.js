@@ -5,6 +5,7 @@ import * as weapons from './weapons.js';
 import * as skills from './skills.js';
 import * as progression from './progression.js';
 import * as playerRenderer from './renderer.js';
+import { scoreItem } from '../world/item-system.js';
 // Phase-1 multiplayer engine refactor: ship physics extracted to
 // `js/sim/ship.js`. The wrapper in `update()` below builds a plain-data
 // `ShipState` from `this`, calls `updateShip`, and writes the result
@@ -91,21 +92,14 @@ export class Player {
         // Powerup system
         this.powerups = new Map(); // Map of powerup type -> {stacks, timeRemaining}
 
-        // Player leveling system
+        // 6.0.0 — Player leveling RETIRED. Wave is the new "level."
+        // Fields kept (as inert constants) so legacy readers don't NPE,
+        // but XP no longer accumulates and skillPoints never increases.
+        // Powerups are bought with GOLD now (see ui-manager.purchasePowerup
+        // + shop-manager). See progression.js for the no-op stubs.
         this.level = 1;
         this.experience = 0;
-        // 5.72.0 — base raised 100 → 400 to slow early leveling.
-        // Combined with the 1.5 → 1.7 exponent in progression.levelUp()
-        // and the halved kill-XP rate, level-ups drop from ~1/wave to
-        // ~1 every 2-3 waves. The 5.71.0 auto-shop on level-up was
-        // disruptive partly because levels came too fast.
-        // 5.79.16 — Initial threshold matches the new linear curve in
-        //   progression.levelUp (200 + (level-1) × 50 → L1→L2 = 200).
-        this.experienceToNextLevel = 200; // EXP needed for level 2
-        // 5.78.0 — `skillPoints` IS the new "picks" currency (renamed
-        // from `powerupPicks`). The 5.76.0 SP-removal cleared the old
-        // SP semantics; this field reuses the name for the picks pool
-        // since the player never sees both at once.
+        this.experienceToNextLevel = Infinity;
         this.skillPoints = 0;
 
         // Weapon system. All primaries / powers / skills are FREE and
@@ -199,12 +193,15 @@ export class Player {
         this.tractorShieldActive = false;
         this.tractorShieldAngle = 0;
 
-        // 5.99.4 — Diablo-style equippedItems table. One item per slot
-        // (helm, armor, shield, plating). Each item is the object
-        // returned by `createItem` in world/item-system.js. New
-        // pickups call `equipItem` below which replaces only when the
-        // new bonus exceeds the current item's bonus.
-        this.equippedItems = { helm: null, armor: null, shield: null, plating: null };
+        // 6.0.0 — equippedItems table extended to 5 slots. The new
+        // `trinket` slot rolls a regen primary (HP/s) — see
+        // item-system.js for the rolled-rarity primary-stat curve.
+        // New pickups call `equipItem` below which replaces only when
+        // the candidate's score (primary + 8× regen affix) beats the
+        // currently-equipped item's score.
+        this.equippedItems = {
+            helm: null, armor: null, shield: null, plating: null, trinket: null,
+        };
 
         this.initializePlayer();
     }
@@ -276,36 +273,39 @@ export class Player {
         this.initializePlayer();
     }
     
-    // Player leveling system methods
     /**
-     * 5.99.4 — Equip a new Diablo-style item if its bonus exceeds the
-     * currently-equipped item's bonus in the same slot. Returns:
+     * 6.0.0 — Equip if the candidate's unified score beats the current
+     * slot's score. Score normalizes HP / toughness / regen against
+     * each other so e.g. an item with high regen affix can edge a
+     * slightly-higher-HP item. See `scoreItem` in item-system.js.
+     *
+     * Returns:
      *   { equipped: true,  replaced: prevItemOrNull }  on successful equip
      *   { equipped: false, current: currentItem }      when not an upgrade
      *
      * Side effects on equip:
      *   - HP items grow getEffectiveMaxHealth → bump current health by
-     *     the bonus delta so the player feels the upgrade immediately
-     *     (rather than just seeing a wider bar).
-     *   - Toughness items just need the equip — getEffectiveShield
-     *     already reads the equipped table.
+     *     the bonus delta so the wider bar isn't visibly empty.
      */
     equipItem(item) {
         if (!item || !item.slot) return { equipped: false, current: null };
         if (!this.equippedItems) {
-            this.equippedItems = { helm: null, armor: null, shield: null, plating: null };
+            this.equippedItems = {
+                helm: null, armor: null, shield: null, plating: null, trinket: null,
+            };
         }
         const prev = this.equippedItems[item.slot] || null;
-        const prevBonus = prev ? prev.bonus : 0;
-        if (item.bonus <= prevBonus) {
+        if (prev && scoreItem(item) <= scoreItem(prev)) {
             return { equipped: false, current: prev };
         }
+        const prevHp = prev && prev.bonusType === 'hp' ? (prev.bonus || 0) : 0;
         this.equippedItems[item.slot] = item;
         if (item.bonusType === 'hp') {
-            // Bump current HP by the gain so the wider bar isn't empty.
-            const gain = item.bonus - prevBonus;
-            const newMax = this.getEffectiveMaxHealth();
-            this.health = Math.min(newMax, this.health + gain);
+            const gain = (item.bonus || 0) - prevHp;
+            if (gain > 0) {
+                const newMax = this.getEffectiveMaxHealth();
+                this.health = Math.min(newMax, this.health + gain);
+            }
         }
         return { equipped: true, replaced: prev };
     }
@@ -463,9 +463,6 @@ export class Player {
     update(input, particlePool, bulletPool, audioManager, starPool, tractorEngaged, gameField = null) {
         if (!this.active) return;
 
-        // Expire temporary level-up bonuses
-        this.updateTempBonuses();
-
         // Store previous position to track movement
         const prevX = this.x;
         const prevY = this.y;
@@ -484,14 +481,9 @@ export class Player {
             }
         }
 
-        // Update level up animation
-        if (this.levelUpAnimation.active) {
-            const elapsed = Date.now() - this.levelUpAnimation.startTime;
-            if (elapsed >= this.levelUpAnimation.duration) {
-                this.levelUpAnimation.active = false;
-                this.levelUpTextInfo = { active: false }; // Clear level up text
-            }
-        }
+        // 6.0.1 — updateTempBonuses() + levelUpAnimation tick removed.
+        // Both were no-op since 6.0.0 (the temp-bonus list never gets
+        // populated and the animation flag never gets set).
 
         // Update powerups
         this.updatePowerups();

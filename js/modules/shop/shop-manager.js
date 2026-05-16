@@ -61,11 +61,8 @@ export function sellShopItem(itemId) {
         // the same stack forever and trivialise the build choice.
         if (item.currency === 'PICKS') return false;
 
-        if (item.currency === 'SP') {
-            this.player.skillPoints += refund;
-        } else {
-            this.game.money += refund;
-        }
+        // 6.0.0 — SP retired; all refunds go to GOLD.
+        this.game.money += refund;
         this.events.emit('audio:coin');
         this._rebuildShopCache();
         return true;
@@ -390,19 +387,10 @@ export function buyShopItem(itemId) {
                 actualCost = item.cost + currentStacks * item.stackCostIncrement;
             }
 
-            // 5.78.0 — picks renamed to SP. The SP and PICKS currency
-            // tags now both spend from `player.skillPoints`. SP-currency
-            // shop items are dead post-5.76.0; PICKS-currency items
-            // (powerups) survived but are bought through the pause-tab
-            // path now. Both branches kept for back-compat with any
-            // legacy item def that still uses either tag.
-            if (item.currency === 'SP' || item.currency === 'PICKS') {
-                if ((this.player.skillPoints || 0) < actualCost) return false;
-                this.player.skillPoints -= actualCost;
-            } else {
-                if (this.game.money < actualCost) return false;
-                this.game.money -= actualCost;
-            }
+            // 6.0.1 — Gold-only. SP / PICKS legacy currency tags are no
+            // longer interpreted; everything deducts from game.money.
+            if (this.game.money < actualCost) return false;
+            this.game.money -= actualCost;
 
             // 5.88.0 — SPARE_SHIP retired (was a +1 life purchase). Any
             // legacy code path that still tags an item as SPARE_SHIP is
@@ -452,13 +440,9 @@ export function _handleUpgradeBuy(item) {
             actualCost = item.costOverrides[Math.min(currentStacks, item.costOverrides.length - 1)] || item.cost;
         }
 
-        if (item.currency === 'SP') {
-            if (this.player.skillPoints < actualCost) return false;
-            this.player.skillPoints -= actualCost;
-        } else {
-            if (this.game.money < actualCost) return false;
-            this.game.money -= actualCost;
-        }
+        // 6.0.0 — SP retired; all upgrade costs deduct from GOLD.
+        if (this.game.money < actualCost) return false;
+        this.game.money -= actualCost;
 
         // Add as permanent powerup
         const powerupConfig = this.getPowerupConfig(item.id) || {

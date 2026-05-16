@@ -711,9 +711,12 @@ export function drawCanvasTriforce(ctx, spareTanks, triforceLeftX, centerY) {
 }
 
 export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
-        // 5.72.0 — LV shield + level number now sits to the RIGHT of the
-        // healthbar on the SAME ROW (was below). Gold is drawn separately
-        // in drawBottomRightGold() above the timer.
+        // 6.0.1 — LV shield repurposed as WAVE shield. Wave is the new
+        // progression axis (player leveling retired in 6.0.0). Same
+        // layout/position so the HUD reads identical, just a different
+        // semantic. Hide entirely if no engine is attached (defensive).
+        const wave = (this.game && this.game.currentWave) | 0;
+        if (!wave) return;
         const shieldIconSize = 28;
         const shieldCenterX = barX + 220 + 10 + shieldIconSize / 2; // 10px gap right of bar (barWidth=220)
         const shieldCenterY = barY + barHeight / 2;
@@ -722,7 +725,7 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
 
         drawCachedShieldIcon(ctx, shieldCenterX, shieldCenterY, shieldIconSize);
 
-        // "LV" inside the shield
+        // "WV" inside the shield (was "LV"). Wave number to the right.
         ctx.save();
         ctx.font = "10px 'Press Start 2P', monospace";
         ctx.fillStyle = '#102342';
@@ -730,21 +733,20 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
         ctx.lineWidth = 1;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.strokeText('LV', shieldCenterX, shieldCenterY);
-        ctx.fillText('LV', shieldCenterX, shieldCenterY);
+        ctx.strokeText('WV', shieldCenterX, shieldCenterY);
+        ctx.fillText('WV', shieldCenterX, shieldCenterY);
         ctx.restore();
 
-        // Level number to the right of the shield
-        const levelNumberX = shieldCenterX + shieldIconSize / 2 + 8;
+        const waveNumberX = shieldCenterX + shieldIconSize / 2 + 8;
         ctx.font = "14px 'Press Start 2P', monospace";
         ctx.fillStyle = '#4A90E2';
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 1;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        const levelNumber = `${this.player.level}`;
-        ctx.strokeText(levelNumber, levelNumberX, shieldCenterY);
-        ctx.fillText(levelNumber, levelNumberX, shieldCenterY);
+        const waveText = `${wave}`;
+        ctx.strokeText(waveText, waveNumberX, shieldCenterY);
+        ctx.fillText(waveText, waveNumberX, shieldCenterY);
 
         ctx.restore();
 }
@@ -934,7 +936,10 @@ export function drawBottomRightGold(ctx) {
 }
 
 export function drawXPBar(ctx, barX, barY, barWidth, barHeight) {
-        // XP bar dimensions - positioned at the bottom of the health bar
+        // 6.0.0 — XP retired with player leveling. No-op the renderer
+        // so the bottom strip of the health bar reads clean.
+        return;
+        // eslint-disable-next-line no-unreachable
         const xpBarHeight = 8;
         const xpBarY = barY + barHeight - xpBarHeight;
         const bevelSize = 12; // Match health bar bevel exactly

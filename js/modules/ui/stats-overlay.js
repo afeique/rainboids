@@ -99,7 +99,7 @@ function buildStatsModel(player, gameEngine) {
             {
                 key: 'Gold Find',
                 value: `${mult(goldFind)}`,
-                tip: `+10% per player level (level ${lvl}).`,
+                tip: `+10% per wave (wave ${gameEngine?.game?.currentWave ?? 1}).`,
             },
         ],
     });
@@ -252,23 +252,14 @@ export class StatsOverlay {
         const summary = this.elements.summary;
         if (summary) {
             summary.replaceChildren();
+            // 6.0.1 — LEVEL + XP cells removed (leveling retired in
+            // 6.0.0). Wave is the new progression axis; promoted to
+            // the leftmost cell.
             const cells = [
-                { label: 'LEVEL', value: `${model.level}` },
+                { label: 'WAVE', value: `${ge.game?.currentWave ?? 1}` },
                 {
-                    label: 'XP',
-                    value: model.xpNext > 0
-                        ? `${model.xp} / ${model.xpNext}`
-                        : `${model.xp}`,
-                },
-                {
-                    // 5.79.14 — Gold cell renders the cached coin icon
-                    //   to the LEFT of the amount, matching the HUD's
-                    //   bottom-right gold readout. Same iconSpriteCache
-                    //   instance the canvas HUD uses so the look stays
-                    //   consistent across DOM + canvas.
                     label: 'GOLD', value: `${ge.game?.money ?? 0}`, icon: 'coin',
                 },
-                { label: 'WAVE', value: `${ge.game?.currentWave ?? 1}` },
             ];
             for (const c of cells) {
                 const cell = document.createElement('div');

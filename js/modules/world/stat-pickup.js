@@ -54,18 +54,30 @@ export class StatPickup {
         this.active = false;
     }
 
-    reset(x, y, kind = 'hpup', level = 1) {
+    reset(x, y, kind = 'hpup', level = 1, item = null) {
         this.x = x;
         this.y = y;
-        // 5.99.4 — `kind` is now a slot id ('helm' / 'armor' / 'shield'
-        // / 'plating') OR the legacy aliases 'hpup' / 'toughness' for
-        // backward compatibility. The dropOrbsFromEntity caller picks
-        // a specific slot from {helm, armor} / {shield, plating} at
-        // spawn time so the StatPickup carries its slot identity all
-        // the way to the collision-system equip path.
+        // 6.0.0 — Pickups now carry a pre-rolled `item` object so the
+        // visible glow (rarity color) matches the item the player will
+        // receive on contact. dropOrbsFromEntity rolls rarity + item
+        // at drop time, checks isUpgrade against equipped, and only
+        // spawns the pickup when it's a strict upgrade. `kind` is the
+        // slot id ('helm' / 'armor' / 'shield' / 'plating' / 'trinket')
+        // or the legacy aliases ('hpup' / 'toughness') for callers
+        // that haven't migrated.
         const SLOT_KIND_LEGACY = { hpup: 'helm', toughness: 'shield' };
         this.kind = SLOT_KIND_LEGACY[kind] || kind;
         this.level = Math.max(1, level | 0);
+        this.item = item || null;
+        if (item) {
+            this.rarity = item.rarity || 'common';
+            this.rarityColor = item.rarityColor || '#cccccc';
+            this.rarityGlow = item.rarityGlow || 0.45;
+        } else {
+            this.rarity = 'common';
+            this.rarityColor = '#cccccc';
+            this.rarityGlow = 0.45;
+        }
         // 5.99.2 — Visual radius bumped 14 → 20 px so pickups are
         // legible at the portrait 0.65 camera zoom (~9 → ~13 effective
         // world-px). Hit radius (used in collision-system) reads
@@ -145,26 +157,36 @@ export class StatPickup {
 
     draw(ctx) {
         if (!this.active) return;
-        // 5.99.4 — `this.kind` is now a slot id. HP slots (helm, armor)
-        // share the cyan treatment; toughness slots (shield, plating)
-        // share amber.
-        const isHp = this.kind === 'helm' || this.kind === 'armor' || this.kind === 'hpup';
+        // 6.0.0 — Slot kind drives the body color; rarity drives the
+        // outer halo color/intensity so the player reads "what slot"
+        // from the body and "how good" from the glow.
+        const isHp     = this.kind === 'helm' || this.kind === 'armor' || this.kind === 'hpup';
+        const isTough  = this.kind === 'shield' || this.kind === 'plating' || this.kind === 'toughness';
+        const isTrink  = this.kind === 'trinket';
 
         ctx.save();
         ctx.globalAlpha = this.opacity;
         ctx.translate(this.x, this.y);
 
-        // Outer glow halo so the pickup pops against the starfield.
-        const glowColor = isHp ? 'rgba(0, 220, 255, 0.45)' : 'rgba(255, 184, 64, 0.45)';
-        const haloR = this.radius * 2.2 + Math.sin(this._pulsePhase) * 1.2;
-        ctx.fillStyle = glowColor;
+        // Rarity halo — color from item.rarityColor with alpha scaled by glow.
+        const rarityAlpha = Math.max(0.30, Math.min(0.95, 0.30 + (this.rarityGlow || 0.45) * 0.55));
+        const rarityHex = this.rarityColor || '#cccccc';
+        const hr = parseInt(rarityHex.slice(1, 3), 16);
+        const hg = parseInt(rarityHex.slice(3, 5), 16);
+        const hb = parseInt(rarityHex.slice(5, 7), 16);
+        const haloR = this.radius * (2.0 + (this.rarityGlow || 0.45) * 0.8)
+            + Math.sin(this._pulsePhase) * 1.4;
+        ctx.fillStyle = `rgba(${hr}, ${hg}, ${hb}, ${rarityAlpha})`;
         ctx.beginPath();
         ctx.arc(0, 0, haloR, 0, Math.PI * 2);
         ctx.fill();
 
-        // Body — rounded square with a thick stroke.
-        const bodyColor = isHp ? '#00ccff' : '#ffae3a';
-        const strokeColor = isHp ? '#002a4a' : '#3a2200';
+        // Body — rounded square. Color per slot type.
+        let bodyColor, strokeColor;
+        if (isHp)         { bodyColor = '#00ccff'; strokeColor = '#002a4a'; }
+        else if (isTough) { bodyColor = '#ffae3a'; strokeColor = '#3a2200'; }
+        else if (isTrink) { bodyColor = '#66ffaa'; strokeColor = '#003322'; }
+        else              { bodyColor = '#cccccc'; strokeColor = '#222222'; }
         ctx.fillStyle = bodyColor;
         ctx.strokeStyle = strokeColor;
         ctx.lineWidth = 2;
@@ -178,12 +200,11 @@ export class StatPickup {
         ctx.fill();
         ctx.stroke();
 
-        // Icon — heart for HP, plus-sign for toughness (shield-ish).
+        // Icon — heart for HP, plus for toughness, circle pip for trinket.
         ctx.fillStyle = '#ffffff';
         ctx.strokeStyle = strokeColor;
         ctx.lineWidth = 1.5;
         if (isHp) {
-            // Heart shape (rough but readable at 14-px scale).
             ctx.beginPath();
             const hs = r * 0.6;
             ctx.moveTo(0, hs * 0.6);
@@ -192,6 +213,16 @@ export class StatPickup {
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
+        } else if (isTrink) {
+            // Concentric ring — regen / cycle-of-life sigil.
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = strokeColor;
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+            ctx.fill();
         } else {
             // Plus / cross — chunky toughness sigil.
             const bar = r * 0.32;

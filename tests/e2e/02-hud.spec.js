@@ -79,48 +79,57 @@ test.describe('E2E-02: HUD elements', () => {
     });
 
     // -----------------------------------------------------------------------
-    // XP / levelling system
+    // Player leveling retired in 6.0.0 — these tests assert the
+    // no-op contract instead of skipping. Wave is the new "level" and
+    // gold is the only progression currency; gainExperience / levelUp
+    // are intentional no-ops in js/modules/player/progression.js so
+    // that legacy callers (collision-system kill rewards) don't NPE.
+    //
+    // If a future change accidentally re-enables leveling, these
+    // assertions will fail and the regression is caught.
     // -----------------------------------------------------------------------
 
-    test.describe('XP and levelling', () => {
-        test('player starts at level 1', async ({ page }) => {
+    test.describe('Leveling-retired contract (6.0.0)', () => {
+        test('player.level stays at 1 across the run', async ({ page }) => {
             const level = await page.evaluate(() => window.gameEngine.player.level);
             expect(level).toBe(1);
         });
 
-        test('player starts with 0 experience', async ({ page }) => {
+        test('player.experience stays at 0 (no XP accumulation)', async ({ page }) => {
             const xp = await page.evaluate(() => window.gameEngine.player.experience);
             expect(xp).toBe(0);
         });
 
-        test('gainExperience() increases player XP', async ({ page }) => {
+        test('gainExperience() is a no-op — XP stays at 0', async ({ page }) => {
             await page.evaluate(() => window.gameEngine.player.gainExperience(10));
             const xp = await page.evaluate(() => window.gameEngine.player.experience);
-            expect(xp).toBeGreaterThanOrEqual(10);
+            expect(xp).toBe(0);
         });
 
-        test('sufficient XP causes a level-up', async ({ page }) => {
-            // Gain 200 XP — enough to jump at least to level 2
+        test('large XP grant does NOT cause a level-up', async ({ page }) => {
             await page.evaluate(() => window.gameEngine.player.gainExperience(200));
             const level = await page.evaluate(() => window.gameEngine.player.level);
-            expect(level).toBeGreaterThan(1);
+            expect(level).toBe(1);
         });
 
-        test('killing an enemy awards XP', async ({ page }) => {
-            const xpBefore = await page.evaluate(() => window.gameEngine.player.experience);
+        test('skillPoints field stays at 0 (SP retired, gold-only)', async ({ page }) => {
+            // gainExperience(1000) would have granted multiple SP in
+            // the old system — verify it does not now.
+            await page.evaluate(() => window.gameEngine.player.gainExperience(1000));
+            const sp = await page.evaluate(() => window.gameEngine.player.skillPoints || 0);
+            expect(sp).toBe(0);
+        });
 
-            // Spawn a HUNTER very close to player and enable one-punch-man
+        test('killing an enemy does NOT change player level', async ({ page }) => {
+            const levelBefore = await page.evaluate(() => window.gameEngine.player.level);
             await page.evaluate(() => {
                 const ge = window.gameEngine;
                 ge.cheats.onePunchMan = true;
                 ge.enemyPool.get(ge.player.x + 20, ge.player.y, 'HUNTER', 1);
             });
-
-            // Wait for bullets to reach and kill the enemy
             await page.waitForTimeout(2000);
-
-            const xpAfter = await page.evaluate(() => window.gameEngine.player.experience);
-            expect(xpAfter).toBeGreaterThanOrEqual(xpBefore);
+            const levelAfter = await page.evaluate(() => window.gameEngine.player.level);
+            expect(levelAfter).toBe(levelBefore);
         });
     });
 

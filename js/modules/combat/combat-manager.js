@@ -4,6 +4,8 @@ import { random } from '../core/utils.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
+import { createItem, isUpgrade } from '../world/item-system.js';
+import { rollRarity } from '../world/item-names.js';
 import { isMobile } from '../platform/platform-detect.js';
 
 // ── Asteroid Debris ──
@@ -487,16 +489,26 @@ export function createHealthOrb(x, y, healAmountOverride = null) {
     if (healAmountOverride !== null) {
         healAmount = Math.max(1, healAmountOverride);
     } else {
-        // 5.78.2 — heal amount scales with player level. The
-        // MEDPACK / DOCTOR powerups were removed; this curve replaces
-        // their stacks (level 1 = base amount, level 20 = +12 min /
-        // +14 max heal). Steeper than the old per-stack rate but
-        // monotonic with level so the player can rely on the curve.
-        const lvl = Math.max(1, (this.player.level | 0));
-        const lvlBonus = Math.floor((lvl - 1) * 0.6);          // L20 = +11
-        const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + lvlBonus;
-        const maxHeal = Math.max(minHeal, GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + lvlBonus + Math.floor((lvl - 1) * 0.15));
+        // 6.0.0 — Player level retired; heal amount now scales with the
+        // current WAVE. Same curve shape as the 5.78.2 player-level
+        // version (W1 base, W30 = +17 min / +21 max).
+        const wave = Math.max(1, (this.game?.currentWave | 0) || 1);
+        const wBonus = Math.floor((wave - 1) * 0.6);
+        const minHeal = GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MIN + wBonus;
+        const maxHeal = Math.max(minHeal,
+            GAME_CONFIG.HEALTH_ORB_HEAL_AMOUNT_MAX + wBonus + Math.floor((wave - 1) * 0.15));
         healAmount = Math.floor(Math.random() * (maxHeal - minHeal + 1)) + minHeal;
+        // 6.0.1 — FIELD_RATIONS magnitude bonus, capped so the heal-
+        // multiplier stack stays sane when combined with FIELD_SURGEON.
+        // Multiplier band: +30% / stack (cap 3 → +90%). FIELD_SURGEON
+        // adds another +50% additively (not multiplicatively) at
+        // collection time. Hard cap across all sources = 2.0×.
+        const rationStacks = this.player.getPowerupStacks
+            ? this.player.getPowerupStacks('FIELD_RATIONS') : 0;
+        if (rationStacks > 0) {
+            const mult = Math.min(2.0, 1 + rationStacks * 0.30);
+            healAmount = Math.max(1, Math.round(healAmount * mult));
+        }
     }
     healthOrb.healAmount = healAmount;
 
@@ -536,9 +548,10 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false
     if (moneyAmountOverride !== null) {
         moneyAmount = Math.max(1, moneyAmountOverride);
     } else {
-        const lvl = Math.max(1, (this.player.level | 0));
-        const minBonus = (lvl - 1) * 3;
-        const maxBonus = (lvl - 1) * 5;
+        // 6.0.0 — wave-based money scaling (was player.level).
+        const wave = Math.max(1, (this.game?.currentWave | 0) || 1);
+        const minBonus = (wave - 1) * 3;
+        const maxBonus = (wave - 1) * 5;
         const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + minBonus;
         const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + maxBonus);
         moneyAmount = Math.floor(Math.random() * (maxMoney - minMoney + 1)) + minMoney;
@@ -621,20 +634,28 @@ function _evenSplitClamped(total, count, cap) {
 export function dropStarsFromEntity(x, y) {
     this.createHealthOrb(x, y);
 
-    const lvl = Math.max(1, (this.player?.level | 0) || 1);
-    const value = Math.max(1, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (lvl - 1) * 3);
+    // 6.0.0 — wave-based scaling (was player level).
+    const wave = Math.max(1, (this.game?.currentWave | 0) || 1);
+    const value = Math.max(1, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (wave - 1) * 3);
     this.createMoneyOrb(x, y, value, false);
 }
 
 export function dropOrbsFromEntity(x, y, entity = null) {
-    // 5.78.2 — DROPS-category powerup stacks were removed; drop rate
-    // and quantity now scale with PLAYER level (instead of being
-    // bought as discrete picks). The rate gets +1.5%/level past 1
-    // (level 20 → +28.5% on top of the base + entity bonuses), and
-    // the quantity ceiling adds +1 max orb every 5 levels.
-    const playerLvl = Math.max(1, (this.player.level | 0));
-    const playerLvlDropRateBonus = (playerLvl - 1) * 0.015;
-    const playerLvlQuantityBonus = Math.floor((playerLvl - 1) / 5);   // L5 +1, L10 +2, L15 +3, L20 +4
+    // 6.0.0 — Player leveling retired. Drop scaling now keys off the
+    // current WAVE, with three new modulators on the health-drop path:
+    //
+    //   (1) Desperation curve — drop chance scales up quadratically
+    //       as player HP falls. Base k=1.5; TRIAGE_SURGE adds +1.0/stack.
+    //       At full HP it's a no-op; at 25% HP it ~doubles the rate.
+    //   (2) LUCKY_DROPS — flat +12% drop chance per stack (cap 3).
+    //   (3) COMBAT_MEDIC — first kill within 8s of taking damage is a
+    //       guaranteed health drop (bypasses cooldown + RNG).
+    //
+    // FIELD_RATIONS (heal magnitude) is applied inside createHealthOrb.
+    // TRIAGE (HEALTH_DROP_FREQUENCY) still shortens the global cooldown.
+    const wave = Math.max(1, (this.game?.currentWave | 0) || 1);
+    const waveDropRateBonus = (wave - 1) * 0.015;
+    const waveQuantityBonus = Math.floor((wave - 1) / 5);
 
     const hitStreakMultiplier = this.player.getHitStreakMultiplier();
 
@@ -646,106 +667,121 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const levelDropRateBonus = (entityLevel - 1) * 0.05;
     const levelQuantityMultiplier = 1 + (entityLevel - 1) * 0.1;
 
-    const baseHealthDropRate = GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE + playerLvlDropRateBonus + levelDropRateBonus + enemyDropRateBonus;
-    const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE + playerLvlDropRateBonus + levelDropRateBonus + enemyDropRateBonus;
+    // ── Desperation curve (new in 6.0.0) ──
+    // Quadratic ramp on (1 - hp%). At full HP, mult = 1. At 25% HP
+    // and base k=1.5, mult ≈ 1.84. TRIAGE_SURGE adds +1.0 to k per
+    // stack so a fully-invested player at 10% HP can see ~3-4× rates.
+    const player = this.player;
+    const maxHp = (typeof player.getEffectiveMaxHealth === 'function')
+        ? player.getEffectiveMaxHealth() : (player.maxHealth || 1);
+    const hpPct = Math.max(0, Math.min(1, (player.health || 0) / Math.max(1, maxHp)));
+    const surgeStacks = player.getPowerupStacks
+        ? player.getPowerupStacks('TRIAGE_SURGE') : 0;
+    const desperationK = GAME_CONFIG.HEALTH_DROP_DESPERATION_K_BASE
+        + surgeStacks * GAME_CONFIG.HEALTH_DROP_DESPERATION_K_PER_STACK;
+    const desperationMult = 1 + desperationK * Math.pow(1 - hpPct, 2);
 
-    // 5.74.9 — Gold Find scales the money drop RATE in addition to the
-    //   amount.
-    // 5.74.10 — money rate clamped to 0.95 (was 1.0).
-    // 5.74.34 — kill-streak now ALSO scales drop rate (was: amount only).
-    //   Same +6%/streak / 2.5× cap as the budget multiplier — high
-    //   streaks earn both more frequent AND larger drops, so the
-    //   reward curve compounds in both axes.
-    const goldFindMult = this.player.getGoldFindMultiplier?.() || 1;
+    // LUCKY_DROPS — flat chance booster (cap 3 stacks → +36%).
+    const luckyStacks = player.getPowerupStacks
+        ? player.getPowerupStacks('LUCKY_DROPS') : 0;
+    const luckyAdd = luckyStacks * 0.12;
+
+    const baseHealthDropRate = (GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE
+        + waveDropRateBonus + levelDropRateBonus + enemyDropRateBonus
+        + luckyAdd) * desperationMult;
+    const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE
+        + waveDropRateBonus + levelDropRateBonus + enemyDropRateBonus;
+
+    const goldFindMult = player.getGoldFindMultiplier?.() || 1;
     const streakCount = this.killStreakCount || 0;
-    // 5.79.19 — Slope 0.06/kill → 0.025/kill, cap 2.5× → 1.4×. The
-    //   old curve hit cap at 25 kills; combined with hitStreakMultiplier
-    //   (also cut to 2× ceiling) and enemy-level scaling, drop yield
-    //   at 70+ streak was 30× baseline. Now caps at ~16 kills with a
-    //   1.4× max so the streak still feels rewarding without
-    //   creating the runaway "invincible + rich" feedback loop.
     const streakGoldMult = Math.min(1.4, 1 + streakCount * 0.025);
     const healthDropRate = Math.min(1.0, baseHealthDropRate);
     const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult * streakGoldMult);
 
     // ── Health orbs ──
-    // Gated by a global cooldown. Default is once every 60s; the Triage
-    // upgrade reduces this by 5s per stack down to a 30s floor. Without this
-    // throttle the player gets healed back up almost continuously and the
-    // game becomes trivial.
+    // Global cooldown gate. Triage stacks shorten the cooldown; when
+    // the player is below 25% HP, the cooldown floor drops further
+    // (desperation also reaches into cadence, not just chance).
     const now = Date.now();
-    const triageStacks = this.player.getPowerupStacks('HEALTH_DROP_FREQUENCY');
-    const healthCooldown = Math.max(
+    const triageStacks = player.getPowerupStacks('HEALTH_DROP_FREQUENCY');
+    let healthCooldown = Math.max(
         GAME_CONFIG.HEALTH_DROP_COOLDOWN_MIN,
-        GAME_CONFIG.HEALTH_DROP_COOLDOWN_BASE - triageStacks * GAME_CONFIG.HEALTH_DROP_COOLDOWN_REDUCTION_PER_STACK
+        GAME_CONFIG.HEALTH_DROP_COOLDOWN_BASE
+            - triageStacks * GAME_CONFIG.HEALTH_DROP_COOLDOWN_REDUCTION_PER_STACK
     );
+    if (hpPct <= 0.25) healthCooldown = Math.floor(healthCooldown * 0.5);
     const healthCooldownReady = (now - (this.lastHealthOrbDropAt || 0)) >= healthCooldown;
 
-    if (healthCooldownReady && Math.random() < healthDropRate) {
-        // 5.79.27 — One health orb per drop event (was: budget split
-        //   across up to MAX_DROP_COUNT orbs). The per-orb heal amount
-        //   is just the level-scaled formula in createHealthOrb — no
-        //   compound multipliers, no swarm. Health is rare and
-        //   important; one chunky blue orb communicates "grab this"
-        //   better than a cluster.
+    // COMBAT_MEDIC — first kill within 8s of taking damage drops a
+    // guaranteed health orb (cooldown 8s after the trigger fires).
+    let combatMedicForce = false;
+    const medicStacks = player.getPowerupStacks
+        ? player.getPowerupStacks('COMBAT_MEDIC') : 0;
+    if (medicStacks > 0 && isEnemy) {
+        const lastHit = player._lastDamageAt || 0;
+        const sinceMedicTrigger = now - (this._lastCombatMedicAt || 0);
+        if (lastHit > 0 && (now - lastHit) <= 8000 && sinceMedicTrigger >= 8000) {
+            combatMedicForce = true;
+            this._lastCombatMedicAt = now;
+        }
+    }
+
+    if (combatMedicForce || (healthCooldownReady && Math.random() < healthDropRate)) {
         this.createHealthOrb(x, y);
         this.lastHealthOrbDropAt = now;
     }
 
-    // ── Stat pickups (5.98.0 → 5.99.4 → 5.101.0) ──
-    // Diablo-style defensive item drops. Four slots:
-    //   HP:        helm,  armor    (each roll picks one of these)
-    //   Toughness: shield, plating (each roll picks one of these)
-    //
-    // Two independent rolls per kill — one for HP, one for toughness.
-    // Boss enemies roll at much higher rates so milestones feel
-    // rewarding. Asteroids do NOT drop these (only enemy kills) so the
-    // player has to engage the threat pool to grow.
-    //
-    // 5.99.4 — Each pickup carries its slot id AND the current wave
-    // as the item LEVEL. Higher-level items have proportionally bigger
-    // bonuses (see item-system.js). The pickup collision in
-    // collision-system.js calls `createItem` with these values, then
-    // `player.equipItem(item)` for the replace-if-better logic. The
-    // player builds up a "best so far" set of 4 items.
-    //
-    // 5.101.0 — Drops are now BOTH mobile AND desktop. Defensive
-    // skills retired; inventory is the primary survival lever
-    // alongside the new defensive powerups + survivor cards.
+    // ── Stat pickups (6.0.0) ──
+    // Five slots: helm, armor (HP), shield, plating (toughness), and
+    // the new trinket (regen). Three independent rolls per enemy
+    // kill — one HP, one toughness, one trinket. Boss kills bias the
+    // rarity roll toward rare+ (so a boss feels jackpot-y) and bump
+    // base rates. Drops are pre-rolled and SUPPRESSED when they're
+    // not a strict upgrade over the equipped item, so anything that
+    // actually appears on screen is worth chasing.
     if (isEnemy && this.statPickupPool) {
         const boss = !!(entity && entity.isBoss);
-        const hpRate = boss ? 0.060 : 0.025;
-        const toughRate = boss ? 0.050 : 0.020;
-        const wave = Math.max(1, this.game?.currentWave | 0);
-        if (Math.random() < hpRate) {
-            const slot = Math.random() < 0.5 ? 'helm' : 'armor';
-            this.statPickupPool.get(x, y, slot, wave);
-        }
-        if (Math.random() < toughRate) {
-            const slot = Math.random() < 0.5 ? 'shield' : 'plating';
-            this.statPickupPool.get(x, y, slot, wave);
-        }
+        const hpRate     = boss ? 0.085 : 0.025;
+        const toughRate  = boss ? 0.075 : 0.020;
+        const trinkRate  = boss ? 0.060 : 0.015;
+        // 6.0.1 — Boss rarity bias trimmed (was +20% rare / +15% epic).
+        // Combined with the +0.27/0.08 base weights an old boss roll
+        // saw ~23% epic; the new numbers settle epic at ~16% which
+        // still feels jackpot-y without trivializing the rarity drip.
+        const bonusRare  = boss ? 0.10  : 0;
+        const bonusEpic  = boss ? 0.08  : 0;
+
+        const tryRoll = (slot, rate) => {
+            if (Math.random() >= rate) return;
+            const rarity = rollRarity(bonusRare, bonusEpic);
+            const item = createItem(slot, wave, rarity);
+            // Suppression — only spawn the pickup if the item beats
+            // the currently-equipped slot. Keeps the screen clean
+            // (everything visible is a true upgrade).
+            const cur = player.equippedItems ? player.equippedItems[slot] : null;
+            if (!isUpgrade(cur, item)) return;
+            this.statPickupPool.get(x, y, slot, wave, item);
+        };
+
+        tryRoll(Math.random() < 0.5 ? 'helm' : 'armor', hpRate);
+        tryRoll(Math.random() < 0.5 ? 'shield' : 'plating', toughRate);
+        tryRoll('trinket', trinkRate);
     }
 
-    // ── Money orbs ── no cooldown; "few shape orbs + many pixel
-    //   particles" split (5.79.27).
+    // ── Money orbs ── no cooldown.
     if (Math.random() < moneyDropRate) {
-        const maxMoneyOrbs = GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX + playerLvlQuantityBonus;
+        const maxMoneyOrbs = GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX + waveQuantityBonus;
         const baseCount = Math.floor(Math.random() * maxMoneyOrbs) + 1;
-        const totalLegacyCount = Math.max(1, Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
+        const totalLegacyCount = Math.max(1,
+            Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
 
-        const lvl = playerLvl;
-        const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (lvl - 1) * 3;
-        const maxMoney = Math.max(minMoney, GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (lvl - 1) * 5);
+        const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (wave - 1) * 3;
+        const maxMoney = Math.max(minMoney,
+            GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (wave - 1) * 5);
         const avgMoney = (minMoney + maxMoney) / 2;
-        const goldFind = this.player.getGoldFindMultiplier?.() || 1;
-        const moneyBudget = Math.max(1, Math.round(totalLegacyCount * avgMoney * goldFind * streakGoldMult));
+        const moneyBudget = Math.max(1,
+            Math.round(totalLegacyCount * avgMoney * goldFindMult * streakGoldMult));
 
-        // 5.79.27 — Splitter returns { shapes, pixels }. Shapes get
-        //   the chunky-orb visual treatment; pixels render as tiny
-        //   gold dots in the same drop. Total budget is hard-capped
-        //   inside _splitMoneyDrop (defense against the runaway
-        //   compound multipliers documented in 5.79.26).
         const { shapes, pixels } = _splitMoneyDrop(moneyBudget);
         for (const v of shapes) this.createMoneyOrb(x, y, v, false);
         for (const v of pixels) this.createMoneyOrb(x, y, v, true);

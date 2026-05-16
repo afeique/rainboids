@@ -22,7 +22,6 @@ export const PRIMARY_WEAPONS = {
         piercing: 0,
         range: 1.0,
         cost: 0,
-        spCost: 0,
         unlockWave: 0,
         upgrades: ['DEAD_EYE', 'OVERCHARGE', 'ECHO_ROUND', 'PULSE_VELOCITY'],
     },
@@ -47,7 +46,6 @@ export const PRIMARY_WEAPONS = {
         piercing: 0,
         range: 1.0,
         cost: 0,
-        spCost: 0,
         unlockWave: 3,
         upgrades: ['NEEDLE_STORM', 'POISON_TIP', 'STATIC_CHARGE', 'SUPPRESSION', 'NEEDLE_VELOCITY'],
     },
@@ -76,7 +74,6 @@ export const PRIMARY_WEAPONS = {
         // are now a viable option instead of point-blank only.
         range: 1.2,
         cost: 0,
-        spCost: 0,
         unlockWave: 5,
         upgrades: ['HEAVY_LOAD', 'BUCKSHOT', 'SHRAPNEL', 'SLUG_ROUND', 'SCATTER_VELOCITY'],
     },
@@ -95,7 +92,6 @@ export const PRIMARY_WEAPONS = {
         piercing: 99,
         range: 0.85,
         cost: 0,
-        spCost: 0,
         unlockWave: 8,
         upgrades: ['MASS_DRIVER', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH', 'RAIL_VELOCITY'],
     },
@@ -300,7 +296,6 @@ export const POWER_WEAPONS = {
         cooldown: 0,          // charge-based, not cooldown-based
         isChargeBased: true,
         cost: 0,
-        spCost: 0,
         unlockWave: 0,
         upgrades: ['CHARGE_POWER', 'CHARGE_SPEED', 'CHARGE_OVERCHARGE'],
     },
@@ -319,7 +314,6 @@ export const POWER_WEAPONS = {
         blastRadius: 80,
         mineDamage: 3,        // was 5 — power weapons scaled down for balance
         cost: 1500,
-        spCost: 1,
         unlockWave: 2,
         upgrades: ['EXTRA_PAYLOAD', 'BLAST_RADIUS', 'DAISY_CHAIN', 'RAPID_DEPLOY'],
     },
@@ -335,7 +329,6 @@ export const POWER_WEAPONS = {
         ringDamage: 4,        // was 2.5 — heavier hit
         ringDuration: 600,    // ms for ring to expand
         cost: 2000,
-        spCost: 2,
         unlockWave: 3,
         upgrades: ['SHOCKWAVE', 'AFTERSHOCK', 'DOUBLE_PULSE', 'RESONANCE'],
     },
@@ -352,7 +345,6 @@ export const POWER_WEAPONS = {
         missileSpeed: 4,
         missileHomingStrength: 0.18, // Always-on homing (LOCK_ON upgrade removed)
         cost: 3000,
-        spCost: 3,
         unlockWave: 7,
         upgrades: ['EXTRA_ORDNANCE', 'CLUSTER_WARHEAD', 'QUICK_RELOAD'],
     },
@@ -380,7 +372,6 @@ export const POWER_WEAPONS = {
         beamDuration: 3000,
         beamWidth: 6,
         cost: 0,
-        spCost: 0,
         unlockWave: 12,
         upgrades: ['BEAM_WIDTH', 'LINGER', 'REFRACTION', 'OVERLOAD_BEAM', 'LANCE_VELOCITY'],
     },
@@ -399,7 +390,6 @@ export const POWER_WEAPONS = {
         chainRange: 360,
         beamDuration: 3000,
         cost: 0,
-        spCost: 0,
         unlockWave: 5,
         upgrades: ['AMPLIFIER', 'ARC_OVERCHARGE'],
     },

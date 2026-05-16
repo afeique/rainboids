@@ -60,12 +60,14 @@ function $(id) { return document.getElementById(id); }
 
 export function initShopDom(gameEngine) {
     _engine = gameEngine;
+    // 6.0.1 — spAmt / picksAmt removed (SP retired in 6.0.0; the
+    // matching DOM elements were never added to index.html anyway,
+    // so the lookups returned null). Gold (coinsAmt) is the only
+    // displayed currency now.
     _elements = {
         overlay:   $('shop-overlay'),
         menu:      $('shop-menu'),
         coinsAmt:  $('shop-coins-amount'),
-        spAmt:     $('shop-sp-amount'),
-        picksAmt:  $('shop-picks-amount'),
         tabs:      document.querySelectorAll('.shop-tab'),
         list:      $('shop-items-list'),
         closeBtn:  $('shop-close-button'),
@@ -135,13 +137,6 @@ export function hideShopDom() {
 export function updateShopCurrencyDom() {
     if (!_elements || !_engine) return;
     _elements.coinsAmt.textContent = `${Math.floor(_engine.game.money)}`;
-    // 5.78.0 — SP and PICKS counters now both read from skillPoints
-    // (picks was renamed to SP). The legacy SP element stays hidden
-    // (5.76.0); the PICKS element is the visible "SP available" badge.
-    _elements.spAmt.textContent = `${_engine.player.skillPoints || 0}`;
-    if (_elements.picksAmt) {
-        _elements.picksAmt.textContent = `${_engine.player.skillPoints || 0}`;
-    }
 }
 
 function syncActiveTab() {
@@ -323,45 +318,23 @@ function buildCategoryBanner(category) {
     return banner;
 }
 
-// HELP panel — explains the three resources (Gold / SP / XP) and the
-// general flow of upgrading between waves. Pure DOM, styled by
-// `.shop-help-*` rules in styles.css.
+// 6.0.1 — HELP panel slimmed to the single live resource (gold).
+// SP + XP entries removed since both were retired in 6.0.0.
 function buildHelpPanel() {
     const wrap = document.createElement('div');
     wrap.className = 'shop-help';
 
     const intro = document.createElement('p');
     intro.className = 'shop-help-intro';
-    intro.textContent = 'Earn resources during waves, then spend them between waves on permanent upgrades. The shop opens automatically after each wave clears — or hit the SHOP button at any time.';
+    intro.textContent = 'Earn gold during waves, then spend it on weapon upgrades here and powerups in the pause-menu POWERUPS tab. The shop opens automatically after each wave clears — or hit the SHOP button at any time.';
     wrap.appendChild(intro);
 
     wrap.appendChild(buildHelpEntry({
         iconNode: makeCoinIconSvg(28),
         title: 'GOLD',
         titleClass: 'shop-help-title--gold',
-        body: 'Spend on WEAPONS above.',
+        body: 'Spend on WEAPON UPGRADES here, and POWERUPS in the pause menu.',
     }));
-
-    wrap.appendChild(buildHelpEntry({
-        iconText: 'SP',
-        iconClass: 'shop-help-icon--sp',
-        title: 'SKILL POINTS',
-        titleClass: 'shop-help-title--sp',
-        body: 'Spend on POWERUPS in the pause menu. +1 SP awarded per level up.',
-    }));
-
-    wrap.appendChild(buildHelpEntry({
-        iconText: 'XP',
-        iconClass: 'shop-help-icon--xp',
-        title: 'EXPERIENCE',
-        titleClass: 'shop-help-title--xp',
-        body: 'Awarded for every hit you land. Tracked by the red bar under your health.',
-    }));
-
-    const footer = document.createElement('p');
-    footer.className = 'shop-help-footer';
-    footer.textContent = 'Tip: ';
-    wrap.appendChild(footer);
 
     return wrap;
 }
@@ -403,26 +376,16 @@ function buildItemRow(item, player, game) {
     const isFree = item.currency === 'FREE';
     const actualCost = actualCostFor(item, currentStacks);
 
+    // 6.0.1 — SP / PICKS branches collapsed. All shop items are gold-
+    // priced now (SP retired in 6.0.0). Weapon-or-skill items reduce
+    // to "owned → can equip / free → can take / else gold".
     let canAfford, maxedOut;
     if (isWeaponOrSkill) {
         maxedOut = isOwned && isEquipped;
-        if (isOwned) canAfford = true;
-        else if (isFree) canAfford = true;
-        else if (item.spCost && item.spCost > 0) {
-            canAfford = game.money >= actualCost && player.skillPoints >= item.spCost;
-        } else {
-            canAfford = item.currency === 'SP'
-                ? player.skillPoints >= actualCost
-                : game.money >= actualCost;
-        }
+        if (isOwned || isFree) canAfford = true;
+        else canAfford = game.money >= actualCost;
     } else {
-        if (item.currency === 'SP') {
-            canAfford = player.skillPoints >= actualCost;
-        } else if (item.currency === 'PICKS') {
-            canAfford = (player.skillPoints || 0) >= actualCost;
-        } else {
-            canAfford = game.money >= actualCost;
-        }
+        canAfford = game.money >= actualCost;
         maxedOut = currentStacks >= item.maxStacks;
     }
 
@@ -471,6 +434,7 @@ function buildItemRow(item, player, game) {
     const costCol = document.createElement('span');
     costCol.className = 'shop-item-cost';
 
+    // 6.0.1 — SP / PICKS price-cell branches removed (gold-only now).
     if (isWeaponOrSkill && isEquipped) {
         costCol.appendChild(makePrice('EQUIPPED', 'shop-item-price--equipped'));
     } else if (isWeaponOrSkill && isOwned) {
@@ -478,30 +442,6 @@ function buildItemRow(item, player, game) {
         costCol.appendChild(makeStatus('OWNED', 'shop-item-status--owned'));
     } else if (isWeaponOrSkill && isFree) {
         costCol.appendChild(makePrice('FREE'));
-    } else if (item.currency === 'SP') {
-        const cls = canAfford ? 'shop-item-price--sp' : 'shop-item-price--cant';
-        costCol.appendChild(makePrice(`${actualCost} SP`, cls));
-        if (!isWeaponOrSkill) costCol.appendChild(stackStatus(currentStacks, item.maxStacks, maxedOut));
-    } else if (item.currency === 'PICKS') {
-        const cls = canAfford ? 'shop-item-price--picks' : 'shop-item-price--cant';
-        // Big bold + sigil + numeric count instead of "1 PICK". Reads
-        // as a budget cost ("+1") and matches the header currency icon.
-        const el = document.createElement('span');
-        el.className = 'shop-item-price shop-item-price--picks-row' + (cls ? ' ' + cls : '');
-        const sigil = document.createElement('span');
-        sigil.className = 'shop-item-price-pick-sigil';
-        sigil.textContent = '+';
-        el.appendChild(sigil);
-        const num = document.createTextNode(String(actualCost));
-        el.appendChild(num);
-        costCol.appendChild(el);
-        if (!isWeaponOrSkill) costCol.appendChild(stackStatus(currentStacks, item.maxStacks, maxedOut));
-    } else if (isWeaponOrSkill && item.spCost && item.spCost > 0) {
-        // Dual-cost weapon
-        const coinCls = (game.money >= actualCost) ? '' : 'shop-item-price--cant';
-        costCol.appendChild(makeCoinPrice(actualCost, coinCls));
-        const spCls = (player.skillPoints >= item.spCost) ? 'shop-item-price--sp' : 'shop-item-price--cant';
-        costCol.appendChild(makePrice(`${item.spCost} SP`, spCls));
     } else {
         const cls = canAfford ? '' : 'shop-item-price--cant';
         costCol.appendChild(makeCoinPrice(actualCost, cls));
@@ -521,16 +461,14 @@ function buildItemRow(item, player, game) {
     const rightCell = document.createElement('span');
     rightCell.className = 'shop-item-right';
 
-    // 5.70.0 — PICKS-currency items aren't refundable (would let players
-    // churn the same stack forever). Skip the sell button for them.
-    if (!isWeaponOrSkill && currentStacks > 0 && item.currency !== 'PICKS') {
+    // 6.0.1 — Sell button is gold-only now (SP refunds retired).
+    if (!isWeaponOrSkill && currentStacks > 0) {
         const refund = sellRefundFor(item, currentStacks);
-        const sellLabel = item.currency === 'SP' ? `SELL +${refund}SP` : `SELL +${refund}`;
         const sellBtn = document.createElement('button');
         sellBtn.type = 'button';
         sellBtn.className = 'shop-item-sell';
         sellBtn.dataset.id = item.id;
-        sellBtn.textContent = sellLabel;
+        sellBtn.textContent = `SELL +${refund}`;
         rightCell.appendChild(sellBtn);
     }
 

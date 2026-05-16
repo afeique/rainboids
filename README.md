@@ -1,6 +1,6 @@
 # Rainboids — Supercharged Asteroids
 
-A modern space combat game with deep weapon systems, 10 enemy types, a 30-wave speedrun campaign with six boss waves, survivor-card powerup picks every 3rd wave, a Diablo-style defensive inventory, and a full upgrade economy. Built on Canvas 2D with a WebGL2 particle layer for bright/glowing effects.
+A modern space combat game with deep weapon systems, 10 enemy types, a 30-wave speedrun campaign with six boss waves, survivor-card powerup picks on every wave clear (boss waves grant a bonus pick), a Diablo-style 5-slot defensive inventory with rarity-tiered rolled stats, a gold-only powerup economy, and a desperation-curve health-drop system. Built on Canvas 2D with a WebGL2 particle layer for bright/glowing effects.
 
 ## Screenshots
 
@@ -41,7 +41,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **5.121.0**
+Current version: **6.0.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -52,14 +52,15 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 Rainboids is a supercharged asteroids game featuring:
 - **5 primary weapons** and **5 power weapons** — both free, both selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop. Phase Dash is a core **Shift-key** movement primitive available to every player at all times. *(5.101.0 — the defensive skill system was retired; defensive progression now flows through powerups + survivor cards + the inventory.)*
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs. Enemy visuals stay at base size at every wave (5.101.0) — only HP / damage / speed scale.
-- **Offensive + defensive powerups** with stacking mechanics and visual indicators — offense (Rapid Fire, Multi Shot, Homing, Big Bullets, Piercing, Explosive, Crit Chance, Crit Damage, Knockback) and defense (Health Boost / Toughness / Regen, restored 5.101.0). Buy with SP in the pause-menu POWERUPS tab any time.
-- **Survivor cards every 3rd wave (5.101.0)** — wave-clear opens a 3-card overlay (2 offense + 1 defense) for a free pick. Followed by a 3-card QUICK BUY overlay listing weapon upgrades tailored to the equipped primary + power. 30 waves ÷ 3 = exactly 10 free picks per playthrough.
-- **Diablo-style defensive inventory (5.99.4 / 5.101.0)** — four slots (helm, armor, shield, plating). Items drop from enemy kills on **both desktop and mobile** (was mobile-only) and auto-equip if their bonus beats the currently-equipped item.
+- **Offensive + defensive powerups** with stacking mechanics and visual indicators — offense (Rapid Fire, Multi Shot, Homing, Big Bullets, Piercing, Explosive, Crit Chance, Crit Damage, Knockback) and defense (Health Boost, Toughness, Regen, Vampirism, Thorns, Guardian) PLUS a full **health-drop family (6.0.0)**: Triage, Lucky Drops, Field Rations, Triage Surge, Combat Medic, Salvage Plating, Triage Net, Adrenal Reserve, Field Surgeon, Blood Bank. **Buy with GOLD** in the pause-menu POWERUPS tab any time (no SP — leveling retired in 6.0.0).
+- **Survivor cards every wave (6.0.0)** — every wave-clear opens a 3-card overlay (2 offense + 1 defense) for a free pick. Followed by a 3-card QUICK BUY overlay listing weapon upgrades tailored to the equipped primary + power. **Boss waves (5/10/15/20/25/30) grant a BONUS random powerup on top of the survivor card.**
+- **Diablo-style 5-slot inventory with rolled rarities (6.0.0)** — helm, armor (HP), shield, plating (toughness), and the new **trinket** slot (regen primary). Items drop in three rarities — common / rare / **epic** — with rolled primary stats (epic ≈ 2× common at the same wave). Glow color signals tier from across the screen. **Drop suppression**: only items that are a strict upgrade over the equipped slot spawn as pickups, so anything visible is worth chasing. Auto-equip on contact; no menu interruption.
 - **Kill-streak damage tiers** — 20-tier ladder firing every 10 kills, ordered by epicness from EMPOWERED (10 kills, +25%) to RAINBOIDS GOD (200 kills, +200%). Five narrative bands of four tiers each: Momentum (EMPOWERED → RELENTLESS → UNSTOPPABLE → INDOMITABLE) → Mortal-extraordinary (OUTRAGEOUS → HERCULEAN → LEGENDARY → MYTHIC) → Divine (IMMORTAL → GODLIKE → INVINCIBLE → ETERNAL) → Cosmic (APOCALYPTIC → ASTRONOMICAL → GALACTIC → COSMIC) → Beyond physical (TRANSCENDENT → OMNIPOTENT → INFINITE → RAINBOIDS GOD). Streak resets when you take damage. LEGENDARY (70 kills) and every tier above also grants auto-explosive splash on every shot.
 - **30-wave speedrun campaign (5.101.0)** with six scripted boss waves (waves 5/10/15/20/25/30) and a Game Complete stats screen — finish the run as fast as possible
-- **Full shop economy** with coins and skill points; per-equipped-weapon upgrade trees
+- **Gold-only shop economy (6.0.0)** — per-equipped-weapon upgrade trees in the shop, full powerup catalog on the pause-menu POWERUPS tab. Both deduct from gold. No SP, no XP, no player level.
+- **Desperation drop curve (6.0.0)** — health-drop chance scales up quadratically as the player loses HP. Below 25% HP the cooldown floor halves. At full HP it's a no-op; at 10% HP with maxed TRIAGE_SURGE the player sees roughly 4× the normal drop rate. Resets when an energy tank pops.
 - **Save / Continue** (5.79.0): wave-start auto-save lets the player resume from the title screen's **CONTINUE** button. **NEW GAME** rolls a randomized starting loadout (primary, power, skill) and clears the save.
-- **Diablo-style stats screen** (5.79.0): press \` to pause and inspect level / XP / vitals / offense / economy / world-scaling with hover tooltips explaining every formula.
+- **Diablo-style stats screen** (5.79.0): press \` to pause and inspect vitals / offense / economy / world-scaling with hover tooltips explaining every formula. (6.0.0 — level / XP rows removed since leveling is retired.)
 - **Persistent volume settings** (5.79.0): music + SFX sliders save to localStorage.
 - **Rich juice systems**: hitstop, camera kick, screen flash, shockwave rings, directional shrapnel
 - **68 background music tracks** spanning chiptune, synthwave, and electronic
@@ -82,7 +83,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Assists** (pause menu → ASSISTS tab — persisted): Aim Assist (cursor snap to nearest target), Auto Aim (lock onto nearest threat), Auto Fire (auto-trigger primary + power)
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
-- **Defensive progression**: pause-menu POWERUPS tab (Health Boost / Toughness / Regen + the offensive lineup), inventory (auto-equip from drops), and the every-3rd-wave survivor card overlay. *(5.101.0 — defensive skills retired; the SKILLS tab and Q/R key bindings are no-ops.)*
+- **Defensive progression**: pause-menu POWERUPS tab (Health Boost, Toughness, Regen, Vampirism, Thorns, Guardian, plus the new health-drop family — all bought with GOLD), inventory (auto-equip from drops, 5 slots including the new trinket), and the per-wave survivor card overlay plus boss-wave bonus pick. *(6.0.0 — player leveling, XP, and SP fully retired. Defensive skills retired in 5.101.0; the SKILLS tab and Q/R key bindings are no-ops.)*
 - **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
 

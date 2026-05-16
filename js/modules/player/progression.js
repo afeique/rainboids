@@ -1,112 +1,25 @@
-// Player progression system — extracted from Player class
+// Player progression system — extracted from Player class.
 // All functions are called with .call(this) so `this` refers to the Player instance.
+//
+// 6.0.0 — Player leveling REMOVED. Wave is the new "level"; gold is
+// the only currency. The functions below are kept as no-op stubs so
+// the collision-system kill-reward call sites and any HUD code that
+// reads getExperienceProgress don't NPE. Originals live in git
+// history if needed.
+//
+// Stats that used to scale with player level now scale with the
+// CURRENT WAVE (see combat-manager.js drops, getGoldFindMultiplier
+// below). Powerups + items are the player's only growth axes.
 
-// ── Experience & leveling ─────────────────────────────────────────────────
+// ── Experience & leveling (6.0.0 — all no-op) ───────────────────────────
 
-export function gainExperience(amount) {
-    this.experience += amount;
-
-    // Check for level up
-    while (this.experience >= this.experienceToNextLevel) {
-        this.levelUp();
-    }
-}
-
-export function levelUp() {
-    this.experience -= this.experienceToNextLevel;
-    this.level++;
-
-    // 5.79.16 — Linear XP curve replacing the geometric blow-up.
-    //   Was: 400 × 1.7^(level-1), which doubled every level.
-    //   Mid-range: 200 + (level-1)·50 (linear).
-    // 5.79.26 — Linear curve was too flat at high levels: enemy
-    //   points scale 6.5× by wave 20 while XP-to-next only grew
-    //   linearly, so a wave-20 player was leveling 8-10× per
-    //   wave (= 8-10 SP per wave on top of wave-clear). Now a
-    //   power curve `50 · level^1.45` so XP requirements scale
-    //   alongside enemy point yields:
-    //     L1: 50    L5: 525   L10: 1414  L15: 2647
-    //     L20: 4202  L25: 5990  L30: 7977
-    //   Approximates ~2 levels/wave across the campaign. SP gain
-    //   stays meaningful but no longer compounds into a runaway
-    //   pile at late waves.
-    this.experienceToNextLevel = Math.floor(50 * Math.pow(this.level, 1.45));
-
-    // 5.78.0 — picks renamed to SP (skill points). Single field;
-    // `skillPoints` is the canonical name now.
-    this.skillPoints = (this.skillPoints || 0) + 1;
-
-    // Health boost every 3 levels
-    if (this.level % 3 === 0) {
-        this.maxHealth += 5;
-        this.health = Math.min(this.health + 5, this.maxHealth);
-    }
-
-    // 5.74.17 — random temporary bonus pair removed. Players reported
-    // randomly being granted a MULTI (or other) powerup without any
-    // pickup or purchase, which broke the build-determinism the shop
-    // and POWERUPS pause-tab provide. Level-up still grants +1 SP and
-    // +1 powerup pick (deliberate, communicated rewards). Empty array
-    // preserves the field for any UI that reads it.
-    this.lastLevelUpBonus = [];
-
-    // Trigger level up effects
-    this.triggerLevelUpEffects();
-
-    // 5.78.0 — T1 (lightweight). When unspent SP queue grows (≥3),
-    // surface a hint toast pointing at the pause-menu POWERUPS tab so
-    // the sink is discoverable. Avoids a full modal interrupt while
-    // closing the discoverability gap on the SP faucet.
-    if ((this.skillPoints || 0) >= 3
-        && this.gameEngine
-        && this.gameEngine.events?.emit) {
-        // Throttle: only fire once per N levels so it doesn't toast on
-        // every single level-up.
-        if (!this._lastSpHintLevel || (this.level - this._lastSpHintLevel) >= 2) {
-            this._lastSpHintLevel = this.level;
-            this.gameEngine.events.emit('ui:show-message', {
-                title: `+${this.skillPoints | 0} SP UNSPENT`,
-                subtitle: 'ESC → POWERUPS to spend',
-                duration: 2200,
-                position: 'top',
-            });
-        }
-    }
-
-    return true;
-}
+export function gainExperience(/* amount */) { /* no-op since 6.0.0 */ }
+export function levelUp() { return false; }
 
 export function grantLevelUpBonus() {
-    // Pick 2 random upgrades to grant as temporary buffs (45 seconds).
-    // 5.110.0 — LONG_RANGE removed from the pool (powerup retired).
-    const bonusPool = [
-        'RAPID_FIRE', 'MULTI_SHOT', 'HOMING', 'SPEED_BOOST',
-        'PIERCING', 'CRIT_CHANCE', 'CRIT_DAMAGE',
-        'SHIELD_BOOST', 'BIG_BULLETS', 'EXPLOSIVE'
-    ];
-
-    // Shuffle and pick 2
-    const shuffled = bonusPool.sort(() => Math.random() - 0.5);
-    const picks = [shuffled[0], shuffled[1]];
-    const duration = 45000; // 45 seconds
-
-    // Track temporary bonuses for expiration
-    if (!this.tempBonuses) this.tempBonuses = [];
-
-    for (const pickId of picks) {
-        // Add 1 temporary stack
-        const config = this.gameEngine?.getPowerupConfig(pickId);
-        if (config) {
-            this.addPowerup(pickId, { ...config, duration }, false);
-            this.tempBonuses.push({
-                id: pickId,
-                name: config.name,
-                expiresAt: Date.now() + duration
-            });
-        }
-    }
-
-    return picks;
+    // 6.0.0 — no-op. Wave-clear survivor cards replace the old 45s
+    // dual-buff cadence.
+    return [];
 }
 
 export function updateTempBonuses() {
@@ -130,35 +43,8 @@ export function updateTempBonuses() {
 }
 
 export function triggerLevelUpEffects() {
-    // Set level up animation flag
-    this.levelUpAnimation = {
-        active: true,
-        startTime: Date.now(),
-        duration: 2000
-    };
-
-    // Build subtitle with bonus info
-    // 5.73.0 — every level-up grants +5% Gold Find on top of the
-    // skill point + powerup pick + temp bonuses, advertised here.
-    let subtitle = '+1 Skill Point  +1 Powerup Pick  +5% Gold Find';
-    if (this.lastLevelUpBonus && this.lastLevelUpBonus.length === 2) {
-        const ge = this.gameEngine;
-        const name1 = ge?.getPowerupConfig(this.lastLevelUpBonus[0])?.name || this.lastLevelUpBonus[0];
-        const name2 = ge?.getPowerupConfig(this.lastLevelUpBonus[1])?.name || this.lastLevelUpBonus[1];
-        subtitle += `\nBonus: ${name1} + ${name2} (45s)`;
-    }
-    if (this.level % 3 === 0) {
-        subtitle += '\n+5 Max Health';
-    }
-
-    if (this.gameEngine?.events) {
-        this.gameEngine.events.emit('ui:show-message', { title: `LEVEL ${this.level}!`, subtitle, duration: 4000, position: 'top' });
-    }
-
-    // Create level up particles via game engine
-    if (this.gameEngine && this.gameEngine.particlePool) {
-        this.createLevelUpParticles();
-    }
+    // 6.0.0 — no-op. Wave-clear survivor cards are the new celebration
+    // beat (see wave-manager.openWavePickOverlay).
 }
 
 export function createLevelUpParticles() {
@@ -195,7 +81,8 @@ export function createLevelUpParticles() {
 }
 
 export function getExperienceProgress() {
-    return this.experience / this.experienceToNextLevel;
+    // 6.0.0 — no XP. Always 0 so any lingering HUD reader paints empty.
+    return 0;
 }
 
 // ── Powerup management ────────────────────────────────────────────────────
@@ -334,13 +221,15 @@ export function getMovementSpeedMultiplier() {
     return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.65) : 1;
 }
 
-// 5.73.0 — Gold Find: scales how much gold drops from kills.
-// 5.74.33 — scaling rate doubled: +10% per player level past 1 (was +5%).
-// Level 1 = 1.0×, level 5 = 1.40×, level 10 = 1.90×, level 20 = 2.90×.
-// Applied as a multiplier on the money-orb budget AND drop rate in
-// dropOrbsFromEntity.
+// 6.0.0 — Gold Find now scales with WAVE, not player level. Same
+// shape: +10% per wave past 1. W1=1.0×, W5=1.4×, W10=1.9×, W30=3.9×.
+// Reads through the live gameEngine reference (set by main.js) since
+// the Player doesn't carry a wave field directly.
 export function getGoldFindMultiplier() {
-    return 1 + Math.max(0, (this.level || 1) - 1) * 0.10;
+    const ge = this.gameEngine
+        || ((typeof window !== 'undefined') ? window.gameEngine : null);
+    const wave = (ge && ge.game) ? (ge.game.currentWave | 0) : 1;
+    return 1 + Math.max(0, wave - 1) * 0.10;
 }
 
 export function getRangeMultiplier() {
@@ -363,6 +252,12 @@ export function getRangeMultiplier() {
 //
 // Combat-gated downstream by updatePowerups (4-second no-damage
 // window before regen ticks).
+// 6.0.1 — Hard ceiling on effective regen. Stacking the REGEN powerup
+// with an epic trinket primary + 4× secondary regen affixes pushed
+// out-of-combat heal past 10 HP/s, making the 4-second damage gate
+// trivial to wait out. Cap at 3.0 HP/s keeps regen a meaningful
+// recovery tool without turning the player into a tank.
+const REGEN_RATE_CAP = 3.0;
 export function getEffectiveRegen() {
     let regen = 0;
     const stacks = this.getPowerupStacks ? this.getPowerupStacks('REGEN') : 0;
@@ -375,7 +270,7 @@ export function getEffectiveRegen() {
             }
         }
     }
-    return regen;
+    return Math.min(REGEN_RATE_CAP, regen);
 }
 
 export function getEffectiveShield() {

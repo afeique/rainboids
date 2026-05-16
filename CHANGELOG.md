@@ -11,6 +11,179 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.0.1] - 2026-05-16
+
+### Changed — Healing balance pass
+
+- **`getEffectiveRegen()` hard-capped at 3.0 HP/s**. Stacking the
+  REGEN powerup with an epic trinket primary + 4× secondary regen
+  affixes was pushing out-of-combat heal past 10 HP/s, making the 4-
+  second damage gate trivial to wait out.
+- **FIELD_SURGEON is now ADDITIVE with FIELD_RATIONS** (was
+  multiplicative). Combined ceiling 2.5× the raw orb value —
+  RATIONS ×3 = +90%, SURGEON = +50%, additive total 2.4×, cap leaves
+  a sliver of headroom for the max to land. Previous behavior chained
+  to 2.85× silently.
+- **ADRENAL_RESERVE gains a 15s internal cooldown.** Without it the
+  desperation drop surge at low HP could refill every orb's worth of
+  tanks back-to-back, effectively giving the player unlimited spare
+  lives during recovery windows.
+- **Boss item rarity bias trimmed** from `+20% rare / +15% epic` to
+  `+10% rare / +8% epic`. Boss rolls still feel jackpot-y (~16% epic
+  vs the base 8%) but don't shortcut the rarity drip.
+
+### Added — Wave HUD + rarity-tagged pickup toast
+
+- The HUD shield that used to read **LV** now reads **WV** and
+  displays the current wave number. Position unchanged so muscle
+  memory holds; semantics are now wave-driven (the LV display was a
+  no-op since 6.0.0).
+- Pickup toasts now prefix the item name with `[COMMON]` / `[RARE]` /
+  `[EPIC]`. Rare+ pickups also adopt the rarity color as the toast
+  accent so the tier reads at a glance.
+- Stats overlay (\` key): LEVEL + XP summary cells removed; WAVE is
+  promoted to the leftmost cell. Gold Find tooltip updated to read
+  "per wave" instead of "per player level".
+
+### Removed — SP / leveling cruft sweep
+
+- **`js/modules/shop/shop-renderer.js` deleted** — already
+  unreferenced since 5.79.60 (game-engine import removed). 552 lines
+  of dead canvas-renderer code gone.
+- **`spAmt` / `picksAmt` DOM element refs removed** from
+  `shop-dom.js` — the matching `<shop-sp-amount>` / `<shop-picks-amount>`
+  elements were never present in `index.html`, so the lookups
+  returned null and the conditional guards in `updateShopCurrencyDom`
+  were running on every shop refresh for nothing.
+- **HELP panel slimmed to gold only** — SP + XP entries removed
+  (both retired in 6.0.0).
+- **`buildItemRow` SP / PICKS branches collapsed** — shop is gold-
+  only now, so the multi-currency canAfford check and price-cell
+  rendering reduce to "owned → equip / free → take / else gold".
+- **Sell button is gold-only** — the `SELL +N SP` branch removed.
+- **`shop-manager.buyShopItem` SP/PICKS branch collapsed** to a
+  single gold deduction.
+- **`progression.js` commented-out original bodies deleted** —
+  `gainExperience`, `levelUp`, `grantLevelUpBonus`,
+  `triggerLevelUpEffects`, and the SP-unspent toast block. Git
+  history has the originals; the no-op stubs stay (1-2 lines each).
+- **10× `this.player.gainExperience(N)` calls removed** from
+  `collision-system.js`. They were calling the no-op stub and added
+  per-frame indirection for nothing.
+- **`updateTempBonuses()` + `levelUpAnimation` tick removed** from
+  `player.update()` — both fields are no longer populated.
+- **`spCost` fields removed from `weapon-data.js`** (all 10 entries
+  across PRIMARY_WEAPONS + POWER_WEAPONS). Nothing reads `spCost`
+  anymore.
+
+### Notes
+
+- All 948 unit tests still pass after the sweep.
+- Test files retain `skillPoints = N` seeds and SP-spend logging —
+  noise but not breaking. A later cleanup pass can excise those.
+
+---
+
+## [6.0.0] - 2026-05-16
+
+### Removed — Player leveling, XP, and SP
+
+Player no longer levels. `gainExperience`, `levelUp`, `grantLevelUpBonus`,
+`triggerLevelUpEffects`, and the XP-curve helpers are all no-op stubs
+(originals preserved in `/* … */` comments inside
+`js/modules/player/progression.js`). The LV shield + XP bar in the HUD
+are no-op renderers (early return); the pause-menu "SP AVAILABLE" badge
+is gone. Player-level damage / drop scaling fully retired — see Changed
+below for replacements.
+
+### Changed — Wave is the new "level"
+
+Drop chance, drop quantity, heal amount, money amount, and gold-find
+multiplier now scale with the CURRENT WAVE instead of player level.
+Same curve shapes, same end-game targets. Beating a wave is the
+progression event (survivor cards already fire at wave-clear; see
+"Boss bonus" below for the milestone reward layer).
+
+### Changed — Powerups purchased with GOLD, not SP
+
+The pause-menu POWERUPS tab and the shop both deduct from
+`game.money` now. A new `powerupGoldCost(cfg, stacks)` helper in
+`js/modules/world/powerup.js` derives a per-stack price from
+`goldCost` / `goldCostIncrement` (explicit) or the legacy `spCost`
+field (mapped at ~500 g/SP + tier-2 bump). Banner reads "GOLD
+AVAILABLE"; buy buttons read "1500 G", etc. SP-currency branches in
+the shop fall through to gold deduction.
+
+### Added — Item rarity tiers + rolled primary stat + trinket slot
+
+Items now drop in three rarities — common (65%) / rare (27%) /
+epic (8%) — that drive:
+
+1. **Rolled primary stat**: each tier rolls a multiplier band over
+   the wave-based base (common 0.85–1.05×, rare 1.00–1.40×,
+   epic 1.35–1.85×). An epic ≈ 2× a common at the same wave.
+2. **Visual glow**: pickup halo color (grey/blue/purple) so the
+   player can read tier at a distance.
+3. **Name adjective**: rare adds "Fine", epic adds "Pristine"
+   before the existing `[Prefix] [Base] [Suffix]` pattern.
+
+A new 5th slot — **trinket** — drops items whose primary IS regen
+(HP/s). HP/toughness items can still roll a secondary regen affix.
+All slots use a unified `scoreItem` formula (HP=1pt, DEF=8pt/%,
+regen=16pt/HP·s, +8 weight on secondary regen) so cross-affix
+comparisons work cleanly.
+
+**Drop suppression**: items are pre-rolled at drop time and only
+spawned as a `StatPickup` when they're a strict upgrade over the
+currently-equipped slot. Anything that appears on-screen is
+guaranteed to improve the build — no more chasing duplicates.
+
+### Added — Health-drop survival powerups (10)
+
+`HEALTH_DROP_FREQUENCY` (Triage) promoted from defense-shop into
+`POWERUP_TYPES` alongside nine new health-drop levers, all priced
+in gold and available from the pause-menu POWERUPS tab + survivor
+cards:
+
+- **Triage** — −2.5s drop cooldown / stack (12s floor)
+- **Lucky Drops** — +12% drop chance / stack
+- **Field Rations** — +30% heal magnitude / stack
+- **Triage Surge** — steeper desperation curve at low HP
+- **Combat Medic** — first kill within 8s of taking damage drops a
+  guaranteed orb (8s cd)
+- **Salvage Plating** — popping an energy tank spawns a health orb
+- **Triage Net** — 2× pickup magnet on health orbs
+- **Adrenal Reserve** — at ≤25% HP, next orb also refills a tank
+- **Field Surgeon** — +50% heal per orb
+- **Blood Bank** — overflow → tank fills 2× faster
+
+### Added — Desperation drop curve
+
+Health-drop chance is multiplied by `1 + k × (1 − hp/maxHp)²`. Base
+`k = 1.5`; `TRIAGE_SURGE` adds +1.0 per stack. Below 25% HP the
+cooldown floor is also halved. At full HP it's a no-op; at 10% HP
+with maxed Surge a player sees roughly 4× the normal drop rate.
+Resets when a tank pops (since tanks refill to max HP).
+
+### Added — Boss-wave bonus powerup
+
+Boss-wave clears (waves 5/10/15/20/25/30) auto-grant a second random
+non-maxed powerup on top of the regular survivor card. Boss item
+drops also bias the rarity roll (+20% rare, +15% epic) and bump per-
+slot drop rates (3.4× HP slots, 3.75× toughness, 4× trinket) so
+boss kills feel jackpot-y.
+
+### Notes
+
+- Existing test suites that assert on `player.level`, `gainExperience`,
+  or `skillPoints` will fail — those are no-op fields now. Update or
+  skip with a `6.0.0 — leveling retired` rationale comment.
+- Shop currently sells weapon upgrades only (DEFENSE economy already
+  suspended in 5.79.57). Old SP-currency branches now fall through to
+  gold deduction defensively.
+
+---
+
 ## [5.121.0] - 2026-05-16
 
 ### Changed — Health drop pool expanded to four solids

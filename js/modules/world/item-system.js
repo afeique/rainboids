@@ -1,36 +1,34 @@
-// 5.99.4 — Diablo-style defensive item system. Generates randomly-
-// named, level-scaled items for one of four equipment slots:
+// 6.0.0 — Items overhaul:
+//   - 5 slots (added 'trinket' for regen-focused gear)
+//   - Rarity tiers (common / rare / epic) drive primary-stat variance
+//     and a visible glow color so the player can spot a good drop at
+//     a distance.
+//   - Primary stat now ROLLS within a range (was deterministic per
+//     level). Epic ≈ 1.85× the band of a common.
+//   - Item LEVEL is the wave number the pickup dropped on. Player no
+//     longer has a level — wave drives all scaling now.
+//   - Trinket primary IS regen (HP/s). HP / toughness items can still
+//     roll a small secondary regen affix.
+//   - isUpgrade uses a unified score (primary normalized to HP value
+//     + 8× regenBonus) so an item's worth is comparable across slots.
 //
-//   HP slots:        helm,  armor    → bonus = max HP
-//   Toughness slots: shield, plating → bonus = damage-reduction %
+// Bonus formulas (wave-driven, pre-rarity-multiplier):
+//   HP base:        5 + (wave - 1) × 2     →  W1=5, W5=13, W10=23, W20=43, W30=63
+//   Toughness base: 3 + (wave - 1) × 0.4   →  W1=3, W5=4.6, W10=6.6, W20=10.6, W30=14.6
+//   Regen base:     0.30 + (wave - 1) × 0.05 → W1=0.30, W5=0.50, W10=0.75, W20=1.25, W30=1.75
 //
-// Item generation pulls from the prefix / base / suffix tables in
-// `item-names.js`. Per-slot base pool keeps the language believable
-// ("Sturdy Helm of the Bear", not "Sturdy Plating of the Bear");
-// prefix and suffix pools are shared across the two slots of the
-// same bonus type so an HP item can roll any HP prefix + any HP
-// suffix.
+// Rarity multiplier bands:
+//   common: 0.85-1.05  rare: 1.00-1.40  epic: 1.35-1.85
 //
-// All items are DEFENSIVE — there are no offensive item slots. The
-// player picks them up from enemy kills; each pickup is auto-equipped
-// if its bonus exceeds the currently-equipped item's bonus for that
-// slot.
+// Secondary regen affix (HP/tough items only):
+//   25% roll chance. Value: 0.20 + (wave - 1) × 0.035 (rounded 1 dp).
 
 import {
     ITEM_BASES, ITEM_PREFIXES, ITEM_SUFFIXES,
     SLOT_BONUS_TYPE, SLOT_LABEL, SLOT_ACCENT, SLOT_ORDER,
+    RARITY_TIERS, RARITY_ORDER, rollRarity,
 } from './item-names.js';
 
-// Bonus formulas. Item LEVEL = the wave number the pickup dropped on.
-// Wave 1 = level 1; wave 20 = level 20. Bonus scales linearly so
-// late-game items are meaningfully better than early ones.
-//
-//   HP:        5 + (level - 1) × 2     →  L1=5, L5=13, L10=23, L20=43
-//   Toughness: 3 + (level - 1) × 0.4   →  L1=3, L5=4.6, L10=6.6, L20=10.6
-//
-// Toughness rounds to one decimal in the display label but the raw
-// number is added to player.shield where the existing 75-cap clamps
-// it. HP is integer.
 export function getHpBonusForLevel(level) {
     const L = Math.max(1, level | 0);
     return 5 + (L - 1) * 2;
@@ -38,63 +36,83 @@ export function getHpBonusForLevel(level) {
 
 export function getToughnessBonusForLevel(level) {
     const L = Math.max(1, level | 0);
-    return Math.round((3 + (L - 1) * 0.4) * 10) / 10; // 1-decimal
+    return Math.round((3 + (L - 1) * 0.4) * 10) / 10;
+}
+
+export function getRegenBonusForLevel(level) {
+    const L = Math.max(1, level | 0);
+    const raw = 0.30 + (L - 1) * 0.05;
+    return Math.round(raw * 100) / 100;
 }
 
 function _pick(arr) {
     return arr[(Math.random() * arr.length) | 0];
 }
 
-/**
- * Generate a fresh item for a given slot at a given level. Returns:
- *   {
- *     slot, level, name, bonus, bonusType,
- *     bonusLabel,   // e.g. "+13 MAX HP" or "+4.6% DEF"
- *     accentColor,  // SLOT_ACCENT[slot]
- *   }
- */
-// 5.114.0 — Secondary regen affix. Items have a small chance to roll
-// a "+X HP/s regen" SECONDARY bonus on top of their primary HP /
-// toughness affix. Scales with item level so a wave-30 item drop
-// rolls a meaningful regen rate. The roll is independent of the
-// primary affix and stacks across all 4 equipped slots — a 4-item
-// regen build comes out around 1.5-2 HP/s, gated by the no-damage
-// timer in updatePowerups.
-//   roll chance: 25%
-//   value:       0.25 + (level - 1) × 0.04   (rounded to 1 decimal)
-//                L1=0.25, L5=0.41, L10=0.61, L20=1.01, L30=1.41
+function _rollMult(rarityKey) {
+    const tier = RARITY_TIERS[rarityKey] || RARITY_TIERS.common;
+    return tier.multMin + Math.random() * (tier.multMax - tier.multMin);
+}
+
 const REGEN_AFFIX_CHANCE = 0.25;
 function _rollRegenAffix(level) {
     if (Math.random() >= REGEN_AFFIX_CHANCE) return 0;
     const L = Math.max(1, level | 0);
-    const raw = 0.25 + (L - 1) * 0.04;
+    const raw = 0.20 + (L - 1) * 0.035;
     return Math.round(raw * 10) / 10;
 }
 
-export function createItem(slot, level) {
-    if (!ITEM_BASES[slot]) {
-        // Defensive fallback — should not happen.
-        slot = 'helm';
-    }
-    const bonusType = SLOT_BONUS_TYPE[slot]; // 'hp' | 'toughness'
-    const prefix = _pick(ITEM_PREFIXES[bonusType]);
+/**
+ * Generate a fresh item for a given slot at a given wave-level.
+ * Optionally accepts a pre-rolled rarity (for boss-biased drops).
+ *
+ * Returns:
+ *   {
+ *     slot, level, name, bonus, bonusType,
+ *     bonusLabel,    // human-readable label
+ *     regenBonus,    // HP/s — primary for trinket, secondary for others
+ *     rarity,        // 'common' | 'rare' | 'epic'
+ *     rarityColor,   // glow color
+ *     accentColor,   // SLOT_ACCENT[slot]
+ *   }
+ */
+export function createItem(slot, level, rarityKey = null) {
+    if (!ITEM_BASES[slot]) slot = 'helm';
+    const bonusType = SLOT_BONUS_TYPE[slot];
+    const rarity = rarityKey || rollRarity();
+    const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
+    const mult = _rollMult(rarity);
+
+    const prefix = _pick(ITEM_PREFIXES[bonusType] || ITEM_PREFIXES.hp);
     const base   = _pick(ITEM_BASES[slot]);
-    const suffix = _pick(ITEM_SUFFIXES[bonusType]);
-    const name = `${prefix} ${base} ${suffix}`;
+    const suffix = _pick(ITEM_SUFFIXES[bonusType] || ITEM_SUFFIXES.hp);
+    const adj = tier.rarityAdjective ? `${tier.rarityAdjective} ` : '';
+    const name = `${adj}${prefix} ${base} ${suffix}`;
 
-    const bonus = bonusType === 'hp'
-        ? getHpBonusForLevel(level)
-        : getToughnessBonusForLevel(level);
+    let bonus;
+    let regenBonus;
+    let bonusLabel;
 
-    // 5.114.0 — Roll a secondary regen affix. Items with regen show
-    // "+N MAX HP · +X/s REGEN" in the bonusLabel so the inventory
-    // pane reads the dual roll at a glance.
-    const regenBonus = _rollRegenAffix(level);
-    let bonusLabel = bonusType === 'hp'
-        ? `+${bonus} MAX HP`
-        : `+${bonus}% DEF`;
-    if (regenBonus > 0) {
-        bonusLabel += ` · +${regenBonus}/s REGEN`;
+    if (bonusType === 'regen') {
+        // Trinket: regen IS the primary. No HP/tough on this slot.
+        const baseRegen = getRegenBonusForLevel(level);
+        const rolled = Math.round(baseRegen * mult * 100) / 100;
+        bonus = rolled;
+        regenBonus = rolled;
+        bonusLabel = `+${rolled}/s REGEN`;
+    } else if (bonusType === 'hp') {
+        const baseHp = getHpBonusForLevel(level);
+        bonus = Math.max(1, Math.round(baseHp * mult));
+        regenBonus = _rollRegenAffix(level);
+        bonusLabel = `+${bonus} MAX HP`;
+        if (regenBonus > 0) bonusLabel += ` · +${regenBonus}/s REGEN`;
+    } else {
+        // toughness
+        const baseTough = getToughnessBonusForLevel(level);
+        bonus = Math.round(baseTough * mult * 10) / 10;
+        regenBonus = _rollRegenAffix(level);
+        bonusLabel = `+${bonus}% DEF`;
+        if (regenBonus > 0) bonusLabel += ` · +${regenBonus}/s REGEN`;
     }
 
     return {
@@ -104,29 +122,47 @@ export function createItem(slot, level) {
         bonus,
         bonusType,
         bonusLabel,
-        regenBonus,  // 0 when not rolled; getEffectiveRegen sums across slots
+        regenBonus,
+        rarity,
+        rarityColor: tier.color,
+        rarityLabel: tier.label,
+        rarityGlow:  tier.glow,
         accentColor: SLOT_ACCENT[slot] || '#33ddff',
     };
 }
 
 /**
- * Return true if `candidate` is a strict upgrade over `current` for
- * the same slot. An undefined current always loses (any item beats
- * empty). Equal bonuses are NOT an upgrade (avoids spam-replacing
- * identical-tier items).
+ * Unified score for cross-rarity / cross-affix comparison.
+ *   hp:        1 HP = 1 pt
+ *   toughness: 1% DEF = 8 pts (a 5% reduction stat ≈ +40 effective HP)
+ *   regen:     1 HP/s = 16 pts (regen compounds; weight higher)
+ * Secondary regenBonus on HP/tough items adds 8× per HP/s.
+ */
+export function scoreItem(item) {
+    if (!item) return 0;
+    let s = 0;
+    if (item.bonusType === 'hp')        s += item.bonus || 0;
+    else if (item.bonusType === 'toughness') s += (item.bonus || 0) * 8;
+    else if (item.bonusType === 'regen')     s += (item.bonus || 0) * 16;
+    // Secondary regen affix (always weighted at 8 since it's bonus, not primary).
+    if (item.bonusType !== 'regen' && item.regenBonus) {
+        s += item.regenBonus * 8;
+    }
+    return s;
+}
+
+/**
+ * Strict-dominant upgrade check. New item must beat the current item's
+ * score to replace it. Empty slot → any item wins.
  */
 export function isUpgrade(current, candidate) {
     if (!candidate) return false;
     if (!current) return true;
-    // 5.114.0 — Score combines primary bonus + regen affix (×8) so an
-    // item with a regen roll can edge out a slightly-higher pure-stat
-    // item. The 8× weight makes 1 HP/s of regen ≈ 8 HP/% of primary
-    // bonus, which roughly matches their per-second value to the
-    // player. Equal scores → no upgrade (avoids spam-replacing).
-    const score = (item) => (item.bonus || 0) + 8 * (item.regenBonus || 0);
-    return score(candidate) > score(current);
+    return scoreItem(candidate) > scoreItem(current);
 }
 
-// Re-export the slot metadata so callers can iterate slots without
-// pulling item-names.js separately.
-export { SLOT_ORDER, SLOT_LABEL, SLOT_ACCENT, SLOT_BONUS_TYPE };
+// Re-exports for convenience.
+export {
+    SLOT_ORDER, SLOT_LABEL, SLOT_ACCENT, SLOT_BONUS_TYPE,
+    RARITY_TIERS, RARITY_ORDER,
+};

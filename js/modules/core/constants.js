@@ -77,6 +77,16 @@ export const GAME_CONFIG = {
     HEALTH_DROP_COOLDOWN_REDUCTION_PER_STACK: 2500, // 5s → 2.5s (smaller absolute, similar % impact on the new base)
     HEALTH_DROP_COOLDOWN_MIN: 12000, // 30s → 12s (reached at ~5 Triage stacks)
 
+    // 6.0.0 — Desperation curve. Multiplier on health-drop chance =
+    //   1 + k × (1 - hp/maxHp)². Quadratic so the boost is gentle at
+    //   half HP and aggressive at low HP. TRIAGE_SURGE powerup adds to k.
+    //     At 100% HP: ×1.0 (no-op).
+    //     At  50% HP: ×1.375 (base k=1.5)
+    //     At  25% HP: ×1.844
+    //     At  10% HP: ×2.215
+    HEALTH_DROP_DESPERATION_K_BASE: 1.5,
+    HEALTH_DROP_DESPERATION_K_PER_STACK: 1.0,
+
     ENEMY_BULLET_ASTEROID_DAMAGE: 1, // Damage enemy bullets deal to asteroids
     MIN_AST_RAD: 15,
     

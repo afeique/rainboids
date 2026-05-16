@@ -292,6 +292,16 @@ export class ColorStar {
             //   radius so orbs zip in from anywhere. See drops.js for
             //   the radius constants.
             ctx.mobileMagnet = _isMobileMagnet();
+            // 6.0.0 — TRIAGE_NET powerup. 2× magnet range on health orbs.
+            // Reads through the live game-engine reference (set by main.js)
+            // so this stays a no-op in offline sim contexts.
+            ctx.healthMagnetScale = 1;
+            const _ge = (typeof window !== 'undefined') ? window.gameEngine : null;
+            if (_ge && _ge.player && typeof _ge.player.getPowerupStacks === 'function') {
+                if (_ge.player.getPowerupStacks('TRIAGE_NET') > 0) {
+                    ctx.healthMagnetScale = 2.0;
+                }
+            }
 
             updateDrop(drop, ctx, null);
 
