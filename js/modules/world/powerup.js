@@ -283,7 +283,11 @@ export const POWERUP_TYPES = {
         maxStacks: 5,
         spCost: 3,
         spCostIncrement: 2,
-        description: '+0.5 HP/s passive regen per stack'
+        // 5.114.0 — Combat-gated. Regen ticks ONLY after 4 seconds of
+        // no damage; taking a hit pauses it. Description updated to
+        // make the conditional clear so players understand the
+        // out-of-combat-only nature.
+        description: '+0.5 HP/s out of combat per stack (4s after last hit)'
     },
 
     // 5.107.0 — Vampirism. Each stack converts +5% of damage DEALT

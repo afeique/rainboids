@@ -3678,6 +3678,9 @@ export class GameEngine {
     createPlayerShipDebris(x, y, angle) { return lifecycle.createPlayerShipDebris.call(this, x, y, angle); }
     _consumeTank() { return lifecycle._consumeTank.call(this); }
     applyHealthOrbToTanks(orbAmount, amountHealed) { return lifecycle.applyHealthOrbToTanks.call(this, orbAmount, amountHealed); }
+    // 5.114.0 — shared overflow → tank accumulator; called from REGEN
+    // ticks at max HP so passive regen also pays into the tank bar.
+    accumulateOverflowToTank(credit) { return lifecycle.accumulateOverflowToTank.call(this, credit); }
     
     updateHUD() { return hudStatus.updateHUD.call(this); }
     

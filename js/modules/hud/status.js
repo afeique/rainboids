@@ -505,27 +505,79 @@ export function spawnTankRecharge(slotIndex, triforceLeftX = 36, centerY = 35) {
     else return;
 
     if (!this._triforceVaporize) this._triforceVaporize = [];
-    const PARTICLES = 24;
-    for (let i = 0; i < PARTICLES; i++) {
+
+    // 5.114.0 — Beefed sparkling appearance animation. Three layers
+    // so the new triforce piece reads as a clear "+1 reward":
+    //   1. Burst of 40 outward sparkle motes (was 24).
+    //   2. Radiating sparkle rays — 8 elongated streaks oriented
+    //      outward from the triangle center so the eye reads the
+    //      appearance as a starburst.
+    //   3. Slow-rising halo motes that drift up past the triforce so
+    //      the triangle looks "settled into existence".
+    // Plus the bright flash sprite layered on top.
+
+    // 1. Outward sparkle burst.
+    const BURST = 40;
+    for (let i = 0; i < BURST; i++) {
         const a = Math.random() * Math.PI * 2;
-        const speed = 0.6 + Math.random() * 2.0;
+        const speed = 0.8 + Math.random() * 2.6;
         const ox = (Math.random() - 0.5) * L.size;
         const oy = (Math.random() - 0.5) * L.size;
         const roll = Math.random();
-        const color = roll < 0.55 ? '#7cffc8'
-            : roll < 0.85 ? '#bfffe6'
-            : '#ffffff';
+        const color = roll < 0.50 ? '#7cffc8'
+            : roll < 0.78 ? '#bfffe6'
+            : roll < 0.92 ? '#ffffff'
+            :              '#ffe87c'; // rare gold accent
         this._triforceVaporize.push({
             x: pos.x + ox,
             y: pos.y + oy,
             vx: Math.cos(a) * speed,
-            vy: Math.sin(a) * speed - 0.2,
+            vy: Math.sin(a) * speed - 0.25,
             life: 1.0,
-            decay: 0.025 + Math.random() * 0.02,
-            radius: 0.7 + Math.random() * 1.3,
+            decay: 0.022 + Math.random() * 0.020,
+            radius: 0.8 + Math.random() * 1.6,
             color,
         });
     }
+
+    // 2. Radiating sparkle rays — 8 elongated motes flying straight
+    // outward in a starburst pattern. Distinct visual layer from the
+    // chaotic burst above so the appearance reads as a "+1 STAR".
+    const RAYS = 8;
+    for (let i = 0; i < RAYS; i++) {
+        const a = (i / RAYS) * Math.PI * 2 + Math.random() * 0.15;
+        const speed = 3.2 + Math.random() * 0.8;
+        this._triforceVaporize.push({
+            x: pos.x,
+            y: pos.y,
+            vx: Math.cos(a) * speed,
+            vy: Math.sin(a) * speed,
+            life: 1.0,
+            decay: 0.038,           // fade faster — they should streak briefly
+            radius: 2.2 + Math.random() * 0.6,
+            color: '#ffffff',
+        });
+    }
+
+    // 3. Rising halo — 6 motes drifting upward past the triforce,
+    // settle slowly so the new triangle looks like it materialized
+    // out of falling magic dust.
+    const HALO = 6;
+    for (let i = 0; i < HALO; i++) {
+        const ox = (Math.random() - 0.5) * (L.size * 1.6);
+        const oy = (Math.random() - 0.3) * L.size;
+        this._triforceVaporize.push({
+            x: pos.x + ox,
+            y: pos.y + oy,
+            vx: (Math.random() - 0.5) * 0.4,
+            vy: -1.2 - Math.random() * 0.8, // upward drift
+            life: 1.0,
+            decay: 0.013 + Math.random() * 0.008, // long-lived
+            radius: 1.0 + Math.random() * 1.4,
+            color: '#aaffea',
+        });
+    }
+
     this._triforceFlash = { x: pos.x, y: pos.y, t: 0, palette: 'green' };
 }
 

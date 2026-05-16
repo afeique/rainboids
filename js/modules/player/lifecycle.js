@@ -202,21 +202,35 @@ export function _consumeTank() {
 const HUD_TRIFORCE_LEFT_X = 36;
 const HUD_BAR_CENTER_Y = 35;
 
-// 5.88.0 — health-pickup overflow → tank progress. `amountHealed` is
-// the actual HP delta (post-cap); `orbAmount` is the original orb value
-// before cap. Overflow = orbAmount - amountHealed. When the accumulated
-// overflow reaches one full max-HP, +1 tank (capped at MAX_HEALTH_TANKS).
+// 5.88.0 — health-pickup overflow → tank progress.
+// 5.114.0 — Threshold is now FLAT 100 HP of overflow per tank (was
+//   maxHp-worth, which scaled the cost with HEALTH_BOOST stacks). A
+//   crisp number tells the player "every 100 wasted HP earns you a
+//   triforce piece." Inventory regen and the REGEN powerup both feed
+//   into this via accumulateOverflowToTank (called from the regen
+//   tick when health is at cap).
+//
+// `amountHealed` is the actual HP delta (post-cap); `orbAmount` is the
+// original orb value before cap.
+const TANK_OVERFLOW_HP = 100;
 export function applyHealthOrbToTanks(orbAmount, amountHealed) {
     const overflow = Math.max(0, orbAmount - amountHealed);
     if (overflow <= 0 && this.player.health < this.player.getEffectiveMaxHealth()) return;
 
-    const maxHp = this.player.getEffectiveMaxHealth();
-    if (this.player._tankProgress === undefined) this.player._tankProgress = 0;
-
-    // If the player picks up health while already at max HP, the entire
-    // orb amount counts toward tank progress. Otherwise just the overflow.
+    // Picking up health while ALREADY at max HP credits the full orb;
+    // otherwise just the unused portion.
     const credit = overflow > 0 ? overflow : orbAmount;
-    this.player._tankProgress += credit / maxHp;
+    accumulateOverflowToTank.call(this, credit);
+}
+
+// 5.114.0 — Shared accumulator. Any HP "wasted" past the cap (orb
+// overflow, regen ticks at max, etc.) feeds in here. Every 100 HP of
+// accumulated overflow grants +1 tank up to MAX_HEALTH_TANKS, fires
+// the sparkling spawnTankRecharge animation, and emits an audio cue.
+export function accumulateOverflowToTank(credit) {
+    if (!(credit > 0) || !this.player) return;
+    if (this.player._tankProgress === undefined) this.player._tankProgress = 0;
+    this.player._tankProgress += credit / TANK_OVERFLOW_HP;
 
     while (this.player._tankProgress >= 1 && this.healthTanks < MAX_HEALTH_TANKS) {
         this.healthTanks++;

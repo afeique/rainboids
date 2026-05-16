@@ -253,11 +253,21 @@ export function updatePowerups() {
     // 5.106.0 — Each granted HP fires a green "+N" floater (aggregated
     // per-player in createDamageNumber so a continuous regen reads as
     // a single growing number, not +1 spam).
-    const regenStacks = this.getPowerupStacks('REGEN');
-    if (regenStacks > 0 && this.active && this.health > 0) {
+    // 5.114.0 — Combat-gated. Regen ONLY ticks after the player has
+    // gone REGEN_DAMAGE_GATE_MS without taking damage. Taking a hit
+    // resets `_lastDamageAt` (already maintained in lifecycle.takeDamage),
+    // which puts regen back on its 4-second cooldown. Net effect: regen
+    // is a between-fights recovery tool, not an in-combat tank.
+    // Inventory items can also contribute regen (see getEffectiveRegen).
+    const regenPerSec = this.getEffectiveRegen();
+    const REGEN_DAMAGE_GATE_MS = 4000;
+    const now = Date.now();
+    const sinceDamage = now - (this._lastDamageAt || 0);
+    if (regenPerSec > 0 && this.active && this.health > 0
+            && sinceDamage >= REGEN_DAMAGE_GATE_MS) {
         const cap = this.getEffectiveMaxHealth();
         if (this.health < cap) {
-            this._regenAcc = (this._regenAcc || 0) + (regenStacks * 0.5) * (16 / 1000);
+            this._regenAcc = (this._regenAcc || 0) + regenPerSec * (16 / 1000);
             let regenTickGained = 0;
             while (this._regenAcc >= 1 && this.health < cap) {
                 this.health = Math.min(cap, this.health + 1);
@@ -274,8 +284,21 @@ export function updatePowerups() {
                 );
             }
         } else {
+            // 5.114.0 — At max HP, regen ticks count toward the
+            // overflow → tank accumulator. So a player camping at max
+            // with REGEN stacks slowly builds toward an extra triforce
+            // piece, mirroring the orb-overflow path.
+            const overflow = regenPerSec * (16 / 1000);
+            if (this.gameEngine && typeof this.gameEngine.accumulateOverflowToTank === 'function') {
+                this.gameEngine.accumulateOverflowToTank(overflow);
+            }
             this._regenAcc = 0;
         }
+    } else if (sinceDamage < REGEN_DAMAGE_GATE_MS) {
+        // Within the no-regen window after taking damage: reset the
+        // accumulator so a returning regen tick doesn't dump stored
+        // progress all at once.
+        this._regenAcc = 0;
     }
 
     // 5.75.0 — STATIC_FIELD regen. After 8s of no damage, the static
@@ -329,6 +352,30 @@ export function getRangeMultiplier() {
     // `config.range` modifiers (e.g. Rail Driver 0.85) are the only
     // remaining axis affecting bullet flight distance.
     return 1;
+}
+
+// 5.114.0 — Effective passive regen rate (HP per second). Sums:
+//   - REGEN powerup: 0.5 HP/s per stack
+//   - Inventory items with a `regenBonus` field: each item's bonus
+//     (HP/s). Items roll regenBonus during createItem in
+//     world/item-system.js (small chance of a secondary regen roll).
+//   - Base: 0 — the player has no innate regen.
+//
+// Combat-gated downstream by updatePowerups (4-second no-damage
+// window before regen ticks).
+export function getEffectiveRegen() {
+    let regen = 0;
+    const stacks = this.getPowerupStacks ? this.getPowerupStacks('REGEN') : 0;
+    if (stacks > 0) regen += stacks * 0.5;
+    if (this.equippedItems) {
+        for (const slot of Object.keys(this.equippedItems)) {
+            const it = this.equippedItems[slot];
+            if (it && typeof it.regenBonus === 'number') {
+                regen += it.regenBonus;
+            }
+        }
+    }
+    return regen;
 }
 
 export function getEffectiveShield() {

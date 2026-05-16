@@ -952,6 +952,11 @@ export class Player {
         return progression.getGoldFindMultiplier.call(this);
     }
 
+    // 5.114.0 — effective regen HP/sec (powerup stacks + inventory).
+    getEffectiveRegen() {
+        return progression.getEffectiveRegen.call(this);
+    }
+
     getEffectiveShield() {
         return progression.getEffectiveShield.call(this);
     }

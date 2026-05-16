@@ -53,6 +53,24 @@ function _pick(arr) {
  *     accentColor,  // SLOT_ACCENT[slot]
  *   }
  */
+// 5.114.0 — Secondary regen affix. Items have a small chance to roll
+// a "+X HP/s regen" SECONDARY bonus on top of their primary HP /
+// toughness affix. Scales with item level so a wave-30 item drop
+// rolls a meaningful regen rate. The roll is independent of the
+// primary affix and stacks across all 4 equipped slots — a 4-item
+// regen build comes out around 1.5-2 HP/s, gated by the no-damage
+// timer in updatePowerups.
+//   roll chance: 25%
+//   value:       0.25 + (level - 1) × 0.04   (rounded to 1 decimal)
+//                L1=0.25, L5=0.41, L10=0.61, L20=1.01, L30=1.41
+const REGEN_AFFIX_CHANCE = 0.25;
+function _rollRegenAffix(level) {
+    if (Math.random() >= REGEN_AFFIX_CHANCE) return 0;
+    const L = Math.max(1, level | 0);
+    const raw = 0.25 + (L - 1) * 0.04;
+    return Math.round(raw * 10) / 10;
+}
+
 export function createItem(slot, level) {
     if (!ITEM_BASES[slot]) {
         // Defensive fallback — should not happen.
@@ -68,9 +86,16 @@ export function createItem(slot, level) {
         ? getHpBonusForLevel(level)
         : getToughnessBonusForLevel(level);
 
-    const bonusLabel = bonusType === 'hp'
+    // 5.114.0 — Roll a secondary regen affix. Items with regen show
+    // "+N MAX HP · +X/s REGEN" in the bonusLabel so the inventory
+    // pane reads the dual roll at a glance.
+    const regenBonus = _rollRegenAffix(level);
+    let bonusLabel = bonusType === 'hp'
         ? `+${bonus} MAX HP`
         : `+${bonus}% DEF`;
+    if (regenBonus > 0) {
+        bonusLabel += ` · +${regenBonus}/s REGEN`;
+    }
 
     return {
         slot,
@@ -79,6 +104,7 @@ export function createItem(slot, level) {
         bonus,
         bonusType,
         bonusLabel,
+        regenBonus,  // 0 when not rolled; getEffectiveRegen sums across slots
         accentColor: SLOT_ACCENT[slot] || '#33ddff',
     };
 }
@@ -92,7 +118,13 @@ export function createItem(slot, level) {
 export function isUpgrade(current, candidate) {
     if (!candidate) return false;
     if (!current) return true;
-    return candidate.bonus > current.bonus;
+    // 5.114.0 — Score combines primary bonus + regen affix (×8) so an
+    // item with a regen roll can edge out a slightly-higher pure-stat
+    // item. The 8× weight makes 1 HP/s of regen ≈ 8 HP/% of primary
+    // bonus, which roughly matches their per-second value to the
+    // player. Equal scores → no upgrade (avoids spam-replacing).
+    const score = (item) => (item.bonus || 0) + 8 * (item.regenBonus || 0);
+    return score(candidate) > score(current);
 }
 
 // Re-export the slot metadata so callers can iterate slots without
