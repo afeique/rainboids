@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.2.3] - 2026-05-17
+
+### Added — Laser-Sight ASSISTS toggle
+
+New `laserSight` assists option controls whether the always-on muzzle
+laser + spread-cone visualization renders. Defaults: desktop **ON**
+(preserves pre-6.2.3 behavior); mobile **OFF** (mobile already uses
+the touch-position reticle and never drew the laser anyway).
+
+### Fixed — Spread cone clipped to viewport edges
+
+The Scatter Shot / Storm Needles cone-of-fire wedge previously rendered
+all the way out to the weapon's bullet range (~688px for Scatter at
+default settings), which routinely shot the fill / boundary arc off-
+screen and read as "the cone is way too long." The cone visual is now
+ray-vs-AABB-clipped to the visible viewport on all three rays (center
+axis + both edges). **Actual bullet flight is unchanged** — only the
+visual.
+
+---
+
 ## [6.2.2] - 2026-05-17
 
 ### Changed — Inventory slot keys + name template rethemed for space vocabulary

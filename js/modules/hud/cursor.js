@@ -299,6 +299,33 @@ function _predictPrimaryPiercing(player) {
     return p;
 }
 
+// 6.2.3 — Ray-vs-viewport-AABB. Returns the positive `t` along
+// (cosA, sinA) starting at (ox, oy) where the ray exits the visible
+// world rectangle. Caller is expected to live inside the viewport;
+// `t` is always >= 0. Used by `_drawSpreadCone` to keep the cone
+// from extending past the screen edge.
+function _viewportRayDistance(engine, ox, oy, cosA, sinA) {
+    const cam = engine.camera;
+    if (!cam) return Infinity;
+    const zoom = cam.zoom || 1;
+    const cw = engine.canvas ? engine.canvas.width : engine.width;
+    const ch = engine.canvas ? engine.canvas.height : engine.height;
+    const visW = cw / zoom;
+    const visH = ch / zoom;
+    const halfPadW = (visW - cw) / 2;
+    const halfPadH = (visH - ch) / 2;
+    const left   = cam.x - halfPadW;
+    const right  = cam.x + cw + halfPadW;
+    const top    = cam.y - halfPadH;
+    const bottom = cam.y + ch + halfPadH;
+    let t = Infinity;
+    if (cosA > 0.0001)      t = Math.min(t, (right  - ox) / cosA);
+    else if (cosA < -0.0001) t = Math.min(t, (left   - ox) / cosA);
+    if (sinA > 0.0001)      t = Math.min(t, (bottom - oy) / sinA);
+    else if (sinA < -0.0001) t = Math.min(t, (top    - oy) / sinA);
+    return Math.max(0, t);
+}
+
 // Render a cone-of-fire wedge from the muzzle spanning the weapon's
 // spreadAngle. Used by Scatter Shot (predictable pellet fan) AND
 // Storm Needles (single needle with randomized jitter within the
@@ -322,6 +349,21 @@ function _drawSpreadCone(engine, player, ox, oy, angle, maxRange) {
     const a2 = angle + halfSpread;
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
+
+    // 6.2.3 — Cap maxRange so no part of the wedge (center axis or
+    // either edge ray) extends past the visible viewport. Without this
+    // the bullet-range-based maxRange (688 px for Scatter at default
+    // settings) routinely shoots the cone fill / boundary arc into
+    // off-screen space, which reads as "the cone is way too long" even
+    // though the pellets WOULD travel that far. We clamp the visual to
+    // screen edges; the actual bullet flight is unchanged.
+    const screenCap = Math.min(
+        _viewportRayDistance(engine, ox, oy, cosA, sinA),
+        _viewportRayDistance(engine, ox, oy, Math.cos(a1), Math.sin(a1)),
+        _viewportRayDistance(engine, ox, oy, Math.cos(a2), Math.sin(a2)),
+    );
+    if (screenCap > 0) maxRange = Math.min(maxRange, screenCap);
+
     const e1x = ox + Math.cos(a1) * maxRange;
     const e1y = oy + Math.sin(a1) * maxRange;
     const e2x = ox + Math.cos(a2) * maxRange;
@@ -470,6 +512,10 @@ export function drawLaserPointerAim() {
     if (this.radialMenu && this.radialMenu.isOpen && this.radialMenu.isOpen()) return;
     // 5.95.1 — Suppress on mobile (replaced by touch-position reticle).
     if (isMobile()) return;
+    // 6.2.3 — Desktop-only Laser Sight ASSIST toggle. Gates both the
+    // single-line laser AND the cone-of-fire wedge. Default ON (mirrors
+    // the pre-6.2.3 always-on behavior). Mobile already returned above.
+    if (this.assists && this.assists.laserSight === false) return;
 
     const player = this.player;
     const ctx = this.ctx;

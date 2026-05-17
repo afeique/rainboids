@@ -3858,10 +3858,14 @@ export class GameEngine {
         // Mobile bakes Aim Assist / Auto Aim / Auto Fire all ON (tap
         // anywhere on the canvas DASHES, auto-fire handles all shooting).
         // Desktop defaults: all off; user opts in via ASSISTS tab.
+        // 6.2.3 — `laserSight` added. Default ON on desktop (preserves
+        // the always-on pre-6.2.3 behavior of the muzzle laser + cone
+        // visualization); mobile gets it false (mobile already uses the
+        // touch-position reticle and never drew the laser anyway).
         const mobile = isMobile();
         const defaults = mobile
-            ? { aimAssist: true, autoAim: true, autoFire: true }
-            : { aimAssist: false, autoAim: false, autoFire: false };
+            ? { aimAssist: true, autoAim: true, autoFire: true, laserSight: false }
+            : { aimAssist: false, autoAim: false, autoFire: false, laserSight: true };
         try {
             const raw = localStorage.getItem('rainboidsAssists');
             const stored = raw ? JSON.parse(raw) : null;
