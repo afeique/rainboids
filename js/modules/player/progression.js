@@ -281,14 +281,16 @@ export function getEffectiveShield() {
     const shieldBoostAmount = shieldBoostStacks * 8;
 
     // 5.99.4 — Diablo defensive items. Each equipped toughness item
-    // (shield, plating) adds its `bonus` directly to the shield
-    // percentage. Stacks on top of SHIELD_BOOST.
+    // (shielding, chassis — slot keys rethemed in 6.2.2) adds its
+    // `bonus` directly to the shield percentage. Stacks on top of
+    // SHIELD_BOOST. `this.shield` (the base 15% damage reduction) is
+    // a different concept and unrelated to the inventory slot.
     let itemBonus = 0;
     if (this.equippedItems) {
-        const s = this.equippedItems.shield;
-        const p = this.equippedItems.plating;
+        const s = this.equippedItems.shielding;
+        const c = this.equippedItems.chassis;
         if (s && s.bonusType === 'toughness') itemBonus += s.bonus;
-        if (p && p.bonusType === 'toughness') itemBonus += p.bonus;
+        if (c && c.bonusType === 'toughness') itemBonus += c.bonus;
     }
 
     const totalShield = baseShield + shieldBoostAmount + itemBonus;
@@ -300,15 +302,15 @@ export function getEffectiveMaxHealth() {
     const healthBoostStacks = this.getPowerupStacks('HEALTH_BOOST');
     const healthBoostAmount = healthBoostStacks * 35; // +35 max health per stack (was +25)
 
-    // 5.99.4 — Diablo defensive items (HP slots). Each equipped HP item
-    // (helm, armor) adds its `bonus` to max health. Stacks on top of
-    // HEALTH_BOOST.
+    // 5.99.4 — Diablo defensive items (HP slots). Each equipped HP
+    // item (cockpit, hull — slot keys rethemed in 6.2.2) adds its
+    // `bonus` to max health. Stacks on top of HEALTH_BOOST.
     let itemBonus = 0;
     if (this.equippedItems) {
-        const h = this.equippedItems.helm;
-        const a = this.equippedItems.armor;
+        const c = this.equippedItems.cockpit;
+        const h = this.equippedItems.hull;
+        if (c && c.bonusType === 'hp') itemBonus += c.bonus;
         if (h && h.bonusType === 'hp') itemBonus += h.bonus;
-        if (a && a.bonusType === 'hp') itemBonus += a.bonus;
     }
 
     const totalMaxHealth = baseMaxHealth + healthBoostAmount + itemBonus;

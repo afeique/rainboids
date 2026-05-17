@@ -763,9 +763,9 @@ export function dropOrbsFromEntity(x, y, entity = null) {
             this.statPickupPool.get(x, y, slot, wave, item);
         };
 
-        tryRoll(Math.random() < 0.5 ? 'helm' : 'armor', hpRate);
-        tryRoll(Math.random() < 0.5 ? 'shield' : 'plating', toughRate);
-        tryRoll('trinket', trinkRate);
+        tryRoll(Math.random() < 0.5 ? 'cockpit' : 'hull', hpRate);
+        tryRoll(Math.random() < 0.5 ? 'shielding' : 'chassis', toughRate);
+        tryRoll('nanites', trinkRate);
     }
 
     // ── Money orbs ── no cooldown.

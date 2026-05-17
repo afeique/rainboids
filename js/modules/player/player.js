@@ -200,7 +200,7 @@ export class Player {
         // the candidate's score (primary + 8× regen affix) beats the
         // currently-equipped item's score.
         this.equippedItems = {
-            helm: null, armor: null, shield: null, plating: null, trinket: null,
+            cockpit: null, hull: null, shielding: null, chassis: null, nanites: null,
         };
 
         this.initializePlayer();
@@ -291,7 +291,7 @@ export class Player {
         if (!item || !item.slot) return { equipped: false, current: null };
         if (!this.equippedItems) {
             this.equippedItems = {
-                helm: null, armor: null, shield: null, plating: null, trinket: null,
+                cockpit: null, hull: null, shielding: null, chassis: null, nanites: null,
             };
         }
         const prev = this.equippedItems[item.slot] || null;

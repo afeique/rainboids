@@ -62,10 +62,14 @@ export class StatPickup {
         // receive on contact. dropOrbsFromEntity rolls rarity + item
         // at drop time, checks isUpgrade against equipped, and only
         // spawns the pickup when it's a strict upgrade. `kind` is the
-        // slot id ('helm' / 'armor' / 'shield' / 'plating' / 'trinket')
+        // slot id ('cockpit' / 'hull' / 'shielding' / 'chassis' / 'nanites')
         // or the legacy aliases ('hpup' / 'toughness') for callers
         // that haven't migrated.
-        const SLOT_KIND_LEGACY = { hpup: 'helm', toughness: 'shield' };
+        // 6.2.2 — Legacy aliases updated to map to the new slot keys
+        // (hpup / toughness names predate the 6.0 inventory revamp; we
+        // preserve them in case any external save/replay path still
+        // emits them as kinds).
+        const SLOT_KIND_LEGACY = { hpup: 'cockpit', toughness: 'shielding' };
         this.kind = SLOT_KIND_LEGACY[kind] || kind;
         this.level = Math.max(1, level | 0);
         this.item = item || null;
@@ -160,9 +164,9 @@ export class StatPickup {
         // 6.0.0 — Slot kind drives the body color; rarity drives the
         // outer halo color/intensity so the player reads "what slot"
         // from the body and "how good" from the glow.
-        const isHp     = this.kind === 'helm' || this.kind === 'armor' || this.kind === 'hpup';
-        const isTough  = this.kind === 'shield' || this.kind === 'plating' || this.kind === 'toughness';
-        const isTrink  = this.kind === 'trinket';
+        const isHp     = this.kind === 'cockpit' || this.kind === 'hull' || this.kind === 'hpup';
+        const isTough  = this.kind === 'shielding' || this.kind === 'chassis' || this.kind === 'toughness';
+        const isTrink  = this.kind === 'nanites';
 
         ctx.save();
         ctx.globalAlpha = this.opacity;

@@ -98,6 +98,8 @@ export class UIManager {
             assistAutoAim: document.getElementById('assist-auto-aim'),
             assistAutoFire: document.getElementById('assist-auto-fire'),
             // 6.1.1 — assistAutoPower removed; autoFire drives power too.
+            // 6.2.3 — Laser Sight toggle. Default ON, desktop-only.
+            assistLaserSight: document.getElementById('assist-laser-sight'),
             // HUD pause button (top-left)
             hudPauseBtn: document.getElementById('hud-pause-btn'),
             hudShopBtn: document.getElementById('hud-shop-btn')
@@ -1223,6 +1225,8 @@ export class UIManager {
         if (this.elements.assistAutoAim) this.elements.assistAutoAim.checked = !!a.autoAim;
         if (this.elements.assistAutoFire) this.elements.assistAutoFire.checked = !!a.autoFire;
         // 6.1.1 — autoPower retired; autoFire drives both barrels.
+        // 6.2.3 — Laser Sight toggle. Default ON; falsy → laser hidden.
+        if (this.elements.assistLaserSight) this.elements.assistLaserSight.checked = a.laserSight !== false;
     }
 
     setAudioManager(audioManager) {
@@ -1526,6 +1530,8 @@ export class UIManager {
         wireAssist(this.elements.assistAutoAim, 'autoAim');
         wireAssist(this.elements.assistAutoFire, 'autoFire');
         // 6.1.1 — autoPower wiring removed; merged into autoFire.
+        // 6.2.3 — Laser Sight toggle.
+        wireAssist(this.elements.assistLaserSight, 'laserSight');
         
         // Music controls
         this.elements.musicPlayPause.addEventListener('click', () => {

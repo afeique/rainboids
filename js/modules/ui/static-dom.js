@@ -237,6 +237,11 @@ function _buildAssistsTab() {
           desc: 'Automatically aim at the nearest target.' },
         { id: 'assist-auto-fire', title: 'Auto Fire',
           desc: 'Fire primary AND power weapon automatically.' },
+        // 6.2.3 — Laser Sight toggle. Renders the muzzle laser / cone-
+        // of-fire wedge so the player can read aim + spread at a
+        // glance. Desktop-only (mobile uses the touch reticle).
+        { id: 'assist-laser-sight', title: 'Laser Sight',
+          desc: 'Show the muzzle laser pointer and spread cone.' },
     ];
     const mobileRows = [];
     const rows = mobile ? mobileRows : desktopRows;

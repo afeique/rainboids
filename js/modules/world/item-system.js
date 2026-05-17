@@ -1,5 +1,5 @@
 // 6.0.0 — Items overhaul:
-//   - 5 slots (added 'trinket' for regen-focused gear)
+//   - 5 slots (cockpit, hull, shielding, chassis, nanites — 6.2.2)
 //   - Rarity tiers (common / rare / epic) drive primary-stat variance
 //     and a visible glow color so the player can spot a good drop at
 //     a distance.
@@ -24,7 +24,7 @@
 //   25% roll chance. Value: 0.20 + (wave - 1) × 0.035 (rounded 1 dp).
 
 import {
-    ITEM_BASES, ITEM_PREFIXES, ITEM_SUFFIXES,
+    ITEM_BASES, ITEM_PREFIXES,
     SLOT_BONUS_TYPE, SLOT_LABEL, SLOT_ACCENT, SLOT_ORDER,
     RARITY_TIERS, RARITY_ORDER, rollRarity,
 } from './item-names.js';
@@ -77,17 +77,20 @@ function _rollRegenAffix(level) {
  *   }
  */
 export function createItem(slot, level, rarityKey = null) {
-    if (!ITEM_BASES[slot]) slot = 'helm';
+    if (!ITEM_BASES[slot]) slot = 'cockpit';
     const bonusType = SLOT_BONUS_TYPE[slot];
     const rarity = rarityKey || rollRarity();
     const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
     const mult = _rollMult(rarity);
 
+    // 6.2.1 — Name template: `[RarityAdj?] [Prefix] [Base]`. The old
+    // `of the X` suffix dropped along with the medieval-armor theme;
+    // space-engineering names read tighter as 2 words (e.g.
+    // "Ablative Hull", "Adaptive Nanites").
     const prefix = _pick(ITEM_PREFIXES[bonusType] || ITEM_PREFIXES.hp);
     const base   = _pick(ITEM_BASES[slot]);
-    const suffix = _pick(ITEM_SUFFIXES[bonusType] || ITEM_SUFFIXES.hp);
     const adj = tier.rarityAdjective ? `${tier.rarityAdjective} ` : '';
-    const name = `${adj}${prefix} ${base} ${suffix}`;
+    const name = `${adj}${prefix} ${base}`;
 
     let bonus;
     let regenBonus;

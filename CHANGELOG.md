@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.2.2] - 2026-05-17
+
+### Changed — Inventory slot keys + name template rethemed for space vocabulary
+
+Internal slot identifiers (used by `player.equippedItems`, drop routing,
+and equip logic) renamed to match the LABEL vocabulary so engine grep
+and file scans surface space-themed names consistently:
+
+- `helm` → `cockpit` (forward-mounted HP hardware)
+- `armor` → `hull` (main HP body armor)
+- `shield` → `shielding` (toughness energy shield)
+- `plating` → `chassis` (toughness structural)
+- `trinket` → `nanites` (regen module)
+
+`player.shield` (the damage-reduction stat, base 15%) is unrelated to
+the inventory slot and intentionally left as `shield` — different
+concept, predates the inventory.
+
+Item name template also slimmed: `[RarityAdj?] [Prefix] [Base]` (the
+trailing ` of [Suffix]` suffix was dropped — names read shorter and
+the rarity adjective carries more signal).
+
+Files touched: `combat-manager.js`, `world/item-names.js`,
+`world/item-system.js`, `player/player.js`, `player/progression.js`,
+`world/stat-pickup.js`, `ui/static-dom.js`, `ui/ui-manager.js`.
+
+---
+
 ## [6.2.0] - 2026-05-17
 
 ### Added — SFX variant system (8 per sound, ~525 unique WAVs)
