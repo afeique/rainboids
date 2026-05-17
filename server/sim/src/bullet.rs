@@ -1131,7 +1131,7 @@ pub fn update_enemy_bullets(
 //   5. Lifetime check.
 //   6. Off-screen check (arena bounds).
 
-use crate::sim::state::BulletState;
+use crate::state::BulletState;
 
 /// Per-tick context for `update_bullets`. Lean — only the fields the
 /// simplified step consumes today. The richer `PlayerBulletContext` /

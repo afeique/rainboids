@@ -6,8 +6,12 @@ import { GameEngine } from './modules/game-engine.js';
 import { GAME_STATES } from './modules/core/constants.js';
 import { VERSION } from './modules/core/version.js';
 import { EngineDriver } from './engine/engine-driver.js';
-import { openMultiplayerModal } from './net/multiplayer-modal.js';
-import { SESSION_STORAGE_KEY } from './net/ws-client.js';
+// 2026-05-17 (WASM pivot, Phase 0): MULTIPLAYER button now navigates to
+// `/mp` (separate page, separate WASM-backed product) instead of opening
+// the legacy modal. The modal source (js/net/multiplayer-modal.js) and
+// the related EngineDriver online path remain on disk but unreachable
+// from the title screen; archived in Phase 1 once the WASM round-trip
+// is proven. See docs/Multiplayer WASM Pivot – 2026-05-17.md.
 import { isMobile as _isMobilePlatform } from './modules/platform/platform-detect.js';
 import { buildStaticDom } from './modules/ui/static-dom.js';
 
@@ -173,22 +177,6 @@ class RainboidsGame {
             this.engineDriver.startSolo(ge._resolveSoloOptions({ continueRun: wantContinue }));
         };
 
-        // Online entry. Called when the multiplayer modal hands off the
-        // ConnectionTask after a successful Welcome. Title-screen prelude
-        // is identical to solo so the player can't tell the modes apart
-        // from this point on (the whole point of "solo and multiplayer
-        // run identically").
-        const launchOnline = (connection, welcome) => {
-            if (_gameStarted) return;
-            if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) {
-                // Title already left for some reason — don't double-start.
-                try { connection.disconnect(); } catch {}
-                return;
-            }
-            consumeTitleScreen({ chime: 'powerup' });
-            this.engineDriver.startOnline({ connection, welcome });
-        };
-
         const ge = () => this.gameEngine;
         const hitId = (e) => {
             const g = ge();
@@ -205,21 +193,14 @@ class RainboidsGame {
             return null;
         };
 
-        // 5.81 introduced the v1 Hello/Welcome modal. 5.85 wires its
-        // "▶ START MULTIPLAYER GAME" button to actually launch a run
-        // through the EngineDriver — the modal hands the live socket
-        // over and goes away; gameplay continues identically to solo.
+        // 2026-05-17 (WASM pivot): MULTIPLAYER is a separate product
+        // at `/mp`. Title button navigates there instead of opening a
+        // modal that connects via the legacy EngineDriver online path.
+        // The /mp page boots the WASM-backed engine fresh; no state
+        // crosses from the solo title screen.
         const openMultiplayer = () => {
-            const ge = this.gameEngine;
-            if (ge.game.state !== GAME_STATES.TITLE_SCREEN) return;
-            let session = null;
-            try { session = localStorage.getItem(SESSION_STORAGE_KEY); } catch {}
-            openMultiplayerModal({
-                clientVersion: VERSION,
-                displayName: 'Pilot',
-                session,
-                onStartGame: (connection, welcome) => launchOnline(connection, welcome),
-            });
+            if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) return;
+            window.location.href = '/mp';
         };
 
         const onMove = (e) => {

@@ -74,21 +74,18 @@ export const FEATURE_FLAG_QUERY = 'multiplayer';
 
 /**
  * Returns true if the multiplayer UI should be exposed to the player.
- * Off by default — the WIP button hides itself in production builds.
+ *
+ * 2026-05-17 (WASM pivot, Phase 0): always returns true. MP is a
+ * separate product at `/mp` and the title-screen button navigates
+ * there directly (no modal, no legacy WS connection from this entry).
+ * The query/localStorage flags below are vestigial — kept so any
+ * existing dogfooder bookmark with `?multiplayer=1` still works, but
+ * the default is now "visible to everyone."
+ *
+ * See `docs/Multiplayer WASM Pivot – 2026-05-17.md`.
  */
 export function multiplayerEnabled() {
-    try {
-        if (typeof window !== 'undefined' && window.location?.search) {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get(FEATURE_FLAG_QUERY) === '1') return true;
-        }
-    } catch {}
-    try {
-        if (typeof localStorage !== 'undefined' && localStorage.getItem(FEATURE_FLAG_KEY) === '1') {
-            return true;
-        }
-    } catch {}
-    return false;
+    return true;
 }
 
 /**

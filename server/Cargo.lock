@@ -1187,6 +1187,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
+name = "rainboids-client-wasm"
+version = "0.1.0"
+dependencies = [
+ "rainboids-sim",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "rainboids-server"
 version = "0.1.0"
 dependencies = [
@@ -1202,6 +1210,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "nanoid",
  "pretty_assertions",
+ "rainboids-sim",
  "rand",
  "rand_pcg",
  "serde",
@@ -1213,6 +1222,21 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "rainboids-sim"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "glam",
+ "nanoid",
+ "pretty_assertions",
+ "rand",
+ "rand_pcg",
+ "serde",
+ "thiserror",
  "uuid",
 ]
 

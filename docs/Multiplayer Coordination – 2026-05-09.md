@@ -1,3 +1,52 @@
+> ## WASM Pivot — 2026-05-17
+>
+> **This doc is superseded by [Multiplayer WASM Pivot – 2026-05-17.md](Multiplayer%20WASM%20Pivot%20%E2%80%93%202026-05-17.md).**
+>
+> The hand-port + LoopbackConnection + parity-fixture strategy described
+> below is being retired. New architecture: one Rust simulation crate
+> (`rainboids-sim`) compiled both natively (for the server) and to
+> WebAssembly (for the client). MP becomes a deliberately separate
+> product, lives at `/mp`, and develops its own identity. Solo at `/`
+> stays bit-identical to current master and continues to iterate at its
+> own pace.
+>
+> The decision was made 2026-05-17 after the hand-port parity model
+> proved unmaintainable: nine months of solo iteration (5.93 → 6.2.0,
+> including the 6.0.x economy overhaul — leveling retired, gold-only,
+> rarity items, trinket slot) landed without any matching Rust-side
+> changes. The parity tests still passed only because nothing changed
+> in Rust; the JS side ran away.
+>
+> **What changes in Phase 0:**
+> - `server/` becomes a Cargo workspace with `sim/`, `server-bin/`,
+>   and `client-wasm/` member crates.
+> - `js/mp/` directory + `mp.html` page added; the title-screen
+>   MULTIPLAYER button now navigates to `/mp` instead of opening the
+>   legacy modal.
+> - Parity scaffolding (`server/tests/parity_*.rs`, `tests/unit/sim/`,
+>   `schema/SIM_SPEC.md`) is archived to `archive/sim-parity/`.
+> - `VERSION-MP` and `CHANGELOG-MP.md` are introduced so MP versions
+>   independently from solo.
+>
+> **What stays in place (for now):**
+> - `js/sim/*.js` and the relocated `server/sim/src/*.rs` — left intact
+>   so existing solo + legacy-MP imports keep compiling. These get
+>   overwritten module-by-module during the Phase 1+ fresh rewrite.
+> - The legacy MP modal + `EngineDriver` / `LoopbackConnection` /
+>   `Predictor` / `Interpolator` wiring in `js/net/` and `js/engine/`
+>   — now unreachable from the UI (MULTIPLAYER goes to `/mp`), to be
+>   archived once the WASM round-trip is proven.
+>
+> **What this means for the content below:** the Status snapshot,
+> Subsystem status table, Phase 2.5 collision pairings, Subagent
+> dispatch rounds, Open questions, and Hand-offs sections are
+> **historical** as of 2026-05-17. They document the hand-port era and
+> remain here for reference, but they are no longer active state — do
+> not act on them. For current MP work, consult the WASM Pivot plan
+> doc linked above.
+
+---
+
 # Multiplayer Two-Agent Coordination
 
 **Live status doc for the two Claude CLI agents collaborating on the

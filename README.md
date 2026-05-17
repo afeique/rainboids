@@ -324,25 +324,43 @@ Boss-tier TITANs at waves 5/10/15/20/25/30 receive an HP/speed multiplier on top
 
 ## Getting Started
 
-### Local Development
+### Local Development (solo only)
+
 ```bash
 git clone https://github.com/user/rainboids.git
 cd rainboids
 npm install
-npm run dev        # Vite dev server on port 8090
+npm run dev:solo   # Static server on http://localhost:8090 (no MP)
 ```
 
-### Build for Production
+### Local Development (with multiplayer)
+
+Multiplayer is an experimental separate product (see "Multiplayer (`/mp`)" below). Running it locally requires the Rust toolchain plus `wasm-pack`:
+
 ```bash
-npm run build      # Output to dist/
-npm run preview    # Preview production build
+# One-time prereqs
+rustup toolchain install stable    # if you don't have Rust
+cargo install wasm-pack            # WASM build tool
+
+# Then either:
+npm run dev                        # http-server + cargo + wasm-pack --watch (all three concurrent)
+# or one-shot:
+npm run wasm:build && npm run dev:solo
 ```
+
+The first `cargo run -p rainboids-server` and `wasm-pack build` are slow (cold compile). Subsequent runs are fast. Open `http://localhost:8090/mp` to reach the multiplayer page.
 
 ### Browser Requirements
 - Modern browser with ES6 module support
 - Canvas 2D support
 - WebGL2 (used for the particle layer; if unavailable the game still runs but explosion sprites are skipped)
 - Web Audio API for sound effects
+- WebAssembly support (multiplayer only; baseline in every browser since 2017)
+
+### Two products, two versions
+
+- **Solo** (`/`) — the canonical single-player game. Versioned via `VERSION` + `CHANGELOG.md`. Currently at `sp 6.2.0`.
+- **Multiplayer** (`/mp`) — experimental WASM-backed co-op product. Versioned via `VERSION-MP` + `CHANGELOG-MP.md`. Currently at `mp 0.1.0`. See `docs/Multiplayer WASM Pivot – 2026-05-17.md` for architectural context.
 
 ---
 
@@ -352,10 +370,22 @@ All commands are run with `npm run <script>` from the project root after `npm in
 
 ### Dev / build
 ```bash
-npm run dev                # Vite dev server (default port 8090) — hot reload
-npm start                  # Alias for `dev`
-npm run build              # Production build → dist/
-npm run preview            # Preview the dist/ build locally
+npm run dev                # All three: http-server + Rust MP server + wasm-pack --watch
+npm run dev:solo           # Static server only (no MP) — fastest for solo iteration
+npm run dev:server         # Rust MP server only (cargo run -p rainboids-server)
+npm run dev:wasm           # One-shot wasm-pack dev build → js/mp/wasm/
+npm run wasm:build         # wasm-pack release build (smaller binary)
+npm start                  # Alias for `dev:solo`
+```
+
+### Multiplayer (`/mp`)
+
+The MP product is a separate, experimental page backed by a Rust simulation crate (`server/sim/`) that compiles natively (for the server binary at `server/server-bin/`) AND to WebAssembly (for the browser client via `server/client-wasm/`). One simulation, two consumers — no JS↔Rust drift. See `docs/Multiplayer WASM Pivot – 2026-05-17.md` for the full plan.
+
+Cargo workspace lives under `server/`:
+```bash
+cargo check --manifest-path server/Cargo.toml --workspace
+cargo test --manifest-path server/Cargo.toml --workspace
 ```
 
 ### Asset generators
@@ -442,14 +472,16 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 ## Project Structure
 
 ```
-├── index.html                 # Game entry point
-├── vite.config.js             # Vite build configuration
+├── index.html                 # Solo game entry point (/)
+├── mp.html                    # Multiplayer entry point (/mp) — experimental
 ├── package.json               # Dependencies and scripts
-├── VERSION                    # Current semantic version
-├── CHANGELOG.md               # Full version history
+├── VERSION                    # Solo semantic version
+├── VERSION-MP                 # Multiplayer semantic version (independent)
+├── CHANGELOG.md               # Solo version history
+├── CHANGELOG-MP.md            # Multiplayer version history
 ├── CLAUDE.md                  # Claude Code project instructions
 ├── js/
-│   ├── main.js                # Game initialization
+│   ├── main.js                # Solo game initialization
 │   ├── playlist-data.js       # Music playlist configuration
 │   └── modules/
 │       ├── game-engine.js     # Game loop orchestrator
@@ -528,27 +560,30 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   └── hint-system.js #   Onboarding hint toasts
 │       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle renderer + atlas
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
-├── js/engine/                 # Mode-aware driver: solo & multiplayer share the same GameEngine (5.86.0)
-│   ├── engine-driver.js       #   EngineDriver: startSolo / startOnline / quit
-│   ├── mp-frame.js            #   pure helpers wiring EngineDriver into the gameLoop (MVD, 5.86.x)
-│   ├── online-status-overlay.js #  DOM badge for connection state in online mode
-│   └── index.js               #   public exports
-├── js/net/                    # Multiplayer client networking (5.84.0)
-│   ├── codec.js               #   bincode 1.x mirror (Reader/Writer, UUID + length-prefix rules)
-│   ├── protocol.js            #   wire enum tags + Hello/Welcome encoders/decoders
-│   ├── ws-client.js           #   ConnectionTask, feature-flag gating, session persistence
-│   ├── multiplayer-modal.js   #   title-screen connect modal (with onStartGame handoff in 5.86.0)
-│   └── (prediction, interpolation, matchmaking, session, event-firehose) — Phase 3 skeletons
-├── js/sim/                    # Simulation primitives — Phase 1 engine refactor (5.84.0, in progress)
-│   ├── codec.js               #   alternative codec (parallel to js/net/codec.js — to be reconciled)
-│   ├── fxp.js                 #   Q16.16 fixed-point math, mirrors server/src/sim/fxp.rs
-│   ├── protocol.js, rng.js    #   wire-protocol mirror + seeded PCG64
-│   ├── state.js, input.js     #   GameState + PlayerInput shapes
-│   └── trig.js, version.js    #   trig tables + WIRE_VERSION/SIM_VERSION
-├── schema/                    # Cross-language wire-protocol source-of-truth (5.84.0)
-│   ├── protocol.toml          #   variant tables (ClientMsg/ServerMsg/GameEvent), pinned versions
-│   ├── SIM_SPEC.md            #   simulation contract
-│   └── snapshots/             #   byte-level parity fixtures (empty until weeks 7–9)
+├── js/mp/                     # Multiplayer entry point + thin client layer (2026-05-17, Phase 0 stub)
+│   ├── mp-main.js             #   /mp boot: loads WASM, runs smoke harness
+│   ├── mp-engine.js           #   (Phase 1+) tick loop, WebSocket, WASM prediction
+│   ├── mp-renderer.js         #   (Phase 1+) canvas renderer over WASM linear memory
+│   ├── mp-input.js            #   (Phase 1+) input → wire-format PackedInput
+│   ├── mp-particles.js        #   (Phase 1+) cosmetic events → particle effects
+│   ├── mp-audio.js            #   (Phase 1+) sim events → SFX triggers (audio files shared with solo)
+│   ├── mp-hud.js              #   (Phase 1+) own + partner ship HUD, shared wave indicator
+│   └── wasm/                  #   wasm-pack output (generated; not committed if .gitignored)
+├── js/engine/                 # Mode-aware driver (legacy MP path; unreachable post-2026-05-17 pivot)
+│   ├── engine-driver.js       #   EngineDriver: startSolo / startOnline — only solo path now used
+│   └── …                      #   archives in Phase 1 with the legacy MP modal
+├── js/net/                    # Legacy MP networking (unreachable post-pivot; archives in Phase 1)
+├── js/sim/                    # Legacy JS sim (relocated 5.89-era port; archives in Phase 1)
+├── schema/                    # Cross-language wire-protocol source-of-truth
+│   └── protocol.toml          #   codegen source → server/sim/src/protocol/generated.rs (+ js/sim/protocol-generated.js)
+├── server/                    # Rust workspace (WASM pivot, 2026-05-17)
+│   ├── Cargo.toml             #   [workspace] root
+│   ├── sim/                   #   rainboids-sim — canonical simulation (compiles native + WASM)
+│   │   └── src/{ship,enemy,bullet,asteroid,collision,drops,wave,…}.rs
+│   ├── server-bin/            #   rainboids-server — authoritative multiplayer server binary
+│   │   ├── src/{main,config,error,lib}.rs + server/, room/, matchmaking/, obs/, util/
+│   │   └── tests/             #   integration tests (handshake, room lifecycle, snapshots, wire goldens)
+│   └── client-wasm/           #   rainboids-client-wasm — wasm-bindgen wrapper exposing sim to JS
 ├── css/
 │   └── styles.css             # Game styling
 ├── music/                     # 58 MP3 tracks (~336MB)

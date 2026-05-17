@@ -4,7 +4,7 @@
 
 import { rgba } from '../core/color-cache.js';
 import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS } from '../combat/weapon-data.js';
-import { VERSION } from '../core/version.js';
+import { VERSION, VERSION_MP } from '../core/version.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 import { multiplayerEnabled } from '../../net/ws-client.js';
 // 5.92.0 — Title screen responsive layout: in mobile-portrait mode
@@ -503,18 +503,31 @@ export function drawTitleScreen() {
             // for attention with the title text.
             this.ctx.save();
             this.ctx.font = "11px 'Press Start 2P', monospace";
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
             this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
             // 5.79.0 — thicker outline for the version tag too.
             this.ctx.lineWidth = 3;
             this.ctx.lineJoin = 'round';
             this.ctx.textAlign = 'right';
             this.ctx.textBaseline = 'bottom';
-            const tag = `v${VERSION}`;
+            // 2026-05-17 (WASM pivot) — two stacked version lines:
+            //   SP X.X.X   (single-player; canonical solo game)   — light gray
+            //   MP 0.X.X   (multiplayer; separate WASM product)   — gold
+            // Reading order top-to-bottom: SP first, MP beneath.
+            // MP gold + caps signals "this is the experimental product
+            // and it has its own identity"; SP gray keeps the canonical
+            // version dominant in the corner anchor.
             const tx = this.canvas.width - 14;
-            const ty = this.canvas.height - 12;
-            this.ctx.strokeText(tag, tx, ty);
-            this.ctx.fillText(tag, tx, ty);
+            const tyBase = this.canvas.height - 12;
+            const lineH = 14;
+            const tagSp = `SP ${VERSION}`;
+            const tagMp = `MP ${VERSION_MP}`;
+            // SP on top (tyBase - lineH), MP on bottom (tyBase, corner anchor).
+            this.ctx.fillStyle = 'rgba(220, 220, 220, 0.85)';
+            this.ctx.strokeText(tagSp, tx, tyBase - lineH);
+            this.ctx.fillText(tagSp, tx, tyBase - lineH);
+            this.ctx.fillStyle = 'rgba(255, 200, 64, 1.0)';
+            this.ctx.strokeText(tagMp, tx, tyBase);
+            this.ctx.fillText(tagMp, tx, tyBase);
             this.ctx.restore();
         }
 

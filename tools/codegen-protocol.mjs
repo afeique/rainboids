@@ -34,7 +34,12 @@ import TOML from '@iarna/toml';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SCHEMA_PATH = resolve(ROOT, 'schema/protocol.toml');
-const RUST_OUT = resolve(ROOT, 'server/src/protocol/generated.rs');
+// 2026-05-17 (WASM pivot, Phase 0) — Rust output moved from
+// server/src/protocol/generated.rs to server/sim/src/protocol/generated.rs
+// because server/ is now a Cargo workspace and the protocol module
+// lives inside the sim crate. JS output unchanged for Phase 0 (js/sim/
+// archives in Phase 1+ along with the protocol-generated.js).
+const RUST_OUT = resolve(ROOT, 'server/sim/src/protocol/generated.rs');
 const JS_OUT = resolve(ROOT, 'js/sim/protocol-generated.js');
 
 const args = new Set(process.argv.slice(2));
