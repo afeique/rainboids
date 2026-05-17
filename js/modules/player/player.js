@@ -820,8 +820,26 @@ export class Player {
         // / already-dashing guards itself. Pulse is consumed regardless
         // so a press during cooldown doesn't queue up a later dash.
         if (input.dashPulse) {
-            this._triggerDash(audioManager);
+            // 6.1.3 — Mobile tap-to-dash passes a screen-space target
+            // (input.dashTargetScreenX/Y). Convert to world coords via
+            // the engine helper and hand off to _triggerDash so the
+            // dash heads toward where the player tapped. Desktop SHIFT
+            // sets no target, so the fallback aim/velocity logic runs.
+            let dashWorldX = null, dashWorldY = null;
+            const sx = input.dashTargetScreenX;
+            const sy = input.dashTargetScreenY;
+            if (typeof sx === 'number' && typeof sy === 'number'
+                    && ge && typeof ge.screenToWorldCoordinates === 'function') {
+                const w = ge.screenToWorldCoordinates(sx, sy);
+                if (w && typeof w.x === 'number') {
+                    dashWorldX = w.x;
+                    dashWorldY = w.y;
+                }
+            }
+            this._triggerDash(audioManager, dashWorldX, dashWorldY);
             input.dashPulse = false; // consume one-shot pulse
+            input.dashTargetScreenX = null;
+            input.dashTargetScreenY = null;
         }
 
         // 5.64.15 — beamTimer-based deactivation removed. Lance Beam is
@@ -995,23 +1013,38 @@ export class Player {
     static DASH_COOLDOWN_MS  = 1500;
     static DASH_DISTANCE_PX  = 135;  // matches the old PHASE_DASH 150px feel after duration tuning
 
-    /** Trigger a dash burst if available. Returns true on success. */
-    _triggerDash(audioManager = null) {
+    /**
+     * Trigger a dash burst if available. Returns true on success.
+     * 6.1.3 — Optional `targetWorldX/Y` arguments steer the dash
+     * toward a world-space point (used by the mobile tap-to-dash
+     * input). When omitted (desktop SHIFT), falls back to the
+     * pre-6.1.3 aim/velocity-direction logic.
+     */
+    _triggerDash(audioManager = null, targetWorldX = null, targetWorldY = null) {
         if (this.isDashing) return false;
         if (this.dashCooldown > 0) return false;
 
-        // Direction: prefer the *aim* angle (this.angle is the live aim
-        // direction, set above in update() and by ship physics). This
-        // makes the dash feel like a thrust forward — same as charging
-        // movement uses. Falls back to the current velocity direction
-        // when the ship has significant momentum to keep the dash
-        // intuitive while sidestepping.
-        const speed = Math.hypot(this.vel.x, this.vel.y);
-        let angle = this.angle;
-        if (speed > 0.5) {
-            // Use the velocity-aligned angle when actively moving so a
-            // dash mid-strafe stays in the strafe direction.
-            angle = Math.atan2(this.vel.y, this.vel.x);
+        let angle;
+        if (typeof targetWorldX === 'number' && typeof targetWorldY === 'number') {
+            // Tap-directed dash: aim straight at the tap position.
+            // Guard against a tap landing exactly on the ship (dist=0
+            // would yield NaN). Fall back to current aim angle.
+            const dx = targetWorldX - this.x;
+            const dy = targetWorldY - this.y;
+            if (Math.hypot(dx, dy) < 1) {
+                angle = this.angle;
+            } else {
+                angle = Math.atan2(dy, dx);
+            }
+        } else {
+            // Desktop SHIFT path: prefer aim angle, fall back to
+            // velocity direction when actively moving so a mid-strafe
+            // dash stays in the strafe direction.
+            const speed = Math.hypot(this.vel.x, this.vel.y);
+            angle = this.angle;
+            if (speed > 0.5) {
+                angle = Math.atan2(this.vel.y, this.vel.x);
+            }
         }
 
         // px/sec speed needed to traverse DASH_DISTANCE_PX in DASH_DURATION_MS.

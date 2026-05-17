@@ -147,23 +147,39 @@ export class MobileTouchHandler {
     }
 
     /**
-     * 6.1.1 — Tap-to-DASH (replaces tap-to-fire-power from 5.100.0).
-     * Mobile auto-fire is always on (covers both primary and power
-     * weapons via the unified autoFire assist), so the tap input is
-     * freed up for dodging. Sets `input.dashPulse = true` for one tick
-     * — the same one-shot signal the desktop SHIFT key uses, consumed
-     * by player.update() which routes it through _triggerDash() with
-     * the standard cooldown + i-frame logic.
+     * 6.1.3 — Tap-to-DASH, now DIRECTED. The tap's canvas coords are
+     * captured and written to `input.dashTargetScreenX/Y` alongside
+     * the `input.dashPulse = true` one-shot signal; player.update()
+     * converts them to world coords via the engine's
+     * screenToWorldCoordinates helper and passes the world position
+     * down to _triggerDash, which dashes in the direction of the tap
+     * relative to the ship instead of the aim/velocity direction.
+     *
+     * Pre-6.1.3 (6.1.1–6.1.2): tap dashed in the current aim or
+     * velocity direction — useful for momentum dodges but not for
+     * tapping where you want to GO. The directed version makes mobile
+     * dodging feel like a teleport pointer.
      */
-    _triggerDash() {
+    _triggerDash(tapX, tapY) {
         const ge = this.engine;
         const input = ge && ge.inputHandler && ge.inputHandler.input;
         if (!input) return;
         input.dashPulse = true;
-        // Player.update consumes the pulse on the very next tick, but
-        // double-rAF the clear in case the input is read before
-        // player.update fires (defensive against tick ordering).
-        const release = () => { input.dashPulse = false; };
+        if (typeof tapX === 'number' && typeof tapY === 'number') {
+            input.dashTargetScreenX = tapX;
+            input.dashTargetScreenY = tapY;
+        } else {
+            input.dashTargetScreenX = null;
+            input.dashTargetScreenY = null;
+        }
+        // Player.update consumes the pulse + target on the very next
+        // tick, but double-rAF the clear in case the input is read
+        // before player.update fires (defensive against tick ordering).
+        const release = () => {
+            input.dashPulse = false;
+            input.dashTargetScreenX = null;
+            input.dashTargetScreenY = null;
+        };
         if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(() => requestAnimationFrame(release));
         } else {
@@ -321,14 +337,13 @@ export class MobileTouchHandler {
             return;
         }
 
-        // 6.1.1 — 'tap' branch DASHES instead of firing power. Power
-        // weapon auto-fires via the unified autoFire assist now (which
-        // is forced true on mobile in player.js). The player's job on
-        // mobile is purely dodging: tap to dash, drag stick to move,
-        // auto-aim + auto-fire handle the shooting.
+        // 6.1.3 — 'tap' branch DASHES in the direction of the tap.
+        // Pass the release coords through so the dash heads TOWARD
+        // where the player tapped (player.update converts to world
+        // and computes the angle from ship to target).
         const elapsed = Date.now() - this._startTime;
         if (!this._dragged && elapsed <= TAP_MS) {
-            this._triggerDash();
+            this._triggerDash(x, y);
         }
         this._reset();
     }

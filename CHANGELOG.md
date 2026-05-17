@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.1.3] - 2026-05-17
+
+### Changed — Mobile tap-to-dash is now DIRECTED
+
+Tap-to-dash dashes TOWARD the tap point instead of in the current
+aim/velocity direction. Reads like a teleport pointer: tap above the
+ship → dash up; tap toward an enemy → dash into it; tap to the side
+of a bullet → dash sideways through it.
+
+Plumbing:
+
+- `mobile-touch.js _triggerDash(tapX, tapY)` — captures the tap's
+  canvas coords (from the `touchend` 'tap' branch) and writes them
+  to `input.dashTargetScreenX/Y` alongside the existing
+  `input.dashPulse = true` one-shot signal. Double-rAF release clears
+  all three.
+- `player.js update()` dash-pulse consumer — converts screen coords
+  to world via `engine.screenToWorldCoordinates(sx, sy)` and passes
+  the world point to `_triggerDash(audioManager, dashWorldX, dashWorldY)`.
+- `player.js _triggerDash(audioManager, targetWorldX, targetWorldY)`
+  — new optional args. When provided: `angle = atan2(dy, dx)` from
+  ship to target. Guards against tap-on-ship (dist < 1) by falling
+  back to current aim angle. When omitted (desktop SHIFT path), the
+  pre-6.1.3 aim/velocity-direction fallback runs.
+
+Desktop SHIFT behavior unchanged.
+
+---
+
 ## [6.1.2] - 2026-05-16
 
 ### Fixed — ESC during powerup-pick / shop-suggest no longer resumes in background
