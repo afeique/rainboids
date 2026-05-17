@@ -1,64 +1,700 @@
 {
-  "generatedAt": "2026-05-06T17:44:29.440Z",
+  "generatedAt": "2026-05-17T13:43:36.351Z",
+  "defaultVariantCount": 8,
   "sounds": {
-    "shoot": "sfx/shoot.wav",
-    "hit": "sfx/hit.wav",
-    "coin": "sfx/coin.wav",
-    "explosion": "sfx/explosion.wav",
-    "playerExplosion": "sfx/playerExplosion.wav",
-    "powerup": "sfx/powerup.wav",
-    "laserBeamLoop": "sfx/laserBeamLoop.wav",
-    "laserBeamHit1": "sfx/laserBeamHit1.wav",
-    "laserBeamHit2": "sfx/laserBeamHit2.wav",
-    "laserBeamHit3": "sfx/laserBeamHit3.wav",
-    "arcHit1": "sfx/arcHit1.wav",
-    "arcHit2": "sfx/arcHit2.wav",
-    "arcHit3": "sfx/arcHit3.wav",
-    "arcLightningLoop": "sfx/arcLightningLoop.wav",
-    "arcStrike1": "sfx/arcStrike1.wav",
-    "arcStrike2": "sfx/arcStrike2.wav",
-    "arcStrike3": "sfx/arcStrike3.wav",
-    "arcStrike4": "sfx/arcStrike4.wav",
-    "tractorBeam": "sfx/tractorBeam.wav",
-    "shield": "sfx/shield.wav",
-    "healthRegen": "sfx/healthRegen.wav",
-    "playerHitAsteroid": "sfx/playerHitAsteroid.wav",
-    "playerHitEnemy": "sfx/playerHitEnemy.wav",
-    "enemyHit_hunter_single": "sfx/enemyHit_hunter_single.wav",
-    "enemyHit_guardian_spread": "sfx/enemyHit_guardian_spread.wav",
-    "enemyHit_wasp_machinegun": "sfx/enemyHit_wasp_machinegun.wav",
-    "enemyHit_charged_laser": "sfx/enemyHit_charged_laser.wav",
-    "enemyHit_arc_lightning": "sfx/enemyHit_arc_lightning.wav",
-    "enemyHit_missile": "sfx/enemyHit_missile.wav",
-    "enemyHit_spiral_laser": "sfx/enemyHit_spiral_laser.wav",
-    "enemyHit_sentinel_sweep": "sfx/enemyHit_sentinel_sweep.wav",
-    "enemyHit_lay_mine": "sfx/enemyHit_lay_mine.wav",
-    "enemyHit_sweep_laser": "sfx/enemyHit_sweep_laser.wav",
-    "playerHit_PULSE_CANNON": "sfx/playerHit_PULSE_CANNON.wav",
-    "playerHit_STORM_NEEDLES": "sfx/playerHit_STORM_NEEDLES.wav",
-    "playerHit_SCATTER_GUN": "sfx/playerHit_SCATTER_GUN.wav",
-    "playerHit_RAIL_DRIVER": "sfx/playerHit_RAIL_DRIVER.wav",
-    "playerHit_LANCE_BEAM": "sfx/playerHit_LANCE_BEAM.wav",
-    "playerHit_LIGHTNING_ARC": "sfx/playerHit_LIGHTNING_ARC.wav",
-    "enemyHit": "sfx/enemyHit.wav",
-    "asteroidDestroy": "sfx/asteroidDestroy.wav",
-    "enemyDestroy": "sfx/enemyDestroy.wav",
-    "enemyDestroy_HUNTER": "sfx/enemyDestroy_HUNTER.wav",
-    "enemyDestroy_GUARDIAN": "sfx/enemyDestroy_GUARDIAN.wav",
-    "enemyDestroy_WASP": "sfx/enemyDestroy_WASP.wav",
-    "enemyDestroy_STALKER": "sfx/enemyDestroy_STALKER.wav",
-    "enemyDestroy_DRIFTER": "sfx/enemyDestroy_DRIFTER.wav",
-    "enemyDestroy_PROWLER": "sfx/enemyDestroy_PROWLER.wav",
-    "enemyDestroy_WEAVER": "sfx/enemyDestroy_WEAVER.wav",
-    "enemyDestroy_SENTINEL": "sfx/enemyDestroy_SENTINEL.wav",
-    "enemyDestroy_TANGERINE": "sfx/enemyDestroy_TANGERINE.wav",
-    "enemyDestroy_TITAN": "sfx/enemyDestroy_TITAN.wav",
-    "bulwark": "sfx/bulwark.wav",
-    "repairNanites": "sfx/repairNanites.wav",
-    "phaseDash": "sfx/phaseDash.wav",
-    "deflectorOrbs": "sfx/deflectorOrbs.wav",
-    "empPulse": "sfx/empPulse.wav",
-    "tractorShield": "sfx/tractorShield.wav",
-    "menuClick": "sfx/menuClick.wav"
+    "shoot": {
+      "variants": [
+        "sfx/shoot_v1.wav",
+        "sfx/shoot_v2.wav",
+        "sfx/shoot_v3.wav",
+        "sfx/shoot_v4.wav",
+        "sfx/shoot_v5.wav",
+        "sfx/shoot_v6.wav",
+        "sfx/shoot_v7.wav",
+        "sfx/shoot_v8.wav"
+      ]
+    },
+    "hit": {
+      "variants": [
+        "sfx/hit_v1.wav",
+        "sfx/hit_v2.wav",
+        "sfx/hit_v3.wav",
+        "sfx/hit_v4.wav",
+        "sfx/hit_v5.wav",
+        "sfx/hit_v6.wav",
+        "sfx/hit_v7.wav",
+        "sfx/hit_v8.wav"
+      ]
+    },
+    "coin": {
+      "variants": [
+        "sfx/coin_v1.wav",
+        "sfx/coin_v2.wav",
+        "sfx/coin_v3.wav",
+        "sfx/coin_v4.wav",
+        "sfx/coin_v5.wav",
+        "sfx/coin_v6.wav",
+        "sfx/coin_v7.wav",
+        "sfx/coin_v8.wav"
+      ]
+    },
+    "explosion": {
+      "variants": [
+        "sfx/explosion_v1.wav",
+        "sfx/explosion_v2.wav",
+        "sfx/explosion_v3.wav",
+        "sfx/explosion_v4.wav",
+        "sfx/explosion_v5.wav",
+        "sfx/explosion_v6.wav",
+        "sfx/explosion_v7.wav",
+        "sfx/explosion_v8.wav"
+      ]
+    },
+    "playerExplosion": {
+      "variants": [
+        "sfx/playerExplosion_v1.wav",
+        "sfx/playerExplosion_v2.wav",
+        "sfx/playerExplosion_v3.wav",
+        "sfx/playerExplosion_v4.wav",
+        "sfx/playerExplosion_v5.wav",
+        "sfx/playerExplosion_v6.wav",
+        "sfx/playerExplosion_v7.wav",
+        "sfx/playerExplosion_v8.wav"
+      ]
+    },
+    "powerup": {
+      "variants": [
+        "sfx/powerup_v1.wav",
+        "sfx/powerup_v2.wav",
+        "sfx/powerup_v3.wav",
+        "sfx/powerup_v4.wav",
+        "sfx/powerup_v5.wav",
+        "sfx/powerup_v6.wav",
+        "sfx/powerup_v7.wav",
+        "sfx/powerup_v8.wav"
+      ]
+    },
+    "laserBeamLoop": {
+      "variants": [
+        "sfx/laserBeamLoop.wav"
+      ]
+    },
+    "laserBeamHit1": {
+      "variants": [
+        "sfx/laserBeamHit1_v1.wav",
+        "sfx/laserBeamHit1_v2.wav",
+        "sfx/laserBeamHit1_v3.wav",
+        "sfx/laserBeamHit1_v4.wav",
+        "sfx/laserBeamHit1_v5.wav",
+        "sfx/laserBeamHit1_v6.wav",
+        "sfx/laserBeamHit1_v7.wav",
+        "sfx/laserBeamHit1_v8.wav"
+      ]
+    },
+    "laserBeamHit2": {
+      "variants": [
+        "sfx/laserBeamHit2_v1.wav",
+        "sfx/laserBeamHit2_v2.wav",
+        "sfx/laserBeamHit2_v3.wav",
+        "sfx/laserBeamHit2_v4.wav",
+        "sfx/laserBeamHit2_v5.wav",
+        "sfx/laserBeamHit2_v6.wav",
+        "sfx/laserBeamHit2_v7.wav",
+        "sfx/laserBeamHit2_v8.wav"
+      ]
+    },
+    "laserBeamHit3": {
+      "variants": [
+        "sfx/laserBeamHit3_v1.wav",
+        "sfx/laserBeamHit3_v2.wav",
+        "sfx/laserBeamHit3_v3.wav",
+        "sfx/laserBeamHit3_v4.wav",
+        "sfx/laserBeamHit3_v5.wav",
+        "sfx/laserBeamHit3_v6.wav",
+        "sfx/laserBeamHit3_v7.wav",
+        "sfx/laserBeamHit3_v8.wav"
+      ]
+    },
+    "arcHit1": {
+      "variants": [
+        "sfx/arcHit1_v1.wav",
+        "sfx/arcHit1_v2.wav",
+        "sfx/arcHit1_v3.wav",
+        "sfx/arcHit1_v4.wav",
+        "sfx/arcHit1_v5.wav",
+        "sfx/arcHit1_v6.wav",
+        "sfx/arcHit1_v7.wav",
+        "sfx/arcHit1_v8.wav"
+      ]
+    },
+    "arcHit2": {
+      "variants": [
+        "sfx/arcHit2_v1.wav",
+        "sfx/arcHit2_v2.wav",
+        "sfx/arcHit2_v3.wav",
+        "sfx/arcHit2_v4.wav",
+        "sfx/arcHit2_v5.wav",
+        "sfx/arcHit2_v6.wav",
+        "sfx/arcHit2_v7.wav",
+        "sfx/arcHit2_v8.wav"
+      ]
+    },
+    "arcHit3": {
+      "variants": [
+        "sfx/arcHit3_v1.wav",
+        "sfx/arcHit3_v2.wav",
+        "sfx/arcHit3_v3.wav",
+        "sfx/arcHit3_v4.wav",
+        "sfx/arcHit3_v5.wav",
+        "sfx/arcHit3_v6.wav",
+        "sfx/arcHit3_v7.wav",
+        "sfx/arcHit3_v8.wav"
+      ]
+    },
+    "arcLightningLoop": {
+      "variants": [
+        "sfx/arcLightningLoop.wav"
+      ]
+    },
+    "arcStrike1": {
+      "variants": [
+        "sfx/arcStrike1_v1.wav",
+        "sfx/arcStrike1_v2.wav",
+        "sfx/arcStrike1_v3.wav",
+        "sfx/arcStrike1_v4.wav",
+        "sfx/arcStrike1_v5.wav",
+        "sfx/arcStrike1_v6.wav",
+        "sfx/arcStrike1_v7.wav",
+        "sfx/arcStrike1_v8.wav"
+      ]
+    },
+    "arcStrike2": {
+      "variants": [
+        "sfx/arcStrike2_v1.wav",
+        "sfx/arcStrike2_v2.wav",
+        "sfx/arcStrike2_v3.wav",
+        "sfx/arcStrike2_v4.wav",
+        "sfx/arcStrike2_v5.wav",
+        "sfx/arcStrike2_v6.wav",
+        "sfx/arcStrike2_v7.wav",
+        "sfx/arcStrike2_v8.wav"
+      ]
+    },
+    "arcStrike3": {
+      "variants": [
+        "sfx/arcStrike3_v1.wav",
+        "sfx/arcStrike3_v2.wav",
+        "sfx/arcStrike3_v3.wav",
+        "sfx/arcStrike3_v4.wav",
+        "sfx/arcStrike3_v5.wav",
+        "sfx/arcStrike3_v6.wav",
+        "sfx/arcStrike3_v7.wav",
+        "sfx/arcStrike3_v8.wav"
+      ]
+    },
+    "arcStrike4": {
+      "variants": [
+        "sfx/arcStrike4_v1.wav",
+        "sfx/arcStrike4_v2.wav",
+        "sfx/arcStrike4_v3.wav",
+        "sfx/arcStrike4_v4.wav",
+        "sfx/arcStrike4_v5.wav",
+        "sfx/arcStrike4_v6.wav",
+        "sfx/arcStrike4_v7.wav",
+        "sfx/arcStrike4_v8.wav"
+      ]
+    },
+    "tractorBeam": {
+      "variants": [
+        "sfx/tractorBeam_v1.wav",
+        "sfx/tractorBeam_v2.wav",
+        "sfx/tractorBeam_v3.wav",
+        "sfx/tractorBeam_v4.wav",
+        "sfx/tractorBeam_v5.wav",
+        "sfx/tractorBeam_v6.wav",
+        "sfx/tractorBeam_v7.wav",
+        "sfx/tractorBeam_v8.wav"
+      ]
+    },
+    "shield": {
+      "variants": [
+        "sfx/shield_v1.wav",
+        "sfx/shield_v2.wav",
+        "sfx/shield_v3.wav",
+        "sfx/shield_v4.wav",
+        "sfx/shield_v5.wav",
+        "sfx/shield_v6.wav",
+        "sfx/shield_v7.wav",
+        "sfx/shield_v8.wav"
+      ]
+    },
+    "healthRegen": {
+      "variants": [
+        "sfx/healthRegen_v1.wav",
+        "sfx/healthRegen_v2.wav",
+        "sfx/healthRegen_v3.wav",
+        "sfx/healthRegen_v4.wav",
+        "sfx/healthRegen_v5.wav",
+        "sfx/healthRegen_v6.wav",
+        "sfx/healthRegen_v7.wav",
+        "sfx/healthRegen_v8.wav"
+      ]
+    },
+    "playerHitAsteroid": {
+      "variants": [
+        "sfx/playerHitAsteroid_v1.wav",
+        "sfx/playerHitAsteroid_v2.wav",
+        "sfx/playerHitAsteroid_v3.wav",
+        "sfx/playerHitAsteroid_v4.wav",
+        "sfx/playerHitAsteroid_v5.wav",
+        "sfx/playerHitAsteroid_v6.wav",
+        "sfx/playerHitAsteroid_v7.wav",
+        "sfx/playerHitAsteroid_v8.wav"
+      ]
+    },
+    "playerHitEnemy": {
+      "variants": [
+        "sfx/playerHitEnemy_v1.wav",
+        "sfx/playerHitEnemy_v2.wav",
+        "sfx/playerHitEnemy_v3.wav",
+        "sfx/playerHitEnemy_v4.wav",
+        "sfx/playerHitEnemy_v5.wav",
+        "sfx/playerHitEnemy_v6.wav",
+        "sfx/playerHitEnemy_v7.wav",
+        "sfx/playerHitEnemy_v8.wav"
+      ]
+    },
+    "enemyHit_hunter_single": {
+      "variants": [
+        "sfx/enemyHit_hunter_single_v1.wav",
+        "sfx/enemyHit_hunter_single_v2.wav",
+        "sfx/enemyHit_hunter_single_v3.wav",
+        "sfx/enemyHit_hunter_single_v4.wav",
+        "sfx/enemyHit_hunter_single_v5.wav",
+        "sfx/enemyHit_hunter_single_v6.wav",
+        "sfx/enemyHit_hunter_single_v7.wav",
+        "sfx/enemyHit_hunter_single_v8.wav"
+      ]
+    },
+    "enemyHit_guardian_spread": {
+      "variants": [
+        "sfx/enemyHit_guardian_spread_v1.wav",
+        "sfx/enemyHit_guardian_spread_v2.wav",
+        "sfx/enemyHit_guardian_spread_v3.wav",
+        "sfx/enemyHit_guardian_spread_v4.wav",
+        "sfx/enemyHit_guardian_spread_v5.wav",
+        "sfx/enemyHit_guardian_spread_v6.wav",
+        "sfx/enemyHit_guardian_spread_v7.wav",
+        "sfx/enemyHit_guardian_spread_v8.wav"
+      ]
+    },
+    "enemyHit_wasp_machinegun": {
+      "variants": [
+        "sfx/enemyHit_wasp_machinegun_v1.wav",
+        "sfx/enemyHit_wasp_machinegun_v2.wav",
+        "sfx/enemyHit_wasp_machinegun_v3.wav",
+        "sfx/enemyHit_wasp_machinegun_v4.wav",
+        "sfx/enemyHit_wasp_machinegun_v5.wav",
+        "sfx/enemyHit_wasp_machinegun_v6.wav",
+        "sfx/enemyHit_wasp_machinegun_v7.wav",
+        "sfx/enemyHit_wasp_machinegun_v8.wav"
+      ]
+    },
+    "enemyHit_charged_laser": {
+      "variants": [
+        "sfx/enemyHit_charged_laser_v1.wav",
+        "sfx/enemyHit_charged_laser_v2.wav",
+        "sfx/enemyHit_charged_laser_v3.wav",
+        "sfx/enemyHit_charged_laser_v4.wav",
+        "sfx/enemyHit_charged_laser_v5.wav",
+        "sfx/enemyHit_charged_laser_v6.wav",
+        "sfx/enemyHit_charged_laser_v7.wav",
+        "sfx/enemyHit_charged_laser_v8.wav"
+      ]
+    },
+    "enemyHit_arc_lightning": {
+      "variants": [
+        "sfx/enemyHit_arc_lightning_v1.wav",
+        "sfx/enemyHit_arc_lightning_v2.wav",
+        "sfx/enemyHit_arc_lightning_v3.wav",
+        "sfx/enemyHit_arc_lightning_v4.wav",
+        "sfx/enemyHit_arc_lightning_v5.wav",
+        "sfx/enemyHit_arc_lightning_v6.wav",
+        "sfx/enemyHit_arc_lightning_v7.wav",
+        "sfx/enemyHit_arc_lightning_v8.wav"
+      ]
+    },
+    "enemyHit_missile": {
+      "variants": [
+        "sfx/enemyHit_missile_v1.wav",
+        "sfx/enemyHit_missile_v2.wav",
+        "sfx/enemyHit_missile_v3.wav",
+        "sfx/enemyHit_missile_v4.wav",
+        "sfx/enemyHit_missile_v5.wav",
+        "sfx/enemyHit_missile_v6.wav",
+        "sfx/enemyHit_missile_v7.wav",
+        "sfx/enemyHit_missile_v8.wav"
+      ]
+    },
+    "enemyHit_spiral_laser": {
+      "variants": [
+        "sfx/enemyHit_spiral_laser_v1.wav",
+        "sfx/enemyHit_spiral_laser_v2.wav",
+        "sfx/enemyHit_spiral_laser_v3.wav",
+        "sfx/enemyHit_spiral_laser_v4.wav",
+        "sfx/enemyHit_spiral_laser_v5.wav",
+        "sfx/enemyHit_spiral_laser_v6.wav",
+        "sfx/enemyHit_spiral_laser_v7.wav",
+        "sfx/enemyHit_spiral_laser_v8.wav"
+      ]
+    },
+    "enemyHit_sentinel_sweep": {
+      "variants": [
+        "sfx/enemyHit_sentinel_sweep_v1.wav",
+        "sfx/enemyHit_sentinel_sweep_v2.wav",
+        "sfx/enemyHit_sentinel_sweep_v3.wav",
+        "sfx/enemyHit_sentinel_sweep_v4.wav",
+        "sfx/enemyHit_sentinel_sweep_v5.wav",
+        "sfx/enemyHit_sentinel_sweep_v6.wav",
+        "sfx/enemyHit_sentinel_sweep_v7.wav",
+        "sfx/enemyHit_sentinel_sweep_v8.wav"
+      ]
+    },
+    "enemyHit_lay_mine": {
+      "variants": [
+        "sfx/enemyHit_lay_mine_v1.wav",
+        "sfx/enemyHit_lay_mine_v2.wav",
+        "sfx/enemyHit_lay_mine_v3.wav",
+        "sfx/enemyHit_lay_mine_v4.wav",
+        "sfx/enemyHit_lay_mine_v5.wav",
+        "sfx/enemyHit_lay_mine_v6.wav",
+        "sfx/enemyHit_lay_mine_v7.wav",
+        "sfx/enemyHit_lay_mine_v8.wav"
+      ]
+    },
+    "enemyHit_sweep_laser": {
+      "variants": [
+        "sfx/enemyHit_sweep_laser_v1.wav",
+        "sfx/enemyHit_sweep_laser_v2.wav",
+        "sfx/enemyHit_sweep_laser_v3.wav",
+        "sfx/enemyHit_sweep_laser_v4.wav",
+        "sfx/enemyHit_sweep_laser_v5.wav",
+        "sfx/enemyHit_sweep_laser_v6.wav",
+        "sfx/enemyHit_sweep_laser_v7.wav",
+        "sfx/enemyHit_sweep_laser_v8.wav"
+      ]
+    },
+    "playerHit_PULSE_CANNON": {
+      "variants": [
+        "sfx/playerHit_PULSE_CANNON_v1.wav",
+        "sfx/playerHit_PULSE_CANNON_v2.wav",
+        "sfx/playerHit_PULSE_CANNON_v3.wav",
+        "sfx/playerHit_PULSE_CANNON_v4.wav",
+        "sfx/playerHit_PULSE_CANNON_v5.wav",
+        "sfx/playerHit_PULSE_CANNON_v6.wav",
+        "sfx/playerHit_PULSE_CANNON_v7.wav",
+        "sfx/playerHit_PULSE_CANNON_v8.wav"
+      ]
+    },
+    "playerHit_STORM_NEEDLES": {
+      "variants": [
+        "sfx/playerHit_STORM_NEEDLES_v1.wav",
+        "sfx/playerHit_STORM_NEEDLES_v2.wav",
+        "sfx/playerHit_STORM_NEEDLES_v3.wav",
+        "sfx/playerHit_STORM_NEEDLES_v4.wav",
+        "sfx/playerHit_STORM_NEEDLES_v5.wav",
+        "sfx/playerHit_STORM_NEEDLES_v6.wav",
+        "sfx/playerHit_STORM_NEEDLES_v7.wav",
+        "sfx/playerHit_STORM_NEEDLES_v8.wav"
+      ]
+    },
+    "playerHit_SCATTER_GUN": {
+      "variants": [
+        "sfx/playerHit_SCATTER_GUN_v1.wav",
+        "sfx/playerHit_SCATTER_GUN_v2.wav",
+        "sfx/playerHit_SCATTER_GUN_v3.wav",
+        "sfx/playerHit_SCATTER_GUN_v4.wav",
+        "sfx/playerHit_SCATTER_GUN_v5.wav",
+        "sfx/playerHit_SCATTER_GUN_v6.wav",
+        "sfx/playerHit_SCATTER_GUN_v7.wav",
+        "sfx/playerHit_SCATTER_GUN_v8.wav"
+      ]
+    },
+    "playerHit_RAIL_DRIVER": {
+      "variants": [
+        "sfx/playerHit_RAIL_DRIVER_v1.wav",
+        "sfx/playerHit_RAIL_DRIVER_v2.wav",
+        "sfx/playerHit_RAIL_DRIVER_v3.wav",
+        "sfx/playerHit_RAIL_DRIVER_v4.wav",
+        "sfx/playerHit_RAIL_DRIVER_v5.wav",
+        "sfx/playerHit_RAIL_DRIVER_v6.wav",
+        "sfx/playerHit_RAIL_DRIVER_v7.wav",
+        "sfx/playerHit_RAIL_DRIVER_v8.wav"
+      ]
+    },
+    "playerHit_LANCE_BEAM": {
+      "variants": [
+        "sfx/playerHit_LANCE_BEAM_v1.wav",
+        "sfx/playerHit_LANCE_BEAM_v2.wav",
+        "sfx/playerHit_LANCE_BEAM_v3.wav",
+        "sfx/playerHit_LANCE_BEAM_v4.wav",
+        "sfx/playerHit_LANCE_BEAM_v5.wav",
+        "sfx/playerHit_LANCE_BEAM_v6.wav",
+        "sfx/playerHit_LANCE_BEAM_v7.wav",
+        "sfx/playerHit_LANCE_BEAM_v8.wav"
+      ]
+    },
+    "playerHit_LIGHTNING_ARC": {
+      "variants": [
+        "sfx/playerHit_LIGHTNING_ARC_v1.wav",
+        "sfx/playerHit_LIGHTNING_ARC_v2.wav",
+        "sfx/playerHit_LIGHTNING_ARC_v3.wav",
+        "sfx/playerHit_LIGHTNING_ARC_v4.wav",
+        "sfx/playerHit_LIGHTNING_ARC_v5.wav",
+        "sfx/playerHit_LIGHTNING_ARC_v6.wav",
+        "sfx/playerHit_LIGHTNING_ARC_v7.wav",
+        "sfx/playerHit_LIGHTNING_ARC_v8.wav"
+      ]
+    },
+    "enemyHit": {
+      "variants": [
+        "sfx/enemyHit_v1.wav",
+        "sfx/enemyHit_v2.wav",
+        "sfx/enemyHit_v3.wav",
+        "sfx/enemyHit_v4.wav",
+        "sfx/enemyHit_v5.wav",
+        "sfx/enemyHit_v6.wav",
+        "sfx/enemyHit_v7.wav",
+        "sfx/enemyHit_v8.wav"
+      ]
+    },
+    "asteroidDestroy": {
+      "variants": [
+        "sfx/asteroidDestroy_v1.wav",
+        "sfx/asteroidDestroy_v2.wav",
+        "sfx/asteroidDestroy_v3.wav",
+        "sfx/asteroidDestroy_v4.wav",
+        "sfx/asteroidDestroy_v5.wav",
+        "sfx/asteroidDestroy_v6.wav",
+        "sfx/asteroidDestroy_v7.wav",
+        "sfx/asteroidDestroy_v8.wav"
+      ]
+    },
+    "enemyDestroy": {
+      "variants": [
+        "sfx/enemyDestroy_v1.wav",
+        "sfx/enemyDestroy_v2.wav",
+        "sfx/enemyDestroy_v3.wav",
+        "sfx/enemyDestroy_v4.wav",
+        "sfx/enemyDestroy_v5.wav",
+        "sfx/enemyDestroy_v6.wav",
+        "sfx/enemyDestroy_v7.wav",
+        "sfx/enemyDestroy_v8.wav"
+      ]
+    },
+    "enemyDestroy_HUNTER": {
+      "variants": [
+        "sfx/enemyDestroy_HUNTER_v1.wav",
+        "sfx/enemyDestroy_HUNTER_v2.wav",
+        "sfx/enemyDestroy_HUNTER_v3.wav",
+        "sfx/enemyDestroy_HUNTER_v4.wav",
+        "sfx/enemyDestroy_HUNTER_v5.wav",
+        "sfx/enemyDestroy_HUNTER_v6.wav",
+        "sfx/enemyDestroy_HUNTER_v7.wav",
+        "sfx/enemyDestroy_HUNTER_v8.wav"
+      ]
+    },
+    "enemyDestroy_GUARDIAN": {
+      "variants": [
+        "sfx/enemyDestroy_GUARDIAN_v1.wav",
+        "sfx/enemyDestroy_GUARDIAN_v2.wav",
+        "sfx/enemyDestroy_GUARDIAN_v3.wav",
+        "sfx/enemyDestroy_GUARDIAN_v4.wav",
+        "sfx/enemyDestroy_GUARDIAN_v5.wav",
+        "sfx/enemyDestroy_GUARDIAN_v6.wav",
+        "sfx/enemyDestroy_GUARDIAN_v7.wav",
+        "sfx/enemyDestroy_GUARDIAN_v8.wav"
+      ]
+    },
+    "enemyDestroy_WASP": {
+      "variants": [
+        "sfx/enemyDestroy_WASP_v1.wav",
+        "sfx/enemyDestroy_WASP_v2.wav",
+        "sfx/enemyDestroy_WASP_v3.wav",
+        "sfx/enemyDestroy_WASP_v4.wav",
+        "sfx/enemyDestroy_WASP_v5.wav",
+        "sfx/enemyDestroy_WASP_v6.wav",
+        "sfx/enemyDestroy_WASP_v7.wav",
+        "sfx/enemyDestroy_WASP_v8.wav"
+      ]
+    },
+    "enemyDestroy_STALKER": {
+      "variants": [
+        "sfx/enemyDestroy_STALKER_v1.wav",
+        "sfx/enemyDestroy_STALKER_v2.wav",
+        "sfx/enemyDestroy_STALKER_v3.wav",
+        "sfx/enemyDestroy_STALKER_v4.wav",
+        "sfx/enemyDestroy_STALKER_v5.wav",
+        "sfx/enemyDestroy_STALKER_v6.wav",
+        "sfx/enemyDestroy_STALKER_v7.wav",
+        "sfx/enemyDestroy_STALKER_v8.wav"
+      ]
+    },
+    "enemyDestroy_DRIFTER": {
+      "variants": [
+        "sfx/enemyDestroy_DRIFTER_v1.wav",
+        "sfx/enemyDestroy_DRIFTER_v2.wav",
+        "sfx/enemyDestroy_DRIFTER_v3.wav",
+        "sfx/enemyDestroy_DRIFTER_v4.wav",
+        "sfx/enemyDestroy_DRIFTER_v5.wav",
+        "sfx/enemyDestroy_DRIFTER_v6.wav",
+        "sfx/enemyDestroy_DRIFTER_v7.wav",
+        "sfx/enemyDestroy_DRIFTER_v8.wav"
+      ]
+    },
+    "enemyDestroy_PROWLER": {
+      "variants": [
+        "sfx/enemyDestroy_PROWLER_v1.wav",
+        "sfx/enemyDestroy_PROWLER_v2.wav",
+        "sfx/enemyDestroy_PROWLER_v3.wav",
+        "sfx/enemyDestroy_PROWLER_v4.wav",
+        "sfx/enemyDestroy_PROWLER_v5.wav",
+        "sfx/enemyDestroy_PROWLER_v6.wav",
+        "sfx/enemyDestroy_PROWLER_v7.wav",
+        "sfx/enemyDestroy_PROWLER_v8.wav"
+      ]
+    },
+    "enemyDestroy_WEAVER": {
+      "variants": [
+        "sfx/enemyDestroy_WEAVER_v1.wav",
+        "sfx/enemyDestroy_WEAVER_v2.wav",
+        "sfx/enemyDestroy_WEAVER_v3.wav",
+        "sfx/enemyDestroy_WEAVER_v4.wav",
+        "sfx/enemyDestroy_WEAVER_v5.wav",
+        "sfx/enemyDestroy_WEAVER_v6.wav",
+        "sfx/enemyDestroy_WEAVER_v7.wav",
+        "sfx/enemyDestroy_WEAVER_v8.wav"
+      ]
+    },
+    "enemyDestroy_SENTINEL": {
+      "variants": [
+        "sfx/enemyDestroy_SENTINEL_v1.wav",
+        "sfx/enemyDestroy_SENTINEL_v2.wav",
+        "sfx/enemyDestroy_SENTINEL_v3.wav",
+        "sfx/enemyDestroy_SENTINEL_v4.wav",
+        "sfx/enemyDestroy_SENTINEL_v5.wav",
+        "sfx/enemyDestroy_SENTINEL_v6.wav",
+        "sfx/enemyDestroy_SENTINEL_v7.wav",
+        "sfx/enemyDestroy_SENTINEL_v8.wav"
+      ]
+    },
+    "enemyDestroy_TANGERINE": {
+      "variants": [
+        "sfx/enemyDestroy_TANGERINE_v1.wav",
+        "sfx/enemyDestroy_TANGERINE_v2.wav",
+        "sfx/enemyDestroy_TANGERINE_v3.wav",
+        "sfx/enemyDestroy_TANGERINE_v4.wav",
+        "sfx/enemyDestroy_TANGERINE_v5.wav",
+        "sfx/enemyDestroy_TANGERINE_v6.wav",
+        "sfx/enemyDestroy_TANGERINE_v7.wav",
+        "sfx/enemyDestroy_TANGERINE_v8.wav"
+      ]
+    },
+    "enemyDestroy_TITAN": {
+      "variants": [
+        "sfx/enemyDestroy_TITAN_v1.wav",
+        "sfx/enemyDestroy_TITAN_v2.wav",
+        "sfx/enemyDestroy_TITAN_v3.wav",
+        "sfx/enemyDestroy_TITAN_v4.wav",
+        "sfx/enemyDestroy_TITAN_v5.wav",
+        "sfx/enemyDestroy_TITAN_v6.wav",
+        "sfx/enemyDestroy_TITAN_v7.wav",
+        "sfx/enemyDestroy_TITAN_v8.wav"
+      ]
+    },
+    "bulwark": {
+      "variants": [
+        "sfx/bulwark_v1.wav",
+        "sfx/bulwark_v2.wav",
+        "sfx/bulwark_v3.wav",
+        "sfx/bulwark_v4.wav",
+        "sfx/bulwark_v5.wav",
+        "sfx/bulwark_v6.wav",
+        "sfx/bulwark_v7.wav",
+        "sfx/bulwark_v8.wav"
+      ]
+    },
+    "repairNanites": {
+      "variants": [
+        "sfx/repairNanites_v1.wav",
+        "sfx/repairNanites_v2.wav",
+        "sfx/repairNanites_v3.wav",
+        "sfx/repairNanites_v4.wav",
+        "sfx/repairNanites_v5.wav",
+        "sfx/repairNanites_v6.wav",
+        "sfx/repairNanites_v7.wav",
+        "sfx/repairNanites_v8.wav"
+      ]
+    },
+    "phaseDash": {
+      "variants": [
+        "sfx/phaseDash_v1.wav",
+        "sfx/phaseDash_v2.wav",
+        "sfx/phaseDash_v3.wav",
+        "sfx/phaseDash_v4.wav",
+        "sfx/phaseDash_v5.wav",
+        "sfx/phaseDash_v6.wav",
+        "sfx/phaseDash_v7.wav",
+        "sfx/phaseDash_v8.wav"
+      ]
+    },
+    "deflectorOrbs": {
+      "variants": [
+        "sfx/deflectorOrbs_v1.wav",
+        "sfx/deflectorOrbs_v2.wav",
+        "sfx/deflectorOrbs_v3.wav",
+        "sfx/deflectorOrbs_v4.wav",
+        "sfx/deflectorOrbs_v5.wav",
+        "sfx/deflectorOrbs_v6.wav",
+        "sfx/deflectorOrbs_v7.wav",
+        "sfx/deflectorOrbs_v8.wav"
+      ]
+    },
+    "empPulse": {
+      "variants": [
+        "sfx/empPulse_v1.wav",
+        "sfx/empPulse_v2.wav",
+        "sfx/empPulse_v3.wav",
+        "sfx/empPulse_v4.wav",
+        "sfx/empPulse_v5.wav",
+        "sfx/empPulse_v6.wav",
+        "sfx/empPulse_v7.wav",
+        "sfx/empPulse_v8.wav"
+      ]
+    },
+    "tractorShield": {
+      "variants": [
+        "sfx/tractorShield_v1.wav",
+        "sfx/tractorShield_v2.wav",
+        "sfx/tractorShield_v3.wav",
+        "sfx/tractorShield_v4.wav",
+        "sfx/tractorShield_v5.wav",
+        "sfx/tractorShield_v6.wav",
+        "sfx/tractorShield_v7.wav",
+        "sfx/tractorShield_v8.wav"
+      ]
+    },
+    "menuClick": {
+      "variants": [
+        "sfx/menuClick_v1.wav",
+        "sfx/menuClick_v2.wav",
+        "sfx/menuClick_v3.wav",
+        "sfx/menuClick_v4.wav",
+        "sfx/menuClick_v5.wav",
+        "sfx/menuClick_v6.wav",
+        "sfx/menuClick_v7.wav",
+        "sfx/menuClick_v8.wav"
+      ]
+    }
   }
 }

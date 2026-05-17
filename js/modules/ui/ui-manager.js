@@ -1306,40 +1306,84 @@ export class UIManager {
         soundNames.forEach(soundName => {
             const toggleDiv = document.createElement('div');
             toggleDiv.className = 'sfx-toggle';
-            
+
             const label = document.createElement('span');
             label.className = 'sfx-toggle-label';
             label.textContent = friendlyNames[soundName] || soundName;
-            
+
             const controlsDiv = document.createElement('div');
             controlsDiv.className = 'sfx-controls';
-            
-            // Test button
+
+            // 6.1.5 — Variant picker. Sounds with generator-produced
+            // variants get a `◀ vN/M ▶` cycler so the player can pin a
+            // specific variant for the rest of the session (overrides
+            // the random pick the session started with). Test button
+            // plays whatever variant is currently active so cycling
+            // gives immediate audible feedback.
+            const variants = this.audioManager.getVariants(soundName);
+            let variantLabel = null;
+            if (variants && variants.length > 1) {
+                const prevBtn = document.createElement('button');
+                prevBtn.className = 'sfx-variant-btn';
+                prevBtn.textContent = '◀';
+                prevBtn.title = 'Previous variant';
+
+                variantLabel = document.createElement('span');
+                variantLabel.className = 'sfx-variant-label';
+                variantLabel.title = 'Current variant for this session';
+                const renderLabel = () => {
+                    variantLabel.textContent = `v${this.audioManager.getCurrentVariantIndex(soundName)}/${variants.length}`;
+                };
+                renderLabel();
+
+                const nextBtn = document.createElement('button');
+                nextBtn.className = 'sfx-variant-btn';
+                nextBtn.textContent = '▶';
+                nextBtn.title = 'Next variant';
+
+                // Both buttons cycle then auto-preview the new variant
+                // so the player hears the change immediately. The
+                // toggle's enabled state still gates audio.
+                const cycle = (delta) => {
+                    this.audioManager.cycleVariant(soundName, delta);
+                    renderLabel();
+                    if (this.audioManager.isSoundEnabled(soundName)) {
+                        this.audioManager.playSound(soundName);
+                    }
+                };
+                prevBtn.addEventListener('click', () => cycle(-1));
+                nextBtn.addEventListener('click', () => cycle(1));
+
+                controlsDiv.appendChild(prevBtn);
+                controlsDiv.appendChild(variantLabel);
+                controlsDiv.appendChild(nextBtn);
+            }
+
+            // Test button — plays the CURRENT variant choice so cycle
+            // + test work as expected together.
             const testButton = document.createElement('button');
             testButton.className = 'sfx-test-button';
             testButton.textContent = '♪';
-            testButton.title = 'Test sound';
+            testButton.title = 'Test current variant';
             testButton.addEventListener('click', () => {
                 if (this.audioManager.isSoundEnabled(soundName)) {
                     this.audioManager.playSound(soundName);
                 }
             });
-            
-            // Toggle switch
+
+            // Toggle switch — on/off.
             const switchDiv = document.createElement('div');
             switchDiv.className = 'sfx-toggle-switch active';
             switchDiv.dataset.sound = soundName;
-            
-            // Handle toggle clicks
             switchDiv.addEventListener('click', () => {
                 const isEnabled = !this.audioManager.isSoundEnabled(soundName);
                 this.audioManager.setSoundEnabled(soundName, isEnabled);
                 switchDiv.classList.toggle('active', isEnabled);
             });
-            
+
             controlsDiv.appendChild(testButton);
             controlsDiv.appendChild(switchDiv);
-            
+
             toggleDiv.appendChild(label);
             toggleDiv.appendChild(controlsDiv);
             this.elements.sfxTogglesContainer.appendChild(toggleDiv);

@@ -11,6 +11,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.2.0] - 2026-05-17
+
+### Added — SFX variant system (8 per sound, ~525 unique WAVs)
+
+Each SFX in `SOUND_DEFS` now renders **8 deterministic variants**
+(was 1 canonical render). Each new game session randomly picks ONE
+variant per sound on first play and reuses it for the rest of the
+session — so each run has a subtly different sonic palette.
+
+Mutation budgets per param category (per variant, seeded by
+`hash(name, variantIdx, layerIdx)`):
+
+- freq: ±0.15 (p_base_freq / p_freq_ramp / p_freq_dramp)
+- envelope: ±0.12 (p_env_attack / sustain / decay / punch)
+- timbre: ±0.12 (p_duty / p_duty_ramp / p_arp_* / p_repeat_speed)
+- filter: ±0.10 (p_lpf_* / p_hpf_*)
+- vibrato: ±0.10 (p_vib_*)
+
+New **AWAKEN mechanic**: zero-valued params (vibrato, arpeggio, duty
+ramps — "off" in SFXR semantics) have a 22% chance per variant of
+being turned ON to a random value in a narrow awaken budget. Adds
+surprise timbral elements that weren't in the canonical, blending
+rather than dominating.
+
+Variant 1 stays canonical (identity render) for back-compat — the
+existing `{name}.wav` files copy v1. Loops (`laserBeamLoop`,
+`arcLightningLoop`) opt out via `noVariants: true` since their MP3
+counterparts override the SFXR WAVs at runtime.
+
+CLI: `--variants=N` flag on `generate-sfx.js` overrides the default 8.
+
+### Added — SFX pause-tab variant picker
+
+Every sound with generator-produced variants gets a new row layout:
+
+```
+[Sound Name]   ◀ v3/8 ▶  ♪  [On/Off]
+```
+
+- **◀ / ▶** cycle through the 8 variants with wraparound. Auto-plays
+  the new variant so the player hears the change instantly.
+- **`vN/M` label** shows which variant is currently active for this
+  session.
+- **♪ test** plays whichever variant is currently active.
+- **Toggle** unchanged.
+
+New `AudioManager` API: `getVariants(name)`, `getCurrentVariant(name)`,
+`getCurrentVariantIndex(name)`, `setVariantIndex(name, idx)`,
+`cycleVariant(name, delta)`.
+
+### Changed — `AudioManager.init()` reads `sfx/manifest.json`
+
+`_expandVariantsFromManifest()` runs before file loading. For each
+`MANIFEST` entry matching `[<name>.wav]`, replaces the entry with
+the full variant list from the manifest. Failures fall through
+silently (hardcoded `MANIFEST` stays in effect).
+
+### Added — Zero-build deployment for GitHub Pages
+
+The project is now zero-build: the repo root is a complete,
+self-contained static site that GitHub Pages can serve directly.
+
+- **`.nojekyll`** added at repo root so Pages doesn't strip files
+  starting with `_`.
+- **Vite removed** — confirmed unused at runtime (no
+  `import.meta.glob`/`env`/`hot`, no `?raw`/`?url` asset imports,
+  no `from 'vite'`). The bundled `dist/` output was orphaned
+  artifact never wired into the deploy.
+- **`vite.config.js` deleted**, `dist/` deleted.
+- **`vite` removed from `devDependencies`**.
+- **`npm run dev` / `npm run start`** swapped to
+  `http-server -p 8090 -o -c-1` (uses the existing `http-server`
+  dependency; `-c-1` disables HTTP caching for fresh reloads on
+  edit). Removed `build` and `preview` scripts.
+
+GitHub Pages: enable Pages → master / root, push, done. No build
+step required.
+
+### Notes
+
+- 515 WAV files in `sfx/` (was 73). 21.7 MB total (was ~1.5 MB).
+- All 948 unit tests pass.
+- In-game version bumped: `js/modules/core/version.js` 6.1.1 → 6.2.0.
+
+---
+
 ## [6.1.3] - 2026-05-17
 
 ### Changed — Mobile tap-to-dash is now DIRECTED

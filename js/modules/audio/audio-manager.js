@@ -224,11 +224,26 @@ export class AudioManager {
         this.lastPlayedAt = new Map();   // name → last performance.now()
         this.soundEnabled = {};          // name → bool (default true)
         this._loaded = false;
+        // 6.1.4 — Session-locked SFX variants. `_variantSounds` is the
+        // set of MANIFEST names whose entries were expanded from
+        // generator-produced variants (sound_v1.wav .. sound_vN.wav).
+        // `_sessionVariant` caches the random pick per name on first
+        // play, so each session uses ONE chosen variant per sound for
+        // its entire lifetime — giving every run a subtly different
+        // sonic palette without per-call jitter.
+        this._variantSounds = new Set();
+        this._sessionVariant = new Map();
     }
 
     async init() {
         const ctx = this._ensureAudioContext();
         if (!ctx) return;
+        // 6.1.4 — Resolve variants BEFORE deciding which files to fetch.
+        // Reads sfx/manifest.json (written by tools/scripts/generate-sfx.js)
+        // and expands any single-canonical MANIFEST entry into its full
+        // variant list. Failures (missing manifest, network error) fall
+        // through gracefully — the hardcoded MANIFEST stays in effect.
+        await this._expandVariantsFromManifest();
         // Fire-and-forget per-file decode. Each failure is logged
         // individually but never blocks the rest of the load.
         const paths = uniquePaths();
@@ -238,6 +253,38 @@ export class AudioManager {
         // SFX pause-tab toggles can reflect them.
         for (const name of Object.keys(MANIFEST)) {
             if (!(name in this.soundEnabled)) this.soundEnabled[name] = true;
+        }
+    }
+
+    // 6.1.4 — Reads sfx/manifest.json and rewrites MANIFEST entries
+    // to include all generator-produced variant filenames. Only
+    // touches entries that are EXACTLY `[<name>.wav]` (single
+    // canonical reference) — multi-bucket entries, layered entries,
+    // and entries pointing at unrelated filenames (e.g. MP3 loops)
+    // are left alone.
+    async _expandVariantsFromManifest() {
+        let manifestJson = null;
+        try {
+            const res = await fetch(SFX_BASE + 'manifest.json');
+            if (res.ok) manifestJson = await res.json();
+        } catch (e) {
+            // Manifest fetch failed — proceed with hardcoded MANIFEST.
+            return;
+        }
+        if (!manifestJson || !manifestJson.sounds) return;
+
+        for (const [name, list] of Object.entries(MANIFEST)) {
+            // Only expand single-canonical entries: `[<name>.wav]`.
+            if (list.length !== 1 || typeof list[0] !== 'string') continue;
+            if (list[0] !== `${name}.wav`) continue;
+            const entry = manifestJson.sounds[name];
+            if (!entry || !entry.variants || entry.variants.length <= 1) continue;
+            // Strip the `sfx/` prefix the manifest uses, since
+            // MANIFEST entries are relative to SFX_BASE.
+            const variantFiles = entry.variants
+                .map(p => p.startsWith(SFX_BASE) ? p.slice(SFX_BASE.length) : p);
+            MANIFEST[name] = variantFiles;
+            this._variantSounds.add(name);
         }
     }
 
@@ -310,8 +357,22 @@ export class AudioManager {
         if (now - last < minInterval) return true;
         this.lastPlayedAt.set(name, now);
 
-        // Pick a random bucket.
-        const item = list[(Math.random() * list.length) | 0];
+        // 6.1.4 — Pick a random bucket. For variant-expanded sounds
+        // (the manifest gave us N alternates of one underlying SFX),
+        // lock the pick to ONE variant per session so each run has a
+        // consistent palette. For everything else (explicit multi-file
+        // buckets like arcStrike1/2/3/4 are SEPARATE MANIFEST keys —
+        // see the bucket grouping at module top), keep per-call random
+        // so the existing per-impact variety stays alive.
+        let item;
+        if (this._variantSounds.has(name) && this._sessionVariant.has(name)) {
+            item = this._sessionVariant.get(name);
+        } else {
+            item = list[(Math.random() * list.length) | 0];
+            if (this._variantSounds.has(name)) {
+                this._sessionVariant.set(name, item);
+            }
+        }
         // String entry → single file. Array entry → layered (play all
         // files in the bucket simultaneously). Layered buckets use a
         // small per-file gain reduction so 3 layers don't peak.
@@ -448,6 +509,58 @@ export class AudioManager {
     }
     isSoundEnabled(name) { return this.soundEnabled[name] ?? true; }
     getSoundNames()      { return Object.keys(MANIFEST); }
+
+    // ── 6.1.5 — Session-variant inspection / control API ──────────────
+    // Used by the SFX pause-tab so the player can cycle through the
+    // 8 generator-produced variants per sound and lock in their
+    // favorite for the rest of the session.
+
+    /** Returns the variant file list for a sound, or null if the sound
+     *  doesn't have generator-produced variants (loops, MP3s, etc.). */
+    getVariants(name) {
+        if (!this._variantSounds.has(name)) return null;
+        return MANIFEST[name].slice();
+    }
+
+    /** Returns the currently-active variant filename for a sound. If
+     *  no variant has been picked yet this session, returns the first
+     *  variant in the list (deterministic default). */
+    getCurrentVariant(name) {
+        if (!this._variantSounds.has(name)) return null;
+        if (this._sessionVariant.has(name)) return this._sessionVariant.get(name);
+        const list = MANIFEST[name];
+        return list && list.length ? list[0] : null;
+    }
+
+    /** Returns the current variant's 1-based index (1..N) within the
+     *  variant list, or 0 if the sound has no variants. */
+    getCurrentVariantIndex(name) {
+        const list = this.getVariants(name);
+        if (!list) return 0;
+        const current = this.getCurrentVariant(name);
+        const idx = list.indexOf(current);
+        return idx < 0 ? 1 : idx + 1;
+    }
+
+    /** Pin the session variant to a specific 1-based index (1..N). */
+    setVariantIndex(name, idx) {
+        const list = this.getVariants(name);
+        if (!list) return false;
+        const i = Math.max(1, Math.min(list.length, idx | 0));
+        this._sessionVariant.set(name, list[i - 1]);
+        return true;
+    }
+
+    /** Cycle forward (delta=+1) or back (delta=-1) through the variant
+     *  list, wrapping at the ends. Returns the new 1-based index. */
+    cycleVariant(name, delta = 1) {
+        const list = this.getVariants(name);
+        if (!list) return 0;
+        const cur = this.getCurrentVariantIndex(name); // 1..N
+        const next = ((cur - 1 + delta) % list.length + list.length) % list.length;
+        this._sessionVariant.set(name, list[next]);
+        return next + 1;
+    }
 }
 
 export const audioManager = new AudioManager();

@@ -4,10 +4,8 @@
   "description": "Royalty-free background music [\"Legend\"](https://www.youtube.com/watch?v=mxygNM3b95M&ab_channel=WhiteBatAudio)  graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).",
   "main": "js/main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "start": "vite",
+    "dev": "http-server -p 8090 -o -c-1",
+    "start": "http-server -p 8090 -o -c-1",
     "generate-playlist": "node tools/scripts/generate-playlist.js",
     "generate-sfx": "node tools/scripts/generate-sfx.js",
     "__CODEGEN__": "── Wire-protocol codegen (Rust types from schema/protocol.toml) ──",
@@ -90,7 +88,6 @@
     "jest-environment-jsdom": "^30.2.0",
     "jsfxr": "^1.4.0",
     "mitata": "^1.0.34",
-    "node-id3": "^0.2.9",
-    "vite": "^7.0.4"
+    "node-id3": "^0.2.9"
   }
 }

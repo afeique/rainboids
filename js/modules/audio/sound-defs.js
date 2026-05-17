@@ -210,6 +210,11 @@ export const SOUND_DEFS = {
     //   mid square harmonic with slow vibrato, sub-bass rumble. Reads
     //   as a clean continuous laser tone — not noisy, not buzzy.
     laserBeamLoop: {
+        // 6.1.4 — Skip variant generation; the audio manager loads
+        // laserBeamLoop.mp3 (a recorded asset) instead of this WAV, so
+        // the generator output is unused. Single variant keeps it from
+        // bloating the disk footprint with 4× unused WAVs.
+        noVariants: true,
         layers: [
             // Layer 1 — high sustained sine carrier (the "hum")
             { params: {
@@ -397,6 +402,10 @@ export const SOUND_DEFS = {
     //   distinct strike sounds (arcStrike1..4) layer over it at
     //   randomized intervals.
     arcLightningLoop: {
+        // 6.1.4 — Skip variants; the audio manager loads
+        // arcLightningLoop.mp3 (a recorded asset) instead of this WAV,
+        // so the generator output is unused. Single variant only.
+        noVariants: true,
         layers: [
             // Sub-bass rumble — slow vibrato low-frequency square
             { params: {
