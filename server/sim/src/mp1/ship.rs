@@ -29,9 +29,9 @@ use super::state::{GameState, ShipState};
 pub fn update_ship(
     ship: &mut ShipState,
     input: &PlayerInput,
-    field_w: f32,
-    field_h: f32,
-    _dt: f32,
+    field_w: f64,
+    field_h: f64,
+    _dt: f64,
 ) {
     // Mirrors js/sim/ship.js:70 — inactive ships skip the step entirely.
     if !ship.active {
@@ -51,8 +51,8 @@ pub fn update_ship(
     // so no extra `dt` factor here.
     let is_moving = input.up || input.down || input.left || input.right;
     if is_moving && !input.thrusters_disabled {
-        let mut move_x: f32 = 0.0;
-        let mut move_y: f32 = 0.0;
+        let mut move_x: f64 = 0.0;
+        let mut move_y: f64 = 0.0;
         if input.left {
             move_x -= 1.0;
         }
@@ -132,7 +132,7 @@ pub fn update_ship(
 /// Helper: tick the single ship in a GameState. Phase 1 entry point
 /// called by the WASM client glue and (eventually) the server room
 /// loop. Increments `state.tick` exactly once per call.
-pub fn tick_phase1(state: &mut GameState, input: &PlayerInput, dt: f32) {
+pub fn tick_phase1(state: &mut GameState, input: &PlayerInput, dt: f64) {
     update_ship(&mut state.ship, input, state.field_w, state.field_h, dt);
     state.tick = state.tick.wrapping_add(1);
 }

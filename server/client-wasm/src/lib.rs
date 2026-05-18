@@ -67,8 +67,8 @@ impl World {
         down: bool,
         left: bool,
         right: bool,
-        aim_x: f32,
-        aim_y: f32,
+        aim_x: f64,
+        aim_y: f64,
     ) {
         self.input.up = up;
         self.input.down = down;
@@ -81,41 +81,41 @@ impl World {
     /// Advance simulation by one tick. `dt` is seconds (unused by
     /// Phase-1 ship physics, which works in per-tick deltas; accepted
     /// for forward compatibility with future delta-time integration).
-    pub fn tick(&mut self, dt: f32) {
+    pub fn tick(&mut self, dt: f64) {
         tick_phase1(&mut self.state, &self.input, dt);
     }
 
     // ── Read-only accessors ──
 
-    pub fn ship_x(&self) -> f32 {
+    pub fn ship_x(&self) -> f64 {
         self.state.ship.x
     }
 
-    pub fn ship_y(&self) -> f32 {
+    pub fn ship_y(&self) -> f64 {
         self.state.ship.y
     }
 
-    pub fn ship_vx(&self) -> f32 {
+    pub fn ship_vx(&self) -> f64 {
         self.state.ship.vx
     }
 
-    pub fn ship_vy(&self) -> f32 {
+    pub fn ship_vy(&self) -> f64 {
         self.state.ship.vy
     }
 
-    pub fn ship_angle(&self) -> f32 {
+    pub fn ship_angle(&self) -> f64 {
         self.state.ship.angle
     }
 
-    pub fn ship_radius(&self) -> f32 {
+    pub fn ship_radius(&self) -> f64 {
         self.state.ship.radius
     }
 
-    pub fn field_width(&self) -> f32 {
+    pub fn field_width(&self) -> f64 {
         self.state.field_w
     }
 
-    pub fn field_height(&self) -> f32 {
+    pub fn field_height(&self) -> f64 {
         self.state.field_h
     }
 

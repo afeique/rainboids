@@ -8,6 +8,81 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.3.0] - 2026-05-17
+
+Foundation for Phase 2 wire integration: switch `mp1` from JSON-tagged
+to binary bincode wire format, and convert all scalars to f64 to match
+JavaScript Number precision (eliminates implicit narrowing at the
+wasm-bindgen boundary).
+
+### Changed — All `mp1` scalars are now f64 (was f32)
+
+`mp1::state::ShipState` (x, y, vx, vy, angle, hp, max_hp, radius),
+`mp1::input::PlayerInput` (aim_x, aim_y, speed_mult, thrust_power),
+`mp1::ship::update_ship` math, tuning constants (`MAX_V`, `VEL_EPSILON`,
+`BOUNCE_DAMP`, `TICK_SCALE`, `THRUST_PER_TICK`, `friction_per_tick`),
+the WASM `World` accessors (`ship_x`, `ship_y`, `ship_vx`, `ship_vy`,
+`ship_angle`, `ship_radius`, `field_width`, `field_height`,
+`set_input`, `tick`), and the wire-format `SnapshotShip` /
+`ClientMsg::Input` / `ServerMsg::Welcome` fields — all f64.
+
+**Why**: JS Number is f64. WASM↔JS marshalling of f32 goes through
+implicit widening/narrowing which can break byte-identical math
+between the WASM client and the native server. f64 throughout =
+same math, both sides. Future Phase 4 prediction reconciliation
+benefits directly. Wire cost: ~70% larger snapshot (228 B vs 132 B
+for 4 ships), still trivial at Phase 2 wire volume.
+
+### Changed — Wire format is now bincode (binary), not JSON
+
+`mp1` ships a `codec` module (`server/sim/src/mp1/codec.rs`) exposing
+`encode_server` / `decode_client` / `encode_client` / `decode_server`
+helpers using `bincode 1.x` with `DefaultOptions + with_fixint_encoding
++ with_little_endian` — matches the legacy `protocol::codec` so the
+JS-side decoder mirrors the same conventions.
+
+Sample wire sizes:
+- `Hello { name="pilot", client_version="0.2.1", wire_version=1 }`: 34 bytes
+- `Welcome` (player_id, server_tick, spawn_x, spawn_y): 28 bytes
+- `Input` (28 bytes): 4 (variant) + 4 (tick) + 4 (4×bool) + 16 (2×f64)
+- `Snapshot` (4 ships): ~228 bytes
+- `Bye`: 4 bytes
+
+At 4 players × 20 Hz snapshot + 30 Hz input: ~4.5 KB/s server-out per
+client, ~0.84 KB/s upload per client — ~6× smaller than JSON would be.
+
+Tier 1 debug visibility is still possible because the same wire types
+also serialize to JSON via `serde_json` (dev-dep). The browser-side
+WS layer (mp-ws.js, landing in 0.3.2) logs decoded JS objects behind
+`?mp-debug=1` for DevTools inspection.
+
+### Changed — Externally-tagged enum encoding
+
+Removed `#[serde(tag = "kind")]` from `ClientMsg` and `ServerMsg` —
+internally-tagged enums need `deserialize_any` which bincode 1.x
+(non-self-describing) doesn't support. Externally-tagged works for
+both bincode (`<u32 variant index><fields>`) AND JSON
+(`{"VariantName": {field: ...}}`). Cost: slightly less pretty JSON
+keys, but all encoders/decoders work cleanly.
+
+### Added — `Snapshot.acked_input_tick` field (4 bytes, forward-compat)
+
+Server's Snapshot now carries the client's last-applied input tick
+number. Phase 2 doesn't use it; Phase 4 reconciliation will replay
+pending local-prediction inputs from `acked_input_tick + 1` forward
+when the server's authoritative position diverges from prediction.
+Cheap to add now (4 bytes per snapshot), expensive to retrofit later.
+
+### Tests
+
+- `cargo test -p rainboids-sim`: 11 pass (6 wire JSON round-trips + 5
+  codec bincode round-trips + 1 size-floor regression + 1 cross-format
+  invariant + 1 legacy protocol test).
+- `cargo test --workspace`: 54 pass (no `rainboids-server` regressions).
+- `npm run wasm:build:dev`: succeeds (~7s incremental, ~135 KB output).
+
+---
+
 ## [0.2.1] - 2026-05-17
 
 ### Fixed — WASM build dependencies

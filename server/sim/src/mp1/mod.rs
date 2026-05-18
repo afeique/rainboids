@@ -12,10 +12,14 @@
 //! is rewritten around the new sim, the legacy modules at the crate
 //! root archive together.
 
+pub mod codec;
 pub mod input;
 pub mod ship;
 pub mod state;
+pub mod wire;
 
+pub use codec::{decode_client, decode_server, encode_client, encode_server};
 pub use input::PlayerInput;
 pub use ship::{tick_phase1, update_ship};
 pub use state::{GameState, ShipState};
+pub use wire::{ClientMsg, ServerMsg, SnapshotShip, WIRE_VERSION};
