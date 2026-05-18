@@ -1,5 +1,180 @@
 # Multiplayer WASM Pivot — Phase 3 — 2026-05-17
 
+> ## ⚡ Architecture Revision (2026-05-17, deterministic-first)
+>
+> **Open questions answered + significant architecture shift.** Per
+> user decision, Phase 3 commits to **full determinism** for
+> bullets / asteroids / enemies — the client predicts ALL entities
+> locally via the same WASM-compiled sim that the server runs natively.
+> Server stops broadcasting per-snapshot entity state for the
+> deterministic kinds; sends only spawn / death / state-divergence
+> events plus a periodic state-checksum heartbeat. **~4× bandwidth
+> reduction** vs the original Phase 3 plan below.
+>
+> ### Decisions locked in
+>
+> 1. **First enemy: HUNTER** (chase + arc-orbit). Per recommendation.
+> 2. **Fire button: LMB only.** Held W stays movement.
+> 3. **Death model: energy tanks + Diablo revive.** Player has energy
+>    tanks that deplete on hit; at 0 the player is **downed** (game-
+>    over for that player if alone). In MP, another player can
+>    **hover within a revive radius** for a fixed period to fill a
+>    revive meter that revives the downed player. If the reviver
+>    leaves the radius the meter **drains**; re-entering resumes
+>    fill. Solo's energy-tank model ports forward verbatim from
+>    `js/modules/player/lifecycle.js`. **No respawn timer.** Game
+>    ends when all players in the room are downed simultaneously.
+> 4. **Friendly fire: OFF.** Bullets exclude `owner_player_id ==
+>    ship.player_id`.
+> 5. **Asteroid splits: DETERMINISTIC** (revised from "server picks +
+>    broadcasts"). See determinism section below.
+> 6. **Bullets: DETERMINISTIC** (revised from "snapshots + events").
+>    See determinism section below.
+>
+> ### What determinism buys us (bandwidth)
+>
+> | Approach | Snapshot size (4 ships + 4 enemies + 16 asteroids + 30 bullets) | @ 20 Hz × 4 clients |
+> |---|---|---|
+> | **Original Phase 3 plan** (per-snapshot entity state) | ~3 KB | ~240 KB/s aggregate |
+> | **Deterministic** (snapshot = ships only; entity state = client-computed) | ~228 B | ~18 KB/s aggregate |
+> | **Reduction** | ~13× | **~13×** |
+>
+> Plus event stream (spawn/hit/destroy) at ~1–2 KB/s/client, plus
+> state-checksum heartbeat at ~12 B/sec/client. Net Phase 3 server-
+> out per client: **~6 KB/s typical, ~12 KB/s peak combat** — within
+> rounding error of Phase 2 (which was ship-only at ~5 KB/s).
+>
+> ### What determinism requires (discipline)
+>
+> Three invariants the sim code MUST hold for the deterministic
+> architecture to survive contact with reality:
+>
+> 1. **All math is f64 IEEE 754** (already done in 0.3.0). `+`, `-`,
+>    `*`, `/` are bit-exact across WASM + x86_64. **`sin`/`cos`/
+>    `atan2` are NOT** — they can differ by 1 ULP between compilers.
+>    Solution: **`mp1::trig`** — polynomial approximations of sin/cos/
+>    atan2 written in pure arithmetic, ported forward from
+>    `archive/sim-parity/js-sim/trig.js`. Both the WASM client and
+>    the native server import and use these instead of `f64::sin`
+>    etc. inside the sim.
+>
+> 2. **All RNG goes through a per-room seeded source.** No
+>    `rand::random()`, no `Math.random()`, no `tokio::time::Instant`,
+>    no wall-clock dependencies inside the sim. Server seeds the
+>    PCG-64 once at room boot, client receives the seed in `Welcome`
+>    and seeds its mirror identically. Every spawn/jitter/split call
+>    consumes from `ctx.rng`.
+>
+> 3. **A safety net for when determinism breaks** (and it will,
+>    eventually). Server broadcasts a small `ServerMsg::StateChecksum
+>    { tick, ships_hash, enemies_hash, asteroids_hash, bullets_hash }`
+>    every 60 ticks (1 second). Client computes the same hash over
+>    its predicted state; on mismatch, requests a `ClientMsg::Resync`
+>    and the server replies with a one-shot full-snapshot
+>    `ServerMsg::Resync { tick, ships, enemies, asteroids, bullets,
+>    rng_state }`. ~12 B/sec/client overhead; covers all rare
+>    determinism-break scenarios (packet loss of a spawn event,
+>    transcendental drift, browser-bug-day).
+>
+> ### What's on the wire (revised)
+>
+> **Server → Client every 20 Hz**:
+> - `Snapshot { tick, acked_input_tick, ships: Vec<SnapshotShip> }`
+>   — ship positions ONLY. Other entities are client-computed from
+>   the deterministic sim.
+>
+> **Server → Client coincident with snapshots**:
+> - `Event { tick, payloads: Vec<EventPayload> }` — discrete moments
+>   the deterministic sim alone can't fully express:
+>   - `EnemySpawn { enemy_id, kind, x, y, vx, vy, rng_subseed }` —
+>     when the server's enemy-spawn timer fires; client immediately
+>     instantiates the same enemy from the seed.
+>   - `BulletSpawn { bullet_id, owner_player_id, x, y, vx, vy,
+>     spawn_tick, weapon }` — when a player's `fire` triggers a
+>     spawn. Client integrates the bullet forward from this point.
+>   - `AsteroidSpawn { asteroid_id, x, y, vx, vy, rot, rot_vel,
+>     radius, rng_subseed }` — emitted at room boot (3-4 asteroids)
+>     and any time the server spawns a fresh asteroid.
+>   - `BulletHit { bullet_id, target_kind, target_id, hit_tick }` —
+>     server-authoritative hit confirmation. Client snaps its bullet
+>     to dead and triggers spark cosmetic at the named tick.
+>   - `EnemyDestroy { enemy_id, by_bullet_id, kill_tick }` —
+>     authoritative death confirmation.
+>   - `AsteroidSplit { parent_id, kill_tick, rng_subseed }` —
+>     deterministic split outcome derived from `rng_subseed` so
+>     client and server compute the same children.
+>   - `ShipDamaged { player_id, by_kind, by_id, hit_tick, amount }`,
+>     `ShipDowned { player_id, at_tick }`, `ShipRevived { by_player_id,
+>     revived_id, at_tick }` — energy-tank / revive lifecycle.
+>
+> **Server → Client every 60 ticks (1 Hz)**:
+> - `StateChecksum { tick, ships_hash, enemies_hash, asteroids_hash,
+>   bullets_hash }` — 20-byte safety heartbeat.
+>
+> **Client → Server**:
+> - `Input { client_tick, up, down, left, right, fire, aim_x, aim_y }`
+>   — unchanged from Phase 2 except `fire` is now load-bearing.
+> - `Resync { client_tick }` — NEW. Client sends on checksum mismatch.
+>   Server responds with `ServerMsg::Resync`.
+>
+> ### Sim-code additions (revised)
+>
+> | File | Purpose | Notes vs original plan |
+> |---|---|---|
+> | `server/sim/src/mp1/trig.rs` | Polynomial `sin64`/`cos64`/`atan2_64` | **NEW.** Ported forward from `archive/sim-parity/js-sim/trig.js`. Both server + WASM use these instead of `f64::*` builtins to guarantee bit-exact trig across runtimes. |
+> | `server/sim/src/mp1/rng_ctx.rs` | `RngCtx { pcg: Pcg64, subseed_counter: u64 }` + helpers | **NEW.** Thin wrapper around `mp1::rng::Pcg64` with a sub-seed generator for split / spawn events (so each split has its own deterministic sub-RNG without state-contamination). |
+> | `server/sim/src/mp1/enemy.rs` | HUNTER chase + arc using `trig::*` | Per original plan; trig swap is the only change |
+> | `server/sim/src/mp1/bullet.rs` | Straight-line projectile | Per original plan; trivially deterministic |
+> | `server/sim/src/mp1/asteroid.rs` | Drift + deterministic split | Split logic now derives from `rng_subseed`; both sides compute the same children |
+> | `server/sim/src/mp1/collision.rs` | Phase 3 pairs | Per original plan |
+> | `server/sim/src/mp1/damage.rs` | Energy tanks + revive meter | **REVISED.** No respawn; downed state + Diablo revive (`REVIVE_RADIUS = 80 px`, `REVIVE_DURATION_TICKS = 180` = 3 s, drains 2× faster than it fills if reviver leaves the radius) |
+> | `server/sim/src/mp1/weapon.rs` | PULSE_CANNON cooldown + spawn | Per original plan |
+> | `server/sim/src/mp1/room.rs` | Unified `RoomState` driving all the above | Per original plan; checksum hash added |
+>
+> ### Open questions resolved
+>
+> - **Q1 — HUNTER** ✅
+> - **Q2 — LMB only** ✅
+> - **Q3 — Energy tanks + Diablo revive, no respawn** ✅ (revised)
+> - **Q4 — Friendly fire OFF** ✅
+> - **Q5 — Deterministic asteroid splits** ✅ (revised from
+>   "server-authoritative split + broadcast")
+> - **Q6 — Deterministic bullets** ✅ (revised from "snapshot + event
+>   both")
+>
+> ### Reading the rest of this doc
+>
+> The original Phase 3 design content below — Wire format additions,
+> Sim additions table, Wire-volume estimates, etc. — describes the
+> NON-deterministic approach. **Read those sections as historical
+> reasoning for the deterministic pivot above; the architecture
+> revision overrides them where they differ.** The acceptance criteria
+> + parallel-dispatch tables remain mostly applicable with the
+> module additions noted above (trig.rs, rng_ctx.rs, damage.rs revised
+> for revive). The Risks and Reversibility sections are still
+> accurate.
+>
+> ### Tests + invariants determinism adds
+>
+> - **Cross-runtime trig parity**: unit test (Rust native) computes
+>   `trig::sin64(x)` for 1000 sample angles and checks against a
+>   pre-computed table. Smoke test (WASM in browser) does the same;
+>   results must match exactly.
+> - **RNG sequence parity**: seed Pcg64 with `42`, draw 100 values,
+>   compare native vs WASM output. Already passing in legacy parity
+>   tests (`archive/sim-parity/rust-parity/pcg64_trace.rs`); needs
+>   to keep passing.
+> - **End-to-end determinism**: integration test spawns 4 ships +
+>   3 asteroids + 1 enemy, runs the sim for 600 ticks (10 s) with a
+>   recorded input sequence, asserts the state hash at tick 600
+>   matches a baked golden value. If a sim change breaks
+>   determinism, this test fails immediately and surfaces the
+>   regression before it reaches a player.
+>
+> ---
+>
+># Multiplayer WASM Pivot — Phase 3 (original plan, partially superseded by the revision above)
+
 **Goal**: two browser tabs at `/mp` can cooperate to shoot a HUNTER
 enemy and see it die. Phase 3 adds the **MVP combat roster** — one
 enemy type, one weapon, one asteroid type, basic HP. No drops, no
