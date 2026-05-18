@@ -32,6 +32,7 @@ use super::bullet::PULSE_CANNON_DAMAGE;
 use super::damage::{apply_damage, DamageOutcome, ShipState};
 use super::drops::{OrbState, ORB_KIND_HEALTH, ORB_RADIUS};
 use super::enemy::{EnemyState, HUNTER_CONTACT_DAMAGE};
+use super::enemy_bullet::EnemyBulletState;
 use super::rng_ctx::RngCtx;
 
 // Re-exported for downstream test fixtures that build mock entities;
@@ -111,6 +112,16 @@ pub enum CollisionEvent {
         x: f64,
         y: f64,
     },
+    /// An enemy bullet struck a ship this tick. Damage already applied
+    /// via `damage::apply_damage` (ship's hp delta lands in the next
+    /// Snapshot). Wire event so the client can play a hit-spark
+    /// cosmetic at the impact point + despawn the named bullet.
+    ShipHitByEnemyBullet {
+        bullet_id: u32,
+        player_id: u32,
+        x: f64,
+        y: f64,
+    },
 }
 
 /// `by_kind` discriminator: damage source was an enemy body.
@@ -139,6 +150,7 @@ pub fn run_collisions(
     asteroids: &mut [AsteroidState],
     bullets: &mut [BulletState],
     orbs: &mut [OrbState],
+    enemy_bullets: &mut [EnemyBulletState],
     current_tick: u32,
     rng: &mut RngCtx,
     mut child_id_start_next: u32,
@@ -348,6 +360,52 @@ pub fn run_collisions(
         }
     }
 
+    // --- ship × enemy_bullet (hostile projectile damage) ---
+    // Each enemy bullet checks against every alive non-downed ship.
+    // On hit: bullet deactivates, ship takes `bullet.damage` via the
+    // shared `apply_damage` flow (which routes through shield + spare
+    // tanks per Phase 4 step 2). Emit ShipHitByEnemyBullet for the
+    // wire-side cosmetic + bullet-despawn replay.
+    for b in enemy_bullets.iter_mut() {
+        if !b.active {
+            continue;
+        }
+        for s in ships.iter_mut() {
+            if !s.active || s.downed {
+                continue;
+            }
+            let dx = s.x - b.x;
+            let dy = s.y - b.y;
+            let r_sum = s.radius + b.radius;
+            if dx * dx + dy * dy > r_sum * r_sum {
+                continue;
+            }
+            let outcome = apply_damage(s, b.damage);
+            match outcome {
+                DamageOutcome::Damaged | DamageOutcome::JustDowned => {
+                    out_events.push(CollisionEvent::ShipHitByEnemyBullet {
+                        bullet_id: b.id,
+                        player_id: s.player_id,
+                        x: b.x,
+                        y: b.y,
+                    });
+                    if matches!(outcome, DamageOutcome::JustDowned) {
+                        out_events.push(CollisionEvent::ShipDowned {
+                            player_id: s.player_id,
+                            at_x: s.x,
+                            at_y: s.y,
+                        });
+                    }
+                }
+                DamageOutcome::NoOp => {}
+            }
+            // Enemy bullets are single-hit (no piercing in Phase 4).
+            b.active = false;
+            b.life_remaining = 0;
+            break;
+        }
+    }
+
     // --- ship × orb (pickup) ---
     // Health orbs heal the ship (clamped to max_hp) and despawn.
     // Gold orbs despawn and emit the event so the wire layer can
@@ -432,6 +490,7 @@ mod tests {
             arc_omega: 0.01,
             arc_phase: 0.0,
             active: true,
+            last_fire_tick: 0,
         }
     }
 
@@ -489,6 +548,7 @@ mod tests {
             &mut asteroids,
             &mut bullets,
             &mut [],
+            &mut [],
             0,
             &mut rng,
             1000,
@@ -517,6 +577,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             &mut [],
             0,
             &mut rng,
@@ -553,6 +614,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             &mut [],
             0,
             &mut rng,
@@ -606,6 +668,7 @@ mod tests {
             &mut asteroids,
             &mut bullets,
             &mut [],
+            &mut [],
             0,
             &mut rng,
             child_id_start_in,
@@ -651,6 +714,7 @@ mod tests {
             &mut asteroids,
             &mut bullets,
             &mut [],
+            &mut [],
             0,
             &mut rng,
             500,
@@ -683,6 +747,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             &mut [],
             0,
             &mut rng,
@@ -726,6 +791,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             &mut [],
             0,
             &mut rng,
@@ -776,6 +842,7 @@ mod tests {
             &mut asteroids,
             &mut bullets,
             &mut [],
+            &mut [],
             0,
             &mut rng,
             1,
@@ -818,6 +885,7 @@ mod tests {
             &mut asteroids,
             &mut bullets,
             &mut [],
+            &mut [],
             0,
             &mut rng,
             1,
@@ -844,6 +912,7 @@ mod tests {
                 &mut enemies,
                 &mut asteroids,
                 &mut bullets,
+                &mut [],
                 &mut [],
                 0,
                 &mut rng,
@@ -919,6 +988,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             &mut [],
             0,
             &mut rng,

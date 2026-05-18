@@ -35,15 +35,18 @@ use rainboids_sim::mp1::{
     damage::{self, REVIVE_RADIUS},
     drops::{self, OrbState, ORB_KIND_GOLD, ORB_KIND_HEALTH},
     enemy::{self, EnemyState, KIND_HUNTER},
+    enemy_bullet::{self, EnemyBulletState},
     ship::update_ship,
-    state::{RoomState, ShipState, FIELD_HEIGHT, FIELD_WIDTH, MAX_ORBS, SHIP_SIZE},
-    trig::{cos64, sin64},
+    state::{
+        RoomState, ShipState, FIELD_HEIGHT, FIELD_WIDTH, MAX_ENEMY_BULLETS, MAX_ORBS, SHIP_SIZE,
+    },
+    trig::{atan2_64, cos64, sin64},
     wave::{self, WaveConfig, WavePhase, WaveSpawnRequest},
     wave_table::{self, KIND_HUNTER as TABLE_KIND_HUNTER},
     weapon as mp1_weapon,
     wire::{
-        AsteroidWire, BulletWire, ClientMsg, EnemyWire, EventPayload, OrbWire, ServerMsg,
-        SnapshotShip,
+        AsteroidWire, BulletWire, ClientMsg, EnemyBulletWire, EnemyWire, EventPayload, OrbWire,
+        ServerMsg, SnapshotShip,
     },
     PlayerInput,
 };
@@ -60,6 +63,12 @@ const SNAPSHOT_DIVISOR: u32 = 3;
 /// StateChecksum broadcast divisor: every Nth tick we send the
 /// safety heartbeat. 60 ticks ≈ 1 Hz.
 const CHECKSUM_DIVISOR: u32 = 60;
+
+/// Enemy fire-rate cooldown (ticks). Solo HUNTER's cooldown is
+/// 600–2200 ms randomized; Phase 4 step 1 uses a fixed 90 ticks
+/// (1.5 s) for predictability. Per-enemy cooldown tuning lands in
+/// Phase 4 step 5 alongside the other 9 enemy types.
+const ENEMY_FIRE_COOLDOWN_TICKS: u32 = 90;
 
 /// Drop probability — chance an enemy kill spawns a gold orb.
 /// Mirrors solo's basic kill-drop rate (no PAYDAY etc. powerups).
@@ -273,6 +282,15 @@ impl Mp1RoomState {
             }
         }
 
+        // 4.6. Enemy-bullet drift + lifetime.
+        for b in self.room.enemy_bullets.iter_mut() {
+            enemy_bullet::update_enemy_bullet(b, self.room.field_w, self.room.field_h);
+        }
+
+        // 4.7. Enemy fire — HUNTER aims at the nearest live ship and
+        //      fires an aimed bullet on its per-enemy cooldown.
+        self.process_enemy_fire();
+
         // 5. Fire input → bullet spawns. Edge-detect plus cooldown.
         self.process_fire_inputs();
 
@@ -289,6 +307,7 @@ impl Mp1RoomState {
             &mut self.room.asteroids,
             &mut self.room.bullets,
             &mut self.room.orbs,
+            &mut self.room.enemy_bullets,
             self.room.tick,
             &mut self.room.rng,
             self.room.next_asteroid_id,
@@ -315,8 +334,72 @@ impl Mp1RoomState {
         self.room.asteroids.retain(|a| a.active);
         self.room.bullets.retain(|b| b.active);
         self.room.orbs.retain(|o| o.active);
+        self.room.enemy_bullets.retain(|b| b.active);
 
         self.room.tick = self.room.tick.wrapping_add(1);
+    }
+
+    /// HUNTER aimed-fire — each alive HUNTER picks the nearest live
+    /// ship, fires an aimed `enemy_bullet::spawn_aimed_default` if its
+    /// per-enemy cooldown has elapsed.
+    fn process_enemy_fire(&mut self) {
+        let tick = self.room.tick;
+        // Snapshot ship positions to avoid the borrow-during-iter issue.
+        let targets: Vec<(f64, f64)> = self
+            .room
+            .ships
+            .iter()
+            .filter(|s| s.active && !s.downed)
+            .map(|s| (s.x, s.y))
+            .collect();
+        if targets.is_empty() {
+            return;
+        }
+
+        // Collect fire intents without holding enemy borrow during
+        // bullet pushes.
+        let mut spawns: Vec<(u32, f64, f64, f64)> = Vec::new(); // (enemy_id, ox, oy, angle)
+        for e in self.room.enemies.iter_mut() {
+            if !e.active || e.hp <= 0.0 {
+                continue;
+            }
+            if tick.wrapping_sub(e.last_fire_tick) < ENEMY_FIRE_COOLDOWN_TICKS {
+                continue;
+            }
+            // Nearest target.
+            let mut best_d2 = f64::INFINITY;
+            let mut best_t = targets[0];
+            for &(tx, ty) in &targets {
+                let dx = tx - e.x;
+                let dy = ty - e.y;
+                let d2 = dx * dx + dy * dy;
+                if d2 < best_d2 {
+                    best_d2 = d2;
+                    best_t = (tx, ty);
+                }
+            }
+            let angle = atan2_64(best_t.1 - e.y, best_t.0 - e.x);
+            e.last_fire_tick = tick;
+            spawns.push((e.id, e.x, e.y, angle));
+        }
+
+        for (owner_id, ox, oy, angle) in spawns {
+            if self.room.enemy_bullets.len() >= MAX_ENEMY_BULLETS {
+                break;
+            }
+            let id = self.room.next_enemy_bullet_id;
+            self.room.next_enemy_bullet_id = self.room.next_enemy_bullet_id.wrapping_add(1);
+            let b = enemy_bullet::spawn_aimed_default(id, owner_id, ox, oy, angle);
+            self.room.enemy_bullets.push(b);
+            self.pending_events.push(EventPayload::EnemyBulletSpawn {
+                bullet_id: id,
+                owner_enemy_id: owner_id,
+                origin_x: ox,
+                origin_y: oy,
+                angle,
+                spawn_tick: tick,
+            });
+        }
     }
 
     /// Drive the wave state machine for one tick. Emits enemy spawns
@@ -663,6 +746,20 @@ impl Mp1RoomState {
                     y,
                 });
             }
+            CollisionEvent::ShipHitByEnemyBullet {
+                bullet_id,
+                player_id,
+                x,
+                y,
+            } => {
+                self.pending_events.push(EventPayload::EnemyBulletHit {
+                    bullet_id,
+                    player_id,
+                    hit_tick: kill_tick,
+                    x,
+                    y,
+                });
+            }
         }
     }
 
@@ -886,6 +983,22 @@ impl Mp1RoomState {
             wave_sub_wave_idx: self.room.wave.sub_wave_idx,
             wave_phase: wave_phase_to_u8(self.room.wave.phase),
             wave_phase_started_tick: self.room.wave.phase_started_tick,
+            enemy_bullets: self
+                .room
+                .enemy_bullets
+                .iter()
+                .map(|b| EnemyBulletWire {
+                    id: b.id,
+                    owner_enemy_id: b.owner_enemy_id,
+                    x: b.x,
+                    y: b.y,
+                    vx: b.vx,
+                    vy: b.vy,
+                    damage: b.damage,
+                    radius: b.radius,
+                    life_remaining: b.life_remaining,
+                })
+                .collect(),
         }
     }
 

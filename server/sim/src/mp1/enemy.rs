@@ -106,6 +106,11 @@ pub struct EnemyState {
     pub arc_phase: f64,
     /// True while alive + in the field; false after destroy.
     pub active: bool,
+    /// Phase 4 — tick at which this enemy last fired an aimed bullet.
+    /// Gates the per-enemy fire cooldown in `mp1_room.rs`. Initialized
+    /// to 0 at spawn; the first fire fires whenever
+    /// `current_tick - last_fire_tick >= ENEMY_FIRE_COOLDOWN_TICKS`.
+    pub last_fire_tick: u32,
 }
 
 /// Spawn a HUNTER at the given seed. Both server and WASM client
@@ -177,6 +182,7 @@ pub fn spawn_hunter_from_seed(
         arc_omega,
         arc_phase,
         active: true,
+        last_fire_tick: 0,
     }
 }
 

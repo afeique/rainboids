@@ -103,7 +103,7 @@ const LE = true;
  *       AsteroidWire / BulletWire records)
  *  - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
  *       client can seed its WASM mirror identically to the server. */
-export const WIRE_VERSION = 6;
+export const WIRE_VERSION = 7;
 
 /* ── Reader ─────────────────────────────────────────────────────── */
 
@@ -357,6 +357,21 @@ function readOrbWire(r) {
     };
 }
 
+/** Read one `EnemyBulletWire` record (WIRE_VERSION 7). */
+function readEnemyBulletWire(r) {
+    return {
+        id: r.u32(),
+        owner_enemy_id: r.u32(),
+        x: r.f64(),
+        y: r.f64(),
+        vx: r.f64(),
+        vy: r.f64(),
+        damage: r.f64(),
+        radius: r.f64(),
+        life_remaining: r.u32(),
+    };
+}
+
 /** Read one `EventPayload` (externally-tagged: u32 variant index + fields).
  *  Returns a JS object tagged with `kind: '<VariantName>'`. The
  *  `EnemySpawn` and `EnemyDestroy` variants rename their `kind: u8`
@@ -492,6 +507,27 @@ function readEventPayload(r) {
                 at_tick: r.u32(),
             };
         }
+        case 13: { // EnemyBulletSpawn { id, owner_enemy_id, origin_x, origin_y, angle, spawn_tick }
+            return {
+                kind: 'EnemyBulletSpawn',
+                bullet_id: r.u32(),
+                owner_enemy_id: r.u32(),
+                origin_x: r.f64(),
+                origin_y: r.f64(),
+                angle: r.f64(),
+                spawn_tick: r.u32(),
+            };
+        }
+        case 14: { // EnemyBulletHit { bullet_id, player_id, hit_tick, x, y }
+            return {
+                kind: 'EnemyBulletHit',
+                bullet_id: r.u32(),
+                player_id: r.u32(),
+                hit_tick: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+            };
+        }
         default:
             throw new RangeError(`wire-codec: unknown EventPayload variant ${tag}`);
     }
@@ -573,6 +609,10 @@ export function decodeServerMsg(input) {
             const wave_sub_wave_idx = r.u8();
             const wave_phase = r.u8();
             const wave_phase_started_tick = r.u32();
+            // WIRE_VERSION 7 addition: enemy_bullets.
+            const ebCount = r.u64();
+            const enemy_bullets = new Array(ebCount);
+            for (let i = 0; i < ebCount; i++) enemy_bullets[i] = readEnemyBulletWire(r);
             return {
                 kind: 'Resync',
                 tick,
@@ -586,6 +626,7 @@ export function decodeServerMsg(input) {
                 wave_sub_wave_idx,
                 wave_phase,
                 wave_phase_started_tick,
+                enemy_bullets,
             };
         }
         default:

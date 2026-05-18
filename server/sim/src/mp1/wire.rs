@@ -177,6 +177,8 @@ pub enum ServerMsg {
         wave_sub_wave_idx: u8,
         wave_phase: u8, // 0=Intro, 1=Spawning, 2=Clearing, 3=Complete
         wave_phase_started_tick: u32,
+        /// Added in WIRE_VERSION 7 (Phase 4 enemy-bullet infra).
+        enemy_bullets: Vec<EnemyBulletWire>,
     },
 }
 
@@ -238,6 +240,9 @@ pub enum ClientMsg {
 /// rejects Hello with a mismatched version (sends Error variant and
 /// closes the WS).
 ///
+/// - 7: Phase 4 — enemy-bullet infrastructure + HUNTER aimed-fire.
+///   Adds `EventPayload::{EnemyBulletSpawn, EnemyBulletHit}`,
+///   `EnemyBulletWire` for Resync, and `enemy_bullets` on `Resync`.
 /// - 6: Phase 4 step 2 — HP/death parity. `SnapshotShip` gains
 ///   `hp`, `max_hp`, `shield`, `max_shield`, `spare_tanks`,
 ///   `weapon_kind`, `downed`. Each ship snapshot grows by ~35 bytes.
@@ -254,7 +259,7 @@ pub enum ClientMsg {
 /// - 2: Phase 3 — adds Event / StateChecksum / Resync; client may
 ///   send Resync in response to a checksum miss. Snapshot still
 ///   ship-only (deterministic kinds reconstructed client-side).
-pub const WIRE_VERSION: u32 = 6;
+pub const WIRE_VERSION: u32 = 7;
 
 // ── Phase 3 — EventPayload variants ──
 
@@ -405,6 +410,32 @@ pub enum EventPayload {
         wave_number: u32,
         at_tick: u32,
     },
+
+    // ── Phase 4 — enemy-bullet infrastructure ──
+
+    /// Enemy fired an aimed bullet. Client reconstructs the bullet via
+    /// `enemy_bullet::spawn_aimed_default` from `(id, owner_enemy_id,
+    /// origin_x, origin_y, angle, spawn_tick)` — both sides produce
+    /// bit-identical state via `trig::cos64`/`sin64`.
+    EnemyBulletSpawn {
+        bullet_id: u32,
+        owner_enemy_id: u32,
+        origin_x: f64,
+        origin_y: f64,
+        angle: f64,
+        spawn_tick: u32,
+    },
+
+    /// Authoritative enemy-bullet hit confirmation. Client snaps the
+    /// named bullet to inactive + triggers the red-spark cosmetic at
+    /// `(x, y)`. Ship HP delta lands in the next Snapshot.
+    EnemyBulletHit {
+        bullet_id: u32,
+        player_id: u32,
+        hit_tick: u32,
+        x: f64,
+        y: f64,
+    },
 }
 
 // ── Phase 3 — Resync wire records ──
@@ -472,6 +503,20 @@ pub struct OrbWire {
     pub vy: f64,
     pub life_ticks: u32,
     pub opacity: f64,
+}
+
+/// Resync record for one enemy bullet. Added in WIRE_VERSION 7.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct EnemyBulletWire {
+    pub id: u32,
+    pub owner_enemy_id: u32,
+    pub x: f64,
+    pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub damage: f64,
+    pub radius: f64,
+    pub life_remaining: u32,
 }
 
 #[cfg(test)]

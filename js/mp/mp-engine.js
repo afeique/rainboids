@@ -561,6 +561,19 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
             case "WaveClear":
                 world.consume_wave_clear(p.wave_number, p.at_tick >>> 0);
                 break;
+            case "EnemyBulletSpawn":
+                world.consume_enemy_bullet_spawn(
+                    p.bullet_id,
+                    p.owner_enemy_id,
+                    p.origin_x,
+                    p.origin_y,
+                    p.angle,
+                );
+                break;
+            case "EnemyBulletHit":
+                world.consume_enemy_bullet_hit(p.bullet_id, p.player_id);
+                particles.spawnEnemyBulletHit(p.x, p.y);
+                break;
             default:
                 if (MP_DEBUG) {
                     console.warn("[mp/engine] unknown event payload kind", p.kind);

@@ -143,6 +143,7 @@ use super::asteroid::AsteroidState;
 use super::bullet::BulletState;
 use super::drops::OrbState;
 use super::enemy::EnemyState;
+use super::enemy_bullet::EnemyBulletState;
 use super::rng_ctx::RngCtx;
 use super::wave::WaveState;
 
@@ -156,6 +157,9 @@ pub const MAX_BULLETS:   usize = 64;
 /// than the player collects them; the room actor drops further spawns
 /// once the cap is hit (mirrors solo's drop-pool soft cap).
 pub const MAX_ORBS:      usize = 32;
+/// Phase 4 — enemy-bullet cap. Generous since enemies fire on a
+/// 90+ tick cooldown; field rarely exceeds a few dozen in flight.
+pub const MAX_ENEMY_BULLETS: usize = 128;
 
 /// Authoritative multi-entity room state. One instance per room on
 /// the server; one instance per client when the WASM build adopts
@@ -181,6 +185,8 @@ pub struct RoomState {
     pub bullets: Vec<BulletState>,
     /// Phase 4 — pickup orbs from enemy/asteroid deaths.
     pub orbs: Vec<OrbState>,
+    /// Phase 4 — hostile projectiles fired by enemies.
+    pub enemy_bullets: Vec<EnemyBulletState>,
 
     /// Monotonic id counters — both server + client advance these
     /// identically by consuming events in order.
@@ -188,6 +194,7 @@ pub struct RoomState {
     pub next_asteroid_id: u32,
     pub next_bullet_id: u32,
     pub next_orb_id: u32,
+    pub next_enemy_bullet_id: u32,
 
     /// Phase 4 — wave cadence state machine. Replaces the Phase 3
     /// fixed-period `enemy_spawn_at_tick` cadence with structured
@@ -214,10 +221,12 @@ impl RoomState {
             asteroids: Vec::with_capacity(MAX_ASTEROIDS),
             bullets: Vec::with_capacity(MAX_BULLETS),
             orbs: Vec::with_capacity(MAX_ORBS),
+            enemy_bullets: Vec::with_capacity(MAX_ENEMY_BULLETS),
             next_enemy_id: 1,
             next_asteroid_id: 1,
             next_bullet_id: 1,
             next_orb_id: 1,
+            next_enemy_bullet_id: 1,
             wave: WaveState::new(),
             rng: RngCtx::from_seed(seed),
         }

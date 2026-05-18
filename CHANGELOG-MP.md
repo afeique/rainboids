@@ -8,6 +8,115 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.8.0] - 2026-05-18
+
+**Enemy bullet infrastructure + HUNTER aimed-fire.** Phase 3's enemies
+were silent (only contact-damage); they now actually shoot. End-to-end
+plumbing for hostile projectiles lands so Phase 4 step 5 enemies all
+share the same wire/sim/collision/render pipeline.
+
+WIRE_VERSION 6 → 7.
+
+### Added — `mp1/enemy_bullet.rs` (Wave 1 new file)
+
+10 unit tests. `EnemyBulletState { id, owner_enemy_id, x, y, vx, vy,
+damage, radius, life_remaining, active }`. Pure deterministic
+`spawn(...)` with all params or `spawn_aimed_default(id, owner, x, y,
+angle)` for the Phase 4 common case (4.5 px/tick, 9 px radius, 180-tick
+lifetime, 2.0 damage). `update_enemy_bullet` does drift + lifetime
+decrement + off-field cull (NOT wrap — enemy bullets fly off and die,
+unlike asteroids/orbs). Cross-runtime trig via `trig::cos64/sin64`.
+
+### Added — `EventPayload::EnemyBulletSpawn` + `EnemyBulletHit`
+
+Wire variants for the new entity. `EnemyBulletSpawn` carries
+`(id, owner_enemy_id, origin_x, origin_y, angle, spawn_tick)` — speed
+/ damage / radius / lifetime derive from the shared
+`spawn_aimed_default` constants so the wire is minimal. `EnemyBulletHit`
+carries `(bullet_id, player_id, hit_tick, x, y)` for cosmetic + bullet
+despawn replay.
+
+Resync extended with `enemy_bullets: Vec<EnemyBulletWire>`.
+
+### Changed — `RoomState` gains `enemy_bullets`
+
+- `enemy_bullets: Vec<EnemyBulletState>`
+- `next_enemy_bullet_id: u32`
+- `MAX_ENEMY_BULLETS = 128` cap
+
+### Changed — `collision::run_collisions`
+
+- New parameter: `enemy_bullets: &mut [EnemyBulletState]`
+- New pair: `ship × enemy_bullet`. Damage routes through the existing
+  `damage::apply_damage` (shield + spare tanks already wired from
+  0.7.0). Emits `CollisionEvent::ShipHitByEnemyBullet`.
+- Bullet deactivates on first hit (no piercing for enemy bullets)
+- Downed ships ignored
+
+### Changed — `EnemyState.last_fire_tick: u32`
+
+Per-enemy fire cooldown gate. Initialized to 0 at spawn. Used by
+`mp1_room.rs::process_enemy_fire` to throttle fire to
+`ENEMY_FIRE_COOLDOWN_TICKS = 90` ticks (1.5 s) — solo's HUNTER
+randomized 600–2200 ms cooldown gets a fixed Phase-4-MVP value; per-
+enemy tuning lands in Phase 4 step 5.
+
+### Changed — `mp1_room.rs::step`
+
+New pipeline:
+- **4.6**: enemy-bullet drift + lifetime
+- **4.7**: enemy fire — each alive HUNTER picks the nearest live ship
+  via squared-distance comparison, fires an aimed bullet through
+  `enemy_bullet::spawn_aimed_default` if its cooldown elapsed
+- Collision pass now includes `enemy_bullets`; cull pass too
+
+`build_resync` extended to include `enemy_bullets` so a Resync after
+combat correctly restores in-flight hostile shots.
+
+### WASM client
+
+- Mirrors the new `step` pipeline (4.5 orbs → 4.6 enemy bullets → 5
+  collision → 7 cull)
+- New accessors: `enemy_bullet_count`, `enemy_bullet_id`,
+  `enemy_bullet_x`, `enemy_bullet_y`
+- New consumers: `consume_enemy_bullet_spawn`, `consume_enemy_bullet_hit`
+- `consume_enemy_bullet_hit` applies HP damage via `damage::apply_damage`
+  (shield + spare tanks routed automatically) for tight local
+  prediction between Snapshot frames
+
+### JS client
+
+- `wire-codec.js`: WIRE_VERSION → 7. New decoders for the two
+  `EventPayload` variants + `readEnemyBulletWire`. Resync decoder
+  extended with `enemy_bullets`.
+- `mp-engine.js`: dispatches `EnemyBulletSpawn` / `EnemyBulletHit` to
+  the WASM consumers; hit triggers a red-spark particle burst.
+- `mp-renderer.js`: `drawEnemyBullet` — red glowing disc, slightly
+  larger than the cyan player bullet (5 px vs 3 px) so incoming shots
+  read as a distinct threat.
+- `mp-particles.js`: `spawnEnemyBulletHit(x, y)` — 6 red sparks (0.4 s
+  life).
+
+### Build health
+
+- `cargo test --workspace`: **144 mp1 + 38 integration tests pass**, 0 regressions
+- `cargo check --workspace`: clean
+- `npm run wasm:build:dev`: clean
+- `npm run test:qa --grep QA-13`: 4/4 pass (Phase 3 regression intact
+  after WIRE_VERSION 6 → 7 bump)
+
+### Phase 4 follow-ups
+
+- HUNTER firing solo-realistic randomized cooldown (600–2200 ms) lands
+  alongside the other 9 enemy types in step 5
+- 16 enemy bullet movement patterns from solo (`'aimed'`, `'homing'`,
+  `'spiral'`, `'burst'`, `'mine'`, `'missile'`, `'laser_beam'`, …) all
+  Phase 5+ polish — Phase 4 step 1 ships `'aimed'` only
+- Mines / missiles probably warrant their own type (`EnemyMineState`
+  with `health` + `isPersistent`) rather than overloading
+  `EnemyBulletState`
+- Explosive variant (`damage: 3`, `radius: 14`) Phase 4 step 5 (TITAN)
+
 ## [0.7.0] - 2026-05-18
 
 **Phase 4 step 2 — HP/death parity (shield + spare tanks).** Ships now

@@ -46,7 +46,9 @@ pub mod weapon;
 
 // Phase 4 step 2 — HP/death parity (shield + spare tanks).
 pub mod shield;
-// Enemy-bullet infra lands in 0.8.0 alongside its Wave 2c integration.
+
+// Phase 4 enemy-bullet infrastructure + HUNTER aimed-fire.
+pub mod enemy_bullet;
 
 pub use codec::{decode_client, decode_server, encode_client, encode_server};
 pub use input::PlayerInput;

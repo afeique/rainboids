@@ -195,6 +195,18 @@ export class Particles {
         }
     }
 
+    // Enemy bullet hit: small red spark burst at the impact site.
+    spawnEnemyBulletHit(x, y) {
+        const count = 6;
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 60 + Math.random() * 80;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this._spawnSpark(x, y, vx, vy, 0.4, "#ff6666");
+        }
+    }
+
     // Orb pickup: tiny color-matched burst (gold or green).
     // `kind` matches OrbState.kind: 0 = gold, 1 = health.
     spawnOrbPickup(x, y, kind) {

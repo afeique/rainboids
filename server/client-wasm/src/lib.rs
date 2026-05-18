@@ -41,6 +41,7 @@ use rainboids_sim::mp1::{
     damage,
     drops::{self, OrbState},
     enemy::{self, EnemyState},
+    enemy_bullet::{self, EnemyBulletState},
     ship::update_ship,
     state::{RoomState, ShipState, SHIP_SIZE},
     trig::atan2_64,
@@ -224,6 +225,13 @@ impl World {
             }
         }
 
+        // 4.6. Enemy bullet drift + lifetime — mirrors the server's
+        //      step 4.6 so client + server enemy_bullet state stays
+        //      in lockstep.
+        for b in self.room.enemy_bullets.iter_mut() {
+            enemy_bullet::update_enemy_bullet(b, self.room.field_w, self.room.field_h);
+        }
+
         // 5. Collision detection. We discard the emitted events
         //    (server is authoritative for events; we get them back
         //    over the wire and replay via `consume_*`), but the
@@ -239,6 +247,7 @@ impl World {
             &mut self.room.asteroids,
             &mut self.room.bullets,
             &mut self.room.orbs,
+            &mut self.room.enemy_bullets,
             self.room.tick,
             &mut self.room.rng,
             self.room.next_asteroid_id,
@@ -276,6 +285,7 @@ impl World {
         self.room.asteroids.retain(|a| a.active);
         self.room.bullets.retain(|b| b.active);
         self.room.orbs.retain(|o| o.active);
+        self.room.enemy_bullets.retain(|b| b.active);
 
         self.room.tick = self.room.tick.wrapping_add(1);
     }
@@ -588,6 +598,46 @@ impl World {
         self.room.wave.phase_started_tick = at_tick;
     }
 
+    /// `EventPayload::EnemyBulletSpawn`. Reconstructs the bullet via
+    /// the shared `enemy_bullet::spawn_aimed_default` so server +
+    /// client produce bit-identical state.
+    pub fn consume_enemy_bullet_spawn(
+        &mut self,
+        bullet_id: u32,
+        owner_enemy_id: u32,
+        origin_x: f64,
+        origin_y: f64,
+        angle: f64,
+    ) {
+        let b = enemy_bullet::spawn_aimed_default(
+            bullet_id,
+            owner_enemy_id,
+            origin_x,
+            origin_y,
+            angle,
+        );
+        self.room.enemy_bullets.push(b);
+        if bullet_id >= self.room.next_enemy_bullet_id {
+            self.room.next_enemy_bullet_id = bullet_id.wrapping_add(1);
+        }
+    }
+
+    /// `EventPayload::EnemyBulletHit`. Marks the bullet inactive +
+    /// applies HP damage via `damage::apply_damage` (shield + spare
+    /// tanks routed automatically). Server-authoritative state lands
+    /// in the next Snapshot — this just keeps local prediction in
+    /// rough sync between Snapshot frames.
+    pub fn consume_enemy_bullet_hit(&mut self, bullet_id: u32, player_id: u32) {
+        if let Some(b) = self.room.enemy_bullets.iter_mut().find(|b| b.id == bullet_id) {
+            let damage_amount = b.damage;
+            b.active = false;
+            b.life_remaining = 0;
+            if let Some(s) = self.room.ships.iter_mut().find(|s| s.player_id == player_id) {
+                let _ = damage::apply_damage(s, damage_amount);
+            }
+        }
+    }
+
     // ── Local-ship accessors (Phase-1 surface; preserved) ──
     //
     // These were the Phase-1/2 single-ship accessors. They now
@@ -814,6 +864,24 @@ impl World {
                 y
             })
             .unwrap_or(0.0)
+    }
+
+    // ── Enemy-bullet accessors ──
+
+    pub fn enemy_bullet_count(&self) -> u32 {
+        self.room.enemy_bullets.len() as u32
+    }
+    fn enemy_bullet_at(&self, idx: u32) -> Option<EnemyBulletState> {
+        self.room.enemy_bullets.get(idx as usize).copied()
+    }
+    pub fn enemy_bullet_id(&self, idx: u32) -> u32 {
+        self.enemy_bullet_at(idx).map(|b| b.id).unwrap_or(0)
+    }
+    pub fn enemy_bullet_x(&self, idx: u32) -> f64 {
+        self.enemy_bullet_at(idx).map(|b| b.x).unwrap_or(0.0)
+    }
+    pub fn enemy_bullet_y(&self, idx: u32) -> f64 {
+        self.enemy_bullet_at(idx).map(|b| b.y).unwrap_or(0.0)
     }
 
     // ── Orb accessors ──

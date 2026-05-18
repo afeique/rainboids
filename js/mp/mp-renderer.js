@@ -170,6 +170,17 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
         );
     }
 
+    // Enemy bullets (red, slightly larger than player bullets).
+    const ebcount = world.enemy_bullet_count();
+    for (let i = 0; i < ebcount; i++) {
+        drawEnemyBullet(
+            ctx,
+            world.enemy_bullet_x(i),
+            world.enemy_bullet_y(i),
+            scale,
+        );
+    }
+
     // ---- Ships (front layer) ----
 
     const tick = world.tick_count();
@@ -336,6 +347,24 @@ function drawOrb(ctx, x, y, kind, opacity, scale) {
         ctx.strokeStyle = ORB_GOLD_STROKE;
         ctx.stroke();
     }
+    ctx.restore();
+}
+
+// Phase 4 — enemy bullet. Red glowing dot, slightly larger than the
+// cyan player bullet so incoming shots read as a distinct threat.
+const ENEMY_BULLET_RADIUS_PX = 5;
+const ENEMY_BULLET_FILL = "#ff4444";
+const ENEMY_BULLET_STROKE = "rgba(255, 100, 100, 0.55)";
+function drawEnemyBullet(ctx, x, y, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    ctx.arc(0, 0, ENEMY_BULLET_RADIUS_PX, 0, Math.PI * 2);
+    ctx.fillStyle = ENEMY_BULLET_FILL;
+    ctx.fill();
+    ctx.lineWidth = 2 / scale;
+    ctx.strokeStyle = ENEMY_BULLET_STROKE;
+    ctx.stroke();
     ctx.restore();
 }
 
