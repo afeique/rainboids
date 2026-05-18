@@ -8,6 +8,112 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.3.3] - 2026-05-17
+
+Phase 3 Wave 1 — leaf simulation modules in `server/sim/src/mp1/`.
+Foundation for the deterministic-first MP combat roster. All seven
+new modules compile + test in isolation; **integration into the room
+actor + wire format lands in Wave 2.** Nothing player-visible yet.
+
+### Added — `mp1::trig`
+
+Polynomial sin/cos/atan2 over f64. 11-degree odd Taylor for sin
+(reduced into [-π/2, π/2] via integer round + fold); cos via
+`sin(x + π/2)` so Pythagoras is exact-by-construction; atan2 via
+quadrant fold + anchored-cubic polynomial from
+`archive/sim-parity/js-sim/trig.js`. Realistic accuracy ~3e-5 vs
+`f64::sin` — **accuracy isn't the goal; determinism is**. Uses ONLY
+`+ - * /`, comparisons, and `f64::abs`. No transcendentals, no
+sqrt, no platform-sensitive ops.
+
+### Added — `mp1::rng_ctx`
+
+Per-room PCG-64 wrapper with a sub-seed generator. `sub_seed()` lets
+each spawn/split event derive its own deterministic sub-RNG without
+contaminating the room's main stream (proven via the
+`sub_seed_does_not_contaminate_main` test). Convenience samplers:
+`range_f64`, `range_i32`, `bool_at_prob`, `pick_index`,
+`unit_circle_angle` — all built on `next_u64` + IEEE-754 bit
+conversions (top-53-bits → mantissa).
+
+### Added — `mp1::asteroid`
+
+Drift + deterministic split. `AsteroidState` holds id / pos / vel /
+rot / radius / hp. `spawn_from_seed(id, rng_subseed, field)` produces
+the same asteroid byte-for-byte from the same inputs.
+`compute_split_children(parent, rng_subseed, child_id_start)` derives
+3-4 children from the sub-seed; both server and client compute the
+same split outcome from the AsteroidSplit event's seed. Uses
+`super::trig::*` throughout — no `f64::sin`.
+
+### Added — `mp1::bullet`
+
+Straight-line projectile. `BulletState::position_at(current_tick)` is
+**bit-exact** across runtimes — pure `+` and `*` on f64, no trig.
+Spawn parameters (origin, velocity, spawn_tick) carried in the
+`BulletSpawn` wire event; client integrates trajectory locally.
+`update_bullet` decrements lifetime + culls off-field. PULSE_CANNON
+constants: BULLET_SPEED = 8.0 px/tick, DAMAGE = 1.2, LIFETIME = 240
+ticks (4 s).
+
+### Added — `mp1::enemy`
+
+HUNTER chase + arc-orbit AI. `EnemyState` carries chase-arc params
+(arc_dir, arc_radius, arc_omega, arc_phase) seeded once at spawn
+from `rng_subseed`. `update_enemy(e, targets, field)` picks the
+closest alive target, runs the arc-offset chase, and bounces at
+field edges. Constant-omega arc replaces solo's wall-clock-keyed
+vortex (since the sim has no wall clock by Phase 3 design). Lerp
+angle factor = 0.08 matches solo's `enemy.turnSpeed`.
+
+### Added — `mp1::damage`
+
+Energy-tank HP model + Diablo-style revive. `apply_damage` returns
+`DamageOutcome::{Damaged, JustDowned, NoOp}`. Downed ships are
+**not respawned** — another alive ship hovering within
+`REVIVE_RADIUS = 80 px` for 3 s (180 ticks at 60 Hz) fills the
+revive meter; leaving the radius drains it at 2× the fill rate.
+`all_downed(ships)` predicate signals game-over for the room when
+true. Phase 3 explicitly omits powerup / shield / reflex / spare-
+ship branches from solo's `takeDamage`.
+
+### Added — `mp1::collision`
+
+Phase-3-relevant collision pairs: bullet × enemy, bullet × asteroid
+(with deterministic split call), ship × enemy contact, ship × asteroid
+contact. N² over ~50 entities — trivial; broadphase deferred.
+**Friendly fire is OFF by omission** — no bullet × ship pair test
+exists. `CollisionEvent` enum returned to caller for wire-event
+mapping (Wave 2). Emits BulletHit, EnemyDestroyed, AsteroidDestroyed
+(with split children + sub-seed), ShipDamaged, ShipDowned.
+
+### Tests
+
+`cargo test --workspace` — **112 pass** (up from 54). New: 7
+`asteroid` tests, 6 `bullet` tests, 8 `enemy` tests, 14 `damage`
+tests, 11 `collision` tests, 8 `rng_ctx` tests, 6 `trig` tests.
+Determinism invariants verified: same-seed-same-output for spawn,
+sub-seed-doesn't-contaminate-main, deterministic split children
+match bit-for-bit across two calls.
+
+`npm run wasm:build:dev` — succeeds (~9s incremental, ~135KB
+unoptimized — the new modules add ~50KB compressed).
+
+### Pending (Wave 2)
+
+- `mp1::state` reshape: multi-ship + multi-entity `RoomState`
+  replacing the Phase-1 single-ship `GameState`
+- `mp1::wire` extensions: `EventPayload` enum + `StateChecksum`
+  variant + `Resync` round-trip
+- WIRE_VERSION bump 1→2
+- `server-bin::mp1_room` adopts new RoomState; emits events instead
+  of (or alongside) snapshots for deterministic entity kinds
+- `js/mp/` integration: WASM client also calls the deterministic
+  sim modules; remote-ship rendering extends to enemies/asteroids/
+  bullets via the same Rust code path
+
+---
+
 ## [0.3.2] - 2026-05-17
 
 Client-side Phase 2 lands. The `/mp` browser page now connects to

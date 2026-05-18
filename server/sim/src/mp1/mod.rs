@@ -12,11 +12,23 @@
 //! is rewritten around the new sim, the legacy modules at the crate
 //! root archive together.
 
+// Phase 1 / Phase 2 modules (ship-only sim + wire format).
 pub mod codec;
 pub mod input;
 pub mod ship;
 pub mod state;
 pub mod wire;
+
+// Phase 3 modules — fully deterministic sim for the MVP combat
+// roster. All randomness sourced from `rng_ctx`; all trig from `trig`
+// (polynomial approximations to guarantee cross-runtime parity).
+pub mod asteroid;
+pub mod bullet;
+pub mod collision;
+pub mod damage;
+pub mod enemy;
+pub mod rng_ctx;
+pub mod trig;
 
 pub use codec::{decode_client, decode_server, encode_client, encode_server};
 pub use input::PlayerInput;
