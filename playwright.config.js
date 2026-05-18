@@ -151,11 +151,41 @@ export default defineConfig({
         },
     ],
 
-    // Start the Vite dev server before tests, reuse if already running
-    webServer: {
-        command: 'npm run dev',
-        port: 8090,
-        reuseExistingServer: true,
-        timeout: 30_000,
-    },
+    // Start the dev servers before tests, reuse if already running.
+    //
+    // ARRAY FORM (Playwright supports `webServer: { ... }` for a single
+    // server OR `webServer: [{...}, {...}]` for multiple). We use the
+    // array form so the QA-13 multiplayer Phase 2 spec can wait on the
+    // Rust `rainboids-server` (port :8443) in addition to the static
+    // http-server (port :8090).
+    //
+    // Both entries use `reuseExistingServer: true` so re-running tests
+    // locally while `npm run dev` is already running is friction-free
+    // (Playwright probes the port/url first, skips spawning if it
+    // responds).
+    //
+    // Existing solo qa/e2e tests never touch :8443, so adding the
+    // cargo entry is non-disruptive — at worst they wait an extra
+    // few seconds for the cold cargo build the first time after a
+    // `cargo clean`. The 180s timeout on the cargo entry accommodates
+    // cold compiles (~30s typical, much longer on first build).
+    //
+    // CI note: if a CI environment doesn't have the Rust toolchain
+    // installed, only the QA-13 spec will fail (the cargo webServer
+    // entry will error out). All other tests pass unaffected because
+    // they don't depend on :8443.
+    webServer: [
+        {
+            command: 'npm run dev:solo',
+            port: 8090,
+            reuseExistingServer: true,
+            timeout: 30_000,
+        },
+        {
+            command: 'cargo run --manifest-path server/Cargo.toml -p rainboids-server',
+            url: 'http://localhost:8443/health',
+            reuseExistingServer: true,
+            timeout: 180_000,
+        },
+    ],
 });

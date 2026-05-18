@@ -1,3 +1,114 @@
+## Implementation Status (2026-05-17)
+
+**Phase 2 is feature-complete in code.** Two `/mp` browser tabs can
+connect to a running `rainboids-server` and see each other's ships
+move via WASM-side prediction + 20Hz server snapshot interpolation.
+What remains is automated two-tab regression testing, performance
+profiling under load, and the Phase 4 prediction-reconciliation work.
+
+The design sections below are preserved as the historical spec.
+Where the shipped implementation diverged from the spec, the
+divergence is captured here, NOT inline in the design sections.
+Notable shifts from the original plan:
+
+- **Wire format is binary bincode, not tagged JSON.** Decided
+  during Wave 1 of implementation. `mp1::codec` (bincode 1.x,
+  externally-tagged enums, fixint LE) replaces the `serde_json`
+  text-frame approach. Cost: a hand-rolled JS decoder
+  (`wire-codec.js`, ~325 lines). Benefit: ~6× smaller wire +
+  byte-exact match with the legacy `protocol::codec` conventions
+  + no `deserialize_any` dependency.
+- **All `mp1` scalars are f64, not f32.** Eliminates implicit
+  widening/narrowing at the wasm-bindgen boundary so the WASM
+  client and native server can do byte-identical math in Phase 4
+  reconciliation.
+- **`Snapshot.acked_input_tick` wire field added.** Phase 2
+  doesn't consume it; Phase 4 reconciliation will.
+- **Module names.** Final layout is `server-bin/src/mp1_room.rs` +
+  `mp1_connection.rs` (sibling of `server/`), not the
+  spec's `server/mp_connection.rs` + `mp_protocol.rs`. Wire types
+  live in `sim/src/mp1/wire.rs`, owned by the sim crate so both
+  native + WASM consumers share one definition.
+- **Tier 1 debug logging** behind `?mp-debug=1` URL flag on the
+  client — not in the original spec but a cheap quality-of-life
+  add during testing.
+
+### Shipped
+
+| Version | Subject | Files |
+|---|---|---|
+| `mp 0.3.0` | f64 + binary bincode wire (sim + WASM bindings) | `server/sim/src/mp1/{state,input,ship,wire,codec,mod}.rs`, `server/client-wasm/src/lib.rs` |
+| `mp 0.3.1` | server-bin `/mp/ws` room actor + connection | `server/server-bin/src/{mp1_room,mp1_connection}.rs` + `server/http.rs` / `main.rs` / `lib.rs` wiring |
+| `mp 0.3.2` | client WS transport + remote-ship rendering | `js/mp/{wire-codec,mp-ws,mp-engine,mp-renderer}.js` |
+
+### Deferred to later phases
+
+- **Prediction reconciliation** — Phase 4. Local prediction in `/mp`
+  may drift from server truth within a session; not snap-corrected.
+  The `Snapshot.acked_input_tick` field is wire-ready.
+- **Multi-room / matchmaking** — Phase 5. Single global room for now.
+- **Reconnect with grace** — Phase 5. Tab-close mints a fresh slot.
+- **Enemies / asteroids / bullets** — Phase 3. Ships-only for now.
+- **Delta-encoded snapshots** — Phase 5+. Full snapshot every 20Hz
+  is fine at Phase 2 wire volume.
+- **TLS / deploy** — Phase 5+. Localhost-only `ws://` for now.
+- **Application-level ping/pong** — Phase 5. Tab-close = clean
+  socket-close drop for Phase 2.
+- **Cheat protection / input clamping** — Phase 5+. Server trusts
+  client input verbatim.
+
+### Tests
+
+| Layer | Suite | Status |
+|---|---|---|
+| Rust unit | `cargo test -p rainboids-sim` | 11 pass (6 JSON + 5 bincode round-trips) |
+| Rust integration | `cargo test --workspace` | 54 pass total, zero regressions in legacy `/ws` suite |
+| WASM build | `npm run wasm:build:dev` | succeeds (~7s incr, ~135KB output) |
+| Browser Phase 1 | `tests/qa/12-mp-smoke.spec.js` | 4 tests (single-client) |
+| Browser Phase 2 | `tests/qa/13-mp2-ws.spec.js` | pending (sibling subagent in flight) |
+
+### To manually verify the two-tab demo
+
+```
+npm run dev           # starts http-server + cargo + wasm-pack
+# wait for the cargo build (~30s cold)
+# open TWO http://localhost:8090/mp tabs side by side
+# add ?mp-debug=1 to either for DevTools console logging
+```
+
+Within a few seconds both tabs should show their own white ship +
+the other player's colored ship + a `P<n>` label. Move with WASD;
+the other tab follows ~100 ms behind via interpolation.
+
+### Open questions — status after implementation
+
+The "Open questions for the user" section at the bottom of this doc
+was answered in the course of implementation. Status as of `mp 0.3.2`:
+
+1. **Room policy (single global room)** — ✅ resolved. Shipped as
+   the spec's default: one global `Mp1Room` actor, all `/mp/ws`
+   connections join it. Per-URL-hash rooms deferred to Phase 5
+   matchmaking.
+2. **Spawn positions** — ⏳ deferred to Phase 4. `Welcome.spawn_x/y`
+   IS sent by the server, but the WASM `World` has no position
+   setter yet, so the client logs but does not apply it. Local
+   prediction starts at the WASM default `(960, 540)`. Snap-to-
+   server-truth lands with Phase 4 reconciliation.
+3. **Friendly fire** — ❓ still open. Not relevant in Phase 2 (no
+   weapons); revisit when Phase 3 introduces bullets.
+4. **Display name** — ⏳ deferred to Phase 5 polish. Defaults to
+   `"Pilot"` in `mp-engine.js`'s `start({ name = 'Pilot' })`
+   signature. No prompt, no title screen — punt as recommended.
+5. **Local-ship "ghost" debug overlay** — ⏳ deferred. Not shipped
+   in Phase 2; the `?mp-debug=1` console logging proved sufficient
+   for the smoke testing actually performed. Revisit if Phase 4
+   reconciliation tuning needs visual aid.
+6. **Per-player input clamping** — ❓ still open. Server currently
+   trusts client `aim_x`/`aim_y` verbatim. Harmless in Phase 2;
+   matters in Phase 3 when bullets fire from those coordinates.
+
+---
+
 # Multiplayer WASM Pivot — Phase 2 — 2026-05-17
 
 **Goal**: two browser tabs at `/mp` see each other's ships move via the
