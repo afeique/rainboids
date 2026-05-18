@@ -535,8 +535,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1190,7 +1192,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 name = "rainboids-client-wasm"
 version = "0.1.0"
 dependencies = [
+ "getrandom 0.2.17",
  "rainboids-sim",
+ "uuid",
  "wasm-bindgen",
 ]
 

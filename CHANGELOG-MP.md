@@ -8,6 +8,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.2.1] - 2026-05-17
+
+### Fixed — WASM build dependencies
+
+`server/client-wasm/Cargo.toml` now declares `getrandom = { features = ["js"] }`
+and `uuid = { features = ["js"] }` as direct deps so Cargo feature
+unification enables the browser-crypto randomness backend on
+`wasm32-unknown-unknown`. Native (server-bin) builds ignore these.
+
+Without this, `wasm-pack build` failed with:
+```
+error: the wasm*-unknown-unknown targets are not supported by default,
+       you may need to enable the "js" feature.
+```
+
+`npm run wasm:build:dev` now succeeds (~28s cold compile, ~135KB
+unoptimized output). The browser side of Phase 1 is unblocked.
+
+---
+
 ## [0.2.0] - 2026-05-17
 
 Phase 1 — WASM round-trip: a single player-controlled ship visible on `/mp`,
