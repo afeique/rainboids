@@ -67,7 +67,10 @@
     ],
     "mac": {
       "target": [
-        "zip"
+        {
+          "target": "zip",
+          "arch": ["universal"]
+        }
       ],
       "category": "public.app-category.games"
     },

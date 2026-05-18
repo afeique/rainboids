@@ -9,6 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 Desktop stays in `0.x` while pre-1.0; promotes to `1.0.0` when the wrapper
 is feature-complete (solo + MP + cached music + cross-platform installers).
 
+## [0.4.1] - 2026-05-18
+
+macOS target switched to a **universal binary** (Intel + Apple Silicon
+in one `.app`) so a single download runs natively on both architectures.
+The previous 0.4.0 macOS build was implicitly x64-only — Apple Silicon
+users would have run it under Rosetta.
+
+### Changed — `electron/package.json` mac target
+
+```json
+"mac": {
+  "target": [
+    { "target": "zip", "arch": ["universal"] }
+  ],
+  ...
+}
+```
+
+electron-builder downloads both Mac Electron prebuilts
+(`electron-v32.3.3-darwin-x64.zip` ~104 MB and `-arm64.zip` ~99 MB),
+packages each side, then uses `@electron/universal` to lipo the
+Mach-O binaries together. Non-binary files (JS, CSS, assets) must be
+byte-identical across the two snapshots — `lipo -info` confirms both
+slices in the output.
+
+### Notes
+
+- Output renamed: `Rainboids-0.4.1-universal-mac.zip` (was
+  `Rainboids-0.4.0-mac.zip`).
+- Size: **184 MB zip** vs the prior 129 MB x64-only zip. The second
+  arch slice adds ~55 MB, not 2× — JS/CSS/assets are shared, only the
+  Electron native binaries duplicate.
+- CI workflow unchanged. `.github/workflows/desktop-release.yml`
+  still just calls `npm run build:mac`; the universal target is
+  driven entirely by the package.json config.
+- Universal builds require all non-binary files in the two arch
+  snapshots to be SHA-identical. If the renderer source is edited
+  while a local build is mid-flight (or if a stale prior build is
+  reused), the lipo step fails with "Expected all non-binary files
+  to have identical SHAs". Fix: `rm -rf electron/dist` between local
+  builds. CI is immune because each run is a fresh checkout.
+- electron-builder applies an ad-hoc self-signature to satisfy
+  macOS's universal-app signing requirement (Gatekeeper still warns
+  on first launch, same as before — right-click → Open to bypass).
+
 ## [0.4.0] - 2026-05-18
 
 Phase 4 — Packaging. Adds electron-builder configuration so the desktop
