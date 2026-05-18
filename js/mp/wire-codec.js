@@ -103,7 +103,7 @@ const LE = true;
  *       AsteroidWire / BulletWire records)
  *  - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
  *       client can seed its WASM mirror identically to the server. */
-export const WIRE_VERSION = 5;
+export const WIRE_VERSION = 6;
 
 /* ── Reader ─────────────────────────────────────────────────────── */
 
@@ -281,6 +281,14 @@ function readSnapshotShip(r) {
         vx: r.f64(),
         vy: r.f64(),
         angle: r.f64(),
+        // WIRE_VERSION 6 additions.
+        hp: r.f64(),
+        max_hp: r.f64(),
+        shield: r.f64(),
+        max_shield: r.f64(),
+        spare_tanks: r.u8(),
+        weapon_kind: r.u8(),
+        downed: r.bool(),
     };
 }
 

@@ -107,12 +107,18 @@ export class Hud {
             let reviveMeter = 0;
             let enemyCount = 0;
             let remoteCount = 0;
+            let shield = 0;
+            let maxShield = 0;
+            let spareTanks = 0;
             try { hp = world.ship_hp(); } catch {}
             try { maxHp = world.ship_max_hp(); } catch {}
             try { downed = !!world.ship_downed(); } catch {}
             try { reviveMeter = world.ship_revive_meter(); } catch {}
             try { enemyCount = world.enemy_count(); } catch {}
             try { remoteCount = world.remote_ship_count(); } catch {}
+            try { shield = world.ship_shield(); } catch {}
+            try { maxShield = world.ship_max_shield(); } catch {}
+            try { spareTanks = world.ship_spare_tanks(); } catch {}
 
             // ---- Hostiles counter (top left) ----
             if (enemyCount > 0) {
@@ -139,8 +145,16 @@ export class Hud {
             const hpBarY = Math.round(ch - HP_BAR_MARGIN_BOTTOM - HP_BAR_H);
             drawHpBar(ctx, hpBarX, hpBarY, hp, maxHp);
 
+            // ---- Shield bar (just above HP bar) ----
+            if (maxShield > 0) {
+                drawShieldBar(ctx, hpBarX, hpBarY - 6, shield, maxShield);
+            }
+
+            // ---- Spare-tank pips (right of HP bar) ----
+            drawSpareTanks(ctx, hpBarX + HP_BAR_W + 8, hpBarY, spareTanks);
+
             // ---- Weapon indicator (just above HP bar, centered) ----
-            drawWeaponIndicator(ctx, weapon, hpBarX + HP_BAR_W / 2, hpBarY - 8);
+            drawWeaponIndicator(ctx, weapon, hpBarX + HP_BAR_W / 2, hpBarY - 18);
 
             // ---- Downed overlay (above HP bar) ----
             if (downed) {
@@ -152,6 +166,41 @@ export class Hud {
             ctx.restore();
         }
     }
+}
+
+// Shield bar — thin cyan bar above HP. Same width as HP, smaller height.
+const SHIELD_BAR_H = 4;
+const SHIELD_COLOR = "#3df1ff";
+const SHIELD_BG_COLOR = "rgba(40, 60, 70, 0.55)";
+function drawShieldBar(ctx, x, baselineY, shield, maxShield) {
+    const w = 240;
+    const h = SHIELD_BAR_H;
+    const y = baselineY - h;
+    const frac = maxShield > 0 ? Math.max(0, Math.min(1, shield / maxShield)) : 0;
+    ctx.save();
+    ctx.fillStyle = SHIELD_BG_COLOR;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = SHIELD_COLOR;
+    ctx.fillRect(x, y, Math.round(w * frac), h);
+    ctx.restore();
+}
+
+// Spare-tank pips — small bracketed cells, one per tank.
+const TANK_PIP_W = 10;
+const TANK_PIP_H = 12;
+const TANK_PIP_GAP = 3;
+const TANK_PIP_COLOR = "#88ff88";
+const TANK_PIP_EMPTY = "rgba(60, 80, 60, 0.45)";
+function drawSpareTanks(ctx, x, baselineY, tanks) {
+    const maxDisplay = 5;
+    ctx.save();
+    for (let i = 0; i < maxDisplay; i++) {
+        const px = x + i * (TANK_PIP_W + TANK_PIP_GAP);
+        const py = baselineY;
+        ctx.fillStyle = i < tanks ? TANK_PIP_COLOR : TANK_PIP_EMPTY;
+        ctx.fillRect(px, py, TANK_PIP_W, TANK_PIP_H);
+    }
+    ctx.restore();
 }
 
 // Weapon indicator — labeled box above HP bar showing equipped weapon.

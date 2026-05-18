@@ -8,6 +8,97 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.7.0] - 2026-05-18
+
+**Phase 4 step 2 — HP/death parity (shield + spare tanks).** Ships now
+have a shield layer that absorbs damage before HP, plus 3 spare tanks
+that auto-consume on HP zero to restore full HP instead of going downed.
+Survival now feels closer to solo (which is currently 3 spare tanks per
+v6.12.4). WIRE_VERSION 5 → 6 — `SnapshotShip` gains 7 fields so the HUD
++ remote-render code can read the authoritative values without waiting
+on Event frames.
+
+### Added — `mp1/shield.rs` (Wave 1 new file)
+
+Pure helpers taking primitive mutable refs (no `ShipState` dependency
+to keep Wave 1 independent):
+
+- `apply_shield_damage(shield: &mut f64, amount) -> ShieldDamageOutcome`
+  — three-way return: `FullyAbsorbed { shield_remaining }`,
+  `PartialAbsorb { hp_damage }`, `NoShield { hp_damage }`
+- `try_consume_spare_tank(tanks: &mut u8, hp: &mut f64, max_hp) -> SpareTankOutcome`
+  — `Consumed { tanks_remaining }` (HP restored to max) or `NoneLeft`
+
+Constants: `STARTING_SHIELD = 50.0`, `MAX_SHIELD = 50.0`,
+`STARTING_SPARE_TANKS = 3`. 11 unit tests cover boundary cases (exact
+shield-equals-damage, negative damage no-op, multi-consume to zero).
+
+### Changed — `damage::apply_damage` flow
+
+Now routes through shield → HP → spare tanks in that order:
+1. Shield absorbs first
+2. HP soaks any residual damage
+3. If HP would hit 0, try a spare tank before going downed
+   (`Consumed` → HP restored to max, ship stays upright; `NoneLeft`
+   → ship transitions to downed as before)
+
+### Changed — `ShipState` gains shield + spare-tank fields
+
+- `shield: f64` (init = `STARTING_SHIELD`)
+- `max_shield: f64` (init = `MAX_SHIELD`)
+- `spare_tanks: u8` (init = `STARTING_SPARE_TANKS`)
+
+### Wire changes (WIRE_VERSION 5 → 6)
+
+`SnapshotShip` gains 7 new fields so the HUD doesn't have to derive
+state from event timing:
+- `hp`, `max_hp`, `shield`, `max_shield`, `spare_tanks`, `weapon_kind`,
+  `downed`
+Each snapshot ship grows ~35 bytes (4 × f64 + 3 × u8). At 8 players ×
+20 Hz = ~5.6 KB/s extra per client — well under any wire-volume cliff.
+
+`SnapshotShip` now derives `Default` so test fixtures can use
+`..Default::default()` for the new fields without verbose construction.
+
+### WASM client
+
+- `apply_snapshot_ship` signature extended to accept the new fields.
+  Old 6-arg shape is gone — JS engine + WASM mirror both updated in
+  the same commit.
+- New accessors: `ship_shield()`, `ship_max_shield()`,
+  `ship_spare_tanks()`.
+
+### JS client
+
+- `mp-engine.js`: Snapshot dispatch passes all 13 ship fields through
+  `apply_snapshot_ship`. Resync path mirrors the same.
+- `mp-hud.js`:
+  - Thin cyan shield bar drawn above the HP bar (suppressed when
+    `max_shield == 0` so non-shielded ships don't flicker an empty bar)
+  - Spare-tank pips drawn to the right of the HP bar (5-slot row,
+    green when filled, gray otherwise)
+  - Weapon indicator nudged up 18 px to make room
+
+### Build health
+
+- `cargo test --workspace`: **134 mp1 sim tests + integration suite pass**
+- `cargo check --workspace`: clean
+- `npm run wasm:build:dev`: clean
+- `npm run test:qa --grep QA-13`: 4/4 pass (Phase 3 two-tab regression
+  intact after WIRE_VERSION 5 → 6 wire bump)
+
+### Known follow-ups
+
+- Shield regeneration not implemented (no grace-window decay → refill).
+  Phase 5+ polish; for now shield is one-time absorption until refilled
+  by a future restock orb / passive.
+- Tank-consume event fires as a normal `Damaged` outcome — there's no
+  dedicated wire event for the dramatic moment yet. Phase 4 step 4
+  could add `EventPayload::TankConsumed` if a distinct VFX trigger
+  becomes worth the wire cost.
+- Solo's "last stand" (1-shot survives at low HP) mechanic deferred
+  to Phase 5+.
+
 ## [0.6.0] - 2026-05-18
 
 **Phase 4 step 4 — 3 new base weapons + per-player weapon switching.**

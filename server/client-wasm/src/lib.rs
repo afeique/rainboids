@@ -300,7 +300,16 @@ impl World {
         vx: f64,
         vy: f64,
         angle: f64,
+        hp: f64,
+        max_hp: f64,
+        shield: f64,
+        max_shield: f64,
+        spare_tanks: u32,
+        weapon_kind: u32,
+        downed: bool,
     ) {
+        let spare_tanks_u8 = (spare_tanks & 0xff) as u8;
+        let weapon_kind_u8 = (weapon_kind & 0xff) as u8;
         if let Some(ship) = self
             .room
             .ships
@@ -312,6 +321,13 @@ impl World {
             ship.vx = vx;
             ship.vy = vy;
             ship.angle = angle;
+            ship.hp = hp;
+            ship.max_hp = max_hp;
+            ship.shield = shield;
+            ship.max_shield = max_shield;
+            ship.spare_tanks = spare_tanks_u8;
+            ship.weapon_kind = weapon_kind_u8;
+            ship.downed = downed;
             return;
         }
         let mut new_ship = ShipState::default();
@@ -321,6 +337,13 @@ impl World {
         new_ship.vx = vx;
         new_ship.vy = vy;
         new_ship.angle = angle;
+        new_ship.hp = hp;
+        new_ship.max_hp = max_hp;
+        new_ship.shield = shield;
+        new_ship.max_shield = max_shield;
+        new_ship.spare_tanks = spare_tanks_u8;
+        new_ship.weapon_kind = weapon_kind_u8;
+        new_ship.downed = downed;
         new_ship.radius = SHIP_SIZE * 0.5;
         self.room.ships.push(new_ship);
     }
@@ -610,6 +633,15 @@ impl World {
     }
     pub fn ship_downed(&self) -> bool {
         self.local_ship().downed
+    }
+    pub fn ship_shield(&self) -> f64 {
+        self.local_ship().shield
+    }
+    pub fn ship_max_shield(&self) -> f64 {
+        self.local_ship().max_shield
+    }
+    pub fn ship_spare_tanks(&self) -> u32 {
+        self.local_ship().spare_tanks as u32
     }
     pub fn ship_revive_meter(&self) -> f64 {
         self.local_ship().revive_meter

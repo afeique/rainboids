@@ -146,6 +146,9 @@ mod tests {
             downed: false,
             revive_meter: 0.0,
             weapon_kind: 0,
+            shield: 0.0,
+            max_shield: 0.0,
+            spare_tanks: 0,
         }
     }
 

@@ -60,20 +60,55 @@ pub enum DamageOutcome {
 }
 
 /// Apply damage to a ship; mutates `ship` in place and returns the outcome.
+///
+/// Phase 4 step 2 — damage flows through shield → HP → spare tanks:
+/// 1. Shield absorbs first. If shield > 0, partial-or-full absorption
+///    runs through `shield::apply_shield_damage`. Any residual rolls
+///    onto HP.
+/// 2. If HP would hit 0, `shield::try_consume_spare_tank` attempts to
+///    consume one tank and restore HP to max. Only if no tanks remain
+///    does the ship transition to downed.
 pub fn apply_damage(ship: &mut ShipState, amount: f64) -> DamageOutcome {
     if !ship.active || ship.downed || amount <= 0.0 {
         return DamageOutcome::NoOp;
     }
-    ship.hp -= amount;
-    if ship.hp <= 0.0 {
-        ship.hp = 0.0;
-        ship.downed = true;
-        ship.vx = 0.0;
-        ship.vy = 0.0;
-        ship.revive_meter = 0.0;
-        DamageOutcome::JustDowned
-    } else {
-        DamageOutcome::Damaged
+
+    // 1. Shield absorption.
+    let hp_damage = match super::shield::apply_shield_damage(&mut ship.shield, amount) {
+        super::shield::ShieldDamageOutcome::FullyAbsorbed { .. } => 0.0,
+        super::shield::ShieldDamageOutcome::PartialAbsorb { hp_damage } => hp_damage,
+        super::shield::ShieldDamageOutcome::NoShield { hp_damage } => hp_damage,
+    };
+
+    if hp_damage <= 0.0 {
+        return DamageOutcome::Damaged;
+    }
+
+    // 2. HP absorption.
+    ship.hp -= hp_damage;
+    if ship.hp > 0.0 {
+        return DamageOutcome::Damaged;
+    }
+
+    // 3. HP would have hit zero — try a spare tank before going downed.
+    ship.hp = 0.0;
+    let max_hp = ship.max_hp;
+    match super::shield::try_consume_spare_tank(&mut ship.spare_tanks, &mut ship.hp, max_hp) {
+        super::shield::SpareTankOutcome::Consumed { .. } => {
+            // Tank restored HP to max. Caller treats as damage event,
+            // not downed event — `DamageOutcome::Damaged` keeps the
+            // existing wire path. (A future Phase 4 follow-up could
+            // add a dedicated TankConsumed outcome + wire event for a
+            // distinct cosmetic VFX.)
+            DamageOutcome::Damaged
+        }
+        super::shield::SpareTankOutcome::NoneLeft => {
+            ship.downed = true;
+            ship.vx = 0.0;
+            ship.vy = 0.0;
+            ship.revive_meter = 0.0;
+            DamageOutcome::JustDowned
+        }
     }
 }
 
@@ -177,6 +212,9 @@ mod tests {
             downed: false,
             revive_meter: 0.0,
             weapon_kind: 0,
+            shield: 0.0,
+            max_shield: 0.0,
+            spare_tanks: 0,
         }
     }
 

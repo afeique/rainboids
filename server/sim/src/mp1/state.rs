@@ -69,6 +69,19 @@ pub struct ShipState {
     /// accepts/clamps. Default `0 = PULSE_CANNON`. See
     /// `mp1::weapon::KIND_*` for the dense u8 enumeration.
     pub weapon_kind: u8,
+
+    /// Phase 4 step 2 — current shield value. Absorbed first by
+    /// `damage::apply_damage` via `shield::apply_shield_damage`.
+    /// No regeneration in Phase 4 step 2 (Phase 5+ adds a regen
+    /// grace window).
+    pub shield: f64,
+    pub max_shield: f64,
+
+    /// Phase 4 step 2 — spare-tank count. When HP hits 0 and at least
+    /// one tank remains, `damage::apply_damage` consumes one and
+    /// restores HP to `max_hp` instead of transitioning to downed.
+    /// Spawned at `shield::STARTING_SPARE_TANKS` (currently 3).
+    pub spare_tanks: u8,
 }
 
 impl Default for ShipState {
@@ -89,6 +102,9 @@ impl Default for ShipState {
             downed: false,
             revive_meter: 0.0,
             weapon_kind: 0, // PULSE_CANNON
+            shield: super::shield::STARTING_SHIELD,
+            max_shield: super::shield::MAX_SHIELD,
+            spare_tanks: super::shield::STARTING_SPARE_TANKS,
         }
     }
 }

@@ -742,6 +742,13 @@ impl Mp1RoomState {
                 vx: s.vx,
                 vy: s.vy,
                 angle: s.angle,
+                hp: s.hp,
+                max_hp: s.max_hp,
+                shield: s.shield,
+                max_shield: s.max_shield,
+                spare_tanks: s.spare_tanks,
+                weapon_kind: s.weapon_kind,
+                downed: s.downed,
             })
             .collect();
         let acked = self
@@ -797,6 +804,13 @@ impl Mp1RoomState {
                     vx: s.vx,
                     vy: s.vy,
                     angle: s.angle,
+                    hp: s.hp,
+                    max_hp: s.max_hp,
+                    shield: s.shield,
+                    max_shield: s.max_shield,
+                    spare_tanks: s.spare_tanks,
+                    weapon_kind: s.weapon_kind,
+                    downed: s.downed,
                 })
                 .collect(),
             enemies: self

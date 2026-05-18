@@ -43,9 +43,10 @@ pub mod weapon_storm_needles;
 pub mod weapon_scatter_gun;
 pub mod weapon_rail_driver;
 pub mod weapon;
-// Phase 4 step 2 (shield/spare-tank) + enemy-bullet infra are authored
-// in `shield.rs` + `enemy_bullet.rs`; their `pub mod` declarations land
-// when those commits integrate them (0.7.0 + 0.8.0).
+
+// Phase 4 step 2 — HP/death parity (shield + spare tanks).
+pub mod shield;
+// Enemy-bullet infra lands in 0.8.0 alongside its Wave 2c integration.
 
 pub use codec::{decode_client, decode_server, encode_client, encode_server};
 pub use input::PlayerInput;

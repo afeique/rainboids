@@ -122,6 +122,7 @@ mod tests {
                     vx: 1.0,
                     vy: -2.0,
                     angle: 0.5,
+                    ..Default::default()
                 },
                 SnapshotShip {
                     player_id: 2,
@@ -130,6 +131,7 @@ mod tests {
                     vx: 0.0,
                     vy: 0.0,
                     angle: 1.5,
+                    ..Default::default()
                 },
             ],
         };
@@ -166,6 +168,7 @@ mod tests {
                     vx: 0.0,
                     vy: 0.0,
                     angle: 0.0,
+                    ..Default::default()
                 },
                 SnapshotShip {
                     player_id: 2,
@@ -174,6 +177,7 @@ mod tests {
                     vx: 0.0,
                     vy: 0.0,
                     angle: 0.0,
+                    ..Default::default()
                 },
                 SnapshotShip {
                     player_id: 3,
@@ -182,6 +186,7 @@ mod tests {
                     vx: 0.0,
                     vy: 0.0,
                     angle: 0.0,
+                    ..Default::default()
                 },
                 SnapshotShip {
                     player_id: 4,
@@ -190,16 +195,18 @@ mod tests {
                     vx: 0.0,
                     vy: 0.0,
                     angle: 0.0,
+                    ..Default::default()
                 },
             ],
         };
         let bytes = encode(&m).unwrap();
-        // 4 (variant) + 4 (tick) + 4 (acked) + 8 (Vec len) + 4×(4 id + 5×f64 + f64 angle)
-        // = 4 + 4 + 4 + 8 + 4×(4 + 48) = 228 bytes (f64 scalars; mp1 is f64
-        // throughout to match JavaScript Number precision and avoid drift at
-        // the wasm-bindgen boundary).
+        // WIRE_VERSION 6 — SnapshotShip carries hp + max_hp + shield +
+        // max_shield (4 × 8 = 32 B), spare_tanks (1 B), weapon_kind (1 B),
+        // downed (1 B). That's 35 extra bytes per ship vs the Phase 3
+        // shape. 4 ships at WIRE_VERSION 6 = ~336 bytes total. Threshold
+        // raised to 500 to keep room for Phase 4+ growth without thrash.
         assert!(
-            bytes.len() < 300,
+            bytes.len() < 500,
             "snapshot grew unexpectedly: {} bytes",
             bytes.len()
         );

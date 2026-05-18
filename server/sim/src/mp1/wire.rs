@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 /// Compact ship state for a Snapshot variant. One per ship in the room.
 /// Plain f64 for everything — no fixed-point yet, that's Phase 4+
 /// when prediction reconciliation needs determinism.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct SnapshotShip {
     /// Server-assigned stable identifier for the ship's owner.
     pub player_id: u32,
@@ -48,6 +48,24 @@ pub struct SnapshotShip {
     pub vy: f64,
     /// Facing angle in radians; 0 = +x axis (right). Matches `ShipState::angle`.
     pub angle: f64,
+    /// Phase 4 step 2 — current HP. Added so HUD reads authoritative
+    /// value without waiting for an Event frame.
+    pub hp: f64,
+    /// Phase 4 step 2 — max HP.
+    pub max_hp: f64,
+    /// Phase 4 step 2 — shield value (absorbs damage before HP).
+    pub shield: f64,
+    /// Phase 4 step 2 — shield maximum.
+    pub max_shield: f64,
+    /// Phase 4 step 2 — remaining spare tanks (extra lives).
+    pub spare_tanks: u8,
+    /// Phase 4 step 2 — currently equipped weapon. Server-authoritative
+    /// echo of the client's selection so remote tabs can render the
+    /// peer's bullet color correctly.
+    pub weapon_kind: u8,
+    /// Phase 4 step 2 — downed flag mirrored onto the wire so remote
+    /// tabs don't have to wait on a ShipDowned event to know.
+    pub downed: bool,
 }
 
 /// Server-to-client messages. Externally-tagged serde enum:
@@ -220,6 +238,9 @@ pub enum ClientMsg {
 /// rejects Hello with a mismatched version (sends Error variant and
 /// closes the WS).
 ///
+/// - 6: Phase 4 step 2 — HP/death parity. `SnapshotShip` gains
+///   `hp`, `max_hp`, `shield`, `max_shield`, `spare_tanks`,
+///   `weapon_kind`, `downed`. Each ship snapshot grows by ~35 bytes.
 /// - 5: Phase 4 step 4 — base weapons. `ClientMsg::Input` gains
 ///   `weapon: u8` so the server knows which fire pattern to dispatch.
 ///   `BulletSpawn` already carries `weapon: u8` (reserved since Phase 3),
@@ -233,7 +254,7 @@ pub enum ClientMsg {
 /// - 2: Phase 3 — adds Event / StateChecksum / Resync; client may
 ///   send Resync in response to a checksum miss. Snapshot still
 ///   ship-only (deterministic kinds reconstructed client-side).
-pub const WIRE_VERSION: u32 = 5;
+pub const WIRE_VERSION: u32 = 6;
 
 // ── Phase 3 — EventPayload variants ──
 
@@ -488,6 +509,7 @@ mod tests {
                     vx: 1.0,
                     vy: -2.0,
                     angle: 0.5,
+                    ..Default::default()
                 },
                 SnapshotShip {
                     player_id: 2,
@@ -496,6 +518,7 @@ mod tests {
                     vx: 0.0,
                     vy: 0.0,
                     angle: 1.5,
+                    ..Default::default()
                 },
             ],
         };

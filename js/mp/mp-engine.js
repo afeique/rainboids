@@ -181,6 +181,13 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                             ship.vx,
                             ship.vy,
                             ship.angle,
+                            ship.hp ?? 0,
+                            ship.max_hp ?? 0,
+                            ship.shield ?? 0,
+                            ship.max_shield ?? 0,
+                            (ship.spare_tanks | 0) >>> 0,
+                            (ship.weapon_kind | 0) >>> 0,
+                            !!ship.downed,
                         );
                     } catch (e) {
                         if (MP_DEBUG) {
@@ -334,6 +341,13 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                             ship.vx,
                             ship.vy,
                             ship.angle,
+                            ship.hp ?? 0,
+                            ship.max_hp ?? 0,
+                            ship.shield ?? 0,
+                            ship.max_shield ?? 0,
+                            (ship.spare_tanks | 0) >>> 0,
+                            (ship.weapon_kind | 0) >>> 0,
+                            !!ship.downed,
                         );
                     } catch (e) {
                         if (MP_DEBUG) {
