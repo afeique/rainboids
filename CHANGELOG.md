@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.14.1] - 2026-05-18
+
+### Fixed — wavy text animation + button hover (revert 6.13.1 HUD cache)
+
+Reverts the HUD cache introduced in 6.13.1. The signature-based dirty
+detection didn't include continuous-animation drivers (Date.now-based
+wave text wobble, button hover state, skill-cooldown progress), so
+idle frames blitted a stale HUD bitmap — freezing wavy text and
+missing button hover updates. Restoring this correctly would require
+the signature to include every animation tick, which makes the cache
+always dirty (no perf win). `drawHUD()` back to a pass-through;
+`js/modules/hud/hud-cache.js` deleted.
+
+The other Tier 1 perf items from 6.13.1 (Player Path2D cache,
+color-cache audit, statPickup frustum cull) are kept — they touch
+geometry/strings/cull only and don't affect rendering correctness.
+
+### Fixed — title-screen entry animation preserves wavy rainbow per letter
+
+Cherry-picked from the discarded `87278ea` (originally 6.13.2 in the
+pre-salvage history). Letters in the title's entry animation
+(twister / explosion / wave / cascade / warpdrive / pinwheel) now
+hold the same vivid rainbow each letter has in the static title,
+instead of cycling through one solid color at a time.
+
+Root cause: `drawWavyText` builds a horizontal gradient over the
+text's measured width; single-character calls were spanning ~30 px
+and showed one palette color at a time. Fix: `_titleLetterDraw`
+takes `opts.letterIndex` + `opts.totalLetters` and pre-resolves each
+letter to its rainbow-position color from `WAVY_PALETTES.title`,
+passing a single-element palette to `drawWavyText`. The 6 animation
+functions updated to pass these (one line each). Wave wobble + scale
++ rotation still apply on top.
+
+---
+
 ## [6.14.0] - 2026-05-18
 
 ### Added — Epic enemy destruction with 3D-tumbling wireframe-triangle shards

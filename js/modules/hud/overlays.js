@@ -637,9 +637,24 @@ function _titleLetterDraw(ctx, drawWavyText, ch, x, y, scale, alpha, opts = {}) 
     if (scale !== 1) ctx.scale(scale, scale);
     if (opts.rotation) ctx.rotate(opts.rotation);
     ctx.globalAlpha *= alpha;
+    // 6.13.1 — resolve per-letter rainbow color by position in the
+    // word so the animated entry preserves the same vivid rainbow
+    // the static title has. `drawWavyText` builds a horizontal gradient
+    // over the text's measured width; a single-char call only spans
+    // ~30 px and ends up showing one color from the palette at a time
+    // (visibly drifting / monochromatic). By pre-resolving each letter
+    // to its rainbow-position color and passing a single-element
+    // palette, the animation matches the static look. The wave-offset
+    // still applies on top so letters still wobble.
+    let colors = opts.colors || WAVY_PALETTES.title;
+    if (opts.letterIndex !== undefined && opts.totalLetters > 0) {
+        const palette = WAVY_PALETTES.title;
+        const idx = Math.floor((opts.letterIndex / opts.totalLetters) * palette.length);
+        colors = [palette[idx % palette.length]];
+    }
     drawWavyText(ch, 0, 0, {
         fontSize: opts.fontSize || TITLE_FONT_SIZE,
-        colors: opts.colors || WAVY_PALETTES.title,
+        colors,
         speed: opts.speed || 0.55,
         colorSpeed: opts.colorSpeed || 0.22,
     });
@@ -714,7 +729,7 @@ function drawTwisterAnim(ctx, elapsed, total, text, seeds, centerX, centerY, sta
         const angleAlpha = (Math.cos(angle) * 0.5 + 0.5);
         const letterAlpha = Math.max(0.25, 0.45 + 0.55 * angleAlpha) * (1 - fadeAlpha * 0.85);
         const r = _settleLerp(elapsed, staticPositions[i], sx, sy, drawScale, letterAlpha, 0);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation, letterIndex: i, totalLetters: N });
     }
     ctx.restore();
     return fadeAlpha;
@@ -783,7 +798,7 @@ function drawExplosionAnim(ctx, elapsed, total, text, seeds, centerX, centerY, s
 
         const letterAlpha = (1 - fadeAlpha * 0.9);
         const r = _settleLerp(elapsed, staticPositions[i], sx, sy, drawScale, letterAlpha, rotation);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation, letterIndex: i, totalLetters: N });
     }
     ctx.restore();
     return fadeAlpha;
@@ -835,7 +850,7 @@ function drawWaveAnim(ctx, elapsed, total, text, seeds, centerX, centerY, static
         const rotation = Math.cos(wavePhase) * 0.25 * eased;
         const letterAlpha = 1 - fadeAlpha * 0.9;
         const r = _settleLerp(elapsed, sp, sx, sy, drawScaleBase, letterAlpha, rotation);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation, letterIndex: i, totalLetters: N });
     }
     ctx.restore();
     return fadeAlpha;
@@ -888,7 +903,7 @@ function drawCascadeAnim(ctx, elapsed, total, text, seeds, centerX, centerY, sta
         const drawScale = 1 + zoomAmount * 6;
         const letterAlpha = 1 - fadeAlpha * 0.9;
         const r = _settleLerp(elapsed, sp, animSx, animSy, drawScale, letterAlpha, rotation);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation, letterIndex: i, totalLetters: N });
     }
     ctx.restore();
     return fadeAlpha;
@@ -953,7 +968,7 @@ function drawWarpdriveAnim(ctx, elapsed, total, text, seeds, centerX, centerY, s
         // During streak phase, letters are stretched faintly along motion
         const alpha = Math.min(1, 0.2 + streakT * 0.95) * (1 - fadeAlpha * 0.9);
         const r = _settleLerp(elapsed, staticPositions[i], sx, sy, drawScale, alpha, 0);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation, letterIndex: i, totalLetters: N });
     }
     ctx.restore();
     return fadeAlpha;
@@ -1003,7 +1018,7 @@ function drawPinwheelAnim(ctx, elapsed, total, text, seeds, centerX, centerY, st
         const drawScale = 1 + zoomAmount * 5.5;
         const alpha = 1 - fadeAlpha * 0.9;
         const r = _settleLerp(elapsed, staticPositions[i], x, y, drawScale, alpha, rotation);
-        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation });
+        _titleLetterDraw(ctx, this.drawWavyText.bind(this), text[i], r.x, r.y, r.scale, r.alpha, { rotation: r.rotation, letterIndex: i, totalLetters: N });
     }
     ctx.restore();
     return fadeAlpha;
