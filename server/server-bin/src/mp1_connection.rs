@@ -95,13 +95,20 @@ pub async fn handle(ws: WebSocket, room: Mp1RoomHandle) {
     }
 
     // ── 2. Join the room ────────────────────────────────────────────
-    let (player_id, spawn_x, spawn_y) = {
+    let rng_seed = room.rng_seed;
+    let (player_id, spawn_x, spawn_y, _) = {
         let mut s = room.state.lock().await;
-        s.join(out_tx.clone())
+        s.join(rng_seed, out_tx.clone())
     };
     tracing::info!(player_id, name = %client_name, "mp1: player joined");
 
-    let server_tick = room.state.lock().await.tick;
+    let server_tick = room.state.lock().await.room.tick;
+    // Welcome's `server_tick` is informational only; rng_seed
+    // delivery happens in a future wire-version bump (Phase 3
+    // Wave 4) when the JS client implements deterministic
+    // mirroring. For now the seed is stored on the handle and
+    // the connection task knows it; the client doesn't yet
+    // consume it.
     let welcome = ServerMsg::Welcome {
         player_id,
         server_tick,
@@ -173,17 +180,19 @@ pub async fn handle(ws: WebSocket, room: Mp1RoomHandle) {
                         tracing::warn!(player_id, "mp1: duplicate Hello, ignoring");
                     }
                     ClientMsg::Resync { client_tick } => {
-                        // Phase-3 Wave-3 will wire this through to the
-                        // room actor (which will reply with ServerMsg::
-                        // Resync carrying the full deterministic state).
-                        // For now: log + ignore — the legacy Phase-2
-                        // room actor doesn't yet track deterministic
-                        // entities so it has nothing to resync.
                         tracing::info!(
                             player_id,
                             client_tick,
-                            "mp1: Resync request received (Phase 3 Wave 3 pending)"
+                            "mp1: Resync requested; forwarding to room"
                         );
+                        if room
+                            .cmd_tx
+                            .send(RoomCmd::Resync { player_id })
+                            .is_err()
+                        {
+                            tracing::warn!(player_id, "mp1: room cmd channel closed");
+                            break;
+                        }
                     }
                 }
             }

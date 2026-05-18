@@ -8,6 +8,106 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.3.5] - 2026-05-17
+
+Phase 3 Wave 3 — server-bin's `mp1_room` adopts the deterministic
+`RoomState`. The Rust server now drives the full Phase-3 sim
+pipeline every tick: ship physics → enemy AI → asteroid drift →
+bullet integration → fire spawn → enemy spawn → collision detection
+→ revive ticking → entity cull. Events fan out as `ServerMsg::Event`
+frames coincident with the 20 Hz snapshot; StateChecksum heartbeat
+at ~1 Hz; Resync handles checksum-miss replies.
+
+### Architectural shape
+
+`Slot` no longer holds a ship — ships live in `room_state.ships`,
+indexed by `player_id`. `Slot` keeps per-connection metadata:
+`latest_input`, `last_input_tick`, `last_fire_tick`, `out_tx`.
+
+`Mp1RoomState` wraps `rainboids_sim::mp1::state::RoomState` (multi-
+entity) instead of a bespoke `HashMap<u32, Slot{ship,…}>`.
+
+### Per-tick pipeline
+
+1. **Ship physics** — `update_ship` per ship; downed ships get a
+   neutral input so they don't move.
+2. **Enemy AI** — `update_enemy` per HUNTER; targets built from
+   alive non-downed ships.
+3. **Asteroid drift** — `update_asteroid` per asteroid (wraps at
+   field edges).
+4. **Bullet integration** — `update_bullet` per bullet (cull
+   off-field / expired lifetime).
+5. **Fire input → spawn** — edge-triggered with
+   `PULSE_CANNON_COOLDOWN_TICKS = 24` (400 ms). Emits
+   `EventPayload::BulletSpawn`.
+6. **Enemy spawn** — every `ENEMY_SPAWN_PERIOD = 600` ticks (10 s),
+   `spawn_hunter_from_seed` via `rng::sub_seed`. Emits
+   `EventPayload::EnemySpawn`.
+7. **Collision** — `collision::run_collisions` on the 4 Phase 3
+   pairs. Returns a `Vec<CollisionEvent>` translated to
+   `EventPayload::{BulletHit, EnemyDestroy, AsteroidSplit,
+   ShipDamaged, ShipDowned}`.
+8. **Revive ticking** — for each downed ship, count nearby alive
+   ships within `REVIVE_RADIUS`, call `damage::tick_revive_meter`.
+   On `JustRevived`, call `damage::revive_ship` + emit
+   `EventPayload::ShipRevived`.
+9. **Cull** — `retain(|e| e.active)` for enemies / asteroids /
+   bullets to keep vecs tight.
+
+### Broadcasts
+
+- **Every tick with events**: `ServerMsg::Event { tick, payloads }`
+  to all slots. Carries spawn/hit/destroy/damage/revive moments
+  at tick precision (cosmetic timing).
+- **Every 3 ticks (~20 Hz)**: `ServerMsg::Snapshot` to all slots.
+  Ship state only — deterministic kinds reconstructed client-side.
+- **Every 60 ticks (~1 Hz)**: `ServerMsg::StateChecksum`. Four
+  u64 hashes (ships / enemies / asteroids / bullets) computed
+  via `f64::to_bits().hash()` for cross-runtime stability.
+
+### Resync round-trip
+
+- `ClientMsg::Resync { client_tick }` → `RoomCmd::Resync { player_id }`
+- Room actor builds a `ServerMsg::Resync { tick, rng_seed, ships,
+  enemies, asteroids, bullets }` payload (one-shot full-state) and
+  sends to ONLY the requesting slot via `send_resync_to`.
+- Client re-seeds its RngCtx from `rng_seed` and replaces its local
+  entity state with the wire records.
+
+### Initial state
+
+- Room boot spawns `INITIAL_ASTEROIDS = 4` asteroids via
+  `seed_initial_asteroids` (deterministic from room seed).
+- First enemy spawns at `tick = 60` (1 s in).
+
+### Welcome
+
+`Welcome.rng_seed` field is **plumbed through `Mp1RoomHandle.rng_seed`**
+and stored on the room. The wire still uses the Phase-2 Welcome
+shape (no `rng_seed` field yet) — Wave 4 adds the field when the
+JS client adopts the deterministic mirror. Until then the seed is
+"server-only knowledge" used to construct the deterministic stream;
+clients running the Phase-2 protocol see the same ship snapshots as
+before, plus the new Event/Snapshot/StateChecksum frames (which
+they'll start consuming in Wave 4).
+
+### Build health
+
+- `cargo check --workspace`: clean
+- `cargo test --workspace`: 112 pass (no regressions)
+
+### Pending (Wave 4 — client integration)
+
+- `js/mp/wire-codec.js` extended for Event/StateChecksum/Resync
+- `js/mp/mp-engine.js` runs the deterministic sim (via the same
+  WASM compile + new World API exports) and consumes Event frames
+- `js/mp/mp-renderer.js` draws enemies/asteroids/bullets from the
+  WASM-state mirror
+- Welcome wire bumps to carry `rng_seed`
+- Two-tab smoke validates the full Phase-3 combat loop
+
+---
+
 ## [0.3.4] - 2026-05-17
 
 Phase 3 Wave 2 — state + wire reshape. Foundations land for the
