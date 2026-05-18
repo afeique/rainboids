@@ -8,6 +8,61 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.4.2] - 2026-05-17
+
+Phase 3 integration fixes — `/mp` now actually connects and the
+two-tab Playwright smoke (QA-13, 4 tests) passes end-to-end.
+
+### Fixed — `new World()` constructor
+
+`mp-engine.js` was calling `World.new()` (static method), but
+wasm-bindgen's `#[wasm_bindgen(constructor)]` exposes the Rust
+`pub fn new() -> World` as JS constructor syntax `new World()`,
+NOT as a static method. Page-load console showed
+`World.new is not a function`. Fixed to `const world = new World()`.
+
+### Fixed — WS URL points to the right port
+
+`mp-ws.js`'s `defaultUrl()` used `window.location.host`, which is
+`:8090` (the http-server serving the static page). The Rust server
+listens on `:8443`. So the WebSocket was trying `ws://localhost:8090/mp/ws`
+and silently failing (http-server returns 404 / closes). Fixed:
+URL now uses the same hostname + port `8443` (and a `?mp-ws=`
+URL override for testing against remote servers).
+
+### Fixed — `VERSION_MP` constant stale
+
+`js/modules/core/version.js` had `VERSION_MP = '0.1.0'` since Phase 0
+never bumped. Updated to `'0.4.1'` so the title screen + debug
+overlay show the correct version. Will keep this in sync with
+`VERSION-MP` going forward.
+
+### Test result
+
+```
+QA-13 pids: page1=1, page2=2
+✓ Two tabs both reach ws:open state (3.3s)
+✓ Each tab sees the OTHER in its peers count (2.2s)
+✓ Ship movement in one tab is visible to the other (5.2s)
+  movement: page1 |Δ|=200.3, page2 srvTick 12279 → 12420 (Δ=141)
+✓ Disconnecting one tab cleanly removes it from the other (3.3s)
+4 passed (22.5s)
+```
+
+**Phase 3 deterministic MP architecture is validated end-to-end.**
+Two tabs at `/mp` connect to the Rust server, exchange ships +
+events, ship movement propagates ~141 server-ticks during a 1.5s
+hold (matches the 20Hz snapshot rate + tick budget), and clean
+disconnect cleanup works.
+
+### Build health
+
+- `cargo check --workspace`: clean (no Rust changes this commit)
+- `npm run test:qa --grep QA-13`: 4/4 pass
+- `node --check js/mp/*.js`: clean
+
+---
+
 ## [0.4.1] - 2026-05-17
 
 Phase 3 follow-up — Welcome carries the room RNG seed, particles +

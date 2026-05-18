@@ -46,7 +46,30 @@ const MP_DEBUG = isDebugEnabled();
 
 function defaultUrl() {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${proto}//${window.location.host}/mp/ws`;
+    // The Rust server (rainboids-server) listens on :8443 by default
+    // regardless of which port serves the static page (typically :8090
+    // via http-server, or 443 behind nginx in prod). Use the same
+    // hostname but force the server port. `?mp-ws=` URL param overrides
+    // for testing against a remote server.
+    let host = window.location.hostname || 'localhost';
+    let port = '8443';
+    try {
+        const q = new URLSearchParams(window.location.search);
+        const override = q.get('mp-ws');
+        if (override) {
+            // Accept formats: "host:port" or "host" or ":port".
+            const colon = override.indexOf(':');
+            if (colon === 0) {
+                port = override.slice(1);
+            } else if (colon > 0) {
+                host = override.slice(0, colon);
+                port = override.slice(colon + 1);
+            } else {
+                host = override;
+            }
+        }
+    } catch {}
+    return `${proto}//${host}:${port}/mp/ws`;
 }
 
 /**

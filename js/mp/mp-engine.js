@@ -79,7 +79,10 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
 
     mpInput.init(canvas);
 
-    const world = World.new();
+    // wasm-bindgen's #[wasm_bindgen(constructor)] exposes the Rust
+    // `pub fn new() -> World` as a JS constructor (use `new World()`),
+    // NOT as a static `World.new()` method.
+    const world = new World();
     const particles = new Particles();
     const hud = new Hud();
 
