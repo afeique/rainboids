@@ -11,6 +11,619 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.11.3] - 2026-05-18
+
+### Changed — Bundle Google Fonts locally
+
+The four UI font families (Press Start 2P, Silkscreen, Fira Code, Pixelify
+Sans) are now served from `css/fonts/*.woff2` instead of fetched from
+fonts.googleapis.com at runtime. The six `<link>` tags (4 stylesheets + 2
+preconnects) were removed from `index.html` in favor of `@font-face` rules
+inlined at the top of `css/styles.css`. Latin subsets only — game UI is
+English; Pixelify Sans's variable-font binary serves both 400 and 700.
+
+The motivation is desktop-port Phase 2 (the Electron build must work
+offline), but the web build benefits equally: no CDN dependency, no
+FOIT/FOUT from a remote CSS round-trip, and faster first paint on
+slow connections.
+
+Total local font payload: ~43 KB across 4 woff2 files.
+
+## [6.11.2] - 2026-05-18
+
+### Fixed — Composite alpha curve: linear → squared
+
+The v6.11.1 fix used `alpha = max(rgb)` which made faint accumulated
+content (nebula clouds at ~0.05 per cloud, summing to ~0.1-0.3 in
+dense regions) read as ~30% opaque. After bloom blur the result was
+translucent polygon-shaped ghosts covering the title screen.
+
+Swapped to `alpha = peak * peak` (squared brightness curve):
+- Bright content (bullets, effects, hot stars at peak ≈ 1.0) → α ≈ 1.0,
+  fully opaque as intended.
+- Faint accumulated nebula (peak ≈ 0.1-0.3) → α ≈ 0.01-0.09, barely
+  visible soft glow as intended.
+- True empty regions (peak = 0) → α = 0, transparent — gameCanvas
+  and glCanvas layers below show through cleanly.
+
+The squared curve also resolves the visual asymmetry where the bloom
+blur was bleeding the cloud's faint center outward to a larger
+radius at uniform alpha; the squared falloff makes the bled halo
+fade to invisible while preserving the bright cloud core.
+
+---
+
+## [6.11.1] - 2026-05-18
+
+### Fixed — CRITICAL: bulletCanvas occluded everything visible (game appeared not to render)
+
+The bloom composite shader (`BLOOM_COMPOSITE_FRAGMENT_SHADER`) wrote
+`alpha = 1.0` unconditionally. For the background bloom pipeline on
+glCanvas (z=0, bottom of the stack) this was harmless — pixels below
+glCanvas are CSS background, identical to opaque-black composite.
+
+But the **foreground bloom pipeline on bulletCanvas (z=2, top of the
+stack)** — added in Phase 2.5 (v6.4.0) — was painting opaque-black
+across the entire canvas every frame regardless of bloom content.
+That covered the gameCanvas (z=1) beneath, hiding the entire title
+screen UI, all Canvas2D entities, and the HUD. The bug was latent
+because:
+- Background bloom on glCanvas has the same visual whether alpha is
+  0 or 1 (CSS background is black either way).
+- Foreground bloom on bulletCanvas was tested only during gameplay
+  smoke (bloom-presence assertions on bright bullets), not the title
+  screen where Canvas2D UI is the load-bearing visual.
+
+Fix: composite outputs `alpha = max(final.rgb)` so empty regions stay
+fully transparent and the layers below show through, while bright
+bloomed regions are appropriately opaque. Same visual on glCanvas
+(CSS background unchanged), correct visual on bulletCanvas (gameCanvas
++ glCanvas visible through empty bloom).
+
+Bug introduced: v6.4.0 (Phase 2.5 foreground bloom).
+Surface diagnosed: title screen black, no menu visible, with no JS
+errors. Browser inspector showed `glCanvas` and `bulletCanvas` both
+sampling maxRGB=0 while `gameCanvas` had the title-screen UI
+rendered (maxRGB=255) but invisible because bulletCanvas (z=2) was
+opaque black on top.
+
+Verified by diagnostic screenshot: title screen now renders with full
+RAINBOIDS logo + menu + nebula background visible.
+
+---
+
+## [6.11.0] - 2026-05-18
+
+### Added — Unified rect renderer (boundary + healthbar consolidation)
+
+New `js/modules/performance/webgl-rect-renderer.js` combines the prior
+two single-purpose renderers (boundary edges + enemy healthbars) into
+one instanced-quad program with per-instance type dispatch
+(`RECT_TYPE_BOUNDARY_EDGE = 0`, `RECT_TYPE_HEALTHBAR = 1`). Saves
+**one draw call per frame** plus the fixed driver overhead of program
+switching (~50-100 µs).
+
+Per-instance layout: 12 floats / 48 bytes per instance (3 × vec4 for
+endpoints, color, params). `MAX_INSTANCES = 128` covers 4 boundary
+edges + ~64 healthbars with comfortable headroom. Uses the shared
+Frame UBO from v6.10.0 — no local `u_camera`/`u_viewport` uniforms.
+
+### Removed — `webgl-boundary-renderer.js` + `webgl-healthbar-renderer.js`
+
+Superseded by `webgl-rect-renderer.js`. Deleted both files (no
+remaining imports anywhere in the tree). FPS overlay registration
+updated: `boundary` + `healthbar` rows merged into a single `rect`
+row showing combined instance count (4 boundary edges + N
+healthbars).
+
+### Added — Per-renderer `drawFrame` perf-measure timings
+
+New timings wrap each GPU renderer's `drawFrame` call site in
+game-engine.js: `t_render_nebula`, `t_render_asteroid`,
+`t_render_enemy`, `t_render_ship`, `t_render_projectile`,
+`t_render_orb`, `t_render_skill`, `t_render_rect`. Existing
+`t_bullets`, `t_effects`, `t_bloom`, `t_bullet_bloom`, `t_starfield`,
+`t_particles` wrappers left as-is for backward compatibility with
+external perf log parsers. Visible via the existing perfLog
+console.table path when `cheats.perfLog === true`. Helps diagnose
+which renderer is most expensive in webgl2 mode.
+
+---
+
+## [6.10.0] - 2026-05-18
+
+### Changed — All WebGL2 renderers share one Uniform Buffer Object for frame data
+
+Migrated all 13 shader programs across 11 renderer modules from
+per-frame `gl.uniform2f`/`gl.uniform1f` calls for `u_camera` /
+`u_viewport` / `u_time` to a shared `Frame` UBO bound to binding
+point 0. **22 per-frame uniform calls eliminated; replaced with
+3 `bufferSubData` updates** (one per GL context: glCanvas gets
+camera, bulletCanvas gets shake-adjusted camera for entities + bullets,
+then re-updated with no-shake camera for effects to preserve the
+v6.6.0 behavior).
+
+New helper module: `js/modules/performance/frame-uniforms.js` exports
+`FrameUniforms` (per-context UBO manager), `bindFrameUniformBlock(gl,
+program)` (called after each program link), and `FRAME_UNIFORM_BLOCK_GLSL`
+(the shader source fragment all renderers prepend).
+
+Std140 layout uses two `vec4`s packed at 32 bytes total:
+```glsl
+layout(std140) uniform Frame {
+    highp vec4 u_cameraViewport;  // .xy = camera, .zw = viewport
+    highp vec4 u_timeUniforms;    // .x = time seconds, .yzw reserved
+};
+```
+
+Required explicit `highp` qualifier — without it the link fails
+because vertex shaders default the block to highp while fragment
+shaders default to mediump, and std140 requires precision match.
+
+Subtle nebula constant rescale: `webgl-nebula-renderer.js` previously
+received `u_time` in milliseconds (`drawFrame(..., performance.now())`)
+and computed `drift = u_time * 0.00003`. The UBO standardizes on
+seconds, so the shader constant changed to `0.03` (1000× compensation)
+to preserve visual drift rate exactly.
+
+Estimated savings: ~0.1-0.2 ms per frame, ~6-12 ms/sec cumulative.
+Most noticeable on mobile where per-uniform driver overhead matters
+more.
+
+Verified: 462/462 unit tests pass; 6/6 bloom smoke tests pass;
+27/27 full QA pass.
+
+---
+
+## [6.9.2] - 2026-05-18
+
+### Fixed — Bullets, enemy bullets, and trails invisible in webgl2 mode
+
+The bullet sort + `bulletPool.drawActiveVisible()` calls (which push to
+`bulletRenderer` via `bullet.draw()`'s GPU branch) were gated inside
+the `RENDER_MODE_HYBRID` block at game-engine.js:3470. In webgl2 mode,
+`bulletRenderer.beginFrame()` fired and `bulletRenderer.drawFrame()`
+fired with an empty instance buffer — meaning **no bullets or trails
+rendered at all in webgl2 mode**, even though the foreground bloom
+pipeline was set up to display them. Likewise for `enemyBulletPool`.
+
+Moved the bullet + enemy-bullet sort + push calls to the existing
+WebGL-bound always-on block (~line 3453) that already houses the
+particle + lineDebris GPU pushes. `vL/vT/vR/vB` viewport-cull bounds
+were already computed there. Hybrid mode behavior 100% unchanged
+(test 11 still passes). webgl2 mode now correctly renders bullets
++ trails alongside everything else through the foreground bloom
+pipeline.
+
+---
+
+## [6.9.1] - 2026-05-18
+
+### Changed — Bloom blur 9-tap → 5-tap linear-sampled
+
+`BLOOM_BLUR_FRAGMENT_SHADER` now uses LINEAR-filtered bilinear sampling
+to collapse pairs of adjacent Gaussian taps into single fractional-
+offset samples. Constants: `O_INNER = 1.385` covers original offsets
+±1/±2, `O_OUTER = 3.231` covers ±3/±4. Weights re-summed exactly:
+center 0.227 + 2×(0.318 + 0.070) = 1.002 ≈ 1.0 — visually identical
+to the prior 9-tap kernel. With 4 blur passes per frame (background
+H+V + foreground H+V), this is **~8.3M fewer texture fetches per
+frame** at typical bloom resolution. Estimated savings: ~0.3-0.5 ms
+desktop, ~1.5-3 ms mobile.
+
+### Changed — Enemy push loop sorts by type (webgl2 mode)
+
+`_drawWebGL2Entities()` sorts `enemyPool.activeObjects` in-place by
+type ID before pushing to `WebGLEnemyRenderer`. Clusters same-typed
+enemies together so the SDF fragment shader's cascading-`if` dispatch
+sees coherent neighbors at quad boundaries instead of divergent ones.
+~60% reduction in branch divergence at typical 30-enemy density.
+O(n log n) sort is microseconds; hybrid mode Canvas2D enemy draw
+unaffected (separate iteration path).
+
+---
+
+## [6.9.0] - 2026-05-18
+
+### Fixed — Starfield renderer re-uploading 136-272 KB/frame of static data
+
+Major perf bug discovered via renderer audit: `resetTransients()` was
+flipping `_dirty = true` unconditionally every frame, causing
+`flush()` to `bufferSubData` the **entire baseline starfield prefix**
+(~2,000-4,000 stars × 17 floats × 4 bytes = 136-272 KB) on every
+frame regardless of whether any orbs were actually added. At 60 fps
+that's 8-16 MB/sec of wasted PCIe bandwidth. Fixed: `resetTransients`
+no longer dirties the buffer (it just rewinds `instanceCount`); the
+existing `addStar()` already flips `_dirty` when orbs are pushed.
+
+### Fixed — Boundary renderer re-uploading 176 B/frame unconditionally
+
+The `_dirty` flag in `webgl-boundary-renderer.js` was only guarding
+`_rebuildInstances()`, NOT the GPU upload. With `setBounds()` called
+per frame from game-engine, 44 floats × 4 bytes were re-uploaded
+even when bounds were identical. Fixed: `setBounds`/`setColor`/
+`setThickness` now early-return on no-change; `bufferSubData` moved
+inside the `_dirty` guard.
+
+### Fixed — Asteroid + projectile renderers re-uploading compile-time uniform
+
+Both renderers were pushing `u_quadPadding` (a literal `1.2` / `1.3`
+constant) to the GPU every frame. Moved to one-time push in
+`_initGL()` after `useProgram`. Trivial cost individually, but
+representative of "set everything every frame" patterns worth
+auditing.
+
+### Added — View-frustum culling for webgl2 push loops
+
+`_drawWebGL2Entities()` now computes a cull rect once per frame
+(camera + zoom-aware viewport with 64 px margin) and AABB-tests
+every entity push. Skipped: asteroids, enemies, healthbars
+(enemy-gated), gold coins, gold shapes, health orbs, mines,
+missiles, deflector orbs. Always-pushed: local player, remote MP
+ships, player-anchored skill effects (Bulwark/Tractor/EMP), dash
+afterimage, nebula (manages its own cull internally), boundary
+(fixed). Expected mid-combat reduction: ~30-50 % of instance pushes
+on typical 1080p/portrait viewports.
+
+### Added — Pre-parsed + per-entity color caching in webgl2 push loops
+
+`_parseColor()` call count in `_drawWebGL2Entities`: 16 unconditional
+per-push → 5 inside cache-miss guards. Constants hoisted via new
+`_constColor()` memoizer (11 literal strings: mine, missile,
+deflector, Bulwark, Tractor, EMP, dash, remote ship hull/wing,
+player hull/wing). Per-entity colors cached on `e._cachedColorRGBA`
+keyed by `e._cachedColorSrc` for asteroids, enemies, gold coins,
+gold shapes, health orbs. Estimated ~80 parses/frame avoided in
+mid-combat (~4,800/sec at 60 fps).
+
+### Added — FPS + per-renderer instance-count overlay (SHIFT+F)
+
+New `js/modules/hud/fps-overlay.js` — top-left diagnostic panel with
+1-second rolling FPS + per-renderer current/max-seen instance counts
+(asteroid, enemy, ship, projectile, orb, skill, healthbar, bullet,
+effect, nebula, boundary). DOM updates throttled to ~4 Hz so the
+overlay doesn't bias the metric it measures. Hotkey-toggled
+(SHIFT+F), starts hidden.
+
+### Changed — Nebula renderer: `DYNAMIC_DRAW` → `STATIC_DRAW`
+
+Nebula instance VBO marked correctly as `STATIC_DRAW` (data set once
+at `seed()` and never per-frame). The upload was already correctly
+gated by `_dirty` (no per-frame re-upload bug), but the driver hint
+was lying about intent — now matches reality.
+
+---
+
+## [6.8.0] - 2026-05-18
+
+### Added — Remote MP ships rendered via WebGL ship renderer (webgl2 mode)
+
+`?renderer=webgl2` mode now pushes remote multiplayer ships through
+the existing `WebGLShipRenderer` with `team=1` differentiation —
+muted blue hull (`#88aacc`) + magenta wings (`#cc66ff`), matching the
+existing hybrid-mode `mpDrawRemoteShips` color scheme. Source:
+`mpDriver.sampleRemoteShips()` (same interpolated snapshots the
+Canvas2D path uses). Solo play stays a clean no-op (`_mpDriverIfOnline()`
+returns null). Local player stays team=0 with cyan wings.
+
+### Added — Enemy health bar GPU renderer (webgl2 mode)
+
+`webgl-healthbar-renderer.js` — Screen-axis-aligned horizontal HP bars
+above enemies via a tiny rectangle shader. Per-instance: anchor
+position, width (px), fill ratio (0..1), alpha. Fill color tier'd by
+ratio: green (>66%), yellow (>33%), red (lower). Pushed only when
+enemy is damaged (`hp < maxHp && hp > 0`) — saves draws for full-HP
+enemies. Renders last in webgl2 z-order, above skill effects, so bars
+stay on top of all entities.
+
+### Changed — Asteroid hue cycle animation (webgl2 mode)
+
+`webgl-asteroid-renderer.js` fragment shader gains a sinusoidal RGB
+shimmer with per-instance phase offset (derived from existing `a_seed`,
+no new attributes). Body fill subtly shifts hue at ~0.4 rad/s with
+±15% per channel and 120° phase between R/G/B — matches the
+Canvas2D rainbow shimmer behavior. Wireframe edges + facet hairlines
+stay anchored to the base color so outlines remain stable.
+
+---
+
+## [6.7.0] - 2026-05-18
+
+### Added — Mine + missile body GPU renderer (webgl2 mode)
+
+`webgl-projectile-body-renderer.js` — One SDF shader, 2 dispatched
+types: `PROJECTILE_BODY_MINE` (filled disc + 6 short radial spike
+marks via angular sector folding) and `PROJECTILE_BODY_MISSILE`
+(elongated forward-pointing dart triangle with fin marks). Pushed
+from `player.activeMines` and `player.activeMissiles`. Renders into
+the foreground bloom pipeline, between ship and orbs in z-order
+(visible above ship silhouette, below pickup orbs).
+
+### Changed — Asteroid renderer: wireframe outline + facet hairlines
+
+`webgl-asteroid-renderer.js` fragment shader gains two zero-attribute
+visual upgrades:
+- **Perimeter wireframe**: `fwidth(d)`-based screen-space-consistent
+  edge outline at 35% of body color brightness. Reads as a "drawn
+  outline" without porting the 3D wireframe math.
+- **Facet hairlines**: 6 radial dividers aligned to the polygon
+  sector folding (`SIDES`/`TAU`), gated to `step(d, -0.05)` so they
+  only show inside the body, dim (0.4 mix) so they don't dominate.
+
+Together they substantially close the visual quality gap to the
+Canvas2D 3D wireframe rendering without the per-frame 3D projection
+cost.
+
+### Changed — WebGL2 migration roadmap: ~22-29 days → ~8-12 days remaining
+
+`docs/WebGL2 Full Renderer Migration` updated to reflect significant
+shipped progress this session. Remaining work for "complete"
+Option A (game world only, HUD stays Canvas2D) now estimated at
+~8-12 days, mostly small polish items: crosshair / laser-pointer aim,
+remote MP ships (ship renderer just needs wiring), enemy health bars,
+asteroid hue cycle, animation polish, and the two partial migrations
+flagged in v6.6.0 (Tractor WIDE_ANGLE stacks, dash multi-ghost trail).
+
+---
+
+## [6.6.0] - 2026-05-18
+
+### Added — Orb + skill-effect GPU renderers (webgl2 mode)
+
+Two more MVP renderers fill in the long tail of Canvas2D content that
+the v6.5.0 webgl2 mode was missing:
+
+- **`webgl-orb-renderer.js`** — One SDF shader, 3 dispatched types:
+  `ORB_TYPE_SPARKLE` (gold sparkle — bright core + 4-spoke diamond
+  halo), `ORB_TYPE_COIN` (gold disc with bright rim glow), and
+  `ORB_TYPE_HEALTH` (cross/plus silhouette with soft radial mask).
+  Replaces the inline Canvas2D draws for gold sparkles (off coin
+  members in `goldCoinPool`), `goldShapePool`, and the health-shape
+  filtered slice of `colorStarPool`. `MAX_INSTANCES = 256`.
+- **`webgl-skill-effect-renderer.js`** — Single program with 5-type
+  dispatch covering all Canvas2D-only skill effects: deflector orbs
+  (filled circles), Bulwark aura (annulus with edge glow), Tractor
+  shield (60° sector wedge rotated by `player.angle`), EMP pulse
+  (thin ring with strong exponential glow), and dash afterimage
+  (ship-triangle silhouette echo). Skill state read from
+  `player.activeSkillEffects` (Map) + `player.deflectorOrbs` array +
+  `player.empPulseActive` flag.
+
+Both render to bulletCanvas through the foreground bloom pipeline.
+Final z-order on bulletCanvas: nebula → boundary → asteroids →
+enemies → ship → orbs → skill effects → bullets → bloom-composite →
+weapon effects. Bullets and weapon effects continue rendering after
+`_drawWebGL2Entities` returns; orbs and skill effects sit above
+entity silhouettes for readability.
+
+### Added — Ship renderer cockpit + exhaust polish
+
+`webgl-ship-renderer.js` fragment shader gains two zero-attribute
+visual cues: a small bright cockpit spot near the hull apex (+y
+local), and a faint warm-orange exhaust marker at the tail (-y
+local). Cockpit is gated by the hull mask so it can't bleed past
+the silhouette edge; exhaust adds a small alpha contribution so the
+warm tint actually renders just past the back edge as a thrust hint.
+No API or per-instance attribute changes — pure shader-internal
+visual upgrade.
+
+### Notes — partial migrations called out for follow-up
+
+The R7A integration found two skill-effect cases where the Canvas2D
+path has richer state than the MVP renderer captures:
+- **Tractor shield**: shader hardcodes ±30° wedge; Canvas2D path uses
+  `WIDE_ANGLE` stacks for wider sectors at upgrade levels.
+- **Dash afterimage**: Canvas2D draws a single disc per frame at the
+  current pose; there's no multi-frame trail history. MVP ports a
+  single instance — multi-ghost trail would need new player state.
+
+Both are documented as TODOs inline.
+
+---
+
+## [6.5.0] - 2026-05-18
+
+### Added — MVP WebGL2-full mode: asteroids / enemies / ship / nebula / boundary all on GPU
+
+`?renderer=webgl2` mode is now genuinely usable. Five new GPU renderers
+fill in what was previously only Canvas2D, all targeting bulletCanvas
+to ride the foreground bloom pipeline:
+
+- **`webgl-asteroid-renderer.js`** — 6-sided procedural polygon SDF with
+  per-instance seed-driven hull lump perturbation. Asteroids spin
+  (new `rotation` + `angularVelocity` fields on asteroid.js, ignored in
+  hybrid mode). MVP only — no 3D wireframe, no depth-bucketed HSL
+  edges, no damage wavefront, no warp streaks (roadmap items).
+- **`webgl-ship-renderer.js`** — Triangle hull + side-wing capsule
+  SDFs. Convention: ship-forward = +y in local space, so caller passes
+  `rotation = player.angle + π/2`. MVP only — no gradients, no thrust
+  glow, no shield shimmer.
+- **`webgl-enemy-renderer.js`** — 10-type SDF dispatch (HUNTER/triangle,
+  GUARDIAN/hexagon-with-rim, WASP/diamond, STALKER/needle,
+  DRIFTER/circle, PROWLER/pentagon, WEAVER/4-point-star,
+  SENTINEL/square, TANGERINE/6-spike-rosette, TITAN/large-hexagon-with-
+  rim). Per-type radius tuning for visual distinctiveness. MVP only —
+  no engine glows, no health bars, no per-type animations.
+- **`webgl-nebula-renderer.js`** — Noise-based cloud quads using
+  hash21 + 4-octave fBm in the fragment shader. Idempotent `seed()`
+  produces a stable cloud field per world dimensions. Sparse, soft,
+  drifts subtly with `u_time`.
+- **`webgl-boundary-renderer.js`** — Four instanced capsule SDFs
+  forming the game-field rectangle edge. Lazy `_dirty` flag so
+  per-frame `setBounds()` is cheap.
+
+All five render through the foreground bloom pipeline, so everything
+in webgl2 mode glows uniformly. Z-order on bulletCanvas:
+nebula → boundary → asteroids → enemies → ship → bullets → effects.
+
+### Changed — HUD draws in webgl2 mode (Option A from migration doc)
+
+The Canvas2D HUD block (powerup display, off-screen indicators, jitter
+circle) was gated to hybrid mode only by the v6.4.0 renderer-mode
+integration. Per the WebGL2 Full Renderer Migration roadmap Option A
+(keep Canvas2D for text — MSDF font is multi-week work), HUD now
+draws in both hybrid and webgl2 modes; only WebGPU mode hides it.
+Makes webgl2 mode actually playable — player can see health, score,
+weapon cooldowns, etc. The Canvas2D **world block** (entities, ship,
+weapon effects) remains gated to hybrid only — those are now handled
+by the new GPU renderers in webgl2 mode.
+
+### Changed — `docs/WebGL2 Full Renderer Migration` updated to reflect MVP shipped
+
+29-layer inventory now marks asteroids / enemies / ship / nebula /
+boundary as "Shipped (MVP)" with deferred polish notes. Phase plan
+updated: Phases 0/2/3 done, Phase 4 partial, Phase 6 minus boundary,
+Phase 7 (HUD) resolved as Option A. Remaining work for "complete"
+webgl2 mode: Canvas2D-only weapon effects (deflector orbs / Bulwark /
+Tractor / EMP / dash trail), mine + missile body parts, inline
+powerup orbs / gold sparkles / health shapes, off-screen indicators,
+crosshair, remote MP ships, and asteroid 3D wireframe / hue cycle as
+quality follow-ups.
+
+---
+
+## [6.4.0] - 2026-05-17
+
+### Added — Foreground bloom on bulletCanvas (Phase 2.5 architectural fix)
+
+A second `BloomPipeline` instance now targets `bulletCanvas` (z=2),
+sharing the bullet renderer's GL context with the effect renderer.
+**Bullets bloom.** Weapon effects (Lance Beam, Lightning, Nova, Mine
+glow, Missile trails) now render above gameCanvas entities AND glow —
+resolves the v6.3.0 layering caveat where effects were stuck on
+glCanvas (z=0) below the player ship. The dual-pass workaround from
+v6.3.0 (effects rendered twice, once for bloom contribution then again
+as sharp overlay) is gone; everything is one cohesive foreground
+bloom pass. Net `game-engine.js` change: −37 LOC despite adding the
+second pipeline. New smoke test at `tests/qa/11-foreground-bloom.spec.js`
+asserts visible halo around bullet pixels via `readPixels` on
+bulletCanvas.
+
+### Added — Bullet trails + line debris to GPU (Phase 3)
+
+Bullet trails (now 6-segment capsule strings, oldest→newest with
+brightness/thickness ramp) and asteroid line debris both push to
+the `WebGLEffectRenderer` (via new `EFFECT_TYPE_TRAIL` and
+`EFFECT_TYPE_DEBRIS` paths) instead of Canvas2D. Both glow through
+the foreground bloom pipeline added in Phase 2.5. `lineDebrisPool`
+now caches per-instance RGB floats from CSS color strings, with an
+inline HSL→RGB formula for the rainbow debris type — zero per-frame
+string allocation. `MAX_CAPSULES` bumped 512→2048 to absorb the
+worst-case storm-needles peak (250 bullets × 6 trail segments = 1500
+capsules — was silently dropping under the old cap).
+
+### Added — Bloom debug overlay (Phase 6)
+
+`SHIFT+B` toggles a top-right DOM panel with live sliders for
+`intensity` / `threshold` / `knee` on each attached `BloomPipeline`
+(background + foreground shown side-by-side). The engine's
+`process()` calls now read params live from the overlay, with
+hardcoded fallbacks for when the overlay is detached. Starts hidden,
+zero gameplay impact when off. Module:
+`js/modules/hud/bloom-debug-overlay.js`.
+
+### Added — Renderer mode selector via URL flag (`?renderer=hybrid|webgl2|webgpu`)
+
+Three modes selectable at startup:
+- `hybrid` (default) — current Canvas2D + WebGL2 game, unchanged.
+- `webgl2` — only WebGL2 layers render (starfield + particles +
+  bullets + effects + dual bloom). Canvas2D world + HUD blocks are
+  gated off. Mode routing works; visible game incomplete pending
+  GPU ports of asteroids/enemies/ship/HUD (~22–29 days of work per
+  the new `docs/WebGL2 Full Renderer Migration – 2026-05-17.md`
+  roadmap).
+- `webgpu` — initializes a `WebGPUStub` (animated WGSL hello
+  triangle with pulsing background) on a dedicated WebGPU canvas
+  with the existing canvases hidden. Proof-of-concept that WebGPU
+  is reachable; full WebGPU rendering is a multi-week port and
+  intentionally not included.
+
+Falls back to hybrid with a `console.warn` if the requested mode
+isn't supported. Small top-left badge shows the active mode label.
+New files: `js/modules/renderer/render-mode.js`,
+`js/modules/renderer/webgpu-stub.js`.
+
+### Changed — Mobile auto-disables foreground bloom (Phase 7, minimal)
+
+Mobile devices skip the foreground bloom pipeline at startup to
+avoid doubling the bloom budget on low-end hardware. Background
+bloom (stars + particles) still runs. Detection reuses the existing
+`isMobile()` utility; the foreground pipeline's `_supported` flag
+is flipped false at construction time, making `bindSceneFBO()` and
+`process()` no-ops per `BloomPipeline`'s standard fallback contract.
+
+### Fixed — Foreground bloom smoke test bullet-spawn race
+
+`tests/qa/11-foreground-bloom.spec.js` was sometimes capturing an
+empty central pixel region because storm-needle bullets (~600 px/s)
+cleared the 256×256 sample window before `readPixels` fired. Fix:
+re-trigger the stress fixture across a 6-tick rAF loop and keep the
+brightest sample. Also nudges the hint overlay out of the way as a
+belt-and-suspenders measure. 6/6 passes across repeated runs.
+
+---
+
+## [6.3.0] - 2026-05-17
+
+### Added — GPU bloom post-process pipeline ("everything glows")
+
+The WebGL2 starfield + particle layers now route through a four-pass
+bloom pipeline (scene FBO → brightness extraction with soft knee →
+separable Gaussian blur H → blur V → additive composite back to
+glCanvas). HDR-capable path uses `RGBA16F` half-res FBOs via
+`EXT_color_buffer_float`; an `RGBA8` LDR fallback runs when the
+extension is absent. Bright explosions, hot star cores, and saturated
+particle bursts now bleed light into their surroundings instead of
+cutting sharp at the silhouette — restores the "world glows" feel
+without the per-entity `shadowBlur` cost that was stripped between
+v5.79.0–5.79.4. Default tuning: intensity 0.8, threshold 0.6, knee
+0.25; tunable at runtime via `window.gameEngine.bloomPipeline`. New
+files: `bloom-shaders.js`, `bloom-fbo.js`, `bloom-pipeline.js`. Smoke
+test at `tests/qa/10-bloom.spec.js` asserts pipeline init and visible
+halo around bright pixels.
+
+### Added — Per-frame render-layer perf instrumentation + SHIFT+P stress fixture
+
+New `PerfMeasure` module (`js/modules/performance/perf-measure.js`)
+tracks rolling 60-frame averages for each render layer
+(`t_total_frame`, `t_starfield`, `t_particles`, `t_bullets`,
+`t_canvas2d_world`, `t_canvas2d_hud`, `t_bloom`, `t_effects`).
+SHIFT+P during play spawns a reproducible stress fixture (50 storm-
+needle bullets + 4 enemies + particle pool filled to MAX_PARTICLES)
+and enables a per-60-frames console table of the layer timings.
+Dev infrastructure for ongoing rendering work; zero runtime cost
+when the cheat flag is off.
+
+### Changed — Weapon effects (Lance Beam / Lightning / Nova / Mine glow / Missile trails) ported to GPU SDF renderer
+
+`WebGLEffectRenderer` (new) renders capsule + ring effects via
+instanced SDF shaders and participates in the bloom pipeline. The
+multi-stroke fake-glow technique introduced when `shadowBlur` was
+removed is now obsolete for these effects — the bloom halo provides
+the soft falloff directly. Deflector orbs, Bulwark aura, Tractor
+shield, EMP pulse, dash trail afterimage, and mine/missile body parts
+remain on Canvas2D intentionally. **Known layering tradeoff**: GPU
+effects render on `glCanvas` (z=0), below the `gameCanvas` (z=1) that
+hosts ship + entities, so the sharp effect body can be partially
+occluded by entities — the bloom halo still leaks around silhouettes.
+Bullets continue to render on their own `bulletCanvas` (z=2) and do
+not yet contribute to bloom; resolving that requires either a
+canvas-stacking restructure or a second bloom pass and is deferred.
+Removed ~267 LOC of Canvas2D draw paths from
+`weapon-effects-renderer.js`.
+
+### Changed — Shader hygiene: `flat` qualifiers + starfield cloud-flag CPU hoist
+
+Per-instance varyings that were being needlessly interpolated are now
+marked `flat`: `v_shape` (bullets), `v_color` (particles), `v_noScan`
+and `v_sharp` (starfield). The starfield's `isCloud8`/`isNeb` flag
+computation moved from per-vertex GLSL to per-instance CPU packing
+(new `a_isCloud` attribute) — was being recomputed 4× per star per
+frame on the GPU for no benefit. No visual change; small win on
+mobile fragment cost.
+
+---
+
 ## [6.2.3] - 2026-05-17
 
 ### Added — Laser-Sight ASSISTS toggle

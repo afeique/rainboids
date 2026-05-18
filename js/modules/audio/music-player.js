@@ -28,12 +28,18 @@ export class MusicPlayer {
     }
 
     async initializePlaylist() {
-        // Use the pre-generated playlist data
-        this.playlist = [...PLAYLIST_DATA];
-
-        // Add duration property to each track
-        this.playlist.forEach(track => {
-            track.duration = 0;
+        // Use the pre-generated playlist data.
+        // Desktop (Electron): rewrite paths from `music/<file>.mp3` to
+        // `music://rainboids/<file>.mp3` so the main-process protocol
+        // handler streams from the CDN with disk caching (Phase 2 of
+        // the Desktop Port Plan, 2026-05-18). Web build keeps the
+        // original relative paths.
+        const isDesktop = typeof window !== 'undefined' && window.rainboids?.isDesktop === true;
+        this.playlist = PLAYLIST_DATA.map(track => {
+            const path = isDesktop
+                ? 'music://rainboids/' + track.path.replace(/^music\//, '')
+                : track.path;
+            return { ...track, path, duration: 0 };
         });
 
         // Shuffle playlist on initialization

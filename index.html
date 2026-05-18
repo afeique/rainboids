@@ -7,12 +7,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-touch-fullscreen" content="yes">
     <title>Rainboids: Supercharged Asteroids</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Fonts are now bundled locally via @font-face in css/styles.css.
+         Previously: 4 Google Fonts <link> tags + 2 preconnects. Removed
+         in desktop-port Phase 2 (2026-05-18) so the Electron build works
+         offline and the web build avoids the FOIT/FOUT from a remote CSS
+         round-trip. Source files live in css/fonts/. -->
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="css/styles.css">
 </head>
