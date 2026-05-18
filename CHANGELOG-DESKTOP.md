@@ -9,6 +9,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 Desktop stays in `0.x` while pre-1.0; promotes to `1.0.0` when the wrapper
 is feature-complete (solo + MP + cached music + cross-platform installers).
 
+## [0.4.0] - 2026-05-18
+
+Phase 4 — Packaging. Adds electron-builder configuration so the desktop
+app can ship as standalone, no-installer binaries on macOS / Windows /
+Linux. Plus a GitHub Actions workflow that builds all three on native
+runners and attaches the outputs to a GitHub Release on `desktop-v*`
+tag push. Per `docs/Electron Desktop Port Plan – 2026-05-18.md`.
+
+Minor bump (0.3.0 → 0.4.0) — the app can now be shipped, which is a
+new capability even though no runtime behaviour changed.
+
+### Added — electron-builder config in `electron/package.json`
+
+- `appId`: `computer.cat.rainboids.desktop` (reverse-DNS of the public
+  host).
+- `productName`: `Rainboids` — drives the binary filename across
+  platforms (`Rainboids.app`, `Rainboids.exe`, `Rainboids-*.AppImage`).
+- `extraResources` copies the renderer files (`index.html`, `mp.html`,
+  `js/`, `css/`, `sprites/`, `sfx/`, `favicon.png`) from the repo root
+  into `resources/renderer/` in the packaged app. `js/mp/dev-mp-port.json`
+  is filtered out — it's a dev-time artifact and would leak a stale
+  loopback port into shipped builds.
+- Per-platform targets — all standalone, no installers:
+  - **macOS**: `zip` (drag the `.app` anywhere and double-click)
+  - **Windows**: `portable` (single `.exe`) + `zip` (extract and run)
+  - **Linux**: `AppImage` (`chmod +x && ./Rainboids-*.AppImage`)
+- No code signing on the v1 release. macOS users get a Gatekeeper
+  warning on first launch (right-click → Open to bypass); Windows
+  users get a SmartScreen warning (More Info → Run Anyway). Signing
+  is deferred until proper certificates are in place.
+
+### Added — `electron/main.js` REPO_ROOT split
+
+In dev (`npm run electron:dev`), `__dirname` is `<repo>/electron/`, so
+`..` is the repo root and `app://rainboids/index.html` resolves to the
+live source tree. In a packaged build, the renderer files live under
+`process.resourcesPath + '/renderer/'` (placed there by
+`extraResources`); `app.isPackaged` discriminates. The `app://`
+protocol handler is otherwise unchanged — same path-traversal guard,
+same `net.fetch(file://…)` body.
+
+### Added — `.github/workflows/desktop-release.yml`
+
+Three-runner matrix (`macos-latest`, `windows-latest`, `ubuntu-latest`)
+— each builds its native target. Steps per runner:
+
+1. Checkout + Node 20 + Rust stable + wasm-pack
+2. `npm run wasm:build` — produces `js/mp/wasm/` so `/mp` works in the
+   shipped binary
+3. `npm install` in `electron/`
+4. `npm run build:<platform>` invokes electron-builder
+5. Upload artifacts (`.zip`, `.exe`, `.AppImage`)
+
+A final `release` job downloads all three sets of artifacts and attaches
+them to a GitHub Release. Triggers on `desktop-v*` tag push (creates
+Release) or manual `workflow_dispatch` (artifacts only). Prerelease
+flag auto-set while the version is `0.x`.
+
+### Added — root `package.json` build delegates
+
+- `npm run electron:build:mac` / `:win` / `:linux` / `:all` — pass-throughs
+  to the `electron/` subproject, mirroring the existing
+  `electron:install` / `:dev` / `:start` pattern.
+
+### Notes
+
+- Default app icon is the stock Electron icon. The repo's `favicon.png`
+  is 64×64 and too small for proper desktop icon sizes (mac wants 512×512+).
+  Swap for a real icon at `electron/build/icon.png` (1024×1024 PNG)
+  before a marketing-quality release.
+- WASM bundling adds ~3 minutes per CI runner (Rust toolchain install +
+  wasm-pack build). If MP turns out to be unnecessary in the shipped
+  desktop binary, the WASM and Rust install steps can be removed and CI
+  drops to ~2 minutes total.
+- Wine is NOT required — neither for local dev (mac:zip + linux:AppImage
+  build natively on macOS) nor for CI (each platform builds on its own
+  runner).
+
 ## [0.3.0] - 2026-05-18
 
 Phase 3 — Multiplayer wiring. Desktop builds can now connect to a

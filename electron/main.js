@@ -19,7 +19,15 @@ const { pathToFileURL } = require('node:url');
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 
-const REPO_ROOT = path.resolve(__dirname, '..');
+// In dev (`npm run electron:dev`), __dirname is `<repo>/electron/`, so
+// `..` is the repo root and `app://rainboids/index.html` etc. resolve
+// to the live source tree. In a packaged build (Phase 4), the renderer
+// files are copied under `resources/renderer/` via electron-builder's
+// `extraResources`; we look there instead. app.isPackaged is the
+// canonical Electron flag for distinguishing the two.
+const REPO_ROOT = app.isPackaged
+  ? path.join(process.resourcesPath, 'renderer')
+  : path.resolve(__dirname, '..');
 const PROTOCOL_HOST = 'rainboids';
 const MUSIC_CDN_BASE = 'https://rainboids.cat.computer/music';
 // Phase 3 — Multiplayer WebSocket URL handed to the renderer via the

@@ -1,14 +1,87 @@
 {
   "name": "rainboids-desktop",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Electron desktop wrapper for Rainboids",
+  "author": "afeique",
+  "license": "ISC",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder -mwl"
   },
   "devDependencies": {
-    "electron": "^32.2.0"
+    "electron": "^32.2.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "computer.cat.rainboids.desktop",
+    "productName": "Rainboids",
+    "asar": true,
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../index.html",
+        "to": "renderer/index.html"
+      },
+      {
+        "from": "../mp.html",
+        "to": "renderer/mp.html"
+      },
+      {
+        "from": "../favicon.png",
+        "to": "renderer/favicon.png"
+      },
+      {
+        "from": "../js",
+        "to": "renderer/js",
+        "filter": [
+          "**/*",
+          "!mp/dev-mp-port.json"
+        ]
+      },
+      {
+        "from": "../css",
+        "to": "renderer/css"
+      },
+      {
+        "from": "../sprites",
+        "to": "renderer/sprites"
+      },
+      {
+        "from": "../sfx",
+        "to": "renderer/sfx"
+      }
+    ],
+    "mac": {
+      "target": [
+        "zip"
+      ],
+      "category": "public.app-category.games"
+    },
+    "win": {
+      "target": [
+        "portable",
+        "zip"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game"
+    }
   }
 }

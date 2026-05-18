@@ -1,0 +1,106 @@
+name: Desktop Release
+
+# Builds Rainboids desktop binaries (macOS / Windows / Linux) and
+# attaches them to a GitHub Release. Each platform builds on its
+# native runner — no cross-compilation, no Wine.
+#
+# Trigger options:
+#   - Tag push matching `desktop-v*` (e.g., `desktop-v0.4.0`) → builds
+#     all three platforms in parallel and creates a Release.
+#   - Manual run via the Actions tab (`workflow_dispatch`) → builds
+#     artifacts but does not create a Release; useful for testing.
+#
+# WASM (multiplayer) is built on each runner before electron-builder
+# packages, so the shipped binary includes a working /mp page. If you
+# don't have the Rust toolchain locally and want to test packaging,
+# you can comment out the wasm step — solo still works without it,
+# only /mp will fail to load.
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # required for the release job to create a Release
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Build WASM (multiplayer client)
+        run: npm run wasm:build
+
+      - name: Install Electron dependencies
+        working-directory: electron
+        run: npm install
+
+      - name: Build (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: electron
+        run: npm run build:mac
+        env:
+          # Skip code signing on the v1 unsigned releases; users will see
+          # a Gatekeeper warning on first launch. Replace with the real
+          # signing identity when an Apple Developer ID is available.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: electron
+        run: npm run build:win
+
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: electron
+        run: npm run build:linux
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rainboids-desktop-${{ matrix.os }}
+          path: |
+            electron/dist/*.zip
+            electron/dist/*.exe
+            electron/dist/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Show downloaded artifacts
+        run: ls -R artifacts
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          draft: false
+          prerelease: ${{ startsWith(github.ref, 'refs/tags/desktop-v0.') }}

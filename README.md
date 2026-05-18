@@ -365,12 +365,24 @@ The first `cargo run -p rainboids-server` and `wasm-pack build` are slow (cold c
 
 ### Desktop wrapper (Electron)
 
-The `electron/` subproject wraps the existing browser build in an Electron shell so the game can ship as a native macOS / Windows / Linux app. Phases 1–3 are complete: solo + multiplayer both run; music streams from the CDN with local disk caching; fonts are bundled locally so the app works offline. **Phase 4 (packaging via electron-builder) is next.** Override the MP server with `RAINBOIDS_MP_WS_URL=wss://… npm run electron:dev`.
+The `electron/` subproject wraps the existing browser build in an Electron shell so the game can ship as a native macOS / Windows / Linux app. **Phases 1–4 are complete** — solo + multiplayer both run; music streams from the CDN with local disk caching; fonts are bundled locally so the app works offline; binaries can be built and shipped via `electron-builder`. Override the MP server with `RAINBOIDS_MP_WS_URL=wss://… npm run electron:dev`.
 
+**Run from a dev checkout:**
 ```bash
 npm run electron:install   # one-time: installs Electron into electron/node_modules (~200 MB)
 npm run electron:dev       # launches the desktop wrapper
 ```
+
+**Build standalone binaries** (no installer — drag-and-run on macOS, portable .exe on Windows, AppImage on Linux):
+```bash
+npm run electron:build:mac     # → electron/dist/Rainboids-<v>-mac.zip
+npm run electron:build:linux   # → electron/dist/Rainboids-<v>.AppImage
+npm run electron:build:win     # → electron/dist/Rainboids-<v>-portable.exe + zip
+```
+
+macOS and Linux builds work natively from any Mac. Windows builds locally require [Wine](https://wiki.winehq.org/MacOS) (`brew install --cask wine-stable`); the recommended path for Windows builds is the CI matrix below.
+
+**Tagged releases** (`git tag desktop-v0.x.y && git push --tags`) trigger `.github/workflows/desktop-release.yml`, which builds all three platforms on native runners (`macos-latest`, `windows-latest`, `ubuntu-latest`) and attaches the standalone binaries to a GitHub Release. No code signing on the v1 releases — users get a Gatekeeper / SmartScreen warning on first launch (right-click → Open / More Info → Run Anyway to bypass).
 
 ---
 

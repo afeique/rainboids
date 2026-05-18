@@ -68,7 +68,11 @@
     "__ELECTRON__": "── Electron desktop wrapper (electron/ subproject) ──────",
     "electron:install": "cd electron && npm install",
     "electron:dev": "cd electron && npm run dev",
-    "electron:start": "cd electron && npm start"
+    "electron:start": "cd electron && npm start",
+    "electron:build:mac": "cd electron && npm run build:mac",
+    "electron:build:win": "cd electron && npm run build:win",
+    "electron:build:linux": "cd electron && npm run build:linux",
+    "electron:build:all": "cd electron && npm run build:all"
   },
   "repository": {
     "type": "git",
