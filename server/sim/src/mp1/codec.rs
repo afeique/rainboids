@@ -212,6 +212,7 @@ mod tests {
             server_tick: 1234,
             spawn_x: 960.0,
             spawn_y: 540.0,
+            rng_seed: 0x1234_5678_9ABC_DEF0,
         };
         let bin = encode(&m).unwrap();
         let json = serde_json::to_string(&m).unwrap();

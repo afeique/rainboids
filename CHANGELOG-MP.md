@@ -8,6 +8,99 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.4.1] - 2026-05-17
+
+Phase 3 follow-up — Welcome carries the room RNG seed, particles +
+HUD light up. End-to-end determinism is now seeded from the
+authoritative source (no more `BigInt(server_tick)` placeholder),
+and combat is visually legible.
+
+### Changed — WIRE_VERSION 2 → 3
+
+`ServerMsg::Welcome` gains a `rng_seed: u64` field. Server constructs
+its room with a seed derived from `SystemTime::UNIX_EPOCH` (already
+stored on `Mp1RoomHandle.rng_seed`), now also broadcasts it in the
+Welcome so the client's WASM `World` can call `World::seed(rng_seed)`
+and consume the identical PCG-64 stream.
+
+The engine drops its `BigInt(server_tick)` placeholder and uses
+`msg.rng_seed` directly. First `Resync` round-trip no longer
+required to align the deterministic stream — alignment is correct
+from tick 0.
+
+### Added — `js/mp/mp-particles.js` (~+200 LOC)
+
+Pooled cosmetic burst system. 256-slot pool, oldest-dies-first
+eviction, no per-spawn allocation. Six spawn methods wired in the
+engine's `dispatchEvent`:
+
+- `spawnBulletHit(x, y)` — 6 cyan PULSE_CANNON sparks (~0.4 s)
+- `spawnEnemyDestroy(x, y)` — red expanding ring + 16 orange sparks
+- `spawnAsteroidSplit(x, y)` — 12 gray debris chunks (line segments + rotation)
+- `spawnShipDamaged(x, y)` — yellow ring + 8 yellow sparks
+- `spawnShipDowned(x, y)` — white shockwave + 20 white sparks
+- `spawnShipRevived(x, y)` — 16 pale-green sparkles biased upward
+
+Line widths counter-scaled by `1/scale` so thickness stays
+screen-stable inside the letterbox transform. Particles are
+intentionally non-deterministic (each tab spawns its own; cosmetic
+only).
+
+### Added — `js/mp/mp-hud.js` (~+150 LOC)
+
+Screen-coord HUD (resets the canvas transform internally so it's
+unaffected by the letterbox). Components:
+
+- **Local HP bar** (bottom center, 240×14 px) — color-tiered fill
+  (red < 33%, yellow < 67%, green ≥ 67%); numeric overlay
+  `HP: 7 / 10`
+- **DOWNED overlay** (when `world.ship_downed()`) — 24px red text +
+  240×8 cyan revive progress bar (`world.ship_revive_meter() / 180`)
+  + "Hold near an ally to revive" hint when revive_meter is near 0
+- **Peer status list** (top right) — `P3: 8/10` color-coded by
+  palette index, `(down)` suffix when downed
+- **HOSTILES counter** (top left) — red `HOSTILES: N` shown only
+  when enemies are alive
+
+Uses the same `'11px 'Press Start 2P', monospace'` font as solo's
+overlay.
+
+### Changed — `js/mp/mp-engine.js`
+
+- Imports + constructs `Particles` + `Hud` instances at start
+- `world.tick(dt)` followed by `particles.update(dt)` per frame
+- `render(...)` followed by `particles.draw(ctx, scale)` (world
+  coords) and `hud.draw(ctx, canvas, world)` (screen coords) per
+  frame
+- `dispatchEvent` calls the matching `particles.spawn*` for each
+  cosmetic-bearing event
+- `onWelcome` calls `world.seed(msg.rng_seed)` (replaces placeholder)
+
+### Build health
+
+- `cargo check --workspace`: clean
+- `cargo test --workspace`: 112 pass (no regressions)
+- `npm run wasm:build:dev`: clean (~18s incremental)
+- `node --check js/mp/*.js`: all clean
+
+### Manual two-tab validation
+
+Pre-built WASM + servers running:
+```
+npm run dev
+# open two http://localhost:8090/mp tabs
+```
+
+Expected (visible improvements over 0.4.0):
+- HP bar always visible at bottom; numbers update as you take damage
+- Bullet impacts produce cyan spark bursts
+- HUNTER kills produce red+orange explosions
+- Asteroid splits produce gray debris bursts
+- When downed: big red DOWNED text + cyan revive bar fills as
+  ally hovers nearby; sparkly green burst on revive
+
+---
+
 ## [0.4.0] - 2026-05-17
 
 Phase 3 Wave 4 — JS client integration. End-to-end Phase 3

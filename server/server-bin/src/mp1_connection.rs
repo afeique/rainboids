@@ -103,17 +103,15 @@ pub async fn handle(ws: WebSocket, room: Mp1RoomHandle) {
     tracing::info!(player_id, name = %client_name, "mp1: player joined");
 
     let server_tick = room.state.lock().await.room.tick;
-    // Welcome's `server_tick` is informational only; rng_seed
-    // delivery happens in a future wire-version bump (Phase 3
-    // Wave 4) when the JS client implements deterministic
-    // mirroring. For now the seed is stored on the handle and
-    // the connection task knows it; the client doesn't yet
-    // consume it.
+    // Welcome carries the room's rng_seed so the client's WASM
+    // mirror can call `World::seed(rng_seed)` and consume the
+    // identical PCG-64 stream. WIRE_VERSION 3 (Phase 3 follow-up).
     let welcome = ServerMsg::Welcome {
         player_id,
         server_tick,
         spawn_x,
         spawn_y,
+        rng_seed,
     };
     if let Ok(b) = codec::encode_server(&welcome) {
         if tx.send(Message::Binary(b)).await.is_err() {

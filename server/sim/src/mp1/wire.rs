@@ -76,6 +76,10 @@ pub enum ServerMsg {
         spawn_x: f64,
         /// Initial spawn y — seeds the client WASM World matching the server.
         spawn_y: f64,
+        /// Room's RNG seed. Client passes this to `World::seed(...)`
+        /// so its deterministic mirror produces the same RNG stream
+        /// the server is consuming. Added in WIRE_VERSION 3.
+        rng_seed: u64,
     },
     /// Periodic state broadcast. ~20Hz. Each ship's authoritative
     /// position. Phase 4+ will add delta-encoding; Phase 2 sends full.
@@ -199,11 +203,13 @@ pub enum ClientMsg {
 /// rejects Hello with a mismatched version (sends Error variant and
 /// closes the WS).
 ///
+/// - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
+///   client can mirror the server's RNG stream deterministically.
 /// - 1: Phase 2 (ships only, Welcome / Snapshot / Input / Bye).
 /// - 2: Phase 3 — adds Event / StateChecksum / Resync; client may
 ///   send Resync in response to a checksum miss. Snapshot still
 ///   ship-only (deterministic kinds reconstructed client-side).
-pub const WIRE_VERSION: u32 = 2;
+pub const WIRE_VERSION: u32 = 3;
 
 // ── Phase 3 — EventPayload variants ──
 
@@ -423,6 +429,7 @@ mod tests {
             server_tick: 1234,
             spawn_x: 960.0,
             spawn_y: 540.0,
+            rng_seed: 0xDEAD_BEEF_CAFE_F00D,
         };
         let json = serde_json::to_string(&m).unwrap();
         assert!(json.contains("\"Welcome\""));

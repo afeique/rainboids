@@ -100,8 +100,10 @@ const LE = true;
  *       Hello / Input / Bye)
  *  - 2: Phase 3 (adds Event / StateChecksum / Resync server-side and
  *       Resync client-side; introduces EventPayload + EnemyWire /
- *       AsteroidWire / BulletWire records). */
-export const WIRE_VERSION = 2;
+ *       AsteroidWire / BulletWire records)
+ *  - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
+ *       client can seed its WASM mirror identically to the server. */
+export const WIRE_VERSION = 3;
 
 /* ── Reader ─────────────────────────────────────────────────────── */
 
@@ -451,6 +453,7 @@ export function decodeServerMsg(input) {
                 server_tick: r.u32(),
                 spawn_x: r.f64(),
                 spawn_y: r.f64(),
+                rng_seed: r.u64Big(),  // WIRE_VERSION 3 addition
             };
         }
         case 1: { // Snapshot

@@ -37,6 +37,8 @@
 import * as mpInput from "./mp-input.js";
 import { render } from "./mp-renderer.js";
 import { connect as wsConnect } from "./mp-ws.js";
+import { Particles } from "./mp-particles.js";
+import { Hud } from "./mp-hud.js";
 import { VERSION_MP } from "../modules/core/version.js";
 
 const DT_CLAMP_MAX = 0.1;             // 100ms per tick max (anti-tab-hide spike)
@@ -78,6 +80,8 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
     mpInput.init(canvas);
 
     const world = World.new();
+    const particles = new Particles();
+    const hud = new Hud();
 
     // Cache field size once; Phase 3 still uses a fixed-size world.
     const fieldW = world.field_width();
@@ -130,14 +134,11 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                 wsConnected = true;
                 wsState = "open";
 
-                // TODO(phase-3-followup): seed RNG from msg.rng_seed
-                // once Welcome carries it on the wire. For Wave 4 we
-                // seed from server_tick as a deterministic placeholder
-                // so the local RngCtx is at least initialized; the
-                // first Resync (or initial Event stream replay) will
-                // overwrite this if/when the server cares.
+                // WIRE_VERSION 3: Welcome carries the room's RNG seed.
+                // Mirror it into our WASM World so the deterministic
+                // PCG-64 stream advances in lockstep with the server's.
                 try {
-                    world.seed(BigInt(msg.server_tick >>> 0));
+                    world.seed(msg.rng_seed);
                 } catch (e) {
                     console.warn("[mp/engine] world.seed failed", e);
                 }
@@ -435,7 +436,7 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                 break;
             case "BulletHit":
                 world.consume_bullet_hit(p.bullet_id, p.hit_tick >>> 0);
-                // TODO(wave-5): emit spark cosmetic at (p.hit_x, p.hit_y).
+                particles.spawnBulletHit(p.hit_x, p.hit_y);
                 if (MP_DEBUG) {
                     console.log(
                         `[mp/engine] bullet ${p.bullet_id} hit ${p.target_kind === 0 ? "enemy" : "asteroid"} ${p.target_id} @ (${p.hit_x.toFixed(0)}, ${p.hit_y.toFixed(0)})`,
@@ -444,7 +445,7 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                 break;
             case "EnemyDestroy":
                 world.consume_enemy_destroy(p.enemy_id);
-                // TODO(wave-5): emit death cosmetic at (p.x, p.y).
+                particles.spawnEnemyDestroy(p.x, p.y);
                 break;
             case "AsteroidSplit":
                 world.consume_asteroid_split(
@@ -452,19 +453,34 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                     BigInt(p.rng_subseed),
                     p.child_id_start,
                 );
-                // TODO(wave-5): emit shatter cosmetic at (p.x, p.y).
+                particles.spawnAsteroidSplit(p.x, p.y);
                 break;
             case "ShipDamaged":
                 world.consume_ship_damaged(p.player_id, p.amount);
-                // TODO(wave-5): emit damage flash cosmetic.
+                particles.spawnShipDamaged(p.x, p.y);
                 break;
             case "ShipDowned":
                 world.consume_ship_downed(p.player_id);
-                // TODO(wave-5): emit wreck cosmetic.
+                particles.spawnShipDowned(p.x, p.y);
                 break;
             case "ShipRevived":
                 world.consume_ship_revived(p.revived_player_id);
-                // TODO(wave-5): emit revive cosmetic.
+                // Spawn at the revived player's current position
+                // (we don't have position on the wire for ShipRevived
+                // — pulling from local mirror).
+                try {
+                    if (p.revived_player_id === localPlayerId) {
+                        particles.spawnShipRevived(world.ship_x(), world.ship_y());
+                    } else {
+                        const rc = world.remote_ship_count();
+                        for (let i = 0; i < rc; i++) {
+                            if (world.remote_ship_player_id(i) === p.revived_player_id) {
+                                particles.spawnShipRevived(world.remote_ship_x(i), world.remote_ship_y(i));
+                                break;
+                            }
+                        }
+                    }
+                } catch {}
                 break;
             default:
                 if (MP_DEBUG) {
@@ -510,6 +526,7 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
             aimWorldY,
         );
         world.tick(dt);
+        particles.update(dt);
         tickCount += 1;
 
         // Throttled input upload (30 Hz).
@@ -555,6 +572,14 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
         }
 
         render(ctx, canvas, world, lastAim, remoteShipsArray);
+
+        // Particles draw INSIDE the renderer's letterbox transform
+        // (world coords). The renderer leaves the transform set when
+        // it returns; we draw, then HUD resets to identity.
+        particles.draw(ctx, scale);
+
+        // HUD draws in SCREEN coords (resets the transform internally).
+        hud.draw(ctx, canvas, world);
 
         // Fatal error overlay (drawn on top of whatever the renderer
         // produced). Kept here in the engine because the renderer is
