@@ -28,6 +28,7 @@
 use super::asteroid::{compute_split_children, AsteroidState};
 use super::bullet::{BulletState, BULLET_RADIUS, PULSE_CANNON_DAMAGE};
 use super::damage::{apply_damage, DamageOutcome, ShipState};
+use super::drops::{OrbState, ORB_KIND_HEALTH, ORB_RADIUS};
 use super::enemy::{EnemyState, HUNTER_CONTACT_DAMAGE};
 use super::rng_ctx::RngCtx;
 
@@ -46,6 +47,12 @@ use super::enemy::KIND_HUNTER;
 /// threats. Mirrors solo's PLAYER_ASTEROID_COLLISION_DAMAGE
 /// (approximately).
 pub const ASTEROID_CONTACT_DAMAGE: f64 = 2.0;
+
+/// HP healed when a ship picks up a health orb. Solo's basic health
+/// orb heals 25 (per `js/modules/levels/health-orb-config.js`-era
+/// numbers); mirrored here as the Phase 4 step 1 starting value.
+/// Clamped to `ship.max_hp` on apply.
+pub const ORB_HEALTH_HEAL: f64 = 25.0;
 
 /// Event variant emitted by the collision pass. Caller (room actor)
 /// maps these to wire-protocol EventPayload variants and broadcasts.
@@ -90,6 +97,18 @@ pub enum CollisionEvent {
         at_x: f64,
         at_y: f64,
     },
+    /// A ship picked up an orb this tick. Health orbs already mutated
+    /// the ship's `hp` field (the room actor's tick translates this
+    /// event into a wire `OrbCollected` payload; the ship's HP delta
+    /// shows up in the next Snapshot). Gold orbs only emit the event
+    /// (no score accounting in mp1 state.rs yet — Phase 4 step 9).
+    OrbCollected {
+        orb_id: u32,
+        by_player_id: u32,
+        kind: u8,
+        x: f64,
+        y: f64,
+    },
 }
 
 /// `by_kind` discriminator: damage source was an enemy body.
@@ -117,6 +136,7 @@ pub fn run_collisions(
     enemies: &mut [EnemyState],
     asteroids: &mut [AsteroidState],
     bullets: &mut [BulletState],
+    orbs: &mut [OrbState],
     current_tick: u32,
     rng: &mut RngCtx,
     mut child_id_start_next: u32,
@@ -312,6 +332,40 @@ pub fn run_collisions(
         }
     }
 
+    // --- ship × orb (pickup) ---
+    // Health orbs heal the ship (clamped to max_hp) and despawn.
+    // Gold orbs despawn and emit the event so the wire layer can
+    // credit the picker; gameplay-side score accounting is Phase 4
+    // step 9. Downed ships can't collect.
+    for s in ships.iter_mut() {
+        if !s.active || s.downed {
+            continue;
+        }
+        for o in orbs.iter_mut() {
+            if !o.active {
+                continue;
+            }
+            let dx = s.x - o.x;
+            let dy = s.y - o.y;
+            let r_sum = s.radius + ORB_RADIUS;
+            if dx * dx + dy * dy > r_sum * r_sum {
+                continue;
+            }
+            // Pickup.
+            o.active = false;
+            if o.kind == ORB_KIND_HEALTH {
+                s.hp = (s.hp + ORB_HEALTH_HEAL).min(s.max_hp);
+            }
+            out_events.push(CollisionEvent::OrbCollected {
+                orb_id: o.id,
+                by_player_id: s.player_id,
+                kind: o.kind,
+                x: o.x,
+                y: o.y,
+            });
+        }
+    }
+
     child_id_start_next - start_child_id
 }
 
@@ -412,6 +466,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             1000,
@@ -440,6 +495,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             1000,
@@ -475,6 +531,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             1000,
@@ -526,6 +583,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             child_id_start_in,
@@ -570,6 +628,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             500,
@@ -602,6 +661,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             1,
@@ -644,6 +704,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             1,
@@ -692,6 +753,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             1,
@@ -733,6 +795,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             1,
@@ -759,6 +822,7 @@ mod tests {
                 &mut enemies,
                 &mut asteroids,
                 &mut bullets,
+                &mut [],
                 0,
                 &mut rng,
                 500,
@@ -833,6 +897,7 @@ mod tests {
             &mut enemies,
             &mut asteroids,
             &mut bullets,
+            &mut [],
             0,
             &mut rng,
             child_id_start_in,

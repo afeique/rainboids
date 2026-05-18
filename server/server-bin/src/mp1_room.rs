@@ -33,12 +33,16 @@ use rainboids_sim::mp1::{
     codec,
     collision::{self, CollisionEvent},
     damage::{self, REVIVE_RADIUS},
+    drops::{self, OrbState, ORB_KIND_GOLD, ORB_KIND_HEALTH},
     enemy::{self, EnemyState, KIND_HUNTER},
     ship::update_ship,
-    state::{RoomState, ShipState, FIELD_HEIGHT, FIELD_WIDTH, SHIP_SIZE},
+    state::{RoomState, ShipState, FIELD_HEIGHT, FIELD_WIDTH, MAX_ORBS, SHIP_SIZE},
     trig::{cos64, sin64},
+    wave::{self, WaveConfig, WavePhase, WaveSpawnRequest},
+    wave_table::{self, KIND_HUNTER as TABLE_KIND_HUNTER},
     wire::{
-        AsteroidWire, BulletWire, ClientMsg, EnemyWire, EventPayload, ServerMsg, SnapshotShip,
+        AsteroidWire, BulletWire, ClientMsg, EnemyWire, EventPayload, OrbWire, ServerMsg,
+        SnapshotShip,
     },
     PlayerInput,
 };
@@ -56,16 +60,19 @@ const SNAPSHOT_DIVISOR: u32 = 3;
 /// safety heartbeat. 60 ticks ≈ 1 Hz.
 const CHECKSUM_DIVISOR: u32 = 60;
 
-/// Initial asteroid count at room boot. Matches solo's lighter
-/// per-wave start; Phase 3 has no waves yet.
-const INITIAL_ASTEROIDS: usize = 4;
-
-/// Enemy spawn cadence (ticks between spawns).
-const ENEMY_SPAWN_PERIOD: u32 = 600; // 10 s at 60 Hz
-
 /// PULSE_CANNON fire rate. Solo's `PULSE_CANNON.fireRateMs = 400` →
 /// 400 ms = 24 ticks at 60 Hz.
 const PULSE_CANNON_COOLDOWN_TICKS: u32 = 24;
+
+/// Drop probability — chance an enemy kill spawns a gold orb.
+/// Mirrors solo's basic kill-drop rate (no PAYDAY etc. powerups).
+const ENEMY_GOLD_DROP_CHANCE: f64 = 0.65;
+/// Drop probability — chance an enemy kill spawns a health orb.
+/// Lower than gold since health is the higher-value drop.
+const ENEMY_HEALTH_DROP_CHANCE: f64 = 0.10;
+/// Drop probability — chance a small asteroid (size tier) spawns
+/// a gold orb on destruction.
+const ASTEROID_GOLD_DROP_CHANCE: f64 = 0.35;
 
 /// Per-connection metadata. Ship state lives in `room_state.ships`,
 /// indexed by `player_id`.
@@ -101,21 +108,21 @@ impl Mp1RoomState {
     /// server typically picks this at boot time and broadcasts it to
     /// each joining client via `Welcome.rng_seed`.
     pub fn from_seed(seed: u64) -> Self {
-        let mut s = Self {
+        // Phase 4: room boots with NO asteroids — they spawn at
+        // WaveStart (Intro → Spawning transition for wave 1, ~1.5 s
+        // after room boot).
+        Self {
             room: RoomState::from_seed(seed),
             next_player_id: 1,
             slots: HashMap::new(),
             pending_events: Vec::new(),
-        };
-        s.seed_initial_asteroids();
-        s
+        }
     }
 
-    /// Boot the room with a handful of asteroids drifting around.
-    /// Each AsteroidSpawn event is queued for the first Event broadcast
-    /// so any client joining before tick > 0 still sees them.
-    fn seed_initial_asteroids(&mut self) {
-        for _ in 0..INITIAL_ASTEROIDS {
+    /// Spawn `count` asteroids for a wave start. Each gets a fresh
+    /// sub-seed so client + server reconstruct identical positions.
+    fn spawn_wave_asteroids(&mut self, count: usize) {
+        for _ in 0..count {
             let id = self.room.next_asteroid_id;
             self.room.next_asteroid_id += 1;
             let sub_seed = self.room.rng.sub_seed();
@@ -248,19 +255,21 @@ impl Mp1RoomState {
             bullet::update_bullet(b, self.room.tick, self.room.field_w, self.room.field_h);
         }
 
+        // 4.5. Orb drift + magnet + lifetime.
+        {
+            let ships_snap = self.room.ships.clone();
+            for o in self.room.orbs.iter_mut() {
+                drops::update_orb(o, &ships_snap, self.room.field_w, self.room.field_h);
+            }
+        }
+
         // 5. Fire input → bullet spawns. Edge-detect plus cooldown.
         self.process_fire_inputs();
 
-        // 6. Enemy spawn cadence.
-        if self.room.tick >= self.room.enemy_spawn_at_tick
-            && self.room.enemies.len() < rainboids_sim::mp1::state::MAX_ENEMIES
-        {
-            self.spawn_enemy();
-            self.room.enemy_spawn_at_tick = self
-                .room
-                .tick
-                .wrapping_add(ENEMY_SPAWN_PERIOD);
-        }
+        // 6. Wave cadence — drive the wave state machine and spawn
+        //    enemies per its requests. Replaces Phase 3's fixed-period
+        //    enemy spawn timer.
+        self.drive_wave();
 
         // 7. Collision detection — mutates entity state + emits events.
         let mut coll_events: Vec<CollisionEvent> = Vec::new();
@@ -269,6 +278,7 @@ impl Mp1RoomState {
             &mut self.room.enemies,
             &mut self.room.asteroids,
             &mut self.room.bullets,
+            &mut self.room.orbs,
             self.room.tick,
             &mut self.room.rng,
             self.room.next_asteroid_id,
@@ -280,7 +290,7 @@ impl Mp1RoomState {
             .wrapping_add(added_child_ids);
 
         // 8. Map collision events → wire events; child asteroids
-        //    pushed into room state.
+        //    pushed into room state. Kill events also roll for orb drops.
         let kill_tick = self.room.tick;
         for ev in coll_events {
             self.translate_collision_event(ev, kill_tick);
@@ -294,8 +304,103 @@ impl Mp1RoomState {
         self.room.enemies.retain(|e| e.active);
         self.room.asteroids.retain(|a| a.active);
         self.room.bullets.retain(|b| b.active);
+        self.room.orbs.retain(|o| o.active);
 
         self.room.tick = self.room.tick.wrapping_add(1);
+    }
+
+    /// Drive the wave state machine for one tick. Emits enemy spawns
+    /// for the wave's sub-waves; emits WaveStart / WaveClear events
+    /// at the right boundaries. When a wave completes, bumps the
+    /// `current_wave` and resets to Intro for the next one.
+    fn drive_wave(&mut self) {
+        let tick = self.room.tick;
+        let prev_phase = self.room.wave.phase;
+        let prev_wave = self.room.wave.current_wave;
+
+        let config: WaveConfig = wave_table::get_wave_config(self.room.wave.current_wave);
+        let alive: usize = self
+            .room
+            .enemies
+            .iter()
+            .filter(|e| e.active && e.hp > 0.0)
+            .count();
+        let requests = wave::tick_wave(&mut self.room.wave, &config, alive, tick);
+
+        // Emit WaveStart on Intro → Spawning transition. Asteroids
+        // are seeded at the same boundary.
+        let just_started_spawning =
+            prev_phase == WavePhase::Intro && self.room.wave.phase == WavePhase::Spawning;
+        if just_started_spawning {
+            self.spawn_wave_asteroids(config.asteroid_count as usize);
+            self.pending_events.push(EventPayload::WaveStart {
+                wave_number: config.wave_number as u32,
+                asteroid_count: config.asteroid_count,
+                is_boss_wave: config.is_boss_wave,
+                boss_tier: config.boss_tier,
+                at_tick: tick,
+            });
+        }
+
+        // Apply each spawn request via the kind-appropriate helper.
+        // Phase 4 step 1 only ships HUNTER — unimplemented kinds fall
+        // back to HUNTER with a debug log so the wave still plays out.
+        for req in requests {
+            self.spawn_enemy_from_request(req);
+        }
+
+        // On Clearing → Complete: emit WaveClear, advance to next wave,
+        // reset wave state to Intro.
+        if prev_phase != WavePhase::Complete && self.room.wave.phase == WavePhase::Complete {
+            self.pending_events.push(EventPayload::WaveClear {
+                wave_number: prev_wave as u32,
+                at_tick: tick,
+            });
+            // Advance to next wave; reset state. The next tick's
+            // `tick_wave` call will run the Intro→Spawning hold for
+            // the new wave.
+            self.room.wave.current_wave = prev_wave.saturating_add(1);
+            self.room.wave.sub_wave_idx = 0;
+            self.room.wave.phase = WavePhase::Intro;
+            self.room.wave.phase_started_tick = tick;
+        }
+    }
+
+    /// Resolve a wave spawn request into an actual EnemyState. Phase 4
+    /// step 1 only implements HUNTER; the other 9 enemy kinds in the
+    /// wave table fall back to HUNTER with a debug log until Phase 4
+    /// step 5 ports them.
+    fn spawn_enemy_from_request(&mut self, req: WaveSpawnRequest) {
+        // MAX_ENEMIES soft cap: drop excess spawns (matches solo's
+        // pool soft-cap behavior).
+        if self.room.enemies.len() >= rainboids_sim::mp1::state::MAX_ENEMIES {
+            return;
+        }
+        let id = self.room.next_enemy_id;
+        self.room.next_enemy_id = self.room.next_enemy_id.wrapping_add(1);
+        let sub_seed = self.room.rng.sub_seed();
+
+        // Phase 4 step 1: only HUNTER has a spawn function. Substitute
+        // HUNTER for unimplemented kinds; Phase 4 step 5 fills in the
+        // others.
+        if req.kind_u8 != TABLE_KIND_HUNTER {
+            tracing::debug!(
+                requested_kind = req.kind_u8,
+                "mp1: wave requested non-HUNTER kind, substituting HUNTER (Phase 4 step 5 will implement)"
+            );
+        }
+        let e = enemy::spawn_hunter_from_seed(
+            id,
+            sub_seed,
+            self.room.field_w,
+            self.room.field_h,
+        );
+        self.room.enemies.push(e);
+        self.pending_events.push(EventPayload::EnemySpawn {
+            enemy_id: id,
+            kind: KIND_HUNTER,
+            rng_subseed: sub_seed,
+        });
     }
 
     /// Detect fire-input → spawn bullet (with cooldown). Spawns
@@ -347,23 +452,38 @@ impl Mp1RoomState {
         }
     }
 
-    /// Spawn one HUNTER enemy via the deterministic spawn helper.
-    fn spawn_enemy(&mut self) {
-        let id = self.room.next_enemy_id;
-        self.room.next_enemy_id = self.room.next_enemy_id.wrapping_add(1);
+    /// Roll for a drop orb at a death site. Returns the orb spawned (if
+    /// any) so the caller can emit the OrbSpawn event with the same
+    /// rng_subseed both sides reconstruct from.
+    fn maybe_spawn_orb(
+        &mut self,
+        kind: u8,
+        gold_chance: f64,
+        health_chance: f64,
+        x: f64,
+        y: f64,
+    ) -> Option<(u32, u8, u64)> {
+        let _ = kind; // reserved for Phase 4 step 5 enemy-specific drop tables
+        // Cap.
+        if self.room.orbs.len() >= MAX_ORBS {
+            return None;
+        }
+        // Roll: gold first (more common), then health (rarer).
+        let gold_roll = self.room.rng.bool_at_prob(gold_chance);
+        let health_roll = self.room.rng.bool_at_prob(health_chance);
+        let drop_kind = if health_roll {
+            ORB_KIND_HEALTH
+        } else if gold_roll {
+            ORB_KIND_GOLD
+        } else {
+            return None;
+        };
+        let id = self.room.next_orb_id;
+        self.room.next_orb_id = self.room.next_orb_id.wrapping_add(1);
         let sub_seed = self.room.rng.sub_seed();
-        let e = enemy::spawn_hunter_from_seed(
-            id,
-            sub_seed,
-            self.room.field_w,
-            self.room.field_h,
-        );
-        self.room.enemies.push(e);
-        self.pending_events.push(EventPayload::EnemySpawn {
-            enemy_id: id,
-            kind: KIND_HUNTER,
-            rng_subseed: sub_seed,
-        });
+        let orb: OrbState = drops::spawn_orb_from_seed(id, drop_kind, x, y, sub_seed);
+        self.room.orbs.push(orb);
+        Some((id, drop_kind, sub_seed))
     }
 
     /// Convert one CollisionEvent into wire EventPayload(s) and push
@@ -408,6 +528,22 @@ impl Mp1RoomState {
                     y,
                     kind,
                 });
+                // Roll for an orb drop at the kill site.
+                if let Some((orb_id, drop_kind, sub_seed)) = self.maybe_spawn_orb(
+                    kind,
+                    ENEMY_GOLD_DROP_CHANCE,
+                    ENEMY_HEALTH_DROP_CHANCE,
+                    x,
+                    y,
+                ) {
+                    self.pending_events.push(EventPayload::OrbSpawn {
+                        orb_id,
+                        kind: drop_kind,
+                        x,
+                        y,
+                        rng_subseed: sub_seed,
+                    });
+                }
             }
             CollisionEvent::AsteroidDestroyed {
                 asteroid_id,
@@ -417,6 +553,7 @@ impl Mp1RoomState {
                 child_id_start,
                 children,
             } => {
+                let was_terminal = children.is_empty();
                 // Push children into the room's asteroid vec; client
                 // computes the same children locally from sub_seed.
                 for c in children {
@@ -430,6 +567,26 @@ impl Mp1RoomState {
                     rng_subseed: split_subseed,
                     child_id_start,
                 });
+                // Only terminal asteroid kills (those that didn't split
+                // further) drop an orb — matches solo's behavior where
+                // splitting rocks give children, not loot.
+                if was_terminal {
+                    if let Some((orb_id, drop_kind, sub_seed)) = self.maybe_spawn_orb(
+                        0,
+                        ASTEROID_GOLD_DROP_CHANCE,
+                        0.0,
+                        x,
+                        y,
+                    ) {
+                        self.pending_events.push(EventPayload::OrbSpawn {
+                            orb_id,
+                            kind: drop_kind,
+                            x,
+                            y,
+                            rng_subseed: sub_seed,
+                        });
+                    }
+                }
             }
             CollisionEvent::ShipDamaged {
                 player_id,
@@ -459,6 +616,22 @@ impl Mp1RoomState {
                     at_tick: kill_tick,
                     x: at_x,
                     y: at_y,
+                });
+            }
+            CollisionEvent::OrbCollected {
+                orb_id,
+                by_player_id,
+                kind,
+                x,
+                y,
+            } => {
+                self.pending_events.push(EventPayload::OrbCollected {
+                    orb_id,
+                    by_player_id,
+                    kind,
+                    at_tick: kill_tick,
+                    x,
+                    y,
                 });
             }
         }
@@ -558,11 +731,16 @@ impl Mp1RoomState {
     /// enemy + asteroid + bullet state into four u64s; client computes
     /// the same hashes over its predicted state and Resyncs on mismatch.
     pub fn build_checksum(&self) -> ServerMsg {
+        // Note: WIRE_VERSION 4 adds orbs to the deterministic state.
+        // The wire `StateChecksum` keeps the four-hash shape for now
+        // (no schema change); orbs fold into `asteroids_hash` since
+        // both are "field debris" semantically. Phase 4 step 9 may
+        // add a dedicated `orbs_hash` if drift becomes hard to debug.
         ServerMsg::StateChecksum {
             tick: self.room.tick,
             ships_hash: hash_ships(&self.room.ships),
             enemies_hash: hash_enemies(&self.room.enemies),
-            asteroids_hash: hash_asteroids(&self.room.asteroids),
+            asteroids_hash: hash_asteroids_and_orbs(&self.room.asteroids, &self.room.orbs),
             bullets_hash: hash_bullets(&self.room.bullets),
         }
     }
@@ -646,6 +824,25 @@ impl Mp1RoomState {
                     life_remaining: b.life_remaining,
                 })
                 .collect(),
+            orbs: self
+                .room
+                .orbs
+                .iter()
+                .map(|o| OrbWire {
+                    id: o.id,
+                    kind: o.kind,
+                    x: o.x,
+                    y: o.y,
+                    vx: o.vx,
+                    vy: o.vy,
+                    life_ticks: o.life_ticks,
+                    opacity: o.opacity,
+                })
+                .collect(),
+            wave_number: self.room.wave.current_wave as u32,
+            wave_sub_wave_idx: self.room.wave.sub_wave_idx,
+            wave_phase: wave_phase_to_u8(self.room.wave.phase),
+            wave_phase_started_tick: self.room.wave.phase_started_tick,
         }
     }
 
@@ -768,8 +965,11 @@ fn hash_enemies(enemies: &[EnemyState]) -> u64 {
     h.finish()
 }
 
-fn hash_asteroids(asteroids: &[AsteroidState]) -> u64 {
+fn hash_asteroids_and_orbs(asteroids: &[AsteroidState], orbs: &[OrbState]) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
+    // Asteroids first — preserves the Phase 3 hash domain for the
+    // asteroid portion. Orbs append, so an asteroid-only sim still
+    // produces the same hash as Phase 3.
     for a in asteroids {
         a.id.hash(&mut h);
         hash_f64(&mut h, a.x);
@@ -777,7 +977,28 @@ fn hash_asteroids(asteroids: &[AsteroidState]) -> u64 {
         hash_f64(&mut h, a.rot);
         hash_f64(&mut h, a.hp);
     }
+    for o in orbs {
+        o.id.hash(&mut h);
+        o.kind.hash(&mut h);
+        hash_f64(&mut h, o.x);
+        hash_f64(&mut h, o.y);
+        hash_f64(&mut h, o.vx);
+        hash_f64(&mut h, o.vy);
+        o.life_ticks.hash(&mut h);
+    }
     h.finish()
+}
+
+/// Wire-encode a WavePhase as the discriminator used by `wire.rs`
+/// (0=Intro, 1=Spawning, 2=Clearing, 3=Complete). Kept private here
+/// since only `build_resync` consumes it.
+fn wave_phase_to_u8(p: WavePhase) -> u8 {
+    match p {
+        WavePhase::Intro => 0,
+        WavePhase::Spawning => 1,
+        WavePhase::Clearing => 2,
+        WavePhase::Complete => 3,
+    }
 }
 
 fn hash_bullets(bullets: &[BulletState]) -> u64 {

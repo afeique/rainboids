@@ -151,6 +151,14 @@ pub enum ServerMsg {
         enemies: Vec<EnemyWire>,
         asteroids: Vec<AsteroidWire>,
         bullets: Vec<BulletWire>,
+        /// Added in WIRE_VERSION 4 (Phase 4 step 1).
+        orbs: Vec<OrbWire>,
+        /// Added in WIRE_VERSION 4. Wave state at resync moment so the
+        /// client's wave machine resumes from the right phase.
+        wave_number: u32,
+        wave_sub_wave_idx: u8,
+        wave_phase: u8, // 0=Intro, 1=Spawning, 2=Clearing, 3=Complete
+        wave_phase_started_tick: u32,
     },
 }
 
@@ -203,13 +211,16 @@ pub enum ClientMsg {
 /// rejects Hello with a mismatched version (sends Error variant and
 /// closes the WS).
 ///
+/// - 4: Phase 4 step 1 — wave-driven enemy spawns + drop-orbs. Adds
+///   `EventPayload::{OrbSpawn, OrbCollected, WaveStart, WaveClear}`,
+///   `OrbWire`, and the orbs / wave fields on `Resync`.
 /// - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
 ///   client can mirror the server's RNG stream deterministically.
 /// - 1: Phase 2 (ships only, Welcome / Snapshot / Input / Bye).
 /// - 2: Phase 3 — adds Event / StateChecksum / Resync; client may
 ///   send Resync in response to a checksum miss. Snapshot still
 ///   ship-only (deterministic kinds reconstructed client-side).
-pub const WIRE_VERSION: u32 = 3;
+pub const WIRE_VERSION: u32 = 4;
 
 // ── Phase 3 — EventPayload variants ──
 
@@ -314,6 +325,52 @@ pub enum EventPayload {
         by_player_id: u32,
         at_tick: u32,
     },
+
+    // ── Phase 4 step 1 — drops + waves ──
+
+    /// A pickup orb spawned at a death site. Client instantiates from
+    /// `(orb_id, kind, x, y, rng_subseed)` via
+    /// `mp1::drops::spawn_orb_from_seed` so both sides produce the
+    /// same outward kick. `kind`: 0 = gold, 1 = health.
+    OrbSpawn {
+        orb_id: u32,
+        kind: u8,
+        x: f64,
+        y: f64,
+        rng_subseed: u64,
+    },
+
+    /// An orb was collected by a ship. Client marks the orb inactive
+    /// + applies the local cosmetic (sparkle particle). Heal / score
+    /// effect is reflected in the next Snapshot (ship.hp for health,
+    /// future per-player score field for gold).
+    OrbCollected {
+        orb_id: u32,
+        by_player_id: u32,
+        kind: u8,
+        at_tick: u32,
+        x: f64,
+        y: f64,
+    },
+
+    /// A new wave just started. Client updates its HUD wave number
+    /// and resets local wave-machine state. Carries the wave number
+    /// (1-indexed) and the asteroid count seeded at wave start.
+    WaveStart {
+        wave_number: u32,
+        asteroid_count: u8,
+        is_boss_wave: bool,
+        boss_tier: u8,
+        at_tick: u32,
+    },
+
+    /// The current wave was cleared (all sub-waves spawned + all
+    /// enemies dead). Server is about to advance to the next wave on
+    /// the next tick. Client can play the wave-clear stinger.
+    WaveClear {
+        wave_number: u32,
+        at_tick: u32,
+    },
 }
 
 // ── Phase 3 — Resync wire records ──
@@ -366,6 +423,21 @@ pub struct BulletWire {
     pub vy: f64,
     pub spawn_tick: u32,
     pub life_remaining: u32,
+}
+
+/// Resync record for one orb. Carries every field the WASM client
+/// needs to bootstrap its deterministic mirror's `OrbState`.
+/// Added in WIRE_VERSION 4 (Phase 4 step 1).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct OrbWire {
+    pub id: u32,
+    pub kind: u8,
+    pub x: f64,
+    pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub life_ticks: u32,
+    pub opacity: f64,
 }
 
 #[cfg(test)]

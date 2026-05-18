@@ -39,10 +39,12 @@ use rainboids_sim::mp1::{
     bullet::{self, BulletState},
     collision,
     damage,
+    drops::{self, OrbState},
     enemy::{self, EnemyState},
     ship::update_ship,
     state::{RoomState, ShipState, SHIP_SIZE},
     trig::atan2_64,
+    wave::WavePhase,
     PlayerInput,
 };
 use wasm_bindgen::prelude::*;
@@ -203,6 +205,21 @@ impl World {
             bullet::update_bullet(b, self.room.tick, self.room.field_w, self.room.field_h);
         }
 
+        // 4.5. Orb drift + magnet + lifetime — mirrors the server's
+        //      step 4.5 so the client's deterministic mirror stays
+        //      aligned with server orb positions tick-by-tick.
+        {
+            let ships_snap = self.room.ships.clone();
+            for o in self.room.orbs.iter_mut() {
+                rainboids_sim::mp1::drops::update_orb(
+                    o,
+                    &ships_snap,
+                    self.room.field_w,
+                    self.room.field_h,
+                );
+            }
+        }
+
         // 5. Collision detection. We discard the emitted events
         //    (server is authoritative for events; we get them back
         //    over the wire and replay via `consume_*`), but the
@@ -217,6 +234,7 @@ impl World {
             &mut self.room.enemies,
             &mut self.room.asteroids,
             &mut self.room.bullets,
+            &mut self.room.orbs,
             self.room.tick,
             &mut self.room.rng,
             self.room.next_asteroid_id,
@@ -253,6 +271,7 @@ impl World {
         self.room.enemies.retain(|e| e.active);
         self.room.asteroids.retain(|a| a.active);
         self.room.bullets.retain(|b| b.active);
+        self.room.orbs.retain(|o| o.active);
 
         self.room.tick = self.room.tick.wrapping_add(1);
     }
@@ -484,6 +503,54 @@ impl World {
         }
     }
 
+    // ── Phase 4 — Orb + Wave EventPayload consumers ──
+
+    /// `EventPayload::OrbSpawn`. Reconstructs the orb via the same
+    /// deterministic helper the server used (`spawn_orb_from_seed`)
+    /// so both sides produce identical state.
+    pub fn consume_orb_spawn(&mut self, orb_id: u32, kind: u8, x: f64, y: f64, rng_subseed: u64) {
+        let o = drops::spawn_orb_from_seed(orb_id, kind, x, y, rng_subseed);
+        self.room.orbs.push(o);
+        if orb_id >= self.room.next_orb_id {
+            self.room.next_orb_id = orb_id.wrapping_add(1);
+        }
+    }
+
+    /// `EventPayload::OrbCollected`. Marks the orb inactive so it's
+    /// culled at the next tick boundary. The picker's HP delta (for
+    /// health orbs) lands via the next Snapshot.
+    pub fn consume_orb_collected(&mut self, orb_id: u32) {
+        if let Some(o) = self.room.orbs.iter_mut().find(|o| o.id == orb_id) {
+            o.active = false;
+        }
+    }
+
+    /// `EventPayload::WaveStart`. Resets the local wave-state mirror
+    /// so the HUD wave number stays in sync. Server is authoritative
+    /// for the phase machine; the client's local `wave` state is
+    /// purely for HUD display + Resync.
+    pub fn consume_wave_start(
+        &mut self,
+        wave_number: u32,
+        _asteroid_count: u8,
+        _is_boss_wave: bool,
+        _boss_tier: u8,
+        at_tick: u32,
+    ) {
+        self.room.wave.current_wave = wave_number as u16;
+        self.room.wave.sub_wave_idx = 0;
+        self.room.wave.phase = WavePhase::Spawning;
+        self.room.wave.phase_started_tick = at_tick;
+    }
+
+    /// `EventPayload::WaveClear`. Marks the wave as complete so the
+    /// HUD can play its stinger. Server bumps `current_wave` on the
+    /// next WaveStart; this just flips the phase.
+    pub fn consume_wave_clear(&mut self, _wave_number: u32, at_tick: u32) {
+        self.room.wave.phase = WavePhase::Complete;
+        self.room.wave.phase_started_tick = at_tick;
+    }
+
     // ── Local-ship accessors (Phase-1 surface; preserved) ──
     //
     // These were the Phase-1/2 single-ship accessors. They now
@@ -703,6 +770,45 @@ impl World {
             .unwrap_or(0.0)
     }
 
+    // ── Orb accessors ──
+
+    pub fn orb_count(&self) -> u32 {
+        self.room.orbs.len() as u32
+    }
+    fn orb_at(&self, idx: u32) -> Option<OrbState> {
+        self.room.orbs.get(idx as usize).copied()
+    }
+    pub fn orb_id(&self, idx: u32) -> u32 {
+        self.orb_at(idx).map(|o| o.id).unwrap_or(0)
+    }
+    pub fn orb_kind(&self, idx: u32) -> u8 {
+        self.orb_at(idx).map(|o| o.kind).unwrap_or(0)
+    }
+    pub fn orb_x(&self, idx: u32) -> f64 {
+        self.orb_at(idx).map(|o| o.x).unwrap_or(0.0)
+    }
+    pub fn orb_y(&self, idx: u32) -> f64 {
+        self.orb_at(idx).map(|o| o.y).unwrap_or(0.0)
+    }
+    pub fn orb_opacity(&self, idx: u32) -> f64 {
+        self.orb_at(idx).map(|o| o.opacity).unwrap_or(0.0)
+    }
+
+    // ── Wave accessors ──
+
+    pub fn wave_number(&self) -> u32 {
+        self.room.wave.current_wave as u32
+    }
+    /// 0 = Intro, 1 = Spawning, 2 = Clearing, 3 = Complete.
+    pub fn wave_phase(&self) -> u8 {
+        match self.room.wave.phase {
+            WavePhase::Intro => 0,
+            WavePhase::Spawning => 1,
+            WavePhase::Clearing => 2,
+            WavePhase::Complete => 3,
+        }
+    }
+
     // ── StateChecksum ──
     //
     // Four u64 hashes — JS reads each one and compares to the
@@ -721,8 +827,11 @@ impl World {
     pub fn checksum_enemies(&self) -> u64 {
         hash_enemies(&self.room.enemies)
     }
+    /// WIRE_VERSION 4: this hash now bundles orbs after asteroids so
+    /// the server's `hash_asteroids_and_orbs` and the client's hash
+    /// stay in sync.
     pub fn checksum_asteroids(&self) -> u64 {
-        hash_asteroids(&self.room.asteroids)
+        hash_asteroids_and_orbs(&self.room.asteroids, &self.room.orbs)
     }
     pub fn checksum_bullets(&self) -> u64 {
         hash_bullets(&self.room.bullets)
@@ -791,7 +900,7 @@ fn hash_enemies(enemies: &[EnemyState]) -> u64 {
     h.finish()
 }
 
-fn hash_asteroids(asteroids: &[AsteroidState]) -> u64 {
+fn hash_asteroids_and_orbs(asteroids: &[AsteroidState], orbs: &[OrbState]) -> u64 {
     let mut h = DefaultHasher::new();
     for a in asteroids {
         a.id.hash(&mut h);
@@ -799,6 +908,15 @@ fn hash_asteroids(asteroids: &[AsteroidState]) -> u64 {
         hash_f64(&mut h, a.y);
         hash_f64(&mut h, a.rot);
         hash_f64(&mut h, a.hp);
+    }
+    for o in orbs {
+        o.id.hash(&mut h);
+        o.kind.hash(&mut h);
+        hash_f64(&mut h, o.x);
+        hash_f64(&mut h, o.y);
+        hash_f64(&mut h, o.vx);
+        hash_f64(&mut h, o.vy);
+        o.life_ticks.hash(&mut h);
     }
     h.finish()
 }

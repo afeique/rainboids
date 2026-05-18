@@ -30,6 +30,14 @@ pub mod enemy;
 pub mod rng_ctx;
 pub mod trig;
 
+// Phase 4 Step 1 — wave cadence + drops. Stubs land first so the
+// three parallel new-file authors can each `cargo test` against a
+// crate that already knows about their module. The orchestrator
+// reconciles into one consistent surface in Wave 2.
+pub mod drops;
+pub mod wave;
+pub mod wave_table;
+
 pub use codec::{decode_client, decode_server, encode_client, encode_server};
 pub use input::PlayerInput;
 pub use ship::{tick_phase1, update_ship};

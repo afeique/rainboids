@@ -106,6 +106,9 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
     let ws = null;
 
     let localPlayerId = null;
+    let localGold = 0; // Phase 4 — local accumulator (HUD display only;
+                       // authoritative score lives server-side once
+                       // Phase 4 step 9 economy lands).
     let clientTick = 0;
     let lastInputSentAt = 0;
     let lastSnapshotTick = null;
@@ -408,6 +411,36 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                     }
                 }
 
+                // Orbs (Phase 4): seed-based reconstruction same caveat
+                // as enemies — OrbWire doesn't carry the original
+                // rng_subseed, so we synthesize from (room_seed, orb_id).
+                for (const o of (msg.orbs || [])) {
+                    const subseed = synthSubseed(msg.rng_seed, 0x07, o.id);
+                    try {
+                        world.consume_orb_spawn(o.id, o.kind, o.x, o.y, subseed);
+                    } catch (err) {
+                        if (MP_DEBUG) {
+                            console.warn(
+                                "[mp/engine] resync orb reconstruct failed",
+                                o.id,
+                                err,
+                            );
+                        }
+                    }
+                }
+
+                // Wave (Phase 4): align the local mirror's wave state
+                // so the HUD wave number stays correct after a Resync.
+                if (typeof msg.wave_number === "number") {
+                    try {
+                        world.consume_wave_start(
+                            msg.wave_number >>> 0,
+                            0, 0, 0,
+                            (msg.wave_phase_started_tick || 0) >>> 0,
+                        );
+                    } catch {}
+                }
+
                 lastResyncAppliedTick = msg.tick;
             },
         });
@@ -484,6 +517,35 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                         }
                     }
                 } catch {}
+                break;
+            // ── Phase 4: drops + waves ──
+            case "OrbSpawn":
+                world.consume_orb_spawn(
+                    p.orb_id,
+                    p.kind_u8,
+                    p.x,
+                    p.y,
+                    BigInt(p.rng_subseed),
+                );
+                break;
+            case "OrbCollected":
+                world.consume_orb_collected(p.orb_id);
+                particles.spawnOrbPickup(p.x, p.y, p.kind_u8);
+                if (p.kind_u8 === 0 /* gold */ && p.by_player_id === localPlayerId) {
+                    localGold++;
+                }
+                break;
+            case "WaveStart":
+                world.consume_wave_start(
+                    p.wave_number,
+                    p.asteroid_count,
+                    p.is_boss_wave,
+                    p.boss_tier,
+                    p.at_tick >>> 0,
+                );
+                break;
+            case "WaveClear":
+                world.consume_wave_clear(p.wave_number, p.at_tick >>> 0);
                 break;
             default:
                 if (MP_DEBUG) {
@@ -582,7 +644,7 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
         particles.draw(ctx, scale);
 
         // HUD draws in SCREEN coords (resets the transform internally).
-        hud.draw(ctx, canvas, world);
+        hud.draw(ctx, canvas, world, { gold: localGold });
 
         // Fatal error overlay (drawn on top of whatever the renderer
         // produced). Kept here in the engine because the renderer is

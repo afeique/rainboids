@@ -82,8 +82,9 @@ export class Hud {
         // animation phase in later phases.
     }
 
-    draw(ctx, canvas, world) {
+    draw(ctx, canvas, world, opts) {
         if (!ctx || !canvas || !world) return;
+        const gold = (opts && opts.gold) | 0;
 
         // mp-renderer leaves ctx with a letterbox transform. The HUD
         // is screen-coord, so reset to identity for the whole draw
@@ -117,6 +118,16 @@ export class Hud {
                 drawHostiles(ctx, enemyCount, cw, ch);
             }
 
+            // ---- Wave indicator (top center) ----
+            let waveNum = 0;
+            try { waveNum = world.wave_number(); } catch {}
+            if (waveNum > 0) {
+                drawWaveNumber(ctx, waveNum, cw);
+            }
+
+            // ---- Gold counter (top-right, above peer list) ----
+            drawGoldCounter(ctx, gold, cw);
+
             // ---- Peer status (top right) ----
             if (remoteCount > 0) {
                 drawPeerList(ctx, world, remoteCount, cw, ch);
@@ -137,6 +148,28 @@ export class Hud {
             ctx.restore();
         }
     }
+}
+
+// Wave indicator — small yellow "WAVE: N" centered top.
+function drawWaveNumber(ctx, n, cw) {
+    ctx.save();
+    ctx.font = HUD_FONT;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#ffd84d";
+    ctx.fillText(`WAVE ${n}`, Math.round(cw / 2), HOSTILES_MARGIN_TOP);
+    ctx.restore();
+}
+
+// Gold counter — top-right, above the peer list.
+function drawGoldCounter(ctx, gold, cw) {
+    ctx.save();
+    ctx.font = HUD_FONT;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#ffd84d";
+    ctx.fillText(`GOLD ${gold}`, cw - 16, HOSTILES_MARGIN_TOP);
+    ctx.restore();
 }
 
 // Hostiles counter — small red "HOSTILES: N" anchored top-left.

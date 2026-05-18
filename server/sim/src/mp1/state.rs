@@ -118,8 +118,10 @@ impl GameState {
 
 use super::asteroid::AsteroidState;
 use super::bullet::BulletState;
+use super::drops::OrbState;
 use super::enemy::EnemyState;
 use super::rng_ctx::RngCtx;
+use super::wave::WaveState;
 
 /// Phase-3 upper bounds. Mirrored on server + client so the
 /// deterministic sim allocates predictable capacities.
@@ -127,6 +129,10 @@ pub const MAX_PLAYERS:   usize = 8;
 pub const MAX_ENEMIES:   usize = 4;
 pub const MAX_ASTEROIDS: usize = 16;
 pub const MAX_BULLETS:   usize = 64;
+/// Phase 4 — orb soft cap. Enemy kills can chain-spawn orbs faster
+/// than the player collects them; the room actor drops further spawns
+/// once the cap is hit (mirrors solo's drop-pool soft cap).
+pub const MAX_ORBS:      usize = 32;
 
 /// Authoritative multi-entity room state. One instance per room on
 /// the server; one instance per client when the WASM build adopts
@@ -150,16 +156,20 @@ pub struct RoomState {
     pub enemies: Vec<EnemyState>,
     pub asteroids: Vec<AsteroidState>,
     pub bullets: Vec<BulletState>,
+    /// Phase 4 — pickup orbs from enemy/asteroid deaths.
+    pub orbs: Vec<OrbState>,
 
     /// Monotonic id counters — both server + client advance these
     /// identically by consuming events in order.
     pub next_enemy_id: u32,
     pub next_asteroid_id: u32,
     pub next_bullet_id: u32,
+    pub next_orb_id: u32,
 
-    /// Tick at which the server will spawn the next enemy. Phase 3
-    /// uses a simple cadence; Phase 4+ introduces real waves.
-    pub enemy_spawn_at_tick: u32,
+    /// Phase 4 — wave cadence state machine. Replaces the Phase 3
+    /// fixed-period `enemy_spawn_at_tick` cadence with structured
+    /// sub-waves from `wave_table::get_wave_config`.
+    pub wave: WaveState,
 
     /// Per-room seeded RNG. Server picks the seed at room boot and
     /// delivers it to clients in `Welcome.rng_seed`. Both sides
@@ -180,10 +190,12 @@ impl RoomState {
             enemies: Vec::with_capacity(MAX_ENEMIES),
             asteroids: Vec::with_capacity(MAX_ASTEROIDS),
             bullets: Vec::with_capacity(MAX_BULLETS),
+            orbs: Vec::with_capacity(MAX_ORBS),
             next_enemy_id: 1,
             next_asteroid_id: 1,
             next_bullet_id: 1,
-            enemy_spawn_at_tick: 60, // first enemy at ~1 s in
+            next_orb_id: 1,
+            wave: WaveState::new(),
             rng: RngCtx::from_seed(seed),
         }
     }

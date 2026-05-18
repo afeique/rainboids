@@ -195,6 +195,20 @@ export class Particles {
         }
     }
 
+    // Orb pickup: tiny color-matched burst (gold or green).
+    // `kind` matches OrbState.kind: 0 = gold, 1 = health.
+    spawnOrbPickup(x, y, kind) {
+        const count = 10;
+        const color = kind === 1 ? "#88ff88" : "#ffd84d";
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 50 + Math.random() * 60;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this._spawnSpark(x, y, vx, vy, 0.45, color);
+        }
+    }
+
     // Ship revived: ~16 pale-green sparkles drifting upward-ish.
     spawnShipRevived(x, y) {
         const count = 16;

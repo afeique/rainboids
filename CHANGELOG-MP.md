@@ -8,6 +8,181 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.5.0] - 2026-05-18
+
+**Phase 4 step 1 — Wave system + drop orbs.** The Phase 3 placeholder
+"one HUNTER every 10 s forever" is gone; `/mp` now plays through
+structured waves with gold + health orbs dropping from enemy and
+asteroid kills.
+
+Wave 1 of the rollout was three parallel new-file dispatches (27 new
+unit tests across `mp1/wave.rs`, `mp1/drops.rs`, `mp1/wave_table.rs`);
+Wave 2 was the orchestrator-serial integration covered below.
+
+### Changed — `WIRE_VERSION` 3 → 4
+
+Adds four new `EventPayload` variants and an `OrbWire` Resync record;
+extends `Resync` with `orbs` + four `wave_*` fields. Clients running
+WIRE_VERSION 3 are rejected with `wire_version_mismatch`.
+
+### Added — `server/sim/src/mp1/wave.rs` (~380 LOC)
+
+Deterministic wave state machine. `WaveState { current_wave,
+sub_wave_idx, phase, phase_started_tick }`, `WavePhase { Intro,
+Spawning, Clearing, Complete }`, `WaveSpawnGroup`, `WaveConfig`,
+`WaveSpawnRequest`, and the pure `tick_wave(state, config,
+alive_enemy_count, current_tick) -> Vec<WaveSpawnRequest>` driver.
+
+Mirrors solo's `js/sim/wave.js` byte-for-byte:
+- Sub-wave advance when alive enemies ≤ 2 OR 720 ticks (12 s @ 60 Hz)
+  have elapsed
+- Wave complete when last sub-wave spawned + 0 enemies alive
+- Caller owns the `Complete → wave++ → Intro` transition
+
+8 unit tests cover the four phase transitions, stale fallback, spawn
+expansion, and the boss-tier propagation.
+
+### Added — `server/sim/src/mp1/drops.rs` (~500 LOC)
+
+Gold + health orb sim. Deterministic spawn via
+`spawn_orb_from_seed(id, kind, src_x, src_y, sub_seed)` using
+`RngCtx::from_sub_seed` + `trig::cos64`/`sin64` for cross-runtime
+bit-exact initial outward kick. `update_orb` mirrors solo's
+`js/sim/drops.js`: friction (0.92 for health to tame the magnet pump,
+0.985 for gold), lifetime decrement (gold 7200 ticks; health
+permanent per the solo 5.102.0 rule), opacity fade-out, two-tier
+health magnet (110 px gentle / 45 px snap), field-edge wrap.
+
+Phase 4 step 1 divergences from solo (documented in module header):
+no tractor branch (Phase 5 — tractor skill not yet implemented), no
+`healthMagnetScale` powerup, and `downed = true` ships don't pull
+orbs (added vs solo which only checked `active`).
+
+11 unit tests cover spawn determinism, velocity bounds, lifetime
+semantics, magnet behavior, downed-ship filter, and field wrap.
+
+### Added — `server/sim/src/mp1/wave_table.rs` (~400 LOC)
+
+Static wave configs for waves 1–10, ported verbatim from solo's
+`js/modules/wave/wave-data.js`. Defines the 10 `KIND_*: u8` enemy
+discriminators (HUNTER=0..TITAN=9, dense). `get_wave_config(n)`
+clamps `[1, MAX_WAVE_NUMBER=10]`. Only `KIND_HUNTER` has a spawn
+function today; `mp1_room.rs` substitutes HUNTER for unimplemented
+kinds with a `tracing::debug!` log until Phase 4 step 5 ports the
+other 9 enemy types.
+
+8 unit tests cover waves 1, 3 (boss tier 1), 6 (boss tier 1), 9
+(boss tier 2); the out-of-range clamp; and that all 10 kind consts
+are exactly `0..=9`.
+
+### Changed — `server/sim/src/mp1/state.rs`
+
+`RoomState` gains `orbs: Vec<OrbState>`, `next_orb_id: u32`,
+`wave: WaveState`, and `MAX_ORBS = 32` (soft cap mirroring solo's
+drop-pool behavior). `enemy_spawn_at_tick` removed (the wave machine
+replaces it).
+
+### Changed — `server/sim/src/mp1/collision.rs`
+
+- New `CollisionEvent::OrbCollected { orb_id, by_player_id, kind, x, y }`
+- New `run_collisions` parameter: `orbs: &mut [OrbState]`
+- New pair: ship × orb pickup. Health orbs heal the picker
+  (`ORB_HEALTH_HEAL = 25.0`, clamped to `max_hp`). Gold orbs only
+  emit the event for now (server-side accounting is Phase 4 step 9).
+- Downed ships can't collect
+
+### Changed — `server/sim/src/mp1/wire.rs`
+
+`WIRE_VERSION` bumped 3 → 4. New `EventPayload` variants:
+- `OrbSpawn { orb_id, kind, x, y, rng_subseed }`
+- `OrbCollected { orb_id, by_player_id, kind, at_tick, x, y }`
+- `WaveStart { wave_number, asteroid_count, is_boss_wave, boss_tier, at_tick }`
+- `WaveClear { wave_number, at_tick }`
+
+New `OrbWire` struct for Resync; `ServerMsg::Resync` extended with
+`orbs: Vec<OrbWire>` + `wave_number`, `wave_sub_wave_idx`,
+`wave_phase`, `wave_phase_started_tick`.
+
+### Changed — `server/server-bin/src/mp1_room.rs`
+
+- `step()` order extended: ship physics → enemy AI → asteroid drift
+  → bullet integration → **orb drift/magnet/lifetime** →
+  fire-to-bullet spawns → **wave cadence drive** → collision →
+  event translation (now rolls for drop spawns on enemy/asteroid
+  death) → revive ticking → cull dead orbs.
+- `drive_wave()` reads `wave_table::get_wave_config`, calls
+  `wave::tick_wave`, spawns asteroids on Intro→Spawning, emits
+  `WaveStart` / `WaveClear` at the right boundaries, and bumps
+  `current_wave` on Complete.
+- Drop chances: enemy kills → 65 % gold / 10 % health; small
+  asteroid terminal kills → 35 % gold.
+- `seed_initial_asteroids` replaced with `spawn_wave_asteroids(n)`
+  fired by `WaveStart` (the room now boots empty; wave 1's asteroids
+  appear ~1.5 s in when Intro → Spawning).
+- `build_checksum` now hashes orbs together with asteroids
+  (`hash_asteroids_and_orbs`) preserving the four-hash wire shape.
+- `build_resync` carries `orbs` + the four `wave_*` fields.
+
+### Changed — `server/client-wasm/src/lib.rs`
+
+New `World` accessors: `orb_count`, `orb_id`, `orb_kind`, `orb_x`,
+`orb_y`, `orb_opacity`, `wave_number`, `wave_phase`. New consumers:
+`consume_orb_spawn`, `consume_orb_collected`, `consume_wave_start`,
+`consume_wave_clear`. `tick()` now updates orbs each frame (mirrors
+server's step 4.5) and passes them to `collision::run_collisions`.
+`checksum_asteroids` now bundles orbs to stay in lockstep with the
+server.
+
+### Changed — `js/mp/wire-codec.js`
+
+`WIRE_VERSION` bumped 3 → 4. New decoders for the four
+`EventPayload` variants, new `readOrbWire`, extended `Resync`
+decoder for orbs + wave fields.
+
+### Changed — `js/mp/mp-engine.js`
+
+- Dispatches `OrbSpawn` / `OrbCollected` / `WaveStart` / `WaveClear`
+  events to the new `world.consume_*` methods
+- Local `localGold` counter increments when an `OrbCollected` event
+  credits the local player (HUD-only; authoritative score lands in
+  Phase 4 step 9)
+- Resync handler re-populates orbs (with synthesized sub-seeds, same
+  caveat as Phase 3's enemy/asteroid Resync path) and re-aligns the
+  local wave state
+
+### Added — orb rendering + HUD elements
+
+- `js/mp/mp-renderer.js`: `drawOrb(x, y, kind, opacity, scale)`
+  — gold = yellow disc + ring outline, health = green disc + white
+  cross. Z-order: between asteroids and enemies.
+- `js/mp/mp-hud.js`: top-center `WAVE N` indicator, top-right
+  `GOLD N` counter. Same `'11px 'Press Start 2P', monospace'` font
+  as the existing HUD elements.
+- `js/mp/mp-particles.js`: `spawnOrbPickup(x, y, kind)` — 10
+  color-matched sparks (gold = yellow, health = pale green).
+
+### Build health
+
+- `cargo test --workspace`: **138 passed, 0 failed** (was 95
+  before Wave 1; 27 new mp1 sim tests + integration coverage).
+- `cargo check --workspace`: clean
+- `npm run wasm:build:dev`: clean (~9 s)
+- `npm run test:qa --grep QA-13`: 4/4 pass — Phase 3 deterministic
+  two-tab smoke regression intact
+
+### Known limitations / Phase 4 follow-ups
+
+- Only `KIND_HUNTER` has a spawn function; the other 9 wave-table
+  kinds spawn HUNTERs with a `tracing::debug!` log (Phase 4 step 5).
+- Gold orb collection increments a per-client `localGold` counter
+  only — no authoritative server-side score state (Phase 4 step 9).
+- `OrbWire` doesn't carry the original `rng_subseed`, so Resync
+  reconstructs orbs from synthesized sub-seeds (same Phase 5 pattern
+  as enemies/asteroids — will diverge from server in any future
+  RNG-driven orb state until widened).
+- Wave 11+ clamps to wave 10 (table size). Phase 4 step 5 widens to
+  30 alongside the remaining enemies.
+
 ## [0.4.3] - 2026-05-18
 
 Renderer-side hook for embedder-provided WS URLs. Enables the Electron

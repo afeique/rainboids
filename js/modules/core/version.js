@@ -11,5 +11,5 @@
 // separate product (`/mp`) that versions independently of solo. The
 // title screen shows both as `sp X.X.X` / `mp 0.X.X`. Keep VERSION_MP
 // in sync with the root /VERSION-MP file on every MP release.
-export const VERSION = '6.12.5';
-export const VERSION_MP = '0.4.3';
+export const VERSION = '6.13.2';
+export const VERSION_MP = '0.5.0';

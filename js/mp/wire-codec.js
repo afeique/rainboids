@@ -103,7 +103,7 @@ const LE = true;
  *       AsteroidWire / BulletWire records)
  *  - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
  *       client can seed its WASM mirror identically to the server. */
-export const WIRE_VERSION = 3;
+export const WIRE_VERSION = 4;
 
 /* ── Reader ─────────────────────────────────────────────────────── */
 
@@ -335,6 +335,20 @@ function readBulletWire(r) {
     };
 }
 
+/** Read one `OrbWire` record (Phase 4 Resync payload — WIRE_VERSION 4). */
+function readOrbWire(r) {
+    return {
+        id: r.u32(),
+        kind: r.u8(),
+        x: r.f64(),
+        y: r.f64(),
+        vx: r.f64(),
+        vy: r.f64(),
+        life_ticks: r.u32(),
+        opacity: r.f64(),
+    };
+}
+
 /** Read one `EventPayload` (externally-tagged: u32 variant index + fields).
  *  Returns a JS object tagged with `kind: '<VariantName>'`. The
  *  `EnemySpawn` and `EnemyDestroy` variants rename their `kind: u8`
@@ -432,6 +446,44 @@ function readEventPayload(r) {
                 at_tick: r.u32(),
             };
         }
+        case 9: { // OrbSpawn { orb_id, kind: u8, x, y, rng_subseed: u64 }
+            return {
+                kind: 'OrbSpawn',
+                orb_id: r.u32(),
+                kind_u8: r.u8(),
+                x: r.f64(),
+                y: r.f64(),
+                rng_subseed: r.u64Big(),
+            };
+        }
+        case 10: { // OrbCollected { orb_id, by_player_id, kind: u8, at_tick, x, y }
+            return {
+                kind: 'OrbCollected',
+                orb_id: r.u32(),
+                by_player_id: r.u32(),
+                kind_u8: r.u8(),
+                at_tick: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+            };
+        }
+        case 11: { // WaveStart { wave_number: u16, asteroid_count: u8, is_boss_wave: bool, boss_tier: u8, at_tick }
+            return {
+                kind: 'WaveStart',
+                wave_number: r.u32(),
+                asteroid_count: r.u8(),
+                is_boss_wave: r.bool(),
+                boss_tier: r.u8(),
+                at_tick: r.u32(),
+            };
+        }
+        case 12: { // WaveClear { wave_number: u16, at_tick }
+            return {
+                kind: 'WaveClear',
+                wave_number: r.u32(),
+                at_tick: r.u32(),
+            };
+        }
         default:
             throw new RangeError(`wire-codec: unknown EventPayload variant ${tag}`);
     }
@@ -490,7 +542,7 @@ export function decodeServerMsg(input) {
                 bullets_hash: r.u64(),
             };
         }
-        case 7: { // Resync { tick, rng_seed: u64, ships, enemies, asteroids, bullets }
+        case 7: { // Resync { tick, rng_seed: u64, ships, enemies, asteroids, bullets, orbs, wave_* }
             const tick = r.u32();
             const rng_seed = r.u64Big();
             const shipsCount = r.u64();
@@ -505,7 +557,28 @@ export function decodeServerMsg(input) {
             const bulletsCount = r.u64();
             const bullets = new Array(bulletsCount);
             for (let i = 0; i < bulletsCount; i++) bullets[i] = readBulletWire(r);
-            return { kind: 'Resync', tick, rng_seed, ships, enemies, asteroids, bullets };
+            // WIRE_VERSION 4 additions: orbs + wave state.
+            const orbsCount = r.u64();
+            const orbs = new Array(orbsCount);
+            for (let i = 0; i < orbsCount; i++) orbs[i] = readOrbWire(r);
+            const wave_number = r.u32();
+            const wave_sub_wave_idx = r.u8();
+            const wave_phase = r.u8();
+            const wave_phase_started_tick = r.u32();
+            return {
+                kind: 'Resync',
+                tick,
+                rng_seed,
+                ships,
+                enemies,
+                asteroids,
+                bullets,
+                orbs,
+                wave_number,
+                wave_sub_wave_idx,
+                wave_phase,
+                wave_phase_started_tick,
+            };
         }
         default:
             throw new RangeError(`wire-codec: unknown ServerMsg variant ${tag}`);

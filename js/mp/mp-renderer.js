@@ -132,6 +132,19 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
         );
     }
 
+    // Orbs (between asteroids and enemies — they're field pickups).
+    const ocount = world.orb_count();
+    for (let i = 0; i < ocount; i++) {
+        drawOrb(
+            ctx,
+            world.orb_x(i),
+            world.orb_y(i),
+            world.orb_kind(i),
+            world.orb_opacity(i),
+            scale,
+        );
+    }
+
     // Enemies.
     const ecount = world.enemy_count();
     for (let i = 0; i < ecount; i++) {
@@ -289,6 +302,43 @@ function drawEnemy(ctx, x, y, angle, hp, maxHp, scale) {
 
 // Small filled cyan disc — matches solo's PULSE_CANNON color so the
 // player's projectiles read the same in MP.
+// Phase 4 — pickup orb. Gold = yellow disc (medium-bright). Health =
+// green cross on darker green disc. Opacity passed in directly from
+// the WASM mirror (fades gold orbs in their last 120 ticks).
+const ORB_RADIUS_PX = 8;
+const ORB_GOLD_FILL = "#ffd84d";
+const ORB_GOLD_STROKE = "#ffa800";
+const ORB_HEALTH_FILL = "#4dff8a";
+const ORB_HEALTH_CROSS = "#ffffff";
+
+function drawOrb(ctx, x, y, kind, opacity, scale) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, opacity || 1));
+    ctx.translate(x, y);
+    if (kind === 1 /* health */) {
+        ctx.beginPath();
+        ctx.arc(0, 0, ORB_RADIUS_PX, 0, Math.PI * 2);
+        ctx.fillStyle = ORB_HEALTH_FILL;
+        ctx.fill();
+        // Cross — drawn in screen-stable thickness (counter-scaled).
+        ctx.lineWidth = 2 / scale;
+        ctx.strokeStyle = ORB_HEALTH_CROSS;
+        ctx.beginPath();
+        ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
+        ctx.moveTo(0, -4); ctx.lineTo(0, 4);
+        ctx.stroke();
+    } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, ORB_RADIUS_PX, 0, Math.PI * 2);
+        ctx.fillStyle = ORB_GOLD_FILL;
+        ctx.fill();
+        ctx.lineWidth = 1.5 / scale;
+        ctx.strokeStyle = ORB_GOLD_STROKE;
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
 function drawBullet(ctx, x, y, scale) {
     ctx.save();
     ctx.fillStyle = BULLET_COLOR;
