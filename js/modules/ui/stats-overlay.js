@@ -207,6 +207,15 @@ export class StatsOverlay {
         if (!this.elements.overlay) return false;
         const ge = this.gameEngine;
         if (!ge?.player) return false;
+        // Capture the SOURCE before togglePause() mutates pause-overlay
+        // visibility. If the pause overlay is already visible (user
+        // opened stats via a pause-menu button), we need to restore
+        // the pause menu on close. Reading the overlay AFTER
+        // togglePause() always reports 'flex' because togglePause
+        // itself shows the overlay when transitioning to PAUSED — that
+        // erases the source signal (the pre-6.12.5 bug).
+        const pauseDom = document.getElementById('pause-overlay');
+        this._cameFromPauseMenu = !!(pauseDom && pauseDom.style.display === 'flex');
         // Stats screen pauses the game like the regular pause, but skips
         // opening the pause menu DOM. We track our own _isOpen so close()
         // can restore properly.
@@ -214,12 +223,9 @@ export class StatsOverlay {
         if (!this._wasPaused) ge.togglePause();
         this._isOpen = true;
         this.elements.overlay.style.display = 'flex';
-        // The pause overlay may also have flipped on. Hide it under us.
-        const pauseDom = document.getElementById('pause-overlay');
-        if (pauseDom) {
-            this._pauseDomWasFlex = pauseDom.style.display === 'flex';
-            pauseDom.style.display = 'none';
-        }
+        // Hide the pause overlay under us (togglePause may have just
+        // flipped it on; or it was already up if cameFromPauseMenu).
+        if (pauseDom) pauseDom.style.display = 'none';
         this.render();
         return true;
     }
@@ -229,16 +235,23 @@ export class StatsOverlay {
         this._isOpen = false;
         if (this.elements.overlay) this.elements.overlay.style.display = 'none';
         if (this.elements.tooltip) this.elements.tooltip.style.display = 'none';
-        // Restore pause-menu display if it was up before, otherwise resume.
+        // Restore based on the captured source, NOT on current overlay
+        // visibility (which we've been mutating).
         const ge = this.gameEngine;
         const pauseDom = document.getElementById('pause-overlay');
-        if (this._pauseDomWasFlex && pauseDom) {
+        if (this._cameFromPauseMenu && pauseDom) {
+            // User entered via a pause-menu button — restore the pause
+            // menu so they land back where they came from.
             pauseDom.style.display = 'flex';
         } else if (!this._wasPaused && ge) {
-            // We took the pause; resume it now.
+            // User entered via backtick / HUD button while playing —
+            // resume the game directly, bypassing the pause menu.
             ge.togglePause();
         }
-        this._pauseDomWasFlex = false;
+        // If !cameFromPauseMenu && _wasPaused, game was paused via some
+        // other path (e.g. shop transition); leave it paused with no
+        // overlay surface — caller's responsibility to manage that.
+        this._cameFromPauseMenu = false;
         this._wasPaused = false;
     }
 
