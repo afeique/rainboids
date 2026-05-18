@@ -108,6 +108,46 @@ pub enum ServerMsg {
         /// Human-readable explanation for logging / DevTools.
         message: String,
     },
+
+    // ── Phase 3 additions ──
+
+    /// One-shot moments the deterministic sim can't fully express.
+    /// Bundled per-tick into a single `Event` frame; broadcast
+    /// coincident with the next `Snapshot`. Client consumes each
+    /// payload in order to update its deterministic state mirror.
+    Event {
+        /// Server tick at which these events occurred.
+        tick: u32,
+        /// Payload variants — see `EventPayload` below.
+        payloads: Vec<EventPayload>,
+    },
+
+    /// Periodic safety net. Server broadcasts every ~60 ticks (~1 Hz).
+    /// Client computes the same hash over its predicted state; on
+    /// mismatch, sends `ClientMsg::Resync { client_tick }` and the
+    /// server replies with a one-shot full `Resync` payload below.
+    /// Wire cost: ~28 B / sec / client.
+    StateChecksum {
+        tick: u32,
+        ships_hash: u64,
+        enemies_hash: u64,
+        asteroids_hash: u64,
+        bullets_hash: u64,
+    },
+
+    /// Full-state recovery payload — sent only in response to
+    /// `ClientMsg::Resync` when checksum mismatched. Carries the
+    /// authoritative current state of every deterministic entity
+    /// plus the room's RNG state so the client can re-seed
+    /// identically and resume the deterministic stream.
+    Resync {
+        tick: u32,
+        rng_seed: u64,
+        ships: Vec<SnapshotShip>,
+        enemies: Vec<EnemyWire>,
+        asteroids: Vec<AsteroidWire>,
+        bullets: Vec<BulletWire>,
+    },
 }
 
 /// Client-to-server messages. Externally-tagged serde enum (see
@@ -144,12 +184,183 @@ pub enum ClientMsg {
     },
     /// Voluntary disconnect. Server can also detect WS close.
     Bye,
+
+    // ── Phase 3 additions ──
+
+    /// Client requests a full-state Resync. Sent when our local
+    /// `StateChecksum` doesn't match the server's. Carries the
+    /// client's current tick for diagnostic logging.
+    Resync {
+        client_tick: u32,
+    },
 }
 
 /// Wire-format version. Bump on any breaking schema change. Server
 /// rejects Hello with a mismatched version (sends Error variant and
 /// closes the WS).
-pub const WIRE_VERSION: u32 = 1;
+///
+/// - 1: Phase 2 (ships only, Welcome / Snapshot / Input / Bye).
+/// - 2: Phase 3 — adds Event / StateChecksum / Resync; client may
+///   send Resync in response to a checksum miss. Snapshot still
+///   ship-only (deterministic kinds reconstructed client-side).
+pub const WIRE_VERSION: u32 = 2;
+
+// ── Phase 3 — EventPayload variants ──
+
+/// One-shot moment the deterministic sim can't fully express.
+/// Bundled into `ServerMsg::Event { tick, payloads }` and broadcast
+/// every tick that had events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EventPayload {
+    /// New enemy spawned. Client instantiates from the sub-seed via
+    /// `mp1::enemy::spawn_hunter_from_seed`. Both sides produce the
+    /// same enemy.
+    EnemySpawn {
+        enemy_id: u32,
+        kind: u8,
+        rng_subseed: u64,
+    },
+
+    /// New asteroid spawned. Client instantiates from the sub-seed
+    /// via `mp1::asteroid::spawn_from_seed`. Used at room boot
+    /// (3-4 initial asteroids) and any time the server spawns more.
+    AsteroidSpawn {
+        asteroid_id: u32,
+        rng_subseed: u64,
+    },
+
+    /// Player fired a bullet. Client integrates trajectory locally
+    /// from `(origin_x, origin_y, vx, vy, spawn_tick)`.
+    BulletSpawn {
+        bullet_id: u32,
+        owner_player_id: u32,
+        origin_x: f64,
+        origin_y: f64,
+        vx: f64,
+        vy: f64,
+        spawn_tick: u32,
+        weapon: u8,
+    },
+
+    /// Authoritative hit confirmation. Client snaps the named
+    /// bullet to inactive and triggers spark cosmetic at hit_tick.
+    /// `target_kind`: 0 = enemy, 1 = asteroid.
+    BulletHit {
+        bullet_id: u32,
+        target_kind: u8,
+        target_id: u32,
+        hit_tick: u32,
+        hit_x: f64,
+        hit_y: f64,
+    },
+
+    /// Enemy died. Client marks inactive + triggers death cosmetic.
+    EnemyDestroy {
+        enemy_id: u32,
+        by_bullet_id: u32,
+        kill_tick: u32,
+        x: f64,
+        y: f64,
+        kind: u8,
+    },
+
+    /// Asteroid died and (if large enough) split into children.
+    /// Client computes the same children via the shared sub-seed.
+    /// `child_id_start` is the first id the room will assign; the
+    /// client matches by consuming events in order, identical to
+    /// server.
+    AsteroidSplit {
+        parent_id: u32,
+        kill_tick: u32,
+        x: f64,
+        y: f64,
+        rng_subseed: u64,
+        child_id_start: u32,
+    },
+
+    /// Ship took damage. Cosmetic — actual HP delta is reflected
+    /// in the next Snapshot's `SnapshotShip.hp`. Used for damage-
+    /// flash trigger timing.
+    ShipDamaged {
+        player_id: u32,
+        by_kind: u8, // 0=enemy, 1=asteroid
+        by_id: u32,
+        hit_tick: u32,
+        amount: f64,
+        x: f64,
+        y: f64,
+    },
+
+    /// Ship just transitioned to downed (HP 0). Cosmetic — Snapshot
+    /// also reflects `downed = true`. Useful for one-shot wreck
+    /// animation timing.
+    ShipDowned {
+        player_id: u32,
+        at_tick: u32,
+        x: f64,
+        y: f64,
+    },
+
+    /// Ship was revived (downed → alive). Cosmetic; Snapshot also
+    /// reflects `downed = false` + `hp = REVIVE_HP_FRACTION * max_hp`.
+    ShipRevived {
+        revived_player_id: u32,
+        by_player_id: u32,
+        at_tick: u32,
+    },
+}
+
+// ── Phase 3 — Resync wire records ──
+//
+// These are full-state recovery payloads, NOT per-snapshot fields.
+// `EnemyWire` / `AsteroidWire` / `BulletWire` carry every field
+// needed to bootstrap the deterministic sim's state mirror. Sent
+// only in response to `ClientMsg::Resync`.
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct EnemyWire {
+    pub id: u32,
+    pub kind: u8,
+    pub x: f64,
+    pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub angle: f64,
+    pub hp: f64,
+    pub max_hp: f64,
+    pub radius: f64,
+    pub arc_dir: f64,
+    pub arc_radius: f64,
+    pub arc_omega: f64,
+    pub arc_phase: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct AsteroidWire {
+    pub id: u32,
+    pub x: f64,
+    pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub rot: f64,
+    pub rot_vel: f64,
+    pub radius: f64,
+    pub base_radius: f64,
+    pub hp: f64,
+    pub max_hp: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct BulletWire {
+    pub id: u32,
+    pub owner_player_id: u32,
+    pub origin_x: f64,
+    pub origin_y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub spawn_tick: u32,
+    pub life_remaining: u32,
+}
 
 #[cfg(test)]
 mod tests {

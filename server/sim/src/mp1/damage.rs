@@ -152,26 +152,11 @@ pub fn all_downed(ships: &[(bool, bool)]) -> bool {
     ships.iter().all(|(a, d)| !*a || *d)
 }
 
-// --- ShipState pinned shape (will be in crate::mp1::state after Wave 2) ---
-// Defined locally so damage.rs compiles in isolation before the state.rs
-// reshape lands. When state.rs gains the matching fields this local copy
-// is deleted and the import becomes `use super::state::ShipState`.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-pub struct ShipState {
-    pub player_id: u32,
-    pub x: f64,
-    pub y: f64,
-    pub vx: f64,
-    pub vy: f64,
-    pub angle: f64,
-    pub hp: f64,
-    pub max_hp: f64,
-    pub radius: f64,
-    pub active: bool,
-    pub downed: bool,
-    pub revive_meter: f64,
-}
+// Phase-3 Wave 2 (mp 0.3.4) — state.rs now owns the canonical
+// `ShipState` with `downed` + `revive_meter` fields. Re-exported
+// here so downstream callers can still write `use super::damage::ShipState`
+// for ergonomic cross-module use; the type identity is `super::state::ShipState`.
+pub use super::state::ShipState;
 
 #[cfg(test)]
 mod tests {

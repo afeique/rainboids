@@ -172,6 +172,19 @@ pub async fn handle(ws: WebSocket, room: Mp1RoomHandle) {
                     ClientMsg::Hello { .. } => {
                         tracing::warn!(player_id, "mp1: duplicate Hello, ignoring");
                     }
+                    ClientMsg::Resync { client_tick } => {
+                        // Phase-3 Wave-3 will wire this through to the
+                        // room actor (which will reply with ServerMsg::
+                        // Resync carrying the full deterministic state).
+                        // For now: log + ignore — the legacy Phase-2
+                        // room actor doesn't yet track deterministic
+                        // entities so it has nothing to resync.
+                        tracing::info!(
+                            player_id,
+                            client_tick,
+                            "mp1: Resync request received (Phase 3 Wave 3 pending)"
+                        );
+                    }
                 }
             }
             Message::Close(_) => break,

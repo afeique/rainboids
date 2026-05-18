@@ -31,6 +31,16 @@ use super::damage::{apply_damage, DamageOutcome, ShipState};
 use super::enemy::{EnemyState, HUNTER_CONTACT_DAMAGE};
 use super::rng_ctx::RngCtx;
 
+// Re-exported for downstream test fixtures that build mock entities;
+// the production code paths use these via their own modules but tests
+// in this file (and Wave 3+ integration tests) want them in scope here.
+#[cfg(test)]
+#[allow(unused_imports)]
+use super::asteroid::MIN_AST_RAD;
+#[cfg(test)]
+#[allow(unused_imports)]
+use super::enemy::KIND_HUNTER;
+
 /// Contact-damage rate for ship × asteroid. Smaller than enemy
 /// damage to keep asteroids as environmental hazards, not main
 /// threats. Mirrors solo's PLAYER_ASTEROID_COLLISION_DAMAGE

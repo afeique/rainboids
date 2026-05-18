@@ -8,6 +8,104 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.3.4] - 2026-05-17
+
+Phase 3 Wave 2 — state + wire reshape. Foundations land for the
+Phase 3 deterministic sim integration. `WIRE_VERSION` bumps 1→2.
+
+### Changed — `mp1::state::ShipState` gains `downed` + `revive_meter`
+
+Plus `player_id: u32`. The single-ship `GameState` surface (used by
+the WASM client's Phase-2 `World` API) stays — same struct, just
+with more fields, all defaulted in `ShipState::default()`. Existing
+accessors (`ship_x`, `ship_y`, etc.) unaffected.
+
+`damage.rs` drops its local pinned `ShipState` copy and re-exports
+`super::state::ShipState` instead — the two shapes are now one,
+canonically owned by state.rs. All `damage::*` callers (collision,
+future room actor) get the same type.
+
+### Added — `mp1::state::RoomState`
+
+Multi-entity authoritative state for Phase 3:
+
+```rust
+pub struct RoomState {
+    pub tick: u32,
+    pub field_w: f64,
+    pub field_h: f64,
+    pub ships:     Vec<ShipState>,      // up to MAX_PLAYERS (8)
+    pub enemies:   Vec<EnemyState>,     // up to MAX_ENEMIES (4)
+    pub asteroids: Vec<AsteroidState>,  // up to MAX_ASTEROIDS (16)
+    pub bullets:   Vec<BulletState>,    // up to MAX_BULLETS (64)
+    pub next_enemy_id:    u32,
+    pub next_asteroid_id: u32,
+    pub next_bullet_id:   u32,
+    pub enemy_spawn_at_tick: u32,
+    pub rng: RngCtx,
+}
+```
+
+Constructed via `RoomState::from_seed(seed)`. Server picks the seed
+at room boot; clients receive it (Wave 3 will add the field to
+`Welcome`) and seed their mirror identically — same RNG stream,
+both sides.
+
+`GameState` (single-ship) stays for backward compatibility with
+the WASM client's existing `World` API. They share `ShipState`.
+Phase 4+ unifies them when the WASM client adopts the full
+deterministic sim.
+
+### Added — Wire-format Phase 3 extensions
+
+New variants on `ServerMsg`:
+- `Event { tick, payloads: Vec<EventPayload> }` — bundled one-shot
+  moments (spawns, hits, destroys, damage, downed, revived)
+- `StateChecksum { tick, ships_hash, enemies_hash, asteroids_hash,
+  bullets_hash }` — periodic safety heartbeat (~1 Hz)
+- `Resync { tick, rng_seed, ships, enemies, asteroids, bullets }`
+  — full-state recovery payload sent only on client request
+
+New variant on `ClientMsg`:
+- `Resync { client_tick }` — client signals checksum miss
+
+New `EventPayload` enum (11 variants): `EnemySpawn`, `AsteroidSpawn`,
+`BulletSpawn`, `BulletHit`, `EnemyDestroy`, `AsteroidSplit`,
+`ShipDamaged`, `ShipDowned`, `ShipRevived` (+ reserved slots).
+
+New wire records for Resync: `EnemyWire`, `AsteroidWire`, `BulletWire`
+— carry every field needed to bootstrap the deterministic mirror.
+
+### Changed — `WIRE_VERSION` 1 → 2
+
+Servers running 0.3.4+ reject Hellos with `wire_version: 1`. Clients
+running 0.3.4+ send `wire_version: 2`. The JS-side wire codec
+(`js/mp/wire-codec.js`) needs to bump its `WIRE_VERSION` const to
+2 too in Wave 3 client integration.
+
+### Server-bin minor extension
+
+`mp1_connection.rs` adds a `ClientMsg::Resync` arm — currently
+just logs the request; the Phase-3 Wave-3 room actor rewrite will
+wire it through to `ServerMsg::Resync` reply.
+
+### Tests + build
+
+- `cargo test --workspace`: **112 pass** (no regressions)
+- `npm run wasm:build:dev`: succeeds, WASM rebuild OK
+
+### Pending (Wave 3)
+
+- `server-bin::mp1_room` adopts `RoomState` (drops Phase-2 HashMap
+  shape, drives multi-entity, emits events)
+- Welcome carries `rng_seed`
+- StateChecksum broadcast loop in the room tick
+- Resync request → reply
+- JS-side wire-codec extended for the new wire variants
+- WASM client begins running the deterministic sim modules
+
+---
+
 ## [0.3.3] - 2026-05-17
 
 Phase 3 Wave 1 — leaf simulation modules in `server/sim/src/mp1/`.
