@@ -64,7 +64,11 @@
     "qa:bot:balance": "node tools/ai-qa-bot/run.js --sessions 5 --build all --duration 10",
     "qa:bot:headed": "node tools/ai-qa-bot/run.js --headed --duration 5",
     "qa:bot:novice": "node tools/ai-qa-bot/run.js --skill novice --duration 5",
-    "qa:bot:report": "node tools/ai-qa-bot/run.js --report"
+    "qa:bot:report": "node tools/ai-qa-bot/run.js --report",
+    "__ELECTRON__": "── Electron desktop wrapper (electron/ subproject) ──────",
+    "electron:install": "cd electron && npm install",
+    "electron:dev": "cd electron && npm run dev",
+    "electron:start": "cd electron && npm start"
   },
   "repository": {
     "type": "git",

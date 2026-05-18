@@ -1,0 +1,14 @@
+{
+  "name": "rainboids-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop wrapper for Rainboids",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^32.2.0"
+  }
+}
