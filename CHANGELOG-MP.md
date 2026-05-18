@@ -8,6 +8,147 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.4.0] - 2026-05-17
+
+Phase 3 Wave 4 — JS client integration. End-to-end Phase 3
+deterministic mirror lands: WASM runs the full sim client-side,
+consumes server Event frames, drifts checked via StateChecksum,
+Resync round-trip available for recovery. Renderer draws enemies +
+asteroids + bullets directly from the WASM mirror. **The deterministic
+architecture is now wired end-to-end** — full validation needs a live
+two-tab session.
+
+Minor-version bump (0.3.5 → 0.4.0) marks the architectural completion
+of Phase 3 wave-by-wave rollout.
+
+### Added — `js/mp/wire-codec.js` Phase 3 extensions (~+128 LOC → 501 total)
+
+- `WIRE_VERSION` bumped 1 → 2
+- Decoders for `ServerMsg::Event` (with all 9 `EventPayload` variants),
+  `StateChecksum`, `Resync`
+- New `EnemyWire` / `AsteroidWire` / `BulletWire` record readers
+  used by Resync
+- `encodeResync(clientTick)` ClientMsg encoder
+- `Reader.u64Big()` for the `rng_subseed` / `rng_seed` fields that
+  genuinely span the full u64 range (everything else stays Number)
+- `EnemySpawn` and `EnemyDestroy` payloads rename the wire `kind: u8`
+  field to `kind_u8` in the decoded JS object to avoid colliding with
+  the JS dispatch `kind: 'EnemySpawn'` etc.
+
+### Added — `server/client-wasm/src/lib.rs` Phase 3 World API (~+400 LOC)
+
+`World` now wraps `mp1::state::RoomState` and exposes a full mirror
+surface. Local-ship accessors (`ship_x`, `ship_y`, …) preserved and
+now resolve via `local_player_id`.
+
+New methods:
+- `seed(BigInt)` — re-seed RngCtx + reset RoomState
+- `set_local_player(player_id)` — set the local pid (after Welcome)
+- `ensure_ship` / `remove_ship` / `apply_snapshot_ship`
+- `tick(dt)` — runs the FULL Phase 3 pipeline (ship → enemy → asteroid
+  → bullet → collision → revive → cull → tick++) matching server's
+  `mp1_room.rs::step` byte-for-byte
+- `consume_enemy_spawn` / `consume_asteroid_spawn` / `consume_bullet_spawn` / `consume_bullet_hit` / `consume_enemy_destroy` / `consume_asteroid_split` / `consume_ship_damaged` / `consume_ship_downed` / `consume_ship_revived` — one per EventPayload variant
+- Per-entity accessors: `remote_ship_*(idx)`, `enemy_*(idx)`,
+  `asteroid_*(idx)`, `bullet_*(idx)` + `_count()` for each
+- `checksum_ships` / `checksum_enemies` / `checksum_asteroids` /
+  `checksum_bullets` — match server's hash byte-for-byte (same
+  DefaultHasher, same fields, same order)
+- `reset_for_resync(seed: BigInt, tick: u32)`
+
+### Changed — `js/mp/mp-engine.js` Phase 3 wiring
+
+Replaces Phase 2's JS-side `remoteShips: Map<player_id, InterpTrack>`
+with WASM-driven state. Per-frame flow now:
+
+1. read input → set on World
+2. `world.tick(dt)` — runs full sim
+3. build remote-ship array via `world.remote_ship_*(i)` accessors
+4. render (renderer queries enemies/asteroids/bullets directly)
+
+New WS callbacks wired:
+- `onEvent({tick, payloads})` — dispatch each EventPayload to the
+  matching `world.consume_*` method
+- `onStateChecksum({tick, ships_hash, enemies_hash, asteroids_hash, bullets_hash})`
+  — compare to local `world.checksum_*()`; on mismatch + 2 s
+  throttle, send Resync
+- `onResync({tick, rng_seed, ships, enemies, asteroids, bullets})`
+  — `world.reset_for_resync(seed, tick)` + repopulate via
+  apply_snapshot_ship / consume_*_spawn
+
+Debug overlay extended: enemies/asteroids/bullets counts, hp/max_hp,
+conditional downed + revive %, last Event tick, last checksum tick,
+Resync miss + applied counts.
+
+`wire_version_mismatch` errors now render a fatal overlay so the
+problem is loud, not silent.
+
+### Changed — `js/mp/mp-renderer.js` Phase 3 draws (~+148 LOC → 285 total)
+
+New entity draws in z-order (back → front):
+
+1. Asteroids — gray wireframe 12-gons; HP bar above (suppressed at
+   full HP to keep idle field clean)
+2. Enemies — red triangles (`#ff4444` matches solo HUNTER); always-on
+   HP bar
+3. Bullets — small cyan dots (`#00ccff` matches solo PULSE_CANNON)
+4. Remote ships (existing, extended for downed state)
+5. Local ship (existing, extended for downed state)
+
+Downed ships (local or remote) render at 40% alpha with a deterministic
+pulsing cyan revive-radius hint (80 px) so nearby live players can see
+where to hover. Pulse driven by `world.tick_count()` — replay-safe;
+no wall-clock dependency.
+
+`render` signature preserved: `(ctx, canvas, world, aim, remoteShips = [])`.
+
+### Changed — `js/mp/mp-ws.js` Phase 3 routing
+
+Dispatches new `Event` / `StateChecksum` / `Resync` ServerMsg
+variants to caller callbacks. Adds `sendResync(clientTick)` to the
+return object. Tier 1 debug logging unchanged (decoded msgs visible
+in DevTools console behind `?mp-debug=1`).
+
+### Known limitations / TODO for follow-up
+
+- `Welcome.rng_seed` not yet on the wire — engine uses
+  `BigInt(server_tick)` as a placeholder seed at Welcome time; the
+  first StateChecksum / Resync round-trip self-heals to the
+  authoritative seed. Wire bump deferred until validated in the
+  two-tab smoke.
+- `Resync` entity ingestion synthesizes deterministic sub-seeds via
+  `splitmix64(rng_seed ^ tag ^ id)` since `BulletWire` /
+  `AsteroidWire` / `EnemyWire` don't carry the original sub-seed.
+  Documented as a Phase 5 follow-up.
+- `mp-particles.js` + `mp-hud.js` (HP bars, revive UI overlay,
+  cosmetic bursts) are stubs — kept minimal in Wave 4; orchestrator
+  will iterate in a follow-up commit.
+- Welcome wire bump pending (server stores `rng_seed` on the handle
+  but doesn't yet transmit it).
+
+### Build health
+
+- `cargo check --workspace`: clean
+- `cargo test --workspace`: 112 pass (no regressions)
+- `npm run wasm:build:dev`: clean (~5s incremental)
+
+### Manual two-tab validation pending
+
+```
+npm run dev
+# wait for cargo + wasm-pack
+# open TWO http://localhost:8090/mp tabs side by side
+# ?mp-debug=1 on either tab for DevTools logging
+```
+
+Expected: both tabs see each other's ships, see asteroids drifting,
+see HUNTER spawn after ~1s, can fire (LMB) at HUNTER, see HUNTER
+die after ~3 PULSE_CANNON hits, see asteroids split when shot,
+take contact damage from HUNTER, drop to 0 HP → downed state with
+revive hint, partner hovers to revive.
+
+---
+
 ## [0.3.5] - 2026-05-17
 
 Phase 3 Wave 3 — server-bin's `mp1_room` adopts the deterministic

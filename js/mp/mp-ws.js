@@ -1,9 +1,10 @@
-//! Phase-2 WebSocket transport for /mp client.
+//! Phase-3 WebSocket transport for /mp client.
 //!
 //! Pure transport — no game logic. Opens a binary WS, sends `Hello`,
 //! routes incoming `ServerMsg` variants to caller-supplied callbacks,
-//! exposes `sendInput` / `sendBye` / `close`. The decoded messages
-//! flow as plain JS objects (see wire-codec.js for shape).
+//! exposes `sendInput` / `sendResync` / `sendBye` / `close` / `isOpen`.
+//! The decoded messages flow as plain JS objects (see wire-codec.js
+//! for shape).
 //!
 //! Tier 1 debug logging: behind `?mp-debug=1` query or
 //! `localStorage.rainboidsMpDebug='1'`. Logs decoded messages to
@@ -11,16 +12,21 @@
 //! Production cost: zero (the gate is a single boolean check; JIT
 //! elides the log call).
 //!
-//! Phase 2 explicitly omits reconnect, heartbeat/ping, and timeout
-//! handling — server-driven for now. Phase 5 polishes resilience.
+//! Phase 3 added Event / StateChecksum / Resync routing; Phase 2 base
+//! still covers Welcome / Snapshot / PeerJoined / PeerLeft / Error.
 //!
-//! See docs/Multiplayer WASM Pivot Phase 2 – 2026-05-17.md.
+//! Phase 3 still explicitly omits reconnect, heartbeat/ping, and
+//! timeout handling — server-driven for now. Phase 5 polishes
+//! resilience.
+//!
+//! See docs/Multiplayer WASM Pivot Phase 3 – 2026-05-17.md.
 
 import {
     WIRE_VERSION,
     encodeHello,
     encodeInput,
     encodeBye,
+    encodeResync,
     decodeServerMsg,
 } from './wire-codec.js';
 import { VERSION_MP } from '../modules/core/version.js';
@@ -47,17 +53,21 @@ function defaultUrl() {
  * Connect to the multiplayer server.
  *
  * @param {object} opts
- * @param {string} opts.name         Player display name.
- * @param {string} [opts.url]        WS URL override (default: derive from window.location).
- * @param {function} opts.onWelcome  (msg: Welcome) → void
- * @param {function} opts.onSnapshot (msg: Snapshot) → void
- * @param {function} opts.onPeerJoined (msg: PeerJoined) → void
- * @param {function} opts.onPeerLeft   (msg: PeerLeft) → void
- * @param {function} opts.onError      (msg: Error) → void
- * @param {function} [opts.onClose]    (event: CloseEvent) → void
+ * @param {string} opts.name              Player display name.
+ * @param {string} [opts.url]             WS URL override (default: derive from window.location).
+ * @param {function} opts.onWelcome       (msg: Welcome) → void
+ * @param {function} opts.onSnapshot      (msg: Snapshot) → void
+ * @param {function} [opts.onPeerJoined]  (msg: PeerJoined) → void
+ * @param {function} [opts.onPeerLeft]    (msg: PeerLeft) → void
+ * @param {function} [opts.onError]       (msg: Error) → void
+ * @param {function} [opts.onEvent]       (msg: Event) → void          — Phase 3
+ * @param {function} [opts.onStateChecksum] (msg: StateChecksum) → void — Phase 3
+ * @param {function} [opts.onResync]      (msg: Resync) → void          — Phase 3
+ * @param {function} [opts.onClose]       (event: CloseEvent) → void
  *
  * @returns {{
  *   sendInput: (clientTick:number, up:boolean, down:boolean, left:boolean, right:boolean, aimX:number, aimY:number) => void,
+ *   sendResync: (clientTick:number) => void,
  *   sendBye: () => void,
  *   close: () => void,
  *   isOpen: () => boolean,
@@ -71,6 +81,9 @@ export function connect({
     onPeerJoined,
     onPeerLeft,
     onError,
+    onEvent,
+    onStateChecksum,
+    onResync,
     onClose,
 }) {
     const ws = new WebSocket(url);
@@ -107,12 +120,16 @@ export function connect({
         }
         if (MP_DEBUG) console.log('[mp/ws ↓]', msg);
         switch (msg.kind) {
-            case 'Welcome':    onWelcome?.(msg); break;
-            case 'Snapshot':   onSnapshot?.(msg); break;
-            case 'PeerJoined': onPeerJoined?.(msg); break;
-            case 'PeerLeft':   onPeerLeft?.(msg); break;
-            case 'Error':      onError?.(msg); break;
-            default:           console.warn('[mp/ws] unknown msg kind', msg.kind);
+            case 'Welcome':         onWelcome?.(msg); break;
+            case 'Snapshot':        onSnapshot?.(msg); break;
+            case 'PeerJoined':      onPeerJoined?.(msg); break;
+            case 'PeerLeft':        onPeerLeft?.(msg); break;
+            case 'Error':           onError?.(msg); break;
+            // ── Phase 3 ──
+            case 'Event':           onEvent?.(msg); break;
+            case 'StateChecksum':   onStateChecksum?.(msg); break;
+            case 'Resync':          onResync?.(msg); break;
+            default:                console.warn('[mp/ws] unknown msg kind', msg.kind);
         }
     });
 
@@ -136,6 +153,14 @@ export function connect({
                     up, down, left, right,
                     aim_x: aimX, aim_y: aimY,
                 });
+            }
+            ws.send(bytes);
+        },
+        sendResync(clientTick) {
+            if (ws.readyState !== WebSocket.OPEN) return;
+            const bytes = encodeResync(clientTick);
+            if (MP_DEBUG) {
+                console.log('[mp/ws ↑]', { kind: 'Resync', client_tick: clientTick });
             }
             ws.send(bytes);
         },

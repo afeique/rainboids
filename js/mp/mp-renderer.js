@@ -6,11 +6,23 @@
 // engine has already interpolated for this frame. The 1920x1080
 // logical world is letterboxed into the live canvas.
 //
+// Phase 3 extends the renderer to draw enemies, asteroids, and
+// bullets sourced directly from the WASM `World` per-entity
+// accessors (no client interpolation — engine has populated the
+// world for this frame). Z-order from back to front:
+//   1. Asteroids (wireframe gray 12-gons)
+//   2. Enemies   (red triangles + HP bar)
+//   3. Bullets   (small cyan dots)
+//   4. Remote ships (palette-colored triangles + "P<id>" labels)
+//   5. Local ship   (white triangle)
+// Downed ships (local or remote) draw dim with a pulsing cyan
+// revive-radius hint so live teammates know where to hover.
+//
 // Contract: `render(ctx, canvas, world, aim, remoteShips)` where
-// `remoteShips` is `Array<{player_id, x, y, vx, vy, angle}>` already
-// interpolated by mp-engine. Empty/omitted in solo or before any
-// snapshots arrive — `remoteShips` defaults to `[]` so the Phase 1
-// four-argument call site keeps working.
+// `remoteShips` is `Array<{player_id, x, y, vx, vy, angle, hp,
+// max_hp, downed}>` already interpolated by mp-engine. Empty/omitted
+// in solo or before any snapshots arrive — `remoteShips` defaults to
+// `[]` so the Phase 1 four-argument call site keeps working.
 //
 // Solo's renderer is NOT shared (per docs/Multiplayer WASM Pivot -
 // 2026-05-17.md, "Asset and shared-layer decisions"). This file is
@@ -38,6 +50,30 @@ const REMOTE_PALETTE = [
 
 const LABEL_FONT_PX = 10;
 const LABEL_OFFSET_Y = SHIP_HALF_HEIGHT + 8;  // above the ship tip
+
+// Phase 3 entity styling.
+const ASTEROID_COLOR = "#888";
+const ASTEROID_SIDES = 12;
+const ASTEROID_HP_BAR_W = 24;
+const ASTEROID_HP_BAR_H = 3;
+const ASTEROID_HP_BAR_GAP = 10;   // gap above the asteroid edge
+const ASTEROID_HP_FILL = "#bbb";
+
+const ENEMY_FILL = "#ff4444";
+const ENEMY_STROKE = "#ff8888";
+const ENEMY_HP_BAR_W = 30;
+const ENEMY_HP_BAR_H = 3;
+const ENEMY_HP_BAR_Y_OFFSET = 28; // pixels above the enemy center
+
+const BULLET_COLOR = "#00ccff";
+const BULLET_RADIUS = 3;
+
+// Revive hint — matches the simulation's REVIVE_RADIUS (80 px).
+const REVIVE_RADIUS = 80;
+const REVIVE_HINT_COLOR_RGB = "80, 200, 255";
+const DOWNED_ALPHA = 0.4;
+const DOWNED_SHIP_FILL = "#ffffff";
+const DOWNED_SHIP_STROKE = "#bbbbbb";
 
 export function render(ctx, canvas, world, aim, remoteShips = []) {
     const cw = canvas.width;
@@ -79,21 +115,85 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
         ctx.stroke();
     }
 
-    // Local ship (white) — pulled directly from the WASM World.
-    const sx = world.ship_x();
-    const sy = world.ship_y();
-    const sa = world.ship_angle();
-    drawShipTriangle(ctx, sx, sy, sa, SHIP_FILL, SHIP_STROKE, scale);
+    // ---- Phase 3 entities, back to front ----
+
+    // Asteroids (back).
+    const acount = world.asteroid_count();
+    for (let i = 0; i < acount; i++) {
+        drawAsteroid(
+            ctx,
+            world.asteroid_x(i),
+            world.asteroid_y(i),
+            world.asteroid_rot(i),
+            world.asteroid_radius(i),
+            world.asteroid_hp(i),
+            world.asteroid_max_hp(i),
+            scale,
+        );
+    }
+
+    // Enemies.
+    const ecount = world.enemy_count();
+    for (let i = 0; i < ecount; i++) {
+        drawEnemy(
+            ctx,
+            world.enemy_x(i),
+            world.enemy_y(i),
+            world.enemy_angle(i),
+            world.enemy_hp(i),
+            world.enemy_max_hp(i),
+            scale,
+        );
+    }
+
+    // Bullets.
+    const bcount = world.bullet_count();
+    for (let i = 0; i < bcount; i++) {
+        drawBullet(
+            ctx,
+            world.bullet_x(i),
+            world.bullet_y(i),
+            scale,
+        );
+    }
+
+    // ---- Ships (front layer) ----
+
+    const tick = world.tick_count();
 
     // Remote ships — slot-indexed palette + floating "P<id>" label.
     // The engine has already interpolated x/y/angle into render-space;
     // we just paint. No label above the local ship — it's "you".
+    // Downed remotes draw dim + a pulsing revive-radius hint.
     for (let i = 0; i < remoteShips.length; i++) {
         const r = remoteShips[i];
         if (!r) continue;
-        const color = REMOTE_PALETTE[r.player_id % REMOTE_PALETTE.length];
-        drawShipTriangle(ctx, r.x, r.y, r.angle, color, color, scale);
-        drawRemoteLabel(ctx, r.x, r.y, r.player_id, color, scale);
+        if (r.downed) {
+            ctx.save();
+            ctx.globalAlpha = DOWNED_ALPHA;
+            drawShipTriangle(ctx, r.x, r.y, r.angle, DOWNED_SHIP_FILL, DOWNED_SHIP_STROKE, scale);
+            ctx.restore();
+            drawReviveHint(ctx, r.x, r.y, tick, scale);
+            drawRemoteLabel(ctx, r.x, r.y, r.player_id, DOWNED_SHIP_STROKE, scale);
+        } else {
+            const color = REMOTE_PALETTE[r.player_id % REMOTE_PALETTE.length];
+            drawShipTriangle(ctx, r.x, r.y, r.angle, color, color, scale);
+            drawRemoteLabel(ctx, r.x, r.y, r.player_id, color, scale);
+        }
+    }
+
+    // Local ship — pulled directly from the WASM World.
+    const sx = world.ship_x();
+    const sy = world.ship_y();
+    const sa = world.ship_angle();
+    if (world.ship_downed()) {
+        ctx.save();
+        ctx.globalAlpha = DOWNED_ALPHA;
+        drawShipTriangle(ctx, sx, sy, sa, DOWNED_SHIP_FILL, DOWNED_SHIP_STROKE, scale);
+        ctx.restore();
+        drawReviveHint(ctx, sx, sy, tick, scale);
+    } else {
+        drawShipTriangle(ctx, sx, sy, sa, SHIP_FILL, SHIP_STROKE, scale);
     }
 }
 
@@ -132,5 +232,102 @@ function drawRemoteLabel(ctx, x, y, playerId, color, scale) {
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = color;
     ctx.fillText(`P${playerId}`, 0, 0);
+    ctx.restore();
+}
+
+// Wireframe 12-gon, rotated and scaled to match the sim's asteroid.
+// HP bar above is suppressed at full HP to keep room-boot visually
+// clean.
+function drawAsteroid(ctx, x, y, rot, radius, hp, maxHp, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.strokeStyle = ASTEROID_COLOR;
+    ctx.lineWidth = 1.5 / scale;
+    ctx.beginPath();
+    for (let i = 0; i < ASTEROID_SIDES; i++) {
+        const theta = (i / ASTEROID_SIDES) * Math.PI * 2;
+        const px = Math.cos(theta) * radius;
+        const py = Math.sin(theta) * radius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+    if (hp < maxHp) {
+        drawHpBar(
+            ctx,
+            x,
+            y - radius - ASTEROID_HP_BAR_GAP,
+            ASTEROID_HP_BAR_W,
+            ASTEROID_HP_BAR_H,
+            hp / maxHp,
+            ASTEROID_HP_FILL,
+            scale,
+        );
+    }
+}
+
+// Red triangle for HUNTER (Phase 3's only enemy kind). Reuses the
+// ship triangle geometry so silhouettes are consistent at a glance —
+// only the palette signals "hostile". HP bar is always shown for
+// enemies since they're always combat-relevant.
+function drawEnemy(ctx, x, y, angle, hp, maxHp, scale) {
+    drawShipTriangle(ctx, x, y, angle, ENEMY_FILL, ENEMY_STROKE, scale);
+    drawHpBar(
+        ctx,
+        x,
+        y - ENEMY_HP_BAR_Y_OFFSET,
+        ENEMY_HP_BAR_W,
+        ENEMY_HP_BAR_H,
+        hp / maxHp,
+        ENEMY_FILL,
+        scale,
+    );
+}
+
+// Small filled cyan disc — matches solo's PULSE_CANNON color so the
+// player's projectiles read the same in MP.
+function drawBullet(ctx, x, y, scale) {
+    ctx.save();
+    ctx.fillStyle = BULLET_COLOR;
+    ctx.beginPath();
+    ctx.arc(x, y, BULLET_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+// HP bar shared by enemies and damaged asteroids. Centered on `x`,
+// top at `y`. Dark background + colored fill + faint white border.
+// `scale` is the world->screen scale so border strokes stay 1px.
+function drawHpBar(ctx, x, y, w, h, fillFraction, color, scale) {
+    ctx.save();
+    ctx.lineWidth = 1 / scale;
+    // Background (dark gray, no border yet — fill then stroke last).
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.fillRect(x - w / 2, y, w, h);
+    // Filled portion.
+    ctx.fillStyle = color;
+    const clamped = Math.max(0, Math.min(1, fillFraction));
+    ctx.fillRect(x - w / 2, y, w * clamped, h);
+    // Border.
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.strokeRect(x - w / 2, y, w, h);
+    ctx.restore();
+}
+
+// Faint cyan ring showing the REVIVE_RADIUS around a downed ship —
+// nearby live players can see where to hover to start a revive. The
+// alpha oscillates with tick_count for a deterministic slow pulse
+// (replay-safe, no Date.now()).
+function drawReviveHint(ctx, x, y, tick, scale) {
+    ctx.save();
+    const alpha = 0.2 + 0.1 * Math.sin(tick * 0.05);
+    ctx.strokeStyle = `rgba(${REVIVE_HINT_COLOR_RGB}, ${alpha})`;
+    ctx.lineWidth = 1.5 / scale;
+    ctx.beginPath();
+    ctx.arc(x, y, REVIVE_RADIUS, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
 }
