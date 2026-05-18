@@ -361,11 +361,11 @@ The first `cargo run -p rainboids-server` and `wasm-pack build` are slow (cold c
 
 - **Solo** (`/`) — the canonical single-player game. Versioned via `VERSION` + `CHANGELOG.md`. Currently at `sp 6.2.0`.
 - **Multiplayer** (`/mp`) — experimental WASM-backed co-op product. Versioned via `VERSION-MP` + `CHANGELOG-MP.md`. Currently at `mp 0.1.0`. See `docs/Multiplayer WASM Pivot – 2026-05-17.md` for architectural context.
-- **Desktop** (Electron) — native wrapper around the browser build. Versioned via `VERSION-DESKTOP` + `CHANGELOG-DESKTOP.md`. Currently at `desktop 0.1.0` (Phase 1 scaffold). See `docs/Electron Desktop Port Plan – 2026-05-18.md`.
+- **Desktop** (Electron) — native wrapper around the browser build. Versioned via `VERSION-DESKTOP` + `CHANGELOG-DESKTOP.md`. Currently at `desktop 0.3.0` (Phases 1–3 done; packaging is Phase 4). See `docs/Electron Desktop Port Plan – 2026-05-18.md`.
 
 ### Desktop wrapper (Electron)
 
-The `electron/` subproject wraps the existing browser build in an Electron shell so the game can ship as a native macOS / Windows / Linux app. Phase 1 (current): solo-only scaffold, loads `index.html` over a custom `app://` protocol. Phase 2 streams music from the CDN with local disk caching; Phase 3 wires multiplayer to the hosted server; Phase 4 packages installers.
+The `electron/` subproject wraps the existing browser build in an Electron shell so the game can ship as a native macOS / Windows / Linux app. Phases 1–3 are complete: solo + multiplayer both run; music streams from the CDN with local disk caching; fonts are bundled locally so the app works offline. **Phase 4 (packaging via electron-builder) is next.** Override the MP server with `RAINBOIDS_MP_WS_URL=wss://… npm run electron:dev`.
 
 ```bash
 npm run electron:install   # one-time: installs Electron into electron/node_modules (~200 MB)
@@ -630,7 +630,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │   ├── src/                   #   lib.rs facade + server/, protocol/, matchmaking/, room/, sim/, obs/, util/
 │   ├── tests/                 #   wire-golden, handshake, room-lifecycle, grace+reconnect (25 tests)
 │   └── deploy/                #   systemd unit, nginx config, Dockerfile
-├── electron/                  # Electron desktop wrapper (Phase 1 scaffold — desktop 0.1.0)
+├── electron/                  # Electron desktop wrapper (Phases 1–3 done — desktop 0.3.0)
 │   ├── package.json           #   Isolated subproject (own node_modules); deps: electron
 │   ├── main.js                #   Main process — app:// custom protocol + BrowserWindow
 │   └── preload.js             #   contextBridge → window.rainboids = { isDesktop, platform }

@@ -22,6 +22,15 @@ const { pipeline } = require('node:stream/promises');
 const REPO_ROOT = path.resolve(__dirname, '..');
 const PROTOCOL_HOST = 'rainboids';
 const MUSIC_CDN_BASE = 'https://rainboids.cat.computer/music';
+// Phase 3 — Multiplayer WebSocket URL handed to the renderer via the
+// preload's additionalArguments. The renderer (`js/mp/mp-ws.js`
+// discoverDefaultUrl()) reads this as priority-0 and connects to it
+// verbatim. Defaults to the production endpoint that matches the web
+// build's hardcoded fallback (`:8443/mp/ws` on the public host).
+// Override at launch with: RAINBOIDS_MP_WS_URL=wss://… npm run electron:dev
+const MP_WS_URL =
+  process.env.RAINBOIDS_MP_WS_URL ||
+  'wss://rainboids.cat.computer:8443/mp/ws';
 // Music filenames are kebab-case-letters-digits-and-dots only; rejecting
 // anything else stops path traversal at the URL layer.
 const MUSIC_FILENAME_RE = /^[a-z0-9][a-z0-9._-]*\.mp3$/i;
@@ -137,6 +146,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Sandboxed preloads can't read process.env, so configuration is
+      // piped through process.argv via this list.
+      additionalArguments: [`--rainboids-mp-ws-url=${MP_WS_URL}`],
     },
   });
 

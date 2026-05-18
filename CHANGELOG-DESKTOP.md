@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 Desktop stays in `0.x` while pre-1.0; promotes to `1.0.0` when the wrapper
 is feature-complete (solo + MP + cached music + cross-platform installers).
 
+## [0.3.0] - 2026-05-18
+
+Phase 3 — Multiplayer wiring. Desktop builds can now connect to a
+production MP WebSocket server. The renderer treats the URL as a
+verbatim string sourced from the embedder, so the same JS runs unchanged
+on the web (where it falls through to the existing discovery chain).
+Per `docs/Electron Desktop Port Plan – 2026-05-18.md`. Minor bump
+(0.2.0 → 0.3.0) — new shipping capability. Bridge commit — MP 0.4.3
+gets the renderer-side priority-0 hook.
+
+### Added
+
+- `MP_WS_URL` constant in `electron/main.js`. Defaults to
+  `wss://rainboids.cat.computer:8443/mp/ws` (matches the web build's
+  current production fallback). Overridable per-launch with
+  `RAINBOIDS_MP_WS_URL=wss://… npm run electron:dev`.
+- Piped to the sandboxed preload via
+  `webPreferences.additionalArguments: ['--rainboids-mp-ws-url=<URL>']`
+  because sandboxed preloads can't read `process.env`. Preload parses
+  the flag from `process.argv` and surfaces it on
+  `window.rainboids.mpServerUrl`.
+- Renderer hook in `js/mp/mp-ws.js → discoverDefaultUrl()` adds a
+  priority-0 tier ahead of the existing URL-param / dev-port-discovery
+  / hostname fallback chain. Returns the embedder URL verbatim — no
+  proto/host/port munging — so the desktop wrapper has full control.
+  See MP 0.4.3.
+
+### Notes
+
+- This change is the minimum needed to make MP work inside Electron at
+  all. Without it, `window.location.hostname` resolves to `rainboids`
+  (the `app://` host) and the renderer's existing fallback would
+  produce `wss://rainboids:8443/mp/ws` — unconnectable.
+- Default URL is a best-guess based on the public host and the
+  renderer's existing fallback port. If production uses a different
+  host or a reverse-proxied port (e.g., bare `:443`), override with
+  the env var or a follow-up patch to `MP_WS_URL`.
+- No server-side changes. Desktop clients are indistinguishable from
+  browser clients on the wire.
+
 ## [0.2.0] - 2026-05-18
 
 Phase 2 — Asset hygiene. Removes the desktop build's two runtime web

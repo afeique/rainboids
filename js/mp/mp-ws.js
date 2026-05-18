@@ -44,20 +44,47 @@ function isDebugEnabled() {
 
 const MP_DEBUG = isDebugEnabled();
 
-function defaultUrl() {
+/**
+ * Discover the multiplayer server's address. Priority:
+ *
+ *   0. `window.rainboids.mpServerUrl` (Electron preload — full URL,
+ *      e.g., `wss://example.com/mp/ws`. Set by the desktop wrapper so
+ *      it can target a production host instead of `app://rainboids`,
+ *      which is what `window.location.hostname` would otherwise resolve
+ *      to inside Electron.)
+ *   1. `?mp-ws=<host>[:<port>]` URL param (testing override)
+ *   2. `js/mp/dev-mp-port.json` (written by `npm run mp` at boot;
+ *      tells us which port the rainboids-server bound — auto-fallback
+ *      means it might not be 8443)
+ *   3. default `:8443` on `window.location.hostname` (production)
+ *
+ * Returns a Promise so we can `fetch()` the discovery file. Caller
+ * (mp-engine) awaits this before invoking `connect({url, ...})`.
+ */
+export async function discoverDefaultUrl() {
+    // (0) Embedder override. The Electron preload sets this when the
+    //     app is launched with RAINBOIDS_MP_WS_URL in the env (or via
+    //     the wrapper's hardcoded default). Full URL — we return it
+    //     verbatim, no proto/host/port munging.
+    try {
+        const fromEmbedder = window.rainboids?.mpServerUrl;
+        if (typeof fromEmbedder === 'string' && fromEmbedder.length > 0) {
+            if (MP_DEBUG) {
+                console.log(`[mp/ws] using embedder-provided URL: ${fromEmbedder}`);
+            }
+            return fromEmbedder;
+        }
+    } catch {}
+
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // The Rust server (rainboids-server) listens on :8443 by default
-    // regardless of which port serves the static page (typically :8090
-    // via http-server, or 443 behind nginx in prod). Use the same
-    // hostname but force the server port. `?mp-ws=` URL param overrides
-    // for testing against a remote server.
     let host = window.location.hostname || 'localhost';
     let port = '8443';
+
+    // (1) URL param override.
     try {
         const q = new URLSearchParams(window.location.search);
         const override = q.get('mp-ws');
         if (override) {
-            // Accept formats: "host:port" or "host" or ":port".
             const colon = override.indexOf(':');
             if (colon === 0) {
                 port = override.slice(1);
@@ -67,8 +94,30 @@ function defaultUrl() {
             } else {
                 host = override;
             }
+            return `${proto}//${host}:${port}/mp/ws`;
         }
     } catch {}
+
+    // (2) Dev discovery file. Cache-busted with a timestamp so a
+    //     stale browser cache doesn't return yesterday's port.
+    try {
+        const resp = await fetch(`./wasm/../dev-mp-port.json?t=${Date.now()}`, {
+            cache: 'no-store',
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data && typeof data.port === 'number') {
+                if (typeof data.host === 'string' && data.host) host = data.host;
+                port = String(data.port);
+                if (MP_DEBUG) {
+                    console.log(`[mp/ws] discovered ${host}:${port} via dev-mp-port.json`);
+                }
+                return `${proto}//${host}:${port}/mp/ws`;
+            }
+        }
+    } catch {}
+
+    // (3) Default fallback.
     return `${proto}//${host}:${port}/mp/ws`;
 }
 
@@ -98,7 +147,7 @@ function defaultUrl() {
  */
 export function connect({
     name,
-    url = defaultUrl(),
+    url,
     onWelcome,
     onSnapshot,
     onPeerJoined,
@@ -109,6 +158,11 @@ export function connect({
     onResync,
     onClose,
 }) {
+    if (!url) {
+        throw new Error(
+            '[mp/ws] connect({url}) is required; await discoverDefaultUrl() first'
+        );
+    }
     const ws = new WebSocket(url);
     ws.binaryType = 'arraybuffer';
 

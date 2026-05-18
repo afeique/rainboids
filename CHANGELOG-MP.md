@@ -8,6 +8,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.4.3] - 2026-05-18
+
+Renderer-side hook for embedder-provided WS URLs. Enables the Electron
+desktop wrapper (desktop 0.3.0) to override `discoverDefaultUrl()` with
+a verbatim production URL, since `window.location.hostname` inside
+Electron resolves to `rainboids` (the `app://` host) and would
+otherwise produce an unconnectable fallback.
+
+### Added — Priority-0 URL source in `js/mp/mp-ws.js`
+
+`discoverDefaultUrl()` now checks `window.rainboids?.mpServerUrl` first.
+If present and non-empty, returns it verbatim — no proto/host/port
+munging. Falls through to the existing three-tier chain otherwise:
+
+  0. `window.rainboids.mpServerUrl` (new — embedder override)
+  1. `?mp-ws=<host>[:<port>]` URL param
+  2. `js/mp/dev-mp-port.json` discovery file
+  3. `${proto}//${hostname}:8443/mp/ws` default
+
+Try/catch-guarded so a missing `window.rainboids` (web build) is a
+no-op fallthrough. Web behaviour is unchanged.
+
+Patch bump (0.4.2 → 0.4.3) — small additive client-side change, no
+wire protocol change, no server change.
+
 ## [0.4.2] - 2026-05-17
 
 Phase 3 integration fixes — `/mp` now actually connects and the
