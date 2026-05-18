@@ -9,6 +9,7 @@ use tracing::info;
 use rainboids_server::{
     config::Config,
     matchmaking::Matchmaker,
+    mp1_room::Mp1RoomHandle,
     obs, protocol,
     server::{
         http::{router, AppState},
@@ -35,10 +36,14 @@ async fn main() -> Result<()> {
     let mm = Matchmaker::new(cfg.clone());
     let sessions = SessionRegistry::new();
     spawn_reaper(sessions.clone(), std::time::Duration::from_secs(30));
+    // WASM-pivot Phase 2 — spawn the single global mp1 room actor.
+    // Serves connections at `/mp/ws`; runs at 60Hz sim / 20Hz snapshot.
+    let mp1 = Mp1RoomHandle::spawn();
     let app = router(AppState {
         mm,
         sessions,
         cfg: cfg.clone(),
+        mp1,
     });
 
     let listener = TcpListener::bind(cfg.bind_addr).await?;

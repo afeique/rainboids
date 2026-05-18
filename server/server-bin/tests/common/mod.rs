@@ -24,6 +24,7 @@ use tokio_tungstenite::{
 use rainboids_server::{
     config::Config,
     matchmaking::Matchmaker,
+    mp1_room::Mp1RoomHandle,
     protocol::{ClientMsg, ServerMsg},
     server::{
         http::{router, AppState},
@@ -48,6 +49,9 @@ impl TestServer {
             mm,
             sessions: sessions.clone(),
             cfg: cfg.clone(),
+            // Phase 2 mp1 room; not exercised by the legacy integration
+            // tests, but AppState requires the field.
+            mp1: Mp1RoomHandle::spawn(),
         });
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

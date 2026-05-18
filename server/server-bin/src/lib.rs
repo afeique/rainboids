@@ -14,6 +14,8 @@
 pub mod config;
 pub mod error;
 pub mod matchmaking;
+pub mod mp1_connection;
+pub mod mp1_room;
 pub mod obs;
 pub mod room;
 pub mod server;

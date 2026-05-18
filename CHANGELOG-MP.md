@@ -8,6 +8,73 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.3.1] - 2026-05-17
+
+Server-side Phase 2 lands. The Rust binary now serves a fresh
+`/mp/ws` WebSocket endpoint parallel to the legacy `/ws` — same
+process, same port (`:8443`), different room actor. Legacy `/ws`
+keeps its 44-test integration coverage; `/mp/ws` is the new path
+clients will use.
+
+### Added — Single global mp1 room actor
+
+`server/server-bin/src/mp1_room.rs` (~300 lines). One `Mp1RoomState`
+holding a `HashMap<u32, Slot>` (Phase 5 will add real matchmaking),
+per-slot input cache, per-slot outbound mpsc channel. Async actor
+ticks every `1_000_000 / 60` µs (precise 60 Hz); broadcasts a
+`Snapshot` every 3rd tick (~20 Hz). Each receiver gets their own
+snapshot with their own `acked_input_tick`.
+
+`Slot` carries the player's `ShipState` + `latest_input` + outbound
+channel. `update_ship` is called per-slot per-tick with that
+slot's input.
+
+`select!` uses `biased;` so the tick interval wins over the command
+backstop — a flood of inputs can't starve simulation. Inputs and
+Leave commands are drained at the top of each tick from an
+`mpsc::unbounded_channel<RoomCmd>`. Snapshots and PeerJoined/PeerLeft
+broadcasts use cloneable `Vec<u8>` of pre-encoded bytes.
+
+### Added — Per-connection task for `/mp/ws`
+
+`server/server-bin/src/mp1_connection.rs` (~180 lines). Per-WS
+async task:
+1. Wait for `Hello` (5s timeout). Reject if not received or wrong
+   wire_version.
+2. Join the room, get `(player_id, spawn_x, spawn_y)`, send `Welcome`.
+3. Broadcast `PeerJoined` to other slots.
+4. Spawn a writer task draining the per-slot outbound queue → WS sink.
+5. Reader loop: decode `ClientMsg::Input` → enqueue
+   `RoomCmd::Input { player_id, msg }` to the room. `ClientMsg::Bye`
+   or WS close → enqueue `RoomCmd::Leave` (which triggers `PeerLeft`).
+
+### Added — `/mp/ws` HTTP route in axum
+
+`server/server-bin/src/server/http.rs`: new `mp1_ws_upgrade` handler
+mounted at `/mp/ws`. `AppState` gains a `mp1: Mp1RoomHandle` field;
+`main.rs` spawns the single global handle at boot via
+`Mp1RoomHandle::spawn()`.
+
+### Architecture note
+
+The server's `Mp1RoomState` is intentionally a SEPARATE shape from
+`mp1::state::GameState` (the WASM client's single-ship state). The
+client's `World` runs one ship; the server's room runs N ships in a
+HashMap. Both call the same `mp1::ship::update_ship` for physics —
+the only difference is the container around it.
+
+Phase 2 single-global-room is deliberate; matchmaking + multi-room
+ship in Phase 5.
+
+### Tests
+
+`cargo test --workspace`: 54 pass (no regressions). The legacy
+integration tests in `tests/common/mod.rs` now stub
+`mp1: Mp1RoomHandle::spawn()` into AppState since the field is
+required.
+
+---
+
 ## [0.3.0] - 2026-05-17
 
 Foundation for Phase 2 wire integration: switch `mp1` from JSON-tagged
