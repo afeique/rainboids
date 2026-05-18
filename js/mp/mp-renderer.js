@@ -1,15 +1,23 @@
 // MP renderer.
 //
-// Thin Canvas2D renderer for the Phase-1 single-ship round-trip. Reads
-// scalar state from the WASM `World` (ship_x / ship_y / ship_angle /
-// field_width / field_height) and paints a triangle on a black field
-// with the 1920x1080 logical world fitted into the live canvas.
+// Thin Canvas2D renderer for the MP loop. Reads scalar state from the
+// WASM `World` (ship_x / ship_y / ship_angle / field_width /
+// field_height) for the LOCAL ship, then paints any REMOTE ships the
+// engine has already interpolated for this frame. The 1920x1080
+// logical world is letterboxed into the live canvas.
+//
+// Contract: `render(ctx, canvas, world, aim, remoteShips)` where
+// `remoteShips` is `Array<{player_id, x, y, vx, vy, angle}>` already
+// interpolated by mp-engine. Empty/omitted in solo or before any
+// snapshots arrive — `remoteShips` defaults to `[]` so the Phase 1
+// four-argument call site keeps working.
 //
 // Solo's renderer is NOT shared (per docs/Multiplayer WASM Pivot -
 // 2026-05-17.md, "Asset and shared-layer decisions"). This file is
 // fresh and intentionally minimal: no entity classes, no sprite
 // pipeline, no particle systems. WebGL is deferred until perf demands
-// it.
+// it. The renderer is stateless — the engine owns interpolation and
+// snapshot bookkeeping.
 
 const SHIP_HALF_WIDTH = 12;   // local-space, in world pixels
 const SHIP_HALF_HEIGHT = 15;  // length from base to tip
@@ -19,7 +27,19 @@ const SHIP_FILL = "#ffffff";
 const SHIP_STROKE = "#ffffff";
 const CROSSHAIR_COLOR = "rgba(160, 240, 255, 0.85)";
 
-export function render(ctx, canvas, world, aim) {
+const REMOTE_PALETTE = [
+    "#3df1ff",  // cyan
+    "#ff5edc",  // magenta
+    "#ffd84d",  // yellow
+    "#7dff3d",  // lime
+    "#ff8a3d",  // orange
+    "#a880ff",  // purple
+];
+
+const LABEL_FONT_PX = 10;
+const LABEL_OFFSET_Y = SHIP_HALF_HEIGHT + 8;  // above the ship tip
+
+export function render(ctx, canvas, world, aim, remoteShips = []) {
     const cw = canvas.width;
     const ch = canvas.height;
 
@@ -59,25 +79,58 @@ export function render(ctx, canvas, world, aim) {
         ctx.stroke();
     }
 
-    // Ship as an isoceles triangle pointing toward +x (right) in local
-    // space; ctx rotation by ship_angle aims it where the player is
-    // looking.
+    // Local ship (white) — pulled directly from the WASM World.
     const sx = world.ship_x();
     const sy = world.ship_y();
     const sa = world.ship_angle();
+    drawShipTriangle(ctx, sx, sy, sa, SHIP_FILL, SHIP_STROKE, scale);
 
+    // Remote ships — slot-indexed palette + floating "P<id>" label.
+    // The engine has already interpolated x/y/angle into render-space;
+    // we just paint. No label above the local ship — it's "you".
+    for (let i = 0; i < remoteShips.length; i++) {
+        const r = remoteShips[i];
+        if (!r) continue;
+        const color = REMOTE_PALETTE[r.player_id % REMOTE_PALETTE.length];
+        drawShipTriangle(ctx, r.x, r.y, r.angle, color, color, scale);
+        drawRemoteLabel(ctx, r.x, r.y, r.player_id, color, scale);
+    }
+}
+
+// Isoceles triangle pointing toward +x (right) in local space; ctx
+// rotation by `angle` aims it where the ship is looking. Same
+// geometry for local and remote ships so the visual scale is
+// consistent.
+function drawShipTriangle(ctx, x, y, angle, fillStyle, strokeStyle, scale) {
     ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(sa);
+    ctx.translate(x, y);
+    ctx.rotate(angle);
     ctx.beginPath();
     ctx.moveTo(SHIP_HALF_HEIGHT, 0);
     ctx.lineTo(-SHIP_HALF_HEIGHT * 0.6, -SHIP_HALF_WIDTH);
     ctx.lineTo(-SHIP_HALF_HEIGHT * 0.6, SHIP_HALF_WIDTH);
     ctx.closePath();
-    ctx.fillStyle = SHIP_FILL;
+    ctx.fillStyle = fillStyle;
     ctx.fill();
-    ctx.strokeStyle = SHIP_STROKE;
+    ctx.strokeStyle = strokeStyle;
     ctx.lineWidth = 1 / scale;
     ctx.stroke();
+    ctx.restore();
+}
+
+// Floating "P<player_id>" label above a remote ship. Drawn in the
+// ship's palette color, centered horizontally, in screen-stable pixel
+// size by counter-scaling the active transform.
+function drawRemoteLabel(ctx, x, y, playerId, color, scale) {
+    ctx.save();
+    ctx.translate(x, y - LABEL_OFFSET_Y);
+    // Counter-scale so the label stays a constant pixel size on
+    // screen regardless of how the world is letterboxed.
+    ctx.scale(1 / scale, 1 / scale);
+    ctx.font = `${LABEL_FONT_PX}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = color;
+    ctx.fillText(`P${playerId}`, 0, 0);
     ctx.restore();
 }

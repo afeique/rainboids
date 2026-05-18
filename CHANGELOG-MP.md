@@ -8,6 +8,98 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.3.2] - 2026-05-17
+
+Client-side Phase 2 lands. The `/mp` browser page now connects to
+`rainboids-server` over the binary `/mp/ws` channel, runs local
+WASM-side prediction for the user's own ship, and renders remote
+ships from server snapshots with ~100 ms interpolation.
+
+### Added — `js/mp/wire-codec.js` (~325 lines)
+
+Self-contained JS bincode 1.x reader matching the Rust mp1::wire
+byte layout (externally-tagged enums, f64 scalars, u64 fixint LE,
+length-prefixed strings/Vecs).
+
+Exports: `WIRE_VERSION`, `decodeServerMsg`, `decodeWireVersion`,
+`encodeClientMsg`, `encodeHello`, `encodeInput`, `encodeBye`.
+
+`u64` is decoded/encoded via Number (split into hi/lo u32 pairs).
+Safe up to `Number.MAX_SAFE_INTEGER` — Phase 2 never sends a value
+beyond `Vec` lengths in the hundreds. If Phase 4+ ever needs true
+u64 ids, switch to BigInt; for now the Number API avoids friction.
+
+### Added — `js/mp/mp-ws.js` (~155 lines)
+
+Pure transport. `connect({name, onWelcome, onSnapshot, onPeerJoined,
+onPeerLeft, onError, onClose})` opens a binary WS to `/mp/ws`, sends
+`Hello` on open (with `VERSION_MP` + `WIRE_VERSION`), dispatches
+incoming `ServerMsg` variants to callbacks. Returns
+`{sendInput, sendBye, close, isOpen}`.
+
+**Tier 1 debug logging** behind `?mp-debug=1` URL flag OR
+`localStorage.rainboidsMpDebug='1'`. When on, every frame in/out is
+console.log'd as a decoded JS object — DevTools shows it as an
+expandable tree. When off, the `if (MP_DEBUG)` gates are
+JIT-eliminated; zero production cost.
+
+Decode failures `console.error` unconditionally (a corrupt frame
+is always worth surfacing); the MP_DEBUG gate only silences the
+per-frame trace.
+
+### Changed — `js/mp/mp-engine.js` extended for WS + interp
+
+New signature: `start(World, debugEl, canvas, { name = 'Pilot' } = {})`.
+
+- `?solo=1` URL flag skips WS entirely (pure-local prediction).
+- WS callbacks maintain `remoteShips: Map<player_id, InterpTrack>`,
+  each track holding the last 6 samples (~300 ms at 20 Hz).
+- 30 Hz input upload throttle (`INPUT_SEND_INTERVAL_MS = 33`) gated
+  on `ws.isOpen()`. `client_tick` increments per send.
+- Each RAF frame: local prediction first (`world.tick(dt)` — instant
+  feel), then sample each remote track at `now - 100 ms` via shortest-
+  path angle interpolation, then render.
+- Debug overlay shows: tick / pos / aim / fps / **ws state / peers /
+  pid / last server tick** / `mp X.Y.Z` build tag.
+
+`Welcome.spawn_x/y` from the server is logged but NOT applied to the
+WASM `World` (no position setter yet). Local prediction starts at
+the WASM default; Phase 4 reconciliation will snap to server truth.
+
+### Changed — `js/mp/mp-renderer.js` extended for remote ships
+
+New signature: `render(ctx, canvas, world, aim, remoteShips = [])`.
+
+- Helper extracted: `drawShipTriangle(ctx, x, y, angle, fill, stroke, scale)`.
+  Local ship rendering byte-identical to before.
+- Remote ships drawn in palette-indexed colors via
+  `player_id % palette.length`: cyan, magenta, yellow, lime,
+  orange, purple.
+- Each remote ship gets a `P<player_id>` label 8 px above the tip,
+  counter-scaled by `1/scale` so the label stays screen-stable
+  across letterbox sizes. No label above the local ship (it's "you").
+
+### How to see it
+
+```
+npm run dev           # starts http-server + cargo + wasm-pack
+# wait for the cargo build (~30s cold)
+# open TWO http://localhost:8090/mp tabs side by side
+# add ?mp-debug=1 to either for DevTools console logging
+```
+
+Within a few seconds both tabs should show their own white ship +
+the other player's colored ship + a `P<n>` label. Move with WASD;
+the other tab follows ~100 ms behind.
+
+### Tests
+
+JS-side has no automated tests yet — the Rust round-trips (cargo
+test) cover the wire format byte-exact. A Playwright two-tab smoke
+spec lands in a follow-up.
+
+---
+
 ## [0.3.1] - 2026-05-17
 
 Server-side Phase 2 lands. The Rust binary now serves a fresh
