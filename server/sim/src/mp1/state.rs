@@ -63,6 +63,12 @@ pub struct ShipState {
     /// drains at `REVIVE_DRAIN_PER_TICK` otherwise. At full → ship
     /// revives at fractional max_hp; meter resets to 0.
     pub revive_meter: f64,
+
+    /// Phase 4 step 4 — currently-equipped weapon. Server-authoritative;
+    /// client echoes its choice each Input frame and the server
+    /// accepts/clamps. Default `0 = PULSE_CANNON`. See
+    /// `mp1::weapon::KIND_*` for the dense u8 enumeration.
+    pub weapon_kind: u8,
 }
 
 impl Default for ShipState {
@@ -82,6 +88,7 @@ impl Default for ShipState {
             active: true,
             downed: false,
             revive_meter: 0.0,
+            weapon_kind: 0, // PULSE_CANNON
         }
     }
 }

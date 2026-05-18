@@ -193,6 +193,15 @@ pub enum ClientMsg {
         aim_x: f64,
         /// World-space aim target y (mouse projected to world coords).
         aim_y: f64,
+        /// Phase 4 step 4 — currently-equipped weapon. Server persists
+        /// onto `ShipState.weapon_kind` and dispatches fire via
+        /// `mp1::weapon::fire(weapon, ship, rng)`. See
+        /// `mp1::weapon::KIND_*` for the dense u8 enumeration.
+        /// Default = 0 (PULSE_CANNON).
+        weapon: u8,
+        /// Fire button held this tick. Edge-detection lives in the
+        /// server's per-weapon cooldown gate.
+        fire: bool,
     },
     /// Voluntary disconnect. Server can also detect WS close.
     Bye,
@@ -211,6 +220,10 @@ pub enum ClientMsg {
 /// rejects Hello with a mismatched version (sends Error variant and
 /// closes the WS).
 ///
+/// - 5: Phase 4 step 4 — base weapons. `ClientMsg::Input` gains
+///   `weapon: u8` so the server knows which fire pattern to dispatch.
+///   `BulletSpawn` already carries `weapon: u8` (reserved since Phase 3),
+///   so no per-bullet shape change.
 /// - 4: Phase 4 step 1 — wave-driven enemy spawns + drop-orbs. Adds
 ///   `EventPayload::{OrbSpawn, OrbCollected, WaveStart, WaveClear}`,
 ///   `OrbWire`, and the orbs / wave fields on `Resync`.
@@ -220,7 +233,7 @@ pub enum ClientMsg {
 /// - 2: Phase 3 — adds Event / StateChecksum / Resync; client may
 ///   send Resync in response to a checksum miss. Snapshot still
 ///   ship-only (deterministic kinds reconstructed client-side).
-pub const WIRE_VERSION: u32 = 4;
+pub const WIRE_VERSION: u32 = 5;
 
 // ── Phase 3 — EventPayload variants ──
 
@@ -522,6 +535,8 @@ mod tests {
             right: true,
             aim_x: 123.5,
             aim_y: -45.25,
+            weapon: 2, // SCATTER_GUN
+            fire: true,
         };
         let json = serde_json::to_string(&m).unwrap();
         assert!(json.contains("\"Input\""));

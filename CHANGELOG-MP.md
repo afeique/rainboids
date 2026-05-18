@@ -8,6 +8,114 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.6.0] - 2026-05-18
+
+**Phase 4 step 4 — 3 new base weapons + per-player weapon switching.**
+STORM_NEEDLES, SCATTER_GUN, RAIL_DRIVER joined PULSE_CANNON. Players
+press `1` / `2` / `3` / `4` to switch live; the choice rides on every
+Input frame so the server dispatches the right per-weapon spawn pattern
+each fire event. Also fixes a Phase 3 bug where `fire` was never on the
+wire (players' bullets actually fire now).
+
+WIRE_VERSION bumped 4 → 5.
+
+### Added — three parallel new-file weapon modules
+
+| Weapon | File | Stats (mirrors `js/modules/combat/weapon-data.js`) |
+|--------|------|----------------------------------------------------|
+| STORM_NEEDLES | `mp1/weapon_storm_needles.rs` | 1 needle/shot, 130 ms cooldown (8 ticks), 0.4 dmg, ±0.10 rad jitter, 1.1× speed |
+| SCATTER_GUN   | `mp1/weapon_scatter_gun.rs`   | 5 pellets, 700 ms cooldown (42 ticks), 0.42 dmg/pellet, even cone ±0.2 rad, 0.9× speed, 1.2× range |
+| RAIL_DRIVER   | `mp1/weapon_rail_driver.rs`   | 1 piercing bullet, 1200 ms cooldown (72 ticks), 3.0 dmg, no jitter, 1.4× speed, 0.85× range, piercing=99 |
+
+Each module is a pure deterministic `fire(ship, rng) -> Vec<WeaponBulletSpawn>`
+function. STORM_NEEDLES uses RNG for jitter; SCATTER_GUN + RAIL_DRIVER
+are RNG-free. 22 new unit tests across the three.
+
+### Added — `mp1/weapon.rs` dispatcher
+
+Routes a `weapon_kind: u8` to the matching per-weapon `fire()` and
+exposes the per-weapon cooldown via `cooldown_ticks()`. Both server
+(`mp1_room.rs::process_fire_inputs`) and WASM client
+(`consume_bullet_spawn`) use this single source of truth so per-weapon
+constants (damage / piercing / lifetime / speed) live in exactly one
+place. Unknown weapon kinds fall back to PULSE_CANNON. 6 dispatcher
+tests.
+
+### Changed — `BulletState` carries per-weapon damage + piercing
+
+Phase 3's `BulletState` had a fixed PULSE_CANNON shape. Step 4 adds:
+- `damage: f64` — per-bullet damage applied at collision
+- `piercing_left: u8` — decrement on each hit; bullet deactivates only at 0
+
+`BulletState::spawn` signature extended with `(damage, piercing,
+speed_mult, lifetime_mult)`. A `spawn_pulse` shortcut preserves the
+old call shape for the existing Phase 3 tests.
+
+### Changed — `collision.rs` piercing-aware
+
+Bullet × enemy and bullet × asteroid now decrement `piercing_left` on
+each hit; the bullet stays alive (and keeps searching for more targets
+in the same loop) until piercing exhausts. RAIL_DRIVER hits an entire
+asteroid field in a single shot if they're collinear.
+
+### Changed — `ShipState.weapon_kind: u8`
+
+Server-authoritative weapon selection persisted onto the ship state.
+The client echoes its choice each Input frame; `apply_input` clamps
+and writes it onto the ship for the next fire dispatch.
+
+### Wire changes
+
+`ClientMsg::Input` gains two fields:
+- `weapon: u8` — currently-equipped weapon (Phase 4 step 4)
+- `fire: bool` — fire button held this tick (was missing from Phase 3
+  wire; bullets actually trigger now)
+
+`BulletSpawn.weapon: u8` slot was already reserved in Phase 3, so the
+per-bullet wire shape is unchanged. WIRE_VERSION bumped 4 → 5.
+
+### JS client
+
+- `js/mp/mp-input.js`: keys `1` / `2` / `3` / `4` switch weapon; exported
+  `WEAPON_*` constants.
+- `js/mp/wire-codec.js`: `encodeInput` accepts and writes the new
+  `weapon` + `fire` fields. WIRE_VERSION → 5.
+- `js/mp/mp-ws.js`: `sendInput` forwards the new args.
+- `js/mp/mp-engine.js`: includes `input.weapon` + `input.fire` in each
+  Input upload (the Phase 3 oversight — `fire` was tracked locally but
+  never sent — is now fixed; players' shots actually reach the server).
+- `js/mp/mp-hud.js`: weapon indicator `[1] PULSE` / `[2] NEEDLES` /
+  `[3] SCATTER` / `[4] RAIL` above the HP bar, color-coded per solo's
+  weapon palette.
+
+### WASM client
+
+- `consume_bullet_spawn` looks up per-weapon constants via a new
+  `weapon_constants(u8)` helper and passes them to the extended
+  `BulletState::spawn` so the mirror state matches the server's
+  per-bullet damage + piercing bit-for-bit.
+
+### Build health
+
+- `cargo test --workspace`: **144 mp1 + 38 server/sim integration tests
+  pass**, 0 failures.
+- `cargo check --workspace`: clean
+- `npm run wasm:build:dev`: clean
+- `npm run test:qa --grep QA-13`: 4/4 pass — Phase 3 deterministic
+  two-tab regression intact
+
+### Known follow-ups
+
+- Bullet color in the renderer is still cyan for all weapons; per-weapon
+  bullet hue is a Phase 4 step 4 polish follow-up (would need a
+  `bullet_weapon(idx) -> u8` WASM accessor).
+- LANCE_BEAM (the original "5th base weapon" in the pivot doc) was moved
+  to POWER_WEAPONS in solo 5.79.23; it'll land alongside step 6 (power
+  weapons) instead.
+- The fire-on-the-wire fix means bullets now actually originate from
+  player input — Phase 3 was deceptively quiet about this. Expect more
+  combat action in any future QA-13 follow-up that times bullet hits.
+
 ## [0.5.0] - 2026-05-18
 
 **Phase 4 step 1 — Wave system + drop orbs.** The Phase 3 placeholder

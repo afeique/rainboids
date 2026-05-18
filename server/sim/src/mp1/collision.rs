@@ -26,7 +26,9 @@
 //! pair test at all).
 
 use super::asteroid::{compute_split_children, AsteroidState};
-use super::bullet::{BulletState, BULLET_RADIUS, PULSE_CANNON_DAMAGE};
+use super::bullet::{BulletState, BULLET_RADIUS};
+#[cfg(test)]
+use super::bullet::PULSE_CANNON_DAMAGE;
 use super::damage::{apply_damage, DamageOutcome, ShipState};
 use super::drops::{OrbState, ORB_KIND_HEALTH, ORB_RADIUS};
 use super::enemy::{EnemyState, HUNTER_CONTACT_DAMAGE};
@@ -145,6 +147,10 @@ pub fn run_collisions(
     let start_child_id = child_id_start_next;
 
     // --- bullet × enemy ---
+    // Phase 4 step 4: each bullet carries its own `damage` and
+    // `piercing_left`. Damage is applied per-hit; the bullet deactivates
+    // only when `piercing_left == 0` (otherwise we decrement and keep
+    // going so a RAIL_DRIVER shot can punch through multiple targets).
     for b in bullets.iter_mut() {
         if b.dead() {
             continue;
@@ -160,15 +166,13 @@ pub fn run_collisions(
             if dx * dx + dy * dy > r_sum * r_sum {
                 continue;
             }
-            // Hit. Damage the enemy, mark bullet dead.
-            e.hp -= PULSE_CANNON_DAMAGE;
+            // Hit.
+            e.hp -= b.damage;
             out_events.push(CollisionEvent::BulletHit {
                 bullet_id: b.id,
                 hit_x: bx,
                 hit_y: by,
             });
-            b.active = false;
-            b.life_remaining = 0;
             if e.hp <= 0.0 {
                 e.hp = 0.0;
                 e.active = false;
@@ -180,7 +184,15 @@ pub fn run_collisions(
                     kind: e.kind,
                 });
             }
-            break; // bullet consumed; advance to next bullet
+            // Piercing: decrement; deactivate only when exhausted.
+            if b.piercing_left == 0 {
+                b.active = false;
+                b.life_remaining = 0;
+                break;
+            }
+            b.piercing_left -= 1;
+            // Continue searching for more enemies along the same tick
+            // — RAIL_DRIVER can chain through the whole array.
         }
     }
 
@@ -200,14 +212,12 @@ pub fn run_collisions(
             if dx * dx + dy * dy > r_sum * r_sum {
                 continue;
             }
-            a.hp -= PULSE_CANNON_DAMAGE;
+            a.hp -= b.damage;
             out_events.push(CollisionEvent::BulletHit {
                 bullet_id: b.id,
                 hit_x: bx,
                 hit_y: by,
             });
-            b.active = false;
-            b.life_remaining = 0;
             if a.hp <= 0.0 {
                 a.hp = 0.0;
                 a.active = false;
@@ -225,7 +235,13 @@ pub fn run_collisions(
                 });
                 child_id_start_next += n_children;
             }
-            break;
+            // Piercing: same logic as enemies.
+            if b.piercing_left == 0 {
+                b.active = false;
+                b.life_remaining = 0;
+                break;
+            }
+            b.piercing_left -= 1;
         }
     }
 
@@ -392,6 +408,7 @@ mod tests {
             active: true,
             downed: false,
             revive_meter: 0.0,
+            weapon_kind: 0,
         }
     }
 
@@ -447,6 +464,8 @@ mod tests {
             vy: 0.0,
             spawn_tick: 0,
             life_remaining: PULSE_CANNON_LIFETIME_TICKS,
+            damage: PULSE_CANNON_DAMAGE,
+            piercing_left: 0,
             active: true,
         }
     }

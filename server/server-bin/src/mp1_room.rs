@@ -40,6 +40,7 @@ use rainboids_sim::mp1::{
     trig::{cos64, sin64},
     wave::{self, WaveConfig, WavePhase, WaveSpawnRequest},
     wave_table::{self, KIND_HUNTER as TABLE_KIND_HUNTER},
+    weapon as mp1_weapon,
     wire::{
         AsteroidWire, BulletWire, ClientMsg, EnemyWire, EventPayload, OrbWire, ServerMsg,
         SnapshotShip,
@@ -59,10 +60,6 @@ const SNAPSHOT_DIVISOR: u32 = 3;
 /// StateChecksum broadcast divisor: every Nth tick we send the
 /// safety heartbeat. 60 ticks ≈ 1 Hz.
 const CHECKSUM_DIVISOR: u32 = 60;
-
-/// PULSE_CANNON fire rate. Solo's `PULSE_CANNON.fireRateMs = 400` →
-/// 400 ms = 24 ticks at 60 Hz.
-const PULSE_CANNON_COOLDOWN_TICKS: u32 = 24;
 
 /// Drop probability — chance an enemy kill spawns a gold orb.
 /// Mirrors solo's basic kill-drop rate (no PAYDAY etc. powerups).
@@ -195,6 +192,8 @@ impl Mp1RoomState {
             right,
             aim_x,
             aim_y,
+            weapon,
+            fire,
         } = msg
         {
             if let Some(slot) = self.slots.get_mut(&player_id) {
@@ -204,7 +203,18 @@ impl Mp1RoomState {
                 slot.latest_input.right = right;
                 slot.latest_input.aim_x = aim_x;
                 slot.latest_input.aim_y = aim_y;
+                slot.latest_input.fire = fire;
+                slot.latest_input.weapon = weapon;
                 slot.last_input_tick = client_tick;
+            }
+            // Persist weapon choice onto the ship for the fire dispatch.
+            if let Some(ship) = self
+                .room
+                .ships
+                .iter_mut()
+                .find(|s| s.player_id == player_id)
+            {
+                ship.weapon_kind = weapon;
             }
         }
     }
@@ -404,17 +414,20 @@ impl Mp1RoomState {
     }
 
     /// Detect fire-input → spawn bullet (with cooldown). Spawns
-    /// emit BulletSpawn events for client mirror.
+    /// emit BulletSpawn events for client mirror. Phase 4 step 4:
+    /// dispatches via `mp1::weapon::fire(weapon_kind, ship, rng)` so
+    /// each weapon emits its own spawn pattern (1 needle / 5 pellets /
+    /// 1 piercing rail / 1 pulse).
     fn process_fire_inputs(&mut self) {
         let tick = self.room.tick;
-        // Collect (player_id, spawn_params) pairs without borrowing
-        // self.room.ships during the iteration that we mutate.
-        let mut spawns: Vec<(u32, f64, f64, f64, f64)> = Vec::new();
+        // Collect firing intents — capture both ship state + weapon
+        // selection without holding a mutable ship borrow during the
+        // bullet push pass.
+        let mut intents: Vec<(u32, ShipState, u8)> = Vec::new();
         for slot in self.slots.values_mut() {
             if !slot.latest_input.fire {
                 continue;
             }
-            // Skip if downed or off cooldown.
             let ship = self
                 .room
                 .ships
@@ -424,31 +437,47 @@ impl Mp1RoomState {
                 Some(s) if s.active && !s.downed => s,
                 _ => continue,
             };
-            if tick.wrapping_sub(slot.last_fire_tick) < PULSE_CANNON_COOLDOWN_TICKS {
+            let weapon = ship.weapon_kind;
+            let cooldown = mp1_weapon::cooldown_ticks(weapon);
+            if tick.wrapping_sub(slot.last_fire_tick) < cooldown {
                 continue;
             }
             slot.last_fire_tick = tick;
-            // Origin: ship center. Direction: ship.angle.
-            spawns.push((slot.player_id, ship.x, ship.y, ship.angle, ship.radius));
+            intents.push((slot.player_id, *ship, weapon));
         }
 
-        for (owner_pid, ox, oy, angle, _radius) in spawns {
-            let id = self.room.next_bullet_id;
-            self.room.next_bullet_id = self.room.next_bullet_id.wrapping_add(1);
-            let vx = cos64(angle) * BULLET_SPEED;
-            let vy = sin64(angle) * BULLET_SPEED;
-            let b = BulletState::spawn(id, owner_pid, ox, oy, angle, tick);
-            self.room.bullets.push(b);
-            self.pending_events.push(EventPayload::BulletSpawn {
-                bullet_id: id,
-                owner_player_id: owner_pid,
-                origin_x: ox,
-                origin_y: oy,
-                vx,
-                vy,
-                spawn_tick: tick,
-                weapon: 0, // PULSE_CANNON
-            });
+        for (owner_pid, ship, weapon) in intents {
+            let spawns = mp1_weapon::fire(weapon, &ship, &mut self.room.rng);
+            for s in spawns {
+                let id = self.room.next_bullet_id;
+                self.room.next_bullet_id = self.room.next_bullet_id.wrapping_add(1);
+                let speed = BULLET_SPEED * s.speed_mult;
+                let vx = cos64(s.angle) * speed;
+                let vy = sin64(s.angle) * speed;
+                let b = BulletState::spawn(
+                    id,
+                    owner_pid,
+                    s.origin_x,
+                    s.origin_y,
+                    s.angle,
+                    tick,
+                    s.damage,
+                    s.piercing,
+                    s.speed_mult,
+                    s.lifetime_mult,
+                );
+                self.room.bullets.push(b);
+                self.pending_events.push(EventPayload::BulletSpawn {
+                    bullet_id: id,
+                    owner_player_id: owner_pid,
+                    origin_x: s.origin_x,
+                    origin_y: s.origin_y,
+                    vx,
+                    vy,
+                    spawn_tick: tick,
+                    weapon,
+                });
+            }
         }
     }
 

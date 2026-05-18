@@ -66,6 +66,12 @@ pub struct PlayerInput {
     /// Fire button held this tick. Reserved for Phase 3 weapons; ship
     /// step doesn't read it.
     pub fire: bool,
+
+    /// Phase 4 step 4 — currently-equipped weapon. Client echoes its
+    /// active weapon every input frame; server accepts/clamps and
+    /// persists onto `ShipState.weapon_kind` for the fire dispatch.
+    /// See `mp1::weapon::KIND_*` for the dense u8 enumeration.
+    pub weapon: u8,
 }
 
 impl PlayerInput {
@@ -82,6 +88,7 @@ impl PlayerInput {
             thrust_power: THRUST_PER_TICK,
             thrusters_disabled: false,
             fire: false,
+            weapon: 0, // PULSE_CANNON
         }
     }
 }

@@ -85,6 +85,7 @@ export class Hud {
     draw(ctx, canvas, world, opts) {
         if (!ctx || !canvas || !world) return;
         const gold = (opts && opts.gold) | 0;
+        const weapon = (opts && opts.weapon) | 0;
 
         // mp-renderer leaves ctx with a letterbox transform. The HUD
         // is screen-coord, so reset to identity for the whole draw
@@ -138,6 +139,9 @@ export class Hud {
             const hpBarY = Math.round(ch - HP_BAR_MARGIN_BOTTOM - HP_BAR_H);
             drawHpBar(ctx, hpBarX, hpBarY, hp, maxHp);
 
+            // ---- Weapon indicator (just above HP bar, centered) ----
+            drawWeaponIndicator(ctx, weapon, hpBarX + HP_BAR_W / 2, hpBarY - 8);
+
             // ---- Downed overlay (above HP bar) ----
             if (downed) {
                 const centerX = Math.round(cw / 2);
@@ -148,6 +152,23 @@ export class Hud {
             ctx.restore();
         }
     }
+}
+
+// Weapon indicator — labeled box above HP bar showing equipped weapon.
+// Color matches the solo weapon-data.js per-weapon hue cue.
+const WEAPON_LABELS = ["PULSE", "NEEDLES", "SCATTER", "RAIL"];
+const WEAPON_COLORS = ["#3df1ff", "#b3ff44", "#ff8844", "#ff44ff"];
+function drawWeaponIndicator(ctx, weapon, cx, baselineY) {
+    const idx = (weapon | 0) & 0xff;
+    const label = WEAPON_LABELS[idx] || `W${idx}`;
+    const color = WEAPON_COLORS[idx] || "#dde9ff";
+    ctx.save();
+    ctx.font = HUD_FONT_SMALL;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillStyle = color;
+    ctx.fillText(`[${idx + 1}] ${label}`, Math.round(cx), Math.round(baselineY));
+    ctx.restore();
 }
 
 // Wave indicator — small yellow "WAVE: N" centered top.

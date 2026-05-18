@@ -220,15 +220,16 @@ export function connect({
     });
 
     return {
-        sendInput(clientTick, up, down, left, right, aimX, aimY) {
+        sendInput(clientTick, up, down, left, right, aimX, aimY, weapon, fire) {
             if (ws.readyState !== WebSocket.OPEN) return;
-            const bytes = encodeInput(clientTick, up, down, left, right, aimX, aimY);
+            const bytes = encodeInput(clientTick, up, down, left, right, aimX, aimY, weapon | 0, !!fire);
             if (MP_DEBUG) {
                 console.log('[mp/ws ↑]', {
                     kind: 'Input',
                     client_tick: clientTick,
                     up, down, left, right,
                     aim_x: aimX, aim_y: aimY,
+                    weapon: weapon | 0, fire: !!fire,
                 });
             }
             ws.send(bytes);

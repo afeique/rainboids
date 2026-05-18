@@ -38,6 +38,15 @@ pub mod drops;
 pub mod wave;
 pub mod wave_table;
 
+// Phase 4 step 4 — base weapons (Wave 1 parallel + Wave 2a integration).
+pub mod weapon_storm_needles;
+pub mod weapon_scatter_gun;
+pub mod weapon_rail_driver;
+pub mod weapon;
+// Phase 4 step 2 (shield/spare-tank) + enemy-bullet infra are authored
+// in `shield.rs` + `enemy_bullet.rs`; their `pub mod` declarations land
+// when those commits integrate them (0.7.0 + 0.8.0).
+
 pub use codec::{decode_client, decode_server, encode_client, encode_server};
 pub use input::PlayerInput;
 pub use ship::{tick_phase1, update_ship};

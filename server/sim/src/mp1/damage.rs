@@ -176,6 +176,7 @@ mod tests {
             active: true,
             downed: false,
             revive_meter: 0.0,
+            weapon_kind: 0,
         }
     }
 

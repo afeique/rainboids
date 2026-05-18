@@ -90,6 +90,8 @@ mod tests {
             right: true,
             aim_x: 800.0,
             aim_y: 450.0,
+            weapon: 0,
+            fire: false,
         };
         let bytes = encode(&m).unwrap();
         let back: ClientMsg = decode(&bytes).unwrap();

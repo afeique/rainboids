@@ -36,7 +36,7 @@
 
 use rainboids_sim::mp1::{
     asteroid::{self, AsteroidState},
-    bullet::{self, BulletState},
+    bullet::{self, BulletState, PULSE_CANNON_DAMAGE},
     collision,
     damage,
     drops::{self, OrbState},
@@ -45,6 +45,10 @@ use rainboids_sim::mp1::{
     state::{RoomState, ShipState, SHIP_SIZE},
     trig::atan2_64,
     wave::WavePhase,
+    weapon::{
+        KIND_PULSE_CANNON, KIND_RAIL_DRIVER, KIND_SCATTER_GUN, KIND_STORM_NEEDLES,
+    },
+    weapon_rail_driver, weapon_scatter_gun, weapon_storm_needles,
     PlayerInput,
 };
 use wasm_bindgen::prelude::*;
@@ -382,15 +386,13 @@ impl World {
         }
     }
 
-    /// `EventPayload::BulletSpawn`. Reconstructs the bullet via
-    /// `BulletState::spawn` (the same constructor the server uses),
-    /// deriving the spawn angle from `(vy, vx)` via the
-    /// polynomial `atan2_64` so the resulting `vx`/`vy` are
-    /// bit-identical to the server's (which built them from the
-    /// same angle via `cos64`/`sin64`).
-    ///
-    /// `_weapon` is accepted for forward compatibility; Phase 3
-    /// only ships PULSE_CANNON (`weapon = 0`).
+    /// `EventPayload::BulletSpawn`. Reconstructs the bullet via the
+    /// shared `BulletState::spawn` (same constructor the server uses),
+    /// deriving the spawn angle from `(vy, vx)` via the polynomial
+    /// `atan2_64`. Phase 4 step 4 — uses `weapon` to look up the
+    /// per-weapon damage / piercing / lifetime / speed multipliers via
+    /// `mp1::weapon` constants so the client's bullet state matches
+    /// the server's bit-for-bit.
     pub fn consume_bullet_spawn(
         &mut self,
         bullet_id: u32,
@@ -400,10 +402,22 @@ impl World {
         vx: f64,
         vy: f64,
         spawn_tick: u32,
-        _weapon: u8,
+        weapon: u8,
     ) {
         let angle = atan2_64(vy, vx);
-        let b = BulletState::spawn(bullet_id, owner_player_id, origin_x, origin_y, angle, spawn_tick);
+        let (damage, piercing, speed_mult, lifetime_mult) = weapon_constants(weapon);
+        let b = BulletState::spawn(
+            bullet_id,
+            owner_player_id,
+            origin_x,
+            origin_y,
+            angle,
+            spawn_tick,
+            damage,
+            piercing,
+            speed_mult,
+            lifetime_mult,
+        );
         self.room.bullets.push(b);
         if bullet_id >= self.room.next_bullet_id {
             self.room.next_bullet_id = bullet_id.wrapping_add(1);
@@ -932,4 +946,32 @@ fn hash_bullets(bullets: &[BulletState]) -> u64 {
         b.life_remaining.hash(&mut h);
     }
     h.finish()
+}
+
+/// Look up the per-weapon (damage, piercing, speed_mult, lifetime_mult)
+/// from a `weapon: u8` discriminator. Mirrors the per-weapon module
+/// constants exactly; unknown weapons fall back to PULSE_CANNON.
+fn weapon_constants(weapon: u8) -> (f64, u8, f64, f64) {
+    match weapon {
+        KIND_PULSE_CANNON => (PULSE_CANNON_DAMAGE, 0, 1.0, 1.0),
+        KIND_STORM_NEEDLES => (
+            weapon_storm_needles::DAMAGE,
+            weapon_storm_needles::PIERCING,
+            weapon_storm_needles::BULLET_SPEED_MULT,
+            weapon_storm_needles::BULLET_LIFETIME_MULT,
+        ),
+        KIND_SCATTER_GUN => (
+            weapon_scatter_gun::DAMAGE,
+            weapon_scatter_gun::PIERCING,
+            weapon_scatter_gun::BULLET_SPEED_MULT,
+            weapon_scatter_gun::BULLET_LIFETIME_MULT,
+        ),
+        KIND_RAIL_DRIVER => (
+            weapon_rail_driver::DAMAGE,
+            weapon_rail_driver::PIERCING,
+            weapon_rail_driver::BULLET_SPEED_MULT,
+            weapon_rail_driver::BULLET_LIFETIME_MULT,
+        ),
+        _ => (PULSE_CANNON_DAMAGE, 0, 1.0, 1.0),
+    }
 }

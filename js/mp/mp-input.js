@@ -20,6 +20,12 @@ const MOVEMENT_KEYS = new Set([
     "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
 ]);
 
+// Weapon kind discriminator (must match `mp1::weapon::KIND_*` in Rust).
+export const WEAPON_PULSE_CANNON = 0;
+export const WEAPON_STORM_NEEDLES = 1;
+export const WEAPON_SCATTER_GUN = 2;
+export const WEAPON_RAIL_DRIVER = 3;
+
 const state = {
     up: false,
     down: false,
@@ -28,6 +34,9 @@ const state = {
     mouseX: 0,
     mouseY: 0,
     fire: false,
+    // Phase 4 step 4 — currently-equipped weapon. Default PULSE_CANNON;
+    // 1/2/3/4 keybinds cycle through the four base weapons.
+    weapon: WEAPON_PULSE_CANNON,
 };
 
 let installed = false;
@@ -67,6 +76,14 @@ export function init(canvas) {
         if (event.repeat) return;
         if (setDir(event.key, true)) {
             if (MOVEMENT_KEYS.has(event.key)) event.preventDefault();
+            return;
+        }
+        // Weapon-cycle keybinds.
+        switch (event.key) {
+            case "1": state.weapon = WEAPON_PULSE_CANNON; break;
+            case "2": state.weapon = WEAPON_STORM_NEEDLES; break;
+            case "3": state.weapon = WEAPON_SCATTER_GUN; break;
+            case "4": state.weapon = WEAPON_RAIL_DRIVER; break;
         }
     });
 

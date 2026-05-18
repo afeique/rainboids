@@ -604,6 +604,8 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                 !!input.right,
                 aimWorldX,
                 aimWorldY,
+                (input.weapon | 0) & 0xff,
+                !!input.fire,
             );
             clientTick += 1;
             lastInputSentAt = now;
@@ -644,7 +646,7 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
         particles.draw(ctx, scale);
 
         // HUD draws in SCREEN coords (resets the transform internally).
-        hud.draw(ctx, canvas, world, { gold: localGold });
+        hud.draw(ctx, canvas, world, { gold: localGold, weapon: (input.weapon | 0) & 0xff });
 
         // Fatal error overlay (drawn on top of whatever the renderer
         // produced). Kept here in the engine because the renderer is

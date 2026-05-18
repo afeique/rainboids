@@ -103,7 +103,7 @@ const LE = true;
  *       AsteroidWire / BulletWire records)
  *  - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
  *       client can seed its WASM mirror identically to the server. */
-export const WIRE_VERSION = 4;
+export const WIRE_VERSION = 5;
 
 /* ── Reader ─────────────────────────────────────────────────────── */
 
@@ -623,6 +623,8 @@ export function encodeClientMsg(msg) {
                 msg.right,
                 msg.aim_x,
                 msg.aim_y,
+                msg.weapon | 0,
+                !!msg.fire,
             );
         case 'Bye':
             return encodeBye();
@@ -660,8 +662,9 @@ export function encodeHello(name, clientVersion, wireVersion) {
  * @param {number} aimY
  * @returns {ArrayBuffer}
  */
-export function encodeInput(clientTick, up, down, left, right, aimX, aimY) {
-    const w = new Writer(28);
+export function encodeInput(clientTick, up, down, left, right, aimX, aimY, weapon, fire) {
+    // 4 (tag) + 4 (tick) + 4×1 (bools) + 2×8 (f64) + 1 (weapon u8) + 1 (fire bool) = 30
+    const w = new Writer(30);
     w.u32(1); // variant tag: Input
     w.u32(clientTick);
     w.bool(up);
@@ -670,6 +673,8 @@ export function encodeInput(clientTick, up, down, left, right, aimX, aimY) {
     w.bool(right);
     w.f64(aimX);
     w.f64(aimY);
+    w.u8((weapon | 0) & 0xff);
+    w.bool(!!fire);
     return w.finish();
 }
 

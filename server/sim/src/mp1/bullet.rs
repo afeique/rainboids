@@ -32,8 +32,14 @@ pub const PULSE_CANNON_LIFETIME_TICKS: u32 = 240;
 /// `bullet.radius = 3` for PULSE_CANNON.
 pub const BULLET_RADIUS: f64 = 3.0;
 
-/// Bullet state. Pure projectile — no acceleration, no homing,
-/// no piercing in Phase 3.
+/// PULSE_CANNON fire-rate cooldown in sim ticks. Solo's
+/// `PULSE_CANNON.fireRateMs = 400` → 24 ticks at 60 Hz. Mirrored
+/// here so `mp1::weapon::cooldown_ticks` can dispatch without
+/// poking into `mp1_room.rs`.
+pub const PULSE_CANNON_COOLDOWN_TICKS: u32 = 24;
+
+/// Bullet state. Pure projectile — no homing in Phase 4 step 4;
+/// piercing landed in step 4 (RAIL_DRIVER) via `piercing_left`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BulletState {
     /// Server-assigned bullet id; stable across spawn → hit/expiry.
@@ -54,14 +60,29 @@ pub struct BulletState {
     /// dies at 0. Tracked separately from `current_tick - spawn_tick`
     /// so the server can apply different lifetimes per-weapon.
     pub life_remaining: u32,
+    /// Damage applied on hit. Phase 4 step 4 — per-weapon damage
+    /// (PULSE_CANNON=1.2, STORM_NEEDLES=0.4, SCATTER_GUN=0.42,
+    /// RAIL_DRIVER=3.0). Collision reads this instead of a global
+    /// constant.
+    pub damage: f64,
+    /// Hit-passes remaining. 0 = deactivate on first hit (PULSE_CANNON,
+    /// STORM_NEEDLES, SCATTER_GUN). 99 = piercing (RAIL_DRIVER —
+    /// passes through every target in its path until lifetime expires
+    /// or it leaves the field).
+    pub piercing_left: u8,
     /// Whether the bullet is still alive in the sim.
     pub active: bool,
 }
 
 impl BulletState {
     /// Construct a fresh bullet from spawn parameters. Called by
-    /// the server's weapon.try_fire and the WASM client's mirror
+    /// the server's `weapon::try_fire` and the WASM client's mirror
     /// on receipt of a BulletSpawn event.
+    ///
+    /// `speed_mult` and `lifetime_mult` are per-weapon multipliers
+    /// against the PULSE_CANNON baseline (`BULLET_SPEED`,
+    /// `PULSE_CANNON_LIFETIME_TICKS`). For PULSE_CANNON pass `1.0`
+    /// for both.
     pub fn spawn(
         id: u32,
         owner_player_id: u32,
@@ -69,18 +90,57 @@ impl BulletState {
         origin_y: f64,
         angle: f64,
         spawn_tick: u32,
+        damage: f64,
+        piercing: u8,
+        speed_mult: f64,
+        lifetime_mult: f64,
     ) -> Self {
+        let speed = BULLET_SPEED * speed_mult;
+        // Lifetime stays an integer tick count; round half-away-from-
+        // zero to keep cross-runtime parity (the multiplier is always
+        // a clean ratio in practice — 0.85, 1.0, 1.2).
+        let life_remaining =
+            ((PULSE_CANNON_LIFETIME_TICKS as f64) * lifetime_mult + 0.5) as u32;
         Self {
             id,
             owner_player_id,
             origin_x,
             origin_y,
-            vx: super::trig::cos64(angle) * BULLET_SPEED,
-            vy: super::trig::sin64(angle) * BULLET_SPEED,
+            vx: super::trig::cos64(angle) * speed,
+            vy: super::trig::sin64(angle) * speed,
             spawn_tick,
-            life_remaining: PULSE_CANNON_LIFETIME_TICKS,
+            life_remaining,
+            damage,
+            piercing_left: piercing,
             active: true,
         }
+    }
+
+    /// Backward-compatible PULSE_CANNON spawn (Phase 3 surface).
+    /// Equivalent to `spawn(id, owner, x, y, angle, tick,
+    /// PULSE_CANNON_DAMAGE, 0, 1.0, 1.0)`. Kept for the existing
+    /// Phase 3 tests / fixtures that don't care about per-weapon
+    /// tuning.
+    pub fn spawn_pulse(
+        id: u32,
+        owner_player_id: u32,
+        origin_x: f64,
+        origin_y: f64,
+        angle: f64,
+        spawn_tick: u32,
+    ) -> Self {
+        Self::spawn(
+            id,
+            owner_player_id,
+            origin_x,
+            origin_y,
+            angle,
+            spawn_tick,
+            PULSE_CANNON_DAMAGE,
+            0,
+            1.0,
+            1.0,
+        )
     }
 
     /// Pure-arithmetic position projection. Given the bullet's
@@ -136,7 +196,7 @@ mod tests {
     /// realistic-accuracy rationale).
     #[test]
     fn spawn_sets_velocity_from_angle() {
-        let b = BulletState::spawn(1, 7, 0.0, 0.0, 0.0, 0);
+        let b = BulletState::spawn_pulse(1, 7, 0.0, 0.0, 0.0, 0);
         assert!((b.vx - BULLET_SPEED).abs() < 1e-3, "vx = {}", b.vx);
         assert!(b.vy.abs() < 1e-3, "vy = {}", b.vy);
     }
@@ -156,6 +216,8 @@ mod tests {
             vy: 0.0,
             spawn_tick: 10,
             life_remaining: PULSE_CANNON_LIFETIME_TICKS,
+            damage: PULSE_CANNON_DAMAGE,
+            piercing_left: 0,
             active: true,
         };
         let (x, y) = b.position_at(30);
@@ -177,6 +239,8 @@ mod tests {
             vy: 0.0,
             spawn_tick: u32::MAX - 5,
             life_remaining: PULSE_CANNON_LIFETIME_TICKS,
+            damage: PULSE_CANNON_DAMAGE,
+            piercing_left: 0,
             active: true,
         };
         let (x, _) = b.position_at(10);
@@ -198,6 +262,8 @@ mod tests {
             vy: 0.0,
             spawn_tick: 0,
             life_remaining: PULSE_CANNON_LIFETIME_TICKS,
+            damage: PULSE_CANNON_DAMAGE,
+            piercing_left: 0,
             active: true,
         };
         for tick in 1..PULSE_CANNON_LIFETIME_TICKS {
@@ -221,6 +287,8 @@ mod tests {
             vy: 0.0,
             spawn_tick: 0,
             life_remaining: PULSE_CANNON_LIFETIME_TICKS,
+            damage: PULSE_CANNON_DAMAGE,
+            piercing_left: 0,
             active: true,
         };
         update_bullet(&mut b, 1, 1920.0, 1080.0);
@@ -231,8 +299,8 @@ mod tests {
     /// must trace identical positions tick-for-tick.
     #[test]
     fn same_inputs_same_state_after_n_ticks() {
-        let a = BulletState::spawn(1, 0, 200.0, 300.0, 0.7853981633974483, 0);
-        let b = BulletState::spawn(2, 0, 200.0, 300.0, 0.7853981633974483, 0);
+        let a = BulletState::spawn_pulse(1, 0, 200.0, 300.0, 0.7853981633974483, 0);
+        let b = BulletState::spawn_pulse(2, 0, 200.0, 300.0, 0.7853981633974483, 0);
         for t in 0..100u32 {
             let pa = a.position_at(t);
             let pb = b.position_at(t);
