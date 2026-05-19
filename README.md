@@ -330,7 +330,7 @@ Boss-tier TITANs at waves 5/10/15/20/25/30 receive an HP/speed multiplier on top
 git clone https://github.com/user/rainboids.git
 cd rainboids
 npm install
-npm run dev:solo   # Static server on http://localhost:8090 (no MP)
+npm run dev:sp     # Static server on http://localhost:8090 (no MP)
 ```
 
 ### Local Development (with multiplayer)
@@ -345,7 +345,7 @@ cargo install wasm-pack            # WASM build tool
 # Then either:
 npm run dev                        # http-server + cargo + wasm-pack --watch (all three concurrent)
 # or one-shot:
-npm run wasm:build && npm run dev:solo
+npm run wasm:build && npm run dev:sp
 ```
 
 The first `cargo run -p rainboids-server` and `wasm-pack build` are slow (cold compile). Subsequent runs are fast. Open `http://localhost:8090/mp` to reach the multiplayer page.
@@ -393,11 +393,11 @@ All commands are run with `npm run <script>` from the project root after `npm in
 ### Dev / build
 ```bash
 npm run dev                # All three: http-server + Rust MP server + wasm-pack --watch
-npm run dev:solo           # Static server only (no MP) — fastest for solo iteration
-npm run dev:server         # Rust MP server only (cargo run -p rainboids-server)
+npm run dev:sp             # Static server only (no MP) — fastest for solo iteration
+npm run dev:mp             # Rust MP server only (cargo run -p rainboids-server)
 npm run dev:wasm           # One-shot wasm-pack dev build → js/mp/wasm/
 npm run wasm:build         # wasm-pack release build (smaller binary)
-npm start                  # Alias for `dev:solo`
+npm start                  # Alias for `dev:sp`
 ```
 
 ### Multiplayer (`/mp`)

@@ -97,6 +97,34 @@ export function createDebris(ast) {
         this.lineDebrisPool.get(ast.x, ast.y, p1, p2, baseColor);
     });
 
+    // 7b. Tumbling 3D wireframe-triangle shards — radial burst that
+    //     flies across the map, spinning on all three axes, fading
+    //     over ~2 seconds. Color palette derived from the asteroid's
+    //     own hue (mixed with bright/dim/white highlights) so the
+    //     burst reads as the rock itself shattering rather than a
+    //     generic effect.
+    if (this.asteroidShardPool) {
+        // Scale count with asteroid size — 10 for small rocks, up to
+        // 22 for the largest. The biggest rocks produce the biggest
+        // bursts; the smallest don't waste a flood of shards.
+        const shardCount = Math.floor(10 + 12 * sizeScale);
+        for (let i = 0; i < shardCount; i++) {
+            // Evenly-spaced angles with jitter so the burst reads as
+            // an organic shatter, not a fixed pinwheel.
+            const angle = (i / shardCount) * Math.PI * 2 + random(-0.35, 0.35);
+            const speed = random(3.5, 9.0) * sizeScale;
+            const size = random(4.0, 9.5);
+            // Most shards take the asteroid's color (base/bright/dim
+            // cycle), every 5th shard is white for the "spark" pop.
+            const color = (i % 5 === 0) ? '#ffffff'
+                        : (i % 3 === 0) ? brightColor
+                        : (i % 3 === 1) ? baseColor
+                        : dimColor;
+            const shard = this.asteroidShardPool.get();
+            if (shard) shard.reset(ast.x, ast.y, angle, speed, size, color);
+        }
+    }
+
     // 8. Delayed secondary burst — cascade
     setTimeout(() => {
         for (let i = 0; i < 6; i++) {

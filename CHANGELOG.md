@@ -11,6 +11,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.13.0] - 2026-05-18
+
+### Added — 3D-spinning wireframe-triangle shards on asteroid destruction
+
+When an asteroid dies, 10–22 small equilateral wireframe triangles
+burst radially outward from the impact point, rotate on all three
+axes (X / Y / Z), drift across the field with mild drag, and fade
+over ~2 seconds. Matches the wireframe-asteroid visual language —
+stroke only, no fill — and uses the dying rock's hue palette
+(base / bright / dim cycle plus every-5th white "spark") so the
+burst reads as the rock itself shattering rather than a generic
+effect.
+
+The 3D rotation uses a tiny on-CPU yaw → pitch → roll matrix per
+shard per frame, then a perspective divide to project the 3 triangle
+vertices to 2D. Drawn as 3 stroked line segments via Canvas2D — cheap
+because each shard is only 3 vertices. Shard count scales with rock
+size (~10 for small rocks, ~22 for the largest), speed jittered
+3.5–9.0 px/frame, lifetime 120 frames, drag 0.985/frame.
+
+New file: `js/modules/world/asteroid-shard.js` (AsteroidShard class,
+PoolManager-compatible). Wired into `createDebris()` as step 7b right
+after the existing line-debris loop, and into the engine update/draw/
+reset/cleanup cycle alongside `lineDebrisPool` (96-slot pool).
+
+---
+
+## [6.12.5] - 2026-05-18
+
+### Fixed — Stats menu exits to wherever it was opened from
+
+Opening the stats overlay via backtick (or HUD STATS button) from active
+gameplay → closing now resumes the game directly instead of dropping the
+player into the pause menu. Opening stats from the pause menu still
+correctly restores the pause menu on close.
+
+Root cause: `StatsOverlay.open()` captured `_pauseDomWasFlex` AFTER
+calling `togglePause()` — but `togglePause()` itself shows the pause
+overlay when transitioning to PAUSED, so the read always returned true,
+erasing the source signal. Fix: capture pause-overlay visibility BEFORE
+the toggle, store as `_cameFromPauseMenu`, and route the close behavior
+off that captured value. Touches `js/modules/ui/stats-overlay.js` only.
+
+(Backfilled changelog entry — code commit was `63c5846`.)
+
+## [6.12.4] - 2026-05-18
+
+### Changed — Player starts with 3 spare tanks (was 1)
+
+Initial `healthTanks` and `displayTanks` bumped from 1 → 3 so new runs
+have more survivability headroom out of the gate. Manual port of a
+change from the divergent feature branch (original commit `157f0d4`);
+the cherry-pick conflicted because the file had drifted via skipped
+graphics commits, so the meaningful change (`1 → 3` in two spots) was
+ported by hand.
+
+(Backfilled changelog entry — code commit was `bac5d3f`.)
+
 ## [6.11.3] - 2026-05-18
 
 ### Changed — Bundle Google Fonts locally

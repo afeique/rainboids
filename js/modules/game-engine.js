@@ -30,6 +30,7 @@ import { GoldShape } from './world/gold-shape.js';
 import { StatPickup } from './world/stat-pickup.js';
 import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
+import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { DEFENSE_SKILLS, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
 import { GameStateMachine } from './core/game-state.js';
@@ -893,6 +894,10 @@ export class GameEngine {
         this.bulletPool = new PoolManager(Bullet, 10);     // Reduced from 20  
         this.particlePool = new PoolManager(Particle, 50); // Cap is MAX_PARTICLES=50
         this.lineDebrisPool = new PoolManager(LineDebris, 100); // Sized for 5.64.5 fragmented ship-shred — 2x pieces per enemy + multi-death overlap
+        // Up to 22 shards per asteroid burst × ~3 simultaneous bursts on a
+        // big explosion frame ≈ 66 active. 96 leaves headroom without
+        // bloating the pool.
+        this.asteroidShardPool = new PoolManager(AsteroidShard, 96);
         this.asteroidPool = new PoolManager(Asteroid, 5);  // Reduced from 20
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
         this.enemyBulletPool = new PoolManager(EnemyBullet, 20); // Reduced from 50
@@ -1013,6 +1018,7 @@ export class GameEngine {
         this.bulletPool.activeObjects = [];
         this.particlePool.activeObjects = [];
         this.lineDebrisPool.activeObjects = [];
+        this.asteroidShardPool.activeObjects = [];
         this.asteroidPool.activeObjects = [];
         this.enemyPool.activeObjects = [];
         // 5.115.0 — drop any active formations on reset so stale
@@ -2553,6 +2559,7 @@ export class GameEngine {
         if (radialOpen) {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
+            this.asteroidShardPool.updateActive();
             return;
         }
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
@@ -2672,6 +2679,7 @@ export class GameEngine {
             this.bulletPool.cleanupInactive();
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
+            this.asteroidShardPool.updateActive();
             this.powerupPool.activeObjects.forEach(p => p.update(this.player, tractorEngaged, this.particlePool));
             // Inject gameEngine ref for asteroids (needed for targeting highlight in draw)
             for (const a of this.asteroidPool.activeObjects) a.gameEngine = this;
@@ -2785,6 +2793,7 @@ export class GameEngine {
             if (Math.floor(this.game.survivalTime / 1000) % GAME_CONFIG.PARTICLE_CLEANUP_INTERVAL === 0) {
                 this.particlePool.cleanupInactive();
                 this.lineDebrisPool.cleanupInactive();
+                this.asteroidShardPool.cleanupInactive();
                 this.powerupPool.cleanupInactive();
                 this.bulletPool.cleanupInactive();
                 this.enemyBulletPool.cleanupInactive();
@@ -2797,6 +2806,7 @@ export class GameEngine {
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
+            this.asteroidShardPool.updateActive();
             // Stars twinkle but don't drift when paused — player can't move in these states
             // 5.99.3 — Mobile keeps the synthetic drift running through
             // PAUSED / GAME_OVER so the background never freezes (the
@@ -2826,6 +2836,7 @@ export class GameEngine {
             // Keep existing particles moving but don't create new ones
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
+            this.asteroidShardPool.updateActive();
         } else if (this.game.state === GAME_STATES.TITLE_SCREEN) {
             // Sandstorm-grade chaotic drift — multiple sine waves at
             // distinct frequencies sum into a fast, direction-shifting
@@ -3029,6 +3040,7 @@ export class GameEngine {
             // appear at the center of the menu.
             if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+                this.asteroidShardPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 // Two-layer particle render — every bright/glowing type
                 // (embers, flashes, sparkles, classic explosion fragments,
                 // shrapnel streaks, expanding rings) draws on the WebGL
@@ -3262,6 +3274,7 @@ export class GameEngine {
             // while gameplay entities are frozen. This contrast sells "impact" not "lag".
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
+            this.asteroidShardPool.updateActive();
 
             // Player keeps moving during offensive hitstop (movement is survival)
             if (this.player && this.player.active &&
