@@ -139,7 +139,11 @@ in vec2 v_quadUV;     // 5.74.13 — local 0..1 UV across the whole quad,
 in float v_noScan;    // 5.79.33 — 1 = skip CRT scanlines (orbs).
 in float v_sharp;     // 5.79.33 — 1 = skip radial halo (gold coins).
 uniform sampler2D u_atlas;
-uniform float u_time;       // seconds — scrolls the scanline pattern
+// highp to match the vertex-shader declaration (vertex default is
+// highp; fragment default is mediump under the precision-directive
+// above). Same-named uniform across stages must agree on precision
+// in GLSL ES 3.00 or the program link fails.
+uniform highp float u_time; // seconds — scrolls the scanline pattern
                             // vertically each frame for a slow CRT roll.
 out vec4 fragColor;
 
@@ -186,7 +190,7 @@ void main() {
     // user asked for; we still smooth the edge over a single pixel
     // with smoothstep so it doesn't shimmer at sub-pixel motion.
     //
-    // Vertical scroll: add `u_time * SCAN_SPEED` to the phase so the
+    // Vertical scroll: add (u_time * SCAN_SPEED) to the phase so the
     // dark bands slowly roll DOWN the screen, mimicking a CRT's
     // electron-beam retrace cycle. 25 px/sec is slow enough to feel
     // like a CRT artifact rather than a moving pattern.
