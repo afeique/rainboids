@@ -92,6 +92,16 @@ export class EnemyBullet {
         // Burst of particles on natural expiry (used by Stalker laser segments)
         this.deathBurst = false;
 
+        // Firing enemy reference — set by createEnemyBullet (firing.js)
+        // so the bullet-vs-enemy collision loop can skip the shooter
+        // (no self-damage from your own shot). Cleared here on every
+        // pool reuse so a recycled bullet from a different enemy
+        // doesn't inherit a stale reference. For bullets that don't
+        // have a single clear shooter (lightning damage proxies,
+        // sweep-hit damage cells), this stays null and the collision
+        // loop falls through to its normal hit behavior.
+        this.shooter = null;
+
         // Sine-wave oscillation (used by Sentinel sine-needle)
         this.sinePhase = 0;
         this.sineFreq  = 0;

@@ -992,14 +992,48 @@ export function createEnemyBullet(gameEngine, angle, speed, color, explosive = f
 
     const bullet = gameEngine.enemyBulletPool.get();
     if (bullet) {
+        const muzzleX = this.x + Math.cos(angle) * this.radius;
+        const muzzleY = this.y + Math.sin(angle) * this.radius;
         bullet.reset(
-            this.x + Math.cos(angle) * this.radius,
-            this.y + Math.sin(angle) * this.radius,
+            muzzleX,
+            muzzleY,
             Math.cos(angle) * scaledSpeed,
             Math.sin(angle) * scaledSpeed,
             color,
             explosive
         );
+
+        // Tag with shooter so the bullet-vs-enemy collision can skip
+        // the firing enemy (no self-damage from your own shot).
+        bullet.shooter = this;
+
+        // Muzzle flash — short-lived bright spray AT the muzzle point,
+        // velocity biased SIDEWAYS + slightly back from the firing
+        // direction so it reads as recoil exhaust around the emerging
+        // bullet rather than another particle traveling forward. Only
+        // spawns 3–5 particles to stay cheap when machine-gun enemies
+        // fire rapidly. Skipped if the enemy is offscreen (the player
+        // can't see it anyway, no need to spawn).
+        if (gameEngine.particlePool && gameEngine.isEntityOnScreen
+            && gameEngine.isEntityOnScreen(this)) {
+            const flashCount = 3 + Math.floor(Math.random() * 3);
+            const px = -Math.sin(angle), py = Math.cos(angle); // perpendicular
+            for (let i = 0; i < flashCount; i++) {
+                const p = gameEngine.particlePool.get(muzzleX, muzzleY, 'explosionEmber',
+                    i === 0 ? '#ffffff' : (i & 1 ? '#ffd66e' : color));
+                if (p) {
+                    const side = (Math.random() - 0.5) * 2;        // -1..1
+                    const back = -Math.random() * 0.6;              // -0.6..0
+                    const spd = 1.2 + Math.random() * 1.6;
+                    // Velocity = sideways spread + slight backwards
+                    // (relative to bullet's travel direction).
+                    p.vel.x = (px * side + Math.cos(angle) * back) * spd;
+                    p.vel.y = (py * side + Math.sin(angle) * back) * spd;
+                    p.radius = 1.4 + Math.random() * 1.6;
+                    p.life = 0.4 + Math.random() * 0.25; // short
+                }
+            }
+        }
 
         // Set level-scaled damage (scaled back down)
         const baseDamage = explosive ? 3 : 2;

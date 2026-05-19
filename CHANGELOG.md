@@ -11,6 +11,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.15.0] - 2026-05-18
+
+### Added — enemy bullets collide with asteroids and other enemies
+
+Enemy bullets no longer pass through obstacles. Two new collision
+loops in `collision-system.js`:
+
+- **Bullet vs asteroid** — re-enables the previously DISABLED
+  collision. Asteroids now physically block enemy fire so the
+  player can use them as cover. The bullet poofs out (small
+  sparkle puff via `createDisappearEffect`) on impact; the
+  asteroid is unharmed (enemy fire doesn't damage rocks).
+- **Bullet vs enemy** — friendly fire. Stray shots that miss the
+  player and connect with another enemy will damage that enemy.
+  The firing enemy is skipped via a new `bullet.shooter`
+  reference set in `createEnemyBullet`. Warping enemies and
+  enemies mid-death-flash are skipped. Mines (proximity bombs
+  with their own logic) are excluded from both loops.
+
+### Added — muzzle-flash particles on enemy bullet spawn
+
+Each bullet that comes out of `createEnemyBullet` now spawns 3–5
+short-lived bright spark particles (`explosionEmber`) at the
+muzzle point. Velocity is biased SIDEWAYS + slightly backwards
+relative to the bullet's travel direction, so the burst reads as
+recoil exhaust around the emerging bullet rather than just more
+particles flying forward. White-yellow-bullet-color palette.
+Skipped when the firing enemy is off-screen.
+
+### Verified (no code change needed)
+
+- All collision loops already skip warping entities (12+ sites
+  in `collision-system.js` + `_separateEnemies`). Combined with
+  the 6.14.2 spawn-distance fix, warping enemies are fully
+  intangible to player, asteroids, and other enemies.
+- Enemy AI already runs `avoidAsteroids` +
+  `maintainDistanceFromEnemies` each tick; enemy-asteroid
+  collision (`handleEnemyAsteroidCollision`) bounces both
+  bodies without damage.
+- Enemies aim directly at the player (`atan2(target - source)`)
+  with level-scaled jitter that decays to zero by level 5.
+  Line-of-sight check in `decideEnemyShooting` already skips
+  shots blocked by asteroids.
+- Enemy bullet expiry sparkle (`createDisappearEffect`) was
+  already in place — 6–10 sparkle particles on natural range
+  expiry. Stalker laser segments use the denser `deathBurst`
+  variant.
+
+---
+
 ## [6.14.2] - 2026-05-18
 
 ### Fixed — enemies and asteroids no longer warp in on top of the player

@@ -912,9 +912,54 @@ export function handleCollisions() {
         }
     });
 
-    // Enemy bullet-asteroid collisions - DISABLED
-    // Enemy shots now travel through asteroids without collision
-    // This allows for more dynamic combat where enemy fire isn't blocked by asteroids
+    // Enemy bullet-asteroid collisions — re-enabled. Asteroids now
+    // physically block enemy fire so the player can use them as cover.
+    // The bullet poofs out (small sparkle puff in bullet color via
+    // createDisappearEffect) on impact; the asteroid is unharmed
+    // (enemy fire doesn't damage rocks — only the player's shots do).
+    // Mines (shape='mine') and persistent damage proxies are skipped
+    // here because they have their own behavior — mines are
+    // proximity-triggered bombs, not regular projectiles.
+    this.enemyBulletPool.activeObjects.forEach(bullet => {
+        if (!bullet.active) return;
+        if (bullet.shape === 'mine') return;
+        for (let i = 0; i < this.asteroidPool.activeObjects.length; i++) {
+            const ast = this.asteroidPool.activeObjects[i];
+            if (!ast.active || ast.warping || ast._deathFlash > 0) continue;
+            if (bullet.checkCollision(ast)) {
+                if (bullet.createDisappearEffect) bullet.createDisappearEffect();
+                bullet.active = false;
+                if (bullet.onOffScreen) bullet.onOffScreen();
+                break; // bullet is gone, stop checking asteroids
+            }
+        }
+    });
+
+    // Enemy bullet-enemy collisions — friendly fire. Stray shots that
+    // miss the player and connect with another enemy will damage that
+    // enemy. The firing enemy is skipped via the `bullet.shooter`
+    // reference set in createEnemyBullet. Warping enemies and the
+    // firing enemy's own death state are skipped. Mines and untagged
+    // damage-proxy bullets fall through to standard behavior.
+    this.enemyBulletPool.activeObjects.forEach(bullet => {
+        if (!bullet.active) return;
+        if (bullet.shape === 'mine') return;
+        for (let i = 0; i < this.enemyPool.activeObjects.length; i++) {
+            const enemy = this.enemyPool.activeObjects[i];
+            if (!enemy.active || enemy.warping || enemy._deathFlash > 0) continue;
+            if (enemy === bullet.shooter) continue;
+            if (bullet.checkCollision(enemy)) {
+                // Damage the enemy. takeDamage handles death + drops.
+                if (typeof enemy.takeDamage === 'function') {
+                    enemy.takeDamage(bullet.damage || 2, this);
+                }
+                if (bullet.createDisappearEffect) bullet.createDisappearEffect();
+                bullet.active = false;
+                if (bullet.onOffScreen) bullet.onOffScreen();
+                break; // bullet is gone, stop checking enemies
+            }
+        }
+    });
 
     // Enemy-asteroid collisions
     this.enemyPool.activeObjects.forEach(enemy => {
