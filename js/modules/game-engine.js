@@ -994,7 +994,6 @@ export class GameEngine {
         this.healthTanks = 3;
         if (this.player) this.player._tankProgress = 0;
         this.displayShields = 40;
-        this.displayTanks = 3;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
         
