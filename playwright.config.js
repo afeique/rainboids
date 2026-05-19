@@ -176,7 +176,7 @@ export default defineConfig({
     // they don't depend on :8443.
     webServer: [
         {
-            command: 'npm run dev:solo',
+            command: 'npm run dev:sp',
             port: 8090,
             reuseExistingServer: true,
             timeout: 30_000,
