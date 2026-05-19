@@ -2493,26 +2493,32 @@ export class GameEngine {
     damageEnemy(enemy, damage) { return col.damageEnemy.call(this, enemy, damage); }
     applyDamageToEnemy(enemy, damage, opts) { return col.applyDamageToEnemy.call(this, enemy, damage, opts); }
     destroyAsteroid(ast) { return col.destroyAsteroid.call(this, ast); }
-    // Phase 5 (2026-05-19) — Mine defensive plasma shield zone.
-    //   If the player is inside any armed enemy mine's shield zone,
-    //   refund 40% of the damage they would have taken. Done as a
+    // Mine defensive plasma shield zone — 6.23.0 (2026-05-19), refactored
+    //   from Phase 5. Shield now comes from PLAYER mines that own the
+    //   MINE_SHIELD_RADIUS upgrade (set on the mine at lay-time via
+    //   skills.js). If the player is standing inside any of their own
+    //   armed mine's shield zone, refund 40% of damage taken. Done as a
     //   thin wrapper here (rather than in collision-system.js) so the
     //   underlying collision pipeline stays untouched — all the FX,
     //   damage numbers, thorns, kill-streak break, and death checks
-    //   run on the pre-mitigation damage; we just heal back the 40%
+    //   run on the pre-mitigation damage; we heal back the 40%
     //   afterward. Net HP delta matches a 0.6 multiplier.
-    getMineShieldMultiplier() { return combat.getMineShieldMultiplier(this.player, this.enemyBulletPool); }
-    isPlayerInMineShield() { return combat.isPlayerInMineShield(this.player, this.enemyBulletPool); }
+    //   The `mineShieldFlash` particle fires on every damage event where
+    //   the refund applied, so the shield reads as a Star-Wars-style
+    //   edge flash instead of a persistent aura.
+    getMineShieldMultiplier() { return combat.getMineShieldMultiplier(this.player); }
+    isPlayerInMineShield() { return combat.isPlayerInMineShield(this.player); }
     _applyMineShieldRefund(player, hpBefore) {
-        const mult = combat.getMineShieldMultiplier(player, this.enemyBulletPool);
-        if (mult >= 1.0) return;
+        const shieldMine = combat.getActivePlayerMineShield(player);
+        if (!shieldMine) return;
         // Only refund if the player actually lost HP and is still alive
         // (don't resurrect — death already triggered tank consumption /
         // guardian / handlePlayerDeath inside the collision handler).
         if (player.health <= 0) return;
         const dmgTaken = hpBefore - player.health;
         if (dmgTaken <= 0) return;
-        const refund = Math.round(dmgTaken * (1 - mult)); // mult=0.6 → refund 40%
+        const mult = 0.6;
+        const refund = Math.round(dmgTaken * (1 - mult)); // refund 40%
         if (refund <= 0) return;
         const cap = (typeof player.getCurrentMaxHp === 'function')
             ? player.getCurrentMaxHp()
@@ -2521,6 +2527,18 @@ export class GameEngine {
         if (this.game && this.game.stats) {
             this.game.stats.totalDamageTaken = Math.max(
                 0, (this.game.stats.totalDamageTaken || 0) - refund
+            );
+        }
+        // Star-Wars / Star-Trek-style edge flash on hit. Drawn AT the
+        //   mine center using its shield radius; the particle renders a
+        //   bright ring right at the shield perimeter so the player sees
+        //   exactly which mine soaked the shot.
+        if (this.particlePool && this.particlePool.get) {
+            this.particlePool.get(
+                shieldMine.x, shieldMine.y,
+                'mineShieldFlash',
+                shieldMine.shieldRadius || 120,
+                '#5cc8ff',
             );
         }
     }
@@ -2596,20 +2614,17 @@ export class GameEngine {
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged, this.gameField);
 
-            // Phase 5 (2026-05-19) — Mine shield crossing detection.
-            //   Track whether the player is currently inside an armed
-            //   enemy mine's plasma shield zone. On the false→true
-            //   transition, fire a single bright cyan sparkle at the
-            //   player's position to acknowledge the crossing. The
-            //   `_inMineShield` flag lives on the player; reads are
-            //   cheap (one pass over enemyBulletPool.activeObjects).
+            // 6.23.0 (2026-05-19) — Mine shield zone tracking.
+            //   Originally (Phase 5) we fired a one-shot crossing sparkle
+            //   when the player entered an ENEMY-mine shield. The
+            //   shield now belongs to PLAYER mines and renders ON HIT
+            //   only (see `_applyMineShieldRefund`, which spawns the
+            //   `mineShieldFlash` particle each time damage is mitigated).
+            //   The boolean is still tracked here so other systems (e.g.
+            //   the HUD / status overlays) can query `player._inMineShield`
+            //   if they want a passive indicator.
             {
-                const insideShield = combat.isPlayerInMineShield(this.player, this.enemyBulletPool);
-                if (insideShield && !this.player._inMineShield) {
-                    if (this.particlePool && this.particlePool.get) {
-                        this.particlePool.get(this.player.x, this.player.y, 'mineShieldCrossing', '#5cc8ff');
-                    }
-                }
+                const insideShield = combat.isPlayerInMineShield(this.player);
                 this.player._inMineShield = insideShield;
             }
 

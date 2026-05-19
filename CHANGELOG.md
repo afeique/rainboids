@@ -11,6 +11,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.23.0] - 2026-05-19
+
+### Changed — seeker mines are now moving turrets by default
+
+Every armed player mine (laid by `MINE_LAYER`) now actively seeks the
+nearest enemy/asteroid AND fires a non-homing pulse bullet on a fixed
+800 ms cadence. No upgrade needed — mines used to just creep toward a
+target silently; now they're moving turrets.
+
+Bullets travel in straight lines (intentionally non-homing — the homing
+flavor is reserved for missiles). Each bullet deals `mineDamage * 0.5`.
+Mine-spawned bullets/missiles tag `shooter = mine` so they don't damage
+the player.
+
+### Removed — Phase 5 ENEMY-mine shield mechanic
+
+The persistent plasma shield aura on ENEMY mines (added in Phase 5 / 6.20.1)
+has been removed. `shieldRadius`, `shieldArmingDelay`, and the armed-flip
+shield gating in `enemy-bullet.js` are gone, along with the plasma aura
+render block. The shield mechanic moved to PLAYER mines (see below).
+
+### Added — Player-mine defensive shield (MINE_SHIELD_RADIUS upgrade)
+
+A new POWER_UPGRADE for `MINE_LAYER`:
+
+- **`MINE_SHIELD_RADIUS`** — Shield Radius — `+50 px shield radius per stack
+  (enables shield)`. Cost 1700g, max 3 stacks, icon `shield`.
+
+When the player owns at least one stack, each armed player mine emits a
+defensive shield of radius `120 + 50 × stacks` px. Player inside ANY armed
+shielded mine's zone takes 40% reduced damage (multiplier 0.6). No
+stacking across overlapping zones (still 0.6 — being inside 3 mine zones
+gives the same protection as 1).
+
+### Added — Star Wars / Trek-style edge-flash shield FX
+
+The persistent plasma aura is gone. Shield is INVISIBLE until something
+hits it — at which point a bright `mineShieldFlash` particle pulses at
+the shield's perimeter. New particle type:
+
+- Three-pass additive ring stroke (outer glow + mid ring + inner core)
+- Cubic-out alpha fade
+- Thinning line width over the ~0.25 s life
+- Reads as the deflector-shield flash from Star Wars / Star Trek
+
+A very faint perimeter outline (alpha 0.10) is drawn on armed shielded
+mines so the player can see the zone exists at all — tune in playtest.
+
+### Added — MINE_MISSILES upgrade (homing missiles on top of bullets)
+
+- **`MINE_MISSILES`** — Seeker Missiles — `Armed mines also fire a homing
+  missile every 2.5s`. Cost 2300g, max 1 stack, icon `rocket`.
+
+ADDS a homing missile heartbeat to the baseline bullet fire. Each missile
+rides the existing `activeMissiles` pipeline (same homing strength,
+collision, VFX as `MISSILE_SALVO` missiles) at half damage. The
+collision-system honors a per-missile `damage` override (2-line surgical
+edit) so mine-launched missiles deal `mineDamage * 0.5` instead of the
+full salvo damage.
+
+### Removed — proposed MINE_TURRET upgrade
+
+A separate turret-mode upgrade was prototyped in early development but
+dropped before ship: the bullet-firing behavior is now the default for
+all armed mines, so MINE_TURRET would have been redundant.
+
+### Tests
+
+- `tests/unit/mine-shield.test.js` rewritten for the new player-mine
+  semantics (21 tests, all passing). Verifies multiplier returns 0.6
+  only when inside an armed player mine's zone AND `MINE_SHIELD_RADIUS`
+  > 0; 1.0 otherwise; no stacking across overlapping zones; radius
+  scales correctly with stacks; flash particle fires on damage
+  absorption.
+- Full suite: 329 / 329 passing.
+
+### Tradeoffs / known issues
+
+- Per-missile damage override required a 2-line surgical edit to
+  `collision-system.js`. The path is forward-compatible with future
+  per-missile tweaks.
+- Mine missiles can hit asteroids (intentional — asteroids are valid
+  targets just like for player-fired missiles).
+- The shield perimeter outline at alpha 0.10 is intentionally barely
+  visible. Tune in playtest if it's too faint to communicate the zone.
+
+---
+
 ## [6.22.1] - 2026-05-19
 
 ### Changed — seeker mines now home at infinite range

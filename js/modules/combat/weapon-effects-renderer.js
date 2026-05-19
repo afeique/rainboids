@@ -291,6 +291,24 @@ export function drawWeaponEffects() {
                 ctx.arc(0, 0, pullR, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.restore();
+
+                // 6.23.0 (2026-05-19) — Plasma shield perimeter outline.
+                //   Only rendered when the mine actually has a shield
+                //   (player owns the MINE_SHIELD_RADIUS upgrade).
+                //   Very faint single-pixel stroke so the zone is
+                //   readable without competing with the trigger / pull
+                //   rings. The Star-Wars-style flash on hit (drawn by
+                //   the `mineShieldFlash` particle) is the primary
+                //   shield visual; this outline just hints at the zone.
+                if (mine.shieldRadius && mine.shieldRadius > 0) {
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(92, 200, 255, 0.10)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, mine.shieldRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
             }
 
             ctx.restore();

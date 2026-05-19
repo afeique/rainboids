@@ -2,7 +2,7 @@
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
 import { GAME_CONFIG } from '../core/constants.js';
-import { DEFENSE_SKILLS } from '../combat/weapon-data.js';
+import { DEFENSE_SKILLS, POWER_WEAPONS } from '../combat/weapon-data.js';
 
 // ── Active skill updates ──────────────────────────────────────────────────
 
@@ -167,6 +167,34 @@ export function updateActiveSkills(dt) {
     const MINE_SIGHT = Infinity;
     const enemiesForMines = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
     const asteroidsForMines = (this.gameEngine && this.gameEngine.asteroidPool && this.gameEngine.asteroidPool.activeObjects) || [];
+
+    // 6.23.0 (2026-05-19) — Mine upgrade tier reads. Hoisted out of the
+    //   per-mine loop because powerup stacks are player-global; sampling
+    //   them once per frame keeps the cost constant regardless of how
+    //   many mines are in play. The values are written onto each armed
+    //   mine below so collision-system / combat-manager can read them
+    //   without re-querying the player object.
+    const mineShieldStacks  = this.getPowerupStacks('MINE_SHIELD_RADIUS') || 0;
+    const mineMissilesOwned = this.getPowerupStacks('MINE_MISSILES') > 0;
+    // 6.23.0 — Mines fire pulse bullets BY DEFAULT (no upgrade needed)
+    //   on a fixed 800 ms cadence. MINE_MISSILES adds a homing missile
+    //   every 2.5s on top of that. The old MINE_TURRET upgrade is gone —
+    //   its behavior (alternating bullets/missiles) was folded into
+    //   "default + MISSILES" so the upgrade tree is simpler.
+    // Computed shield radius (0 when player has no stacks of the upgrade).
+    const mineShieldRadius  = mineShieldStacks > 0 ? (120 + 50 * mineShieldStacks) : 0;
+    // Live MINE_LAYER mine damage (config — pull once per frame).
+    // Missiles spawned from mines deal mineDamage * 0.5 per design doc.
+    const mineDamageBase = (POWER_WEAPONS && POWER_WEAPONS.MINE_LAYER)
+        ? POWER_WEAPONS.MINE_LAYER.mineDamage : 3;
+    // Pull MISSILE_SALVO config for the in-flight tuning constants
+    // (speed, homing strength, lifetime, radius). Reuses the proven
+    // values so mine-launched missiles look + steer identically to
+    // salvo missiles. Per-missile damage is overridden below.
+    const salvoConfig = (POWER_WEAPONS && POWER_WEAPONS.MISSILE_SALVO) || {
+        missileSpeed: 4, missileHomingStrength: 0.18,
+    };
+
     for (const mine of this.activeMines) {
         if (!mine.active) continue;
 
@@ -177,11 +205,44 @@ export function updateActiveSkills(dt) {
         }
         if (!mine.armed) continue;
 
+        // 6.23.0 — Each frame, write the current shield radius onto
+        //   the mine so combat-manager.getMineShieldMultiplier can read
+        //   it directly. Re-evaluating per frame means selling/buying
+        //   the upgrade mid-fight is reflected immediately on every
+        //   live mine without needing a "respawn mines" pass.
+        mine.shieldRadius = mineShieldRadius;
+
         // ── Self-detonation lifetime ──
         mine.lifeTimer -= dt;
         if (mine.lifeTimer <= 0) {
             // Flag for collision-system to explode it next frame.
             mine.expired = true;
+        }
+
+        // 6.23.0 — Mines are MOVING TURRETS by default. Every armed mine
+        //   fires a non-homing pulse bullet at the nearest enemy on an
+        //   800 ms cadence (the seek-and-move logic below handles target
+        //   acquisition + steering). MINE_MISSILES adds a homing missile
+        //   on top every 2.5 s — additive, not exclusive. Both timers
+        //   tick independently per mine; small spawn-time stagger keeps
+        //   multi-mine fire from being perfectly synced.
+        if (mine.turretCooldown === undefined) {
+            mine.turretCooldown = 800 + Math.random() * 200;
+        }
+        mine.turretCooldown -= dt;
+        if (mine.turretCooldown <= 0) {
+            mine.turretCooldown = 800;
+            spawnMineTurretBullet.call(this, mine, mineDamageBase * 0.5);
+        }
+        if (mineMissilesOwned) {
+            if (mine.missileCooldown === undefined) {
+                mine.missileCooldown = 2500 + Math.random() * 400;
+            }
+            mine.missileCooldown -= dt;
+            if (mine.missileCooldown <= 0) {
+                mine.missileCooldown = 2500;
+                spawnMineMissile.call(this, mine, mineDamageBase * 0.5, salvoConfig);
+            }
         }
 
         // ── Acquire a target if we don't have one (or current died) ──
@@ -363,6 +424,139 @@ export function updateSkillCooldowns(dt) {
             if (skillId === 'REPAIR_NANITES') this.regenActive = false;
             if (skillId === 'DEFLECTOR_ORBS') this.deflectorOrbs = [];
             if (skillId === 'TRACTOR_SHIELD') this.tractorShieldActive = false;
+        }
+    }
+}
+
+// ── 6.23.0 (2026-05-19) — Mine projectile launcher helpers ────────────────
+//
+// Default armed-mine behavior: spawnMineTurretBullet on a fixed 800 ms
+// cadence — non-homing pulse bullets at the nearest enemy. MINE_MISSILES
+// upgrade ADDS spawnMineMissile every 2.5s on top (homing seekers via the
+// existing activeMissiles pipeline). Both helpers are .call()'d with
+// `this = Player`. Turret bullets ride the shared bulletPool; missiles
+// reuse the MISSILE_SALVO homing/collision pipeline. Mine-spawned
+// projectiles tag `shooter = mine` so the collision pipeline skips the
+// player.
+//
+// Missiles ride the player's existing `activeMissiles` system (same homing
+// + collision pipeline as the MISSILE_SALVO power weapon). Per-missile
+// `damage` is set on the missile and respected by collision-system.
+// Turret bullets are plain straight-line projectiles spawned via the
+// shared bulletPool — homing is intentionally OFF so the mine acts as a
+// stationary turret rather than a wave of seekers. The bullet's
+// `shooter = mine` reference lets the collision pipeline skip the player.
+
+function _findNearestEnemyFromMine(mine, enemies) {
+    let best = null, bestD = Infinity;
+    for (const e of enemies) {
+        if (!e || !e.active) continue;
+        const d = Math.hypot(e.x - mine.x, e.y - mine.y);
+        if (d < bestD) { bestD = d; best = e; }
+    }
+    return best;
+}
+
+export function spawnMineMissile(mine, damage, salvoConfig) {
+    if (!this.activeMissiles) return;
+    const enemies = (this.gameEngine && this.gameEngine.enemyPool
+        && this.gameEngine.enemyPool.activeObjects) || [];
+    const target = _findNearestEnemyFromMine(mine, enemies);
+    if (!target) return; // No valid target — skip this fire (timer still resets above).
+
+    const speed = (salvoConfig && salvoConfig.missileSpeed) || 4;
+    const homingStrength = (salvoConfig && salvoConfig.missileHomingStrength) || 0.18;
+
+    // Launch angle aimed at the target so the missile reads as a
+    // directed shot from the mine, not a stationary spawn that pivots.
+    const dx = target.x - mine.x;
+    const dy = target.y - mine.y;
+    const ang = Math.atan2(dy, dx);
+    this.activeMissiles.push({
+        x: mine.x,
+        y: mine.y,
+        vel: { x: Math.cos(ang) * speed, y: Math.sin(ang) * speed },
+        angle: ang,
+        damage: damage,
+        homingStrength: homingStrength,
+        cluster: false,
+        life: 3000,
+        maxLife: 3000,
+        radius: 5,
+        target: target,
+        active: true,
+        speed: speed,
+        // Tag — collision-system reads `missile.shooter` to skip
+        //   self-damage. Set to mine so missiles can't hit the player.
+        shooter: mine,
+        // 6.23.0 — Mark as mine-launched so per-FX scaling could use it.
+        fromMine: true,
+    });
+
+    // Small puff at the launch position so the spawn reads as an
+    // ejection rather than a teleport.
+    if (this.gameEngine && this.gameEngine.particlePool) {
+        const pp = this.gameEngine.particlePool;
+        for (let i = 0; i < 4; i++) {
+            const p = pp.get(mine.x, mine.y, 'starSparkle');
+            if (!p) continue;
+            const a = ang + (Math.random() - 0.5) * 1.2;
+            const sp = 1.0 + Math.random() * 1.6;
+            p.vel.x = Math.cos(a) * sp;
+            p.vel.y = Math.sin(a) * sp;
+            p.color = '#ffaa66';
+            p.radius = 1.2 + Math.random() * 1.4;
+            p.life = 14 + Math.random() * 8;
+            p.friction = 0.92;
+        }
+    }
+}
+
+export function spawnMineTurretBullet(mine, damage) {
+    const ge = this.gameEngine;
+    if (!ge || !ge.bulletPool) return;
+    const enemies = (ge.enemyPool && ge.enemyPool.activeObjects) || [];
+    const target = _findNearestEnemyFromMine(mine, enemies);
+    if (!target) return;
+
+    const dx = target.x - mine.x;
+    const dy = target.y - mine.y;
+    const ang = Math.atan2(dy, dx);
+
+    // Reuse the player bullet pool. Bullet.reset() applies a small
+    // forward offset from `mine.x/y` so the bullet visually emerges from
+    // the mine body rather than its center.
+    const bullet = ge.bulletPool.get(mine.x, mine.y, ang);
+    if (!bullet) return;
+    bullet.damage = damage;
+    // Straight shot — no homing, no piercing, no AoE. Turret bullets
+    //   are meant to read as a steady drumbeat of fire rather than a
+    //   guided salvo (those are MINE_MISSILES).
+    bullet.homing = false;
+    bullet.piercing = 0;
+    bullet.explosive = false;
+    bullet.rangeMultiplier = 0.7; // Shorter range than player shots.
+    // Collision-system skip-self tag.
+    bullet.shooter = mine;
+    bullet.fromMine = true;
+    // Smaller render radius so turret rounds visually distinguish from
+    //   the player's primary fire.
+    bullet.baseRadius = 3;
+    bullet.radius = 3;
+
+    if (ge.particlePool) {
+        const pp = ge.particlePool;
+        for (let i = 0; i < 3; i++) {
+            const p = pp.get(mine.x, mine.y, 'starSparkle');
+            if (!p) continue;
+            const a = ang + (Math.random() - 0.5) * 0.6;
+            const sp = 0.8 + Math.random() * 1.2;
+            p.vel.x = Math.cos(a) * sp;
+            p.vel.y = Math.sin(a) * sp;
+            p.color = '#ffcc66';
+            p.radius = 0.9 + Math.random() * 1.1;
+            p.life = 10 + Math.random() * 6;
+            p.friction = 0.92;
         }
     }
 }

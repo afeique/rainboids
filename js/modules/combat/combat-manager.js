@@ -1867,32 +1867,40 @@ export function applyStun(enemy, durationMs = 1500) {
     enemy.stunUntil = Math.max(enemy.stunUntil || 0, proposed);
 }
 
-// ─── Phase 5 (2026-05-19) — Mine Defensive Plasma Shield Zone ────────────────
+// ─── Mine Defensive Plasma Shield Zone ───────────────────────────────────────
 //
-// Each armed enemy mine emits a soft plasma shield around itself. While the
-// player stands inside any mine's shield radius, incoming damage is reduced
-// by 40% (multiplier 0.6). Stacking is intentionally disabled — being inside
-// two zones still gives the same 0.6 multiplier, matching the design doc.
+// 6.23.0 (2026-05-19) — refactored from Phase 5. Originally each ENEMY mine
+// emitted a defensive shield; the mechanic has moved to PLAYER mines
+// (MINE_LAYER + the new MINE_SHIELD_RADIUS upgrade). While the player stands
+// inside any of their OWN armed mine's shield zone, incoming damage is
+// reduced by 40% (multiplier 0.6). Stacking is intentionally disabled —
+// overlapping zones still give 0.6 (not 0.36).
 //
-// `enemyBulletPool` is the pool that houses enemy bullets including mines
-// (shape === 'mine', set by firing.layMine). Pre-armed mines (mine.armed
-// === false during the brief settling window) are excluded so the shield
-// doesn't kick in instantaneously on spawn.
+// The shield is "on" for a player mine when ALL of the following hold:
+//   • mine.active === true
+//   • mine.armed === true (post arm-timer)
+//   • mine.shieldRadius > 0 (which `skills.js` sets only when the player
+//     has at least 1 stack of MINE_SHIELD_RADIUS)
+//
+// Function signatures kept identical to the Phase 5 helpers so the existing
+// engine-side wrappers (`_applyMineShieldRefund`, crossing detection) stay
+// drop-in compatible — `enemyBulletPool` is now ignored. New call sites
+// should pass `null`/`undefined` to make the rename obvious.
 
-export function getMineShieldMultiplier(player, enemyBulletPool) {
-    if (!player || !enemyBulletPool || !enemyBulletPool.activeObjects) return 1.0;
-    const list = enemyBulletPool.activeObjects;
-    for (let i = 0; i < list.length; i++) {
-        const m = list[i];
+export function getMineShieldMultiplier(player, /* legacy: enemyBulletPool */ _) {
+    if (!player) return 1.0;
+    const mines = player.activeMines;
+    if (!mines || mines.length === 0) return 1.0;
+    for (let i = 0; i < mines.length; i++) {
+        const m = mines[i];
         if (!m || !m.active) continue;
-        if (m.shape !== 'mine') continue;
         if (!m.armed) continue;
         const r = m.shieldRadius || 0;
         if (r <= 0) continue;
         const dx = player.x - m.x;
         const dy = player.y - m.y;
-        // Radius-squared compare avoids the sqrt in Math.hypot; mines are
-        // common during heavy fights and this is called per damage event.
+        // Radius-squared compare avoids the sqrt in Math.hypot; mines can
+        // be common with EXTRA_PAYLOAD and this is called per damage event.
         if ((dx * dx + dy * dy) <= r * r) {
             return 0.6;
         }
@@ -1900,12 +1908,34 @@ export function getMineShieldMultiplier(player, enemyBulletPool) {
     return 1.0;
 }
 
-// Per-frame check used by the game engine to detect false→true zone
-// crossings so the entry sparkle particle can fire exactly once at the
-// boundary. Returns true if the player is currently inside ANY armed
-// mine's shield zone.
-export function isPlayerInMineShield(player, enemyBulletPool) {
-    return getMineShieldMultiplier(player, enemyBulletPool) < 1.0;
+// Returns the FIRST armed-and-shielded player mine the player is currently
+// inside, or null. Used by the engine's collision wrappers to know which
+// mine to spawn the `mineShieldFlash` particle at, AND to feed the
+// crossing-detection block. Single pass keeps the cost identical to the
+// boolean check.
+export function getActivePlayerMineShield(player) {
+    if (!player) return null;
+    const mines = player.activeMines;
+    if (!mines || mines.length === 0) return null;
+    for (let i = 0; i < mines.length; i++) {
+        const m = mines[i];
+        if (!m || !m.active) continue;
+        if (!m.armed) continue;
+        const r = m.shieldRadius || 0;
+        if (r <= 0) continue;
+        const dx = player.x - m.x;
+        const dy = player.y - m.y;
+        if ((dx * dx + dy * dy) <= r * r) {
+            return m;
+        }
+    }
+    return null;
+}
+
+// Per-frame check used by the game engine. Returns true if the player is
+// currently inside ANY armed mine's shield zone.
+export function isPlayerInMineShield(player, /* legacy: enemyBulletPool */ _) {
+    return getMineShieldMultiplier(player) < 1.0;
 }
 
 // ─── Phase 6 (2026-05-19) — Cluster Launcher detonation helpers ──────────────

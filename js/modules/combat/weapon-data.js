@@ -413,7 +413,14 @@ export const POWER_WEAPONS = {
         mineDamage: 3,        // was 5 — power weapons scaled down for balance
         cost: 1500,
         unlockWave: 2,
-        upgrades: ['EXTRA_PAYLOAD', 'BLAST_RADIUS', 'DAISY_CHAIN', 'RAPID_DEPLOY'],
+        upgrades: [
+            'EXTRA_PAYLOAD', 'BLAST_RADIUS', 'DAISY_CHAIN', 'RAPID_DEPLOY',
+            // 6.23.0 (2026-05-19) — mine-shield + missiles-add-on kit.
+            //   Bullets are baseline behavior now — every armed mine
+            //   fires non-homing pulse bullets at the nearest target.
+            //   MINE_MISSILES adds a homing missile on top.
+            'MINE_SHIELD_RADIUS', 'MINE_MISSILES',
+        ],
     },
     NOVA_BLAST: {
         id: 'NOVA_BLAST',
@@ -512,6 +519,23 @@ export const POWER_UPGRADES = {
     BLAST_RADIUS:     { id: 'BLAST_RADIUS',     name: 'Blast Radius',     description: '+30px blast, +20px trigger',              cost: 1700, maxStacks: 3,  weapon: 'MINE_LAYER', icon: 'explosion' },
     DAISY_CHAIN:      { id: 'DAISY_CHAIN',      name: 'Daisy Chain',      description: 'Nearby mines detonate together',          cost: 4300, maxStacks: 1,  weapon: 'MINE_LAYER', icon: 'chain' },
     RAPID_DEPLOY:     { id: 'RAPID_DEPLOY',     name: 'Rapid Deploy',     description: '-25% mine cooldown',                      cost: 2400, maxStacks: 2, weapon: 'MINE_LAYER', icon: 'bolt' },
+    // 6.23.0 (2026-05-19) — Mine shield + projectile-launcher kits.
+    //   Seeker mines behave as moving turrets BY DEFAULT — armed mines
+    //   always seek the nearest enemy/asteroid AND fire non-homing pulse
+    //   bullets at it on a fixed cadence. Upgrades enhance that core loop.
+    //
+    //   SHIELD_RADIUS: each armed mine emits a 120 + 50*stacks px plasma
+    //     shield. While the player is inside ANY armed mine's zone, incoming
+    //     damage is reduced by 40% (no stacking across overlapping zones).
+    //     Shield is invisible until a hit — see `mineShieldFlash` particle.
+    //   MISSILES: ADDS a homing seeker missile every 2.5s on top of the
+    //     baseline bullet fire. Each missile deals `mineDamage * 0.5`.
+    MINE_SHIELD_RADIUS: { id: 'MINE_SHIELD_RADIUS', name: 'Shield Radius',
+        description: '+50 px shield radius per stack (enables shield)',
+        cost: 1700, maxStacks: 3, weapon: 'MINE_LAYER', icon: 'shield' },
+    MINE_MISSILES:    { id: 'MINE_MISSILES',    name: 'Seeker Missiles',
+        description: 'Armed mines also fire a homing missile every 2.5s',
+        cost: 2300, maxStacks: 1, weapon: 'MINE_LAYER', icon: 'rocket' },
 
     // Nova Blast
     SHOCKWAVE:        { id: 'SHOCKWAVE',        name: 'Shockwave',        description: '+40px ring radius',                       cost: 1700, maxStacks: 3,  weapon: 'NOVA_BLAST', icon: 'wave' },

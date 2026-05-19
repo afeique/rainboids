@@ -1786,11 +1786,18 @@ export function checkMissileCollisions() {
         const mvLen = Math.hypot(mvx, mvy) || 1;
         const kx = mvx / mvLen;
         const ky = mvy / mvLen;
+        // 6.23.0 — Honor a per-missile `damage` override if set (used by
+        //   mine-launched missiles from MINE_MISSILES so their damage
+        //   scales with mineDamage * 0.5 instead of the full salvo
+        //   damage). Falls back to MISSILE_SALVO config.
+        const missileDamage = (missile.damage !== undefined && missile.damage !== null)
+            ? missile.damage
+            : POWER_WEAPONS.MISSILE_SALVO.missileDamage;
         for (const enemy of this.enemyPool.activeObjects) {
             if (!enemy.active) continue;
             const dist = Math.hypot(enemy.x - missile.x, enemy.y - missile.y);
             if (dist < (enemy.radius || 15) + 6) {
-                this.damageEnemy(enemy, POWER_WEAPONS.MISSILE_SALVO.missileDamage);
+                this.damageEnemy(enemy, missileDamage);
                 if (enemy.vel) {
                     enemy.vel.x += kx * MISSILE_KNOCK;
                     enemy.vel.y += ky * MISSILE_KNOCK;
@@ -1808,7 +1815,7 @@ export function checkMissileCollisions() {
             if (!ast.active || ast.warping) continue;
             const dist = Math.hypot(ast.x - missile.x, ast.y - missile.y);
             if (dist < (ast.baseRadius || ast.radius || 20) + 6) {
-                ast.health = Math.max(0, (ast.health || 0) - POWER_WEAPONS.MISSILE_SALVO.missileDamage);
+                ast.health = Math.max(0, (ast.health || 0) - missileDamage);
                 ast._hitFlashTimer = 4;
                 if (ast.vel) {
                     ast.vel.x += kx * MISSILE_KNOCK * 0.6;

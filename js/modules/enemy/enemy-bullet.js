@@ -103,17 +103,12 @@ export class EnemyBullet {
         this.sinePerpX = 0;
         this.sinePerpY = 0;
 
-        // Phase 5 (2026-05-19) — Mine defensive plasma shield zone.
-        //   Each enemy mine emits a soft shield around itself; while
-        //   the player is inside this zone, incoming damage is reduced
-        //   by 40% (see combat-manager.getMineShieldMultiplier). Fields
-        //   are set on every reset so pooled bullets that get repurposed
-        //   into mines pick up clean values. The shape='mine' init path
-        //   below (and the firing.js mine spawner) leaves these as-is
-        //   because non-mine bullets ignore them.
-        this.shieldRadius = 120;
-        this.shieldArmingDelay = 600;  // ms after spawn before shield is active
-        this.armed = false;            // flips true once arming delay elapses
+        // 6.23.0 (2026-05-19) — Mine defensive plasma shield moved
+        //   from ENEMY mines to PLAYER mines (MINE_LAYER + the new
+        //   MINE_SHIELD_RADIUS upgrade). Enemy mines no longer emit
+        //   any defensive zone. The persistent plasma aura render in
+        //   draw() was also removed. See `combat-manager.js`
+        //   `getMineShieldMultiplier` for the new player-mine path.
     }
     
     update() {
@@ -161,12 +156,9 @@ export class EnemyBullet {
             }
             if (this.shape === 'mine') {
                 this.life = 1.0;
-                // Phase 5 — flip the shield to armed once the settling
-                // delay has elapsed. Until then the mine renders its
-                // body normally but emits no plasma aura.
-                if (!this.armed && age >= this.shieldArmingDelay) {
-                    this.armed = true;
-                }
+                // 6.23.0 — Phase 5 shield-arming flip removed with the
+                //   enemy-mine shield. Mine body / HP / proximity logic
+                //   stays identical; only the shield aura is gone.
             } else {
                 const progress = age / maxLife;
                 this.life = progress < 0.6 ? 1.0 : 1.0 - (progress - 0.6) / 0.4;
@@ -588,28 +580,10 @@ export class EnemyBullet {
     draw(ctx, gameEngine = null) {
         if (!this.active) return;
 
-        // Phase 5 (2026-05-19) — Plasma shield aura around armed mines.
-        //   Drawn FIRST so the mine body + spikes sit on top of the
-        //   glow. Radial gradient + additive composite mimics the
-        //   shielded-energy look. Slow sine pulse (~1.2s period) keeps
-        //   the aura visually breathing without flicker. Cheap: one
-        //   gradient + one fillRect per armed mine per frame.
-        if (this.shape === 'mine' && this.armed) {
-            ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
-            const pulse = 0.85 + Math.sin(frameClock.now * 0.00524) * 0.15; // ~1.2s period
-            const r = this.shieldRadius;
-            const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r);
-            // Plasma blue → transparent. Alpha capped at 0.45 per plan.
-            grad.addColorStop(0,    `rgba(80, 180, 255, ${0.45 * pulse})`);
-            grad.addColorStop(0.55, `rgba(80, 180, 255, ${0.18 * pulse})`);
-            grad.addColorStop(1,    'rgba(80, 180, 255, 0)');
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        }
+        // 6.23.0 (2026-05-19) — Phase 5 plasma shield aura on enemy
+        //   mines was removed; the mechanic now lives on PLAYER mines
+        //   (MINE_LAYER + MINE_SHIELD_RADIUS upgrade) and renders ONLY
+        //   on hit via the `mineShieldFlash` particle.
 
         ctx.save();
 

@@ -292,6 +292,8 @@ export class Particle {
             //   (0.4s), Canvas2D only — fired infrequently so a dedicated
             //   WebGL atlas entry isn't worth the complexity. Reset takes
             //   (x, y, color) per the design doc; defaults to plasma blue.
+            //   6.23.0 — kept for back-compat with any existing callers,
+            //   but the main shield FX now uses `mineShieldFlash` below.
             case 'mineShieldCrossing': {
                 const [crossColor] = args;
                 this.life = 0.4;
@@ -300,6 +302,29 @@ export class Particle {
                 this.maxRadius = 22;
                 this.color = crossColor || '#5cc8ff';
                 this.vel = { x: 0, y: 0 };
+                break;
+            }
+
+            // 6.23.0 (2026-05-19) — Mine shield Star-Wars / Star-Trek
+            //   edge flash. Rendered AT a player mine's center using its
+            //   `shieldRadius`. Visual: a bright thin ring at the
+            //   perimeter that flashes brightest right at the radius and
+            //   falls off both inward and outward (driven by a radial
+            //   gradient with peak alpha at the ring's offset). Fires on
+            //   EACH damage event where the shield mitigated damage —
+            //   the perimeter pop sells the deflection. Lifetime ~0.25s
+            //   with a cubic-out fade. Additive composite handled in
+            //   the draw branch. Canvas2D only.
+            //   args: [shieldRadius, color?]
+            case 'mineShieldFlash': {
+                const [flashRadius, flashColor] = args;
+                this.life = 0.25;
+                this.maxLife = 0.25;
+                this.shieldRadius = flashRadius || 120;
+                this.color = flashColor || '#5cc8ff';
+                this.vel = { x: 0, y: 0 };
+                // Used by drawParticlesBatched culling.
+                this.radius = this.shieldRadius;
                 break;
             }
 
@@ -597,6 +622,15 @@ export class Particle {
                 break;
             }
 
+            // 6.23.0 — Mine shield perimeter flash. Static (no position
+            //   change); life drains over ~0.25s. Decay 0.04/tick at
+            //   TS=0.5 → ~12 ticks ≈ 0.25 s wall-clock. The draw branch
+            //   eases alpha + ring thickness via a cubic-out curve.
+            case 'mineShieldFlash': {
+                this.life -= 0.04 * TS;
+                break;
+            }
+
             // Phase 3 status particles.
             case 'burnFlame':
                 // Rise + jitter + gentle shrink as the flame "burns out."
@@ -823,6 +857,47 @@ export class Particle {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius * 0.35, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.globalCompositeOperation = prevComp;
+                break;
+            }
+
+            // 6.23.0 (2026-05-19) — Star-Wars-style mine shield edge
+            //   flash. Three-pass additive stroke at the perimeter so
+            //   the ring reads as a deflector pulse:
+            //     1. Wide outer falloff (soft glow outside the radius).
+            //     2. Bright sharp ring AT the radius.
+            //     3. Bright white core stroke on top of (2).
+            //   Each pass uses a cubic-out alpha curve so the flash
+            //   pops hard at spawn and tapers cleanly. lineWidth
+            //   shrinks over time so the ring narrows as it fades.
+            case 'mineShieldFlash': {
+                const lifeFrac = Math.max(0, this.life / (this.maxLife || 0.25));
+                // Cubic-out: t=0 (life=1) → 1, t=1 (life=0) → 0
+                const ease = 1 - Math.pow(1 - lifeFrac, 3);
+                const prevComp = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = 'lighter';
+                const r = this.shieldRadius || this.radius || 120;
+                // 1. Wide outer falloff — thick, low alpha
+                ctx.globalAlpha = ease * 0.35;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 12 * ease + 4;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+                // 2. Sharp ring at the perimeter
+                ctx.globalAlpha = ease * 0.9;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 4 * ease + 1.5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+                // 3. Bright white core stroke
+                ctx.globalAlpha = ease;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2 * ease + 0.5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+                ctx.stroke();
                 ctx.globalCompositeOperation = prevComp;
                 break;
             }
