@@ -351,6 +351,10 @@ export class Player {
         return weapons.fireRailDriver.call(this, bulletPool, audioManager, config);
     }
 
+    fireCluster(bulletPool, audioManager, config) {
+        return weapons.fireCluster.call(this, bulletPool, audioManager, config);
+    }
+
     startLanceBeam(audioManager, config) {
         return weapons.startLanceBeam.call(this, audioManager, config);
     }

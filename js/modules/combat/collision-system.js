@@ -700,6 +700,14 @@ export function handleCollisions() {
     for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
         const bullet = this.bulletPool.activeObjects[i];
         if (!bullet.active) continue;
+        // Phase 6 — cluster bombs / sub-bomblets own their own collision
+        // path (the proximity check below). Skip the standard bullet-hit
+        // logic here so a primary cluster bomb sitting in its armed
+        // window doesn't trigger normal bullet damage on enemies entering
+        // its tile (those should ONLY drive the detonation, not also
+        // apply per-tick contact damage). Same for sub-bomblets — they
+        // detonate on contact via the proximity block below.
+        if (bullet.cluster || bullet.subBomb) continue;
         const nearbyEn = this.spatialGrid.retrieve(bullet);
         for (let j = nearbyEn.length - 1; j >= 0; j--) {
             const enemy = nearbyEn[j];
@@ -859,6 +867,46 @@ export function handleCollisions() {
                 if (!bullet.active) {
                     break;
                 }
+            }
+        }
+    }
+
+    // ── Phase 6 (2026-05-19) — Cluster bomb enemy proximity detection ──
+    // Surgical insert: walks the bullet pool for armed cluster bombs OR
+    // sub-bomblets in flight, triggering early detonation when an enemy
+    // enters their proximity radius. The bomb's `_detonate` callback
+    // (see Bullet) routes through the combat manager to apply AoE
+    // damage + spawn sub-bomblets. Cheap loop because typically <5
+    // cluster bombs are in flight at once; iterates the bullet pool
+    // once with an early-out for non-cluster bullets.
+    for (let i = this.bulletPool.activeObjects.length - 1; i >= 0; i--) {
+        const bullet = this.bulletPool.activeObjects[i];
+        if (!bullet.active) continue;
+        if (!bullet.cluster && !bullet.subBomb) continue;
+
+        // Sub-bomblets detonate on first enemy contact (any enemy
+        // within the proximity radius — uses subBombBlastRadius * 0.5
+        // as a contact threshold so a stationary sub-bomb still
+        // detonates if an enemy walks into it before flight ends).
+        // Primary cluster bombs only detonate from proximity when
+        // armed — the travel-stage check is skipped (the bomb is
+        // moving fast and would shred the player's intended placement
+        // if every passing enemy detonated it mid-flight).
+        const proxR = bullet.subBomb
+            ? Math.max(12, (bullet.blastRadius || 50) * 0.4)
+            : (bullet.stage === 'armed' ? (bullet.proximityRadius || 60) : 0);
+        if (proxR <= 0) continue;
+        const r2 = proxR * proxR;
+        const enemies = this.enemyPool.activeObjects;
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const e = enemies[j];
+            if (!e || !e.active) continue;
+            if (e.warping || e._deathFlash > 0) continue;
+            const dx = e.x - bullet.x;
+            const dy = e.y - bullet.y;
+            if (dx * dx + dy * dy <= r2) {
+                bullet._detonate(this);
+                break;
             }
         }
     }
@@ -1358,6 +1406,28 @@ export function checkNovaCollisions() {
             }
         }
 
+        // Phase 4 (2026-05-19) — Per-ring upgrade snapshot. Read stacks
+        // once per ring/frame so the inner enemy loop doesn't repeatedly
+        // hit `getPowerupStacks`. Cached values feed the BRN/STUN/chain
+        // branches below.
+        //
+        // `chainBudget` collapses two checks: NOVA_CHAIN must be owned
+        // AND the ring's own hop counter must still be > 0. Initial nova
+        // rings spawned by `fireNova` predate the Phase 4 fields, so a
+        // missing `_hopsRemaining` is interpreted as the default 3 hops.
+        const infernoStacks  = (typeof p.getPowerupStacks === 'function')
+            ? p.getPowerupStacks('NOVA_INFERNO') : 0;
+        const lightningStacks = (typeof p.getPowerupStacks === 'function')
+            ? p.getPowerupStacks('NOVA_LIGHTNING') : 0;
+        const chainStacks    = (typeof p.getPowerupStacks === 'function')
+            ? p.getPowerupStacks('NOVA_CHAIN') : 0;
+        // Initial novas default to 3 hops; secondaries carry an explicit
+        // (decremented) counter set by `_spawnSecondaryNova`. Clamp to
+        // [0,3] for defense — a malformed ring can never exceed the cap.
+        const ringHopsRemaining = Math.max(0, Math.min(3,
+            (ring._hopsRemaining != null) ? ring._hopsRemaining : 3));
+        const chainBudget = chainStacks > 0 && ringHopsRemaining > 0;
+
         // Enemies — damage + outward shove on first contact with ring.
         for (const enemy of this.enemyPool.activeObjects) {
             if (!enemy.active || ring.hitEnemies.has(enemy)) continue;
@@ -1366,7 +1436,45 @@ export function checkNovaCollisions() {
             const dist = Math.hypot(dx, dy);
             if (Math.abs(dist - ring.currentRadius) < RING_WIDTH) {
                 ring.hitEnemies.add(enemy);
-                this.damageEnemy(enemy, ring.damage || POWER_WEAPONS.NOVA_BLAST.ringDamage);
+                const novaDmg = ring.damage || POWER_WEAPONS.NOVA_BLAST.ringDamage;
+                // Snapshot pre-hit state so we can detect kills + apply
+                // status without re-reading the enemy after destruction
+                // (damageEnemy may reset the pool slot on lethal hits).
+                const killX = enemy.x;
+                const killY = enemy.y;
+                this.damageEnemy(enemy, novaDmg);
+                const wasKilled = !enemy.active || enemy.health <= 0.001;
+
+                // Phase 4 — INFERNO: always-on BRN apply to every enemy
+                // the ring passes through. No roll; the upgrade IS the
+                // proc. Skip on dead enemies (applyBurn no-ops anyway).
+                if (infernoStacks > 0 && !wasKilled && typeof this.applyBurn === 'function') {
+                    this.applyBurn(enemy, novaDmg);
+                }
+                // Phase 4 — LIGHTNING: roll 30% × stacks per hit. Same
+                // skip-on-kill rule as burn (applyStun no-ops on dying
+                // enemies regardless, but we avoid the call to keep
+                // the code path obvious).
+                if (lightningStacks > 0 && !wasKilled && typeof this.applyStun === 'function') {
+                    if (Math.random() < 0.30 * lightningStacks) {
+                        this.applyStun(enemy);
+                    }
+                }
+                // Phase 4 — CHAIN: only on kills, and only if the ring
+                // still has hop budget. Decrement and pass the remaining
+                // budget to the secondary; defensive ceiling at 3 also
+                // enforced inside `_spawnSecondaryNova`.
+                if (chainBudget && wasKilled && typeof this._spawnSecondaryNova === 'function') {
+                    const nextHops = ringHopsRemaining - 1;
+                    // Connector arc particle — visualizes the chain link
+                    // from the killed enemy back to the parent ring's
+                    // origin so the cascade reads as causally linked.
+                    if (this.particlePool) {
+                        this.particlePool.get(ring.x, ring.y, 'novaChainArc', killX, killY);
+                    }
+                    this._spawnSecondaryNova(killX, killY, 0.6, 0.4, nextHops);
+                }
+
                 if (dist > 0.001 && enemy.vel) {
                     enemy.vel.x += (dx / dist) * KNOCK_ENEMY;
                     enemy.vel.y += (dy / dist) * KNOCK_ENEMY;

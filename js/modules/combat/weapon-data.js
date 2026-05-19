@@ -95,6 +95,53 @@ export const PRIMARY_WEAPONS = {
         unlockWave: 8,
         upgrades: ['MASS_DRIVER', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH', 'RAIL_VELOCITY'],
     },
+    // Phase 6 (2026-05-19) — CLUSTER_LAUNCHER. Lobs a projectile that
+    //   decelerates via friction, halts mid-flight, arms for 0.8s, then
+    //   detonates on enemy proximity or timer expiry. The primary blast
+    //   damages enemies within `blastRadius`, then spawns N sub-bombs
+    //   that scatter at random angles and detonate on contact / end-of-
+    //   flight. Intentionally NO homing / piercing / explosive
+    //   upgrades exposed — the per-weapon upgrade tables in
+    //   `PRIMARY_UPGRADES` below only carry payload / bomblet-count /
+    //   fuse-time / blast-radius tuners. See `firePrimary` dispatch in
+    //   `js/modules/player/weapons.js` for the firing path and
+    //   `combat-manager.js` for `detonateCluster` / `spawnSubBomblet`.
+    CLUSTER_LAUNCHER: {
+        id: 'CLUSTER_LAUNCHER',
+        name: 'Cluster Launcher',
+        description: 'Lobs a sticky bomb that arms, detonates, and spawns sub-bomblets',
+        icon: 'bomb',
+        color: '#ff5544',
+        fireRate: 800,
+        damage: 50,
+        bulletSpeed: 1.0,
+        bulletSize: 1.4,
+        bulletCount: 1,
+        spreadAngle: 0,
+        piercing: 0,
+        range: 800,
+        cost: 0,
+        unlockWave: 10,
+        // Cluster bomb stage tuning. Travel friction decays the
+        // projectile to halt over ~30 frames; armed window is 0.8s
+        // (reduced by SHORT_FUSE stacks). Sub-bomblet count is 5 base,
+        // bumped by MORE_BOMBLETS. Blast radius is 90px primary / 50px
+        // sub, bumped by MEGA_CLUSTER on the primary side only.
+        initialVelocity: 12,
+        travelFriction: 0.92,
+        haltVelocity: 0.3,
+        armedDurationMs: 800,
+        proximityRadius: 60,
+        blastRadius: 90,
+        blastDamage: 50,
+        subBombCount: 5,
+        subBombSpeed: 4,
+        subBombFriction: 0.94,
+        subBombLifeFrames: 20,
+        subBombBlastRadius: 50,
+        subBombDamage: 25,
+        upgrades: ['CLUSTER_PAYLOAD', 'MORE_BOMBLETS', 'SHORT_FUSE', 'MEGA_CLUSTER'],
+    },
     // 5.79.23 — LANCE_BEAM and LIGHTNING_ARC moved to POWER_WEAPONS
     //   below. They're now cooldown-based power weapons: press the
     //   power-weapon trigger to activate the beam for `beamDuration`,
@@ -278,6 +325,15 @@ export const PRIMARY_UPGRADES = {
     SCATTER_PIERCING:{ id: 'SCATTER_PIERCING',name: 'Armor Piercer',    description: '+1 pierce on pellets',                 cost: 1500, maxStacks: 2, weapon: 'SCATTER_GUN',   icon: 'bow-arrow' },
     RAIL_PIERCING:   { id: 'RAIL_PIERCING',   name: 'Saboted Slug',     description: '+1 pierce on rail slugs',              cost: 1500, maxStacks: 2, weapon: 'RAIL_DRIVER',   icon: 'bow-arrow' },
 
+    // ─── CLUSTER LAUNCHER (Phase 6 — 2026-05-19) ────────────────────────
+    // Intentionally NO homing / piercing — cluster bombs halt mid-flight
+    // and spawn sub-bomblets, so seeking + piercing don't translate.
+    // Tuners only adjust damage, sub-bomb count, fuse, and blast radius.
+    CLUSTER_PAYLOAD: { id: 'CLUSTER_PAYLOAD', name: 'Heavy Payload',    description: '+20% damage',                          cost: 1200, maxStacks: 3, weapon: 'CLUSTER_LAUNCHER', icon: 'bomb' },
+    MORE_BOMBLETS:   { id: 'MORE_BOMBLETS',   name: 'More Bomblets',    description: '+1 sub-bomb per stack',                cost: 1900, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'sparkle' },
+    SHORT_FUSE:      { id: 'SHORT_FUSE',      name: 'Short Fuse',       description: '-0.3s armed time',                     cost: 1500, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'stopwatch' },
+    MEGA_CLUSTER:    { id: 'MEGA_CLUSTER',    name: 'Mega Cluster',     description: '+30px primary blast radius',           cost: 2300, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'explosion' },
+
     // ─── TIER 2 — CAPSTONE UPGRADES (5.75.1, B1) ────────────────────────
     // Each weapon gets ONE evolved upgrade that unlocks only after its
     // tier-1 prereqs are maxed. They're expensive single-stack picks
@@ -372,7 +428,7 @@ export const POWER_WEAPONS = {
         ringDuration: 600,    // ms for ring to expand
         cost: 2000,
         unlockWave: 3,
-        upgrades: ['SHOCKWAVE', 'AFTERSHOCK', 'DOUBLE_PULSE', 'RESONANCE'],
+        upgrades: ['SHOCKWAVE', 'AFTERSHOCK', 'DOUBLE_PULSE', 'RESONANCE', 'NOVA_LIGHTNING', 'NOVA_CHAIN', 'NOVA_INFERNO'],
     },
     MISSILE_SALVO: {
         id: 'MISSILE_SALVO',
@@ -462,6 +518,13 @@ export const POWER_UPGRADES = {
     AFTERSHOCK:       { id: 'AFTERSHOCK',       name: 'Aftershock',       description: 'Hits slow enemies 30% / 2s',              cost: 2600, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: 'snail' },
     DOUBLE_PULSE:     { id: 'DOUBLE_PULSE',     name: 'Double Pulse',     description: 'Second ring 0.3s later',                  cost: 4300, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: 'loop' },
     RESONANCE:        { id: 'RESONANCE',        name: 'Resonance',        description: '-1.5s cooldown',                          cost: 3200, maxStacks: 2,  weapon: 'NOVA_BLAST', icon: 'volume' },
+    // Phase 4 (2026-05-19) — Nova lightning + chain + inferno. These
+    // consume the Phase 3 BRN/STUN engine via the applyBurn/applyStun
+    // helpers exposed on the engine. Chain Reaction enforces a hard
+    // 3-hop ceiling at the collision site (see checkNovaCollisions).
+    NOVA_LIGHTNING:   { id: 'NOVA_LIGHTNING',   name: 'Static Discharge', description: '30%/stack chance to stun on hit',         cost: 1900, maxStacks: 2,  weapon: 'NOVA_BLAST', icon: 'bolt' },
+    NOVA_CHAIN:       { id: 'NOVA_CHAIN',       name: 'Chain Reaction',   description: 'Kills spawn smaller novas (3 hops)',      cost: 4300, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: 'chain' },
+    NOVA_INFERNO:     { id: 'NOVA_INFERNO',     name: 'Inferno',          description: 'Nova hits apply burn (BRN)',              cost: 2300, maxStacks: 1,  weapon: 'NOVA_BLAST', icon: 'fire' },
 
     // Missile Salvo
     EXTRA_ORDNANCE:   { id: 'EXTRA_ORDNANCE',   name: 'Extra Ordnance',   description: '+1 missile per volley',                   cost: 2200, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: 'rocket' },

@@ -272,6 +272,10 @@ export function firePrimary(bulletPool, audioManager, particlePool) {
             this.fireRailDriver(bulletPool, audioManager, config);
             spawnMuzzleFlare.call(this, particlePool, 'heavy', '#44ffaa');
             break;
+        case 'CLUSTER_LAUNCHER':
+            this.fireCluster(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'heavy', '#ffaa44');
+            break;
         default:
             this.firePulseCannon(bulletPool, audioManager, config);
             spawnMuzzleFlare.call(this, particlePool, 'medium', '#ffdd88');
@@ -562,6 +566,63 @@ export function fireRailDriver(bulletPool, audioManager, config) {
             this.applyGlobalBulletUpgrades(bullet);
         }
     }
+    audioManager.playShoot();
+}
+
+// Phase 6 (2026-05-19) — Cluster Launcher firing path. Spawns a ClusterBomb
+// (Bullet with cluster=true) at the player position aimed at the cursor.
+// The bomb owns its own travel→armed→detonate state machine in
+// `Bullet.updateClusterStage`; this function only resolves upgrades and
+// initializes the bomb. Intentionally does NOT call
+// `applyGlobalBulletUpgrades` — cluster bombs are exempt from
+// per-weapon HOMING / PIERCING (no CLUSTER_HOMING / CLUSTER_PIERCING
+// upgrades exist) AND from the global EXPLOSIVE check, because the
+// bomb's detonation is itself the AoE payload.
+export function fireCluster(bulletPool, audioManager, config) {
+    // Resolve per-weapon upgrade stacks. CLUSTER_PAYLOAD scales damage,
+    // MORE_BOMBLETS adds sub-bombs, SHORT_FUSE reduces the armed timer,
+    // MEGA_CLUSTER bumps the primary blast radius.
+    const payloadStacks  = this.getPowerupStacks('CLUSTER_PAYLOAD');
+    const bombletStacks  = this.getPowerupStacks('MORE_BOMBLETS');
+    const shortFuseStacks = this.getPowerupStacks('SHORT_FUSE');
+    const megaClusterStacks = this.getPowerupStacks('MEGA_CLUSTER');
+
+    // Bake upgrade adjustments into a per-shot config snapshot so the
+    // bullet doesn't re-read globals during its update loop.
+    const armedDurationMs = Math.max(
+        100,
+        config.armedDurationMs - shortFuseStacks * 300,
+    );
+    const blastRadius = config.blastRadius + megaClusterStacks * 30;
+    const blastDamage = config.blastDamage * (1 + payloadStacks * 0.2);
+    const subBombCount = config.subBombCount + bombletStacks;
+
+    const bullet = bulletPool.get(this.x, this.y, this.angle);
+    if (!bullet) return;
+    bullet.weaponId = 'CLUSTER_LAUNCHER';
+    bullet.setupClusterBomb({
+        initialVelocity: config.initialVelocity,
+        travelFriction: config.travelFriction,
+        haltVelocity: config.haltVelocity,
+        armedDurationMs,
+        proximityRadius: config.proximityRadius,
+        blastRadius,
+        blastDamage,
+        subBombCount,
+        subBombSpeed: config.subBombSpeed,
+        subBombFriction: config.subBombFriction,
+        subBombLifeFrames: config.subBombLifeFrames,
+        subBombBlastRadius: config.subBombBlastRadius,
+        subBombDamage: config.subBombDamage,
+    });
+
+    // Speedrun-meta stats parity with other primary weapons.
+    const stats = this.gameEngine && this.gameEngine.game && this.gameEngine.game.stats;
+    if (stats) {
+        stats.shotsFired++;
+        stats.weaponShots.CLUSTER_LAUNCHER = (stats.weaponShots.CLUSTER_LAUNCHER || 0) + 1;
+    }
+
     audioManager.playShoot();
 }
 

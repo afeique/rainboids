@@ -65,6 +65,95 @@ export class Bullet {
         // Reset ring buffer trail
         this.trailHead = 0;
         this.trailCount = 0;
+        // Phase 6 (2026-05-19) — clear cluster-bomb state so a recycled
+        // bullet doesn't carry a stale stage / armed timer into its
+        // next life. `cluster` is true for primary cluster bombs (set
+        // by fireCluster); `subBomb` is true for sub-bomblets spawned
+        // on detonation. Both share the staged life-cycle code below.
+        this.cluster = false;
+        this.subBomb = false;
+        this.stage = null;
+        this.armedAt = 0;
+        this.armedDuration = 0;
+        this.clusterFriction = 0;
+        this.haltVelocity = 0;
+        this.proximityRadius = 0;
+        this.blastRadius = 0;
+        this.blastDamage = 0;
+        this.subBombCount = 0;
+        this.subBombLifeFrames = 0;
+        this._smokeFrame = 0;
+    }
+
+    // Phase 6 (2026-05-19) — initialize cluster-bomb state on a freshly-
+    // reset bullet. Called by `fireCluster` immediately after `bulletPool.get`.
+    // The caller passes the resolved config (with upgrades baked in) so
+    // this method just plumbs the values onto the bullet.
+    setupClusterBomb(config) {
+        this.cluster = true;
+        this.subBomb = false;
+        this.stage = 'travel';
+        this.armedAt = 0;
+        this.armedDuration = config.armedDurationMs;
+        this.clusterFriction = config.travelFriction;
+        this.haltVelocity = config.haltVelocity;
+        this.proximityRadius = config.proximityRadius;
+        this.blastRadius = config.blastRadius;
+        this.blastDamage = config.blastDamage;
+        this.subBombCount = config.subBombCount;
+        this.subBombSpeed = config.subBombSpeed;
+        this.subBombFriction = config.subBombFriction;
+        this.subBombLifeFrames = config.subBombLifeFrames;
+        this.subBombBlastRadius = config.subBombBlastRadius;
+        this.subBombDamage = config.subBombDamage;
+        // Cluster bombs do NOT pierce / home / explode (Phase 6 design).
+        this.piercing = 0;
+        this.homing = false;
+        this.explosive = false;
+        // Override the initial velocity to the cluster-launch speed.
+        const speed = config.initialVelocity;
+        this.vel.x = Math.cos(this.angle) * speed;
+        this.vel.y = Math.sin(this.angle) * speed;
+        // Use a generous lifetime — the staged code below auto-clears
+        // the bullet on detonation, but we want a safety net for any
+        // path that misses a transition (e.g. armed timer drift).
+        this.maxLife = Math.round(600 / GAME_CONFIG.TICK_SCALE);
+        this.rangeMultiplier = 1.0;
+        // Bigger render radius so the bomb reads as a physical payload
+        // instead of a regular bullet. The Canvas2D draw path uses
+        // `radius` for the body size.
+        this.baseRadius = 7;
+        this.radius = this.baseRadius;
+    }
+
+    // Phase 6 — initialize a sub-bomblet on a freshly-reset bullet.
+    // Sub-bombs spawn at the primary cluster's detonation site, fly
+    // outward at random angles, decelerate, then detonate on contact
+    // or end-of-flight. They reuse the staged code below but with a
+    // simpler 2-stage shape (travel → detonating).
+    setupSubBomblet(config, angle, speed) {
+        this.cluster = false;
+        this.subBomb = true;
+        this.stage = 'travel';
+        this.armedAt = 0;
+        this.armedDuration = 0; // sub-bombs don't sit and arm
+        this.clusterFriction = config.subBombFriction;
+        this.haltVelocity = 0; // sub-bombs detonate on flight-out, not on halt
+        this.proximityRadius = 0; // collision-system handles enemy-contact detection
+        this.blastRadius = config.subBombBlastRadius;
+        this.blastDamage = config.subBombDamage;
+        this.subBombCount = 0; // sub-bombs don't spawn further sub-bombs
+        this.subBombLifeFrames = config.subBombLifeFrames;
+        this.piercing = 0;
+        this.homing = false;
+        this.explosive = false;
+        this.angle = angle;
+        this.vel.x = Math.cos(angle) * speed;
+        this.vel.y = Math.sin(angle) * speed;
+        this.maxLife = Math.round(120 / GAME_CONFIG.TICK_SCALE);
+        this.rangeMultiplier = 1.0;
+        this.baseRadius = 4;
+        this.radius = this.baseRadius;
     }
     
     // Simple bullet removal on impact
@@ -91,6 +180,15 @@ export class Bullet {
     
     update(particlePool, asteroidPool, enemyPool = null, gameEngine = null, gameField = null) {
         if (!this.active) return;
+
+        // Phase 6 — cluster bomb / sub-bomblet staged update. The primary
+        // cluster bomb goes travel → armed → detonate; sub-bomblets go
+        // travel → detonate-on-flight-end. Both paths bypass the
+        // standard bullet physics + range-fade code below.
+        if (this.cluster || this.subBomb) {
+            this.updateClusterStage(particlePool, enemyPool, gameEngine, gameField);
+            return;
+        }
 
         // Trail ring-buffer (runs BEFORE physics so the trail captures the
         // pre-move position).
@@ -155,6 +253,134 @@ export class Bullet {
         }
     }
     
+    // Phase 6 (2026-05-19) — Cluster-bomb staged update path.
+    //   travel → friction decay → halt (cluster only) → armed → detonate
+    //   travel → friction decay → flight-end detonate (sub-bomb only)
+    //
+    // Detonation is delegated to `gameEngine.detonateCluster(...)` which
+    // applies AoE damage and (for primary cluster bombs) spawns sub-
+    // bomblets. The bullet itself is marked inactive once detonated.
+    //
+    // Off-field guard at the bottom matches the standard bullet path so a
+    // cluster bomb that flies off-screen during travel is despawned
+    // cleanly (with detonation FX so the player still sees what happened).
+    updateClusterStage(particlePool, enemyPool, gameEngine, gameField) {
+        this.life++;
+
+        // Apply friction to velocity. travelFriction (0.92 cluster /
+        // 0.94 sub-bomb) is applied per LOGIC tick, so the projectile
+        // reaches near-zero velocity in ~30 frames (cluster) / ~20
+        // frames (sub-bomb).
+        this.vel.x *= this.clusterFriction;
+        this.vel.y *= this.clusterFriction;
+
+        // Position update.
+        this.x += this.vel.x;
+        this.y += this.vel.y;
+
+        const speedSq = this.vel.x * this.vel.x + this.vel.y * this.vel.y;
+        const now = (typeof window !== 'undefined' && window.gameEngine)
+            ? (window.gameEngine._frameClock?.now || Date.now())
+            : Date.now();
+
+        // ── Primary cluster bomb stage machine ─────────────────────────
+        if (this.cluster) {
+            if (this.stage === 'travel') {
+                // Spawn a smoke trail every few frames during travel.
+                this._smokeFrame++;
+                if (particlePool && (this._smokeFrame % 3 === 0)) {
+                    particlePool.get(this.x, this.y, 'clusterTrail');
+                }
+                // Transition to armed when velocity drops below halt threshold.
+                if (speedSq < this.haltVelocity * this.haltVelocity) {
+                    this.stage = 'armed';
+                    this.armedAt = now;
+                    this.vel.x = 0;
+                    this.vel.y = 0;
+                }
+            } else if (this.stage === 'armed') {
+                // Snap to stationary.
+                this.vel.x = 0;
+                this.vel.y = 0;
+                // Pulse particle while armed.
+                if (particlePool && (this.life % 6 === 0)) {
+                    particlePool.get(this.x, this.y, 'clusterPulse');
+                }
+                // Auto-detonate if any enemy enters proximity radius.
+                if (enemyPool && this.proximityRadius > 0) {
+                    const r2 = this.proximityRadius * this.proximityRadius;
+                    const list = enemyPool.activeObjects || [];
+                    for (let i = 0; i < list.length; i++) {
+                        const e = list[i];
+                        if (!e || !e.active) continue;
+                        const dx = e.x - this.x;
+                        const dy = e.y - this.y;
+                        if (dx * dx + dy * dy <= r2) {
+                            this._detonate(gameEngine);
+                            return;
+                        }
+                    }
+                }
+                // Timer expiry detonation.
+                if (now - this.armedAt >= this.armedDuration) {
+                    this._detonate(gameEngine);
+                    return;
+                }
+            }
+        } else if (this.subBomb) {
+            // Sub-bomblet: simpler path. Travel for `subBombLifeFrames`
+            // logic ticks, then detonate. Collision-system handles
+            // enemy-contact early detonation via a similar AoE call.
+            this._smokeFrame++;
+            if (particlePool && (this._smokeFrame % 4 === 0)) {
+                particlePool.get(this.x, this.y, 'clusterTrail');
+            }
+            if (this.life >= this.subBombLifeFrames) {
+                this._detonate(gameEngine);
+                return;
+            }
+        }
+
+        // Off-field despawn — cluster bombs that fly off-screen during
+        // travel still get a detonation so the player sees the explosion.
+        const boundaryWidth  = gameField ? gameField.width  : this.width;
+        const boundaryHeight = gameField ? gameField.height : this.height;
+        if (this.x < -50 || this.x > boundaryWidth + 50 ||
+            this.y < -50 || this.y > boundaryHeight + 50) {
+            this._detonate(gameEngine);
+        }
+    }
+
+    // Phase 6 — trigger detonation. Routes through the combat manager's
+    // `detonateCluster` (for primary bombs) or `detonateSubBomblet` (for
+    // sub-bombs) so AoE damage, FX, and (for the primary) sub-bomb spawn
+    // all live in one place. Marks the bullet inactive on completion.
+    _detonate(gameEngine) {
+        if (!this.active) return;
+        if (gameEngine) {
+            if (this.cluster && typeof gameEngine.detonateCluster === 'function') {
+                gameEngine.detonateCluster(
+                    this.x, this.y,
+                    this.blastDamage,
+                    this.blastRadius,
+                    this.subBombCount,
+                    {
+                        subBombSpeed: this.subBombSpeed,
+                        subBombFriction: this.subBombFriction,
+                        subBombLifeFrames: this.subBombLifeFrames,
+                        subBombBlastRadius: this.subBombBlastRadius,
+                        subBombDamage: this.subBombDamage,
+                    },
+                );
+            } else if (this.subBomb && typeof gameEngine.detonateSubBomblet === 'function') {
+                gameEngine.detonateSubBomblet(
+                    this.x, this.y, this.blastDamage, this.blastRadius,
+                );
+            }
+        }
+        this.active = false;
+    }
+
     applyHoming(enemyPool, asteroidPool = null, gameEngine = null) {
         if (!this.homing) return;
 
@@ -352,6 +578,15 @@ export class Bullet {
 
     draw(ctx, gameEngine = null) {
         if (!this.active) return;
+
+        // Phase 6 — Cluster bomb / sub-bomblet have a custom Canvas2D
+        // visual (no WebGL atlas entry). The primary bomb pulses
+        // red/white while armed; the sub-bomb is a smaller flashing
+        // sphere. Both bypass the standard bullet draw chain below.
+        if (this.cluster || this.subBomb) {
+            this._drawClusterBomb(ctx);
+            return;
+        }
 
         ctx.save();
 
@@ -630,12 +865,60 @@ export class Bullet {
         }
         ctx.closePath();
         ctx.fill();
-        
+
         // Bright center
         ctx.fillStyle = '#FFFFFF';
 
         ctx.beginPath();
         ctx.arc(this.x, this.y, visualData.size * 0.4, 0, 2 * Math.PI);
         ctx.fill();
+    }
+
+    // Phase 6 — Cluster bomb / sub-bomblet Canvas2D draw. Primary bomb
+    // pulses red/white during the armed stage, with a darker travel
+    // visual. Sub-bomblets are smaller spheres with a yellow glow.
+    _drawClusterBomb(ctx) {
+        ctx.save();
+        const r = this.radius || (this.cluster ? 7 : 4);
+        if (this.cluster && this.stage === 'armed') {
+            // Pulse: alternate red / white every ~6 logic ticks.
+            const pulseT = ((this.life | 0) % 30) / 30;
+            // Sine wave makes pulse breathe in/out smoothly.
+            const wave = 0.5 + 0.5 * Math.sin(pulseT * Math.PI * 2);
+            const outerR = r * (1.0 + wave * 0.6);
+            // Outer red glow.
+            ctx.globalAlpha = 0.5 + 0.4 * wave;
+            ctx.fillStyle = '#ff2222';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, outerR, 0, Math.PI * 2);
+            ctx.fill();
+            // Inner white core.
+            ctx.globalAlpha = 0.85;
+            ctx.fillStyle = wave > 0.5 ? '#ffffff' : '#ffaaaa';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r * 0.55, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (this.cluster) {
+            // Travel: dark red body, white glint.
+            ctx.fillStyle = '#cc2222';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffeeaa';
+            ctx.beginPath();
+            ctx.arc(this.x - r * 0.3, this.y - r * 0.3, r * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (this.subBomb) {
+            // Sub-bomblet: small yellow-orange sphere.
+            ctx.fillStyle = '#ffaa33';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
     }
 }

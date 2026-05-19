@@ -2314,6 +2314,96 @@ export class GameEngine {
     applyBurn(enemy, sourceDmg, durationMs) { return combat.applyBurn(enemy, sourceDmg, durationMs); }
     applyStun(enemy, durationMs) { return combat.applyStun(enemy, durationMs); }
 
+    // Phase 6 (2026-05-19) — Cluster Launcher detonation hooks. Called
+    // from `Bullet._detonate` when a cluster bomb's armed timer expires
+    // or an enemy enters its proximity radius (primary), or when a
+    // sub-bomblet's flight-time elapses (sub).
+    detonateCluster(x, y, baseDamage, baseRadius, subBombCount, opts) {
+        return combat.detonateCluster.call(this, x, y, baseDamage, baseRadius, subBombCount, opts);
+    }
+    detonateSubBomblet(x, y, baseDamage, baseRadius) {
+        return combat.detonateSubBomblet.call(this, x, y, baseDamage, baseRadius);
+    }
+    spawnSubBomblet(x, y, angle, speed, opts) {
+        return combat.spawnSubBomblet.call(this, x, y, angle, speed, opts);
+    }
+
+    // Phase 4 (2026-05-19) — Nova Chain Reaction secondary spawn.
+    //   Pushes a smaller nova ring onto the player's `novaRings` queue
+    //   at (x,y). The ring inherits the same shape as the primary nova
+    //   spawned by `fireNova` (player/weapons.js:849) so the renderer +
+    //   collision loops handle it identically.
+    //
+    //   Parameters:
+    //     x, y           — detonation origin (killed enemy's position)
+    //     radiusFrac     — multiplier on base NOVA_BLAST.ringRadius
+    //     damageFrac     — multiplier on base NOVA_BLAST.ringDamage
+    //     hopsRemaining  — chain depth budget left for further chains
+    //                      (0 = terminal; collision site WILL NOT chain
+    //                      from this ring again).
+    //
+    //   Hop-cap is enforced at TWO sites for defense in depth:
+    //     1. The caller (collision-system.checkNovaCollisions) only
+    //        invokes this when `hopsRemaining > 0`.
+    //     2. This helper hard-clamps `hopsRemaining` to [0, 3] so a bad
+    //        caller can't smuggle in a runaway value.
+    _spawnSecondaryNova(x, y, radiusFrac = 0.6, damageFrac = 0.4, hopsRemaining = 0) {
+        const p = this.player;
+        if (!p) return;
+        const cfg = POWER_WEAPONS.NOVA_BLAST;
+        if (!cfg) return;
+
+        // Hard ceiling — defensive clamp regardless of caller input.
+        const clampedHops = Math.max(0, Math.min(3, hopsRemaining | 0));
+
+        const shockwaveStacks = (typeof p.getPowerupStacks === 'function')
+            ? p.getPowerupStacks('SHOCKWAVE') : 0;
+        const baseRingMax = cfg.ringRadius + shockwaveStacks * 40;
+        const ringMax = baseRingMax * radiusFrac;
+        const dmg = cfg.ringDamage * damageFrac;
+
+        if (!Array.isArray(p.novaRings)) p.novaRings = [];
+        p.novaActive = true;
+        p.novaRings.push({
+            x, y,
+            currentRadius: 0,
+            maxRadius: ringMax,
+            damage: dmg,
+            duration: cfg.ringDuration,
+            elapsed: 0,
+            hitEnemies: new Set(),
+            hitAsteroids: new Set(),
+            // Secondaries don't re-roll Aftershock — primary already had
+            // its chance; otherwise a deep chain would multiply slow-AoE
+            // beyond design.
+            aftershock: false,
+            active: true,
+            // Phase 4 — chain bookkeeping. The collision loop reads this
+            // to decide whether further chains may spawn from THIS ring's
+            // kills. Hard ceiling of 3 enforced above.
+            _hopsRemaining: clampedHops,
+            _isSecondary: true,
+        });
+
+        // Light VFX at the secondary origin so the chain reads as a real
+        // mini-detonation rather than a silent ring birth. Mirrors the
+        // first-frame flash from fireNova() but scaled to the smaller
+        // radius. Burst sizes are bounded so a 3-hop cascade can't spike
+        // particle counts.
+        if (this.particlePool) {
+            const ORANGE = '#ffaa00';
+            const ORANGE_BRIGHT = '#ffe080';
+            this.particlePool.get(x, y, 'explosionFlash', Math.max(20, ringMax * 0.35));
+            for (let i = 0; i < 10; i++) {
+                const ang = (i / 10) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+                this.particlePool.get(x, y, 'explosionShrapnel', ang, 3 + Math.random() * 4,
+                    i % 2 === 0 ? ORANGE_BRIGHT : ORANGE);
+            }
+        }
+
+        return p.novaRings[p.novaRings.length - 1];
+    }
+
     createHealthOrb(x, y, healAmountOverride = null) { return combat.createHealthOrb.call(this, x, y, healAmountOverride); }
     createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false) { return combat.createMoneyOrb.call(this, x, y, moneyAmountOverride, isPixel); }
     dropStarsFromEntity(x, y) { return combat.dropStarsFromEntity.call(this, x, y); }

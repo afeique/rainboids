@@ -363,6 +363,84 @@ export class Particle {
                 this.vel = { x: 0, y: 0 };
                 break;
             }
+
+            // Phase 4 (2026-05-19) — Nova Chain Reaction connector arc.
+            //   White energy bolt drawn between a killed enemy's position
+            //   and the secondary Nova that spawned at it. Reuses the
+            //   stunArc / mineShieldCrossing structural template: a
+            //   pre-baked polyline + alpha decay over a short window.
+            //   Reset takes (targetX, targetY, color?). Slightly longer
+            //   life than stunArc (0.25s) so the eye reads the spatial
+            //   link between detonations.
+            //   args: [targetX, targetY, color?]
+            case 'novaChainArc': {
+                const [targetX, targetY, arcColor] = args;
+                this.life = 0.25;
+                this.maxLife = 0.25;
+                const tx = targetX != null ? targetX : this.x;
+                const ty = targetY != null ? targetY : this.y;
+                this.color = arcColor || '#ffffff';
+                this.lineWidth = random(1.4, 2.4);
+                // Pre-bake a 5-segment jagged polyline from (x,y) to (tx,ty).
+                const segs = 5;
+                this._pts = new Array(segs + 1);
+                const dx = tx - this.x;
+                const dy = ty - this.y;
+                const len = Math.hypot(dx, dy) || 1;
+                const ux = dx / len;
+                const uy = dy / len;
+                // Perpendicular axis for jitter (rotate (ux,uy) 90°).
+                const px = -uy;
+                const py =  ux;
+                // Jitter magnitude scales with length so a long arc has
+                // proportionally visible zigzag.
+                const jitterMag = Math.min(18, len * 0.18);
+                for (let i = 0; i <= segs; i++) {
+                    const t = i / segs;
+                    const baseX = this.x + ux * len * t;
+                    const baseY = this.y + uy * len * t;
+                    const jitter = i === 0 || i === segs
+                        ? 0
+                        : random(-jitterMag, jitterMag);
+                    this._pts[i] = {
+                        x: baseX + px * jitter,
+                        y: baseY + py * jitter,
+                    };
+                }
+                // Radius is only used for culling — set to span half the
+                // arc length so the bolt never gets culled mid-way.
+                this.radius = len * 0.5;
+                this.vel = { x: 0, y: 0 };
+                break;
+            }
+
+            // ── Phase 6 (2026-05-19) Cluster Launcher particles ─────────
+            // `clusterPulse` — expanding red/white ring that respawns
+            //   every few ticks while a cluster bomb is armed. Reads as
+            //   the bomb "breathing" — visual warning that detonation is
+            //   imminent. Short life (~0.25s) so each pulse fades fast.
+            // `clusterTrail` — small dim smoke trail behind the bomb
+            //   while traveling. Shrinks + fades quickly.
+            case 'clusterPulse': {
+                this.life = 0.25;
+                this.maxLife = 0.25;
+                this.radius = 8;
+                this.maxRadius = 28;
+                this.color = '#ff4422';
+                this.vel = { x: 0, y: 0 };
+                break;
+            }
+            case 'clusterTrail': {
+                this.life = 0.4;
+                this.maxLife = 0.4;
+                this.radius = random(1.8, 3.0);
+                this.vel = {
+                    x: random(-0.3, 0.3),
+                    y: random(-0.3, 0.3),
+                };
+                this.color = Math.random() < 0.4 ? '#aaaaaa' : '#555555';
+                break;
+            }
         }
     }
 
@@ -538,6 +616,29 @@ export class Particle {
                 // Static bolt — only life drains. Decay 0.055/tick →
                 // ~18 ticks ≈ 0.3s wall-clock at TS=0.5.
                 this.life -= 0.055 * TS;
+                break;
+            case 'novaChainArc':
+                // Phase 4 — static chain-reaction arc; only life drains.
+                // Decay 0.066/tick → ~15 ticks ≈ 0.25s wall-clock at TS=0.5.
+                this.life -= 0.066 * TS;
+                break;
+
+            // Phase 6 — Cluster Launcher particles.
+            case 'clusterPulse': {
+                // Pulsing ring grows + fades. Decay 0.04/tick → ~25
+                // ticks ≈ 0.25s wall-clock at TS=0.5.
+                this.life -= 0.04 * TS;
+                const t = 1 - Math.max(0, this.life / (this.maxLife || 0.25));
+                // Quadratic-out radius growth.
+                this.radius = 8 + (this.maxRadius - 8) * (1 - (1 - t) * (1 - t));
+                break;
+            }
+            case 'clusterTrail':
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                // Smoke trail dissipates over ~0.4s.
+                this.life -= 0.025 * TS;
+                this.radius *= Math.pow(0.97, TS);
                 break;
         }
 
@@ -776,6 +877,75 @@ export class Particle {
                 }
                 ctx.stroke();
                 ctx.globalCompositeOperation = prevComp;
+                break;
+            }
+
+            // Phase 4 (2026-05-19) — Nova Chain Reaction arc draw.
+            //   Two-pass additive stroke (warm orange glow + white core)
+            //   so the link reads as a Nova-flavored energy bolt rather
+            //   than a generic electric arc. Same polyline structure as
+            //   stunArc above — only the colors + line widths differ.
+            case 'novaChainArc': {
+                if (!this._pts || this._pts.length < 2) break;
+                const lifeFrac = Math.max(0, this.life / (this.maxLife || 0.25));
+                const prevComp = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = 'lighter';
+                // Warm glow pass — wider, semi-transparent.
+                ctx.globalAlpha = lifeFrac * 0.7;
+                ctx.strokeStyle = '#ffaa66';
+                ctx.lineWidth = this.lineWidth + 2.5;
+                ctx.beginPath();
+                ctx.moveTo(this._pts[0].x, this._pts[0].y);
+                for (let i = 1; i < this._pts.length; i++) {
+                    ctx.lineTo(this._pts[i].x, this._pts[i].y);
+                }
+                ctx.stroke();
+                // White core — sharp.
+                ctx.globalAlpha = lifeFrac;
+                ctx.strokeStyle = this.color || '#ffffff';
+                ctx.lineWidth = this.lineWidth;
+                ctx.beginPath();
+                ctx.moveTo(this._pts[0].x, this._pts[0].y);
+                for (let i = 1; i < this._pts.length; i++) {
+                    ctx.lineTo(this._pts[i].x, this._pts[i].y);
+                }
+                ctx.stroke();
+                ctx.globalCompositeOperation = prevComp;
+                break;
+            }
+
+            // Phase 6 (2026-05-19) — Cluster Launcher particles.
+            //   clusterPulse: red glowing ring (additive) with white core,
+            //     reads as the bomb pulsing while armed.
+            //   clusterTrail: small fading smoke dot left behind the bomb
+            //     while traveling.
+            case 'clusterPulse': {
+                const lifeFrac = Math.max(0, this.life / (this.maxLife || 0.25));
+                const prevComp = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = lifeFrac * 0.7;
+                ctx.strokeStyle = this.color || '#ff4422';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                // White inner ring — bright core that pops the pulse.
+                ctx.globalAlpha = lifeFrac;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalCompositeOperation = prevComp;
+                break;
+            }
+            case 'clusterTrail': {
+                const lifeFrac = Math.max(0, this.life / (this.maxLife || 0.4));
+                ctx.globalAlpha = lifeFrac * 0.6;
+                ctx.fillStyle = this.color || '#888888';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
                 break;
             }
 

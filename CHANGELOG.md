@@ -11,6 +11,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.21.0] - 2026-05-19
+
+### Added — Nova chain reaction + lightning + inferno upgrades (Phase 4 of Skill Tree & Combat Overhaul)
+
+Three new POWER_UPGRADES for `NOVA_BLAST`:
+
+- **`NOVA_LIGHTNING`** (Static Discharge) — Per enemy hit, roll `0.30 × stacks`
+  chance to apply STUN. 1 stack = 30%, 2 stacks = 60%. Cost 1900, max 2 stacks.
+- **`NOVA_CHAIN`** (Chain Reaction) — On each enemy KILLED by a Nova, spawn a
+  secondary Nova at the killed enemy's position (60% radius, 40% damage).
+  Secondaries can chain to depth 3 total — initial blast is hop 0; secondary
+  inherits `hopsRemaining = parent.hopsRemaining - 1`. Hop cap enforced with
+  defense-in-depth: collision-site guard + collision-site clamp to `[0, 3]` +
+  helper-site clamp on incoming `hopsRemaining`. Cost 4300, 1 stack.
+- **`NOVA_INFERNO`** (Inferno) — Always applies BRN on every Nova hit (no
+  roll). Cost 2300, 1 stack.
+
+Implementation:
+
+- `weapon-data.js`: 3 new upgrades appended to POWER_UPGRADES + added to
+  `NOVA_BLAST.upgrades` array.
+- `collision-system.js` `checkNovaCollisions`: per-ring snapshot of upgrade
+  stacks + `_hopsRemaining`; applies BRN / rolls STUN / spawns secondary
+  on kill via `_spawnSecondaryNova(killX, killY, 0.6, 0.4, hops - 1)`.
+- `game-engine.js`: new `_spawnSecondaryNova(x, y, radiusFrac, damageFrac,
+  hopsRemaining)` method (right after Phase 3's `applyBurn`/`applyStun`
+  wrappers). Pushes a ring onto `player.novaRings` with `_isSecondary: true`
+  and a clamped `_hopsRemaining`. Spawns a light explosionFlash + 10
+  shrapnel particles at the origin.
+- `world/particle.js`: new `novaChainArc` particle type (Canvas2D, 5-segment
+  jagged polyline with perpendicular jitter, two-pass additive stroke).
+
+18 new tests in `tests/unit/nova-chain.test.js` — all passing. Tests cover
+probability scaling, always-on burn, kill detection, full 3-hop cascade,
+recursion safety with 50 enemies, and defensive clamp on malformed rings.
+
+### Added — CLUSTER_LAUNCHER 6th primary weapon (Phase 6 of Skill Tree & Combat Overhaul)
+
+A new primary weapon with novel mechanics. Projectile arcs to cursor with
+friction, halts, sits armed, then detonates with sub-bomblets.
+
+| Stage | Behavior |
+| ----- | -------- |
+| Travel | Initial velocity ~12 px/frame toward cursor. Friction 0.92/frame. Reaches near-zero in ~30 frames. |
+| Halt | When `\|vel\| < 0.3`, snaps stationary. Enters armed stage. |
+| Armed | Idle for 0.8s (reduced by SHORT_FUSE stacks, min 100 ms). Pulses red/white. Auto-detonates on enemy proximity (60 px) OR timer. |
+| Primary detonation | 90 px AoE, 50 base damage with linear falloff. Spawns 5 sub-bombs at random angles. |
+| Sub-bomblets | 4 px/frame velocity, 0.94/frame friction, ~20 frame flight. Detonate on enemy contact OR end-of-flight. 50 px AoE, 25 damage. |
+
+Per-weapon upgrades:
+
+- **CLUSTER_PAYLOAD** — +20% damage per stack. Cost 1200, max 3.
+- **MORE_BOMBLETS** — +1 sub-bomb per stack. Cost 1900, max 2.
+- **SHORT_FUSE** — −0.3s armed time per stack (clamped at 100 ms min). Cost
+  1500, max 2.
+- **MEGA_CLUSTER** — +30 px primary blast radius per stack. Cost 2300, max 2.
+
+**Cluster bombs do NOT receive HOMING / PIERCING / EXPLOSIVE** — explicitly
+gated in `fireCluster` (bypasses `applyGlobalBulletUpgrades`) and in
+`setupClusterBomb` / `setupSubBomblet` (sets `homing=false, piercing=0,
+explosive=false`). Aligns with the per-weapon framework from Phase 2.
+
+Implementation:
+
+- `weapon-data.js`: `CLUSTER_LAUNCHER` added to PRIMARY_WEAPONS; 4 per-weapon
+  upgrades added to PRIMARY_UPGRADES after RAIL_PIERCING.
+- `player/bullet.js`: Bullet class extended with cluster/subBomb fields,
+  `setupClusterBomb()`, `setupSubBomblet()`, `updateClusterStage()`,
+  `_detonate()`, `_drawClusterBomb()`.
+- `player/weapons.js`: CLUSTER_LAUNCHER case in `firePrimary`. New
+  `fireCluster()` resolves the 4 upgrade stacks and bakes them into a
+  per-shot config.
+- `player/player.js`: `fireCluster()` method binding so the dispatch reaches
+  the player instance.
+- `combat-manager.js`: appended `detonateCluster(...)`, `spawnSubBomblet(...)`,
+  `detonateSubBomblet(...)`, `_applyClusterBlast(...)`. Linear-falloff AoE
+  damage through existing `enemy.takeDamage` / `destroyAsteroid` /
+  `applyVampirism` / `onEnemyKill` pipelines. Triggers chromatic explosion VFX
+  cascade + light hitstop / screen shake. Kinetic AoE — no BRN/STUN procs.
+- `game-engine.js`: thin wrappers `detonateCluster`, `detonateSubBomblet`,
+  `spawnSubBomblet` so `Bullet._detonate(gameEngine)` can call them.
+- `world/particle.js`: new `clusterPulse` (pulsing red+white armed ring,
+  additive composite, ~0.25 s life) and `clusterTrail` (smoke dot, ~0.4 s
+  life) types.
+- `collision-system.js`: cluster bombs / sub-bomblets skipped in the
+  bullet-enemy contact loop. Surgical proximity-detection block detonates
+  armed clusters when an enemy enters their proximity radius.
+
+22 new tests in `tests/unit/cluster-launcher.test.js` — all passing. Tests
+cover the travel → armed transition, fuse math + clamp, proximity
+detonation, sub-bomb count scaling, MEGA_CLUSTER radius reach,
+NO HOMING/PIERCING enforcement.
+
+---
+
 ## [6.20.1] - 2026-05-19
 
 ### Added — BRN/STUN elemental status engine (Phase 3 of Skill Tree & Combat Overhaul)

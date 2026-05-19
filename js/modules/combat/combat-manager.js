@@ -1907,3 +1907,169 @@ export function getMineShieldMultiplier(player, enemyBulletPool) {
 export function isPlayerInMineShield(player, enemyBulletPool) {
     return getMineShieldMultiplier(player, enemyBulletPool) < 1.0;
 }
+
+// ─── Phase 6 (2026-05-19) — Cluster Launcher detonation helpers ──────────────
+//
+// `detonateCluster` is invoked from `Bullet._detonate` when a primary cluster
+// bomb's armed timer expires or an enemy enters its proximity radius. The
+// helper damages all enemies within `baseRadius`, triggers an explosion
+// VFX cascade, then spawns N sub-bomblets at random angles via
+// `spawnSubBomblet`.
+//
+// `detonateSubBomblet` is the smaller-radius counterpart for sub-bomblets;
+// it shares damage application and VFX but does not spawn further bombs.
+//
+// Cluster bombs are intentionally KINETIC AoE — no elemental BRN/STUN
+// procs. Vampirism/Thorns still apply through `applyVampirism` like any
+// other damage source, but the cluster path doesn't itself stamp BRN or
+// STUN onto hit enemies.
+//
+// `this` is the game engine, bound via the thin wrappers in
+// `js/modules/game-engine.js`.
+
+export function detonateCluster(x, y, baseDamage, baseRadius, subBombCount, opts = {}) {
+    // 1. Primary blast — radial damage to all enemies inside baseRadius.
+    _applyClusterBlast.call(this, x, y, baseDamage, baseRadius);
+
+    // 2. VFX cascade. Reuse the nova-style chromatic ring stack so the
+    //    detonation reads as a substantial explosion. Falls back gracefully
+    //    if any individual particle type isn't registered (defensive
+    //    against pool race conditions during heavy fire).
+    if (this.particlePool) {
+        const pp = this.particlePool;
+        pp.get(x, y, 'explosionFlash', baseRadius * 0.9, '#ffffff');
+        pp.get(x, y, 'explosionRingColored', baseRadius * 1.1, '#ff4422');
+        pp.get(x, y, 'explosionRingColored', baseRadius * 1.3, '#ffaa44');
+        pp.get(x, y, 'enemyShockwave', baseRadius * 1.5, '#ff8844');
+        // Ember + shrapnel fan.
+        for (let i = 0; i < 18; i++) {
+            const a = (i / 18) * Math.PI * 2 + random(-0.2, 0.2);
+            pp.get(x, y, 'explosionShrapnel', a, 4 + Math.random() * 5,
+                i % 3 === 0 ? '#ffffff' : (i % 3 === 1 ? '#ffaa44' : '#ff4422'));
+        }
+        for (let i = 0; i < 12; i++) {
+            pp.get(x, y, 'explosionEmber', i % 2 ? '#ff8844' : '#ffe080');
+        }
+    }
+    // Light screen punch on detonation — matches the nova-cast feel but
+    // smaller (clusters detonate frequently in a heavy-fire build).
+    if (typeof this.triggerHitstop === 'function') this.triggerHitstop(3);
+    if (typeof this.triggerScreenShake === 'function') this.triggerScreenShake(8, 5, baseRadius);
+
+    // 3. Spawn sub-bomblets at random angles. Each sub-bomb travels for
+    //    a short window then detonates on its own.
+    if (subBombCount > 0 && this.bulletPool) {
+        const subSpeed = opts.subBombSpeed || 4;
+        for (let i = 0; i < subBombCount; i++) {
+            // Spread angles evenly with random jitter so the fan reads
+            // as procedural-but-fair (not perfectly symmetric).
+            const baseAngle = (i / subBombCount) * Math.PI * 2;
+            const angle = baseAngle + random(-0.4, 0.4);
+            spawnSubBomblet.call(this, x, y, angle, subSpeed, opts);
+        }
+    }
+}
+
+export function spawnSubBomblet(x, y, angle, speed, opts = {}) {
+    if (!this.bulletPool) return null;
+    const bullet = this.bulletPool.get(x, y, angle);
+    if (!bullet) return null;
+    bullet.weaponId = 'CLUSTER_LAUNCHER';
+    // The bullet's reset() places it at (x + offset, y + offset) so the
+    // bullet emerges from the muzzle. For sub-bomblets we want them to
+    // spawn AT the detonation site, so snap the position back here.
+    bullet.x = x;
+    bullet.y = y;
+    bullet.setupSubBomblet({
+        subBombFriction: opts.subBombFriction || 0.94,
+        subBombLifeFrames: opts.subBombLifeFrames || 20,
+        subBombBlastRadius: opts.subBombBlastRadius || 50,
+        subBombDamage: opts.subBombDamage || 25,
+    }, angle, speed);
+    return bullet;
+}
+
+export function detonateSubBomblet(x, y, baseDamage, baseRadius) {
+    // Smaller blast, lighter VFX. Same damage application path.
+    _applyClusterBlast.call(this, x, y, baseDamage, baseRadius);
+    if (this.particlePool) {
+        const pp = this.particlePool;
+        pp.get(x, y, 'explosionFlash', baseRadius * 0.6, '#ffffff');
+        pp.get(x, y, 'explosionRingColored', baseRadius * 0.9, '#ffaa44');
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2 + random(-0.2, 0.2);
+            pp.get(x, y, 'explosionShrapnel', a, 3 + Math.random() * 4, '#ffaa44');
+        }
+        for (let i = 0; i < 4; i++) {
+            pp.get(x, y, 'explosionEmber', '#ff8844');
+        }
+    }
+    if (typeof this.triggerScreenShake === 'function') {
+        this.triggerScreenShake(3, 3, baseRadius);
+    }
+}
+
+// Internal — apply AoE damage from a cluster blast. Damages all enemies
+// (and asteroids, if reachable) within `radius` of (x, y). Damage falls
+// off linearly with distance so direct hits hit hardest.
+function _applyClusterBlast(x, y, baseDamage, radius) {
+    if (!radius || radius <= 0) return;
+    const r2 = radius * radius;
+
+    // Enemies — full damage pipeline (registers stats, hit FX, kills).
+    if (this.enemyPool && this.enemyPool.activeObjects) {
+        const list = this.enemyPool.activeObjects;
+        for (let i = list.length - 1; i >= 0; i--) {
+            const e = list[i];
+            if (!e || !e.active) continue;
+            if (e.warping || e._deathFlash > 0) continue;
+            const dx = e.x - x;
+            const dy = e.y - y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > r2) continue;
+            // Linear falloff: hits at the center receive full damage,
+            // hits at the edge receive ~30% damage.
+            const dist = Math.sqrt(d2);
+            const falloff = 1 - 0.7 * (dist / radius);
+            const dmg = Math.max(1, baseDamage * falloff);
+            const hpBefore = e.health;
+            const destroyed = e.takeDamage(dmg, { isExplosion: true });
+            const applied = Math.max(0, hpBefore - e.health);
+            if (typeof this.applyVampirism === 'function') this.applyVampirism(applied);
+            if (this.game && this.game.stats) {
+                this.game.stats.totalDamageDealt = (this.game.stats.totalDamageDealt || 0) + applied;
+            }
+            if (destroyed) {
+                if (typeof this.onEnemyKill === 'function') this.onEnemyKill(e);
+                e._deathFlash = 8;
+                e._deathFlashMax = 8;
+                if (typeof this.createEnemyDebris === 'function') this.createEnemyDebris(e);
+                if (typeof this.dropOrbsFromEntity === 'function') this.dropOrbsFromEntity(e.x, e.y, e);
+            }
+        }
+    }
+
+    // Asteroids — straight HP application with vampirism + destruction.
+    if (this.asteroidPool && this.asteroidPool.activeObjects) {
+        const list = this.asteroidPool.activeObjects;
+        for (let i = list.length - 1; i >= 0; i--) {
+            const ast = list[i];
+            if (!ast || !ast.active) continue;
+            if (ast.warping || ast._deathFlash > 0) continue;
+            const dx = ast.x - x;
+            const dy = ast.y - y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > r2) continue;
+            const dist = Math.sqrt(d2);
+            const falloff = 1 - 0.7 * (dist / radius);
+            const dmg = Math.max(1, baseDamage * falloff);
+            const hpBefore = ast.health;
+            ast.health = Math.max(0, ast.health - dmg);
+            const applied = hpBefore - ast.health;
+            if (typeof this.applyVampirism === 'function') this.applyVampirism(applied);
+            if (ast.health <= 0.001 && typeof this.destroyAsteroid === 'function') {
+                this.destroyAsteroid(ast);
+            }
+        }
+    }
+}
