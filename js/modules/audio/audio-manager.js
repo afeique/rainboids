@@ -209,6 +209,27 @@ function uniquePaths() {
     return Array.from(out);
 }
 
+// 6.18.x — Eager-preload set. Only these sound names get fetched +
+// decoded at boot; everything else lazy-loads on first play (and is
+// cached thereafter). Keeps boot near-instant (~14 files / ~600 KB)
+// instead of waiting on the full 23 MB / 515-file library.
+//
+// Selection rule: immediate-response combat SFX where first-play
+// latency would be audible as missing-sound. Long-tail sounds
+// (per-weapon hit variants, boss death roars, defense-skill triggers,
+// loops) lazy-load on first use; the player accepts ~50-150 ms one-
+// time fetch delay the first time each fires.
+const EAGER_SOUNDS = new Set([
+    // Player firing + actions (every-frame-ish)
+    'shoot',
+    // Pickups (frequent, must feel snappy + used as title-screen chimes)
+    'coin', 'powerup', 'healthRegen',
+    // Player damage / death (must fire on the exact damage frame)
+    'playerHitAsteroid', 'playerHitEnemy', 'playerExplosion', 'shield',
+    // Generic combat fallbacks (specific weapon names fall through to these)
+    'hit', 'enemyHit', 'explosion', 'enemyDestroy', 'asteroidDestroy',
+]);
+
 export class AudioManager {
     constructor() {
         this.audioReady = false;
@@ -233,6 +254,11 @@ export class AudioManager {
         // sonic palette without per-call jitter.
         this._variantSounds = new Set();
         this._sessionVariant = new Map();
+        // 6.18.x — In-flight lazy-load promises keyed by path. Prevents
+        // double-fetching when a rapid-fire sound triggers `playSound`
+        // before the first fetch has resolved. Once the buffer lands
+        // it's stored in `audioBuffers` and removed from this map.
+        this._loadingPromises = new Map();
     }
 
     async init() {
@@ -244,16 +270,43 @@ export class AudioManager {
         // variant list. Failures (missing manifest, network error) fall
         // through gracefully — the hardcoded MANIFEST stays in effect.
         await this._expandVariantsFromManifest();
-        // Fire-and-forget per-file decode. Each failure is logged
-        // individually but never blocks the rest of the load.
-        const paths = uniquePaths();
-        await Promise.all(paths.map(p => this._loadOne(p)));
+        // 6.18.x — Only fetch the EAGER_SOUNDS set at boot. Everything
+        // else lazy-loads on first `playSound`/`startLoop` (cached for
+        // subsequent calls). Pre-pick + load just ONE variant per
+        // eager name so a sound with 8 variants only fetches 1 file at
+        // boot; the rest are pulled on-demand when the player rerolls
+        // via the SFX pause-tab.
+        const eagerPaths = new Set();
+        for (const name of EAGER_SOUNDS) {
+            const item = this._pickItemForName(name);
+            if (!item) continue;
+            const files = (typeof item === 'string') ? [item] : item;
+            for (const f of files) eagerPaths.add(SFX_BASE + f);
+        }
+        await Promise.all([...eagerPaths].map(p => this._loadOne(p)));
         this._loaded = true;
         // Default every named sound to enabled in `soundEnabled` so the
         // SFX pause-tab toggles can reflect them.
         for (const name of Object.keys(MANIFEST)) {
             if (!(name in this.soundEnabled)) this.soundEnabled[name] = true;
         }
+    }
+
+    // 6.18.x — Pick (and lock) the session variant for a name, returning
+    // the chosen MANIFEST item (string filename or layered-bucket array).
+    // Mirrors the same picker logic `playSound` uses, but extracted so
+    // init() can pre-pick the variant before the first playSound call.
+    _pickItemForName(name) {
+        const list = MANIFEST[name];
+        if (!list || list.length === 0) return null;
+        if (this._sessionVariant.has(name)) {
+            return this._sessionVariant.get(name);
+        }
+        const item = list[(Math.random() * list.length) | 0];
+        if (this._variantSounds.has(name)) {
+            this._sessionVariant.set(name, item);
+        }
+        return item;
     }
 
     // 6.1.4 — Reads sfx/manifest.json and rewrites MANIFEST entries
@@ -289,6 +342,11 @@ export class AudioManager {
     }
 
     async _loadOne(path) {
+        // De-dupe concurrent fetches of the same path. The boot-time
+        // path goes through `init()`'s direct `Promise.all`; runtime
+        // `_ensureLoaded` paths go through `_loadingPromises`. This
+        // method is shared by both.
+        if (this.audioBuffers.has(path)) return;
         try {
             const res = await fetch(path);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -298,6 +356,22 @@ export class AudioManager {
         } catch (e) {
             console.warn(`[AudioManager] failed to load ${path}:`, e?.message || e);
         }
+    }
+
+    // 6.18.x — Lazy-load a single SFX path on demand. Returns a Promise
+    // that resolves when the buffer is in `audioBuffers` (or rejected
+    // load completed silently). Cheap if already cached. De-dupes
+    // concurrent callers so rapid-fire sounds only trigger one fetch.
+    _ensureLoaded(path) {
+        if (this.audioBuffers.has(path)) return Promise.resolve();
+        const existing = this._loadingPromises.get(path);
+        if (existing) return existing;
+        if (!this.audioContext) return Promise.resolve();
+        const p = this._loadOne(path).finally(() => {
+            this._loadingPromises.delete(path);
+        });
+        this._loadingPromises.set(path, p);
+        return p;
     }
 
     _ensureAudioContext() {
@@ -400,7 +474,17 @@ export class AudioManager {
         for (const f of files) {
             const path = SFX_BASE + f;
             const buf = this.audioBuffers.get(path);
-            if (!buf) continue;
+            if (!buf) {
+                // 6.18.x — Lazy-load on cache miss. This particular call
+                // doesn't play (no buffer to schedule); the next call
+                // for the same sound after the fetch resolves will. Web
+                // Audio doesn't queue playback against a pending buffer
+                // and trying to delay-then-play here would create
+                // audible latency anyway — better to skip + cache for
+                // the next trigger.
+                this._ensureLoaded(path);
+                continue;
+            }
             try {
                 const src = this.audioContext.createBufferSource();
                 src.buffer = buf;
@@ -459,7 +543,16 @@ export class AudioManager {
         if (!files || files.length === 0) return false;
         const path = SFX_BASE + files[0];
         const buf = this.audioBuffers.get(path);
-        if (!buf) return false;
+        if (!buf) {
+            // 6.18.x — Lazy-load on cache miss. Loops are typically
+            // started on a player gesture (weapon-trigger) so the
+            // ~100 ms first-time fetch is acceptable; caller is
+            // expected to re-invoke `startLoop` once the asset lands
+            // (which weapon code already does — the loop is restarted
+            // every fire-down event until stopped on fire-up).
+            this._ensureLoaded(path);
+            return false;
+        }
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume().catch(() => {});
         }
@@ -542,23 +635,36 @@ export class AudioManager {
         return idx < 0 ? 1 : idx + 1;
     }
 
-    /** Pin the session variant to a specific 1-based index (1..N). */
+    /** Pin the session variant to a specific 1-based index (1..N).
+     *  6.18.x — proactively kicks off a lazy fetch of the chosen
+     *  variant file so the player's next `playSound(name)` (or the
+     *  pause-tab preview button) plays immediately. */
     setVariantIndex(name, idx) {
         const list = this.getVariants(name);
         if (!list) return false;
         const i = Math.max(1, Math.min(list.length, idx | 0));
-        this._sessionVariant.set(name, list[i - 1]);
+        const chosen = list[i - 1];
+        this._sessionVariant.set(name, chosen);
+        if (typeof chosen === 'string') {
+            this._ensureLoaded(SFX_BASE + chosen);
+        }
         return true;
     }
 
     /** Cycle forward (delta=+1) or back (delta=-1) through the variant
-     *  list, wrapping at the ends. Returns the new 1-based index. */
+     *  list, wrapping at the ends. Returns the new 1-based index.
+     *  6.18.x — also kicks off a lazy fetch of the chosen variant
+     *  file so the next playSound for this name fires without latency. */
     cycleVariant(name, delta = 1) {
         const list = this.getVariants(name);
         if (!list) return 0;
         const cur = this.getCurrentVariantIndex(name); // 1..N
         const next = ((cur - 1 + delta) % list.length + list.length) % list.length;
-        this._sessionVariant.set(name, list[next]);
+        const chosen = list[next];
+        this._sessionVariant.set(name, chosen);
+        if (typeof chosen === 'string') {
+            this._ensureLoaded(SFX_BASE + chosen);
+        }
         return next + 1;
     }
 }

@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.25.0] - 2026-05-19
+
+### Changed
+- **SFX loading is now lazy.** Boot used to fetch + decode all 515
+  SFX files (~23 MB) before the title screen would render. Now only
+  a small `EAGER_SOUNDS` set (~14 critical-path combat sounds) loads
+  upfront, and every other sound lazy-fetches on its first
+  `playSound`/`startLoop` call. The first time a non-critical sound
+  fires it gets dropped while the buffer fetches (~50-150 ms); every
+  subsequent call hits the in-memory cache instantly.
+- Variant reroll (`cycleVariant`, `setVariantIndex` in the SFX
+  pause-tab) now proactively kicks off a fetch for the newly-chosen
+  variant file, so the next preview / fire plays immediately.
+- Background music behavior is unchanged — it was already streamed
+  on-demand via the `<audio id="background-music">` element; only
+  SFX boot cost is reduced.
+
 ## [6.24.1] - 2026-05-19
 
 ### Changed — scanlines reverted to fine sin-based pattern
