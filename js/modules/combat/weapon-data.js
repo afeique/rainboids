@@ -264,6 +264,20 @@ export const PRIMARY_UPGRADES = {
     SCATTER_VELOCITY:{ id: 'SCATTER_VELOCITY',name: 'Powder Charge',         description: '+12% pellet speed & damage',  cost: 1500, maxStacks: 3, weapon: 'SCATTER_GUN',   icon: 'bullet-train', velocityBonus: 0.12 },
     RAIL_VELOCITY:   { id: 'RAIL_VELOCITY',   name: 'Tungsten Slug',         description: '+12% rail speed & damage',    cost: 1900, maxStacks: 3, weapon: 'RAIL_DRIVER',   icon: 'bullet-train', velocityBonus: 0.12 },
 
+    // ─── PER-WEAPON HOMING & PIERCING (Phase 2 — 2026-05-19) ────────────────
+    // Replaces the global HOMING / PIERCING powerups with weapon-bound
+    // variants. Only weapons that semantically support these get an
+    // entry. Lance Beam (innate pierce), Mine Layer, Nova Blast,
+    // Lightning Arc, and the upcoming Cluster Launcher intentionally
+    // have no entry. Missile Salvo's homing is innate; only pierce is
+    // exposed as an upgrade.
+    PULSE_HOMING:    { id: 'PULSE_HOMING',    name: 'Pulse Tracking',   description: 'Pulse bullets seek nearest enemy',     cost: 1500, maxStacks: 3, weapon: 'PULSE_CANNON',  icon: 'target' },
+    PULSE_PIERCING:  { id: 'PULSE_PIERCING',  name: 'Pulse Penetrator', description: '+1 pierce on Pulse bullets',           cost: 1500, maxStacks: 3, weapon: 'PULSE_CANNON',  icon: 'bow-arrow' },
+    NEEDLE_HOMING:   { id: 'NEEDLE_HOMING',   name: 'Tracking Needles', description: 'Needles seek nearest enemy',           cost: 1500, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'target' },
+    NEEDLE_PIERCING: { id: 'NEEDLE_PIERCING', name: 'Barbed Needles',   description: '+1 pierce on needles',                 cost: 1500, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'bow-arrow' },
+    SCATTER_PIERCING:{ id: 'SCATTER_PIERCING',name: 'Armor Piercer',    description: '+1 pierce on pellets',                 cost: 1500, maxStacks: 2, weapon: 'SCATTER_GUN',   icon: 'bow-arrow' },
+    RAIL_PIERCING:   { id: 'RAIL_PIERCING',   name: 'Saboted Slug',     description: '+1 pierce on rail slugs',              cost: 1500, maxStacks: 2, weapon: 'RAIL_DRIVER',   icon: 'bow-arrow' },
+
     // ─── TIER 2 — CAPSTONE UPGRADES (5.75.1, B1) ────────────────────────
     // Each weapon gets ONE evolved upgrade that unlocks only after its
     // tier-1 prereqs are maxed. They're expensive single-stack picks
@@ -432,6 +446,10 @@ export const POWER_UPGRADES = {
     CHARGE_SPEED:     { id: 'CHARGE_SPEED',     name: 'Charge Speed',     description: '-1s charge time',                         cost: 3200, maxStacks: 3,  weapon: 'CHARGE_SHOT', icon: 'stopwatch',
                         costOverrides: [3200, 6400, 10500] },
     CHARGE_OVERCHARGE:{ id: 'CHARGE_OVERCHARGE', name: 'Overcharge',      description: 'Full charge explodes on impact',          cost: 4300, maxStacks: 1,  weapon: 'CHARGE_SHOT', icon: 'explosion' },
+    // Per-weapon Phase 2 (2026-05-19) — replaces the old global
+    // HOMING/PIERCING powerups for Charge Shot specifically.
+    CHARGE_HOMING:    { id: 'CHARGE_HOMING',    name: 'Magnetic Charge',  description: 'Charged shots seek nearest enemy',        cost: 1800, maxStacks: 3,  weapon: 'CHARGE_SHOT', icon: 'target' },
+    CHARGE_PIERCING:  { id: 'CHARGE_PIERCING',  name: 'Lance Round',      description: '+1 pierce on charged shots',              cost: 1800, maxStacks: 3,  weapon: 'CHARGE_SHOT', icon: 'bow-arrow' },
 
     // Mine Layer
     EXTRA_PAYLOAD:    { id: 'EXTRA_PAYLOAD',    name: 'Extra Payload',    description: '+1 max mine',                             cost: 1500, maxStacks: 2,  weapon: 'MINE_LAYER', icon: 'bomb' },
@@ -449,6 +467,9 @@ export const POWER_UPGRADES = {
     EXTRA_ORDNANCE:   { id: 'EXTRA_ORDNANCE',   name: 'Extra Ordnance',   description: '+1 missile per volley',                   cost: 2200, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: 'rocket' },
     CLUSTER_WARHEAD:  { id: 'CLUSTER_WARHEAD',  name: 'Cluster Warhead',  description: 'Missiles split into 3 on impact',         cost: 3900, maxStacks: 1,  weapon: 'MISSILE_SALVO', icon: 'explosion' },
     QUICK_RELOAD:     { id: 'QUICK_RELOAD',     name: 'Quick Reload',     description: '-2s cooldown',                            cost: 3200, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: 'fast-forward' },
+    // Per-weapon Phase 2 (2026-05-19) — missile homing is innate, so
+    // only PIERCING is exposed as a buy.
+    MISSILE_PIERCING: { id: 'MISSILE_PIERCING', name: 'Penetrator Warhead', description: '+1 pierce on missiles',                  cost: 1800, maxStacks: 2,  weapon: 'MISSILE_SALVO', icon: 'bow-arrow' },
 
     // 5.79.23 — Lance Beam (now power weapon)
     BEAM_WIDTH:      { id: 'BEAM_WIDTH',      name: 'Beam Width',     description: '+30% beam width',                            cost: 1100, maxStacks: 3,  weapon: 'LANCE_BEAM', icon: 'ruler' },
@@ -598,6 +619,61 @@ export const SKILL_UPGRADES = {
     REDIRECTION:      { id: 'REDIRECTION',      name: 'Redirection',      description: '30% of absorbed bullets fire back',   cost: 3, maxStacks: 1, skill: 'TRACTOR_SHIELD', icon: 'undo' },
 };
 
+// ─── PASSIVE UPGRADES (Phase 1 — 2026-05-19) ────────────────────────────────
+//
+// Always-on, weapon-agnostic, skill-agnostic. PASSIVE_UPGRADES is the
+// fourth category alongside PRIMARY_UPGRADES, POWER_UPGRADES, and
+// SKILL_UPGRADES. Each entry's `id` matches the existing in-game ID so
+// `getPowerupStacks('THORNS')` etc. continues to resolve correctly via
+// the player's namespace-agnostic powerup map.
+//
+// Phase 1 is INTENTIONALLY additive: this new export sits alongside
+// POWERUP_TYPES (offensive drop pool) and SKILL_UPGRADES (BULWARK's
+// IRON_WILL) without removing entries from those buckets. The Phase 7
+// shop UI rewrite will consume this export directly when it lands.
+// Until then the live shop POWERUPS tab and the in-game drop pool
+// continue to surface these IDs through POWERUP_TYPES as before, so
+// runtime behavior is unchanged.
+//
+// IDs that may not currently exist in any other table (LONG_RANGE,
+// SPARE_SHIP, SPEED_BOOST — all previously retired) are intentionally
+// included as PASSIVE entries so Phase 7 can resurface them if/when
+// the corresponding game systems return. The `hidden` flag keeps them
+// out of any browse path that respects it.
+export const PASSIVE_UPGRADES = {
+    // Offensive passives (mirror entries in POWERUP_TYPES — see
+    // js/modules/world/powerup.js for the live drop / shop config).
+    RAPID_FIRE:    { id: 'RAPID_FIRE',    name: 'Rapid Fire',         description: '+22% fire rate',                       cost: 1500, maxStacks: 5,  passive: true, icon: 'bolt'      },
+    MULTI_SHOT:    { id: 'MULTI_SHOT',    name: 'Multi Shot',         description: '+1 bullet per shot',                   cost: 1500, maxStacks: 4,  passive: true, icon: 'multi-shot' },
+    CRIT_CHANCE:   { id: 'CRIT_CHANCE',   name: 'Critical Chance',    description: '+7% crit chance',                      cost: 1500, maxStacks: 6,  passive: true, icon: 'star'      },
+    CRIT_DAMAGE:   { id: 'CRIT_DAMAGE',   name: 'Critical Damage',    description: '+15% crit damage',                     cost: 1500, maxStacks: 6,  passive: true, icon: 'dagger'    },
+    EXPLOSIVE:     { id: 'EXPLOSIVE',     name: 'Explosive Rounds',   description: 'AoE blast on impact (+10px radius)',   cost: 1800, maxStacks: 3,  passive: true, icon: 'bomb'      },
+    EXECUTIONER:   { id: 'EXECUTIONER',   name: 'Executioner',        description: '+20% damage vs enemies under 25% HP',  cost: 1800, maxStacks: 5,  passive: true, icon: 'dagger'    },
+
+    // Defensive passives.
+    HEALTH_BOOST:  { id: 'HEALTH_BOOST',  name: 'Health Boost',       description: '+35 max HP, full heal',                cost: 1500, maxStacks: 10, passive: true, icon: 'heart'     },
+    SHIELD_BOOST:  { id: 'SHIELD_BOOST',  name: 'Toughness',          description: '+8% damage reduction (cap 75%)',       cost: 1500, maxStacks: 8,  passive: true, icon: 'shield'    },
+    VAMPIRISM:     { id: 'VAMPIRISM',     name: 'Vampirism',          description: 'Heal 5% of damage dealt',              cost: 1800, maxStacks: 5,  passive: true, icon: 'skull'     },
+    THORNS:        { id: 'THORNS',        name: 'Thorns',             description: 'Reflect 25% of damage taken',          cost: 1800, maxStacks: 4,  passive: true, icon: 'anger'     },
+
+    // Bulwark's tied damage-resistance bump. Phase 1 keeps the live
+    // entry in SKILL_UPGRADES (still tied to BULWARK) so the in-game
+    // damage-reduction maths are untouched. Mirrored here so Phase 7
+    // can decide whether to migrate IRON_WILL to a true always-on
+    // passive without rewriting the live behavior. Stacks resolve to
+    // the same player.powerups slot — fine, since `getPowerupStacks`
+    // is namespace-agnostic.
+    IRON_WILL:     { id: 'IRON_WILL',     name: 'Iron Will',          description: 'Bulwark resistance raised to 65%',     cost: 2400, maxStacks: 1,  passive: true, icon: 'shield'    },
+
+    // Retired-but-reserved IDs. Marked `hidden` so any browse path
+    // that filters on `cfg.hidden` (mirrors POWERUP_TYPES convention)
+    // keeps them out of the live shop. Phase 7 can re-enable when the
+    // corresponding game system returns.
+    SPEED_BOOST:   { id: 'SPEED_BOOST',   name: 'Afterburner',        description: '+50% thrust & +35% top speed',         cost: 2200, maxStacks: 4,  passive: true, icon: 'wind',      hidden: true },
+    LONG_RANGE:    { id: 'LONG_RANGE',    name: 'Long Range',         description: 'Bullets fly farther (legacy)',         cost: 1500, maxStacks: 3,  passive: true, icon: 'bullet-train', hidden: true },
+    SPARE_SHIP:    { id: 'SPARE_SHIP',    name: 'Spare Ship',         description: '+1 extra life (legacy)',               cost: 12000, maxStacks: 1, passive: true, icon: 'rocket',    hidden: true, flatCost: true },
+};
+
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
 /** Get all upgrades for a specific primary weapon */
@@ -613,4 +689,14 @@ export function getPowerUpgrades(weaponId) {
 /** Get all upgrades for a specific defense skill */
 export function getSkillUpgrades(skillId) {
     return Object.values(SKILL_UPGRADES).filter(u => u.skill === skillId);
+}
+
+/**
+ * Get all passive upgrades. Optional `{ includeHidden }` flag controls
+ * whether legacy/retired entries (LONG_RANGE, SPEED_BOOST, SPARE_SHIP)
+ * are surfaced. Default behavior matches the POWERUP_TYPES convention
+ * (`cfg.hidden` filters them out).
+ */
+export function getPassiveUpgrades({ includeHidden = false } = {}) {
+    return Object.values(PASSIVE_UPGRADES).filter(u => includeHidden || !u.hidden);
 }

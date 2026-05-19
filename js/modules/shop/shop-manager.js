@@ -6,7 +6,7 @@
  */
 
 import { GAME_STATES } from '../core/constants.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS, getPrimaryUpgrades, getPowerUpgrades, getSkillUpgrades } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS, PASSIVE_UPGRADES, getPrimaryUpgrades, getPowerUpgrades, getSkillUpgrades, getPassiveUpgrades } from '../combat/weapon-data.js';
 import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { showShopDom, hideShopDom, renderShopDom, updateShopCurrencyDom } from './shop-dom.js';
@@ -156,6 +156,14 @@ export function _rebuildShopCache() {
             this._buildPowerupsTabItems();
             return;
         }
+        // Phase 1 (2026-05-19) — PASSIVE tab: lists entries from the
+        // new PASSIVE_UPGRADES export in weapon-data.js. Pricing keys
+        // off each entry's `cost` field. Phase 7's shop-UI rewrite
+        // will replace this builder with a richer skill-tree layout.
+        if (this.shopCategory === 'PASSIVE') {
+            this._buildPassiveTabItems();
+            return;
+        }
         // 6.1.0 — INVENTORY tab: read-only view of the player's 5
         // equipped items. No purchasable items; renderer paints item
         // rows from player.equippedItems directly.
@@ -197,6 +205,32 @@ export function _buildPowerupsTabItems() {
             category: 'POWERUPS',
             currency: 'COINS',
             isPowerup: true,
+        });
+    }
+    this.shopFilteredItems = items;
+}
+
+// Phase 1 (2026-05-19) — Builds the PASSIVE shop tab. Walks
+// PASSIVE_UPGRADES (always-on, weapon-agnostic, skill-agnostic
+// upgrades) and produces a shop item per non-hidden entry. Pricing
+// uses each upgrade's static `cost` (no per-stack ramp yet — Phase 7
+// can layer that on with the UI rewrite). All items use
+// `currency: 'COINS'` so the existing buy flow handles them.
+export function _buildPassiveTabItems() {
+    const items = [];
+    const upgrades = getPassiveUpgrades({ includeHidden: false });
+    for (const upg of upgrades) {
+        items.push({
+            id: upg.id,
+            name: upg.name,
+            description: upg.description || '',
+            icon: upg.icon,
+            cost: upg.cost,
+            maxStacks: upg.maxStacks || 1,
+            category: 'PASSIVE',
+            currency: 'COINS',
+            isPassive: true,
+            flatCost: !!upg.flatCost,
         });
     }
     this.shopFilteredItems = items;
@@ -397,6 +431,16 @@ export function buyShopItem(itemId) {
 
             // Weapon upgrades from the per-weapon shop tabs.
             if (filteredItem && (filteredItem.isWeaponUpgrade || filteredItem.isSkillUpgrade)) {
+                return this._handleUpgradeBuy(filteredItem);
+            }
+
+            // Phase 1 (2026-05-19) — PASSIVE shop tab items route
+            // through the same upgrade-buy path as weapon-upgrade
+            // rows. `_handleUpgradeBuy` reads `id`, `cost`,
+            // `maxStacks`, and resolves the powerup config via
+            // `getPowerupConfig`; PASSIVE_UPGRADES entries match that
+            // shape.
+            if (filteredItem && filteredItem.isPassive) {
                 return this._handleUpgradeBuy(filteredItem);
             }
 

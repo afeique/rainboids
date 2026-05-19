@@ -11,6 +11,137 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.20.0] - 2026-05-19
+
+### Added — PASSIVE upgrade category (Phase 1 of Skill Tree & Combat Overhaul)
+
+New `PASSIVE_UPGRADES` export in `js/modules/combat/weapon-data.js` collects the
+always-on, weapon-agnostic upgrades into a fourth category alongside PRIMARY,
+POWER, and SKILL:
+
+`RAPID_FIRE`, `MULTI_SHOT`, `CRIT_CHANCE`, `CRIT_DAMAGE`, `EXPLOSIVE`,
+`EXECUTIONER`, `HEALTH_BOOST`, `SHIELD_BOOST`, `VAMPIRISM`, `THORNS`,
+`IRON_WILL`, `SPEED_BOOST` (hidden), `LONG_RANGE` (hidden), `SPARE_SHIP`
+(hidden).
+
+This is **additive only** — existing `POWERUP_TYPES` entries are left intact so
+the live drop pool, the POWERUPS shop tab, level-up picks, and HUD overlays
+keep functioning identically. The Phase 7 shop UI rewrite will surface the new
+category through the Diablo-style skill-tree visual.
+
+A new `getPassiveUpgrades({ includeHidden })` helper iterates the category.
+`shop-manager.js` registers PASSIVE as a fourth shop browse category.
+
+### Changed — HOMING and PIERCING are now per-weapon upgrades (Phase 2)
+
+The global `HOMING` and `PIERCING` powerups have been **removed entirely** from
+the drop pool. Each primary or power weapon that semantically supports the
+behavior now has its own upgrade:
+
+| Weapon | HOMING | PIERCING |
+| ------ | ------ | -------- |
+| Pulse Cannon | `PULSE_HOMING` | `PULSE_PIERCING` |
+| Storm Needles | `NEEDLE_HOMING` | `NEEDLE_PIERCING` |
+| Scatter Gun | — | `SCATTER_PIERCING` |
+| Rail Driver | — | `RAIL_PIERCING` |
+| Charge Shot | `CHARGE_HOMING` | `CHARGE_PIERCING` |
+| Missile Salvo | innate | `MISSILE_PIERCING` |
+| Lance Beam | — | innate |
+| Mine Layer | — | — |
+| Nova Blast | — | — |
+| Lightning Arc | — | — |
+
+The pre-launch Cluster Launcher (planned in Phase 6) will also be excluded.
+
+Implementation: `_PER_WEAPON_HOMING_ID` / `_PER_WEAPON_PIERCING_ID` lookup
+tables in `player/weapons.js` resolve the weapon-specific upgrade IDs at fire
+time. Bullets carry per-bullet `homing` / `piercing` flags set at spawn (no
+runtime `powerups.has(...)` checks in the bullet update loop). Charge Shot
+passes an explicit `'CHARGE_SHOT'` override into `createChargedBullets` so it
+always uses `CHARGE_HOMING` / `CHARGE_PIERCING` regardless of equipped primary.
+
+The `HOMING` powerup case in `world/powerup.js` draw path is gone, along with
+the diamond-shape branch. The HUD cursor's piercing-trail prediction
+(`hud/cursor.js`) now looks up the per-weapon stack keyed by
+`player.activePrimary`.
+
+### Added — 31 unit tests in `tests/unit/passive-upgrades.test.js`
+
+Covers PASSIVE_UPGRADES export shape, all expected IDs, ID stability, the
+hidden-flag handling, `getPassiveUpgrades()` iteration semantics, and the
+per-weapon HOMING/PIERCING applicability matrix.
+
+---
+
+## [6.19.0] - 2026-05-19
+
+### Changed — solo/MP architectural split: `js/sim/`, `js/net/`, `js/engine/` inlined and deleted
+
+Solo and multiplayer are now fully separate stacks. The `js/sim/` pure-function
+layer (extracted in 5.88.x for shared parity with Rust) was paying parity tax
+that no live code consumed anymore — `mp1/` had its own enemy roster, `/mp`
+runs through WASM, and solo's wrapper-and-roundtrip ceremony was pure overhead.
+
+**Inlined into solo entities** (byte-for-byte equivalent to the prior wrappers):
+
+- `js/sim/ship.js` → `js/modules/player/player.js` (`update()` physics block)
+- `js/sim/bullet.js::updatePlayerBullet` → `js/modules/player/bullet.js`
+- `js/sim/bullet.js::updateEnemyBullet` → `js/modules/enemy/enemy-bullet.js`
+- `js/sim/enemy.js` → `js/modules/enemy/enemy.js` (incl. `_decideShooting`)
+- `js/sim/asteroid.js` → `js/modules/world/asteroid.js`
+- `js/sim/drops.js` → `js/modules/world/color-star.js`
+- `js/sim/wave.js` + `freshWaveState` → `js/modules/wave/wave-manager.js`
+
+### Removed — legacy MP-online JS runtime + EngineDriver
+
+The pre-WASM-pivot multiplayer JS path (already unreachable from the title screen
+since 2026-05-17) is gone. MULTIPLAYER button still routes to `/mp` (the
+WASM-backed product); solo runs the GameEngine directly with no Predictor,
+Interpolator, or LoopbackConnection in the loop.
+
+Deleted directories: `js/sim/`, `js/net/`, `js/engine/`.
+
+Stripped from solo runtime:
+
+- `main.js` no longer constructs `EngineDriver` or sets `window.engineDriver`.
+- `game-engine.js` — `_mpTickIfOnline`, `_mpApplyPredictedShipIfOnline`,
+  `_mpDrawRemoteShipsIfOnline`, `_mpDriverIfOnline`, `resolveSoloOptions`,
+  `_resolveSoloOptions` removed (≈ 23 call sites collapsed). The
+  `?solo-loopback=1` URL param is no longer recognized.
+- `player.js` — `_isAbilitySuppressedByMp`, `isAbilityMpSafe` gate removed
+  (always returned true in solo; firePower / activateSkill now unconditional).
+- `hud/overlays.js` — `multiplayerEnabled()` check removed; MULTIPLAYER button
+  is always rendered.
+
+### Removed — Rust↔JS parity tooling
+
+`tools/parity-runner.mjs` and `tools/check-schema.mjs` deleted (sim parity is
+no longer a thing). `tools/codegen-protocol.mjs` now emits Rust only; the
+`schema:check` npm script is dropped. `npm run codegen` / `codegen:check` keep
+working for the Rust wire types under `server/sim/src/protocol/generated.rs`.
+
+### Removed — obsolete tests
+
+- `tests/unit/sim/` (the wrapped-sim parity suite — never created).
+- `tests/unit/net/` (Predictor, Interpolator, tick-buffer, loopback, ws-client,
+  mp-feature-flags, matchmaking).
+- `tests/unit/engine/` (EngineDriver and mp-frame).
+- `tests/unit/wire-codec.test.js` (legacy MP hello/welcome handshake).
+- `tests/unit/player/mp-ability-gate.test.js`.
+- `tests/e2e/multiplayer-mvd.spec.js`, `tests/e2e/multiplayer-extended.spec.js`,
+  `tests/helpers/multiplayer.js`.
+- The "online mode does NOT suppress dash" case in `shift-dash.test.js`.
+
+### Notes
+
+- Rust-side parity mirrors at `server/sim/src/{ship,enemy,bullet,asteroid,
+  drops,wave,collision,...}.rs` are intentionally left in place — they're still
+  consumed by `server-bin/src/room/` (legacy Room actor used by matchmaking /
+  session / connection). That subtree is a separate MP-side cleanup and will
+  land as its own change.
+
+---
+
 ## [6.18.9] - 2026-05-19
 
 ### Fixed — stats-state-case-mismatch (stats-overlay `_wasPaused` always false)

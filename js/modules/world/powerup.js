@@ -89,22 +89,10 @@ export const POWERUP_TYPES = {
         spCostIncrement: 2,
         description: '+1 bullet per shot'
     },
-    HOMING: {
-        name: 'Homing',
-        displayName: 'Homing',
-        abbr: 'HOM',
-        color: '#ff3399',
-        gradientColors: ['#ff66cc', '#cc0066'],
-        icon: 'target',
-        duration: 30000,
-        effect: 'homing',
-        rarity: 0.15,
-        category: 'OFFENSE',
-        maxStacks: 3,
-        spCost: 3,
-        spCostIncrement: 2,
-        description: 'Bullets seek nearest enemy'
-    },
+    // Phase 2 (2026-05-19) — Global HOMING powerup removed. HOMING is
+    // now a per-weapon upgrade (PULSE_HOMING / NEEDLE_HOMING /
+    // CHARGE_HOMING). Missile Salvo's homing remains innate. See
+    // js/modules/combat/weapon-data.js PRIMARY_UPGRADES / POWER_UPGRADES.
     BIG_BULLETS: {
         name: 'Big',
         displayName: 'Big Bullets',
@@ -129,22 +117,11 @@ export const POWERUP_TYPES = {
     //   The combat-manager.js getPowerupConfig fallback keeps the shop
     //   purchase path working (still resolves the Afterburner config
     //   when the shop calls addPowerup('SPEED_BOOST', …)).
-    PIERCING: {
-        name: 'Pierce',
-        displayName: 'Piercing',
-        abbr: 'PRC',
-        color: '#ff9933',
-        gradientColors: ['#ffcc66', '#cc6600'],
-        icon: 'bow-arrow',
-        duration: 30000,
-        effect: 'piercing',
-        rarity: 0.12,
-        category: 'OFFENSE',
-        maxStacks: 4,
-        spCost: 3,
-        spCostIncrement: 2,
-        description: '+1 pierce'
-    },
+    // Phase 2 (2026-05-19) — Global PIERCING powerup removed.
+    // PIERCING is now a per-weapon upgrade (PULSE_PIERCING /
+    // NEEDLE_PIERCING / SCATTER_PIERCING / RAIL_PIERCING /
+    // CHARGE_PIERCING / MISSILE_PIERCING). Lance Beam has innate
+    // pierce. See js/modules/combat/weapon-data.js for definitions.
     EXPLOSIVE: {
         name: 'Explode',
         displayName: 'Explosive',
@@ -914,15 +891,10 @@ export class Powerup {
         glowSpriteCache.draw(ctx, 0, 0, this.color, R, 8, 0.6);
         ctx.globalAlpha = 1;
 
-        if (this.type === 'HOMING') {
-            // Diamond shape for homing
-            ctx.beginPath();
-            ctx.moveTo(0, -R);
-            ctx.lineTo(R * 0.8, 0);
-            ctx.lineTo(0, R);
-            ctx.lineTo(-R * 0.8, 0);
-            ctx.closePath();
-        } else if (this.type === 'EXPLOSIVE') {
+        // Phase 2 (2026-05-19) — Global HOMING powerup retired; the
+        // diamond shape branch that used to handle it is removed.
+        // HOMING is now per-weapon and never spawns as a world drop.
+        if (this.type === 'EXPLOSIVE') {
             // Star shape for explosive
             ctx.beginPath();
             for (let i = 0; i < 8; i++) {

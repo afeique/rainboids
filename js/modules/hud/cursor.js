@@ -284,15 +284,27 @@ function _predictPrimaryBulletRange(player) {
 
 // How many additional targets a single primary bullet can punch through
 // past the first hit. 0 = stops at first hit. Pulls weapon built-in,
-// PIERCING upgrade stacks, and the per-weapon capstone bonuses
-// (HAILSTORM, CONE_OF_FIRE, RAIL_PENETRATOR_PLUS) the same way
-// applyGlobalBulletUpgrades + the fire functions do.
+// per-weapon PIERCING upgrade stacks (Phase 2 — 2026-05-19), and the
+// per-weapon capstone bonuses (HAILSTORM, CONE_OF_FIRE,
+// RAIL_PENETRATOR_PLUS) the same way applyGlobalBulletUpgrades + the
+// fire functions do.
+//
+// Mapping mirrors `_PER_WEAPON_PIERCING_ID` in player/weapons.js;
+// duplicated here to avoid a cross-module import for a 4-entry table
+// (primary-only — Charge Shot / Missile Salvo aren't predicted here).
+const _PIERCING_UPGRADE_BY_PRIMARY = {
+    PULSE_CANNON: 'PULSE_PIERCING',
+    STORM_NEEDLES: 'NEEDLE_PIERCING',
+    SCATTER_GUN: 'SCATTER_PIERCING',
+    RAIL_DRIVER: 'RAIL_PIERCING',
+};
 function _predictPrimaryPiercing(player) {
     if (!player || !player.getActivePrimaryConfig) return 0;
     const cfg = player.getActivePrimaryConfig();
     let p = (cfg && cfg.piercing) || 0;
     if (!player.getPowerupStacks) return p;
-    p += player.getPowerupStacks('PIERCING');
+    const perWeaponId = _PIERCING_UPGRADE_BY_PRIMARY[player.activePrimary];
+    if (perWeaponId) p += player.getPowerupStacks(perWeaponId);
     if (player.getPowerupStacks('RAIL_PENETRATOR_PLUS') > 0) p = Math.max(p, 99);
     if (player.activePrimary === 'STORM_NEEDLES' && player.getPowerupStacks('HAILSTORM') > 0) p += 1;
     if (player.activePrimary === 'SCATTER_GUN' && player.getPowerupStacks('CONE_OF_FIRE') > 0) p += 1;

@@ -454,13 +454,19 @@ export class Bullet {
                 glowColor = '#33cc33';
                 size = this.radius * 1.2; // Slightly bigger visual
             }
-            if (powerups.has('PIERCING')) {
+            // Phase 2 (2026-05-19) — Global HOMING / PIERCING powerups
+            // retired. Visuals now key off the per-bullet `piercing` /
+            // `homing` flags set at fire time by the per-weapon
+            // upgrade path. This narrows the visual to bullets that
+            // ACTUALLY pierce / home (not every bullet just because the
+            // player owns the upgrade on some weapon).
+            if (this.piercing > 0) {
                 color = '#ffcc66';
                 glowColor = '#ff9933';
                 shape = 'diamond';
                 glowIntensity = 12;
             }
-            if (powerups.has('HOMING')) {
+            if (this.homing) {
                 color = '#ff66cc';
                 glowColor = '#ff3399';
                 shape = 'diamond';

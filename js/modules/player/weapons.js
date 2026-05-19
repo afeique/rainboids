@@ -34,6 +34,47 @@ function getMobileEarlyDamageMultiplier(wave) {
 // stack, so the visual feel is consistent across the roster.
 const BIG_BULLETS_PX_PER_STACK = 2.2; // was 1.5 — chunkier per stack to match new rarity
 
+// ── Per-weapon HOMING / PIERCING (Phase 2 — 2026-05-19) ────────────────────
+// Global HOMING / PIERCING powerups removed; each weapon that
+// semantically supports them now exposes its own per-weapon upgrade.
+// These tables map `bullet.weaponId` → the per-weapon upgrade ID that
+// applies. A missing entry means the weapon doesn't get the bonus
+// (LANCE_BEAM has innate pierce; NOVA / MINE / ARC have neither).
+const _PER_WEAPON_HOMING_ID = {
+    PULSE_CANNON: 'PULSE_HOMING',
+    STORM_NEEDLES: 'NEEDLE_HOMING',
+    CHARGE_SHOT: 'CHARGE_HOMING',
+};
+const _PER_WEAPON_PIERCING_ID = {
+    PULSE_CANNON: 'PULSE_PIERCING',
+    STORM_NEEDLES: 'NEEDLE_PIERCING',
+    SCATTER_GUN: 'SCATTER_PIERCING',
+    RAIL_DRIVER: 'RAIL_PIERCING',
+    CHARGE_SHOT: 'CHARGE_PIERCING',
+    MISSILE_SALVO: 'MISSILE_PIERCING',
+};
+
+function _getPerWeaponHomingStacks(player, weaponId) {
+    const id = _PER_WEAPON_HOMING_ID[weaponId];
+    if (!id || !player.getPowerupStacks) return 0;
+    return player.getPowerupStacks(id);
+}
+
+function _getPerWeaponPiercingStacks(player, weaponId) {
+    const id = _PER_WEAPON_PIERCING_ID[weaponId];
+    if (!id || !player.getPowerupStacks) return 0;
+    return player.getPowerupStacks(id);
+}
+
+// Exported so cursor.js (and any other HUD prediction code) can sum
+// per-weapon piercing without re-importing the lookup tables.
+export function getPiercingStacksForWeapon(player, weaponId) {
+    return _getPerWeaponPiercingStacks(player, weaponId);
+}
+export function getHomingStacksForWeapon(player, weaponId) {
+    return _getPerWeaponHomingStacks(player, weaponId);
+}
+
 // ── Velocity-and-damage upgrade helper ────────────────────────────────────
 // Per-weapon "high-velocity rounds"-style upgrade: each stack adds the same
 // percentage to bullet speed AND damage. Weapons declare their bonus per
@@ -579,9 +620,14 @@ export function applyGlobalBulletUpgrades(bullet) {
     // chokepoint to set it. Charge-shot stamps its own weaponId separately.
     bullet.weaponId = this.activePrimary;
 
-    const homingStacks = this.getPowerupStacks('HOMING');
+    // Phase 2 (2026-05-19) — global HOMING / PIERCING removed; each
+    // weapon's firing path now reads its OWN per-weapon stack. Lookup
+    // tables keyed by `bullet.weaponId`. Weapons that don't have a
+    // per-weapon variant (LANCE_BEAM has innate pierce; NOVA / MINE /
+    // ARC have neither) just see 0 stacks here.
+    const homingStacks = _getPerWeaponHomingStacks(this, bullet.weaponId);
     const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
-    const piercingStacks = this.getPowerupStacks('PIERCING');
+    const piercingStacks = _getPerWeaponPiercingStacks(this, bullet.weaponId);
     const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
 
     // Range
@@ -1196,8 +1242,10 @@ export function fireChargedShot(bulletPool, audioManager) {
     // Calculate charge-based homing strength (base homing from charge time)
     const baseHomingStrength = Math.min(0.15, (chargeTime / 1000) * 0.03); // +0.03 per second, max 0.15 at 5s
 
-    // Create charged bullet
-    this.createChargedBullets(bulletPool, sizeMultiplier, speedMultiplier, totalDamage, critChanceBonus, baseHomingStrength);
+    // Create charged bullet. Pass 'CHARGE_SHOT' as the weapon-upgrade
+    // source so CHARGE_HOMING / CHARGE_PIERCING apply regardless of
+    // which primary is equipped underneath the charge shot.
+    this.createChargedBullets(bulletPool, sizeMultiplier, speedMultiplier, totalDamage, critChanceBonus, baseHomingStrength, 1, 'CHARGE_SHOT');
 
     // Play shoot sound
     audioManager.playShoot();
@@ -1227,9 +1275,12 @@ export function fireWeapons(bulletPool, audioManager) {
 
 export function createBullets(bulletPool) {
     const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
-    const homingStacks = this.getPowerupStacks('HOMING');
+    // Phase 2 (2026-05-19) — per-weapon HOMING / PIERCING. Legacy
+    // `createBullets` path doesn't have a per-bullet weaponId yet, so
+    // we resolve by activePrimary up front.
+    const homingStacks = _getPerWeaponHomingStacks(this, this.activePrimary);
     const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
-    const piercingStacks = this.getPowerupStacks('PIERCING');
+    const piercingStacks = _getPerWeaponPiercingStacks(this, this.activePrimary);
     const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
 
     // +1 bullet per multi-shot stack, spread evenly in a fan
@@ -1289,11 +1340,20 @@ export function createBullets(bulletPool) {
     }
 }
 
-export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultiplier = 1, totalDamage = 20, critChanceBonus = 0, baseHomingStrength = 0, rangeOverride = 1) {
+export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultiplier = 1, totalDamage = 20, critChanceBonus = 0, baseHomingStrength = 0, rangeOverride = 1, weaponIdOverride = null) {
     const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
-    const homingStacks = this.getPowerupStacks('HOMING');
+    // Phase 2 (2026-05-19) — global HOMING / PIERCING retired. Each
+    // call site picks its own per-weapon upgrade source via
+    // `weaponIdOverride`. firePulseCannon doesn't pass an override so
+    // we resolve via `activePrimary` (= PULSE_CANNON →
+    // PULSE_HOMING/PULSE_PIERCING). fireChargedShot passes
+    // 'CHARGE_SHOT' explicitly so charge shots read
+    // CHARGE_HOMING/CHARGE_PIERCING regardless of which primary is
+    // equipped underneath.
+    const weaponIdForUpgrades = weaponIdOverride || this.activePrimary;
+    const homingStacks = _getPerWeaponHomingStacks(this, weaponIdForUpgrades);
     const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
-    const piercingStacks = this.getPowerupStacks('PIERCING');
+    const piercingStacks = _getPerWeaponPiercingStacks(this, weaponIdForUpgrades);
     const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
 
     // +1 bullet per multi-shot stack, spread evenly in a fan
