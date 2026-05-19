@@ -188,25 +188,23 @@ void main() {
     // The foreground action (gameCanvas) sits on top of glCanvas and
     // is unaffected.
     //
-    // 6.15.2 — flicker mitigations on the 5.79.2 band:
-    //   * Period now measured in CSS pixels (divide gl_FragCoord.y by
-    //     u_dpr) so high-DPR displays no longer sub-pixel-crawl the
-    //     band edges.
-    //   * Vertical scroll disabled. The previous 25 px/sec scroll over
-    //     a 5-px period produced ~5 Hz blinking — squarely in the
-    //     human flicker-sensitivity peak (4-10 Hz). Static bands have
-    //     zero temporal flicker.
-    //   * Contrast eased from 0.55 → 0.75 so bands read as CRT haze
-    //     rather than blinking bars.
-    // 6.18.1 — Transition width reverted from 2 px → 1 px each side.
-    //   The wider transition softened the band edges into a blurred
-    //   "gradient stripe" feel; bands now read as crisper, finer
-    //   scanlines while keeping the eased contrast + DPR-stable
-    //   period from 6.15.2.
-    float modY = mod(gl_FragCoord.y / u_dpr, 5.0);
-    // 0..2 dark, 2..3 smooth transition, 3..5 light.
-    float scanFactor = smoothstep(2.0, 3.0, modY);
-    float scan = mix(0.75, 1.0, scanFactor);
+    // 6.18.2 — Reverted to the pre-5.79.2 fine sin-based pattern.
+    //   Period: 2 CSS pixels (dense — every other CSS pixel reads
+    //   dark). Modulation: cosine (smooth edges, no aliasing). Floor:
+    //   0.78 → 22% contrast (matches the original tuning, well below
+    //   the loud 45% the 5.79.2 hard-band introduced). NO scroll —
+    //   the 6.15.2 fix established that any time-based motion at
+    //   these short periods produces ~5 Hz blink, which is squarely
+    //   in the eye-irritation window.
+    //
+    //   The (gl_FragCoord.y / u_dpr) divisor keeps the period at 2 CSS px
+    //   regardless of display density (the 6.15.2 DPR fix), so high-
+    //   DPR displays don't sub-pixel-crawl. The cosine's smoothness
+    //   means we don't need a smoothstep transition — the wave's own
+    //   curvature anti-aliases the band edges.
+    float phase = (gl_FragCoord.y / u_dpr) * 3.14159265;
+    float wave = 0.5 + 0.5 * cos(phase);  // 0..1, period 2 CSS px
+    float scan = mix(0.78, 1.0, wave);
     // 5.79.33 — orbs (health, gold shape, gold coin) pass v_noScan=1
     //   so the scanline tint stays at 1.0, leaving them at full
     //   brightness while the starfield/nebula behind them keeps the

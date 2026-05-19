@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.24.1] - 2026-05-19
+
+### Changed — scanlines reverted to fine sin-based pattern
+
+The 6.15.2/6.18.1 hard-band scanline (5-px period, 1-px transition,
+smoothstep) read as chunky alternating stripes rather than CRT
+scanlines. Reverted in `webgl-starfield-renderer.js` to the
+pre-5.79.2 fine pattern:
+
+- Period: 2 CSS px (was 5) — dense, every other CSS pixel reads
+  dark, matches a real CRT's line spacing.
+- Modulation: `0.5 + 0.5 * cos(y * π)` (sin-based) — the wave's own
+  curvature anti-aliases the edges; no smoothstep needed.
+- Contrast: 22% (floor 0.78) — gentle CRT haze, well below the loud
+  45% the 5.79.2 hard-band used.
+- Movement: still disabled (the 6.15.2 flicker mitigation). At a
+  2-px period any time-based motion produces ≥12 Hz blink which is
+  even worse than the 5 Hz the wider band had.
+
+DPR-stable period from 6.15.2 retained — divides `gl_FragCoord.y`
+by `u_dpr` so the 2-px period is measured in CSS pixels regardless
+of display density.
+
+---
+
 ## [6.24.0] - 2026-05-19
 
 ### Removed — dead JS sim/net/engine directories + Rust↔JS codegen pipeline
