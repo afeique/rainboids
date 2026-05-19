@@ -1,515 +1,580 @@
-//! Enemy AI + movement — Phase 2 port (HUNTER only).
+//! Phase 3 enemy sim — HUNTER chase + arc-orbit.
 //!
-//! Mirrors a SIMPLIFIED slice of `js/sim/enemy.js::updateEnemy()` for the
-//! HUNTER kind only. The full `updateEnemy` (391 lines) dispatches across
-//! 10 enemy types, 6 event types, multiple movement strategies, boss-rage
-//! mechanics, late-wave AI throttle, line-of-sight checks, screen-size
-//! shooting ranges, music-sync shield rotation, micro-movements, fish-like
-//! motion, light trails, and torus wraparound. None of that is in scope
-//! for THIS port — see "Deferred" below.
+//! Fresh rewrite from solo's `js/modules/enemy/{enemy-data,movement,
+//! ai}.js`. Deterministic: every random draw goes through
+//! `RngCtx` (seeded per-spawn from the `EnemySpawn` event's
+//! `rng_subseed`), and every trig op goes through `super::trig::*`
+//! (polynomial-bit-exact across native + WASM).
 //!
-//! The HUNTER chase implemented here is the **simplified** chase from
-//! `js/modules/enemy/movement.js::chasePlayer()` standard branch
-//! (lines 73–97), NOT the production `hunter_arc` movement
-//! (`movement.js::hunterArcMovement()`, lines 806–901). The real
-//! HUNTER's `hunter_arc` uses sticky per-spawn random state, frameClock
-//! timestamps, vortex-paced angular speed, slingshot contractions, and
-//! perpendicular weave — none of which is parity-friendly without a
-//! deeper RNG/clock contract. Once the wider sim has a deterministic
-//! frameClock + RNG plumbed through the per-tick context, the
-//! `hunter_arc` port can replace the simplified chase here.
+//! Phase 3 ships ONE enemy kind: HUNTER. Reserves kind discriminator
+//! 0 for HUNTER; 1+ left open for Phase 4 enemies (GUARDIAN, WASP,
+//! STALKER, ...). No enemy-bullet firing in Phase 3 — body-collision
+//! damage only.
 //!
-//! ── What lives here ─────────────────────────────────────────────────
-//!   - `Enemy` struct (HUNTER-relevant fields only)
-//!   - `EnemyKind` enum (HUNTER only)
-//!   - `EnemyContext<'a>` per-tick context bag (with `frame_clock_ms`
-//!     + `rng` plumbing reserved for `hunter_arc`; see "RNG / frameClock
-//!     plumbing" below)
-//!   - `ShipPosition` minimal ship slice (avoids dragging wire-format
-//!     `ShipState` into the sim)
-//!   - `EnemyEvent` / `BulletPattern` event surface (single-shot only)
-//!   - `update_enemy` pure step: chase + cooldown-gated single-shot fire
-//!   - `update_enemies` loop helper
-//!   - HUNTER constants (speed, hp, fire cooldown) verbatim from
-//!     `js/modules/enemy/enemy-data.js` and
-//!     `js/modules/core/constants.js`
-//!
-//! ── RNG / frameClock plumbing (2026-05-10) ───────────────────────────
-//!
-//! `EnemyContext` now carries `frame_clock_ms: u64` and
-//! `rng: Option<&'a mut Pcg64>` — the deterministic clock + RNG that the
-//! production HUNTER `hunter_arc` movement (`movement.js:806-901`) needs
-//! for its sticky per-spawn random init, lunge dice, and slingshot
-//! contractions. **Neither field is read by `update_enemy` today** —
-//! the simplified chase is the only branch that runs.
-//!
-//! The fields are wired now so:
-//!   1. The wrapper / call sites already have somewhere to plug in a
-//!      seeded `Pcg64` + ms-precision clock (no signature churn when
-//!      `hunter_arc` lands).
-//!   2. The parity fixture
-//!      `parity_enemy::hunter_chase_with_ctx_plumbing` proves that
-//!      populating these fields with non-default values does NOT alter
-//!      the chase output today (same invariant agent F established for
-//!      `wave::WaveContext` in PR #28).
-//!
-//! **JS-side limitation**: `hunter_arc` consumes `Math.random()` (the
-//! global, non-seedable JS RNG) and `frameClock.now` (a session-local
-//! ms counter). Cross-language byte-for-byte parity is **impossible
-//! without harmonizing JS-side onto a deterministic Pcg64 + injected
-//! clock**. The plumbing landing here is the Rust half of that
-//! contract; the JS half (a `ctx.rng` + `ctx.now` argument threaded
-//! into `hunterArcMovement` instead of the global reads) is deferred
-//! to a follow-up session — see `docs/Multiplayer Rust Client Engine
-//! – 2026-05-07.md` §"Phase 2.1 RNG harmonization".
-//!
-//! ── Deferred (Phase 2.1+) ───────────────────────────────────────────
-//!
-//! Enemy kinds (all 9 non-Hunter):
-//!   - GUARDIAN (square movement, guardian_spread firing)
-//!   - WASP (wasp_zigzag movement, wasp_machinegun firing)
-//!   - STALKER (arc movement, charged_laser firing)
-//!   - DRIFTER (drifter_wave movement, arc_lightning firing)
-//!   - PROWLER (keep_distance movement, missile firing)
-//!   - WEAVER (weaver_spinup movement, spiral_laser firing)
-//!   - SENTINEL (weaver_spinup movement, sentinel_sweep firing)
-//!   - TANGERINE / Bomber (chase movement, lay_mine firing)
-//!   - TITAN (boulder movement, sweep_laser firing)
-//!
-//! Event types (5 of 6, only single-shot fire is implemented):
-//!   - `enemy_debris_burst` — JS enemy.js:125 (death animation)
-//!   - `enemy_fire_continuous` — JS enemy.js:320,324,328 (wasp_machinegun,
-//!     sweep_laser, sentinel_sweep)
-//!   - `enemy_fire_charging` — JS enemy.js:365 (laser, arc_lightning)
-//!   - `enemy_fire_burst` — JS enemy.js:359 (burst_3, burst_2,
-//!     square_burst, hunter_single)
-//!   - `enemy_death_recycle` — JS enemy.js:270 (post-death pool recycle)
-//!
-//! Enemy struct fields skipped (will be added when the corresponding
-//! behavior gets ported):
-//!   - `_arcDirection`, `_arcRadius`, `_arcAngle`, `_arcOmega`,
-//!     `_arcLungeUntil`, `_arcLungeRollAt`, `_arcSlingUntil`,
-//!     `_arcSlingRollAt`, `_arcWeavePhase` — hunter_arc state
-//!   - `triangleBurstState`, `triangleBurstTimer`,
-//!     `triangleBurstDuration`, `burstDirection`, `burstStartPos`,
-//!     `burstDistance` — triangle/wasp burst state
-//!   - `_deathFlash`, `_deathFlashMax`, `_debrisBurstFired` —
-//!     death sequence
-//!   - `warping`, `updateWarpIn` — entry animation
-//!   - `isBoss`, `bossPhase`, `_aiOffset` — boss tier mechanics
-//!   - `currentTarget`, `targetPlayer` — multi-target priority
-//!   - `tankState`, `canShoot` — tank/arc movement gates
-//!   - `shield`, `lightTrail` — visual systems
-//!   - `mass`, `radius` (currently we use a fixed radius for HUNTER)
-//!
-//! Behavior simplifications vs JS:
-//!   - JS uses `frameClock.now` (ms since simulation start) for fire
-//!     timestamps + lunge dice. Rust uses dt-accumulated cooldown
-//!     countdown — semantically equivalent for the simple-chase /
-//!     simple-fire path but **divergent** from the real HUNTER's
-//!     burst-pattern + lunge logic.
-//!   - JS standard chase adds a per-tick weave term via `Math.sin(now *
-//!     0.002 + this.x * 0.01)`. The simplified port omits the weave
-//!     because that depends on frameClock + the enemy's x-coord which
-//!     are inputs the deferred branches need. The parity fixture has
-//!     ship and enemy on a single line so the chase is purely radial
-//!     and the weave (perpendicular) wouldn't change the radial result
-//!     anyway — but for arbitrary inputs the divergence is real.
-//!   - JS heavy-AI block (evasion, asteroid-avoid, distance-keep,
-//!     bullet-dodge) skipped entirely. Same for tier-3/4 boss formation.
-//!   - JS shooting decision gates on screen size, line-of-sight,
-//!     aim tolerance, burst pipeline — all skipped. Rust just decrements
-//!     a cooldown timer and emits a single-shot event when it hits 0.
-//!
-//! Parity fixture: `server/tests/parity_enemy.rs::hunter_basic_chase`.
+//! Behavioral deviations from solo's `hunterArcMovement` (intentional,
+//! determinism-driven):
+//!   - No `frameClock.now`-based lunge/slingshot dice. Solo rolls
+//!     these against wall-clock; the sim has no wall-clock. Phase 3
+//!     keeps the orbit's core read (one-way strafe at a chosen
+//!     radius/omega around the closest player) and drops the
+//!     stochastic per-tick state.
+//!   - No velocity damping/friction (`vel *= 0.92`). The Phase 3
+//!     enemy moves at constant `HUNTER_BASE_SPEED` along its facing
+//!     vector; the arc emerges from the offset chase-target, not
+//!     from accumulated velocity. Same visual read with a simpler
+//!     state vector.
+//!   - Angle is lerped toward the desired heading at `t = 0.08` per
+//!     tick (solo's `turnSpeed`). Mirrors solo's `updateFaceDirection`
+//!     turn rate so the visual feel ports forward.
 
-use crate::protocol::{EnemyState, GameEvent, ShipState};
-use rand_pcg::Pcg64;
+use serde::{Deserialize, Serialize};
 
-// ── Constants copied verbatim from JS sources ─────────────────────────────
-//
-// JS: `TICK_SCALE: 30 / 60` (constants.js:116).
-// Position deltas are scaled by this factor each tick to convert
-// frame-based velocity (calibrated at 30 Hz) to logic ticks (60 Hz).
-pub const TICK_SCALE: f32 = 30.0 / 60.0;
+use super::trig;
 
-// JS: HUNTER `speed: 2.6` (enemy-data.js:16).
-// Maximum velocity magnitude (px/tick) before the chase clamps.
-pub const HUNTER_SPEED: f32 = 2.6;
+/// HUNTER kind discriminator. Reserves 0-9 for future enemy kinds
+/// (GUARDIAN=1, WASP=2, ...) when Phase 4+ ports them.
+pub const KIND_HUNTER: u8 = 0;
 
-// JS: HUNTER `health: 5` (enemy-data.js:11).
-// Base HP at level 1 (level scaling from `initializeEnemy` is deferred).
-pub const HUNTER_HP: f32 = 5.0;
+/// Base HP for a HUNTER. 3 PULSE_CANNON hits at 1.2 dmg = 3.6 > 3.0.
+pub const HUNTER_MAX_HP: f64 = 3.0;
+/// Body radius (px). Matches solo's HUNTER `size` (visual + collider).
+pub const HUNTER_RADIUS: f64 = 18.0;
+/// Movement speed (px/tick at 60 Hz).
+pub const HUNTER_BASE_SPEED: f64 = 1.4;
+/// Minimum arc-orbit radius (px) — closest the orbit pulls in.
+pub const HUNTER_ARC_RADIUS_MIN: f64 = 120.0;
+/// Maximum arc-orbit radius (px) — widest the orbit swings out.
+pub const HUNTER_ARC_RADIUS_MAX: f64 = 200.0;
+/// Upper bound on arc-orbit angular velocity (radians/tick).
+pub const HUNTER_ARC_OMEGA_RANGE: f64 = 0.02;
+/// Contact damage dealt to a ship on body-touch (Phase 3 only damage source).
+pub const HUNTER_CONTACT_DAMAGE: f64 = 5.0;
 
-// JS: HUNTER `size: 32` (enemy-data.js:17).
-// Visual + collision radius at level 1 (level-based scaling deferred).
-pub const HUNTER_RADIUS: f32 = 32.0;
+/// Lerp factor used to turn the enemy's facing angle toward its
+/// desired heading per tick. 0.08 mirrors solo's
+/// `enemy.turnSpeed = 0.08` in `js/modules/enemy/enemy.js`.
+const ANGLE_TURN_T: f64 = 0.08;
 
-// JS: standard chase `acceleration = 0.012` (movement.js:79).
-// Per-tick acceleration applied to velocity along the chase direction.
-pub const CHASE_ACCEL: f32 = 0.012;
-
-// JS: standard chase `maxSpeed = this.config.speed * 1.08` (movement.js:92).
-// Velocity cap multiplier for the standard chase. HUNTER's effective cap is
-// `HUNTER_SPEED * CHASE_SPEED_CAP_MULT = 2.808 px/tick`.
-pub const CHASE_SPEED_CAP_MULT: f32 = 1.08;
-
-// JS: HUNTER firing cooldown range `MIN: 600, MAX: 2200` ms (constants.js:187).
-// `getEnemyFiringCooldown('HUNTER', level)` interpolates MAX→MIN as level
-// rises 1→10. We expose both so callers can mirror the level-scaling.
-pub const HUNTER_FIRE_COOLDOWN_MIN_MS: f32 = 600.0;
-pub const HUNTER_FIRE_COOLDOWN_MAX_MS: f32 = 2200.0;
-
-// ── Types ────────────────────────────────────────────────────────────────
-
-/// Enemy kind discriminator. HUNTER only for Phase 2; the other 9 kinds
-/// (Guardian, Wasp, Stalker, Drifter, Prowler, Weaver, Sentinel,
-/// Tangerine, Titan) land in follow-up sessions — see module docstring.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EnemyKind {
-    Hunter,
-    // TODO Phase 2.1+: Guardian, Wasp, Stalker, Drifter, Prowler, Weaver,
-    // Sentinel, Tangerine, Titan. Each adds a movement-pattern dispatch
-    // branch in `update_enemy` plus its own struct field set.
-}
-
-/// Bullet emission pattern. Single-shot only for HUNTER's simplified
-/// fire path. The full set (`hunter_single` burst, `wasp_machinegun`,
-/// `sweep_laser`, `sentinel_sweep`, `charged_laser`, `arc_lightning`,
-/// `missile`, `lay_mine`, `spiral_laser`, `guardian_spread`,
-/// `square_burst`, `burst_2`, `burst_3`) lands with the corresponding
-/// enemy kind ports.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BulletPattern {
-    SingleShot,
-    // TODO Phase 2.1+: HunterBurst, WaspMachinegun, SweepLaser,
-    // SentinelSweep, ChargedLaser, ArcLightning, Missile, LayMine,
-    // SpiralLaser, GuardianSpread, SquareBurst, Burst2, Burst3.
-}
-
-/// Sim-level enemy state. Mirrors the `EnemyState` typedef in
-/// `js/sim/state.js` (lines 656–670, agent D's round-2 addition) but
-/// scoped to HUNTER's chase + single-shot fire. Fields beyond this
-/// minimal set are listed in the module docstring under
-/// "Enemy struct fields skipped".
+/// Lightweight read-only view of a ship that an enemy can target.
+/// Caller passes a slice of these built from the room's active
+/// ships — keeps enemy update decoupled from RoomState shape.
 #[derive(Debug, Clone, Copy)]
-pub struct Enemy {
-    /// Stable id for the enemy slot. JS enemy.id is `EnemyId|number`.
-    pub id: u32,
-
-    /// Enemy kind discriminator.
-    pub kind: EnemyKind,
-
-    // ── Position / velocity (px / px-per-tick) ───────────────────────
-    pub x: f32,
-    pub y: f32,
-    pub vx: f32,
-    pub vy: f32,
-
-    /// Aim angle in radians. Cosmetic — the simplified fire path emits
-    /// the angle as part of the event so the wrapper can spawn a bullet
-    /// without re-computing.
-    pub angle: f32,
-
-    /// Current HP. Decremented by collisions; when ≤ 0.001 the enemy
-    /// dies. JS death threshold: `enemy.health <= 0.001` (enemy.js:268).
-    pub hp: f32,
-
-    /// HP cap. Computed from `config.health * levelMultiplier` in JS;
-    /// Rust mirrors HUNTER level=1 → max_hp = HUNTER_HP.
-    pub max_hp: f32,
-
-    /// Difficulty level (1..). Used by JS to scale HP / size / speed.
-    /// In the simplified port we only honor it for fire cooldown
-    /// interpolation; movement uses base `HUNTER_SPEED` regardless.
-    pub level: u32,
-
-    /// False when destroyed. Mirrors JS `enemy.active`.
-    pub active: bool,
-
-    /// Time until next single-shot fire (ms). Decremented by
-    /// `dt * 1000` each tick; emits an event + resets when ≤ 0.
-    /// JS uses `lastShot` timestamps + `firingCooldown`; Rust uses a
-    /// countdown to avoid carrying a wall-clock dependency.
-    pub fire_cooldown_ms: f32,
-
-    /// Reset value when the cooldown expires. JS computes this from
-    /// `getEnemyFiringCooldown(type, level)` after each shot; Rust
-    /// mirrors via `hunter_fire_cooldown_ms_for_level`.
-    pub fire_cooldown_reset_ms: f32,
-
-    /// Velocity scale (1.0 = baseline). Reserved for Phase 2.1+
-    /// upgrade flags (e.g. boss rage tantrum slow); currently always 1.0.
-    pub speed_multiplier: f32,
+pub struct TargetView {
+    /// Server-assigned player id (stable for the ship's session).
+    pub player_id: u32,
+    /// Ship x position (px, field-local).
+    pub x: f64,
+    /// Ship y position (px, field-local).
+    pub y: f64,
+    /// True if the ship is alive + targetable. Downed ships are skipped.
+    pub alive: bool,
 }
 
-impl Enemy {
-    /// Construct a fresh HUNTER at the given position. Mirrors the
-    /// JS `freshEnemyState('HUNTER', { x, y, ... })` factory plus the
-    /// `initializeEnemy` HP / radius defaults at level 1.
-    pub fn fresh_hunter(id: u32, x: f32, y: f32) -> Self {
+/// Deterministic enemy state. Serialized verbatim into snapshot /
+/// checksum payloads. Every field is f64 or a fixed-width int —
+/// no `String`s, no `Vec`s — so wire size is constant per enemy.
+///
+/// **Phase 4 step 5** — this struct unifies all 10 enemy kinds. Each
+/// kind reads/writes only the per-kind movement-state fields relevant
+/// to it; unused fields default to `0.0` / `0`. The union approach
+/// (instead of a tagged enum) keeps the wire shape constant per enemy
+/// and avoids serialization complexity. Memory cost is ~64 extra bytes
+/// per enemy, trivial at `MAX_ENEMIES = 4`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct EnemyState {
+    /// Server-assigned enemy id (stable for the enemy's lifetime).
+    pub id: u32,
+    /// Kind discriminator. See `KIND_HUNTER`, `enemy_wasp::KIND_WASP`,
+    /// etc. for the dense u8 enumeration (0-9 across the 10 kinds).
+    pub kind: u8,
+    /// X position (px, field-local).
+    pub x: f64,
+    /// Y position (px, field-local).
+    pub y: f64,
+    /// X velocity component (px/tick).
+    pub vx: f64,
+    /// Y velocity component (px/tick).
+    pub vy: f64,
+    /// Face-direction in radians (lerped toward desired heading).
+    pub angle: f64,
+    /// Current HP (depletes on bullet hits; <= 0 → `active = false`).
+    pub hp: f64,
+    /// Max HP at spawn — used for HP-bar rendering.
+    pub max_hp: f64,
+    /// Body radius (px) for collision + visuals.
+    pub radius: f64,
+    /// True while alive + in the field; false after destroy.
+    pub active: bool,
+    /// Phase 4 — tick at which this enemy last fired. Per-kind cooldown
+    /// is consulted via the per-module `XXX_FIRE_COOLDOWN_TICKS` const.
+    pub last_fire_tick: u32,
+
+    // ── Arc-orbit fields (HUNTER, STALKER, WEAVER, SENTINEL) ──
+    /// Arc-orbit direction: +1 = orbit clockwise, -1 = counterclockwise.
+    /// Seeded at spawn; never changes during life.
+    pub arc_dir: f64,
+    /// Arc-orbit radius (px). Seeded at spawn.
+    pub arc_radius: f64,
+    /// Arc-orbit angular velocity (radians/tick). Seeded at spawn.
+    pub arc_omega: f64,
+    /// Current arc-orbit phase angle (radians). Advances by arc_omega per tick.
+    pub arc_phase: f64,
+
+    // ── WASP zigzag ──
+    pub zigzag_phase: f64,
+    pub zigzag_amplitude: f64,
+
+    // ── GUARDIAN square-perimeter ──
+    pub square_corner_idx: u8,
+    pub square_dir: f64,
+
+    // ── STALKER charged-laser ──
+    pub charge_progress: u32,
+
+    // ── DRIFTER sinusoidal wave ──
+    pub wave_phase: f64,
+    pub wave_amplitude: f64,
+
+    // ── WEAVER / SENTINEL spinup + orbit ──
+    pub spinup_progress: u32,
+    pub orbit_phase: f64,
+    /// WEAVER spiral fire phase (advances per shot). Also reused for
+    /// SENTINEL sweep_phase to keep the struct compact — kind dictates
+    /// which semantics apply.
+    pub spiral_phase: f64,
+    /// SENTINEL / TITAN sweep oscillation phase (advances per tick).
+    pub sweep_phase: f64,
+
+    // ── TITAN momentum-based boulder movement ──
+    pub momentum_dir: f64,
+    pub momentum_t: f64,
+}
+
+impl Default for EnemyState {
+    /// Zero-initialized enemy. Per-kind `spawn_xxx_from_seed` populates
+    /// the relevant fields; unused fields remain at 0.0/0/false.
+    fn default() -> Self {
         Self {
-            id,
-            kind: EnemyKind::Hunter,
-            x,
-            y,
+            id: 0,
+            kind: 0,
+            x: 0.0,
+            y: 0.0,
             vx: 0.0,
             vy: 0.0,
             angle: 0.0,
-            hp: HUNTER_HP,
-            max_hp: HUNTER_HP,
-            level: 1,
-            active: true,
-            fire_cooldown_ms: HUNTER_FIRE_COOLDOWN_MAX_MS,
-            fire_cooldown_reset_ms: HUNTER_FIRE_COOLDOWN_MAX_MS,
-            speed_multiplier: 1.0,
+            hp: 0.0,
+            max_hp: 0.0,
+            radius: 0.0,
+            active: false,
+            last_fire_tick: 0,
+            arc_dir: 0.0,
+            arc_radius: 0.0,
+            arc_omega: 0.0,
+            arc_phase: 0.0,
+            zigzag_phase: 0.0,
+            zigzag_amplitude: 0.0,
+            square_corner_idx: 0,
+            square_dir: 0.0,
+            charge_progress: 0,
+            wave_phase: 0.0,
+            wave_amplitude: 0.0,
+            spinup_progress: 0,
+            orbit_phase: 0.0,
+            spiral_phase: 0.0,
+            sweep_phase: 0.0,
+            momentum_dir: 0.0,
+            momentum_t: 0.0,
         }
     }
 }
 
-/// Minimal ship slice the chase needs. We deliberately avoid borrowing
-/// `crate::protocol::ShipState` directly — that struct is the wire
-/// format and dragging it through the sim creates an unwanted coupling.
-/// `update_enemy` only reads position + velocity from each ship.
-#[derive(Debug, Clone, Copy)]
-pub struct ShipPosition {
-    pub x: f32,
-    pub y: f32,
-    pub vx: f32,
-    pub vy: f32,
-}
+/// Spawn a HUNTER at the given seed. Both server and WASM client
+/// call this with the SAME id + rng_subseed (carried in `EnemySpawn`
+/// event) and produce the same enemy.
+pub fn spawn_hunter_from_seed(
+    id: u32,
+    rng_subseed: u64,
+    field_w: f64,
+    field_h: f64,
+) -> EnemyState {
+    // Per-spawn RngCtx, seeded by the event's sub-seed. Sub-seed is
+    // generated by the room's main `RngCtx` and shipped on the wire,
+    // so server + client construct identical streams here without
+    // contaminating the room's main RNG state.
+    let mut rng = super::rng_ctx::RngCtx::from_seed(rng_subseed);
 
-/// Per-tick context for `update_enemy`. Mirrors the JS
-/// `EnemyUpdateContext` typedef (state.js:673–681).
-///
-/// **Currently unread fields** (`frame_clock_ms`, `rng`):
-///
-/// The JS `hunterArcMovement` (`movement.js:806-901`) reads
-/// `frameClock.now` (a session-local ms counter) on every tick for its
-/// lunge / slingshot dice rolls, and consumes `Math.random()` on first
-/// call for the sticky per-spawn `_arcDirection` / `_arcRadius` /
-/// `_arcOmega` init. The Rust mirror needs both behind a deterministic
-/// contract before that branch can be ported — so the fields are wired
-/// now and the simplified chase ignores them.
-///
-/// We carry the fields in the Rust shape anyway so:
-///   1. The wrapper / call sites already have somewhere to plug in a
-///      seeded `Pcg64` + ms-precision clock (no signature churn when
-///      `hunter_arc` lands).
-///   2. The parity fixture `parity_enemy::hunter_chase_with_ctx_plumbing`
-///      proves that populating these fields with non-default values
-///      does NOT alter the chase output today (same invariant agent F
-///      established for `wave::WaveContext` in PR #28).
-///
-/// When `hunter_arc` is ported, `update_enemy` will start reading
-/// these fields and the `#[allow(dead_code)]` attribute on `rng` will
-/// be removed. See module docstring §"RNG / frameClock plumbing" for
-/// the cross-language harmonization story.
-#[allow(dead_code)] // `frame_clock_ms` + `rng` reserved for `hunter_arc` port — see doc comment.
-pub struct EnemyContext<'a> {
-    /// Active player ships. The chase picks the nearest; if empty the
-    /// enemy idles in place (no chase target). Stored as `Vec<ShipPosition>`
-    /// rather than a borrow to avoid lifetime gymnastics — the caller
-    /// can populate this once per tick from the wire `ShipState` slice.
-    pub ships: Vec<ShipPosition>,
+    // Pick a field edge (0=top, 1=right, 2=bottom, 3=left) and place
+    // the enemy just outside it so it "enters" the play space.
+    let edge = rng.range_f64(0.0, 4.0) as i32;
+    let (x, y, vx, vy) = match edge {
+        0 => (
+            rng.range_f64(0.0, field_w),
+            -HUNTER_RADIUS,
+            0.0,
+            HUNTER_BASE_SPEED,
+        ),
+        1 => (
+            field_w + HUNTER_RADIUS,
+            rng.range_f64(0.0, field_h),
+            -HUNTER_BASE_SPEED,
+            0.0,
+        ),
+        2 => (
+            rng.range_f64(0.0, field_w),
+            field_h + HUNTER_RADIUS,
+            0.0,
+            -HUNTER_BASE_SPEED,
+        ),
+        _ => (
+            -HUNTER_RADIUS,
+            rng.range_f64(0.0, field_h),
+            HUNTER_BASE_SPEED,
+            0.0,
+        ),
+    };
 
-    /// Seconds elapsed this tick. Typically `1/60`.
-    pub dt: f32,
+    // Sticky one-way strafe direction (solo's `_arcDirection`).
+    let arc_dir = if rng.range_f64(0.0, 1.0) < 0.5 { -1.0 } else { 1.0 };
+    let arc_radius = rng.range_f64(HUNTER_ARC_RADIUS_MIN, HUNTER_ARC_RADIUS_MAX);
+    // Lower bound 0.005 matches the solo lower bound (slowest orbit ~
+    // 0.3°/tick); upper bound caps at HUNTER_ARC_OMEGA_RANGE.
+    let arc_omega = rng.range_f64(0.005, HUNTER_ARC_OMEGA_RANGE);
+    let arc_phase = rng.unit_circle_angle();
 
-    /// Position-integration scale. Typically `0.5` (matches JS
-    /// `GAME_CONFIG.TICK_SCALE`).
-    pub tick_scale: f32,
-
-    /// World bounds (px). Currently unused by the HUNTER chase but
-    /// reserved for the boundary-bounce branch (enemy.js:243–256) when
-    /// it lands.
-    pub field_width: f32,
-    pub field_height: f32,
-
-    /// Wall-clock ms since session start. Mirrors `frameClock.now` on
-    /// the JS side. Reserved for `hunter_arc` (lunge / slingshot dice
-    /// rolls keyed off `now > arc_lunge_roll_at`), music-sync shield
-    /// rotation, and fire timestamps. **Unread by `update_enemy` today.**
-    pub frame_clock_ms: u64,
-
-    /// Seeded RNG. `None` = no RNG available (also acceptable — the
-    /// current implementation never touches it). When `hunter_arc`
-    /// lands, the first-call init will pull four values for
-    /// `_arcDirection`, `_arcRadius`, `_arcOmega`, `_arcLungeRollAt`,
-    /// `_arcSlingRollAt`, `_arcWeavePhase` — at which point this field
-    /// becomes load-bearing and the `#[allow(dead_code)]` goes away.
-    /// **Unread by `update_enemy` today.**
-    pub rng: Option<&'a mut Pcg64>,
-}
-
-/// Side-effect events emitted by `update_enemy`. Currently single-shot
-/// fire only; the other 5 event types from `js/sim/enemy.js`
-/// (`enemy_debris_burst`, `enemy_fire_continuous`, `enemy_fire_charging`,
-/// `enemy_fire_burst`, `enemy_death_recycle`) land with the deferred
-/// branches.
-#[derive(Debug, Clone, Copy)]
-pub enum EnemyEvent {
-    /// A single bullet spawn. The wrapper drains this and calls the
-    /// matching helper from `firing.js` (HUNTER's `hunter_single`
-    /// pattern). `kind` is `BulletPattern::SingleShot` for now.
-    Fire {
-        enemy_id: u32,
-        x: f32,
-        y: f32,
-        angle: f32,
-        kind: BulletPattern,
-    },
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────
-
-/// Linear-interpolate HUNTER fire cooldown by level. Mirrors
-/// `getEnemyFiringCooldown('HUNTER', level)` in
-/// `js/modules/core/constants.js:201–212`. Level 1 → MAX, level ≥ 10 →
-/// MIN, in between is a straight linear blend.
-pub fn hunter_fire_cooldown_ms_for_level(level: u32) -> f32 {
-    let level_progress = ((level.saturating_sub(1)) as f32 / 9.0).min(1.0);
-    HUNTER_FIRE_COOLDOWN_MAX_MS
-        - (HUNTER_FIRE_COOLDOWN_MAX_MS - HUNTER_FIRE_COOLDOWN_MIN_MS) * level_progress
-}
-
-/// Pick the nearest ship to `enemy`. Returns `None` if `ships` is empty.
-fn nearest_ship(enemy: &Enemy, ships: &[ShipPosition]) -> Option<ShipPosition> {
-    let mut best: Option<(f32, ShipPosition)> = None;
-    for s in ships {
-        let dx = s.x - enemy.x;
-        let dy = s.y - enemy.y;
-        let d2 = dx * dx + dy * dy;
-        match best {
-            Some((d, _)) if d <= d2 => {}
-            _ => best = Some((d2, *s)),
-        }
+    EnemyState {
+        id,
+        kind: KIND_HUNTER,
+        x,
+        y,
+        vx,
+        vy,
+        angle: trig::atan2_64(vy, vx),
+        hp: HUNTER_MAX_HP,
+        max_hp: HUNTER_MAX_HP,
+        radius: HUNTER_RADIUS,
+        arc_dir,
+        arc_radius,
+        arc_omega,
+        arc_phase,
+        active: true,
+        last_fire_tick: 0,
+        ..EnemyState::default()
     }
-    best.map(|(_, s)| s)
 }
 
-// ── Pure step ───────────────────────────────────────────────────────────
+/// Per-tick enemy update dispatcher — routes to the per-kind module's
+/// `update_xxx_movement` function based on `e.kind`. Phase 4 step 5
+/// added the 9 non-HUNTER kinds; each has its own movement-pattern
+/// module under `sim::enemy_{wasp,guardian,stalker,...}`.
+pub fn update_enemy(e: &mut EnemyState, targets: &[TargetView], field_w: f64, field_h: f64) {
+    if !e.active {
+        return;
+    }
+    match e.kind {
+        KIND_HUNTER => update_hunter_movement(e, targets, field_w, field_h),
+        k if k == super::enemy_wasp::KIND_WASP => {
+            super::enemy_wasp::update_wasp_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_guardian::KIND_GUARDIAN => {
+            super::enemy_guardian::update_guardian_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_stalker::KIND_STALKER => {
+            super::enemy_stalker::update_stalker_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_drifter::KIND_DRIFTER => {
+            super::enemy_drifter::update_drifter_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_prowler::KIND_PROWLER => {
+            super::enemy_prowler::update_prowler_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_weaver::KIND_WEAVER => {
+            super::enemy_weaver::update_weaver_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_sentinel::KIND_SENTINEL => {
+            super::enemy_sentinel::update_sentinel_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_tangerine::KIND_TANGERINE => {
+            super::enemy_tangerine::update_tangerine_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_titan::KIND_TITAN => {
+            super::enemy_titan::update_titan_movement(e, targets, field_w, field_h)
+        }
+        _ => {} // unknown kind — no-op
+    }
+}
 
-/// One tick of HUNTER chase + single-shot fire. Mirrors the simplified
-/// path described in the module docstring.
-///
-/// Order of operations (load-bearing for parity):
-///
-///   1. Active-guard. JS enemy.js:93.
-///   2. Pick nearest ship as chase target. JS enemy.js:97 picks
-///      `ctx.ships[0]`; we pick nearest because the multiplayer port
-///      will have multiple ships.
-///   3. Standard chase: dx/dy/distance, accelerate toward target,
-///      cap velocity. Mirrors `chasePlayer()` standard branch
-///      (movement.js:73–97), minus the weave term.
-///   4. Cooldown decrement + fire emission. Mirrors
-///      `decideEnemyShooting()` non-burst path (enemy.js:370–376),
-///      but uses a countdown rather than a wall-clock comparison.
-///   5. Position integration. Mirrors enemy.js:229–230. Always uses
-///      `ctx.tick_scale` (matches JS `GAME_CONFIG.TICK_SCALE`).
-///
-/// Boundary handling (enemy.js:242–264) is deferred — for the parity
-/// fixture the enemy stays well clear of the field bounds.
-pub fn update_enemy(enemy: &mut Enemy, ctx: &EnemyContext<'_>, events: &mut Vec<EnemyEvent>) {
-    if !enemy.active {
+/// HUNTER-specific per-tick update. Picks closest alive ship as
+/// target, runs arc-orbit chase, clamps to field, bounces off
+/// edges. Mirrors solo's `hunterArcMovement` + `chasePlayer` pattern
+/// from `movement.js` / `ai.js`.
+fn update_hunter_movement(
+    e: &mut EnemyState,
+    targets: &[TargetView],
+    field_w: f64,
+    field_h: f64,
+) {
+    if !e.active || e.kind != KIND_HUNTER {
         return;
     }
 
-    match enemy.kind {
-        EnemyKind::Hunter => update_hunter(enemy, ctx, events),
-        // TODO Phase 2.1+: dispatch other kinds. Until then, any other
-        // kind is a logic error — but we leave the match exhaustive
-        // by virtue of `EnemyKind` only having the `Hunter` variant.
+    // Pick closest alive target. If none, drift toward field center.
+    let target = closest_target(targets, e.x, e.y);
+
+    let (tx, ty) = match target {
+        Some(t) => (t.x, t.y),
+        None => (field_w * 0.5, field_h * 0.5),
+    };
+
+    // Arc-orbit chase: target a point offset from the player along
+    // the arc, rather than the player directly. The orbit phase
+    // advances by `arc_omega * arc_dir` each tick — sticky CW/CCW
+    // strafe (solo's `_arcDirection`).
+    e.arc_phase += e.arc_omega * e.arc_dir;
+    let arc_offset_x = trig::cos64(e.arc_phase) * e.arc_radius;
+    let arc_offset_y = trig::sin64(e.arc_phase) * e.arc_radius;
+    let chase_target_x = tx + arc_offset_x;
+    let chase_target_y = ty + arc_offset_y;
+
+    let to_dx = chase_target_x - e.x;
+    let to_dy = chase_target_y - e.y;
+    let desired_angle = trig::atan2_64(to_dy, to_dx);
+
+    // Smoothly turn toward the desired angle (avoid snap-rotation).
+    e.angle = lerp_angle(e.angle, desired_angle, ANGLE_TURN_T);
+
+    // Velocity along facing. Constant speed — no friction term; the
+    // arc emerges from the offset chase-target.
+    e.vx = trig::cos64(e.angle) * HUNTER_BASE_SPEED;
+    e.vy = trig::sin64(e.angle) * HUNTER_BASE_SPEED;
+
+    e.x += e.vx;
+    e.y += e.vy;
+
+    // Bounce off field edges (matches solo's boundary clamp).
+    let r = e.radius;
+    if e.x - r < 0.0 {
+        e.x = r;
+        e.vx = e.vx.abs();
+    } else if e.x + r > field_w {
+        e.x = field_w - r;
+        e.vx = -e.vx.abs();
+    }
+    if e.y - r < 0.0 {
+        e.y = r;
+        e.vy = e.vy.abs();
+    } else if e.y + r > field_h {
+        e.y = field_h - r;
+        e.vy = -e.vy.abs();
     }
 }
 
-fn update_hunter(enemy: &mut Enemy, ctx: &EnemyContext<'_>, events: &mut Vec<EnemyEvent>) {
-    // ── Step 2: target selection (movement.js:73 implicit; sim/enemy.js:97) ──
-    // The target may be `None` if there are no ships — mirror JS
-    // `if (!playerRef) return enemy;` (enemy.js:143).
-    let target = match nearest_ship(enemy, &ctx.ships) {
-        Some(s) => s,
-        None => return,
-    };
+/// Internal: find the closest alive target. `None` if all dead/empty.
+fn closest_target(targets: &[TargetView], x: f64, y: f64) -> Option<TargetView> {
+    let mut best: Option<(f64, TargetView)> = None;
+    for t in targets {
+        if !t.alive {
+            continue;
+        }
+        let dx = t.x - x;
+        let dy = t.y - y;
+        let d2 = dx * dx + dy * dy;
+        if best.is_none() || d2 < best.unwrap().0 {
+            best = Some((d2, *t));
+        }
+    }
+    best.map(|(_, t)| t)
+}
 
-    // ── Step 3: standard chase (movement.js:73–97) ──
-    // dx/dy/distance toward target.
-    let dx = target.x - enemy.x;
-    let dy = target.y - enemy.y;
-    let distance = (dx * dx + dy * dy).sqrt();
+/// Internal: angle lerp via shortest path (handles ±π wrap so the
+/// turn always takes the short way around the circle).
+fn lerp_angle(a: f64, b: f64, t: f64) -> f64 {
+    let mut d = b - a;
+    while d > trig::PI {
+        d -= trig::TAU;
+    }
+    while d < -trig::PI {
+        d += trig::TAU;
+    }
+    a + d * t
+}
 
-    if distance > 0.0 {
-        // movement.js:80-81: per-tick acceleration along chase direction.
-        // (We omit the weave term — see module docstring.)
-        let target_vel_x = (dx / distance) * CHASE_ACCEL;
-        let target_vel_y = (dy / distance) * CHASE_ACCEL;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        enemy.vx += target_vel_x;
-        enemy.vy += target_vel_y;
-
-        // movement.js:91-96: clamp velocity magnitude to
-        // `config.speed * 1.08`. HUNTER speed = 2.6.
-        let speed = (enemy.vx * enemy.vx + enemy.vy * enemy.vy).sqrt();
-        let max_speed = HUNTER_SPEED * enemy.speed_multiplier * CHASE_SPEED_CAP_MULT;
-        if speed > max_speed {
-            enemy.vx = (enemy.vx / speed) * max_speed;
-            enemy.vy = (enemy.vy / speed) * max_speed;
+    fn target(player_id: u32, x: f64, y: f64, alive: bool) -> TargetView {
+        TargetView {
+            player_id,
+            x,
+            y,
+            alive,
         }
     }
 
-    // Update aim angle for the fire event. JS `enemy.faceAngle` is
-    // computed inside `updateFaceDirection`; we simplify to point
-    // straight at the chase target.
-    enemy.angle = dy.atan2(dx);
-
-    // ── Step 4: cooldown + fire (enemy.js:370–376 simplified) ──
-    // Decrement by milliseconds elapsed this tick. When the cooldown
-    // hits zero we emit one fire event and reset to the level-scaled
-    // value. The JS path uses `now - lastShot > firingCooldown`; the
-    // countdown form here is semantically equivalent for a single-shot
-    // pattern (no burst, no charging).
-    enemy.fire_cooldown_ms -= ctx.dt * 1000.0;
-    if enemy.fire_cooldown_ms <= 0.0 {
-        events.push(EnemyEvent::Fire {
-            enemy_id: enemy.id,
-            x: enemy.x,
-            y: enemy.y,
-            angle: enemy.angle,
-            kind: BulletPattern::SingleShot,
-        });
-        enemy.fire_cooldown_ms = enemy.fire_cooldown_reset_ms;
+    #[test]
+    fn spawn_from_same_seed_is_identical() {
+        let a = spawn_hunter_from_seed(7, 0xDEAD_BEEF, 1920.0, 1080.0);
+        let b = spawn_hunter_from_seed(7, 0xDEAD_BEEF, 1920.0, 1080.0);
+        assert_eq!(a.id, b.id);
+        assert_eq!(a.kind, b.kind);
+        assert_eq!(a.x.to_bits(), b.x.to_bits());
+        assert_eq!(a.y.to_bits(), b.y.to_bits());
+        assert_eq!(a.vx.to_bits(), b.vx.to_bits());
+        assert_eq!(a.vy.to_bits(), b.vy.to_bits());
+        assert_eq!(a.angle.to_bits(), b.angle.to_bits());
+        assert_eq!(a.hp.to_bits(), b.hp.to_bits());
+        assert_eq!(a.max_hp.to_bits(), b.max_hp.to_bits());
+        assert_eq!(a.radius.to_bits(), b.radius.to_bits());
+        assert_eq!(a.arc_dir.to_bits(), b.arc_dir.to_bits());
+        assert_eq!(a.arc_radius.to_bits(), b.arc_radius.to_bits());
+        assert_eq!(a.arc_omega.to_bits(), b.arc_omega.to_bits());
+        assert_eq!(a.arc_phase.to_bits(), b.arc_phase.to_bits());
+        assert_eq!(a.active, b.active);
     }
 
-    // ── Step 5: position integration (enemy.js:229–230) ──
-    enemy.x += enemy.vx * ctx.tick_scale;
-    enemy.y += enemy.vy * ctx.tick_scale;
-}
-
-/// Loop helper. Calls `update_enemy` over a slice with the same context.
-pub fn update_enemies(
-    enemies: &mut [Enemy],
-    ctx: &EnemyContext<'_>,
-    events: &mut Vec<EnemyEvent>,
-) {
-    for enemy in enemies.iter_mut() {
-        update_enemy(enemy, ctx, events);
+    #[test]
+    fn spawn_within_field_bounds() {
+        let fw = 1920.0;
+        let fh = 1080.0;
+        for seed in 0..100u64 {
+            let e = spawn_hunter_from_seed(seed as u32, seed.wrapping_mul(7919), fw, fh);
+            // The enemy is at one of the four edges. On the spawning
+            // axis it sits exactly ±HUNTER_RADIUS outside the field;
+            // on the orthogonal axis it sits inside [0, field].
+            let at_top = (e.y - (-HUNTER_RADIUS)).abs() < 1e-9;
+            let at_right = (e.x - (fw + HUNTER_RADIUS)).abs() < 1e-9;
+            let at_bottom = (e.y - (fh + HUNTER_RADIUS)).abs() < 1e-9;
+            let at_left = (e.x - (-HUNTER_RADIUS)).abs() < 1e-9;
+            assert!(
+                at_top || at_right || at_bottom || at_left,
+                "seed {seed}: not at an edge — pos=({}, {})",
+                e.x,
+                e.y
+            );
+            if at_top || at_bottom {
+                assert!(e.x >= 0.0 && e.x <= fw, "seed {seed}: x out of field");
+            }
+            if at_left || at_right {
+                assert!(e.y >= 0.0 && e.y <= fh, "seed {seed}: y out of field");
+            }
+            // Arc params seeded into expected ranges.
+            assert!(e.arc_dir == 1.0 || e.arc_dir == -1.0);
+            assert!(e.arc_radius >= HUNTER_ARC_RADIUS_MIN && e.arc_radius < HUNTER_ARC_RADIUS_MAX);
+            assert!(e.arc_omega >= 0.005 && e.arc_omega < HUNTER_ARC_OMEGA_RANGE);
+            assert!(e.arc_phase >= 0.0 && e.arc_phase < trig::TAU);
+        }
     }
-}
 
-// ── Wire-state integration stub (Phase 3) ───────────────────────────────
-//
-// Existing entry point called from `simulate_tick` in `mod.rs`. The
-// real wire ↔ sim bridging will land when client prediction wires up;
-// for now this is a no-op that satisfies the existing call site.
-// Untouched from the original scaffold.
-pub fn update_all(
-    _enemies: &mut Vec<EnemyState>,
-    _ships: &[ShipState],
-    _dt: f32,
-    _rng: &mut Pcg64,
-    _events: &mut Vec<GameEvent>,
-) {
-    // 10 enemy types per CLAUDE.md memory: HUNTER, GUARDIAN, WASP, STALKER,
-    // DRIFTER, PROWLER, WEAVER, SENTINEL, TANGERINE, TITAN. Behaviors live
-    // in the JS sim today and get ported per the week 7–9 plan.
+    #[test]
+    fn update_moves_toward_target() {
+        let mut e = spawn_hunter_from_seed(1, 42, 1920.0, 1080.0);
+        // Override spawn position + facing so the test starts at a
+        // controlled point regardless of which edge the seed picked.
+        e.x = 1000.0;
+        e.y = 500.0;
+        e.vx = -HUNTER_BASE_SPEED;
+        e.vy = 0.0;
+        e.angle = trig::atan2_64(0.0, -1.0);
+        let start_x = e.x;
+        let targets = [target(99, 100.0, 500.0, true)];
+        for _ in 0..60 {
+            update_enemy(&mut e, &targets, 1920.0, 1080.0);
+        }
+        assert!(
+            e.x < start_x,
+            "x should decrease toward target at x=100, got {} -> {}",
+            start_x,
+            e.x
+        );
+    }
+
+    #[test]
+    fn update_no_target_drifts_toward_center() {
+        let mut e = spawn_hunter_from_seed(2, 13, 1920.0, 1080.0);
+        e.x = 100.0;
+        e.y = 100.0;
+        e.vx = HUNTER_BASE_SPEED;
+        e.vy = HUNTER_BASE_SPEED;
+        e.angle = trig::atan2_64(1.0, 1.0);
+        let start_x = e.x;
+        let targets: [TargetView; 0] = [];
+        for _ in 0..100 {
+            update_enemy(&mut e, &targets, 1920.0, 1080.0);
+        }
+        assert!(
+            e.x > start_x,
+            "x should drift toward center 960, got {} -> {}",
+            start_x,
+            e.x
+        );
+    }
+
+    #[test]
+    fn update_bounces_off_edge() {
+        let mut e = spawn_hunter_from_seed(3, 99, 1920.0, 1080.0);
+        e.x = 10.0;
+        e.y = 540.0;
+        e.vx = -5.0;
+        e.vy = 0.0;
+        // Face pointing left so the per-tick velocity recompute also
+        // produces a negative vx that the bounce branch can flip.
+        e.angle = trig::PI;
+        // Empty targets → drifts toward center, but the immediate
+        // bounce branch fires first because we start inside the wall.
+        let targets: [TargetView; 0] = [];
+        update_enemy(&mut e, &targets, 1920.0, 1080.0);
+        assert!(
+            e.vx > 0.0,
+            "vx should be positive after bounce, got {}",
+            e.vx
+        );
+        assert!(
+            e.x >= e.radius - 1e-6,
+            "x should be clamped to radius, got {}",
+            e.x
+        );
+    }
+
+    #[test]
+    fn closest_target_picks_nearest_alive() {
+        let near_x = 0.0;
+        let near_y = 0.0;
+        let targets = [
+            target(1, 100.0, 0.0, true), // dist 100
+            target(2, 50.0, 0.0, true),  // dist 50  (closest)
+            target(3, 200.0, 0.0, true), // dist 200
+        ];
+        let picked = closest_target(&targets, near_x, near_y).expect("alive target exists");
+        assert_eq!(picked.player_id, 2);
+
+        // Mark the 50-distance one dead → 100 wins.
+        let targets = [
+            target(1, 100.0, 0.0, true),
+            target(2, 50.0, 0.0, false),
+            target(3, 200.0, 0.0, true),
+        ];
+        let picked = closest_target(&targets, near_x, near_y).expect("alive target exists");
+        assert_eq!(picked.player_id, 1);
+
+        // All dead → None.
+        let targets = [
+            target(1, 100.0, 0.0, false),
+            target(2, 50.0, 0.0, false),
+        ];
+        assert!(closest_target(&targets, near_x, near_y).is_none());
+    }
+
+    #[test]
+    fn lerp_angle_wraps_correctly() {
+        // 3.0 → -3.0 should NOT go through 0 (that's ~6 rad the long
+        // way). The short way crosses ±π in ~0.28 rad.
+        let result = lerp_angle(3.0, -3.0, 0.5);
+        let dist_to_zero = result.abs();
+        let dist_to_pi = (result.abs() - trig::PI).abs();
+        assert!(
+            dist_to_pi < dist_to_zero,
+            "lerp_angle(3, -3, 0.5) = {} should be closer to ±π than to 0",
+            result
+        );
+    }
 }

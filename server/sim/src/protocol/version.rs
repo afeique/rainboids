@@ -1,7 +1,6 @@
 //! Wire and simulation versions.
 //!
-//! These constants now live in `generated.rs` (codegen'd from
-//! `schema/protocol.toml`); this module re-exports them so existing
-//! `crate::protocol::version::WIRE_VERSION` imports resolve.
+//! Re-exported from `types.rs` so `crate::protocol::version::*` paths
+//! still resolve.
 
-pub use super::generated::{is_compatible, SIM_VERSION, WIRE_VERSION};
+pub use super::types::{is_compatible, SIM_VERSION, WIRE_VERSION};

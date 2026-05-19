@@ -8,13 +8,9 @@ use tracing::info;
 
 use rainboids_server::{
     config::Config,
-    matchmaking::Matchmaker,
-    mp1_room::Mp1RoomHandle,
+    room::SimRoomHandle,
     obs, protocol,
-    server::{
-        http::{router, AppState},
-        session::{spawn_reaper, SessionRegistry},
-    },
+    server::http::{router, AppState},
 };
 
 #[tokio::main]
@@ -33,18 +29,10 @@ async fn main() -> Result<()> {
         "rainboids-server starting"
     );
 
-    let mm = Matchmaker::new(cfg.clone());
-    let sessions = SessionRegistry::new();
-    spawn_reaper(sessions.clone(), std::time::Duration::from_secs(30));
-    // WASM-pivot Phase 2 — spawn the single global mp1 room actor.
+    // Single global multiplayer room actor.
     // Serves connections at `/mp/ws`; runs at 60Hz sim / 20Hz snapshot.
-    let mp1 = Mp1RoomHandle::spawn();
-    let app = router(AppState {
-        mm,
-        sessions,
-        cfg: cfg.clone(),
-        mp1,
-    });
+    let room = SimRoomHandle::spawn();
+    let app = router(AppState { cfg: cfg.clone(), room });
 
     let listener = TcpListener::bind(cfg.bind_addr).await?;
     axum::serve(listener, app)

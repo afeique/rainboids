@@ -8,6 +8,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.10.0] - 2026-05-19
+
+### Changed — Rust crate consolidation: `mp1` namespace promoted to `sim`
+
+The `rainboids-sim` crate is now MP-only — solo no longer routes through
+it (see solo `CHANGELOG.md` 6.19.0). With no parity contract left to
+honor, the parallel `mp1/` submodule was promoted to the crate root and
+the legacy parity-mirror modules deleted.
+
+**Sim crate (`server/sim/src/`)**:
+- `mp1/{ship,enemy,bullet,asteroid,collision,drops,wave,weapon,…}.rs`
+  flattened into the crate root. `pub mod mp1;` removed.
+- Legacy parity-mirror modules deleted: `ship.rs`, `enemy.rs`,
+  `bullet.rs`, `asteroid.rs`, `collision.rs`, `drops.rs`, `wave.rs`,
+  `input.rs`, `state.rs`, `difficulty.rs`, `fxp.rs`, plus `util/`.
+- `simulate_tick()` + legacy `PlayerInput` / `PlayerInputs` /
+  `GameState` re-exports removed from `lib.rs`.
+- Strongly-typed entity ID newtypes (`AsteroidId`, `BulletId`, etc.)
+  moved from `util::id` into `protocol::ids`.
+
+**Server-bin (`server/server-bin/src/`)**:
+- `mp1_room.rs` → `room.rs`, `mp1_connection.rs` → `connection.rs`.
+- `Mp1RoomHandle` → `SimRoomHandle`, `Mp1RoomState` → `SimRoomState`.
+- Legacy `/ws` endpoint deleted along with its supporting layers:
+  `matchmaking/`, `room/`, `server/connection.rs`, `server/session.rs`,
+  `server/auth.rs`, `util/` — none of these were reachable post-WASM
+  pivot (the legacy JS net path was deleted in solo 6.19.0).
+- 8 obsolete integration tests removed under `server-bin/tests/`
+  (they exercised the legacy `/ws` handshake + matchmaking + room).
+- Tracing log prefix `"mp1:"` → `"sim:"`.
+
+**Client-wasm (`server/client-wasm/src/`)**:
+- `rainboids_sim::mp1::*` paths flattened to `rainboids_sim::*`.
+
+**Codegen + tooling**:
+- `tools/codegen-protocol.mjs` now emits `pub use super::ids::*` instead
+  of `pub use crate::util::id::*` for entity ID newtypes.
+
+WIRE_VERSION unchanged (still 8). No gameplay or wire-protocol diff —
+this is pure crate-layout cleanup.
+
 ## [0.9.0] - 2026-05-19
 
 **Phase 4 step 5 — all 9 remaining enemy types + mines + missiles.**

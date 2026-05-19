@@ -1,13 +1,13 @@
 //! # rainboids-client-wasm — Phase 3 deterministic mirror
 //!
 //! WebAssembly bindings exposing the shared `rainboids_sim` crate's
-//! `mp1` sim to the Rainboids multiplayer browser client at `/mp`
+//! `sim` sim to the Rainboids multiplayer browser client at `/mp`
 //! (see `js/mp/mp-main.js`). wasm-pack builds this crate to
 //! `js/mp/wasm/` and the browser drives the simulation tick from JS.
 //!
 //! ## Phase 3 surface (2026-05-18)
 //!
-//! Wraps `mp1::state::RoomState`. The browser client:
+//! Wraps `sim::state::RoomState`. The browser client:
 //!
 //!   1. Constructs one `World` on boot.
 //!   2. On Welcome: calls `seed(welcome.rng_seed)` then
@@ -34,7 +34,7 @@
 //! `tick(dt)` surface still works for any caller that hasn't migrated
 //! to Phase 3 yet (they just operate on an empty room).
 
-use rainboids_sim::mp1::{
+use rainboids_sim::{
     asteroid::{self, AsteroidState},
     bullet::{self, BulletState, PULSE_CANNON_DAMAGE},
     collision,
@@ -154,7 +154,7 @@ impl World {
         self.local_input.aim_y = aim_y;
     }
 
-    /// Advance the full sim one tick. Mirrors `mp1_room.rs::step`
+    /// Advance the full sim one tick. Mirrors `room.rs::step`
     /// exactly in order: ship physics → enemy AI → asteroid drift →
     /// bullet integration → collision (events discarded; entity
     /// mutations kept) → revive ticking → cull → tick++.
@@ -176,7 +176,7 @@ impl World {
         //    (their authoritative positions are corrected by
         //    Snapshot frames in `apply_snapshot_ship`). Downed local
         //    ship also gets neutral input (matches server's
-        //    downed-ship branch in `mp1_room.rs::step`).
+        //    downed-ship branch in `room.rs::step`).
         for ship in self.room.ships.iter_mut() {
             let input = if ship.player_id == local_pid && !ship.downed {
                 local_input
@@ -218,7 +218,7 @@ impl World {
         {
             let ships_snap = self.room.ships.clone();
             for o in self.room.orbs.iter_mut() {
-                rainboids_sim::mp1::drops::update_orb(
+                rainboids_sim::drops::update_orb(
                     o,
                     &ships_snap,
                     self.room.field_w,
@@ -295,7 +295,7 @@ impl World {
         );
 
         // 6. Revive ticking — mirrors the server's loop in
-        //    `mp1_room.rs::tick_revive_meters` but emits no events.
+        //    `room.rs::tick_revive_meters` but emits no events.
         let positions: Vec<(u32, f64, f64, bool, bool)> = self
             .room
             .ships
@@ -469,7 +469,7 @@ impl World {
     /// deriving the spawn angle from `(vy, vx)` via the polynomial
     /// `atan2_64`. Phase 4 step 4 — uses `weapon` to look up the
     /// per-weapon damage / piercing / lifetime / speed multipliers via
-    /// `mp1::weapon` constants so the client's bullet state matches
+    /// `sim::weapon` constants so the client's bullet state matches
     /// the server's bit-for-bit.
     pub fn consume_bullet_spawn(
         &mut self,
@@ -1113,7 +1113,7 @@ impl World {
     // `apply_snapshot_ship` + `consume_*_spawn` for each entity.
     //
     // Each helper MUST hash the SAME fields in the SAME order as
-    // the server's `mp1_room.rs::hash_*` functions — any divergence
+    // the server's `room.rs::hash_*` functions — any divergence
     // turns the heartbeat into a Resync flood.
 
     pub fn checksum_ships(&self) -> u64 {
@@ -1127,7 +1127,7 @@ impl World {
     /// stay in sync. WIRE_VERSION 8 (Phase 4 step 5): extended to
     /// bundle enemy mines + enemy missiles into the same hash so the
     /// safety-net heartbeat covers the new entity kinds too. Server's
-    /// `mp1_room.rs::hash_asteroids_and_orbs` MUST mirror this exact
+    /// `room.rs::hash_asteroids_and_orbs` MUST mirror this exact
     /// field order — see hash helper below.
     pub fn checksum_asteroids(&self) -> u64 {
         hash_asteroids_and_orbs(
@@ -1162,11 +1162,11 @@ impl Default for World {
     }
 }
 
-// ── Hash helpers — MUST match `server-bin/src/mp1_room.rs::hash_*` ──
+// ── Hash helpers — MUST match `server-bin/src/room.rs::hash_*` ──
 //
 // Same `DefaultHasher`, same field order, same `to_bits()` for f64.
 // Any change here MUST be paired with a matching change in
-// `mp1_room.rs`; otherwise the StateChecksum heartbeat will trigger
+// `room.rs`; otherwise the StateChecksum heartbeat will trigger
 // false-positive Resync requests every second.
 
 /// Hash an f64 by its IEEE 754 bit pattern. `to_bits()` is
@@ -1228,7 +1228,7 @@ fn hash_asteroids_and_orbs(
         o.life_ticks.hash(&mut h);
     }
     // Phase 4 step 5: mines + missiles bundled here so the heartbeat
-    // covers them too. Field order matches `mp1_room.rs::hash_asteroids_and_orbs`
+    // covers them too. Field order matches `room.rs::hash_asteroids_and_orbs`
     // bit-for-bit — any divergence triggers false-positive Resyncs.
     for m in mines {
         m.id.hash(&mut h);

@@ -1,27 +1,18 @@
-//! Wire protocol module.
+//! Wire-protocol module.
 //!
-//! All wire types — newtypes, enums, structs, and tagged-union messages —
-//! are codegen'd from `schema/protocol.toml` into `generated.rs`. This
-//! module re-exports them along with the `codec` helpers and version
-//! constants so callers continue to `use crate::protocol::*` exactly as
-//! before.
-//!
-//! To add or change a variant, edit `schema/protocol.toml`, run
-//! `node tools/codegen-protocol.mjs` from the project root, and commit
-//! the resulting `generated.rs` diff. CI verifies this with
-//! `node tools/codegen-protocol.mjs --check` so the schema and the
-//! generated code can never drift in PRs.
-//!
-//! `version.rs` is kept as a one-liner re-export of the generated
-//! constants so existing imports (`crate::protocol::version::WIRE_VERSION`)
-//! still resolve.
+//! `types::*` is the source of truth for client ↔ server messages,
+//! snapshot payloads, and event envelopes. `codec` provides bincode
+//! encode/decode helpers; `ids` defines the strongly-typed entity
+//! newtypes (`PlayerId`, `BulletId`, …).
 
 pub mod codec;
-pub mod generated;
+pub mod ids;
+pub mod types;
 pub mod version;
 
 pub use codec::{decode, decode_client, encode, encode_into, encode_server};
-pub use generated::*;
+pub use ids::{AsteroidId, BulletId, DropId, EnemyId, PlayerId, RoomId};
+pub use types::*;
 
 #[cfg(test)]
 mod tests {

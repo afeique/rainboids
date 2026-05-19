@@ -1,76 +1,66 @@
 //! Rainboids canonical simulation crate — `rainboids-sim`.
 //!
-//! Single source of simulation truth. Compiles both natively (for
-//! `rainboids-server`) and to WebAssembly (for `rainboids-client-wasm`,
-//! consumed by the browser at `/mp`).
+//! Single source of simulation truth for multiplayer. Compiles both
+//! natively (consumed by `rainboids-server`) and to WebAssembly
+//! (consumed by `rainboids-client-wasm`, served at `/mp` in the browser).
 //!
-//! ## Two parallel sub-sims (2026-05-17, WASM pivot Phase 1)
-//!
-//! - **Legacy sim** at the crate root (`state`, `input`, `ship`,
-//!   `asteroid`, `bullet`, `collision`, `difficulty`, `drops`, `enemy`,
-//!   `wave`) — the 9-month-stale hand-port that the existing
-//!   `rainboids-server` room actor still depends on. Stays operational
-//!   so the server-bin integration tests (44 tests) keep passing.
-//!   Will be archived module-by-module as Phase 1+ rewrites land and
-//!   the room actor migrates to `mp1`.
-//!
-//! - **`mp1`** — the fresh-rewrite Phase-1 simulation, authored from
-//!   current solo behavior (`js/sim/ship.js`, `js/modules/core/constants.js`).
-//!   Compiles to WASM via `rainboids-client-wasm`; consumed by the
-//!   browser `/mp` client. Phase 1 supports a single ship; later phases
-//!   add enemies, asteroids, bullets, drops, waves.
-//!
-//! ## The `protocol` submodule
-//!
-//! Holds the codegen'd wire types (`schema/protocol.toml` →
-//! `protocol/generated.rs`). The legacy sim reads/writes these types
-//! directly (`state::GameState.ships: Vec<protocol::ShipState>`). `mp1`
-//! is intentionally **decoupled** from the wire format for now — its
-//! `state::ShipState` is a fresh minimal struct. They'll converge
-//! again when networking lands in Phase 2+ (wire format gets the same
-//! fresh treatment as the sim).
+//! Solo gameplay does NOT route through this crate — solo runs entirely
+//! in JS (`js/modules/*`). This crate is the MP product's sim.
 
-// ── Legacy sim modules (stay until each is rewritten in mp1) ──
+// ── Core sim primitives ────────────────────────────────────────────
+pub mod codec;
+pub mod input;
+pub mod ship;
+pub mod state;
+pub mod wire;
+
+// ── Deterministic combat (all randomness via rng_ctx, all trig via trig) ──
 pub mod asteroid;
 pub mod bullet;
 pub mod collision;
-pub mod difficulty;
-pub mod drops;
+pub mod damage;
 pub mod enemy;
-pub mod fxp;
-pub mod input;
+pub mod rng_ctx;
+pub mod trig;
+
+// ── Wave cadence + drops ──
+pub mod drops;
+pub mod wave;
+pub mod wave_table;
+
+// ── Base weapons ──
+pub mod weapon;
+pub mod weapon_rail_driver;
+pub mod weapon_scatter_gun;
+pub mod weapon_storm_needles;
+
+// ── HP / death parity (shield + spare tanks) ──
+pub mod shield;
+
+// ── Enemy bullet infrastructure ──
+pub mod enemy_bullet;
+pub mod enemy_bullet_patterns;
+
+// ── Per-enemy modules (movement + firing) ──
+pub mod enemy_drifter;
+pub mod enemy_guardian;
+pub mod enemy_mine;
+pub mod enemy_missile;
+pub mod enemy_prowler;
+pub mod enemy_sentinel;
+pub mod enemy_stalker;
+pub mod enemy_tangerine;
+pub mod enemy_titan;
+pub mod enemy_wasp;
+pub mod enemy_weaver;
+
+// ── Wire protocol + shared PRNG ──
 pub mod protocol;
 pub mod rng;
-pub mod ship;
-pub mod state;
-pub mod util;
-pub mod wave;
 
-// ── Phase-1 fresh-rewrite (WASM client + future MP server) ──
-pub mod mp1;
-
-use rand_pcg::Pcg64;
-
-use crate::protocol::GameEvent;
-
-// ── Re-exports (legacy entry point, used by server-bin) ──
+// ── Public surface ──
+pub use codec::{decode_client, decode_server, encode_client, encode_server};
 pub use input::PlayerInput;
-pub use state::{GameState, PlayerInputs};
-
-/// Legacy top-level tick — used by the existing `rainboids-server`
-/// room actor. Calls into the legacy sim modules. New code should use
-/// `mp1::tick_phase1` instead.
-pub fn simulate_tick(
-    state: &mut GameState,
-    inputs: &PlayerInputs,
-    dt: f32,
-    rng: &mut Pcg64,
-    events: &mut Vec<GameEvent>,
-) {
-    ship::update_all(&mut state.ships, inputs, dt, events);
-    enemy::update_all(&mut state.enemies, &state.ships, dt, rng, events);
-    asteroid::update_all(&mut state.asteroids, dt, events);
-    collision::detect_and_resolve(state, events);
-    drops::update(&mut state.drops, &state.ships, dt, events);
-    wave::tick(&mut state.wave, &mut state.enemies, dt, rng, events);
-}
+pub use ship::{tick_phase1, update_ship};
+pub use state::{GameState, ShipState};
+pub use wire::{ClientMsg, ServerMsg, SnapshotShip, WIRE_VERSION};

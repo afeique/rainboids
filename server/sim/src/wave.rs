@@ -1,73 +1,38 @@
-//! Pure wave-spawn step — authoritative, mirroring `js/sim/wave.js::updateWave()`.
+//! Phase 4 wave state machine — deterministic per-room sub-wave cadence.
 //!
-//! Tick model: `update_wave` advances one wave's phase machine by exactly
-//! one logic tick. Decides "spawn next sub-wave now?" and emits
-//! `WaveEvent::EnemySpawn` events; the wrapper drains those events and
-//! constructs the actual Enemy instances via the existing
-//! `spawnLeveledEnemies` helpers (which know about pools, warp-in, level
-//! scaling, mini-boss promotion, boss linking).
+//! Mirrors solo's `js/sim/wave.js` `updateWave` + `tryAdvanceSubWave`.
+//! Pure function: takes the wave config + current state + alive enemy
+//! count, returns spawn requests for this tick and mutates state.
 //!
-//! Phase machine: `Intro` → `Spawning` → `Clearing` → `Complete`.
-//!   - `Intro`    : the wave just started; sub-wave 0 has not spawned
-//!                  yet. The wrapper transitions intro → spawning when
-//!                  the intro overlay lifts (legacy timing: ~700 ms).
-//!                  This pure step treats `Intro` as a no-op.
-//!   - `Spawning` : at least one sub-wave has spawned, more may follow.
-//!                  Steady state during gameplay; runs the sub-wave
-//!                  advance logic.
-//!   - `Clearing` : all sub-waves spawned but enemies remain. Watches
-//!                  for `enemy_count == 0` to flip to `Complete`.
-//!   - `Complete` : terminal. Emits `WaveEvent::WaveClear` once on
-//!                  entry; the wrapper observes this and triggers the
-//!                  wave-clear flow.
+//! Tick rate: 60 Hz (matches sim).
 //!
-//! What lives here:
-//!   - Sub-wave advance decision (≤2 enemies OR 12 s elapsed)
-//!   - End-of-wave detection (zero enemies + all sub-waves spawned)
-//!   - `EnemySpawn` event emission (one per group in the spawning
-//!     sub-wave)
-//!   - `WaveClear` event emission (when the wave transitions to
-//!     `Complete`)
-//!
-//! What does NOT live here (deferred to the wrapper, mirroring JS):
-//!   - Pool cleanup, audio cues, UI overlays, wave-clear bonuses,
-//!     mission resolution, persistent save, powerups menu trigger,
-//!     player invincibility grace, Enemy / Asteroid construction.
-//!   - Intro phase transition: the wrapper flips `Intro` → `Spawning`
-//!     when the overlay lifts; this pure step does not own that timer.
-//!
-//! Parity fixture: `server/tests/parity_wave.rs::wave1_advance_at_two_enemies`
-//! drives 4 ticks of wave 1 with `enemy_count` vector `[0, 5, 2, 0]` and
-//! asserts agreement with JS on the 3 emitted `EnemySpawn` events.
-//!
-//! The existing `tick` stub at the bottom of this file is the
-//! placeholder called from `simulate_tick` in `mod.rs`. It is left
-//! untouched here; the new `update_wave` is the parity-tested function.
+//! Out of scope for this module:
+//! - The wave config table itself (lives in `wave_table.rs`, owned by Agent C).
+//! - Actual enemy entity construction (lives in `room.rs`, which calls
+//!   `enemy::spawn_hunter_from_seed` per spawn request).
+//! - Wave-clear bonuses, audio, UI (those are JS-side Phase 4 follow-ups).
 
-use rand_pcg::Pcg64;
+/// Ticks per second for the sim. Used to convert solo's millisecond
+/// constants into tick budgets.
+pub const SIM_HZ: u32 = 60;
 
-use crate::protocol::{EnemyState, GameEvent, ShipState};
+/// Sub-wave advance threshold (alive enemies). When `alive_enemy_count`
+/// drops to this or below, the next sub-wave starts. Mirrors solo's
+/// `SUB_WAVE_ADVANCE_ENEMY_THRESHOLD = 2`.
+pub const SUB_WAVE_ADVANCE_ENEMY_THRESHOLD: usize = 2;
 
-use super::state::WaveState;
+/// Sub-wave stale-fallback ticks. If the current sub-wave hasn't advanced
+/// within this many ticks of starting, force-advance regardless of enemy
+/// count. Solo's `12000 ms` × 60 Hz / 1000 = 720 ticks.
+pub const SUB_WAVE_ADVANCE_STALE_TICKS: u32 = 720;
 
-// ── Constants copied verbatim from js/sim/wave.js ───────────────────────
-//
-// JS: `export const SUB_WAVE_ADVANCE_ENEMY_THRESHOLD = 2;` (wave.js:57)
-// JS: `export const SUB_WAVE_ADVANCE_STALE_MS = 12000;`    (wave.js:58)
-//
-// Sub-wave advance trigger: ≤2 enemies left (player has the field
-// mostly cleared) OR 12 s since last sub-wave spawn (defensive build is
-// stalling the wave). Mirrors `tryAdvanceSubWave` in `wave-manager.js`.
-pub const SUB_WAVE_ADVANCE_ENEMY_THRESHOLD: u32 = 2;
-pub const SUB_WAVE_ADVANCE_STALE_MS: u32 = 12_000;
+/// Intro-phase duration. Solo's wave-manager holds a brief intro splash
+/// before spawning starts. Phase 4 MVP keeps it short (1.5 s) so the
+/// game flows without forced waiting.
+pub const WAVE_INTRO_TICKS: u32 = 90;
 
-// MAX_WAVES — campaign length. Matches `js/modules/core/constants.js`'s
-// `MAX_WAVES = 20`. Used for clamping in `get_enemy_level`,
-// `get_asteroid_level`, and `get_wave_config`.
-pub const MAX_WAVES: u32 = 20;
-
-/// Wave phase machine. Mirrors the JS string discriminator
-/// (`'intro' | 'spawning' | 'clearing' | 'complete'`).
+/// Wave phase machine. Mirrors solo's `Intro` / `Spawning` / `Clearing`
+/// / `Complete` states (see `js/sim/wave.js` lines 11–22 for definitions).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WavePhase {
     Intro,
@@ -76,582 +41,446 @@ pub enum WavePhase {
     Complete,
 }
 
-/// Enemy type discriminator. Mirrors the JS string keys used in
-/// `WAVE_DATA` (HUNTER, GUARDIAN, WASP, STALKER, DRIFTER, PROWLER,
-/// WEAVER, SENTINEL, TANGERINE, TITAN — see
-/// `js/modules/wave/wave-data.js`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EnemyType {
-    Hunter,
-    Guardian,
-    Wasp,
-    Stalker,
-    Drifter,
-    Prowler,
-    Weaver,
-    Sentinel,
-    Tangerine,
-    Titan,
-}
-
-impl EnemyType {
-    /// Mirror of the JS `enemyType` string the wrapper consumes.
-    /// Useful for cross-language event diffing.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            EnemyType::Hunter => "HUNTER",
-            EnemyType::Guardian => "GUARDIAN",
-            EnemyType::Wasp => "WASP",
-            EnemyType::Stalker => "STALKER",
-            EnemyType::Drifter => "DRIFTER",
-            EnemyType::Prowler => "PROWLER",
-            EnemyType::Weaver => "WEAVER",
-            EnemyType::Sentinel => "SENTINEL",
-            EnemyType::Tangerine => "TANGERINE",
-            EnemyType::Titan => "TITAN",
-        }
+impl Default for WavePhase {
+    fn default() -> Self {
+        Self::Intro
     }
 }
 
-/// Sim-level wave state. Mirrors the JS `WaveState` typedef in
-/// `js/sim/state.js` (lines 232–273, agent F's round-2 addition).
-///
-/// `u32` for the wave number / sub-wave index / spawn timer (ms);
-/// `i32` for `remaining_to_spawn` (informational, can go negative if
-/// callers supply weird overrides — JS coerces to a number, we mirror).
+/// Per-room wave runtime state. Lives in `RoomState` (Wave 2 adds it).
 #[derive(Debug, Clone, Copy)]
-pub struct Wave {
-    pub number: u32,
-    pub started_at_tick: u32,
-    pub remaining_to_spawn: i32,
-    pub sub_wave_index: u32,
-    pub spawn_timer: u32,
+pub struct WaveState {
+    /// 1-indexed wave number. Starts at 1 (room boot starts wave 1).
+    pub current_wave: u16,
+    /// 0-indexed sub-wave within the current wave.
+    pub sub_wave_idx: u8,
     pub phase: WavePhase,
+    /// Tick at which the current phase began (room tick, not relative).
+    /// Used to detect the 720-tick stale-fallback condition and the
+    /// intro splash duration.
+    pub phase_started_tick: u32,
 }
 
-impl Wave {
-    /// Construct a fresh wave anchored at the start of the given wave
-    /// number. Mirrors the JS `freshWaveState` defaults
-    /// (state.js:362–373): `sub_wave_index=0`, `phase=Intro`,
-    /// `spawn_timer=0`, `started_at_tick=0`, `remaining_to_spawn=0`.
-    pub fn fresh(wave_number: u32) -> Self {
-        let n = wave_number.max(1);
+impl WaveState {
+    /// Initial state at room boot: wave 1, sub-wave 0, Intro phase.
+    pub fn new() -> Self {
         Self {
-            number: n,
-            started_at_tick: 0,
-            remaining_to_spawn: 0,
-            sub_wave_index: 0,
-            spawn_timer: 0,
+            current_wave: 1,
+            sub_wave_idx: 0,
             phase: WavePhase::Intro,
+            phase_started_tick: 0,
         }
     }
 }
 
-/// Per-tick context for `update_wave`. Mirrors the JS
-/// `WaveUpdateContext` typedef (state.js:316–327).
-///
-/// **Currently unread fields** (`ships`, `rng`):
-///
-/// The JS `WaveUpdateContext` typedef declares both `ships` and `rng`
-/// — see `js/sim/wave.js` lines 98–102 and the corresponding state
-/// typedef — but the JS `updateWave` body **does not read either**.
-/// `wave-data.js` is fully deterministic (zero `Math.random` /
-/// `ctx.rng` references; no randomized branches in the campaign
-/// schedule).
-///
-/// We carry the fields in the Rust shape anyway so:
-///   1. The wrapper / call sites already have somewhere to plug in
-///      ship snapshots and a seeded `Pcg64` (no signature churn when
-///      randomized scheduling lands).
-///   2. The parity fixture can prove that populating these fields
-///      with non-default values does NOT alter the spawn sequence
-///      (`parity_wave::wave1_with_populated_context`).
-///
-/// When randomized scheduling is introduced (e.g., a future
-/// "substitute one Hunter with a Wasp on Pcg64::gen_bool(0.3)"
-/// branch), `update_wave` will start reading these fields and the
-/// `#[allow(dead_code)]` attribute will be removed.
-#[allow(dead_code)] // ships + rng reserved for future randomized scheduling — see doc comment.
-pub struct WaveContext<'a> {
-    pub enemy_count: u32,
-    pub dt: f32,
-    /// Ship snapshots for any future "spawn enemies near the player"
-    /// scheduling. Empty slice = no ships (e.g., between rounds).
-    /// **Unread by `update_wave` today.**
-    pub ships: &'a [ShipState],
-    /// Seeded RNG for any future randomized branch. `None` = no RNG
-    /// available (also acceptable — the current implementation never
-    /// touches it). **Unread by `update_wave` today.**
-    pub rng: Option<&'a mut Pcg64>,
+impl Default for WaveState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-/// Side-effect events emitted by `update_wave`. Mirrors the JS event
-/// shape exactly so the wrapper can drain a homogeneous queue.
+/// One enemy spawn request emitted by `tick_wave`. The caller
+/// (`room.rs`) translates this into an actual `EnemyState` via the
+/// kind-appropriate spawn helper (`spawn_hunter_from_seed` etc).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WaveEvent {
-    /// One per group in the spawning sub-wave. The wrapper drains
-    /// these and calls `spawnLeveledEnemies(type, count, opts)` (or
-    /// the Rust equivalent) to instantiate the Enemy objects.
-    EnemySpawn {
-        enemy_type: EnemyType,
-        count: u32,
-        level: u32,
-        wave: u32,
-        sub_wave_index: u32,
-        is_boss: bool,
-        boss_tier: u8,
-    },
-    /// Emitted once when the wave transitions to `Complete`. The
-    /// wrapper observes this and triggers wave-clear flow.
-    WaveClear { wave: u32 },
+pub struct WaveSpawnRequest {
+    pub kind_u8: u8,
+    pub is_boss: bool,
+    pub boss_tier: u8,
 }
 
-// ── WAVE_DATA — the 20-wave campaign schedule ───────────────────────────
-//
-// Mirrors `js/modules/wave/wave-data.js::WAVE_DATA` byte-for-byte.
-// Tuple layout: `(enemy_type, count, is_boss, boss_tier)`. Use
-// `(.., 0, false, 0)` for non-boss groups; the wrapper applies
-// `BOSS_TIER_STATS` lookups when `is_boss == true`.
-//
-// Outer-array index = `wave_number - 1`. Inside a wave we have a slice
-// of sub-waves; each sub-wave is a slice of groups. The pure step
-// emits one `EnemySpawn` per group on the trigger tick.
-//
-// 5.79.16 — Enemy counts scaled up across the campaign (~+60% enemies,
-// ~+33% asteroids) so per-wave XP yields keep pace with the new linear
-// XP curve targeting ~1.5 levels per wave. See
-// `docs/XP_BALANCE_REWORK_5.79.md` for the analysis.
-
-// Wave 1 — First Contact #1 (wave-data.js:33-36)
-const W1_S0: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Hunter, 3, false, 0)];
-const W1_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 2, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W1: &[&[(EnemyType, u32, bool, u8)]] = &[W1_S0, W1_S1];
-
-// Wave 2 — First Contact #2 (wave-data.js:37-40)
-const W2_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W2_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W2: &[&[(EnemyType, u32, bool, u8)]] = &[W2_S0, W2_S1];
-
-// Wave 3 — First Contact #3 (wave-data.js:41-45)
-const W3_S0: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Hunter, 4, false, 0)];
-const W3_S1: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Wasp, 4, false, 0)];
-const W3_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W3: &[&[(EnemyType, u32, bool, u8)]] = &[W3_S0, W3_S1, W3_S2];
-
-// Wave 4 — First Contact #4, GUARDIAN intro (wave-data.js:46-50)
-const W4_S0: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Guardian, 3, false, 0)];
-const W4_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Wasp, 4, false, 0),
-    (EnemyType::Hunter, 1, false, 0),
-];
-const W4_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Hunter, 4, false, 0),
-];
-const W4: &[&[(EnemyType, u32, bool, u8)]] = &[W4_S0, W4_S1, W4_S2];
-
-// Wave 5 — BOSS: Iron Giant — TITAN bossTier 1 + escort (wave-data.js:53-60)
-const W5_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 4, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-];
-const W5_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Wasp, 3, false, 0),
-    (EnemyType::Stalker, 1, false, 0),
-];
-const W5_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Titan, 1, true, 1),
-    (EnemyType::Guardian, 3, false, 0),
-    (EnemyType::Hunter, 2, false, 0),
-];
-const W5: &[&[(EnemyType, u32, bool, u8)]] = &[W5_S0, W5_S1, W5_S2];
-
-// Wave 6 — Escalation, STALKER intro (wave-data.js:63-67)
-const W6_S0: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Stalker, 3, false, 0)];
-const W6_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 4, false, 0),
-    (EnemyType::Wasp, 1, false, 0),
-];
-const W6_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Stalker, 2, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W6: &[&[(EnemyType, u32, bool, u8)]] = &[W6_S0, W6_S1, W6_S2];
-
-// Wave 7 — Escalation, DRIFTER + TANGERINE intro (wave-data.js:68-72)
-const W7_S0: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Drifter, 3, false, 0)];
-const W7_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Tangerine, 3, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-];
-const W7_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Drifter, 2, false, 0),
-    (EnemyType::Hunter, 4, false, 0),
-    (EnemyType::Wasp, 1, false, 0),
-];
-const W7: &[&[(EnemyType, u32, bool, u8)]] = &[W7_S0, W7_S1, W7_S2];
-
-// Wave 8 — Escalation, SENTINEL intro (wave-data.js:73-77)
-const W8_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Stalker, 2, false, 0),
-];
-const W8_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Stalker, 3, false, 0),
-    (EnemyType::Sentinel, 1, false, 0),
-];
-const W8_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Sentinel, 2, false, 0),
-    (EnemyType::Hunter, 4, false, 0),
-    (EnemyType::Stalker, 1, false, 0),
-];
-const W8: &[&[(EnemyType, u32, bool, u8)]] = &[W8_S0, W8_S1, W8_S2];
-
-// Wave 9 — Escalation, WEAVER + PROWLER intro (wave-data.js:78-82)
-const W9_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Weaver, 2, false, 0),
-    (EnemyType::Wasp, 3, false, 0),
-];
-const W9_S1: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Prowler, 3, false, 0)];
-const W9_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Weaver, 2, false, 0),
-    (EnemyType::Prowler, 1, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-    (EnemyType::Hunter, 1, false, 0),
-];
-const W9: &[&[(EnemyType, u32, bool, u8)]] = &[W9_S0, W9_S1, W9_S2];
-
-// Wave 10 — BOSS: Twin Iron — 2× TITAN bossTier 2 (wave-data.js:85-92)
-const W10_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 3, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-];
-const W10_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Stalker, 2, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W10_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Titan, 2, true, 2),
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Stalker, 1, false, 0),
-];
-const W10: &[&[(EnemyType, u32, bool, u8)]] = &[W10_S0, W10_S1, W10_S2];
-
-// Wave 11 — Gauntlet (wave-data.js:95-99)
-const W11_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 5, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W11_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 3, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-];
-const W11_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Stalker, 2, false, 0),
-    (EnemyType::Wasp, 3, false, 0),
-];
-const W11: &[&[(EnemyType, u32, bool, u8)]] = &[W11_S0, W11_S1, W11_S2];
-
-// Wave 12 — Gauntlet, sniper alley (wave-data.js:100-104)
-const W12_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Stalker, 3, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W12_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Prowler, 3, false, 0),
-    (EnemyType::Drifter, 2, false, 0),
-];
-const W12_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Stalker, 2, false, 0),
-    (EnemyType::Prowler, 2, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-];
-const W12: &[&[(EnemyType, u32, bool, u8)]] = &[W12_S0, W12_S1, W12_S2];
-
-// Wave 13 — Gauntlet, speed demons (wave-data.js:105-109)
-const W13_S0: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Wasp, 6, false, 0)];
-const W13_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Weaver, 2, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-];
-const W13_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Wasp, 3, false, 0),
-    (EnemyType::Weaver, 2, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-];
-const W13: &[&[(EnemyType, u32, bool, u8)]] = &[W13_S0, W13_S1, W13_S2];
-
-// Wave 14 — Gauntlet, defense wall (wave-data.js:110-114)
-const W14_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 3, false, 0),
-    (EnemyType::Sentinel, 2, false, 0),
-];
-const W14_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Sentinel, 3, false, 0),
-    (EnemyType::Prowler, 2, false, 0),
-];
-const W14_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Prowler, 2, false, 0),
-    (EnemyType::Stalker, 3, false, 0),
-];
-const W14: &[&[(EnemyType, u32, bool, u8)]] = &[W14_S0, W14_S1, W14_S2];
-
-// Wave 15 — BOSS: Triple Threat — 3× TITAN bossTier 3 (wave-data.js:117-124)
-const W15_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 3, false, 0),
-    (EnemyType::Stalker, 2, false, 0),
-];
-const W15_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Sentinel, 3, false, 0),
-    (EnemyType::Wasp, 3, false, 0),
-];
-const W15_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Titan, 3, true, 3),
-    (EnemyType::Sentinel, 2, false, 0),
-    (EnemyType::Guardian, 1, false, 0),
-];
-const W15: &[&[(EnemyType, u32, bool, u8)]] = &[W15_S0, W15_S1, W15_S2];
-
-// Wave 16 — Endgame Approach #1 (wave-data.js:127-131)
-const W16_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Wasp, 3, false, 0),
-];
-const W16_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 3, false, 0),
-    (EnemyType::Stalker, 2, false, 0),
-];
-const W16_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Stalker, 2, false, 0),
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W16: &[&[(EnemyType, u32, bool, u8)]] = &[W16_S0, W16_S1, W16_S2];
-
-// Wave 17 — Endgame Approach #2, bullet hell sample (wave-data.js:132-136)
-const W17_S0: &[(EnemyType, u32, bool, u8)] = &[(EnemyType::Weaver, 3, false, 0)];
-const W17_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Wasp, 5, false, 0),
-    (EnemyType::Drifter, 2, false, 0),
-];
-const W17_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Weaver, 2, false, 0),
-    (EnemyType::Wasp, 3, false, 0),
-    (EnemyType::Drifter, 2, false, 0),
-    (EnemyType::Hunter, 1, false, 0),
-];
-const W17: &[&[(EnemyType, u32, bool, u8)]] = &[W17_S0, W17_S1, W17_S2];
-
-// Wave 18 — Endgame Approach #3 — non-boss TITAN appearance (wave-data.js:137-141)
-const W18_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Tangerine, 2, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-];
-const W18_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Sentinel, 3, false, 0),
-    (EnemyType::Stalker, 2, false, 0),
-];
-// NB: js/modules/wave/wave-data.js:140 lists `{ type: 'TITAN', count: 1 }`
-// without `isBoss` — this is a non-boss TITAN miniboss, so we set
-// `is_boss=false, boss_tier=0` to mirror the JS shape exactly.
-const W18_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Titan, 1, false, 0),
-    (EnemyType::Tangerine, 2, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Sentinel, 1, false, 0),
-];
-const W18: &[&[(EnemyType, u32, bool, u8)]] = &[W18_S0, W18_S1, W18_S2];
-
-// Wave 19 — Endgame Approach #4 (wave-data.js:142-146)
-const W19_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Wasp, 2, false, 0),
-];
-const W19_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Stalker, 2, false, 0),
-    (EnemyType::Drifter, 2, false, 0),
-    (EnemyType::Weaver, 2, false, 0),
-];
-const W19_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Tangerine, 2, false, 0),
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Hunter, 3, false, 0),
-    (EnemyType::Wasp, 3, false, 0),
-];
-const W19: &[&[(EnemyType, u32, bool, u8)]] = &[W19_S0, W19_S1, W19_S2];
-
-// Wave 20 — FINAL BOSS: The Last Stand — 3× TITAN bossTier 4 (wave-data.js:149-156)
-const W20_S0: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Guardian, 3, false, 0),
-    (EnemyType::Sentinel, 2, false, 0),
-    (EnemyType::Stalker, 2, false, 0),
-];
-const W20_S1: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Prowler, 2, false, 0),
-    (EnemyType::Weaver, 2, false, 0),
-    (EnemyType::Tangerine, 2, false, 0),
-];
-const W20_S2: &[(EnemyType, u32, bool, u8)] = &[
-    (EnemyType::Titan, 3, true, 4),
-    (EnemyType::Guardian, 2, false, 0),
-    (EnemyType::Sentinel, 2, false, 0),
-    (EnemyType::Stalker, 1, false, 0),
-];
-const W20: &[&[(EnemyType, u32, bool, u8)]] = &[W20_S0, W20_S1, W20_S2];
-
-/// The 20-wave campaign schedule. Index `i` holds wave number `i + 1`.
-/// Mirrors `js/modules/wave/wave-data.js::WAVE_DATA` (waves 1..20).
-pub const WAVE_DATA: [&[&[(EnemyType, u32, bool, u8)]]; 20] = [
-    W1, W2, W3, W4, W5, W6, W7, W8, W9, W10, W11, W12, W13, W14, W15, W16, W17, W18, W19, W20,
-];
-
-/// Read the static wave config for a given wave number. Pure lookup,
-/// clamped to `1..=MAX_WAVES`. Mirrors
-/// `js/modules/wave/wave-data.js::getWaveConfig` (line 162).
-pub fn get_wave_config(wave: u32) -> &'static [&'static [(EnemyType, u32, bool, u8)]] {
-    let w = wave.max(1).min(MAX_WAVES);
-    WAVE_DATA[(w - 1) as usize]
+/// One enemy group inside a sub-wave (e.g. "3 HUNTERs"). A sub-wave is
+/// a slice of these.
+#[derive(Debug, Clone, Copy)]
+pub struct WaveSpawnGroup {
+    pub kind_u8: u8,
+    pub count: u8,
+    pub is_boss: bool,
+    pub boss_tier: u8,
 }
 
-/// Enemy level for the wave — 1..20 across the campaign. Mirrors
-/// `js/modules/wave/wave-data.js::getEnemyLevel` (lines 174–176).
-pub fn get_enemy_level(wave: u32) -> u32 {
-    wave.max(1).min(MAX_WAVES)
+/// Static config for one wave. Read from `wave_table::get_wave_config`.
+#[derive(Debug, Clone, Copy)]
+pub struct WaveConfig {
+    pub wave_number: u16,
+    pub asteroid_count: u8,
+    pub sub_waves: &'static [&'static [WaveSpawnGroup]],
+    pub is_boss_wave: bool,
+    pub boss_tier: u8,
 }
 
-/// Asteroid level lifts every other wave (1,1,2,2,…,10,10). Mirrors
-/// `js/modules/wave/wave-data.js::getAsteroidLevel` (lines 180–183).
-pub fn get_asteroid_level(wave: u32) -> u32 {
-    let w = wave.max(1).min(MAX_WAVES);
-    // ceil(w/2) for u32: (w + 1) / 2
-    ((w + 1) / 2).max(1)
-}
-
-/// Boss waves are the exact set [5, 10, 15, 20]. Mirrors
-/// `js/modules/wave/wave-data.js::isBossWave` (lines 168–170).
-pub fn is_boss_wave(wave: u32) -> bool {
-    matches!(wave, 5 | 10 | 15 | 20)
-}
-
-/// Pure wave-update step. Mirrors `js/sim/wave.js::updateWave`.
-///
-/// One tick of the phase machine. The wrapper drains `events` and
-/// constructs the actual Enemy instances for `EnemySpawn`, and runs
-/// the wave-clear flow for `WaveClear`.
-///
-/// Order of operations is **load-bearing for parity** — see the
-/// matching block comments in `js/sim/wave.js::updateWave()`. Do not
-/// reorder without a matching change on the JS side.
-///
-/// **Note**: `ctx.ships` and `ctx.rng` are part of the context shape
-/// for forward-compat (see `WaveContext` doc comment) but are not
-/// read by this implementation — the JS counterpart does not read
-/// them either. The fixture
-/// `parity_wave::wave1_with_populated_context` exercises this
-/// no-op-on-extras invariant.
-pub fn update_wave(wave: &mut Wave, ctx: &WaveContext<'_>, events: &mut Vec<WaveEvent>) {
-    // ── 'intro' or 'complete' phases: nothing to do ──
-    // 'intro' is a brief overlay phase; the wrapper transitions to
-    // 'spawning' once it spawns sub-wave 0. 'complete' is terminal.
-    if matches!(wave.phase, WavePhase::Intro | WavePhase::Complete) {
-        return;
-    }
-
-    let sub_waves = get_wave_config(wave.number);
-    let total_sub_waves = sub_waves.len() as u32;
-
-    // ── 'clearing' phase: all sub-waves out, watch for last enemy ──
-    if matches!(wave.phase, WavePhase::Clearing) {
-        if ctx.enemy_count == 0 {
-            wave.phase = WavePhase::Complete;
-            events.push(WaveEvent::WaveClear { wave: wave.number });
+/// Expand a sub-wave's groups into one `WaveSpawnRequest` per enemy.
+/// Order: groups in declaration order, each group's count emitted
+/// consecutively before moving to the next group.
+fn emit_sub_wave(groups: &[WaveSpawnGroup]) -> Vec<WaveSpawnRequest> {
+    let total: usize = groups.iter().map(|g| g.count as usize).sum();
+    let mut out = Vec::with_capacity(total);
+    for g in groups {
+        for _ in 0..g.count {
+            out.push(WaveSpawnRequest {
+                kind_u8: g.kind_u8,
+                is_boss: g.is_boss,
+                boss_tier: g.boss_tier,
+            });
         }
-        return;
     }
-
-    // ── 'spawning' phase: try to advance to the next sub-wave ──
-    // Exit condition: every sub-wave has been emitted. Move to
-    // 'clearing' so the next tick watches for `enemy_count == 0`.
-    let idx = wave.sub_wave_index;
-    if idx >= total_sub_waves {
-        // All sub-waves out. If the field is already empty, jump
-        // straight to 'complete' (mirrors the same fast-path in JS).
-        wave.phase = WavePhase::Clearing;
-        if ctx.enemy_count == 0 {
-            wave.phase = WavePhase::Complete;
-            events.push(WaveEvent::WaveClear { wave: wave.number });
-        }
-        return;
-    }
-
-    // Advance trigger: ≤2 enemies left OR 12 s since last sub-wave
-    // spawn. Mirrors `tryAdvanceSubWave` in `wave-manager.js`.
-    let elapsed = wave.spawn_timer;
-    let ready = ctx.enemy_count <= SUB_WAVE_ADVANCE_ENEMY_THRESHOLD
-        || elapsed >= SUB_WAVE_ADVANCE_STALE_MS;
-    if !ready {
-        // Not yet — accumulate elapsed time. dt is in seconds; the
-        // legacy code uses Date.now() deltas in ms so we convert.
-        // `(dt * 1000).floor()` matches JS's `Math.floor`.
-        let add_ms = (ctx.dt * 1000.0).floor().max(0.0) as u32;
-        wave.spawn_timer = elapsed.saturating_add(add_ms);
-        return;
-    }
-
-    // Emit one `EnemySpawn` event per group in this sub-wave. The
-    // wrapper drains these and instantiates Enemy objects. Bosses
-    // carry their `boss_tier` through so the wrapper applies
-    // `BOSS_TIER_STATS`.
-    let groups = sub_waves[idx as usize];
-    let enemy_level = get_enemy_level(wave.number);
-    for &(enemy_type, count, is_boss, boss_tier) in groups {
-        events.push(WaveEvent::EnemySpawn {
-            enemy_type,
-            count,
-            level: enemy_level,
-            wave: wave.number,
-            sub_wave_index: idx,
-            is_boss,
-            boss_tier,
-        });
-    }
-
-    // Bookkeeping: bump the index, reset the per-sub-wave spawn
-    // timer, and decrement `remaining_to_spawn` (informational).
-    wave.sub_wave_index = idx + 1;
-    wave.spawn_timer = 0;
-    let remaining = total_sub_waves.saturating_sub(wave.sub_wave_index) as i32;
-    wave.remaining_to_spawn = remaining;
+    out
 }
 
-// ── Wire-state integration stub ─────────────────────────────────────────
-//
-// Existing entry point called from `simulate_tick` in `mod.rs`. The
-// real wire ↔ sim bridging will land when the wave wrapper wires up;
-// for now this is a no-op that satisfies the existing call site.
-pub fn tick(
-    _wave: &mut WaveState,
-    _enemies: &mut Vec<EnemyState>,
-    _dt: f32,
-    _rng: &mut Pcg64,
-    _events: &mut Vec<GameEvent>,
-) {
+/// Per-tick wave update.
+///
+/// Inputs:
+/// - `state`: mutated to reflect phase transitions.
+/// - `config`: the static config for `state.current_wave`. Caller looks
+///    this up via `wave_table::get_wave_config(state.current_wave)`.
+/// - `alive_enemy_count`: how many enemies are currently alive in the
+///   room. Used to gate sub-wave advance (≤2) and wave-complete (=0).
+/// - `current_tick`: room tick (`RoomState.tick`).
+///
+/// Returns: a Vec of spawn requests for this tick. Empty when nothing
+/// is spawning (Intro waiting, Spawning between sub-waves, Clearing,
+/// or Complete).
+///
+/// Phase transitions:
+/// - Intro → Spawning when `current_tick - phase_started_tick >= WAVE_INTRO_TICKS`.
+///   Emits sub-wave 0's groups as spawn requests on the SAME tick that
+///   transitions to Spawning.
+/// - Spawning → Spawning (advance sub_wave_idx) when alive ≤ 2 OR
+///   stale (720 ticks). Emits the new sub-wave's groups. Updates
+///   `phase_started_tick` to `current_tick`.
+/// - Spawning → Clearing when sub_wave_idx == sub_waves.len() (all
+///   sub-waves have spawned) AND we just advanced past the last one.
+///   Equivalently: when there are no more sub-waves left to advance to.
+/// - Clearing → Complete when alive_enemy_count == 0.
+/// - Complete: terminal — `tick_wave` returns empty. Caller advances
+///   `current_wave += 1` and resets `phase = Intro`, `sub_wave_idx = 0`,
+///   `phase_started_tick = current_tick`. (Caller's job, NOT yours.)
+///
+/// Pure function; no I/O, no time queries, no randomness. Deterministic.
+pub fn tick_wave(
+    state: &mut WaveState,
+    config: &WaveConfig,
+    alive_enemy_count: usize,
+    current_tick: u32,
+) -> Vec<WaveSpawnRequest> {
+    let total_sub_waves = config.sub_waves.len();
+
+    match state.phase {
+        // ── Complete: terminal. Caller decides when to start next wave. ──
+        WavePhase::Complete => Vec::new(),
+
+        // ── Intro: hold for WAVE_INTRO_TICKS, then transition to
+        //   Spawning AND emit sub-wave 0 on the same tick. ──
+        WavePhase::Intro => {
+            let elapsed = current_tick.saturating_sub(state.phase_started_tick);
+            if elapsed < WAVE_INTRO_TICKS {
+                return Vec::new();
+            }
+
+            // Degenerate config: zero sub-waves. Skip straight through.
+            if total_sub_waves == 0 {
+                state.phase = if alive_enemy_count == 0 {
+                    WavePhase::Complete
+                } else {
+                    WavePhase::Clearing
+                };
+                state.phase_started_tick = current_tick;
+                return Vec::new();
+            }
+
+            state.phase = WavePhase::Spawning;
+            state.sub_wave_idx = 0;
+            state.phase_started_tick = current_tick;
+            emit_sub_wave(config.sub_waves[0])
+        }
+
+        // ── Clearing: all sub-waves are out; wait for the field to clear. ──
+        WavePhase::Clearing => {
+            if alive_enemy_count == 0 {
+                state.phase = WavePhase::Complete;
+                state.phase_started_tick = current_tick;
+            }
+            Vec::new()
+        }
+
+        // ── Spawning: decide whether to advance to next sub-wave. ──
+        WavePhase::Spawning => {
+            let elapsed = current_tick.saturating_sub(state.phase_started_tick);
+            let ready = alive_enemy_count <= SUB_WAVE_ADVANCE_ENEMY_THRESHOLD
+                || elapsed >= SUB_WAVE_ADVANCE_STALE_TICKS;
+
+            if !ready {
+                return Vec::new();
+            }
+
+            // Next sub-wave index to emit. `sub_wave_idx` is the index
+            // of the sub-wave we most recently emitted (set on entry
+            // to Spawning to 0). So the next one to emit is +1.
+            let next_idx = (state.sub_wave_idx as usize).saturating_add(1);
+
+            if next_idx >= total_sub_waves {
+                // No more sub-waves to advance to. Move to Clearing.
+                // If the field is already empty, jump straight to
+                // Complete (e.g., last sub-wave was a single boss that
+                // died on the same tick — vanishingly rare, but cheap).
+                state.phase = WavePhase::Clearing;
+                state.phase_started_tick = current_tick;
+                if alive_enemy_count == 0 {
+                    state.phase = WavePhase::Complete;
+                }
+                return Vec::new();
+            }
+
+            // Advance. Emit the new sub-wave's groups.
+            state.sub_wave_idx = next_idx as u8;
+            state.phase_started_tick = current_tick;
+            emit_sub_wave(config.sub_waves[next_idx])
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Synthetic kind values — these tests don't import the real enemy
+    // kind table; any u8s will do. Real values get plugged in by
+    // Agent C's `wave_table.rs`.
+    const HUNTER: u8 = 0;
+    const GUARDIAN: u8 = 1;
+    const BOSS: u8 = 9;
+
+    // ── Static sub-wave fixtures (require &'static for WaveConfig) ──
+    const SUB_WAVE_A: &[WaveSpawnGroup] = &[WaveSpawnGroup {
+        kind_u8: HUNTER,
+        count: 3,
+        is_boss: false,
+        boss_tier: 0,
+    }];
+    const SUB_WAVE_B: &[WaveSpawnGroup] = &[WaveSpawnGroup {
+        kind_u8: GUARDIAN,
+        count: 2,
+        is_boss: false,
+        boss_tier: 0,
+    }];
+    const SUB_WAVE_MIXED: &[WaveSpawnGroup] = &[
+        WaveSpawnGroup {
+            kind_u8: HUNTER,
+            count: 3,
+            is_boss: false,
+            boss_tier: 0,
+        },
+        WaveSpawnGroup {
+            kind_u8: GUARDIAN,
+            count: 2,
+            is_boss: false,
+            boss_tier: 0,
+        },
+    ];
+    const SUB_WAVE_BOSS: &[WaveSpawnGroup] = &[WaveSpawnGroup {
+        kind_u8: BOSS,
+        count: 1,
+        is_boss: true,
+        boss_tier: 2,
+    }];
+
+    const TWO_SUB_WAVE_CONFIG: WaveConfig = WaveConfig {
+        wave_number: 1,
+        asteroid_count: 0,
+        sub_waves: &[SUB_WAVE_A, SUB_WAVE_B],
+        is_boss_wave: false,
+        boss_tier: 0,
+    };
+
+    const MIXED_CONFIG: WaveConfig = WaveConfig {
+        wave_number: 1,
+        asteroid_count: 0,
+        sub_waves: &[SUB_WAVE_MIXED],
+        is_boss_wave: false,
+        boss_tier: 0,
+    };
+
+    const BOSS_CONFIG: WaveConfig = WaveConfig {
+        wave_number: 1,
+        asteroid_count: 0,
+        sub_waves: &[SUB_WAVE_BOSS],
+        is_boss_wave: true,
+        boss_tier: 2,
+    };
+
+    #[test]
+    fn wave_state_new_is_intro_wave_1() {
+        let s = WaveState::new();
+        assert_eq!(s.current_wave, 1);
+        assert_eq!(s.sub_wave_idx, 0);
+        assert_eq!(s.phase, WavePhase::Intro);
+        assert_eq!(s.phase_started_tick, 0);
+    }
+
+    #[test]
+    fn intro_phase_holds_for_intro_ticks() {
+        let mut state = WaveState::new();
+        // Phase started at tick 0. For ticks 0..WAVE_INTRO_TICKS-1,
+        // tick_wave returns empty and stays in Intro.
+        for t in 0..WAVE_INTRO_TICKS {
+            let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 0, t);
+            assert!(
+                out.is_empty(),
+                "intro should not emit at tick {} (< {})",
+                t,
+                WAVE_INTRO_TICKS
+            );
+            assert_eq!(state.phase, WavePhase::Intro);
+        }
+
+        // On tick == WAVE_INTRO_TICKS, transition to Spawning AND emit
+        // sub-wave 0 (3 HUNTERs).
+        let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 0, WAVE_INTRO_TICKS);
+        assert_eq!(state.phase, WavePhase::Spawning);
+        assert_eq!(state.sub_wave_idx, 0);
+        assert_eq!(out.len(), 3);
+        for req in &out {
+            assert_eq!(req.kind_u8, HUNTER);
+            assert!(!req.is_boss);
+        }
+    }
+
+    #[test]
+    fn sub_wave_advance_on_low_enemy_count() {
+        let mut state = WaveState::new();
+
+        // Burn through intro.
+        let _ = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 0, WAVE_INTRO_TICKS);
+        assert_eq!(state.phase, WavePhase::Spawning);
+        assert_eq!(state.sub_wave_idx, 0);
+
+        // For a few ticks with the field still full, no advance.
+        let base = WAVE_INTRO_TICKS;
+        for t in 1..10 {
+            let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 5, base + t);
+            assert!(out.is_empty(), "no advance with 5 enemies alive");
+            assert_eq!(state.sub_wave_idx, 0);
+        }
+
+        // Drop to 1 alive — advance to sub-wave 1 (2 GUARDIANs).
+        let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 1, base + 10);
+        assert_eq!(state.sub_wave_idx, 1);
+        assert_eq!(state.phase, WavePhase::Spawning);
+        assert_eq!(out.len(), 2);
+        for req in &out {
+            assert_eq!(req.kind_u8, GUARDIAN);
+        }
+    }
+
+    #[test]
+    fn sub_wave_advance_on_stale_fallback() {
+        let mut state = WaveState::new();
+
+        // Burn through intro at tick WAVE_INTRO_TICKS — emits sub-wave 0.
+        let _ = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 0, WAVE_INTRO_TICKS);
+        assert_eq!(state.sub_wave_idx, 0);
+        assert_eq!(state.phase_started_tick, WAVE_INTRO_TICKS);
+
+        // For SUB_WAVE_ADVANCE_STALE_TICKS - 1 ticks with field full
+        // (alive=5, way above threshold), no advance.
+        for delta in 1..SUB_WAVE_ADVANCE_STALE_TICKS {
+            let out = tick_wave(
+                &mut state,
+                &TWO_SUB_WAVE_CONFIG,
+                5,
+                WAVE_INTRO_TICKS + delta,
+            );
+            assert!(
+                out.is_empty(),
+                "no stale advance yet at delta {} (< {})",
+                delta,
+                SUB_WAVE_ADVANCE_STALE_TICKS
+            );
+            assert_eq!(state.sub_wave_idx, 0);
+        }
+
+        // At delta == SUB_WAVE_ADVANCE_STALE_TICKS, force-advance.
+        let out = tick_wave(
+            &mut state,
+            &TWO_SUB_WAVE_CONFIG,
+            5,
+            WAVE_INTRO_TICKS + SUB_WAVE_ADVANCE_STALE_TICKS,
+        );
+        assert_eq!(state.sub_wave_idx, 1);
+        assert_eq!(out.len(), 2);
+        for req in &out {
+            assert_eq!(req.kind_u8, GUARDIAN);
+        }
+    }
+
+    #[test]
+    fn spawn_request_count_matches_group_count() {
+        let mut state = WaveState::new();
+        let out = tick_wave(&mut state, &MIXED_CONFIG, 0, WAVE_INTRO_TICKS);
+
+        // 3 HUNTERs + 2 GUARDIANs = 5 requests, in declaration order.
+        assert_eq!(out.len(), 5);
+        assert_eq!(out[0].kind_u8, HUNTER);
+        assert_eq!(out[1].kind_u8, HUNTER);
+        assert_eq!(out[2].kind_u8, HUNTER);
+        assert_eq!(out[3].kind_u8, GUARDIAN);
+        assert_eq!(out[4].kind_u8, GUARDIAN);
+    }
+
+    #[test]
+    fn wave_complete_when_clearing_and_no_enemies() {
+        let mut state = WaveState::new();
+
+        // Intro → Spawning, emit sub-wave 0 (3 HUNTERs).
+        let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 0, WAVE_INTRO_TICKS);
+        assert_eq!(out.len(), 3);
+
+        // Drop alive to 1 — advance to sub-wave 1, emit 2 GUARDIANs.
+        let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 1, WAVE_INTRO_TICKS + 30);
+        assert_eq!(state.sub_wave_idx, 1);
+        assert_eq!(out.len(), 2);
+
+        // Drop alive to 1 again — no more sub-waves, transition to Clearing.
+        let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 1, WAVE_INTRO_TICKS + 60);
+        assert!(out.is_empty());
+        assert_eq!(state.phase, WavePhase::Clearing);
+
+        // Still enemies alive — stay Clearing.
+        let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 1, WAVE_INTRO_TICKS + 70);
+        assert!(out.is_empty());
+        assert_eq!(state.phase, WavePhase::Clearing);
+
+        // Field clears — transition to Complete.
+        let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, 0, WAVE_INTRO_TICKS + 80);
+        assert!(out.is_empty());
+        assert_eq!(state.phase, WavePhase::Complete);
+    }
+
+    #[test]
+    fn complete_phase_returns_empty() {
+        let mut state = WaveState {
+            current_wave: 1,
+            sub_wave_idx: 1,
+            phase: WavePhase::Complete,
+            phase_started_tick: 0,
+        };
+
+        // Regardless of inputs, Complete returns empty and stays Complete.
+        for (alive, tick) in [(0usize, 0u32), (5, 100), (99, 99_999)] {
+            let out = tick_wave(&mut state, &TWO_SUB_WAVE_CONFIG, alive, tick);
+            assert!(out.is_empty());
+            assert_eq!(state.phase, WavePhase::Complete);
+        }
+    }
+
+    #[test]
+    fn boss_spawn_request_carries_boss_tier() {
+        let mut state = WaveState::new();
+        let out = tick_wave(&mut state, &BOSS_CONFIG, 0, WAVE_INTRO_TICKS);
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].kind_u8, BOSS);
+        assert!(out[0].is_boss);
+        assert_eq!(out[0].boss_tier, 2);
+    }
 }
