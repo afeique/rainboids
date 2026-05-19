@@ -37,6 +37,7 @@ import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
 import * as hudStatus from './hud/status.js';
+import { HUDCache } from './hud/hud-cache.js';
 import * as hudCombat from './hud/combat.js';
 import * as hudNav from './hud/navigation.js';
 import * as hudOverlays from './hud/overlays.js';
@@ -3071,7 +3072,7 @@ export class GameEngine {
                 // 5.98.0 — Stat pickups render between gold/health and
                 // asteroids/enemies so they sit on top of the drop layer
                 // and never get hidden behind a passing rock.
-                for (const sp of this.statPickupPool.activeObjects) sp.draw(this.ctx);
+                this.statPickupPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
 
@@ -3153,7 +3154,96 @@ export class GameEngine {
         this.bulletRenderer.drawFrame(bcamX, bcamY);
     }
     
-    drawHUD() { return hudStatus.drawHUD.call(this); }
+    // HUD draw with offscreen-canvas cache + signature-based dirty
+    // tracking. Most frames have identical HUD pixels to the previous
+    // frame (stats change a few times per second, not every frame), so
+    // re-running drawHUD's dozens of beginPath/fill/stroke calls is
+    // wasted work. We snapshot a small string of HUD-relevant state
+    // each frame; when it matches the previous frame, we just blit the
+    // cached HUD canvas. When it differs (or during animations like
+    // wave messages / level-up / pickup toasts whose age decays each
+    // frame), we re-run the draw into the offscreen canvas first.
+    //
+    // The `this.ctx` swap inside the redraw block is what lets the
+    // existing hudStatus.drawHUD function transparently target the
+    // offscreen canvas without code changes — it just paints into
+    // whatever `this.ctx` points at.
+    drawHUD() {
+        if (!this.hudCache) {
+            this.hudCache = new HUDCache(this.width, this.height);
+        }
+        this.hudCache.resize(this.width, this.height);
+
+        const sig = this._computeHudSignature();
+        this.hudCache.invalidateIfChanged(sig);
+
+        if (this.hudCache.isDirty()) {
+            this.hudCache.clear();
+            const realCtx = this.ctx;
+            this.ctx = this.hudCache.getContext();
+            try {
+                hudStatus.drawHUD.call(this);
+            } finally {
+                this.ctx = realCtx;
+            }
+            this.hudCache.markClean();
+        }
+
+        // Always blit — single drawImage call, cheap compared to the
+        // vector redraw, and correctly composites the cache over the
+        // world layer.
+        this.ctx.drawImage(this.hudCache.getCanvas(), 0, 0);
+    }
+
+    /**
+     * Compute a tiny string snapshot of all HUD-affecting state.
+     * Stable across frames when nothing changes → cache hit. Includes
+     * time-decay values for active animations so they correctly
+     * invalidate the cache while playing.
+     */
+    _computeHudSignature() {
+        const p = this.player;
+        if (!p) return 's:' + this.game.state;
+        const g = this.game;
+        // Pickup toast life decays each frame while active; serializing
+        // it as a 2-decimal number ensures the signature ticks ~every
+        // frame during the toast (cache invalidates) but stabilizes at
+        // 'null' once gone (cache holds again).
+        const toast = this._pickupToast
+            ? (this._pickupToast.life || 0).toFixed(2)
+            : 'null';
+        const wave = (this.waveMessage && this.waveMessage.active)
+            ? `${this.waveMessage.startTime}|${this.waveMessage.phase}`
+            : 'null';
+        const lvl = (p.levelUpTextInfo && p.levelUpTextInfo.active)
+            ? (p.levelUpTextInfo.startTime || 0)
+            : 'null';
+        // Gold popup count — when any popup is live, redraw each frame
+        // so the popup motion is smooth.
+        const popups = (this._goldPopups && this._goldPopups.length) || 0;
+        return [
+            g.state,
+            p.health | 0,
+            p.shields | 0,
+            p.skillPoints | 0,
+            p.streakLevel | 0,
+            p.streakKills | 0,
+            this.healthTanks | 0,
+            g.score | 0,
+            g.money | 0,
+            g.currentWave | 0,
+            p.activePrimaryWeapon,
+            p.activePowerWeapon,
+            p.activeSkill,
+            p.invuln ? 1 : 0,
+            toast,
+            wave,
+            lvl,
+            popups,
+            this.width,
+            this.height,
+        ].join('|');
+    }
 
     drawWaveIntroOverlay() { return hudStatus.drawWaveIntroOverlay.call(this); }
 

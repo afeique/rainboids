@@ -5,6 +5,57 @@ import { glowSpriteCache } from '../core/utils.js';
 import { rgba } from '../core/color-cache.js';
 import { frameClock } from '../core/frame-clock.js';
 
+// ── Path2D cache for ship geometry ─────────────────────────────────
+// The ship's wings, tips, and central hull are STATIC polygons in
+// ship-local coordinates that depend only on `radius`. We were
+// rebuilding them with beginPath + 4–6 moveTo/lineTo calls per
+// PIECE per PASS per FRAME — and there are TWO passes (silhouette
+// stroke + colored fill+stroke) per piece, so 10 path-build sequences
+// per frame per ship just for the wings/tips/hull. Cache as Path2D
+// objects keyed by radius; build once, reuse forever (cache survives
+// the entire session — radius almost never changes after construction).
+const _shipPathCache = new Map();
+
+function _getShipPaths(r) {
+    let paths = _shipPathCache.get(r);
+    if (paths) return paths;
+    const rightWing  = new Path2D();
+    rightWing.moveTo( r * 0.32, -r * 0.18);
+    rightWing.lineTo( r * 1.12,  r * 0.28);
+    rightWing.lineTo( r * 0.82,  r * 0.68);
+    rightWing.lineTo( r * 0.28,  r * 0.58);
+    rightWing.closePath();
+    const leftWing   = new Path2D();
+    leftWing.moveTo(-r * 0.32, -r * 0.18);
+    leftWing.lineTo(-r * 1.12,  r * 0.28);
+    leftWing.lineTo(-r * 0.82,  r * 0.68);
+    leftWing.lineTo(-r * 0.28,  r * 0.58);
+    leftWing.closePath();
+    const rightTip   = new Path2D();
+    rightTip.moveTo( r * 1.12,  r * 0.28);
+    rightTip.lineTo( r * 1.42,  r * 0.08);
+    rightTip.lineTo( r * 1.18,  r * 0.56);
+    rightTip.lineTo( r * 0.82,  r * 0.68);
+    rightTip.closePath();
+    const leftTip    = new Path2D();
+    leftTip.moveTo(-r * 1.12,  r * 0.28);
+    leftTip.lineTo(-r * 1.42,  r * 0.08);
+    leftTip.lineTo(-r * 1.18,  r * 0.56);
+    leftTip.lineTo(-r * 0.82,  r * 0.68);
+    leftTip.closePath();
+    const centralHull = new Path2D();
+    centralHull.moveTo(0, -r);
+    centralHull.lineTo( r * 0.32, -r * 0.18);
+    centralHull.lineTo( r * 0.28,  r * 0.58);
+    centralHull.lineTo(0,           r * 0.38);
+    centralHull.lineTo(-r * 0.28,  r * 0.58);
+    centralHull.lineTo(-r * 0.32, -r * 0.18);
+    centralHull.closePath();
+    paths = { rightWing, leftWing, rightTip, leftTip, centralHull };
+    _shipPathCache.set(r, paths);
+    return paths;
+}
+
 // ── Remote-peer ship draw (MVD multiplayer, 2026-05-13) ────────────────────
 //
 // Minimal silhouette renderer for remote-player ships in multiplayer mode.
@@ -39,77 +90,33 @@ export function drawRemoteShip(ctx, x, y, angle, radius = 12) {
     // ship art points "up" (negative-Y) in its local frame.
     ctx.rotate(angle + Math.PI / 2);
 
+    const paths = _getShipPaths(r);
+
     // ── Black silhouette stroke pass (visibility against bright nebulae) ──
     ctx.globalCompositeOperation = 'source-over';
     ctx.strokeStyle = '#000';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 3.5;
-
-    // Right wing
-    ctx.beginPath();
-    ctx.moveTo( r * 0.32, -r * 0.18);
-    ctx.lineTo( r * 1.12,  r * 0.28);
-    ctx.lineTo( r * 0.82,  r * 0.68);
-    ctx.lineTo( r * 0.28,  r * 0.58);
-    ctx.closePath();
-    ctx.stroke();
-    // Left wing
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.32, -r * 0.18);
-    ctx.lineTo(-r * 1.12,  r * 0.28);
-    ctx.lineTo(-r * 0.82,  r * 0.68);
-    ctx.lineTo(-r * 0.28,  r * 0.58);
-    ctx.closePath();
-    ctx.stroke();
-    // Central hull
+    ctx.stroke(paths.rightWing);
+    ctx.stroke(paths.leftWing);
     ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo( r * 0.32, -r * 0.18);
-    ctx.lineTo( r * 0.28,  r * 0.58);
-    ctx.lineTo(0,           r * 0.38);
-    ctx.lineTo(-r * 0.28,  r * 0.58);
-    ctx.lineTo(-r * 0.32, -r * 0.18);
-    ctx.closePath();
-    ctx.stroke();
+    ctx.stroke(paths.centralHull);
 
     // ── Wing fills — magenta-ish, distinct from local blue ──
     ctx.fillStyle = 'rgba(180, 60, 200, 0.55)';
     ctx.strokeStyle = '#ff66ff';
     ctx.lineWidth = 1.4;
-    // Right wing
-    ctx.beginPath();
-    ctx.moveTo( r * 0.32, -r * 0.18);
-    ctx.lineTo( r * 1.12,  r * 0.28);
-    ctx.lineTo( r * 0.82,  r * 0.68);
-    ctx.lineTo( r * 0.28,  r * 0.58);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Left wing
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.32, -r * 0.18);
-    ctx.lineTo(-r * 1.12,  r * 0.28);
-    ctx.lineTo(-r * 0.82,  r * 0.68);
-    ctx.lineTo(-r * 0.28,  r * 0.58);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fill(paths.rightWing);
+    ctx.stroke(paths.rightWing);
+    ctx.fill(paths.leftWing);
+    ctx.stroke(paths.leftWing);
 
     // ── Central hull — dark with magenta outline ──
     ctx.fillStyle = 'rgba(40, 10, 50, 0.92)';
     ctx.strokeStyle = '#ff88ff';
     ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo( r * 0.32, -r * 0.18);
-    ctx.lineTo( r * 0.28,  r * 0.58);
-    ctx.lineTo(0,           r * 0.38);
-    ctx.lineTo(-r * 0.28,  r * 0.58);
-    ctx.lineTo(-r * 0.32, -r * 0.18);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fill(paths.centralHull);
+    ctx.stroke(paths.centralHull);
 
     // ── Cockpit — small magenta dot to balance the silhouette ──
     ctx.fillStyle = 'rgba(255, 180, 255, 0.85)';
@@ -203,41 +210,19 @@ export function draw(ctx) {
     // erase the outline. Wraps every major piece (wings, tips, hull,
     // engine pods, cockpit) in a thick black stroke for visual definition
     // against bright nebulae.
+    const paths = _getShipPaths(r);
+
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
     ctx.strokeStyle = '#000';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 4;
-    // Right wing
-    ctx.beginPath();
-    ctx.moveTo( r * 0.32, -r * 0.18); ctx.lineTo( r * 1.12,  r * 0.28);
-    ctx.lineTo( r * 0.82,  r * 0.68); ctx.lineTo( r * 0.28,  r * 0.58);
-    ctx.closePath(); ctx.stroke();
-    // Left wing
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.32, -r * 0.18); ctx.lineTo(-r * 1.12,  r * 0.28);
-    ctx.lineTo(-r * 0.82,  r * 0.68); ctx.lineTo(-r * 0.28,  r * 0.58);
-    ctx.closePath(); ctx.stroke();
-    // Right tip
-    ctx.beginPath();
-    ctx.moveTo( r * 1.12,  r * 0.28); ctx.lineTo( r * 1.42,  r * 0.08);
-    ctx.lineTo( r * 1.18,  r * 0.56); ctx.lineTo( r * 0.82,  r * 0.68);
-    ctx.closePath(); ctx.stroke();
-    // Left tip
-    ctx.beginPath();
-    ctx.moveTo(-r * 1.12,  r * 0.28); ctx.lineTo(-r * 1.42,  r * 0.08);
-    ctx.lineTo(-r * 1.18,  r * 0.56); ctx.lineTo(-r * 0.82,  r * 0.68);
-    ctx.closePath(); ctx.stroke();
-    // Central hull
+    ctx.stroke(paths.rightWing);
+    ctx.stroke(paths.leftWing);
+    ctx.stroke(paths.rightTip);
+    ctx.stroke(paths.leftTip);
     ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo( r * 0.32, -r * 0.18);
-    ctx.lineTo( r * 0.28,  r * 0.58);
-    ctx.lineTo(0,           r * 0.38);
-    ctx.lineTo(-r * 0.28,  r * 0.58);
-    ctx.lineTo(-r * 0.32, -r * 0.18);
-    ctx.closePath(); ctx.stroke();
+    ctx.stroke(paths.centralHull);
     // Engine pods
     ctx.lineWidth = 2.6;
     for (const eng of engines) {
@@ -258,47 +243,19 @@ export function draw(ctx) {
     ctx.fillStyle = 'rgba(0, 90, 180, 0.45)';
     ctx.strokeStyle = '#0088ff';
     ctx.lineWidth = 1.6;
-    // Right wing
-    ctx.beginPath();
-    ctx.moveTo( r * 0.32, -r * 0.18);
-    ctx.lineTo( r * 1.12,  r * 0.28);
-    ctx.lineTo( r * 0.82,  r * 0.68);
-    ctx.lineTo( r * 0.28,  r * 0.58);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Left wing
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.32, -r * 0.18);
-    ctx.lineTo(-r * 1.12,  r * 0.28);
-    ctx.lineTo(-r * 0.82,  r * 0.68);
-    ctx.lineTo(-r * 0.28,  r * 0.58);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fill(paths.rightWing);
+    ctx.stroke(paths.rightWing);
+    ctx.fill(paths.leftWing);
+    ctx.stroke(paths.leftWing);
 
     // ── Wing tip extensions ───────────────────────────────────────────────
     ctx.fillStyle = 'rgba(0, 160, 255, 0.25)';
     ctx.strokeStyle = '#44aaff';
     ctx.lineWidth = 1.1;
-    // Right tip
-    ctx.beginPath();
-    ctx.moveTo( r * 1.12,  r * 0.28);
-    ctx.lineTo( r * 1.42,  r * 0.08);
-    ctx.lineTo( r * 1.18,  r * 0.56);
-    ctx.lineTo( r * 0.82,  r * 0.68);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Left tip
-    ctx.beginPath();
-    ctx.moveTo(-r * 1.12,  r * 0.28);
-    ctx.lineTo(-r * 1.42,  r * 0.08);
-    ctx.lineTo(-r * 1.18,  r * 0.56);
-    ctx.lineTo(-r * 0.82,  r * 0.68);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fill(paths.rightTip);
+    ctx.stroke(paths.rightTip);
+    ctx.fill(paths.leftTip);
+    ctx.stroke(paths.leftTip);
 
     // ── Central hull ─────────────────────────────────────────────────────
     // OPT-2: live GPU blur removed — stroke provides hull edge glow
@@ -306,16 +263,8 @@ export function draw(ctx) {
     ctx.fillStyle = 'rgba(0, 25, 55, 0.92)';
     ctx.strokeStyle = '#00ccff';
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, -r);               // nose tip
-    ctx.lineTo( r * 0.32, -r * 0.18); // upper-right
-    ctx.lineTo( r * 0.28,  r * 0.58); // lower-right
-    ctx.lineTo(0,           r * 0.38); // tail notch
-    ctx.lineTo(-r * 0.28,  r * 0.58); // lower-left
-    ctx.lineTo(-r * 0.32, -r * 0.18); // upper-left
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fill(paths.centralHull);
+    ctx.stroke(paths.centralHull);
 
     // ── Hull panel detail lines ───────────────────────────────────────────
     ctx.strokeStyle = 'rgba(0, 200, 255, 0.35)';

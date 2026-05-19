@@ -139,6 +139,8 @@ in vec2 v_quadUV;     // 5.74.13 — local 0..1 UV across the whole quad,
 in float v_noScan;    // 5.79.33 — 1 = skip CRT scanlines (orbs).
 in float v_sharp;     // 5.79.33 — 1 = skip radial halo (gold coins).
 uniform sampler2D u_atlas;
+uniform float u_time;       // seconds — scrolls the scanline pattern
+                            // vertically each frame for a slow CRT roll.
 out vec4 fragColor;
 
 // 5.74.19 — gain on RGB removed entirely. With additive blending
@@ -183,7 +185,13 @@ void main() {
     // (rather than a smooth sin) gives the chunky retro CRT look the
     // user asked for; we still smooth the edge over a single pixel
     // with smoothstep so it doesn't shimmer at sub-pixel motion.
-    float modY = mod(gl_FragCoord.y, 5.0);
+    //
+    // Vertical scroll: add `u_time * SCAN_SPEED` to the phase so the
+    // dark bands slowly roll DOWN the screen, mimicking a CRT's
+    // electron-beam retrace cycle. 25 px/sec is slow enough to feel
+    // like a CRT artifact rather than a moving pattern.
+    const float SCAN_SPEED = 25.0;
+    float modY = mod(gl_FragCoord.y - u_time * SCAN_SPEED, 5.0);
     // 0..2 dark, 2..3 transition, 3..5 light.
     float scanFactor = smoothstep(2.0, 3.0, modY);
     float scan = mix(0.55, 1.0, scanFactor);

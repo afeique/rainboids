@@ -725,18 +725,20 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
 
         drawCachedShieldIcon(ctx, shieldCenterX, shieldCenterY, shieldIconSize);
 
-        // 6.1.0 — "STG" inside the shield, "S-W" label to the right
-        // (was "WV" + bare wave number in 6.0.1). Stage label gives
-        // the player intra-stage pacing without taking more space.
+        // "S" inside the shield (was "STG" in 6.1.0; shortened per
+        // request — single letter reads cleaner inside the small
+        // shield icon and centers better at 10 px). The "S-W" label
+        // to the right of the shield still spells out stage-wave.
         ctx.save();
-        ctx.font = "10px 'Press Start 2P', monospace";
+        // Bump font size since we have more space with one letter.
+        ctx.font = "14px 'Press Start 2P', monospace";
         ctx.fillStyle = '#102342';
         ctx.strokeStyle = '#155379';
         ctx.lineWidth = 1;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.strokeText('STG', shieldCenterX, shieldCenterY);
-        ctx.fillText('STG', shieldCenterX, shieldCenterY);
+        ctx.strokeText('S', shieldCenterX, shieldCenterY);
+        ctx.fillText('S', shieldCenterX, shieldCenterY);
         ctx.restore();
 
         const stageLabelX = shieldCenterX + shieldIconSize / 2 + 8;

@@ -1,6 +1,7 @@
 // Combat effects, debris, orb drops, powerup collection, damage numbers, kill streaks
 import { GAME_CONFIG, GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
+import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
@@ -11,13 +12,17 @@ import { isMobile } from '../platform/platform-detect.js';
 // ── Asteroid Debris ──
 
 export function createDebris(ast) {
-    // Derive explosion color from the asteroid's unique hue
+    // Derive explosion color from the asteroid's unique hue. Routed
+    // through the cached hsl() helper — every asteroid death builds
+    // 3 strings + reuses them across the 60+ shrapnel / ember spawns
+    // below. Caching makes the asteroid-color strings shared across
+    // bursts that hit the same baseHue bucket (integer-quantized).
     const hue = ast.baseHue || 0;
     const sat = ast.saturation || 90;
     const lit = ast.lightness || 70;
-    const baseColor = `hsl(${hue}, ${sat}%, ${lit}%)`;
-    const brightColor = `hsl(${hue}, ${sat}%, ${Math.min(95, lit + 20)}%)`;
-    const dimColor = `hsl(${(hue + 20) % 360}, ${sat}%, ${Math.max(40, lit - 15)}%)`;
+    const baseColor = hsl(hue, sat, lit);
+    const brightColor = hsl(hue, sat, Math.min(95, lit + 20));
+    const dimColor = hsl((hue + 20) % 360, sat, Math.max(40, lit - 15));
     const sizeScale = Math.min(1.5, ast.baseRadius / 25);
     const onScreen = this.isEntityOnScreen(ast);
     const isLarge = ast.baseRadius > (GAME_CONFIG.MIN_AST_RAD + 5);
@@ -74,7 +79,7 @@ export function createDebris(ast) {
     const emberCount = Math.floor(10 + 7 * sizeScale);
     for (let i = 0; i < emberCount; i++) {
         const eHue = hue + random(-30, 30);
-        const eColor = `hsl(${(eHue + 360) % 360}, ${sat}%, ${random(55, 80)}%)`;
+        const eColor = hsl((eHue + 360) % 360, sat, random(55, 80));
         this.particlePool.get(ast.x, ast.y, 'explosionEmber', eColor);
     }
 

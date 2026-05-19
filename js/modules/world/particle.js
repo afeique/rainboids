@@ -21,7 +21,11 @@ export class Particle {
                 this.radius = random(1, 3);
                 this.vel = { x: random(-5, 5), y: random(-5, 5) };
                 this.life = 1;
-                this.color = `hsl(${random(0, 360)}, 100%, 70%)`;
+                // Route through the cached hsl() helper — explosion bursts
+                // spawn many particles with overlapping integer-quantized
+                // hues, so the lookup hits ~30–60% of the time, saving the
+                // template-literal allocation each spawn.
+                this.color = hsl(random(0, 360), 100, 70);
                 break;
                 
             case 'playerExplosion':
