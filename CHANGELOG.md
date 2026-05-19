@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.24.0] - 2026-05-19
+
+### Removed — dead JS sim/net/engine directories + Rust↔JS codegen pipeline
+
+The solo cleanup work from 6.19.0 left the dead `js/sim/`, `js/net/`,
+`js/engine/` directories on disk even though no live code referenced
+them anymore. Cleaning that up now plus the schema→Rust+JS codegen that
+no longer has a JS half to feed:
+
+- **Deleted** `js/sim/`, `js/net/`, `js/engine/` (every consumer was
+  already inlined or rewired in earlier versions).
+- **Deleted** `tests/unit/net/` (6 specs against the deleted prediction /
+  loopback / interpolation / matchmaking / tick-buffer / mp-feature-flags
+  modules) and `tests/unit/wire-codec.test.js` (legacy handshake golden).
+- **Deleted** `tools/parity-runner.mjs` and `tools/check-schema.mjs`
+  (Rust↔JS parity tools — JS half is gone, parity is no longer a thing).
+- **Deleted** `schema/protocol.toml` + `tools/codegen-protocol.mjs`
+  (the wire-protocol codegen pipeline). Generated Rust types promoted
+  to hand-maintained source: `server/sim/src/protocol/generated.rs` →
+  `server/sim/src/protocol/types.rs` (drop the "DO NOT EDIT" header,
+  same content, single source of truth).
+- **Removed npm scripts**: `codegen`, `codegen:check`, `schema:check`.
+
+Going forward: adding a new wire variant is a direct edit to
+`server/sim/src/protocol/types.rs`; serde derives keep encode/decode in
+lockstep, `WIRE_VERSION` bumps when the byte layout breaks
+backward-compatibility.
+
+No gameplay diff — pure dead-code cleanup. 329 unit tests pass.
+
+---
+
 ## [6.23.0] - 2026-05-19
 
 ### Changed — seeker mines are now moving turrets by default

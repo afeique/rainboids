@@ -17,7 +17,7 @@ Version bumps ONLY apply to **actual code changes** (source files, assets, confi
 
 ### Solo changes
 
-After completing solo code changes (anything under `js/main.js`, `js/modules/`, `js/engine/`, `js/net/`, `css/`, `index.html`, solo-side `tests/`), you MUST:
+After completing solo code changes (anything under `js/main.js`, `js/modules/`, `css/`, `index.html`, solo-side `tests/`), you MUST:
 
 1. **Determine the appropriate version bump** using [Semantic Versioning](https://semver.org/):
    - **MAJOR** = fundamental gameplay or architectural overhaul

@@ -41,7 +41,7 @@ Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode 
 
 ## Version and History
 
-Current version: **6.23.0**
+Current version: **6.24.0**
 
 See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 
@@ -593,21 +593,13 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │   ├── mp-audio.js            #   (Phase 1+) sim events → SFX triggers (audio files shared with solo)
 │   ├── mp-hud.js              #   (Phase 1+) own + partner ship HUD, shared wave indicator
 │   └── wasm/                  #   wasm-pack output (generated; not committed if .gitignored)
-├── js/engine/                 # Mode-aware driver (legacy MP path; unreachable post-2026-05-17 pivot)
-│   ├── engine-driver.js       #   EngineDriver: startSolo / startOnline — only solo path now used
-│   └── …                      #   archives in Phase 1 with the legacy MP modal
-├── js/net/                    # Legacy MP networking (unreachable post-pivot; archives in Phase 1)
-├── js/sim/                    # Legacy JS sim (relocated 5.89-era port; archives in Phase 1)
-├── schema/                    # Cross-language wire-protocol source-of-truth
-│   └── protocol.toml          #   codegen source → server/sim/src/protocol/generated.rs (+ js/sim/protocol-generated.js)
-├── server/                    # Rust workspace (WASM pivot, 2026-05-17)
+├── server/                    # Rust workspace — MP product (server + WASM client core)
 │   ├── Cargo.toml             #   [workspace] root
-│   ├── sim/                   #   rainboids-sim — canonical simulation (compiles native + WASM)
-│   │   └── src/{ship,enemy,bullet,asteroid,collision,drops,wave,…}.rs
-│   ├── server-bin/            #   rainboids-server — authoritative multiplayer server binary
-│   │   ├── src/{main,config,error,lib}.rs + server/, room/, matchmaking/, obs/, util/
-│   │   └── tests/             #   integration tests (handshake, room lifecycle, snapshots, wire goldens)
-│   └── client-wasm/           #   rainboids-client-wasm — wasm-bindgen wrapper exposing sim to JS
+│   ├── sim/                   #   rainboids-sim — canonical MP simulation (native + WASM)
+│   │   └── src/{ship,enemy,bullet,asteroid,collision,drops,wave,weapon,protocol/,…}.rs
+│   ├── server-bin/            #   rainboids-server — authoritative WS server binary
+│   │   └── src/{main,lib,config,error,room,connection,server/http,obs}.rs
+│   └── client-wasm/           #   rainboids-client-wasm — wasm-bindgen wrapper exposing sim to /mp
 ├── css/
 │   └── styles.css             # Game styling
 ├── music/                     # 58 MP3 tracks (~336MB)
@@ -626,13 +618,9 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │   ├── benchmark/             #   Mitata microbenchmark suite
 │   ├── ai-qa-bot/             #   AI QA bot for automated playtesting
 │   ├── scripts/               #   Playlist generation, SFX generation, utilities
-│   ├── check-schema.mjs       #   Wire-protocol parity checker (Rust ↔ schema ↔ JS) (5.84.0)
-│   ├── parity-runner.mjs      #   Byte-level parity runner for schema/snapshots (5.84.0)
 │   └── juice-capture.mjs      #   Juice tuning screen capture
 ├── tests/
-│   ├── unit/                  # Jest unit tests (972 tests as of 5.96.0)
-│   │   ├── sim/               #   Engine-refactor primitives (rng, trig, fxp, codec, protocol)
-│   │   └── wire-codec.test.js #   Hello/Welcome golden-byte regression
+│   ├── unit/                  # Jest unit tests (solo gameplay primitives)
 │   ├── qa/                    # Playwright smoke tests (95 tests)
 │   ├── e2e/                   # Playwright E2E suite
 │   ├── performance/           # FPS benchmark tests
