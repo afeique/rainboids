@@ -36,7 +36,7 @@
 
 import * as mpInput from "./mp-input.js";
 import { render } from "./mp-renderer.js";
-import { connect as wsConnect } from "./mp-ws.js";
+import { connect as wsConnect, discoverDefaultUrl } from "./mp-ws.js";
 import { Particles } from "./mp-particles.js";
 import { Hud } from "./mp-hud.js";
 import { VERSION_MP } from "../modules/core/version.js";
@@ -132,9 +132,17 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
     };
 
     // ── WS wiring ──────────────────────────────────────────────────
+    // Promise-deferred: discoverDefaultUrl() reads the embedder hook /
+    // ?mp-ws= param / dev-mp-port.json discovery file before falling
+    // back to the default. Once resolved we hand the URL to
+    // `wsConnect({url, ...})` — which requires `url` since the Phase 3
+    // refactor that split discovery from connect.
     if (!solo) {
-        ws = wsConnect({
-            name,
+        discoverDefaultUrl()
+            .then((url) => {
+                ws = wsConnect({
+                    name,
+                    url,
             onWelcome(msg) {
                 localPlayerId = msg.player_id;
                 wsConnected = true;
@@ -425,6 +433,50 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                     }
                 }
 
+                // Enemy mines (Phase 4 step 5): wire doesn't preserve
+                // the original sub_seed, so we pass 0n. Matches the
+                // existing Resync caveat for other RNG-driven entities;
+                // the next checksum gate will trigger another Resync if
+                // RNG-driven mine state diverges.
+                for (const m of (msg.enemy_mines || [])) {
+                    try {
+                        world.consume_enemy_mine_spawn(m.id, m.owner_enemy_id, m.x, m.y, 0n);
+                    } catch (err) {
+                        if (MP_DEBUG) {
+                            console.warn(
+                                "[mp/engine] resync enemy_mine reconstruct failed",
+                                m.id,
+                                err,
+                            );
+                        }
+                    }
+                }
+
+                // Enemy missiles (Phase 4 step 5): the wire carries
+                // velocity but the consumer wants an initial angle, so
+                // we recover it from atan2(vy, vx). Same caveat as
+                // bullets: trajectory is exact, RNG-driven downstream
+                // state is best-effort.
+                for (const m of (msg.enemy_missiles || [])) {
+                    try {
+                        world.consume_enemy_missile_spawn(
+                            m.id,
+                            m.owner_enemy_id,
+                            m.x,
+                            m.y,
+                            Math.atan2(m.vy, m.vx),
+                        );
+                    } catch (err) {
+                        if (MP_DEBUG) {
+                            console.warn(
+                                "[mp/engine] resync enemy_missile reconstruct failed",
+                                m.id,
+                                err,
+                            );
+                        }
+                    }
+                }
+
                 // Orbs (Phase 4): seed-based reconstruction same caveat
                 // as enemies — OrbWire doesn't carry the original
                 // rng_subseed, so we synthesize from (room_seed, orb_id).
@@ -458,6 +510,11 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                 lastResyncAppliedTick = msg.tick;
             },
         });
+            })
+            .catch((err) => {
+                console.error("[mp/engine] discoverDefaultUrl failed", err);
+                wsState = "closed";
+            });
     }
 
     // Dispatch a single decoded EventPayload into the WASM mirror.
@@ -573,6 +630,39 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
             case "EnemyBulletHit":
                 world.consume_enemy_bullet_hit(p.bullet_id, p.player_id);
                 particles.spawnEnemyBulletHit(p.x, p.y);
+                break;
+            case "EnemyMineSpawn":
+                world.consume_enemy_mine_spawn(
+                    p.mine_id,
+                    p.owner_enemy_id,
+                    p.x,
+                    p.y,
+                    BigInt(p.sub_seed),
+                );
+                if (particles && particles.spawnEnemyMineSpawn) {
+                    particles.spawnEnemyMineSpawn(p.x, p.y);
+                }
+                break;
+            case "EnemyMineDeath":
+                world.consume_enemy_mine_death(p.mine_id);
+                if (particles && particles.spawnEnemyMineDeath) {
+                    particles.spawnEnemyMineDeath(p.x, p.y);
+                }
+                break;
+            case "EnemyMissileSpawn":
+                world.consume_enemy_missile_spawn(
+                    p.missile_id,
+                    p.owner_enemy_id,
+                    p.origin_x,
+                    p.origin_y,
+                    p.initial_angle,
+                );
+                break;
+            case "EnemyMissileHit":
+                world.consume_enemy_missile_hit(p.missile_id, p.player_id);
+                if (particles && particles.spawnEnemyMissileHit) {
+                    particles.spawnEnemyMissileHit(p.x, p.y);
+                }
                 break;
             default:
                 if (MP_DEBUG) {

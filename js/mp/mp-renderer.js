@@ -65,8 +65,42 @@ const ENEMY_HP_BAR_W = 30;
 const ENEMY_HP_BAR_H = 3;
 const ENEMY_HP_BAR_Y_OFFSET = 28; // pixels above the enemy center
 
+// Per-kind enemy color tokens. Sourced from
+// `js/modules/enemy/enemy-data.js` so MP enemies read the same color
+// as their solo counterparts. The kind index (u8 from
+// `world.enemy_kind(idx)`) matches the discriminator declared in the
+// sim crate's mp1 modules:
+//   0 HUNTER, 1 GUARDIAN, 2 WASP, 3 STALKER, 4 DRIFTER,
+//   5 TANGERINE, 6 WEAVER, 7 SENTINEL, 8 PROWLER, 9 TITAN.
+const ENEMY_KIND_COLORS = [
+    "#ff4444", // 0 HUNTER     — red
+    "#44ff44", // 1 GUARDIAN   — green
+    "#ffff44", // 2 WASP       — yellow
+    "#44ffff", // 3 STALKER    — cyan-ish
+    "#00ffff", // 4 DRIFTER    — cyan
+    "#ff8844", // 5 TANGERINE  — orange
+    "#ffff00", // 6 WEAVER     — yellow
+    "#00ff00", // 7 SENTINEL   — green
+    "#ff00ff", // 8 PROWLER    — magenta
+    "#ff44ff", // 9 TITAN      — boss magenta
+];
+
 const BULLET_COLOR = "#00ccff";
 const BULLET_RADIUS = 3;
+
+// Mines — stationary, bullet-targetable hazards. Solo draws a red disc
+// with a warning ring + cross-hatch; MP MVP keeps it simple: red disc,
+// outline ring, and a slow tick-driven pulse so they read as menacing.
+const MINE_FILL = "#ff3030";
+const MINE_OUTLINE = "rgba(255, 80, 80, 0.85)";
+const MINE_RING = "rgba(255, 60, 60, 0.45)";
+
+// Missiles — fast homing projectile, drawn as a small elongated red
+// triangle pointing along the velocity heading.
+const MISSILE_COLOR = "#ff4444";
+const MISSILE_STROKE = "#ffaa88";
+const MISSILE_LENGTH = 12;
+const MISSILE_HALF_WIDTH = 4;
 
 // Revive hint — matches the simulation's REVIVE_RADIUS (80 px).
 const REVIVE_RADIUS = 80;
@@ -145,7 +179,14 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
         );
     }
 
-    // Enemies.
+    // Mines (drawn under enemies so an enemy hovering on top reads
+    // as the more important threat; still over orbs which are
+    // pickups).
+    if (typeof world.enemy_mine_count === "function") {
+        drawEnemyMines(ctx, world, scale);
+    }
+
+    // Enemies — per-kind dispatch (color + silhouette).
     const ecount = world.enemy_count();
     for (let i = 0; i < ecount; i++) {
         drawEnemy(
@@ -155,8 +196,16 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
             world.enemy_angle(i),
             world.enemy_hp(i),
             world.enemy_max_hp(i),
+            // Older WASM builds may not expose enemy_kind; default to
+            // HUNTER (0) so the renderer stays back-compatible.
+            typeof world.enemy_kind === "function" ? world.enemy_kind(i) : 0,
             scale,
         );
+    }
+
+    // Missiles (over enemies so they read as live projectiles).
+    if (typeof world.enemy_missile_count === "function") {
+        drawEnemyMissiles(ctx, world, scale);
     }
 
     // Bullets.
@@ -293,12 +342,50 @@ function drawAsteroid(ctx, x, y, rot, radius, hp, maxHp, scale) {
     }
 }
 
-// Red triangle for HUNTER (Phase 3's only enemy kind). Reuses the
-// ship triangle geometry so silhouettes are consistent at a glance —
-// only the palette signals "hostile". HP bar is always shown for
-// enemies since they're always combat-relevant.
-function drawEnemy(ctx, x, y, angle, hp, maxHp, scale) {
-    drawShipTriangle(ctx, x, y, angle, ENEMY_FILL, ENEMY_STROKE, scale);
+// Per-kind enemy draw — dispatches on the u8 kind discriminator and
+// picks a color + silhouette. MVP shapes (not pixel-perfect against
+// solo's full renderer): color + general silhouette is enough for
+// gameplay legibility. HP bar is always shown since enemies are always
+// combat-relevant.
+function drawEnemy(ctx, x, y, angle, hp, maxHp, kind, scale) {
+    const color = ENEMY_KIND_COLORS[kind] || ENEMY_FILL;
+    const stroke = color;
+    switch (kind) {
+        case 0: // HUNTER — triangle (same as ship geometry).
+            drawShipTriangle(ctx, x, y, angle, color, stroke, scale);
+            break;
+        case 1: // GUARDIAN — octagon.
+            drawEnemyPolygon(ctx, x, y, angle, 18, 8, color, stroke, scale);
+            break;
+        case 2: // WASP — small sharp triangle.
+            drawEnemyTriangle(ctx, x, y, angle, 12, 7, color, stroke, scale);
+            break;
+        case 3: // STALKER — diamond.
+            drawEnemyDiamond(ctx, x, y, angle, 16, 10, color, stroke, scale);
+            break;
+        case 4: // DRIFTER — pentagon.
+            drawEnemyPolygon(ctx, x, y, angle, 16, 5, color, stroke, scale);
+            break;
+        case 5: // TANGERINE — circle with cross.
+            drawEnemyCircleCross(ctx, x, y, 14, color, stroke, scale);
+            break;
+        case 6: // WEAVER — hexagon.
+            drawEnemyPolygon(ctx, x, y, angle, 16, 6, color, stroke, scale);
+            break;
+        case 7: // SENTINEL — rotated square / diamond.
+            drawEnemyDiamond(ctx, x, y, angle + Math.PI * 0.25, 14, 14, color, stroke, scale);
+            break;
+        case 8: // PROWLER — elongated triangle.
+            drawEnemyTriangle(ctx, x, y, angle, 22, 10, color, stroke, scale);
+            break;
+        case 9: // TITAN — large hexagon with inner detail (boss feel).
+            drawEnemyPolygon(ctx, x, y, angle, 32, 6, color, stroke, scale);
+            drawEnemyPolygon(ctx, x, y, -angle, 16, 6, color, stroke, scale);
+            break;
+        default:
+            drawShipTriangle(ctx, x, y, angle, color, stroke, scale);
+            break;
+    }
     drawHpBar(
         ctx,
         x,
@@ -306,9 +393,167 @@ function drawEnemy(ctx, x, y, angle, hp, maxHp, scale) {
         ENEMY_HP_BAR_W,
         ENEMY_HP_BAR_H,
         hp / maxHp,
-        ENEMY_FILL,
+        color,
         scale,
     );
+}
+
+// Regular N-gon centered on (x,y), rotated by `angle`. Stroked
+// (wireframe) so enemies read as line-art against the dark backdrop.
+function drawEnemyPolygon(ctx, x, y, angle, radius, sides, fillStyle, strokeStyle, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    for (let i = 0; i < sides; i++) {
+        const theta = (i / sides) * Math.PI * 2;
+        const px = Math.cos(theta) * radius;
+        const py = Math.sin(theta) * radius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+    ctx.fill();
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = 1.5 / scale;
+    ctx.stroke();
+    ctx.restore();
+}
+
+// Isoceles triangle pointing along +x in local space, parameterized so
+// WASP (short/sharp) and PROWLER (long) can share the same primitive.
+function drawEnemyTriangle(ctx, x, y, angle, length, halfWidth, fillStyle, strokeStyle, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(length, 0);
+    ctx.lineTo(-length * 0.6, -halfWidth);
+    ctx.lineTo(-length * 0.6, halfWidth);
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = 1 / scale;
+    ctx.stroke();
+    ctx.restore();
+}
+
+// Diamond / kite. `length` is half-length along +x (point), `width` is
+// half-width across +y.
+function drawEnemyDiamond(ctx, x, y, angle, length, width, fillStyle, strokeStyle, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(length, 0);
+    ctx.lineTo(0, -width);
+    ctx.lineTo(-length, 0);
+    ctx.lineTo(0, width);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+    ctx.fill();
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = 1.5 / scale;
+    ctx.stroke();
+    ctx.restore();
+}
+
+// Filled disc with a cross overlay. Used by TANGERINE for the citrus
+// look — round body + a faint cross to suggest segmenting.
+function drawEnemyCircleCross(ctx, x, y, radius, fillStyle, strokeStyle, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = 1.5 / scale;
+    ctx.stroke();
+    // Cross — counter-scaled lineWidth so the cross reads at any
+    // letterbox scale.
+    ctx.beginPath();
+    ctx.moveTo(-radius, 0); ctx.lineTo(radius, 0);
+    ctx.moveTo(0, -radius); ctx.lineTo(0, radius);
+    ctx.lineWidth = 1 / scale;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.stroke();
+    ctx.restore();
+}
+
+// Mines — stationary red discs with a faint warning ring. The ring
+// alpha pulses on tick so the hazard reads as live even though it's
+// not moving. HP fraction (< 1.0) dims the body so a damaged mine
+// looks worn.
+function drawEnemyMines(ctx, world, scale) {
+    const tick = world.tick_count();
+    const pulse = 0.5 + 0.5 * Math.sin(tick * 0.08); // 0..1, slow.
+    const ringAlpha = 0.25 + 0.35 * pulse;
+    const count = world.enemy_mine_count();
+    for (let i = 0; i < count; i++) {
+        const x = world.enemy_mine_x(i);
+        const y = world.enemy_mine_y(i);
+        const r = world.enemy_mine_radius(i);
+        const hpFrac = typeof world.enemy_mine_hp_fraction === "function"
+            ? world.enemy_mine_hp_fraction(i)
+            : 1.0;
+        ctx.save();
+        ctx.translate(x, y);
+        // Warning ring (drawn under the body so it haloes the mine).
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 60, 60, ${ringAlpha.toFixed(3)})`;
+        ctx.lineWidth = 1.5 / scale;
+        ctx.stroke();
+        // Body.
+        ctx.globalAlpha = 0.55 + 0.45 * Math.max(0, Math.min(1, hpFrac));
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fillStyle = MINE_FILL;
+        ctx.fill();
+        ctx.strokeStyle = MINE_OUTLINE;
+        ctx.lineWidth = 1.5 / scale;
+        ctx.stroke();
+        // Subtle cross-hatch — two thin lines through the center for
+        // texture (matches solo's mine "danger" read).
+        ctx.lineWidth = 1 / scale;
+        ctx.strokeStyle = MINE_RING;
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.6, -r * 0.6); ctx.lineTo(r * 0.6, r * 0.6);
+        ctx.moveTo(-r * 0.6, r * 0.6); ctx.lineTo(r * 0.6, -r * 0.6);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// Missiles — small red elongated triangle pointed along the velocity
+// vector. atan2(vy, vx) is the heading; degenerate (zero-velocity)
+// missiles fall back to angle 0 so the geometry never NaNs.
+function drawEnemyMissiles(ctx, world, scale) {
+    const count = world.enemy_missile_count();
+    for (let i = 0; i < count; i++) {
+        const x = world.enemy_missile_x(i);
+        const y = world.enemy_missile_y(i);
+        const vx = world.enemy_missile_vx(i);
+        const vy = world.enemy_missile_vy(i);
+        const angle = (vx === 0 && vy === 0) ? 0 : Math.atan2(vy, vx);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(MISSILE_LENGTH, 0);
+        ctx.lineTo(-MISSILE_LENGTH * 0.5, -MISSILE_HALF_WIDTH);
+        ctx.lineTo(-MISSILE_LENGTH * 0.5, MISSILE_HALF_WIDTH);
+        ctx.closePath();
+        ctx.fillStyle = MISSILE_COLOR;
+        ctx.fill();
+        ctx.strokeStyle = MISSILE_STROKE;
+        ctx.lineWidth = 1 / scale;
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 // Small filled cyan disc — matches solo's PULSE_CANNON color so the

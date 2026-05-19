@@ -27,6 +27,10 @@
 //   particles.spawnAsteroidSplit(x, y);  // gray debris
 //   particles.spawnShipDowned(x, y);     // white shockwave
 //   particles.spawnShipRevived(x, y);    // green sparkles
+//   particles.spawnEnemyMineSpawn(x, y); // dim red "mine placed" sparks
+//   particles.spawnEnemyMineDeath(x, y); // red+orange burst on mine kill
+//   particles.spawnEnemyMissileSpawn(x, y); // gray exhaust puff at launch
+//   particles.spawnEnemyMissileHit(x, y);   // heavy red+ember burst on hit
 //   particles.update(dt);                // BEFORE renderer.render
 //   particles.draw(ctx, scale);          // AFTER renderer.render
 //
@@ -231,6 +235,73 @@ export class Particles {
             // Bias slightly upward so the revive reads as uplift.
             const vy = Math.sin(angle) * speed - 30;
             this._spawnSpark(x, y, vx, vy, 0.55, "#88ff88");
+        }
+    }
+
+    // Enemy mine spawn: ~5 dim red sparks expanding slowly — reads as a
+    // brief "armed" flicker when TANGERINE drops a mine.
+    spawnEnemyMineSpawn(x, y) {
+        const count = 5;
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 25 + Math.random() * 25;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this._spawnSpark(x, y, vx, vy, 0.3, "#ff4444");
+        }
+    }
+
+    // Enemy mine death: bright red burst, larger than a bullet hit but
+    // lighter than a full enemy destroy. ~8 red sparks + ~4 orange embers.
+    spawnEnemyMineDeath(x, y) {
+        const redCount = 8;
+        for (let i = 0; i < redCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 140 + Math.random() * 120;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this._spawnSpark(x, y, vx, vy, 0.5, "#ff4444");
+        }
+        const emberCount = 4;
+        for (let i = 0; i < emberCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 100 + Math.random() * 100;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this._spawnSpark(x, y, vx, vy, 0.5, "#ff8844");
+        }
+    }
+
+    // Enemy missile spawn: tiny gray exhaust puff trailing the launch.
+    spawnEnemyMissileSpawn(x, y) {
+        const count = 3;
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 30 + Math.random() * 30;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this._spawnSpark(x, y, vx, vy, 0.2, "#888888");
+        }
+    }
+
+    // Enemy missile hit: heavy red burst with orange embers — missiles
+    // deal 5 dmg so the impact should read clearly heavier than a bullet.
+    spawnEnemyMissileHit(x, y) {
+        const redCount = 10;
+        for (let i = 0; i < redCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 120 + Math.random() * 130;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this._spawnSpark(x, y, vx, vy, 0.4, "#ff4444");
+        }
+        const emberCount = 3;
+        for (let i = 0; i < emberCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 80 + Math.random() * 100;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this._spawnSpark(x, y, vx, vy, 0.4, "#ff8844");
         }
     }
 

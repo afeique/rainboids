@@ -33,6 +33,8 @@ use super::damage::{apply_damage, DamageOutcome, ShipState};
 use super::drops::{OrbState, ORB_KIND_HEALTH, ORB_RADIUS};
 use super::enemy::{EnemyState, HUNTER_CONTACT_DAMAGE};
 use super::enemy_bullet::EnemyBulletState;
+use super::enemy_mine::{apply_damage_to_mine, EnemyMineState};
+use super::enemy_missile::EnemyMissileState;
 use super::rng_ctx::RngCtx;
 
 // Re-exported for downstream test fixtures that build mock entities;
@@ -118,6 +120,31 @@ pub enum CollisionEvent {
     /// cosmetic at the impact point + despawn the named bullet.
     ShipHitByEnemyBullet {
         bullet_id: u32,
+        player_id: u32,
+        x: f64,
+        y: f64,
+    },
+    /// Phase 4 step 5 — a player bullet damaged a mine.
+    BulletDamagedMine {
+        bullet_id: u32,
+        mine_id: u32,
+        x: f64,
+        y: f64,
+    },
+    /// Phase 4 step 5 — a mine reached <= 0 HP from a bullet hit, OR
+    /// a ship contacted it (in which case `by_bullet_id == 0`). Caller
+    /// (room actor) translates this into the wire `EnemyMineDeath`
+    /// payload.
+    MineDestroyed {
+        mine_id: u32,
+        by_bullet_id: u32, // 0 if killed by ship contact / lifetime
+        x: f64,
+        y: f64,
+    },
+    /// Phase 4 step 5 — an enemy missile struck a ship. Mirrors the
+    /// `ShipHitByEnemyBullet` shape; missile is single-hit.
+    ShipHitByEnemyMissile {
+        missile_id: u32,
         player_id: u32,
         x: f64,
         y: f64,
@@ -443,6 +470,161 @@ pub fn run_collisions(
     child_id_start_next - start_child_id
 }
 
+/// Phase 4 step 5 — bullet × mine collision pass. Mines have HP and
+/// are destructible by player bullets. Bullets respect piercing
+/// (`piercing_left`); mines deactivate when HP hits 0.
+///
+/// Emits `BulletDamagedMine` per hit, `MineDestroyed` per kill.
+/// Caller (room actor) reaps dead mines + bullets after this returns.
+pub fn run_bullet_mine_pairs(
+    mines: &mut [EnemyMineState],
+    bullets: &mut [BulletState],
+    current_tick: u32,
+    out_events: &mut Vec<CollisionEvent>,
+) {
+    for b in bullets.iter_mut() {
+        if b.dead() {
+            continue;
+        }
+        let (bx, by) = b.position_at(current_tick);
+        for m in mines.iter_mut() {
+            if m.dead() {
+                continue;
+            }
+            let dx = m.x - bx;
+            let dy = m.y - by;
+            let r_sum = m.radius + BULLET_RADIUS;
+            if dx * dx + dy * dy > r_sum * r_sum {
+                continue;
+            }
+            let killed = apply_damage_to_mine(m, b.damage);
+            out_events.push(CollisionEvent::BulletDamagedMine {
+                bullet_id: b.id,
+                mine_id: m.id,
+                x: bx,
+                y: by,
+            });
+            if killed {
+                out_events.push(CollisionEvent::MineDestroyed {
+                    mine_id: m.id,
+                    by_bullet_id: b.id,
+                    x: m.x,
+                    y: m.y,
+                });
+            }
+            // Piercing rule mirrors bullet × enemy / asteroid.
+            if b.piercing_left == 0 {
+                b.active = false;
+                b.life_remaining = 0;
+                break;
+            } else {
+                b.piercing_left -= 1;
+            }
+        }
+    }
+}
+
+/// Phase 4 step 5 — ship × mine collision pass. On contact the ship
+/// takes the mine's `contact_damage` (routed through `apply_damage`)
+/// and the mine deactivates (MineDestroyed with `by_bullet_id = 0`).
+/// Downed ships are skipped.
+pub fn run_ship_mine_pairs(
+    ships: &mut [ShipState],
+    mines: &mut [EnemyMineState],
+    out_events: &mut Vec<CollisionEvent>,
+) {
+    for m in mines.iter_mut() {
+        if m.dead() {
+            continue;
+        }
+        for s in ships.iter_mut() {
+            if !s.active || s.downed {
+                continue;
+            }
+            let dx = s.x - m.x;
+            let dy = s.y - m.y;
+            let r_sum = s.radius + m.radius;
+            if dx * dx + dy * dy > r_sum * r_sum {
+                continue;
+            }
+            let outcome = apply_damage(s, m.contact_damage);
+            if matches!(outcome, DamageOutcome::Damaged | DamageOutcome::JustDowned) {
+                out_events.push(CollisionEvent::ShipDamaged {
+                    player_id: s.player_id,
+                    by_kind: BY_KIND_ENEMY,
+                    by_id: m.id,
+                    amount: m.contact_damage,
+                    x: m.x,
+                    y: m.y,
+                });
+                if matches!(outcome, DamageOutcome::JustDowned) {
+                    out_events.push(CollisionEvent::ShipDowned {
+                        player_id: s.player_id,
+                        at_x: s.x,
+                        at_y: s.y,
+                    });
+                }
+            }
+            // Mine deactivates regardless of damage outcome (single-use).
+            m.active = false;
+            m.hp = 0.0;
+            out_events.push(CollisionEvent::MineDestroyed {
+                mine_id: m.id,
+                by_bullet_id: 0,
+                x: m.x,
+                y: m.y,
+            });
+            break;
+        }
+    }
+}
+
+/// Phase 4 step 5 — ship × enemy_missile collision pass. Mirrors the
+/// ship × enemy_bullet pair: missile damages ship via `apply_damage`,
+/// missile deactivates on first hit (no piercing). Downed ships are
+/// skipped.
+pub fn run_ship_missile_pairs(
+    ships: &mut [ShipState],
+    missiles: &mut [EnemyMissileState],
+    out_events: &mut Vec<CollisionEvent>,
+) {
+    for m in missiles.iter_mut() {
+        if !m.active {
+            continue;
+        }
+        for s in ships.iter_mut() {
+            if !s.active || s.downed {
+                continue;
+            }
+            let dx = s.x - m.x;
+            let dy = s.y - m.y;
+            let r_sum = s.radius + m.radius;
+            if dx * dx + dy * dy > r_sum * r_sum {
+                continue;
+            }
+            let outcome = apply_damage(s, m.damage);
+            if matches!(outcome, DamageOutcome::Damaged | DamageOutcome::JustDowned) {
+                out_events.push(CollisionEvent::ShipHitByEnemyMissile {
+                    missile_id: m.id,
+                    player_id: s.player_id,
+                    x: m.x,
+                    y: m.y,
+                });
+                if matches!(outcome, DamageOutcome::JustDowned) {
+                    out_events.push(CollisionEvent::ShipDowned {
+                        player_id: s.player_id,
+                        at_x: s.x,
+                        at_y: s.y,
+                    });
+                }
+            }
+            m.active = false;
+            m.life_remaining = 0;
+            break;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -491,6 +673,7 @@ mod tests {
             arc_phase: 0.0,
             active: true,
             last_fire_tick: 0,
+            ..EnemyState::default()
         }
     }
 

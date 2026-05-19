@@ -42,8 +42,10 @@ use rainboids_sim::mp1::{
     drops::{self, OrbState},
     enemy::{self, EnemyState},
     enemy_bullet::{self, EnemyBulletState},
+    enemy_mine::{self, EnemyMineState},
+    enemy_missile::{self, EnemyMissileState},
     ship::update_ship,
-    state::{RoomState, ShipState, SHIP_SIZE},
+    state::{RoomState, ShipState, MAX_ENEMY_MINES, MAX_ENEMY_MISSILES, SHIP_SIZE},
     trig::atan2_64,
     wave::WavePhase,
     weapon::{
@@ -232,6 +234,21 @@ impl World {
             enemy_bullet::update_enemy_bullet(b, self.room.field_w, self.room.field_h);
         }
 
+        // 4.7. Enemy mine lifetime tick — mines are stationary, only
+        //      the lifetime counter ticks down. Mirrors the server's
+        //      Phase 4 step 5 mine integration step.
+        for m in self.room.enemy_mines.iter_mut() {
+            enemy_mine::update_mine(m);
+        }
+
+        // 4.8. Enemy missile homing + drift — missiles re-aim toward
+        //      the closest alive target each tick, clamped by
+        //      MISSILE_TURN_RATE. Uses the same `targets` slice built
+        //      above so server + WASM client stay bit-identical.
+        for m in self.room.enemy_missiles.iter_mut() {
+            enemy_missile::update_missile(m, &targets, self.room.field_w, self.room.field_h);
+        }
+
         // 5. Collision detection. We discard the emitted events
         //    (server is authoritative for events; we get them back
         //    over the wire and replay via `consume_*`), but the
@@ -254,6 +271,28 @@ impl World {
             &mut _ignored,
         );
         self.room.next_asteroid_id = self.room.next_asteroid_id.wrapping_add(added);
+
+        // 5b. Phase 4 step 5 mine/missile collision pairs. Run AFTER
+        //     `run_collisions` so bullet state (piercing_left, active)
+        //     reflects any prior hits this tick before bullets get a
+        //     shot at the mines. Events are discarded for the same
+        //     reason as above — server-authoritative replay.
+        collision::run_bullet_mine_pairs(
+            &mut self.room.enemy_mines,
+            &mut self.room.bullets,
+            self.room.tick,
+            &mut _ignored,
+        );
+        collision::run_ship_mine_pairs(
+            &mut self.room.ships,
+            &mut self.room.enemy_mines,
+            &mut _ignored,
+        );
+        collision::run_ship_missile_pairs(
+            &mut self.room.ships,
+            &mut self.room.enemy_missiles,
+            &mut _ignored,
+        );
 
         // 6. Revive ticking — mirrors the server's loop in
         //    `mp1_room.rs::tick_revive_meters` but emits no events.
@@ -286,6 +325,12 @@ impl World {
         self.room.bullets.retain(|b| b.active);
         self.room.orbs.retain(|o| o.active);
         self.room.enemy_bullets.retain(|b| b.active);
+        // Phase 4 step 5: cull dead mines (HP<=0, life=0, or
+        // collision-pass flipped !active) and missiles (collision +
+        // off-field flipped !active). Uses `EnemyMineState::dead()`
+        // which folds all three failure modes into one predicate.
+        self.room.enemy_mines.retain(|m| !m.dead());
+        self.room.enemy_missiles.retain(|m| m.active);
 
         self.room.tick = self.room.tick.wrapping_add(1);
     }
@@ -638,6 +683,81 @@ impl World {
         }
     }
 
+    // ── Phase 4 step 5 — Enemy mine + missile EventPayload consumers ──
+
+    /// `EventPayload::EnemyMineSpawn`. Reconstructs the mine via the
+    /// shared `enemy_mine::spawn_from_seed` so server + WASM client
+    /// produce bit-identical state. Capped at `MAX_ENEMY_MINES` —
+    /// extra spawns are dropped (matches the server's cap; the WASM
+    /// client trusts the server stays under it but defends in depth).
+    pub fn consume_enemy_mine_spawn(
+        &mut self,
+        mine_id: u32,
+        owner_enemy_id: u32,
+        x: f64,
+        y: f64,
+        sub_seed: u64,
+    ) {
+        if self.room.enemy_mines.len() >= MAX_ENEMY_MINES {
+            return;
+        }
+        let m = enemy_mine::spawn_from_seed(mine_id, owner_enemy_id, x, y, sub_seed);
+        self.room.enemy_mines.push(m);
+        if mine_id >= self.room.next_enemy_mine_id {
+            self.room.next_enemy_mine_id = mine_id.wrapping_add(1);
+        }
+    }
+
+    /// `EventPayload::EnemyMineDeath`. Marks the mine inactive + zero
+    /// HP so it's culled at the next tick boundary. Server is the
+    /// source of truth for death (bullet kill, ship-contact kill, or
+    /// lifetime expiry all funnel through the same event).
+    pub fn consume_enemy_mine_death(&mut self, mine_id: u32) {
+        if let Some(m) = self.room.enemy_mines.iter_mut().find(|m| m.id == mine_id) {
+            m.active = false;
+            m.hp = 0.0;
+        }
+    }
+
+    /// `EventPayload::EnemyMissileSpawn`. Reconstructs the missile via
+    /// the shared `enemy_missile::spawn_default` so server + WASM
+    /// client produce bit-identical state. Capped at
+    /// `MAX_ENEMY_MISSILES` — extra spawns are dropped.
+    pub fn consume_enemy_missile_spawn(
+        &mut self,
+        missile_id: u32,
+        owner_enemy_id: u32,
+        origin_x: f64,
+        origin_y: f64,
+        initial_angle: f64,
+    ) {
+        if self.room.enemy_missiles.len() >= MAX_ENEMY_MISSILES {
+            return;
+        }
+        let m = enemy_missile::spawn_default(
+            missile_id,
+            owner_enemy_id,
+            origin_x,
+            origin_y,
+            initial_angle,
+        );
+        self.room.enemy_missiles.push(m);
+        if missile_id >= self.room.next_enemy_missile_id {
+            self.room.next_enemy_missile_id = missile_id.wrapping_add(1);
+        }
+    }
+
+    /// `EventPayload::EnemyMissileHit`. Marks the missile inactive +
+    /// zero lifetime so it's culled at the next tick boundary. The
+    /// ship's HP delta lands via the next Snapshot (or via local
+    /// prediction's own collision pass between Snapshot frames).
+    pub fn consume_enemy_missile_hit(&mut self, missile_id: u32, _player_id: u32) {
+        if let Some(m) = self.room.enemy_missiles.iter_mut().find(|m| m.id == missile_id) {
+            m.active = false;
+            m.life_remaining = 0;
+        }
+    }
+
     // ── Local-ship accessors (Phase-1 surface; preserved) ──
     //
     // These were the Phase-1/2 single-ship accessors. They now
@@ -884,6 +1004,67 @@ impl World {
         self.enemy_bullet_at(idx).map(|b| b.y).unwrap_or(0.0)
     }
 
+    // ── Enemy-mine accessors (Phase 4 step 5) ──
+    //
+    // JS renderer reads these per render frame to draw mines and their
+    // health bars. Indexing matches the room's `enemy_mines` Vec
+    // ordering (insertion order, retained across ticks).
+
+    pub fn enemy_mine_count(&self) -> u32 {
+        self.room.enemy_mines.len() as u32
+    }
+    fn enemy_mine_at(&self, idx: u32) -> Option<EnemyMineState> {
+        self.room.enemy_mines.get(idx as usize).copied()
+    }
+    pub fn enemy_mine_id(&self, idx: u32) -> u32 {
+        self.enemy_mine_at(idx).map(|m| m.id).unwrap_or(0)
+    }
+    pub fn enemy_mine_x(&self, idx: u32) -> f64 {
+        self.enemy_mine_at(idx).map(|m| m.x).unwrap_or(0.0)
+    }
+    pub fn enemy_mine_y(&self, idx: u32) -> f64 {
+        self.enemy_mine_at(idx).map(|m| m.y).unwrap_or(0.0)
+    }
+    pub fn enemy_mine_radius(&self, idx: u32) -> f64 {
+        self.enemy_mine_at(idx).map(|m| m.radius).unwrap_or(0.0)
+    }
+    /// HP / max_HP. Returns 0.0 if the mine isn't found OR max_hp is
+    /// non-positive (defensive — avoids NaN from div-by-zero).
+    pub fn enemy_mine_hp_fraction(&self, idx: u32) -> f64 {
+        match self.enemy_mine_at(idx) {
+            Some(m) if m.max_hp > 0.0 => m.hp / m.max_hp,
+            _ => 0.0,
+        }
+    }
+
+    // ── Enemy-missile accessors (Phase 4 step 5) ──
+    //
+    // JS renderer reads these per render frame to draw missile sprites
+    // + velocity-aligned heading. `vx`/`vy` are exposed so the renderer
+    // can derive the heading without re-querying for two positions.
+
+    pub fn enemy_missile_count(&self) -> u32 {
+        self.room.enemy_missiles.len() as u32
+    }
+    fn enemy_missile_at(&self, idx: u32) -> Option<EnemyMissileState> {
+        self.room.enemy_missiles.get(idx as usize).copied()
+    }
+    pub fn enemy_missile_id(&self, idx: u32) -> u32 {
+        self.enemy_missile_at(idx).map(|m| m.id).unwrap_or(0)
+    }
+    pub fn enemy_missile_x(&self, idx: u32) -> f64 {
+        self.enemy_missile_at(idx).map(|m| m.x).unwrap_or(0.0)
+    }
+    pub fn enemy_missile_y(&self, idx: u32) -> f64 {
+        self.enemy_missile_at(idx).map(|m| m.y).unwrap_or(0.0)
+    }
+    pub fn enemy_missile_vx(&self, idx: u32) -> f64 {
+        self.enemy_missile_at(idx).map(|m| m.vx).unwrap_or(0.0)
+    }
+    pub fn enemy_missile_vy(&self, idx: u32) -> f64 {
+        self.enemy_missile_at(idx).map(|m| m.vy).unwrap_or(0.0)
+    }
+
     // ── Orb accessors ──
 
     pub fn orb_count(&self) -> u32 {
@@ -943,9 +1124,18 @@ impl World {
     }
     /// WIRE_VERSION 4: this hash now bundles orbs after asteroids so
     /// the server's `hash_asteroids_and_orbs` and the client's hash
-    /// stay in sync.
+    /// stay in sync. WIRE_VERSION 8 (Phase 4 step 5): extended to
+    /// bundle enemy mines + enemy missiles into the same hash so the
+    /// safety-net heartbeat covers the new entity kinds too. Server's
+    /// `mp1_room.rs::hash_asteroids_and_orbs` MUST mirror this exact
+    /// field order — see hash helper below.
     pub fn checksum_asteroids(&self) -> u64 {
-        hash_asteroids_and_orbs(&self.room.asteroids, &self.room.orbs)
+        hash_asteroids_and_orbs(
+            &self.room.asteroids,
+            &self.room.orbs,
+            &self.room.enemy_mines,
+            &self.room.enemy_missiles,
+        )
     }
     pub fn checksum_bullets(&self) -> u64 {
         hash_bullets(&self.room.bullets)
@@ -1014,7 +1204,12 @@ fn hash_enemies(enemies: &[EnemyState]) -> u64 {
     h.finish()
 }
 
-fn hash_asteroids_and_orbs(asteroids: &[AsteroidState], orbs: &[OrbState]) -> u64 {
+fn hash_asteroids_and_orbs(
+    asteroids: &[AsteroidState],
+    orbs: &[OrbState],
+    mines: &[EnemyMineState],
+    missiles: &[EnemyMissileState],
+) -> u64 {
     let mut h = DefaultHasher::new();
     for a in asteroids {
         a.id.hash(&mut h);
@@ -1031,6 +1226,24 @@ fn hash_asteroids_and_orbs(asteroids: &[AsteroidState], orbs: &[OrbState]) -> u6
         hash_f64(&mut h, o.vx);
         hash_f64(&mut h, o.vy);
         o.life_ticks.hash(&mut h);
+    }
+    // Phase 4 step 5: mines + missiles bundled here so the heartbeat
+    // covers them too. Field order matches `mp1_room.rs::hash_asteroids_and_orbs`
+    // bit-for-bit — any divergence triggers false-positive Resyncs.
+    for m in mines {
+        m.id.hash(&mut h);
+        hash_f64(&mut h, m.x);
+        hash_f64(&mut h, m.y);
+        hash_f64(&mut h, m.hp);
+        m.life_remaining.hash(&mut h);
+    }
+    for m in missiles {
+        m.id.hash(&mut h);
+        hash_f64(&mut h, m.x);
+        hash_f64(&mut h, m.y);
+        hash_f64(&mut h, m.vx);
+        hash_f64(&mut h, m.vy);
+        m.life_remaining.hash(&mut h);
     }
     h.finish()
 }

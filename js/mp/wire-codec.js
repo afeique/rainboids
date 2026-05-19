@@ -103,7 +103,7 @@ const LE = true;
  *       AsteroidWire / BulletWire records)
  *  - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
  *       client can seed its WASM mirror identically to the server. */
-export const WIRE_VERSION = 7;
+export const WIRE_VERSION = 8;
 
 /* ── Reader ─────────────────────────────────────────────────────── */
 
@@ -292,7 +292,8 @@ function readSnapshotShip(r) {
     };
 }
 
-/** Read one `EnemyWire` record (Phase 3 Resync payload). */
+/** Read one `EnemyWire` record (Phase 3 Resync payload; expanded in WIRE_VERSION 8
+ * with per-kind movement-state fields for the 9 new enemy kinds). */
 function readEnemyWire(r) {
     return {
         id: r.u32(),
@@ -305,10 +306,31 @@ function readEnemyWire(r) {
         hp: r.f64(),
         max_hp: r.f64(),
         radius: r.f64(),
+        last_fire_tick: r.u32(),
+        // Arc-orbit (HUNTER, STALKER, WEAVER, SENTINEL)
         arc_dir: r.f64(),
         arc_radius: r.f64(),
         arc_omega: r.f64(),
         arc_phase: r.f64(),
+        // WASP zigzag
+        zigzag_phase: r.f64(),
+        zigzag_amplitude: r.f64(),
+        // GUARDIAN square
+        square_corner_idx: r.u8(),
+        square_dir: r.f64(),
+        // STALKER charge
+        charge_progress: r.u32(),
+        // DRIFTER wave
+        wave_phase: r.f64(),
+        wave_amplitude: r.f64(),
+        // WEAVER / SENTINEL spinup + orbit
+        spinup_progress: r.u32(),
+        orbit_phase: r.f64(),
+        spiral_phase: r.f64(),
+        sweep_phase: r.f64(),
+        // TITAN momentum
+        momentum_dir: r.f64(),
+        momentum_t: r.f64(),
     };
 }
 
@@ -359,6 +381,36 @@ function readOrbWire(r) {
 
 /** Read one `EnemyBulletWire` record (WIRE_VERSION 7). */
 function readEnemyBulletWire(r) {
+    return {
+        id: r.u32(),
+        owner_enemy_id: r.u32(),
+        x: r.f64(),
+        y: r.f64(),
+        vx: r.f64(),
+        vy: r.f64(),
+        damage: r.f64(),
+        radius: r.f64(),
+        life_remaining: r.u32(),
+    };
+}
+
+/** Read one `EnemyMineWire` record (WIRE_VERSION 8). */
+function readEnemyMineWire(r) {
+    return {
+        id: r.u32(),
+        owner_enemy_id: r.u32(),
+        x: r.f64(),
+        y: r.f64(),
+        hp: r.f64(),
+        max_hp: r.f64(),
+        radius: r.f64(),
+        contact_damage: r.f64(),
+        life_remaining: r.u32(),
+    };
+}
+
+/** Read one `EnemyMissileWire` record (WIRE_VERSION 8). */
+function readEnemyMissileWire(r) {
     return {
         id: r.u32(),
         owner_enemy_id: r.u32(),
@@ -528,6 +580,48 @@ function readEventPayload(r) {
                 y: r.f64(),
             };
         }
+        case 15: { // EnemyMineSpawn { mine_id, owner_enemy_id, x, y, sub_seed, spawn_tick } — WIRE_VERSION 8
+            return {
+                kind: 'EnemyMineSpawn',
+                mine_id: r.u32(),
+                owner_enemy_id: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+                sub_seed: r.u64Big(),
+                spawn_tick: r.u32(),
+            };
+        }
+        case 16: { // EnemyMineDeath { mine_id, x, y, killed_by_bullet_id, kill_tick } — WIRE_VERSION 8
+            return {
+                kind: 'EnemyMineDeath',
+                mine_id: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+                killed_by_bullet_id: r.u32(),
+                kill_tick: r.u32(),
+            };
+        }
+        case 17: { // EnemyMissileSpawn { missile_id, owner_enemy_id, origin_x, origin_y, initial_angle, spawn_tick } — WIRE_VERSION 8
+            return {
+                kind: 'EnemyMissileSpawn',
+                missile_id: r.u32(),
+                owner_enemy_id: r.u32(),
+                origin_x: r.f64(),
+                origin_y: r.f64(),
+                initial_angle: r.f64(),
+                spawn_tick: r.u32(),
+            };
+        }
+        case 18: { // EnemyMissileHit { missile_id, player_id, hit_tick, x, y } — WIRE_VERSION 8
+            return {
+                kind: 'EnemyMissileHit',
+                missile_id: r.u32(),
+                player_id: r.u32(),
+                hit_tick: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+            };
+        }
         default:
             throw new RangeError(`wire-codec: unknown EventPayload variant ${tag}`);
     }
@@ -613,6 +707,13 @@ export function decodeServerMsg(input) {
             const ebCount = r.u64();
             const enemy_bullets = new Array(ebCount);
             for (let i = 0; i < ebCount; i++) enemy_bullets[i] = readEnemyBulletWire(r);
+            // WIRE_VERSION 8 additions: enemy_mines + enemy_missiles.
+            const emCount = r.u64();
+            const enemy_mines = new Array(emCount);
+            for (let i = 0; i < emCount; i++) enemy_mines[i] = readEnemyMineWire(r);
+            const emsCount = r.u64();
+            const enemy_missiles = new Array(emsCount);
+            for (let i = 0; i < emsCount; i++) enemy_missiles[i] = readEnemyMissileWire(r);
             return {
                 kind: 'Resync',
                 tick,
@@ -627,6 +728,8 @@ export function decodeServerMsg(input) {
                 wave_phase,
                 wave_phase_started_tick,
                 enemy_bullets,
+                enemy_mines,
+                enemy_missiles,
             };
         }
         default:

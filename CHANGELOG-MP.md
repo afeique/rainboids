@@ -8,6 +8,163 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.9.0] - 2026-05-19
+
+**Phase 4 step 5 — all 9 remaining enemy types + mines + missiles.**
+The biggest single MP version yet. Wave 1 to 10 now play through with
+real enemy variety: GUARDIAN, WASP, STALKER, DRIFTER, PROWLER, WEAVER,
+SENTINEL, TANGERINE, TITAN each get their own movement pattern, firing
+pattern, and HP/contact-damage tuning. Two new entity types ship
+alongside — `EnemyMineState` (persistent, bullet-targetable hazards
+dropped by TANGERINE) and `EnemyMissileState` (homing projectiles
+fired by PROWLER).
+
+WIRE_VERSION 7 → 8.
+
+### Wave 1 — 12 new sim modules (parallel new-file dispatch)
+
+| Module | Purpose | Constants of note |
+|---|---|---|
+| `mp1/enemy_wasp.rs` | Zigzag movement + aimed fire | `WASP_BASE_SPEED=2.3`, `WASP_FIRE_COOLDOWN_TICKS=45` |
+| `mp1/enemy_guardian.rs` | Square-perimeter movement + 3-bullet spread fire | `GUARDIAN_MAX_HP=12`, `GUARDIAN_SPREAD_RADIANS=0.35` |
+| `mp1/enemy_stalker.rs` | Arc orbit + charged-laser windup | `STALKER_CHARGE_TICKS=60` |
+| `mp1/enemy_drifter.rs` | Sinusoidal wave drift + aimed fire | `DRIFTER_WAVE_AMPLITUDE=60`, `DRIFTER_WAVE_OMEGA=0.08` |
+| `mp1/enemy_prowler.rs` | Keep-distance + missile fire | `PROWLER_PREFERRED_RANGE=350` |
+| `mp1/enemy_weaver.rs` | Spinup orbit + spiral fire | `WEAVER_SPINUP_TICKS=180`, `WEAVER_SPIRAL_STEP_RADIANS=0.31` |
+| `mp1/enemy_sentinel.rs` | Spinup orbit + sweep fire | `SENTINEL_SWEEP_AMPLITUDE=0.7` |
+| `mp1/enemy_tangerine.rs` | Chase + mine drop | `TANGERINE_MINE_COOLDOWN_TICKS=90` |
+| `mp1/enemy_titan.rs` | Boulder boss + sweep-fire + explosive bullets + rage gate | `TITAN_MAX_HP=40`, `TITAN_RAGE_HP_FRACTION=0.4`, `TITAN_BULLET_DAMAGE=3` |
+| `mp1/enemy_mine.rs` | Stationary 2-HP bullet-targetable hazard, contact-damage 6 | `MINE_DEFAULT_LIFETIME_TICKS=600` |
+| `mp1/enemy_missile.rs` | Homing projectile with clamped turn rate | `MISSILE_TURN_RATE=0.04 rad/tick`, `MISSILE_DEFAULT_DAMAGE=5` |
+| `mp1/enemy_bullet_patterns.rs` | Pure helpers: `spawn_spread`, `spawn_spiral`, `spawn_sweep`, `spawn_explosive` | — |
+
+Each module is fresh-rewritten from solo's `js/modules/enemy/*` per
+the WASM-pivot authoring discipline. 134 new unit tests across the
+12 modules; full sim crate test count now 287 (up from 144).
+
+### Wave 2 — Sim crate refactors
+
+- **`EnemyState` unified to a fat struct** (`enemy.rs`) carrying common
+  fields + the union of per-kind movement-state fields (zigzag, square,
+  charge, wave, spinup, orbit, spiral, sweep, momentum). `Default`
+  added so `EnemyState { ..known fields.., ..EnemyState::default() }`
+  is the construction pattern. ~16 new fields, +~64 bytes per enemy —
+  trivial at `MAX_ENEMIES = 4`.
+- **`update_enemy(...)` is now a kind-dispatcher** that routes to each
+  module's `update_xxx_movement`. The HUNTER-specific body moved to a
+  private `update_hunter_movement`.
+- **`RoomState` extended** (`state.rs`) with `enemy_mines:
+  Vec<EnemyMineState>`, `enemy_missiles: Vec<EnemyMissileState>`,
+  matching `next_enemy_mine_id` / `next_enemy_missile_id` counters,
+  and `MAX_ENEMY_MINES = 32` / `MAX_ENEMY_MISSILES = 32` caps.
+- **`collision.rs` gains three new pairs** (additive helpers, not
+  changing `run_collisions` signature): `run_bullet_mine_pairs`,
+  `run_ship_mine_pairs`, `run_ship_missile_pairs`. New
+  `CollisionEvent` variants: `BulletDamagedMine`, `MineDestroyed`,
+  `ShipHitByEnemyMissile`.
+
+### Wire changes (WIRE_VERSION 7 → 8)
+
+- New `EventPayload` variants: `EnemyMineSpawn`, `EnemyMineDeath`,
+  `EnemyMissileSpawn`, `EnemyMissileHit`.
+- New Resync records: `EnemyMineWire` + `EnemyMissileWire`.
+- `EnemyWire` grew with per-kind movement-state fields so Resync can
+  rebuild any of the 10 kinds (zigzag_*, square_*, charge_progress,
+  wave_*, spinup_progress, orbit_phase, spiral_phase, sweep_phase,
+  momentum_*, last_fire_tick).
+- `ServerMsg::Resync` extended with `enemy_mines` + `enemy_missiles`
+  Vecs.
+
+### Server (`server-bin/src/mp1_room.rs`)
+
+- **`spawn_enemy_from_request`**: replaced the HUNTER-fallback for
+  non-HUNTER kinds with a full 10-way match dispatch.
+- **`process_enemy_fire`**: per-kind dispatch via a new `FireIntent`
+  enum (Bullet / Spread / Explosive / Missile / Mine). HUNTER, WASP,
+  STALKER, DRIFTER fire aimed bullets; GUARDIAN fires a 3-bullet
+  spread; WEAVER fires spiral (advances `spiral_phase` after each
+  shot); SENTINEL fires sweep; TITAN fires explosive sweep with
+  rage-aware cooldown via `current_fire_cooldown` + `advance_sweep`;
+  PROWLER fires a homing missile; TANGERINE drops a mine. STALKER
+  gated on `is_charge_complete` / `reset_charge`.
+- **`step()`** adds tick stages for mine-lifetime + missile-homing
+  before collision; calls the three new collision helpers after
+  `run_collisions`; retain pass culls dead mines + missiles.
+- **`translate_collision_event`** translates `MineDestroyed` →
+  `EnemyMineDeath` event and `ShipHitByEnemyMissile` →
+  `EnemyMissileHit` event.
+- **`build_resync`** carries `enemy_mines` + `enemy_missiles`. The
+  fat-shape `EnemyWire` is populated with all new per-kind fields.
+- **`build_checksum`** extended (`hash_asteroids_and_orbs` now also
+  bundles mines + missiles, mirroring the client's checksum order
+  exactly — bit-identical lockstep required for the StateChecksum
+  heartbeat).
+
+### WASM client (`client-wasm/src/lib.rs`)
+
+- Tick pipeline mirrors server: `update_mine` + `update_missile`
+  before collision; new collision-pair helpers after; retain culls
+  mines + missiles.
+- 4 new consumers: `consume_enemy_mine_spawn`,
+  `consume_enemy_mine_death`, `consume_enemy_missile_spawn`,
+  `consume_enemy_missile_hit`.
+- 10 new accessors for mines/missiles (count + id + x + y + radius +
+  hp_fraction for mines; count + id + x + y + vx + vy for missiles).
+- `hash_asteroids_and_orbs` (the checksum heartbeat helper) bundles
+  mines + missiles in the exact order the server uses.
+
+### JS client
+
+- **`wire-codec.js`**: WIRE_VERSION → 8. 4 new EventPayload decoders.
+  `readEnemyMineWire` + `readEnemyMissileWire`. `EnemyWire` decoder
+  grew to match the fat shape (~17 new fields). Resync decoder reads
+  `enemy_mines` + `enemy_missiles` Vecs.
+- **`mp-engine.js`**: dispatches the 4 new event kinds to the WASM
+  consumers. Resync handler replays `msg.enemy_mines` +
+  `msg.enemy_missiles`. Also fixes a pre-existing breakage from the
+  Phase 3 discovery refactor: the `wsConnect({url, ...})` call now
+  awaits `discoverDefaultUrl()` first. QA-13 4/4 pass again after
+  this fix.
+- **`mp-renderer.js`**: per-kind enemy hull shapes (polygon /
+  triangle / diamond / circle-cross) with `ENEMY_KIND_COLORS` map
+  matching solo's `enemy-data.js` palette. New `drawEnemyMines`
+  (red disc + warning ring + cross-hatch) and `drawEnemyMissiles`
+  (small elongated red triangle aimed along heading). Z-order:
+  asteroids → orbs → mines → enemies → missiles → bullets →
+  enemy_bullets → ships.
+- **`mp-particles.js`**: 4 new cosmetic spawn functions
+  (`spawnEnemyMineSpawn`, `spawnEnemyMineDeath`,
+  `spawnEnemyMissileSpawn`, `spawnEnemyMissileHit`).
+
+### Build health
+
+- `cargo test --workspace`: **287 sim tests + 43 integration tests
+  = 330 passing**, 0 failures.
+- `cargo build -p rainboids-server`: clean.
+- `npm run wasm:build:dev`: clean.
+- `npm run test:qa --grep QA-13`: **4/4 pass** (Phase 3 deterministic
+  two-tab regression intact after WIRE_VERSION 7 → 8 bump and after
+  fixing the pre-existing discoverDefaultUrl breakage).
+
+### Known follow-ups
+
+- **HUNTER randomized cooldown** (600-2200 ms per solo) deferred —
+  noted as a `TODO` in `process_enemy_fire`. Currently uses fixed
+  90-tick cooldown. Cleanest fix requires a new per-enemy field on
+  `EnemyState` (e.g., `next_fire_cooldown`); landing it alongside
+  the rest of step 5 risked breaking the parallel client-wasm
+  agent's `EnemyWire` understanding mid-dispatch.
+- **`BulletDamagedMine` doesn't emit a wire event** (intentional MVP
+  decision) — bullet-damage to mines syncs only on the next
+  Resync. Cosmetic mid-damage feedback is a Phase 5+ polish item.
+- **Lightning chain (DRIFTER), charged laser (STALKER), 16 enemy
+  bullet movement patterns** all ship as simplified aimed shots
+  for Phase 4 step 5 MVP. Full visual fidelity is Phase 5+ polish.
+- **Missile target-pick tie-breaker** uses slice-index order — the
+  Wave 2F dispatcher MUST pass `TargetView` slices in the same
+  order on server + client (currently both use `player_id`
+  ascending) or homing will diverge.
+
 ## [0.8.0] - 2026-05-18
 
 **Enemy bullet infrastructure + HUNTER aimed-fire.** Phase 3's enemies

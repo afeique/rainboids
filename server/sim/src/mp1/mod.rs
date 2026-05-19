@@ -50,6 +50,24 @@ pub mod shield;
 // Phase 4 enemy-bullet infrastructure + HUNTER aimed-fire.
 pub mod enemy_bullet;
 
+// Phase 4 step 5 — 9 remaining enemy types + 2 new entity kinds (mines,
+// missiles) + shared bullet-pattern helpers. Each module is authored
+// fresh from solo's `js/modules/enemy/{enemy-data,movement,firing}.js`
+// in Wave 1 parallel dispatch; orchestrator wires the dispatchers in
+// Wave 2.
+pub mod enemy_bullet_patterns;
+pub mod enemy_drifter;
+pub mod enemy_guardian;
+pub mod enemy_mine;
+pub mod enemy_missile;
+pub mod enemy_prowler;
+pub mod enemy_sentinel;
+pub mod enemy_stalker;
+pub mod enemy_tangerine;
+pub mod enemy_titan;
+pub mod enemy_wasp;
+pub mod enemy_weaver;
+
 pub use codec::{decode_client, decode_server, encode_client, encode_server};
 pub use input::PlayerInput;
 pub use ship::{tick_phase1, update_ship};

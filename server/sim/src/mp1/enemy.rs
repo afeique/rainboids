@@ -73,11 +73,19 @@ pub struct TargetView {
 /// Deterministic enemy state. Serialized verbatim into snapshot /
 /// checksum payloads. Every field is f64 or a fixed-width int —
 /// no `String`s, no `Vec`s — so wire size is constant per enemy.
+///
+/// **Phase 4 step 5** — this struct unifies all 10 enemy kinds. Each
+/// kind reads/writes only the per-kind movement-state fields relevant
+/// to it; unused fields default to `0.0` / `0`. The union approach
+/// (instead of a tagged enum) keeps the wire shape constant per enemy
+/// and avoids serialization complexity. Memory cost is ~64 extra bytes
+/// per enemy, trivial at `MAX_ENEMIES = 4`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct EnemyState {
     /// Server-assigned enemy id (stable for the enemy's lifetime).
     pub id: u32,
-    /// Kind discriminator (Phase 3: always `KIND_HUNTER`).
+    /// Kind discriminator. See `KIND_HUNTER`, `enemy_wasp::KIND_WASP`,
+    /// etc. for the dense u8 enumeration (0-9 across the 10 kinds).
     pub kind: u8,
     /// X position (px, field-local).
     pub x: f64,
@@ -95,6 +103,13 @@ pub struct EnemyState {
     pub max_hp: f64,
     /// Body radius (px) for collision + visuals.
     pub radius: f64,
+    /// True while alive + in the field; false after destroy.
+    pub active: bool,
+    /// Phase 4 — tick at which this enemy last fired. Per-kind cooldown
+    /// is consulted via the per-module `XXX_FIRE_COOLDOWN_TICKS` const.
+    pub last_fire_tick: u32,
+
+    // ── Arc-orbit fields (HUNTER, STALKER, WEAVER, SENTINEL) ──
     /// Arc-orbit direction: +1 = orbit clockwise, -1 = counterclockwise.
     /// Seeded at spawn; never changes during life.
     pub arc_dir: f64,
@@ -104,13 +119,73 @@ pub struct EnemyState {
     pub arc_omega: f64,
     /// Current arc-orbit phase angle (radians). Advances by arc_omega per tick.
     pub arc_phase: f64,
-    /// True while alive + in the field; false after destroy.
-    pub active: bool,
-    /// Phase 4 — tick at which this enemy last fired an aimed bullet.
-    /// Gates the per-enemy fire cooldown in `mp1_room.rs`. Initialized
-    /// to 0 at spawn; the first fire fires whenever
-    /// `current_tick - last_fire_tick >= ENEMY_FIRE_COOLDOWN_TICKS`.
-    pub last_fire_tick: u32,
+
+    // ── WASP zigzag ──
+    pub zigzag_phase: f64,
+    pub zigzag_amplitude: f64,
+
+    // ── GUARDIAN square-perimeter ──
+    pub square_corner_idx: u8,
+    pub square_dir: f64,
+
+    // ── STALKER charged-laser ──
+    pub charge_progress: u32,
+
+    // ── DRIFTER sinusoidal wave ──
+    pub wave_phase: f64,
+    pub wave_amplitude: f64,
+
+    // ── WEAVER / SENTINEL spinup + orbit ──
+    pub spinup_progress: u32,
+    pub orbit_phase: f64,
+    /// WEAVER spiral fire phase (advances per shot). Also reused for
+    /// SENTINEL sweep_phase to keep the struct compact — kind dictates
+    /// which semantics apply.
+    pub spiral_phase: f64,
+    /// SENTINEL / TITAN sweep oscillation phase (advances per tick).
+    pub sweep_phase: f64,
+
+    // ── TITAN momentum-based boulder movement ──
+    pub momentum_dir: f64,
+    pub momentum_t: f64,
+}
+
+impl Default for EnemyState {
+    /// Zero-initialized enemy. Per-kind `spawn_xxx_from_seed` populates
+    /// the relevant fields; unused fields remain at 0.0/0/false.
+    fn default() -> Self {
+        Self {
+            id: 0,
+            kind: 0,
+            x: 0.0,
+            y: 0.0,
+            vx: 0.0,
+            vy: 0.0,
+            angle: 0.0,
+            hp: 0.0,
+            max_hp: 0.0,
+            radius: 0.0,
+            active: false,
+            last_fire_tick: 0,
+            arc_dir: 0.0,
+            arc_radius: 0.0,
+            arc_omega: 0.0,
+            arc_phase: 0.0,
+            zigzag_phase: 0.0,
+            zigzag_amplitude: 0.0,
+            square_corner_idx: 0,
+            square_dir: 0.0,
+            charge_progress: 0,
+            wave_phase: 0.0,
+            wave_amplitude: 0.0,
+            spinup_progress: 0,
+            orbit_phase: 0.0,
+            spiral_phase: 0.0,
+            sweep_phase: 0.0,
+            momentum_dir: 0.0,
+            momentum_t: 0.0,
+        }
+    }
 }
 
 /// Spawn a HUNTER at the given seed. Both server and WASM client
@@ -183,14 +258,61 @@ pub fn spawn_hunter_from_seed(
         arc_phase,
         active: true,
         last_fire_tick: 0,
+        ..EnemyState::default()
     }
 }
 
-/// Per-tick update for a HUNTER. Picks closest alive ship as
+/// Per-tick enemy update dispatcher — routes to the per-kind module's
+/// `update_xxx_movement` function based on `e.kind`. Phase 4 step 5
+/// added the 9 non-HUNTER kinds; each has its own movement-pattern
+/// module under `mp1::enemy_{wasp,guardian,stalker,...}`.
+pub fn update_enemy(e: &mut EnemyState, targets: &[TargetView], field_w: f64, field_h: f64) {
+    if !e.active {
+        return;
+    }
+    match e.kind {
+        KIND_HUNTER => update_hunter_movement(e, targets, field_w, field_h),
+        k if k == super::enemy_wasp::KIND_WASP => {
+            super::enemy_wasp::update_wasp_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_guardian::KIND_GUARDIAN => {
+            super::enemy_guardian::update_guardian_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_stalker::KIND_STALKER => {
+            super::enemy_stalker::update_stalker_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_drifter::KIND_DRIFTER => {
+            super::enemy_drifter::update_drifter_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_prowler::KIND_PROWLER => {
+            super::enemy_prowler::update_prowler_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_weaver::KIND_WEAVER => {
+            super::enemy_weaver::update_weaver_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_sentinel::KIND_SENTINEL => {
+            super::enemy_sentinel::update_sentinel_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_tangerine::KIND_TANGERINE => {
+            super::enemy_tangerine::update_tangerine_movement(e, targets, field_w, field_h)
+        }
+        k if k == super::enemy_titan::KIND_TITAN => {
+            super::enemy_titan::update_titan_movement(e, targets, field_w, field_h)
+        }
+        _ => {} // unknown kind — no-op
+    }
+}
+
+/// HUNTER-specific per-tick update. Picks closest alive ship as
 /// target, runs arc-orbit chase, clamps to field, bounces off
 /// edges. Mirrors solo's `hunterArcMovement` + `chasePlayer` pattern
 /// from `movement.js` / `ai.js`.
-pub fn update_enemy(e: &mut EnemyState, targets: &[TargetView], field_w: f64, field_h: f64) {
+fn update_hunter_movement(
+    e: &mut EnemyState,
+    targets: &[TargetView],
+    field_w: f64,
+    field_h: f64,
+) {
     if !e.active || e.kind != KIND_HUNTER {
         return;
     }

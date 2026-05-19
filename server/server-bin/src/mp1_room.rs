@@ -35,18 +35,39 @@ use rainboids_sim::mp1::{
     damage::{self, REVIVE_RADIUS},
     drops::{self, OrbState, ORB_KIND_GOLD, ORB_KIND_HEALTH},
     enemy::{self, EnemyState, KIND_HUNTER},
-    enemy_bullet::{self, EnemyBulletState},
+    enemy_bullet,
+    enemy_bullet_patterns,
+    enemy_drifter,
+    enemy_guardian::{self, GUARDIAN_FIRE_COOLDOWN_TICKS, GUARDIAN_SPREAD_COUNT,
+        GUARDIAN_SPREAD_RADIANS},
+    enemy_mine::{self, EnemyMineState},
+    enemy_missile::{self, EnemyMissileState},
+    enemy_prowler::{self, PROWLER_FIRE_COOLDOWN_TICKS},
+    enemy_sentinel::{self, SENTINEL_FIRE_COOLDOWN_TICKS},
+    enemy_stalker::{self, STALKER_FIRE_COOLDOWN_TICKS},
+    enemy_tangerine::{self, TANGERINE_MINE_COOLDOWN_TICKS},
+    enemy_titan::{self, TITAN_BULLET_DAMAGE, TITAN_BULLET_RADIUS},
+    enemy_wasp::{self, WASP_FIRE_COOLDOWN_TICKS},
+    enemy_weaver::{self, WEAVER_FIRE_COOLDOWN_TICKS},
+    enemy_drifter::DRIFTER_FIRE_COOLDOWN_TICKS,
     ship::update_ship,
     state::{
-        RoomState, ShipState, FIELD_HEIGHT, FIELD_WIDTH, MAX_ENEMY_BULLETS, MAX_ORBS, SHIP_SIZE,
+        RoomState, ShipState, FIELD_HEIGHT, FIELD_WIDTH, MAX_ENEMY_BULLETS, MAX_ENEMY_MINES,
+        MAX_ENEMY_MISSILES, MAX_ORBS, SHIP_SIZE,
     },
     trig::{atan2_64, cos64, sin64},
     wave::{self, WaveConfig, WavePhase, WaveSpawnRequest},
-    wave_table::{self, KIND_HUNTER as TABLE_KIND_HUNTER},
+    wave_table::{
+        self, KIND_DRIFTER as TABLE_KIND_DRIFTER, KIND_GUARDIAN as TABLE_KIND_GUARDIAN,
+        KIND_HUNTER as TABLE_KIND_HUNTER, KIND_PROWLER as TABLE_KIND_PROWLER,
+        KIND_SENTINEL as TABLE_KIND_SENTINEL, KIND_STALKER as TABLE_KIND_STALKER,
+        KIND_TANGERINE as TABLE_KIND_TANGERINE, KIND_TITAN as TABLE_KIND_TITAN,
+        KIND_WASP as TABLE_KIND_WASP, KIND_WEAVER as TABLE_KIND_WEAVER,
+    },
     weapon as mp1_weapon,
     wire::{
-        AsteroidWire, BulletWire, ClientMsg, EnemyBulletWire, EnemyWire, EventPayload, OrbWire,
-        ServerMsg, SnapshotShip,
+        AsteroidWire, BulletWire, ClientMsg, EnemyBulletWire, EnemyMineWire, EnemyMissileWire,
+        EnemyWire, EventPayload, OrbWire, ServerMsg, SnapshotShip,
     },
     PlayerInput,
 };
@@ -287,8 +308,36 @@ impl Mp1RoomState {
             enemy_bullet::update_enemy_bullet(b, self.room.field_w, self.room.field_h);
         }
 
-        // 4.7. Enemy fire — HUNTER aims at the nearest live ship and
-        //      fires an aimed bullet on its per-enemy cooldown.
+        // 4.6.a. Enemy mine lifetime tick (mines are stationary).
+        for m in self.room.enemy_mines.iter_mut() {
+            enemy_mine::update_mine(m);
+        }
+        // 4.6.b. Enemy missile homing + drift + lifetime.
+        {
+            let missile_targets: Vec<enemy::TargetView> = self
+                .room
+                .ships
+                .iter()
+                .map(|s| enemy::TargetView {
+                    player_id: s.player_id,
+                    x: s.x,
+                    y: s.y,
+                    alive: s.active && !s.downed,
+                })
+                .collect();
+            for m in self.room.enemy_missiles.iter_mut() {
+                enemy_missile::update_missile(
+                    m,
+                    &missile_targets,
+                    self.room.field_w,
+                    self.room.field_h,
+                );
+            }
+        }
+
+        // 4.7. Enemy fire — per-kind dispatch (HUNTER aimed, GUARDIAN
+        //      spread, WEAVER spiral, SENTINEL/TITAN sweep, PROWLER
+        //      missile, TANGERINE mine drop, etc.).
         self.process_enemy_fire();
 
         // 5. Fire input → bullet spawns. Edge-detect plus cooldown.
@@ -318,6 +367,27 @@ impl Mp1RoomState {
             .next_asteroid_id
             .wrapping_add(added_child_ids);
 
+        // 7.b. Phase 4 step 5 — additional collision pairs for mines
+        //      and missiles. Additive: signature of run_collisions is
+        //      unchanged; these helpers append to the same event vec.
+        let tick_for_collisions = self.room.tick;
+        collision::run_bullet_mine_pairs(
+            &mut self.room.enemy_mines,
+            &mut self.room.bullets,
+            tick_for_collisions,
+            &mut coll_events,
+        );
+        collision::run_ship_mine_pairs(
+            &mut self.room.ships,
+            &mut self.room.enemy_mines,
+            &mut coll_events,
+        );
+        collision::run_ship_missile_pairs(
+            &mut self.room.ships,
+            &mut self.room.enemy_missiles,
+            &mut coll_events,
+        );
+
         // 8. Map collision events → wire events; child asteroids
         //    pushed into room state. Kill events also roll for orb drops.
         let kill_tick = self.room.tick;
@@ -335,70 +405,390 @@ impl Mp1RoomState {
         self.room.bullets.retain(|b| b.active);
         self.room.orbs.retain(|o| o.active);
         self.room.enemy_bullets.retain(|b| b.active);
+        self.room.enemy_mines.retain(|m| !m.dead());
+        self.room.enemy_missiles.retain(|m| m.active);
 
         self.room.tick = self.room.tick.wrapping_add(1);
     }
 
-    /// HUNTER aimed-fire — each alive HUNTER picks the nearest live
-    /// ship, fires an aimed `enemy_bullet::spawn_aimed_default` if its
-    /// per-enemy cooldown has elapsed.
+    /// Per-kind enemy fire dispatch — each alive enemy picks the nearest
+    /// live ship and emits the kind-appropriate projectile(s) when its
+    /// cooldown gate clears. Phase 4 step 5 extends Phase 4 step 1's
+    /// HUNTER-only logic to all 10 kinds plus the new mine + missile
+    /// entity types.
+    ///
+    /// Kind summary:
+    /// - HUNTER, WASP, STALKER, DRIFTER — single aimed bullet
+    /// - GUARDIAN — N-bullet spread (GUARDIAN_SPREAD_COUNT)
+    /// - WEAVER — single spiral-aimed bullet; spiral phase advances per shot
+    /// - SENTINEL — sweeping single bullet; sweep_phase advances every tick
+    ///   (in update_sentinel_movement)
+    /// - TITAN — explosive sweep bullet; rage-aware cooldown + amplitude;
+    ///   sweep_phase advances on each fire via `advance_sweep`
+    /// - PROWLER — homing missile (separate entity)
+    /// - TANGERINE — drops a mine at its position (separate entity);
+    ///   does NOT fire bullets
     fn process_enemy_fire(&mut self) {
         let tick = self.room.tick;
-        // Snapshot ship positions to avoid the borrow-during-iter issue.
-        let targets: Vec<(f64, f64)> = self
+        // Build the TargetView slice once (same shape enemy AI uses).
+        let target_views: Vec<enemy::TargetView> = self
             .room
             .ships
             .iter()
-            .filter(|s| s.active && !s.downed)
-            .map(|s| (s.x, s.y))
+            .map(|s| enemy::TargetView {
+                player_id: s.player_id,
+                x: s.x,
+                y: s.y,
+                alive: s.active && !s.downed,
+            })
             .collect();
-        if targets.is_empty() {
+        // Fast path: if no alive ships, no enemy fires.
+        if !target_views.iter().any(|t| t.alive) {
             return;
         }
 
-        // Collect fire intents without holding enemy borrow during
-        // bullet pushes.
-        let mut spawns: Vec<(u32, f64, f64, f64)> = Vec::new(); // (enemy_id, ox, oy, angle)
+        // Helper: pick closest alive TargetView to (x, y).
+        fn closest<'a>(targets: &'a [enemy::TargetView], x: f64, y: f64) -> Option<&'a enemy::TargetView> {
+            let mut best: Option<(f64, &enemy::TargetView)> = None;
+            for t in targets {
+                if !t.alive {
+                    continue;
+                }
+                let dx = t.x - x;
+                let dy = t.y - y;
+                let d2 = dx * dx + dy * dy;
+                if best.is_none() || d2 < best.unwrap().0 {
+                    best = Some((d2, t));
+                }
+            }
+            best.map(|(_, t)| t)
+        }
+
+        // Per-tick fire intents — accumulated WITHOUT pushing onto the
+        // room vecs (which would invalidate the enemy iter borrow).
+        // Each variant captures the minimum state needed for the spawn pass below.
+        enum FireIntent {
+            Bullet {
+                owner_id: u32,
+                ox: f64,
+                oy: f64,
+                angle: f64,
+            },
+            Spread {
+                owner_id: u32,
+                ox: f64,
+                oy: f64,
+                base_angle: f64,
+                count: u8,
+                spread: f64,
+            },
+            Explosive {
+                owner_id: u32,
+                ox: f64,
+                oy: f64,
+                angle: f64,
+                damage: f64,
+                radius: f64,
+            },
+            Missile {
+                owner_id: u32,
+                ox: f64,
+                oy: f64,
+                angle: f64,
+            },
+            Mine {
+                owner_id: u32,
+                ox: f64,
+                oy: f64,
+            },
+        }
+        let mut intents: Vec<FireIntent> = Vec::new();
+
         for e in self.room.enemies.iter_mut() {
             if !e.active || e.hp <= 0.0 {
                 continue;
             }
-            if tick.wrapping_sub(e.last_fire_tick) < ENEMY_FIRE_COOLDOWN_TICKS {
+            // Per-kind cooldown const lookup. TITAN's cooldown is rage-
+            // aware so we read it from its helper.
+            let cooldown = match e.kind {
+                KIND_HUNTER => ENEMY_FIRE_COOLDOWN_TICKS,
+                k if k == enemy_wasp::KIND_WASP => WASP_FIRE_COOLDOWN_TICKS,
+                k if k == enemy_guardian::KIND_GUARDIAN => GUARDIAN_FIRE_COOLDOWN_TICKS,
+                k if k == enemy_stalker::KIND_STALKER => STALKER_FIRE_COOLDOWN_TICKS,
+                k if k == enemy_drifter::KIND_DRIFTER => DRIFTER_FIRE_COOLDOWN_TICKS,
+                k if k == enemy_prowler::KIND_PROWLER => PROWLER_FIRE_COOLDOWN_TICKS,
+                k if k == enemy_weaver::KIND_WEAVER => WEAVER_FIRE_COOLDOWN_TICKS,
+                k if k == enemy_sentinel::KIND_SENTINEL => SENTINEL_FIRE_COOLDOWN_TICKS,
+                k if k == enemy_tangerine::KIND_TANGERINE => TANGERINE_MINE_COOLDOWN_TICKS,
+                k if k == enemy_titan::KIND_TITAN => enemy_titan::current_fire_cooldown(e),
+                _ => ENEMY_FIRE_COOLDOWN_TICKS,
+            };
+            if tick.wrapping_sub(e.last_fire_tick) < cooldown {
                 continue;
             }
-            // Nearest target.
-            let mut best_d2 = f64::INFINITY;
-            let mut best_t = targets[0];
-            for &(tx, ty) in &targets {
-                let dx = tx - e.x;
-                let dy = ty - e.y;
-                let d2 = dx * dx + dy * dy;
-                if d2 < best_d2 {
-                    best_d2 = d2;
-                    best_t = (tx, ty);
+            // Pick the closest alive target.
+            let target = match closest(&target_views, e.x, e.y) {
+                Some(t) => *t,
+                None => continue,
+            };
+
+            match e.kind {
+                KIND_HUNTER => {
+                    // TODO(Phase 4 step 5 follow-up): randomize HUNTER
+                    // cooldown 36-132 ticks per solo (600-2200 ms). Needs a
+                    // per-enemy next-fire-tick field or extending the
+                    // last_fire_tick gate to read a stored jitter — both
+                    // require EnemyState surgery, deferred to a follow-up
+                    // patch to keep this dispatch additive.
+                    let angle = atan2_64(target.y - e.y, target.x - e.x);
+                    e.last_fire_tick = tick;
+                    intents.push(FireIntent::Bullet {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        angle,
+                    });
                 }
+                k if k == enemy_wasp::KIND_WASP => {
+                    let angle = enemy_wasp::aim_wasp(e, &target);
+                    e.last_fire_tick = tick;
+                    intents.push(FireIntent::Bullet {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        angle,
+                    });
+                }
+                k if k == enemy_stalker::KIND_STALKER => {
+                    // STALKER needs charge_progress to have reached the
+                    // windup threshold in addition to the cooldown gate.
+                    if !enemy_stalker::is_charge_complete(e) {
+                        continue;
+                    }
+                    let angle = enemy_stalker::aim_stalker(e, &target);
+                    e.last_fire_tick = tick;
+                    enemy_stalker::reset_charge(e);
+                    intents.push(FireIntent::Bullet {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        angle,
+                    });
+                }
+                k if k == enemy_drifter::KIND_DRIFTER => {
+                    let angle = enemy_drifter::aim_drifter(e, &target);
+                    e.last_fire_tick = tick;
+                    intents.push(FireIntent::Bullet {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        angle,
+                    });
+                }
+                k if k == enemy_guardian::KIND_GUARDIAN => {
+                    let angle = enemy_guardian::aim_guardian(e, &target);
+                    e.last_fire_tick = tick;
+                    intents.push(FireIntent::Spread {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        base_angle: angle,
+                        count: GUARDIAN_SPREAD_COUNT,
+                        spread: GUARDIAN_SPREAD_RADIANS,
+                    });
+                }
+                k if k == enemy_weaver::KIND_WEAVER => {
+                    let base_angle = enemy_weaver::aim_weaver(e, &target);
+                    let total_angle = base_angle + e.spiral_phase;
+                    e.last_fire_tick = tick;
+                    enemy_weaver::advance_spiral_phase(e);
+                    intents.push(FireIntent::Bullet {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        angle: total_angle,
+                    });
+                }
+                k if k == enemy_sentinel::KIND_SENTINEL => {
+                    let base_angle = enemy_sentinel::aim_sentinel(e, &target);
+                    let total_angle = base_angle + enemy_sentinel::current_sweep_offset(e);
+                    e.last_fire_tick = tick;
+                    intents.push(FireIntent::Bullet {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        angle: total_angle,
+                    });
+                }
+                k if k == enemy_titan::KIND_TITAN => {
+                    let raging = enemy_titan::is_raging(e);
+                    let base_angle = enemy_titan::aim_titan(e, &target);
+                    let total_angle = base_angle + enemy_titan::current_sweep_offset(e, raging);
+                    e.last_fire_tick = tick;
+                    enemy_titan::advance_sweep(e);
+                    intents.push(FireIntent::Explosive {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        angle: total_angle,
+                        damage: TITAN_BULLET_DAMAGE,
+                        radius: TITAN_BULLET_RADIUS,
+                    });
+                }
+                k if k == enemy_prowler::KIND_PROWLER => {
+                    let angle = enemy_prowler::aim_prowler(e, &target);
+                    e.last_fire_tick = tick;
+                    intents.push(FireIntent::Missile {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                        angle,
+                    });
+                }
+                k if k == enemy_tangerine::KIND_TANGERINE => {
+                    // TANGERINE drops a mine at its current position
+                    // instead of firing a projectile.
+                    e.last_fire_tick = tick;
+                    intents.push(FireIntent::Mine {
+                        owner_id: e.id,
+                        ox: e.x,
+                        oy: e.y,
+                    });
+                }
+                _ => {}
             }
-            let angle = atan2_64(best_t.1 - e.y, best_t.0 - e.x);
-            e.last_fire_tick = tick;
-            spawns.push((e.id, e.x, e.y, angle));
         }
 
-        for (owner_id, ox, oy, angle) in spawns {
-            if self.room.enemy_bullets.len() >= MAX_ENEMY_BULLETS {
-                break;
+        // Spawn pass — materialize each intent + emit the wire event.
+        for intent in intents {
+            match intent {
+                FireIntent::Bullet {
+                    owner_id,
+                    ox,
+                    oy,
+                    angle,
+                } => {
+                    if self.room.enemy_bullets.len() >= MAX_ENEMY_BULLETS {
+                        continue;
+                    }
+                    let id = self.room.next_enemy_bullet_id;
+                    self.room.next_enemy_bullet_id =
+                        self.room.next_enemy_bullet_id.wrapping_add(1);
+                    let b = enemy_bullet::spawn_aimed_default(id, owner_id, ox, oy, angle);
+                    self.room.enemy_bullets.push(b);
+                    self.pending_events.push(EventPayload::EnemyBulletSpawn {
+                        bullet_id: id,
+                        owner_enemy_id: owner_id,
+                        origin_x: ox,
+                        origin_y: oy,
+                        angle,
+                        spawn_tick: tick,
+                    });
+                }
+                FireIntent::Spread {
+                    owner_id,
+                    ox,
+                    oy,
+                    base_angle,
+                    count,
+                    spread,
+                } => {
+                    let id_start = self.room.next_enemy_bullet_id;
+                    let bullets = enemy_bullet_patterns::spawn_spread(
+                        id_start, owner_id, ox, oy, base_angle, count, spread,
+                    );
+                    for b in bullets {
+                        if self.room.enemy_bullets.len() >= MAX_ENEMY_BULLETS {
+                            break;
+                        }
+                        let bid = b.id;
+                        let angle = atan2_64(b.vy, b.vx);
+                        self.room.enemy_bullets.push(b);
+                        self.room.next_enemy_bullet_id =
+                            self.room.next_enemy_bullet_id.wrapping_add(1);
+                        self.pending_events.push(EventPayload::EnemyBulletSpawn {
+                            bullet_id: bid,
+                            owner_enemy_id: owner_id,
+                            origin_x: ox,
+                            origin_y: oy,
+                            angle,
+                            spawn_tick: tick,
+                        });
+                    }
+                }
+                FireIntent::Explosive {
+                    owner_id,
+                    ox,
+                    oy,
+                    angle,
+                    damage,
+                    radius,
+                } => {
+                    if self.room.enemy_bullets.len() >= MAX_ENEMY_BULLETS {
+                        continue;
+                    }
+                    let id = self.room.next_enemy_bullet_id;
+                    self.room.next_enemy_bullet_id =
+                        self.room.next_enemy_bullet_id.wrapping_add(1);
+                    let b = enemy_bullet_patterns::spawn_explosive(
+                        id, owner_id, ox, oy, angle, damage, radius,
+                    );
+                    self.room.enemy_bullets.push(b);
+                    self.pending_events.push(EventPayload::EnemyBulletSpawn {
+                        bullet_id: id,
+                        owner_enemy_id: owner_id,
+                        origin_x: ox,
+                        origin_y: oy,
+                        angle,
+                        spawn_tick: tick,
+                    });
+                }
+                FireIntent::Missile {
+                    owner_id,
+                    ox,
+                    oy,
+                    angle,
+                } => {
+                    if self.room.enemy_missiles.len() >= MAX_ENEMY_MISSILES {
+                        continue;
+                    }
+                    let id = self.room.next_enemy_missile_id;
+                    self.room.next_enemy_missile_id =
+                        self.room.next_enemy_missile_id.wrapping_add(1);
+                    let m = enemy_missile::spawn_default(id, owner_id, ox, oy, angle);
+                    self.room.enemy_missiles.push(m);
+                    self.pending_events.push(EventPayload::EnemyMissileSpawn {
+                        missile_id: id,
+                        owner_enemy_id: owner_id,
+                        origin_x: ox,
+                        origin_y: oy,
+                        initial_angle: angle,
+                        spawn_tick: tick,
+                    });
+                }
+                FireIntent::Mine {
+                    owner_id,
+                    ox,
+                    oy,
+                } => {
+                    if self.room.enemy_mines.len() >= MAX_ENEMY_MINES {
+                        continue;
+                    }
+                    let id = self.room.next_enemy_mine_id;
+                    self.room.next_enemy_mine_id = self.room.next_enemy_mine_id.wrapping_add(1);
+                    let sub_seed = self.room.rng.sub_seed();
+                    let m = enemy_mine::spawn_from_seed(id, owner_id, ox, oy, sub_seed);
+                    self.room.enemy_mines.push(m);
+                    self.pending_events.push(EventPayload::EnemyMineSpawn {
+                        mine_id: id,
+                        owner_enemy_id: owner_id,
+                        x: ox,
+                        y: oy,
+                        sub_seed,
+                        spawn_tick: tick,
+                    });
+                }
             }
-            let id = self.room.next_enemy_bullet_id;
-            self.room.next_enemy_bullet_id = self.room.next_enemy_bullet_id.wrapping_add(1);
-            let b = enemy_bullet::spawn_aimed_default(id, owner_id, ox, oy, angle);
-            self.room.enemy_bullets.push(b);
-            self.pending_events.push(EventPayload::EnemyBulletSpawn {
-                bullet_id: id,
-                owner_enemy_id: owner_id,
-                origin_x: ox,
-                origin_y: oy,
-                angle,
-                spawn_tick: tick,
-            });
         }
     }
 
@@ -460,9 +850,8 @@ impl Mp1RoomState {
     }
 
     /// Resolve a wave spawn request into an actual EnemyState. Phase 4
-    /// step 1 only implements HUNTER; the other 9 enemy kinds in the
-    /// wave table fall back to HUNTER with a debug log until Phase 4
-    /// step 5 ports them.
+    /// step 5 dispatches to each kind's `spawn_xxx_from_seed`; unknown
+    /// kinds fall back to HUNTER with a warn log so the wave still plays.
     fn spawn_enemy_from_request(&mut self, req: WaveSpawnRequest) {
         // MAX_ENEMIES soft cap: drop excess spawns (matches solo's
         // pool soft-cap behavior).
@@ -472,26 +861,35 @@ impl Mp1RoomState {
         let id = self.room.next_enemy_id;
         self.room.next_enemy_id = self.room.next_enemy_id.wrapping_add(1);
         let sub_seed = self.room.rng.sub_seed();
+        let fw = self.room.field_w;
+        let fh = self.room.field_h;
 
-        // Phase 4 step 1: only HUNTER has a spawn function. Substitute
-        // HUNTER for unimplemented kinds; Phase 4 step 5 fills in the
-        // others.
-        if req.kind_u8 != TABLE_KIND_HUNTER {
-            tracing::debug!(
-                requested_kind = req.kind_u8,
-                "mp1: wave requested non-HUNTER kind, substituting HUNTER (Phase 4 step 5 will implement)"
-            );
-        }
-        let e = enemy::spawn_hunter_from_seed(
-            id,
-            sub_seed,
-            self.room.field_w,
-            self.room.field_h,
-        );
+        let e = match req.kind_u8 {
+            TABLE_KIND_HUNTER => enemy::spawn_hunter_from_seed(id, sub_seed, fw, fh),
+            TABLE_KIND_WASP => enemy_wasp::spawn_wasp_from_seed(id, sub_seed, fw, fh),
+            TABLE_KIND_GUARDIAN => enemy_guardian::spawn_guardian_from_seed(id, sub_seed, fw, fh),
+            TABLE_KIND_STALKER => enemy_stalker::spawn_stalker_from_seed(id, sub_seed, fw, fh),
+            TABLE_KIND_DRIFTER => enemy_drifter::spawn_drifter_from_seed(id, sub_seed, fw, fh),
+            TABLE_KIND_PROWLER => enemy_prowler::spawn_prowler_from_seed(id, sub_seed, fw, fh),
+            TABLE_KIND_WEAVER => enemy_weaver::spawn_weaver_from_seed(id, sub_seed, fw, fh),
+            TABLE_KIND_SENTINEL => enemy_sentinel::spawn_sentinel_from_seed(id, sub_seed, fw, fh),
+            TABLE_KIND_TANGERINE => {
+                enemy_tangerine::spawn_tangerine_from_seed(id, sub_seed, fw, fh)
+            }
+            TABLE_KIND_TITAN => enemy_titan::spawn_titan_from_seed(id, sub_seed, fw, fh),
+            other => {
+                tracing::warn!(
+                    requested_kind = other,
+                    "mp1: unknown enemy kind, substituting HUNTER"
+                );
+                enemy::spawn_hunter_from_seed(id, sub_seed, fw, fh)
+            }
+        };
+        let kind = e.kind;
         self.room.enemies.push(e);
         self.pending_events.push(EventPayload::EnemySpawn {
             enemy_id: id,
-            kind: KIND_HUNTER,
+            kind,
             rng_subseed: sub_seed,
         });
     }
@@ -760,6 +1158,39 @@ impl Mp1RoomState {
                     y,
                 });
             }
+            // Phase 4 step 5 — bullet × mine: HP delta lands in the
+            // next Resync if the client cares; we don't currently emit
+            // a per-hit wire event for mine damage cosmetics. The
+            // MineDestroyed event below covers the kill case.
+            CollisionEvent::BulletDamagedMine { .. } => {}
+            CollisionEvent::MineDestroyed {
+                mine_id,
+                by_bullet_id,
+                x,
+                y,
+            } => {
+                self.pending_events.push(EventPayload::EnemyMineDeath {
+                    mine_id,
+                    x,
+                    y,
+                    killed_by_bullet_id: by_bullet_id,
+                    kill_tick,
+                });
+            }
+            CollisionEvent::ShipHitByEnemyMissile {
+                missile_id,
+                player_id,
+                x,
+                y,
+            } => {
+                self.pending_events.push(EventPayload::EnemyMissileHit {
+                    missile_id,
+                    player_id,
+                    hit_tick: kill_tick,
+                    x,
+                    y,
+                });
+            }
         }
     }
 
@@ -873,7 +1304,12 @@ impl Mp1RoomState {
             tick: self.room.tick,
             ships_hash: hash_ships(&self.room.ships),
             enemies_hash: hash_enemies(&self.room.enemies),
-            asteroids_hash: hash_asteroids_and_orbs(&self.room.asteroids, &self.room.orbs),
+            asteroids_hash: hash_asteroids_and_orbs(
+                &self.room.asteroids,
+                &self.room.orbs,
+                &self.room.enemy_mines,
+                &self.room.enemy_missiles,
+            ),
             bullets_hash: hash_bullets(&self.room.bullets),
         }
     }
@@ -925,10 +1361,24 @@ impl Mp1RoomState {
                     hp: e.hp,
                     max_hp: e.max_hp,
                     radius: e.radius,
+                    last_fire_tick: e.last_fire_tick,
                     arc_dir: e.arc_dir,
                     arc_radius: e.arc_radius,
                     arc_omega: e.arc_omega,
                     arc_phase: e.arc_phase,
+                    zigzag_phase: e.zigzag_phase,
+                    zigzag_amplitude: e.zigzag_amplitude,
+                    square_corner_idx: e.square_corner_idx,
+                    square_dir: e.square_dir,
+                    charge_progress: e.charge_progress,
+                    wave_phase: e.wave_phase,
+                    wave_amplitude: e.wave_amplitude,
+                    spinup_progress: e.spinup_progress,
+                    orbit_phase: e.orbit_phase,
+                    spiral_phase: e.spiral_phase,
+                    sweep_phase: e.sweep_phase,
+                    momentum_dir: e.momentum_dir,
+                    momentum_t: e.momentum_t,
                 })
                 .collect(),
             asteroids: self
@@ -997,6 +1447,38 @@ impl Mp1RoomState {
                     damage: b.damage,
                     radius: b.radius,
                     life_remaining: b.life_remaining,
+                })
+                .collect(),
+            enemy_mines: self
+                .room
+                .enemy_mines
+                .iter()
+                .map(|m| EnemyMineWire {
+                    id: m.id,
+                    owner_enemy_id: m.owner_enemy_id,
+                    x: m.x,
+                    y: m.y,
+                    hp: m.hp,
+                    max_hp: m.max_hp,
+                    radius: m.radius,
+                    contact_damage: m.contact_damage,
+                    life_remaining: m.life_remaining,
+                })
+                .collect(),
+            enemy_missiles: self
+                .room
+                .enemy_missiles
+                .iter()
+                .map(|m| EnemyMissileWire {
+                    id: m.id,
+                    owner_enemy_id: m.owner_enemy_id,
+                    x: m.x,
+                    y: m.y,
+                    vx: m.vx,
+                    vy: m.vy,
+                    damage: m.damage,
+                    radius: m.radius,
+                    life_remaining: m.life_remaining,
                 })
                 .collect(),
         }
@@ -1121,11 +1603,16 @@ fn hash_enemies(enemies: &[EnemyState]) -> u64 {
     h.finish()
 }
 
-fn hash_asteroids_and_orbs(asteroids: &[AsteroidState], orbs: &[OrbState]) -> u64 {
+fn hash_asteroids_and_orbs(
+    asteroids: &[AsteroidState],
+    orbs: &[OrbState],
+    mines: &[EnemyMineState],
+    missiles: &[EnemyMissileState],
+) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     // Asteroids first — preserves the Phase 3 hash domain for the
-    // asteroid portion. Orbs append, so an asteroid-only sim still
-    // produces the same hash as Phase 3.
+    // asteroid portion. Orbs / mines / missiles append in stable order
+    // so the same sim state always hashes to the same u64.
     for a in asteroids {
         a.id.hash(&mut h);
         hash_f64(&mut h, a.x);
@@ -1141,6 +1628,25 @@ fn hash_asteroids_and_orbs(asteroids: &[AsteroidState], orbs: &[OrbState]) -> u6
         hash_f64(&mut h, o.vx);
         hash_f64(&mut h, o.vy);
         o.life_ticks.hash(&mut h);
+    }
+    // Mines + missiles, WIRE_VERSION 8 — field order MUST mirror the
+    // client's `hash_asteroids_and_orbs` in `client-wasm/src/lib.rs`
+    // (mine: id, x, y, hp, life_remaining; missile: id, x, y, vx, vy,
+    // life_remaining) or the checksum will mismatch every heartbeat.
+    for m in mines {
+        m.id.hash(&mut h);
+        hash_f64(&mut h, m.x);
+        hash_f64(&mut h, m.y);
+        hash_f64(&mut h, m.hp);
+        m.life_remaining.hash(&mut h);
+    }
+    for m in missiles {
+        m.id.hash(&mut h);
+        hash_f64(&mut h, m.x);
+        hash_f64(&mut h, m.y);
+        hash_f64(&mut h, m.vx);
+        hash_f64(&mut h, m.vy);
+        m.life_remaining.hash(&mut h);
     }
     h.finish()
 }

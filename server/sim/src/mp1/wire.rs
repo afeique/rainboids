@@ -179,6 +179,10 @@ pub enum ServerMsg {
         wave_phase_started_tick: u32,
         /// Added in WIRE_VERSION 7 (Phase 4 enemy-bullet infra).
         enemy_bullets: Vec<EnemyBulletWire>,
+        /// Added in WIRE_VERSION 8 (Phase 4 step 5 — mines).
+        enemy_mines: Vec<EnemyMineWire>,
+        /// Added in WIRE_VERSION 8 (Phase 4 step 5 — missiles).
+        enemy_missiles: Vec<EnemyMissileWire>,
     },
 }
 
@@ -240,6 +244,13 @@ pub enum ClientMsg {
 /// rejects Hello with a mismatched version (sends Error variant and
 /// closes the WS).
 ///
+/// - 8: Phase 4 step 5 — 9 remaining enemy types + mines + missiles.
+///   `EnemyWire` grows with per-kind movement-state fields
+///   (zigzag/square/charge/wave/spinup/orbit/spiral/sweep/momentum)
+///   so Resync can rebuild any kind. Adds `EventPayload::{
+///   EnemyMineSpawn, EnemyMineDeath, EnemyMissileSpawn, EnemyMissileHit}`,
+///   `EnemyMineWire` + `EnemyMissileWire`, and the matching Vec fields
+///   on `Resync`.
 /// - 7: Phase 4 — enemy-bullet infrastructure + HUNTER aimed-fire.
 ///   Adds `EventPayload::{EnemyBulletSpawn, EnemyBulletHit}`,
 ///   `EnemyBulletWire` for Resync, and `enemy_bullets` on `Resync`.
@@ -259,7 +270,7 @@ pub enum ClientMsg {
 /// - 2: Phase 3 — adds Event / StateChecksum / Resync; client may
 ///   send Resync in response to a checksum miss. Snapshot still
 ///   ship-only (deterministic kinds reconstructed client-side).
-pub const WIRE_VERSION: u32 = 7;
+pub const WIRE_VERSION: u32 = 8;
 
 // ── Phase 3 — EventPayload variants ──
 
@@ -436,6 +447,51 @@ pub enum EventPayload {
         x: f64,
         y: f64,
     },
+
+    // ── Phase 4 step 5 — mines + missiles ──
+
+    /// TANGERINE dropped a mine. Client reconstructs via
+    /// `enemy_mine::spawn_from_seed(id, owner, x, y, sub_seed)`.
+    EnemyMineSpawn {
+        mine_id: u32,
+        owner_enemy_id: u32,
+        x: f64,
+        y: f64,
+        sub_seed: u64,
+        spawn_tick: u32,
+    },
+
+    /// A mine was destroyed (by bullet damage, by ship contact, or by
+    /// lifetime expiry). Client marks inactive + plays explosion cosmetic.
+    EnemyMineDeath {
+        mine_id: u32,
+        x: f64,
+        y: f64,
+        killed_by_bullet_id: u32, // 0 if not killed by a bullet
+        kill_tick: u32,
+    },
+
+    /// PROWLER fired a homing missile. Client reconstructs via
+    /// `enemy_missile::spawn_default(id, owner, origin_x, origin_y,
+    /// initial_angle)`.
+    EnemyMissileSpawn {
+        missile_id: u32,
+        owner_enemy_id: u32,
+        origin_x: f64,
+        origin_y: f64,
+        initial_angle: f64,
+        spawn_tick: u32,
+    },
+
+    /// Authoritative missile hit on a ship. Client snaps missile to
+    /// inactive + plays impact cosmetic.
+    EnemyMissileHit {
+        missile_id: u32,
+        player_id: u32,
+        hit_tick: u32,
+        x: f64,
+        y: f64,
+    },
 }
 
 // ── Phase 3 — Resync wire records ──
@@ -445,7 +501,12 @@ pub enum EventPayload {
 // needed to bootstrap the deterministic sim's state mirror. Sent
 // only in response to `ClientMsg::Resync`.
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// Full per-enemy state snapshot for Resync. Carries the union of
+/// per-kind movement-state fields so the client can rebuild any of the
+/// 10 enemy kinds (HUNTER/GUARDIAN/WASP/STALKER/DRIFTER/TANGERINE/
+/// WEAVER/SENTINEL/PROWLER/TITAN). WIRE_VERSION 8 — fields beyond the
+/// arc_* group added when Phase 4 step 5 landed.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct EnemyWire {
     pub id: u32,
     pub kind: u8,
@@ -457,10 +518,59 @@ pub struct EnemyWire {
     pub hp: f64,
     pub max_hp: f64,
     pub radius: f64,
+    pub last_fire_tick: u32,
+    // Arc-orbit (HUNTER, STALKER, WEAVER, SENTINEL)
     pub arc_dir: f64,
     pub arc_radius: f64,
     pub arc_omega: f64,
     pub arc_phase: f64,
+    // WASP zigzag
+    pub zigzag_phase: f64,
+    pub zigzag_amplitude: f64,
+    // GUARDIAN square
+    pub square_corner_idx: u8,
+    pub square_dir: f64,
+    // STALKER charge
+    pub charge_progress: u32,
+    // DRIFTER wave
+    pub wave_phase: f64,
+    pub wave_amplitude: f64,
+    // WEAVER / SENTINEL spinup + orbit
+    pub spinup_progress: u32,
+    pub orbit_phase: f64,
+    pub spiral_phase: f64,
+    pub sweep_phase: f64,
+    // TITAN momentum
+    pub momentum_dir: f64,
+    pub momentum_t: f64,
+}
+
+/// Resync record for one enemy mine. WIRE_VERSION 8 — Phase 4 step 5.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct EnemyMineWire {
+    pub id: u32,
+    pub owner_enemy_id: u32,
+    pub x: f64,
+    pub y: f64,
+    pub hp: f64,
+    pub max_hp: f64,
+    pub radius: f64,
+    pub contact_damage: f64,
+    pub life_remaining: u32,
+}
+
+/// Resync record for one enemy missile. WIRE_VERSION 8 — Phase 4 step 5.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct EnemyMissileWire {
+    pub id: u32,
+    pub owner_enemy_id: u32,
+    pub x: f64,
+    pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub damage: f64,
+    pub radius: f64,
+    pub life_remaining: u32,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

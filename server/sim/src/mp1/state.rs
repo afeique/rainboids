@@ -144,6 +144,8 @@ use super::bullet::BulletState;
 use super::drops::OrbState;
 use super::enemy::EnemyState;
 use super::enemy_bullet::EnemyBulletState;
+use super::enemy_mine::EnemyMineState;
+use super::enemy_missile::EnemyMissileState;
 use super::rng_ctx::RngCtx;
 use super::wave::WaveState;
 
@@ -160,6 +162,13 @@ pub const MAX_ORBS:      usize = 32;
 /// Phase 4 — enemy-bullet cap. Generous since enemies fire on a
 /// 90+ tick cooldown; field rarely exceeds a few dozen in flight.
 pub const MAX_ENEMY_BULLETS: usize = 128;
+/// Phase 4 step 5 — enemy-mine cap. TANGERINE drops mines on a 90-tick
+/// cooldown; mines live ~600 ticks; cap matches worst-case 4 TANGERINEs
+/// dropping faster than they can be cleared.
+pub const MAX_ENEMY_MINES: usize = 32;
+/// Phase 4 step 5 — enemy-missile cap. PROWLER fires missiles on a
+/// 240-tick cooldown; missiles live ~300 ticks; cap is generous.
+pub const MAX_ENEMY_MISSILES: usize = 32;
 
 /// Authoritative multi-entity room state. One instance per room on
 /// the server; one instance per client when the WASM build adopts
@@ -187,6 +196,11 @@ pub struct RoomState {
     pub orbs: Vec<OrbState>,
     /// Phase 4 — hostile projectiles fired by enemies.
     pub enemy_bullets: Vec<EnemyBulletState>,
+    /// Phase 4 step 5 — persistent mines dropped by TANGERINE enemies.
+    /// Bullet-targetable, contact-damage to ships.
+    pub enemy_mines: Vec<EnemyMineState>,
+    /// Phase 4 step 5 — homing missiles fired by PROWLER enemies.
+    pub enemy_missiles: Vec<EnemyMissileState>,
 
     /// Monotonic id counters — both server + client advance these
     /// identically by consuming events in order.
@@ -195,6 +209,8 @@ pub struct RoomState {
     pub next_bullet_id: u32,
     pub next_orb_id: u32,
     pub next_enemy_bullet_id: u32,
+    pub next_enemy_mine_id: u32,
+    pub next_enemy_missile_id: u32,
 
     /// Phase 4 — wave cadence state machine. Replaces the Phase 3
     /// fixed-period `enemy_spawn_at_tick` cadence with structured
@@ -222,11 +238,15 @@ impl RoomState {
             bullets: Vec::with_capacity(MAX_BULLETS),
             orbs: Vec::with_capacity(MAX_ORBS),
             enemy_bullets: Vec::with_capacity(MAX_ENEMY_BULLETS),
+            enemy_mines: Vec::with_capacity(MAX_ENEMY_MINES),
+            enemy_missiles: Vec::with_capacity(MAX_ENEMY_MISSILES),
             next_enemy_id: 1,
             next_asteroid_id: 1,
             next_bullet_id: 1,
             next_orb_id: 1,
             next_enemy_bullet_id: 1,
+            next_enemy_mine_id: 1,
+            next_enemy_missile_id: 1,
             wave: WaveState::new(),
             rng: RngCtx::from_seed(seed),
         }
