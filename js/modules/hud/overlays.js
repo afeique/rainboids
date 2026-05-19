@@ -1528,7 +1528,9 @@ export function drawStreakIndicator() {
     const tierColor = currentTier ? currentTier.color : '#7FE7FF';
 
     const x = this.width / 2;
-    const y = this.height - 180;
+    // 6.22.1 — moved 10 px up so the streak block doesn't overlap the
+    // bottom action-button bar (was -180, now -190).
+    const y = this.height - 190;
     const pulse = buffActive ? 0.85 + Math.sin(Date.now() * 0.015) * 0.15 : 1;
 
     // 5.74.36 — fade the streak block to ~25% opacity when the player

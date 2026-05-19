@@ -177,15 +177,12 @@ export function drawPickupToast() {
     const _mob = isMobile();
     const _port = _mob && isPortrait();
 
-    // Sizing — small bottom-anchored chip on portrait, slightly larger
-    // banner on landscape / desktop.
+    // Sizing — small chip on portrait, slightly larger on landscape / desktop.
     const titleFS = _port ? 14 : (_mob ? 16 : 18);
     const subFS   = _port ? 9  : (_mob ? 10 : 12);
     const padX    = _port ? 14 : 18;
     const padY    = _port ? 8  : 10;
     const gap     = _port ? 4  : 6;
-    // Position above the bottom button bar (HUD bar is 64+22+~10 ≈ 96 px tall).
-    const bottomY = canvasH - 110;
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -197,9 +194,13 @@ export function drawPickupToast() {
     const subW = t.subtitle ? ctx.measureText(t.subtitle).width : 0;
     const blockW = Math.max(titleW, subW) + padX * 2;
     const blockH = titleFS + (t.subtitle ? gap + subFS : 0) + padY * 2;
-    const cx = canvasW / 2;
-    const x0 = cx - blockW / 2;
-    const y0 = bottomY - blockH / 2;
+    // 6.22.1 — Moved to LEFT-CENTER (was bottom-center). Bottom-center
+    // overlapped the kill-streak block and the HUD action-button bar.
+    // Left-center keeps the pickup feedback out of the streak/HUD path
+    // while still being visible at a glance.
+    const x0 = 24;                            // 24 px gutter from left edge
+    const y0 = canvasH / 2 - blockH / 2;       // vertically centered
+    const cx = x0 + blockW / 2;                // center for the title/subtitle text
 
     // Background pill — accent-tinted with a darker fill.
     const accent = t.accentColor || '#33ddff';

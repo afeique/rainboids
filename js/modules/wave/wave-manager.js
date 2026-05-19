@@ -345,12 +345,16 @@ export function showWaveComplete() {
                 : ` · MISSION —`;
     const title = isStage
         ? `STAGE ${getStage(cleared)} CLEAR!`
-        : `WAVE ${getStageLabel(cleared)} CLEAR`;
+        : `WAVE CLEAR`;
     const subtitle = isStage
         ? `+${r.bonusCoins}G  ·  POWERUP INCOMING${missionTag}`
         : `+${r.bonusCoins}G${missionTag}`;
+    // 6.22.1 — Mid-stage WAVE CLEAR banner suppressed (set active:false)
+    // per user request — banner felt redundant on every sub-wave clear.
+    // Stage clear banners (1-3, 2-3, 3-3) still fire below. To restore
+    // mid-stage banners, set `active: true`.
     this.waveMessage = {
-        active: true,
+        active: isStage, // mid-stage WAVE CLEAR suppressed; stage clears still display
         startTime: Date.now(),
         duration: 2400,
         title,

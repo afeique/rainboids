@@ -11,6 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.22.1] - 2026-05-19
+
+### Changed — seeker mines now home at infinite range
+
+`MINE_SIGHT` cap removed in `player/skills.js`. Previously player mines
+that drifted past 360 px from any enemy/asteroid would park themselves
+in an empty corner of the map and never move. With the cap removed they
+always lock onto the nearest target regardless of distance; the
+`MINE_MAX_SPEED` cap (1.4 px/frame) still keeps them creeping rather
+than zooming.
+
+### Changed — kill-streak block moved 10 px up
+
+`y = this.height - 180` → `this.height - 190` in `hud/overlays.js`
+`drawStreakIndicator`. Previously overlapped the bottom action-button bar.
+
+### Changed — pickup toast moved to left-center
+
+`drawPickupToast` in `hud/status.js` now anchors the pill at `(24, canvasH/2)`
+left-center. Previously bottom-centered which stacked it under the
+kill-streak block + HUD action-button bar in the same vertical column.
+
+### Changed — mid-stage WAVE CLEAR banner suppressed
+
+`wave-manager.js` `showWaveComplete` no longer displays the per-wave banner
+on mid-stage clears (1-1, 1-2, 2-1, 2-2). Title renamed to plain
+"WAVE CLEAR" (was "WAVE 1-1 CLEAR" etc.). Stage-clear banners (1-3, 2-3,
+3-3) still fire. To restore mid-stage banners, set `active: true` in the
+`waveMessage` assignment.
+
+### Notes — CLUSTER_LAUNCHER visibility in primary radial
+
+CLUSTER_LAUNCHER is present in `PRIMARY_WEAPONS` (line 109 of weapon-data.js)
+and the radial menu reads `Object.values(PRIMARY_WEAPONS)` with no filter
+— so it should render in the radial automatically. No code change made.
+If it appears missing, confirm you're at wave ≥ 10 (its `unlockWave`) or
+have already purchased it via the shop.
+
+---
+
 ## [6.22.0] - 2026-05-19
 
 ### Added — Diablo-style skill tree shop UI (Phase 7 of Skill Tree & Combat Overhaul)

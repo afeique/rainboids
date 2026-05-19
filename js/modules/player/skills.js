@@ -159,7 +159,12 @@ export function updateActiveSkills(dt) {
     const MINE_MAX_SPEED = 1.4;
     const MINE_ACCEL = 0.06;       // velocity gain per frame toward target
     const MINE_TURN = 0.08;        // angular interpolation rate
-    const MINE_SIGHT = 360;        // px — only seek targets inside this
+    // 6.22.1 — infinite seek range. Previously capped at 360 px which
+    // meant mines parked themselves in an empty corner of the map and
+    // never moved. Now they always lock onto the nearest enemy/asteroid
+    // regardless of distance; MAX_SPEED cap (1.4 px/frame) keeps them
+    // creeping rather than zooming.
+    const MINE_SIGHT = Infinity;
     const enemiesForMines = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
     const asteroidsForMines = (this.gameEngine && this.gameEngine.asteroidPool && this.gameEngine.asteroidPool.activeObjects) || [];
     for (const mine of this.activeMines) {
