@@ -11,6 +11,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.20.1] - 2026-05-19
+
+### Added — BRN/STUN elemental status engine (Phase 3 of Skill Tree & Combat Overhaul)
+
+Two reusable status effects that any weapon can apply.
+
+**BRN (burn)** — ticks 10% of source damage every 0.5s for 3s. Max 3 stacks
+(each application increments stack count, refreshes duration). Per-tick damage
+scales linearly with stack count. BRN-kills award normal XP / coins / kill
+streak / VFX through the standard damage pipeline (`applyDamageToEnemy` with
+`opts.isBurn`). Burn damage numbers render in red, lower alpha than crit
+floaters, with no aggregation.
+
+**STUN** — enemy stops moving (velocity zeroed and re-zeroed after movement
+helpers), stops firing, loses AI target. Lasts 1.5s. **No immunity window** —
+repeated stun applies refresh the timer (explicit design: enemies can be
+repeatedly stunned). `Math.max(existing, proposed)` so a refresh never
+shortens an active stun.
+
+Implementation:
+
+- `enemy.js`: new fields `brnStacks`, `brnUntil`, `brnTickAt`, `brnSourceDmg`,
+  `stunUntil` (zeroed on reset). New `_processStatusEffects()` method runs
+  6 ticks across the 3s BRN window (inclusive-upper-bound scheduler so the
+  boundary tick lands).
+- `combat-manager.js`: new `applyBurn(enemy, sourceDmg, durationMs=3000)` and
+  `applyStun(enemy, durationMs=1500)` exports. Both no-op on
+  inactive/warping/dying enemies.
+- `collision-system.js`: Lance Beam hit path rolls 15% chance to apply BRN;
+  Arc Lightning hit path rolls 25% chance to apply STUN. Surgical inserts.
+- `world/particle.js`: new `burnFlame` and `stunArc` particle types (Canvas2D).
+- `hud/status-icons.js` (NEW): renders flame + bolt icons above affected
+  enemies, pulsing electric-blue ring around stunned enemies.
+- `hud/combat.js`: new `isBurn` render branch for burn damage numbers.
+
+17 new tests in `tests/unit/status-effects.test.js` — all passing.
+
+### Added — Mine defensive plasma shield zone (Phase 5 of Skill Tree & Combat Overhaul)
+
+Armed enemy mines now emit a plasma shield aura that protects the player
+inside the zone.
+
+- **Zone radius**: 120 px (independent of mine trigger radius).
+- **Damage reduction**: 40% (multiplier 0.6). Does NOT stack — being inside two
+  zones still gives 40%.
+- **Arming delay**: 600 ms after spawn before the aura activates, so the player
+  doesn't get auto-protected at spawn.
+- **Visual**: radial gradient (plasma blue → transparent), additive blend,
+  ~1.2s sine pulse. Bright cyan sparkle fires at the player on each
+  false→true zone-crossing.
+
+Implementation:
+
+- `enemy-bullet.js`: mines gain `shieldRadius=120`, `shieldArmingDelay=600`,
+  `armed=false` fields; flip to `armed` after the delay. Plasma aura renders
+  at the top of the mine draw path when armed.
+- `combat-manager.js`: new `getMineShieldMultiplier(player, pool)` and
+  `isPlayerInMineShield(player, pool)` exports. Cheap radius-squared compare;
+  early-exits on first matching mine.
+- `game-engine.js`: collision wrappers around `handlePlayerEnemyBulletCollision`
+  and `handlePlayerEnemyCollision` capture pre-call player HP and refund 40%
+  when the player is inside a shield zone. Crossing-detection block fires the
+  sparkle on the false→true transition.
+- `world/particle.js`: new `mineShieldCrossing` particle type (Canvas2D,
+  additive halo + white core, 0.4s lifetime).
+
+16 new tests in `tests/unit/mine-shield.test.js` — all passing.
+
+Note: damage-number floaters currently still display the unmitigated value;
+only the net HP delta reflects the 0.6 multiplier. A cleaner UX (numbers also
+reduced) is a one-line edit to `collision-system.js` deferred to a later patch.
+
+---
+
 ## [6.20.0] - 2026-05-19
 
 ### Added — PASSIVE upgrade category (Phase 1 of Skill Tree & Combat Overhaul)

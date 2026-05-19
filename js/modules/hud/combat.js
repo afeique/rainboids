@@ -53,6 +53,19 @@ export function drawDamageNumbers() {
                 const text = '-' + dmgNum.damage.toString();
                 ctx.strokeText(text, screenX, screenY);
                 ctx.fillText(text, screenX, screenY);
+            } else if (dmgNum.isBurn) {
+                // Phase 3 — BRN tick floater: red, 14px (smaller than
+                // a regular hit), lower alpha so the DOT stream reads
+                // as a faint trickle of damage rather than competing
+                // with bullet-hit numbers. Drifts up like the others.
+                const fontSize = 14;
+                ctx.font = `bold ${fontSize}px 'Press Start 2P', monospace`;
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = rgba(0, 0, 0, alpha * 0.55);
+                ctx.fillStyle = rgba(255, 70, 50, alpha * 0.75);
+                const text = dmgNum.damage.toString();
+                ctx.strokeText(text, screenX, screenY);
+                ctx.fillText(text, screenX, screenY);
             } else if (dmgNum.isCrit) {
                 // 5.99.2 — CRIT screen-flash removed. The pre-5.99.2
                 // renderer grew the font from 22 → 56 px and added a

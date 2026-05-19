@@ -285,9 +285,87 @@ export class Particle {
                 this.lineWidth = random(3, 8);
                 break;
             }
+
+            // Phase 5 (2026-05-19) — Mine plasma shield crossing flash.
+            //   Bright cyan sparkle that fires once when the player crosses
+            //   into an armed mine's shield zone. Small, short-lived
+            //   (0.4s), Canvas2D only — fired infrequently so a dedicated
+            //   WebGL atlas entry isn't worth the complexity. Reset takes
+            //   (x, y, color) per the design doc; defaults to plasma blue.
+            case 'mineShieldCrossing': {
+                const [crossColor] = args;
+                this.life = 0.4;
+                this.maxLife = 0.4;
+                this.radius = 6;
+                this.maxRadius = 22;
+                this.color = crossColor || '#5cc8ff';
+                this.vel = { x: 0, y: 0 };
+                break;
+            }
+
+            // ── Phase 3 status-effect particles ────────────────────────
+            // BRN / STUN visual feedback. Canvas2D-only (no WebGL atlas
+            // entry — these spawn at most ~30/sec across the whole field
+            // and don't justify the renderer complexity). status-icons.js
+            // (HUD overlay) walks the enemy pool every frame and respawns
+            // these while the effect is active; each particle is
+            // short-lived so respawn cadence drives perceived density.
+            case 'burnFlame': {
+                // Tiny flickering flame attached to an enemy. Rises with
+                // small horizontal jitter so a cluster reads as "this
+                // thing is on fire." Two-color sample (orange core vs.
+                // yellow tip) gives the flame perceptible flicker even
+                // with one frame per particle.
+                // args: [flameColor?]
+                const [flameColor] = args;
+                this.life = 0.5;
+                this.maxLife = 0.5;
+                this.radius = random(1.6, 3.2);
+                this.vel = {
+                    x: random(-0.35, 0.35),
+                    y: random(-1.4, -0.7),
+                };
+                this.color = flameColor || (Math.random() < 0.6 ? '#ff7722' : '#ffcc44');
+                break;
+            }
+            case 'stunArc': {
+                // Short electric-blue arc above a stunned enemy.
+                // Procedural 4-segment polyline with perpendicular jitter
+                // — same idea as the larger `enemyLightning` bolt but
+                // smaller and shorter-lived. The path is pre-baked at
+                // reset so the draw path is just a stroke.
+                // args: [arcLength?, arcAngle?]
+                const [arcLength, arcAngle] = args;
+                this.life = 0.3;
+                this.maxLife = 0.3;
+                this.length = arcLength || random(10, 20);
+                this.angle = arcAngle !== undefined ? arcAngle : random(0, Math.PI * 2);
+                this.color = '#88ddff';
+                this.lineWidth = random(1.0, 2.0);
+                const segs = 4;
+                this._pts = new Array(segs + 1);
+                const cx = Math.cos(this.angle);
+                const cy = Math.sin(this.angle);
+                const px = -cy;
+                const py =  cx;
+                for (let i = 0; i <= segs; i++) {
+                    const t = i / segs;
+                    const baseLen = this.length * t;
+                    const jitter = i === 0 || i === segs
+                        ? 0
+                        : random(-this.length * 0.3, this.length * 0.3);
+                    this._pts[i] = {
+                        x: this.x + cx * baseLen + px * jitter,
+                        y: this.y + cy * baseLen + py * jitter,
+                    };
+                }
+                this.radius = this.length;
+                this.vel = { x: 0, y: 0 };
+                break;
+            }
         }
     }
-    
+
     update() {
         if (!this.active) return;
 
@@ -427,8 +505,42 @@ export class Particle {
                 // Bolt is static — only life drains. Drawn each frame.
                 this.life -= 0.18 * TS;
                 break;
+
+            // Phase 5 (2026-05-19) — Crossing-flash sparkle expands +
+            //   fades. Eased radius growth so the burst pops fast then
+            //   tapers. Drain rate matches the starSparkle pattern
+            //   (which targets ~0.4s wall-clock lifetime under the
+            //   TS=0.5 logic-tick scaling).
+            case 'mineShieldCrossing': {
+                this.life -= 0.025 * TS;
+                const t = 1 - Math.max(0, this.life / this.maxLife);
+                // Cubic-out radius growth: punchy initial pop, then tapers.
+                this.radius = 6 + (this.maxRadius - 6) * (1 - Math.pow(1 - t, 3));
+                break;
+            }
+
+            // Phase 3 status particles.
+            case 'burnFlame':
+                // Rise + jitter + gentle shrink as the flame "burns out."
+                // Decay 0.033/tick → ~30 ticks ≈ 0.5s wall-clock at TS=0.5.
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                // Add small per-frame horizontal jitter so the flame
+                // dances rather than rising on a straight line.
+                this.vel.x += random(-0.08, 0.08);
+                // Gentle vertical deceleration so the flame slows as it
+                // rises (looks more like fire than smoke).
+                this.vel.y *= Math.pow(0.96, TS);
+                this.life -= 0.033 * TS;
+                this.radius *= Math.pow(0.95, TS);
+                break;
+            case 'stunArc':
+                // Static bolt — only life drains. Decay 0.055/tick →
+                // ~18 ticks ≈ 0.3s wall-clock at TS=0.5.
+                this.life -= 0.055 * TS;
+                break;
         }
-        
+
         if (this.life <= 0) {
             this.active = false;
         }
@@ -586,6 +698,84 @@ export class Particle {
                     ctx.lineTo(this._pts[i].x, this._pts[i].y);
                 }
                 ctx.stroke();
+                break;
+            }
+
+            // Phase 5 (2026-05-19) — Mine shield crossing flash. Bright
+            //   cyan sparkle: outer additive halo + crisp inner core.
+            //   Alpha tied to remaining life so the flash fades cleanly
+            //   after ~0.4s. globalCompositeOperation 'lighter' makes
+            //   the halo bloom into the starfield without obscuring it.
+            case 'mineShieldCrossing': {
+                const lifeFrac = Math.max(0, this.life / (this.maxLife || 0.4));
+                const prevComp = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = 'lighter';
+                // Outer halo
+                ctx.globalAlpha = lifeFrac * 0.7;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Bright white core
+                ctx.globalAlpha = lifeFrac;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalCompositeOperation = prevComp;
+                break;
+            }
+
+            // ── Phase 3 status particles ───────────────────────────────
+            case 'burnFlame': {
+                // Additive small filled circle — fire-orange or yellow
+                // depending on which color was sampled at reset. Two-pass
+                // (outer glow + inner brighter core) sells the heat.
+                const lifeFrac = Math.max(0, this.life / (this.maxLife || 0.5));
+                const prevComp = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = lifeFrac * 0.85;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = lifeFrac;
+                ctx.fillStyle = '#fff2a8';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalCompositeOperation = prevComp;
+                break;
+            }
+            case 'stunArc': {
+                // Electric-blue zigzag with bright core. Reuses the
+                // pre-baked polyline from reset(). Additive composite so
+                // it pops over the enemy silhouette.
+                if (!this._pts || this._pts.length < 2) break;
+                const lifeFrac = Math.max(0, this.life / (this.maxLife || 0.3));
+                const prevComp = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = 'lighter';
+                // Colored glow pass.
+                ctx.globalAlpha = lifeFrac * 0.8;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.lineWidth + 1.2;
+                ctx.beginPath();
+                ctx.moveTo(this._pts[0].x, this._pts[0].y);
+                for (let i = 1; i < this._pts.length; i++) {
+                    ctx.lineTo(this._pts[i].x, this._pts[i].y);
+                }
+                ctx.stroke();
+                // White core.
+                ctx.globalAlpha = lifeFrac;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = this.lineWidth;
+                ctx.beginPath();
+                ctx.moveTo(this._pts[0].x, this._pts[0].y);
+                for (let i = 1; i < this._pts.length; i++) {
+                    ctx.lineTo(this._pts[i].x, this._pts[i].y);
+                }
+                ctx.stroke();
+                ctx.globalCompositeOperation = prevComp;
                 break;
             }
 

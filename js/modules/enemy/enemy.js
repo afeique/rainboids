@@ -220,7 +220,22 @@ export class Enemy {
         this.knightTargetY = this.y;
         this.knightMoving = false;
         this.knightMoveStartTime = 0;
-        
+
+        // ── Phase 3 — BRN (burn) + STUN status effects ──
+        // BRN: ticks 10% of source damage every 0.5 s for up to 3 s, max 3 stacks.
+        //   `brnStacks`     — current stack count (0-3). Per-tick damage scales linearly.
+        //   `brnUntil`      — frameClock.now timestamp when BRN expires.
+        //   `brnTickAt`     — next tick timestamp (ms). When `now >= brnTickAt`,
+        //                     a damage tick is applied and this is bumped by 500.
+        //   `brnSourceDmg`  — peak source damage seen across stack applies.
+        // STUN: zero velocity + skip firing while `stunUntil > frameClock.now`.
+        // Reset every spawn so a recycled pool slot doesn't carry forward state.
+        this.brnStacks = 0;
+        this.brnUntil = 0;
+        this.brnTickAt = 0;
+        this.brnSourceDmg = 0;
+        this.stunUntil = 0;
+
         // Circulating shield indicator with music sync
         this.shield = {
             rotation: 0,
@@ -333,6 +348,22 @@ export class Enemy {
         if (!playerRef) return;
         this.targetPlayer = playerRef;
 
+        // ── Phase 3 status effects (BRN + STUN) ──
+        // Burn ticks run first — they may kill the enemy, in which case
+        // `active` flips off and the rest of the tick short-circuits.
+        this._processStatusEffects();
+        if (!this.active) return;
+
+        // STUN: zero velocity here so the per-pattern movement dispatch
+        // below starts from a stopped state. We re-zero AFTER movement too
+        // (some patterns set velocity directly without reading the current
+        // value) so the enemy stays fully frozen for the stun duration.
+        const stunned = this.stunUntil > frameClock.now;
+        if (stunned) {
+            this.vel.x = 0;
+            this.vel.y = 0;
+        }
+
         // Boss rage + per-tier mechanics (HP-threshold telegraph, invuln,
         // tantrum, tier-4 phase cycling, tier-2 partner-death flags).
         if (this.isBoss) updateBossRage(this, gameEngine);
@@ -388,7 +419,8 @@ export class Enemy {
         }
 
         // ── Shooting decision (runs every frame) ──
-        this._decideShooting(gameEngine);
+        // STUN suppresses firing entirely while the timer is active.
+        if (!stunned) this._decideShooting(gameEngine);
 
         // Rotation + shield rotation + music-sync pulse.
         this.rotation += this.rotationSpeed;
@@ -418,6 +450,16 @@ export class Enemy {
 
         this.addMicroMovements();
         this.addFishLikeMovement();
+
+        // STUN: re-zero velocity AFTER all movement / micro-movement
+        // helpers ran. Some patterns set velocity directly (vs.
+        // accumulating), so the early zero above isn't enough on its
+        // own. Doing both ensures the enemy is fully frozen for the
+        // duration of the stun.
+        if (stunned) {
+            this.vel.x = 0;
+            this.vel.y = 0;
+        }
 
         // Position update (scaled for tick rate).
         this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
@@ -1285,7 +1327,57 @@ export class Enemy {
     // Cooldown timer method removed - turrets are now mobile
     
     hasLineOfSight(target, gameEngine) { return ai.hasLineOfSight.call(this, target, gameEngine); }
-    
+
+    /**
+     * Phase 3 — process active BRN ticks + clear expired status timers.
+     *
+     * Runs once per `update()` tick before movement / AI dispatch. Owns
+     * the per-stack burn-damage tick (10% of source × stack count, every
+     * 500 ms while `brnUntil > now`). Burn damage flows through the
+     * standard `takeDamage` → engine `applyDamageToEnemy` consolidator
+     * so kills via burn properly award XP, increment kill counters,
+     * trigger debris / explosion FX, and drop loot exactly like a bullet
+     * kill.
+     *
+     * STUN is data-only at this layer — the `update()` body reads
+     * `stunUntil` directly to gate velocity + firing. Nothing decays here.
+     */
+    _processStatusEffects() {
+        const now = frameClock.now;
+
+        // BRN tick — fire as many ticks as fit since the last tick. Most
+        // frames will trigger at most one tick; the while-loop guards
+        // against frame-time spikes that span multiple 500 ms windows.
+        // Boundary semantics: the tick scheduled exactly at `brnUntil`
+        // DOES fire (inclusive upper bound) so a 3-second burn yields a
+        // clean 6 ticks at t = 0.5, 1.0, 1.5, 2.0, 2.5, 3.0.
+        // Order matters: ticks run BEFORE expiry so the boundary tick
+        // isn't pre-empted by the expiry check.
+        if (this.brnStacks > 0 && this.brnUntil > 0) {
+            while (now >= this.brnTickAt && this.brnTickAt <= this.brnUntil) {
+                const tickDmg = this.brnSourceDmg * 0.1 * this.brnStacks;
+                if (tickDmg > 0) {
+                    // Route through takeDamage so the engine's standard
+                    // damage pipeline runs (XP / kill streak / vampirism /
+                    // debris / loot all stay attached). The `isBurn` flag
+                    // lets the damage-number renderer render in red.
+                    this.takeDamage(tickDmg, { showNumber: true, isBurn: true });
+                    if (!this.active) return; // burn-killed; bail.
+                }
+                this.brnTickAt += 500;
+            }
+        }
+
+        // BRN expiry — clear stacks once the timer fully runs out. Uses
+        // strict `>` so the boundary tick above fires first.
+        if (this.brnStacks > 0 && this.brnUntil > 0 && now > this.brnUntil) {
+            this.brnStacks = 0;
+            this.brnUntil = 0;
+            this.brnTickAt = 0;
+            this.brnSourceDmg = 0;
+        }
+    }
+
     takeDamage(damage, opts = {}) {
         // 5.78.0 — delegated to the engine's `applyDamageToEnemy`
         // consolidator (M1). The consolidator owns invuln gating

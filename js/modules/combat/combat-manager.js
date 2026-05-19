@@ -8,6 +8,7 @@ import { POWERUP_TYPES } from '../world/powerup.js';
 import { createItem, isUpgrade } from '../world/item-system.js';
 import { rollRarity } from '../world/item-names.js';
 import { isMobile } from '../platform/platform-detect.js';
+import { frameClock } from '../core/frame-clock.js';
 
 // ── Asteroid Debris ──
 
@@ -1804,4 +1805,105 @@ export function updateHoverDetection() {
 
     this.cursor.hoveredEntity = hoveredEntity;
     this.cursor.isOverTarget = hoveredEntity !== null;
+}
+
+// ─── Phase 3 — BRN (burn) + STUN status effect helpers ─────────────────
+//
+// `applyBurn(enemy, sourceDmg, durationMs?)`
+//   Increment stack count (cap 3). Refresh duration. Track the strongest
+//   source-damage seen across applies so the per-tick payload reflects
+//   the most powerful proc. Schedule the first tick 500 ms out so the
+//   enemy gets a brief "lit on fire" beat before the first damage lands.
+//   Per-tick damage = `brnSourceDmg * 0.1 * brnStacks` — applied by
+//   `Enemy._processStatusEffects()` every 500 ms while `brnUntil > now`.
+//   Stacks at cap simply refresh duration without inflating damage past
+//   the 3× ceiling.
+//
+// `applyStun(enemy, durationMs?)`
+//   Refresh-style: each new application extends `stunUntil` to whichever
+//   is later — current value or `now + durationMs`. Per Afeique's call,
+//   there is NO immunity window. A re-stun mid-stun just pushes the
+//   timer out further; gameplay reads that as "tap a stun proc to keep
+//   the enemy locked indefinitely if you can keep rolling the proc."
+//
+// Both helpers are no-ops on dead/inactive/warping/death-flashing
+// enemies — applying status to something that's already dying would
+// just queue empty ticks against a recycled pool slot.
+
+export function applyBurn(enemy, sourceDmg, durationMs = 3000) {
+    if (!enemy || !enemy.active) return;
+    if (enemy.warping || enemy._deathFlash > 0) return;
+    if (!(sourceDmg > 0)) return;
+
+    const now = frameClock.now;
+    const wasInactive = !(enemy.brnStacks > 0) || enemy.brnUntil <= now;
+
+    // Increment stack, cap at 3.
+    enemy.brnStacks = Math.min(3, (enemy.brnStacks || 0) + 1);
+    // Refresh duration.
+    enemy.brnUntil = now + durationMs;
+    // Track peak source damage seen across all applies for this active
+    // burn window. Higher-damage procs upgrade the tick payload mid-burn.
+    enemy.brnSourceDmg = Math.max(enemy.brnSourceDmg || 0, sourceDmg);
+    // First-tick scheduling — 500 ms out from now if the burn was
+    // previously inactive. If a stack is added to an already-burning
+    // enemy, leave the existing tick schedule alone so we don't reset
+    // the per-tick cadence mid-burn (otherwise rapid Lance Beam procs
+    // would prevent any tick from ever landing).
+    if (wasInactive) {
+        enemy.brnTickAt = now + 500;
+    }
+}
+
+export function applyStun(enemy, durationMs = 1500) {
+    if (!enemy || !enemy.active) return;
+    if (enemy.warping || enemy._deathFlash > 0) return;
+
+    const now = frameClock.now;
+    const proposed = now + durationMs;
+    // Refresh-style: extend the timer to whichever is later. Repeat
+    // applications while already stunned push the end-time out further
+    // — no immunity gap by design.
+    enemy.stunUntil = Math.max(enemy.stunUntil || 0, proposed);
+}
+
+// ─── Phase 5 (2026-05-19) — Mine Defensive Plasma Shield Zone ────────────────
+//
+// Each armed enemy mine emits a soft plasma shield around itself. While the
+// player stands inside any mine's shield radius, incoming damage is reduced
+// by 40% (multiplier 0.6). Stacking is intentionally disabled — being inside
+// two zones still gives the same 0.6 multiplier, matching the design doc.
+//
+// `enemyBulletPool` is the pool that houses enemy bullets including mines
+// (shape === 'mine', set by firing.layMine). Pre-armed mines (mine.armed
+// === false during the brief settling window) are excluded so the shield
+// doesn't kick in instantaneously on spawn.
+
+export function getMineShieldMultiplier(player, enemyBulletPool) {
+    if (!player || !enemyBulletPool || !enemyBulletPool.activeObjects) return 1.0;
+    const list = enemyBulletPool.activeObjects;
+    for (let i = 0; i < list.length; i++) {
+        const m = list[i];
+        if (!m || !m.active) continue;
+        if (m.shape !== 'mine') continue;
+        if (!m.armed) continue;
+        const r = m.shieldRadius || 0;
+        if (r <= 0) continue;
+        const dx = player.x - m.x;
+        const dy = player.y - m.y;
+        // Radius-squared compare avoids the sqrt in Math.hypot; mines are
+        // common during heavy fights and this is called per damage event.
+        if ((dx * dx + dy * dy) <= r * r) {
+            return 0.6;
+        }
+    }
+    return 1.0;
+}
+
+// Per-frame check used by the game engine to detect false→true zone
+// crossings so the entry sparkle particle can fire exactly once at the
+// boundary. Returns true if the player is currently inside ANY armed
+// mine's shield zone.
+export function isPlayerInMineShield(player, enemyBulletPool) {
+    return getMineShieldMultiplier(player, enemyBulletPool) < 1.0;
 }

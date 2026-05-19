@@ -32,6 +32,7 @@ import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
 import * as hudStatus from './hud/status.js';
 import * as hudCombat from './hud/combat.js';
+import * as hudStatusIcons from './hud/status-icons.js';
 import * as hudNav from './hud/navigation.js';
 import * as hudOverlays from './hud/overlays.js';
 import * as hudCursor from './hud/cursor.js';
@@ -2306,7 +2307,13 @@ export class GameEngine {
     triggerEnemyFinalExplosion(enemy) { return combat.triggerEnemyFinalExplosion.call(this, enemy); }
     triggerEnemyDebrisBurst(enemy) { return combat.triggerEnemyDebrisBurst.call(this, enemy); }
     createShapeDebris(enemy) { return combat.createShapeDebris.call(this, enemy); }
-    
+
+    // Phase 3 — BRN / STUN status procs. Called from collision-system.js
+    // at the Arc Lightning + Lance Beam hit paths. Refresh-style; no
+    // immunity gap on repeated stun (user requirement).
+    applyBurn(enemy, sourceDmg, durationMs) { return combat.applyBurn(enemy, sourceDmg, durationMs); }
+    applyStun(enemy, durationMs) { return combat.applyStun(enemy, durationMs); }
+
     createHealthOrb(x, y, healAmountOverride = null) { return combat.createHealthOrb.call(this, x, y, healAmountOverride); }
     createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false) { return combat.createMoneyOrb.call(this, x, y, moneyAmountOverride, isPixel); }
     dropStarsFromEntity(x, y) { return combat.dropStarsFromEntity.call(this, x, y); }
@@ -2346,6 +2353,11 @@ export class GameEngine {
     tickWhirlwind() { return combat.tickWhirlwind.call(this); }
 
     drawDamageNumbers() { return hudCombat.drawDamageNumbers.call(this); }
+
+    // Phase 3 — BRN / STUN icon + particle overlay over status-afflicted
+    // enemies. Walks `enemyPool.activeObjects`; cheap for the common
+    // case where no enemies are afflicted.
+    drawStatusIcons() { return hudStatusIcons.drawStatusIcons.call(this); }
 
     drawTargetInfo() { return hudCombat.drawTargetInfo.call(this); }
 
@@ -2387,8 +2399,49 @@ export class GameEngine {
     damageEnemy(enemy, damage) { return col.damageEnemy.call(this, enemy, damage); }
     applyDamageToEnemy(enemy, damage, opts) { return col.applyDamageToEnemy.call(this, enemy, damage, opts); }
     destroyAsteroid(ast) { return col.destroyAsteroid.call(this, ast); }
-    handlePlayerEnemyCollision(player, enemy) { return col.handlePlayerEnemyCollision.call(this, player, enemy); }
-    handlePlayerEnemyBulletCollision(player, bullet) { return col.handlePlayerEnemyBulletCollision.call(this, player, bullet); }
+    // Phase 5 (2026-05-19) — Mine defensive plasma shield zone.
+    //   If the player is inside any armed enemy mine's shield zone,
+    //   refund 40% of the damage they would have taken. Done as a
+    //   thin wrapper here (rather than in collision-system.js) so the
+    //   underlying collision pipeline stays untouched — all the FX,
+    //   damage numbers, thorns, kill-streak break, and death checks
+    //   run on the pre-mitigation damage; we just heal back the 40%
+    //   afterward. Net HP delta matches a 0.6 multiplier.
+    getMineShieldMultiplier() { return combat.getMineShieldMultiplier(this.player, this.enemyBulletPool); }
+    isPlayerInMineShield() { return combat.isPlayerInMineShield(this.player, this.enemyBulletPool); }
+    _applyMineShieldRefund(player, hpBefore) {
+        const mult = combat.getMineShieldMultiplier(player, this.enemyBulletPool);
+        if (mult >= 1.0) return;
+        // Only refund if the player actually lost HP and is still alive
+        // (don't resurrect — death already triggered tank consumption /
+        // guardian / handlePlayerDeath inside the collision handler).
+        if (player.health <= 0) return;
+        const dmgTaken = hpBefore - player.health;
+        if (dmgTaken <= 0) return;
+        const refund = Math.round(dmgTaken * (1 - mult)); // mult=0.6 → refund 40%
+        if (refund <= 0) return;
+        const cap = (typeof player.getCurrentMaxHp === 'function')
+            ? player.getCurrentMaxHp()
+            : (player.maxHealth || hpBefore);
+        player.health = Math.min(cap, player.health + refund);
+        if (this.game && this.game.stats) {
+            this.game.stats.totalDamageTaken = Math.max(
+                0, (this.game.stats.totalDamageTaken || 0) - refund
+            );
+        }
+    }
+    handlePlayerEnemyCollision(player, enemy) {
+        const hpBefore = player.health;
+        const result = col.handlePlayerEnemyCollision.call(this, player, enemy);
+        this._applyMineShieldRefund(player, hpBefore);
+        return result;
+    }
+    handlePlayerEnemyBulletCollision(player, bullet) {
+        const hpBefore = player.health;
+        const result = col.handlePlayerEnemyBulletCollision.call(this, player, bullet);
+        this._applyMineShieldRefund(player, hpBefore);
+        return result;
+    }
     handleEnemyAsteroidCollision(enemy, asteroid) { return col.handleEnemyAsteroidCollision.call(this, enemy, asteroid); }
 
     // ── Multiplayer wiring (MVD slice, 2026-05-13) ──────────────────────────
@@ -2448,6 +2501,23 @@ export class GameEngine {
 
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged, this.gameField);
+
+            // Phase 5 (2026-05-19) — Mine shield crossing detection.
+            //   Track whether the player is currently inside an armed
+            //   enemy mine's plasma shield zone. On the false→true
+            //   transition, fire a single bright cyan sparkle at the
+            //   player's position to acknowledge the crossing. The
+            //   `_inMineShield` flag lives on the player; reads are
+            //   cheap (one pass over enemyBulletPool.activeObjects).
+            {
+                const insideShield = combat.isPlayerInMineShield(this.player, this.enemyBulletPool);
+                if (insideShield && !this.player._inMineShield) {
+                    if (this.particlePool && this.particlePool.get) {
+                        this.particlePool.get(this.player.x, this.player.y, 'mineShieldCrossing', '#5cc8ff');
+                    }
+                }
+                this.player._inMineShield = insideShield;
+            }
 
             // 5.108.0 — Passive AoE powerups tick AFTER the player has
             // moved this frame so their positions key off the latest
@@ -2904,6 +2974,14 @@ export class GameEngine {
                 this.statPickupPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.enemyPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
+
+                // Phase 3 — BRN / STUN status overlays drawn in world
+                // space, on top of the enemy silhouette so flames + bolts
+                // sit visibly over the body. Also spawns short-lived
+                // particles (burnFlame / stunArc) into particlePool —
+                // those render on the next draw cycle as part of the
+                // particle pass.
+                this.drawStatusIcons();
 
                 // 5.79.2 — Bullet bodies render on WebGL via the
                 //   instanced renderer (bulletCanvas). Trails still

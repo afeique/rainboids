@@ -1082,6 +1082,10 @@ export function checkLanceBeamCollisions() {
 
     if (hitTarget === 'enemy') {
         this.damageEnemy(hitRef, dmg);
+        // Phase 3 — Lance Beam BRN proc: 15% per per-tick hit. Source
+        // damage = the beam's per-tick damage so the burn DOT scales
+        // with OVERLOAD_BEAM stacks.
+        if (Math.random() < 0.15) this.applyBurn(hitRef, dmg);
         if (hitRef.vel) {
             hitRef.vel.x += dx * BEAM_PUSH;
             hitRef.vel.y += dy * BEAM_PUSH;
@@ -1508,6 +1512,10 @@ export function checkLightningCollisions() {
             const ky = dy / len;
             if (bestKind === 'enemy') {
                 this.damageEnemy(best, dmg);
+                // Phase 3 — Arc Lightning STUN proc: 25% per per-tick
+                // hit. Refresh-style; chained procs keep the tether
+                // target frozen indefinitely.
+                if (Math.random() < 0.25) this.applyStun(best);
                 if (best.vel) {
                     best.vel.x += kx * TETHER_PUSH;
                     best.vel.y += ky * TETHER_PUSH;
@@ -1861,7 +1869,10 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
             opts.numberX != null ? opts.numberX : enemy.x,
             opts.numberY != null ? opts.numberY : (enemy.y - (enemy.radius || 15)),
             damage,
-            { isCrit: !!opts.isCrit, isEmpowered: !!opts.isEmpowered, target: enemy }
+            // Phase 3 — `isBurn` lets the renderer differentiate BRN
+            // tick damage (red, lower alpha) from regular hits. Pure
+            // pass-through; no new branching in this function.
+            { isCrit: !!opts.isCrit, isEmpowered: !!opts.isEmpowered, isBurn: !!opts.isBurn, target: enemy }
         );
     }
     if (this.game?.stats) this.game.stats.totalDamageDealt += damage;
