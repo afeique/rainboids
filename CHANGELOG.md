@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.14.2] - 2026-05-18
+
+### Fixed — enemies and asteroids no longer warp in on top of the player
+
+The `onScreen` spawn path already enforced a ~260 px minimum
+distance from the player via `getOnScreenSpawnPosition`, but the
+off-screen / continuous-spawn paths (used by wave asteroids and
+continuous enemy spawns) picked targets purely from the
+middle-60% rect with no player check. Result: the warp animation
+finished right on top of the player and the collision landed on
+the same frame the warp ended — felt like the entity spawned ON
+the player.
+
+Added a player-distance check to both off-screen branches:
+- `initializeWaveAsteroid` (asteroid path): retries the random
+  target up to 8 times if `dist < r + 240`; if still too close
+  after retries, projects the candidate outward along the
+  player-to-target axis to guarantee separation, clamped to the
+  middle-60% rect.
+- `getRandomSpawnPosition` (enemy off-screen path): same pattern
+  with `minDist = 300`; runs after the per-edge target pick and
+  the clamp.
+
+Both fall back to the existing field-clamp so the target stays
+inside the play area.
+
+---
+
 ## [6.14.1] - 2026-05-18
 
 ### Fixed — wavy text animation + button hover (revert 6.13.1 HUD cache)

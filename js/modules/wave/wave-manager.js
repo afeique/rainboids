@@ -889,8 +889,41 @@ export function initializeWaveAsteroid(asteroid, opts = {}) {
             }
             attempts++;
         } while (this.isInMinimapArea(srcX, srcY) && attempts < 10);
-        targetX = random(this.gameField.width * 0.2, this.gameField.width * 0.8);
-        targetY = random(this.gameField.height * 0.2, this.gameField.height * 0.8);
+        // Pick a target in the middle 60% of the field, but RETRY up to
+        // 8 times if the candidate lands too close to the player. With
+        // out this guard the asteroid finishes its warp animation right
+        // on top of the player and collides on the same frame the
+        // warp completes — feels like the asteroid spawned ON the
+        // player. minDist scales with radius so big rocks need more
+        // breathing room than small ones (r + 240 ≈ ~300 px for a
+        // typical 60 px asteroid, ≈ ~280 px for a 40 px asteroid).
+        const playerActive = this.player && this.player.active;
+        const px = playerActive ? this.player.x : this.gameField.width / 2;
+        const py = playerActive ? this.player.y : this.gameField.height / 2;
+        const minDist = r + 240;
+        const minDistSq = minDist * minDist;
+        let tries = 0;
+        do {
+            targetX = random(this.gameField.width * 0.2, this.gameField.width * 0.8);
+            targetY = random(this.gameField.height * 0.2, this.gameField.height * 0.8);
+            const dxp = targetX - px;
+            const dyp = targetY - py;
+            if (dxp * dxp + dyp * dyp >= minDistSq) break;
+            tries++;
+        } while (tries < 8);
+        // If we couldn't find one in 8 tries, push the last candidate
+        // outward along the player-to-target axis to guarantee
+        // separation. Clamped to the same middle-60% rect.
+        if (playerActive) {
+            const dxp = targetX - px, dyp = targetY - py;
+            if (dxp * dxp + dyp * dyp < minDistSq) {
+                const len = Math.hypot(dxp, dyp) || 1;
+                targetX = Math.max(this.gameField.width * 0.2,
+                    Math.min(this.gameField.width * 0.8, px + (dxp / len) * minDist));
+                targetY = Math.max(this.gameField.height * 0.2,
+                    Math.min(this.gameField.height * 0.8, py + (dyp / len) * minDist));
+            }
+        }
     }
 
     const spd = Math.min(5.0, GAME_CONFIG.AST_SPEED + (this.game.currentWave - 1) * 0.15);
@@ -980,6 +1013,26 @@ export function getRandomSpawnPosition(opts = {}) {
     // Clamp target inside field
     targetX = Math.max(60, Math.min(this.gameField.width - 60, targetX));
     targetY = Math.max(60, Math.min(this.gameField.height - 60, targetY));
+
+    // Player-safety: if the target landed too close to the player, push
+    // it outward along the player-to-target axis. The off-screen
+    // continuous-spawn path picks a target near the field edge based on
+    // the spawn side — but if the player is also near that edge the
+    // enemy's warp-in finishes right on top of them and the collision
+    // lands on the same frame. minDist 300 ≈ a couple of player
+    // diameters; enough time to react after the warp telegraph.
+    // (The on-screen path above uses getOnScreenSpawnPosition which
+    // already enforces a similar 260 px minDist.)
+    if (this.player && this.player.active) {
+        const px = this.player.x, py = this.player.y;
+        const minDist = 300;
+        const dxp = targetX - px, dyp = targetY - py;
+        if (dxp * dxp + dyp * dyp < minDist * minDist) {
+            const len = Math.hypot(dxp, dyp) || 1;
+            targetX = Math.max(60, Math.min(this.gameField.width - 60, px + (dxp / len) * minDist));
+            targetY = Math.max(60, Math.min(this.gameField.height - 60, py + (dyp / len) * minDist));
+        }
+    }
 
     return { x, y, targetX, targetY };
 }
