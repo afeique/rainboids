@@ -298,6 +298,33 @@ export function triggerEnemyDebrisBurst(enemy) {
         try { this.createShapeDebris(enemy); } catch (_) {}
     }
 
+    // 3b. Tumbling 3D wireframe-triangle shards — same pool + same 3D
+    //     rotation rig as asteroid death, but bigger / faster / denser
+    //     to sell enemy kills as the "main event" vs an asteroid pop.
+    //     Combined with the line-piece scatter above, the visual reads
+    //     as the enemy's hull shattering AND spinning shrapnel flung
+    //     through it — geometry tumbling away in three dimensions
+    //     before fading. Color palette pulls the enemy's own tint
+    //     plus white sparks so the burst feels OF the dying enemy,
+    //     not a generic effect.
+    if (this.asteroidShardPool) {
+        const enemyShardCount = Math.floor(18 + 14 * sizeScale); // 18 baseline up to ~46 for TITAN
+        for (let i = 0; i < enemyShardCount; i++) {
+            const angle = (i / enemyShardCount) * Math.PI * 2 + random(-0.35, 0.35);
+            const speed = random(5.0, 13.0) * sizeScale;     // faster than asteroid shards (3.5-9)
+            const size  = random(7.0, 14.0);                  // bigger than asteroid shards (4-9.5)
+            // Every 4th = white spark, otherwise alternate
+            // enemy-color / warm highlight / cool highlight so the
+            // burst reads as the enemy's palette flying apart.
+            const sColor = (i % 4 === 0) ? '#ffffff'
+                         : (i % 3 === 0) ? '#ffcc66'
+                         : (i % 3 === 1) ? color
+                         : '#ff8855';
+            const shard = this.asteroidShardPool.get();
+            if (shard) shard.reset(ex, ey, angle, speed, size, sColor);
+        }
+    }
+
     // 4. Tight inner secondary ring — fires as the debris emerges, so
     // there's a final wavefront chasing the shrapnel out. Kept small
     // (0.6×) so it reads as an "exhale" pulse, not another big ring.

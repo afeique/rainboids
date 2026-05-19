@@ -11,6 +11,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.14.0] - 2026-05-18
+
+### Added — Epic enemy destruction with 3D-tumbling wireframe-triangle shards
+
+Enemy deaths now spawn 18–46 tumbling 3D wireframe triangle shards
+on top of the existing hull-piece scatter + shrapnel + dust. Reuses
+the AsteroidShard 3D rotation rig (yaw → pitch → roll matrix per
+shard + perspective projection) but with bigger, faster, denser
+defaults:
+
+- Shard count: `18 + 14 × sizeScale` (18 for small enemies, ~46 for
+  TITAN). Asteroid burst is 10–22 for comparison.
+- Speed: `5.0–13.0 × sizeScale` px/frame (asteroid: 3.5–9.0).
+- Size: `7.0–14.0` px (asteroid: 4.0–9.5).
+- Color palette: enemy's own tint + warm highlight + cool highlight
+  + every-4th white spark.
+
+Combined with `createShapeDebris` (line-piece hull scatter) and the
+shrapnel + dust + ring sequence already in `triggerEnemyDebrisBurst`,
+enemy death now reads as the ship's geometry physically shattering
+and tumbling away through three dimensions before fading — the "main
+event" feel the player expects vs an asteroid pop.
+
+`asteroidShardPool` capacity bumped from 96 → 200 to absorb the
+worst-case wave-clear instant (several enemy bursts + asteroids in
+the same frame).
+
+---
+
+## [6.13.1] - 2026-05-18
+
+### Changed
+- Shield icon label "STG" → "S". Cleaner single letter centers
+  better at the small shield icon size; font bumped 10 → 14 px.
+- CRT scanlines on the WebGL starfield/nebula layer now scroll
+  vertically at 25 px/sec via a `u_time`-driven y-offset (was
+  static).
+
+### Performance — Tier 1 pass
+- **HUD cache** (new `js/modules/hud/hud-cache.js`). Offscreen
+  canvas + signature-based dirty detection wrapping `drawHUD()`.
+  Most frames have identical HUD pixels to the previous frame;
+  signature includes stats + time-decay values for active
+  animations so the cache correctly invalidates while wave
+  messages / level-up text / pickup toasts animate. Idle frames
+  blit the cached canvas via single `drawImage` instead of running
+  dozens of `beginPath`/`fill`/`stroke` calls.
+- **Player ship Path2D cache**. Wings / tips / hull are static
+  geometry at a fixed radius. Cached once as `Path2D` objects keyed
+  by radius; reused for the silhouette stroke pass AND the colored
+  fill+stroke pass. Cuts `beginPath` count in `player/renderer.js`
+  from 42 → 27.
+- **Color caching audit** (hot-path conversions): `createDebris`'s
+  3 per-asteroid-death color strings now route through the cached
+  `hsl()` helper. Particle explosion init color cached.
+  combat-manager ember color cached.
+- **Frustum culling extension**: `statPickupPool` now draws via
+  `drawActiveVisible` (was iterating all active). Audited every
+  other draw loop — already culled.
+
+### Versioning note
+The 6.13.1 commit (`ec26d60`) landed the above changes with the
+"6.13.1" label in its commit message but did not actually bump
+the `VERSION` file. This entry retro-documents 6.13.1; the next
+real bump is 6.14.0 above.
+
+---
+
 ## [6.13.0] - 2026-05-18
 
 ### Added — 3D-spinning wireframe-triangle shards on asteroid destruction

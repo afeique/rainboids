@@ -895,10 +895,14 @@ export class GameEngine {
         this.bulletPool = new PoolManager(Bullet, 10);     // Reduced from 20  
         this.particlePool = new PoolManager(Particle, 50); // Cap is MAX_PARTICLES=50
         this.lineDebrisPool = new PoolManager(LineDebris, 100); // Sized for 5.64.5 fragmented ship-shred — 2x pieces per enemy + multi-death overlap
-        // Up to 22 shards per asteroid burst × ~3 simultaneous bursts on a
-        // big explosion frame ≈ 66 active. 96 leaves headroom without
-        // bloating the pool.
-        this.asteroidShardPool = new PoolManager(AsteroidShard, 96);
+        // Sized for asteroid + enemy bursts both flowing through this
+        // pool. Asteroid burst: 10–22 shards; enemy burst: 18–46. A
+        // worst-case "wave-clear instant" can produce ~5 enemy bursts
+        // and a few asteroid bursts in the same frame, so 200 leaves
+        // headroom without overshoot. AsteroidShard objects are tiny
+        // (~10 fields + 3-element scratch projection array), so the
+        // memory footprint of 200 is negligible.
+        this.asteroidShardPool = new PoolManager(AsteroidShard, 200);
         this.asteroidPool = new PoolManager(Asteroid, 5);  // Reduced from 20
         this.enemyPool = new PoolManager(Enemy, 5);        // Reduced from 15
         this.enemyBulletPool = new PoolManager(EnemyBullet, 20); // Reduced from 50
