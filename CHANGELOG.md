@@ -11,6 +11,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.17.0] - 2026-05-19
+
+### Added — post-dash invuln window + Phase Echo powerup
+
+Every SHIFT dash now grants a **1-second post-burst invincibility
+window** on top of the existing 250 ms i-frames during the burst
+itself. The dash sets `invincible = true` with a duration spanning
+both the burst and the tail, so every collision site that already
+gates on `!player.invincible` (asteroid contact, enemy contact,
+enemy bullets) honors the new window without per-site changes.
+
+The existing `isDashIFrameActive()` check becomes redundant during
+the burst but stays in place — it's still correct, just no longer
+load-bearing.
+
+#### New defensive powerup — Phase Echo
+
+| Stat | Value |
+|---|---|
+| Category | DEFENSE |
+| Max stacks | 2 |
+| Per-stack effect | +2 s post-dash invuln |
+| Window | base 1 s → 3 s (1 stack) → 5 s (2 stacks, cap) |
+| Gold cost | spCost 4 (≈ `2500g` base via `powerupGoldCost`) |
+| Rarity | 0.10 (uncommon) |
+| Icon | `vortex` |
+| Color | `#88ddff` (electric blue) |
+
+Pairs naturally with the dash's 1.5 s cooldown — a maxed Phase Echo
+player can chain dashes with overlapping safety windows, turning the
+dash from a pure escape tool into a brief offensive ramming option
+(the existing "dash damages the enemy you ram" path at
+`collision-system.js:1996` is outside the `!invincible` guard, so
+it still fires during the invuln window).
+
+Files touched:
+
+- `js/modules/player/progression.js` — `getPostDashIframeMs()` helper
+  reads `PHASE_ECHO` stacks; exports `POST_DASH_IFRAME_BASE_MS = 1000`
+  and `POST_DASH_IFRAME_PER_STACK_MS = 2000`.
+- `js/modules/player/player.js` — `_triggerDash` calls
+  `makeInvincible(DASH_DURATION_MS + getPostDashIframeMs())`; guarded
+  by `invincibilityTimer < dashInvulnMs` so a longer pre-existing
+  invuln (BULWARK/LAST_STAND/GUARDIAN) doesn't get clobbered.
+- `js/modules/world/powerup.js` — new `PHASE_ECHO` entry in
+  `POWERUP_TYPES`.
+
+---
+
 ## [6.16.1] - 2026-05-19
 
 ### Fixed — enemy explosions no longer vanish under heavy fire

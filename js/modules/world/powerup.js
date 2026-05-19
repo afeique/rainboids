@@ -1,5 +1,5 @@
 // Powerup system for enhanced combat capabilities
-import { GAME_CONFIG } from '../core/constants.js';
+import { GAME_CONFIG, applyShopPriceScaling } from '../core/constants.js';
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
@@ -288,6 +288,29 @@ export const POWERUP_TYPES = {
         // make the conditional clear so players understand the
         // out-of-combat-only nature.
         description: '+0.5 HP/s out of combat (4s after hit)'
+    },
+
+    // 6.16.0 — Dash post-burst i-frame extender. Every SHIFT dash
+    // already grants a 1s post-burst invuln window (see Player._triggerDash
+    // + progression.getPostDashIframeMs). Each stack here adds +2s,
+    // capping at 5s total at 2 stacks. Pairs naturally with the dash's
+    // 1.5s cooldown so a maxed Phase Echo player can chain dashes
+    // through bullet hell with overlapping safety windows.
+    PHASE_ECHO: {
+        name: 'Echo',
+        displayName: 'Phase Echo',
+        abbr: 'ECHO',
+        color: '#88ddff',
+        gradientColors: ['#bbeeff', '#225588'],
+        icon: 'vortex',
+        duration: 30000,
+        effect: 'phaseEcho',
+        rarity: 0.10,
+        category: 'DEFENSE',
+        maxStacks: 2,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: '+2s post-dash invuln (1s base, cap 5s)',
     },
 
     // 5.107.0 — Vampirism. Each stack converts +5% of damage DEALT
@@ -653,7 +676,12 @@ export const POWERUP_TYPES = {
 // powerup config (`goldCost` + `goldCostIncrement`) or derived from
 // the legacy `spCost` field. Mapping: spCost × 500 + 500 if tier ≥ 4.
 // Rounded to the nearest 50 for a clean storefront price.
-export function powerupGoldCost(cfg, currentStacks = 0) {
+//
+// 6.18.0 — Accepts an optional `wave` arg. When provided, the
+// computed cost is run through `applyShopPriceScaling` so prices
+// inflate alongside the drop economy. Callers that don't pass wave
+// get the legacy unscaled cost.
+export function powerupGoldCost(cfg, currentStacks = 0, wave = 0) {
     if (!cfg) return 0;
     let base = (typeof cfg.goldCost === 'number') ? cfg.goldCost : null;
     let inc  = (typeof cfg.goldCostIncrement === 'number') ? cfg.goldCostIncrement : null;
@@ -666,7 +694,9 @@ export function powerupGoldCost(cfg, currentStacks = 0) {
         inc = incSp * 350 + 150;
     }
     const raw = base + (currentStacks | 0) * inc;
-    return Math.round(raw / 50) * 50;
+    const base50 = Math.round(raw / 50) * 50;
+    if (wave > 0) return applyShopPriceScaling(base50, wave);
+    return base50;
 }
 
 export class Powerup {

@@ -942,6 +942,10 @@ export class Player {
         return progression.getKnockbackMultiplier.call(this);
     }
 
+    getPostDashIframeMs() {
+        return progression.getPostDashIframeMs.call(this);
+    }
+
     getEffectiveHealthOrbHealing(baseHealing = 1) {
         return progression.getEffectiveHealthOrbHealing.call(this, baseHealing);
     }
@@ -1054,6 +1058,19 @@ export class Player {
         this.dashVelX     = Math.cos(angle) * dashSpeed;
         this.dashVelY     = Math.sin(angle) * dashSpeed;
         this.dashCooldown = Player.DASH_COOLDOWN_MS;
+
+        // Post-dash i-frame window. Spans the burst itself (already
+        // i-frame'd via isDashIFrameActive) plus a configurable tail
+        // routed through `invincible`/`invincibilityTimer` so every
+        // collision site that already gates on `!player.invincible`
+        // honors it for free. Base 1s tail, +2s per PHASE_ECHO stack,
+        // capped at 5s (2 stacks). Don't shorten an existing longer
+        // window — if BULWARK / LAST_STAND / GUARDIAN granted a bigger
+        // invuln just before the dash, keep it.
+        const dashInvulnMs = Player.DASH_DURATION_MS + this.getPostDashIframeMs();
+        if (this.invincibilityTimer < dashInvulnMs) {
+            this.makeInvincible(dashInvulnMs);
+        }
 
         // Audio — keep the existing phaseDash.wav (defense-skill removal
         // doesn't kill the sound). audioManager may be null in test paths;

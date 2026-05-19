@@ -347,6 +347,22 @@ export function getKnockbackMultiplier() {
     return Math.min(3.5, 1 + stacks * 0.4);
 }
 
+// Post-dash invuln window in ms. Every dash earns a base safety
+// breath after the burst itself ends (the 250ms burst already grants
+// i-frames via isDashIFrameActive — this stacks ON TOP). PHASE_ECHO
+// powerup extends the window: 0 stacks = 1s, 1 stack = 3s, 2 stacks
+// (max) = 5s. The Player calls this once at dash trigger and feeds
+// `DASH_DURATION_MS + getPostDashIframeMs()` into makeInvincible so
+// the collision sites' existing `!player.invincible` check handles
+// the new window without any per-site changes.
+export const POST_DASH_IFRAME_BASE_MS = 1000;
+export const POST_DASH_IFRAME_PER_STACK_MS = 2000;
+export function getPostDashIframeMs() {
+    const stacks = this.getPowerupStacks
+        ? this.getPowerupStacks('PHASE_ECHO') : 0;
+    return POST_DASH_IFRAME_BASE_MS + stacks * POST_DASH_IFRAME_PER_STACK_MS;
+}
+
 export function getEffectiveHealthOrbHealing(baseHealing = 1) {
     // 5.78.2 — heal amount is decided at orb creation time inside
     // createHealthOrb (level-scaled). No collection-time bonus.
