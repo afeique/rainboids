@@ -11,6 +11,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.17.1] - 2026-05-19
+
+### Changed — no flash on damage, shake reserved for collisions (and scaled by damage)
+
+Per-hit visual noise reduced. Previously every grazing bullet ping
+fired a 0.18-alpha white flash plus a 16-frame/6-mag shake plus
+hitstop plus camera kick — four overlapping cues for the same event.
+The flash and shake parts were the loudest; they made minor chip
+damage feel like a near-death and stacked into a strobing mess
+during sustained bullet-hell sequences.
+
+**Screen flash — removed from all damage paths:**
+
+- `combat-manager.triggerPlayerHitFX` no longer fires `triggerScreenFlash`.
+- `combat-manager.tryConsumeGuardian` no longer flashes on the Guardian save.
+- `lifecycle.takeDamage` no longer flashes on the LAST_STAND save.
+- Flash is retained for non-damage events: enemy-destroy ceremony
+  (`combat-manager.triggerEnemyDebrisBurst`), player-mine boom
+  (`collision-system` mine path), charge-shot release
+  (`player/weapons.js`), boss-rage transition (`enemy/boss-rage.js`),
+  and the full multi-phase death sequence (`lifecycle.handlePlayerDeath`
+  Phase 0 / Phase 2 / Phase 3 plus the gold death flash).
+
+**Screen shake — collisions only, damage-scaled:**
+
+- Removed from `triggerPlayerHitFX` — no longer fires shake for the
+  generic-damage code path.
+- Removed from the enemy-bullet hit site in `collision-system.js`
+  (~2136). Bullet impacts now communicate via hitstop + damage
+  number + particle burst + per-pattern audio only.
+- Removed from `lifecycle.takeDamage` generic-damage fallback.
+- **Enemy collision** (`handlePlayerEnemyCollision`) — shake now
+  scales with `finalDamage`. `sev = clamp(finalDamage / 25, 0.15, 1)`;
+  duration = `round(8 + sev * 18)`, magnitude = `round(3 + sev * 10)`.
+  Range: ~10 dur / 5 mag for a 3 HP graze up to 26 dur / 13 mag for a
+  25+ HP slam (was a flat 18 / 10 regardless of damage). Skipped
+  entirely on a damage-zero ram (dash i-frame through an enemy).
+- **Asteroid collision** (`handlePlayerAsteroidCollision`) — same
+  damage-scaled formula (was a flat 20 / 12). Heavily shielded
+  contacts now register as a small jolt instead of the same big
+  shake as a one-shot slam.
+
+Net effect: the screen stays calm during a clean run; physical
+collisions still register with weight; impact feel scales with how
+hard you got hit, not with whether you got hit at all.
+
+Files touched:
+
+- `js/modules/combat/combat-manager.js` — `triggerPlayerHitFX`,
+  `tryConsumeGuardian`.
+- `js/modules/player/lifecycle.js` — `takeDamage` (LAST_STAND save +
+  generic-damage fallback).
+- `js/modules/combat/collision-system.js` — enemy-bullet hit path,
+  `handlePlayerEnemyCollision`, `handlePlayerAsteroidCollision`.
+
+---
+
 ## [6.17.0] - 2026-05-19
 
 ### Added — post-dash invuln window + Phase Echo powerup

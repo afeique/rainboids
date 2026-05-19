@@ -134,12 +134,10 @@ export function takeDamage(damageAmount = this.baseDamage) {
                 this.events.emit('audio:powerup');
                 this.events.emit('audio:player-explosion');
             }
-            if (typeof this.triggerScreenFlash === 'function') {
-                this.triggerScreenFlash(0.35, 8);
-            }
-            if (typeof this.triggerScreenShake === 'function') {
-                this.triggerScreenShake(20, 14);
-            }
+            // 6.17.1 — LAST_STAND flash + shake removed alongside the
+            // broader "damage doesn't flash/shake" rule. The save still
+            // reads loud thanks to the audio cue, the banner toast,
+            // and the 24-sparkle radial spawn below.
             if (this.particlePool) {
                 for (let i = 0; i < 24; i++) {
                     const a = (i / 24) * Math.PI * 2;
@@ -167,10 +165,12 @@ export function takeDamage(damageAmount = this.baseDamage) {
         if (typeof this.createDamageNumber === 'function') {
             this.createDamageNumber(this.player.x, this.player.y - (this.player.radius || 14), reducedDamage, { isPlayerHit: true });
         }
+        // 6.17.1 — Shake removed from the generic-damage fallback path.
+        // Shake is now reserved for physical collisions only (handled
+        // at the collision-system sites with damage-scaled magnitude).
+        // triggerPlayerHitFX still fires kick + hitstop + particles.
         if (typeof this.triggerPlayerHitFX === 'function') {
             this.triggerPlayerHitFX(this.player.x, this.player.y, reducedDamage);
-        } else {
-            this.triggerScreenShake(15, 8);
         }
     }
 }

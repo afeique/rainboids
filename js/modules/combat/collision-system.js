@@ -1959,12 +1959,23 @@ export function handlePlayerEnemyCollision(player, enemy) {
             }
         }
 
-        // ── JUICE: hitstop + camera kick + screen shake ──
+        // ── JUICE: hitstop + camera kick + damage-scaled shake ──
+        // 6.17.1 — Shake magnitude/duration now scale with finalDamage
+        // so a glancing 3 HP nudge feels tactile but small, while a
+        // 25+ HP slam shakes the world. sev clamped at 0.15 min so
+        // damage-zero contacts (dash i-frame ram) skip the shake.
         this.triggerHitstop(6); // ~100ms — enemies hit harder than asteroids
         const kickDx = player.x - enemy.x;
         const kickDy = player.y - enemy.y;
         this.triggerCameraKick(kickDx, kickDy, 10);
-        this.triggerScreenShake(18, 10, enemy.radius);
+        if (finalDamage > 0) {
+            const sev = Math.min(1, Math.max(0.15, finalDamage / 25));
+            this.triggerScreenShake(
+                Math.round(8 + sev * 18),
+                Math.round(3 + sev * 10),
+                enemy.radius,
+            );
+        }
         this.events.emit('audio:player-hit-enemy');
 
         // Damage number is created above via createDamageNumber — that
@@ -2131,9 +2142,12 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
         }
     }
 
-    // ── JUICE: hitstop + screen shake (no camera kick for bullets — too small) ──
+    // ── JUICE: hitstop only (no camera kick or screen shake for bullets) ──
+    // 6.17.1 — Screen shake removed from the bullet-hit path. Shake is
+    // now reserved for physical collisions (player ↔ enemy, player ↔
+    // asteroid); bullet impacts read clearly enough from the hitstop,
+    // damage number, particle burst, and per-pattern audio cue.
     this.triggerHitstop(4); // ~67ms — quick jolt
-    this.triggerScreenShake(12, 6, bullet.radius);
     // Per-pattern enemy-bullet hit SFX (falls back to generic if untagged).
     this.events.emit('audio:player-hit-bullet', bullet.firingPattern);
 
@@ -2292,12 +2306,23 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         // Brief white flash on the player
         this.player._hitFlashTimer = 6;
 
-        // ── JUICE: hitstop + camera kick + screen shake ──
+        // ── JUICE: hitstop + camera kick + damage-scaled shake ──
+        // 6.17.1 — Shake scales with finalDamage (sev formula matches
+        // the enemy-collision site). Asteroid contacts on a heavily
+        // shielded ship now shake less than a one-shot slam, instead
+        // of every contact firing the same 20/12 jolt.
         this.triggerHitstop(6); // ~100ms freeze — satisfying impact weight
         const kickDx = this.player.x - asteroid.x;
         const kickDy = this.player.y - asteroid.y;
         this.triggerCameraKick(kickDx, kickDy, 8); // directional camera lurch
-        this.triggerScreenShake(20, 12, asteroid.radius);
+        if (finalDamage > 0) {
+            const sev = Math.min(1, Math.max(0.15, finalDamage / 25));
+            this.triggerScreenShake(
+                Math.round(8 + sev * 18),
+                Math.round(3 + sev * 10),
+                asteroid.radius,
+            );
+        }
     }
 
     // Always damage the asteroid when colliding with player (massive damage)
