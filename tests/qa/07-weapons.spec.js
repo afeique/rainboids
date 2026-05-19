@@ -65,28 +65,36 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     // Shop is now strictly the gold + SP economy — picks-currency
     // purchases happen in the pause menu's POWERUPS tab.
 
-    // 5.101.0 — shop tab strip is now HELP + one tab per weapon (5
-    // primaries + 5 powers + LANCE + ARC = 11 entries). DEFENSE was
-    // suspended in 5.79.57. Test asserts ≥4 to stay resilient.
-    test('shop has multiple DOM tabs (HELP + per-weapon tabs)', async ({ page }) => {
+    // Phase 7 (2026-05-19) — Shop is now a Diablo-style skill tree
+    // with four cluster regions (PRIMARY / POWER / DEFENSE / PASSIVES)
+    // displayed at once. The legacy `.shop-tab` strip is retained as a
+    // hidden DOM stub for back-compat, but the visible navigation lives
+    // in `#shop-tree`. Assert on the new cluster structure.
+    test('shop renders four skill-tree clusters', async ({ page }) => {
         await page.evaluate(() => window.gameEngine.openShop());
         await page.waitForTimeout(100);
-        const tabCount = await page.evaluate(() =>
-            document.querySelectorAll('#shop-overlay .shop-tab').length
+        const clusters = await page.evaluate(() =>
+            document.querySelectorAll('#shop-tree .shop-tree-cluster').length
         );
-        expect(tabCount).toBeGreaterThanOrEqual(4);
+        expect(clusters).toBe(4);
     });
 
-    test('shop tabs include HELP + primary + power weapon entries', async ({ page }) => {
+    test('shop tree contains primary, power, defense, and passive nodes', async ({ page }) => {
         await page.evaluate(() => window.gameEngine.openShop());
         await page.waitForTimeout(100);
-        const tabKeys = await page.evaluate(() =>
-            [...document.querySelectorAll('#shop-overlay .shop-tab')]
-                .map(b => b.dataset.tab)
+        const ids = await page.evaluate(() =>
+            [...document.querySelectorAll('#shop-tree .shop-node')]
+                .map(n => n.dataset.id)
         );
-        expect(tabKeys).toContain('HELP');
-        expect(tabKeys).toContain('PULSE_CANNON');
-        expect(tabKeys).toContain('CHARGE_SHOT');
+        // Parent nodes — weapon / skill IDs.
+        expect(ids).toContain('PULSE_CANNON');
+        expect(ids).toContain('CHARGE_SHOT');
+        expect(ids).toContain('BULWARK');
+        // Upgrade nodes — at least one well-known upgrade per category.
+        expect(ids).toContain('DEAD_EYE');       // PULSE_CANNON upgrade
+        expect(ids).toContain('CHARGE_POWER');   // CHARGE_SHOT upgrade
+        expect(ids).toContain('FORTIFY');        // BULWARK skill upgrade
+        expect(ids).toContain('RAPID_FIRE');     // passive
     });
 
     // 5.79.57 — shop is per-weapon now. Each PRIMARY/POWER weapon ID is

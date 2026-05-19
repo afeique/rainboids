@@ -11,6 +11,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.22.0] - 2026-05-19
+
+### Added — Diablo-style skill tree shop UI (Phase 7 of Skill Tree & Combat Overhaul)
+
+**This is the final phase of the overhaul.** The existing list/tab-based shop
+UI has been replaced with a full-screen skill-tree visual modeled on Diablo II
+/ D2R skill trees — every node always available, no dependency lines between
+nodes (per the explicit design constraint: no skill prerequisites).
+
+### Layout
+
+Four cluster regions, one per upgrade category, surfaced through a unified
+`_buildTreeItems()` helper in `shop-manager.js`:
+
+1. **PRIMARY WEAPONS** — 6 weapons (PULSE_CANNON, STORM_NEEDLES, SCATTER_GUN,
+   RAIL_DRIVER, LANCE_BEAM, CLUSTER_LAUNCHER). Each weapon is a parent node;
+   its per-weapon upgrades from `PRIMARY_UPGRADES` (including the new
+   per-weapon HOMING/PIERCING from Phase 2 and CLUSTER_PAYLOAD / MORE_BOMBLETS
+   / SHORT_FUSE / MEGA_CLUSTER from Phase 6) orbit it in a ring at radius
+   ~120 px.
+2. **POWER WEAPONS** — CHARGE_SHOT, MINE_LAYER, NOVA_BLAST, MISSILE_SALVO,
+   LANCE_BEAM, LIGHTNING_ARC. POWER_UPGRADES orbit each (including the new
+   NOVA_LIGHTNING / NOVA_CHAIN / NOVA_INFERNO from Phase 4).
+3. **DEFENSE SKILLS** — BULWARK, REPAIR_NANITES, DEFLECTOR_ORBS, EMP_PULSE,
+   TRACTOR_SHIELD. SKILL_UPGRADES orbit each.
+4. **PASSIVES** — flat hex grid of the 11 non-hidden entries from
+   `PASSIVE_UPGRADES` (Phase 1). No parent-child structure.
+
+### Node visual
+
+- 56 px circular button (84 px for weapon/skill parents, larger for the
+  capstone gold rosette).
+- Icon centered, cost below icon, name floating under the circle.
+- Stack badge in top-right corner: e.g. "2/3".
+- Border color encodes state:
+  - **Unaffordable** (cost > gold) — gray (#555), dimmed content.
+  - **Affordable** — gold (#e0c060), full saturation.
+  - **Owned (any stacks)** — blue (#5cc8ff), shows stack count.
+  - **Maxed** (stacks === maxStacks) — purple (#a060e0).
+- Hover → floating tooltip with full description, cost, current/max stacks.
+- Click → triggers purchase via existing `shop-manager` logic, animates a
+  gold→blue flash on success.
+
+### Files modified
+
+- **`js/modules/shop/shop-dom.js`** — full rewrite (~552 lines). Renders the
+  4-cluster DOM, handles click→buy, hover→floating tooltip, purchase flash.
+- **`js/modules/shop/shop-manager.js`** — added `_buildTreeItems()` (unified
+  item list across all 4 categories). Changed `openShop` default
+  `shopCategory` to `'TREE'`. Kept the legacy per-weapon / per-category
+  branches for QA back-compat. Added a `SKILLS`/`DEFENSE` empty-list branch
+  to pin the 5.101.0 retirement contract. Defense-skill SP costs are
+  multiplied by 800 (SP retired in 5.101.0) so they're gold-meaningful in
+  the unified tree.
+- **`js/modules/ui/static-dom.js`** — `_buildShopOverlay()` rewritten to
+  build the tree skeleton (header with gold + wave, 4 cluster sections,
+  legend, floating tooltip). Hidden DOM stubs (`#shop-items-list`,
+  `.shop-tab` buttons) retained as no-ops for QA back-compat.
+- **`js/modules/game-engine.js`** — added `_buildTreeItems` and
+  `_buildPassiveTabItems` engine-level shop bindings.
+- **`css/styles.css`** — +430 lines under the "SHOP SKILL TREE (Phase 7)"
+  section: radial-gradient dark background, 4-cluster grid, weapon-orbit
+  ring (340×340 with absolute-positioned upgrade nodes), 56px circular
+  nodes, state border colors, stack badge, parent node, capstone gold
+  rosette, purchase flash keyframe, legend, tooltip, two responsive
+  breakpoints (1100 px → single column, 720 px → scaled nodes).
+- **`tests/qa/07-weapons.spec.js`** — replaced 2 tab-targeted assertions
+  with tree-targeted ones (cluster count + node IDs across all 4 categories).
+
+### Test results
+
+- Unit suite: **509 / 526 — identical to baseline.** The 17 failing tests
+  are pre-existing MP/engine-driver failures unrelated to the shop UI.
+- QA suite (`07-weapons`): **all 19 tests pass** (4.9 minutes). Tree-targeted
+  assertions + preserved legacy `shopCategory` flips both work.
+
+### Tradeoffs / known issues
+
+- **Defense-skill cost re-pricing.** Skill upgrades cost 2-3 SP each in the
+  legacy SP economy (retired in 5.101.0). To surface them in the gold-only
+  tree, the unified `_buildTreeItems` multiplies their costs by 800
+  (FORTIFY = 1600 g, capstones = 2400 g). This puts them in the same price
+  band as the cheapest weapon upgrades.
+- **Legacy DOM stubs.** `.shop-tab` buttons and `#shop-items-list` are still
+  emitted into the DOM as hidden no-ops so any non-test consumer that queries
+  them still resolves. QA test now targets `.shop-tree-cluster` and
+  `.shop-node`.
+- **Capstones still gated.** Upgrades with a `requires` field render with a
+  darkened "LOCK" label and a `Locked — needs X ×N` tooltip line. They auto-
+  unlock once the prereq stacks reach the threshold — no separate unlock
+  action. (NB: this is independent of the user's "no dependencies" rule for
+  TREE LAYOUT — there are no visible dependency lines; the lock gate is a
+  per-upgrade economic constraint, not a tree connection.)
+- **Mobile.** Two responsive breakpoints. Not pixel-perfect, but doesn't
+  break the viewport.
+
+### Visual playtest required before declaring done
+
+This is the one phase that genuinely needs an in-browser eyeball. The agent
+verified syntax + tests but cannot see the rendered layout. Open the shop
+in-game and check:
+
+1. The 4 clusters arrange cleanly without overflow.
+2. Node colors transition through gray → gold → blue → purple as gold and
+   stacks change.
+3. Hover tooltip appears next to the cursor and shows full description.
+4. Click purchase shows the gold→blue flash and increments stacks.
+5. Responsive breakpoints render without broken layout at mobile sizes.
+
+---
+
 ## [6.21.0] - 2026-05-19
 
 ### Added — Nova chain reaction + lightning + inferno upgrades (Phase 4 of Skill Tree & Combat Overhaul)

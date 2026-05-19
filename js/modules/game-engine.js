@@ -2256,9 +2256,13 @@ export class GameEngine {
 
     _buildPowerTabItems(weaponId = null) { return shop._buildPowerTabItems.call(this, weaponId); }
 
+    // Phase 7 (2026-05-19) — Unified item list for the skill-tree shop.
+    _buildTreeItems() { return shop._buildTreeItems.call(this); }
+
     // 6.1.0 — POWERUPS tab restored. Builds a gold-priced list from
     // POWERUP_TYPES (see shop-manager._buildPowerupsTabItems).
     _buildPowerupsTabItems() { return shop._buildPowerupsTabItems.call(this); }
+    _buildPassiveTabItems() { return shop._buildPassiveTabItems.call(this); }
     closeShop() { return shop.closeShop.call(this); }
     closeShopToPlaying() { return shop.closeShopToPlaying.call(this); }
     closeShopAndReturn() { return shop.closeShopAndReturn.call(this); }

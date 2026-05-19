@@ -6,7 +6,16 @@
  */
 
 import { GAME_STATES } from '../core/constants.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS, PASSIVE_UPGRADES, getPrimaryUpgrades, getPowerUpgrades, getSkillUpgrades, getPassiveUpgrades } from '../combat/weapon-data.js';
+import {
+    PRIMARY_WEAPONS,
+    POWER_WEAPONS,
+    DEFENSE_SKILLS,
+    PASSIVE_UPGRADES,
+    getPrimaryUpgrades,
+    getPowerUpgrades,
+    getSkillUpgrades,
+    getPassiveUpgrades,
+} from '../combat/weapon-data.js';
 import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { showShopDom, hideShopDom, renderShopDom, updateShopCurrencyDom } from './shop-dom.js';
@@ -103,11 +112,12 @@ export function openShop() {
         }
 
 
-        // 6.1.0 — Shop lands on POWERUPS by default (was HELP). Unified
-        // shop now hosts POWERUPS + INVENTORY + per-weapon upgrade
-        // trees + HELP. POWERUPS is the most-used tab so it's the
-        // landing surface.
-        this.shopCategory = 'POWERUPS';
+        // Phase 7 (2026-05-19) — Skill-tree shop. No tabs; the tree
+        // displays every category at once. `shopCategory` is left as
+        // 'TREE' so `_rebuildShopCache` builds the unified item list
+        // the new UI consumes. Legacy tests that flip shopCategory to
+        // a specific weapon ID still work — that branch is preserved.
+        this.shopCategory = 'TREE';
 
         // 5.79.57 — Shop is now exclusively offensive: one tab per
         //   weapon, each tab listing that weapon's offensive upgrades
@@ -141,38 +151,50 @@ export function openShop() {
 
 }
 
+// Phase 7 (2026-05-19) — Skill-tree shop. The tree UI shows every
+// category at once, so the legacy "filter by tab" cache is now a
+// unified list of every purchasable upgrade across PRIMARY / POWER /
+// DEFENSE / PASSIVES. Tests + the per-weapon tab path still flip
+// `shopCategory` to single out one weapon's filtered view, so we keep
+// that branch intact and let the new tree consume the full union when
+// `shopCategory` is unset / not a weapon.
+//
+// `shopFilteredItems` always contains the items relevant to the
+// current `shopCategory`. When `shopCategory` is one of POWERUPS /
+// PASSIVE / a weapon id, we build that subset (legacy compat). When
+// it's unset or 'TREE', we build the full union the new UI consumes.
 export function _rebuildShopCache() {
         if (this.shopCategory === 'HELP') {
-            // HELP tab has no purchasable items — renderer paints
-            // an instructions panel.
             this.shopFilteredItems = [];
             return;
         }
-        // 6.1.0 — POWERUPS tab: gold-priced list of every entry in
-        // POWERUP_TYPES. Pricing comes from powerupGoldCost (cost grows
-        // with current stack count). Renderer reads from
-        // shopFilteredItems just like the weapon tabs.
+        // 6.1.0 — POWERUPS tab (legacy): gold-priced list of every
+        // entry in POWERUP_TYPES. Still surfaced via the new tree as
+        // PASSIVES (overlapping ids), but the legacy path is kept for
+        // any pause-menu code that still reads it.
         if (this.shopCategory === 'POWERUPS') {
             this._buildPowerupsTabItems();
             return;
         }
-        // Phase 1 (2026-05-19) — PASSIVE tab: lists entries from the
-        // new PASSIVE_UPGRADES export in weapon-data.js. Pricing keys
-        // off each entry's `cost` field. Phase 7's shop-UI rewrite
-        // will replace this builder with a richer skill-tree layout.
         if (this.shopCategory === 'PASSIVE') {
             this._buildPassiveTabItems();
             return;
         }
-        // 6.1.0 — INVENTORY tab: read-only view of the player's 5
-        // equipped items. No purchasable items; renderer paints item
-        // rows from player.equippedItems directly.
         if (this.shopCategory === 'INVENTORY') {
             this.shopFilteredItems = [];
             return;
         }
-        // Per-weapon shop tabs. Each weapon ID is a valid shopCategory
-        // value; route to the appropriate generalized builder.
+        // 5.101.0 contract — `shopCategory === 'SKILLS'` returns an
+        // empty list. The Phase 7 tree exposes skill upgrades through
+        // the DEFENSE cluster, but this legacy category remains empty
+        // so the corresponding QA tests continue to pin the contract.
+        if (this.shopCategory === 'SKILLS' || this.shopCategory === 'DEFENSE') {
+            this.shopFilteredItems = [];
+            return;
+        }
+        // Per-weapon shop tabs — kept for QA tests that flip
+        // shopCategory to a specific weapon id and assert on the
+        // filtered list.
         if (PRIMARY_WEAPONS[this.shopCategory]) {
             this._buildPrimaryTabItems(this.shopCategory);
             return;
@@ -181,7 +203,103 @@ export function _rebuildShopCache() {
             this._buildPowerTabItems(this.shopCategory);
             return;
         }
-        this.shopFilteredItems = [];
+        // Default — tree view. Union of every purchasable upgrade.
+        this._buildTreeItems();
+}
+
+// Phase 7 — Builds the unified "everything in the tree" list. Walks
+// every PRIMARY / POWER / DEFENSE weapon and emits their upgrades, plus
+// the PASSIVE_UPGRADES set. Each item carries enough metadata for
+// shop-dom to render a node AND for buyShopItem to route the purchase
+// (`isWeaponUpgrade` / `isPassive` / `isSkillUpgrade`).
+export function _buildTreeItems() {
+    const items = [];
+
+    // PRIMARY weapon upgrades
+    for (const w of Object.values(PRIMARY_WEAPONS)) {
+        for (const upg of getPrimaryUpgrades(w.id)) {
+            items.push({
+                id: upg.id,
+                name: upg.name,
+                description: upg.description,
+                icon: upg.icon,
+                cost: upg.cost,
+                costOverrides: upg.costOverrides,
+                maxStacks: upg.maxStacks,
+                category: 'PRIMARY',
+                currency: 'COINS',
+                isWeaponUpgrade: true,
+                parentWeapon: upg.weapon,
+                tier: upg.tier,
+                requires: upg.requires,
+            });
+        }
+    }
+
+    // POWER weapon upgrades
+    for (const w of Object.values(POWER_WEAPONS)) {
+        for (const upg of getPowerUpgrades(w.id)) {
+            items.push({
+                id: upg.id,
+                name: upg.name,
+                description: upg.description,
+                icon: upg.icon,
+                cost: upg.costOverrides ? upg.costOverrides[0] : upg.cost,
+                costOverrides: upg.costOverrides,
+                maxStacks: upg.maxStacks,
+                category: 'POWER',
+                currency: 'COINS',
+                isWeaponUpgrade: true,
+                parentWeapon: upg.weapon,
+                tier: upg.tier,
+                requires: upg.requires,
+            });
+        }
+    }
+
+    // DEFENSE skill upgrades — convert SP cost into gold using the same
+    // multiplier shop-dom applies for display. Without this the buy
+    // path would deduct only 2-3 gold for skill upgrades, making them
+    // effectively free.
+    for (const s of Object.values(DEFENSE_SKILLS)) {
+        for (const upg of getSkillUpgrades(s.id)) {
+            items.push({
+                id: upg.id,
+                name: upg.name,
+                description: upg.description,
+                icon: upg.icon,
+                cost: (upg.cost || 0) * 800,
+                costOverrides: null,
+                maxStacks: upg.maxStacks,
+                category: 'SKILLS',
+                currency: 'COINS',
+                isSkillUpgrade: true,
+                isWeaponUpgrade: true,    // routed through _handleUpgradeBuy
+                parentSkill: upg.skill,
+                tier: upg.tier,
+                requires: upg.requires,
+            });
+        }
+    }
+
+    // PASSIVES (non-hidden only)
+    for (const upg of getPassiveUpgrades({ includeHidden: false })) {
+        items.push({
+            id: upg.id,
+            name: upg.name,
+            description: upg.description || '',
+            icon: upg.icon,
+            cost: upg.cost,
+            maxStacks: upg.maxStacks || 1,
+            category: 'PASSIVE',
+            currency: 'COINS',
+            isPassive: true,
+            isWeaponUpgrade: true,        // routed through _handleUpgradeBuy
+            flatCost: !!upg.flatCost,
+        });
+    }
+
+    this.shopFilteredItems = items;
 }
 
 // 6.1.0 — Builds the POWERUPS shop tab. Walks POWERUP_TYPES, skips

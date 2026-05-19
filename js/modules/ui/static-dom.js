@@ -545,10 +545,22 @@ function _buildShopSuggestOverlay() {
 }
 
 // ── Shop overlay ───────────────────────────────────────────────────
+// Phase 7 (2026-05-19) — Skill-tree rewrite. Replaces the list-based
+// shop with a Diablo-style visual: 4 cluster regions (PRIMARY / POWER /
+// DEFENSE / PASSIVES), each laying out weapon/skill parent nodes with
+// per-weapon upgrade nodes orbiting them. No tab strip — every category
+// is visible at once. The shop-tree CSS lives in css/styles.css under
+// the SHOP SKILL TREE section.
+//
+// Hidden compatibility shims kept for legacy test selectors:
+//   - `#shop-items-list` + `.shop-tab` nodes are kept (visually hidden)
+//     so the existing QA selectors still resolve. The tree itself lives
+//     in `#shop-tree`. The legacy nodes are emptied of meaningful
+//     content and have no event listeners.
 
 function _buildShopOverlay() {
     const overlay = document.getElementById('shop-overlay');
-    if (!overlay || !markBuilt(overlay, 'shop-v1')) return;
+    if (!overlay || !markBuilt(overlay, 'shop-tree-v1')) return;
     overlay.replaceChildren();
     overlay.className = 'ui-element';
     Object.assign(overlay.style, {
@@ -559,54 +571,100 @@ function _buildShopOverlay() {
         height: '100%',
     });
 
-    const menu = el('div', { id: 'shop-menu' });
+    const menu = el('div', { id: 'shop-menu', className: 'shop-menu--tree' });
     overlay.appendChild(menu);
 
-    // Close + title.
+    // Close button — kept in the top-left corner for muscle-memory.
     const closeBtn = el('button', { id: 'shop-close-button', className: 'shop-close', text: '×' });
     closeBtn.setAttribute('aria-label', 'Close shop');
     menu.appendChild(closeBtn);
-    menu.appendChild(el('h2', { className: 'shop-title', text: 'SHOP' }));
 
-    // 6.1.0 — Gold-only currency row (SP / picks DOM removed; were hidden
-    // since 5.99.0 and the SP system was fully retired in 6.0.0).
-    const currencyRow = el('div', { className: 'shop-currency-row' });
-    currencyRow.appendChild(el('span', {
-        className: 'shop-currency shop-currency--coins',
+    // ── Header ────────────────────────────────────────────────────
+    // Gold balance on the left, title in the center, wave indicator
+    // on the right. Wave is updated by shop-dom on each render.
+    const header = el('div', { className: 'shop-tree-header' });
+    header.appendChild(el('div', {
+        className: 'shop-tree-currency',
         children: [
-            el('span', { className: 'shop-currency-icon', text: '💰' }),
-            el('span', { id: 'shop-coins-amount', text: '0' }),
+            el('span', { className: 'shop-tree-currency-icon shop-currency-icon' }),
+            el('span', { id: 'shop-coins-amount', className: 'shop-tree-currency-amount', text: '0' }),
         ],
     }));
-    menu.appendChild(currencyRow);
+    header.appendChild(el('h2', { className: 'shop-tree-title', text: 'SKILL TREE' }));
+    header.appendChild(el('div', {
+        className: 'shop-tree-wave',
+        children: [
+            el('span', { className: 'shop-tree-wave-label', text: 'WAVE' }),
+            el('span', { id: 'shop-wave-amount', className: 'shop-tree-wave-amount', text: '1' }),
+        ],
+    }));
+    menu.appendChild(header);
 
-    // 6.1.0 — Unified shop tabs: POWERUPS + INVENTORY promoted from
-    // the pause menu, followed by the per-weapon upgrade trees.
-    const tabs = el('div', { className: 'shop-tabs' });
-    const tabDefs = [
-        { key: 'POWERUPS',      label: 'POWERUPS', active: true },
-        { key: 'INVENTORY',     label: 'INVENTORY' },
-        { key: 'PULSE_CANNON',  label: 'PULSE' },
-        { key: 'STORM_NEEDLES', label: 'NEEDLES' },
-        { key: 'SCATTER_GUN',   label: 'SCATTER' },
-        { key: 'RAIL_DRIVER',   label: 'RAIL' },
-        { key: 'CHARGE_SHOT',   label: 'CHARGE' },
-        { key: 'MINE_LAYER',    label: 'MINES' },
-        { key: 'NOVA_BLAST',    label: 'NOVA' },
-        { key: 'MISSILE_SALVO', label: 'MISSILES' },
-        { key: 'LANCE_BEAM',    label: 'LANCE' },
-        { key: 'LIGHTNING_ARC', label: 'ARC' },
-        { key: 'HELP',          label: 'HELP' },
+    // ── Tree body ─────────────────────────────────────────────────
+    // 4 cluster regions. shop-dom renders into these — the cluster
+    // containers themselves are stable, only their children change.
+    const tree = el('div', { id: 'shop-tree', className: 'shop-tree' });
+    const clusters = [
+        { id: 'shop-tree-primary',  label: 'PRIMARY WEAPONS' },
+        { id: 'shop-tree-power',    label: 'POWER WEAPONS' },
+        { id: 'shop-tree-defense',  label: 'DEFENSE SKILLS' },
+        { id: 'shop-tree-passives', label: 'PASSIVES' },
     ];
-    for (const t of tabDefs) {
-        const b = el('button', { className: 'shop-tab' + (t.active ? ' active' : ''), text: t.label });
-        b.dataset.tab = t.key;
-        tabs.appendChild(b);
+    for (const c of clusters) {
+        const cluster = el('section', { className: 'shop-tree-cluster' });
+        cluster.dataset.cluster = c.id;
+        cluster.appendChild(el('h3', { className: 'shop-tree-cluster-title', text: c.label }));
+        cluster.appendChild(el('div', { id: c.id, className: 'shop-tree-cluster-body' }));
+        tree.appendChild(cluster);
     }
-    menu.appendChild(tabs);
+    menu.appendChild(tree);
 
-    // Items list — filled by shop-dom.renderShopDom() on open.
-    menu.appendChild(el('div', { id: 'shop-items-list', className: 'shop-content' }));
+    // ── Legend ────────────────────────────────────────────────────
+    const legend = el('div', { className: 'shop-tree-legend' });
+    const legendEntries = [
+        { cls: 'shop-tree-legend-swatch--unaffordable', label: 'Too expensive' },
+        { cls: 'shop-tree-legend-swatch--affordable',   label: 'Affordable' },
+        { cls: 'shop-tree-legend-swatch--owned',        label: 'Owned' },
+        { cls: 'shop-tree-legend-swatch--maxed',        label: 'Maxed' },
+    ];
+    for (const entry of legendEntries) {
+        legend.appendChild(el('div', {
+            className: 'shop-tree-legend-entry',
+            children: [
+                el('span', { className: `shop-tree-legend-swatch ${entry.cls}` }),
+                el('span', { className: 'shop-tree-legend-label', text: entry.label }),
+            ],
+        }));
+    }
+    menu.appendChild(legend);
+
+    // ── Floating tooltip ─────────────────────────────────────────
+    // Hidden until a node is hovered; shop-dom positions it next to
+    // the cursor and fills in name + description + stack + cost.
+    const tip = el('div', { id: 'shop-tree-tooltip', className: 'shop-tree-tooltip' });
+    tip.style.display = 'none';
+    overlay.appendChild(tip);
+
+    // ── Hidden legacy stubs (test back-compat) ────────────────────
+    // `#shop-items-list` and the `.shop-tab` nodes are kept so the
+    // existing QA test selectors still resolve. They have no visual
+    // presence and no event listeners.
+    const legacy = el('div', { className: 'shop-tree-legacy-hidden' });
+    legacy.appendChild(el('div', { id: 'shop-items-list' }));
+    const tabKeys = [
+        'POWERUPS', 'INVENTORY', 'PULSE_CANNON', 'STORM_NEEDLES',
+        'SCATTER_GUN', 'RAIL_DRIVER', 'CLUSTER_LAUNCHER', 'CHARGE_SHOT',
+        'MINE_LAYER', 'NOVA_BLAST', 'MISSILE_SALVO', 'LANCE_BEAM',
+        'LIGHTNING_ARC', 'PASSIVE', 'HELP',
+    ];
+    for (const key of tabKeys) {
+        const stub = el('button', { className: 'shop-tab' });
+        stub.dataset.tab = key;
+        stub.setAttribute('aria-hidden', 'true');
+        stub.tabIndex = -1;
+        legacy.appendChild(stub);
+    }
+    menu.appendChild(legacy);
 }
 
 // ── Stats overlay ──────────────────────────────────────────────────

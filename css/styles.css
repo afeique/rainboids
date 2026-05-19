@@ -3566,3 +3566,517 @@ body.mobile-portrait .shop-help-icon {
     font-size: 10px;
 }
 
+/* ──────────────────────────────────────────────────────────────────────
+ * SHOP SKILL TREE (Phase 7 — 2026-05-19)
+ *
+ * Diablo-style visual replacing the legacy tab + list layout. Four
+ * cluster regions stacked vertically; within each cluster, weapon/skill
+ * "parent" nodes have their upgrade nodes orbiting them in a ring. The
+ * PASSIVES cluster uses a flat hex-style grid instead. No dependency
+ * lines between nodes — every node is independently available.
+ * ────────────────────────────────────────────────────────────────────── */
+
+/* Base overlay swap — the skill-tree shop replaces the legacy list-
+ * style layout, so override the old shop-menu sizing rules. */
+.shop-menu--tree {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background:
+        radial-gradient(ellipse at center top, rgba(40, 28, 60, 0.55) 0%, rgba(8, 8, 16, 0.92) 60%, rgba(0, 0, 0, 0.96) 100%),
+        repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.012) 0 2px,
+            transparent 2px 6px
+        );
+    padding: 28px 36px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    font-family: 'Press Start 2P', monospace;
+    color: #e6e6e6;
+}
+
+/* Hide the legacy test-only stubs (kept in DOM for QA selector
+ * back-compat). */
+.shop-tree-legacy-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ── Header ───────────────────────────────────────────────────────── */
+.shop-tree-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 24px;
+    padding: 12px 24px 12px 80px; /* left padding leaves room for #shop-close-button */
+    border-bottom: 1px solid rgba(200, 170, 100, 0.22);
+}
+
+.shop-tree-title {
+    margin: 0;
+    font-size: 22px;
+    color: #f0d090;
+    letter-spacing: 4px;
+    text-align: center;
+    text-shadow: 0 0 12px rgba(240, 208, 144, 0.35);
+}
+
+.shop-tree-currency,
+.shop-tree-wave {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.shop-tree-currency { justify-self: start; color: #ffd700; }
+.shop-tree-wave     { justify-self: end;   color: #88ccff; }
+
+.shop-tree-wave-label,
+.shop-tree-currency-label {
+    color: #888;
+    font-size: 12px;
+    letter-spacing: 2px;
+}
+
+.shop-tree-currency-amount,
+.shop-tree-wave-amount {
+    font-size: 22px;
+    font-weight: bold;
+    text-shadow: 0 0 8px currentColor;
+}
+
+/* ── Tree body ────────────────────────────────────────────────────── */
+.shop-tree {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    flex: 1;
+    min-height: 0;
+}
+
+.shop-tree-cluster {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px;
+    background:
+        linear-gradient(180deg, rgba(40, 30, 20, 0.45) 0%, rgba(20, 14, 10, 0.55) 100%);
+    border: 1px solid rgba(200, 170, 100, 0.18);
+    border-radius: 10px;
+    box-shadow:
+        inset 0 0 24px rgba(0, 0, 0, 0.4),
+        0 0 12px rgba(80, 60, 30, 0.25);
+}
+
+.shop-tree-cluster-title {
+    margin: 0;
+    font-size: 14px;
+    color: #f0d090;
+    letter-spacing: 3px;
+    text-align: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(200, 170, 100, 0.18);
+    text-shadow: 0 0 10px rgba(240, 208, 144, 0.4);
+}
+
+.shop-tree-cluster-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 30px 50px;
+    flex: 1;
+    padding: 18px 8px;
+}
+
+/* ── Weapon/skill subgroup (parent + orbiting upgrades) ──────────── */
+.shop-tree-subgroup {
+    --node-accent: #888;
+    flex: 0 0 auto;
+}
+
+/* The ring container is the layout box for one parent + its orbiting
+ * upgrade nodes. Children are absolute-positioned (transforms in JS)
+ * relative to the ring's centre. */
+.shop-tree-ring {
+    position: relative;
+    width: 340px;
+    height: 340px;
+}
+
+.shop-tree-ring > * {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+}
+
+/* The parent (weapon/skill) sits at the centre. JS doesn't translate
+ * it, so a default centre transform applies. */
+.shop-tree-ring > .shop-node--parent {
+    transform: translate(-50%, -50%);
+}
+
+/* Decorative inner ring — purely visual, no dependency semantics. */
+.shop-tree-ring::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 240px;
+    height: 240px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 1px dashed rgba(200, 170, 100, 0.18);
+    pointer-events: none;
+}
+
+/* ── Passive cluster grid (no orbit) ─────────────────────────────── */
+.shop-tree-passive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 30px 22px;
+    padding: 8px 20px;
+    width: 100%;
+}
+
+.shop-tree-passive-grid > .shop-node {
+    position: relative;
+    margin: 0 auto;
+}
+
+/* ── Node base ─────────────────────────────────────────────────────
+ * A node is a 56px circle with an icon + cost label + name label
+ * underneath. The border color drives the affordability state. */
+.shop-node {
+    --node-color: #999;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.12) 0%, rgba(0, 0, 0, 0.35) 70%),
+        rgba(20, 16, 30, 0.85);
+    border: 3px solid var(--node-color);
+    color: white;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    font-family: 'Press Start 2P', monospace;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
+    box-shadow:
+        0 0 0 2px rgba(0, 0, 0, 0.6),
+        0 0 14px color-mix(in srgb, var(--node-color) 35%, transparent);
+    outline: none;
+}
+
+/* Icon centered inside the circle. */
+.shop-node .shop-node-icon {
+    line-height: 0;
+    color: var(--node-color);
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--node-color) 60%, transparent));
+}
+
+/* Cost text — small label below the icon, inside the circle. */
+.shop-node-cost {
+    font-size: 8px;
+    color: #f8d670;
+    margin-top: 2px;
+    line-height: 1;
+    letter-spacing: 0.5px;
+}
+
+/* Short name underneath the circle — wraps under, doesn't affect the
+ * circle's hit area but is centered with it. */
+.shop-node-label {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translate(-50%, 0);
+    font-size: 9px;
+    color: #c8c8c8;
+    white-space: nowrap;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    letter-spacing: 1px;
+}
+
+/* Stack badge — small pill in the top-right corner. */
+.shop-node-badge {
+    position: absolute;
+    top: -6px;
+    right: -10px;
+    background: #5cc8ff;
+    color: #001020;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 3px 6px;
+    border-radius: 10px;
+    line-height: 1;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 6px rgba(92, 200, 255, 0.5);
+    pointer-events: none;
+}
+
+/* Parent node — bigger, no buy state, weapon-tinted. Renders the
+ * weapon icon at a larger size; sits at the cluster center. */
+.shop-node--parent {
+    width: 84px;
+    height: 84px;
+    border-width: 4px;
+    cursor: default;
+    background:
+        radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.15) 0%, rgba(0, 0, 0, 0.5) 75%),
+        rgba(10, 8, 20, 0.95);
+    box-shadow:
+        0 0 0 2px rgba(0, 0, 0, 0.6),
+        0 0 20px color-mix(in srgb, var(--node-color) 50%, transparent),
+        inset 0 0 12px color-mix(in srgb, var(--node-color) 25%, transparent);
+}
+
+.shop-node--parent .shop-node-label {
+    font-size: 10px;
+    color: var(--node-color);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--node-color) 50%, transparent);
+    letter-spacing: 1.5px;
+}
+
+/* ── State variants ──────────────────────────────────────────────── */
+.shop-node--unaffordable {
+    --node-color: #555;
+    filter: grayscale(0.6) brightness(0.7);
+}
+.shop-node--unaffordable .shop-node-cost { color: #ff8080; }
+.shop-node--unaffordable .shop-node-icon { color: #888; filter: none; }
+
+.shop-node--affordable {
+    --node-color: #e0c060;
+}
+.shop-node--affordable .shop-node-cost { color: #ffe080; }
+
+.shop-node--owned {
+    --node-color: #5cc8ff;
+}
+.shop-node--owned .shop-node-cost { color: #aef0ff; }
+
+.shop-node--maxed {
+    --node-color: #a060e0;
+    cursor: default;
+}
+.shop-node--maxed .shop-node-cost { color: #d8b8ff; font-weight: bold; }
+.shop-node--maxed .shop-node-badge { background: #a060e0; color: white; box-shadow: 0 0 8px rgba(160, 96, 224, 0.55); }
+
+.shop-node--locked {
+    --node-color: #444;
+    cursor: not-allowed;
+    filter: grayscale(0.9) brightness(0.55);
+}
+.shop-node--locked .shop-node-cost { color: #555; font-size: 7px; }
+
+/* Capstone (tier-2) rosette — adds an extra gold ring around the
+ * node so mastery upgrades stand out before the player hovers. */
+.shop-node--capstone {
+    box-shadow:
+        0 0 0 2px rgba(0, 0, 0, 0.6),
+        0 0 0 4px rgba(240, 208, 144, 0.5),
+        0 0 18px color-mix(in srgb, var(--node-color) 50%, transparent);
+}
+
+/* ── Interactions ────────────────────────────────────────────────── */
+.shop-node--upgrade:not(:disabled):hover {
+    transform: translate(-50%, -50%) scale(1.12);
+    box-shadow:
+        0 0 0 2px rgba(0, 0, 0, 0.6),
+        0 0 22px color-mix(in srgb, var(--node-color) 75%, transparent);
+    z-index: 2;
+}
+
+/* Passive grid nodes use a different transform origin (no orbit
+ * translate) so the hover scale doesn't fight a half-translate. */
+.shop-tree-passive-grid .shop-node--upgrade:not(:disabled):hover {
+    transform: scale(1.12);
+}
+
+.shop-node--upgrade:not(:disabled):active {
+    transform: translate(-50%, -50%) scale(1.04);
+}
+.shop-tree-passive-grid .shop-node--upgrade:not(:disabled):active {
+    transform: scale(1.04);
+}
+
+.shop-node--upgrade:disabled {
+    cursor: not-allowed;
+}
+
+/* ── Purchase flash animation ────────────────────────────────────── */
+@keyframes shop-node-flash {
+    0%   { box-shadow: 0 0 0 2px #fff8c0, 0 0 30px #ffd700; filter: brightness(1.8); }
+    50%  { box-shadow: 0 0 0 2px #5cc8ff, 0 0 26px #5cc8ff; filter: brightness(1.3); }
+    100% { box-shadow: 0 0 0 2px rgba(0,0,0,0.6), 0 0 14px color-mix(in srgb, var(--node-color) 35%, transparent); filter: brightness(1); }
+}
+.shop-node--flash {
+    animation: shop-node-flash 0.55s ease-out 1;
+}
+
+/* ── Legend ──────────────────────────────────────────────────────── */
+.shop-tree-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 24px;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(200, 170, 100, 0.18);
+    font-size: 10px;
+    color: #aaa;
+}
+
+.shop-tree-legend-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shop-tree-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid #555;
+    background: rgba(20, 16, 30, 0.85);
+}
+
+.shop-tree-legend-swatch--unaffordable { border-color: #555; }
+.shop-tree-legend-swatch--affordable   { border-color: #e0c060; box-shadow: 0 0 6px rgba(224, 192, 96, 0.5); }
+.shop-tree-legend-swatch--owned        { border-color: #5cc8ff; box-shadow: 0 0 6px rgba(92, 200, 255, 0.5); }
+.shop-tree-legend-swatch--maxed        { border-color: #a060e0; box-shadow: 0 0 6px rgba(160, 96, 224, 0.5); }
+
+.shop-tree-legend-label {
+    letter-spacing: 1px;
+}
+
+/* ── Tooltip ─────────────────────────────────────────────────────── */
+.shop-tree-tooltip {
+    position: fixed;
+    z-index: 1000;
+    max-width: 280px;
+    padding: 12px 14px;
+    background: rgba(8, 8, 14, 0.96);
+    border: 1px solid rgba(200, 170, 100, 0.55);
+    border-radius: 8px;
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.6),
+        0 6px 24px rgba(0, 0, 0, 0.7),
+        0 0 18px rgba(200, 170, 100, 0.18);
+    pointer-events: none;
+    font-family: 'Press Start 2P', monospace;
+    color: #e6e6e6;
+}
+
+.shop-tree-tooltip-name {
+    font-size: 13px;
+    color: #f0d090;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+
+.shop-tree-tooltip-desc {
+    font-size: 10px;
+    color: #cccccc;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.shop-tree-tooltip-lock {
+    font-size: 9px;
+    color: #ff9070;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.shop-tree-tooltip-meta {
+    display: flex;
+    gap: 16px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(200, 170, 100, 0.2);
+}
+
+.shop-tree-tooltip-meta-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.shop-tree-tooltip-meta-label {
+    font-size: 8px;
+    color: #888;
+    letter-spacing: 1.5px;
+}
+
+.shop-tree-tooltip-meta-value {
+    font-size: 12px;
+    color: #ffd700;
+    font-weight: bold;
+}
+
+/* ── Responsive — narrow viewports ───────────────────────────────── */
+@media (max-width: 1100px) {
+    .shop-tree {
+        grid-template-columns: 1fr;
+    }
+    .shop-tree-ring {
+        width: 300px;
+        height: 300px;
+    }
+}
+
+@media (max-width: 720px) {
+    .shop-menu--tree {
+        padding: 16px;
+    }
+    .shop-tree-header {
+        padding-left: 60px;
+        gap: 12px;
+    }
+    .shop-tree-title { font-size: 16px; letter-spacing: 2px; }
+    .shop-tree-currency-amount,
+    .shop-tree-wave-amount { font-size: 16px; }
+    .shop-tree-cluster { padding: 12px; }
+    .shop-tree-cluster-title { font-size: 12px; letter-spacing: 2px; }
+    .shop-tree-cluster-body { gap: 22px 30px; padding: 12px 4px; }
+    .shop-tree-ring {
+        width: 260px;
+        height: 260px;
+    }
+    .shop-tree-ring::before {
+        width: 180px;
+        height: 180px;
+    }
+    .shop-node {
+        width: 48px;
+        height: 48px;
+        border-width: 2px;
+    }
+    .shop-node--parent {
+        width: 64px;
+        height: 64px;
+    }
+    .shop-node-label {
+        font-size: 8px;
+        max-width: 90px;
+    }
+}
