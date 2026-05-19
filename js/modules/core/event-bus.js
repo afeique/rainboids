@@ -34,8 +34,14 @@ export class EventBus {
     emit(event, data) {
         const list = this._listeners[event];
         if (!list) return;
-        for (let i = 0; i < list.length; i++) {
-            list[i](data);
+        // 6.18.3 — Iterate over a snapshot. If a callback calls off()
+        // (directly or via the returned unsubscribe fn) during emit,
+        // splice mutates `list` mid-iteration and the next listener
+        // gets skipped. Slicing once isolates the dispatch from any
+        // unsubscriptions triggered by the handlers themselves.
+        const snapshot = list.slice();
+        for (let i = 0; i < snapshot.length; i++) {
+            snapshot[i](data);
         }
     }
 

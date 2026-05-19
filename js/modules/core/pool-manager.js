@@ -131,6 +131,21 @@ export class PoolManager {
     }
 
     /**
+     * 6.18.4 — Drain every active object back into the free pool. Used
+     * at game-init / restart to clear leftover entities without
+     * orphaning them. The pre-6.18.4 path nulled `activeObjects = []`
+     * directly, which left the freed objects stuck with stale
+     * `_poolIndex` values and never returned them to `this.pool` —
+     * the next session paid `new ObjectClass()` for every spawn until
+     * the pool grew back to its peak.
+     */
+    drainActive() {
+        for (let i = this.activeObjects.length - 1; i >= 0; i--) {
+            this.release(this.activeObjects[i]);
+        }
+    }
+
+    /**
      * 5.76.2 — soft-cap eviction. When the active count is at or above
      * `cap`, release the oldest active object that satisfies the
      * predicate (default: any object). Used by `firePrimary` to evict

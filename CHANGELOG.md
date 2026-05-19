@@ -11,6 +11,153 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.18.9] - 2026-05-19
+
+### Fixed — stats-state-case-mismatch (stats-overlay `_wasPaused` always false)
+
+`stats-overlay.js:open()` compared `ge.game.state === 'paused'`
+(lowercase string literal), but `GAME_STATES.PAUSED = 'PAUSED'`
+(uppercase). The comparison was always false, so `_wasPaused`
+never reflected the real pause state:
+
+- The open() path always called `togglePause()` even when the
+  game was already paused — causing a transient unpause/repause
+  when stats opened from the pause menu.
+- The close() path took the "resume directly, bypass pause menu"
+  branch even when the user entered stats *from* the pause menu.
+  The `_cameFromPauseMenu` check above it caught most of these
+  cases via DOM inspection, but the third branch ("paused via
+  some other path, leave it paused") was unreachable.
+
+`stats-overlay.js` now imports `GAME_STATES` from `core/constants.js`
+and compares to `GAME_STATES.PAUSED`.
+
+---
+
+## [6.18.8] - 2026-05-19
+
+### Changed — particle pool starts at MAX_PARTICLES instead of 50
+
+`new PoolManager(Particle, 50)` was a vestige of the pre-6.17.2
+soft-cap era when `50` acted as the eviction threshold. The 6.17.2
+work removed the cap (pool grows on demand) — leaving the 50 as
+the *initial* size meant the first ~2450 particles after boot
+each paid `new Particle()`, distributed GC pressure during the
+first 30 seconds of gameplay before steady state.
+
+`game-engine.js` now passes `GAME_CONFIG.MAX_PARTICLES` (2500) as
+the initial size, pre-allocating the working set at boot. ~500 KB
+upfront memory; no warm-up GC blip during the first heavy
+explosion.
+
+Not a correctness fix — the post-6.17.2 grow-on-demand pool was
+already producing the right particles; this just shifts the
+allocation cost from gameplay to boot.
+
+---
+
+## [6.18.7] - 2026-05-19
+
+### Fixed — input-bind-per-frame-alloc
+
+`game-engine.update()` and the offensive-hitstop branch each called
+`this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler)`
+once per logic tick, allocating a fresh bound closure every frame
+(~120 unnecessary allocations/second between the two sites). The
+bound fn is now cached once at constructor time into
+`this._boundAimForPlayerMovement` and reused at both call sites.
+
+Pure perf — no behavior change.
+
+---
+
+## [6.18.6] - 2026-05-19
+
+### Fixed — cleanup-interval tick storm
+
+The periodic pool sweep was gated by
+`Math.floor(survivalTime/1000) % PARTICLE_CLEANUP_INTERVAL === 0`,
+which is true for EVERY frame within a qualifying second — so the
+sweep ran ~60 times per "trigger second" instead of once. With
+PARTICLE_CLEANUP_INTERVAL=3 and ~6 pools sweeping per call, that's
+~360 redundant `cleanupInactive` calls per trigger second.
+
+`game-engine.js` now tracks `_lastCleanupSecond` and only sweeps
+when the current second has changed AND falls on the interval
+boundary. Sweep fires exactly once per N-second tick as intended.
+
+---
+
+## [6.18.5] - 2026-05-19
+
+### Fixed — survivalTime kept counting during pause / shop / title
+
+`survivalTime` was updated as `Date.now() - gameStartTime` inside
+the logic-tick body. The PLAYING/WAVE_TRANSITION gate was already
+in place, but the WALL-CLOCK base ignored the gate — pausing for
+five minutes would still attribute five minutes of "survival" to
+the run once the game resumed.
+
+Replaced with `survivalTime += GAME_CONFIG.LOGIC_TICK_MS` inside the
+same gated block. Time now only accumulates on ticks where gameplay
+actually advanced; the survival readout / record / cleanup-interval
+gating all stay correct because they read the same field.
+
+---
+
+## [6.18.4] - 2026-05-19
+
+### Fixed — pool reset orphaned active entities
+
+`game-engine.init()` cleared its 12 entity pools by directly
+assigning `pool.activeObjects = []`. The freed objects were
+stranded — they were no longer tracked in `activeObjects`, but
+they were also never pushed back onto `pool.pool`, so the next
+session paid `new ObjectClass()` for every spawn until the pool
+grew back to peak. The orphaned entities also carried stale
+`_poolIndex` values, so a late-arriving `release()` on one of
+them (e.g. via a deferred timer) would corrupt the active list.
+
+Added `PoolManager.drainActive()` which iterates backwards and
+calls `release()` on each entity, properly returning them to the
+free pool. Every `pool.activeObjects = []` site in `init()`
+replaced with `pool.drainActive()`.
+
+---
+
+## [6.18.3] - 2026-05-19
+
+### Fixed — eventbus emit skips next listener when handler unsubscribes
+
+`EventBus.emit()` iterated over the live `this._listeners[event]`
+array. If a handler called `off()` during emit (either directly or
+via the unsubscribe function returned from `on()`), `splice` mutated
+the array mid-iteration and the next listener was silently skipped.
+
+`emit()` now iterates over `list.slice()` so a synchronous
+unsubscribe by a handler doesn't change the dispatch list for the
+in-progress emit. New subscriptions added during emit still get
+their callback registered for next time (correct behavior).
+
+---
+
+## [6.18.2] - 2026-05-19
+
+### Fixed — touchstart audio-warmer listener leak
+
+`onTouchWarmAudio` was registered on `window` alongside the other
+title-screen listeners but was missing from the teardown block in
+`consumeTitleScreen`. The keydown / mousedown / mouseup / click /
+mousemove listeners were removed; the touchstart one stayed live
+for the entire post-title session. Today it's a cheap no-op once
+audio is warm, but it's still a leak and a footgun if the handler
+ever grows.
+
+Added the missing `window.removeEventListener('touchstart',
+onTouchWarmAudio)` to `consumeTitleScreen` in `js/main.js`.
+
+---
+
 ## [6.18.1] - 2026-05-19
 
 ### Changed — scanlines made finer (sharper edges, same period)

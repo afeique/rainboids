@@ -143,6 +143,13 @@ class RainboidsGame {
             window.removeEventListener('mouseup',   onMouseUp);
             window.removeEventListener('click',     onClick);
             window.removeEventListener('mousemove', onMove);
+            // 6.18.2 — Plug touchstart listener leak. onTouchWarmAudio
+            // was registered alongside the other title-screen listeners
+            // but never removed; after leaving the title screen it
+            // continued firing on every touch for the rest of the
+            // session (cheap no-op once audio is warm, but a leak all
+            // the same and a footgun if the handler ever grows).
+            window.removeEventListener('touchstart', onTouchWarmAudio);
 
             this.audioManager.initializeAudio();
             this.uiManager.startMusic();

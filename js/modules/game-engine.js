@@ -337,10 +337,19 @@ export class GameEngine {
         this.PRIMARY_WEAPONS_LIST = PRIMARY_WEAPONS;
         this.POWER_WEAPONS_LIST = POWER_WEAPONS;
         this.inputHandler = inputHandler;
-        
+
         // Set game engine reference in input handler for coordinate transformation
         this.inputHandler.gameEngine = this;
-        
+
+        // 6.18.7 — Pre-bind updateAimForPlayerMovement once. The per-tick
+        // sites used to call `.bind(this.inputHandler)` every frame
+        // (twice: in update() and in the offensive-hitstop branch),
+        // allocating a fresh bound closure each time. Caching the
+        // bound fn here turns the per-frame allocation into a one-time
+        // bind at init.
+        this._boundAimForPlayerMovement =
+            this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
+
         // Make game engine globally accessible for entities
         window.gameEngine = this;
         this._defenseSkillsRef = DEFENSE_SKILLS; // Expose for UI manager skill slots
@@ -457,6 +466,15 @@ export class GameEngine {
 
         // Frame-counted timers — only advance during PLAYING/WAVE_TRANSITION
         this._gameTimers = [];
+
+        // 6.18.6 — Last whole-second on which the periodic pool sweep
+        // ran. Previously the gate was `Math.floor(survivalTime/1000)
+        // % PARTICLE_CLEANUP_INTERVAL === 0`, which evaluates true for
+        // EVERY frame within a qualifying second — i.e. the cleanup
+        // ran ~60 times per "trigger second" instead of once. Tracking
+        // the last sweep's second and bailing when it hasn't changed
+        // gives the intended once-per-N-seconds cadence.
+        this._lastCleanupSecond = -1;
 
         // Initialize game state properties
         this.initializeGameState();
@@ -821,7 +839,13 @@ export class GameEngine {
         this.player.y = this.gameField.height / 2;
         
         this.bulletPool = new PoolManager(Bullet, 10);     // Reduced from 20  
-        this.particlePool = new PoolManager(Particle, 50); // Cap is MAX_PARTICLES=50
+        // 6.18.8 — Particle pool starts at MAX_PARTICLES (2500). Pre-6.17.2
+        // this field acted as a hard cap with eviction; 6.17.2 removed
+        // the cap (pool grows on demand). With size=50, the first ~2450
+        // particles after boot each pay `new Particle()` — distributed
+        // GC pressure during early gameplay before steady state. Boots
+        // with a warm pool now; ~500 KB upfront, no warm-up GC blip.
+        this.particlePool = new PoolManager(Particle, GAME_CONFIG.MAX_PARTICLES);
         this.lineDebrisPool = new PoolManager(LineDebris, 100); // Sized for 5.64.5 fragmented ship-shred — 2x pieces per enemy + multi-death overlap
         // Sized for asteroid + enemy bursts both flowing through this
         // pool. Asteroid burst: 10–22 shards; enemy burst: 18–46. A
@@ -947,23 +971,30 @@ export class GameEngine {
         // Reset ghost preview positions
         this.ghostEnemyPosition = this.generateGhostPosition();
         this.ghostAsteroidPosition = this.generateGhostPosition();
-        // Clear all pools
-        this.bulletPool.activeObjects = [];
-        this.particlePool.activeObjects = [];
-        this.lineDebrisPool.activeObjects = [];
-        this.asteroidShardPool.activeObjects = [];
-        this.asteroidPool.activeObjects = [];
-        this.enemyPool.activeObjects = [];
+        // Clear all pools.
+        // 6.18.4 — Drain via PoolManager.drainActive() instead of nulling
+        // `activeObjects = []`. The direct assignment orphaned the
+        // freed entities — they were neither in activeObjects nor in
+        // the free pool, so the next session had to allocate fresh
+        // instances (paying `new ObjectClass()` cost) until the pool
+        // grew back to peak. drainActive() releases each entity
+        // properly so it goes back on `this.pool` for reuse.
+        this.bulletPool.drainActive();
+        this.particlePool.drainActive();
+        this.lineDebrisPool.drainActive();
+        this.asteroidShardPool.drainActive();
+        this.asteroidPool.drainActive();
+        this.enemyPool.drainActive();
         // 5.115.0 — drop any active formations on reset so stale
         // _formation refs don't point to dead enemies after pool wipe.
         if (this.formationManager) this.formationManager.clear();
-        this.enemyBulletPool.activeObjects = [];
-        this.colorStarPool.activeObjects = [];
-        this.goldCoinPool.activeObjects = [];
-        this.goldShapePool.activeObjects = [];
-        this.statPickupPool.activeObjects = [];
-        this.backgroundStarPool.activeObjects = [];
-        this.powerupPool.activeObjects = [];
+        this.enemyBulletPool.drainActive();
+        this.colorStarPool.drainActive();
+        this.goldCoinPool.drainActive();
+        this.goldShapePool.drainActive();
+        this.statPickupPool.drainActive();
+        this.backgroundStarPool.drainActive();
+        this.powerupPool.drainActive();
 
         // 5.64.16 — wipe the WebGL star buffer too so the new run's
         // stars don't render on top of the previous run's leftovers.
@@ -2380,14 +2411,22 @@ export class GameEngine {
                 if (t.done) this._gameTimers.splice(i, 1);
             }
 
-            // Update survival timer
+            // Update survival timer.
+            // 6.18.5 — Accumulate by logic-tick rather than reading
+            // wall-clock from `gameStartTime`. The wall-clock path
+            // kept ticking during PAUSED/SHOP/title-overlay states,
+            // so a player who paused for 5 minutes saw their
+            // "survival time" jump by 5 minutes of phantom progress.
+            // This block is already gated by PLAYING/WAVE_TRANSITION,
+            // so adding LOGIC_TICK_MS here counts only frames where
+            // gameplay actually advanced.
             if (this.game.gameStartTime > 0) {
-                this.game.survivalTime = Date.now() - this.game.gameStartTime;
+                this.game.survivalTime += GAME_CONFIG.LOGIC_TICK_MS;
             }
             
             const input = this.inputHandler.getInput();
             // Add the update method to the input object so player can call it
-            input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
+            input.updateAimForPlayerMovement = this._boundAimForPlayerMovement;
 
             // ── Mobile tower-defense mode (5.94.0) ───────────────────────
             // No auto-pilot — the player is stationary on mobile. Movement
@@ -2573,8 +2612,15 @@ export class GameEngine {
                 }
             }
 
-            // Performance: Clean up inactive objects periodically
-            if (Math.floor(this.game.survivalTime / 1000) % GAME_CONFIG.PARTICLE_CLEANUP_INTERVAL === 0) {
+            // Performance: Clean up inactive objects periodically.
+            // 6.18.6 — Gate on whole-second change rather than the
+            // raw `floor(survivalTime/1000) % N === 0` predicate so
+            // the sweep fires once per N-second boundary instead of
+            // ~60 times per trigger second.
+            const currentSecond = Math.floor(this.game.survivalTime / 1000);
+            if (currentSecond !== this._lastCleanupSecond &&
+                currentSecond % GAME_CONFIG.PARTICLE_CLEANUP_INTERVAL === 0) {
+                this._lastCleanupSecond = currentSecond;
                 this.particlePool.cleanupInactive();
                 this.lineDebrisPool.cleanupInactive();
                 this.asteroidShardPool.cleanupInactive();
@@ -3057,7 +3103,7 @@ export class GameEngine {
             if (this.player && this.player.active &&
                 (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION)) {
                 const input = this.inputHandler.getInput();
-                input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
+                input.updateAimForPlayerMovement = this._boundAimForPlayerMovement;
                 // Update player movement only (firing is suppressed by not running collisions)
                 this.player.update(input, this.particlePool, this.bulletPool, this.audioManager,
                     this.colorStarPool, !this.player.isCharging, this.gameField);

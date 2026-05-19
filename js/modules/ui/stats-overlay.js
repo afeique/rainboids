@@ -9,7 +9,7 @@
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { iconSpriteCache } from '../core/utils.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
-import { getStageLabel as stageLabelFor } from '../core/constants.js';
+import { getStageLabel as stageLabelFor, GAME_STATES } from '../core/constants.js';
 
 // Helper: percent-format with 1 decimal of headroom for tiny gains.
 function pct(v) { return `${(v * 100).toFixed(1)}%`; }
@@ -219,7 +219,15 @@ export class StatsOverlay {
         // Stats screen pauses the game like the regular pause, but skips
         // opening the pause menu DOM. We track our own _isOpen so close()
         // can restore properly.
-        this._wasPaused = !!(ge.game && ge.game.state === 'paused');
+        // 6.18.9 — Compare to GAME_STATES.PAUSED ('PAUSED' uppercase),
+        // not the lowercase string literal 'paused'. The mismatch made
+        // _wasPaused always read as false: the open() path called
+        // togglePause() even when the game was already paused (causing
+        // a transient unpause/repause), and the close() path took the
+        // "resume directly" branch even when entering from the pause
+        // menu, making the "leave it paused with no overlay" branch
+        // unreachable.
+        this._wasPaused = !!(ge.game && ge.game.state === GAME_STATES.PAUSED);
         if (!this._wasPaused) ge.togglePause();
         this._isOpen = true;
         this.elements.overlay.style.display = 'flex';
