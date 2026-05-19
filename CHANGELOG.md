@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.15.1] - 2026-05-18
+
+### Fixed — enemies and asteroids no longer warp in overlapping each other
+
+Wave spawns picked warp targets independently — two enemies or
+asteroids spawning in the same tick could both choose the same
+"empty-looking" point and arrive on top of each other after their
+warp animations finished. `_separateEnemies` would then shove them
+apart on subsequent frames, but the brief overlap was visible.
+
+Added a shared module-scope helper `_isAnyEntityNearTarget(engine,
+tx, ty, selfRadius)` that checks both `asteroidPool` and
+`enemyPool`. **Already-warping entities are checked against their
+WARP TARGET** (`warpTargetX/Y`), not their current animated
+position — so when entity A starts warping toward `(tx, ty)` and
+the next spawn in the same tick consults the pool, it sees A's
+intended landing spot and avoids it.
+
+Wired into all four spawn paths:
+- `initializeWaveAsteroid` on-screen branch — passes `selfRadius:
+  r` to `getOnScreenSpawnPosition`.
+- `initializeWaveAsteroid` off-screen branch — retries up to 12
+  times; both player-distance AND entity-overlap must pass.
+- `getRandomSpawnPosition` on-screen branch — passes `selfRadius:
+  18` (representative enemy radius).
+- `getRandomSpawnPosition` off-screen branch — 8 jittered re-rolls
+  if entity overlap; preserves the per-edge target bias.
+
+`getOnScreenSpawnPosition` extended with an opt-in `selfRadius`
+parameter so existing callers that don't care about overlap are
+unaffected.
+
+---
+
 ## [6.15.0] - 2026-05-18
 
 ### Added — enemy bullets collide with asteroids and other enemies

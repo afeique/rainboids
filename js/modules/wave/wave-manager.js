@@ -41,6 +41,41 @@ export const MOBILE_PORTRAIT_ASTEROID_MAX_RADIUS = 28;
 // Local constant to avoid circular import with game-engine.js
 const PLAYER_STATES = { NORMAL: 'normal' };
 
+// ── Entity-overlap check for warp-in target selection ───────────────
+// Returns true if (tx, ty) is too close to any active asteroid or
+// enemy. Used by the spawn-target retry loops below to stop wave-in
+// asteroids/enemies from landing on top of each other after their
+// warp animation finishes.
+//
+// Already-warping entities are checked against their WARP TARGET
+// (warpTargetX/Y), not their current animated position — because
+// those entities are ABOUT TO arrive at the target. Without this,
+// spawning two enemies in the same tick would both pick "empty"
+// targets relative to the live position of the other (which is still
+// mid-warp far away), then both arrive on top of each other.
+//
+// `selfRadius` is the radius of the entity we're trying to place.
+// `buffer` is the extra padding beyond touching distance (24 px = a
+// noticeable gap so entities don't read as "stuck together" even
+// when separation hasn't kicked in yet).
+function _isAnyEntityNearTarget(engine, tx, ty, selfRadius, buffer = 24) {
+    const checkPool = (pool) => {
+        if (!pool || !pool.activeObjects) return false;
+        for (let i = 0; i < pool.activeObjects.length; i++) {
+            const ent = pool.activeObjects[i];
+            if (!ent.active) continue;
+            const ex = ent.warping ? (ent.warpTargetX != null ? ent.warpTargetX : ent.x) : ent.x;
+            const ey = ent.warping ? (ent.warpTargetY != null ? ent.warpTargetY : ent.y) : ent.y;
+            const er = ent.radius || ent.baseRadius || 20;
+            const md = selfRadius + er + buffer;
+            const dx = tx - ex, dy = ty - ey;
+            if (dx * dx + dy * dy < md * md) return true;
+        }
+        return false;
+    };
+    return checkPool(engine.asteroidPool) || checkPool(engine.enemyPool);
+}
+
 // Fixed wave system with object limits for performance
 export function updateWaveSystem() {
     if (this.game.state !== GAME_STATES.PLAYING && this.game.state !== GAME_STATES.WAVE_TRANSITION) {
@@ -859,9 +894,14 @@ export function initializeWaveAsteroid(asteroid, opts = {}) {
     if (opts.onScreen) {
         // Target inside the current viewport. Source is just outside the
         // closest viewport edge so the streak enters from the screen border.
+        // Pass selfRadius so the helper avoids placing the warp target
+        // overlapping any already-active or already-warping asteroid or
+        // enemy (otherwise wave spawns within the same tick can pile up
+        // at the same point).
         const target = this.getOnScreenSpawnPosition({
             minDistFromPlayer: r + 220,
             edgePad: r + 12,
+            selfRadius: r,
         });
         targetX = target.x;
         targetY = target.y;
@@ -902,18 +942,30 @@ export function initializeWaveAsteroid(asteroid, opts = {}) {
         const py = playerActive ? this.player.y : this.gameField.height / 2;
         const minDist = r + 240;
         const minDistSq = minDist * minDist;
+        // Two acceptance criteria per candidate:
+        //   1. Far enough from the player (6.14.2).
+        //   2. Not overlapping an existing/already-warping asteroid or
+        //      enemy (this fix). Without #2, wave spawns in the same
+        //      tick can both target the same empty-looking spot — the
+        //      first one's warpTargetX/Y is registered the instant it
+        //      calls startWarpIn, so subsequent same-tick spawns see it
+        //      via _isAnyEntityNearTarget and pick something else.
         let tries = 0;
         do {
             targetX = random(this.gameField.width * 0.2, this.gameField.width * 0.8);
             targetY = random(this.gameField.height * 0.2, this.gameField.height * 0.8);
             const dxp = targetX - px;
             const dyp = targetY - py;
-            if (dxp * dxp + dyp * dyp >= minDistSq) break;
+            const farFromPlayer = dxp * dxp + dyp * dyp >= minDistSq;
+            const farFromOthers = !_isAnyEntityNearTarget(this, targetX, targetY, r);
+            if (farFromPlayer && farFromOthers) break;
             tries++;
-        } while (tries < 8);
-        // If we couldn't find one in 8 tries, push the last candidate
+        } while (tries < 12);
+        // If we couldn't find one in 12 tries, push the last candidate
         // outward along the player-to-target axis to guarantee
-        // separation. Clamped to the same middle-60% rect.
+        // player separation. Clamped to the same middle-60% rect.
+        // Entity overlap may remain — _separateEnemies takes over once
+        // both entities finish warping.
         if (playerActive) {
             const dxp = targetX - px, dyp = targetY - py;
             if (dxp * dxp + dyp * dyp < minDistSq) {
@@ -948,9 +1000,13 @@ export function getRandomSpawnPosition(opts = {}) {
     let x, y, targetX, targetY;
 
     if (opts.onScreen) {
+        // selfRadius: typical enemy radius ~14-20 (use a representative
+        // 18). Helper checks both pools for overlap including the
+        // warp-target positions of in-flight warps.
         const target = this.getOnScreenSpawnPosition({
             minDistFromPlayer: 260,
             edgePad: 90,
+            selfRadius: 18,
         });
         targetX = target.x;
         targetY = target.y;
@@ -1014,18 +1070,32 @@ export function getRandomSpawnPosition(opts = {}) {
     targetX = Math.max(60, Math.min(this.gameField.width - 60, targetX));
     targetY = Math.max(60, Math.min(this.gameField.height - 60, targetY));
 
-    // Player-safety: if the target landed too close to the player, push
-    // it outward along the player-to-target axis. The off-screen
-    // continuous-spawn path picks a target near the field edge based on
-    // the spawn side — but if the player is also near that edge the
-    // enemy's warp-in finishes right on top of them and the collision
-    // lands on the same frame. minDist 300 ≈ a couple of player
-    // diameters; enough time to react after the warp telegraph.
-    // (The on-screen path above uses getOnScreenSpawnPosition which
-    // already enforces a similar 260 px minDist.)
+    // Player-safety AND entity-safety: if the target landed too close
+    // to the player OR overlapping an already-active/already-warping
+    // asteroid or enemy, nudge it. The off-screen path picks a target
+    // near the field edge based on the spawn side — without these
+    // checks two enemies spawning the same tick can both land at the
+    // same edge point and overlap after their warps finish.
     if (this.player && this.player.active) {
         const px = this.player.x, py = this.player.y;
         const minDist = 300;
+        // Try a few jittered re-rolls if the entity-overlap check fails;
+        // jitter is bounded so we stay in the same general "edge of
+        // field" region the per-edge target was originally aiming at.
+        for (let tries = 0; tries < 8; tries++) {
+            const dxp = targetX - px, dyp = targetY - py;
+            const farFromPlayer = dxp * dxp + dyp * dyp >= minDist * minDist;
+            const farFromOthers = !_isAnyEntityNearTarget(this, targetX, targetY, 18);
+            if (farFromPlayer && farFromOthers) break;
+            // Re-roll within ±120 px of the current candidate, clamped
+            // to the field. Don't reset to scratch — preserve the
+            // edge-bias from the per-edge picker above.
+            targetX = Math.max(60, Math.min(this.gameField.width - 60,
+                targetX + random(-120, 120)));
+            targetY = Math.max(60, Math.min(this.gameField.height - 60,
+                targetY + random(-120, 120)));
+        }
+        // Final player-distance fallback if still too close.
         const dxp = targetX - px, dyp = targetY - py;
         if (dxp * dxp + dyp * dyp < minDist * minDist) {
             const len = Math.hypot(dxp, dyp) || 1;
@@ -1043,7 +1113,15 @@ export function getRandomSpawnPosition(opts = {}) {
  * overlay region. Used for wave-start spawning so the player can see the
  * entities that just appeared.
  */
-export function getOnScreenSpawnPosition({ minDistFromPlayer = 240, edgePad = 80 } = {}) {
+export function getOnScreenSpawnPosition({
+    minDistFromPlayer = 240,
+    edgePad = 80,
+    // selfRadius: when provided, the picker also rejects candidates
+    // that overlap any active or already-warping asteroid/enemy
+    // (via _isAnyEntityNearTarget). Skipped if undefined to preserve
+    // backwards-compat with callers that don't care about overlap.
+    selfRadius,
+} = {}) {
     const camX = this.camera.x;
     const camY = this.camera.y;
     const fieldW = this.gameField.width;
@@ -1071,13 +1149,17 @@ export function getOnScreenSpawnPosition({ minDistFromPlayer = 240, edgePad = 80
         y = random(safeTop, safeBottom);
         if (this.isInMinimapArea(x, y)) continue;
         const dx = x - px, dy = y - py;
-        if (dx * dx + dy * dy >= minDistFromPlayer * minDistFromPlayer) {
-            return { x, y };
-        }
+        if (dx * dx + dy * dy < minDistFromPlayer * minDistFromPlayer) continue;
+        // Entity-overlap check (warps in same tick won't pile up here).
+        if (selfRadius !== undefined &&
+            _isAnyEntityNearTarget(this, x, y, selfRadius)) continue;
+        return { x, y };
     }
 
     // Fallback: project the last candidate outward from the player to satisfy
     // the minimum-distance constraint, clamped to the safe viewport rect.
+    // Entity overlap may remain — _separateEnemies fixes it once both
+    // warps complete.
     const dx = x - px, dy = y - py;
     const len = Math.hypot(dx, dy) || 1;
     const ox = (dx / len) * minDistFromPlayer;
