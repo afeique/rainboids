@@ -1,8 +1,8 @@
 // Combat effects, debris, orb drops, powerup collection, damage numbers, kill streaks
-import { GAME_CONFIG, GAME_STATES } from '../core/constants.js';
+import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
-import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION } from './weapon-data.js';
+import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { createItem, isUpgrade } from '../world/item-system.js';
@@ -181,6 +181,7 @@ export function createEnemyDebris(enemy) {
     enemy._deathFlash = 24;
     enemy._deathFlashMax = 24;
     enemy._debrisBurstFired = false;
+    enemy._explosionFired = false; // cleared so triggerEnemyFinalExplosion fires now
     // Ship vanishes immediately — the ring takes over as the visual.
     enemy._shipDestroyed = true;
     if (enemy.vel) {
@@ -194,62 +195,144 @@ export function createEnemyDebris(enemy) {
     this.triggerEnemyFinalExplosion(enemy);
 }
 
-// Big final-frame explosion. Fired by the enemy update loop right when
-// _deathFlash counts down to 0 — last frame before the enemy is
-// deactivated. Designed to be unmistakable: 4 expanding rings, a fat
-// shrapnel fan, dense embers, sparkles, and a screen punch.
+// ── BEAT 2: BIG explosion announce ──
+// Fires immediately on death (called by `createEnemyDebris`). THIS is the
+// visual "BANG" — multi-layer plasma fireball + chromatic flashes +
+// expanding rings + a fat shockwave + radial lightning bolts + a starburst
+// of sparkles + dense embers + the full screen punch. Designed to be
+// UNMISTAKABLE: even the smallest enemy produces a clearly defined burst.
 //
-// Captures position once at call time so even if `enemy` gets recycled
-// later (pool reuse), the spawn coords stay correct.
-// ── BEAT 2: BIG ring announce ──
-// Fired by the enemy update loop at the death-window midpoint (frame 12).
-// THIS is the visual "BANG" — bright flash + 3 expanding wavefront rings
-// + the full screen punch (hitstop, flash, kick, shake). NO debris yet —
-// debris fires 6 frames later via triggerEnemyDebrisBurst, so the player
-// sees the wavefront first and the wreckage flying through it second.
+// Position captured once at call time so pool recycling can't corrupt
+// the spawn coords later.
 //
-// Ring sizes bumped back up since they no longer compete with debris in
-// the same frame: now `1.4/1.9/2.5` (was 0.55/0.75/0.9 in 5.64.6 when
-// rings + debris fired together). Largest ring is now ~2.5× the enemy
-// radius — clearly a wavefront, but bounded so simultaneous deaths
-// don't paint over the whole screen.
+// Two design rules carried over from 5.64.7+:
+//   • Debris (shrapnel streaks + outline pieces + 3D shards) fires at
+//     frame 6 via `triggerEnemyDebrisBurst` — sequenced AFTER the
+//     wavefront so the player reads the BANG first, then wreckage
+//     flying through it.
+//   • A minimum size floor (`bigR ≥ 32px` even for tiny enemies) keeps
+//     small-enemy bursts visually beefy — the previous version produced
+//     30-px max rings for HUNTERs which read as "did nothing happen?"
 export function triggerEnemyFinalExplosion(enemy) {
     if (!enemy || !this.particlePool) return;
+    // Idempotency guard — repeat calls in the same frame (e.g. from a
+    // hitting bullet + an AOE landing on the same tick) shouldn't stack
+    // particles. The flag is reset by `createEnemyDebris` for re-use.
+    if (enemy._explosionFired) return;
+    enemy._explosionFired = true;
+
     const color = enemy.color || '#ff4444';
-    const sizeScale = Math.min(2, (enemy.radius || 18) / 15);
+    const r = enemy.radius || 18;
+    // Size floor — even tiny enemies produce a beefy 32-px-anchored burst.
+    // Bosses scale up via sizeScale capped at 2.5×.
+    const bigR = Math.max(32, r);
+    const sizeScale = Math.min(2.5, bigR / 15);
     const onScreen = this.isEntityOnScreen(enemy);
     const ex = enemy.x;
     const ey = enemy.y;
-    const r  = enemy.radius || 18;
 
-    // ── Main screen punch lands HERE, not on impact. ──
-    // 5.105.0 — Shake tuned WAY down (38 → 14, 22 → 8, r×3 → r×1.4).
-    // Previously every kill produced a ~600ms wobble that compounded
-    // with adjacent kills into an unreadable cam. The new values still
-    // register as a satisfying "punch" but the camera settles fast
-    // enough that the next kill's shake reads as a distinct event.
-    // Hitstop + camera kick + screen flash stay the same — those are
-    // the read-as-impact channels; shake is just the cherry on top.
+    // ── Screen punch ──
+    // Hitstop + flash + camera kick + shake. Tuned in 5.105.0; not amped
+    // further here so wave-clears still read as distinct kills, not one
+    // long shake.
     if (onScreen) {
         this.triggerHitstop(7);
-        this.triggerScreenFlash(0.12, 6);
+        this.triggerScreenFlash(0.14, 7);
         if (this.player) {
             const kdx = this.player.x - ex;
             const kdy = this.player.y - ey;
             this.triggerCameraKick(kdx, kdy, 18);
         }
-        this.triggerScreenShake(14, 8, r * 1.4);
+        this.triggerScreenShake(14, 8, bigR * 1.4);
     }
 
-    // 1. Bright core flash.
-    this.particlePool.get(ex, ey, 'explosionFlash', r * 2.6 * sizeScale);
+    // ── 1. Chromatic plasma core stack ──
+    // Three layered fireballs of decreasing size: white (hottest) → gold
+    // → enemy color. They overlap as one defined plasma blob that lingers
+    // ~30 frames, sustaining the explosion's anchor point through the
+    // entire 24-frame death window.
+    this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 1.6 * sizeScale, color);
+    this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 1.2 * sizeScale, '#ffd060');
+    this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 0.85 * sizeScale, '#ffffff');
 
-    // 2. Three expanding wavefront rings. Sizes bumped vs 5.64.6 since
-    // they now occupy their own beat — debris is delayed and won't
-    // wash them out.
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.4 * sizeScale, '#ffffff');
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 1.9 * sizeScale, color);
-    this.particlePool.get(ex, ey, 'explosionRingColored', r * 2.5 * sizeScale, '#ffcc66');
+    // ── 2. Bright instantaneous flash ──
+    // The "frame-0 punch" — engulfs the area for ~6 frames before the
+    // plasma core takes over visually.
+    this.particlePool.get(ex, ey, 'explosionFlash', bigR * 2.8 * sizeScale, '#ffffff');
+
+    // ── 3. Four chromatic wavefront rings ──
+    // White (sharp wavefront) → gold → enemy color → orange. Largest is
+    // ≥80px so even small enemies get a defined shockwave.
+    const ringBase = Math.max(80, bigR * 2.2 * sizeScale);
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.65, '#ffffff');
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.88, '#ffe080');
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.1, color);
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.32, '#ffa044');
+
+    // ── 4. Mega shockwave ──
+    // Thick + slow + wide. One pressure-front that outlasts the chromatic
+    // rings and reads as the actual blast wave dissipating outward.
+    this.particlePool.get(ex, ey, 'enemyShockwave', ringBase * 1.8, '#ff9966');
+
+    // ── 5. Radial lightning crackle ──
+    // 8–12 jagged bolts shooting outward from the core. Read as the
+    // ship's hull-energy discharging at the moment of vaporization.
+    const boltCount = 8 + Math.floor(sizeScale * 2);
+    for (let i = 0; i < boltCount; i++) {
+        const angle = (i / boltCount) * Math.PI * 2 + random(-0.18, 0.18);
+        const len = bigR * (1.6 + Math.random() * 1.4) * sizeScale;
+        // Alternate white-core + enemy-color glow on a 3-step cycle so the
+        // crackle reads as both "white-hot core" and "enemy plasma."
+        const c = i % 3 === 0 ? color : (i % 3 === 1 ? '#ffd070' : '#ffffff');
+        this.particlePool.get(ex, ey, 'enemyLightning', angle, len, c);
+    }
+
+    // ── 6. Starburst sparkles ──
+    // 14 bright cross-sparkles arranged in a tight ring just outside the
+    // plasma core. Each sparkle is the WebGL atlas's 8-point star — they
+    // collectively read as the explosion "throwing light."
+    const sparkleCount = 14;
+    for (let i = 0; i < sparkleCount; i++) {
+        const angle = (i / sparkleCount) * Math.PI * 2;
+        const d = bigR * (0.55 + Math.random() * 0.35) * sizeScale;
+        const sx = ex + Math.cos(angle) * d;
+        const sy = ey + Math.sin(angle) * d;
+        const sp = this.particlePool.get(sx, sy, 'starSparkle', random(1.4, 2.4),
+            i % 4 === 0 ? color : (i % 4 === 1 ? '#ffd060' : '#ffffff'));
+        if (sp) {
+            sp.life = random(0.5, 0.9);
+            // Slow outward drift so the sparkle ring expands gently.
+            sp.vel = {
+                x: Math.cos(angle) * random(0.3, 0.9),
+                y: Math.sin(angle) * random(0.3, 0.9),
+            };
+        }
+    }
+
+    // ── 7. Hot embers at frame 0 ──
+    // Previously embers were ONLY in the debris burst (frame 6). Adding
+    // them at frame 0 fills the gap between "ship vanishes" and "debris
+    // emerges" with motion, so the explosion never has a dead frame.
+    const emberCount = 16 + Math.floor(sizeScale * 6);
+    for (let i = 0; i < emberCount; i++) {
+        // Mostly hot palette (white/gold/orange/enemy-color) with a slight
+        // outward bias so the ember cloud blooms instead of just
+        // floating in place.
+        const eColor = i % 5 === 0 ? '#ffffff'
+                     : i % 5 === 1 ? '#ffe080'
+                     : i % 5 === 2 ? color
+                     : i % 5 === 3 ? '#ff8855'
+                     :              '#ffcc44';
+        const p = this.particlePool.get(ex, ey, 'explosionEmber', eColor);
+        if (p) {
+            // Bias velocity outward so embers radiate from the core.
+            const a = random(0, Math.PI * 2);
+            const sp = random(1.2, 4.5) * sizeScale;
+            p.vel = { x: Math.cos(a) * sp, y: Math.sin(a) * sp };
+            p.radius = random(1.8, 4.0);
+            p.life = random(0.7, 1.1);
+        }
+    }
 }
 
 // ── BEAT 3: Debris flies through the still-expanding rings ──
@@ -263,9 +346,21 @@ export function triggerEnemyFinalExplosion(enemy) {
 export function triggerEnemyDebrisBurst(enemy) {
     if (!enemy || !this.particlePool) return;
     const color = enemy.color || '#ff4444';
-    const sizeScale = Math.min(2, (enemy.radius || 18) / 15);
+    const r = enemy.radius || 18;
+    const bigR = Math.max(32, r);
+    const sizeScale = Math.min(2.5, bigR / 15);
     const ex = enemy.x;
     const ey = enemy.y;
+
+    // ── 0. Secondary fireball pop ──
+    // A smaller, sharper flash + mini-shockwave timed to the debris
+    // emerging. Reads as the chamber-rupture pulse that hurls the
+    // wreckage outward — distinct from the frame-0 plasma core, which
+    // is by now mid-dim.
+    this.particlePool.get(ex, ey, 'explosionFlash', bigR * 1.6 * sizeScale, '#ffeec0');
+    this.particlePool.get(ex, ey, 'enemyShockwave', bigR * 1.4 * sizeScale, '#ffcc66');
+    // Tight inner ring — fires as debris emerges, chasing the shrapnel out.
+    this.particlePool.get(ex, ey, 'explosionRingColored', bigR * 1.0 * sizeScale, color);
 
     // 1. Dense directional shrapnel — fast streaks in all directions.
     const shrapnelCount = Math.floor(36 + 18 * sizeScale);
@@ -325,10 +420,20 @@ export function triggerEnemyDebrisBurst(enemy) {
         }
     }
 
-    // 4. Tight inner secondary ring — fires as the debris emerges, so
-    // there's a final wavefront chasing the shrapnel out. Kept small
-    // (0.6×) so it reads as an "exhale" pulse, not another big ring.
-    this.particlePool.get(ex, ey, 'explosionRingColored', (enemy.radius || 18) * 0.6 * sizeScale, color);
+    // 4. Late ember puff — 8 hot embers spawn at random offsets within
+    //    the debris cloud, simulating the after-glow of secondary ignitions.
+    for (let i = 0; i < 8; i++) {
+        const ox = ex + random(-bigR * 0.7, bigR * 0.7);
+        const oy = ey + random(-bigR * 0.7, bigR * 0.7);
+        const p = this.particlePool.get(ox, oy, 'explosionEmber',
+            i < 2 ? '#ffffff' : i < 5 ? color : '#ffcc66');
+        if (p) {
+            p.vel.x *= 0.4;
+            p.vel.y *= 0.4;
+            p.life = random(0.8, 1.3);
+            p.radius = random(2, 4.5);
+        }
+    }
 }
 
 export function createShapeDebris(enemy) {
@@ -625,44 +730,71 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false
     return shape;
 }
 
-// 5.81.1 — Money drops are now a HARD CAP of 3 chunky shape orbs per
-//   drop event. The 5.79.31 "1 shape + up to 30 pixel coins" layout
-//   was too noisy; we capped to 1-3 shapes only.
-// 5.118.0 — Pixel scatter restored as COSMETIC sparkle. Each drop
-//   now also spits 4 + (2 × shapeN) tiny gold pieces at 1g each
-//   (6 pieces on a small kill, up to 10 on a big multi-kill). The
-//   total bonus value per drop is +6 to +10g, negligible vs the
-//   shape budget (50-300g) but the visual flair of "treasure dust
-//   sparkling out alongside the jewels" is what makes a kill feel
-//   like LOOT. The renderer (_drawGoldSparklesCanvas2D) gives each
-//   piece a square/circle/dot shape + sparkle pulse so the scatter
-//   reads as glittering pixels, not just static specks.
+// 6.16.1 — Drop split rebalanced: fewer chunky shapes, more pixel
+//   pieces, and pixels now CARRY VALUE instead of being pure cosmetic.
+//   The prior 1-3 shapes layout meant late-game drops (where gold-find
+//   + streak + enemy multipliers reliably push past the DROP_BUDGET_MAX
+//   cap) almost always emitted 3 shapes on top of a small pixel
+//   scatter — visually busy, and the shapes piled into a clump.
 //
-//   Shape count is value-driven:
-//     ≤ SHAPE_VALUE_MAX            → 1 shape  (small kill)  →  6 pixels
-//     ≤ 2 × SHAPE_VALUE_MAX        → 2 shapes (mid kill)    →  8 pixels
-//     >  2 × SHAPE_VALUE_MAX       → 3 shapes (big kill)    → 10 pixels
-function _splitMoneyDrop(total) {
+//   New rules:
+//     ≤ SHAPE_VALUE_MAX (200) → 1 shape  (typical drop)  → 10 pixels
+//     >  SHAPE_VALUE_MAX       → 2 shapes (big drops)    → 12 pixels
+//   3-shape drops removed entirely. SHAPE_VALUE_MAX raised from 80 to
+//   200 (constants.js) so a single shape can carry most of the budget.
+//   Whatever budget the shapes can't absorb spills into the pixel
+//   scatter, with per-pixel value distributed evenly. The pixel value
+//   is what gives big drops their punch — the visual is a single
+//   chunky jewel surrounded by a glittering coin shower.
+function _splitMoneyDrop(total, profile = null) {
     if (total <= 0) return { shapes: [], pixels: [] };
 
-    const dropMax = GAME_CONFIG.MONEY_ORB_DROP_BUDGET_MAX;
+    // 6.18.0 — Boss drops use the higher budget cap so platinum-tier
+    //   shapes can actually fire.
+    const isBoss = profile && profile.budgetMult >= 2.0;
+    const dropMax = isBoss
+        ? GAME_CONFIG.MONEY_ORB_DROP_BUDGET_MAX_BOSS
+        : GAME_CONFIG.MONEY_ORB_DROP_BUDGET_MAX;
     total = Math.min(total, dropMax);
 
     const shapeCap = GAME_CONFIG.MONEY_ORB_SHAPE_VALUE_MAX;
-    // Decide shape count from total budget so small kills stay
-    //   quiet (1 piece) and big multi-kills produce up to 3.
+    // 6.18.0 — Profile-driven minimum shape count. Bosses guarantee
+    //   1 shape minimum; grunts (minShape=0) may emit pixel-only when
+    //   the budget is tiny.
+    const minShape = profile ? (profile.minShape | 0) : 1;
     let shapeN;
-    if (total <= shapeCap)            shapeN = 1;
-    else if (total <= shapeCap * 2)   shapeN = 2;
-    else                              shapeN = 3;
+    if (minShape === 0 && total <= shapeCap * 0.4) shapeN = 0;
+    else if (total <= shapeCap) shapeN = Math.max(1, minShape);
+    else shapeN = 2;
 
-    // Full budget into shapes (per-shape value capped at SHAPE_VALUE_MAX).
-    const shapes = _evenSplitClamped(total, shapeN, shapeCap);
+    // Shapes absorb up to (shapeCap × shapeN). Anything beyond rolls
+    //   into the pixel scatter as real value-bearing coins.
+    const shapeBudget = Math.min(total, shapeCap * shapeN);
+    const shapes = shapeN > 0 ? _evenSplitClamped(shapeBudget, shapeN, shapeCap) : [];
 
-    // 5.118.0 — Cosmetic pixel scatter: 4 + 2N pieces at 1g each.
-    //   Always 1g per piece so the scatter is "sparkle" not value.
-    const pixelCount = 4 + shapeN * 2;
-    const pixels = new Array(pixelCount).fill(1);
+    const remainder = Math.max(0, total - shapeBudget);
+    const profilePixelBonus = profile ? (profile.pixelBonus | 0) : 0;
+    // Base 10-12 pieces from shape count; profile adds extras so
+    //   bosses sparkle bigger and grunts scatter more confetti.
+    const pixelCount = Math.min(
+        GAME_CONFIG.MONEY_ORB_PIXEL_COUNT_MAX,
+        Math.max(6, 8 + shapeN * 2 + profilePixelBonus)
+    );
+    let pixels;
+    if (remainder > 0) {
+        // Split remainder evenly across pixels, distributing the
+        //   round-off so total pixel value === remainder exactly.
+        const base = Math.floor(remainder / pixelCount);
+        const leftover = remainder - base * pixelCount;
+        pixels = new Array(pixelCount);
+        for (let i = 0; i < pixelCount; i++) {
+            pixels[i] = Math.max(1, base + (i < leftover ? 1 : 0));
+        }
+    } else {
+        // No remainder — emit pixelCount cosmetic 1g sparkles so the
+        //   coin shower reads consistently regardless of drop size.
+        pixels = new Array(pixelCount).fill(1);
+    }
 
     return { shapes, pixels };
 }
@@ -723,6 +855,13 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const enemyDropRateBonus = isEnemy ? 0.15 : 0;
     const enemyQuantityMultiplier = isEnemy ? 1.3 : 1;
 
+    // 6.18.0 — Per-enemy drop profile. Grunts drop pixel showers,
+    //   tanky enemies guarantee shapes, bosses jackpot. Asteroids
+    //   and non-enemy drops fall through to 'standard' defaults.
+    const profile = isEnemy ? getEnemyDropProfile(entity) : null;
+    const profileBudgetMult = profile ? profile.budgetMult : 1.0;
+    const profileRateMult   = profile ? profile.rateMult   : 1.0;
+
     const entityLevel = entity?.level || 1;
     const levelDropRateBonus = (entityLevel - 1) * 0.05;
     const levelQuantityMultiplier = 1 + (entityLevel - 1) * 0.1;
@@ -754,9 +893,12 @@ export function dropOrbsFromEntity(x, y, entity = null) {
 
     const goldFindMult = player.getGoldFindMultiplier?.() || 1;
     const streakCount = this.killStreakCount || 0;
-    const streakGoldMult = Math.min(1.4, 1 + streakCount * 0.025);
+    // 6.18.0 — Tier-keyed streak gold curve (was linear 0.025/kill).
+    //   Pre-tier ramp 1.00 → 1.05 across kills 1-9; then steps up
+    //   per STREAK_TIER. Cap at 1.50 at the RAINBOIDS GOD tier.
+    const streakGoldMult = getStreakGoldMult(streakCount);
     const healthDropRate = Math.min(1.0, baseHealthDropRate);
-    const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult * streakGoldMult);
+    const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult * streakGoldMult * profileRateMult);
 
     // ── Health orbs ──
     // Global cooldown gate. Triage stacks shorten the cooldown; when
@@ -840,9 +982,11 @@ export function dropOrbsFromEntity(x, y, entity = null) {
             GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (wave - 1) * 5);
         const avgMoney = (minMoney + maxMoney) / 2;
         const moneyBudget = Math.max(1,
-            Math.round(totalLegacyCount * avgMoney * goldFindMult * streakGoldMult));
+            Math.round(totalLegacyCount * avgMoney * goldFindMult * streakGoldMult * profileBudgetMult));
 
-        const { shapes, pixels } = _splitMoneyDrop(moneyBudget);
+        // 6.18.0 — _splitMoneyDrop reads profile for boss budget cap
+        //   + bonus pixel pieces.
+        const { shapes, pixels } = _splitMoneyDrop(moneyBudget, profile);
         for (const v of shapes) this.createMoneyOrb(x, y, v, false);
         for (const v of pixels) this.createMoneyOrb(x, y, v, true);
     }
@@ -1024,11 +1168,18 @@ export function updateKillStreak() {
 }
 
 // ── Player-hit visual FX ──
-// Loud, unmistakable feedback when the player takes damage: red-tinted
-// flash + radial shrapnel + embers + screen shake + camera kick + screen
-// flash. Caller passes the impact point (where the damage came from) so
-// the camera kick and shrapnel angle correctly. Scaled by `damage` so a
-// big hit feels appropriately bigger than a graze.
+// Per-hit feedback when the player takes damage: radial shrapnel +
+// embers + hitstop + camera kick. Caller passes the impact point so
+// the kick and shrapnel angle correctly. Scaled by `damage` so a big
+// hit feels appropriately bigger than a graze.
+//
+// 6.17.1 — Screen flash + screen shake removed from this path. The
+// per-hit flash made every chip of damage feel like a near-death; the
+// shake fired for every bullet ping too. Both are now reserved:
+// - Flash: explosion/save ceremonies only (death sequence, Guardian
+//   is kept silent on flash too — see tryConsumeGuardian, LAST_STAND).
+// - Shake: physical collisions only (player ↔ enemy, player ↔ asteroid),
+//   scaled by `finalDamage` at the collision sites themselves.
 export function triggerPlayerHitFX(impactX, impactY, damage = 1) {
     if (!this.player || !this.player.active) return;
     const px = this.player.x;
@@ -1037,13 +1188,7 @@ export function triggerPlayerHitFX(impactX, impactY, damage = 1) {
     // Severity 0..1 — caps so a one-shot kill doesn't render off-screen.
     const sev = Math.min(1, Math.max(0.4, damage / 25));
 
-    // ── Screen + camera punch ──
-    if (typeof this.triggerScreenFlash === 'function') {
-        this.triggerScreenFlash(0.18 + sev * 0.18, 6 + Math.floor(sev * 6));
-    }
-    if (typeof this.triggerScreenShake === 'function') {
-        this.triggerScreenShake(16 + Math.floor(sev * 14), 6 + sev * 9);
-    }
+    // ── Camera punch (kick + hitstop only — flash/shake removed 6.17.1) ──
     if (typeof this.triggerHitstop === 'function') {
         this.triggerHitstop(3 + Math.floor(sev * 4));
     }
@@ -1327,9 +1472,10 @@ export function tryConsumeGuardian() {
             duration: 1500,
         });
     }
-    if (typeof this.triggerScreenFlash === 'function') {
-        this.triggerScreenFlash(0.3, 8);
-    }
+    // 6.17.1 — Guardian flash removed alongside the broader "no flash
+    // on damage" rule. The audio cue + UI banner + sparkles already
+    // make the save unmistakable; the white flash was redundant with
+    // the LAST_STAND save and added to the per-hit visual noise.
     if (this.particlePool) {
         for (let i = 0; i < 24; i++) {
             const a = (i / 24) * Math.PI * 2;

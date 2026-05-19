@@ -16,14 +16,26 @@ export class PoolManager {
     }
     
     get(...args) {
-        // Performance: Limit total active objects for particle pools
-        if (this.ObjectClass.name === 'Particle' && this.activeObjects.length > GAME_CONFIG.MAX_PARTICLES) {
-            // Release oldest particle to make room for new one
-            const oldestParticle = this.activeObjects[0];
-            if (oldestParticle) {
-                this.release(oldestParticle);
-            }
-        }
+        // 6.16.1 — soft-cap eviction REMOVED for the Particle pool.
+        //
+        // The previous "release activeObjects[0] when >MAX_PARTICLES" path
+        // could silently evict in-flight death-explosion particles under
+        // heavy fire. Per-bullet hit sparks + embers were filling the pool
+        // first; the explosion particles (added later via push) sat at
+        // the end of `activeObjects` while older sparkles squatted in
+        // slot 0. On the next get() the eviction would release a random
+        // OLDER particle — but since the cap-walk happens on EVERY get(),
+        // by the time the wavefront ring rendered, the WebGL renderer's
+        // own cap (`n < maxInstances`) was already truncating the tail
+        // of the active list, dropping the freshly-spawned explosion
+        // sub-particles entirely.
+        //
+        // The pool now grows without bound. Particles self-release when
+        // `life <= 0` via cleanupInactive(). Memory is bounded by the
+        // actual peak particle count (typically <3000 even during
+        // wave-clears). The WebGL renderer's instance buffer grows
+        // dynamically in lockstep so nothing is silently dropped from
+        // the draw pass either.
 
         let obj;
         if (this.pool.length > 0) {

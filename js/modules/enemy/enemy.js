@@ -124,6 +124,7 @@ export class Enemy {
         this._deathFlash = 0;
         this._shipDestroyed = false;
         this._debrisBurstFired = false;
+        this._explosionFired = false;
         // Frame-stagger offset for late-wave AI throttling. Each enemy
         // gets a random parity bucket at spawn so half the active
         // enemies' heavy AI scans run on even frames and the other half

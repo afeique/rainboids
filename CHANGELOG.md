@@ -11,6 +11,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.16.1] - 2026-05-19
+
+### Fixed — enemy explosions no longer vanish under heavy fire
+
+The frame-0 plasma core / rings / shockwave / lightning / sparkles
+were sometimes failing to appear, while the frame-6 debris burst
+always rendered. Two compounding caps were dropping the late-arriving
+death-explosion sub-particles:
+
+1. **WebGL renderer hard-stop** (`webgl-particle-renderer.js:363`)
+   — the per-frame pack loop terminated at `n < maxInstances`
+   (2500). `pool.activeObjects` walks oldest → newest, so when the
+   active list was already saturated with hit-spark embers + sparkles
+   from heavy fire, the explosion sub-particles (appended at the END
+   on the kill frame) sat past slot 2500 and were silently truncated
+   out of the draw call. By frame 6 enough older particles had
+   self-released that the debris burst always fit — explaining why
+   debris worked but the frame-0 burst didn't.
+2. **Pool soft-cap eviction** (`pool-manager.js:18`) — every
+   `pool.get()` above 2500 released `activeObjects[0]`. With ~30+
+   `.get()` calls per explosion, the eviction loop chewed through
+   the head of the active list. Combined with WebGL's tail-truncation,
+   the explosion particles were squeezed from both sides on busy frames.
+
+Both caps removed:
+
+- **`pool-manager.js`** — eviction stripped. The Particle pool now
+  grows freely; particles self-release via `cleanupInactive()` when
+  `life <= 0`. Memory is bounded by the actual peak (~3000 during
+  simultaneous wave-clear deaths).
+- **`webgl-particle-renderer.js`** — instance buffer + Float32Array
+  scratch grow dynamically. A pre-count walk determines `need`; if
+  `need > maxInstances`, `_growInstanceBuffer(need)` doubles capacity
+  (clamped at `need + 256`) and reallocates both the typed-array
+  scratch and the `gl.bufferData` allocation. VAO bindings stay
+  valid because the underlying VBO id doesn't change.
+- **`constants.js`** — `MAX_PARTICLES = 2500` redocumented as the
+  INITIAL capacity (not a cap). Naming kept for API stability.
+
+Net effect: every enemy death now reliably produces the full
+multi-layer burst from 6.16.0 — plasma core, chromatic rings,
+shockwave, lightning crackle, sparkles, embers — regardless of how
+many bullets / hit-sparks are in flight.
+
+---
+
+## [6.16.0] - 2026-05-19
+
+### Added — enemy explosions are now an unmistakable multi-layer burst
+
+Every enemy death now produces a dramatic, defined explosion — not a
+faint pair of expanding rings. The previous version's frame-0 effect
+was a single white flash + 3 thin rings sized at `radius × 1.4/1.9/2.5`,
+which for a small HUNTER (r=12) capped the largest ring at 30 px and
+started it at 4.5 px. Combined with the per-bullet hit-spark shrapnel
+that fires on every impact, the death event was visually indistinguishable
+from a non-lethal hit on small enemies.
+
+The death sequence still uses the same 24-frame death window with the
+debris cascade at frame 6, but `triggerEnemyFinalExplosion` now spawns
+seven layered effects on the kill frame:
+
+1. **Chromatic plasma core stack** — three nested fireballs (white, gold,
+   enemy-color) that occupy the explosion's center and linger ~30 frames.
+   New particle type `enemyPlasmaCore` renders through the WebGL flash
+   atlas slot with a sustained alpha curve so the core stays bright into
+   mid-life instead of dimming linearly.
+2. **Bright instantaneous flash** — engulfs the area for ~6 frames as
+   the frame-0 punch.
+3. **Four chromatic wavefront rings** — white, gold, enemy color, orange.
+   Floored at 80 px minimum diameter so even small enemies get a defined
+   shockwave.
+4. **Mega shockwave** — new particle type `enemyShockwave`. Thick, wide,
+   slow-decay ring with a hot inner white highlight; reads as the actual
+   blast pressure-front dissipating outward over ~23 frames.
+5. **Radial lightning crackle** — 8–12 jagged bolts shooting outward from
+   the core. New particle type `enemyLightning`: pre-baked polylines
+   with white-core + colored-glow stroke. Lasts ~6 frames.
+6. **Starburst sparkles** — 14 bright 8-point sparkles arranged radially
+   just outside the plasma core, drifting outward.
+7. **Hot embers at frame 0** — 16–28 embers added immediately (previously
+   embers only spawned at frame 6 with the debris). Fills the gap between
+   "ship vanishes" and "debris emerges" so the explosion never has a
+   dead frame.
+
+A minimum-size floor (`bigR = max(32, radius)`) is applied to every
+sub-effect's sizing so tiny enemies (small HUNTERs, WASPs, drifters)
+produce the same anchored burst as a TITAN — just slightly less amped
+via the `sizeScale` multiplier.
+
+The frame-6 `triggerEnemyDebrisBurst` is also beefed: adds a secondary
+fireball + mini-shockwave + late ember puff so the debris emerging
+reads as a chamber-rupture pulse, not just objects flying outward.
+
+### Fixed — explosion-fire path is now idempotent + guaranteed
+
+Added an `enemy._explosionFired` flag (cleared by `createEnemyDebris`
+and reset on Enemy construction). Repeat calls to
+`triggerEnemyFinalExplosion` for the same enemy in the same frame —
+e.g. a bullet hit + an AOE landing on the same tick — no longer stack
+their particle bursts.
+
+### Changed — `explosionFlash` accepts an optional color
+
+`particlePool.get(x, y, 'explosionFlash', radius, color?)` — previously
+hardcoded `#ffffff`. Default behavior preserved; new behavior enables
+the chromatic flash + plasma-core stack above.
+
+---
+
 ## [6.15.1] - 2026-05-18
 
 ### Fixed — enemies and asteroids no longer warp in overlapping each other

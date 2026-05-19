@@ -145,6 +145,7 @@ export class WebGLParticleRenderer {
             explosion:             'dot',
             starSparkle:           'spark',
             explosionFlash:        'flash',
+            enemyPlasmaCore:       'flash',
             explosionRingColored:  'ring',
             explosionShrapnel:     'streak',
         };
@@ -354,12 +355,26 @@ export class WebGLParticleRenderer {
         // surface in order.
         gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
-        // Fill the instance scratch.
+        // 6.16.1 — grow the instance buffer if needed BEFORE packing.
+        // The previous `n < max` walk silently dropped late-arriving
+        // particles (death-explosion sub-particles appended after the
+        // older hit-spark sea). Now we count first, then resize once.
+        // The count walk is O(active), no allocations; it's cheap.
+        const slotMap = this.TYPE_TO_SLOT;
+        let need = 0;
+        for (let i = 0; i < list.length; i++) {
+            const p = list[i];
+            if (!p.active) continue;
+            if (!slotMap[p.type]) continue;
+            need++;
+        }
+        if (need > this.maxInstances) this._growInstanceBuffer(need);
+
+        // Fill the instance scratch — no upper bound now, the buffer is
+        // sized for `need` (or larger from a previous frame).
         const data = this.instanceData;
         let n = 0;
-        const max = this.maxInstances;
-        const slotMap = this.TYPE_TO_SLOT;
-        for (let i = 0; i < list.length && n < max; i++) {
+        for (let i = 0; i < list.length; i++) {
             const p = list[i];
             if (!p.active) continue;
             const slotKey = slotMap[p.type];
@@ -452,6 +467,23 @@ export class WebGLParticleRenderer {
                 alpha = eased * 0.95;
                 break;
             }
+            case 'enemyPlasmaCore': {
+                // Hot plasma fireball — uses the flash slot but with a
+                // longer life and a punchier alpha curve so the core
+                // stays bright through mid-life, then fades out smoothly.
+                // Quad multiplier 2.4× so the fireball reads as a defined
+                // hot blob, not a thin halo.
+                const maxLife = p.maxLife || 1.8;
+                const coreLife = lifeAlpha / maxLife;
+                // Sustain → falloff: holds peak for first ~50%, then fades.
+                const sustained = coreLife > 0.55
+                    ? 1
+                    : Math.pow(Math.max(0, coreLife) / 0.55, 0.7);
+                w = p.radius * 2.4;
+                h = p.radius * 2.4;
+                alpha = sustained;
+                break;
+            }
             case 'explosionRingColored': {
                 // Boost ring alpha multiplier 1.5 → 2.0 so the wavefront
                 // edge reads as a hot pulse, not a faint halo.
@@ -516,5 +548,23 @@ export class WebGLParticleRenderer {
     /** True when the renderer handles the given particle type. */
     handlesType(type) {
         return this.supported && !this._contextLost && this.TYPE_TO_SLOT.hasOwnProperty(type);
+    }
+
+    /**
+     * 6.16.1 — Grow the per-frame instance VBO + scratch array so a
+     * higher-than-baseline particle count can render in a single draw
+     * call. Doubles the previous capacity (clamped at `needed + 256`),
+     * reallocates both the Float32Array AND the GL buffer, then rebinds
+     * the instance attribute pointers because the underlying VBO id is
+     * the SAME (we use bufferData on the existing id), so VAO bindings
+     * remain valid. Logged once per grow event for telemetry.
+     */
+    _growInstanceBuffer(needed) {
+        const newCap = Math.max(this.maxInstances * 2, needed + 256);
+        this.maxInstances = newCap;
+        this.instanceData = new Float32Array(newCap * FLOATS_PER_INSTANCE);
+        const gl = this.gl;
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceVbo);
+        gl.bufferData(gl.ARRAY_BUFFER, newCap * BYTES_PER_INSTANCE, gl.DYNAMIC_DRAW);
     }
 }

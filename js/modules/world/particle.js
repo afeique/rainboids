@@ -167,12 +167,75 @@ export class Particle {
 
             // ── Enhanced explosion types ──────────────────────────────
             case 'explosionFlash': {
-                // Bright white core flash that expands and fades
-                const [flashRadius] = args;
+                // Bright core flash that expands and fades. Optional color
+                // (default white) lets enemy explosions stack chromatic
+                // flashes (white + yellow + enemy-color) for depth.
+                const [flashRadius, flashColor] = args;
                 this.life = 1.2;
                 this.radius = (flashRadius || 40) * 0.3; // start visible (shows during hitstop)
                 this.maxRadius = flashRadius || 40;
-                this.color = '#ffffff';
+                this.color = flashColor || '#ffffff';
+                break;
+            }
+            case 'enemyPlasmaCore': {
+                // Hot fireball core — bright, big, and lingers. Sits at the
+                // explosion's center as a defined hot blob so the death
+                // event reads as "ship vaporized into plasma" instead of
+                // "rings + scatter." Renders through the flash atlas slot
+                // in WebGL with a longer life + stronger alpha curve so
+                // the core stays bright into mid-life.
+                const [coreRadius, coreColor] = args;
+                this.life = 1.8;          // ~30 frames @ 60Hz — lingers past the ring expansion
+                this.maxLife = 1.8;
+                this.radius = (coreRadius || 60) * 0.55;  // starts big (already a fireball)
+                this.maxRadius = coreRadius || 60;
+                this.color = coreColor || '#ffcc44';
+                break;
+            }
+            case 'enemyShockwave': {
+                // Massive expanding shockwave — wider quad, slower decay,
+                // thicker stroke than `explosionRingColored`. One per
+                // explosion; reads as the pressure-front of the blast.
+                const [waveRadius, waveColor] = args;
+                this.life = 1.4;          // ~23 frames; slower than the chromatic rings
+                this.maxLife = 1.4;
+                this.radius = (waveRadius || 80) * 0.25;
+                this.maxRadius = waveRadius || 80;
+                this.color = waveColor || '#ff8855';
+                this.lineWidth = random(8, 14);
+                break;
+            }
+            case 'enemyLightning': {
+                // Jagged radial bolt from the explosion center. Renders via
+                // Canvas2D — a procedural polyline with random offsets per
+                // segment. Stored once at spawn; redrawn each frame with a
+                // fading alpha. Very short-lived (~6 frames) for a crackle
+                // effect.
+                const [boltAngle, boltLength, boltColor] = args;
+                this.life = 0.45;
+                this.maxLife = 0.45;
+                this.angle = boltAngle || 0;
+                this.length = boltLength || 80;
+                this.color = boltColor || '#ffffff';
+                this.lineWidth = random(1.5, 3.5);
+                // Build the jagged path once: 5 segments with perpendicular jitter.
+                const segs = 5;
+                this._pts = new Array(segs + 1);
+                const cx = Math.cos(this.angle);
+                const cy = Math.sin(this.angle);
+                const px = -cy; // perp
+                const py =  cx;
+                for (let i = 0; i <= segs; i++) {
+                    const t = i / segs;
+                    const baseLen = this.length * t;
+                    const jitter = i === 0 || i === segs ? 0 : random(-this.length * 0.18, this.length * 0.18);
+                    this._pts[i] = {
+                        x: this.x + cx * baseLen + px * jitter,
+                        y: this.y + cy * baseLen + py * jitter,
+                    };
+                }
+                // Bolt itself doesn't move; radius used for cull only.
+                this.radius = this.length;
                 break;
             }
             case 'explosionShrapnel': {
@@ -346,6 +409,24 @@ export class Particle {
                 this.life -= 0.035 * TS;
                 this.radius = (1 - this.life / 0.9) * this.maxRadius;
                 break;
+            case 'enemyPlasmaCore': {
+                // Stronger pulse: rapid expansion in the first third, then
+                // slow swell to maxRadius. Eased so the core "breathes."
+                this.life -= 0.033 * TS;
+                const t = 1 - (this.life / this.maxLife);
+                // Cubic-out for the size — punchy initial pop, then settle.
+                const tt = 1 - Math.pow(1 - t, 3);
+                this.radius = this.maxRadius * (0.55 + 0.45 * tt);
+                break;
+            }
+            case 'enemyShockwave':
+                this.life -= 0.024 * TS;
+                this.radius = (1 - this.life / this.maxLife) * this.maxRadius;
+                break;
+            case 'enemyLightning':
+                // Bolt is static — only life drains. Drawn each frame.
+                this.life -= 0.18 * TS;
+                break;
         }
         
         if (this.life <= 0) {
@@ -458,6 +539,55 @@ export class Particle {
                 ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
                 ctx.stroke();
                 break;
+
+            case 'enemyShockwave': {
+                // Thick, fading expanding ring with a hot inner highlight.
+                // Two-pass stroke gives a defined pressure-front edge.
+                const t = 1 - (this.life / this.maxLife);
+                const alpha = Math.max(0, this.life / this.maxLife);
+                ctx.globalAlpha = alpha * 0.85;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.lineWidth * (1 - t * 0.5);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+                ctx.stroke();
+                // Inner hot highlight — narrower, brighter, sits inside the wave.
+                ctx.globalAlpha = alpha * 0.7;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = Math.max(1, this.lineWidth * 0.3);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.97, 0, 2 * Math.PI);
+                ctx.stroke();
+                break;
+            }
+
+            case 'enemyLightning': {
+                // Jagged polyline rendered with a bright white core + colored
+                // glow. Pre-baked points so each frame is just a path draw.
+                if (!this._pts || this._pts.length < 2) break;
+                const alpha = Math.max(0, this.life / this.maxLife);
+                // Outer colored glow
+                ctx.globalAlpha = alpha * 0.85;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.lineWidth + 2.5;
+                ctx.beginPath();
+                ctx.moveTo(this._pts[0].x, this._pts[0].y);
+                for (let i = 1; i < this._pts.length; i++) {
+                    ctx.lineTo(this._pts[i].x, this._pts[i].y);
+                }
+                ctx.stroke();
+                // Bright white core
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = this.lineWidth;
+                ctx.beginPath();
+                ctx.moveTo(this._pts[0].x, this._pts[0].y);
+                for (let i = 1; i < this._pts.length; i++) {
+                    ctx.lineTo(this._pts[i].x, this._pts[i].y);
+                }
+                ctx.stroke();
+                break;
+            }
 
             // 'damageNumber' draw path removed in 5.64.8 — see reset() above.
         }
