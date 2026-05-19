@@ -143,8 +143,13 @@ uniform sampler2D u_atlas;
 // highp; fragment default is mediump under the precision-directive
 // above). Same-named uniform across stages must agree on precision
 // in GLSL ES 3.00 or the program link fails.
-uniform highp float u_time; // seconds — scrolls the scanline pattern
-                            // vertically each frame for a slow CRT roll.
+uniform highp float u_time; // seconds — reserved (legacy: used to
+                            // scroll scanlines; scroll disabled 6.15.2
+                            // to remove ~5 Hz flicker).
+uniform highp float u_dpr;  // device-pixel-ratio so the scanline
+                            // period is measured in CSS pixels rather
+                            // than framebuffer pixels (was sub-pixel
+                            // on retina displays, causing crawl/moiré).
 out vec4 fragColor;
 
 // 5.74.19 — gain on RGB removed entirely. With additive blending
@@ -179,26 +184,29 @@ void main() {
     vec3 rgb = clamp(shapeRGB + haloRGB, 0.0, 1.0);
     float a = clamp(tex.a + haloMask * 0.9, 0.0, 1.0) * v_color.a;
 
-    // 5.74.24 — CRT-style scanlines on the WebGL starfield/nebula layer
-    // ONLY. The foreground action (gameCanvas) sits on top of glCanvas
-    // and is unaffected. gl_FragCoord.y is in framebuffer pixels.
+    // CRT-style scanlines on the WebGL starfield/nebula layer ONLY.
+    // The foreground action (gameCanvas) sits on top of glCanvas and
+    // is unaffected.
     //
-    // 5.79.2 — thicker + more apparent CRT scanlines. Was a fine 1-px
-    // band at ~22% contrast (sin period 2). Now: hard 2-px dark band
-    // every 5 px → 40% contrast, much more visible. The hard threshold
-    // (rather than a smooth sin) gives the chunky retro CRT look the
-    // user asked for; we still smooth the edge over a single pixel
-    // with smoothstep so it doesn't shimmer at sub-pixel motion.
-    //
-    // Vertical scroll: add (u_time * SCAN_SPEED) to the phase so the
-    // dark bands slowly roll DOWN the screen, mimicking a CRT's
-    // electron-beam retrace cycle. 25 px/sec is slow enough to feel
-    // like a CRT artifact rather than a moving pattern.
-    const float SCAN_SPEED = 25.0;
-    float modY = mod(gl_FragCoord.y - u_time * SCAN_SPEED, 5.0);
-    // 0..2 dark, 2..3 transition, 3..5 light.
+    // 6.15.2 — flicker mitigations on the 5.79.2 band:
+    //   * Period now measured in CSS pixels (divide gl_FragCoord.y by
+    //     u_dpr) so high-DPR displays no longer sub-pixel-crawl the
+    //     band edges.
+    //   * Vertical scroll disabled. The previous 25 px/sec scroll over
+    //     a 5-px period produced ~5 Hz blinking — squarely in the
+    //     human flicker-sensitivity peak (4-10 Hz). Static bands have
+    //     zero temporal flicker.
+    //   * Contrast eased from 0.55 → 0.75 so bands read as CRT haze
+    //     rather than blinking bars.
+    // 6.18.1 — Transition width reverted from 2 px → 1 px each side.
+    //   The wider transition softened the band edges into a blurred
+    //   "gradient stripe" feel; bands now read as crisper, finer
+    //   scanlines while keeping the eased contrast + DPR-stable
+    //   period from 6.15.2.
+    float modY = mod(gl_FragCoord.y / u_dpr, 5.0);
+    // 0..2 dark, 2..3 smooth transition, 3..5 light.
     float scanFactor = smoothstep(2.0, 3.0, modY);
-    float scan = mix(0.55, 1.0, scanFactor);
+    float scan = mix(0.75, 1.0, scanFactor);
     // 5.79.33 — orbs (health, gold shape, gold coin) pass v_noScan=1
     //   so the scanline tint stays at 1.0, leaving them at full
     //   brightness while the starfield/nebula behind them keeps the
@@ -241,6 +249,7 @@ export class WebGLStarfieldRenderer {
         this.uViewport = null;
         this.uField = null;
         this.uTime = null;
+        this.uDpr = null;
         this.uAtlas = null;
         this.uAtlasSlots = null;
 
@@ -309,6 +318,7 @@ export class WebGLStarfieldRenderer {
         this.uViewport    = gl.getUniformLocation(program, 'u_viewport');
         this.uField       = gl.getUniformLocation(program, 'u_field');
         this.uTime        = gl.getUniformLocation(program, 'u_time');
+        this.uDpr         = gl.getUniformLocation(program, 'u_dpr');
         this.uAtlas       = gl.getUniformLocation(program, 'u_atlas');
         this.uAtlasSlots  = gl.getUniformLocation(program, 'u_atlasSlots');
         gl.uniform1i(this.uAtlas, 1); // texture unit 1 (particle renderer uses 0)
@@ -547,6 +557,10 @@ export class WebGLStarfieldRenderer {
         gl.uniform2f(this.uField, this.fieldW, this.fieldH);
         // Mod time to avoid float-precision drift over long sessions.
         gl.uniform1f(this.uTime, timeSec % 86400);
+        // DPR fed every frame so live zoom/display-density changes
+        // (e.g. user dragging window between monitors) are honored.
+        const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+        gl.uniform1f(this.uDpr, dpr);
 
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.instanceCount);
 

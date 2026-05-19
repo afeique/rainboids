@@ -5,13 +5,8 @@ import { UIManager } from './modules/ui/ui-manager.js';
 import { GameEngine } from './modules/game-engine.js';
 import { GAME_STATES } from './modules/core/constants.js';
 import { VERSION } from './modules/core/version.js';
-import { EngineDriver } from './engine/engine-driver.js';
-// 2026-05-17 (WASM pivot, Phase 0): MULTIPLAYER button now navigates to
-// `/mp` (separate page, separate WASM-backed product) instead of opening
-// the legacy modal. The modal source (js/net/multiplayer-modal.js) and
-// the related EngineDriver online path remain on disk but unreachable
-// from the title screen; archived in Phase 1 once the WASM round-trip
-// is proven. See docs/Multiplayer WASM Pivot – 2026-05-17.md.
+// MULTIPLAYER button on the title screen navigates to /mp (separate page,
+// separate WASM-backed product). Solo runs the GameEngine directly here.
 import { isMobile as _isMobilePlatform } from './modules/platform/platform-detect.js';
 import { buildStaticDom } from './modules/ui/static-dom.js';
 
@@ -55,7 +50,6 @@ class RainboidsGame {
         this.inputHandler = null;
         this.uiManager = null;
         this.gameEngine = null;
-        this.engineDriver = null;
     }
 
     async init() {
@@ -123,13 +117,6 @@ class RainboidsGame {
         this.uiManager.setGameEngine(this.gameEngine);
         window.gameEngine = this.gameEngine;
         window.game = this.gameEngine;
-
-        // EngineDriver wraps the GameEngine and adds mode-awareness
-        // (solo vs online). Both modes route through the same GameEngine
-        // — the driver only differs in whether a multiplayer connection
-        // is held open in the background. See js/engine/engine-driver.js.
-        this.engineDriver = new EngineDriver({ gameEngine: this.gameEngine });
-        window.engineDriver = this.engineDriver;
     }
 
     setupStartHandlers() {
@@ -174,7 +161,14 @@ class RainboidsGame {
 
             // 5.79.2 chime: NEW GAME → 'powerup', CONTINUE → 'coin'.
             consumeTitleScreen({ chime: wantContinue ? 'coin' : 'powerup' });
-            this.engineDriver.startSolo(ge._resolveSoloOptions({ continueRun: wantContinue }));
+            const start = wantContinue && ge.hasSavedRun?.()
+                ? () => ge.startContinueRun?.()
+                : () => ge.startNewRun?.();
+            if (typeof ge.triggerTitleStart === 'function') {
+                if (!ge.triggerTitleStart(start)) start();
+            } else {
+                start();
+            }
         };
 
         const ge = () => this.gameEngine;
@@ -193,11 +187,8 @@ class RainboidsGame {
             return null;
         };
 
-        // 2026-05-17 (WASM pivot): MULTIPLAYER is a separate product
-        // at `/mp`. Title button navigates there instead of opening a
-        // modal that connects via the legacy EngineDriver online path.
-        // The /mp page boots the WASM-backed engine fresh; no state
-        // crosses from the solo title screen.
+        // MULTIPLAYER is a separate product at `/mp` (WASM-backed engine,
+        // own page). Title button navigates there; no state crosses over.
         const openMultiplayer = () => {
             if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) return;
             window.location.href = '/mp';

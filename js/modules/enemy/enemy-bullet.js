@@ -2,12 +2,6 @@
 import { GameDimensions, bakedBulletSpriteCache } from '../core/utils.js';
 import { ENEMY_BULLET_CONFIG, GAME_CONFIG } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
-// Phase-1 multiplayer engine refactor: enemy-bullet ballistics extracted
-// to `js/sim/bullet.js`. The wrapper in `update()` below builds a
-// plain-data `BulletState` from `this`, calls `updateEnemyBullet`, and
-// writes the result back. Behavior is byte-for-byte equivalent to the
-// legacy inline code (per-shape velocity, lifetime, despawn).
-import { updateEnemyBullet } from '../../sim/bullet.js';
 
 // 5.79.2 — Map enemy-bullet shape names to bullet-atlas slot names.
 //   When a shape has an entry here, the WebGL bullet renderer takes
@@ -113,9 +107,8 @@ export class EnemyBullet {
     update() {
         if (!this.active) return;
 
-        // ── Trail ring-buffer (presentation; runs BEFORE physics so
-        // the trail captures the pre-move position). Reuses the slot's
-        // {x,y} object — no allocation.
+        // Trail ring-buffer (runs BEFORE physics so the trail captures
+        // the pre-move position).
         let slot = this.trail[this.trailHead];
         if (!slot) {
             slot = { x: 0, y: 0 };
@@ -126,122 +119,59 @@ export class EnemyBullet {
         this.trailHead = (this.trailHead + 1) % this.trailLength;
         if (this.trailCount < this.trailLength) this.trailCount++;
 
-        // ── Pure-sim physics step (extracted to js/sim/bullet.js) ──
-        // Reusable scratch state — avoid per-tick allocation.
-        if (!this._eBulletScratch) {
-            this._eBulletScratch = {
-                id: 0, kind: 'enemy', shape: null, movementPattern: 'aimed',
-                x: 0, y: 0, vx: 0, vy: 0,
-                startX: 0, startY: 0, baseVx: 0, baseVy: 0,
-                angle: 0, rotation: 0, rotationSpeed: 0,
-                life: 1.0, maxLife: 0, fadeFactor: 1.0,
-                damage: 0, radius: 0, baseRadius: 0,
-                maxRange: 0, rangeMultiplier: 1.0,
-                active: true, owner: null,
-                homing: false, homingStrength: 0,
-                helixActive: false, helixFreq: 0, helixPhase: 0, helixAmplitude: 0,
-                piercing: 0, piercedEnemies: 0,
-                explosive: false, explosionRadius: 0,
-                patternTimer: 0, patternPhase: 0,
-                isPersistent: false, maxLifetimeOverride: undefined,
-                creationTime: 0, targetPlayer: null, bossRageHoming: false,
-                sinePhase: 0, sineFreq: 0, sineAmp: 0, sinePerpX: 0, sinePerpY: 0,
-                health: undefined, maxHealth: undefined,
-                rocketSpeed: undefined, maxDistance: undefined, distanceTraveled: undefined,
-                deceleration: undefined, minSpeed: undefined, slashProgress: 0,
-                expiredByRange: false, expiredByBounds: false, expiredByDistance: false,
-            };
-        }
-        if (!this._eBulletCtx) {
-            this._eBulletCtx = {
-                tickScale: GAME_CONFIG.TICK_SCALE,
-                logicTickSeconds: GAME_CONFIG.LOGIC_TICK_MS / 1000,
-                bulletSpeed: GAME_CONFIG.BULLET_SPEED,
-                boundaryWidth: 0, boundaryHeight: 0,
-                now: 0,
-                targetPlayer: null, homingTarget: null,
-                rngFloat: Math.random,
-            };
-        }
-        const sb = this._eBulletScratch;
-        sb.shape = this.shape || null;
-        sb.movementPattern = this.movementPattern;
-        sb.x = this.x; sb.y = this.y;
-        sb.vx = this.vel.x; sb.vy = this.vel.y;
-        sb.startX = this.startX; sb.startY = this.startY;
-        sb.baseVx = this.baseVel ? this.baseVel.x : 0;
-        sb.baseVy = this.baseVel ? this.baseVel.y : 0;
-        sb.rotation = this.rotation;
-        sb.rotationSpeed = this.rotationSpeed;
-        sb.life = this.life;
-        sb.damage = this.damage;
-        sb.radius = this.radius;
-        sb.maxRange = this.maxRange;
-        sb.active = this.active;
-        sb.patternTimer = this.patternTimer;
-        sb.patternPhase = this.patternPhase;
-        sb.isPersistent = this.isPersistent;
-        sb.maxLifetimeOverride = this.maxLifetimeOverride;
-        sb.creationTime = this.creationTime;
-        sb.targetPlayer = this.targetPlayer;
-        sb.bossRageHoming = this.bossRageHoming;
-        sb.sinePhase = this.sinePhase;
-        sb.sineFreq = this.sineFreq;
-        sb.sineAmp = this.sineAmp;
-        sb.sinePerpX = this.sinePerpX;
-        sb.sinePerpY = this.sinePerpY;
-        sb.health = this.health;
-        sb.maxHealth = this.maxHealth;
-        sb.rocketSpeed = this.rocketSpeed;
-        sb.maxDistance = this.maxDistance;
-        sb.distanceTraveled = this.distanceTraveled;
-        // Resolve missile_decelerate constants from PROWLER_PIKE config
-        // (the legacy code did this lazily inside applyMovementPattern).
-        if (this.movementPattern === 'missile_decelerate') {
-            const cfg = ENEMY_BULLET_CONFIG.MISSILE && ENEMY_BULLET_CONFIG.MISSILE.PROWLER_PIKE;
-            sb.deceleration = this.deceleration !== undefined
-                ? this.deceleration
-                : (cfg ? cfg.DECELERATION : undefined);
-            sb.minSpeed = cfg ? cfg.MIN_SPEED : undefined;
-        } else {
-            sb.deceleration = this.deceleration;
-            sb.minSpeed = this.minSpeed;
-        }
-        sb.slashProgress = this.slashProgress || 0;
-        sb.expiredByRange = false;
-        sb.expiredByBounds = false;
-        sb.expiredByDistance = false;
+        // Apply per-pattern velocity adjustment. Self-destruct patterns
+        // (titan_rocket / missile_decelerate at terminal phase) set
+        // this.active = false and call createExplosionEffect() inline.
+        this.applyMovementPattern();
+        if (!this.active) return;
 
-        const ctx = this._eBulletCtx;
-        ctx.boundaryWidth = GameDimensions.width;
-        ctx.boundaryHeight = GameDimensions.height;
-        ctx.now = frameClock.now;
-        ctx.targetPlayer = this.targetPlayer;
+        // Position update (scaled for tick rate) + rotation accumulator +
+        // pattern timer.
+        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
+        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
+        this.rotation += this.rotationSpeed * GAME_CONFIG.TICK_SCALE;
+        this.patternTimer += GAME_CONFIG.LOGIC_TICK_MS / 1000;
 
-        updateEnemyBullet(sb, ctx, null);
-
-        // Write outputs back.
-        this.x = sb.x; this.y = sb.y;
-        this.vel.x = sb.vx; this.vel.y = sb.vy;
-        this.rotation = sb.rotation;
-        this.life = sb.life;
-        this.damage = sb.damage;
-        this.radius = sb.radius;
-        this.patternTimer = sb.patternTimer;
-        this.sinePhase = sb.sinePhase;
-        this.distanceTraveled = sb.distanceTraveled;
-
-        if (!sb.active) {
+        // Mine HP-based death (collision-system writes this.health; we observe).
+        if (this.shape === 'mine' && this.health !== undefined && this.health <= 0) {
             this.active = false;
-            // Translate sim-emitted despawn flags into legacy FX calls.
-            // expiredByRange spawns the disappear puff; expiredByDistance
-            // (titan_rocket / missile_decelerate) spawns an explosion;
-            // expiredByBounds is silent (too far away to see).
-            if (sb.expiredByRange) {
-                this.createDisappearEffect();
-            } else if (sb.expiredByDistance) {
-                this.createExplosionEffect();
+            return;
+        }
+
+        // Lifetime / fade.
+        if (this.isPersistent) {
+            // Time-based (mines, lightning orbs).
+            const maxLife = this.maxLifetimeOverride || 15000;
+            const age = frameClock.now - this.creationTime;
+            if (age > maxLife) {
+                this.active = false;
+                return;
             }
+            if (this.shape === 'mine') {
+                this.life = 1.0;
+            } else {
+                const progress = age / maxLife;
+                this.life = progress < 0.6 ? 1.0 : 1.0 - (progress - 0.6) / 0.4;
+            }
+        } else {
+            // Distance-based — fades / despawns once traveled maxRange from origin.
+            const dist = Math.hypot(this.x - this.startX, this.y - this.startY);
+            const progress = dist / this.maxRange;
+            if (progress >= 1.0) {
+                this.active = false;
+                this.createDisappearEffect();
+                return;
+            }
+            this.life = progress < 0.65
+                ? 1.0
+                : 1.0 - (progress - 0.65) / 0.35 * 0.5; // 1.0 → 0.5
+        }
+
+        // Off-bounds despawn (silent — too far away to see).
+        const margin = 50;
+        if (this.x < -margin || this.x > GameDimensions.width + margin ||
+            this.y < -margin || this.y > GameDimensions.height + margin) {
+            this.active = false;
         }
     }
     

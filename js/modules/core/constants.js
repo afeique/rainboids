@@ -64,7 +64,10 @@ export const GAME_CONFIG = {
     //   With the new visual layout (1 shape + ≤30 pixels) this
     //   keeps the drop event from delivering more than ~250g.
     MONEY_ORB_DROP_BUDGET_MAX: 250,
-    
+    // 6.18.0 — Boss drops get a higher cap so platinum-tier shapes can
+    //   actually fire. Normal kills cap at 250; boss kills at 600.
+    MONEY_ORB_DROP_BUDGET_MAX_BOSS: 600,
+
     // 5.78.2 — Orb-drop "*_UPGRADE" constants and MEDPACK / PAYDAY /
     // DOCTOR / HIGH_ROLLER per-stack constants removed alongside the
     // DROPS-category powerups. Drop rate, quantity, and per-orb amount
@@ -375,4 +378,102 @@ export const STAR_SHAPES = [
     'star4', 'star5', 'star6', 'star8',
     'cube', 'octahedron', 'tetrahedron', 'prism',
 ];
-export const BIG_STAR_SHAPES = ['point', 'circle']; 
+export const BIG_STAR_SHAPES = ['point', 'circle'];
+
+// ─── 6.18.0 — DROP TIERS ────────────────────────────────────────────────
+// Each gold-shape orb is stamped with a TIER at spawn time, driven by
+// the orb's final value (post-jewel-multiplier). Tier defines color,
+// size scale, glow intensity, and pickup audio pitch hint.
+//
+// Bronze   — small-kill scraps; copper-toned, subtle.
+// Silver   — common drops; pale silver.
+// Gold     — most kills; the default treasure-gold (visual baseline).
+// Platinum — boss kills / huge multi-kills; cyan-tinted, big, glowy.
+//
+// Tiers are intentionally distinct in HUE so the player can read drop
+// quality at a glance without reading numbers.
+export const DROP_TIERS = [
+    {
+        id: 'bronze',
+        minValue: 1,
+        color: '#cd7f32',  // bronze
+        sizeScale: 0.80,
+        glowMult: 0.35,
+        pickupPitch: 0.85,
+    },
+    {
+        id: 'silver',
+        minValue: 35,
+        color: '#dcdcdc',  // pale silver
+        sizeScale: 0.95,
+        glowMult: 0.70,
+        pickupPitch: 1.00,
+    },
+    {
+        id: 'gold',
+        minValue: 100,
+        color: '#ffd700',  // treasure gold (baseline)
+        sizeScale: 1.00,
+        glowMult: 1.00,
+        pickupPitch: 1.10,
+    },
+    {
+        id: 'platinum',
+        minValue: 200,
+        color: '#88ddff',  // cyan-tinted platinum
+        sizeScale: 1.20,
+        glowMult: 1.50,
+        pickupPitch: 1.25,
+    },
+];
+
+// Lookup helper — picks the highest tier whose minValue ≤ value.
+export function getDropTier(value) {
+    let t = DROP_TIERS[0];
+    for (let i = 0; i < DROP_TIERS.length; i++) {
+        if (value >= DROP_TIERS[i].minValue) t = DROP_TIERS[i];
+    }
+    return t;
+}
+
+// ─── 6.18.0 — ENEMY DROP PROFILES ───────────────────────────────────────
+// Each enemy type maps to a drop profile that scales the base drop
+// budget and rate. Bosses get the 'boss' profile via isBoss override
+// regardless of type.
+//
+//   budgetMult     — multiplier applied to total drop budget
+//   rateMult       — multiplier applied to drop rate
+//   pixelBonus     — extra pixel pieces on top of split's default
+//   minShape       — minimum chunky shapes per drop (1 = always 1)
+//
+// Grunts (cheap, frequent) drop pixel showers; tanky enemies drop
+// guaranteed shapes; bosses drop jackpots.
+export const ENEMY_DROP_PROFILES = {
+    grunt:    { budgetMult: 0.75, rateMult: 0.85, pixelBonus: 2, minShape: 0 },
+    standard: { budgetMult: 1.00, rateMult: 1.00, pixelBonus: 0, minShape: 1 },
+    tanky:    { budgetMult: 1.40, rateMult: 1.00, pixelBonus: 0, minShape: 1 },
+    miniboss: { budgetMult: 1.80, rateMult: 1.00, pixelBonus: 4, minShape: 1 },
+    boss:     { budgetMult: 2.40, rateMult: 1.00, pixelBonus: 6, minShape: 1 },
+};
+
+// Enemy-type → profile slug. Bosses are identified by the isBoss
+// FLAG, not the type, so this map covers the standard kill case.
+export const ENEMY_TYPE_DROP_PROFILE = {
+    HUNTER:    'grunt',
+    WASP:      'grunt',
+    STALKER:   'grunt',
+    DRIFTER:   'standard',
+    WEAVER:    'standard',
+    TANGERINE: 'standard',
+    GUARDIAN:  'tanky',
+    PROWLER:   'tanky',
+    SENTINEL:  'tanky',
+    TITAN:     'miniboss',
+};
+
+export function getEnemyDropProfile(entity) {
+    if (!entity) return ENEMY_DROP_PROFILES.standard;
+    if (entity.isBoss) return ENEMY_DROP_PROFILES.boss;
+    const slug = ENEMY_TYPE_DROP_PROFILE[entity.type] || 'standard';
+    return ENEMY_DROP_PROFILES[slug] || ENEMY_DROP_PROFILES.standard;
+} 

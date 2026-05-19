@@ -8,7 +8,7 @@
 //   player on mobile mode regardless of upgrade state, with a much
 //   wider attraction radius so collection feels effortless on a phone.
 //   See the MOBILE_* constants below.
-import { GAME_CONFIG } from '../core/constants.js';
+import { GAME_CONFIG, getDropTier } from '../core/constants.js';
 import { random } from '../core/utils.js';
 // 5.109.0 — isMobile() no longer referenced; unified magnet (see
 // gold-coin.js for the same change).
@@ -86,6 +86,10 @@ export class GoldShape {
         this._driftFreq = 0;
         this.active = false;
         this.kind = 'shape';
+        // 6.18.0 — drop tier metadata (stamped in reset()).
+        this.tier = 'gold';
+        this.glowMult = 1.0;
+        this.pickupPitch = 1.0;
     }
 
     reset(x, y, value = 10) {
@@ -101,11 +105,20 @@ export class GoldShape {
         this.isJewel = Math.random() < JEWEL_ROLL_CHANCE;
         if (this.isJewel) {
             this.value = baseValue * JEWEL_VALUE_MULT;
-            this.color = JEWEL_COLORS[(Math.random() * JEWEL_COLORS.length) | 0];
         } else {
             this.value = baseValue;
-            this.color = '#ffd700'; // standard treasure gold
         }
+        // 6.18.0 — Tier stamp based on FINAL value (post-jewel-mult).
+        //   Jewels can climb a tier when their 3× multiplier pushes
+        //   them past the next threshold — a real "lucky" feel.
+        const tier = getDropTier(this.value);
+        this.tier = tier.id;
+        this.glowMult = tier.glowMult;
+        this.pickupPitch = tier.pickupPitch;
+        // Color: jewels keep their rare hue; non-jewels read the tier.
+        this.color = this.isJewel
+            ? JEWEL_COLORS[(Math.random() * JEWEL_COLORS.length) | 0]
+            : tier.color;
         this.life = LIFE_TICKS;
         this.active = true;
         this.opacity = 1;
@@ -118,12 +131,13 @@ export class GoldShape {
         this.is3DShape = false;
 
         // Size scales linearly with value across [SHAPE_SIZE_MIN, SHAPE_SIZE_MAX]
-        //   up to MONEY_ORB_SHAPE_VALUE_MAX gold (after which size is capped).
+        //   up to MONEY_ORB_SHAPE_VALUE_MAX gold, then multiplied by the
+        //   tier's sizeScale (bronze 0.80 → platinum 1.20).
         const cap = GAME_CONFIG.MONEY_ORB_SHAPE_VALUE_MAX;
         const ratio = Math.min(1, (this.value - 1) / Math.max(1, cap - 1));
         const minSize = GAME_CONFIG.MONEY_ORB_SHAPE_SIZE_MIN;
         const maxSize = GAME_CONFIG.MONEY_ORB_SHAPE_SIZE_MAX;
-        this.radius = minSize + ratio * (maxSize - minSize);
+        this.radius = (minSize + ratio * (maxSize - minSize)) * tier.sizeScale;
 
         // 5.88.1 — Rotation dialed back to a gentle tumble. Was
         //   random(0.04, 0.08) → ~0.4-0.8 rev/s, which read as a

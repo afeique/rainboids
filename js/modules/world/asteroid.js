@@ -3,13 +3,11 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { random, GameDimensions, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 import { hsl } from '../core/color-cache.js';
-// Phase-1 multiplayer engine refactor: asteroid drift / boundary /
-// rotation extracted to `js/sim/asteroid.js`. The wrapper in `update()`
-// below builds a plain-data `AsteroidState` from `this`, calls
-// `updateAsteroid`, and writes the result back. Behavior is byte-for-
-// byte equivalent to the legacy inline code.
-import { updateAsteroid } from '../../sim/asteroid.js';
 const DEBRIS_COUNT = 5;
+// Asteroid drift cap (px per logic tick, post-scale) + boundary-bounce
+// energy retention (slightly more elastic than the ship's 0.8).
+const ASTEROID_MAX_SPEED = 2.0;
+const ASTEROID_BOUNCE_DAMP = 0.9;
 
 // ── Shared sin/cos lookup table ──────────────────────────────────────────
 // 1024 entries ≈ 0.35° precision — imperceptible for tumbling rocks,
@@ -331,69 +329,65 @@ export class Asteroid {
     update(gameField = null) {
         if (!this.active) return;
 
-        // Warp-in entry — presentation-side animation. Stays in the
-        // wrapper because it touches projection dirtiness and uses a
-        // 1.5x rotation multiplier specific to the warp-in feel.
+        // Warp-in entry — presentation-side animation.
         if (this.warping) {
             this.updateWarpIn();
             return;
         }
 
-        // ── Pure-sim physics step (extracted to js/sim/asteroid.js) ──
-        // Reusable scratch object — avoid per-tick allocation.
-        if (!this._astScratch) {
-            this._astScratch = {
-                id: 0, size: 0,
-                x: 0, y: 0, vx: 0, vy: 0, radius: 0,
-                rotX: 0, rotY: 0, rotZ: 0,
-                rotVelX: 0, rotVelY: 0, rotVelZ: 0,
-                hp: 0, maxHp: 0, level: 1,
-                active: true, warping: false, deathFlash: 0,
-            };
-        }
-        if (!this._astCtx) {
-            this._astCtx = {
-                field: null,
-                tickScale: GAME_CONFIG.TICK_SCALE,
-                wrapWidth: 0, wrapHeight: 0,
-            };
-        }
-        const ast = this._astScratch;
-        ast.x = this.x;
-        ast.y = this.y;
-        ast.vx = this.vel.x;
-        ast.vy = this.vel.y;
-        ast.radius = this.radius;
-        ast.rotX = this.rot3D.x;
-        ast.rotY = this.rot3D.y;
-        ast.rotZ = this.rot3D.z;
-        ast.rotVelX = this.rotVel3D.x;
-        ast.rotVelY = this.rotVel3D.y;
-        ast.rotVelZ = this.rotVel3D.z;
-        ast.active = this.active;
-        ast.warping = false;
-        ast.deathFlash = this._deathFlash || 0;
-
-        const ctx = this._astCtx;
-        ctx.field = gameField || null;
-        ctx.wrapWidth = GameDimensions.width;
-        ctx.wrapHeight = GameDimensions.height;
-
-        updateAsteroid(ast, ctx, null);
-
-        // Write outputs back.
-        this.x = ast.x;
-        this.y = ast.y;
-        this.vel.x = ast.vx;
-        this.vel.y = ast.vy;
-        this.rot3D.x = ast.rotX;
-        this.rot3D.y = ast.rotY;
-        this.rot3D.z = ast.rotZ;
-        this._deathFlash = ast.deathFlash;
-        if (!ast.active) {
-            this.active = false;
+        // Death flash — tick down and deactivate at zero so motion doesn't
+        // continue mid-explosion.
+        if (this._deathFlash > 0) {
+            this._deathFlash--;
+            if (this._deathFlash <= 0) this.active = false;
             return;
         }
+
+        // Speed cap — renormalize when |v| > 2.0 so freshly-split fragments
+        // (which spawn at 4.5-7.5 initial speed) settle into a manageable
+        // drift instead of streaking off-screen.
+        const speed = Math.hypot(this.vel.x, this.vel.y);
+        if (speed > ASTEROID_MAX_SPEED) {
+            this.vel.x = (this.vel.x / speed) * ASTEROID_MAX_SPEED;
+            this.vel.y = (this.vel.y / speed) * ASTEROID_MAX_SPEED;
+        }
+
+        // Position update — vel is in 30Hz units; scale per render frame.
+        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
+        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
+
+        // Boundary bounce (with field) or torus wraparound (fallback —
+        // live engine call sites always pass a field).
+        if (gameField) {
+            const r = this.radius;
+            if (this.x - r < 0) {
+                this.x = r;
+                this.vel.x = Math.abs(this.vel.x) * ASTEROID_BOUNCE_DAMP;
+            } else if (this.x + r > gameField.width) {
+                this.x = gameField.width - r;
+                this.vel.x = -Math.abs(this.vel.x) * ASTEROID_BOUNCE_DAMP;
+            }
+            if (this.y - r < 0) {
+                this.y = r;
+                this.vel.y = Math.abs(this.vel.y) * ASTEROID_BOUNCE_DAMP;
+            } else if (this.y + r > gameField.height) {
+                this.y = gameField.height - r;
+                this.vel.y = -Math.abs(this.vel.y) * ASTEROID_BOUNCE_DAMP;
+            }
+        } else {
+            const wrapW = GameDimensions.width;
+            const wrapH = GameDimensions.height;
+            const buf = this.radius * 2;
+            if (this.x < -buf) this.x = wrapW + buf;
+            if (this.x > wrapW + buf) this.x = -buf;
+            if (this.y < -buf) this.y = wrapH + buf;
+            if (this.y > wrapH + buf) this.y = -buf;
+        }
+
+        // 3D rotation accumulator (projection happens in draw).
+        this.rot3D.x += this.rotVel3D.x;
+        this.rot3D.y += this.rotVel3D.y;
+        this.rot3D.z += this.rotVel3D.z;
 
         // Presentation-only: stagger projection re-bake across frames.
         if (((frameClock.tick & 1) === this._projOffset) || this.warping) {

@@ -9,15 +9,14 @@ import * as firing from './firing.js';
 import * as shapes from './shapes.js';
 import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
-// 5.88.5 Phase-1 wiring — pure-function step from agent D's mp/sim-enemy-extract.
-import { updateEnemy } from '../../sim/enemy.js';
-// 5.95.1 — Mobile fire suppression defense-in-depth. The sim-layer
-// `decideEnemyShooting` already short-circuits on mobile, but the legacy
-// wrapper `updateShooting` path below and the inline spiral-laser shot
-// in `movement.js::weaverSpinupMovement` are second firing paths that
-// would bypass the sim gate. Re-gate them here at the call site.
-// `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait.
+// `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
+// `isMobile` toggles the lateral weave decoration in update().
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
+
+// 5.99.0 — Mobile combat decoration: small per-tick perpendicular weave
+// that makes enemies READ as actively moving while they shoot.
+const MOBILE_WEAVE_FORCE = 0.85;
+const MOBILE_WEAVE_FREQ_HZ = 1.4;
 
 // Re-export for consumers that import from enemy.js
 export { ENEMY_TYPES };
@@ -298,61 +297,253 @@ export class Enemy {
         if (!this.active) return;
         this.gameEngine = gameEngine; // cached for draw/takeDamage paths
 
-        // 5.88.6 wiring — pure step in `js/sim/enemy.js` does the orchestration
-        // (death drift / warp / boss rage / target / movement / heavy AI /
-        // shooting decision / rotation / shield pulse / micro-movements /
-        // position / trail / boundary). Side effects ride out via `events`.
-        // The wrapper translates each event back into the existing helper
-        // calls (firing.shoot, gameEngine.triggerEnemyDebrisBurst, …) so
-        // solo behavior is byte-equivalent to the pre-wiring version.
-        if (!this._enemyEvents) this._enemyEvents = [];
-        const events = this._enemyEvents;
-        events.length = 0;
+        // ── Death sequence (drift → recycle) ──
+        // Two-beat death: drift under inertia for ~12 ticks, trigger
+        // debris burst at tick 6, recycle at tick 0.
+        if (this._deathFlash > 0) {
+            const drag = 0.97;
+            this.vel.x *= drag;
+            this.vel.y *= drag;
+            this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
+            this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
+            this.faceAngle = (this.faceAngle || 0) + 0.04;
 
-        if (!this._enemyCtx) this._enemyCtx = {};
-        const ctx = this._enemyCtx;
-        ctx.gameEngine = gameEngine;
-        ctx.ships = playerRef ? [playerRef] : [];
-        ctx.field = gameField;
-        ctx.dt = 1 / 60;
-        ctx.rng = null;
-        ctx.tick = frameClock.tick;
-        ctx.wave = (gameEngine && gameEngine.game && gameEngine.game.currentWave) | 0;
+            const max = this._deathFlashMax || 24;
+            const tickIntoDeath = max - this._deathFlash;
 
-        updateEnemy(this, ctx, events);
-
-        for (let i = 0; i < events.length; i++) {
-            const ev = events[i];
-            switch (ev.type) {
-                case 'enemy_debris_burst':
-                    if (gameEngine && typeof gameEngine.triggerEnemyDebrisBurst === 'function') {
-                        try { gameEngine.triggerEnemyDebrisBurst(ev.enemy); }
-                        catch (err) { console.error('triggerEnemyDebrisBurst failed', err); }
-                    }
-                    break;
-                case 'enemy_fire_continuous':
-                    if (ev.kind === 'wasp_machinegun') this.updateWaspMachineGun(gameEngine);
-                    else if (ev.kind === 'sweep_laser') this.updateSweepLaserSystem(gameEngine);
-                    else if (ev.kind === 'sentinel_sweep') this.updateSentinelSweep(gameEngine);
-                    break;
-                case 'enemy_fire_burst':
-                    this.handleBurstShooting(gameEngine, ev.now);
-                    break;
-                case 'enemy_fire_charging':
-                case 'enemy_fire':
-                    this.shoot(gameEngine);
-                    break;
-                case 'enemy_death_recycle':
-                    if (typeof window !== 'undefined' && window._qaBotKillBuffer) {
-                        window._qaBotKillBuffer.push({
-                            type: ev.enemy.type,
-                            wave: this.gameEngine?.game?.currentWave,
-                            ts: Date.now(),
-                            maxHealth: ev.enemy.maxHealth,
-                        });
-                    }
-                    break;
+            if (!this._debrisBurstFired && tickIntoDeath >= 6) {
+                this._debrisBurstFired = true;
+                if (gameEngine && typeof gameEngine.triggerEnemyDebrisBurst === 'function') {
+                    try { gameEngine.triggerEnemyDebrisBurst(this); }
+                    catch (err) { console.error('triggerEnemyDebrisBurst failed', err); }
+                }
             }
+
+            this._deathFlash--;
+            if (this._deathFlash <= 0) this.active = false;
+            return;
+        }
+
+        // ── Warp-in (skip normal AI) ──
+        if (this.warping) {
+            this.updateWarpIn();
+            return;
+        }
+
+        if (!playerRef) return;
+        this.targetPlayer = playerRef;
+
+        // Boss rage + per-tier mechanics (HP-threshold telegraph, invuln,
+        // tantrum, tier-4 phase cycling, tier-2 partner-death flags).
+        if (this.isBoss) updateBossRage(this, gameEngine);
+
+        // Late-wave AI throttle: in waves 15+, run the heavy spatial scans
+        // on alternating frames per enemy.
+        const wave = (gameEngine && gameEngine.game && gameEngine.game.currentWave) | 0;
+        const tick = frameClock.tick;
+        const skipHeavyAI = wave >= 15 && (tick & 1) !== this._aiOffset;
+
+        const playerDistance = Math.hypot(this.x - playerRef.x, this.y - playerRef.y);
+        this.updateTargetPriority(playerDistance, gameEngine);
+        this.updateFaceDirection();
+
+        // Tier-3 (and tier-4 phase 0) formation orbit overrides normal movement.
+        if (!this.isBoss || !bossFormationMovement(this)) {
+            this.updateMovement(gameEngine);
+        }
+
+        // Mobile lateral weave — small sin-phased side-step perpendicular
+        // to line-of-sight so enemies READ as actively moving while they shoot.
+        if (isMobile() && !this.isBoss) {
+            if (typeof this._weavePhase !== 'number') {
+                this._weavePhase = Math.random() * Math.PI * 2;
+            }
+            this._weavePhase += (MOBILE_WEAVE_FREQ_HZ * Math.PI * 2) / 60;
+            const dx = playerRef.x - this.x;
+            const dy = playerRef.y - this.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 1) {
+                const px = -dy / dist;
+                const py =  dx / dist;
+                const swing = Math.sin(this._weavePhase) * MOBILE_WEAVE_FORCE;
+                this.vel.x += px * swing;
+                this.vel.y += py * swing;
+            }
+        }
+
+        if (!skipHeavyAI) {
+            this.updateEvasiveManeuvers(gameEngine);
+            this.avoidAsteroids(gameEngine);
+            if (this.currentTarget === 'player') {
+                this.maintainDistanceFromPlayer();
+            }
+            if (gameEngine && gameEngine.enemyPool) {
+                this.maintainDistanceFromEnemies(gameEngine.enemyPool.active);
+            }
+            if (this.currentTarget === 'patrol') {
+                this.patrolTerritory();
+            }
+            this.dodgeEnemyBullets(gameEngine);
+            this.dodgePlayerBullets(gameEngine);
+        }
+
+        // ── Shooting decision (runs every frame) ──
+        this._decideShooting(gameEngine);
+
+        // Rotation + shield rotation + music-sync pulse.
+        this.rotation += this.rotationSpeed;
+        if (this.shield) {
+            this.shield.rotation += this.shield.rotationSpeed;
+            const musicPlayer = gameEngine && gameEngine.uiManager
+                ? gameEngine.uiManager.musicPlayer
+                : null;
+            let musicIntensity = 0.5;
+            if (musicPlayer && musicPlayer.isPlaying && musicPlayer.currentAudio) {
+                const musicTime = musicPlayer.getCurrentTime();
+                const assumedBPM = 130;
+                const beatFrequency = assumedBPM / 60;
+                const beatPhase = (musicTime * beatFrequency * Math.PI * 2) + this.shield.basePulsePhase;
+                const primaryBeat = Math.sin(beatPhase);
+                const harmonicBeat = Math.sin(beatPhase * 2) * 0.3;
+                const subBeat = Math.sin(beatPhase * 0.5) * 0.2;
+                musicIntensity = 0.5 + (primaryBeat + harmonicBeat + subBeat) * 0.5 * this.shield.musicSyncIntensity;
+                musicIntensity = Math.max(0.1, Math.min(1.0, musicIntensity));
+            } else {
+                const time = frameClock.now * 0.001;
+                const fallbackPhase = (time * 2.2 * Math.PI) + this.shield.basePulsePhase;
+                musicIntensity = 0.5 + Math.sin(fallbackPhase) * 0.3;
+            }
+            this.shield.currentIntensity = musicIntensity;
+        }
+
+        this.addMicroMovements();
+        this.addFishLikeMovement();
+
+        // Position update (scaled for tick rate).
+        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
+        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
+
+        this.updateLightTrail();
+        this.createTrailParticles(gameEngine);
+
+        // Boundary bounce (with field) or torus wraparound (fallback).
+        if (gameField) {
+            if (this.x - this.radius < 0) {
+                this.x = this.radius;
+                this.vel.x = Math.abs(this.vel.x) * 0.8;
+            } else if (this.x + this.radius > gameField.width) {
+                this.x = gameField.width - this.radius;
+                this.vel.x = -Math.abs(this.vel.x) * 0.8;
+            }
+            if (this.y - this.radius < 0) {
+                this.y = this.radius;
+                this.vel.y = Math.abs(this.vel.y) * 0.8;
+            } else if (this.y + this.radius > gameField.height) {
+                this.y = gameField.height - this.radius;
+                this.vel.y = -Math.abs(this.vel.y) * 0.8;
+            }
+        } else {
+            const fieldWidth = GameDimensions.width;
+            const fieldHeight = GameDimensions.height;
+            if (this.x < -this.radius) this.x = fieldWidth + this.radius;
+            if (this.x > fieldWidth + this.radius) this.x = -this.radius;
+            if (this.y < -this.radius) this.y = fieldHeight + this.radius;
+            if (this.y > fieldHeight + this.radius) this.y = -this.radius;
+        }
+
+        // Death check (tolerance for floating-point precision).
+        if (this.health <= 0.001 && this.active) {
+            this.active = false;
+            if (typeof window !== 'undefined' && window._qaBotKillBuffer) {
+                window._qaBotKillBuffer.push({
+                    type: this.type,
+                    wave: this.gameEngine?.game?.currentWave,
+                    ts: Date.now(),
+                    maxHealth: this.maxHealth,
+                });
+            }
+        }
+    }
+
+    /**
+     * Per-tick shooting decision. Pattern dispatch + cooldown gate +
+     * aim-tolerance check; calls the matching `firing.js` helper inline.
+     */
+    _decideShooting(gameEngine) {
+        if (!gameEngine || !gameEngine.enemyBulletPool) return;
+        if (!this.targetPlayer) return;
+
+        // Arc-movement enemies only shoot when stopped.
+        if (this.config.movePattern === 'arc' && !this.canShoot) return;
+        // Tank-movement enemies only shoot in firing state.
+        if (this.config.movePattern === 'tank' && this.tankState !== 'firing') return;
+
+        const playerDistance = Math.hypot(
+            this.x - this.targetPlayer.x,
+            this.y - this.targetPlayer.y,
+        );
+        const avgScreenSize = (window.innerWidth + window.innerHeight) / 2;
+        const maxShootingRange = Math.min(this.getTerritorySize() * 1.5, avgScreenSize * 1.0);
+        if (playerDistance > maxShootingRange) return;
+
+        // Line-of-sight check (asteroids block shots).
+        if (!this.hasLineOfSight(this.targetPlayer, gameEngine)) return;
+
+        const now = frameClock.now;
+
+        // Continuous patterns.
+        if (this.config.shootPattern === 'wasp_machinegun') {
+            this.updateWaspMachineGun(gameEngine);
+            return;
+        }
+        if (this.config.shootPattern === 'sweep_laser') {
+            this.updateSweepLaserSystem(gameEngine);
+            return;
+        }
+        if (this.config.shootPattern === 'sentinel_sweep') {
+            this.updateSentinelSweep(gameEngine);
+            return;
+        }
+
+        // Spiral laser is triggered inside weaverSpinupMovement.
+        if (this.config.shootPattern === 'spiral_laser') return;
+
+        // Aim-tolerance gate (charging patterns exempt — they advance per frame).
+        const isChargingPattern =
+            this.config.shootPattern === 'laser' ||
+            this.config.shootPattern === 'arc_lightning';
+        if (!isChargingPattern && this.targetPlayer) {
+            const aimDx = this.targetPlayer.x - this.x;
+            const aimDy = this.targetPlayer.y - this.y;
+            const toPlayer = Math.atan2(aimDy, aimDx);
+            let aimDiff = toPlayer - this.faceAngle;
+            while (aimDiff > Math.PI) aimDiff -= Math.PI * 2;
+            while (aimDiff < -Math.PI) aimDiff += Math.PI * 2;
+            if (Math.abs(aimDiff) > Math.PI / 6) return;
+        }
+
+        const isBurstPattern =
+            this.config.shootPattern === 'burst_3' ||
+            this.config.shootPattern === 'burst_2' ||
+            this.config.shootPattern === 'square_burst' ||
+            this.config.shootPattern === 'hunter_single';
+
+        if (isBurstPattern) {
+            this.handleBurstShooting(gameEngine, now);
+            return;
+        }
+
+        if (isChargingPattern) {
+            // Per-frame call advances charge state.
+            this.shoot(gameEngine);
+            return;
+        }
+
+        // Non-burst patterns (circle_6, homing, …). Cooldown gate.
+        if (now - this.lastShot > this.firingCooldown) {
+            this.shoot(gameEngine);
+            this.lastShot = now;
+            this.firingCooldown = getEnemyFiringCooldown(this.type, this.level || 1);
         }
     }
     

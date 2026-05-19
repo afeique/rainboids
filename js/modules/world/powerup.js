@@ -1,5 +1,5 @@
 // Powerup system for enhanced combat capabilities
-import { GAME_CONFIG, applyShopPriceScaling } from '../core/constants.js';
+import { GAME_CONFIG } from '../core/constants.js';
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
@@ -676,12 +676,7 @@ export const POWERUP_TYPES = {
 // powerup config (`goldCost` + `goldCostIncrement`) or derived from
 // the legacy `spCost` field. Mapping: spCost × 500 + 500 if tier ≥ 4.
 // Rounded to the nearest 50 for a clean storefront price.
-//
-// 6.18.0 — Accepts an optional `wave` arg. When provided, the
-// computed cost is run through `applyShopPriceScaling` so prices
-// inflate alongside the drop economy. Callers that don't pass wave
-// get the legacy unscaled cost.
-export function powerupGoldCost(cfg, currentStacks = 0, wave = 0) {
+export function powerupGoldCost(cfg, currentStacks = 0) {
     if (!cfg) return 0;
     let base = (typeof cfg.goldCost === 'number') ? cfg.goldCost : null;
     let inc  = (typeof cfg.goldCostIncrement === 'number') ? cfg.goldCostIncrement : null;
@@ -694,9 +689,7 @@ export function powerupGoldCost(cfg, currentStacks = 0, wave = 0) {
         inc = incSp * 350 + 150;
     }
     const raw = base + (currentStacks | 0) * inc;
-    const base50 = Math.round(raw / 50) * 50;
-    if (wave > 0) return applyShopPriceScaling(base50, wave);
-    return base50;
+    return Math.round(raw / 50) * 50;
 }
 
 export class Powerup {

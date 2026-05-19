@@ -146,33 +146,61 @@ export const PRIMARY_WEAPONS = {
 //     180   2.93×  OMNIPOTENT     all-powerful
 //     190   2.97×  INFINITE       no upper bound
 //     200   3.00×  RAINBOIDS GOD  hard cap, the final word
+// 6.18.0 — `goldMult` added per tier. Replaces the legacy
+//   `min(1.4, 1 + 0.025*kills)` formula which hit cap at 16 kills
+//   and silently saturated the per-drop budget. New curve is
+//   tier-keyed and gentler:
+//     tier 10  → +5%  gold
+//     tier 60  → +30% gold
+//     tier 200 → +50% gold (RAINBOIDS GOD cap)
+//   Pre-tier (kills 1-9) ramps linearly from 1.00 → 1.05 so a
+//   single kill already moves the HUD readout.
 export const STREAK_TIERS = [
     // Momentum tier
-    { kills:  10, mult: 1.25, label: 'EMPOWERED',     color: '#7FE7FF' }, // pale cyan
-    { kills:  20, mult: 1.40, label: 'RELENTLESS',    color: '#FF7733' }, // red-orange
-    { kills:  30, mult: 1.55, label: 'UNSTOPPABLE',   color: '#FFA844' }, // orange
-    { kills:  40, mult: 1.70, label: 'INDOMITABLE',   color: '#55D6FF' }, // electric blue
+    { kills:  10, mult: 1.25, goldMult: 1.05, label: 'EMPOWERED',     color: '#7FE7FF' }, // pale cyan
+    { kills:  20, mult: 1.40, goldMult: 1.10, label: 'RELENTLESS',    color: '#FF7733' }, // red-orange
+    { kills:  30, mult: 1.55, goldMult: 1.15, label: 'UNSTOPPABLE',   color: '#FFA844' }, // orange
+    { kills:  40, mult: 1.70, goldMult: 1.20, label: 'INDOMITABLE',   color: '#55D6FF' }, // electric blue
     // Mortal-extraordinary
-    { kills:  50, mult: 1.85, label: 'OUTRAGEOUS',    color: '#FF55FF' }, // magenta
-    { kills:  60, mult: 2.00, label: 'HERCULEAN',     color: '#B0FF55' }, // bright lime
-    { kills:  70, mult: 2.12, label: 'LEGENDARY',     color: '#FFD700' }, // gold
-    { kills:  80, mult: 2.23, label: 'MYTHIC',        color: '#DC143C' }, // crimson
+    { kills:  50, mult: 1.85, goldMult: 1.25, label: 'OUTRAGEOUS',    color: '#FF55FF' }, // magenta
+    { kills:  60, mult: 2.00, goldMult: 1.30, label: 'HERCULEAN',     color: '#B0FF55' }, // bright lime
+    { kills:  70, mult: 2.12, goldMult: 1.32, label: 'LEGENDARY',     color: '#FFD700' }, // gold
+    { kills:  80, mult: 2.23, goldMult: 1.34, label: 'MYTHIC',        color: '#DC143C' }, // crimson
     // Divine / immortal
-    { kills:  90, mult: 2.33, label: 'IMMORTAL',      color: '#FFD0FF' }, // pale violet
-    { kills: 100, mult: 2.42, label: 'GODLIKE',       color: '#FF6688' }, // pink-red
-    { kills: 110, mult: 2.50, label: 'INVINCIBLE',    color: '#FFFFFF' }, // bright white
-    { kills: 120, mult: 2.58, label: 'ETERNAL',       color: '#FFF8DC' }, // ivory
+    { kills:  90, mult: 2.33, goldMult: 1.36, label: 'IMMORTAL',      color: '#FFD0FF' }, // pale violet
+    { kills: 100, mult: 2.42, goldMult: 1.38, label: 'GODLIKE',       color: '#FF6688' }, // pink-red
+    { kills: 110, mult: 2.50, goldMult: 1.40, label: 'INVINCIBLE',    color: '#FFFFFF' }, // bright white
+    { kills: 120, mult: 2.58, goldMult: 1.42, label: 'ETERNAL',       color: '#FFF8DC' }, // ivory
     // Cosmic / universe-scale
-    { kills: 130, mult: 2.65, label: 'APOCALYPTIC',   color: '#FF4444' }, // blood red
-    { kills: 140, mult: 2.72, label: 'ASTRONOMICAL',  color: '#AA88FF' }, // royal purple
-    { kills: 150, mult: 2.78, label: 'GALACTIC',      color: '#4466FF' }, // deep blue
-    { kills: 160, mult: 2.84, label: 'COSMIC',        color: '#9933FF' }, // purple
+    { kills: 130, mult: 2.65, goldMult: 1.43, label: 'APOCALYPTIC',   color: '#FF4444' }, // blood red
+    { kills: 140, mult: 2.72, goldMult: 1.44, label: 'ASTRONOMICAL',  color: '#AA88FF' }, // royal purple
+    { kills: 150, mult: 2.78, goldMult: 1.45, label: 'GALACTIC',      color: '#4466FF' }, // deep blue
+    { kills: 160, mult: 2.84, goldMult: 1.46, label: 'COSMIC',        color: '#9933FF' }, // purple
     // Beyond physical
-    { kills: 170, mult: 2.89, label: 'TRANSCENDENT',  color: '#88FFEE' }, // teal-mint
-    { kills: 180, mult: 2.93, label: 'OMNIPOTENT',    color: '#FF44AA' }, // hot pink
-    { kills: 190, mult: 2.97, label: 'INFINITE',      color: '#FFEC8B' }, // pale gold
-    { kills: 200, mult: 3.00, label: 'RAINBOIDS GOD', color: '#FFD700' }, // gold (cap)
+    { kills: 170, mult: 2.89, goldMult: 1.47, label: 'TRANSCENDENT',  color: '#88FFEE' }, // teal-mint
+    { kills: 180, mult: 2.93, goldMult: 1.48, label: 'OMNIPOTENT',    color: '#FF44AA' }, // hot pink
+    { kills: 190, mult: 2.97, goldMult: 1.49, label: 'INFINITE',      color: '#FFEC8B' }, // pale gold
+    { kills: 200, mult: 3.00, goldMult: 1.50, label: 'RAINBOIDS GOD', color: '#FFD700' }, // gold (cap)
 ];
+
+// 6.18.0 — Streak gold-find multiplier. Returns 1.0 at 0 kills,
+//   ramps linearly to STREAK_TIERS[0].goldMult over kills 1..first
+//   tier, then steps up per tier. Used in combat-manager
+//   dropOrbsFromEntity AND in the HUD streak block (drawStreakIndicator)
+//   to display "+N% GOLD" so players see the current bonus.
+export function getStreakGoldMult(killStreakCount) {
+    const k = killStreakCount | 0;
+    if (k <= 0) return 1.0;
+    const first = STREAK_TIERS[0];
+    if (k < first.kills) {
+        return 1 + (k / first.kills) * (first.goldMult - 1);
+    }
+    let m = 1.0;
+    for (let i = 0; i < STREAK_TIERS.length; i++) {
+        if (k >= STREAK_TIERS[i].kills) m = STREAK_TIERS[i].goldMult;
+    }
+    return m;
+}
 export const STREAK_BUFF_DURATION = 4000; // ms — buff lasts 4s, refreshes on each new kill while active.
 // NOTE: there is NO time-based streak reset. The streak only resets when the
 // player TAKES DAMAGE (see lifecycle.js takeDamage + collision-system.js).

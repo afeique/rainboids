@@ -11,6 +11,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.18.1] - 2026-05-19
+
+### Changed — scanlines made finer (sharper edges, same period)
+
+The 6.15.2 flicker fix softened the CRT scanline transition from
+1 px to 2 px each side, which made the bands feel "wide" — more
+like blurred gradient stripes than crisp scanlines.
+
+Transition width reverted to 1 px each side in
+`webgl-starfield-renderer.js`:
+
+- `smoothstep(1.5, 3.5, modY)` → `smoothstep(2.0, 3.0, modY)`.
+- New band layout in the 5-px period: 0..2 dark, 2..3 smooth
+  transition, 3..5 light (was 0..1.5 dark, 1.5..3.5 transition,
+  3.5..5 light).
+
+Other 6.15.2 mitigations kept: DPR-stable period (CSS-pixel
+measurement via `u_dpr`), vertical scroll disabled, eased contrast
+(0.75 floor instead of 0.55). So bands stay flicker-free while
+reading as finer.
+
+---
+
+## [6.18.0] - 2026-05-19
+
+### Added — drop tiers + per-enemy drop profiles + gold-find HUD readout
+
+**Drop tiers (`constants.js DROP_TIERS`).** Each gold-shape orb is
+stamped with a tier at spawn time based on its final value
+(post-jewel-mult). Tiers are visually distinct: bronze (copper) /
+silver (pale) / gold (standard treasure) / platinum (cyan-tinted,
+larger, glowier). Jewels still roll their rare colors on top.
+Players can read drop quality at a glance without reading numbers.
+`gold-shape.js` consumes the tier for color + size scale.
+
+**Per-enemy drop profiles (`constants.js ENEMY_DROP_PROFILES`).**
+Each enemy maps to a profile that scales drop budget, rate, and
+pixel-bonus count. Grunts (HUNTER / WASP / STALKER) drop pixel-
+heavy showers; standard enemies (DRIFTER / WEAVER / TANGERINE) get
+the baseline; tanky enemies (GUARDIAN / PROWLER / SENTINEL)
+guarantee a shape; TITAN gets a miniboss profile; any `isBoss`
+enemy gets the boss profile with a higher 600g cap (vs the 250g
+normal cap) so platinum-tier shapes actually fire on bosses.
+
+### Changed — streak gold curve rebalanced + HUD readout
+
+The streak gold mult was `min(1.4, 1 + 0.025 × kills)` — capped at
+16 kills then silently saturated. Replaced with a tier-keyed curve
+on `STREAK_TIERS[].goldMult` ramping from +5% at EMPOWERED (10
+kills) to +50% at RAINBOIDS GOD (200 kills). Pre-tier (1-9 kills)
+linearly ramps 0 → +5% so the bonus moves from kill 1.
+
+The streak HUD block now shows `+N% GOLD` below the tier label so
+players see what the streak is buying them. Bars shift down 14 px
+to make room.
+
+`getStreakGoldMult` is exported from `weapon-data.js` and consumed
+by both the drop math (`combat-manager.js`) and the HUD
+(`hud/overlays.js`) so the displayed bonus exactly matches what
+gets paid.
+
+---
+
+## [6.17.2] - 2026-05-19
+
+### Fixed — enemy explosions no longer vanish under heavy fire
+
+The frame-0 plasma core / rings / shockwave / lightning / sparkles
+were sometimes failing to appear, while the frame-6 debris burst
+always rendered. Two compounding caps were dropping the late-arriving
+death-explosion sub-particles:
+
+1. **WebGL renderer hard-stop** (`webgl-particle-renderer.js:363`)
+   — the per-frame pack loop terminated at `n < maxInstances`
+   (2500). `pool.activeObjects` walks oldest → newest, so when the
+   active list was already saturated with hit-spark embers + sparkles
+   from heavy fire, the explosion sub-particles (appended at the END
+   on the kill frame) sat past slot 2500 and were silently truncated
+   out of the draw call. By frame 6 enough older particles had
+   self-released that the debris burst always fit.
+2. **Pool soft-cap eviction** (`pool-manager.js:18`) — every
+   `pool.get()` above 2500 released `activeObjects[0]`. With ~30+
+   `.get()` calls per explosion, the eviction loop chewed through
+   the head of the active list. Combined with WebGL's tail-truncation,
+   the explosion particles were squeezed from both sides on busy frames.
+
+Both caps removed:
+
+- **`pool-manager.js`** — eviction stripped. The Particle pool now
+  grows freely; particles self-release via `cleanupInactive()` when
+  `life <= 0`. Memory is bounded by the actual peak (~3000 during
+  simultaneous wave-clear deaths).
+- **`webgl-particle-renderer.js`** — instance buffer + Float32Array
+  scratch grow dynamically. A pre-count walk determines `need`; if
+  `need > maxInstances`, `_growInstanceBuffer(need)` doubles capacity
+  (clamped at `need + 256`) and reallocates both the typed-array
+  scratch and the `gl.bufferData` allocation. VAO bindings stay
+  valid because the underlying VBO id doesn't change.
+- **`constants.js`** — `MAX_PARTICLES = 2500` redocumented as the
+  INITIAL capacity (not a cap). Naming kept for API stability.
+
+Net effect: every enemy death now reliably produces the full
+multi-layer burst from 6.16.0 — plasma core, chromatic rings,
+shockwave, lightning crackle, sparkles, embers — regardless of how
+many bullets / hit-sparks are in flight.
+
+---
+
 ## [6.17.1] - 2026-05-19
 
 ### Changed — no flash on damage, shake reserved for collisions (and scaled by damage)
@@ -224,6 +332,38 @@ their particle bursts.
 `particlePool.get(x, y, 'explosionFlash', radius, color?)` — previously
 hardcoded `#ffffff`. Default behavior preserved; new behavior enables
 the chromatic flash + plasma-core stack above.
+
+---
+
+## [6.15.2] - 2026-05-19
+
+### Fixed — CRT scanlines no longer flicker
+
+The starfield scanline effect produced visible flicker on most
+displays. Four compounding causes:
+
+- **5 Hz blink rate.** Scrolling a 5-px-period band at 25 px/sec
+  produced a full dark/light cycle every 200 ms — squarely in the
+  human flicker-sensitivity peak (4–10 Hz).
+- **Sub-pixel period.** `gl_FragCoord.y` is in framebuffer pixels,
+  so a 5-px period on a 2× DPR display was 2.5 CSS px — the band
+  edges crawled across screen pixels each frame as moiré.
+- **Hard band edge.** The 1-pixel `smoothstep` transition wasn't
+  wide enough to anti-alias smoothly on high-DPR.
+- **High contrast.** The 5.79.2 bump (22% → 45%) magnified
+  perceived flicker.
+
+Fixes applied in `webgl-starfield-renderer.js`:
+
+- Scroll disabled (was 25 px/sec). Static bands have zero temporal
+  flicker.
+- New `u_dpr` uniform divides `gl_FragCoord.y` so the period is
+  measured in CSS pixels regardless of display density.
+- Transition softened from 1 px → 2 px each side.
+- Contrast eased from 0.55 → 0.75 (45% → 25%).
+
+Net effect: bands now read as steady CRT haze instead of blinking
+bars.
 
 ---
 

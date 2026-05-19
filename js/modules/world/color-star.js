@@ -3,23 +3,17 @@
 import { GAME_CONFIG, NORMAL_STAR_COLORS, STAR_SHAPES, BIG_STAR_SHAPES } from '../core/constants.js';
 import { random, wrap, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
-// Phase-1 multiplayer engine refactor: drop physics extracted to
-// `js/sim/drops.js`. The wrapper in `update()` below builds a plain-data
-// `DropState` from `this`, calls `updateDrop`, and writes the result back.
-// Behavior is byte-for-byte equivalent to the legacy inline code (drift,
-// friction, two-tier health magnet, tractor pull, lifetime). Decorative
-// stars (`starType === 'decorative'`) are not drops — they keep the inline
-// path below.
-import { updateDrop } from '../../sim/drops.js';
-import { isMobile } from '../platform/platform-detect.js';
-
-// 5.95.0 — Tiny helper for the per-drop `ctx.mobileMagnet` flag. Kept
-//   as a single function call so the hot path stays a function ref
-//   (V8 inlines it; calling isMobile() directly inside update was
-//   marginally slower in profiling).
-function _isMobileMagnet() {
-    return isMobile();
-}
+// Drop physics tuning constants — friction, magnet radii / forces,
+// fade window. Inlined from the prior `js/sim/drops.js` extraction.
+const DROP_FRICTION_HEALTH = 0.92;
+const DROP_FRICTION_DEFAULT = 0.985;
+// 5.109.0 — Health orbs sit MID in the range hierarchy:
+//   gold (180px) > health (110px) > inventory (90px).
+const DROP_MAGNET_FAR_RADIUS = 110;
+const DROP_MAGNET_NEAR_RADIUS = 45;
+const DROP_MAGNET_FAR_FORCE = 5;
+const DROP_MAGNET_NEAR_FORCE = 14;
+const DROP_OPACITY_FADE_FRAMES = 120;
 
 export class ColorStar {
     constructor() {
@@ -226,98 +220,76 @@ export class ColorStar {
                 }
             }
 
-            // ── Drop physics step (extracted to js/sim/drops.js) ──
-            // The wrapper builds a plain-data DropState from `this`,
-            // hands it to the pure `updateDrop` function, and writes
-            // the result back. This is the F-agent slice of the
-            // Phase-1 multiplayer engine refactor; behavior is
-            // byte-for-byte equivalent to the legacy inline code
-            // (lifetime decay, friction, position update, opacity
-            // fade-in/fade-out, two-tier health magnet, tractor pull).
-            //
-            // Reusable scratch objects to avoid per-tick allocation.
-            // The pure sim doesn't need fresh objects each call; the
-            // ColorStar instance gets one scratch DropState attached
-            // and reuses it across ticks.
-            if (!this._dropScratch) {
-                this._dropScratch = {
-                    id: 0,
-                    kind: 'health',
-                    x: 0, y: 0, vx: 0, vy: 0,
-                    life: 0,
-                    radius: 0,
-                    value: 0,
-                    opacity: 1,
-                    z: 1,
-                    active: true,
-                };
-            }
-            if (!this._dropCtxScratch) {
-                this._dropCtxScratch = {
-                    ships: [null],
-                    field: null,
-                    dt: 1 / 60,
-                    tractorEngaged: false,
-                    tractorAttraction: 0,
-                    tractorRange: 0,
-                };
-            }
-            const drop = this._dropScratch;
-            // Map starType ('health' | 'money') to the DropState
-            // discriminator. Pixel-orb subtype is independent of the
-            // money kind for physics purposes (both use the default
-            // 0.985 friction) — `kind` only branches the magnet path.
-            drop.kind = (this.starType === 'health') ? 'health'
-                       : (this.isPixelOrb ? 'money_pixel' : 'money_shape');
-            drop.x = this.x;
-            drop.y = this.y;
-            drop.vx = this.vel.x;
-            drop.vy = this.vel.y;
-            drop.life = this.life;
-            drop.radius = this.radius;
-            drop.opacity = this.opacity;
-            drop.z = this.z;
-            drop.active = this.active;
+            // ── Drop physics: lifetime, friction, position, magnet, tractor ──
+            const isHealth = this.starType === 'health';
 
-            const ctx = this._dropCtxScratch;
-            // Wrap the live `playerPos` (a Player ref) as a single-ship
-            // array. updateDrop picks the nearest from `ships`; for solo
-            // there's only one player so this is the trivial case.
-            ctx.ships[0] = playerPos;
-            ctx.field = gameField;
-            ctx.tractorEngaged = !!tractorEngaged;
-            ctx.tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
-            ctx.tractorRange = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
-            // 5.95.0 — Mobile auto-magnet: widens the health-orb magnet
-            //   radius so orbs zip in from anywhere. See drops.js for
-            //   the radius constants.
-            ctx.mobileMagnet = _isMobileMagnet();
-            // 6.0.0 — TRIAGE_NET powerup. 2× magnet range on health orbs.
-            // Reads through the live game-engine reference (set by main.js)
-            // so this stays a no-op in offline sim contexts.
-            ctx.healthMagnetScale = 1;
-            const _ge = (typeof window !== 'undefined') ? window.gameEngine : null;
-            if (_ge && _ge.player && typeof _ge.player.getPowerupStacks === 'function') {
-                if (_ge.player.getPowerupStacks('TRIAGE_NET') > 0) {
-                    ctx.healthMagnetScale = 2.0;
+            // Lifetime tick. Health drops are PERMANENT — they sit on the
+            // field forever until collected. Other orbs decrement each tick.
+            if (!isHealth) {
+                this.life--;
+                if (this.life <= 0) {
+                    this.active = false;
+                    return;
                 }
             }
 
-            updateDrop(drop, ctx, null);
+            // Friction — health orbs use a heavier 0.92 so the magnet's
+            // per-tick force pump doesn't accelerate them to absurd speeds.
+            const friction = isHealth ? DROP_FRICTION_HEALTH : DROP_FRICTION_DEFAULT;
+            this.vel.x *= friction;
+            this.vel.y *= friction;
 
-            // Write physics back to `this`. The vel object stays the
-            // same reference (mutated in place); x/y/life/opacity/active
-            // are simple scalars copied back.
-            this.x = drop.x;
-            this.y = drop.y;
-            this.vel.x = drop.vx;
-            this.vel.y = drop.vy;
-            this.life = drop.life;
-            this.opacity = drop.opacity;
-            // `active` flips false when life reaches 0 — copy the
-            // signal back so the existing engine pool cleanup picks
-            // it up on the next pass.
-            if (!drop.active) this.active = false;
+            // Position update (per-tick delta, not per-second integration).
+            this.x += this.vel.x;
+            this.y += this.vel.y;
+
+            // Opacity fade — pinned at 1.0 for health, fades out over the
+            // last DROP_OPACITY_FADE_FRAMES ticks for everything else.
+            this.opacity = isHealth ? 1 : Math.min(1, this.life / DROP_OPACITY_FADE_FRAMES);
+
+            if (!playerPos) return;
+
+            const dxToPlayer = playerPos.x - this.x;
+            const dyToPlayer = playerPos.y - this.y;
+            const dist = Math.hypot(dxToPlayer, dyToPlayer);
+
+            // Health-orb passive magnet (two-tier).
+            // 6.0.0 — TRIAGE_NET powerup widens the magnet by up to 2×.
+            if (isHealth && dist > 1) {
+                let magScale = 1;
+                const _ge = (typeof window !== 'undefined') ? window.gameEngine : null;
+                if (_ge && _ge.player && typeof _ge.player.getPowerupStacks === 'function') {
+                    if (_ge.player.getPowerupStacks('TRIAGE_NET') > 0) magScale = 2.0;
+                }
+                const farR = DROP_MAGNET_FAR_RADIUS * magScale;
+                if (dist < farR) {
+                    const farF = DROP_MAGNET_FAR_FORCE * magScale;
+                    const nearR = DROP_MAGNET_NEAR_RADIUS * magScale;
+                    const nearF = DROP_MAGNET_NEAR_FORCE * magScale;
+                    const inv = 1 / dist;
+                    const farFactor = (farR - dist) / farR;
+                    this.vel.x += dxToPlayer * inv * farF * farFactor;
+                    this.vel.y += dyToPlayer * inv * farF * farFactor;
+                    if (dist < nearR) {
+                        const nearFactor = (nearR - dist) / nearR;
+                        this.vel.x += dxToPlayer * inv * nearF * nearFactor;
+                        this.vel.y += dyToPlayer * inv * nearF * nearFactor;
+                    }
+                }
+            }
+
+            // Tractor-beam pull — fall-off scaled by orb's z parallax depth.
+            // Stacks on top of the health magnet for an even snappier scoop.
+            if (dist > 1 && tractorEngaged) {
+                const tractorAttraction = GAME_CONFIG.ACTIVE_STAR_ATTR * 1500;
+                const tractorDist = GAME_CONFIG.ACTIVE_STAR_ATTRACT_DIST;
+                if (tractorDist > 0 && dist < tractorDist) {
+                    const tractorForce = tractorAttraction * (1 - dist / tractorDist);
+                    const z = this.z !== undefined ? this.z : 1;
+                    this.vel.x += (dxToPlayer / dist) * tractorForce * z;
+                    this.vel.y += (dyToPlayer / dist) * tractorForce * z;
+                }
+            }
         } else {
             // Update twinkle based on sine wave - much more subtle variation
             this.opacity = 0.6 + 0.3 * (Math.sin(frameClock.now * this.twinkleSpeed + this.opacityOffset) + 1) / 2;

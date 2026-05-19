@@ -6,17 +6,6 @@ import * as skills from './skills.js';
 import * as progression from './progression.js';
 import * as playerRenderer from './renderer.js';
 import { scoreItem } from '../world/item-system.js';
-// Phase-1 multiplayer engine refactor: ship physics extracted to
-// `js/sim/ship.js`. The wrapper in `update()` below builds a plain-data
-// `ShipState` from `this`, calls `updateShip`, and writes the result
-// back. Behavior is byte-for-byte equivalent to the legacy inline code.
-import { updateShip } from '../../sim/ship.js';
-// MP feature-flag gate: in online mode, abilities that lack full
-// Rust-mirror parity are suppressed at the fire-site so they can't
-// desync gameplay. Solo runs are unaffected (the helper returns true
-// when no online driver is attached). See `js/net/mp-feature-flags.js`
-// for the per-ability allowlist.
-import { isAbilityMpSafe } from '../../net/mp-feature-flags.js';
 // Mobile auto-fire (5.92.0): when running in mobile mode the player
 // has no spare hand to tap a power-weapon button — the spec auto-
 // fires the equipped power weapon the moment it's ready (off
@@ -373,26 +362,7 @@ export class Player {
     // ── Weapon bindings ──
     getBulletVelocityDamageMult(id)     { return weapons.getBulletVelocityDamageMult.call(this, id); }
 
-    // ── MP feature-flag suppression helper ─────────────────────────────────
-    // Returns true when an ability should be suppressed because the engine
-    // is online AND the ability lacks full Rust-mirror parity. The engine
-    // driver lives on `window.engineDriver` (set in `main.js`); the same
-    // lookup convention game-engine.js's `_mpDriverIfOnline()` uses. In
-    // solo runs (or before the driver is attached) this returns false and
-    // the gate is a no-op.
-    _isAbilitySuppressedByMp(abilityId) {
-        const driver = (typeof window !== 'undefined') ? window.engineDriver : null;
-        if (!driver || !driver.isOnline) return false;
-        return !isAbilityMpSafe(abilityId);
-    }
-
     firePower(bulletPool, audioManager, particlePool) {
-        // MP gate — suppress power weapons that don't yet have a Rust mirror.
-        // The cooldown gate is upstream in weapons.updateChargingSystem(),
-        // and the caller (weapons.js:163) clears `input.fireSecondary`
-        // unconditionally after calling us, so an early-return here cleanly
-        // no-ops: no entity spawn, no audio, no FX, no cooldown consumed.
-        if (this._isAbilitySuppressedByMp(this.activePower)) return;
         return weapons.firePower.call(this, bulletPool, audioManager, particlePool);
     }
 
@@ -621,11 +591,8 @@ export class Player {
         // ── FX particle effects (must run BEFORE physics) ──
         // These read this.x / this.y, which the physics step below
         // mutates. The original update() emitted these particles between
-        // the velocity-integration step and the friction step (lines
-        // 552-575 of the pre-extraction player.js), so this.x / this.y
-        // were the pre-position-update values at that point. Running
-        // them here, before updateShip, preserves that exact pixel
-        // placement — byte-for-byte parity with the legacy ordering.
+        // the velocity-integration step and the friction step, so
+        // this.x / this.y are the pre-position-update values at this point.
 
         // Spawn particles during invulnerability (renamed from tractor beam)
         if (this.invincible && Math.random() < 0.3) {
@@ -653,83 +620,76 @@ export class Player {
             }
         }
 
-        // ── Physics step (extracted to js/sim/ship.js) ──
-        // The wrapper builds a plain-data ShipState from `this`, hands
-        // it to the pure `updateShip` function, and writes the result
-        // back. This is the Phase-1 deliverable for the multiplayer
-        // engine refactor; behavior is byte-for-byte equivalent to the
-        // legacy inline code (aim, thrust, friction, snap-to-zero,
-        // max-speed clamp, position update, boundary bounce).
-        //
-        // Reusable scratch objects to avoid per-tick allocation in the
-        // solo path. The pure sim doesn't need fresh objects each call.
-        if (!this._shipScratch) {
-            this._shipScratch = {
-                player: 0,
-                x: 0, y: 0, vx: 0, vy: 0,
-                angle: 0,
-                hp: 0, maxHp: 0, shield: 0,
-                radius: 0,
-                field: null,
-                active: true,
-            };
+        // ── Physics step ──
+        // Velocity integration → friction → snap-to-zero → max-speed clamp
+        // → position update → boundary bounce. Aim angle is set above
+        // (line ~535) before the auto-fire check, so we don't re-set it
+        // here. Mobile stick overrides velocity + position in the next
+        // block.
+        if (this.active) {
+            const _mobile = isMobile();
+            const speedMult = this.getMovementSpeedMultiplier();
+
+            // Velocity integration — WASD direction → moveAngle → per-tick
+            // velocity delta scaled by thrustPower * speedMult. Mobile
+            // movement comes from the analog stick instead, so we zero
+            // out the keyboard contribution there.
+            const isMoving = !_mobile && (input.up || input.down || input.left || input.right);
+            if (isMoving && !this.thrustersDisabled) {
+                let moveX = 0;
+                let moveY = 0;
+                if (input.left)  moveX -= 1;
+                if (input.right) moveX += 1;
+                if (input.up)    moveY -= 1;
+                if (input.down)  moveY += 1;
+                const moveAngle = Math.atan2(moveY, moveX);
+                const thrustForce = this.thrustPower * speedMult;
+                this.vel.x += Math.cos(moveAngle) * thrustForce;
+                this.vel.y += Math.sin(moveAngle) * thrustForce;
+            }
+
+            // Friction — Math.pow(0.50, TICK_SCALE) per tick.
+            const friction = Math.pow(0.50, GAME_CONFIG.TICK_SCALE);
+            this.vel.x *= friction;
+            this.vel.y *= friction;
+
+            // Snap to zero (prevents subpixel drift after key release).
+            if (Math.abs(this.vel.x) < 0.05) this.vel.x = 0;
+            if (Math.abs(this.vel.y) < 0.05) this.vel.y = 0;
+
+            // Max-speed clamp — speed boost only contributes 70% of its
+            // multiplier to the cap, so upgrades feel powerful without
+            // trivializing positioning.
+            const effectiveMaxV = GAME_CONFIG.MAX_V * (1 + (speedMult - 1) * 0.7);
+            const mag = Math.hypot(this.vel.x, this.vel.y);
+            if (mag > effectiveMaxV) {
+                this.vel.x = (this.vel.x / mag) * effectiveMaxV;
+                this.vel.y = (this.vel.y / mag) * effectiveMaxV;
+            }
+
+            // Position update.
+            this.x += this.vel.x;
+            this.y += this.vel.y;
+
+            // Boundary bounce (damped 0.8 to avoid perpetual edge-rebound).
+            if (gameField) {
+                const r = this.radius;
+                if (this.x - r < 0) {
+                    this.x = r;
+                    this.vel.x = Math.abs(this.vel.x) * 0.8;
+                } else if (this.x + r > gameField.width) {
+                    this.x = gameField.width - r;
+                    this.vel.x = -Math.abs(this.vel.x) * 0.8;
+                }
+                if (this.y - r < 0) {
+                    this.y = r;
+                    this.vel.y = Math.abs(this.vel.y) * 0.8;
+                } else if (this.y + r > gameField.height) {
+                    this.y = gameField.height - r;
+                    this.vel.y = -Math.abs(this.vel.y) * 0.8;
+                }
+            }
         }
-        if (!this._inputScratch) {
-            this._inputScratch = {
-                up: false, down: false, left: false, right: false,
-                aimX: 0, aimY: 0,
-                thrustPower: 0,
-                speedMult: 1,
-                thrustersDisabled: false,
-                maxV: GAME_CONFIG.MAX_V,
-                friction: Math.pow(0.50, GAME_CONFIG.TICK_SCALE),
-                velEpsilon: 0.05,
-                bounceDamp: 0.8,
-            };
-        }
-        const ship = this._shipScratch;
-        ship.x = this.x;
-        ship.y = this.y;
-        ship.vx = this.vel.x;
-        ship.vy = this.vel.y;
-        ship.angle = this.angle;
-        ship.hp = this.health;
-        ship.maxHp = this.maxHealth;
-        ship.shield = this.shield;
-        ship.radius = this.radius;
-        ship.active = this.active;
-        // Set ship.field only when the engine passes a gameField. When
-        // null (legacy fallback path), updateShip skips the boundary
-        // step entirely and the wrapper handles wraparound below —
-        // matching the original `wrap(this, this.width, this.height)`
-        // call exactly.
-        ship.field = gameField || null;
-
-        const sim = this._inputScratch;
-        // 5.100.0 — Mobile movement comes from the analog stick, not
-        // keyboard up/down/left/right. Zero out the boolean thrust
-        // inputs so updateShip doesn't add a competing legacy thrust.
-        // The stick path below overrides velocity + position cleanly.
-        const _mobile = isMobile();
-        sim.up = !_mobile && !!input.up;
-        sim.down = !_mobile && !!input.down;
-        sim.left = !_mobile && !!input.left;
-        sim.right = !_mobile && !!input.right;
-        sim.aimX = input.aimX;
-        sim.aimY = input.aimY;
-        sim.speedMult = this.getMovementSpeedMultiplier();
-        sim.thrustPower = this.thrustPower;
-        sim.thrustersDisabled = !!this.thrustersDisabled;
-        // maxV / friction / velEpsilon / bounceDamp are constants — set once.
-
-        updateShip(ship, sim, GAME_CONFIG.LOGIC_TICK_MS / 1000, null, null);
-
-        // Write physics back to Player.
-        this.x = ship.x;
-        this.y = ship.y;
-        this.vel.x = ship.vx;
-        this.vel.y = ship.vy;
-        this.angle = ship.angle;
 
         // 5.100.0 — Mobile drag-to-move (Sky-force-style). Reverses
         // the 5.94 stationary-ship pivot. Reads the virtual analog
@@ -737,11 +697,9 @@ export class Player {
         // frame by mobile-touch.js) and overrides the physics step's
         // velocity with a lerp toward (stick × MAX_V × mult).
         //
-        // We override AFTER updateShip rather than gating its input so
-        // existing per-frame side effects (angle from atan2, friction
-        // snap-to-zero) still run unchanged for any state we don't
-        // want to disturb. The position is reset to prevX + new vel
-        // so the player's actual movement comes from the stick alone.
+        // Override happens AFTER the physics step so friction snap-to-zero
+        // still runs. Position is reset to prevX + new vel so the player's
+        // actual movement comes from the stick alone.
         if (isMobile()) {
             const stickIn = (input && input.stickInput) || { x: 0, y: 0, magnitude: 0 };
             const speedMult = this.getMovementSpeedMultiplier();
@@ -780,19 +738,15 @@ export class Player {
             }
         }
 
-        // Legacy fallback: if no gameField was provided, the original
-        // code applied torus wraparound on this.width / this.height.
-        // updateShip skips the boundary step when ship.field is null,
-        // so we replicate that behavior here. Both live call sites in
-        // game-engine.js pass gameField, so this branch is effectively
-        // dead — kept for robustness against off-engine call sites.
+        // Legacy fallback: if no gameField was provided, apply torus
+        // wraparound. Both live call sites in game-engine.js pass
+        // gameField, so this branch is effectively dead — kept for
+        // robustness against off-engine call sites.
         if (!gameField) {
             wrap(this, this.width, this.height);
         }
 
         // Calculate movement delta and update aim coordinates if player moved.
-        // The legacy code did this after boundary-bounce; the new physics
-        // path produces the same final (x, y), so the delta is identical.
         const deltaX = this.x - prevX;
         const deltaY = this.y - prevY;
         if ((deltaX !== 0 || deltaY !== 0) && input.updateAimForPlayerMovement) {
@@ -993,15 +947,6 @@ export class Player {
     }
 
     activateSkill() {
-        // MP gate — the five remaining defense skills mutate ship state
-        // in ways the server doesn't model yet, so they're suppressed
-        // in online mode. (PHASE_DASH was the sixth, moved to the SHIFT
-        // key as a core MP-safe movement primitive in 5.93.0.)
-        // The Q-key one-shot pulse is consumed in update() regardless
-        // (see input.activateSkill = false right after the call site),
-        // so an early-return here means no cooldown, no FX, no audio,
-        // and the input stays consumed.
-        if (this._isAbilitySuppressedByMp(this.activeSkill)) return false;
         return skills.activateSkill.call(this);
     }
 

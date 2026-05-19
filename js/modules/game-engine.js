@@ -8,12 +8,6 @@ import { SpatialGrid } from './performance/spatial-grid.js';
 import { PoolManager } from './core/pool-manager.js';
 import { frameClock } from './core/frame-clock.js';
 import { Player } from './player/player.js';
-import { drawRemoteShip } from './player/renderer.js';
-import {
-    mpBuildSimInput,
-    mpApplyPredictedShipToPlayer,
-    mpDrawRemoteShips,
-} from '../engine/mp-frame.js';
 import { Bullet } from './player/bullet.js';
 import { Asteroid } from './world/asteroid.js';
 import { Enemy } from './enemy/enemy.js';
@@ -73,71 +67,6 @@ export const PLAYER_STATES = {
     NORMAL: 'normal'
 };
 
-// ── Solo options resolver (Phase 3 reverted in 5.96.2) ─────────────────
-//
-// Pure resolver for `engineDriver.startSolo()` options. Originally added
-// in 5.93.0/PR #84 to default solo runs through the LoopbackConnection so
-// solo and MP would share one code path at the simulation/rendering layer
-// (the "Hybrid unification" plan). 5.96.2 REVERTS that default — solo
-// runs are now purely local (legacy direct-Engine path), and the
-// LoopbackConnection is opt-in via a URL param.
-//
-// Why the revert: the LoopbackConnection introduced a wire-format aim-
-// vector mismatch (see 5.96.1's bug report) where `_derivePlayerInput`
-// normalized `aimX/aimY` to a unit vector but `_normalizeInput` passed
-// it through to `updateShip` as an absolute world coord. Even after
-// 5.96.1 fixed the immediate symptom by passing simInput directly as
-// wireInput, the loopback path remained a brittle interface boundary
-// that masked further bugs (off-by-one tick reconciliation, snapshot/
-// replay race conditions on initial spawn, etc.). User feedback ("Aiming
-// is still broken because of it") forced the call: until the loopback
-// is hardened, solo should not route through it.
-//
-// Inputs:
-//   • `opts.continueRun`  user-facing "resume saved run" flag.
-//   • `locSearch`         the `location.search` query string (e.g.
-//                         "?solo-loopback=1"). Tests pass a synthetic
-//                         value; the method below reads `window.location`.
-//
-// Outputs:
-//   { useLoopback, continueRun }
-//
-// Contract (5.96.2):
-//   • `useLoopback` defaults to FALSE. Solo NEW GAME runs use the legacy
-//     direct-Engine path — no LoopbackConnection, no Predictor, no
-//     Interpolator. Pure local simulation.
-//
-//   • `?solo-loopback=1` URL param OPTS IN to the loopback path for
-//     testing / dogfooding. Inverse of the 5.96.0 `?solo-classic=1`
-//     escape hatch.
-//
-//   • `continueRun: true` always forces `useLoopback: false` (the
-//     loopback can't restore a persisted baseline yet; was Phase 4).
-//
-// @param {{ continueRun?: boolean }} [opts]
-// @param {string} [locSearch]   location.search-shaped string (with or
-//                               without leading `?`). Default "" → no
-//                               loopback opt-in.
-// @returns {{ useLoopback: boolean, continueRun: boolean }}
-export function resolveSoloOptions({ continueRun = false } = {}, locSearch = '') {
-    // URL-param opt-in for the loopback path. URLSearchParams gracefully
-    // handles a missing leading `?` and unrecognized values. Defensive
-    // try/catch covers obscure environments that lack URLSearchParams;
-    // we treat ANY error as "no opt-in".
-    let loopbackOptIn = false;
-    try {
-        loopbackOptIn = new URLSearchParams(locSearch || '').has('solo-loopback');
-    } catch {
-        loopbackOptIn = false;
-    }
-
-    // CONTINUE path can't safely use the loopback yet — force legacy.
-    // Otherwise default to legacy (the 5.96.2 revert). Loopback is only
-    // engaged when the user explicitly opts in via URL param.
-    const useLoopback = loopbackOptIn && !continueRun;
-
-    return { useLoopback, continueRun: !!continueRun };
-}
 
 /* ─── Health-shape 3D geometry (5.88.5) ─────────────────────────────────────
  *
@@ -1343,30 +1272,6 @@ export class GameEngine {
         };
     }
 
-    /**
-     * Instance-method wrapper around the module-scope `resolveSoloOptions()`
-     * helper. Reads `location.search` from the browser environment by
-     * default so production callers (currently `main.js::launch`) can
-     * invoke `engine._resolveSoloOptions({ continueRun })` without
-     * threading a location object through the title-screen handler.
-     *
-     * Tests don't go through this wrapper — they import `resolveSoloOptions`
-     * at module scope and pass synthetic search strings directly.
-     *
-     * @param {{ continueRun?: boolean }} [opts]
-     * @param {{ search?: string }}        [winLoc]
-     * @returns {{ useLoopback: boolean, continueRun: boolean }}
-     */
-    _resolveSoloOptions(opts = {}, winLoc = null) {
-        let search = '';
-        if (winLoc && typeof winLoc.search === 'string') {
-            search = winLoc.search;
-        } else if (typeof window !== 'undefined' && window.location && typeof window.location.search === 'string') {
-            search = window.location.search;
-        }
-        return resolveSoloOptions(opts, search);
-    }
-
     // Generate all initial color stars using purely generative method
     generateInitialColorStars() {
         const spawnWidth = this.gameField.width;
@@ -2456,106 +2361,6 @@ export class GameEngine {
     handleEnemyAsteroidCollision(enemy, asteroid) { return col.handleEnemyAsteroidCollision.call(this, enemy, asteroid); }
 
     // ── Multiplayer wiring (MVD slice, 2026-05-13) ──────────────────────────
-    //
-    // Three thin hooks attach the EngineDriver's prediction + interpolation
-    // pipelines to the live gameLoop. In solo mode each one early-returns
-    // (the driver's `isOnline` flag is false), so solo gameplay is byte-for-
-    // byte identical to the pre-MVD path.
-    //
-    //   • `_mpTickIfOnline(input)` — once per logic tick, build a SimInput
-    //     from the same raw input Player will consume, then advance the
-    //     Predictor (and forward a PackedInput to the server). Called BEFORE
-    //     `player.update()` so the driver's tick counter stays in lockstep
-    //     with the simulation tick the local Player just produced.
-    //
-    //   • `_mpApplyPredictedShipIfOnline()` — after `player.update()`, mirror
-    //     the predicted ShipState into `this.player.x/y/vel/angle`. Camera,
-    //     HUD, FX, and collision continue to read the player object as usual;
-    //     they just see a server-authoritative + locally-predicted position
-    //     in MP mode.
-    //
-    //   • `_mpDrawRemoteShipsIfOnline()` — inside `draw()`, after the local
-    //     player renders, iterate `engineDriver.sampleRemoteShips()` and
-    //     paint each as a minimal-visual outline ship. FX (camera kick,
-    //     hitstop, particles) are intentionally NOT triggered for remote
-    //     peers — those are local feedback signals.
-    //
-    // EngineDriver lives on `window.engineDriver` (set in `main.js` after
-    // construction). Same lookup convention as `window.gameEngine`. If the
-    // driver isn't attached yet (very early init), the helpers no-op
-    // silently — they treat that the same as solo mode.
-
-    /** Returns the EngineDriver if currently in MP mode; null otherwise. */
-    _mpDriverIfOnline() {
-        const d = (typeof window !== 'undefined') ? window.engineDriver : null;
-        if (!d) return null;
-        return d.isOnline ? d : null;
-    }
-
-    /**
-     * Hook 1 — advance the EngineDriver one logic tick. Builds a SimInput
-     * (the same `InputFrame` shape Player.update synthesizes inline) and
-     * hands it to the driver, which packs it into a wire-form PackedInput,
-     * forwards to the server, and advances the local Predictor.
-     *
-     * @param {object} input  raw inputHandler.getInput() shape
-     */
-    _mpTickIfOnline(input) {
-        const driver = this._mpDriverIfOnline();
-        if (!driver) return;
-        try {
-            const simInput = mpBuildSimInput(input, this.player, GAME_CONFIG);
-            // 5.96.1 — CRITICAL BUG FIX. Pass simInput as wireInput so
-            // engineDriver.tick() skips the wire-format `_derivePlayerInput`
-            // which NORMALIZES `aimX/aimY` to a unit vector. The Loopback-
-            // Connection in solo mode then passed that unit vector through
-            // `_normalizeInput → updateShip`, which treats `aimX/Y` as
-            // ABSOLUTE WORLD COORDS — so `ship.angle = atan2(0.47 - shipY,
-            // 0.88 - shipX)` ≈ a constant direction (toward origin) and
-            // the ship NEVER FACED the touch/cursor position. The fix is to
-            // bypass the unit-vector normalization in solo mode by handing
-            // the raw simInput (with world-coord aim) directly to the
-            // driver as wireInput — LoopbackConnection's `_normalizeInput`
-            // detects the InputFrame shape via `'up' in raw` and keeps the
-            // world-coord aim as-is.
-            //
-            // For real MP this same call path would lose the wire-format
-            // unit-vector encoding; that's a Phase 2-MP concern (the real
-            // ConnectionTask should re-pack at the wire boundary). For now
-            // solo uses LoopbackConnection and benefits from world-coord
-            // pass-through; real MP is post-MVD and not yet shipping.
-            driver.tick(simInput, simInput);
-        } catch (err) {
-            // Never let an MP wiring error tank the local game loop.
-            // eslint-disable-next-line no-console
-            console.warn('[game-engine] MP tick failed', err?.message ?? err);
-        }
-    }
-
-    /**
-     * Hook 2 — mirror the Predictor's localShipState into the live Player.
-     * After this runs, `this.player.x/y/vel/angle` reflect the server-
-     * authoritative + locally-predicted state; renderer/camera/FX/collision
-     * read those unchanged.
-     */
-    _mpApplyPredictedShipIfOnline() {
-        const driver = this._mpDriverIfOnline();
-        if (!driver) return;
-        mpApplyPredictedShipToPlayer(driver, this.player);
-    }
-
-    /**
-     * Hook 3 — paint remote-peer ships at their interpolated positions.
-     * Called from `draw()` inside the camera-transformed world space,
-     * right after `player.draw()`. Solo mode early-returns.
-     */
-    _mpDrawRemoteShipsIfOnline(ctx) {
-        const driver = this._mpDriverIfOnline();
-        if (!driver) return;
-        const fallbackRadius = (this.player && this.player.radius) || 12;
-        mpDrawRemoteShips(driver, ctx, drawRemoteShip, fallbackRadius);
-    }
-
     update() {
         // Radial menu (E/R/F held) freezes gameplay just like the pause menu —
         // particles still finish their lifetimes but no entity logic ticks.
@@ -2602,19 +2407,6 @@ export class GameEngine {
             // Calculate tractor beam state - active when not charging
             const tractorEngaged = !this.player.isCharging;
 
-            // ── MP HOOK 1: advance the EngineDriver predictor ──────────────
-            // In online mode, build a SimInput from the same raw input the
-            // local Player will consume, then hand it to the EngineDriver's
-            // 60Hz tick. The driver packs the wire-form PackedInput, sends
-            // it to the server, and advances the local Predictor one tick.
-            // Solo runs early-return inside EngineDriver.tick().
-            //
-            // The driver lives on `window.engineDriver` — same as how Player
-            // already reaches the engine via `window.gameEngine`. Stable v1
-            // wiring; if we want to inject it explicitly later, the gameLoop
-            // is the only call site to update.
-            this._mpTickIfOnline(input);
-
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged, this.gameField);
 
@@ -2624,18 +2416,6 @@ export class GameEngine {
             // powerup has zero stacks; safe to call unconditionally.
             this.tickStaticDischarge();
             this.tickWhirlwind();
-
-            // ── MP HOOK 2: mirror the predicted ship state into the local
-            // Player object. This way camera/FX/collision/HUD all keep
-            // reading `this.player.x/y/vel/angle` (unchanged), but those
-            // fields now reflect the server-authoritative + locally-
-            // predicted ship state instead of the pure-local simulation.
-            // Same physics on both sides (`js/sim/ship.js::updateShip`)
-            // means tick-to-tick parity until a server snapshot arrives
-            // and `Predictor.onSnapshot` reconciles.
-            //
-            // Solo runs early-return inside `_mpApplyPredictedShipIfOnline`.
-            this._mpApplyPredictedShipIfOnline();
 
             // Update camera to follow player
             this.updateCamera();
@@ -3091,13 +2871,6 @@ export class GameEngine {
 
                 this.player.draw(this.ctx);
 
-                // ── MP HOOK 3: paint remote-peer ships in world space ──
-                // Solo runs early-return inside the helper. Remote ships
-                // render with a minimal outline silhouette — no thrust,
-                // no shield shimmer, no FX (those are local feedback
-                // signals, inappropriate for an interpolated peer).
-                this._mpDrawRemoteShipsIfOnline(this.ctx);
-
                 this.drawWeaponEffects();
 
                 // Laser-pointer aim — subtle line from muzzle to bullet's
@@ -3285,15 +3058,9 @@ export class GameEngine {
                 (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION)) {
                 const input = this.inputHandler.getInput();
                 input.updateAimForPlayerMovement = this.inputHandler.updateAimForPlayerMovement.bind(this.inputHandler);
-                // MP HOOK 1 (hitstop branch) — keep the predictor in lockstep
-                // with the local Player.update so the predicted-state mirror
-                // below stays accurate even during impact freeze frames.
-                this._mpTickIfOnline(input);
                 // Update player movement only (firing is suppressed by not running collisions)
                 this.player.update(input, this.particlePool, this.bulletPool, this.audioManager,
                     this.colorStarPool, !this.player.isCharging, this.gameField);
-                // MP HOOK 2 (hitstop branch) — mirror predicted ship → Player.
-                this._mpApplyPredictedShipIfOnline();
                 this.updateCamera();
             }
 

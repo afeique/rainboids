@@ -3,10 +3,9 @@
 // so all `this.*` references work exactly as they did as class methods.
 
 import { rgba } from '../core/color-cache.js';
-import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS } from '../combat/weapon-data.js';
+import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS, getStreakGoldMult } from '../combat/weapon-data.js';
 import { VERSION, VERSION_MP } from '../core/version.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
-import { multiplayerEnabled } from '../../net/ws-client.js';
 // 5.92.0 — Title screen responsive layout: in mobile-portrait mode
 // the NEW GAME / CONTINUE / MULTIPLAYER buttons stack vertically so
 // they fit a phone-sized viewport without truncation; landscape mobile
@@ -237,7 +236,9 @@ export function drawTitleScreen() {
         // ── Button + spacing budgets (computed up front so we can place
         //    the title above the buttons rather than at a fixed offset).
         const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
-        const _mpEnabled = multiplayerEnabled();
+        // MULTIPLAYER button is always shown — title-screen click routes
+        // to /mp (the WASM-backed multiplayer product).
+        const _mpEnabled = true;
         const mobilePortrait = _isPortrait;
         const mobileLandscape = _isLandscape;
         let buttonW, buttonH, buttonGap;
@@ -1536,7 +1537,9 @@ export function drawStreakIndicator() {
     // smoothly. Block AABB is roughly 200×95 centered on (x, y+40).
     const halfW = 100, halfH = 50;
     const blockTop = y - 8;
-    const blockBottom = y + 84;
+    // 6.18.0 — Extended block bottom by 14 px to cover the new
+    //   "+N% GOLD" row + the shifted bars.
+    const blockBottom = y + 98;
     const blockLeft = x - halfW;
     const blockRight = x + halfW;
     const playerSx = (this.player.x - this.camera.x);
@@ -1581,11 +1584,39 @@ export function drawStreakIndicator() {
     ctx.strokeText(labelText, x, y + 30);
     ctx.fillText(labelText, x, y + 30);
 
+    // 6.18.0 — Gold-find readout BELOW the tier name. Replaces the
+    //   prior implicit "STREAK = +damage" framing with an explicit
+    //   "you are earning +N% gold". Uses the same gold curve as the
+    //   drop math so what the HUD says matches what drops deliver.
+    //   Pre-tier (1-9 kills) shows the linear ramp percentage so the
+    //   player sees the bonus moving from the first kill. Bars below
+    //   shift down 14 px (see y+64 / y+76 / y+88) to make room.
+    let goldRowDrawn = false;
+    {
+        const goldMult = getStreakGoldMult(k);
+        const pct = Math.round((goldMult - 1) * 100);
+        if (pct > 0) {
+            ctx.font = "bold 9px 'Press Start 2P', monospace";
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#ffd700';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            const goldText = `+${pct}% GOLD`;
+            ctx.strokeText(goldText, x, y + 46);
+            ctx.fillText(goldText, x, y + 46);
+            // Restore stroke for downstream draws.
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3;
+            goldRowDrawn = true;
+        }
+    }
+    const rowShift = goldRowDrawn ? 14 : 0;
+
     // ── Tier progress bar (toward next tier — or full bar at MAX) ──
     {
         const barW = 160, barH = 5;
         const barX = x - barW / 2;
-        const barY = y + 50;
+        const barY = y + 50 + rowShift;
         ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
         ctx.fillRect(barX, barY, barW, barH);
@@ -1614,7 +1645,7 @@ export function drawStreakIndicator() {
         const remainingFrac = Math.max(0, 1 - elapsed / STREAK_IDLE_MS);
         const idleBarW = 160, idleBarH = 5;
         const idleBarX = x - idleBarW / 2;
-        const idleBarY = y + 62;
+        const idleBarY = y + 62 + rowShift;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.fillRect(idleBarX, idleBarY, idleBarW, idleBarH);
         const fillR = Math.round(255 * (1 - remainingFrac));
