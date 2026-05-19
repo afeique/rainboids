@@ -990,15 +990,11 @@ export class GameEngine {
         // animation; values are overwritten later anyway, so the
         // initial number just needs to match the player's start HP.
         this.playerShields = 40;
-        // 6.1.1 — Player now STARTS with 1 spare tank (was 3, which was
-        // already at the MAX_HEALTH_TANKS=3 cap, so overflow had nowhere
-        // to go and the "earn tanks via overflow" mechanic was inert).
-        // Player can now earn 2 more spares via overflow healing,
-        // visually filling the triforce from 1 → 2 → 3 triangles.
-        this.healthTanks = 1;
+        // 6.12.4 — Player STARTS with 3 spare tanks (full triforce).
+        this.healthTanks = 3;
         if (this.player) this.player._tankProgress = 0;
         this.displayShields = 40;
-        this.displayTanks = 1;
+        this.displayTanks = 3;
         this.animatingDamage = false;
         this.pendingDamage = 0; // Reset pending damage
         
