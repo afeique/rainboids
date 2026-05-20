@@ -95,21 +95,30 @@ export const PRIMARY_WEAPONS = {
         unlockWave: 8,
         upgrades: ['MASS_DRIVER', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH', 'RAIL_VELOCITY'],
     },
-    // Phase 6 (2026-05-19) — CLUSTER_LAUNCHER. Lobs a projectile that
-    //   decelerates via friction, halts mid-flight, arms for 0.8s, then
-    //   detonates on enemy proximity or timer expiry. The primary blast
-    //   damages enemies within `blastRadius`, then spawns N sub-bombs
-    //   that scatter at random angles and detonate on contact / end-of-
-    //   flight. Intentionally NO homing / piercing / explosive
-    //   upgrades exposed — the per-weapon upgrade tables in
-    //   `PRIMARY_UPGRADES` below only carry payload / bomblet-count /
-    //   fuse-time / blast-radius tuners. See `firePrimary` dispatch in
-    //   `js/modules/player/weapons.js` for the firing path and
-    //   `combat-manager.js` for `detonateCluster` / `spawnSubBomblet`.
+    // Phase 6 (2026-05-19) — CLUSTER_LAUNCHER. A nucleus-shaped cluster
+    //   of glowing spheres that flies in a straight line toward the
+    //   cursor at constant velocity (no friction halt) and detonates
+    //   the instant it touches ANY enemy, asteroid, or mine. The
+    //   primary blast damages enemies within `blastRadius`, then
+    //   spawns N sub-bomblets ("spheres flying off") that scatter
+    //   radially and detonate on their own contact.
+    //
+    //   6.26.0 (2026-05-19) — Range tripled+ to "effectively unlimited";
+    //   the bomb no longer arms / halts. SHORT_FUSE now has no effect
+    //   (kept as a no-op stack so existing save runs don't break) since
+    //   there is no armed window. The 'travel → armed → detonate'
+    //   state machine collapsed to 'flying → detonate' on first contact.
+    //
+    //   Intentionally NO homing / piercing / explosive upgrades exposed
+    //   — the per-weapon upgrade tables in `PRIMARY_UPGRADES` below
+    //   only carry payload / bomblet-count / blast-radius tuners. See
+    //   `firePrimary` dispatch in `js/modules/player/weapons.js` for
+    //   the firing path and `combat-manager.js` for `detonateCluster`
+    //   / `spawnSubBomblet`.
     CLUSTER_LAUNCHER: {
         id: 'CLUSTER_LAUNCHER',
         name: 'Cluster Launcher',
-        description: 'Lobs a sticky bomb that arms, detonates, and spawns sub-bomblets',
+        description: 'Nucleus cluster flies straight at the cursor; explodes on touch into spheres',
         icon: 'bomb',
         color: '#ff5544',
         fireRate: 800,
@@ -119,19 +128,26 @@ export const PRIMARY_WEAPONS = {
         bulletCount: 1,
         spreadAngle: 0,
         piercing: 0,
-        range: 800,
+        // 6.26.0 — effectively unlimited range. Field diagonal is ~2203 px;
+        // bomb travels at velocity 12 / frame so the safety-net maxLife
+        // in setupClusterBomb covers worst-case off-field flight.
+        range: 9999,
         cost: 0,
         unlockWave: 10,
-        // Cluster bomb stage tuning. Travel friction decays the
-        // projectile to halt over ~30 frames; armed window is 0.8s
-        // (reduced by SHORT_FUSE stacks). Sub-bomblet count is 5 base,
-        // bumped by MORE_BOMBLETS. Blast radius is 90px primary / 50px
-        // sub, bumped by MEGA_CLUSTER on the primary side only.
+        // Cluster bomb tuning (6.26.0 — no halt / no arm):
+        //   initialVelocity  — constant flight speed (no friction).
+        //   travelFriction   — 1.0 (no deceleration).
+        //   contactRadius    — radius at which any enemy/asteroid/mine
+        //                      contact triggers detonation. Replaces
+        //                      the old proximityRadius.
+        //   blastRadius      — primary blast AoE (+30 per MEGA_CLUSTER stack).
+        //   subBombCount     — radial spheres emitted on detonation
+        //                      (+1 per MORE_BOMBLETS stack).
         initialVelocity: 12,
-        travelFriction: 0.92,
-        haltVelocity: 0.3,
-        armedDurationMs: 800,
-        proximityRadius: 60,
+        travelFriction: 1.0,
+        haltVelocity: 0.0,
+        armedDurationMs: 0,
+        proximityRadius: 18,
         blastRadius: 90,
         blastDamage: 50,
         subBombCount: 5,
@@ -331,7 +347,7 @@ export const PRIMARY_UPGRADES = {
     // Tuners only adjust damage, sub-bomb count, fuse, and blast radius.
     CLUSTER_PAYLOAD: { id: 'CLUSTER_PAYLOAD', name: 'Heavy Payload',    description: '+20% damage',                          cost: 1200, maxStacks: 3, weapon: 'CLUSTER_LAUNCHER', icon: 'bomb' },
     MORE_BOMBLETS:   { id: 'MORE_BOMBLETS',   name: 'More Bomblets',    description: '+1 sub-bomb per stack',                cost: 1900, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'sparkle' },
-    SHORT_FUSE:      { id: 'SHORT_FUSE',      name: 'Short Fuse',       description: '-0.3s armed time',                     cost: 1500, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'stopwatch' },
+    SHORT_FUSE:      { id: 'SHORT_FUSE',      name: 'Short Fuse',       description: 'Vestigial — cluster bombs no longer arm', cost: 1500, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'stopwatch' },
     MEGA_CLUSTER:    { id: 'MEGA_CLUSTER',    name: 'Mega Cluster',     description: '+30px primary blast radius',           cost: 2300, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'explosion' },
 
     // ─── TIER 2 — CAPSTONE UPGRADES (5.75.1, B1) ────────────────────────

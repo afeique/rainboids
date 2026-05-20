@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { random, GameDimensions, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 import { hsl } from '../core/color-cache.js';
+import { drawAsteroidShape as drawAsteroidShapeShared } from '../render/shapes.js';
 const DEBRIS_COUNT = 5;
 // Asteroid drift cap (px per logic tick, post-scale) + boundary-bounce
 // energy retention (slightly more elastic than the ship's 0.8).
@@ -697,85 +698,32 @@ export class Asteroid {
     
     // Helper method to draw the asteroid shape
     drawAsteroidShape(ctx) {
-        const now = frameClock.now;
-
-        // Set constant state once — not 30× per edge
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-
-        // 5.74.35 — black underlayer pass. Strokes every edge once at
-        // a thicker line width in opaque black, BEFORE the colored
-        // bucketed pass below paints the visible wireframe on top.
-        // Result: every line gets a dark outline, making the asteroid
-        // wireframe legible even when it overlaps a bright nebula
-        // cloud or saturated lens-flare star. Single beginPath +
-        // stroke — one extra draw call per asteroid, negligible.
-        ctx.globalAlpha = 0.85;
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 4.5;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        for (let i = 0; i < this.edges.length; i++) {
-            const edge = this.edges[i];
-            const v1 = this.projectedVertices[edge[0]];
-            const v2 = this.projectedVertices[edge[1]];
-            if (!v1 || !v2) continue;
-            ctx.moveTo(v1.x, v1.y);
-            ctx.lineTo(v2.x, v2.y);
+        // 6.x — delegates to the shared pure helper in
+        // js/modules/render/shapes.js so solo + MP draw the identical
+        // tumbling-wireframe silhouette from one definition. Solo passes
+        // its own pre-allocated bucket scratch to preserve the zero-
+        // per-frame-allocation property.
+        if (!this._drawScratch) {
+            this._drawScratch = {
+                BUCKETS: this._BUCKETS,
+                bucketEdges: this._bucketEdges,
+                bucketHue: this._bucketHue,
+                bucketCount: this._bucketCount,
+            };
         }
-        ctx.stroke();
-        ctx.lineCap = 'butt';
-        ctx.lineWidth = 2;
-
-        // Compute per-edge alpha and hue, then group into ~5 depth buckets.
-        // Pre-allocated arrays on `this` — zero per-frame allocation.
-        const BUCKETS = this._BUCKETS;
-        const bucketEdges = this._bucketEdges;
-        const bucketHue   = this._bucketHue;
-        const bucketCount = this._bucketCount;
-
-        // Clear buckets (reuse arrays)
-        for (let b = 0; b < BUCKETS; b++) {
-            bucketEdges[b].length = 0;
-            bucketHue[b]   = 0;
-            bucketCount[b] = 0;
-        }
-
-        for (let i = 0; i < this.edges.length; i++) {
-            const edge = this.edges[i];
-            const v1 = this.projectedVertices[edge[0]];
-            const v2 = this.projectedVertices[edge[1]];
-            if (!v1 || !v2) continue;
-
-            const avg = (v1.depth + v2.depth) / 2;
-            const alpha = Math.max(0.2, Math.pow(Math.max(0, (this.fov - avg) / (this.fov + this.radius)), 2.0));
-            const hue   = (this.baseHue + now / this.hueCycleSpeed + (i / this.edges.length) * this.hueSpread) % 360;
-
-            // Map alpha [0.2, 1.0] → bucket index [0, 4]
-            const bi = Math.min(BUCKETS - 1, Math.floor((alpha - 0.2) / 0.8 * BUCKETS));
-            bucketEdges[bi].push(v1, v2, alpha);
-            bucketHue[bi]  += hue;
-            bucketCount[bi]++;
-        }
-
-        // One beginPath + stroke per non-empty bucket
-        for (let bi = 0; bi < BUCKETS; bi++) {
-            if (bucketCount[bi] === 0) continue;
-            const edges = bucketEdges[bi];
-            const alpha = edges[2]; // first edge's alpha for this bucket
-            const hue   = bucketHue[bi] / bucketCount[bi]; // average hue
-
-            ctx.globalAlpha = alpha;
-            ctx.strokeStyle = hsl(hue, this.saturation, this.lightness);
-            ctx.beginPath();
-            for (let j = 0; j < edges.length; j += 3) {
-                ctx.moveTo(edges[j].x, edges[j].y);
-                ctx.lineTo(edges[j + 1].x, edges[j + 1].y);
-            }
-            ctx.stroke();
-        }
+        drawAsteroidShapeShared(ctx, {
+            projectedVertices: this.projectedVertices,
+            edges: this.edges,
+            fov: this.fov,
+            radius: this.radius,
+            baseHue: this.baseHue,
+            hueCycleSpeed: this.hueCycleSpeed,
+            hueSpread: this.hueSpread,
+            saturation: this.saturation,
+            lightness: this.lightness,
+            now: frameClock.now,
+            scratch: this._drawScratch,
+        });
     }
     
     drawTargetingEffect(ctx) {

@@ -57,7 +57,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Diablo-style 5-slot inventory with rolled rarities (6.0.0)** — helm, armor (HP), shield, plating (toughness), and the new **trinket** slot (regen primary). Items drop in three rarities — common / rare / **epic** — with rolled primary stats (epic ≈ 2× common at the same wave). Glow color signals tier from across the screen. **Drop suppression**: only items that are a strict upgrade over the equipped slot spawn as pickups, so anything visible is worth chasing. Auto-equip on contact; no menu interruption.
 - **Kill-streak damage tiers** — 20-tier ladder firing every 10 kills, ordered by epicness from EMPOWERED (10 kills, +25%) to RAINBOIDS GOD (200 kills, +200%). Five narrative bands of four tiers each: Momentum (EMPOWERED → RELENTLESS → UNSTOPPABLE → INDOMITABLE) → Mortal-extraordinary (OUTRAGEOUS → HERCULEAN → LEGENDARY → MYTHIC) → Divine (IMMORTAL → GODLIKE → INVINCIBLE → ETERNAL) → Cosmic (APOCALYPTIC → ASTRONOMICAL → GALACTIC → COSMIC) → Beyond physical (TRANSCENDENT → OMNIPOTENT → INFINITE → RAINBOIDS GOD). Streak resets when you take damage. LEGENDARY (70 kills) and every tier above also grants auto-explosive splash on every shot.
 - **10-stage / 30-wave speedrun campaign (6.1.0)** — `1-1` → `10-3`. Every stage final is a boss (10 bosses total). Game Complete stats screen at the end. Each stage typically introduces a new enemy type, with the boss + escort showcasing the stage's headliners.
-- **Unified gold-only shop (6.1.0)** — one menu, opened by the prominent SHOP button at the top of the pause menu (or the 🛒 HUD button). Tabs: **POWERUPS** (every powerup, gold-priced), **INVENTORY** (read-only 5-slot equipped display), per-weapon upgrade trees (PULSE / NEEDLES / SCATTER / RAIL / LANCE / CHARGE / MINES / NOVA / MISSILES / ARC), and HELP. No SP, no XP, no player level.
+- **Gold-only Upgrades panel (6.27.0)** — a tabbed skill-tree UI ("UPGRADES"), opened by the prominent **UPGRADES** button at the top of the pause menu (or the 🛒 HUD button / bottom button bar). Four category tabs — **PRIMARY / POWER / DEFENSE / PASSIVE** — each showing that category's upgrade rings in a 2-column layout (Primary is the default tab). Per-node cost is hover-only (tooltip); a color key sits at the top. No SP, no XP, no player level.
 - **Desperation drop curve (6.0.0)** — health-drop chance scales up quadratically as the player loses HP. Below 25% HP the cooldown floor halves. At full HP it's a no-op; at 10% HP with maxed TRIAGE_SURGE the player sees roughly 4× the normal drop rate. Resets when an energy tank pops.
 - **Save / Continue** (5.79.0): wave-start auto-save lets the player resume from the title screen's **CONTINUE** button. **NEW GAME** rolls a randomized starting loadout (primary, power, skill) and clears the save.
 - **Diablo-style stats screen** (5.79.0): press \` to pause and inspect vitals / offense / economy / world-scaling with hover tooltips explaining every formula. (6.0.0 — level / XP rows removed since leveling is retired.)
@@ -84,7 +84,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
 - **Defensive progression**: pause-menu POWERUPS tab (Health Boost, Toughness, Regen, Vampirism, Thorns, Guardian, Phase Echo, plus the new health-drop family — all bought with GOLD), inventory (auto-equip from drops, 5 slots including the new trinket), and the per-wave survivor card overlay plus boss-wave bonus pick. *(6.0.0 — player leveling, XP, and SP fully retired. Defensive skills retired in 5.101.0; the SKILLS tab and Q/R key bindings are no-ops.)*
-- **Shop**: 🛒 button in the top-right of the HUD, or in the pause menu
+- **Upgrades**: 🛒 button in the top-right of the HUD, or in the pause menu
 - **Pause**: Escape
 
 ### Mobile (touch) — turret-defense RPG (5.98.0)
@@ -106,7 +106,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Auto-magnet drops (5.95.0)**: Health orbs use a 600 / 240 px far/near magnet (vs 320 / 120 on desktop). Gold coins and gold shapes get a new 400 / 80 px mobile-only proximity pull on top of the desktop tractor-beam path. No MAGNET upgrade required.
 - **Power weapon (auto-fire, 5.92.0)**: Even without a tap, the equipped power weapon fires automatically as soon as it's ready — cooldown weapons the instant their cooldown clears; the Charge Shot the instant it's fully charged. Tap-fire and auto-fire pathways are idempotent.
 - **PRM and PWR side buttons (5.94.0)**: Two square 64×64 buttons flank the canvas — PRM (left) opens the primary-weapon radial; PWR (right) opens the power-weapon radial. The radials read the live touch position for wedge hover and commit on release.
-- **Bottom button bar (5.92.0)**: SHOP / STATS / PAUSE buttons centered along the bottom of the screen. Direct tap routes to the matching action — they do not fall through to fire-a-shot.
+- **Bottom button bar (5.92.0)**: UPGRADES / STATS / PAUSE buttons centered along the bottom of the screen. Direct tap routes to the matching action — they do not fall through to fire-a-shot.
 - **Responsive title (5.92.0 → 5.97.0)**: NEW GAME / CONTINUE / MULTIPLAYER stack vertically in portrait, sit inline in landscape. **5.97.0** tightens font caps roughly a third across every full-screen overlay: title (RAINBOIDS) 48 → 36 px portrait cap, Game Over title 72 → 40 px portrait cap with vertical button stack, Wave Intro 120 → 46 px portrait cap, Game Complete responsive. Pause / shop DOM panels scale at 0.82 (was 0.92). Pause menu tab + action-button labels shrink in portrait (5.94.0); the Controls tab fits in portrait (5.95.0).
 
 ### Cheat Codes
@@ -582,14 +582,15 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── stats-overlay.js # Diablo-style stats screen (` key, 5.79.0)
 │       │   ├── icons.js       #   SVG icon registry (53 paths) + DOM/Canvas renderers (5.79.37)
 │       │   └── hint-system.js #   Onboarding hint toasts
-│       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle renderer + atlas
+│       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle/starfield/bullet renderers + atlases
+│       ├── render/            # Shared pure draw helpers (drawAsteroidShape + shape-from-seed) used by BOTH solo entities and the /mp renderer
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
 ├── js/mp/                     # Multiplayer entry point + thin client layer (2026-05-17, Phase 0 stub)
 │   ├── mp-main.js             #   /mp boot: loads WASM, runs smoke harness
 │   ├── mp-engine.js           #   (Phase 1+) tick loop, WebSocket, WASM prediction
-│   ├── mp-renderer.js         #   (Phase 1+) canvas renderer over WASM linear memory
-│   ├── mp-input.js            #   (Phase 1+) input → wire-format PackedInput
-│   ├── mp-particles.js        #   (Phase 1+) cosmetic events → particle effects
+│   ├── mp-renderer.js         #   Canvas2D entity layer + shared draw helpers; WebGL starfield/particle/bullet layers driven from mp-engine (full solo-parity bloom, mp 0.12.0)
+│   ├── mp-input.js            #   input → wire-format PackedInput
+│   ├── mp-particles.js        #   cosmetic events → particles (WebGL additive pool + Canvas2D fallback)
 │   ├── mp-audio.js            #   (Phase 1+) sim events → SFX triggers (audio files shared with solo)
 │   ├── mp-hud.js              #   (Phase 1+) own + partner ship HUD, shared wave indicator
 │   └── wasm/                  #   wasm-pack output (generated; not committed if .gitignored)

@@ -11,6 +11,140 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.27.0] - 2026-05-19
+
+### Changed — Upgrades panel: tabbed, decluttered skill tree
+
+Reworked the skill-tree shop into a tabbed "Upgrades" panel.
+
+- **Title** "SKILL TREE" → **"UPGRADES"**; the **Shop button**
+  (bottom-center HUD, pause menu, HUD aria-label) likewise renamed
+  to **"UPGRADES"** (canvas label auto-shrinks so it never clips).
+- **Per-node cost text removed.** The little `1.6k`-style labels are
+  gone; cost is now hover-only via the existing tooltip. With the
+  cost gone, each node's icon is centered in its circle.
+- **Wave indicator removed** from the panel header (it added no
+  value to upgrade decisions). Gold balance stays top-left, title
+  centered.
+- **Legend moved to the top** (was a center-overlaid footer that
+  collided with content) — now reads as a key above the tabs.
+- **Category tabs added** — PRIMARY / POWER / DEFENSE / PASSIVE.
+  Only the active category's tree shows, laid out in **2 columns**
+  of weapon/skill rings (Primary is the default tab). Tab switching
+  is an instant CSS visibility flip; all four clusters stay
+  rendered so there's no rebuild lag.
+
+Files: `ui/static-dom.js` (DOM skeleton, cache key bumped to
+`shop-tree-v2`), `shop/shop-dom.js` (tab state + handlers, cost
+span removed), `hud/hud-buttons.js` (label + auto-shrink),
+`index.html` (aria-label), `css/styles.css` (tabs, 2-col grid,
+centered icons, top legend, responsive single-column).
+
+---
+
+## [6.26.4] - 2026-05-19
+
+### Changed
+- **Extracted the asteroid wireframe draw into a shared render module**
+  (`js/modules/render/shapes.js`). `Asteroid.drawAsteroidShape()` now
+  delegates to the pure `drawAsteroidShape(ctx, shape)` helper there;
+  solo behaviour is unchanged (faithful extraction, solo still passes
+  its pre-allocated bucket scratch so the zero-per-frame-allocation
+  property holds). The module also exports `generateAsteroidVertices`
+  + `projectAsteroidVertices` so the multiplayer renderer can derive
+  and draw the identical tumbling silhouette from one definition
+  instead of duplicating it. Bridge change — see CHANGELOG-MP `0.12.0`.
+
+## [6.26.3] - 2026-05-19
+
+### Fixed — survival timer showed runaway decimals + over-wide readout
+
+The bottom-right survival timer rendered milliseconds like
+`683.33340000000003` and ran off the screen edge. Since 6.18.5,
+`game.survivalTime` accumulates `LOGIC_TICK_MS` (16.6667…, a float)
+per tick rather than an integer wall-clock delta, so the
+`milliseconds = totalMs % 1000` term in `drawSurvivalTimer` was a
+float with a long fractional tail.
+
+Floored `totalMs` up front in `hud/overlays.drawSurvivalTimer` so
+every component (and the raw `% 1000` ms term) stays an integer.
+`formatSurvivalTime` was already safe (floors via
+`Math.floor(ms / 1000)`).
+
+---
+
+## [6.26.2] - 2026-05-19
+
+### Fixed — post-shop "ghost" state where entities stopped rendering
+
+After dismissing the end-of-wave shop-suggest overlay, the player /
+enemies / asteroids / gold drops all stopped rendering — only the
+HUD, starfield, and bullets remained visible — and no new wave
+spawned.
+
+Root cause: `closeWavePickOverlay`'s defensive fallback flipped
+state to PLAYING without calling `startNextWave` when the popped
+resume frame wasn't tagged `fromWaveClear`. The run stayed with
+`waveComplete=true`, pools un-spawned, and `checkWaveComplete`
+either re-fired the wave-pick overlay or simply sat in PLAYING
+with empty pools while the WebGL layers (bullets, starfield)
+kept rendering on their own canvases.
+
+Patched in `wave-manager.closeWavePickOverlay`: when the resume
+frame is missing or non-`fromWaveClear` but `game.waveComplete`
+is still true, flip to WAVE_TRANSITION and call `startNextWave`
+anyway — that's what the dropped resume frame would have routed
+to. The original "fall to PLAYING" branch is kept as a true last
+resort for paths where waveComplete isn't set.
+
+---
+
+## [6.26.1] - 2026-05-19
+
+### Changed — enemy death explosions: random palette + no lightning
+
+Two tweaks to enemy death VFX in `combat-manager.js`:
+
+- **Lightning crackle removed.** The 8-12 radial bolts in section 5
+  of `triggerEnemyFinalExplosion` were obscuring the chromatic
+  plasma core and reading as a player-skill cue (EMP / electric
+  chain) rather than a generic death effect. The rings + shockwave
+  + sparkles + embers carry the "BANG" by themselves.
+- **Per-kill randomized accent palette.** Every enemy death now
+  picks one of 8 themed palettes (classic gold, ice plasma, toxic
+  green, magenta storm, hot red, solar yellow, aqua teal, royal
+  purple) at random. The palette is stamped on the enemy via
+  `_explosionPalette` so the frame-0 explosion and the frame-6
+  debris burst share the same accent scheme. `enemy.color` still
+  drives the primary tint on top so each enemy type retains its
+  own hue identity.
+
+---
+
+## [6.26.0] - 2026-05-19
+
+### Changed
+- **CLUSTER_LAUNCHER reworked into a nucleus cluster.** Tripled+ range
+  (effectively unlimited — 800 → 9999), no friction halt, no armed
+  window. The bomb now flies in a perfectly straight line toward the
+  cursor at constant velocity and detonates the instant it touches
+  ANY enemy, asteroid, or mine — whichever it reaches first.
+- **Visual identity: atomic nucleus.** The in-flight projectile now
+  renders as a glowing core with N satellite spheres (one per future
+  sub-bomblet) orbiting it. On detonation the satellites "fly off"
+  as the existing sub-bomblet projectiles, augmented with bright
+  warm-palette tracer particles along each ejection vector so the
+  split reads as nucleus fission.
+- `SHORT_FUSE` upgrade is now vestigial (no armed window to shorten);
+  description updated. Stacks still consume gold but have no effect
+  — Phase 7 will replace it with a meaningful upgrade.
+
+### Fixed
+- `bullet.cluster` no longer requires entering an `armed` stage before
+  it can detonate from proximity — every active cluster bomb in flight
+  now responds to enemy contact (previously the bomb had to halt first,
+  which made placing it on a moving target unreliable).
+
 ## [6.25.0] - 2026-05-19
 
 ### Changed

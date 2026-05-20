@@ -888,13 +888,14 @@ export function handleCollisions() {
         // within the proximity radius — uses subBombBlastRadius * 0.5
         // as a contact threshold so a stationary sub-bomb still
         // detonates if an enemy walks into it before flight ends).
-        // Primary cluster bombs only detonate from proximity when
-        // armed — the travel-stage check is skipped (the bomb is
-        // moving fast and would shred the player's intended placement
-        // if every passing enemy detonated it mid-flight).
+        // 6.26.0 — Primary cluster bombs detonate on the FIRST enemy
+        // contact at any point during flight (no armed-stage gate;
+        // bullet.js' per-frame proximity check is the primary trigger,
+        // this spatial-grid pass is a redundant safety net for very
+        // crowded fields).
         const proxR = bullet.subBomb
             ? Math.max(12, (bullet.blastRadius || 50) * 0.4)
-            : (bullet.stage === 'armed' ? (bullet.proximityRadius || 60) : 0);
+            : (bullet.proximityRadius || 18);
         if (proxR <= 0) continue;
         const r2 = proxR * proxR;
         const enemies = this.enemyPool.activeObjects;

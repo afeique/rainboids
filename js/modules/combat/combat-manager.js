@@ -10,6 +10,29 @@ import { rollRarity } from '../world/item-names.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 
+// 6.26.1 — Explosion accent palettes. Each kill picks a palette at
+// random and stamps it on the enemy via `_explosionPalette` so the
+// frame-0 burst and the frame-6 debris burst share the same accent
+// scheme. Per-palette slots:
+//   [0] warm   — was `#ffd060` (gold) in the legacy single-palette
+//   [1] hot    — was `#ffa044` / `#ff9966` (orange) in the legacy
+//   [2] ember  — was `#ff8855` / `#ffcc66` (coral) in the legacy
+// `enemy.color` is layered on top of these as the primary tint so
+// each enemy type still reads with its own hue.
+const EXPLOSION_PALETTES = [
+    ['#ffd060', '#ffa044', '#ff8855'],  // classic gold / orange / coral (original)
+    ['#88ddff', '#4488ff', '#aaccff'],  // ice plasma — cyan / cobalt / pale
+    ['#bbff66', '#88dd44', '#ddff99'],  // toxic — lime / green / soft yellow
+    ['#ff77cc', '#cc44ff', '#ffaaff'],  // magenta storm — pink / violet / blush
+    ['#ffcc44', '#ff5566', '#ff8855'],  // hot — gold / red / coral
+    ['#ddff66', '#ffee88', '#ffd060'],  // solar — chartreuse / cream / gold
+    ['#88ffee', '#44ccaa', '#ccffff'],  // aqua — teal / jade / iceblue
+    ['#aa88ff', '#5544cc', '#ccbbff'],  // royal — lavender / indigo / pale
+];
+function pickExplosionPalette() {
+    return EXPLOSION_PALETTES[(Math.random() * EXPLOSION_PALETTES.length) | 0];
+}
+
 // ── Asteroid Debris ──
 
 export function createDebris(ast) {
@@ -223,6 +246,12 @@ export function triggerEnemyFinalExplosion(enemy) {
     enemy._explosionFired = true;
 
     const color = enemy.color || '#ff4444';
+    // 6.26.1 — Randomized accent palette per kill. Stamped on the
+    //   enemy so the frame-6 debris burst inherits the same scheme.
+    const palette = enemy._explosionPalette || (enemy._explosionPalette = pickExplosionPalette());
+    const accentWarm  = palette[0];
+    const accentHot   = palette[1];
+    const accentEmber = palette[2];
     const r = enemy.radius || 18;
     // Size floor — even tiny enemies produce a beefy 32-px-anchored burst.
     // Bosses scale up via sizeScale capped at 2.5×.
@@ -248,12 +277,13 @@ export function triggerEnemyFinalExplosion(enemy) {
     }
 
     // ── 1. Chromatic plasma core stack ──
-    // Three layered fireballs of decreasing size: white (hottest) → gold
+    // Three layered fireballs of decreasing size: white (hottest) → warm
     // → enemy color. They overlap as one defined plasma blob that lingers
     // ~30 frames, sustaining the explosion's anchor point through the
-    // entire 24-frame death window.
+    // entire 24-frame death window. Warm accent comes from the random
+    // per-kill palette so cores read different per explosion.
     this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 1.6 * sizeScale, color);
-    this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 1.2 * sizeScale, '#ffd060');
+    this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 1.2 * sizeScale, accentWarm);
     this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 0.85 * sizeScale, '#ffffff');
 
     // ── 2. Bright instantaneous flash ──
@@ -262,31 +292,25 @@ export function triggerEnemyFinalExplosion(enemy) {
     this.particlePool.get(ex, ey, 'explosionFlash', bigR * 2.8 * sizeScale, '#ffffff');
 
     // ── 3. Four chromatic wavefront rings ──
-    // White (sharp wavefront) → gold → enemy color → orange. Largest is
-    // ≥80px so even small enemies get a defined shockwave.
+    // White (sharp wavefront) → warm → enemy color → hot accent. Largest
+    // is ≥80px so even small enemies get a defined shockwave. Per-kill
+    // palette drives the warm + hot accents so rings recolor per kill.
     const ringBase = Math.max(80, bigR * 2.2 * sizeScale);
     this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.65, '#ffffff');
-    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.88, '#ffe080');
-    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.1, color);
-    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.32, '#ffa044');
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.88, accentWarm);
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.1,  color);
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.32, accentHot);
 
     // ── 4. Mega shockwave ──
     // Thick + slow + wide. One pressure-front that outlasts the chromatic
     // rings and reads as the actual blast wave dissipating outward.
-    this.particlePool.get(ex, ey, 'enemyShockwave', ringBase * 1.8, '#ff9966');
+    this.particlePool.get(ex, ey, 'enemyShockwave', ringBase * 1.8, accentEmber);
 
-    // ── 5. Radial lightning crackle ──
-    // 8–12 jagged bolts shooting outward from the core. Read as the
-    // ship's hull-energy discharging at the moment of vaporization.
-    const boltCount = 8 + Math.floor(sizeScale * 2);
-    for (let i = 0; i < boltCount; i++) {
-        const angle = (i / boltCount) * Math.PI * 2 + random(-0.18, 0.18);
-        const len = bigR * (1.6 + Math.random() * 1.4) * sizeScale;
-        // Alternate white-core + enemy-color glow on a 3-step cycle so the
-        // crackle reads as both "white-hot core" and "enemy plasma."
-        const c = i % 3 === 0 ? color : (i % 3 === 1 ? '#ffd070' : '#ffffff');
-        this.particlePool.get(ex, ey, 'enemyLightning', angle, len, c);
-    }
+    // 6.26.1 — Radial lightning crackle removed. The bolts read as
+    //   a player-skill (EMP / electric chain) rather than a generic
+    //   death effect, and they obscured the plasma core's chromatic
+    //   layering. The rings + shockwave + sparkles + embers carry
+    //   the "BANG" by themselves.
 
     // ── 6. Starburst sparkles ──
     // 14 bright cross-sparkles arranged in a tight ring just outside the
@@ -299,7 +323,7 @@ export function triggerEnemyFinalExplosion(enemy) {
         const sx = ex + Math.cos(angle) * d;
         const sy = ey + Math.sin(angle) * d;
         const sp = this.particlePool.get(sx, sy, 'starSparkle', random(1.4, 2.4),
-            i % 4 === 0 ? color : (i % 4 === 1 ? '#ffd060' : '#ffffff'));
+            i % 4 === 0 ? color : (i % 4 === 1 ? accentWarm : '#ffffff'));
         if (sp) {
             sp.life = random(0.5, 0.9);
             // Slow outward drift so the sparkle ring expands gently.
@@ -320,10 +344,10 @@ export function triggerEnemyFinalExplosion(enemy) {
         // outward bias so the ember cloud blooms instead of just
         // floating in place.
         const eColor = i % 5 === 0 ? '#ffffff'
-                     : i % 5 === 1 ? '#ffe080'
+                     : i % 5 === 1 ? accentWarm
                      : i % 5 === 2 ? color
-                     : i % 5 === 3 ? '#ff8855'
-                     :              '#ffcc44';
+                     : i % 5 === 3 ? accentEmber
+                     :              accentHot;
         const p = this.particlePool.get(ex, ey, 'explosionEmber', eColor);
         if (p) {
             // Bias velocity outward so embers radiate from the core.
@@ -347,6 +371,13 @@ export function triggerEnemyFinalExplosion(enemy) {
 export function triggerEnemyDebrisBurst(enemy) {
     if (!enemy || !this.particlePool) return;
     const color = enemy.color || '#ff4444';
+    // 6.26.1 — Inherit the palette stamped at death. Fall back to a
+    //   fresh pick if the debris burst somehow fires before the
+    //   frame-0 explosion (shouldn't happen — but defensive).
+    const palette = enemy._explosionPalette || (enemy._explosionPalette = pickExplosionPalette());
+    const accentWarm  = palette[0];
+    const accentHot   = palette[1];
+    const accentEmber = palette[2];
     const r = enemy.radius || 18;
     const bigR = Math.max(32, r);
     const sizeScale = Math.min(2.5, bigR / 15);
@@ -357,9 +388,9 @@ export function triggerEnemyDebrisBurst(enemy) {
     // A smaller, sharper flash + mini-shockwave timed to the debris
     // emerging. Reads as the chamber-rupture pulse that hurls the
     // wreckage outward — distinct from the frame-0 plasma core, which
-    // is by now mid-dim.
-    this.particlePool.get(ex, ey, 'explosionFlash', bigR * 1.6 * sizeScale, '#ffeec0');
-    this.particlePool.get(ex, ey, 'enemyShockwave', bigR * 1.4 * sizeScale, '#ffcc66');
+    // is by now mid-dim. Palette accents recolor per kill.
+    this.particlePool.get(ex, ey, 'explosionFlash', bigR * 1.6 * sizeScale, accentWarm);
+    this.particlePool.get(ex, ey, 'enemyShockwave', bigR * 1.4 * sizeScale, accentHot);
     // Tight inner ring — fires as debris emerges, chasing the shrapnel out.
     this.particlePool.get(ex, ey, 'explosionRingColored', bigR * 1.0 * sizeScale, color);
 
@@ -369,9 +400,9 @@ export function triggerEnemyDebrisBurst(enemy) {
         const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
         const speed = random(6, 18) * sizeScale;
         const sColor = i % 4 === 0 ? '#ffffff'
-                     : i % 4 === 1 ? '#ffcc66'
+                     : i % 4 === 1 ? accentHot
                      : i % 4 === 2 ? color
-                     : '#ff8855';
+                     : accentEmber;
         this.particlePool.get(ex, ey, 'explosionShrapnel', angle, speed, sColor);
     }
 
@@ -380,7 +411,7 @@ export function triggerEnemyDebrisBurst(enemy) {
     for (let i = 0; i < 24; i++) {
         const p = this.particlePool.get(ex, ey, 'explosion');
         if (p) {
-            p.color = i < 8 ? '#ffffff' : i < 16 ? color : '#ffcc66';
+            p.color = i < 8 ? '#ffffff' : i < 16 ? color : accentHot;
             const a = random(0, Math.PI * 2);
             const s = random(3, 12);
             p.vel = { x: Math.cos(a) * s, y: Math.sin(a) * s };
@@ -413,9 +444,9 @@ export function triggerEnemyDebrisBurst(enemy) {
             // enemy-color / warm highlight / cool highlight so the
             // burst reads as the enemy's palette flying apart.
             const sColor = (i % 4 === 0) ? '#ffffff'
-                         : (i % 3 === 0) ? '#ffcc66'
+                         : (i % 3 === 0) ? accentHot
                          : (i % 3 === 1) ? color
-                         : '#ff8855';
+                         : accentEmber;
             const shard = this.asteroidShardPool.get();
             if (shard) shard.reset(ex, ey, angle, speed, size, sColor);
         }
@@ -427,7 +458,7 @@ export function triggerEnemyDebrisBurst(enemy) {
         const ox = ex + random(-bigR * 0.7, bigR * 0.7);
         const oy = ey + random(-bigR * 0.7, bigR * 0.7);
         const p = this.particlePool.get(ox, oy, 'explosionEmber',
-            i < 2 ? '#ffffff' : i < 5 ? color : '#ffcc66');
+            i < 2 ? '#ffffff' : i < 5 ? color : accentHot);
         if (p) {
             p.vel.x *= 0.4;
             p.vel.y *= 0.4;
@@ -1961,16 +1992,16 @@ export function detonateCluster(x, y, baseDamage, baseRadius, subBombCount, opts
     // 1. Primary blast — radial damage to all enemies inside baseRadius.
     _applyClusterBlast.call(this, x, y, baseDamage, baseRadius);
 
-    // 2. VFX cascade. Reuse the nova-style chromatic ring stack so the
-    //    detonation reads as a substantial explosion. Falls back gracefully
-    //    if any individual particle type isn't registered (defensive
-    //    against pool race conditions during heavy fire).
+    // 2. VFX cascade. 6.26.0 — Reads as a "nucleus splitting": a bright
+    //    central flash + chromatic rings, then a fan of radial sphere-
+    //    tracer embers that visually echo the sub-bomblets flying off
+    //    along their actual ejection vectors.
     if (this.particlePool) {
         const pp = this.particlePool;
-        pp.get(x, y, 'explosionFlash', baseRadius * 0.9, '#ffffff');
+        pp.get(x, y, 'explosionFlash', baseRadius * 1.1, '#ffffff');
         pp.get(x, y, 'explosionRingColored', baseRadius * 1.1, '#ff4422');
-        pp.get(x, y, 'explosionRingColored', baseRadius * 1.3, '#ffaa44');
-        pp.get(x, y, 'enemyShockwave', baseRadius * 1.5, '#ff8844');
+        pp.get(x, y, 'explosionRingColored', baseRadius * 1.4, '#ffaa44');
+        pp.get(x, y, 'enemyShockwave', baseRadius * 1.6, '#ff8844');
         // Ember + shrapnel fan.
         for (let i = 0; i < 18; i++) {
             const a = (i / 18) * Math.PI * 2 + random(-0.2, 0.2);
@@ -1979,6 +2010,17 @@ export function detonateCluster(x, y, baseDamage, baseRadius, subBombCount, opts
         }
         for (let i = 0; i < 12; i++) {
             pp.get(x, y, 'explosionEmber', i % 2 ? '#ff8844' : '#ffe080');
+        }
+        // Extra "sphere flying off" tracers along the sub-bomb ejection
+        // angles. Each sub-bomb gets one bright trail particle so the
+        // viewer's eye reads "the cluster split into glowing spheres"
+        // even before the spawned sub-bomblets render their first frame.
+        if (subBombCount > 0) {
+            for (let i = 0; i < subBombCount; i++) {
+                const a = (i / subBombCount) * Math.PI * 2;
+                pp.get(x, y, 'explosionShrapnel', a, 6 + Math.random() * 3, '#ffcc44');
+                pp.get(x, y, 'explosionShrapnel', a, 7 + Math.random() * 3, '#ff8833');
+            }
         }
     }
     // Light screen punch on detonation — matches the nova-cast feel but

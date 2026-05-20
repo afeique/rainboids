@@ -92,12 +92,14 @@ export class Bullet {
     setupClusterBomb(config) {
         this.cluster = true;
         this.subBomb = false;
-        this.stage = 'travel';
+        // 6.26.0 — Always 'flying' (no travel/armed split). The bomb
+        // detonates the moment it touches ANY enemy / asteroid / mine.
+        this.stage = 'flying';
         this.armedAt = 0;
         this.armedDuration = config.armedDurationMs;
-        this.clusterFriction = config.travelFriction;
-        this.haltVelocity = config.haltVelocity;
-        this.proximityRadius = config.proximityRadius;
+        this.clusterFriction = config.travelFriction; // = 1.0 now (no decel)
+        this.haltVelocity = config.haltVelocity;      // unused under flying-only
+        this.proximityRadius = config.proximityRadius; // contact radius
         this.blastRadius = config.blastRadius;
         this.blastDamage = config.blastDamage;
         this.subBombCount = config.subBombCount;
@@ -111,19 +113,26 @@ export class Bullet {
         this.homing = false;
         this.explosive = false;
         // Override the initial velocity to the cluster-launch speed.
+        // 6.26.0 — `this.angle` is the player's aim angle (set from the
+        // click direction in player.js), so the bomb flies exactly
+        // toward the cursor.
         const speed = config.initialVelocity;
         this.vel.x = Math.cos(this.angle) * speed;
         this.vel.y = Math.sin(this.angle) * speed;
-        // Use a generous lifetime — the staged code below auto-clears
-        // the bullet on detonation, but we want a safety net for any
-        // path that misses a transition (e.g. armed timer drift).
-        this.maxLife = Math.round(600 / GAME_CONFIG.TICK_SCALE);
+        // 6.26.0 — Generous lifetime safety net. At velocity 12 / frame
+        // the bomb crosses the field diagonal (~2200 px) in ~184 frames.
+        // 1200 frames is ~6x that, well past any sensible cursor
+        // distance; the off-field cull triggers detonation long before
+        // this fires.
+        this.maxLife = Math.round(1200 / GAME_CONFIG.TICK_SCALE);
         this.rangeMultiplier = 1.0;
-        // Bigger render radius so the bomb reads as a physical payload
-        // instead of a regular bullet. The Canvas2D draw path uses
-        // `radius` for the body size.
-        this.baseRadius = 7;
+        // 6.26.0 — Nucleus cluster body: ~10 px core lets the per-orbit
+        // satellite spheres in `_drawClusterBomb` read clearly. Per-
+        // bullet orbit seed jitters the satellite arrangement so two
+        // bombs in flight aren't visually identical.
+        this.baseRadius = 10;
         this.radius = this.baseRadius;
+        this._nucleusSpin = Math.random() * Math.PI * 2;
     }
 
     // Phase 6 — initialize a sub-bomblet on a freshly-reset bullet.
@@ -186,7 +195,7 @@ export class Bullet {
         // travel → detonate-on-flight-end. Both paths bypass the
         // standard bullet physics + range-fade code below.
         if (this.cluster || this.subBomb) {
-            this.updateClusterStage(particlePool, enemyPool, gameEngine, gameField);
+            this.updateClusterStage(particlePool, enemyPool, gameEngine, gameField, asteroidPool);
             return;
         }
 
@@ -264,7 +273,7 @@ export class Bullet {
     // Off-field guard at the bottom matches the standard bullet path so a
     // cluster bomb that flies off-screen during travel is despawned
     // cleanly (with detonation FX so the player still sees what happened).
-    updateClusterStage(particlePool, enemyPool, gameEngine, gameField) {
+    updateClusterStage(particlePool, enemyPool, gameEngine, gameField, asteroidPool = null) {
         this.life++;
 
         // Apply friction to velocity. travelFriction (0.92 cluster /
@@ -278,53 +287,50 @@ export class Bullet {
         this.x += this.vel.x;
         this.y += this.vel.y;
 
-        const speedSq = this.vel.x * this.vel.x + this.vel.y * this.vel.y;
-        const now = (typeof window !== 'undefined' && window.gameEngine)
-            ? (window.gameEngine._frameClock?.now || Date.now())
-            : Date.now();
-
-        // ── Primary cluster bomb stage machine ─────────────────────────
+        // ── Primary cluster bomb (6.26.0 — flying-until-contact) ───────
+        // No travel/armed split: the bomb flies at constant velocity
+        // toward the cursor and detonates the instant it touches any
+        // enemy. Asteroid + mine contact is handled in collision-system.js
+        // for spatial-grid efficiency; this loop only checks enemies
+        // (small list, fine to scan linearly).
         if (this.cluster) {
-            if (this.stage === 'travel') {
-                // Spawn a smoke trail every few frames during travel.
-                this._smokeFrame++;
-                if (particlePool && (this._smokeFrame % 3 === 0)) {
-                    particlePool.get(this.x, this.y, 'clusterTrail');
-                }
-                // Transition to armed when velocity drops below halt threshold.
-                if (speedSq < this.haltVelocity * this.haltVelocity) {
-                    this.stage = 'armed';
-                    this.armedAt = now;
-                    this.vel.x = 0;
-                    this.vel.y = 0;
-                }
-            } else if (this.stage === 'armed') {
-                // Snap to stationary.
-                this.vel.x = 0;
-                this.vel.y = 0;
-                // Pulse particle while armed.
-                if (particlePool && (this.life % 6 === 0)) {
-                    particlePool.get(this.x, this.y, 'clusterPulse');
-                }
-                // Auto-detonate if any enemy enters proximity radius.
-                if (enemyPool && this.proximityRadius > 0) {
-                    const r2 = this.proximityRadius * this.proximityRadius;
-                    const list = enemyPool.activeObjects || [];
-                    for (let i = 0; i < list.length; i++) {
-                        const e = list[i];
-                        if (!e || !e.active) continue;
-                        const dx = e.x - this.x;
-                        const dy = e.y - this.y;
-                        if (dx * dx + dy * dy <= r2) {
-                            this._detonate(gameEngine);
-                            return;
-                        }
+            // Advance spin for the nucleus render so satellite spheres
+            // orbit visibly while in flight.
+            this._nucleusSpin = (this._nucleusSpin || 0) + 0.18;
+            // Spawn a smoke trail every few frames during flight.
+            this._smokeFrame++;
+            if (particlePool && (this._smokeFrame % 3 === 0)) {
+                particlePool.get(this.x, this.y, 'clusterTrail');
+            }
+            // Detonate on first enemy contact within proximityRadius.
+            if (enemyPool && this.proximityRadius > 0) {
+                const r2 = this.proximityRadius * this.proximityRadius;
+                const list = enemyPool.activeObjects || [];
+                for (let i = 0; i < list.length; i++) {
+                    const e = list[i];
+                    if (!e || !e.active) continue;
+                    if (e.warping || e._deathFlash > 0) continue;
+                    const dx = e.x - this.x;
+                    const dy = e.y - this.y;
+                    if (dx * dx + dy * dy <= r2) {
+                        this._detonate(gameEngine);
+                        return;
                     }
                 }
-                // Timer expiry detonation.
-                if (now - this.armedAt >= this.armedDuration) {
-                    this._detonate(gameEngine);
-                    return;
+            }
+            // Asteroid contact triggers detonation too.
+            if (asteroidPool && this.proximityRadius > 0) {
+                const list = asteroidPool.activeObjects || [];
+                for (let i = 0; i < list.length; i++) {
+                    const a = list[i];
+                    if (!a || !a.active) continue;
+                    const dx = a.x - this.x;
+                    const dy = a.y - this.y;
+                    const r = this.proximityRadius + (a.radius || 0);
+                    if (dx * dx + dy * dy <= r * r) {
+                        this._detonate(gameEngine);
+                        return;
+                    }
                 }
             }
         } else if (this.subBomb) {
@@ -874,49 +880,89 @@ export class Bullet {
         ctx.fill();
     }
 
-    // Phase 6 — Cluster bomb / sub-bomblet Canvas2D draw. Primary bomb
-    // pulses red/white during the armed stage, with a darker travel
-    // visual. Sub-bomblets are smaller spheres with a yellow glow.
+    // 6.26.0 — Cluster bomb is drawn as an atomic nucleus: a glowing
+    // central core surrounded by satellite spheres that orbit while
+    // the bomb flies. Each satellite previews a sub-bomblet that will
+    // fly off on detonation. Sub-bomblets themselves stay as small
+    // yellow-orange spheres (the "spheres flying off" the nucleus).
     _drawClusterBomb(ctx) {
         ctx.save();
-        const r = this.radius || (this.cluster ? 7 : 4);
-        if (this.cluster && this.stage === 'armed') {
-            // Pulse: alternate red / white every ~6 logic ticks.
-            const pulseT = ((this.life | 0) % 30) / 30;
-            // Sine wave makes pulse breathe in/out smoothly.
-            const wave = 0.5 + 0.5 * Math.sin(pulseT * Math.PI * 2);
-            const outerR = r * (1.0 + wave * 0.6);
-            // Outer red glow.
-            ctx.globalAlpha = 0.5 + 0.4 * wave;
-            ctx.fillStyle = '#ff2222';
+        const r = this.radius || (this.cluster ? 10 : 4);
+        if (this.cluster) {
+            const satCount = Math.max(4, Math.min(this.subBombCount || 5, 8));
+            const orbitR = r * 0.95;
+            const satR = r * 0.42;
+            const spin = this._nucleusSpin || 0;
+
+            // Outer glow halo — soft warm aura around the whole cluster.
+            ctx.globalAlpha = 0.30;
+            ctx.fillStyle = '#ff7733';
             ctx.beginPath();
-            ctx.arc(this.x, this.y, outerR, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, r * 1.8, 0, Math.PI * 2);
             ctx.fill();
-            // Inner white core.
-            ctx.globalAlpha = 0.85;
-            ctx.fillStyle = wave > 0.5 ? '#ffffff' : '#ffaaaa';
+
+            // Central core — bright hot nucleus.
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = '#ffeecc';
             ctx.beginPath();
-            ctx.arc(this.x, this.y, r * 0.55, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, r * 0.5, 0, Math.PI * 2);
             ctx.fill();
-        } else if (this.cluster) {
-            // Travel: dark red body, white glint.
-            ctx.fillStyle = '#cc2222';
+            ctx.fillStyle = '#ffffff';
             ctx.beginPath();
-            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, r * 0.25, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#ffeeaa';
-            ctx.beginPath();
-            ctx.arc(this.x - r * 0.3, this.y - r * 0.3, r * 0.35, 0, Math.PI * 2);
-            ctx.fill();
+
+            // Satellite spheres orbiting the core. Two passes — back
+            // half drawn at lower alpha to fake depth.
+            for (let pass = 0; pass < 2; pass++) {
+                for (let i = 0; i < satCount; i++) {
+                    const phase = (i / satCount) * Math.PI * 2 + spin;
+                    const ox = Math.cos(phase) * orbitR;
+                    const oy = Math.sin(phase) * orbitR * 0.85;
+                    // Back half (oy < 0) drawn dimmer on pass 0; front
+                    // half drawn full-bright on pass 1.
+                    const isBack = oy < 0;
+                    if (pass === 0 && !isBack) continue;
+                    if (pass === 1 &&  isBack) continue;
+                    ctx.globalAlpha = isBack ? 0.55 : 1.0;
+                    // Cycle satellite colors for a "different proton/
+                    // neutron" feel: red, orange, yellow.
+                    const tone = i % 3;
+                    ctx.fillStyle = tone === 0 ? '#ff4422'
+                                  : tone === 1 ? '#ff8833'
+                                               : '#ffcc44';
+                    ctx.beginPath();
+                    ctx.arc(this.x + ox, this.y + oy, satR, 0, Math.PI * 2);
+                    ctx.fill();
+                    // White highlight on top-left of each sphere.
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(
+                        this.x + ox - satR * 0.3,
+                        this.y + oy - satR * 0.3,
+                        satR * 0.35,
+                        0,
+                        Math.PI * 2,
+                    );
+                    ctx.fill();
+                }
+            }
         } else if (this.subBomb) {
-            // Sub-bomblet: small yellow-orange sphere.
+            // Sub-bomblet: small yellow-orange sphere (the "sphere
+            // flying off" the nucleus on detonation).
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = '#ffaa33';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r * 1.7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
             ctx.fillStyle = '#ffaa33';
             ctx.beginPath();
             ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
-            ctx.arc(this.x, this.y, r * 0.4, 0, Math.PI * 2);
+            ctx.arc(this.x - r * 0.25, this.y - r * 0.25, r * 0.4, 0, Math.PI * 2);
             ctx.fill();
         }
         ctx.restore();

@@ -99,17 +99,21 @@ function makeEnemy(x, y, hp = 100) {
 
 describe('PRIMARY_WEAPONS.CLUSTER_LAUNCHER — config sanity', () => {
     test('cluster launcher config exists with correct defaults', () => {
+        // 6.26.0 — nucleus-cluster rework: range effectively unlimited
+        // (9999), no friction halt, no armed window. Detonates on first
+        // contact with any enemy / asteroid / mine.
         const cfg = PRIMARY_WEAPONS.CLUSTER_LAUNCHER;
         expect(cfg).toBeDefined();
         expect(cfg.id).toBe('CLUSTER_LAUNCHER');
         expect(cfg.damage).toBe(50);
         expect(cfg.fireRate).toBe(800);
-        expect(cfg.range).toBe(800);
+        expect(cfg.range).toBe(9999);
         expect(cfg.blastRadius).toBe(90);
         expect(cfg.blastDamage).toBe(50);
         expect(cfg.subBombCount).toBe(5);
-        expect(cfg.armedDurationMs).toBe(800);
-        expect(cfg.proximityRadius).toBe(60);
+        expect(cfg.travelFriction).toBe(1.0);
+        expect(cfg.armedDurationMs).toBe(0);
+        expect(cfg.proximityRadius).toBe(18);
         expect(cfg.piercing).toBe(0); // Cluster bombs do not pierce by spec
     });
 
@@ -144,7 +148,8 @@ describe('Bullet.setupClusterBomb — initial state', () => {
         expect(b.homing).toBe(false);
         expect(b.piercing).toBe(0);
         expect(b.explosive).toBe(false);
-        expect(b.stage).toBe('travel');
+        // 6.26.0 — single-stage 'flying' (no travel/armed split).
+        expect(b.stage).toBe('flying');
     });
 
     test('initial velocity matches config.initialVelocity along firing angle', () => {
@@ -169,111 +174,56 @@ describe('Bullet.setupClusterBomb — initial state', () => {
     });
 });
 
-describe('Bullet.updateClusterStage — travel → armed transition', () => {
-    test('transitions to armed when velocity drops below haltVelocity', () => {
+// 6.26.0 — flight model: constant-velocity straight-line flight at
+// initialVelocity (no friction, no halt). The old travel→armed FSM and
+// armed-timer detonation paths were removed; the bomb is "always armed"
+// and detonates on the first contact with any enemy or asteroid.
+describe('Bullet.updateClusterStage — flight model (6.26.0)', () => {
+    test('flies at constant velocity (no friction deceleration)', () => {
         const b = new Bullet();
         b.reset(500, 500, 0);
         b.setupClusterBomb(makeClusterConfig());
         const emptyPool = makePool([]);
-        // Force velocity very low — friction will pull it below 0.3 immediately.
-        b.vel.x = 0.25;
-        b.vel.y = 0;
-        b.updateClusterStage(null, emptyPool, null, null);
-        expect(b.stage).toBe('armed');
-        expect(b.vel.x).toBe(0);
-        expect(b.vel.y).toBe(0);
-        expect(b.armedAt).toBeGreaterThan(0);
-    });
-
-    test('stays in travel while velocity is above haltVelocity', () => {
-        const b = new Bullet();
-        b.reset(500, 500, 0);
-        b.setupClusterBomb(makeClusterConfig());
-        const emptyPool = makePool([]);
-        // High velocity — one tick of friction won't drop below 0.3.
-        b.vel.x = 10;
-        b.vel.y = 0;
-        b.updateClusterStage(null, emptyPool, null, null);
-        expect(b.stage).toBe('travel');
-        // Friction applied: 10 * 0.92 = 9.2
-        expect(b.vel.x).toBeCloseTo(9.2, 5);
-    });
-
-    test('decays from initial velocity to halt within ~30 ticks', () => {
-        const b = new Bullet();
-        b.reset(500, 500, 0);
-        b.setupClusterBomb(makeClusterConfig());
-        const emptyPool = makePool([]);
-        let ticks = 0;
-        while (b.stage === 'travel' && ticks < 100) {
+        const v0 = Math.hypot(b.vel.x, b.vel.y);
+        for (let i = 0; i < 30; i++) {
             b.updateClusterStage(null, emptyPool, null, null);
-            ticks++;
         }
-        // Should halt within ~30-50 ticks (allowing margin for friction drift).
-        expect(b.stage).toBe('armed');
-        expect(ticks).toBeLessThan(60);
+        const v30 = Math.hypot(b.vel.x, b.vel.y);
+        // Friction = 1.0, so velocity stays constant across 30 ticks.
+        expect(v30).toBeCloseTo(v0, 5);
+        // Stage stays 'flying' (no transition to 'armed').
+        expect(b.stage).toBe('flying');
     });
-});
 
-describe('Bullet.updateClusterStage — armed timer detonation', () => {
-    test('detonates after armedDuration elapses', () => {
+    test('stage stays "flying" indefinitely without contact', () => {
         const b = new Bullet();
         b.reset(500, 500, 0);
         b.setupClusterBomb(makeClusterConfig());
-        // Snap straight to armed at known timestamp.
-        b.stage = 'armed';
-        const t0 = Date.now();
-        b.armedAt = t0 - 900; // 900ms ago — past the 800ms default
-        b.vel.x = 0;
-        b.vel.y = 0;
-        let detonated = false;
-        const stubGE = {
-            detonateCluster() { detonated = true; b.active = false; },
-        };
-        b.updateClusterStage(null, makePool([]), stubGE, null);
-        expect(detonated).toBe(true);
-        expect(b.active).toBe(false);
-    });
-
-    test('does NOT detonate before armed timer expires', () => {
-        const b = new Bullet();
-        b.reset(500, 500, 0);
-        b.setupClusterBomb(makeClusterConfig());
-        b.stage = 'armed';
-        b.armedAt = Date.now() - 100; // only 100ms ago, way under 800ms
-        b.vel.x = 0; b.vel.y = 0;
-        let detonated = false;
-        const stubGE = { detonateCluster() { detonated = true; } };
-        b.updateClusterStage(null, makePool([]), stubGE, null);
-        expect(detonated).toBe(false);
+        const emptyPool = makePool([]);
+        for (let i = 0; i < 100; i++) {
+            b.updateClusterStage(null, emptyPool, null, null);
+        }
+        // No friction halt → never transitions to 'armed' / 'detonated'.
+        expect(b.stage).toBe('flying');
         expect(b.active).toBe(true);
     });
 
-    test('SHORT_FUSE reduces armed duration (per-stack -0.3s)', () => {
-        // Simulate the fireCluster baked-in math: armedDuration shrinks
-        // by 300ms per SHORT_FUSE stack, clamped at 100ms minimum.
-        const baseMs = PRIMARY_WEAPONS.CLUSTER_LAUNCHER.armedDurationMs;
-        expect(baseMs).toBe(800);
-        // 1 stack → 500ms armed window
-        const oneStack = Math.max(100, baseMs - 1 * 300);
-        expect(oneStack).toBe(500);
-        // 2 stacks (cap) → 200ms armed window
-        const twoStack = Math.max(100, baseMs - 2 * 300);
-        expect(twoStack).toBe(200);
+    test('SHORT_FUSE is vestigial (no armed window to shorten)', () => {
+        // 6.26.0 — armedDurationMs is 0 in the new config; SHORT_FUSE
+        // stacks still exist as a no-op so existing save runs don't
+        // break, but they no longer change behavior.
+        expect(PRIMARY_WEAPONS.CLUSTER_LAUNCHER.armedDurationMs).toBe(0);
     });
 });
 
-describe('Bullet.updateClusterStage — enemy proximity detonation', () => {
-    test('enemy within 60px proximity triggers detonation while armed', () => {
+describe('Bullet.updateClusterStage — enemy / asteroid contact detonation', () => {
+    test('enemy within contact radius triggers detonation immediately', () => {
         const b = new Bullet();
         b.reset(500, 500, 0);
         b.setupClusterBomb(makeClusterConfig());
-        b.stage = 'armed';
-        b.armedAt = Date.now(); // freshly armed
         b.x = 500; b.y = 500;
-        b.vel.x = 0; b.vel.y = 0;
-        // Enemy 40px away — well within 60px proximity.
-        const enemy = makeEnemy(540, 500);
+        // Enemy 12px away — within the 18px contact radius.
+        const enemy = makeEnemy(512, 500);
         const pool = makePool([enemy]);
         let detonated = false;
         const stubGE = { detonateCluster() { detonated = true; b.active = false; } };
@@ -281,20 +231,32 @@ describe('Bullet.updateClusterStage — enemy proximity detonation', () => {
         expect(detonated).toBe(true);
     });
 
-    test('enemy outside proximity radius does not trigger detonation', () => {
+    test('enemy outside contact radius does not trigger detonation', () => {
         const b = new Bullet();
         b.reset(500, 500, 0);
         b.setupClusterBomb(makeClusterConfig());
-        b.stage = 'armed';
-        b.armedAt = Date.now();
         b.x = 500; b.y = 500;
-        b.vel.x = 0; b.vel.y = 0;
         const enemy = makeEnemy(700, 500); // 200px away
         const pool = makePool([enemy]);
         let detonated = false;
         const stubGE = { detonateCluster() { detonated = true; } };
         b.updateClusterStage(null, pool, stubGE, null);
         expect(detonated).toBe(false);
+    });
+
+    test('asteroid contact also triggers detonation', () => {
+        const b = new Bullet();
+        b.reset(500, 500, 0);
+        b.setupClusterBomb(makeClusterConfig());
+        b.x = 500; b.y = 500;
+        // Asteroid with radius 30 at distance 40 → centers 40px apart,
+        // combined radii (18 + 30 = 48) overlap → detonate.
+        const asteroid = { x: 540, y: 500, radius: 30, active: true };
+        const asteroidPool = makePool([asteroid]);
+        let detonated = false;
+        const stubGE = { detonateCluster() { detonated = true; b.active = false; } };
+        b.updateClusterStage(null, makePool([]), stubGE, null, asteroidPool);
+        expect(detonated).toBe(true);
     });
 });
 
