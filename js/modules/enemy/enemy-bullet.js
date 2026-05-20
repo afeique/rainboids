@@ -399,6 +399,20 @@ export class EnemyBullet {
                 }
                 break;
                 
+            case 'titan_tomahawk': {
+                // Titan tomahawk — launches slow and accelerates straight
+                // along its heading toward MAX_SPEED (no homing).
+                const accel = this.acceleration || ENEMY_BULLET_CONFIG.MISSILE.TITAN_TOMAHAWK.ACCELERATION;
+                const maxSpeed = this.maxSpeed || ENEMY_BULLET_CONFIG.MISSILE.TITAN_TOMAHAWK.MAX_SPEED;
+                const cur = Math.hypot(this.vel.x, this.vel.y);
+                const dir = Math.atan2(this.vel.y, this.vel.x);
+                const next = Math.min(cur + accel, maxSpeed);
+                this.vel.x = Math.cos(dir) * next;
+                this.vel.y = Math.sin(dir) * next;
+                this.rotation = dir;
+                break;
+            }
+
             case 'missile_decelerate':
                 // Missile turret missiles - start fast, decelerate, then explode
                 // Use level-scaled deceleration or fall back to constants

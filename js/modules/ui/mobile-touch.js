@@ -105,6 +105,22 @@ export class MobileTouchHandler {
         return null;
     }
 
+    // Hit-test the GAME OVER screen buttons (newGame / restartWave),
+    // mirroring event-setup.js's desktop `_gameOverHitId`.
+    _hitGameOverButton(canvasX, canvasY) {
+        const rects = this.engine && this.engine._gameOverButtonRects;
+        if (!rects) return null;
+        for (const id of ['newGame', 'restartWave']) {
+            const r = rects[id];
+            if (!r || r.disabled) continue;
+            if (canvasX >= r.x && canvasX <= r.x + r.w &&
+                canvasY >= r.y && canvasY <= r.y + r.h) {
+                return id;
+            }
+        }
+        return null;
+    }
+
     // Mirror the desktop click handler for SHOP / STATS / PAUSE so
     // mobile and mouse paths share the same end action.
     _runHudButtonAction(id) {
@@ -190,6 +206,23 @@ export class MobileTouchHandler {
     // ── Event handlers ──────────────────────────────────────────────────
 
     _onTouchStart(e) {
+        // GAME OVER restart — the canvas game-over buttons (newGame /
+        // restartWave) had no mobile dispatcher, so mobile players were
+        // stranded on the death screen. Hit-test them BEFORE the
+        // playable-state guard (GAME_OVER is not a playable state).
+        if (this.engine && this.engine.game
+            && this.engine.game.state === GAME_STATES.GAME_OVER) {
+            const t0 = e.changedTouches[0];
+            if (!t0) return;
+            e.preventDefault();
+            const { x: gx, y: gy } = this._canvasCoords(t0);
+            const id = this._hitGameOverButton(gx, gy);
+            if (id && typeof this.engine.triggerGameOverAction === 'function') {
+                this.engine.triggerGameOverAction(id);
+            }
+            return;
+        }
+
         if (!this._isPlayableState()) return;
         e.preventDefault();
         if (this._touchId !== null) return; // single-finger only

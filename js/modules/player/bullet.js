@@ -504,7 +504,7 @@ export class Bullet {
     
     explode(gameEngine) {
         if (!this.explosive || !gameEngine) return;
-        
+
         // Create explosion particles
         for (let i = 0; i < 15; i++) {
             const particle = gameEngine.particlePool.get(this.x, this.y, 'explosion');
@@ -518,45 +518,40 @@ export class Bullet {
                 };
             }
         }
-        
-        // Damage nearby enemies
-        if (gameEngine.enemyPool) {
-            for (const enemy of gameEngine.enemyPool.activeObjects) {
+
+        const r = this.explosionRadius;
+
+        // Damage nearby enemies through the CANONICAL kill pipeline
+        // (gameEngine.damageEnemy). The old path did an inline
+        // enemy.takeDamage + direct enemyPool.release, which skipped
+        // onEnemyKill (no kill-streak credit, no enemy debris), awarded
+        // score by hand, and dropped *stars* instead of orbs — plus the
+        // mid-iteration release shifted activeObjects. Snapshot so pool
+        // churn during the loop is safe.
+        if (gameEngine.enemyPool && typeof gameEngine.damageEnemy === 'function') {
+            const enemies = gameEngine.enemyPool.activeObjects.slice();
+            for (const enemy of enemies) {
                 if (!enemy.active) continue;
-                
-                const dx = enemy.x - this.x;
-                const dy = enemy.y - this.y;
-                const distance = Math.hypot(dx, dy);
-                
-                if (distance < this.explosionRadius) {
-                    const damage = Math.ceil(2 * (1 - distance / this.explosionRadius));
-                    const destroyed = enemy.takeDamage(damage);
-                    
-                    if (destroyed && gameEngine.game) {
-                        // 5.74.3 — gold no longer auto-awarded on kill
-                        // (pickup-only). Score still ticks.
-                        const reward = enemy.getDestructionReward();
-                        gameEngine.game.score += reward.points;
-                        
-                        // Create additional explosion particles for destroyed enemies
-                        for (let j = 0; j < 8; j++) {
-                            const particle = gameEngine.particlePool.get(enemy.x, enemy.y, 'explosion');
-                            if (particle) {
-                                particle.color = '#ffaa00';
-                                const angle = random(0, Math.PI * 2);
-                                const speed = random(3, 10);
-                                particle.vel = {
-                                    x: Math.cos(angle) * speed,
-                                    y: Math.sin(angle) * speed
-                                };
-                            }
-                        }
-                        
-                        // Drop health and money stars
-                        gameEngine.dropStarsFromEntity(enemy.x, enemy.y);
-                        
-                        gameEngine.enemyPool.release(enemy);
-                    }
+                const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
+                if (dist < r) {
+                    const damage = Math.max(1, Math.ceil(2 * (1 - dist / r)));
+                    gameEngine.damageEnemy(enemy, damage);
+                }
+            }
+        }
+
+        // 6.x — Explosion now also damages asteroids (was enemy-only).
+        // Mirrors the nova/lightning AOE asteroid handling.
+        if (gameEngine.asteroidPool && typeof gameEngine.destroyAsteroid === 'function') {
+            const asteroids = gameEngine.asteroidPool.activeObjects.slice();
+            for (const ast of asteroids) {
+                if (!ast.active || ast.warping) continue;
+                const dist = Math.hypot(ast.x - this.x, ast.y - this.y);
+                if (dist < r) {
+                    const damage = Math.max(1, Math.ceil(2 * (1 - dist / r)));
+                    ast.health = Math.max(0, (ast.health || 0) - damage);
+                    ast._hitFlashTimer = 4;
+                    if (ast.health <= 0.001) gameEngine.destroyAsteroid(ast);
                 }
             }
         }

@@ -149,6 +149,16 @@ export const ENEMY_BULLET_CONFIG = {
             MAX_DISTANCE: 600, // Medium range
             DAMAGE: 3, // High damage
         },
+
+        // Titan tomahawk — slow-launch purple missile that accelerates
+        // along its launch heading. Referenced by shootMissile()'s TITAN
+        // branch; was missing entirely (undefined → throw / no-op).
+        TITAN_TOMAHAWK: {
+            INITIAL_SPEED: 1.5, // very slow launch (matches "very slow initial speed")
+            ACCELERATION: 0.12, // px/frame² ramp
+            MAX_SPEED: 9.0,
+            DAMAGE: 3,
+        },
         
         // Missile turret decelerating missiles (Prowler rockets)
         PROWLER_PIKE: {

@@ -312,6 +312,9 @@ export class GameEngine {
             : { supported: false, draw: () => {}, addStar: () => false, clear: () => {}, accumulateDrift: () => {}, setFieldSize: () => {} };
         if (this.starfieldRenderer.init && this.particleRenderer.gl) {
             this.starfieldRenderer.init(this.particleRenderer.gl);
+            // Let the particle renderer (which owns the shared canvas's
+            // context-loss listeners) forward those events to the starfield.
+            this.particleRenderer.starfieldRenderer = this.starfieldRenderer;
         }
 
         // 5.79.2 — WebGL bullet renderer. Single instanced draw call for
@@ -1279,6 +1282,24 @@ export class GameEngine {
         if (!snap) return false;
         this.init({ writeWave1Save: false });
         return this.restoreRunState(snap);
+    }
+
+    // 6.x — Canonical GAME OVER button action, shared by the desktop
+    // click/keyboard path (event-setup.js) and the mobile touch path
+    // (mobile-touch.js, which previously had no way to run it → mobile
+    // players were stuck on the game-over screen).
+    triggerGameOverAction(id) {
+        if (id === 'newGame') {
+            if (typeof this.startNewRun === 'function') this.startNewRun();
+            else this.init();
+        } else if (id === 'restartWave') {
+            if (typeof this.startContinueRun === 'function') {
+                const ok = this.startContinueRun();
+                if (!ok) (typeof this.startNewRun === 'function') ? this.startNewRun() : this.init();
+            } else {
+                this.init();
+            }
+        }
     }
 
     startNewRun() {
@@ -3951,7 +3972,7 @@ export class GameEngine {
     drawRedTargetingCursor(ctx, x, y) { return hudCursor.drawRedTargetingCursor.call(this, ctx, x, y); }
 
     
-    takeDamage(damageAmount = this.baseDamage) { return lifecycle.takeDamage.call(this, damageAmount); }
+    takeDamage(damageAmount = this.baseDamage, opts = {}) { return lifecycle.takeDamage.call(this, damageAmount, opts); }
     handlePlayerDeath() { return lifecycle.handlePlayerDeath.call(this); }
     createPlayerShipDebris(x, y, angle) { return lifecycle.createPlayerShipDebris.call(this, x, y, angle); }
     _consumeTank() { return lifecycle._consumeTank.call(this); }

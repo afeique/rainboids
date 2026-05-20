@@ -246,6 +246,74 @@ export class Enemy {
             musicSyncIntensity: 0.7 + Math.random() * 0.6, // How strongly it responds to music (0.7-1.3)
             waveOffset: Math.random() * Math.PI * 2 // Phase offset for wave pattern
         }
+
+        // ── Pool-recycle state scrub (6.x bug fix) ──────────────────────
+        // Per-type movement/firing state lazy-inits via `if (x === undefined)`
+        // in movement.js/firing.js, so once set on a slot it PERSISTS across
+        // pool reuse — a recycled grunt could inherit another type's
+        // mid-pattern state (instant-firing stalkers, stuck sentinel bursts,
+        // etc.). Reset every such field to undefined so the lazy-init
+        // re-triggers fresh for whatever type now occupies this slot.
+        // initializeEnemy runs BEFORE applyEnemyLevelScaling, so clearing
+        // the boss flags here is safe — real bosses re-set them afterward.
+        this._arcDirection = undefined;
+        this._arcAngle = undefined;
+        this.arcState = undefined;
+        this.arcTimer = undefined;
+        this.boulderOrbitSign = undefined;
+        this.circleAngle = undefined;
+        this.crossScrollState = undefined;
+        this.diamondProgress = undefined;
+        this.drifterChargeOrbitSign = undefined;
+        this.drifterWavePhase = undefined;
+        this.guardianSinePhase = undefined;
+        this.guardianVolleyIndex = undefined;
+        this.hexagonProgress = undefined;
+        this.knightOrbitSign = undefined;
+        this.laserCharge = undefined;
+        this.laserChargeProgress = undefined;
+        this.laserChargeStartTime = undefined;
+        this.orbitalState = undefined;
+        this.prowlerState = undefined;
+        this.sentinelArcPhase = undefined;
+        this.sentinelBurstsFired = undefined;
+        this.sentinelLastShot = undefined;
+        this.sentinelSweepAngle = undefined;
+        this.sentinelSweepLastDamage = undefined;
+        this.spiralAngle = undefined;
+        this.squareBurstState = undefined;
+        this.tacticalState = undefined;
+        this.tankState = undefined;
+        this.triangleBurstState = undefined;
+        this.trailTimer = undefined;
+        this.waspGunState = undefined;
+        this.waspMovementState = undefined;
+        this.waspOrbitSign = undefined;
+        this.zigzagState = undefined;
+        // (weaverState / waspZigzagState / boulderState / sweepState already
+        // reset to undefined above.)
+
+        // Boss / rage / formation flags — set only by applyEnemyLevelScaling
+        // for real bosses, never cleared on recycle → a recycled grunt could
+        // inherit boss treatment (extra HP path, rage rings, homing bullets).
+        this.isBoss = false;
+        this.isMiniBoss = false;
+        this.bossTier = 0;
+        this.bossSizeMul = 1;
+        this.enableHomingBullets = false;
+        this._partnerDied = false;
+        this._bossPair = null;
+        this._phaseTimer = 0;
+        this._phaseIdx = 0;
+        this._formationCenter = null;
+        this._formationAngle = 0;
+        this._formationRadius = 0;
+        this._formationOmega = 0;
+        this._rageActive = false;
+        this._rageTriggered = false;
+        this._rageTelegraph = false;
+        this._rageFireRateApplied = false;
+        this._rageInvulnUntil = 0;
     }
     
     // Get level-scaled damage for enemy attacks.

@@ -150,13 +150,25 @@ export class WebGLParticleRenderer {
             explosionShrapnel:     'streak',
         };
 
+        // The starfield renderer shares this canvas/GL context but can't
+        // register its own loss/restore listeners (the canvas only fires
+        // them once). The engine sets this so we can forward the events.
+        this.starfieldRenderer = null;
+
         this._onContextLost = (e) => {
             e.preventDefault();
             this._contextLost = true;
+            if (this.starfieldRenderer && this.starfieldRenderer.handleContextLost) {
+                this.starfieldRenderer.handleContextLost();
+            }
         };
         this._onContextRestored = () => {
             this._contextLost = false;
             this._initGL();
+            // Restore the shared-context starfield AFTER our own GL re-init.
+            if (this.starfieldRenderer && this.starfieldRenderer.handleContextRestored) {
+                this.starfieldRenderer.handleContextRestored();
+            }
         };
     }
 

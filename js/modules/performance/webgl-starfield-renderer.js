@@ -264,16 +264,24 @@ export class WebGLStarfieldRenderer {
         this.fieldW = 4000;
         this.fieldH = 3000;
 
-        this._onContextLost = (e) => {
-            e.preventDefault();
-            this._contextLost = true;
-        };
-        this._onContextRestored = () => {
-            this._contextLost = false;
-            this._initGL();
-            // Re-upload the instance data on context restore.
-            this._uploadAllInstances();
-        };
+    }
+
+    // Context-loss recovery. The starfield SHARES the WebGL context with
+    // the particle renderer (same canvas), and only the particle renderer
+    // registers the canvas `webglcontextlost`/`restored` listeners — so it
+    // forwards the events here. Previously these were unregistered arrow
+    // props, so after a context loss the starfield's textures/buffers/
+    // program were orphaned and it rendered nothing until a page reload.
+    handleContextLost() {
+        this._contextLost = true;
+    }
+
+    handleContextRestored() {
+        this._contextLost = false;
+        if (!this.gl) return;
+        this._initGL();
+        // Re-upload the instance data on context restore.
+        this._uploadAllInstances();
     }
 
     /**

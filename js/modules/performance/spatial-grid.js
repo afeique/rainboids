@@ -30,6 +30,13 @@ export class SpatialGrid {
     // Insert entity — O(1) for point entities, O(k) for large entities spanning k cells
     insert(entity) {
         const r = entity.radius || 0;
+        // Skip entities entirely outside the grid. Today the clamped loop
+        // bounds below already produce an empty (inverted) range for these,
+        // but this makes the intent explicit and guards against a future
+        // index change clamping far-offscreen entities into the edge cells
+        // as false neighbor candidates.
+        if (entity.x + r < 0 || entity.x - r > this.width
+            || entity.y + r < 0 || entity.y - r > this.height) return;
         const c0 = Math.max(0, Math.floor((entity.x - r) / this.cellW));
         const c1 = Math.min(this.cols - 1, Math.floor((entity.x + r) / this.cellW));
         const r0 = Math.max(0, Math.floor((entity.y - r) / this.cellH));

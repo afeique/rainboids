@@ -190,24 +190,9 @@ export function setupEventListeners() {
         return null;
     };
 
-    const _runGameOverAction = (id) => {
-        if (id === 'newGame') {
-            // Fresh run: clear save + roll a new random loadout. Mirrors
-            // the title-screen NEW GAME path.
-            if (typeof this.startNewRun === 'function') this.startNewRun();
-            else this.init();
-        } else if (id === 'restartWave') {
-            // Restart at the wave-start auto-save (the wave they died
-            // on, with their pre-wave loadout + economy intact).
-            if (typeof this.startContinueRun === 'function') {
-                const ok = this.startContinueRun();
-                if (!ok && typeof this.startNewRun === 'function') this.startNewRun();
-                else if (!ok) this.init();
-            } else {
-                this.init();
-            }
-        }
-    };
+    // Delegates to the engine's canonical action so desktop + mobile
+    // (mobile-touch.js) share one code path.
+    const _runGameOverAction = (id) => this.triggerGameOverAction(id);
 
     // Handle game restart on click
     window.addEventListener('click', (e) => {

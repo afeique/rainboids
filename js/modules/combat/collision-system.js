@@ -2066,65 +2066,28 @@ export function damageEnemy(enemy, damage) {
 export function handlePlayerEnemyCollision(player, enemy) {
     // Apply damage only if not invincible
     if (!this.player.invincible) {
-        // Apply balanced damage with shield calculation and enemy level scaling
+        // 6.x — Route through the SINGLE takeDamage pipeline. It applies
+        // shield + BULWARK + dash i-frames + DODGE + REFLEXES + mobile
+        // multiplier + STATIC_FIELD + the `_lastDamageAt` regen gate +
+        // Thorns + kill-streak break + GUARDIAN / LAST_STAND / tank /
+        // death, and fires the damage number + player-hit FX at the
+        // impact point. Returns the HP actually lost (0 if dodged /
+        // i-framed) so the screen-shake can scale.
         const baseDamage = enemy.getLevelScaledDamage(25);
-        const effectiveShield = player.getEffectiveShield();
-        let reducedDamage = baseDamage * (1 - effectiveShield / 100);
-        // Bulwark damage reduction
-        if (player.activeSkillEffects && player.activeSkillEffects.has('BULWARK')) {
-            const bulwarkReduction = player.getPowerupStacks('IRON_WILL') > 0 ? 0.65 : 0.5;
-            reducedDamage *= (1 - bulwarkReduction);
-        }
-        // 5.93.0 — Dash i-frames. PHASE_DASH was promoted from a defense
-        // skill to a core SHIFT-key movement primitive; dashing through
-        // an enemy still zeroes damage during the burst window.
-        if (player.isDashIFrameActive && player.isDashIFrameActive()) {
-            reducedDamage = 0;
-        }
-        const finalDamage = Math.round(reducedDamage);
-        player.health = Math.max(0, player.health - finalDamage);
-        if (this.game.stats && finalDamage > 0) this.game.stats.totalDamageTaken += finalDamage;
-        if (finalDamage > 0) {
-            this.createDamageNumber(player.x, player.y - (player.radius || 14), finalDamage, { isPlayerHit: true });
-            this.triggerPlayerHitFX(enemy.x, enemy.y, finalDamage);
-            // 5.107.0 — Thorns: reflect a fraction of damage back to
-            // the colliding enemy. Skip if dashing-through (no
-            // damage was taken) — finalDamage>0 guards that.
-            if (typeof this.applyThorns === 'function') this.applyThorns(finalDamage, enemy);
-        }
-
-        // Break the kill streak on actual HP loss (Phase Dash zeroes
-        // reducedDamage above, so dashing through enemies preserves it).
-        if (finalDamage > 0) this._breakKillStreak();
-
-        // Award XP for surviving enemy collision
-
-        // 5.88.0 — tank-based hit model: HP→0 consumes a tank (vaporize
-        // FX + HP refill, no invuln); the only "lives" left are tanks.
-        // 5.108.0 — GUARDIAN gets first dibs: if it fires it clamps to
-        // 1 HP + grants invuln (one save per wave), bypassing the tank.
-        if (player.health <= 0) {
-            if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
-                // Guardian save — skip the tank/death branch entirely.
-            } else if (this.healthTanks > 0) {
-                this._consumeTank();
-            } else {
-                this.handlePlayerDeath();
-                return;
-            }
-        }
+        const dealt = this.takeDamage(baseDamage, { source: enemy, fxX: enemy.x, fxY: enemy.y });
+        if (player.health <= 0) return; // died with no save — skip post-hit FX + bounce
 
         // ── JUICE: hitstop + camera kick + damage-scaled shake ──
-        // 6.17.1 — Shake magnitude/duration now scale with finalDamage
-        // so a glancing 3 HP nudge feels tactile but small, while a
-        // 25+ HP slam shakes the world. sev clamped at 0.15 min so
-        // damage-zero contacts (dash i-frame ram) skip the shake.
+        // 6.17.1 — Shake magnitude/duration scale with the dealt damage
+        // so a glancing 3 HP nudge feels tactile but small, while a 25+
+        // HP slam shakes the world. sev clamped at 0.15 min so damage-
+        // zero contacts (dash i-frame ram) skip the shake.
         this.triggerHitstop(6); // ~100ms — enemies hit harder than asteroids
         const kickDx = player.x - enemy.x;
         const kickDy = player.y - enemy.y;
         this.triggerCameraKick(kickDx, kickDy, 10);
-        if (finalDamage > 0) {
-            const sev = Math.min(1, Math.max(0.15, finalDamage / 25));
+        if (dealt > 0) {
+            const sev = Math.min(1, Math.max(0.15, dealt / 25));
             this.triggerScreenShake(
                 Math.round(8 + sev * 18),
                 Math.round(3 + sev * 10),
@@ -2132,12 +2095,6 @@ export function handlePlayerEnemyCollision(player, enemy) {
             );
         }
         this.events.emit('audio:player-hit-enemy');
-
-        // Damage number is created above via createDamageNumber — that
-        // path renders through hud/combat.js with isPlayerHit styling
-        // (red color, crit/empowered tags). The old particle-pool
-        // 'damageNumber' was a duplicate that double-rendered the
-        // number, removed in 5.64.8.
 
         // Create explosion particles at player position with enemy color
         for (let i = 0; i < 15; i++) {
@@ -2247,55 +2204,15 @@ export function handlePlayerEnemyCollision(player, enemy) {
 }
 
 export function handlePlayerEnemyBulletCollision(player, bullet) {
-    // Apply balanced damage with shield calculation
+    // 6.x — Route through the SINGLE takeDamage pipeline (see
+    // handlePlayerEnemyCollision). It now also makes enemy bullets honor
+    // player invincibility (the inline path here didn't check it). Mines
+    // (bullet.shape === 'mine') have health and take Thorns directly;
+    // plain enemy bullets have no shooter ref, so applyThorns falls back
+    // to the nearest enemy as the proxy source.
     const baseDamage = bullet.damage || 15;
-    const effectiveShield = player.getEffectiveShield();
-    let reducedDamage = baseDamage * (1 - effectiveShield / 100);
-    // Bulwark damage reduction
-    if (player.activeSkillEffects && player.activeSkillEffects.has('BULWARK')) {
-        const bulwarkReduction = player.getPowerupStacks('IRON_WILL') > 0 ? 0.65 : 0.5;
-        reducedDamage *= (1 - bulwarkReduction);
-    }
-    // 5.93.0 — Dash i-frames. PHASE_DASH was promoted from a defense
-    // skill to a core SHIFT-key movement primitive; dashing through
-    // an enemy bullet still zeroes damage during the burst window.
-    if (player.isDashIFrameActive && player.isDashIFrameActive()) {
-        reducedDamage = 0;
-    }
-    const finalDamage = Math.round(reducedDamage);
-    player.health = Math.max(0, player.health - finalDamage);
-    if (finalDamage > 0) {
-        this.createDamageNumber(player.x, player.y - (player.radius || 14), finalDamage, { isPlayerHit: true });
-        // Bullet impact point — bullet's most recent position is the hit
-        // location for the camera kick + shrapnel direction.
-        this.triggerPlayerHitFX(bullet.x, bullet.y, finalDamage);
-        if (this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
-        // 5.107.0 — Thorns: reflect a fraction of damage back to the
-        // bullet. Mines (bullet.shape === 'mine') have health and
-        // take damage directly; regular enemy bullets don't have a
-        // shooter reference, so applyThorns falls back to the nearest
-        // enemy as a proxy source.
-        if (typeof this.applyThorns === 'function') this.applyThorns(finalDamage, bullet);
-    }
-
-    // Break the kill streak on actual HP loss (see also player↔enemy
-    // collision above and lifecycle.takeDamage).
-    if (finalDamage > 0) this._breakKillStreak();
-
-    // Award XP for surviving enemy bullet hit
-
-    // 5.88.0 — tank-based hit model.
-    // 5.108.0 — GUARDIAN intercept (see handlePlayerEnemyCollision).
-    if (player.health <= 0) {
-        if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
-            // saved
-        } else if (this.healthTanks > 0) {
-            this._consumeTank();
-        } else {
-            this.handlePlayerDeath();
-            return;
-        }
-    }
+    this.takeDamage(baseDamage, { source: bullet, fxX: bullet.x, fxY: bullet.y });
+    if (player.health <= 0) return; // died with no save
 
     // ── JUICE: hitstop only (no camera kick or screen shake for bullets) ──
     // 6.17.1 — Screen shake removed from the bullet-hit path. Shake is
@@ -2405,37 +2322,15 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         // Apply level scaling to damage
         const totalDamage = asteroid.getLevelScaledCollisionDamage(baseDamage);
 
-            // Apply shield damage reduction and round to integer (including powerup boosts)
-        const effectiveShield = this.player.getEffectiveShield();
-        const reducedDamage = totalDamage * (1 - effectiveShield / 100);
-        const finalDamage = Math.round(reducedDamage);
-
-        // Apply the calculated damage
-        this.player.health = Math.max(0, this.player.health - finalDamage);
-        if (finalDamage > 0) {
-            this.createDamageNumber(this.player.x, this.player.y - (this.player.radius || 14), finalDamage, { isPlayerHit: true });
-            this.triggerPlayerHitFX(asteroid.x, asteroid.y, finalDamage);
-            if (this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
-            // 5.107.0 — Thorns reflects damage back into the asteroid.
-            // Asteroids don't have a takeDamage method; applyThorns
-            // detects that and decrements `asteroid.health` directly.
-            if (typeof this.applyThorns === 'function') this.applyThorns(finalDamage, asteroid);
-        }
-
-        // Award XP for surviving asteroid collision
-
-        // 5.88.0 — tank-based hit model.
-        // 5.108.0 — GUARDIAN intercept (see handlePlayerEnemyCollision).
-        if (this.player.health <= 0) {
-            if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
-                // saved
-            } else if (this.healthTanks > 0) {
-                this._consumeTank();
-            } else {
-                this.handlePlayerDeath();
-                return;
-            }
-        }
+        // 6.x — Route through the SINGLE takeDamage pipeline. Asteroid
+        // collisions previously applied ONLY the shield reduction, so
+        // BULWARK, dash i-frames, DODGE, REFLEXES, STATIC_FIELD, and the
+        // `_lastDamageAt` regen gate were all skipped here — now unified.
+        // applyThorns (inside takeDamage) decrements asteroid.health
+        // directly since asteroids have no takeDamage method. Returns the
+        // HP actually lost so the shake can scale.
+        const dealt = this.takeDamage(totalDamage, { source: asteroid, fxX: asteroid.x, fxY: asteroid.y });
+        if (this.player.health <= 0) return; // died with no save
 
         // 5.88.0 — no automatic post-hit invuln. Hit feedback still fires.
         this.events.emit('audio:player-hit-asteroid');
@@ -2462,7 +2357,7 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         this.player._hitFlashTimer = 6;
 
         // ── JUICE: hitstop + camera kick + damage-scaled shake ──
-        // 6.17.1 — Shake scales with finalDamage (sev formula matches
+        // 6.17.1 — Shake scales with the dealt damage (sev formula matches
         // the enemy-collision site). Asteroid contacts on a heavily
         // shielded ship now shake less than a one-shot slam, instead
         // of every contact firing the same 20/12 jolt.
@@ -2470,8 +2365,8 @@ export function handlePlayerAsteroidCollision(player, asteroid) {
         const kickDx = this.player.x - asteroid.x;
         const kickDy = this.player.y - asteroid.y;
         this.triggerCameraKick(kickDx, kickDy, 8); // directional camera lurch
-        if (finalDamage > 0) {
-            const sev = Math.min(1, Math.max(0.15, finalDamage / 25));
+        if (dealt > 0) {
+            const sev = Math.min(1, Math.max(0.15, dealt / 25));
             this.triggerScreenShake(
                 Math.round(8 + sev * 18),
                 Math.round(3 + sev * 10),

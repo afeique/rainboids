@@ -499,7 +499,16 @@ export function shootMissile(gameEngine, targetX, targetY) {
 
         // Fire straight from turret direction (accelerating missile) with very slow initial speed
         const titanConfig = ENEMY_BULLET_CONFIG.MISSILE.TITAN_TOMAHAWK;
-        this.createEnemyBullet(gameEngine, turretAngle, titanConfig.INITIAL_SPEED, '#8A2BE2', true, 'titan_tonahawk', null);
+        const bullet = this.createEnemyBullet(gameEngine, turretAngle, titanConfig.INITIAL_SPEED, '#8A2BE2', true, 'titan_tomahawk', null);
+        if (bullet) {
+            // Render as a missile (was falling through to the spike-circle
+            // default) and carry the accel/max-speed the pattern reads.
+            bullet.shape = 'missile_shape';
+            bullet.rotation = turretAngle;
+            bullet.acceleration = titanConfig.ACCELERATION;
+            bullet.maxSpeed = titanConfig.MAX_SPEED;
+            bullet.damage = this.getLevelScaledDamage(titanConfig.DAMAGE);
+        }
     } else {
         // Prowler - fires missile in the direction the ship is facing
         const angle = this.faceAngle;

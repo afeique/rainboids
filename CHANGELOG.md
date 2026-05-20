@@ -11,6 +11,124 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.37.11] - 2026-05-20
+
+### Fixed — one unified player-damage pipeline (collisions no longer bypass it)
+
+The three collision sites (player↔enemy, player↔enemy-bullet,
+player↔asteroid) each inlined their own `player.health -= …`, so the
+canonical `lifecycle.takeDamage()` had **zero callers** — meaning DODGE,
+REFLEXES, the mobile incoming-damage multiplier, STATIC_FIELD,
+LAST_STAND, and the `_lastDamageAt` regen gate never applied to actual
+gameplay damage, and the inline death branches skipped tank/STATIC/
+LAST_STAND. All three now route through `takeDamage(base, { source,
+fxX, fxY })`, which centralizes shield + BULWARK + dash i-frames + DODGE
++ REFLEXES + mobile mult + STATIC_FIELD + `_lastDamageAt` + Thorns +
+kill-streak break + GUARDIAN → LAST_STAND → tank → death + the damage
+number / hit FX, and returns the HP actually lost so each site scales
+its own screen-shake. Side effects of the unification (all intended):
+asteroid collisions now honor BULWARK / dash i-frames / DODGE; enemy
+bullets now honor invincibility; LAST_STAND actually triggers.
+[BUG-collision-damage-bypasses-takeDamage-pipeline,
+BUG-lastDamageAt-not-updated-on-collision,
+BUG-handlePlayerEnemyCollision-skips-tank-flash-and-static-shield]
+
+## [6.37.10] - 2026-05-20
+
+### Fixed — explosive rounds now kill through the real pipeline + hit asteroids
+
+`Bullet.explode()` damaged enemies with an inline `takeDamage` + direct
+`enemyPool.release()`, which skipped `onEnemyKill` (no kill-streak credit,
+no enemy debris), awarded score by hand, and dropped *stars* instead of
+orbs — and the mid-iteration release shifted the active array. It now
+routes each AOE hit through `gameEngine.damageEnemy()` (the canonical
+kill pipeline) over a snapshot, and also damages asteroids in the blast
+(previously enemy-only). [BUG-explosive-bullet-skips-kill-pipeline,
+BUG-explosive-bullet-explosion-ignores-asteroids-and-mines]
+
+## [6.37.9] - 2026-05-20
+
+### Fixed — mobile players can restart from GAME OVER
+
+The canvas GAME OVER buttons (NEW GAME / RESTART WAVE) had no mobile
+touch dispatcher, so mobile players were stranded on the death screen.
+Added a GAME_OVER hit-test branch in the mobile touch handler and a
+shared `engine.triggerGameOverAction()` that both desktop and mobile
+now call. [BUG-mobile-touch-shop-state-no-routing]
+
+## [6.37.8] - 2026-05-20
+
+### Fixed — WebGL starfield recovers from context loss
+
+The starfield shares its GL context with the particle renderer but its
+`webglcontextlost`/`restored` handlers were never registered, so after a
+context loss the starfield rendered nothing until a page reload. The
+handlers are now public methods the particle renderer forwards to.
+[BUG-starfield-no-context-loss-recovery]
+
+## [6.37.7] - 2026-05-20
+
+### Fixed — spatial grid skips fully-offscreen entities
+
+Added an explicit early-return in `SpatialGrid.insert()` for entities
+entirely outside the grid — a robustness guard so far-offscreen entities
+can never be clamped into the edge cells as false neighbor candidates.
+[BUG-spatial-grid-out-of-bounds-truncated]
+
+## [6.37.6] - 2026-05-20
+
+### Fixed — powerups wrap at the live field edge
+
+`Powerup.update()` wrapped against `window.innerWidth/Height` captured in
+the constructor, so after a resize/orientation change powerups wrapped at
+the wrong edge. Now wraps against the live `GameDimensions`.
+[BUG-powerup-resize-stale-dimensions]
+
+## [6.37.5] - 2026-05-20
+
+### Fixed — recycled enemies no longer inherit stale per-type / boss state
+
+`initializeEnemy()` reset only a handful of fields; dozens of per-type
+movement/firing state fields (`tankState`, `laserCharge*`, `spiralAngle`,
+`sentinelBurstsFired`, prowler/wasp/orbit state, …) lazy-init via
+`if (=== undefined)` and persisted across pool reuse, and boss/rage/
+formation flags were never cleared. A recycled grunt could spawn
+mid-pattern or with boss treatment (extra HP, rage rings, homing
+bullets). Added a full state-scrub block (runs before
+`applyEnemyLevelScaling`, so real bosses re-set their flags).
+[BUG-pool-recycle-state-leak, BUG-pool-recycle-boss-flags-leak,
+BUG-sentinel-bursts-stuck-on-recycle]
+
+## [6.37.4] - 2026-05-20
+
+### Fixed — staggered asteroid spawns can't leak into the next wave
+
+`spawnWaveAsteroids()` schedules spawns with `setTimeout`; if the wave
+advanced or the run ended before a timer fired, asteroids spawned into
+the wrong wave / a dead screen. The callback now bails if the captured
+wave changed or the game left PLAYING/WAVE_TRANSITION.
+[BUG-spawnWaveAsteroids-setTimeout-race]
+
+## [6.37.3] - 2026-05-20
+
+### Fixed — Titan tomahawk missile (typo, missing config, wrong shape)
+
+The Titan missile branch referenced a non-existent
+`TITAN_TOMAHAWK` config (would throw) and passed a misspelled
+`'titan_tonahawk'` movement pattern that matched no case (no
+acceleration), and never set `missile_shape` (rendered as a spike
+circle). Added the config + a `titan_tomahawk` accelerating pattern,
+fixed the spelling, and set the missile shape.
+[BUG-titan-tonahawk-typo, BUG-explosive-tomahawk-flag-vs-bullet-flag-mismatch]
+
+## [6.37.2] - 2026-05-20
+
+### Fixed — knight-movement enemies no longer clamp to NaN bounds
+
+`startKnightMove()` clamped its target to `this.width`/`this.height`,
+which are undefined on Enemy instances → NaN target → NaN velocity. Now
+clamps against the live `GameDimensions`. [BUG-knight-undefined-bounds]
+
 ## [6.37.1] - 2026-05-20
 
 ### Fixed — unit suite realigned to the post-redesign behavior (test-only)

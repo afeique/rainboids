@@ -1225,8 +1225,16 @@ export function spawnWaveAsteroids() {
     const currentAsteroids = this.asteroidPool.activeObjects.length;
     const asteroidsToSpawn = Math.max(0, desiredAsteroids - currentAsteroids);
 
+    // Capture the wave these asteroids belong to. The stagger uses
+    // setTimeout, so if the wave advances or the run ends before a timer
+    // fires, bail — otherwise stale spawns leak into the next wave (or a
+    // dead game-over/title screen).
+    const scheduledWave = this.game.currentWave;
     for (let i = 0; i < asteroidsToSpawn; i++) {
         setTimeout(() => {
+            if (this.game.currentWave !== scheduledWave) return;
+            if (this.game.state !== GAME_STATES.PLAYING
+                && this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
             const asteroid = this.asteroidPool.get();
             if (asteroid) {
                 this.initializeWaveAsteroid(asteroid);

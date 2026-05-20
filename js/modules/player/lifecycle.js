@@ -54,8 +54,25 @@ function getMobileIncomingDamageMultiplier(wave) {
     return table[w - 1] || 1;
 }
 
-export function takeDamage(damageAmount = this.baseDamage) {
-    if (this.player.invincible) return;
+// 6.x — SINGLE player-damage pipeline. Previously the three collision
+// sites (player↔enemy, player↔enemy-bullet, player↔asteroid) each
+// inlined their own `player.health -= …`, bypassing this function
+// entirely — so DODGE, REFLEXES, the mobile damage multiplier,
+// STATIC_FIELD, LAST_STAND, and the `_lastDamageAt` regen gate never
+// applied to actual gameplay damage (this fn had ZERO callers). They now
+// all route here. opts:
+//   source : the colliding enemy / bullet / asteroid (for Thorns)
+//   fxX/fxY: impact point for the hit FX (defaults to the player)
+// Returns the final (post-reduction, rounded) damage dealt — 0 if the
+// hit was dodged / i-framed / invincible — so callers can scale their
+// own screen-shake / bounce off it.
+export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
+    if (this.player.invincible) return 0;
+
+    // PHASE_DASH i-frames zero the hit entirely (dash-through). Was only
+    // honored at the enemy / enemy-bullet sites; asteroid collisions
+    // ignored it — now uniform.
+    if (this.player.isDashIFrameActive && this.player.isDashIFrameActive()) return 0;
 
     // 6.28.0 — DODGE: flat % chance to ignore a hit entirely. Rolls
     // before REFLEXES so a lucky dodge doesn't burn the 30s REFLEXES
@@ -101,6 +118,14 @@ export function takeDamage(damageAmount = this.baseDamage) {
     const wave = (this.game && this.game.currentWave) ? (this.game.currentWave | 0) : 1;
     reducedDamage *= getMobileIncomingDamageMultiplier(wave);
 
+    // BULWARK active-skill damage reduction (was applied inline at the
+    // collision sites). IRON_WILL deepens it 50% → 65%.
+    if (this.player.activeSkillEffects && this.player.activeSkillEffects.has('BULWARK')) {
+        const bulwarkReduction = (this.player.getPowerupStacks
+            && this.player.getPowerupStacks('IRON_WILL') > 0) ? 0.65 : 0.5;
+        reducedDamage *= (1 - bulwarkReduction);
+    }
+
     // 5.75.0 — STATIC_FIELD: passive HP shield that regenerates after 8s.
     const staticStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('STATIC_FIELD') : 0;
     const staticMax = staticStacks * 2;
@@ -126,16 +151,33 @@ export function takeDamage(damageAmount = this.baseDamage) {
     }
     this.player._lastDamageAt = Date.now();
 
-    this.player.health = Math.max(0, this.player.health - reducedDamage);
+    // Round to an integer so HP, damage numbers, and stats stay clean
+    // (the collision sites used to round; the generic path didn't).
+    const finalDamage = Math.round(reducedDamage);
+    this.player.health = Math.max(0, this.player.health - finalDamage);
 
-    if (reducedDamage > 0) this._breakKillStreak();
+    if (finalDamage > 0) {
+        this._breakKillStreak();
+        if (this.game && this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
+        // Thorns — reflect a fraction back into the damage source
+        // (enemy / bullet / asteroid). Only on a real HP loss.
+        if (opts.source && typeof this.applyThorns === 'function') {
+            this.applyThorns(finalDamage, opts.source);
+        }
+    }
 
-    if (reducedDamage > 0 && typeof this.checkMissionOnDamage === 'function') {
+    if (finalDamage > 0 && typeof this.checkMissionOnDamage === 'function') {
         if (this.game.mission) this.game.mission.damaged = true;
         this.checkMissionOnDamage();
     }
 
     if (this.player.health <= 0) {
+        // 5.108.0 — GUARDIAN gets first dibs: clamps to 1 HP + grants
+        // invuln (one save per wave), bypassing LAST_STAND + the tank.
+        // Was applied inline at the collision sites; centralized here.
+        if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
+            return finalDamage;
+        }
         // 5.75.0 — LAST_STAND: one-time-per-run survive at 1 HP.
         const lastStandStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('LAST_STAND') : 0;
         if (lastStandStacks > 0 && !this.player._lastStandUsed) {
@@ -162,30 +204,32 @@ export function takeDamage(damageAmount = this.baseDamage) {
                     }
                 }
             }
-            return;
+            return finalDamage;
         }
 
         if (this.healthTanks > 0) {
             this._consumeTank();
-            return;
+            return finalDamage;
         }
         this.handlePlayerDeath();
-        return;
+        return finalDamage;
     }
 
     this.events.emit('audio:hit');
-    if (reducedDamage > 0) {
+    if (finalDamage > 0) {
+        const fxX = (opts.fxX !== undefined) ? opts.fxX : this.player.x;
+        const fxY = (opts.fxY !== undefined) ? opts.fxY : (this.player.y - (this.player.radius || 14));
         if (typeof this.createDamageNumber === 'function') {
-            this.createDamageNumber(this.player.x, this.player.y - (this.player.radius || 14), reducedDamage, { isPlayerHit: true });
+            this.createDamageNumber(this.player.x, this.player.y - (this.player.radius || 14), finalDamage, { isPlayerHit: true });
         }
-        // 6.17.1 — Shake removed from the generic-damage fallback path.
-        // Shake is now reserved for physical collisions only (handled
-        // at the collision-system sites with damage-scaled magnitude).
-        // triggerPlayerHitFX still fires kick + hitstop + particles.
+        // 6.17.1 — Shake stays at the collision sites (damage-scaled).
+        // triggerPlayerHitFX fires kick + hitstop + particles at the
+        // impact point (opts.fxX/fxY) so the kick direction is correct.
         if (typeof this.triggerPlayerHitFX === 'function') {
-            this.triggerPlayerHitFX(this.player.x, this.player.y, reducedDamage);
+            this.triggerPlayerHitFX(fxX, fxY, finalDamage);
         }
     }
+    return finalDamage;
 }
 
 // Consume one energy tank: vaporize the corresponding triforce triangle

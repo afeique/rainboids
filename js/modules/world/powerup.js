@@ -1,6 +1,6 @@
 // Powerup system for enhanced combat capabilities
 import { GAME_CONFIG } from '../core/constants.js';
-import { random, wrap, glowSpriteCache } from '../core/utils.js';
+import { random, wrap, glowSpriteCache, GameDimensions } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 
@@ -842,7 +842,10 @@ export class Powerup {
         this.vel.x *= GAME_CONFIG.ORB_FRIC;
         this.vel.y *= GAME_CONFIG.ORB_FRIC;
 
-        wrap(this, this.width, this.height);
+        // Wrap against the LIVE play-field, not the window dimensions
+        // captured in the constructor (stale after a resize/orientation
+        // change — powerups would wrap at the wrong edge).
+        wrap(this, GameDimensions.width, GameDimensions.height);
     }
     
     draw(ctx) {
