@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.27.2] - 2026-05-19
+
+### Changed — Upgrades tree nodes are icon-only (names hover-only)
+
+Removed the weapon parent-node names and the upgrade-node names from
+the skill tree (`shop-dom.js`) — many didn't fit under the circles.
+Each node is now just its icon; name + description + cost + stacks
+all surface in the hover tooltip. Dropped the now-unused `_shortName`
+helper.
+
+---
+
+## [6.27.1] - 2026-05-19
+
+### Changed
+- **Extracted the ship + all 10 enemy silhouette draws into the shared
+  render module** (`js/modules/render/shapes.js`), continuing the
+  `6.26.4` asteroid extraction so solo and `/mp` share one visual
+  definition per entity instead of duplicating it.
+  - `drawShipShape(ctx, x, y, angle, {radius, palette})` — palette-
+    parameterized winged hull. Solo's `drawRemoteShip` now delegates to
+    it (magenta palette); behaviour unchanged.
+  - `drawEnemy<Kind>Shape` (×10) + `drawEnemyShapeByType(ctx, type,
+    opts)` — faithful 1:1 extraction of solo's per-type enemy art
+    (`enemy/shapes.js`); each `Enemy.drawXxx` is now a thin delegator
+    passing `this.*`. Animation time flows in via `opts.now` (no
+    `frameClock` import) and turret charge/firing state via defaulted
+    `opts` fields, so the helpers stay pure. Solo enemy visuals are
+    byte-identical (verified: HUNTER e2e reaches wave-clear, no crash).
+  Bridge change — see CHANGELOG-MP `0.12.1`.
+
 ## [6.27.0] - 2026-05-19
 
 ### Changed — Upgrades panel: tabbed, decluttered skill tree

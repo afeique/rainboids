@@ -4,6 +4,7 @@
 import { glowSpriteCache } from '../core/utils.js';
 import { rgba } from '../core/color-cache.js';
 import { frameClock } from '../core/frame-clock.js';
+import { drawShipShape, SHIP_PALETTE_MAGENTA } from '../render/shapes.js';
 
 // ── Path2D cache for ship geometry ─────────────────────────────────
 // The ship's wings, tips, and central hull are STATIC polygons in
@@ -80,54 +81,10 @@ function _getShipPaths(r) {
 // @param {number} angle      aim angle in radians
 // @param {number} [radius]   ship radius (defaults to local-player 12 px)
 export function drawRemoteShip(ctx, x, y, angle, radius = 12) {
-    if (!ctx) return;
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(angle)) return;
-    const r = radius > 0 ? radius : 12;
-
-    ctx.save();
-    ctx.translate(x, y);
-    // Match local-ship orientation convention: angle + PI/2 because the
-    // ship art points "up" (negative-Y) in its local frame.
-    ctx.rotate(angle + Math.PI / 2);
-
-    const paths = _getShipPaths(r);
-
-    // ── Black silhouette stroke pass (visibility against bright nebulae) ──
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = '#000';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 3.5;
-    ctx.stroke(paths.rightWing);
-    ctx.stroke(paths.leftWing);
-    ctx.lineWidth = 4;
-    ctx.stroke(paths.centralHull);
-
-    // ── Wing fills — magenta-ish, distinct from local blue ──
-    ctx.fillStyle = 'rgba(180, 60, 200, 0.55)';
-    ctx.strokeStyle = '#ff66ff';
-    ctx.lineWidth = 1.4;
-    ctx.fill(paths.rightWing);
-    ctx.stroke(paths.rightWing);
-    ctx.fill(paths.leftWing);
-    ctx.stroke(paths.leftWing);
-
-    // ── Central hull — dark with magenta outline ──
-    ctx.fillStyle = 'rgba(40, 10, 50, 0.92)';
-    ctx.strokeStyle = '#ff88ff';
-    ctx.lineWidth = 1.8;
-    ctx.fill(paths.centralHull);
-    ctx.stroke(paths.centralHull);
-
-    // ── Cockpit — small magenta dot to balance the silhouette ──
-    ctx.fillStyle = 'rgba(255, 180, 255, 0.85)';
-    ctx.strokeStyle = 'rgba(255, 200, 255, 0.6)';
-    ctx.lineWidth = 0.9;
-    ctx.beginPath();
-    ctx.ellipse(0, -r * 0.42, r * 0.17, r * 0.21, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.restore();
+    // Delegates to the shared `drawShipShape` helper (js/modules/render/
+    // shapes.js) with the magenta remote palette, so solo + /mp share
+    // one ship silhouette definition. Behaviour is unchanged.
+    drawShipShape(ctx, x, y, angle, { radius, palette: SHIP_PALETTE_MAGENTA });
 }
 
 // ── Main draw ─────────────────────────────────────────────────────────────
