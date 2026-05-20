@@ -50,10 +50,19 @@ use rainboids_sim::{
     enemy_wasp::{self, WASP_FIRE_COOLDOWN_TICKS},
     enemy_weaver::{self, WEAVER_FIRE_COOLDOWN_TICKS},
     enemy_drifter::DRIFTER_FIRE_COOLDOWN_TICKS,
+    player_mine::{self, PlayerMineState},
+    player_missile::{self, PlayerMissileState},
+    power_weapon,
+    power_weapon_charge_shot,
+    power_weapon_lance_beam,
+    power_weapon_lightning_arc,
+    power_weapon_mine_layer,
+    power_weapon_missile_salvo,
+    power_weapon_nova_blast,
     ship::update_ship,
     state::{
         RoomState, ShipState, FIELD_HEIGHT, FIELD_WIDTH, MAX_ENEMY_BULLETS, MAX_ENEMY_MINES,
-        MAX_ENEMY_MISSILES, MAX_ORBS, SHIP_SIZE,
+        MAX_ENEMY_MISSILES, MAX_ORBS, MAX_PLAYER_MINES, MAX_PLAYER_MISSILES, SHIP_SIZE,
     },
     trig::{atan2_64, cos64, sin64},
     wave::{self, WaveConfig, WavePhase, WaveSpawnRequest},
@@ -112,6 +121,19 @@ pub struct Slot {
     pub last_fire_tick: u32,
     /// Outbound queue back to this connection's WS writer.
     pub out_tx: mpsc::UnboundedSender<Vec<u8>>,
+    /// Phase 4 step 6 — most recent `power_fire` bit from the client.
+    /// `process_power_fire` reads this each tick and compares to
+    /// `last_power_fire` for rising-edge detection (one activation per
+    /// press, not one per tick held).
+    pub latest_power_fire: bool,
+    /// Phase 4 step 6 — most recent `power_weapon` kind from the client
+    /// (see `power_weapon::KIND_*`). Persisted onto `ShipState.power_weapon_kind`
+    /// in `apply_input` so Snapshot reflects HUD state on the receiver side.
+    pub latest_power_weapon: u8,
+    /// Phase 4 step 6 — prior tick's `latest_power_fire`, captured at the
+    /// end of `process_power_fire` so the next tick can detect a rising
+    /// edge (`!last_power_fire && latest_power_fire`).
+    pub last_power_fire: bool,
 }
 
 /// Authoritative room state. Wraps the canonical `RoomState` from
@@ -198,6 +220,9 @@ impl SimRoomState {
             last_input_tick: 0,
             last_fire_tick: 0,
             out_tx,
+            latest_power_fire: false,
+            latest_power_weapon: 0,
+            last_power_fire: false,
         };
         self.slots.insert(pid, slot);
 
@@ -224,6 +249,8 @@ impl SimRoomState {
             aim_y,
             weapon,
             fire,
+            power_weapon,
+            power_fire,
         } = msg
         {
             if let Some(slot) = self.slots.get_mut(&player_id) {
@@ -236,6 +263,12 @@ impl SimRoomState {
                 slot.latest_input.fire = fire;
                 slot.latest_input.weapon = weapon;
                 slot.last_input_tick = client_tick;
+                // Phase 4 step 6 — capture power-weapon input bits onto
+                // the slot. `latest_power_fire` is sampled by
+                // `process_power_fire` next tick; `latest_power_weapon`
+                // chooses the dispatch branch.
+                slot.latest_power_fire = power_fire;
+                slot.latest_power_weapon = power_weapon;
             }
             // Persist weapon choice onto the ship for the fire dispatch.
             if let Some(ship) = self
@@ -245,6 +278,11 @@ impl SimRoomState {
                 .find(|s| s.player_id == player_id)
             {
                 ship.weapon_kind = weapon;
+                // Phase 4 step 6 — also persist the equipped power
+                // weapon kind so the Snapshot reflects it for HUD
+                // rendering on the receiver side. Clamp to the dense
+                // 0..=5 range (see `power_weapon::KIND_*`).
+                ship.power_weapon_kind = power_weapon.min(5);
             }
         }
     }
@@ -343,6 +381,16 @@ impl SimRoomState {
         // 5. Fire input → bullet spawns. Edge-detect plus cooldown.
         self.process_fire_inputs();
 
+        // 5.b. Phase 4 step 6 — power-weapon dispatch. Mirrors the
+        //      primary-weapon dispatch but routes through `power_weapon`'s
+        //      per-kind activate / tick_* entry points and feeds the new
+        //      `player_mines` / `player_missiles` vecs.
+        self.process_power_fire();
+
+        // 5.c. Phase 4 step 6 — stateful per-tick updates for the beam/arc
+        //      power weapons and homing player-mines/missiles.
+        self.tick_power_weapon_state();
+
         // 6. Wave cadence — drive the wave state machine and spawn
         //    enemies per its requests. Replaces Phase 3's fixed-period
         //    enemy spawn timer.
@@ -388,6 +436,19 @@ impl SimRoomState {
             &mut coll_events,
         );
 
+        // 7.c. Phase 4 step 6 — player-mine × enemy + player-missile ×
+        //      enemy pairs. Additive; reuses the same `coll_events` vec.
+        collision::run_player_mine_enemy_pairs(
+            &mut self.room.player_mines,
+            &mut self.room.enemies,
+            &mut coll_events,
+        );
+        collision::run_player_missile_enemy_pairs(
+            &mut self.room.player_missiles,
+            &mut self.room.enemies,
+            &mut coll_events,
+        );
+
         // 8. Map collision events → wire events; child asteroids
         //    pushed into room state. Kill events also roll for orb drops.
         let kill_tick = self.room.tick;
@@ -407,6 +468,10 @@ impl SimRoomState {
         self.room.enemy_bullets.retain(|b| b.active);
         self.room.enemy_mines.retain(|m| !m.dead());
         self.room.enemy_missiles.retain(|m| m.active);
+        // Phase 4 step 6 — cull dead player mines / missiles. Mines use
+        // `dead()` (active=false OR hp<=0); missiles use `active`.
+        self.room.player_mines.retain(|m| !m.dead());
+        self.room.player_missiles.retain(|m| m.active);
 
         self.room.tick = self.room.tick.wrapping_add(1);
     }
@@ -962,6 +1027,515 @@ impl SimRoomState {
         }
     }
 
+    /// Phase 4 step 6 — power-weapon dispatch. Mirrors `process_fire_inputs`
+    /// for the secondary (power) weapon slot. Per-kind branches:
+    ///
+    /// - CHARGE_SHOT: tick the charge state machine every frame regardless
+    ///   of the held bit; the module reads the bit + emits a spawn on the
+    ///   falling edge once the min-charge threshold has been reached.
+    /// - MINE_LAYER / NOVA_BLAST / MISSILE_SALVO: instant activations
+    ///   gated on a rising edge (`!last_power_fire && latest_power_fire`)
+    ///   AND `current_tick >= ship.power_weapon_cooldown_tick`.
+    /// - LANCE_BEAM / LIGHTNING_ARC: same rising-edge + cooldown gate,
+    ///   plus a "no beam currently active" gate (`beam_remaining_ticks == 0`).
+    ///   The per-tick beam/arc update lands in `tick_power_weapon_state`.
+    fn process_power_fire(&mut self) {
+        let tick = self.room.tick;
+        // Snapshot per-slot (player_id, latest_power_fire, last_power_fire)
+        // up front so we can mutate `ship` + `slot.last_power_fire` in the
+        // same loop without overlapping borrows.
+        let snapshot: Vec<(u32, bool, bool)> = self
+            .slots
+            .values()
+            .map(|s| (s.player_id, s.latest_power_fire, s.last_power_fire))
+            .collect();
+        for (pid, power_fire, last_power_fire) in snapshot {
+            let rising_edge = power_fire && !last_power_fire;
+            // Resolve ship (mut). Skip if missing / inactive / downed.
+            let kind = match self.room.ships.iter().find(|s| s.player_id == pid) {
+                Some(s) if s.active && !s.downed => s.power_weapon_kind,
+                _ => {
+                    if let Some(slot) = self.slots.get_mut(&pid) {
+                        slot.last_power_fire = power_fire;
+                    }
+                    continue;
+                }
+            };
+
+            match kind {
+                k if k == power_weapon::KIND_CHARGE_SHOT => {
+                    // Charge state machine ticks every frame; module
+                    // returns Some on falling edge ≥ min-charge.
+                    let spawn = {
+                        let ship = self
+                            .room
+                            .ships
+                            .iter_mut()
+                            .find(|s| s.player_id == pid)
+                            .expect("ship existed above");
+                        power_weapon_charge_shot::tick_charge(ship, power_fire)
+                    };
+                    if let Some(s) = spawn {
+                        let id = self.room.next_bullet_id;
+                        self.room.next_bullet_id = self.room.next_bullet_id.wrapping_add(1);
+                        let speed = bullet::BULLET_SPEED * s.speed_mult;
+                        let vx = cos64(s.angle) * speed;
+                        let vy = sin64(s.angle) * speed;
+                        let charge_ticks = {
+                            // The module reset progress on release; for
+                            // the wire event we approximate via damage
+                            // lerp inverse. Simpler: pass damage straight
+                            // through and let the client treat
+                            // charge_ticks as advisory. We don't have
+                            // the pre-reset progress here, so use the
+                            // CHARGE_MAX_TICKS-saturated proxy.
+                            let frac = (s.damage - power_weapon_charge_shot::CHARGE_BASE_DAMAGE)
+                                / (power_weapon_charge_shot::CHARGE_MAX_DAMAGE
+                                    - power_weapon_charge_shot::CHARGE_BASE_DAMAGE);
+                            let frac = frac.clamp(0.0, 1.0);
+                            (frac * power_weapon_charge_shot::CHARGE_MAX_TICKS as f64) as u32
+                        };
+                        let b = BulletState::spawn(
+                            id,
+                            pid,
+                            s.origin_x,
+                            s.origin_y,
+                            s.angle,
+                            tick,
+                            s.damage,
+                            s.piercing,
+                            s.speed_mult,
+                            s.lifetime_mult,
+                        );
+                        self.room.bullets.push(b);
+                        self.pending_events.push(EventPayload::BulletSpawn {
+                            bullet_id: id,
+                            owner_player_id: pid,
+                            origin_x: s.origin_x,
+                            origin_y: s.origin_y,
+                            vx,
+                            vy,
+                            spawn_tick: tick,
+                            // weapon=0 (CHARGE_SHOT) — client renders
+                            // the charge-shot trail cosmetic.
+                            weapon: 0,
+                        });
+                        self.pending_events.push(EventPayload::ChargeShotFire {
+                            player_id: pid,
+                            charge_ticks,
+                            damage: s.damage,
+                            at_tick: tick,
+                            x: s.origin_x,
+                            y: s.origin_y,
+                        });
+                    }
+                }
+                k if k == power_weapon::KIND_MINE_LAYER => {
+                    if !rising_edge {
+                        // fall through to last_power_fire update
+                    } else {
+                        let (ship_pos, cooldown_ok) = {
+                            let ship = self
+                                .room
+                                .ships
+                                .iter()
+                                .find(|s| s.player_id == pid)
+                                .expect("ship existed above");
+                            (
+                                (ship.x, ship.y),
+                                tick >= ship.power_weapon_cooldown_tick,
+                            )
+                        };
+                        if cooldown_ok {
+                            let active_mines: u8 = self
+                                .room
+                                .player_mines
+                                .iter()
+                                .filter(|m| m.owner_player_id == pid && !m.dead())
+                                .count()
+                                .min(u8::MAX as usize)
+                                as u8;
+                            // Borrow ship immutably for activate (it
+                            // doesn't mutate). Cooldown bump happens
+                            // after.
+                            let spawn = {
+                                let ship = self
+                                    .room
+                                    .ships
+                                    .iter()
+                                    .find(|s| s.player_id == pid)
+                                    .expect("ship existed above");
+                                let _ = ship_pos;
+                                power_weapon_mine_layer::activate(ship, active_mines)
+                            };
+                            if let Some(ms) = spawn {
+                                if self.room.player_mines.len() < MAX_PLAYER_MINES {
+                                    let mine_id = self.room.next_player_mine_id;
+                                    self.room.next_player_mine_id =
+                                        self.room.next_player_mine_id.wrapping_add(1);
+                                    let mine = player_mine::spawn_default(
+                                        mine_id,
+                                        ms.owner_player_id,
+                                        ms.x,
+                                        ms.y,
+                                    );
+                                    self.room.player_mines.push(mine);
+                                    self.pending_events.push(EventPayload::PlayerMineSpawn {
+                                        mine_id,
+                                        owner_player_id: ms.owner_player_id,
+                                        x: ms.x,
+                                        y: ms.y,
+                                        at_tick: tick,
+                                    });
+                                    self.pending_events.push(EventPayload::PowerWeaponActivate {
+                                        player_id: pid,
+                                        power_weapon_kind: power_weapon::KIND_MINE_LAYER,
+                                        at_tick: tick,
+                                    });
+                                }
+                                // Set cooldown regardless of cap rejection
+                                // so spamming the button doesn't bypass it
+                                // (matches the dispatcher contract — see
+                                // power_weapon_mine_layer::activate doc).
+                                let ship = self
+                                    .room
+                                    .ships
+                                    .iter_mut()
+                                    .find(|s| s.player_id == pid)
+                                    .expect("ship existed above");
+                                ship.power_weapon_cooldown_tick = tick
+                                    + power_weapon::cooldown_ticks(
+                                        power_weapon::KIND_MINE_LAYER,
+                                    );
+                            }
+                        }
+                    }
+                }
+                k if k == power_weapon::KIND_NOVA_BLAST => {
+                    if rising_edge {
+                        let (ship_x, ship_y, cooldown_ok) = {
+                            let ship = self
+                                .room
+                                .ships
+                                .iter()
+                                .find(|s| s.player_id == pid)
+                                .expect("ship existed above");
+                            (ship.x, ship.y, tick >= ship.power_weapon_cooldown_tick)
+                        };
+                        if cooldown_ok {
+                            // Snapshot enemies for the activate() call,
+                            // then apply damage + push by id back into
+                            // self.room.enemies.
+                            let enemies_snap: Vec<EnemyState> =
+                                self.room.enemies.iter().copied().collect();
+                            let hits = {
+                                let ship = self
+                                    .room
+                                    .ships
+                                    .iter()
+                                    .find(|s| s.player_id == pid)
+                                    .expect("ship existed above");
+                                power_weapon_nova_blast::activate(ship, &enemies_snap)
+                            };
+                            for h in hits {
+                                if let Some(e) = self
+                                    .room
+                                    .enemies
+                                    .iter_mut()
+                                    .find(|e| e.id == h.enemy_id)
+                                {
+                                    e.hp -= h.damage;
+                                    e.vx += h.push_vx;
+                                    e.vy += h.push_vy;
+                                    if e.hp <= 0.0 {
+                                        e.active = false;
+                                    }
+                                }
+                            }
+                            self.pending_events.push(EventPayload::NovaBlast {
+                                player_id: pid,
+                                x: ship_x,
+                                y: ship_y,
+                                radius: power_weapon_nova_blast::NOVA_RING_RADIUS,
+                                at_tick: tick,
+                            });
+                            self.pending_events.push(EventPayload::PowerWeaponActivate {
+                                player_id: pid,
+                                power_weapon_kind: power_weapon::KIND_NOVA_BLAST,
+                                at_tick: tick,
+                            });
+                            let ship = self
+                                .room
+                                .ships
+                                .iter_mut()
+                                .find(|s| s.player_id == pid)
+                                .expect("ship existed above");
+                            ship.power_weapon_cooldown_tick = tick
+                                + power_weapon::cooldown_ticks(
+                                    power_weapon::KIND_NOVA_BLAST,
+                                );
+                        }
+                    }
+                }
+                k if k == power_weapon::KIND_MISSILE_SALVO => {
+                    if rising_edge {
+                        let cooldown_ok = {
+                            let ship = self
+                                .room
+                                .ships
+                                .iter()
+                                .find(|s| s.player_id == pid)
+                                .expect("ship existed above");
+                            tick >= ship.power_weapon_cooldown_tick
+                        };
+                        if cooldown_ok {
+                            let spawns = {
+                                let ship = self
+                                    .room
+                                    .ships
+                                    .iter()
+                                    .find(|s| s.player_id == pid)
+                                    .expect("ship existed above");
+                                power_weapon_missile_salvo::activate(ship)
+                            };
+                            for s in spawns {
+                                if self.room.player_missiles.len() >= MAX_PLAYER_MISSILES {
+                                    break;
+                                }
+                                let mid = self.room.next_player_missile_id;
+                                self.room.next_player_missile_id =
+                                    self.room.next_player_missile_id.wrapping_add(1);
+                                let m = player_missile::spawn_default(
+                                    mid,
+                                    s.owner_player_id,
+                                    s.origin_x,
+                                    s.origin_y,
+                                    s.angle,
+                                );
+                                self.room.player_missiles.push(m);
+                                self.pending_events.push(EventPayload::PlayerMissileSpawn {
+                                    missile_id: mid,
+                                    owner_player_id: s.owner_player_id,
+                                    origin_x: s.origin_x,
+                                    origin_y: s.origin_y,
+                                    initial_angle: s.angle,
+                                    at_tick: tick,
+                                });
+                            }
+                            self.pending_events.push(EventPayload::PowerWeaponActivate {
+                                player_id: pid,
+                                power_weapon_kind: power_weapon::KIND_MISSILE_SALVO,
+                                at_tick: tick,
+                            });
+                            let ship = self
+                                .room
+                                .ships
+                                .iter_mut()
+                                .find(|s| s.player_id == pid)
+                                .expect("ship existed above");
+                            ship.power_weapon_cooldown_tick = tick
+                                + power_weapon::cooldown_ticks(
+                                    power_weapon::KIND_MISSILE_SALVO,
+                                );
+                        }
+                    }
+                }
+                k if k == power_weapon::KIND_LANCE_BEAM => {
+                    if rising_edge {
+                        let (aim, cooldown_ok, no_beam) = {
+                            let ship = self
+                                .room
+                                .ships
+                                .iter()
+                                .find(|s| s.player_id == pid)
+                                .expect("ship existed above");
+                            (
+                                ship.angle,
+                                tick >= ship.power_weapon_cooldown_tick,
+                                ship.beam_remaining_ticks == 0,
+                            )
+                        };
+                        if cooldown_ok && no_beam {
+                            {
+                                let ship = self
+                                    .room
+                                    .ships
+                                    .iter_mut()
+                                    .find(|s| s.player_id == pid)
+                                    .expect("ship existed above");
+                                power_weapon_lance_beam::activate(ship);
+                                ship.power_weapon_cooldown_tick = tick
+                                    + power_weapon::cooldown_ticks(
+                                        power_weapon::KIND_LANCE_BEAM,
+                                    );
+                            }
+                            self.pending_events.push(EventPayload::BeamStart {
+                                player_id: pid,
+                                kind: power_weapon::KIND_LANCE_BEAM,
+                                aim_angle: aim,
+                                duration_ticks:
+                                    power_weapon_lance_beam::LANCE_BEAM_DURATION_TICKS,
+                                at_tick: tick,
+                            });
+                            self.pending_events.push(EventPayload::PowerWeaponActivate {
+                                player_id: pid,
+                                power_weapon_kind: power_weapon::KIND_LANCE_BEAM,
+                                at_tick: tick,
+                            });
+                        }
+                    }
+                }
+                k if k == power_weapon::KIND_LIGHTNING_ARC => {
+                    if rising_edge {
+                        let (aim, cooldown_ok, no_beam) = {
+                            let ship = self
+                                .room
+                                .ships
+                                .iter()
+                                .find(|s| s.player_id == pid)
+                                .expect("ship existed above");
+                            (
+                                ship.angle,
+                                tick >= ship.power_weapon_cooldown_tick,
+                                ship.beam_remaining_ticks == 0,
+                            )
+                        };
+                        if cooldown_ok && no_beam {
+                            {
+                                let ship = self
+                                    .room
+                                    .ships
+                                    .iter_mut()
+                                    .find(|s| s.player_id == pid)
+                                    .expect("ship existed above");
+                                power_weapon_lightning_arc::activate(ship);
+                                ship.power_weapon_cooldown_tick = tick
+                                    + power_weapon::cooldown_ticks(
+                                        power_weapon::KIND_LIGHTNING_ARC,
+                                    );
+                            }
+                            self.pending_events.push(EventPayload::BeamStart {
+                                player_id: pid,
+                                kind: power_weapon::KIND_LIGHTNING_ARC,
+                                // ARC is auto-targeted; aim_angle isn't
+                                // used by clients for chain rendering
+                                // (they use ArcStrike's polyline) but
+                                // we forward ship.angle as advisory.
+                                aim_angle: aim,
+                                duration_ticks:
+                                    power_weapon_lightning_arc::ARC_DURATION_TICKS,
+                                at_tick: tick,
+                            });
+                            self.pending_events.push(EventPayload::PowerWeaponActivate {
+                                player_id: pid,
+                                power_weapon_kind: power_weapon::KIND_LIGHTNING_ARC,
+                                at_tick: tick,
+                            });
+                        }
+                    }
+                }
+                _ => {
+                    // Unknown kind — no-op. The clamp in apply_input
+                    // shouldn't allow this branch in practice.
+                }
+            }
+
+            // Commit the held-bit for next-tick rising-edge detection.
+            if let Some(slot) = self.slots.get_mut(&pid) {
+                slot.last_power_fire = power_fire;
+            }
+        }
+    }
+
+    /// Phase 4 step 6 — per-tick updates for the stateful power weapons:
+    ///   - LANCE_BEAM / LIGHTNING_ARC beam ticks (damage application,
+    ///     duration decrement, end-event emission)
+    ///   - player_mine seek update (homing toward closest enemy)
+    ///   - player_missile homing update
+    fn tick_power_weapon_state(&mut self) {
+        let tick = self.room.tick;
+
+        // 1. Per-ship beam / arc tick. We need a snapshot of enemies for
+        //    the `tick_beam` / `tick_arc` calls (they take &[EnemyState]),
+        //    then apply damage back to the live enemies vec by id.
+        let enemies_snapshot: Vec<EnemyState> = self.room.enemies.iter().copied().collect();
+        // Buffer ArcStrike events we want to emit after the ship loop so
+        // we're not borrowing self.pending_events while iterating ships.
+        let mut arc_events: Vec<(u32, Vec<(f64, f64)>)> = Vec::new();
+        let mut beam_end_events: Vec<(u32, u8)> = Vec::new();
+        let mut damage_apply: Vec<(u32, f64)> = Vec::new();
+
+        for ship in self.room.ships.iter_mut() {
+            if ship.beam_remaining_ticks == 0 {
+                continue;
+            }
+            let kind = ship.beam_kind;
+            if kind == power_weapon::KIND_LANCE_BEAM {
+                let hits = power_weapon_lance_beam::tick_beam(ship, &enemies_snapshot);
+                for h in hits {
+                    damage_apply.push((h.enemy_id, h.damage));
+                }
+            } else if kind == power_weapon::KIND_LIGHTNING_ARC {
+                let hits = power_weapon_lightning_arc::tick_arc(ship, &enemies_snapshot);
+                if !hits.is_empty() {
+                    for h in &hits {
+                        damage_apply.push((h.enemy_id, h.damage));
+                    }
+                    let chain: Vec<(f64, f64)> =
+                        hits.iter().map(|h| (h.x, h.y)).collect();
+                    arc_events.push((ship.player_id, chain));
+                }
+            }
+            // BeamEnd: tick_beam / tick_arc decrement beam_remaining_ticks.
+            // If it just reached zero, emit one BeamEnd. `kind` was read
+            // pre-tick, which is correct: the JS client looks up the kind
+            // from the matching BeamStart, so we forward the same value.
+            if ship.beam_remaining_ticks == 0 {
+                beam_end_events.push((ship.player_id, kind));
+            }
+        }
+
+        // Apply collected damage back to live enemies. Multiple hits on
+        // the same enemy in one tick (e.g. arc primary + chain) all stack.
+        for (eid, dmg) in damage_apply {
+            if let Some(e) = self.room.enemies.iter_mut().find(|e| e.id == eid) {
+                e.hp -= dmg;
+                if e.hp <= 0.0 {
+                    e.active = false;
+                }
+            }
+        }
+        for (pid, chain) in arc_events {
+            self.pending_events.push(EventPayload::ArcStrike {
+                player_id: pid,
+                chain,
+                at_tick: tick,
+            });
+        }
+        for (pid, kind) in beam_end_events {
+            self.pending_events.push(EventPayload::BeamEnd {
+                player_id: pid,
+                kind,
+                at_tick: tick,
+            });
+        }
+
+        // 2. Player mine homing + lifetime tick.
+        let enemies_view: Vec<EnemyState> = self.room.enemies.iter().copied().collect();
+        for m in self.room.player_mines.iter_mut() {
+            player_mine::update_mine(m, &enemies_view, self.room.field_w, self.room.field_h);
+        }
+        // 3. Player missile homing + lifetime tick.
+        for m in self.room.player_missiles.iter_mut() {
+            player_missile::update_missile(
+                m,
+                &enemies_view,
+                self.room.field_w,
+                self.room.field_h,
+            );
+        }
+    }
+
     /// Roll for a drop orb at a death site. Returns the orb spawned (if
     /// any) so the caller can emit the OrbSpawn event with the same
     /// rng_subseed both sides reconstruct from.
@@ -1191,6 +1765,37 @@ impl SimRoomState {
                     y,
                 });
             }
+            // Phase 4 step 6 — player mine detonated. Owner / bullet
+            // attribution lives on the collision event but the wire
+            // EventPayload::PlayerMineDeath only carries the cosmetic
+            // fields (mine_id + position + tick).
+            CollisionEvent::PlayerMineDetonate {
+                mine_id, x, y, ..
+            } => {
+                self.pending_events.push(EventPayload::PlayerMineDeath {
+                    mine_id,
+                    x,
+                    y,
+                    at_tick: kill_tick,
+                });
+            }
+            // Phase 4 step 6 — player missile hit an enemy. Missile is
+            // deactivated by the collision pass; HP delta on the enemy
+            // shows up in the next Snapshot.
+            CollisionEvent::PlayerMissileHitEnemy {
+                missile_id,
+                enemy_id,
+                x,
+                y,
+            } => {
+                self.pending_events.push(EventPayload::PlayerMissileHit {
+                    missile_id,
+                    enemy_id,
+                    hit_tick: kill_tick,
+                    x,
+                    y,
+                });
+            }
         }
     }
 
@@ -1277,6 +1882,10 @@ impl SimRoomState {
                 spare_tanks: s.spare_tanks,
                 weapon_kind: s.weapon_kind,
                 downed: s.downed,
+                power_weapon_kind: s.power_weapon_kind,
+                charge_progress: s.charge_progress,
+                beam_remaining_ticks: s.beam_remaining_ticks,
+                beam_kind: s.beam_kind,
             })
             .collect();
         let acked = self
@@ -1309,6 +1918,8 @@ impl SimRoomState {
                 &self.room.orbs,
                 &self.room.enemy_mines,
                 &self.room.enemy_missiles,
+                &self.room.player_mines,
+                &self.room.player_missiles,
             ),
             bullets_hash: hash_bullets(&self.room.bullets),
         }
@@ -1344,6 +1955,10 @@ impl SimRoomState {
                     spare_tanks: s.spare_tanks,
                     weapon_kind: s.weapon_kind,
                     downed: s.downed,
+                    power_weapon_kind: s.power_weapon_kind,
+                    charge_progress: s.charge_progress,
+                    beam_remaining_ticks: s.beam_remaining_ticks,
+                    beam_kind: s.beam_kind,
                 })
                 .collect(),
             enemies: self
@@ -1481,6 +2096,48 @@ impl SimRoomState {
                     life_remaining: m.life_remaining,
                 })
                 .collect(),
+            // Phase 4 step 6 — Resync carries the full player-mine /
+            // player-missile state so clients catching up on a desync
+            // can rebuild every active power-weapon entity. Wave 2D
+            // power_weapon integration agent owns the actual spawning
+            // path; this Resync wiring is the minimal mirror.
+            player_mines: self
+                .room
+                .player_mines
+                .iter()
+                .map(|m| rainboids_sim::wire::PlayerMineWire {
+                    id: m.id,
+                    owner_player_id: m.owner_player_id,
+                    x: m.x,
+                    y: m.y,
+                    vx: m.vx,
+                    vy: m.vy,
+                    angle: m.angle,
+                    hp: m.hp,
+                    max_hp: m.max_hp,
+                    radius: m.radius,
+                    trigger_radius: m.trigger_radius,
+                    blast_radius: m.blast_radius,
+                    blast_damage: m.blast_damage,
+                    life_remaining: m.life_remaining,
+                })
+                .collect(),
+            player_missiles: self
+                .room
+                .player_missiles
+                .iter()
+                .map(|m| rainboids_sim::wire::PlayerMissileWire {
+                    id: m.id,
+                    owner_player_id: m.owner_player_id,
+                    x: m.x,
+                    y: m.y,
+                    vx: m.vx,
+                    vy: m.vy,
+                    damage: m.damage,
+                    radius: m.radius,
+                    life_remaining: m.life_remaining,
+                })
+                .collect(),
         }
     }
 
@@ -1608,6 +2265,8 @@ fn hash_asteroids_and_orbs(
     orbs: &[OrbState],
     mines: &[EnemyMineState],
     missiles: &[EnemyMissileState],
+    player_mines: &[PlayerMineState],
+    player_missiles: &[PlayerMissileState],
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     // Asteroids first — preserves the Phase 3 hash domain for the
@@ -1641,6 +2300,28 @@ fn hash_asteroids_and_orbs(
         m.life_remaining.hash(&mut h);
     }
     for m in missiles {
+        m.id.hash(&mut h);
+        hash_f64(&mut h, m.x);
+        hash_f64(&mut h, m.y);
+        hash_f64(&mut h, m.vx);
+        hash_f64(&mut h, m.vy);
+        m.life_remaining.hash(&mut h);
+    }
+    // Phase 4 step 6 (WIRE_VERSION 9) — player mines + player missiles
+    // append AFTER enemy mines + missiles. Field order MUST mirror
+    // `client-wasm/src/lib.rs::hash_asteroids_and_orbs`:
+    //   player_mine:    (id, x, y, hp, life_remaining)
+    //   player_missile: (id, x, y, vx, vy, life_remaining)
+    // — identical schema to the enemy_mine / enemy_missile slabs above
+    // so the checksum stays a single u64 even after the wave expansion.
+    for m in player_mines {
+        m.id.hash(&mut h);
+        hash_f64(&mut h, m.x);
+        hash_f64(&mut h, m.y);
+        hash_f64(&mut h, m.hp);
+        m.life_remaining.hash(&mut h);
+    }
+    for m in player_missiles {
         m.id.hash(&mut h);
         hash_f64(&mut h, m.x);
         hash_f64(&mut h, m.y);

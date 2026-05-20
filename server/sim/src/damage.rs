@@ -215,6 +215,7 @@ mod tests {
             shield: 0.0,
             max_shield: 0.0,
             spare_tanks: 0,
+            ..ShipState::default()
         }
     }
 

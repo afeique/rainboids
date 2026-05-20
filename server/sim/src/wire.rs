@@ -66,6 +66,20 @@ pub struct SnapshotShip {
     /// Phase 4 step 2 — downed flag mirrored onto the wire so remote
     /// tabs don't have to wait on a ShipDowned event to know.
     pub downed: bool,
+    /// Phase 4 step 6 (WIRE_VERSION 9) — currently equipped power weapon
+    /// (see `power_weapon::KIND_*`).
+    pub power_weapon_kind: u8,
+    /// Phase 4 step 6 — charge progress (CHARGE_SHOT only). 0 = idle;
+    /// counts up to `power_weapon_charge_shot::CHARGE_MAX_TICKS` while
+    /// the player holds the power-fire input.
+    pub charge_progress: u32,
+    /// Phase 4 step 6 — remaining ticks of an active beam / arc
+    /// (LANCE_BEAM and LIGHTNING_ARC). 0 = no active beam.
+    pub beam_remaining_ticks: u32,
+    /// Phase 4 step 6 — kind discriminator for the active beam (same
+    /// dense u8 as `power_weapon_kind`). Only meaningful when
+    /// `beam_remaining_ticks > 0`.
+    pub beam_kind: u8,
 }
 
 /// Server-to-client messages. Externally-tagged serde enum:
@@ -183,6 +197,10 @@ pub enum ServerMsg {
         enemy_mines: Vec<EnemyMineWire>,
         /// Added in WIRE_VERSION 8 (Phase 4 step 5 — missiles).
         enemy_missiles: Vec<EnemyMissileWire>,
+        /// Added in WIRE_VERSION 9 (Phase 4 step 6 — player mines).
+        player_mines: Vec<PlayerMineWire>,
+        /// Added in WIRE_VERSION 9 (Phase 4 step 6 — player missiles).
+        player_missiles: Vec<PlayerMissileWire>,
     },
 }
 
@@ -226,6 +244,19 @@ pub enum ClientMsg {
         /// Fire button held this tick. Edge-detection lives in the
         /// server's per-weapon cooldown gate.
         fire: bool,
+        /// Phase 4 step 6 (WIRE_VERSION 9) — currently equipped power
+        /// weapon (see `power_weapon::KIND_*`). 0 = CHARGE_SHOT,
+        /// 1 = MINE_LAYER, 2 = NOVA_BLAST, 3 = MISSILE_SALVO,
+        /// 4 = LANCE_BEAM, 5 = LIGHTNING_ARC. Server persists onto
+        /// `ShipState.power_weapon_kind` and dispatches via
+        /// `power_weapon::activate(...)`.
+        power_weapon: u8,
+        /// Phase 4 step 6 — power-fire input bit (right mouse button
+        /// on desktop, Q key as keyboard alternative). For charge-based
+        /// weapons (CHARGE_SHOT) the rising edge starts charging and
+        /// the falling edge releases. For cooldown-based weapons the
+        /// rising edge triggers activation if cooldown elapsed.
+        power_fire: bool,
     },
     /// Voluntary disconnect. Server can also detect WS close.
     Bye,
@@ -251,6 +282,20 @@ pub enum ClientMsg {
 ///   EnemyMineSpawn, EnemyMineDeath, EnemyMissileSpawn, EnemyMissileHit}`,
 ///   `EnemyMineWire` + `EnemyMissileWire`, and the matching Vec fields
 ///   on `Resync`.
+/// - 9: Phase 4 step 6 — 6 power weapons + 2 player-owned entities.
+///   `ClientMsg::Input` gains `power_fire: bool` + `power_weapon: u8`.
+///   `SnapshotShip` gains `power_weapon_kind`, `charge_progress`,
+///   `beam_remaining_ticks`, `beam_kind`. New `EventPayload` variants:
+///   `PowerWeaponActivate`, `ChargeShotFire`, `NovaBlast`, `BeamStart`,
+///   `BeamEnd`, `ArcStrike`, `PlayerMineSpawn`, `PlayerMineDeath`,
+///   `PlayerMissileSpawn`, `PlayerMissileHit`. New wire records:
+///   `PlayerMineWire`, `PlayerMissileWire`. Resync extended with
+///   `player_mines` + `player_missiles` Vecs.
+/// - 8: Phase 4 step 5 — 9 enemy types + mines + missiles. Adds
+///   `EventPayload::{EnemyMineSpawn, EnemyMineDeath, EnemyMissileSpawn,
+///   EnemyMissileHit}`, `EnemyMineWire` + `EnemyMissileWire`, and
+///   `enemy_mines` + `enemy_missiles` on `Resync`. `EnemyWire` grew
+///   with per-kind movement-state fields.
 /// - 7: Phase 4 — enemy-bullet infrastructure + HUNTER aimed-fire.
 ///   Adds `EventPayload::{EnemyBulletSpawn, EnemyBulletHit}`,
 ///   `EnemyBulletWire` for Resync, and `enemy_bullets` on `Resync`.
@@ -270,7 +315,7 @@ pub enum ClientMsg {
 /// - 2: Phase 3 — adds Event / StateChecksum / Resync; client may
 ///   send Resync in response to a checksum miss. Snapshot still
 ///   ship-only (deterministic kinds reconstructed client-side).
-pub const WIRE_VERSION: u32 = 8;
+pub const WIRE_VERSION: u32 = 9;
 
 // ── Phase 3 — EventPayload variants ──
 
@@ -492,6 +537,116 @@ pub enum EventPayload {
         x: f64,
         y: f64,
     },
+
+    // ── Phase 4 step 6 — power weapons ──
+
+    /// A player just activated their power weapon. Cosmetic — clients
+    /// play the activation sound + flash. The actual effect (spawn,
+    /// damage, beam-start, etc.) lands in a more specific event
+    /// (`NovaBlast`, `BeamStart`, `ChargeShotFire`, `PlayerMissileSpawn`,
+    /// `PlayerMineSpawn`) — `PowerWeaponActivate` is the umbrella
+    /// trigger so clients can play one activation sound regardless of
+    /// which weapon fired.
+    PowerWeaponActivate {
+        player_id: u32,
+        power_weapon_kind: u8,
+        at_tick: u32,
+    },
+
+    /// CHARGE_SHOT released — server spawned the charged bullet. Client
+    /// plays the charge-release SFX + muzzle flash. The bullet itself
+    /// goes through the normal `BulletSpawn` event.
+    ChargeShotFire {
+        player_id: u32,
+        charge_ticks: u32,
+        damage: f64,
+        at_tick: u32,
+        x: f64,
+        y: f64,
+    },
+
+    /// NOVA_BLAST activated. Carries the player position + ring radius
+    /// so clients render the chromatic shockwave + push particles.
+    /// Damage is applied server-side from `power_weapon_nova_blast::activate`;
+    /// per-enemy HP delta lands in the next Snapshot.
+    NovaBlast {
+        player_id: u32,
+        x: f64,
+        y: f64,
+        radius: f64,
+        at_tick: u32,
+    },
+
+    /// A beam-style power weapon started (LANCE_BEAM or LIGHTNING_ARC).
+    /// `kind` is the power weapon kind discriminator. Clients render
+    /// the beam from `(ship.x, ship.y)` along `aim_angle` for LANCE,
+    /// or as a chained polyline for LIGHTNING_ARC (see `ArcStrike`).
+    BeamStart {
+        player_id: u32,
+        kind: u8,
+        aim_angle: f64,
+        duration_ticks: u32,
+        at_tick: u32,
+    },
+
+    /// A beam-style power weapon ended (duration elapsed). Clients
+    /// stop the beam render + play the fizzle SFX.
+    BeamEnd {
+        player_id: u32,
+        kind: u8,
+        at_tick: u32,
+    },
+
+    /// One tick of LIGHTNING_ARC chain hits. `chain` is the ordered
+    /// sequence of hit positions (ship → primary → next link → ...);
+    /// JS client renders connected line segments. Emitted per tick
+    /// the arc is active and has at least one chain link.
+    ArcStrike {
+        player_id: u32,
+        chain: Vec<(f64, f64)>,
+        at_tick: u32,
+    },
+
+    /// A player mine was deployed (MINE_LAYER activation). Client
+    /// instantiates from `(mine_id, owner_player_id, x, y)`.
+    PlayerMineSpawn {
+        mine_id: u32,
+        owner_player_id: u32,
+        x: f64,
+        y: f64,
+        at_tick: u32,
+    },
+
+    /// A player mine was destroyed (by enemy contact detonation, by
+    /// bullet HP-kill, or by lifetime expiry). Client marks inactive
+    /// + plays the explosion cosmetic.
+    PlayerMineDeath {
+        mine_id: u32,
+        x: f64,
+        y: f64,
+        at_tick: u32,
+    },
+
+    /// A player missile was launched (MISSILE_SALVO activation). One
+    /// event per missile — a salvo emits N events with sequential ids.
+    PlayerMissileSpawn {
+        missile_id: u32,
+        owner_player_id: u32,
+        origin_x: f64,
+        origin_y: f64,
+        initial_angle: f64,
+        at_tick: u32,
+    },
+
+    /// Authoritative player-missile hit on an enemy. Client marks the
+    /// missile inactive + plays impact cosmetic.
+    PlayerMissileHit {
+        missile_id: u32,
+        enemy_id: u32,
+        hit_tick: u32,
+        x: f64,
+        y: f64,
+    },
 }
 
 // ── Phase 3 — Resync wire records ──
@@ -564,6 +719,40 @@ pub struct EnemyMineWire {
 pub struct EnemyMissileWire {
     pub id: u32,
     pub owner_enemy_id: u32,
+    pub x: f64,
+    pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub damage: f64,
+    pub radius: f64,
+    pub life_remaining: u32,
+}
+
+/// Resync record for one player-owned mine. WIRE_VERSION 9 — Phase 4 step 6.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct PlayerMineWire {
+    pub id: u32,
+    pub owner_player_id: u32,
+    pub x: f64,
+    pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub angle: f64,
+    pub hp: f64,
+    pub max_hp: f64,
+    pub radius: f64,
+    pub trigger_radius: f64,
+    pub blast_radius: f64,
+    pub blast_damage: f64,
+    pub life_remaining: u32,
+}
+
+/// Resync record for one player-owned homing missile. WIRE_VERSION 9 —
+/// Phase 4 step 6.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct PlayerMissileWire {
+    pub id: u32,
+    pub owner_player_id: u32,
     pub x: f64,
     pub y: f64,
     pub vx: f64,
@@ -715,6 +904,8 @@ mod tests {
             aim_y: -45.25,
             weapon: 2, // SCATTER_GUN
             fire: true,
+            power_weapon: 4, // LANCE_BEAM
+            power_fire: false,
         };
         let json = serde_json::to_string(&m).unwrap();
         assert!(json.contains("\"Input\""));

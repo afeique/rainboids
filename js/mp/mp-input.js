@@ -13,6 +13,18 @@
 // the canvas's bounding rect, accounting for any CSS scaling). The
 // engine layer is responsible for the canvas-pixel -> world-coord
 // projection because it owns the 1920x1080 logical-world scale.
+//
+// ── Keybinds ─────────────────────────────────────────────────────────
+//   WASD / arrows  — thrust / strafe
+//   Mouse-aim      — aim
+//   LMB            — primary fire (`fire`)
+//   RMB / Q        — power-weapon fire (`powerFire`)
+//   1 / 2 / 3 / 4  — select primary weapon
+//   Z              — cycle power weapon backward (`powerWeapon`)
+//   X              — cycle power weapon forward (`powerWeapon`)
+//
+// Browser context-menu is suppressed on the canvas so RMB can be used
+// as an action button.
 
 const MOVEMENT_KEYS = new Set([
     "w", "a", "s", "d",
@@ -26,6 +38,11 @@ export const WEAPON_STORM_NEEDLES = 1;
 export const WEAPON_SCATTER_GUN = 2;
 export const WEAPON_RAIL_DRIVER = 3;
 
+// Power-weapon discriminator (must match `mp1::power_weapon::KIND_*` in
+// Rust). HUD-facing display labels — index matches the u8 wire value.
+export const POWER_WEAPON_NAMES = ['CHARGE', 'MINE', 'NOVA', 'MISSILE', 'LANCE', 'ARC'];
+const POWER_WEAPON_COUNT = POWER_WEAPON_NAMES.length;
+
 const state = {
     up: false,
     down: false,
@@ -37,6 +54,12 @@ const state = {
     // Phase 4 step 4 — currently-equipped weapon. Default PULSE_CANNON;
     // 1/2/3/4 keybinds cycle through the four base weapons.
     weapon: WEAPON_PULSE_CANNON,
+    // Phase 4 step 6 — currently-equipped power weapon + held-fire bit.
+    // powerWeapon defaults to 0 (CHARGE_SHOT); Z/X cycle through the six
+    // entries of POWER_WEAPON_NAMES with wrap-around. powerFire is true
+    // while RMB or Q is held.
+    powerWeapon: 0,
+    powerFire: false,
 };
 
 let installed = false;
@@ -73,7 +96,12 @@ export function init(canvas) {
     installed = true;
 
     window.addEventListener("keydown", (event) => {
-        if (event.repeat) return;
+        if (event.repeat) {
+            // Q held → power-fire stays asserted (no edge needed, but
+            // we don't want repeat events to spam any per-edge logic
+            // elsewhere either). Just early-out.
+            return;
+        }
         if (setDir(event.key, true)) {
             if (MOVEMENT_KEYS.has(event.key)) event.preventDefault();
             return;
@@ -85,11 +113,31 @@ export function init(canvas) {
             case "3": state.weapon = WEAPON_SCATTER_GUN; break;
             case "4": state.weapon = WEAPON_RAIL_DRIVER; break;
         }
+        // Power-weapon controls (use event.code so layout-shifted keys
+        // still match by physical position).
+        switch (event.code) {
+            case "KeyQ":
+                state.powerFire = true;
+                event.preventDefault();
+                break;
+            case "KeyZ":
+                state.powerWeapon = (state.powerWeapon - 1 + POWER_WEAPON_COUNT) % POWER_WEAPON_COUNT;
+                event.preventDefault();
+                break;
+            case "KeyX":
+                state.powerWeapon = (state.powerWeapon + 1) % POWER_WEAPON_COUNT;
+                event.preventDefault();
+                break;
+        }
     });
 
     window.addEventListener("keyup", (event) => {
         if (setDir(event.key, false)) {
             if (MOVEMENT_KEYS.has(event.key)) event.preventDefault();
+        }
+        if (event.code === "KeyQ") {
+            state.powerFire = false;
+            event.preventDefault();
         }
     });
 
@@ -106,11 +154,29 @@ export function init(canvas) {
     });
 
     canvas.addEventListener("mousedown", (event) => {
-        if (event.button === 0) state.fire = true;
+        if (event.button === 0) {
+            state.fire = true;
+        } else if (event.button === 2) {
+            // Right mouse button → power-fire. preventDefault() blocks
+            // the browser context menu from popping over the canvas.
+            state.powerFire = true;
+            event.preventDefault();
+        }
     });
 
     canvas.addEventListener("mouseup", (event) => {
-        if (event.button === 0) state.fire = false;
+        if (event.button === 0) {
+            state.fire = false;
+        } else if (event.button === 2) {
+            state.powerFire = false;
+            event.preventDefault();
+        }
+    });
+
+    // Suppress the canvas context menu so RMB is usable as an action
+    // button without the browser overlay stealing the click.
+    canvas.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
     });
 
     // If the page loses focus mid-keypress, the keyup never fires; clear
@@ -121,6 +187,7 @@ export function init(canvas) {
         state.left = false;
         state.right = false;
         state.fire = false;
+        state.powerFire = false;
     });
 }
 

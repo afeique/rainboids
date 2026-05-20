@@ -14,14 +14,32 @@
             background: #000;
             overflow: hidden;
         }
-        #mp-canvas {
+        /* Phase 4 step 6 graphics — three-canvas WebGL bloom stack
+           mirroring solo (index.html / styles.css). glCanvas (WebGL,
+           bottom: starfield + additive particles) → mp-canvas (Canvas2D,
+           middle: ships / asteroids / enemies) → bulletCanvas (WebGL,
+           top: additive bullet glow). mp-canvas keeps its id so
+           mp-main.js + the QA-13 smoke selector are unchanged. */
+        canvas {
             display: block;
             position: absolute;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
+        }
+        #glCanvas {
             background: #000;
+            z-index: 0;
+        }
+        #mp-canvas {
+            background: transparent;
+            z-index: 1;
+        }
+        #bulletCanvas {
+            background: transparent;
+            z-index: 2;
+            pointer-events: none;
         }
         #mp-debug {
             position: absolute;
@@ -48,7 +66,13 @@
         and build_info()). The real MP game (renderer, networking,
         prediction) arrives in Phase 1+.
     -->
+    <!-- WebGL particle + starfield layer (bottom). -->
+    <canvas id="glCanvas"></canvas>
+    <!-- Canvas2D entity layer (middle): ships, asteroids, enemies,
+         mines, HUD-adjacent draws. Transparent so glCanvas shows through. -->
     <canvas id="mp-canvas"></canvas>
+    <!-- WebGL bullet layer (top): additive bullet/missile glow. -->
+    <canvas id="bulletCanvas"></canvas>
     <div id="mp-debug"></div>
 
     <script type="module" src="js/mp/mp-main.js"></script>

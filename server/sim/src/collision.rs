@@ -149,6 +149,26 @@ pub enum CollisionEvent {
         x: f64,
         y: f64,
     },
+    /// Phase 4 step 6 — a player mine detonated from enemy contact (or
+    /// from HP-killed). `by_bullet_id == 0` if the detonation was triggered
+    /// by an enemy entering the mine's trigger_radius; otherwise it's the
+    /// id of the enemy bullet that killed it. Caller emits one
+    /// `EventPayload::PlayerMineDeath` per event.
+    PlayerMineDetonate {
+        mine_id: u32,
+        owner_player_id: u32,
+        x: f64,
+        y: f64,
+        by_bullet_id: u32,
+    },
+    /// Phase 4 step 6 — a player missile hit an enemy. Caller emits one
+    /// `EventPayload::PlayerMissileHit`.
+    PlayerMissileHitEnemy {
+        missile_id: u32,
+        enemy_id: u32,
+        x: f64,
+        y: f64,
+    },
 }
 
 /// `by_kind` discriminator: damage source was an enemy body.
@@ -625,6 +645,105 @@ pub fn run_ship_missile_pairs(
     }
 }
 
+/// Phase 4 step 6 — player_mine × enemy collision pass. An enemy
+/// within the mine's `trigger_radius` triggers detonation: the blast
+/// damages every active enemy within the mine's `blast_radius`, then
+/// the mine deactivates. Emits one `PlayerMineDetonate` event per
+/// detonation. Caller reaps dead enemies + mines after this returns.
+///
+/// Friendly fire is OFF — the mine never damages player ships (the
+/// blast only iterates `enemies`, not `ships`).
+pub fn run_player_mine_enemy_pairs(
+    mines: &mut [crate::player_mine::PlayerMineState],
+    enemies: &mut [crate::enemy::EnemyState],
+    out_events: &mut Vec<CollisionEvent>,
+) {
+    for m in mines.iter_mut() {
+        if m.dead() {
+            continue;
+        }
+        let mut triggered = false;
+        let tr = m.trigger_radius * m.trigger_radius;
+        for e in enemies.iter() {
+            if !e.active {
+                continue;
+            }
+            let dx = e.x - m.x;
+            let dy = e.y - m.y;
+            if dx * dx + dy * dy <= tr {
+                triggered = true;
+                break;
+            }
+        }
+        if !triggered {
+            continue;
+        }
+        // Apply blast damage to every enemy in the blast radius.
+        let br = m.blast_radius * m.blast_radius;
+        for e in enemies.iter_mut() {
+            if !e.active {
+                continue;
+            }
+            let dx = e.x - m.x;
+            let dy = e.y - m.y;
+            if dx * dx + dy * dy <= br {
+                e.hp -= m.blast_damage;
+                if e.hp <= 0.0 {
+                    e.active = false;
+                }
+            }
+        }
+        out_events.push(CollisionEvent::PlayerMineDetonate {
+            mine_id: m.id,
+            owner_player_id: m.owner_player_id,
+            x: m.x,
+            y: m.y,
+            by_bullet_id: 0,
+        });
+        m.active = false;
+        m.hp = 0.0;
+    }
+}
+
+/// Phase 4 step 6 — player_missile × enemy collision pass. Missile
+/// deactivates on first enemy contact (no piercing); enemy takes
+/// `missile.damage`. Emits one `PlayerMissileHitEnemy` event per hit.
+pub fn run_player_missile_enemy_pairs(
+    missiles: &mut [crate::player_missile::PlayerMissileState],
+    enemies: &mut [crate::enemy::EnemyState],
+    out_events: &mut Vec<CollisionEvent>,
+) {
+    for m in missiles.iter_mut() {
+        if !m.active {
+            continue;
+        }
+        for e in enemies.iter_mut() {
+            if !e.active {
+                continue;
+            }
+            let dx = e.x - m.x;
+            let dy = e.y - m.y;
+            let r_sum = m.radius + e.radius;
+            if dx * dx + dy * dy > r_sum * r_sum {
+                continue;
+            }
+            e.hp -= m.damage;
+            if e.hp <= 0.0 {
+                e.active = false;
+            }
+            out_events.push(CollisionEvent::PlayerMissileHitEnemy {
+                missile_id: m.id,
+                enemy_id: e.id,
+                x: m.x,
+                y: m.y,
+            });
+            m.active = false;
+            m.life_remaining = 0;
+            break;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -652,6 +771,7 @@ mod tests {
             shield: 0.0,
             max_shield: 0.0,
             spare_tanks: 0,
+            ..ShipState::default()
         }
     }
 
@@ -1202,5 +1322,234 @@ mod tests {
         // Returned advance count == total children produced.
         let total_children = destroyed.iter().map(|d| d.2 as u32).sum::<u32>();
         assert_eq!(new_ids, total_children);
+    }
+}
+
+#[cfg(test)]
+mod tests_phase4_step6 {
+    //! Tests for the Phase 4 step 6 player-mine and player-missile
+    //! collision helpers added in this file. Kept in their own module
+    //! so the existing `tests` module above can stay focused on the
+    //! original `run_collisions` pairs.
+
+    use super::*;
+    use crate::enemy::{EnemyState, HUNTER_MAX_HP, HUNTER_RADIUS, KIND_HUNTER};
+    use crate::player_mine::{
+        spawn_default as spawn_player_mine, PlayerMineState, PLAYER_MINE_BLAST_DAMAGE,
+        PLAYER_MINE_BLAST_RADIUS, PLAYER_MINE_TRIGGER_RADIUS,
+    };
+    use crate::player_missile::{
+        spawn_default as spawn_player_missile, PlayerMissileState,
+        PLAYER_MISSILE_DEFAULT_DAMAGE,
+    };
+
+    // ---------- helpers ----------
+
+    fn make_enemy_for_test(id: u32, x: f64, y: f64, hp: f64) -> EnemyState {
+        EnemyState {
+            id,
+            kind: KIND_HUNTER,
+            x,
+            y,
+            vx: 0.0,
+            vy: 0.0,
+            angle: 0.0,
+            hp,
+            max_hp: HUNTER_MAX_HP,
+            radius: HUNTER_RADIUS,
+            arc_dir: 1.0,
+            arc_radius: 150.0,
+            arc_omega: 0.01,
+            arc_phase: 0.0,
+            active: true,
+            last_fire_tick: 0,
+            ..EnemyState::default()
+        }
+    }
+
+    fn make_player_mine(id: u32, owner: u32, x: f64, y: f64) -> PlayerMineState {
+        spawn_player_mine(id, owner, x, y)
+    }
+
+    fn make_player_missile(id: u32, owner: u32, x: f64, y: f64) -> PlayerMissileState {
+        // Aim east (angle 0): vx > 0, vy ≈ 0. The collision pass we
+        // exercise here doesn't care about heading — only position
+        // overlap with enemies — so the angle is cosmetic.
+        spawn_player_missile(id, owner, x, y, 0.0)
+    }
+
+    // ---------- player_mine × enemy ----------
+
+    /// An enemy whose centre is strictly inside the mine's trigger
+    /// radius must trigger detonation: mine flips inactive, exactly
+    /// one PlayerMineDetonate event lands with `by_bullet_id == 0`.
+    #[test]
+    fn mine_detonates_on_enemy_contact() {
+        let mut mines = [make_player_mine(1, 7, 500.0, 500.0)];
+        // Enemy inside trigger_radius (60). Distance = 30.
+        let mut enemies = [make_enemy_for_test(10, 500.0, 530.0, HUNTER_MAX_HP)];
+        let mut events = Vec::new();
+        run_player_mine_enemy_pairs(&mut mines, &mut enemies, &mut events);
+
+        assert!(!mines[0].active, "mine must deactivate on detonation");
+        assert_eq!(mines[0].hp, 0.0, "mine hp must zero out on detonation");
+
+        let detonations: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(e, CollisionEvent::PlayerMineDetonate { .. }))
+            .collect();
+        assert_eq!(detonations.len(), 1, "expected one detonation event");
+        if let CollisionEvent::PlayerMineDetonate {
+            mine_id,
+            owner_player_id,
+            by_bullet_id,
+            x,
+            y,
+        } = detonations[0]
+        {
+            assert_eq!(*mine_id, 1);
+            assert_eq!(*owner_player_id, 7);
+            assert_eq!(*by_bullet_id, 0, "contact detonation: bullet_id 0");
+            assert_eq!(*x, 500.0);
+            assert_eq!(*y, 500.0);
+        }
+    }
+
+    /// On detonation, every alive enemy inside `blast_radius` takes
+    /// `blast_damage`. Enemies outside the radius are untouched.
+    #[test]
+    fn mine_blast_damages_all_enemies_in_radius() {
+        let mut mines = [make_player_mine(1, 7, 500.0, 500.0)];
+        // 3 enemies inside blast_radius (80), 1 outside. The first
+        // (trigger) is inside trigger_radius (60) so detonation fires.
+        // We give every enemy enough HP that one blast doesn't kill,
+        // so we can read the post-blast HP cleanly.
+        let big_hp = 50.0;
+        let mut enemies = [
+            make_enemy_for_test(10, 500.0, 540.0, big_hp), // d=40, triggers + blasted
+            make_enemy_for_test(11, 560.0, 500.0, big_hp), // d=60, blasted
+            make_enemy_for_test(12, 500.0, 575.0, big_hp), // d=75, blasted
+            make_enemy_for_test(13, 500.0, 800.0, big_hp), // d=300, OUTSIDE
+        ];
+        let mut events = Vec::new();
+        run_player_mine_enemy_pairs(&mut mines, &mut enemies, &mut events);
+
+        assert_eq!(enemies[0].hp, big_hp - PLAYER_MINE_BLAST_DAMAGE);
+        assert_eq!(enemies[1].hp, big_hp - PLAYER_MINE_BLAST_DAMAGE);
+        assert_eq!(enemies[2].hp, big_hp - PLAYER_MINE_BLAST_DAMAGE);
+        assert_eq!(enemies[3].hp, big_hp, "outside-radius enemy untouched");
+        // Sanity-check the constants haven't drifted away from the
+        // test setup (trigger inside trigger_radius, etc.).
+        assert!(PLAYER_MINE_TRIGGER_RADIUS >= 40.0);
+        assert!(PLAYER_MINE_BLAST_RADIUS >= 75.0);
+    }
+
+    /// An enemy beyond the trigger radius leaves the mine intact —
+    /// no detonation, no event, no HP changes.
+    #[test]
+    fn mine_outside_trigger_doesnt_detonate() {
+        let mut mines = [make_player_mine(1, 7, 500.0, 500.0)];
+        // Enemy at d=300, well beyond trigger_radius (60).
+        let mut enemies = [make_enemy_for_test(10, 800.0, 500.0, HUNTER_MAX_HP)];
+        let mut events = Vec::new();
+        run_player_mine_enemy_pairs(&mut mines, &mut enemies, &mut events);
+
+        assert!(mines[0].active, "mine must stay active when no enemy in trigger");
+        assert!(events.is_empty(), "no events expected, got {:?}", events);
+        assert_eq!(enemies[0].hp, HUNTER_MAX_HP);
+    }
+
+    /// A mine flagged dead (active=false) is a no-op even if an
+    /// enemy is sitting on top of it. The retain pass culls it next.
+    #[test]
+    fn inactive_mine_no_op() {
+        let mut mine = make_player_mine(1, 7, 500.0, 500.0);
+        mine.active = false;
+        let mut mines = [mine];
+        let mut enemies = [make_enemy_for_test(10, 500.0, 500.0, HUNTER_MAX_HP)];
+        let mut events = Vec::new();
+        run_player_mine_enemy_pairs(&mut mines, &mut enemies, &mut events);
+
+        assert!(events.is_empty(), "dead mine must emit no events");
+        assert_eq!(enemies[0].hp, HUNTER_MAX_HP, "dead mine must not damage enemies");
+    }
+
+    // ---------- player_missile × enemy ----------
+
+    /// On overlap, the missile damages the enemy and deactivates.
+    /// Exactly one PlayerMissileHitEnemy event lands carrying the
+    /// missile id and enemy id.
+    #[test]
+    fn missile_hits_first_enemy() {
+        let mut missiles = [make_player_missile(42, 7, 100.0, 100.0)];
+        let mut enemies = [make_enemy_for_test(10, 100.0, 100.0, HUNTER_MAX_HP)];
+        let mut events = Vec::new();
+        run_player_missile_enemy_pairs(&mut missiles, &mut enemies, &mut events);
+
+        assert_eq!(enemies[0].hp, HUNTER_MAX_HP - PLAYER_MISSILE_DEFAULT_DAMAGE);
+        assert!(!missiles[0].active, "missile must deactivate on hit");
+        assert_eq!(missiles[0].life_remaining, 0);
+
+        let hits: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(e, CollisionEvent::PlayerMissileHitEnemy { .. }))
+            .collect();
+        assert_eq!(hits.len(), 1, "expected one hit event");
+    }
+
+    /// A missile that doesn't overlap any enemy stays active and
+    /// no events are emitted.
+    #[test]
+    fn missile_misses_distant_enemy() {
+        let mut missiles = [make_player_missile(42, 7, 100.0, 100.0)];
+        let mut enemies = [make_enemy_for_test(10, 900.0, 900.0, HUNTER_MAX_HP)];
+        let mut events = Vec::new();
+        run_player_missile_enemy_pairs(&mut missiles, &mut enemies, &mut events);
+
+        assert!(missiles[0].active, "missile must stay active on miss");
+        assert_eq!(enemies[0].hp, HUNTER_MAX_HP);
+        assert!(events.is_empty());
+    }
+
+    /// An inactive missile sitting on top of an enemy is a no-op.
+    #[test]
+    fn missile_inactive_no_op() {
+        let mut missile = make_player_missile(42, 7, 100.0, 100.0);
+        missile.active = false;
+        let mut missiles = [missile];
+        let mut enemies = [make_enemy_for_test(10, 100.0, 100.0, HUNTER_MAX_HP)];
+        let mut events = Vec::new();
+        run_player_missile_enemy_pairs(&mut missiles, &mut enemies, &mut events);
+
+        assert!(events.is_empty());
+        assert_eq!(enemies[0].hp, HUNTER_MAX_HP);
+    }
+
+    /// The emitted PlayerMissileHitEnemy event must carry the
+    /// missile's id, the enemy's id, and the missile's position at
+    /// impact — so the room actor can replay the wire event cleanly.
+    #[test]
+    fn missile_event_carries_ids() {
+        let mut missiles = [make_player_missile(123, 7, 250.0, 350.0)];
+        let mut enemies = [make_enemy_for_test(456, 250.0, 350.0, HUNTER_MAX_HP)];
+        let mut events = Vec::new();
+        run_player_missile_enemy_pairs(&mut missiles, &mut enemies, &mut events);
+
+        let hit = events
+            .iter()
+            .find_map(|e| match e {
+                CollisionEvent::PlayerMissileHitEnemy {
+                    missile_id,
+                    enemy_id,
+                    x,
+                    y,
+                } => Some((*missile_id, *enemy_id, *x, *y)),
+                _ => None,
+            })
+            .expect("expected PlayerMissileHitEnemy event");
+        assert_eq!(hit.0, 123, "missile_id");
+        assert_eq!(hit.1, 456, "enemy_id");
+        assert_eq!(hit.2, 250.0, "hit x = missile.x");
+        assert_eq!(hit.3, 350.0, "hit y = missile.y");
     }
 }

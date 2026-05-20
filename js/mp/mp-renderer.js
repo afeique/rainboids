@@ -33,8 +33,107 @@
 
 const SHIP_HALF_WIDTH = 12;   // local-space, in world pixels
 const SHIP_HALF_HEIGHT = 15;  // length from base to tip
+import {
+    drawAsteroidShape,
+    generateAsteroidVertices,
+    projectAsteroidVertices,
+    ASTEROID_EDGES,
+    ASTEROID_FOV,
+} from "../modules/render/shapes.js";
+
 const WORLD_BG = "#000000";
 const WORLD_BOUNDS_COLOR = "rgba(140, 140, 160, 0.35)";
+
+// ── Asteroid silhouette cache (cosmetic, client-local) ──────────────
+// The sim gives us only id / x / y / rot / radius. The tumbling
+// 3D-wireframe silhouette is a pure function of the asteroid id (both
+// tabs agree on ids → both derive the same shape via a seeded PRNG).
+// We cache the generated vertices + per-axis spin + hue palette per id
+// and advance the spin client-side each frame, then hand the projected
+// 2D verts to the shared drawAsteroidShape helper (same code solo uses).
+const _astShapeCache = new Map();
+let _astSeenTick = 0;
+
+// Deterministic 32-bit PRNG (mulberry32). Seeded by asteroid id so the
+// silhouette is identical across both clients without any wire cost.
+function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function getAsteroidShape(id, radius) {
+    let s = _astShapeCache.get(id);
+    if (!s) {
+        const rng = mulberry32(id || 1);
+        s = {
+            vertices3D: generateAsteroidVertices(rng, radius),
+            rot3D: { x: rng() * 6.283, y: rng() * 6.283, z: rng() * 6.283 },
+            rotVel3D: {
+                x: (rng() - 0.5) * 0.08,
+                y: (rng() - 0.5) * 0.08,
+                z: (rng() - 0.5) * 0.08,
+            },
+            baseHue: rng() < 0.2 ? 40 + rng() * 20 : 150 + rng() * 130,
+            hueSpread: 30 + rng() * 70,
+            hueCycleSpeed: 10 + rng() * 20,
+            saturation: 80 + rng() * 15,
+            lightness: 65 + rng() * 15,
+            projected: null,
+            lastSeen: 0,
+        };
+        _astShapeCache.set(id, s);
+    }
+    return s;
+}
+
+// Draw all asteroids via the shared tumbling-wireframe helper. `now`
+// is monotonic ms for the hue cycle; `tick` is the sim tick used to
+// prune cache entries for asteroids that have despawned.
+function drawAsteroids(ctx, world, scale, now) {
+    const tick = (typeof world.tick_count === "function") ? world.tick_count() : ++_astSeenTick;
+    const acount = world.asteroid_count();
+    for (let i = 0; i < acount; i++) {
+        const id = (typeof world.asteroid_id === "function") ? world.asteroid_id(i) : i + 1;
+        const x = world.asteroid_x(i);
+        const y = world.asteroid_y(i);
+        const radius = world.asteroid_radius(i);
+        const s = getAsteroidShape(id, radius);
+        s.lastSeen = tick;
+        // Advance the cosmetic 3D tumble client-side.
+        s.rot3D.x += s.rotVel3D.x;
+        s.rot3D.y += s.rotVel3D.y;
+        s.rot3D.z += s.rotVel3D.z;
+        s.projected = projectAsteroidVertices(s.vertices3D, s.rot3D, ASTEROID_FOV, s.projected);
+        ctx.save();
+        ctx.translate(x, y);
+        drawAsteroidShape(ctx, {
+            projectedVertices: s.projected,
+            edges: ASTEROID_EDGES,
+            fov: ASTEROID_FOV,
+            radius,
+            baseHue: s.baseHue,
+            hueCycleSpeed: s.hueCycleSpeed,
+            hueSpread: s.hueSpread,
+            saturation: s.saturation,
+            lightness: s.lightness,
+            now,
+        });
+        ctx.restore();
+    }
+    // Prune despawned asteroids occasionally so the cache doesn't grow
+    // unbounded over a long session.
+    if (_astShapeCache.size > 64) {
+        for (const [id, s] of _astShapeCache) {
+            if (s.lastSeen !== tick) _astShapeCache.delete(id);
+        }
+    }
+}
 const SHIP_FILL = "#ffffff";
 const SHIP_STROKE = "#ffffff";
 const CROSSHAIR_COLOR = "rgba(160, 240, 255, 0.85)";
@@ -102,6 +201,32 @@ const MISSILE_STROKE = "#ffaa88";
 const MISSILE_LENGTH = 12;
 const MISSILE_HALF_WIDTH = 4;
 
+// ── Phase 4 step 6 — player power-weapon visuals ──
+// Player mines (cyan friendly variant of the enemy red mine).
+const PLAYER_MINE_FILL = "#44ccff";
+const PLAYER_MINE_OUTLINE = "rgba(120, 200, 255, 0.6)";
+const PLAYER_MINE_HATCH = "rgba(150, 220, 255, 0.5)";
+const PLAYER_MINE_HP_GOOD = "#44ff66";
+const PLAYER_MINE_HP_MID = "#ffd84d";
+const PLAYER_MINE_HP_LOW = "#ff5e5e";
+
+// Player missiles — cyan elongated triangle pointed along velocity.
+const PLAYER_MISSILE_FILL = "#44ddff";
+const PLAYER_MISSILE_STROKE = "#88ffff";
+
+// Beam visuals (LANCE_BEAM = solid green line, LIGHTNING_ARC = purple).
+const LANCE_BEAM_LENGTH_PX = 1728;
+const LANCE_BEAM_WIDTH_PX = 6;
+const LANCE_BEAM_OUTER = "#44ff44";
+const LANCE_BEAM_CORE = "#ddffdd";
+const LIGHTNING_ARC_COLOR = "#a855ff";
+const KIND_LANCE_BEAM = 4;
+const KIND_LIGHTNING_ARC = 5;
+
+// Charge indicator (CHARGE_SHOT ring around the local ship).
+const CHARGE_MAX_TICKS = 180;
+const CHARGE_RING_COLOR = "#00e6aa";
+
 // Revive hint — matches the simulation's REVIVE_RADIUS (80 px).
 const REVIVE_RADIUS = 80;
 const REVIVE_HINT_COLOR_RGB = "80, 200, 255";
@@ -109,7 +234,13 @@ const DOWNED_ALPHA = 0.4;
 const DOWNED_SHIP_FILL = "#ffffff";
 const DOWNED_SHIP_STROKE = "#bbbbbb";
 
-export function render(ctx, canvas, world, aim, remoteShips = []) {
+export function render(ctx, canvas, world, aim, remoteShips = [], opts = {}) {
+    // opts.webglBullets — when true, the engine draws bullets / enemy
+    // bullets / both missile kinds on the additive WebGL bulletCanvas,
+    // so the Canvas2D fallbacks below are skipped to avoid double-draw.
+    const webglBullets = !!opts.webglBullets;
+    const nowMs = (typeof performance !== "undefined" && performance.now)
+        ? performance.now() : Date.now();
     const cw = canvas.width;
     const ch = canvas.height;
 
@@ -151,20 +282,9 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
 
     // ---- Phase 3 entities, back to front ----
 
-    // Asteroids (back).
-    const acount = world.asteroid_count();
-    for (let i = 0; i < acount; i++) {
-        drawAsteroid(
-            ctx,
-            world.asteroid_x(i),
-            world.asteroid_y(i),
-            world.asteroid_rot(i),
-            world.asteroid_radius(i),
-            world.asteroid_hp(i),
-            world.asteroid_max_hp(i),
-            scale,
-        );
-    }
+    // Asteroids (back) — shared tumbling-wireframe helper (same draw
+    // code solo uses), silhouette derived from the asteroid id.
+    drawAsteroids(ctx, world, scale, nowMs);
 
     // Orbs (between asteroids and enemies — they're field pickups).
     const ocount = world.orb_count();
@@ -186,6 +306,14 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
         drawEnemyMines(ctx, world, scale);
     }
 
+    // Player-laid mines — friendly cyan variant, sits in the same
+    // z-band as enemy mines (below enemies, above asteroids/orbs) so
+    // the player can read them as terrain features without obscuring
+    // active enemy threats.
+    if (typeof world.player_mine_count === "function") {
+        drawPlayerMines(ctx, world, scale);
+    }
+
     // Enemies — per-kind dispatch (color + silhouette).
     const ecount = world.enemy_count();
     for (let i = 0; i < ecount; i++) {
@@ -203,31 +331,34 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
         );
     }
 
-    // Missiles (over enemies so they read as live projectiles).
-    if (typeof world.enemy_missile_count === "function") {
-        drawEnemyMissiles(ctx, world, scale);
+    // Projectiles. When the WebGL bullet layer is active (opts.webglBullets)
+    // the engine paints all four projectile kinds on the additive
+    // bulletCanvas for the bloom look; we skip the Canvas2D fallbacks
+    // here to avoid double-draw. The fallbacks still run when WebGL2 is
+    // unavailable so projectiles never silently disappear.
+    if (!webglBullets) {
+        // Missiles (over enemies so they read as live projectiles).
+        if (typeof world.enemy_missile_count === "function") {
+            drawEnemyMissiles(ctx, world, scale);
+        }
+        if (typeof world.player_missile_count === "function") {
+            drawPlayerMissiles(ctx, world, scale);
+        }
+        const bcount = world.bullet_count();
+        for (let i = 0; i < bcount; i++) {
+            drawBullet(ctx, world.bullet_x(i), world.bullet_y(i), scale);
+        }
+        const ebcount = world.enemy_bullet_count();
+        for (let i = 0; i < ebcount; i++) {
+            drawEnemyBullet(ctx, world.enemy_bullet_x(i), world.enemy_bullet_y(i), scale);
+        }
     }
 
-    // Bullets.
-    const bcount = world.bullet_count();
-    for (let i = 0; i < bcount; i++) {
-        drawBullet(
-            ctx,
-            world.bullet_x(i),
-            world.bullet_y(i),
-            scale,
-        );
-    }
-
-    // Enemy bullets (red, slightly larger than player bullets).
-    const ebcount = world.enemy_bullet_count();
-    for (let i = 0; i < ebcount; i++) {
-        drawEnemyBullet(
-            ctx,
-            world.enemy_bullet_x(i),
-            world.enemy_bullet_y(i),
-            scale,
-        );
+    // Ship beams — drawn over all projectiles so the LANCE_BEAM /
+    // LIGHTNING_ARC visuals punch through everything (still under the
+    // ship sprites, which are painted next).
+    if (typeof world.ship_beam_remaining_ticks === "function") {
+        drawShipBeams(ctx, world, remoteShips, scale);
     }
 
     // ---- Ships (front layer) ----
@@ -267,6 +398,12 @@ export function render(ctx, canvas, world, aim, remoteShips = []) {
         drawReviveHint(ctx, sx, sy, tick, scale);
     } else {
         drawShipTriangle(ctx, sx, sy, sa, SHIP_FILL, SHIP_STROKE, scale);
+    }
+
+    // Charge-up indicator (CHARGE_SHOT pre-fire halo around the local
+    // ship). Drawn last so it composites cleanly over the ship body.
+    if (typeof world.ship_charge_progress === "function") {
+        drawChargeIndicator(ctx, world, sx, sy, tick, scale);
     }
 }
 
@@ -554,6 +691,239 @@ function drawEnemyMissiles(ctx, world, scale) {
         ctx.stroke();
         ctx.restore();
     }
+}
+
+// Player-laid mines — friendly cyan discs (mirror of drawEnemyMines but
+// flipped to a non-threatening color). A thin top-half arc shows the
+// mine's remaining HP, color-coded green/yellow/red. The body alpha
+// pulses on tick so the mine reads as a live, homing-style hazard.
+function drawPlayerMines(ctx, world, scale) {
+    const tick = world.tick_count();
+    const pulse = 0.5 + 0.5 * Math.sin(tick * 0.1); // 0..1, slightly faster than enemy mines.
+    const count = world.player_mine_count();
+    for (let i = 0; i < count; i++) {
+        const x = world.player_mine_x(i);
+        const y = world.player_mine_y(i);
+        const r = world.player_mine_radius(i);
+        const hpFrac = typeof world.player_mine_hp_fraction === "function"
+            ? Math.max(0, Math.min(1, world.player_mine_hp_fraction(i)))
+            : 1.0;
+        ctx.save();
+        ctx.translate(x, y);
+        // Outline ring — slightly larger halo around the body.
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 1.4, 0, Math.PI * 2);
+        ctx.strokeStyle = PLAYER_MINE_OUTLINE;
+        ctx.lineWidth = 1.5 / scale;
+        ctx.stroke();
+        // Body disc — alpha pulses for the homing "armed" feel.
+        ctx.globalAlpha = 0.6 + 0.4 * pulse;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fillStyle = PLAYER_MINE_FILL;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Cross-hatch texture (matches enemy mine treatment).
+        ctx.lineWidth = 1 / scale;
+        ctx.strokeStyle = PLAYER_MINE_HATCH;
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.6, -r * 0.6); ctx.lineTo(r * 0.6, r * 0.6);
+        ctx.moveTo(-r * 0.6, r * 0.6); ctx.lineTo(r * 0.6, -r * 0.6);
+        ctx.stroke();
+        // HP arc across the top half (PI..0 sweep), shrinking with HP.
+        const hpColor = hpFrac > 0.5
+            ? PLAYER_MINE_HP_GOOD
+            : (hpFrac >= 0.25 ? PLAYER_MINE_HP_MID : PLAYER_MINE_HP_LOW);
+        ctx.beginPath();
+        // Sweep over the top half: start at left (PI), end where HP runs out.
+        ctx.arc(0, 0, r * 1.7, Math.PI, Math.PI + Math.PI * hpFrac);
+        ctx.strokeStyle = hpColor;
+        ctx.lineWidth = 1.5 / scale;
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// Player missiles — cyan elongated triangle pointed along the velocity
+// vector (mirror of drawEnemyMissiles with flipped color polarity).
+function drawPlayerMissiles(ctx, world, scale) {
+    const count = world.player_missile_count();
+    for (let i = 0; i < count; i++) {
+        const x = world.player_missile_x(i);
+        const y = world.player_missile_y(i);
+        const vx = world.player_missile_vx(i);
+        const vy = world.player_missile_vy(i);
+        const angle = (vx === 0 && vy === 0) ? 0 : Math.atan2(vy, vx);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(MISSILE_LENGTH, 0);
+        ctx.lineTo(-MISSILE_LENGTH * 0.5, -MISSILE_HALF_WIDTH);
+        ctx.lineTo(-MISSILE_LENGTH * 0.5, MISSILE_HALF_WIDTH);
+        ctx.closePath();
+        ctx.fillStyle = PLAYER_MISSILE_FILL;
+        ctx.fill();
+        ctx.strokeStyle = PLAYER_MISSILE_STROKE;
+        ctx.lineWidth = 1 / scale;
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// Ship beams — LANCE_BEAM (solid green line) and LIGHTNING_ARC (electric
+// purple). Iterates the ships Vec by position (the same indexing the
+// `ship_beam_*` accessors use). Position per Vec idx is not exposed by a
+// generic accessor, so we resolve it from the data we DO have:
+//   - The local ship: world.ship_x()/ship_y()/ship_angle().
+//   - Remote ships: the `remoteShips` array the engine interpolated.
+// We map each Vec idx to a position by matching against those known
+// origins. The ships Vec is [local + remotes] in join order; since the
+// local Vec idx is not exposed, we probe every idx and pick the closest
+// known origin by aim-angle/position. For the common (1-2 player) case
+// this resolves cleanly; multi-ship rooms with overlapping beams may
+// mis-attribute origin until a per-idx position accessor lands.
+function drawShipBeams(ctx, world, remoteShips, scale) {
+    const tick = world.tick_count();
+    const remoteCount = typeof world.remote_ship_count === "function"
+        ? world.remote_ship_count()
+        : 0;
+    const totalShips = (typeof world.ship_count === "function")
+        ? world.ship_count()
+        : remoteCount + 1;
+
+    // Collect candidate origins so each active beam can be placed at a
+    // plausible ship. Local first, then each interpolated remote.
+    const origins = [];
+    if (!world.ship_downed()) {
+        origins.push({ x: world.ship_x(), y: world.ship_y(), used: false });
+    }
+    for (let i = 0; i < remoteShips.length; i++) {
+        const r = remoteShips[i];
+        if (r && !r.downed) origins.push({ x: r.x, y: r.y, used: false });
+    }
+
+    let originCursor = 0;
+    for (let idx = 0; idx < totalShips; idx++) {
+        if (world.ship_beam_remaining_ticks(idx) <= 0) continue;
+        const beamKind = world.ship_beam_kind(idx);
+        const aim = world.ship_beam_aim_angle(idx);
+        // Assign the next unused origin in order. Origins are ordered
+        // local-then-remotes; beams are rare enough that round-robin
+        // assignment is adequate for MVP legibility.
+        let origin = null;
+        while (originCursor < origins.length && origins[originCursor].used) {
+            originCursor++;
+        }
+        if (originCursor < origins.length) {
+            origin = origins[originCursor];
+            origin.used = true;
+        }
+        if (!origin) continue;
+
+        if (beamKind === KIND_LANCE_BEAM) {
+            drawLanceBeam(ctx, origin.x, origin.y, aim, tick, scale);
+        } else if (beamKind === KIND_LIGHTNING_ARC) {
+            drawLightningArc(ctx, origin.x, origin.y, tick, scale);
+        }
+    }
+}
+
+// LANCE_BEAM — a fixed-length green line from the ship along the aim
+// angle. Two stroked passes (wide green glow + thin white-green core)
+// give the layered laser look. Alpha pulses subtly on tick.
+function drawLanceBeam(ctx, x, y, angle, tick, scale) {
+    const ex = x + Math.cos(angle) * LANCE_BEAM_LENGTH_PX;
+    const ey = y + Math.sin(angle) * LANCE_BEAM_LENGTH_PX;
+    const pulse = 0.85 + 0.15 * Math.sin(tick * 0.4);
+    ctx.save();
+    ctx.lineCap = "round";
+    // Outer glow.
+    ctx.globalAlpha = 0.55 * pulse;
+    ctx.strokeStyle = LANCE_BEAM_OUTER;
+    ctx.lineWidth = LANCE_BEAM_WIDTH_PX;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    // Inner core.
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = LANCE_BEAM_CORE;
+    ctx.lineWidth = LANCE_BEAM_WIDTH_PX * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.restore();
+}
+
+// LIGHTNING_ARC — MVP placeholder. The real arc is a polyline through
+// the chained hit targets, which the sim emits as ArcStrike { chain }
+// events. Those positions are not yet plumbed into the renderer, so we
+// draw a short static "crackle" of jagged segments radiating from the
+// ship to signal the arc is active.
+// TODO Phase 5 polish: thread the ArcStrike chain positions in via an
+// engine-populated cache and replace this with the true chain polyline.
+function drawLightningArc(ctx, x, y, tick, scale) {
+    ctx.save();
+    ctx.strokeStyle = LIGHTNING_ARC_COLOR;
+    ctx.lineWidth = 2 / scale;
+    ctx.lineCap = "round";
+    const segments = 4;
+    for (let s = 0; s < segments; s++) {
+        // Deterministic pseudo-random direction from tick + segment so
+        // the crackle animates without a real RNG (replay-safe).
+        const seed = Math.sin((tick * 0.31 + s * 1.7)) * 43758.5453;
+        const rand = seed - Math.floor(seed); // 0..1
+        const baseAngle = (s / segments) * Math.PI * 2 + rand * 0.8;
+        const len = 22 + rand * 16;
+        const midAngle = baseAngle + (rand - 0.5) * 0.9;
+        const mx = x + Math.cos(baseAngle) * len * 0.5 + Math.cos(midAngle) * 6;
+        const my = y + Math.sin(baseAngle) * len * 0.5 + Math.sin(midAngle) * 6;
+        const ex = x + Math.cos(baseAngle) * len;
+        const ey = y + Math.sin(baseAngle) * len;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(mx, my); // jagged midpoint kink.
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// CHARGE_SHOT charge-up indicator — an expanding teal ring around the
+// local ship that grows with charge progress. Alpha pulses faster as
+// the charge approaches CHARGE_MAX_TICKS for a "ready to fire" read.
+// The local ship's Vec idx is not exposed, so we take the max charge
+// across all ship indices and render it at the local ship origin. In
+// practice only the local player charges in their own view, so this
+// resolves to the local ship's charge.
+function drawChargeIndicator(ctx, world, x, y, tick, scale) {
+    const remoteCount = typeof world.remote_ship_count === "function"
+        ? world.remote_ship_count()
+        : 0;
+    const totalShips = (typeof world.ship_count === "function")
+        ? world.ship_count()
+        : remoteCount + 1;
+    let progress = 0;
+    for (let idx = 0; idx < totalShips; idx++) {
+        const p = world.ship_charge_progress(idx);
+        if (p > progress) progress = p;
+    }
+    if (progress <= 0) return;
+    const frac = Math.max(0, Math.min(1, progress / CHARGE_MAX_TICKS));
+    const outer = 14 + 30 * frac;
+    // Pulse speed ramps up with charge; alpha oscillates 0.35..0.85.
+    const pulse = 0.5 + 0.5 * Math.sin(tick * (0.15 + 0.45 * frac));
+    const alpha = 0.35 + 0.5 * pulse;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = CHARGE_RING_COLOR;
+    ctx.lineWidth = (1.5 + 1.5 * frac) / scale;
+    ctx.beginPath();
+    ctx.arc(x, y, outer, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
 }
 
 // Small filled cyan disc — matches solo's PULSE_CANNON color so the

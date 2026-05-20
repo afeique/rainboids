@@ -8,6 +8,138 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.12.0] - 2026-05-19
+
+**Full solo-parity graphics: WebGL bloom + starfield in `/mp`.** MP
+moves from a single flat Canvas2D surface to the same three-canvas
+WebGL stack solo uses — by *reusing solo's standalone renderer classes
+via import* (no duplicated renderer code), not reimplementing them.
+
+### Canvas architecture
+
+- `mp.html` now stacks three canvases mirroring solo: `glCanvas`
+  (WebGL — starfield + additive particles, bottom), `#mp-canvas`
+  (Canvas2D — ships / asteroids / enemies / mines, middle, id kept so
+  `mp-main.js` + the QA-13 selector are unchanged), `bulletCanvas`
+  (WebGL — additive bullet glow, top).
+- The two WebGL canvases use a **fixed 1920×1080 backing store** that's
+  CSS-scaled to the letterbox rect, so world coordinates map 1:1 to
+  canvas pixels (camera 0,0) and line up pixel-for-pixel with the
+  Canvas2D entity layer. `mp-engine.js` owns the layout + resize.
+
+### Reused (imported, not copied) solo renderers
+
+- `WebGLStarfieldRenderer` — seeded with 700 stars across the field
+  (blue-white / white / warm / orange-red mix, parallax depths,
+  twinkle); parallax camera drifts from the local ship's position.
+- `WebGLParticleRenderer` — additive particle bloom on `glCanvas`.
+- `WebGLBulletRenderer` — additive glow for player bullets, enemy
+  bullets, and both missile kinds (pushed each frame from WASM
+  accessors).
+
+### Shared draw helpers (no duplication)
+
+- New `js/modules/render/shapes.js` (also consumed by solo — see
+  CHANGELOG `6.26.4`). MP draws asteroids via the same
+  `drawAsteroidShape` helper solo uses: the tumbling 3D-wireframe
+  silhouette is **derived client-side from the asteroid id** via a
+  seeded PRNG (both tabs agree → identical shape, zero wire cost), the
+  spin advances client-side, and the projected verts go to the shared
+  helper. Replaces the old flat 12-gon.
+
+### Architecture note
+
+- The deterministic sim stays **gameplay-pure**: it tracks the inputs
+  cosmetics are derived from (position, rotation, radius, kind, spawn
+  seeds) but never rendering state. Ephemeral cosmetic animation
+  (silhouette spin, particle/flash timers) is client-local; the sim
+  carries none of it. This is what lets the GPU renderers + draw
+  helpers be reused without coupling them to the sim.
+- `mp-particles.js` pool reshaped to carry solo's WebGL particle type
+  fields so `WebGLParticleRenderer` consumes it directly; the Canvas2D
+  path remains as a fallback when WebGL2 is unavailable.
+- `mp-renderer.js` skips its Canvas2D projectile draws when the WebGL
+  bullet layer is active (no double-draw); falls back automatically
+  without WebGL2.
+
+### Build health
+
+- `npm run test:qa --grep QA-13`: **4/4 pass** with the full WebGL
+  stack live (page loads, all three GL contexts initialize, starfield
+  + bloom + shared-helper asteroids render, no regressions).
+- `node --check` clean on all touched JS.
+- No sim/wire change — `WIRE_VERSION` unchanged at 9; `cargo`
+  untouched.
+
+### Known follow-ups
+
+- LIGHTNING_ARC chain polyline is still the static-crackle MVP
+  (carried over from 0.11.0).
+- Ship + enemy silhouettes still use MP's own Canvas2D draws; only the
+  asteroid shape is shared so far. Extracting `drawShipShape` /
+  `drawEnemyShape` into `render/shapes.js` is the natural next step to
+  finish the shared-draw interface.
+- Automated visual coverage (a Playwright screenshot of `/mp` under the
+  screenshots project) not yet wired — QA-13 proves load + init only.
+
+## [0.11.0] - 2026-05-19
+
+**Phase 4 step 6 — all 6 power weapons + 2 player-owned entity types.**
+The right-click power-weapon slot comes online: CHARGE_SHOT (hold-to-
+charge bullet), MINE_LAYER (seeker mines), NOVA_BLAST (radial shockwave),
+MISSILE_SALVO (3 homing missiles), LANCE_BEAM (3 s sustained beam), and
+LIGHTNING_ARC (3 s chained tether). Players cycle the equipped power
+weapon and fire it with a dedicated power-fire input independent of the
+primary weapon.
+
+WIRE_VERSION 8 → 9.
+
+### Wave 1 — 9 new sim modules (parallel new-file dispatch)
+
+| Module | Role | Tests |
+|---|---|---|
+| `player_mine.rs` | Player-owned seeker mine entity (homes toward enemies, HP, detonates on contact) | 14 |
+| `player_missile.rs` | Player-owned homing missile entity (mirror of `enemy_missile`, targets enemies) | 13 |
+| `power_weapon_charge_shot.rs` | Charge state machine: hold → ramp `charge_progress`, release → scaled-damage bullet | 13 |
+| `power_weapon_mine_layer.rs` | `activate()` → mine spawn descriptor, 3-mine cap, 4 s cooldown | 9 |
+| `power_weapon_nova_blast.rs` | Radial AoE damage + outward push, 320 px radius, 8 s cooldown | 11 |
+| `power_weapon_missile_salvo.rs` | Fans 3 homing missiles ±spread, 10 s cooldown | 10 |
+| `power_weapon_lance_beam.rs` | Point-to-segment beam, 3 s duration, per-tick damage along the aim line | 13 |
+| `power_weapon_lightning_arc.rs` | Greedy-nearest chain (5 targets), 3 s duration, per-tick chain damage | 14 |
+| `power_weapon.rs` | Dispatcher (kind → cooldown / charge / beam classification), mirrors `weapon.rs` | 6 |
+
+~97 new unit tests; total sim crate test count 392 → 400.
+
+### Wave 2 — integration
+
+- **`state.rs`**: `ShipState` gains `power_weapon_kind`, `power_weapon_cooldown_tick`, `charge_active`, `charge_progress`, `beam_remaining_ticks`, `beam_kind`, `beam_aim_angle`. `RoomState` gains `player_mines` + `player_missiles` Vecs + caps (`MAX_PLAYER_MINES = 48`, `MAX_PLAYER_MISSILES = 48`) + id counters.
+- **`wire.rs`** (WIRE_VERSION 9): `ClientMsg::Input` gains `power_weapon: u8` + `power_fire: bool`. `SnapshotShip` gains `power_weapon_kind`, `charge_progress`, `beam_remaining_ticks`, `beam_kind`. 10 new `EventPayload` variants (`PowerWeaponActivate`, `ChargeShotFire`, `NovaBlast`, `BeamStart`, `BeamEnd`, `ArcStrike`, `PlayerMineSpawn`/`Death`, `PlayerMissileSpawn`/`Hit`). New `PlayerMineWire` + `PlayerMissileWire` Resync records.
+- **`collision.rs`**: `run_player_mine_enemy_pairs` (contact detonation → blast damages all enemies in radius) + `run_player_missile_enemy_pairs` (single-hit). New `CollisionEvent::PlayerMineDetonate` / `PlayerMissileHitEnemy`.
+- **`room.rs` (server)**: `process_power_fire` per-kind dispatch with rising-edge detection; `tick_power_weapon_state` applies beam/arc damage + ticks mines/missiles; collision + cull passes extended; checksum bundles player mines/missiles.
+- **`client-wasm/src/lib.rs`**: mirrors the tick pipeline; 10 new `consume_*` methods; player-mine/missile + beam-state accessors; Resync + checksum parity.
+
+### JS client
+
+- **`wire-codec.js`**: WIRE_VERSION → 9; 10 new EventPayload decoders (tags 19-28); `readPlayerMineWire` / `readPlayerMissileWire`; `encodeInput` carries `power_weapon` + `power_fire`; Resync extended.
+- **`mp-input.js`**: RMB or `Q` → power-fire (held); `Z`/`X` cycle the equipped power weapon; `contextmenu` suppressed on canvas; `POWER_WEAPON_NAMES` exported for the HUD.
+- **`mp-engine.js`**: dispatches the 10 new events to WASM consumers; forwards `power_weapon` + `power_fire` in the input upload; Resync replays player mines + missiles.
+- **`mp-renderer.js`**: `drawPlayerMines` (cyan disc + HP arc), `drawPlayerMissiles` (cyan triangle), `drawShipBeams` (LANCE green line; LIGHTNING_ARC purple crackle MVP), `drawChargeIndicator` (growing teal ring on the local ship).
+- **`mp-particles.js`**: 8 new cosmetics — nova ring, charge-release burst, arc micro-strikes, friendly mine/missile bursts (cyan, distinct from enemy red).
+
+### Build health
+
+- `cargo test --workspace`: **400 passing**, 0 failures.
+- `cargo build --release`: clean.
+- `npm run wasm:build:dev`: clean.
+- `npm run test:qa --grep QA-13`: **4/4 pass** (Phase 3 two-tab deterministic regression intact after WIRE_VERSION 8 → 9 bump).
+
+### Known follow-ups
+
+- **LIGHTNING_ARC chain polyline**: the renderer draws a static ship-anchored crackle; the true chained polyline (ship → target → target → …) needs the `ArcStrike { chain }` event positions plumbed into a renderer cache. Damage is already correct; only the visual is MVP. Deferred to Phase 5 polish.
+- **Multi-ship beam-origin attribution**: `ship_beam_*` accessors index by `room.ships` Vec position but no per-index ship-position accessor is exposed yet, so the renderer round-robins beam origins. Resolves cleanly for 1-2 player rooms; >2 simultaneous beams may mis-attribute origin until a per-index position accessor lands.
+- **CHARGE_SHOT overcharge / per-weapon upgrades** (CHARGE_OVERCHARGE, EXTRA_PAYLOAD, BLAST_RADIUS, BEAM_WIDTH, AMPLIFIER, etc.): all upgrade-gated in solo, deferred to Phase 4 step 8 (damage modifiers) / step 9 (economy).
+- **MINE_LAYER bullets-from-mines + shield zone, NOVA chain/inferno, missile cluster-warhead**: solo upgrade behaviors, all deferred.
+
 ## [0.10.0] - 2026-05-19
 
 ### Changed — Rust crate consolidation: `mp1` namespace promoted to `sim`

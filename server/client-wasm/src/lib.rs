@@ -44,8 +44,17 @@ use rainboids_sim::{
     enemy_bullet::{self, EnemyBulletState},
     enemy_mine::{self, EnemyMineState},
     enemy_missile::{self, EnemyMissileState},
+    player_mine::{self, PlayerMineState},
+    player_missile::{self, PlayerMissileState},
+    power_weapon,
+    power_weapon_lance_beam,
+    power_weapon_lightning_arc,
+    power_weapon_nova_blast,
     ship::update_ship,
-    state::{RoomState, ShipState, MAX_ENEMY_MINES, MAX_ENEMY_MISSILES, SHIP_SIZE},
+    state::{
+        RoomState, ShipState, MAX_ENEMY_MINES, MAX_ENEMY_MISSILES, MAX_PLAYER_MINES,
+        MAX_PLAYER_MISSILES, SHIP_SIZE,
+    },
     trig::atan2_64,
     wave::WavePhase,
     weapon::{
@@ -249,6 +258,57 @@ impl World {
             enemy_missile::update_missile(m, &targets, self.room.field_w, self.room.field_h);
         }
 
+        // 4.9. Phase 4 step 6 — beam / arc per-tick damage. Snapshot
+        //      enemies first (so we can pass an immutable slice to the
+        //      tick helpers while we still hold a mutable borrow on
+        //      `ships`). After each call, apply per-hit HP deltas to
+        //      the live enemy entries. Mirrors the server's pipeline
+        //      bit-for-bit so the deterministic mirror stays aligned.
+        let enemies_view: Vec<EnemyState> = self.room.enemies.iter().copied().collect();
+        for ship in self.room.ships.iter_mut() {
+            if ship.beam_remaining_ticks == 0 {
+                continue;
+            }
+            let kind = ship.beam_kind;
+            if kind == power_weapon::KIND_LANCE_BEAM {
+                let hits = power_weapon_lance_beam::tick_beam(ship, &enemies_view);
+                for h in hits {
+                    if let Some(e) =
+                        self.room.enemies.iter_mut().find(|e| e.id == h.enemy_id)
+                    {
+                        e.hp -= h.damage;
+                        if e.hp <= 0.0 {
+                            e.active = false;
+                        }
+                    }
+                }
+            } else if kind == power_weapon::KIND_LIGHTNING_ARC {
+                let hits = power_weapon_lightning_arc::tick_arc(ship, &enemies_view);
+                for h in hits {
+                    if let Some(e) =
+                        self.room.enemies.iter_mut().find(|e| e.id == h.enemy_id)
+                    {
+                        e.hp -= h.damage;
+                        if e.hp <= 0.0 {
+                            e.active = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4.10. Player-mine seek + player-missile homing. Both run
+        //       BEFORE the collision pass so the mine/missile positions
+        //       reflect this tick's movement when the pair pass tests
+        //       them against enemies. Uses the same `enemies_view`
+        //       snapshot built above.
+        for m in self.room.player_mines.iter_mut() {
+            player_mine::update_mine(m, &enemies_view, self.room.field_w, self.room.field_h);
+        }
+        for m in self.room.player_missiles.iter_mut() {
+            player_missile::update_missile(m, &enemies_view, self.room.field_w, self.room.field_h);
+        }
+
         // 5. Collision detection. We discard the emitted events
         //    (server is authoritative for events; we get them back
         //    over the wire and replay via `consume_*`), but the
@@ -294,6 +354,20 @@ impl World {
             &mut _ignored,
         );
 
+        // 5c. Phase 4 step 6 — player_mine × enemy + player_missile ×
+        //     enemy collision pairs. Events discarded for the same
+        //     reason as 5b — server is authoritative for event replay.
+        collision::run_player_mine_enemy_pairs(
+            &mut self.room.player_mines,
+            &mut self.room.enemies,
+            &mut _ignored,
+        );
+        collision::run_player_missile_enemy_pairs(
+            &mut self.room.player_missiles,
+            &mut self.room.enemies,
+            &mut _ignored,
+        );
+
         // 6. Revive ticking — mirrors the server's loop in
         //    `room.rs::tick_revive_meters` but emits no events.
         let positions: Vec<(u32, f64, f64, bool, bool)> = self
@@ -331,6 +405,11 @@ impl World {
         // which folds all three failure modes into one predicate.
         self.room.enemy_mines.retain(|m| !m.dead());
         self.room.enemy_missiles.retain(|m| m.active);
+        // Phase 4 step 6: cull dead player mines (HP<=0, life=0, or
+        // collision-pass flipped !active) and player missiles (collision
+        // flipped !active on first hit, or lifetime expired).
+        self.room.player_mines.retain(|m| !m.dead());
+        self.room.player_missiles.retain(|m| m.active);
 
         self.room.tick = self.room.tick.wrapping_add(1);
     }
@@ -758,6 +837,185 @@ impl World {
         }
     }
 
+    // ── Phase 4 step 6 — Player-owned mine / missile + power-weapon EventPayload consumers ──
+
+    /// `EventPayload::PlayerMineSpawn`. Reconstructs the mine via the
+    /// shared `player_mine::spawn_default` so server + WASM client
+    /// produce bit-identical state. Capped at `MAX_PLAYER_MINES`; extra
+    /// spawns are dropped (matches the server's cap as defence-in-depth).
+    #[wasm_bindgen]
+    pub fn consume_player_mine_spawn(
+        &mut self,
+        mine_id: u32,
+        owner_player_id: u32,
+        x: f64,
+        y: f64,
+    ) {
+        if self.room.player_mines.len() >= MAX_PLAYER_MINES {
+            return;
+        }
+        let m = player_mine::spawn_default(mine_id, owner_player_id, x, y);
+        self.room.player_mines.push(m);
+        if mine_id >= self.room.next_player_mine_id {
+            self.room.next_player_mine_id = mine_id.wrapping_add(1);
+        }
+    }
+
+    /// `EventPayload::PlayerMineDeath`. Marks the mine inactive + zero
+    /// HP so it's culled at the next tick boundary. Server is the
+    /// source of truth for death (detonation, bullet kill, or lifetime
+    /// expiry all funnel through the same event).
+    #[wasm_bindgen]
+    pub fn consume_player_mine_death(&mut self, mine_id: u32) {
+        if let Some(m) = self.room.player_mines.iter_mut().find(|m| m.id == mine_id) {
+            m.active = false;
+            m.hp = 0.0;
+        }
+    }
+
+    /// `EventPayload::PlayerMissileSpawn`. Reconstructs the missile via
+    /// the shared `player_missile::spawn_default` so server + WASM
+    /// client produce bit-identical state. Capped at
+    /// `MAX_PLAYER_MISSILES`; extra spawns are dropped.
+    #[wasm_bindgen]
+    pub fn consume_player_missile_spawn(
+        &mut self,
+        missile_id: u32,
+        owner_player_id: u32,
+        origin_x: f64,
+        origin_y: f64,
+        initial_angle: f64,
+    ) {
+        if self.room.player_missiles.len() >= MAX_PLAYER_MISSILES {
+            return;
+        }
+        let m = player_missile::spawn_default(
+            missile_id,
+            owner_player_id,
+            origin_x,
+            origin_y,
+            initial_angle,
+        );
+        self.room.player_missiles.push(m);
+        if missile_id >= self.room.next_player_missile_id {
+            self.room.next_player_missile_id = missile_id.wrapping_add(1);
+        }
+    }
+
+    /// `EventPayload::PlayerMissileHit`. Marks the missile inactive +
+    /// zero lifetime so it's culled at the next tick boundary. The
+    /// enemy HP delta lands either via the next Snapshot or via the
+    /// client's own collision pass for `run_player_missile_enemy_pairs`
+    /// between Snapshot frames.
+    #[wasm_bindgen]
+    pub fn consume_player_missile_hit(&mut self, missile_id: u32, _enemy_id: u32) {
+        if let Some(m) = self
+            .room
+            .player_missiles
+            .iter_mut()
+            .find(|m| m.id == missile_id)
+        {
+            m.active = false;
+            m.life_remaining = 0;
+        }
+    }
+
+    /// `EventPayload::ChargeShotFire` — CHARGE_SHOT release.
+    /// The actual bullet arrives via `consume_bullet_spawn`; this event
+    /// is for cosmetic release VFX only. JS particle effects handle the
+    /// visual; the WASM client has no state change to apply because
+    /// the ship-side `charge_progress` / `charge_active` flags get
+    /// corrected by the next Snapshot frame.
+    #[wasm_bindgen]
+    pub fn consume_charge_shot_fire(
+        &mut self,
+        _player_id: u32,
+        _charge_ticks: u32,
+        _damage: f64,
+    ) {
+        // No-op — cosmetic on the JS side.
+    }
+
+    /// `EventPayload::NovaBlast` — NOVA_BLAST activation. The server
+    /// applied damage authoritatively; the client mirror re-applies the
+    /// same damage by re-running `power_weapon_nova_blast::activate` at
+    /// the event's `(x, y)` so the post-event enemy HP matches the
+    /// server's state exactly.
+    #[wasm_bindgen]
+    pub fn consume_nova_blast(&mut self, player_id: u32, x: f64, y: f64, _radius: f64) {
+        // Snapshot a ship for the activate() signature; override
+        // position from the event so we don't depend on local-ship
+        // drift between Snapshot frames.
+        let ship_proto = match self.room.ships.iter().find(|s| s.player_id == player_id) {
+            Some(s) => *s,
+            None => return,
+        };
+        let mut ship_at = ship_proto;
+        ship_at.x = x;
+        ship_at.y = y;
+        let enemies_view: Vec<EnemyState> = self.room.enemies.iter().copied().collect();
+        let hits = power_weapon_nova_blast::activate(&ship_at, &enemies_view);
+        for h in hits {
+            if let Some(e) = self.room.enemies.iter_mut().find(|e| e.id == h.enemy_id) {
+                e.hp -= h.damage;
+                if e.hp <= 0.0 {
+                    e.active = false;
+                }
+                e.vx += h.push_vx;
+                e.vy += h.push_vy;
+            }
+        }
+    }
+
+    /// `EventPayload::BeamStart` — server flipped a ship into a beam-
+    /// based power weapon (LANCE_BEAM or LIGHTNING_ARC). Sets the ship
+    /// fields so the client's `tick()` step 4.9 applies beam damage in
+    /// lockstep with the server.
+    #[wasm_bindgen]
+    pub fn consume_beam_start(
+        &mut self,
+        player_id: u32,
+        kind: u8,
+        aim_angle: f64,
+        duration_ticks: u32,
+    ) {
+        if let Some(ship) = self.room.ships.iter_mut().find(|s| s.player_id == player_id) {
+            ship.beam_kind = kind;
+            ship.beam_remaining_ticks = duration_ticks;
+            ship.beam_aim_angle = aim_angle;
+        }
+    }
+
+    /// `EventPayload::BeamEnd` — server-side beam expired or was
+    /// cancelled. Zero out `beam_remaining_ticks` so step 4.9 stops
+    /// applying damage. `beam_kind` is intentionally NOT reset to 0 so
+    /// the JS renderer's final-frame cosmetic doesn't flicker; the next
+    /// `BeamStart` overwrites it cleanly.
+    #[wasm_bindgen]
+    pub fn consume_beam_end(&mut self, player_id: u32, _kind: u8) {
+        if let Some(ship) = self.room.ships.iter_mut().find(|s| s.player_id == player_id) {
+            ship.beam_remaining_ticks = 0;
+        }
+    }
+
+    /// `EventPayload::PowerWeaponActivate` — generic activation event
+    /// (sound + flash on the JS side). No WASM state change; the
+    /// kind-specific events (BeamStart / NovaBlast / etc.) handle any
+    /// actual sim mutations.
+    #[wasm_bindgen]
+    pub fn consume_power_weapon_activate(&mut self, _player_id: u32, _kind: u8) {
+        // No-op — cosmetic on the JS side.
+    }
+
+    /// `EventPayload::ArcStrike` — per-tick chain-hit visualization
+    /// event. The damage is already applied via the client's own
+    /// `tick_arc` call in `tick()` step 4.9, so this consumer is a
+    /// pure no-op (JS handles the chain-render visualization).
+    #[wasm_bindgen]
+    pub fn consume_arc_strike(&mut self, _player_id: u32) {
+        // No-op — visualization-only.
+    }
+
     // ── Local-ship accessors (Phase-1 surface; preserved) ──
     //
     // These were the Phase-1/2 single-ship accessors. They now
@@ -1065,6 +1323,169 @@ impl World {
         self.enemy_missile_at(idx).map(|m| m.vy).unwrap_or(0.0)
     }
 
+    // ── Player-mine accessors (Phase 4 step 6) ──
+    //
+    // JS renderer reads these per render frame to draw player-owned
+    // mines + their health bars. Indexing matches `room.player_mines`
+    // Vec ordering (insertion-order, retained across ticks).
+
+    #[wasm_bindgen]
+    pub fn player_mine_count(&self) -> u32 {
+        self.room.player_mines.len() as u32
+    }
+    #[wasm_bindgen]
+    pub fn player_mine_id(&self, idx: u32) -> u32 {
+        self.room
+            .player_mines
+            .get(idx as usize)
+            .map(|m| m.id)
+            .unwrap_or(0)
+    }
+    #[wasm_bindgen]
+    pub fn player_mine_owner(&self, idx: u32) -> u32 {
+        self.room
+            .player_mines
+            .get(idx as usize)
+            .map(|m| m.owner_player_id)
+            .unwrap_or(0)
+    }
+    #[wasm_bindgen]
+    pub fn player_mine_x(&self, idx: u32) -> f64 {
+        self.room
+            .player_mines
+            .get(idx as usize)
+            .map(|m| m.x)
+            .unwrap_or(0.0)
+    }
+    #[wasm_bindgen]
+    pub fn player_mine_y(&self, idx: u32) -> f64 {
+        self.room
+            .player_mines
+            .get(idx as usize)
+            .map(|m| m.y)
+            .unwrap_or(0.0)
+    }
+    #[wasm_bindgen]
+    pub fn player_mine_radius(&self, idx: u32) -> f64 {
+        self.room
+            .player_mines
+            .get(idx as usize)
+            .map(|m| m.radius)
+            .unwrap_or(0.0)
+    }
+    /// HP / max_HP. Returns 0.0 if the mine isn't found OR max_hp is
+    /// non-positive (defensive — avoids NaN from div-by-zero).
+    #[wasm_bindgen]
+    pub fn player_mine_hp_fraction(&self, idx: u32) -> f64 {
+        match self.room.player_mines.get(idx as usize) {
+            Some(m) if m.max_hp > 0.0 => m.hp / m.max_hp,
+            _ => 0.0,
+        }
+    }
+
+    // ── Player-missile accessors (Phase 4 step 6) ──
+
+    #[wasm_bindgen]
+    pub fn player_missile_count(&self) -> u32 {
+        self.room.player_missiles.len() as u32
+    }
+    #[wasm_bindgen]
+    pub fn player_missile_id(&self, idx: u32) -> u32 {
+        self.room
+            .player_missiles
+            .get(idx as usize)
+            .map(|m| m.id)
+            .unwrap_or(0)
+    }
+    #[wasm_bindgen]
+    pub fn player_missile_owner(&self, idx: u32) -> u32 {
+        self.room
+            .player_missiles
+            .get(idx as usize)
+            .map(|m| m.owner_player_id)
+            .unwrap_or(0)
+    }
+    #[wasm_bindgen]
+    pub fn player_missile_x(&self, idx: u32) -> f64 {
+        self.room
+            .player_missiles
+            .get(idx as usize)
+            .map(|m| m.x)
+            .unwrap_or(0.0)
+    }
+    #[wasm_bindgen]
+    pub fn player_missile_y(&self, idx: u32) -> f64 {
+        self.room
+            .player_missiles
+            .get(idx as usize)
+            .map(|m| m.y)
+            .unwrap_or(0.0)
+    }
+    #[wasm_bindgen]
+    pub fn player_missile_vx(&self, idx: u32) -> f64 {
+        self.room
+            .player_missiles
+            .get(idx as usize)
+            .map(|m| m.vx)
+            .unwrap_or(0.0)
+    }
+    #[wasm_bindgen]
+    pub fn player_missile_vy(&self, idx: u32) -> f64 {
+        self.room
+            .player_missiles
+            .get(idx as usize)
+            .map(|m| m.vy)
+            .unwrap_or(0.0)
+    }
+
+    // ── Ship beam / charge / power-weapon-kind accessors (Phase 4 step 6) ──
+    //
+    // JS renderer reads these to draw the beam segment, charge-up
+    // halo, and the active power-weapon icon on the HUD. Indexed by
+    // ship Vec position (same ordering as the `remote_ship_*` family);
+    // use `ship_idx_for_player_id` if you have a player_id instead.
+
+    #[wasm_bindgen]
+    pub fn ship_beam_remaining_ticks(&self, idx: u32) -> u32 {
+        self.room
+            .ships
+            .get(idx as usize)
+            .map(|s| s.beam_remaining_ticks)
+            .unwrap_or(0)
+    }
+    #[wasm_bindgen]
+    pub fn ship_beam_kind(&self, idx: u32) -> u8 {
+        self.room
+            .ships
+            .get(idx as usize)
+            .map(|s| s.beam_kind)
+            .unwrap_or(0)
+    }
+    #[wasm_bindgen]
+    pub fn ship_beam_aim_angle(&self, idx: u32) -> f64 {
+        self.room
+            .ships
+            .get(idx as usize)
+            .map(|s| s.beam_aim_angle)
+            .unwrap_or(0.0)
+    }
+    #[wasm_bindgen]
+    pub fn ship_charge_progress(&self, idx: u32) -> u32 {
+        self.room
+            .ships
+            .get(idx as usize)
+            .map(|s| s.charge_progress)
+            .unwrap_or(0)
+    }
+    #[wasm_bindgen]
+    pub fn ship_power_weapon_kind(&self, idx: u32) -> u8 {
+        self.room
+            .ships
+            .get(idx as usize)
+            .map(|s| s.power_weapon_kind)
+            .unwrap_or(0)
+    }
+
     // ── Orb accessors ──
 
     pub fn orb_count(&self) -> u32 {
@@ -1135,6 +1556,8 @@ impl World {
             &self.room.orbs,
             &self.room.enemy_mines,
             &self.room.enemy_missiles,
+            &self.room.player_mines,
+            &self.room.player_missiles,
         )
     }
     pub fn checksum_bullets(&self) -> u64 {
@@ -1209,6 +1632,8 @@ fn hash_asteroids_and_orbs(
     orbs: &[OrbState],
     mines: &[EnemyMineState],
     missiles: &[EnemyMissileState],
+    player_mines: &[PlayerMineState],
+    player_missiles: &[PlayerMissileState],
 ) -> u64 {
     let mut h = DefaultHasher::new();
     for a in asteroids {
@@ -1238,6 +1663,27 @@ fn hash_asteroids_and_orbs(
         m.life_remaining.hash(&mut h);
     }
     for m in missiles {
+        m.id.hash(&mut h);
+        hash_f64(&mut h, m.x);
+        hash_f64(&mut h, m.y);
+        hash_f64(&mut h, m.vx);
+        hash_f64(&mut h, m.vy);
+        m.life_remaining.hash(&mut h);
+    }
+    // Phase 4 step 6: player-owned mines + missiles. MUST mirror the
+    // server's `room.rs::hash_asteroids_and_orbs` bit-for-bit; any
+    // divergence triggers false-positive Resyncs every heartbeat.
+    // Field order:
+    //   - player_mine: id, x, y, hp, life_remaining
+    //   - player_missile: id, x, y, vx, vy, life_remaining
+    for m in player_mines {
+        m.id.hash(&mut h);
+        hash_f64(&mut h, m.x);
+        hash_f64(&mut h, m.y);
+        hash_f64(&mut h, m.hp);
+        m.life_remaining.hash(&mut h);
+    }
+    for m in player_missiles {
         m.id.hash(&mut h);
         hash_f64(&mut h, m.x);
         hash_f64(&mut h, m.y);

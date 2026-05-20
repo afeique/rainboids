@@ -103,7 +103,7 @@ const LE = true;
  *       AsteroidWire / BulletWire records)
  *  - 3: Phase 3 follow-up — `Welcome.rng_seed: u64` added so the
  *       client can seed its WASM mirror identically to the server. */
-export const WIRE_VERSION = 8;
+export const WIRE_VERSION = 9;
 
 /* ── Reader ─────────────────────────────────────────────────────── */
 
@@ -289,6 +289,11 @@ function readSnapshotShip(r) {
         spare_tanks: r.u8(),
         weapon_kind: r.u8(),
         downed: r.bool(),
+        // WIRE_VERSION 9 additions (Phase 4 step 6 — power weapons).
+        power_weapon_kind: r.u8(),
+        charge_progress: r.u32(),
+        beam_remaining_ticks: r.u32(),
+        beam_kind: r.u8(),
     };
 }
 
@@ -414,6 +419,41 @@ function readEnemyMissileWire(r) {
     return {
         id: r.u32(),
         owner_enemy_id: r.u32(),
+        x: r.f64(),
+        y: r.f64(),
+        vx: r.f64(),
+        vy: r.f64(),
+        damage: r.f64(),
+        radius: r.f64(),
+        life_remaining: r.u32(),
+    };
+}
+
+/** Read one `PlayerMineWire` record (WIRE_VERSION 9 — Phase 4 step 6). */
+function readPlayerMineWire(r) {
+    return {
+        id: r.u32(),
+        owner_player_id: r.u32(),
+        x: r.f64(),
+        y: r.f64(),
+        vx: r.f64(),
+        vy: r.f64(),
+        angle: r.f64(),
+        hp: r.f64(),
+        max_hp: r.f64(),
+        radius: r.f64(),
+        trigger_radius: r.f64(),
+        blast_radius: r.f64(),
+        blast_damage: r.f64(),
+        life_remaining: r.u32(),
+    };
+}
+
+/** Read one `PlayerMissileWire` record (WIRE_VERSION 9 — Phase 4 step 6). */
+function readPlayerMissileWire(r) {
+    return {
+        id: r.u32(),
+        owner_player_id: r.u32(),
         x: r.f64(),
         y: r.f64(),
         vx: r.f64(),
@@ -622,6 +662,103 @@ function readEventPayload(r) {
                 y: r.f64(),
             };
         }
+        case 19: { // PowerWeaponActivate { player_id, power_weapon_kind: u8, at_tick } — WIRE_VERSION 9
+            return {
+                kind: 'PowerWeaponActivate',
+                player_id: r.u32(),
+                power_weapon_kind: r.u8(),
+                at_tick: r.u32(),
+            };
+        }
+        case 20: { // ChargeShotFire { player_id, charge_ticks, damage, at_tick, x, y } — WIRE_VERSION 9
+            return {
+                kind: 'ChargeShotFire',
+                player_id: r.u32(),
+                charge_ticks: r.u32(),
+                damage: r.f64(),
+                at_tick: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+            };
+        }
+        case 21: { // NovaBlast { player_id, x, y, radius, at_tick } — WIRE_VERSION 9
+            return {
+                kind: 'NovaBlast',
+                player_id: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+                radius: r.f64(),
+                at_tick: r.u32(),
+            };
+        }
+        case 22: { // BeamStart { player_id, kind: u8, aim_angle, duration_ticks, at_tick } — WIRE_VERSION 9
+            return {
+                kind: 'BeamStart',
+                player_id: r.u32(),
+                beam_kind: r.u8(),
+                aim_angle: r.f64(),
+                duration_ticks: r.u32(),
+                at_tick: r.u32(),
+            };
+        }
+        case 23: { // BeamEnd { player_id, kind: u8, at_tick } — WIRE_VERSION 9
+            return {
+                kind: 'BeamEnd',
+                player_id: r.u32(),
+                beam_kind: r.u8(),
+                at_tick: r.u32(),
+            };
+        }
+        case 24: { // ArcStrike { player_id, chain: Vec<(f64,f64)>, at_tick } — WIRE_VERSION 9
+            const player_id = r.u32();
+            const chainCount = r.u64(); // bincode Vec length prefix
+            const chain = new Array(chainCount);
+            for (let i = 0; i < chainCount; i++) {
+                chain[i] = { x: r.f64(), y: r.f64() };
+            }
+            const at_tick = r.u32();
+            return { kind: 'ArcStrike', player_id, chain, at_tick };
+        }
+        case 25: { // PlayerMineSpawn { mine_id, owner_player_id, x, y, at_tick } — WIRE_VERSION 9
+            return {
+                kind: 'PlayerMineSpawn',
+                mine_id: r.u32(),
+                owner_player_id: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+                at_tick: r.u32(),
+            };
+        }
+        case 26: { // PlayerMineDeath { mine_id, x, y, at_tick } — WIRE_VERSION 9
+            return {
+                kind: 'PlayerMineDeath',
+                mine_id: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+                at_tick: r.u32(),
+            };
+        }
+        case 27: { // PlayerMissileSpawn { missile_id, owner_player_id, origin_x, origin_y, initial_angle, at_tick } — WIRE_VERSION 9
+            return {
+                kind: 'PlayerMissileSpawn',
+                missile_id: r.u32(),
+                owner_player_id: r.u32(),
+                origin_x: r.f64(),
+                origin_y: r.f64(),
+                initial_angle: r.f64(),
+                at_tick: r.u32(),
+            };
+        }
+        case 28: { // PlayerMissileHit { missile_id, enemy_id, hit_tick, x, y } — WIRE_VERSION 9
+            return {
+                kind: 'PlayerMissileHit',
+                missile_id: r.u32(),
+                enemy_id: r.u32(),
+                hit_tick: r.u32(),
+                x: r.f64(),
+                y: r.f64(),
+            };
+        }
         default:
             throw new RangeError(`wire-codec: unknown EventPayload variant ${tag}`);
     }
@@ -714,6 +851,13 @@ export function decodeServerMsg(input) {
             const emsCount = r.u64();
             const enemy_missiles = new Array(emsCount);
             for (let i = 0; i < emsCount; i++) enemy_missiles[i] = readEnemyMissileWire(r);
+            // WIRE_VERSION 9 additions: player_mines + player_missiles.
+            const playerMinesCount = r.u64();
+            const player_mines = new Array(playerMinesCount);
+            for (let i = 0; i < playerMinesCount; i++) player_mines[i] = readPlayerMineWire(r);
+            const playerMissilesCount = r.u64();
+            const player_missiles = new Array(playerMissilesCount);
+            for (let i = 0; i < playerMissilesCount; i++) player_missiles[i] = readPlayerMissileWire(r);
             return {
                 kind: 'Resync',
                 tick,
@@ -730,6 +874,8 @@ export function decodeServerMsg(input) {
                 enemy_bullets,
                 enemy_mines,
                 enemy_missiles,
+                player_mines,
+                player_missiles,
             };
         }
         default:
@@ -777,6 +923,8 @@ export function encodeClientMsg(msg) {
                 msg.aim_y,
                 msg.weapon | 0,
                 !!msg.fire,
+                msg.power_weapon | 0,
+                !!msg.power_fire,
             );
         case 'Bye':
             return encodeBye();
@@ -804,7 +952,10 @@ export function encodeHello(name, clientVersion, wireVersion) {
 }
 
 /**
- * Encode `ClientMsg::Input { client_tick, up, down, left, right, aim_x, aim_y }`.
+ * Encode `ClientMsg::Input { client_tick, up, down, left, right, aim_x,
+ * aim_y, weapon, fire, power_weapon, power_fire }`. The trailing
+ * `power_weapon` (u8) + `power_fire` (bool) fields were added in
+ * WIRE_VERSION 9 (Phase 4 step 6 — power weapons).
  * @param {number} clientTick
  * @param {boolean} up
  * @param {boolean} down
@@ -812,11 +963,28 @@ export function encodeHello(name, clientVersion, wireVersion) {
  * @param {boolean} right
  * @param {number} aimX
  * @param {number} aimY
+ * @param {number} weapon
+ * @param {boolean} fire
+ * @param {number} powerWeapon
+ * @param {boolean} powerFire
  * @returns {ArrayBuffer}
  */
-export function encodeInput(clientTick, up, down, left, right, aimX, aimY, weapon, fire) {
-    // 4 (tag) + 4 (tick) + 4×1 (bools) + 2×8 (f64) + 1 (weapon u8) + 1 (fire bool) = 30
-    const w = new Writer(30);
+export function encodeInput(
+    clientTick,
+    up,
+    down,
+    left,
+    right,
+    aimX,
+    aimY,
+    weapon,
+    fire,
+    powerWeapon,
+    powerFire,
+) {
+    // 4 (tag) + 4 (tick) + 4×1 (bools) + 2×8 (f64) + 1 (weapon u8) + 1 (fire bool)
+    //   + 1 (power_weapon u8) + 1 (power_fire bool) = 32
+    const w = new Writer(32);
     w.u32(1); // variant tag: Input
     w.u32(clientTick);
     w.bool(up);
@@ -827,6 +995,8 @@ export function encodeInput(clientTick, up, down, left, right, aimX, aimY, weapo
     w.f64(aimY);
     w.u8((weapon | 0) & 0xff);
     w.bool(!!fire);
+    w.u8((powerWeapon | 0) & 0xff);
+    w.bool(!!powerFire);
     return w.finish();
 }
 

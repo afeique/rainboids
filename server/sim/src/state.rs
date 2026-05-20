@@ -82,6 +82,34 @@ pub struct ShipState {
     /// restores HP to `max_hp` instead of transitioning to downed.
     /// Spawned at `shield::STARTING_SPARE_TANKS` (currently 3).
     pub spare_tanks: u8,
+
+    // ── Phase 4 step 6 — power-weapon state ────────────────────────────
+    /// Currently-equipped power weapon. `0` = CHARGE_SHOT, `1` = MINE_LAYER,
+    /// `2` = NOVA_BLAST, `3` = MISSILE_SALVO, `4` = LANCE_BEAM,
+    /// `5` = LIGHTNING_ARC. Discriminator lives in `power_weapon::KIND_*`.
+    pub power_weapon_kind: u8,
+    /// Server tick at which the equipped power weapon's cooldown elapses.
+    /// `0` = ready. The activation handler checks `current_tick >=
+    /// power_weapon_cooldown_tick` before firing.
+    pub power_weapon_cooldown_tick: u32,
+    /// True while the player is holding the power-fire input AND the
+    /// equipped weapon is charge-based (CHARGE_SHOT). Otherwise false.
+    pub charge_active: bool,
+    /// Ticks the current charge has been held for (CHARGE_SHOT only).
+    /// Capped at `power_weapon_charge_shot::CHARGE_MAX_TICKS`.
+    pub charge_progress: u32,
+    /// Ticks remaining on the active beam / arc (LANCE_BEAM and
+    /// LIGHTNING_ARC). Decremented each tick; per-tick damage applies
+    /// while `> 0`. `0` = no active beam.
+    pub beam_remaining_ticks: u32,
+    /// Kind discriminator for the active beam (same dense u8 as
+    /// `power_weapon_kind`). Only meaningful when
+    /// `beam_remaining_ticks > 0`.
+    pub beam_kind: u8,
+    /// Aim angle at the moment the beam started — beams use a fixed
+    /// world-space aim for the duration (player can't sweep them).
+    /// Matches solo's beam-snapshot behavior.
+    pub beam_aim_angle: f64,
 }
 
 impl Default for ShipState {
@@ -105,6 +133,13 @@ impl Default for ShipState {
             shield: super::shield::STARTING_SHIELD,
             max_shield: super::shield::MAX_SHIELD,
             spare_tanks: super::shield::STARTING_SPARE_TANKS,
+            power_weapon_kind: 0, // CHARGE_SHOT
+            power_weapon_cooldown_tick: 0,
+            charge_active: false,
+            charge_progress: 0,
+            beam_remaining_ticks: 0,
+            beam_kind: 0,
+            beam_aim_angle: 0.0,
         }
     }
 }
@@ -169,6 +204,14 @@ pub const MAX_ENEMY_MINES: usize = 32;
 /// Phase 4 step 5 — enemy-missile cap. PROWLER fires missiles on a
 /// 240-tick cooldown; missiles live ~300 ticks; cap is generous.
 pub const MAX_ENEMY_MISSILES: usize = 32;
+/// Phase 4 step 6 — player-mine cap. MINE_LAYER drops up to
+/// `power_weapon_mine_layer::MAX_MINES_PER_PLAYER` (3 base, +1 per
+/// EXTRA_PAYLOAD stack); 8 players × 5 max = 40. Round up to 48.
+pub const MAX_PLAYER_MINES: usize = 48;
+/// Phase 4 step 6 — player-missile cap. MISSILE_SALVO fires 3 per
+/// activation on a 10s cooldown; missiles live ~300 ticks; 8 players
+/// × 5 in flight worst case = 40. Round up.
+pub const MAX_PLAYER_MISSILES: usize = 48;
 
 /// Authoritative multi-entity room state. One instance per room on
 /// the server; one instance per client when the WASM build adopts
@@ -201,6 +244,10 @@ pub struct RoomState {
     pub enemy_mines: Vec<EnemyMineState>,
     /// Phase 4 step 5 — homing missiles fired by PROWLER enemies.
     pub enemy_missiles: Vec<EnemyMissileState>,
+    /// Phase 4 step 6 — player-owned seeker mines (MINE_LAYER power weapon).
+    pub player_mines: Vec<super::player_mine::PlayerMineState>,
+    /// Phase 4 step 6 — player-owned homing missiles (MISSILE_SALVO power weapon).
+    pub player_missiles: Vec<super::player_missile::PlayerMissileState>,
 
     /// Monotonic id counters — both server + client advance these
     /// identically by consuming events in order.
@@ -211,6 +258,8 @@ pub struct RoomState {
     pub next_enemy_bullet_id: u32,
     pub next_enemy_mine_id: u32,
     pub next_enemy_missile_id: u32,
+    pub next_player_mine_id: u32,
+    pub next_player_missile_id: u32,
 
     /// Phase 4 — wave cadence state machine. Replaces the Phase 3
     /// fixed-period `enemy_spawn_at_tick` cadence with structured
@@ -240,6 +289,8 @@ impl RoomState {
             enemy_bullets: Vec::with_capacity(MAX_ENEMY_BULLETS),
             enemy_mines: Vec::with_capacity(MAX_ENEMY_MINES),
             enemy_missiles: Vec::with_capacity(MAX_ENEMY_MISSILES),
+            player_mines: Vec::with_capacity(MAX_PLAYER_MINES),
+            player_missiles: Vec::with_capacity(MAX_PLAYER_MISSILES),
             next_enemy_id: 1,
             next_asteroid_id: 1,
             next_bullet_id: 1,
@@ -247,6 +298,8 @@ impl RoomState {
             next_enemy_bullet_id: 1,
             next_enemy_mine_id: 1,
             next_enemy_missile_id: 1,
+            next_player_mine_id: 1,
+            next_player_missile_id: 1,
             wave: WaveState::new(),
             rng: RngCtx::from_seed(seed),
         }

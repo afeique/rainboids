@@ -54,6 +54,20 @@ pub mod enemy_titan;
 pub mod enemy_wasp;
 pub mod enemy_weaver;
 
+// ── Phase 4 step 6 — power weapons + player-owned entities. Each
+// module is authored fresh in Wave 1 parallel dispatch from solo's
+// js/modules/player/weapons.js. The dispatcher (power_weapon.rs)
+// mirrors the primary-weapon weapon.rs surface.
+pub mod player_mine;
+pub mod player_missile;
+pub mod power_weapon;
+pub mod power_weapon_charge_shot;
+pub mod power_weapon_lance_beam;
+pub mod power_weapon_lightning_arc;
+pub mod power_weapon_mine_layer;
+pub mod power_weapon_missile_salvo;
+pub mod power_weapon_nova_blast;
+
 // ── Wire protocol + shared PRNG ──
 pub mod protocol;
 pub mod rng;

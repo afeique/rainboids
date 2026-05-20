@@ -40,6 +40,14 @@ import { connect as wsConnect, discoverDefaultUrl } from "./mp-ws.js";
 import { Particles } from "./mp-particles.js";
 import { Hud } from "./mp-hud.js";
 import { VERSION_MP } from "../modules/core/version.js";
+// Full solo-parity bloom: reuse solo's standalone WebGL renderers
+// (NOT copied — imported). glCanvas hosts starfield + additive
+// particles; bulletCanvas hosts additive bullet glow. Both render in
+// the fixed 1920x1080 field space and are CSS-scaled to the letterbox
+// rect (see layoutGlCanvases) so world coords map 1:1 to canvas pixels.
+import { WebGLParticleRenderer } from "../modules/performance/webgl-particle-renderer.js";
+import { WebGLStarfieldRenderer } from "../modules/performance/webgl-starfield-renderer.js";
+import { WebGLBulletRenderer } from "../modules/performance/webgl-bullet-renderer.js";
 
 const DT_CLAMP_MAX = 0.1;             // 100ms per tick max (anti-tab-hide spike)
 const DEBUG_UPDATE_EVERY = 10;        // overlay refresh cadence in frames
@@ -89,6 +97,75 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
     // Cache field size once; Phase 3 still uses a fixed-size world.
     const fieldW = world.field_width();
     const fieldH = world.field_height();
+
+    // ── WebGL bloom stack (full solo-parity graphics) ───────────────
+    // glCanvas: starfield (bottom) + additive particles. bulletCanvas:
+    // additive bullet glow (top). Both use a FIXED field-size backing
+    // store (fieldW x fieldH) and are CSS-positioned/scaled to the
+    // letterbox rect, so we push raw field coordinates with camera
+    // (0,0) and they line up pixel-for-pixel with the Canvas2D entity
+    // layer on #mp-canvas. If WebGL2 is unavailable the renderers
+    // report `supported=false` and the engine silently falls back to
+    // the Canvas2D-only look.
+    const glCanvas = document.getElementById("glCanvas");
+    const bulletCanvas = document.getElementById("bulletCanvas");
+
+    const particleRenderer = glCanvas
+        ? new WebGLParticleRenderer(glCanvas)
+        : { supported: false, drawParticles: () => {}, resize: () => {}, gl: null };
+    if (glCanvas && particleRenderer.init) particleRenderer.init();
+
+    const starfieldRenderer = (particleRenderer && particleRenderer.supported)
+        ? new WebGLStarfieldRenderer(glCanvas, 4000)
+        : { supported: false, draw: () => {}, addStar: () => false, clear: () => {}, setFieldSize: () => {}, accumulateDrift: () => {}, setBaseline: () => {} };
+    if (starfieldRenderer.init && particleRenderer.gl) {
+        starfieldRenderer.init(particleRenderer.gl);
+        if (starfieldRenderer.setFieldSize) starfieldRenderer.setFieldSize(fieldW, fieldH);
+    }
+
+    const bulletRenderer = bulletCanvas
+        ? new WebGLBulletRenderer(bulletCanvas)
+        : { supported: false, beginFrame: () => {}, pushBullet: () => false, drawFrame: () => {}, resize: () => {}, gl: null };
+    if (bulletCanvas && bulletRenderer.init) bulletRenderer.init();
+
+    // Size the WebGL canvases: fixed field-size backing store, CSS rect
+    // = the letterboxed game area (matching #mp-canvas's internal
+    // letterbox). Runs on boot + every resize.
+    const layoutGlCanvases = () => {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const sc = Math.min(vw / fieldW, vh / fieldH);
+        const dispW = fieldW * sc;
+        const dispH = fieldH * sc;
+        const left = (vw - dispW) * 0.5;
+        const top = (vh - dispH) * 0.5;
+        for (const c of [glCanvas, bulletCanvas]) {
+            if (!c) continue;
+            // Backing store = field size (1:1 world↔pixel inside the canvas).
+            if (c.width !== fieldW) c.width = fieldW;
+            if (c.height !== fieldH) c.height = fieldH;
+            // CSS display rect = letterbox area on the page.
+            c.style.left = `${left}px`;
+            c.style.top = `${top}px`;
+            c.style.width = `${dispW}px`;
+            c.style.height = `${dispH}px`;
+        }
+        if (particleRenderer.resize) particleRenderer.resize(fieldW, fieldH);
+        if (bulletRenderer.resize) bulletRenderer.resize(fieldW, fieldH);
+    };
+    layoutGlCanvases();
+    window.addEventListener("resize", layoutGlCanvases);
+
+    // Seed the starfield once: stars scattered across the field with
+    // randomized parallax depth, size, warm/cool palette + twinkle.
+    // Parallax is driven each frame from local-ship motion. This is
+    // pure client cosmetic — no determinism / wire involvement.
+    if (starfieldRenderer.supported) {
+        seedStarfield(starfieldRenderer, fieldW, fieldH);
+        if (starfieldRenderer.setBaseline) starfieldRenderer.setBaseline();
+    }
+    const starCam = { x: 0, y: 0 };
+    const startTime = performance.now();
 
     let lastTime = performance.now();
     let frameCount = 0;
@@ -477,6 +554,49 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                     }
                 }
 
+                // Player mines (Phase 4 step 6): wire carries id +
+                // owner + position; the consumer needs no sub_seed since
+                // mine motion is fully position-driven. Best effort —
+                // RNG-driven downstream state (e.g. detonation timing
+                // entropy) will reconverge via the next checksum gate.
+                for (const m of (msg.player_mines || [])) {
+                    try {
+                        world.consume_player_mine_spawn(m.id, m.owner_player_id, m.x, m.y);
+                    } catch (err) {
+                        if (MP_DEBUG) {
+                            console.warn(
+                                "[mp/engine] resync player_mine reconstruct failed",
+                                m.id,
+                                err,
+                            );
+                        }
+                    }
+                }
+
+                // Player missiles (Phase 4 step 6): same shape as enemy
+                // missiles — wire carries velocity, consumer wants an
+                // initial angle, so recover via atan2(vy, vx).
+                for (const m of (msg.player_missiles || [])) {
+                    const initial_angle = Math.atan2(m.vy, m.vx);
+                    try {
+                        world.consume_player_missile_spawn(
+                            m.id,
+                            m.owner_player_id,
+                            m.x,
+                            m.y,
+                            initial_angle,
+                        );
+                    } catch (err) {
+                        if (MP_DEBUG) {
+                            console.warn(
+                                "[mp/engine] resync player_missile reconstruct failed",
+                                m.id,
+                                err,
+                            );
+                        }
+                    }
+                }
+
                 // Orbs (Phase 4): seed-based reconstruction same caveat
                 // as enemies — OrbWire doesn't carry the original
                 // rng_subseed, so we synthesize from (room_seed, orb_id).
@@ -664,6 +784,67 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                     particles.spawnEnemyMissileHit(p.x, p.y);
                 }
                 break;
+            // ── Phase 4 step 6: power weapons ──
+            case "PowerWeaponActivate":
+                world.consume_power_weapon_activate(p.player_id, p.power_weapon_kind);
+                if (particles && particles.spawnPowerWeaponActivate) {
+                    particles.spawnPowerWeaponActivate(p.player_id, p.power_weapon_kind);
+                }
+                break;
+            case "ChargeShotFire":
+                world.consume_charge_shot_fire(p.player_id, p.charge_ticks, p.damage);
+                if (particles && particles.spawnChargeShotFire) {
+                    particles.spawnChargeShotFire(p.x, p.y, p.damage);
+                }
+                break;
+            case "NovaBlast":
+                world.consume_nova_blast(p.player_id, p.x, p.y, p.radius);
+                if (particles && particles.spawnNovaBlast) {
+                    particles.spawnNovaBlast(p.x, p.y, p.radius);
+                }
+                break;
+            case "BeamStart":
+                world.consume_beam_start(p.player_id, p.beam_kind, p.aim_angle, p.duration_ticks);
+                if (particles && particles.spawnBeamStart) {
+                    particles.spawnBeamStart(p.player_id, p.beam_kind);
+                }
+                break;
+            case "BeamEnd":
+                world.consume_beam_end(p.player_id, p.beam_kind);
+                if (particles && particles.spawnBeamEnd) {
+                    particles.spawnBeamEnd(p.player_id);
+                }
+                break;
+            case "ArcStrike":
+                world.consume_arc_strike(p.player_id);
+                if (particles && particles.spawnArcStrike) {
+                    particles.spawnArcStrike(p.chain);
+                }
+                break;
+            case "PlayerMineSpawn":
+                world.consume_player_mine_spawn(p.mine_id, p.owner_player_id, p.x, p.y);
+                break;
+            case "PlayerMineDeath":
+                world.consume_player_mine_death(p.mine_id);
+                if (particles && particles.spawnPlayerMineDeath) {
+                    particles.spawnPlayerMineDeath(p.x, p.y);
+                }
+                break;
+            case "PlayerMissileSpawn":
+                world.consume_player_missile_spawn(
+                    p.missile_id,
+                    p.owner_player_id,
+                    p.origin_x,
+                    p.origin_y,
+                    p.initial_angle,
+                );
+                break;
+            case "PlayerMissileHit":
+                world.consume_player_missile_hit(p.missile_id, p.enemy_id);
+                if (particles && particles.spawnPlayerMissileHit) {
+                    particles.spawnPlayerMissileHit(p.x, p.y);
+                }
+                break;
             default:
                 if (MP_DEBUG) {
                     console.warn("[mp/engine] unknown event payload kind", p.kind);
@@ -723,6 +904,8 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
                 aimWorldY,
                 (input.weapon | 0) & 0xff,
                 !!input.fire,
+                (input.powerWeapon | 0) & 0xff,
+                !!input.powerFire,
             );
             clientTick += 1;
             lastInputSentAt = now;
@@ -755,12 +938,81 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
             }
         }
 
-        render(ctx, canvas, world, lastAim, remoteShipsArray);
+        // ── WebGL background layer (glCanvas): starfield + particles ──
+        // Clear the GL surface once per frame (opaque black = space),
+        // then draw starfield, then additive particles ON TOP of the
+        // same cleared surface. camera offsets gently from field center
+        // toward the local ship so the parallax layers drift as you fly.
+        const webglFx = particleRenderer.supported && particleRenderer.gl;
+        if (webglFx) {
+            const gl = particleRenderer.gl;
+            gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+        if (starfieldRenderer.supported) {
+            let sx = fieldW * 0.5, sy = fieldH * 0.5;
+            try { sx = world.ship_x(); sy = world.ship_y(); } catch {}
+            // Subtle camera offset around field center → parallax drift.
+            starCam.x = (sx - fieldW * 0.5) * 0.35;
+            starCam.y = (sy - fieldH * 0.5) * 0.35;
+            const tSec = (now - startTime) / 1000;
+            starfieldRenderer.draw(starCam.x, starCam.y, fieldW, fieldH, tSec);
+        }
+        // Additive particle bloom on glCanvas (field coords 1:1, camera
+        // 0,0; the full field is the viewport so nothing is culled).
+        if (webglFx) {
+            particleRenderer.drawParticles(particles, 0, 0, 0, 0, fieldW, fieldH);
+        }
 
-        // Particles draw INSIDE the renderer's letterbox transform
-        // (world coords). The renderer leaves the transform set when
-        // it returns; we draw, then HUD resets to identity.
-        particles.draw(ctx, scale);
+        render(ctx, canvas, world, lastAim, remoteShipsArray, {
+            webglBullets: bulletRenderer.supported,
+        });
+
+        // ── WebGL bullet layer (bulletCanvas): additive glow ─────────
+        // Field coords pushed 1:1 (canvas backing store = field size),
+        // camera (0,0). Covers player bullets, enemy bullets, and both
+        // missile kinds. mp-renderer no longer draws bullets on the 2D
+        // layer (Phase C) so there's no double-draw.
+        if (bulletRenderer.supported) {
+            bulletRenderer.beginFrame();
+            try {
+                const bn = world.bullet_count();
+                for (let i = 0; i < bn; i++) {
+                    bulletRenderer.pushBullet("circle", world.bullet_x(i), world.bullet_y(i), 7, "#00ccff", 1.0);
+                }
+            } catch {}
+            try {
+                const en = world.enemy_bullet_count();
+                for (let i = 0; i < en; i++) {
+                    bulletRenderer.pushBullet("circle", world.enemy_bullet_x(i), world.enemy_bullet_y(i), 10, "#ff4444", 1.0);
+                }
+            } catch {}
+            try {
+                const mn = world.enemy_missile_count();
+                for (let i = 0; i < mn; i++) {
+                    const vx = world.enemy_missile_vx(i), vy = world.enemy_missile_vy(i);
+                    bulletRenderer.pushBullet("triangle", world.enemy_missile_x(i), world.enemy_missile_y(i), 10, "#ff7744", 1.0, Math.atan2(vy, vx), 1.6);
+                }
+            } catch {}
+            try {
+                const pm = world.player_missile_count();
+                for (let i = 0; i < pm; i++) {
+                    const vx = world.player_missile_vx(i), vy = world.player_missile_vy(i);
+                    bulletRenderer.pushBullet("triangle", world.player_missile_x(i), world.player_missile_y(i), 9, "#44ddff", 1.0, Math.atan2(vy, vx), 1.6);
+                }
+            } catch {}
+            bulletRenderer.drawFrame(0, 0);
+        }
+
+        // Canvas2D particle fallback — only when the WebGL particle
+        // layer is unavailable (no WebGL2). Draws inside the renderer's
+        // letterbox transform on #mp-canvas. When WebGL is up, particles
+        // already drew additively on glCanvas above, so this is skipped
+        // to avoid double-draw.
+        if (!webglFx) {
+            particles.draw(ctx, scale);
+        }
 
         // HUD draws in SCREEN coords (resets the transform internally).
         hud.draw(ctx, canvas, world, { gold: localGold, weapon: (input.weapon | 0) & 0xff });
@@ -827,6 +1079,53 @@ export function start(World, debugEl, canvas, { name = "Pilot" } = {}) {
     };
 
     requestAnimationFrame(frame);
+}
+
+/**
+ * Seed the WebGL starfield with a scattered field of stars. Pure
+ * client cosmetic (no sim/wire involvement) — each tab seeds its own;
+ * a mismatch between tabs is imperceptible for a parallax background.
+ * Palette mirrors solo's background-star mix: mostly blue-white, some
+ * pure white, a minority warm/orange. Star count + parallax depths
+ * give the multi-layer drift solo has.
+ */
+function seedStarfield(renderer, fieldW, fieldH) {
+    const STAR_COUNT = 700;
+    // Spread stars over 1.5x the field so parallax drift never reveals
+    // a hard edge as the camera offsets around field center.
+    const spanX = fieldW * 1.5;
+    const spanY = fieldH * 1.5;
+    const ox = (spanX - fieldW) * 0.5;
+    const oy = (spanY - fieldH) * 0.5;
+    for (let i = 0; i < STAR_COUNT; i++) {
+        const x = Math.random() * spanX - ox;
+        const y = Math.random() * spanY - oy;
+        // Depth: most stars far (low parallax); a few near (more drift).
+        const depth = Math.random();
+        const parallax = 0.02 + Math.pow(depth, 2.2) * 0.16;   // 0.02–0.18
+        const sizeRoll = Math.random();
+        const size = sizeRoll < 0.85
+            ? 1.2 + Math.random() * 1.6                         // 85% small (1.2–2.8)
+            : 3.0 + Math.random() * 2.5;                        // 15% bright (3.0–5.5)
+        // Color mix.
+        let r, g, b;
+        const hueRoll = Math.random();
+        if (hueRoll < 0.55) { r = 0.78; g = 0.86; b = 1.0; }    // blue-white
+        else if (hueRoll < 0.80) { r = 1.0; g = 1.0; b = 1.0; } // pure white
+        else if (hueRoll < 0.92) { r = 1.0; g = 0.92; b = 0.78; } // warm
+        else { r = 1.0; g = 0.72; b = 0.55; }                   // orange-red
+        const a = 0.5 + Math.random() * 0.5;
+        const twinklePhase = Math.random() * Math.PI * 2;
+        const twinkleSpeed = 0.4 + Math.random() * 1.6;
+        const twinkleAmp = 0.15 + Math.random() * 0.35;
+        // 90% round dots; 10% 4-point sparkle accents for the bigger ones.
+        const shapeSlot = (size > 3.0 && Math.random() < 0.5) ? 4 : 0;
+        renderer.addStar(
+            x, y, parallax, size, r, g, b, a,
+            twinklePhase, twinkleSpeed, twinkleAmp,
+            shapeSlot, 0, 0, 0, shapeSlot === 0 ? 1 : 0,
+        );
+    }
 }
 
 /**
