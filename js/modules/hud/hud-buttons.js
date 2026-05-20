@@ -78,7 +78,7 @@ export function getHudButtonRects(canvasW, canvasH) {
     const y = canvasH - BOTTOM_MARGIN - bh;
     const slot = (i) => startX + i * (bw + bg);
     const rects = {
-        shop:  { id: 'shop',  x: slot(0), y, w: bw, h: bh, icon: 'cart',  label: 'SHOP'  },
+        shop:  { id: 'shop',  x: slot(0), y, w: bw, h: bh, icon: 'cart',  label: 'UPGRADES' },
         stats: { id: 'stats', x: slot(1), y, w: bw, h: bh, icon: 'chart', label: 'STATS' },
         pause: { id: 'pause', x: slot(2), y, w: bw, h: bh, icon: 'pause', label: 'PAUSE' },
     };
@@ -206,6 +206,16 @@ export function drawHudButtons(ctx, engine) {
         ctx.lineWidth = 3;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
         ctx.lineJoin = 'round';
+        // 6.27.0 — Auto-shrink long labels (e.g. "UPGRADES") so they
+        //   never clip the rounded button edge. Drop the font size by
+        //   1px steps until the measured width fits inside w - 8px.
+        let labelPx = 9;
+        let labelW = ctx.measureText(r.label).width;
+        while (labelW > w - 8 && labelPx > 6) {
+            labelPx -= 1;
+            ctx.font = `${labelPx}px 'Press Start 2P', monospace`;
+            labelW = ctx.measureText(r.label).width;
+        }
         const labelY = y + h - 7;
         ctx.strokeText(r.label, x + w / 2, labelY);
         ctx.fillStyle = isPress ? '#fffadf' : (isHover ? '#fff' : 'rgba(230, 240, 250, 0.95)');

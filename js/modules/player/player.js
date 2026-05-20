@@ -91,6 +91,13 @@ export class Player {
         this.experienceToNextLevel = Infinity;
         this.skillPoints = 0;
 
+        // 6.29.0 — Energy meter (replaces the vestigial XP bar). Energy
+        // builds as the player lands hits and is spent to fire power
+        // weapons; each power weapon costs a different amount
+        // (POWER_ENERGY_COST in weapons.js).
+        this.energy = 0;
+        this.maxEnergy = 100;
+
         // Weapon system. All primaries / powers / skills are FREE and
         // selectable from start (5.64.11). The owned-sets are still
         // tracked for legacy upgrade-tree compatibility but the pause
@@ -226,6 +233,7 @@ export class Player {
         this.powerups.clear();
 
         // Reset weapon active states (keep owned weapons/skills)
+        this.energy = 0; // 6.29.0 — start each run with an empty energy meter
         this.powerCooldown = 0;
         this.beamActive = false;
         this.beamTimer = 0;
@@ -1060,6 +1068,14 @@ export class Player {
 
     isPowerReady() {
         return weapons.isPowerReady.call(this);
+    }
+
+    // 6.29.0 — Energy meter helpers.
+    getPowerEnergyCost() {
+        return weapons.getPowerEnergyCost.call(this);
+    }
+    addEnergy(amount) {
+        this.energy = Math.max(0, Math.min(this.maxEnergy, (this.energy || 0) + amount));
     }
 
     updateSkillCooldowns(dt) {

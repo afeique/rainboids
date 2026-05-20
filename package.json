@@ -4,12 +4,7 @@
   "description": "Royalty-free background music [\"Legend\"](https://www.youtube.com/watch?v=mxygNM3b95M&ab_channel=WhiteBatAudio)  graciously provided by [Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/).",
   "main": "js/main.js",
   "scripts": {
-    "dev:sp": "http-server -p 8090 -o -c-1",
-    "dev": "concurrently -n http,cargo,wasm -c green,yellow,magenta \"npm:dev:sp\" \"npm:dev:mp\" \"npm:dev:wasm\"",
-    "dev:mp": "cargo run --manifest-path server/Cargo.toml -p rainboids-server",
-    "dev:wasm": "wasm-pack build server/client-wasm --target web --out-dir ../../js/mp/wasm --dev",
-    "wasm:build": "wasm-pack build server/client-wasm --target web --out-dir ../../js/mp/wasm --release",
-    "wasm:build:dev": "wasm-pack build server/client-wasm --target web --out-dir ../../js/mp/wasm --dev",
+    "dev": "http-server -p 8090 -o -c-1",
     "start": "http-server -p 8090 -o -c-1",
     "generate-playlist": "node tools/scripts/generate-playlist.js",
     "generate-sfx": "node tools/scripts/generate-sfx.js",

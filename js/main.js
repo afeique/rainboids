@@ -5,8 +5,6 @@ import { UIManager } from './modules/ui/ui-manager.js';
 import { GameEngine } from './modules/game-engine.js';
 import { GAME_STATES } from './modules/core/constants.js';
 import { VERSION } from './modules/core/version.js';
-// MULTIPLAYER button on the title screen navigates to /mp (separate page,
-// separate WASM-backed product). Solo runs the GameEngine directly here.
 import { isMobile as _isMobilePlatform } from './modules/platform/platform-detect.js';
 import { buildStaticDom } from './modules/ui/static-dom.js';
 
@@ -190,16 +188,12 @@ class RainboidsGame {
             const hit = (r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
             if (rects.newGame  && hit(rects.newGame))  return 'newGame';
             if (rects.continue && hit(rects.continue) && !rects.continue.disabled) return 'continue';
-            if (rects.multiplayer && hit(rects.multiplayer) && !rects.multiplayer.disabled) return 'multiplayer';
+            if (rects.tutorial && hit(rects.tutorial)) return 'tutorial';
             return null;
         };
 
-        // MULTIPLAYER is a separate product at `/mp` (WASM-backed engine,
-        // own page). Title button navigates there; no state crosses over.
-        const openMultiplayer = () => {
-            if (this.gameEngine.game.state !== GAME_STATES.TITLE_SCREEN) return;
-            window.location.href = '/mp';
-        };
+        // (Multiplayer shelved — the /mp navigation handler was removed.
+        // See /multiplayer/RESTORE.md to bring it back.)
 
         const onMove = (e) => {
             const g = ge();
@@ -242,8 +236,12 @@ class RainboidsGame {
             if (e.button !== 0 && e.button !== undefined) return;
             const id = hitId(e);
             if (!id) return;
-            if (id === 'multiplayer') {
-                openMultiplayer();
+            // 6.28.0 — TUTORIAL button opens the tutorial overlay (does
+            // not start a run).
+            if (id === 'tutorial') {
+                const ov = document.getElementById('tutorial-overlay');
+                if (ov) ov.style.display = 'flex';
+                try { this.audioManager.playSound?.('coin'); } catch {}
                 return;
             }
             launch(id === 'newGame' ? 'new' : 'continue');
@@ -265,7 +263,6 @@ class RainboidsGame {
             e.preventDefault();
             const g = ge();
             const hovered = g._titleHoveredButton;
-            if (hovered === 'multiplayer') return openMultiplayer();
             if (hovered === 'continue') return launch('continue');
             if (hovered === 'newGame')  return launch('new');
             launch(g.hasSavedRun?.() ? 'continue' : 'new');

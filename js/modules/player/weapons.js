@@ -40,9 +40,15 @@ const BIG_BULLETS_PX_PER_STACK = 2.2; // was 1.5 — chunkier per stack to match
 // These tables map `bullet.weaponId` → the per-weapon upgrade ID that
 // applies. A missing entry means the weapon doesn't get the bonus
 // (LANCE_BEAM has innate pierce; NOVA / MINE / ARC have neither).
+// 6.28.0 — Per-weapon shared-trait id tables. Each maps a weaponId to
+// the upgrade id that supplies that trait for that weapon. A missing
+// entry → 0 stacks (weapon doesn't get the trait). Kinetic primaries
+// (Pulse/Storm/Scatter/Rail) get all 8; Cluster gets Multi/Stun/Knock.
 const _PER_WEAPON_HOMING_ID = {
     PULSE_CANNON: 'PULSE_HOMING',
     STORM_NEEDLES: 'NEEDLE_HOMING',
+    SCATTER_GUN: 'SCATTER_HOMING',
+    RAIL_DRIVER: 'RAIL_HOMING',
     CHARGE_SHOT: 'CHARGE_HOMING',
 };
 const _PER_WEAPON_PIERCING_ID = {
@@ -53,17 +59,63 @@ const _PER_WEAPON_PIERCING_ID = {
     CHARGE_SHOT: 'CHARGE_PIERCING',
     MISSILE_SALVO: 'MISSILE_PIERCING',
 };
+const _PER_WEAPON_MULTI_ID = {
+    PULSE_CANNON: 'PULSE_MULTI',
+    STORM_NEEDLES: 'NEEDLE_MULTI',
+    SCATTER_GUN: 'SCATTER_MULTI',
+    RAIL_DRIVER: 'RAIL_MULTI',
+    CLUSTER_LAUNCHER: 'CLUSTER_MULTI',
+};
+const _PER_WEAPON_RAPID_ID = {
+    PULSE_CANNON: 'PULSE_RAPID',
+    STORM_NEEDLES: 'NEEDLE_RAPID',
+    SCATTER_GUN: 'SCATTER_RAPID',
+    RAIL_DRIVER: 'RAIL_RAPID',
+};
+const _PER_WEAPON_BIG_ID = {
+    PULSE_CANNON: 'PULSE_BIG',
+    STORM_NEEDLES: 'NEEDLE_BIG',
+    SCATTER_GUN: 'SCATTER_BIG',
+    RAIL_DRIVER: 'RAIL_BIG',
+};
+const _PER_WEAPON_EXPLODE_ID = {
+    PULSE_CANNON: 'PULSE_EXPLODE',
+    STORM_NEEDLES: 'NEEDLE_EXPLODE',
+    SCATTER_GUN: 'SCATTER_EXPLODE',
+    RAIL_DRIVER: 'RAIL_EXPLODE',
+};
+const _PER_WEAPON_STUN_ID = {
+    PULSE_CANNON: 'PULSE_STUN',
+    STORM_NEEDLES: 'NEEDLE_STUN',
+    SCATTER_GUN: 'SCATTER_STUN',
+    RAIL_DRIVER: 'RAIL_STUN',
+    CLUSTER_LAUNCHER: 'CLUSTER_STUN',
+};
+const _PER_WEAPON_KNOCK_ID = {
+    PULSE_CANNON: 'PULSE_KNOCK',
+    STORM_NEEDLES: 'NEEDLE_KNOCK',
+    SCATTER_GUN: 'SCATTER_KNOCK',
+    RAIL_DRIVER: 'RAIL_KNOCK',
+    CLUSTER_LAUNCHER: 'CLUSTER_KNOCK',
+};
 
-function _getPerWeaponHomingStacks(player, weaponId) {
-    const id = _PER_WEAPON_HOMING_ID[weaponId];
+// Per-stack mechanic constants for the new shared traits.
+const RAPID_FIRE_PER_STACK = 0.12;   // -12% fire-rate interval per stack (compounding)
+const STUN_CHANCE_PER_STACK = 0.12;  // +12% chance to stun on hit
+const KNOCK_CHANCE_PER_STACK = 0.15; // +15% chance to knock back on hit
+
+function _perWeaponStacks(player, table, weaponId) {
+    const id = table[weaponId];
     if (!id || !player.getPowerupStacks) return 0;
     return player.getPowerupStacks(id);
 }
 
+function _getPerWeaponHomingStacks(player, weaponId) {
+    return _perWeaponStacks(player, _PER_WEAPON_HOMING_ID, weaponId);
+}
+
 function _getPerWeaponPiercingStacks(player, weaponId) {
-    const id = _PER_WEAPON_PIERCING_ID[weaponId];
-    if (!id || !player.getPowerupStacks) return 0;
-    return player.getPowerupStacks(id);
+    return _perWeaponStacks(player, _PER_WEAPON_PIERCING_ID, weaponId);
 }
 
 // Exported so cursor.js (and any other HUD prediction code) can sum
@@ -213,10 +265,18 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         this.tractorBeamActive = this.isCharging && !isFullyCharged;
         this.isFullyCharged = isFullyCharged;
 
+        // 6.29.0 — Charge Shot also costs energy. The wind-up charge
+        // still gates damage, but releasing now requires (and spends)
+        // its energy cost; without enough energy the press is consumed
+        // but no shot fires.
         const shouldFire = input.fireSecondary && currentChargeTime >= this.minChargeTime;
 
         if (shouldFire) {
-            this.fireChargedShot(bulletPool, audioManager);
+            const cost = this.getPowerEnergyCost();
+            if ((this.energy || 0) >= cost) {
+                this.energy = Math.max(0, this.energy - cost);
+                this.fireChargedShot(bulletPool, audioManager);
+            }
             this.isCharging = false;
             this.chargeLevel = 0;
             this.pausedChargeTime = 0;
@@ -364,7 +424,7 @@ export function fireStormNeedles(bulletPool, audioManager, config) {
     // and HAILSTORM still stack additional needles into the cone (so
     // the powerup paths still grow the per-shot density), but the
     // base weapon is one jittered needle.
-    const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
+    const multiShotStacks = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, 'STORM_NEEDLES');
     const hailstormBonus = this.getPowerupStacks('HAILSTORM') > 0 ? 1 : 0;
     const bulletCount = 1 + multiShotStacks + hailstormBonus;
     const fanSpread = bulletCount > 1 ? Math.min(0.5, 0.10 * (bulletCount - 1)) : 0;
@@ -421,8 +481,8 @@ export function fireScatterGun(bulletPool, audioManager, config) {
         damage *= 1 + heavyLoadStacks * 0.15;
     }
     const buckshotStacks = this.getPowerupStacks('BUCKSHOT');
-    // MULTI_SHOT carry-over: +1 pellet per stack on top of BUCKSHOT.
-    const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
+    // 6.28.0 — per-weapon Scatter multishot adds +1 pellet per stack.
+    const multiShotStacks = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, 'SCATTER_GUN');
     const slugRound = this.getPowerupStacks('SLUG_ROUND') > 0 && this.scatterShotCount % 4 === 0;
 
     if (slugRound) {
@@ -493,7 +553,7 @@ export function fireRailDriver(bulletPool, audioManager, config) {
     // Rail Driver fires a helix pair — two bullets spiraling around each
     // other on a shared rail. MULTI_SHOT adds extra pairs, fanned narrowly
     // because rails travel far and a wide fan reads as chaotic.
-    const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
+    const multiShotStacks = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, 'RAIL_DRIVER');
     const pairCount = 1 + multiShotStacks;
     const pairFan = pairCount > 1 ? Math.min(0.3, 0.06 * (pairCount - 1)) : 0;
 
@@ -686,10 +746,18 @@ export function applyGlobalBulletUpgrades(bullet) {
     // tables keyed by `bullet.weaponId`. Weapons that don't have a
     // per-weapon variant (LANCE_BEAM has innate pierce; NOVA / MINE /
     // ARC have neither) just see 0 stacks here.
+    // 6.28.0 — all five projectile traits are now per-weapon.
     const homingStacks = _getPerWeaponHomingStacks(this, bullet.weaponId);
-    const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
+    const bigBulletStacks = _perWeaponStacks(this, _PER_WEAPON_BIG_ID, bullet.weaponId);
     const piercingStacks = _getPerWeaponPiercingStacks(this, bullet.weaponId);
-    const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
+    const explosiveStacks = _perWeaponStacks(this, _PER_WEAPON_EXPLODE_ID, bullet.weaponId);
+
+    // 6.28.0 — Stun% / Knockback% chances stamped on the bullet; the
+    // collision handler rolls them on enemy impact (see applyBulletImpactCC).
+    const stunStacks = _perWeaponStacks(this, _PER_WEAPON_STUN_ID, bullet.weaponId);
+    const knockStacks = _perWeaponStacks(this, _PER_WEAPON_KNOCK_ID, bullet.weaponId);
+    bullet.stunChance = stunStacks * STUN_CHANCE_PER_STACK;
+    bullet.knockbackChance = knockStacks * KNOCK_CHANCE_PER_STACK;
 
     // Range
     bullet.rangeMultiplier = (bullet.rangeMultiplier || 1) * this.getRangeMultiplier();
@@ -804,6 +872,11 @@ export function applyGlobalBulletUpgrades(bullet) {
 
 export function firePower(bulletPool, audioManager, particlePool) {
     const config = this.getActivePowerConfig();
+
+    // 6.29.0 — Spend energy. Callers gate on isPowerReady() (energy >=
+    // cost) before reaching here, but deduct defensively in case a
+    // future caller skips the gate.
+    this.energy = Math.max(0, (this.energy || 0) - this.getPowerEnergyCost());
 
     switch (this.activePower) {
         case 'MINE_LAYER':
@@ -1335,14 +1408,15 @@ export function fireWeapons(bulletPool, audioManager) {
 }
 
 export function createBullets(bulletPool) {
-    const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
-    // Phase 2 (2026-05-19) — per-weapon HOMING / PIERCING. Legacy
-    // `createBullets` path doesn't have a per-bullet weaponId yet, so
-    // we resolve by activePrimary up front.
-    const homingStacks = _getPerWeaponHomingStacks(this, this.activePrimary);
-    const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
-    const piercingStacks = _getPerWeaponPiercingStacks(this, this.activePrimary);
-    const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
+    // 6.28.0 — all traits resolve per-weapon by activePrimary.
+    const wid = this.activePrimary;
+    const multiShotStacks = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, wid);
+    const homingStacks = _getPerWeaponHomingStacks(this, wid);
+    const bigBulletStacks = _perWeaponStacks(this, _PER_WEAPON_BIG_ID, wid);
+    const piercingStacks = _getPerWeaponPiercingStacks(this, wid);
+    const explosiveStacks = _perWeaponStacks(this, _PER_WEAPON_EXPLODE_ID, wid);
+    const stunChance = _perWeaponStacks(this, _PER_WEAPON_STUN_ID, wid) * STUN_CHANCE_PER_STACK;
+    const knockbackChance = _perWeaponStacks(this, _PER_WEAPON_KNOCK_ID, wid) * KNOCK_CHANCE_PER_STACK;
 
     // +1 bullet per multi-shot stack, spread evenly in a fan
     const bulletCount = 1 + multiShotStacks;
@@ -1397,12 +1471,14 @@ export function createBullets(bulletPool) {
                 bullet.explosive = true;
                 bullet.explosionRadius = 30 + explosiveStacks * 10;
             }
+            // 6.28.0 — Stun% / Knockback% chances (rolled on enemy impact).
+            bullet.stunChance = stunChance;
+            bullet.knockbackChance = knockbackChance;
         }
     }
 }
 
 export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultiplier = 1, totalDamage = 20, critChanceBonus = 0, baseHomingStrength = 0, rangeOverride = 1, weaponIdOverride = null) {
-    const multiShotStacks = this.getPowerupStacks('MULTI_SHOT');
     // Phase 2 (2026-05-19) — global HOMING / PIERCING retired. Each
     // call site picks its own per-weapon upgrade source via
     // `weaponIdOverride`. firePulseCannon doesn't pass an override so
@@ -1413,12 +1489,16 @@ export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultip
     // equipped underneath.
     const weaponIdForUpgrades = weaponIdOverride || this.activePrimary;
     const homingStacks = _getPerWeaponHomingStacks(this, weaponIdForUpgrades);
-    const bigBulletStacks = this.getPowerupStacks('BIG_BULLETS');
+    // 6.28.0 — all projectile traits resolve per-weapon here too.
+    const bigBulletStacks = _perWeaponStacks(this, _PER_WEAPON_BIG_ID, weaponIdForUpgrades);
     const piercingStacks = _getPerWeaponPiercingStacks(this, weaponIdForUpgrades);
-    const explosiveStacks = this.getPowerupStacks('EXPLOSIVE');
+    const explosiveStacks = _perWeaponStacks(this, _PER_WEAPON_EXPLODE_ID, weaponIdForUpgrades);
+    const stunChance = _perWeaponStacks(this, _PER_WEAPON_STUN_ID, weaponIdForUpgrades) * STUN_CHANCE_PER_STACK;
+    const knockbackChance = _perWeaponStacks(this, _PER_WEAPON_KNOCK_ID, weaponIdForUpgrades) * KNOCK_CHANCE_PER_STACK;
 
     // +1 bullet per multi-shot stack, spread evenly in a fan
-    const bulletCount = 1 + multiShotStacks;
+    const multiShotForCount = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, weaponIdForUpgrades);
+    const bulletCount = 1 + multiShotForCount;
 
     // Spread scales with bullet count: gentle fan that widens per stack
     const spreadAngle = bulletCount > 1 ? Math.min(0.8, 0.12 * (bulletCount - 1)) : 0;
@@ -1503,6 +1583,9 @@ export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultip
                 bullet.explosive = true;
                 bullet.explosionRadius = 30 + explosiveStacks * 10;
             }
+            // 6.28.0 — Stun% / Knockback% chances (rolled on enemy impact).
+            bullet.stunChance = stunChance;
+            bullet.knockbackChance = knockbackChance;
 
             // Visual effects for charged shots
             if (sizeMultiplier > 1.5) {
@@ -1520,15 +1603,11 @@ export function getEffectivePrimaryFireRate() {
     const config = this.getActivePrimaryConfig();
     let rate = config.fireRate;
 
-    // Apply weapon-specific upgrades
-    if (this.activePrimary === 'STORM_NEEDLES') {
-        const stacks = this.getPowerupStacks('NEEDLE_STORM');
-        rate *= Math.pow(0.85, stacks); // -15% per stack compounding
-    }
-
-    // Apply global Rapid Fire — -22% per stack compounding (was -15%)
-    const rapidFireStacks = this.getPowerupStacks('RAPID_FIRE');
-    rate *= Math.pow(0.78, rapidFireStacks);
+    // 6.28.0 — Per-weapon Rapid Fire. Each stack shortens the fire
+    // interval by RAPID_FIRE_PER_STACK (compounding). Only the 4 kinetic
+    // primaries have a rapid-fire upgrade; others see 0 stacks.
+    const rapidStacks = _perWeaponStacks(this, _PER_WEAPON_RAPID_ID, this.activePrimary);
+    rate *= Math.pow(1 - RAPID_FIRE_PER_STACK, rapidStacks);
 
     return Math.round(rate);
 }
@@ -1562,10 +1641,28 @@ export function getPowerCooldownRemaining() {
     return Math.max(0, this.powerCooldown);
 }
 
+// 6.29.0 — Power weapons now cost ENERGY (built by landing hits)
+// instead of running on a fixed cooldown. Each power weapon spends a
+// different amount on fire.
+export const POWER_ENERGY_COST = {
+    CHARGE_SHOT:   20,
+    MINE_LAYER:    25,
+    LIGHTNING_ARC: 30,
+    NOVA_BLAST:    45,
+    MISSILE_SALVO: 55,
+    LANCE_BEAM:    60,
+};
+
+export function getPowerEnergyCost() {
+    return POWER_ENERGY_COST[this.activePower] || 30;
+}
+
 export function isPowerReady() {
-    const config = this.getActivePowerConfig();
-    if (config.isChargeBased) return true;
-    return this.powerCooldown <= 0;
+    // Energy-gated (6.29.0). The per-weapon fire fns still set
+    // `powerCooldown` for a short anti-spam floor, but the primary
+    // gate is now having enough energy banked.
+    if (this.powerCooldown > 0) return false;
+    return (this.energy || 0) >= this.getPowerEnergyCost();
 }
 
 // ── Weapon config / equip / buy ────────────────────────────────────────────

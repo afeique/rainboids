@@ -18,6 +18,10 @@ import { SLOT_LABEL } from '../world/item-names.js';
 const MOBILE_ASTEROID_SPLIT_MAX_RADIUS = 36;
 const MOBILE_PORTRAIT_ASTEROID_SPLIT_MAX_RADIUS = 28;
 
+// 6.29.0 — Power-weapon energy gained per landed bullet hit. With the
+// 100-cap, ~5 hits banks a Charge Shot (20), ~25 hits a Lance Beam (60).
+const ENERGY_PER_HIT = 4;
+
 // ─── Collision Physics Config ────────────────────────────────────────────────
 export const COLLISION_CONFIG = {
     // Bullet-to-asteroid knockback impulse multiplier
@@ -756,6 +760,30 @@ export function handleCollisions() {
                 // heal more than we'd dealt to a full-HP target).
                 const enemyApplied = Math.max(0, enemyHpBefore - enemy.health);
                 if (typeof this.applyVampirism === 'function') this.applyVampirism(enemyApplied);
+
+                // 6.29.0 — Build power-weapon energy on every landed hit.
+                if (this.player && typeof this.player.addEnergy === 'function') {
+                    this.player.addEnergy(ENERGY_PER_HIT);
+                }
+
+                // 6.28.0 — Per-weapon Stun% / Knockback% procs. Chances are
+                // stamped on the bullet at fire time (player/weapons.js).
+                // Skip on a lethal hit — the enemy is already dying. Stun
+                // uses the BRN/STUN engine; knockback is a direct positional
+                // shove along the bullet's travel vector (reliable even
+                // though enemies recompute velocity each movement tick).
+                if (!destroyed) {
+                    if (bullet.stunChance > 0 && Math.random() < bullet.stunChance
+                        && typeof this.applyStun === 'function') {
+                        this.applyStun(enemy);
+                    }
+                    if (bullet.knockbackChance > 0 && Math.random() < bullet.knockbackChance) {
+                        const ka = Math.atan2(bullet.vel?.y || 0, bullet.vel?.x || 1);
+                        const shove = 16;
+                        enemy.x += Math.cos(ka) * shove;
+                        enemy.y += Math.sin(ka) * shove;
+                    }
+                }
 
                 if (bullet.isCrit || bullet.isCritical) {
                     if (typeof this.checkMissionOnCrit === 'function') this.checkMissionOnCrit();

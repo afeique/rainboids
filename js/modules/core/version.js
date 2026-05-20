@@ -7,9 +7,10 @@
 // Now kept in sync with /VERSION on every release; see the bump section
 // in CLAUDE.md.
 //
-// 2026-05-17 (WASM pivot, Phase 0) — VERSION_MP added. MP is now a
-// separate product (`/mp`) that versions independently of solo. The
-// title screen shows both as `sp X.X.X` / `mp 0.X.X`. Keep VERSION_MP
-// in sync with the root /VERSION-MP file on every MP release.
-export const VERSION = '6.15.1';
-export const VERSION_MP = '0.8.0';
+// 2026-05-19 — Multiplayer shelved (see /multiplayer/RESTORE.md). The
+// title screen now renders a single gold version tag (no sp/mp prefix);
+// VERSION is the only one displayed.
+export const VERSION = '6.30.0';
+// VERSION_MP retained (unused while multiplayer is shelved — see
+// /multiplayer/RESTORE.md) so restoring MP doesn't need to re-add it.
+export const VERSION_MP = '0.12.1';

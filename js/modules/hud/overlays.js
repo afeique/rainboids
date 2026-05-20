@@ -4,7 +4,7 @@
 
 import { rgba } from '../core/color-cache.js';
 import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS, getStreakGoldMult } from '../combat/weapon-data.js';
-import { VERSION, VERSION_MP } from '../core/version.js';
+import { VERSION } from '../core/version.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 // 5.92.0 — Title screen responsive layout: in mobile-portrait mode
 // the NEW GAME / CONTINUE / MULTIPLAYER buttons stack vertically so
@@ -236,9 +236,8 @@ export function drawTitleScreen() {
         // ── Button + spacing budgets (computed up front so we can place
         //    the title above the buttons rather than at a fixed offset).
         const hasSavedRun = !!(this.hasSavedRun && this.hasSavedRun());
-        // MULTIPLAYER button is always shown — title-screen click routes
-        // to /mp (the WASM-backed multiplayer product).
-        const _mpEnabled = true;
+        // 6.28.0 — MULTIPLAYER button removed from the title screen and
+        // replaced by a TUTORIAL button (always shown).
         const mobilePortrait = _isPortrait;
         const mobileLandscape = _isLandscape;
         let buttonW, buttonH, buttonGap;
@@ -264,13 +263,16 @@ export function drawTitleScreen() {
         // Compute the buttons-block height so we can lay out the title
         // ABOVE it (instead of the old `centerY - 100` magic number that
         // pushed the title above the canvas on phones).
-        const mpRows = _mpEnabled ? 1 : 0;
+        // 6.28.0 — Multiplayer button replaced by an always-present
+        // TUTORIAL button, so there's always one extra row below the
+        // NEW GAME / CONTINUE pair.
+        const mpRows = 1;
         let buttonsBlockH;
         if (mobilePortrait) {
-            // Vertical stack: 2 rows + optional multiplayer.
+            // Vertical stack: NEW GAME + CONTINUE + TUTORIAL.
             buttonsBlockH = buttonH * (2 + mpRows) + buttonGap * (1 + mpRows);
         } else {
-            // Side-by-side primary row + optional multiplayer row below.
+            // Side-by-side primary row + TUTORIAL row below.
             buttonsBlockH = buttonH * (1 + mpRows) + (mpRows ? 18 : 0);
         }
         // 5.99.1 — recordH shrinks on mobile to match the smaller record
@@ -356,16 +358,14 @@ export function drawTitleScreen() {
                 const yTop = buttonsTop;
                 rects.newGame  = { id: 'newGame',  x: x0, y: yTop,                                w: buttonW, h: buttonH, disabled: false };
                 rects.continue = { id: 'continue', x: x0, y: yTop + (buttonH + buttonGap),       w: buttonW, h: buttonH, disabled: !hasSavedRun };
-                if (_mpEnabled) {
-                    rects.multiplayer = {
-                        id: 'multiplayer',
-                        x: x0,
-                        y: yTop + 2 * (buttonH + buttonGap),
-                        w: buttonW,
-                        h: buttonH,
-                        disabled: false,
-                    };
-                }
+                rects.tutorial = {
+                    id: 'tutorial',
+                    x: x0,
+                    y: yTop + 2 * (buttonH + buttonGap),
+                    w: buttonW,
+                    h: buttonH,
+                    disabled: false,
+                };
             } else {
                 // Landscape / desktop — side-by-side NEW GAME + CONTINUE
                 // with optional MULTIPLAYER row beneath. This is the
@@ -377,17 +377,15 @@ export function drawTitleScreen() {
                 const x0 = centerX - totalW / 2;
                 rects.newGame  = { id: 'newGame',  x: x0,                       y: yTop, w: buttonW, h: buttonH, disabled: false };
                 rects.continue = { id: 'continue', x: x0 + buttonW + buttonGap, y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun };
-                if (_mpEnabled) {
-                    const mpY = yTop + buttonH + 18;
-                    rects.multiplayer = {
-                        id: 'multiplayer',
-                        x: x0,
-                        y: mpY,
-                        w: totalW,
-                        h: buttonH,
-                        disabled: false,
-                    };
-                }
+                const tutY = yTop + buttonH + 18;
+                rects.tutorial = {
+                    id: 'tutorial',
+                    x: x0,
+                    y: tutY,
+                    w: totalW,
+                    h: buttonH,
+                    disabled: false,
+                };
             }
 
             this._titleButtonRects = rects;
@@ -455,8 +453,8 @@ export function drawTitleScreen() {
             };
             drawButton(rects.newGame, labels[0]);
             drawButton(rects.continue, labels[1]);
-            if (rects.multiplayer) {
-                drawButton(rects.multiplayer, 'MULTIPLAYER');
+            if (rects.tutorial) {
+                drawButton(rects.tutorial, 'TUTORIAL');
             }
 
             if (this.game.survivalRecord > 0) {
@@ -510,25 +508,15 @@ export function drawTitleScreen() {
             this.ctx.lineJoin = 'round';
             this.ctx.textAlign = 'right';
             this.ctx.textBaseline = 'bottom';
-            // 2026-05-17 (WASM pivot) — two stacked version lines:
-            //   SP X.X.X   (single-player; canonical solo game)   — light gray
-            //   MP 0.X.X   (multiplayer; separate WASM product)   — gold
-            // Reading order top-to-bottom: SP first, MP beneath.
-            // MP gold + caps signals "this is the experimental product
-            // and it has its own identity"; SP gray keeps the canonical
-            // version dominant in the corner anchor.
+            // Single gold version tag, bottom-right. (Multiplayer was
+            // shelved — see /multiplayer/RESTORE.md — so there's one
+            // product again; no SP/MP prefix, just the version number.)
             const tx = this.canvas.width - 14;
             const tyBase = this.canvas.height - 12;
-            const lineH = 14;
-            const tagSp = `SP ${VERSION}`;
-            const tagMp = `MP ${VERSION_MP}`;
-            // SP on top (tyBase - lineH), MP on bottom (tyBase, corner anchor).
-            this.ctx.fillStyle = 'rgba(220, 220, 220, 0.85)';
-            this.ctx.strokeText(tagSp, tx, tyBase - lineH);
-            this.ctx.fillText(tagSp, tx, tyBase - lineH);
+            const tag = `${VERSION}`;
             this.ctx.fillStyle = 'rgba(255, 200, 64, 1.0)';
-            this.ctx.strokeText(tagMp, tx, tyBase);
-            this.ctx.fillText(tagMp, tx, tyBase);
+            this.ctx.strokeText(tag, tx, tyBase);
+            this.ctx.fillText(tag, tx, tyBase);
             this.ctx.restore();
         }
 
@@ -1235,7 +1223,12 @@ export function drawSurvivalTimer(ctx) {
         ctx.save();
 
         // Format survival time as H:M:SS:mmm
-        const totalMs = this.game.survivalTime || 0;
+        // 6.26.3 — `survivalTime` accumulates LOGIC_TICK_MS (16.6667…, a
+        //   float) per tick since 6.18.5, so it's no longer an integer
+        //   millisecond count. Floor up front so every component — and
+        //   especially `milliseconds` (a raw `% 1000`) — stays a clean
+        //   integer instead of rendering "683.33340000000003".
+        const totalMs = Math.floor(this.game.survivalTime || 0);
         const hours = Math.floor(totalMs / (1000 * 60 * 60));
         const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);

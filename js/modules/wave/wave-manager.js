@@ -13,7 +13,7 @@ import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStat
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades, PASSIVE_UPGRADES, PASSIVE_REWARD_IDS } from '../combat/weapon-data.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
 // Sub-wave advance thresholds — advance to next sub-wave when ≤ 2
@@ -24,7 +24,6 @@ const SUB_WAVE_ADVANCE_STALE_MS = 12000;
 // 5.98.0 — Wave-clear pick screen on mobile reads the master powerup
 // catalog so the 3 random offers are drawn from the same pool that
 // the desktop POWERUPS tab uses.
-import { POWERUP_TYPES } from '../world/powerup.js';
 import { renderIconHTML } from '../ui/icons.js';
 import { pickFormation } from '../enemy/formations.js';
 
@@ -1393,14 +1392,18 @@ export function openWavePickOverlay() {
     //   and draw 2 from OFFENSE + 1 from DEFENSE. If a category is short
     //   (e.g. all DEFENSE powerups maxed) we fall back to filling from
     //   whichever pool still has entries so the player still gets 3.
-    const eligible = Object.entries(POWERUP_TYPES).filter(([type, cfg]) => {
-        if (cfg.hidden) return false;
-        const cap = cfg.maxStacks || 99;
-        const stacks = player.getPowerupStacks ? player.getPowerupStacks(type) : 0;
-        return stacks < cap;
-    });
-    const offensePool = eligible.filter(([, cfg]) => cfg.category !== 'DEFENSE');
-    const defensePool = eligible.filter(([, cfg]) => cfg.category === 'DEFENSE');
+    // 6.30.0 — Survivor cards now draw from the PASSIVE reward pool
+    // (Health, Toughness, Vampirism, Thorns, Crit Chance, Crit Damage,
+    // Evasion, Speed). Passives are obtainable ONLY here — the shop has
+    // no PASSIVE buy tab — so each pick is a deliberate playstyle choice.
+    const eligible = PASSIVE_REWARD_IDS
+        .map(id => [id, PASSIVE_UPGRADES[id]])
+        .filter(([id, cfg]) => {
+            if (!cfg) return false;
+            const cap = cfg.maxStacks || 99;
+            const stacks = player.getPowerupStacks ? player.getPowerupStacks(id) : 0;
+            return stacks < cap;
+        });
 
     const shuffle = (arr) => {
         const a = arr.slice();
@@ -1411,19 +1414,7 @@ export function openWavePickOverlay() {
         return a;
     };
 
-    const offenseShuf = shuffle(offensePool);
-    const defenseShuf = shuffle(defensePool);
-    const picks = [];
-    for (let i = 0; i < 2 && i < offenseShuf.length; i++) picks.push(offenseShuf[i]);
-    if (defenseShuf.length > 0) picks.push(defenseShuf[0]);
-    // Backfill from leftovers if either pool was short — keep the
-    // 3-card promise even if the player has maxed most picks.
-    let oi = 2, di = 1;
-    while (picks.length < 3) {
-        if (oi < offenseShuf.length) picks.push(offenseShuf[oi++]);
-        else if (di < defenseShuf.length) picks.push(defenseShuf[di++]);
-        else break;
-    }
+    const picks = shuffle(eligible).slice(0, 3);
 
     // If the player has maxed EVERY powerup, fall through to the
     // pre-5.98 pause-menu path so they at least see the wave-clear
@@ -1509,12 +1500,16 @@ export function openWavePickOverlay() {
             // so the flow stays brisk; the toast advertises the bonus.
             const justCleared = (this.game && this.game.currentWave) | 0;
             if (justCleared > 0 && isBossWave(justCleared)) {
-                const remaining = Object.entries(POWERUP_TYPES).filter(([t2, c2]) => {
-                    if (c2.hidden) return false;
-                    const cap2 = c2.maxStacks || 99;
-                    const stk = player.getPowerupStacks ? player.getPowerupStacks(t2) : 0;
-                    return stk < cap2;
-                });
+                // 6.30.0 — Boss bonus grants an extra random PASSIVE
+                // (same pool as the survivor cards).
+                const remaining = PASSIVE_REWARD_IDS
+                    .map(id => [id, PASSIVE_UPGRADES[id]])
+                    .filter(([id, c2]) => {
+                        if (!c2) return false;
+                        const cap2 = c2.maxStacks || 99;
+                        const stk = player.getPowerupStacks ? player.getPowerupStacks(id) : 0;
+                        return stk < cap2;
+                    });
                 if (remaining.length > 0) {
                     const [bonusType, bonusCfg] = remaining[(Math.random() * remaining.length) | 0];
                     player.addPowerup(bonusType, { ...bonusCfg, duration: Infinity }, true);
@@ -1569,9 +1564,24 @@ export function closeWavePickOverlay() {
     if (frame && frame.fromWaveClear) {
         this.game.state = GAME_STATES.WAVE_TRANSITION;
         if (typeof this.startNextWave === 'function') this.startNextWave();
+    } else if (this.game && this.game.waveComplete) {
+        // 6.26.2 — Defensive recovery for the "post-shop ghost" bug.
+        //   When this branch was reached previously, the engine flipped
+        //   to PLAYING without calling startNextWave, leaving the run
+        //   in a stuck state: pools un-spawned, currentWave un-incremented,
+        //   spawn timers never scheduled. checkWaveComplete then re-fired
+        //   openWaveClearPowerupsMenu the next tick → overlay pop-up
+        //   loop, OR (with the pool's last-frame entity refs cleaned up)
+        //   the canvas appeared "empty" of player/asteroids/enemies
+        //   while the WebGL layers (bullets, starfield) kept rendering.
+        //   If we reach this fallback with waveComplete still true, the
+        //   only safe recovery is to flip to WAVE_TRANSITION and start
+        //   the next wave anyway — that's what the missing/dropped
+        //   resume frame would have routed to.
+        this.game.state = GAME_STATES.WAVE_TRANSITION;
+        if (typeof this.startNextWave === 'function') this.startNextWave();
     } else {
-        // Defensive fallback — should not happen since openWavePickOverlay
-        // pushes the wave-clear frame. Restore to PLAYING.
+        // True defensive fallback — neither path applies, just restore PLAYING.
         this.game.state = GAME_STATES.PLAYING;
     }
 }

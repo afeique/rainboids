@@ -66,6 +66,7 @@ export const POWERUP_TYPES = {
         icon: 'bolt',
         duration: 30000,
         effect: 'rapidFire',
+        hidden: true, // 6.28.0 — retired; rapid fire is now per-weapon
         rarity: 0.3,
         category: 'OFFENSE',
         maxStacks: 5,
@@ -82,6 +83,7 @@ export const POWERUP_TYPES = {
         icon: 'multi-shot',
         duration: 30000,
         effect: 'multiShot',
+        hidden: true, // 6.28.0 — retired; multishot is now per-weapon
         rarity: 0.18,
         category: 'OFFENSE',
         maxStacks: 4,
@@ -102,6 +104,7 @@ export const POWERUP_TYPES = {
         icon: 'circle-fill',
         duration: 30000,
         effect: 'bigBullets',
+        hidden: true, // 6.28.0 — retired; big bullets is now per-weapon
         rarity: 0.2,
         category: 'OFFENSE',
         // 5.76.1 — 4 → 3. 3 stacks = +6.6 px diameter on top of base
@@ -131,6 +134,7 @@ export const POWERUP_TYPES = {
         icon: 'bomb',
         duration: 30000,
         effect: 'explosive',
+        hidden: true, // 6.28.0 — retired; explosive is now per-weapon
         rarity: 0.08,
         category: 'OFFENSE',
         maxStacks: 3,

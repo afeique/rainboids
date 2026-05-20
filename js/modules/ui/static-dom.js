@@ -38,6 +38,86 @@ export function buildStaticDom() {
     _buildStatsOverlay();
     _buildCustomizationOverlay();
     _buildHintOverlay();
+    _buildTutorialOverlay();
+}
+
+// ── Tutorial overlay (6.28.0) ──────────────────────────────────────
+// Title-screen TUTORIAL button opens this. Scrollable sections explain
+// controls, primary + power weapons, the defense ability, upgrades,
+// and kill streaks / bonuses. In-game tooltips were removed; this is
+// where the explanatory text now lives.
+function _buildTutorialOverlay() {
+    const overlay = document.getElementById('tutorial-overlay');
+    if (!overlay || !markBuilt(overlay, 'tutorial-v1')) return;
+    overlay.replaceChildren();
+    overlay.className = 'ui-element';
+    Object.assign(overlay.style, {
+        display: 'none',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+        height: '100%',
+    });
+
+    const panel = el('div', { id: 'tutorial-panel', className: 'tutorial-panel' });
+    overlay.appendChild(panel);
+
+    const closeBtn = el('button', { id: 'tutorial-close-button', className: 'shop-close', text: '×' });
+    closeBtn.setAttribute('aria-label', 'Close tutorial');
+    closeBtn.addEventListener('click', () => { overlay.style.display = 'none'; });
+    panel.appendChild(closeBtn);
+
+    panel.appendChild(el('h2', { className: 'tutorial-title', text: 'HOW TO PLAY' }));
+
+    const section = (title, lines) => {
+        const sec = el('div', { className: 'tutorial-section' });
+        sec.appendChild(el('h3', { className: 'tutorial-section-title', text: title }));
+        for (const line of lines) {
+            sec.appendChild(el('div', { className: 'tutorial-line', text: line }));
+        }
+        return sec;
+    };
+
+    const body = el('div', { className: 'tutorial-body' });
+    body.appendChild(section('CONTROLS', [
+        'Move — WASD / arrow keys (drag to move on mobile).',
+        'Aim — mouse (auto-aim on mobile).',
+        'Primary weapon — hold LEFT CLICK to fire continuously.',
+        'Power weapon — RIGHT CLICK (costs energy — see below).',
+        'Defense ability — SPACE / SHIFT when fully charged.',
+        'Pause — ESC.   Stats — backtick (`).',
+    ]));
+    body.appendChild(section('PRIMARY WEAPONS', [
+        'Five primaries: Pulse Cannon, Storm Needles, Scatter Shot,',
+        'Rail Driver, Cluster Launcher. Swap them in the pause menu.',
+        'Each has its own upgrade tree: Multishot, Rapid Fire, Piercing,',
+        'Big Bullets, Explosive, Homing, Stun %, and Knockback %.',
+    ]));
+    body.appendChild(section('POWER WEAPONS', [
+        'Right-click weapons (Charge Shot, Mine Layer, Nova Blast,',
+        'Missile Salvo, Lance Beam, Lightning Arc).',
+        'Each spends ENERGY — you build energy by landing hits, and',
+        'every power weapon costs a different amount to fire.',
+    ]));
+    body.appendChild(section('DEFENSE ABILITY', [
+        'Your defensive move (e.g. Phase Dash) runs off a CHARGE meter.',
+        'Land hits / survive to fill it; trigger it when fully charged',
+        'for an i-frame dodge or burst.',
+    ]));
+    body.appendChild(section('UPGRADES', [
+        'Spend gold in the UPGRADES panel (🛒). Four tabs:',
+        'PRIMARY / POWER / DEFENSE / PASSIVE.',
+        'Passives include Health, Toughness, Vampirism, Thorns,',
+        'Crit Chance, Crit Damage, and Evasion (dodge).',
+        'Hover any node to see its name, effect, and cost.',
+    ]));
+    body.appendChild(section('KILL STREAKS & BONUSES', [
+        'Consecutive kills build a streak that ramps your damage AND',
+        'gold-find (the HUD shows your current +% GOLD). Taking damage',
+        'resets the streak. Clearing a stage grants a survivor-card pick;',
+        'boss waves grant a bonus pick on top.',
+    ]));
+    panel.appendChild(body);
 }
 
 // ── HUD buttons + lives display ────────────────────────────────────
@@ -153,7 +233,7 @@ function _buildPauseMenu() {
     // spending surface; making it the visually-louder option steers
     // players into the new flow.
     const actions = el('div', { className: 'pause-menu-actions' });
-    const shopBtn = _pauseActionBtn('pause-shop-button', '🛒', 'SHOP');
+    const shopBtn = _pauseActionBtn('pause-shop-button', '🛒', 'UPGRADES');
     shopBtn.classList.add('pause-action-btn--primary');
     actions.appendChild(shopBtn);
     actions.appendChild(_pauseActionBtn('pause-resume-button', '►', 'RESUME'));
@@ -560,7 +640,7 @@ function _buildShopSuggestOverlay() {
 
 function _buildShopOverlay() {
     const overlay = document.getElementById('shop-overlay');
-    if (!overlay || !markBuilt(overlay, 'shop-tree-v1')) return;
+    if (!overlay || !markBuilt(overlay, 'shop-tree-v2')) return;
     overlay.replaceChildren();
     overlay.className = 'ui-element';
     Object.assign(overlay.style, {
@@ -580,8 +660,9 @@ function _buildShopOverlay() {
     menu.appendChild(closeBtn);
 
     // ── Header ────────────────────────────────────────────────────
-    // Gold balance on the left, title in the center, wave indicator
-    // on the right. Wave is updated by shop-dom on each render.
+    // 6.27.0 — Gold balance on the left, title centered. Wave indicator
+    // removed (the upgrades panel no longer surfaces wave). An empty
+    // spacer holds the 3rd grid column so the title stays centered.
     const header = el('div', { className: 'shop-tree-header' });
     header.appendChild(el('div', {
         className: 'shop-tree-currency',
@@ -590,36 +671,13 @@ function _buildShopOverlay() {
             el('span', { id: 'shop-coins-amount', className: 'shop-tree-currency-amount', text: '0' }),
         ],
     }));
-    header.appendChild(el('h2', { className: 'shop-tree-title', text: 'SKILL TREE' }));
-    header.appendChild(el('div', {
-        className: 'shop-tree-wave',
-        children: [
-            el('span', { className: 'shop-tree-wave-label', text: 'WAVE' }),
-            el('span', { id: 'shop-wave-amount', className: 'shop-tree-wave-amount', text: '1' }),
-        ],
-    }));
+    header.appendChild(el('h2', { className: 'shop-tree-title', text: 'UPGRADES' }));
+    header.appendChild(el('div', { className: 'shop-tree-header-spacer' }));
     menu.appendChild(header);
 
-    // ── Tree body ─────────────────────────────────────────────────
-    // 4 cluster regions. shop-dom renders into these — the cluster
-    // containers themselves are stable, only their children change.
-    const tree = el('div', { id: 'shop-tree', className: 'shop-tree' });
-    const clusters = [
-        { id: 'shop-tree-primary',  label: 'PRIMARY WEAPONS' },
-        { id: 'shop-tree-power',    label: 'POWER WEAPONS' },
-        { id: 'shop-tree-defense',  label: 'DEFENSE SKILLS' },
-        { id: 'shop-tree-passives', label: 'PASSIVES' },
-    ];
-    for (const c of clusters) {
-        const cluster = el('section', { className: 'shop-tree-cluster' });
-        cluster.dataset.cluster = c.id;
-        cluster.appendChild(el('h3', { className: 'shop-tree-cluster-title', text: c.label }));
-        cluster.appendChild(el('div', { id: c.id, className: 'shop-tree-cluster-body' }));
-        tree.appendChild(cluster);
-    }
-    menu.appendChild(tree);
-
     // ── Legend ────────────────────────────────────────────────────
+    // 6.27.0 — Moved to the TOP (was a center-overlaid footer). Reads
+    // as a key for the tab content below it.
     const legend = el('div', { className: 'shop-tree-legend' });
     const legendEntries = [
         { cls: 'shop-tree-legend-swatch--unaffordable', label: 'Too expensive' },
@@ -637,6 +695,50 @@ function _buildShopOverlay() {
         }));
     }
     menu.appendChild(legend);
+
+    // ── Tab strip ─────────────────────────────────────────────────
+    // 6.27.0 — One tab per category. Clicking a tab swaps which cluster
+    // is visible (handled in shop-dom.initShopDom). Primary is the
+    // default active tab.
+    // 6.30.0 — Passives are obtainable ONLY from wave-clear survivor
+    // cards (not buyable). The PASSIVE tab is kept as a READ-ONLY
+    // display so the player can see which passives they've collected.
+    const tabs = el('div', { id: 'shop-tree-tabs', className: 'shop-tree-tabs' });
+    const tabDefs = [
+        { tab: 'primary', label: 'PRIMARY' },
+        { tab: 'power',   label: 'POWER' },
+        { tab: 'defense', label: 'DEFENSE' },
+        { tab: 'passive', label: 'PASSIVE' },
+    ];
+    for (const t of tabDefs) {
+        const btn = el('button', { className: 'shop-tree-tab', text: t.label });
+        btn.type = 'button';
+        btn.dataset.tab = t.tab;
+        if (t.tab === 'primary') btn.classList.add('active');
+        tabs.appendChild(btn);
+    }
+    menu.appendChild(tabs);
+
+    // ── Tree body ─────────────────────────────────────────────────
+    // 4 cluster regions; only the active tab's cluster is shown (CSS
+    // gates visibility off `#shop-tree[data-active-tab]`). shop-dom
+    // renders into the cluster bodies — the containers are stable.
+    const tree = el('div', { id: 'shop-tree', className: 'shop-tree' });
+    tree.dataset.activeTab = 'primary';
+    const clusters = [
+        { id: 'shop-tree-primary',  tab: 'primary' },
+        { id: 'shop-tree-power',    tab: 'power' },
+        { id: 'shop-tree-defense',  tab: 'defense' },
+        { id: 'shop-tree-passives', tab: 'passive' },
+    ];
+    for (const c of clusters) {
+        const cluster = el('section', { className: 'shop-tree-cluster' });
+        cluster.dataset.cluster = c.id;
+        cluster.dataset.tab = c.tab;
+        cluster.appendChild(el('div', { id: c.id, className: 'shop-tree-cluster-body' }));
+        tree.appendChild(cluster);
+    }
+    menu.appendChild(tree);
 
     // ── Floating tooltip ─────────────────────────────────────────
     // Hidden until a node is hovered; shop-dom positions it next to

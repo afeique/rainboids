@@ -4,11 +4,11 @@ js/dist/
 *.log
 npm-debug.log*
 
-# Rust workspace build artifacts (WASM pivot, 2026-05-17)
-server/target/
+# Rust workspace build artifacts (multiplayer shelved 2026-05-19 → multiplayer/)
+multiplayer/server/target/
 
-# wasm-pack output — regenerated from server/client-wasm/ by `npm run wasm:build`
-js/mp/wasm/
+# wasm-pack output — regenerated from multiplayer/server/client-wasm/
+multiplayer/js-mp/wasm/
 
 # Benchmark output
 tools/benchmark/results/*

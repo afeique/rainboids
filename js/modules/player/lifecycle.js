@@ -57,6 +57,15 @@ function getMobileIncomingDamageMultiplier(wave) {
 export function takeDamage(damageAmount = this.baseDamage) {
     if (this.player.invincible) return;
 
+    // 6.28.0 — DODGE passive: flat % chance to ignore a hit entirely
+    // (5%/stack, cap 50%). Rolls before REFLEXES so a lucky dodge
+    // doesn't burn the 30s REFLEXES free-dodge cooldown.
+    const dodgeStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('DODGE') : 0;
+    if (dodgeStacks > 0 && Math.random() < Math.min(0.5, dodgeStacks * 0.05)) {
+        if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
+        return;
+    }
+
     // 5.75.0 — REFLEXES: one free dodge per 30s.
     if (this.player.getPowerupStacks && this.player.getPowerupStacks('REFLEXES') > 0) {
         const now = Date.now();

@@ -23,7 +23,7 @@ export const PRIMARY_WEAPONS = {
         range: 1.0,
         cost: 0,
         unlockWave: 0,
-        upgrades: ['DEAD_EYE', 'OVERCHARGE', 'ECHO_ROUND', 'PULSE_VELOCITY'],
+        upgrades: ['PULSE_MULTI', 'PULSE_RAPID', 'PULSE_PIERCING', 'PULSE_BIG', 'PULSE_EXPLODE', 'PULSE_HOMING', 'PULSE_STUN', 'PULSE_KNOCK'],
     },
     STORM_NEEDLES: {
         id: 'STORM_NEEDLES',
@@ -47,7 +47,7 @@ export const PRIMARY_WEAPONS = {
         range: 1.0,
         cost: 0,
         unlockWave: 3,
-        upgrades: ['NEEDLE_STORM', 'POISON_TIP', 'STATIC_CHARGE', 'SUPPRESSION', 'NEEDLE_VELOCITY'],
+        upgrades: ['NEEDLE_MULTI', 'NEEDLE_RAPID', 'NEEDLE_PIERCING', 'NEEDLE_BIG', 'NEEDLE_EXPLODE', 'NEEDLE_HOMING', 'NEEDLE_STUN', 'NEEDLE_KNOCK'],
     },
     SCATTER_GUN: {
         // 5.79.18 — Display name renamed Scatter Gun → Scatter Shot.
@@ -75,7 +75,7 @@ export const PRIMARY_WEAPONS = {
         range: 1.2,
         cost: 0,
         unlockWave: 5,
-        upgrades: ['HEAVY_LOAD', 'BUCKSHOT', 'SHRAPNEL', 'SLUG_ROUND', 'SCATTER_VELOCITY'],
+        upgrades: ['SCATTER_MULTI', 'SCATTER_RAPID', 'SCATTER_PIERCING', 'SCATTER_BIG', 'SCATTER_EXPLODE', 'SCATTER_HOMING', 'SCATTER_STUN', 'SCATTER_KNOCK'],
     },
     RAIL_DRIVER: {
         id: 'RAIL_DRIVER',
@@ -93,7 +93,7 @@ export const PRIMARY_WEAPONS = {
         range: 0.85,
         cost: 0,
         unlockWave: 8,
-        upgrades: ['MASS_DRIVER', 'KINETIC_IMPACT', 'RAILGUN_CAPACITOR', 'THROUGH_AND_THROUGH', 'RAIL_VELOCITY'],
+        upgrades: ['RAIL_MULTI', 'RAIL_RAPID', 'RAIL_PIERCING', 'RAIL_BIG', 'RAIL_EXPLODE', 'RAIL_HOMING', 'RAIL_STUN', 'RAIL_KNOCK'],
     },
     // Phase 6 (2026-05-19) — CLUSTER_LAUNCHER. A nucleus-shaped cluster
     //   of glowing spheres that flies in a straight line toward the
@@ -156,7 +156,7 @@ export const PRIMARY_WEAPONS = {
         subBombLifeFrames: 20,
         subBombBlastRadius: 50,
         subBombDamage: 25,
-        upgrades: ['CLUSTER_PAYLOAD', 'MORE_BOMBLETS', 'SHORT_FUSE', 'MEGA_CLUSTER'],
+        upgrades: ['CLUSTER_MULTI', 'CLUSTER_STUN', 'CLUSTER_KNOCK'],
     },
     // 5.79.23 — LANCE_BEAM and LIGHTNING_ARC moved to POWER_WEAPONS
     //   below. They're now cooldown-based power weapons: press the
@@ -274,7 +274,17 @@ export const STREAK_BUFF_DURATION = 4000; // ms — buff lasts 4s, refreshes on 
 // post-5.74.33 Gold Find economy. Tier-1 base cost ~2× prior, tier-2
 // (capstones) ~1.5× prior. Every upgrade should feel like a deliberate
 // purchase rather than a fistful-of-gold dump.
-export const PRIMARY_UPGRADES = {
+// 6.28.0 — WEAPON REDESIGN. The old per-weapon upgrade set (DEAD_EYE,
+// NEEDLE_STORM, HEAVY_LOAD, MASS_DRIVER, velocity rounds, capstones,
+// etc.) is retired in favor of a uniform per-weapon "shared trait" set:
+// every kinetic primary (Pulse / Storm / Scatter / Rail) gets its own
+// stackable Multishot, Rapid Fire, Piercing, Big Bullets, Explosive,
+// Homing, Stun%, and Knockback%. Cluster Launcher (lobbed bombs) gets
+// only Multishot / Stun% / Knockback%. Each is mechanically the same
+// effect with weapon-flavored names ("distinct but simple"). The old
+// block is preserved below as a comment for reference.
+/* RETIRED 6.28.0 — old PRIMARY_UPGRADES (kept for reference):
+export const PRIMARY_UPGRADES_LEGACY = {
     // Pulse Cannon
     // 5.111.0 — STEADY_AIM (-8% spread/stack) retired. Pulse Cannon
     // has spreadAngle=0 already, so the upgrade was a no-op dressed
@@ -393,6 +403,60 @@ export const PRIMARY_UPGRADES = {
         tier: 2, requires: { id: 'MASS_DRIVER', stacks: 3 },
     },
     // 5.79.23 — TRIPLE_BEAM + ARC_OVERCHARGE moved to POWER_UPGRADES.
+};
+*/
+
+// ─── 6.28.0 — PER-WEAPON SHARED TRAITS ──────────────────────────────────────
+// 8 shared trait types. Kinetic primaries (Pulse / Storm / Scatter / Rail)
+// get all 8; Cluster Launcher gets Multishot / Stun / Knockback only.
+// Mechanic constants live in player/weapons.js + combat/collision-system.js;
+// these entries just declare id / name / desc / cost / stacks / weapon / icon.
+// Piercing + homing reuse the existing PER_WEAPON id tables in weapons.js.
+export const PRIMARY_UPGRADES = {
+    // ── Pulse Cannon ──
+    PULSE_MULTI:    { id: 'PULSE_MULTI',    name: 'Split Fire',        description: '+1 bullet per shot',          cost: 1800, maxStacks: 3, weapon: 'PULSE_CANNON', icon: 'multi-shot' },
+    PULSE_RAPID:    { id: 'PULSE_RAPID',    name: 'Overclock',         description: '+12% fire rate',              cost: 1200, maxStacks: 4, weapon: 'PULSE_CANNON', icon: 'bolt' },
+    PULSE_PIERCING: { id: 'PULSE_PIERCING', name: 'Penetrator',        description: '+1 pierce',                   cost: 1500, maxStacks: 3, weapon: 'PULSE_CANNON', icon: 'bow-arrow' },
+    PULSE_BIG:      { id: 'PULSE_BIG',      name: 'Heavy Rounds',      description: '+2.2px bullet radius',        cost: 1200, maxStacks: 3, weapon: 'PULSE_CANNON', icon: 'circle-fill' },
+    PULSE_EXPLODE:  { id: 'PULSE_EXPLODE',  name: 'Frag Rounds',       description: 'AoE blast on impact',         cost: 1800, maxStacks: 3, weapon: 'PULSE_CANNON', icon: 'bomb' },
+    PULSE_HOMING:   { id: 'PULSE_HOMING',   name: 'Pulse Tracking',    description: 'Bullets seek nearest enemy',  cost: 1600, maxStacks: 3, weapon: 'PULSE_CANNON', icon: 'target' },
+    PULSE_STUN:     { id: 'PULSE_STUN',     name: 'Concussion',        description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'PULSE_CANNON', icon: 'spiral' },
+    PULSE_KNOCK:    { id: 'PULSE_KNOCK',    name: 'Impact Rounds',     description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'PULSE_CANNON', icon: 'wind' },
+
+    // ── Storm Needles ──
+    NEEDLE_MULTI:    { id: 'NEEDLE_MULTI',    name: 'Needle Burst',     description: '+1 needle per shot',          cost: 1800, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'multi-shot' },
+    NEEDLE_RAPID:    { id: 'NEEDLE_RAPID',    name: 'Rapid Weave',      description: '+12% fire rate',              cost: 1200, maxStacks: 4, weapon: 'STORM_NEEDLES', icon: 'bolt' },
+    NEEDLE_PIERCING: { id: 'NEEDLE_PIERCING', name: 'Barbed Needles',   description: '+1 pierce',                   cost: 1500, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'bow-arrow' },
+    NEEDLE_BIG:      { id: 'NEEDLE_BIG',      name: 'Thick Needles',    description: '+2.2px needle radius',        cost: 1200, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'circle-fill' },
+    NEEDLE_EXPLODE:  { id: 'NEEDLE_EXPLODE',  name: 'Volatile Tips',    description: 'AoE blast on impact',         cost: 1800, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'bomb' },
+    NEEDLE_HOMING:   { id: 'NEEDLE_HOMING',   name: 'Tracking Needles', description: 'Needles seek nearest enemy',  cost: 1600, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'target' },
+    NEEDLE_STUN:     { id: 'NEEDLE_STUN',     name: 'Shock Tips',       description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'spiral' },
+    NEEDLE_KNOCK:    { id: 'NEEDLE_KNOCK',    name: 'Concussive Needles', description: '+15% chance to knock back', cost: 1300, maxStacks: 3, weapon: 'STORM_NEEDLES', icon: 'wind' },
+
+    // ── Scatter Shot ──
+    SCATTER_MULTI:    { id: 'SCATTER_MULTI',    name: 'Extra Pellet',    description: '+1 pellet per shot',          cost: 1800, maxStacks: 3, weapon: 'SCATTER_GUN', icon: 'multi-shot' },
+    SCATTER_RAPID:    { id: 'SCATTER_RAPID',    name: 'Fast Pump',       description: '+12% fire rate',              cost: 1200, maxStacks: 4, weapon: 'SCATTER_GUN', icon: 'bolt' },
+    SCATTER_PIERCING: { id: 'SCATTER_PIERCING', name: 'Armor Piercer',   description: '+1 pierce',                   cost: 1500, maxStacks: 3, weapon: 'SCATTER_GUN', icon: 'bow-arrow' },
+    SCATTER_BIG:      { id: 'SCATTER_BIG',      name: 'Fat Pellets',     description: '+2.2px pellet radius',        cost: 1200, maxStacks: 3, weapon: 'SCATTER_GUN', icon: 'circle-fill' },
+    SCATTER_EXPLODE:  { id: 'SCATTER_EXPLODE',  name: 'Frag Pellets',    description: 'AoE blast on impact',         cost: 1800, maxStacks: 3, weapon: 'SCATTER_GUN', icon: 'bomb' },
+    SCATTER_HOMING:   { id: 'SCATTER_HOMING',   name: 'Seeking Shot',    description: 'Pellets seek nearest enemy',  cost: 1600, maxStacks: 3, weapon: 'SCATTER_GUN', icon: 'target' },
+    SCATTER_STUN:     { id: 'SCATTER_STUN',     name: 'Stun Shot',       description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'SCATTER_GUN', icon: 'spiral' },
+    SCATTER_KNOCK:    { id: 'SCATTER_KNOCK',    name: 'Knockback Load',  description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'SCATTER_GUN', icon: 'wind' },
+
+    // ── Rail Driver ──
+    RAIL_MULTI:    { id: 'RAIL_MULTI',    name: 'Twin Rail',       description: '+1 rail pair per shot',       cost: 1800, maxStacks: 3, weapon: 'RAIL_DRIVER', icon: 'multi-shot' },
+    RAIL_RAPID:    { id: 'RAIL_RAPID',    name: 'Rapid Charge',    description: '+12% fire rate',              cost: 1200, maxStacks: 4, weapon: 'RAIL_DRIVER', icon: 'bolt' },
+    RAIL_PIERCING: { id: 'RAIL_PIERCING', name: 'Saboted Slug',    description: '+1 pierce',                   cost: 1500, maxStacks: 3, weapon: 'RAIL_DRIVER', icon: 'bow-arrow' },
+    RAIL_BIG:      { id: 'RAIL_BIG',      name: 'Dense Slug',      description: '+2.2px rail radius',          cost: 1200, maxStacks: 3, weapon: 'RAIL_DRIVER', icon: 'circle-fill' },
+    RAIL_EXPLODE:  { id: 'RAIL_EXPLODE',  name: 'HE Slug',         description: 'AoE blast on impact',         cost: 1800, maxStacks: 3, weapon: 'RAIL_DRIVER', icon: 'bomb' },
+    RAIL_HOMING:   { id: 'RAIL_HOMING',   name: 'Guided Slug',     description: 'Rails seek nearest enemy',    cost: 1600, maxStacks: 3, weapon: 'RAIL_DRIVER', icon: 'target' },
+    RAIL_STUN:     { id: 'RAIL_STUN',     name: 'Disruptor Slug',  description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'RAIL_DRIVER', icon: 'spiral' },
+    RAIL_KNOCK:    { id: 'RAIL_KNOCK',    name: 'Kinetic Slug',    description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'RAIL_DRIVER', icon: 'wind' },
+
+    // ── Cluster Launcher (lobbed bombs — Multishot / Stun / Knockback only) ──
+    CLUSTER_MULTI: { id: 'CLUSTER_MULTI', name: 'Extra Bomb',       description: '+1 bomb per shot',            cost: 2000, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'multi-shot' },
+    CLUSTER_STUN:  { id: 'CLUSTER_STUN',  name: 'Concussive Blast', description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'CLUSTER_LAUNCHER', icon: 'spiral' },
+    CLUSTER_KNOCK: { id: 'CLUSTER_KNOCK', name: 'Shockwave Blast',  description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'CLUSTER_LAUNCHER', icon: 'wind' },
 };
 
 // ─── POWER WEAPONS (Right Click) ────────────────────────────────────────────
@@ -743,39 +807,28 @@ export const SKILL_UPGRADES = {
 // included as PASSIVE entries so Phase 7 can resurface them if/when
 // the corresponding game systems return. The `hidden` flag keeps them
 // out of any browse path that respects it.
+// 6.30.0 — Passives are now the WAVE-CLEAR REWARD pool ONLY. They were
+// removed from the shop (no PASSIVE tab) — the only way to gain a
+// passive is to pick it from the survivor cards at every stage clear,
+// which forces deliberate playstyle choices. Weapon-specific effects
+// (Rapid Fire, Multi Shot, Explosive Rounds) were dropped from this
+// pool entirely — those are now per-weapon upgrades (6.28.0).
 export const PASSIVE_UPGRADES = {
-    // Offensive passives (mirror entries in POWERUP_TYPES — see
-    // js/modules/world/powerup.js for the live drop / shop config).
-    RAPID_FIRE:    { id: 'RAPID_FIRE',    name: 'Rapid Fire',         description: '+22% fire rate',                       cost: 1500, maxStacks: 5,  passive: true, icon: 'bolt'      },
-    MULTI_SHOT:    { id: 'MULTI_SHOT',    name: 'Multi Shot',         description: '+1 bullet per shot',                   cost: 1500, maxStacks: 4,  passive: true, icon: 'multi-shot' },
-    CRIT_CHANCE:   { id: 'CRIT_CHANCE',   name: 'Critical Chance',    description: '+7% crit chance',                      cost: 1500, maxStacks: 6,  passive: true, icon: 'star'      },
-    CRIT_DAMAGE:   { id: 'CRIT_DAMAGE',   name: 'Critical Damage',    description: '+15% crit damage',                     cost: 1500, maxStacks: 6,  passive: true, icon: 'dagger'    },
-    EXPLOSIVE:     { id: 'EXPLOSIVE',     name: 'Explosive Rounds',   description: 'AoE blast on impact (+10px radius)',   cost: 1800, maxStacks: 3,  passive: true, icon: 'bomb'      },
-    EXECUTIONER:   { id: 'EXECUTIONER',   name: 'Executioner',        description: '+20% damage vs enemies under 25% HP',  cost: 1800, maxStacks: 5,  passive: true, icon: 'dagger'    },
-
-    // Defensive passives.
-    HEALTH_BOOST:  { id: 'HEALTH_BOOST',  name: 'Health Boost',       description: '+35 max HP, full heal',                cost: 1500, maxStacks: 10, passive: true, icon: 'heart'     },
-    SHIELD_BOOST:  { id: 'SHIELD_BOOST',  name: 'Toughness',          description: '+8% damage reduction (cap 75%)',       cost: 1500, maxStacks: 8,  passive: true, icon: 'shield'    },
-    VAMPIRISM:     { id: 'VAMPIRISM',     name: 'Vampirism',          description: 'Heal 5% of damage dealt',              cost: 1800, maxStacks: 5,  passive: true, icon: 'skull'     },
-    THORNS:        { id: 'THORNS',        name: 'Thorns',             description: 'Reflect 25% of damage taken',          cost: 1800, maxStacks: 4,  passive: true, icon: 'anger'     },
-
-    // Bulwark's tied damage-resistance bump. Phase 1 keeps the live
-    // entry in SKILL_UPGRADES (still tied to BULWARK) so the in-game
-    // damage-reduction maths are untouched. Mirrored here so Phase 7
-    // can decide whether to migrate IRON_WILL to a true always-on
-    // passive without rewriting the live behavior. Stacks resolve to
-    // the same player.powerups slot — fine, since `getPowerupStacks`
-    // is namespace-agnostic.
-    IRON_WILL:     { id: 'IRON_WILL',     name: 'Iron Will',          description: 'Bulwark resistance raised to 65%',     cost: 2400, maxStacks: 1,  passive: true, icon: 'shield'    },
-
-    // Retired-but-reserved IDs. Marked `hidden` so any browse path
-    // that filters on `cfg.hidden` (mirrors POWERUP_TYPES convention)
-    // keeps them out of the live shop. Phase 7 can re-enable when the
-    // corresponding game system returns.
-    SPEED_BOOST:   { id: 'SPEED_BOOST',   name: 'Afterburner',        description: '+50% thrust & +35% top speed',         cost: 2200, maxStacks: 4,  passive: true, icon: 'wind',      hidden: true },
-    LONG_RANGE:    { id: 'LONG_RANGE',    name: 'Long Range',         description: 'Bullets fly farther (legacy)',         cost: 1500, maxStacks: 3,  passive: true, icon: 'bullet-train', hidden: true },
-    SPARE_SHIP:    { id: 'SPARE_SHIP',    name: 'Spare Ship',         description: '+1 extra life (legacy)',               cost: 12000, maxStacks: 1, passive: true, icon: 'rocket',    hidden: true, flatCost: true },
+    CRIT_CHANCE:   { id: 'CRIT_CHANCE',   name: 'Critical Chance',    description: '+7% crit chance',                      maxStacks: 6,  passive: true, icon: 'star'   },
+    CRIT_DAMAGE:   { id: 'CRIT_DAMAGE',   name: 'Critical Damage',    description: '+15% crit damage',                     maxStacks: 6,  passive: true, icon: 'dagger' },
+    HEALTH_BOOST:  { id: 'HEALTH_BOOST',  name: 'Health',             description: '+35 max HP, full heal',                maxStacks: 10, passive: true, icon: 'heart'  },
+    SHIELD_BOOST:  { id: 'SHIELD_BOOST',  name: 'Toughness',          description: '+8% damage reduction (cap 75%)',       maxStacks: 8,  passive: true, icon: 'shield' },
+    VAMPIRISM:     { id: 'VAMPIRISM',     name: 'Vampirism',          description: 'Heal 5% of damage dealt',              maxStacks: 5,  passive: true, icon: 'skull'  },
+    THORNS:        { id: 'THORNS',        name: 'Thorns',             description: 'Reflect 25% of damage taken',          maxStacks: 4,  passive: true, icon: 'anger'  },
+    DODGE:         { id: 'DODGE',         name: 'Evasion',            description: '+5% dodge chance (cap 50%)',           maxStacks: 10, passive: true, icon: 'wind'   },
+    SPEED_BOOST:   { id: 'SPEED_BOOST',   name: 'Speed',              description: '+65% thrust & top speed',              maxStacks: 4,  passive: true, icon: 'wind',  gradientColors: ['#aaffff', '#0099cc'], color: '#66ddff' },
 };
+
+// 6.30.0 — Ordered reward pool the survivor-card pick draws from.
+export const PASSIVE_REWARD_IDS = [
+    'HEALTH_BOOST', 'SHIELD_BOOST', 'VAMPIRISM', 'THORNS',
+    'CRIT_CHANCE', 'CRIT_DAMAGE', 'DODGE', 'SPEED_BOOST',
+];
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 

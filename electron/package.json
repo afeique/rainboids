@@ -37,20 +37,12 @@
         "to": "renderer/index.html"
       },
       {
-        "from": "../mp.html",
-        "to": "renderer/mp.html"
-      },
-      {
         "from": "../favicon.png",
         "to": "renderer/favicon.png"
       },
       {
         "from": "../js",
-        "to": "renderer/js",
-        "filter": [
-          "**/*",
-          "!mp/dev-mp-port.json"
-        ]
+        "to": "renderer/js"
       },
       {
         "from": "../css",

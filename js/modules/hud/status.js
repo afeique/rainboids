@@ -941,80 +941,67 @@ export function drawBottomRightGold(ctx) {
 }
 
 export function drawXPBar(ctx, barX, barY, barWidth, barHeight) {
-        // 6.0.0 — XP retired with player leveling. No-op the renderer
-        // so the bottom strip of the health bar reads clean.
-        return;
-        // eslint-disable-next-line no-unreachable
-        const xpBarHeight = 8;
-        const xpBarY = barY + barHeight - xpBarHeight;
-        const bevelSize = 12; // Match health bar bevel exactly
+        // 6.29.0 — Repurposed as the ENERGY meter (was the retired XP
+        // bar). Draws in the bottom strip of the health bar. Fill =
+        // energy / maxEnergy; a tick marks the active power weapon's
+        // cost, and the fill pulses bright once enough is banked to fire.
+        const player = this.player;
+        if (!player) return;
+        const maxEnergy = player.maxEnergy || 100;
+        const energy = Math.max(0, Math.min(maxEnergy, player.energy || 0));
+        const frac = energy / maxEnergy;
 
-        // Calculate XP progress
-        const xpProgress = this.player.getExperienceProgress();
-        const filledWidth = barWidth * xpProgress;
+        const eH = 8;
+        const eY = barY + barHeight - eH;
+        const bevelSize = 12;
 
         ctx.save();
-
-        // Use the EXACT same health bar clipping path, then clip to bottom section
-        const createHealthBarPath = (width) => {
-            ctx.beginPath();
-            // Exact copy of health bar path
-            ctx.moveTo(barX + bevelSize, barY);
-            ctx.lineTo(barX + width - bevelSize * 0.5, barY);
-            ctx.lineTo(barX + width, barY + bevelSize);
-            ctx.lineTo(barX + width, barY + barHeight - bevelSize);
-            ctx.lineTo(barX + width - bevelSize, barY + barHeight);
-            ctx.lineTo(barX + bevelSize * 0.5, barY + barHeight);
-            ctx.lineTo(barX, barY + barHeight - bevelSize);
-            ctx.lineTo(barX, barY + bevelSize);
-            ctx.closePath();
-        };
-
-        // First, clip to the health bar shape
-        createHealthBarPath(barWidth);
-        ctx.clip();
-
-        // Then clip to just the bottom portion for XP bar
+        // Clip to the health-bar silhouette, then to the bottom strip.
         ctx.beginPath();
-        ctx.rect(barX - 5, xpBarY, barWidth + 10, xpBarHeight);
+        ctx.moveTo(barX + bevelSize, barY);
+        ctx.lineTo(barX + barWidth - bevelSize * 0.5, barY);
+        ctx.lineTo(barX + barWidth, barY + bevelSize);
+        ctx.lineTo(barX + barWidth, barY + barHeight - bevelSize);
+        ctx.lineTo(barX + barWidth - bevelSize, barY + barHeight);
+        ctx.lineTo(barX + bevelSize * 0.5, barY + barHeight);
+        ctx.lineTo(barX, barY + barHeight - bevelSize);
+        ctx.lineTo(barX, barY + bevelSize);
+        ctx.closePath();
+        ctx.clip();
+        ctx.beginPath();
+        ctx.rect(barX - 5, eY, barWidth + 10, eH);
         ctx.clip();
 
-        // Draw XP bar background
         ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.fillRect(barX - 5, xpBarY, barWidth + 10, xpBarHeight);
+        ctx.fillRect(barX - 5, eY, barWidth + 10, eH);
 
-        // Draw segmented XP fill with precise clipping
-        if (filledWidth > 0) {
-            // Lazily create and cache the XP bar gradient (constant coordinates)
-            if (!this._xpBarGradient) {
-                const g = ctx.createLinearGradient(barX, xpBarY, barX, xpBarY + xpBarHeight);
-                g.addColorStop(0, '#FF6B35'); // Bright orange-vermilion top
-                g.addColorStop(0.5, '#FF4500'); // Orange-red middle
-                g.addColorStop(1, '#CC3300'); // Deep vermilion bottom
-                this._xpBarGradient = g;
+        const cost = (typeof player.getPowerEnergyCost === 'function') ? player.getPowerEnergyCost() : 30;
+        const ready = energy >= cost;
+
+        if (frac > 0) {
+            const w = barWidth * frac;
+            if (!this._energyBarGradient) {
+                const g = ctx.createLinearGradient(barX, eY, barX, eY + eH);
+                g.addColorStop(0, '#7fe7ff');
+                g.addColorStop(0.5, '#33aaff');
+                g.addColorStop(1, '#1166cc');
+                this._energyBarGradient = g;
             }
-            const gradient = this._xpBarGradient;
-
-            // Draw the filled area as one solid shape
-            ctx.fillStyle = gradient;
-            ctx.fillRect(barX, xpBarY, filledWidth, xpBarHeight);
-
-            // Add inner highlight
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.fillRect(barX, xpBarY, filledWidth, 1);
-
-            // Draw segment separators over the filled area
-            const segments = 20;
-            const segmentWidth = barWidth / segments;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-
-            for (let i = 1; i < segments; i++) {
-                const separatorX = barX + (i * segmentWidth);
-                if (separatorX < barX + filledWidth) {
-                    ctx.fillRect(separatorX, xpBarY, 0.5, xpBarHeight);
-                }
+            ctx.fillStyle = this._energyBarGradient;
+            ctx.fillRect(barX, eY, w, eH);
+            if (ready) {
+                const pulse = 0.22 + 0.22 * Math.sin(Date.now() * 0.012);
+                ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
+                ctx.fillRect(barX, eY, w, eH);
             }
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.fillRect(barX, eY, w, 1);
         }
+
+        // Active-power cost tick.
+        const tickX = barX + barWidth * Math.min(1, cost / maxEnergy);
+        ctx.fillStyle = ready ? 'rgba(255, 255, 160, 0.9)' : 'rgba(255, 255, 255, 0.5)';
+        ctx.fillRect(tickX - 0.5, eY, 1, eH);
 
         ctx.restore();
 }

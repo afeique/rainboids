@@ -35,7 +35,7 @@ Rainboids runs on both **desktop / laptop** (mouse + keyboard) and **mobile / ta
 - **Auto-magnet drops (5.95.0).** Health orbs and gold coins fly to the player automatically with a generous attraction radius (~600 px for health, ~400 px for gold). No MAGNET upgrade required.
 - **Smaller asteroids (5.95.0 → 5.95.1).** Asteroid spawn radius is capped at 36 px on landscape-mobile and 28 px on portrait-mobile. Combined with the camera zoom-out the playfield reads much less cluttered.
 - **PRM and PWR side buttons (5.94.0).** Two square 64×64 buttons sit on the left and right edges of the canvas, vertically centred. Tap **PRM** (left) to open the primary-weapon radial; tap **PWR** (right) to open the power-weapon radial. The long-press radial gesture from 5.91–5.93 was removed in favor of these dedicated buttons.
-- **Responsive layout** (5.92.0) — the title screen stacks NEW GAME / CONTINUE / MULTIPLAYER vertically in portrait and keeps the side-by-side layout (at a slightly smaller scale) in landscape. Title text auto-shrinks to fit phone-sized viewports. The pause menu's tab/action-button text shrinks proportionally in portrait so labels fit within bounds (5.94.0). The Controls tab fits in narrow portrait viewports too (5.95.0).
+- **Responsive layout** (5.92.0) — the title screen stacks NEW GAME / CONTINUE / TUTORIAL vertically in portrait and keeps the side-by-side layout (at a slightly smaller scale) in landscape. Title text auto-shrinks to fit phone-sized viewports. The pause menu's tab/action-button text shrinks proportionally in portrait so labels fit within bounds (5.94.0). The Controls tab fits in narrow portrait viewports too (5.95.0). **6.28.0** — the Multiplayer button was replaced by a **Tutorial** button that opens an in-game how-to-play overlay (controls, weapons, defense, upgrades, kill streaks).
 
 Force a specific mode for testing with the URL: `?mobile=1` enables mobile mode on a desktop, `?mobile=0` disables it on a touch device.
 
@@ -50,7 +50,7 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 ## Game Overview
 
 Rainboids is a supercharged asteroids game featuring:
-- **5 primary weapons** and **5 power weapons** — both free, both selectable from the start (pause-menu PRIMARY / POWER tabs); spend coins on per-weapon upgrades in the shop. Phase Dash is a core **Shift-key** movement primitive available to every player at all times. *(5.101.0 — the defensive skill system was retired; defensive progression now flows through powerups + survivor cards + the inventory.)*
+- **5 primary weapons** and **5 power weapons** — both free, both selectable from the start (pause-menu PRIMARY / POWER tabs); spend gold on per-weapon upgrades in the Upgrades panel. **6.28.0** — every primary now shares a uniform trait set: kinetic primaries (Pulse / Storm / Scatter / Rail) each get their own stackable Multishot, Rapid Fire, Piercing, Big Bullets, Explosive, Homing, Stun %, and Knockback %; Cluster Launcher gets Multishot / Stun % / Knockback %. Phase Dash is a core **Shift-key** movement primitive available to every player at all times.
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs. Enemy visuals stay at base size at every wave (5.101.0) — only HP / damage / speed scale.
 - **Offensive + defensive powerups** with stacking mechanics and visual indicators — offense (Rapid Fire, Multi Shot, Homing, Big Bullets, Piercing, Explosive, Crit Chance, Crit Damage, Knockback) and defense (Health Boost, Toughness, Regen, Vampirism, Thorns, Guardian, Phase Echo) PLUS a full **health-drop family**: Triage, Lucky Drops, Field Rations, Triage Surge, Combat Medic, Salvage Plating, Triage Net, Adrenal Reserve, Field Surgeon, Blood Bank. **Buy with GOLD** in the unified shop's POWERUPS tab (6.1.0 — moved from pause menu) any time.
 - **Survivor cards every stage clear (6.1.0)** — clearing waves 3 / 6 / 9 / … / 30 opens a 3-card overlay (2 offense + 1 defense) for a free pick. Followed by a 3-card QUICK BUY overlay listing weapon upgrades tailored to the equipped primary + power. **Stage finals are boss waves, and each grants a BONUS random powerup on top of the survivor card.** Mid-stage clears (1-1 / 1-2 / 2-1 / 2-2 / etc.) give just a brisk gold bonus + WAVE CLEAR toast.
@@ -330,25 +330,15 @@ Boss-tier TITANs at waves 5/10/15/20/25/30 receive an HP/speed multiplier on top
 git clone https://github.com/user/rainboids.git
 cd rainboids
 npm install
-npm run dev:sp     # Static server on http://localhost:8090 (no MP)
+npm run dev        # Static server on http://localhost:8090
 ```
 
-### Local Development (with multiplayer)
+### Multiplayer — shelved
 
-Multiplayer is an experimental separate product (see "Multiplayer (`/mp`)" below). Running it locally requires the Rust toolchain plus `wasm-pack`:
-
-```bash
-# One-time prereqs
-rustup toolchain install stable    # if you don't have Rust
-cargo install wasm-pack            # WASM build tool
-
-# Then either:
-npm run dev                        # http-server + cargo + wasm-pack --watch (all three concurrent)
-# or one-shot:
-npm run wasm:build && npm run dev:sp
-```
-
-The first `cargo run -p rainboids-server` and `wasm-pack build` are slow (cold compile). Subsequent runs are fast. Open `http://localhost:8090/mp` to reach the multiplayer page.
+The experimental WASM-backed multiplayer product (`/mp`) has been
+**shelved** and archived under [`multiplayer/`](multiplayer/RESTORE.md).
+`npm run dev` runs the single-player static server only. To bring
+multiplayer back, follow [`multiplayer/RESTORE.md`](multiplayer/RESTORE.md).
 
 ### Browser Requirements
 - Modern browser with ES6 module support
@@ -392,23 +382,17 @@ All commands are run with `npm run <script>` from the project root after `npm in
 
 ### Dev / build
 ```bash
-npm run dev                # All three: http-server + Rust MP server + wasm-pack --watch
-npm run dev:sp             # Static server only (no MP) — fastest for solo iteration
-npm run dev:mp             # Rust MP server only (cargo run -p rainboids-server)
-npm run dev:wasm           # One-shot wasm-pack dev build → js/mp/wasm/
-npm run wasm:build         # wasm-pack release build (smaller binary)
-npm start                  # Alias for `dev:sp`
+npm run dev                # Static server on http://localhost:8090
+npm start                  # Alias for `dev`
 ```
 
-### Multiplayer (`/mp`)
+### Multiplayer (`/mp`) — shelved
 
-The MP product is a separate, experimental page backed by a Rust simulation crate (`server/sim/`) that compiles natively (for the server binary at `server/server-bin/`) AND to WebAssembly (for the browser client via `server/client-wasm/`). One simulation, two consumers — no JS↔Rust drift. See `docs/Multiplayer WASM Pivot – 2026-05-17.md` for the full plan.
-
-Cargo workspace lives under `server/`:
-```bash
-cargo check --manifest-path server/Cargo.toml --workspace
-cargo test --manifest-path server/Cargo.toml --workspace
-```
+The experimental WASM-backed multiplayer product has been **shelved**
+and archived under [`multiplayer/`](multiplayer/RESTORE.md) (client,
+Rust `server/` workspace, `mp.html`, version + changelog, MP test
+specs). `npm run dev` no longer builds or runs it. To bring it back,
+follow [`multiplayer/RESTORE.md`](multiplayer/RESTORE.md).
 
 ### Asset generators
 ```bash
@@ -583,24 +567,15 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── icons.js       #   SVG icon registry (53 paths) + DOM/Canvas renderers (5.79.37)
 │       │   └── hint-system.js #   Onboarding hint toasts
 │       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle/starfield/bullet renderers + atlases
-│       ├── render/            # Shared pure draw helpers (drawAsteroidShape + shape-from-seed) used by BOTH solo entities and the /mp renderer
+│       ├── render/            # Shared pure draw helpers (drawAsteroidShape / drawShipShape / drawEnemyShapeByType) — used by solo entities (and the archived /mp renderer)
 │       └── debug/             # VFX telemetry (per-frame effect state recording)
-├── js/mp/                     # Multiplayer entry point + thin client layer (2026-05-17, Phase 0 stub)
-│   ├── mp-main.js             #   /mp boot: loads WASM, runs smoke harness
-│   ├── mp-engine.js           #   (Phase 1+) tick loop, WebSocket, WASM prediction
-│   ├── mp-renderer.js         #   Canvas2D entity layer + shared draw helpers; WebGL starfield/particle/bullet layers driven from mp-engine (full solo-parity bloom, mp 0.12.0)
-│   ├── mp-input.js            #   input → wire-format PackedInput
-│   ├── mp-particles.js        #   cosmetic events → particles (WebGL additive pool + Canvas2D fallback)
-│   ├── mp-audio.js            #   (Phase 1+) sim events → SFX triggers (audio files shared with solo)
-│   ├── mp-hud.js              #   (Phase 1+) own + partner ship HUD, shared wave indicator
-│   └── wasm/                  #   wasm-pack output (generated; not committed if .gitignored)
-├── server/                    # Rust workspace — MP product (server + WASM client core)
-│   ├── Cargo.toml             #   [workspace] root
-│   ├── sim/                   #   rainboids-sim — canonical MP simulation (native + WASM)
-│   │   └── src/{ship,enemy,bullet,asteroid,collision,drops,wave,weapon,protocol/,…}.rs
-│   ├── server-bin/            #   rainboids-server — authoritative WS server binary
-│   │   └── src/{main,lib,config,error,room,connection,server/http,obs}.rs
-│   └── client-wasm/           #   rainboids-client-wasm — wasm-bindgen wrapper exposing sim to /mp
+├── multiplayer/               # SHELVED multiplayer product — see multiplayer/RESTORE.md
+│   ├── RESTORE.md             #   How to bring MP back (move-back + config-restore steps)
+│   ├── js-mp/                 #   (was js/mp/) MP client: engine, renderer, input, particles, hud, ws, wire-codec
+│   ├── mp.html                #   (was /mp.html) MP entry page
+│   ├── server/                #   (was /server/) Rust workspace: sim + server-bin + client-wasm
+│   ├── VERSION-MP, CHANGELOG-MP.md
+│   └── tests/                 #   archived MP Playwright specs (qa 12/13, e2e mvd)
 ├── css/
 │   └── styles.css             # Game styling
 ├── music/                     # 58 MP3 tracks (~336MB)
@@ -626,11 +601,6 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │   ├── e2e/                   # Playwright E2E suite
 │   ├── performance/           # FPS benchmark tests
 │   └── helpers/               # Game helpers and AI playtester
-├── server/                    # Rust authoritative multiplayer server (scaffold)
-│   ├── Cargo.toml             #   axum + tokio + bincode wire protocol
-│   ├── src/                   #   lib.rs facade + server/, protocol/, matchmaking/, room/, sim/, obs/, util/
-│   ├── tests/                 #   wire-golden, handshake, room-lifecycle, grace+reconnect (25 tests)
-│   └── deploy/                #   systemd unit, nginx config, Dockerfile
 ├── electron/                  # Electron desktop wrapper (Phases 1–3 done — desktop 0.3.0)
 │   ├── package.json           #   Isolated subproject (own node_modules); deps: electron
 │   ├── main.js                #   Main process — app:// custom protocol + BrowserWindow

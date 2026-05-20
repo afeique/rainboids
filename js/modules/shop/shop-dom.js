@@ -26,7 +26,6 @@ import {
     PRIMARY_WEAPONS,
     POWER_WEAPONS,
     DEFENSE_SKILLS,
-    PASSIVE_UPGRADES,
     getPrimaryUpgrades,
     getPowerUpgrades,
     getSkillUpgrades,
@@ -57,6 +56,9 @@ const COIN_SVG_PATH = "M59.989,21c-0.099-1.711-2.134-3.048-6.204-4.068c0.137-0.3
 
 let _engine = null;
 let _elements = null;
+// 6.27.0 — Active category tab. Drives which cluster is visible. CSS
+// gates visibility off `#shop-tree[data-active-tab]`.
+let _activeTab = 'primary';
 
 function $(id) { return document.getElementById(id); }
 
@@ -68,8 +70,8 @@ export function initShopDom(gameEngine) {
         overlay:        $('shop-overlay'),
         menu:           $('shop-menu'),
         coinsAmt:       $('shop-coins-amount'),
-        waveAmt:        $('shop-wave-amount'),
         tree:           $('shop-tree'),
+        tabs:           $('shop-tree-tabs'),
         clusterPrimary: $('shop-tree-primary'),
         clusterPower:   $('shop-tree-power'),
         clusterDefense: $('shop-tree-defense'),
@@ -82,6 +84,21 @@ export function initShopDom(gameEngine) {
     if (_elements.closeBtn) {
         _elements.closeBtn.addEventListener('click', () => {
             _engine.closeShopAndReturn();
+        });
+    }
+
+    // 6.27.0 — Tab strip. Clicking a tab swaps the active category;
+    // the tree's `data-active-tab` attr drives which cluster shows
+    // (CSS), and we toggle the `.active` class on the buttons.
+    if (_elements.tabs) {
+        _elements.tabs.addEventListener('click', (e) => {
+            const btn = e.target.closest('.shop-tree-tab');
+            if (!btn) return;
+            const tab = btn.dataset.tab;
+            if (!tab || tab === _activeTab) return;
+            _activeTab = tab;
+            _syncActiveTab();
+            _hideTooltip();
         });
     }
 
@@ -150,9 +167,17 @@ export function updateShopCurrencyDom() {
     if (_elements.coinsAmt) {
         _elements.coinsAmt.textContent = `${Math.floor(_engine.game.money)}`;
     }
-    if (_elements.waveAmt) {
-        const w = _engine.game?.currentWave ?? 1;
-        _elements.waveAmt.textContent = `${w}`;
+}
+
+// 6.27.0 — Reflect `_activeTab` into the DOM: set the tree's
+// data-active-tab (CSS shows the matching cluster) and toggle the
+// `.active` class on the tab buttons.
+function _syncActiveTab() {
+    if (_elements.tree) _elements.tree.dataset.activeTab = _activeTab;
+    if (_elements.tabs) {
+        for (const btn of _elements.tabs.querySelectorAll('.shop-tree-tab')) {
+            btn.classList.toggle('active', btn.dataset.tab === _activeTab);
+        }
     }
 }
 
@@ -161,15 +186,18 @@ export function updateShopCurrencyDom() {
 export function renderShopDom() {
     if (!_elements || !_engine) return;
     updateShopCurrencyDom();
+    _syncActiveTab();
 
     const player = _engine.player;
     if (!player) return;
 
-    // Build each cluster.
+    // 6.30.0 — Weapon/skill clusters are buyable; the PASSIVE cluster is
+    // READ-ONLY (passives come from wave-clear cards, not the shop) — it
+    // just visualizes what the player has collected.
     _renderWeaponCluster(_elements.clusterPrimary, _collectPrimaryGroups(), player);
     _renderWeaponCluster(_elements.clusterPower,   _collectPowerGroups(),   player);
     _renderWeaponCluster(_elements.clusterDefense, _collectDefenseGroups(), player);
-    _renderPassiveCluster(_elements.clusterPassive, _collectPassives(),     player);
+    _renderPassiveCluster(_elements.clusterPassive, player);
 }
 
 // ── Cluster builders ───────────────────────────────────────────────
@@ -249,20 +277,6 @@ function _collectDefenseGroups() {
     return groups;
 }
 
-function _collectPassives() {
-    return getPassiveUpgrades({ includeHidden: false }).map(u => ({
-        id: u.id,
-        name: u.name,
-        icon: u.icon,
-        description: u.description || '',
-        cost: u.cost,
-        costOverrides: null,
-        maxStacks: u.maxStacks || 1,
-        color: '#cfcfff', // soft lavender — distinguishes passives from weapon-tinted nodes
-        flatCost: !!u.flatCost,
-    }));
-}
-
 // Weapon-style cluster: parent + orbiting upgrades. One subgroup per
 // weapon, separated by a thin divider.
 function _renderWeaponCluster(container, groups, player) {
@@ -300,18 +314,62 @@ function _renderWeaponCluster(container, groups, player) {
     }
 }
 
-// Passive cluster: flat hex grid, no parent-child structure.
-function _renderPassiveCluster(container, upgrades, player) {
+// 6.30.0 — READ-ONLY passive cluster. Passives are gained only from
+// wave-clear cards, so these nodes are not buyable — they just show
+// the player's collected passives (lit + stack badge) vs the ones
+// they haven't picked yet (dimmed). Hover shows name + effect + stacks.
+function _renderPassiveCluster(container, player) {
     if (!container) return;
     container.replaceChildren();
 
     const grid = document.createElement('div');
     grid.className = 'shop-tree-passive-grid';
 
-    for (const upg of upgrades) {
-        grid.appendChild(_buildUpgradeNode(upg, player));
+    for (const upg of getPassiveUpgrades({ includeHidden: false })) {
+        grid.appendChild(_buildPassiveDisplayNode(upg, player));
     }
     container.appendChild(grid);
+}
+
+function _buildPassiveDisplayNode(upg, player) {
+    const stacks = (player.getPowerupStacks && typeof player.getPowerupStacks === 'function')
+        ? player.getPowerupStacks(upg.id) : 0;
+    const maxStacks = upg.maxStacks || 1;
+    const owned = stacks > 0;
+    const maxed = stacks >= maxStacks;
+
+    // Non-button div so it reads as a display, not a buy target.
+    const node = document.createElement('div');
+    node.className = 'shop-node shop-node--upgrade shop-node--passive';
+    node.dataset.id = upg.id;
+    node.dataset.buyable = '0'; // never purchasable — reward-only
+    const state = maxed ? 'maxed' : (owned ? 'owned' : 'unaffordable');
+    node.dataset.state = state;
+    node.classList.add(`shop-node--${state}`);
+    if (upg.color) node.style.setProperty('--node-color', upg.color);
+
+    node.dataset.tooltipKind = 'upgrade';
+    node.dataset.tooltipName = upg.name;
+    node.dataset.tooltipDesc = upg.description || '';
+    node.dataset.tooltipStacks = `${stacks}/${maxStacks}`;
+    node.dataset.tooltipState = owned ? 'owned' : 'reward';
+    // No cost — passives aren't bought. Mark so the tooltip can show
+    // "WAVE REWARD" instead of a price.
+    node.dataset.tooltipReward = '1';
+
+    const icon = document.createElement('span');
+    icon.className = 'shop-node-icon';
+    icon.innerHTML = renderIconHTML(upg.icon, { size: 26, fallback: '?' });
+    node.appendChild(icon);
+
+    if (owned) {
+        const badge = document.createElement('span');
+        badge.className = 'shop-node-badge';
+        badge.textContent = `${stacks}/${maxStacks}`;
+        node.appendChild(badge);
+    }
+
+    return node;
 }
 
 // ── Node builders ──────────────────────────────────────────────────
@@ -331,11 +389,8 @@ function _buildParentNode(parent) {
     icon.innerHTML = renderIconHTML(parent.icon, { size: 30, fallback: '?' });
     node.appendChild(icon);
 
-    const label = document.createElement('div');
-    label.className = 'shop-node-label';
-    label.textContent = _shortName(parent.name);
-    node.appendChild(label);
-
+    // 6.28.0 — Weapon name removed (many didn't fit under the node).
+    // Name + description show in the hover tooltip (dataset above).
     return node;
 }
 
@@ -398,22 +453,14 @@ function _buildUpgradeNode(upg, player) {
     // Capstone (tier 2) rosette ring.
     if (upg.tier === 2) node.classList.add('shop-node--capstone');
 
-    // Inner content.
+    // Inner content — icon only, centered in the circle. 6.27.0 — the
+    // per-node cost label was removed; cost is now hover-only (tooltip).
+    // Affordability/maxed/locked state is conveyed by the border color
+    // (see .shop-node--<state>) and the stack badge.
     const icon = document.createElement('span');
     icon.className = 'shop-node-icon';
     icon.innerHTML = renderIconHTML(upg.icon, { size: 26, fallback: '?' });
     node.appendChild(icon);
-
-    const cost_el = document.createElement('span');
-    cost_el.className = 'shop-node-cost';
-    if (isMaxed) {
-        cost_el.textContent = 'MAX';
-    } else if (locked) {
-        cost_el.textContent = 'LOCK';
-    } else {
-        cost_el.textContent = _formatCost(cost);
-    }
-    node.appendChild(cost_el);
 
     // Stack badge (only if owned or maxed).
     if (isOwned) {
@@ -423,27 +470,9 @@ function _buildUpgradeNode(upg, player) {
         node.appendChild(badge);
     }
 
-    // Short name underneath (below the circle).
-    const label = document.createElement('span');
-    label.className = 'shop-node-label';
-    label.textContent = _shortName(upg.name);
-    node.appendChild(label);
-
+    // 6.28.0 — Upgrade name removed from under the node; it's hover-only
+    // now (tooltip carries name + description + cost + stacks).
     return node;
-}
-
-// Trim long names so they don't blow the node label width. Real names
-// are visible in the tooltip on hover.
-function _shortName(name) {
-    if (!name) return '';
-    if (name.length <= 14) return name;
-    return name.slice(0, 13) + '…';
-}
-
-function _formatCost(c) {
-    if (c >= 10000) return `${Math.floor(c / 1000)}k`;
-    if (c >= 1000)  return `${(c / 1000).toFixed(1)}k`;
-    return `${c}`;
 }
 
 // ── Tooltip ────────────────────────────────────────────────────────
@@ -485,7 +514,11 @@ function _showTooltip(node, e) {
         const metaEl = document.createElement('div');
         metaEl.className = 'shop-tree-tooltip-meta';
         metaEl.appendChild(_makeMeta('STACK', stacks));
-        if (state === 'maxed') {
+        // 6.30.0 — Passive display nodes aren't bought; show how they're
+        // acquired instead of a price.
+        if (node.dataset.tooltipReward === '1') {
+            metaEl.appendChild(_makeMeta('FROM', 'WAVE REWARD'));
+        } else if (state === 'maxed') {
             metaEl.appendChild(_makeMeta('COST', 'MAX'));
         } else {
             metaEl.appendChild(_makeMeta('COST', cost));

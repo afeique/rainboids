@@ -11,7 +11,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [6.27.2] - 2026-05-19
+## [6.30.0] - 2026-05-19
+
+### Changed — passives are now wave-clear rewards only
+
+Passives can no longer be bought. The wave-clear survivor cards (every
+stage clear, plus the boss-wave bonus) now draw from a curated
+**passive pool**: Health, Toughness, Vampirism, Thorns, Crit Chance,
+Crit Damage, Evasion (dodge), and Speed. This forces deliberate
+playstyle commitment — you can't just buy every passive.
+
+- `PASSIVE_UPGRADES` rebuilt: dropped the weapon-specific entries
+  (Rapid Fire, Multi Shot, Explosive Rounds — those are per-weapon
+  upgrades since 6.28.0) and Executioner/Iron Will; **Speed** added
+  (reuses the existing `SPEED_BOOST` thrust/top-speed consumer).
+  New `PASSIVE_REWARD_IDS` export drives the card pool.
+- `wave-manager` survivor cards + boss bonus now pull from the passive
+  pool instead of `POWERUP_TYPES`.
+- **Shop**: the PASSIVE tab is kept but **read-only** — it visualizes
+  which passives you've collected (lit + stack badge) vs not-yet-picked
+  (dimmed); nodes aren't purchasable and the tooltip reads
+  "FROM · WAVE REWARD". The PRIMARY / POWER / DEFENSE tabs stay buyable.
+
+
+
+### Added — power weapons run on an energy meter (was the XP bar)
+
+The retired XP bar is now an **energy meter**. Energy builds as the
+player lands hits (+4 per bullet hit, cap 100) and is spent to fire
+power weapons — each costs a different amount: Charge Shot 20, Mine
+Layer 25, Lightning Arc 30, Nova Blast 45, Missile Salvo 55, Lance
+Beam 60.
+
+- `player.energy` / `maxEnergy` added (reset to 0 each run); `addEnergy`
+  + `getPowerEnergyCost` helpers.
+- `isPowerReady()` is now energy-gated (`energy >= cost`, with the
+  per-weapon `powerCooldown` kept as a brief anti-spam floor). Firing
+  deducts the cost — in `firePower` for cooldown-based powers and in
+  the Charge Shot release path.
+- Energy is granted in the bullet→enemy hit handler.
+- The health bar's bottom strip renders the energy meter (cyan fill,
+  a tick at the active power's cost, a bright pulse once it's
+  affordable).
+
+
+
+### Changed — weapon upgrades rebuilt as per-weapon shared traits
+
+Retired the old per-weapon upgrade set (Dead Eye, Needle Storm,
+Mass Driver, velocity rounds, capstones, etc. — preserved as a
+comment block in `weapon-data.js`) and replaced it with a uniform
+per-weapon "shared trait" system:
+
+- Each kinetic primary (Pulse / Storm / Scatter / Rail) gets its own
+  stackable **Multishot, Rapid Fire, Piercing, Big Bullets,
+  Explosive, Homing, Stun %, and Knockback %**.
+- Cluster Launcher (lobbed bombs) gets **Multishot / Stun % /
+  Knockback %** only.
+- The global MULTI_SHOT / RAPID_FIRE / BIG_BULLETS / EXPLOSIVE
+  powerups are retired (hidden) — those effects are now per-weapon.
+  `weapons.js` reads every projectile trait per-weapon via the
+  existing lookup-table pattern.
+- **Stun %** rolls on enemy hit via the BRN/STUN engine;
+  **Knockback %** shoves the enemy 16px along the bullet vector
+  (the previously-dead `bullet.knockback` field had no consumer).
+
+### Added — Evasion passive + tutorial; title screen Tutorial button
+
+- New **Evasion (Dodge)** passive — +5%/stack chance to ignore a hit
+  (cap 50%), wired into `lifecycle.takeDamage`. The existing
+  Health / Toughness / Vampirism / Thorns / Crit Chance / Crit
+  Damage passives are kept.
+- Title screen: **Multiplayer button removed, Tutorial button added.**
+  Opens a new scrollable tutorial overlay covering controls, primary
+  + power weapons, the defense ability, upgrades, and kill
+  streaks / bonuses.
+- Upgrade-tree node names are already hover-only (6.27.2); the
+  tutorial is where the long-form explanations now live.
+
+
 
 ### Changed — Upgrades tree nodes are icon-only (names hover-only)
 
